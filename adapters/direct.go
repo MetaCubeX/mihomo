@@ -31,7 +31,7 @@ type Direct struct {
 }
 
 func (d *Direct) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
-	c, err := net.Dial("tcp", net.JoinHostPort(addr.Host, addr.Port))
+	c, err := net.Dial("tcp", net.JoinHostPort(addr.String(), addr.Port))
 	if err != nil {
 		return
 	}
