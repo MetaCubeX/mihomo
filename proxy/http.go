@@ -90,7 +90,7 @@ func (h *HttpAdapter) Addr() *constant.Addr {
 
 func parseHttpAddr(target string) *constant.Addr {
 	host, port, _ := net.SplitHostPort(target)
-
+	ipAddr, _ := net.ResolveIPAddr("ip", host)
 	var addType int
 	ip := net.ParseIP(host)
 	switch {
@@ -105,6 +105,7 @@ func parseHttpAddr(target string) *constant.Addr {
 	return &constant.Addr{
 		AddrType: addType,
 		Host:     host,
+		IP:       &ipAddr.IP,
 		Port:     port,
 	}
 }

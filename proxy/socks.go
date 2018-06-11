@@ -65,22 +65,28 @@ func (s *SocksAdapter) Addr() *constant.Addr {
 
 func parseSocksAddr(target socks.Addr) *constant.Addr {
 	var host, port string
+	var ip net.IP
 
 	switch target[0] {
 	case socks.AtypDomainName:
 		host = string(target[2 : 2+target[1]])
 		port = strconv.Itoa((int(target[2+target[1]]) << 8) | int(target[2+target[1]+1]))
+		ipAddr, err := net.ResolveIPAddr("ip", host)
+		if err == nil {
+			ip = ipAddr.IP
+		}
 	case socks.AtypIPv4:
-		host = net.IP(target[1 : 1+net.IPv4len]).String()
+		ip = net.IP(target[1 : 1+net.IPv4len])
 		port = strconv.Itoa((int(target[1+net.IPv4len]) << 8) | int(target[1+net.IPv4len+1]))
 	case socks.AtypIPv6:
-		host = net.IP(target[1 : 1+net.IPv6len]).String()
+		ip = net.IP(target[1 : 1+net.IPv6len])
 		port = strconv.Itoa((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
 	}
 
 	return &constant.Addr{
 		AddrType: int(target[0]),
 		Host:     host,
+		IP:       &ip,
 		Port:     port,
 	}
 }

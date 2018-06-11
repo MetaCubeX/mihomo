@@ -87,10 +87,10 @@ func serializesSocksAddr(addr *C.Addr) []byte {
 		host := []byte(addr.Host)
 		buf = [][]byte{[]byte{aType, len}, host, port}
 	case socks.AtypIPv4:
-		host := net.ParseIP(addr.Host).To4()
+		host := addr.IP.To4()
 		buf = [][]byte{[]byte{aType}, host, port}
 	case socks.AtypIPv6:
-		host := net.ParseIP(addr.Host).To16()
+		host := addr.IP.To16()
 		buf = [][]byte{[]byte{aType}, host, port}
 	}
 	return bytes.Join(buf, []byte(""))

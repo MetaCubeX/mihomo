@@ -1,8 +1,6 @@
 package rules
 
 import (
-	"net"
-
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/oschwald/geoip2-golang"
@@ -29,14 +27,10 @@ func (g *GEOIP) RuleType() C.RuleType {
 }
 
 func (g *GEOIP) IsMatch(addr *C.Addr) bool {
-	if addr.AddrType == C.AtypDomainName {
+	if addr.IP == nil {
 		return false
 	}
-	dstIP := net.ParseIP(addr.Host)
-	if dstIP == nil {
-		return false
-	}
-	record, _ := mmdb.Country(dstIP)
+	record, _ := mmdb.Country(*addr.IP)
 	return record.Country.IsoCode == g.country
 }
 

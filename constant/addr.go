@@ -1,5 +1,9 @@
 package constant
 
+import (
+	"net"
+)
+
 // Socks addr type
 const (
 	AtypIPv4       = 1
@@ -11,5 +15,13 @@ const (
 type Addr struct {
 	AddrType int
 	Host     string
+	IP       *net.IP
 	Port     string
+}
+
+func (addr *Addr) String() string {
+	if addr.Host == "" {
+		return addr.IP.String()
+	}
+	return addr.Host
 }
