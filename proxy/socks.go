@@ -36,7 +36,8 @@ func NewSocksProxy(port string) {
 func handleSocks(conn net.Conn) {
 	target, err := socks.Handshake(conn)
 	if err != nil {
-
+		conn.Close()
+		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
 	tun.Add(NewSocks(target, conn))
