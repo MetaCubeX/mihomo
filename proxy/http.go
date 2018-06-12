@@ -3,7 +3,6 @@ package proxy
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -27,8 +26,6 @@ func NewHttpProxy(port string) {
 				handleHTTP(w, r)
 			}
 		}),
-		// Disable HTTP/2.
-		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 	log.Infof("HTTP proxy :%s", port)
 	server.ListenAndServe()
@@ -53,7 +50,6 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTunneling(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		return
@@ -62,13 +58,14 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	// w.WriteHeader(http.StatusOK) doesn't works in Safari
+	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
 	tun.Add(NewHttp(r.Host, conn, rw, []byte{}))
 }
 
 type HttpAdapter struct {
 	addr *constant.Addr
 	conn net.Conn
-	rw   *bufio.ReadWriter
 	r    io.Reader
 }
 
@@ -115,7 +112,6 @@ func NewHttp(host string, conn net.Conn, rw *bufio.ReadWriter, payload []byte) *
 	return &HttpAdapter{
 		conn: conn,
 		addr: parseHttpAddr(host),
-		rw:   rw,
 		r:    r,
 	}
 }
