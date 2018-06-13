@@ -12,19 +12,19 @@ type DirectAdapter struct {
 	conn net.Conn
 }
 
-// Writer is used to output network traffic
-func (d *DirectAdapter) Writer() io.Writer {
-	return d.conn
-}
-
-// Reader is used to input network traffic
-func (d *DirectAdapter) Reader() io.Reader {
+// ReadWriter is used to handle network traffic
+func (d *DirectAdapter) ReadWriter() io.ReadWriter {
 	return d.conn
 }
 
 // Close is used to close connection
 func (d *DirectAdapter) Close() {
 	d.conn.Close()
+}
+
+// Close is used to close connection
+func (d *DirectAdapter) Conn() net.Conn {
+	return d.conn
 }
 
 type Direct struct {

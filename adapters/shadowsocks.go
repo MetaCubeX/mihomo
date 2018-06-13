@@ -19,19 +19,18 @@ type ShadowsocksAdapter struct {
 	conn net.Conn
 }
 
-// Writer is used to output network traffic
-func (ss *ShadowsocksAdapter) Writer() io.Writer {
-	return ss.conn
-}
-
-// Reader is used to input network traffic
-func (ss *ShadowsocksAdapter) Reader() io.Reader {
+// ReadWriter is used to handle network traffic
+func (ss *ShadowsocksAdapter) ReadWriter() io.ReadWriter {
 	return ss.conn
 }
 
 // Close is used to close connection
 func (ss *ShadowsocksAdapter) Close() {
 	ss.conn.Close()
+}
+
+func (ss *ShadowsocksAdapter) Conn() net.Conn {
+	return ss.conn
 }
 
 type ShadowSocks struct {

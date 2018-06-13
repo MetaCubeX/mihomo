@@ -2,7 +2,6 @@ package tunnel
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
@@ -110,8 +109,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	}
 	defer remoConn.Close()
 
-	go io.Copy(localConn.Writer(), remoConn.Reader())
-	io.Copy(remoConn.Writer(), localConn.Reader())
+	localConn.Connect(remoConn)
 }
 
 func (t *Tunnel) match(addr *C.Addr) C.Proxy {

@@ -1,4 +1,4 @@
-package proxy
+package socks
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/Dreamacro/clash/constant"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 
 	"github.com/riobard/go-shadowsocks2/socks"
@@ -45,26 +45,23 @@ func handleSocks(conn net.Conn) {
 
 type SocksAdapter struct {
 	conn net.Conn
-	addr *constant.Addr
-}
-
-func (s *SocksAdapter) Writer() io.Writer {
-	return s.conn
-}
-
-func (s *SocksAdapter) Reader() io.Reader {
-	return s.conn
+	addr *C.Addr
 }
 
 func (s *SocksAdapter) Close() {
 	s.conn.Close()
 }
 
-func (s *SocksAdapter) Addr() *constant.Addr {
+func (s *SocksAdapter) Addr() *C.Addr {
 	return s.addr
 }
 
-func parseSocksAddr(target socks.Addr) *constant.Addr {
+func (s *SocksAdapter) Connect(proxy C.ProxyAdapter) {
+	go io.Copy(s.conn, proxy.ReadWriter())
+	io.Copy(proxy.ReadWriter(), s.conn)
+}
+
+func parseSocksAddr(target socks.Addr) *C.Addr {
 	var host, port string
 	var ip net.IP
 
@@ -84,7 +81,8 @@ func parseSocksAddr(target socks.Addr) *constant.Addr {
 		port = strconv.Itoa((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
 	}
 
-	return &constant.Addr{
+	return &C.Addr{
+		NetWork:  C.TCP,
 		AddrType: int(target[0]),
 		Host:     host,
 		IP:       &ip,
