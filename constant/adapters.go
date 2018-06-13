@@ -2,17 +2,19 @@ package constant
 
 import (
 	"io"
+	"net"
 )
 
 type ProxyAdapter interface {
-	Writer() io.Writer
-	Reader() io.Reader
+	ReadWriter() io.ReadWriter
+	Conn() net.Conn
 	Close()
 }
 
 type ServerAdapter interface {
 	Addr() *Addr
-	ProxyAdapter
+	Connect(ProxyAdapter)
+	Close()
 }
 
 type Proxy interface {

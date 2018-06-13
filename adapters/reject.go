@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"io"
+	"net"
 
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -10,18 +11,17 @@ import (
 type RejectAdapter struct {
 }
 
-// Writer is used to output network traffic
-func (r *RejectAdapter) Writer() io.Writer {
-	return &NopRW{}
-}
-
-// Reader is used to input network traffic
-func (r *RejectAdapter) Reader() io.Reader {
+// ReadWriter is used to handle network traffic
+func (r *RejectAdapter) ReadWriter() io.ReadWriter {
 	return &NopRW{}
 }
 
 // Close is used to close connection
-func (r *RejectAdapter) Close() {
+func (r *RejectAdapter) Close() {}
+
+// Close is used to close connection
+func (r *RejectAdapter) Conn() net.Conn {
+	return nil
 }
 
 type Reject struct {

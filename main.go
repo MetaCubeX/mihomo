@@ -6,7 +6,8 @@ import (
 	"syscall"
 
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/proxy"
+	"github.com/Dreamacro/clash/proxy/http"
+	"github.com/Dreamacro/clash/proxy/socks"
 	"github.com/Dreamacro/clash/tunnel"
 
 	log "github.com/sirupsen/logrus"
@@ -33,8 +34,8 @@ func main() {
 		log.Fatalf("Parse config error: %s", err.Error())
 	}
 
-	go proxy.NewHttpProxy(port)
-	go proxy.NewSocksProxy(socksPort)
+	go http.NewHttpProxy(port)
+	go socks.NewSocksProxy(socksPort)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
