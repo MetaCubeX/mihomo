@@ -37,6 +37,10 @@ func (t *Tunnel) UpdateConfig() (err error) {
 		return
 	}
 
+	// clear proxys and rules
+	t.proxys = make(map[string]C.Proxy)
+	t.rules = []C.Rule{}
+
 	proxys := cfg.Section("Proxy")
 	rules := cfg.Section("Rule")
 
