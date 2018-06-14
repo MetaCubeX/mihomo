@@ -59,7 +59,12 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 
 func parseHttpAddr(target string) *C.Addr {
 	host, port, _ := net.SplitHostPort(target)
-	ipAddr, _ := net.ResolveIPAddr("ip", host)
+	ipAddr, err := net.ResolveIPAddr("ip", host)
+	var resolveIP *net.IP
+	if err == nil {
+		resolveIP = &ipAddr.IP
+	}
+
 	var addType int
 	ip := net.ParseIP(host)
 	switch {
@@ -75,7 +80,7 @@ func parseHttpAddr(target string) *C.Addr {
 		NetWork:  C.TCP,
 		AddrType: addType,
 		Host:     host,
-		IP:       &ipAddr.IP,
+		IP:       resolveIP,
 		Port:     port,
 	}
 }
