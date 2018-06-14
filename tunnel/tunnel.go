@@ -24,6 +24,7 @@ type Tunnel struct {
 	proxys     map[string]C.Proxy
 	observable *observable.Observable
 	logCh      chan interface{}
+	configLock *sync.RWMutex
 }
 
 func (t *Tunnel) Add(req C.ServerAdapter) {
@@ -31,6 +32,9 @@ func (t *Tunnel) Add(req C.ServerAdapter) {
 }
 
 func (t *Tunnel) UpdateConfig() (err error) {
+	t.configLock.Lock()
+	defer t.configLock.Unlock()
+
 	cfg, err := C.GetConfig()
 	if err != nil {
 		return
@@ -113,6 +117,9 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 }
 
 func (t *Tunnel) match(addr *C.Addr) C.Proxy {
+	t.configLock.RLock()
+	defer t.configLock.RUnlock()
+
 	for _, rule := range t.rules {
 		if rule.IsMatch(addr) {
 			a, ok := t.proxys[rule.Adapter()]
@@ -134,6 +141,7 @@ func newTunnel() *Tunnel {
 		proxys:     make(map[string]C.Proxy),
 		observable: observable.NewObservable(logCh),
 		logCh:      logCh,
+		configLock: &sync.RWMutex{},
 	}
 	go tunnel.process()
 	go tunnel.subscribeLogs()
