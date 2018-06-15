@@ -16,6 +16,8 @@ You can build from source:
 go get -u -v github.com/Dreamacro/clash
 ```
 
+Pre-built binaries are available: [release](https://github.com/Dreamacro/clash/releases)
+
 Requires Go >= 1.10.
 
 ## Daemon
