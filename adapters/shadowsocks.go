@@ -34,31 +34,32 @@ func (ss *ShadowsocksAdapter) Conn() net.Conn {
 }
 
 type ShadowSocks struct {
-	server   string
-	cipher   string
-	password string
+	server string
+	cipher core.Cipher
 }
 
 func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
-	var key []byte
-	ciph, _ := core.PickCipher(ss.cipher, key, ss.password)
 	c, err := net.Dial("tcp", ss.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
 	}
 	c.(*net.TCPConn).SetKeepAlive(true)
-	c = ciph.StreamConn(c)
+	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(addr))
 	return &ShadowsocksAdapter{conn: c}, err
 }
 
-func NewShadowSocks(ssURL string) *ShadowSocks {
+func NewShadowSocks(ssURL string) (*ShadowSocks, error) {
+	var key []byte
 	server, cipher, password, _ := parseURL(ssURL)
-	return &ShadowSocks{
-		server:   server,
-		cipher:   cipher,
-		password: password,
+	ciph, err := core.PickCipher(cipher, key, password)
+	if err != nil {
+		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
+	return &ShadowSocks{
+		server: server,
+		cipher: ciph,
+	}, nil
 }
 
 func parseURL(s string) (addr, cipher, password string, err error) {
