@@ -18,5 +18,6 @@ type ServerAdapter interface {
 }
 
 type Proxy interface {
+	Name() string
 	Generator(addr *Addr) (ProxyAdapter, error)
 }
