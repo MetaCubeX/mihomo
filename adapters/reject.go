@@ -27,6 +27,10 @@ func (r *RejectAdapter) Conn() net.Conn {
 type Reject struct {
 }
 
+func (r *Reject) Name() string {
+	return "Reject"
+}
+
 func (r *Reject) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	return &RejectAdapter{}, nil
 }

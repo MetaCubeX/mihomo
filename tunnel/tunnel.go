@@ -2,8 +2,10 @@ package tunnel
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/adapters"
 	C "github.com/Dreamacro/clash/constant"
@@ -43,6 +45,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 
 	proxysConfig := cfg.Section("Proxy")
 	rulesConfig := cfg.Section("Rule")
+	groupsConfig := cfg.Section("Proxy Group")
 
 	// parse proxy
 	for _, key := range proxysConfig.Keys() {
@@ -58,7 +61,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 				continue
 			}
 			ssURL := fmt.Sprintf("ss://%s:%s@%s:%s", proxy[3], proxy[4], proxy[1], proxy[2])
-			ss, err := adapters.NewShadowSocks(ssURL)
+			ss, err := adapters.NewShadowSocks(key.Name(), ssURL)
 			if err != nil {
 				return err
 			}
@@ -88,6 +91,33 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			rules = append(rules, R.NewIPCIDR(rule[1], rule[2]))
 		case "FINAL":
 			rules = append(rules, R.NewFinal(rule[2]))
+		}
+	}
+
+	// parse proxy groups
+	for _, key := range groupsConfig.Keys() {
+		rule := strings.Split(key.Value(), ",")
+		if len(rule) < 4 {
+			continue
+		}
+		rule = trimArr(rule)
+		switch rule[0] {
+		case "url-test":
+			proxyNames := rule[1 : len(rule)-2]
+			delay, _ := strconv.Atoi(rule[len(rule)-1])
+			url := rule[len(rule)-2]
+			var ps []C.Proxy
+			for _, name := range proxyNames {
+				if p, ok := proxys[name]; ok {
+					ps = append(ps, p)
+				}
+			}
+
+			adapter, err := adapters.NewURLTest(key.Name(), ps, url, time.Duration(delay)*time.Second)
+			if err != nil {
+				return fmt.Errorf("Config error: %s", err.Error())
+			}
+			proxys[key.Name()] = adapter
 		}
 	}
 

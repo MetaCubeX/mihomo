@@ -35,7 +35,12 @@ func (ss *ShadowsocksAdapter) Conn() net.Conn {
 
 type ShadowSocks struct {
 	server string
+	name   string
 	cipher core.Cipher
+}
+
+func (ss *ShadowSocks) Name() string {
+	return ss.name
 }
 
 func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
@@ -49,7 +54,7 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 	return &ShadowsocksAdapter{conn: c}, err
 }
 
-func NewShadowSocks(ssURL string) (*ShadowSocks, error) {
+func NewShadowSocks(name string, ssURL string) (*ShadowSocks, error) {
 	var key []byte
 	server, cipher, password, _ := parseURL(ssURL)
 	ciph, err := core.PickCipher(cipher, key, password)
@@ -58,6 +63,7 @@ func NewShadowSocks(ssURL string) (*ShadowSocks, error) {
 	}
 	return &ShadowSocks{
 		server: server,
+		name:   name,
 		cipher: ciph,
 	}, nil
 }
