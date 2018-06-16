@@ -1,5 +1,7 @@
 # Clash
 
+[![TravisCI](https://img.shields.io/travis/Dreamacro/clash.svg?style=flat-square)](https://travis-ci.org/Dreamacro/clash)
+
 A rule based proxy in Go.
 
 ## Features
@@ -47,7 +49,13 @@ socks-port = 7891
 # name = ss, server, port, cipher, password
 # The types of cipher are consistent with go-shadowsocks2
 # support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
-Proxy = ss, server, port, AEAD_CHACHA20_POLY1305, password
+Proxy1 = ss, server1, port, AEAD_CHACHA20_POLY1305, password
+Proxy2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
+
+[Proxy Group]
+# url-test select which proxy will be used by benchmarking speed to a URL.
+# name = url-test, [proxys], url, interval(second)
+Proxy = url-test, Proxy1, Proxy2, http://www.google.com/generate_204, 300
 
 [Rule]
 DOMAIN-SUFFIX,google.com,Proxy
