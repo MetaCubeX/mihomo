@@ -32,23 +32,20 @@ func (t *Tunnel) Add(req C.ServerAdapter) {
 }
 
 func (t *Tunnel) UpdateConfig() (err error) {
-	t.configLock.Lock()
-	defer t.configLock.Unlock()
-
 	cfg, err := C.GetConfig()
 	if err != nil {
 		return
 	}
 
 	// clear proxys and rules
-	t.proxys = make(map[string]C.Proxy)
-	t.rules = []C.Rule{}
+	proxys := make(map[string]C.Proxy)
+	rules := []C.Rule{}
 
-	proxys := cfg.Section("Proxy")
-	rules := cfg.Section("Rule")
+	proxysConfig := cfg.Section("Proxy")
+	rulesConfig := cfg.Section("Rule")
 
 	// parse proxy
-	for _, key := range proxys.Keys() {
+	for _, key := range proxysConfig.Keys() {
 		proxy := strings.Split(key.Value(), ",")
 		if len(proxy) == 0 {
 			continue
@@ -61,16 +58,20 @@ func (t *Tunnel) UpdateConfig() (err error) {
 				continue
 			}
 			ssURL := fmt.Sprintf("ss://%s:%s@%s:%s", proxy[3], proxy[4], proxy[1], proxy[2])
-			t.proxys[key.Name()] = adapters.NewShadowSocks(ssURL)
+			ss, err := adapters.NewShadowSocks(ssURL)
+			if err != nil {
+				return err
+			}
+			proxys[key.Name()] = ss
 		}
 	}
 
 	// init proxy
-	t.proxys["DIRECT"] = adapters.NewDirect()
-	t.proxys["REJECT"] = adapters.NewReject()
+	proxys["DIRECT"] = adapters.NewDirect()
+	proxys["REJECT"] = adapters.NewReject()
 
 	// parse rules
-	for _, key := range rules.Keys() {
+	for _, key := range rulesConfig.Keys() {
 		rule := strings.Split(key.Name(), ",")
 		if len(rule) < 3 {
 			continue
@@ -78,17 +79,23 @@ func (t *Tunnel) UpdateConfig() (err error) {
 		rule = trimArr(rule)
 		switch rule[0] {
 		case "DOMAIN-SUFFIX":
-			t.rules = append(t.rules, R.NewDomainSuffix(rule[1], rule[2]))
+			rules = append(rules, R.NewDomainSuffix(rule[1], rule[2]))
 		case "DOMAIN-KEYWORD":
-			t.rules = append(t.rules, R.NewDomainKeyword(rule[1], rule[2]))
+			rules = append(rules, R.NewDomainKeyword(rule[1], rule[2]))
 		case "GEOIP":
-			t.rules = append(t.rules, R.NewGEOIP(rule[1], rule[2]))
+			rules = append(rules, R.NewGEOIP(rule[1], rule[2]))
 		case "IP-CIDR", "IP-CIDR6":
-			t.rules = append(t.rules, R.NewIPCIDR(rule[1], rule[2]))
+			rules = append(rules, R.NewIPCIDR(rule[1], rule[2]))
 		case "FINAL":
-			t.rules = append(t.rules, R.NewFinal(rule[2]))
+			rules = append(rules, R.NewFinal(rule[2]))
 		}
 	}
+
+	t.configLock.Lock()
+	defer t.configLock.Unlock()
+
+	t.proxys = proxys
+	t.rules = rules
 
 	return nil
 }
