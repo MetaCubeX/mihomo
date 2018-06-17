@@ -1,9 +1,7 @@
 FROM golang:latest as builder
 RUN wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz -O /tmp/GeoLite2-Country.tar.gz && \
-    cd /tmp && \
-    tar zxvf GeoLite2-Country.tar.gz && \
-    cd GeoLite2-Country_* && \
-    cp GeoLite2-Country.mmdb /Country.mmdb
+    tar zxvf /tmp/GeoLite2-Country.tar.gz -C /tmp && \
+    cp /tmp/GeoLite2-Country_*/GeoLite2-Country.mmdb /Country.mmdb
 RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && \
     mkdir -p /go/src/github.com/Dreamacro/clash
 WORKDIR /go/src/github.com/Dreamacro/clash
