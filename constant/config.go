@@ -29,9 +29,14 @@ var (
 func init() {
 	currentUser, err := user.Current()
 	if err != nil {
-		log.Fatalf("Can't get current user: %s", err.Error())
+		dir := os.Getenv("HOME")
+		if dir == "" {
+			log.Fatalf("Can't get current user: %s", err.Error())
+		}
+		HomeDir = dir
+	} else {
+		HomeDir = currentUser.HomeDir
 	}
-	HomeDir = currentUser.HomeDir
 
 	dirPath := path.Join(HomeDir, ".config", Name)
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {

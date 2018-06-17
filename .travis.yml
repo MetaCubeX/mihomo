@@ -12,11 +12,7 @@ env:
     - BINDIR=bin
 script:
   - go test
-  - GOARCH=amd64 GOOS=linux go build -o $BINDIR/$NAME-linux
-  - GOARCH=amd64 GOOS=darwin go build -o $BINDIR/$NAME-macos
-  - chmod +x $BINDIR/$NAME-*
-  - gzip $BINDIR/$NAME-linux
-  - gzip $BINDIR/$NAME-macos
+before_deploy: make -j releases
 deploy:
   provider: releases
   prerelease: true
