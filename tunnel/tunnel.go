@@ -27,6 +27,7 @@ type Tunnel struct {
 	observable *observable.Observable
 	logCh      chan interface{}
 	configLock *sync.RWMutex
+	traffic    *C.Traffic
 }
 
 func (t *Tunnel) Add(req C.ServerAdapter) {
@@ -61,7 +62,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 				continue
 			}
 			ssURL := fmt.Sprintf("ss://%s:%s@%s:%s", proxy[3], proxy[4], proxy[1], proxy[2])
-			ss, err := adapters.NewShadowSocks(key.Name(), ssURL)
+			ss, err := adapters.NewShadowSocks(key.Name(), ssURL, t.traffic)
 			if err != nil {
 				return err
 			}
@@ -70,7 +71,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 	}
 
 	// init proxy
-	proxys["DIRECT"] = adapters.NewDirect()
+	proxys["DIRECT"] = adapters.NewDirect(t.traffic)
 	proxys["REJECT"] = adapters.NewReject()
 
 	// parse rules
@@ -167,7 +168,7 @@ func (t *Tunnel) match(addr *C.Addr) C.Proxy {
 			return a
 		}
 	}
-	t.logCh <- newLog(INFO, "don't find, direct")
+	t.logCh <- newLog(INFO, "%v doesn't match any rule using DIRECT", addr.String())
 	return t.proxys["DIRECT"]
 }
 
@@ -179,6 +180,7 @@ func newTunnel() *Tunnel {
 		observable: observable.NewObservable(logCh),
 		logCh:      logCh,
 		configLock: &sync.RWMutex{},
+		traffic:    C.NewTraffic(time.Second),
 	}
 	go tunnel.process()
 	go tunnel.subscribeLogs()

@@ -19,7 +19,7 @@ func (r *RejectAdapter) ReadWriter() io.ReadWriter {
 // Close is used to close connection
 func (r *RejectAdapter) Close() {}
 
-// Close is used to close connection
+// Conn is used to http request
 func (r *RejectAdapter) Conn() net.Conn {
 	return nil
 }

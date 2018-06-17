@@ -34,9 +34,10 @@ func (ss *ShadowsocksAdapter) Conn() net.Conn {
 }
 
 type ShadowSocks struct {
-	server string
-	name   string
-	cipher core.Cipher
+	server  string
+	name    string
+	cipher  core.Cipher
+	traffic *C.Traffic
 }
 
 func (ss *ShadowSocks) Name() string {
@@ -51,10 +52,10 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 	c.(*net.TCPConn).SetKeepAlive(true)
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(addr))
-	return &ShadowsocksAdapter{conn: c}, err
+	return &ShadowsocksAdapter{conn: NewTrafficTrack(c, ss.traffic)}, err
 }
 
-func NewShadowSocks(name string, ssURL string) (*ShadowSocks, error) {
+func NewShadowSocks(name string, ssURL string, traffic *C.Traffic) (*ShadowSocks, error) {
 	var key []byte
 	server, cipher, password, _ := parseURL(ssURL)
 	ciph, err := core.PickCipher(cipher, key, password)
@@ -62,9 +63,10 @@ func NewShadowSocks(name string, ssURL string) (*ShadowSocks, error) {
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
 	return &ShadowSocks{
-		server: server,
-		name:   name,
-		cipher: ciph,
+		server:  server,
+		name:    name,
+		cipher:  ciph,
+		traffic: traffic,
 	}, nil
 }
 
