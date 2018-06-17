@@ -22,12 +22,13 @@ func (d *DirectAdapter) Close() {
 	d.conn.Close()
 }
 
-// Close is used to close connection
+// Conn is used to http request
 func (d *DirectAdapter) Conn() net.Conn {
 	return d.conn
 }
 
 type Direct struct {
+	traffic *C.Traffic
 }
 
 func (d *Direct) Name() string {
@@ -40,9 +41,9 @@ func (d *Direct) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 		return
 	}
 	c.(*net.TCPConn).SetKeepAlive(true)
-	return &DirectAdapter{conn: c}, nil
+	return &DirectAdapter{conn: NewTrafficTrack(c, d.traffic)}, nil
 }
 
-func NewDirect() *Direct {
-	return &Direct{}
+func NewDirect(traffic *C.Traffic) *Direct {
+	return &Direct{traffic: traffic}
 }
