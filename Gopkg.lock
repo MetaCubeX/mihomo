@@ -49,10 +49,11 @@
     "chacha20poly1305",
     "hkdf",
     "internal/chacha20",
+    "internal/subtle",
     "poly1305",
     "ssh/terminal"
   ]
-  revision = "8ac0e0d97ce45cd83d1d7243c060cb8461dda5e9"
+  revision = "a8fb68e7206f8c78be19b432c58eb52a6aa34462"
 
 [[projects]]
   branch = "master"
@@ -62,7 +63,7 @@
     "unix",
     "windows"
   ]
-  revision = "9527bec2660bd847c050fda93a0f0c6dee0800bb"
+  revision = "6c888cc515d3ed83fc103cf1d84468aad274b0a7"
 
 [[projects]]
   name = "gopkg.in/eapache/channels.v1"
