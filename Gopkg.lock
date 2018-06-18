@@ -14,6 +14,18 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/go-chi/chi"
+  packages = ["."]
+  revision = "e83ac2304db3c50cf03d96a2fcd39009d458bc35"
+  version = "v3.3.2"
+
+[[projects]]
+  name = "github.com/go-chi/render"
+  packages = ["."]
+  revision = "3215478343fbc559bd3fc08f7031bb134d6bdad5"
+  version = "v1.0.1"
+
+[[projects]]
   name = "github.com/oschwald/geoip2-golang"
   packages = ["."]
   revision = "7118115686e16b77967cdbf55d1b944fe14ad312"
@@ -53,7 +65,7 @@
     "poly1305",
     "ssh/terminal"
   ]
-  revision = "a8fb68e7206f8c78be19b432c58eb52a6aa34462"
+  revision = "027cca12c2d63e3d62b670d901e8a2c95854feec"
 
 [[projects]]
   branch = "master"
@@ -80,6 +92,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4297c505508c6cdd8c94fd4ef29bc6940c65fea81e125fcf871a316b6e671a71"
+  inputs-digest = "c3c901e4e393a2df9e421924d3a4d85ec73642e36dcbc1ddca5fc13159220e86"
   solver-name = "gps-cdcl"
   solver-version = 1

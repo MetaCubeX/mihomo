@@ -26,6 +26,14 @@
 
 
 [[constraint]]
+  name = "github.com/go-chi/chi"
+  version = "3.3.2"
+
+[[constraint]]
+  name = "github.com/go-chi/render"
+  version = "1.0.1"
+
+[[constraint]]
   name = "github.com/oschwald/geoip2-golang"
   version = "1.2.1"
 
