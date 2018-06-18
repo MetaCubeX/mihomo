@@ -13,7 +13,7 @@ RUN dep ensure && \
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates && \
     mkdir -p /root/.config/clash
-COPY --from=builder /clash .
 COPY --from=builder /Country.mmdb /root/.config/clash/
+COPY --from=builder /clash .
 EXPOSE 7890 7891
 ENTRYPOINT ["/clash"]

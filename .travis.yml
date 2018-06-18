@@ -11,7 +11,7 @@ env:
     - NAME=clash
     - BINDIR=bin
 script:
-  - go test
+  - go test ./...
 before_deploy: make -j releases
 deploy:
   provider: releases
