@@ -28,11 +28,15 @@ Unfortunately, there is no native elegant way to implement golang's daemon.
 
 So we can use third-party daemon tools like pm2, supervisor, and so on.
 
-In the case of pm2, we can start the daemon this way:
+In the case of [pm2](https://github.com/Unitech/pm2), we can start the daemon this way:
 
 ```sh
 pm2 start clash
 ```
+
+If you have Docker installed, you can run clash directly using `docker-compose`.
+
+[Run clash in docker](https://github.com/Dreamacro/clash/wiki/Run-clash-in-docker)
 
 ## Config
 
@@ -44,6 +48,9 @@ Below is a simple demo configuration file:
 [General]
 port = 7890
 socks-port = 7891
+
+# A RESTful API for clash
+external-controller = 127.0.0.1:8080
 
 [Proxy]
 # name = ss, server, port, cipher, password
