@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/hub"
 	"github.com/Dreamacro/clash/proxy/http"
 	"github.com/Dreamacro/clash/proxy/socks"
 	"github.com/Dreamacro/clash/tunnel"
@@ -36,6 +37,11 @@ func main() {
 
 	go http.NewHttpProxy(port)
 	go socks.NewSocksProxy(socksPort)
+
+	// Hub
+	if key, err := section.GetKey("external-controller"); err == nil {
+		go hub.NewHub(key.Value())
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

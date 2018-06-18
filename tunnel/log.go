@@ -20,6 +20,21 @@ type Log struct {
 	Payload string
 }
 
+func (l *Log) Type() string {
+	switch l.LogType {
+	case INFO:
+		return "Info"
+	case WARNING:
+		return "Warning"
+	case ERROR:
+		return "Error"
+	case DEBUG:
+		return "Debug"
+	default:
+		return "Unknow"
+	}
+}
+
 func print(data Log) {
 	switch data.LogType {
 	case INFO:

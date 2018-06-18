@@ -34,6 +34,14 @@ func (t *Tunnel) Add(req C.ServerAdapter) {
 	t.queue.In() <- req
 }
 
+func (t *Tunnel) Traffic() *C.Traffic {
+	return t.traffic
+}
+
+func (t *Tunnel) Log() *observable.Observable {
+	return t.observable
+}
+
 func (t *Tunnel) UpdateConfig() (err error) {
 	cfg, err := C.GetConfig()
 	if err != nil {
