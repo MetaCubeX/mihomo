@@ -19,6 +19,7 @@ type URLTest struct {
 	addr   *C.Addr
 	fast   C.Proxy
 	delay  time.Duration
+	done   chan struct{}
 }
 
 func (u *URLTest) Name() string {
@@ -29,11 +30,21 @@ func (u *URLTest) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	return u.fast.Generator(addr)
 }
 
+func (u *URLTest) Close() {
+	u.done <- struct{}{}
+}
+
 func (u *URLTest) loop() {
-	tick := time.Tick(u.delay)
+	tick := time.NewTicker(u.delay)
 	go u.speedTest()
-	for range tick {
-		go u.speedTest()
+Loop:
+	for {
+		select {
+		case <-tick.C:
+			go u.speedTest()
+		case <-u.done:
+			break Loop
+		}
 	}
 }
 
@@ -142,6 +153,7 @@ func NewURLTest(name string, proxys []C.Proxy, rawURL string, delay time.Duratio
 		addr:   addr,
 		fast:   proxys[0],
 		delay:  delay,
+		done:   make(chan struct{}),
 	}
 	go urlTest.loop()
 	return urlTest, nil
