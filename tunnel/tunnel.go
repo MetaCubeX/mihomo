@@ -48,7 +48,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 		return
 	}
 
-	// clear proxys and rules
+	// empty proxys and rules
 	proxys := make(map[string]C.Proxy)
 	rules := []C.Rule{}
 
@@ -77,10 +77,6 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			proxys[key.Name()] = ss
 		}
 	}
-
-	// init proxy
-	proxys["DIRECT"] = adapters.NewDirect(t.traffic)
-	proxys["REJECT"] = adapters.NewReject()
 
 	// parse rules
 	for _, key := range rulesConfig.Keys() {
@@ -130,8 +126,20 @@ func (t *Tunnel) UpdateConfig() (err error) {
 		}
 	}
 
+	// init proxy
+	proxys["DIRECT"] = adapters.NewDirect(t.traffic)
+	proxys["REJECT"] = adapters.NewReject()
+
 	t.configLock.Lock()
 	defer t.configLock.Unlock()
+
+	// stop url-test
+	for _, elm := range t.proxys {
+		urlTest, ok := elm.(*adapters.URLTest)
+		if ok {
+			urlTest.Close()
+		}
+	}
 
 	t.proxys = proxys
 	t.rules = rules
