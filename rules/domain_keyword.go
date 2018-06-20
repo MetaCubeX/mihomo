@@ -27,6 +27,10 @@ func (dk *DomainKeyword) Adapter() string {
 	return dk.adapter
 }
 
+func (dk *DomainKeyword) Payload() string {
+	return dk.keyword
+}
+
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
 	return &DomainKeyword{
 		keyword: keyword,

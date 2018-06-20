@@ -20,6 +20,10 @@ func (f *Final) Adapter() string {
 	return f.adapter
 }
 
+func (f *Final) Payload() string {
+	return ""
+}
+
 func NewFinal(adapter string) *Final {
 	return &Final{
 		adapter: adapter,
