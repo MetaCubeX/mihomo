@@ -38,6 +38,10 @@ func (t *Tunnel) Traffic() *C.Traffic {
 	return t.traffic
 }
 
+func (t *Tunnel) Config() ([]C.Rule, map[string]C.Proxy) {
+	return t.rules, t.proxys
+}
+
 func (t *Tunnel) Log() *observable.Observable {
 	return t.observable
 }

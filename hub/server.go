@@ -35,6 +35,7 @@ func NewHub(addr string) {
 
 	r.Get("/traffic", traffic)
 	r.Get("/logs", getLogs)
+	r.Mount("/configs", configRouter())
 
 	err := http.ListenAndServe(addr, r)
 	if err != nil {
@@ -43,7 +44,7 @@ func NewHub(addr string) {
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
-	render.Status(r, http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 
 	tick := time.NewTicker(time.Second)
 	t := tun.Traffic()
@@ -64,10 +65,11 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	sub, err := src.Subscribe()
 	defer src.UnSubscribe(sub)
 	if err != nil {
-		render.Status(r, http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		render.JSON(w, r, Error{
 			Error: err.Error(),
 		})
+		return
 	}
 	render.Status(r, http.StatusOK)
 	for elm := range sub {

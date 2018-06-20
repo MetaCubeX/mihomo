@@ -27,6 +27,10 @@ func (ds *DomainSuffix) Adapter() string {
 	return ds.adapter
 }
 
+func (ds *DomainSuffix) Payload() string {
+	return ds.suffix
+}
+
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
 	return &DomainSuffix{
 		suffix:  suffix,

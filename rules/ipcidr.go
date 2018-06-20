@@ -23,8 +23,12 @@ func (i *IPCIDR) IsMatch(addr *C.Addr) bool {
 	return i.ipnet.Contains(*addr.IP)
 }
 
-func (g *IPCIDR) Adapter() string {
-	return g.adapter
+func (i *IPCIDR) Adapter() string {
+	return i.adapter
+}
+
+func (i *IPCIDR) Payload() string {
+	return i.ipnet.String()
 }
 
 func NewIPCIDR(s string, adapter string) *IPCIDR {

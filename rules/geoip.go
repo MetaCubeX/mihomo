@@ -38,6 +38,10 @@ func (g *GEOIP) Adapter() string {
 	return g.adapter
 }
 
+func (g *GEOIP) Payload() string {
+	return g.country
+}
+
 func NewGEOIP(country string, adapter string) *GEOIP {
 	return &GEOIP{
 		country: country,
