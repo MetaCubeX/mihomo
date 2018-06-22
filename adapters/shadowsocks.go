@@ -93,13 +93,13 @@ func serializesSocksAddr(addr *C.Addr) []byte {
 	case socks.AtypDomainName:
 		len := uint8(len(addr.Host))
 		host := []byte(addr.Host)
-		buf = [][]byte{[]byte{aType, len}, host, port}
+		buf = [][]byte{{aType, len}, host, port}
 	case socks.AtypIPv4:
 		host := addr.IP.To4()
-		buf = [][]byte{[]byte{aType}, host, port}
+		buf = [][]byte{{aType}, host, port}
 	case socks.AtypIPv6:
 		host := addr.IP.To16()
-		buf = [][]byte{[]byte{aType}, host, port}
+		buf = [][]byte{{aType}, host, port}
 	}
 	return bytes.Join(buf, []byte(""))
 }
