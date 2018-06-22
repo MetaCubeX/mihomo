@@ -7,21 +7,21 @@ import (
 )
 
 const (
-	INFO LogType = iota
+	ERROR LogLevel = iota
 	WARNING
-	ERROR
+	INFO
 	DEBUG
 )
 
-type LogType int
+type LogLevel int
 
 type Log struct {
-	LogType LogType
-	Payload string
+	LogLevel LogLevel
+	Payload  string
 }
 
 func (l *Log) Type() string {
-	switch l.LogType {
+	switch l.LogLevel {
 	case INFO:
 		return "Info"
 	case WARNING:
@@ -36,7 +36,7 @@ func (l *Log) Type() string {
 }
 
 func print(data Log) {
-	switch data.LogType {
+	switch data.LogLevel {
 	case INFO:
 		log.Infoln(data.Payload)
 	case WARNING:
@@ -59,9 +59,9 @@ func (t *Tunnel) subscribeLogs() {
 	}
 }
 
-func newLog(logType LogType, format string, v ...interface{}) Log {
+func newLog(logLevel LogLevel, format string, v ...interface{}) Log {
 	return Log{
-		LogType: logType,
-		Payload: fmt.Sprintf(format, v...),
+		LogLevel: logLevel,
+		Payload:  fmt.Sprintf(format, v...),
 	}
 }

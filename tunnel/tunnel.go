@@ -184,7 +184,7 @@ func (t *Tunnel) match(addr *C.Addr) C.Proxy {
 			if !ok {
 				continue
 			}
-			t.logCh <- newLog(INFO, "%v match %d using %s", addr.String(), rule.RuleType(), rule.Adapter())
+			t.logCh <- newLog(INFO, "%v match %s using %s", addr.String(), rule.RuleType().String(), rule.Adapter())
 			return a
 		}
 	}
