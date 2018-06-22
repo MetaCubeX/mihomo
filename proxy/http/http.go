@@ -32,7 +32,6 @@ func (h *HttpAdapter) Connect(proxy C.ProxyAdapter) {
 		// from http.DefaultTransport
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 	resp, err := req.RoundTrip(h.r)
@@ -48,7 +47,23 @@ func (h *HttpAdapter) Connect(proxy C.ProxyAdapter) {
 		}
 	}
 	h.w.WriteHeader(resp.StatusCode)
-	io.Copy(h.w, resp.Body)
+	var writer io.Writer = h.w
+	if len(resp.TransferEncoding) > 0 && resp.TransferEncoding[0] == "chunked" {
+		writer = ChunkWriter{Writer: h.w}
+	}
+	io.Copy(writer, resp.Body)
+}
+
+type ChunkWriter struct {
+	io.Writer
+}
+
+func (cw ChunkWriter) Write(b []byte) (int, error) {
+	n, err := cw.Writer.Write(b)
+	if err == nil {
+		cw.Writer.(http.Flusher).Flush()
+	}
+	return n, err
 }
 
 func NewHttp(host string, w http.ResponseWriter, r *http.Request) (*HttpAdapter, chan struct{}) {
