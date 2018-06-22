@@ -21,11 +21,6 @@ type Traffic struct {
 	Down int64 `json:"down"`
 }
 
-type Log struct {
-	Type    string `json:"type"`
-	Payload string `json:"payload"`
-}
-
 type Error struct {
 	Error string `json:"error"`
 }
@@ -60,7 +55,38 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type GetLogs struct {
+	Level string `json:"level"`
+}
+
+type Log struct {
+	Type    string `json:"type"`
+	Payload string `json:"payload"`
+}
+
 func getLogs(w http.ResponseWriter, r *http.Request) {
+	req := &GetLogs{}
+	render.DecodeJSON(r.Body, req)
+	if req.Level == "" {
+		req.Level = "info"
+	}
+
+	mapping := map[string]tunnel.LogLevel{
+		"info":    tunnel.INFO,
+		"debug":   tunnel.DEBUG,
+		"error":   tunnel.ERROR,
+		"warning": tunnel.WARNING,
+	}
+
+	level, ok := mapping[req.Level]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		render.JSON(w, r, Error{
+			Error: "Level error",
+		})
+		return
+	}
+
 	src := tun.Log()
 	sub, err := src.Subscribe()
 	defer src.UnSubscribe(sub)
@@ -74,6 +100,10 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, http.StatusOK)
 	for elm := range sub {
 		log := elm.(tunnel.Log)
+		if log.LogLevel > level {
+			continue
+		}
+
 		if err := json.NewEncoder(w).Encode(Log{
 			Type:    log.Type(),
 			Payload: log.Payload,
