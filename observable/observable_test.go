@@ -27,11 +27,7 @@ func TestObservable(t *testing.T) {
 		t.Error(err)
 	}
 	count := 0
-	for {
-		_, open := <-data
-		if !open {
-			break
-		}
+	for range data {
 		count = count + 1
 	}
 	if count != 5 {
@@ -49,11 +45,7 @@ func TestObservable_MutilSubscribe(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	waitCh := func(ch <-chan interface{}) {
-		for {
-			_, open := <-ch
-			if !open {
-				break
-			}
+		for range ch {
 			count = count + 1
 		}
 		wg.Done()
@@ -80,6 +72,25 @@ func TestObservable_UnSubscribe(t *testing.T) {
 	}
 }
 
+func TestObservable_SubscribeClosedSource(t *testing.T) {
+	iter := iterator([]interface{}{1})
+	src := NewObservable(iter)
+	data, _ := src.Subscribe()
+	<-data
+
+	_, closed := src.Subscribe()
+	if closed == nil {
+		t.Error("Observable should be closed")
+	}
+}
+
+func TestObservable_UnSubscribeWithNotExistSubscription(t *testing.T) {
+	sub := Subscription(make(chan interface{}))
+	iter := iterator([]interface{}{1})
+	src := NewObservable(iter)
+	src.UnSubscribe(sub)
+}
+
 func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 	// waiting for other goroutine recycle
 	time.Sleep(120 * time.Millisecond)
@@ -97,11 +108,7 @@ func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(max)
 	waitCh := func(ch <-chan interface{}) {
-		for {
-			_, open := <-ch
-			if !open {
-				break
-			}
+		for range ch {
 		}
 		wg.Done()
 	}

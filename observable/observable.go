@@ -50,7 +50,6 @@ func (o *Observable) Subscribe() (Subscription, error) {
 func (o *Observable) UnSubscribe(sub Subscription) {
 	elm, exist := o.listener.Load(sub)
 	if !exist {
-		println("not exist")
 		return
 	}
 	subscriber := elm.(*Subscriber)
