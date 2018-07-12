@@ -31,6 +31,8 @@ func NewHub(addr string) {
 	r.Get("/traffic", traffic)
 	r.Get("/logs", getLogs)
 	r.Mount("/configs", configRouter())
+	r.Mount("/proxys", proxyRouter())
+	r.Mount("/rules", ruleRouter())
 
 	err := http.ListenAndServe(addr, r)
 	if err != nil {

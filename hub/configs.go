@@ -3,65 +3,47 @@ package hub
 import (
 	"net/http"
 
+	"github.com/Dreamacro/clash/tunnel"
+
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )
 
-type Configs struct {
-	Proxys []Proxy `json:"proxys"`
-	Rules  []Rule  `json:"rules"`
-}
-
-type Proxy struct {
-	Name string `json:"name"`
-}
-
-type Rule struct {
-	Name    string `json:"name"`
-	Payload string `json:"type"`
-}
-
 func configRouter() http.Handler {
 	r := chi.NewRouter()
-	r.Get("/", getConfig)
 	r.Put("/", updateConfig)
 	return r
 }
 
-func getConfig(w http.ResponseWriter, r *http.Request) {
-	rulesCfg, proxysCfg := tun.Config()
+type General struct {
+	Mode string `json:mode`
+}
 
-	var (
-		rules  []Rule
-		proxys []Proxy
-	)
-
-	for _, rule := range rulesCfg {
-		rules = append(rules, Rule{
-			Name:    rule.RuleType().String(),
-			Payload: rule.Payload(),
-		})
-	}
-
-	for _, proxy := range proxysCfg {
-		proxys = append(proxys, Proxy{Name: proxy.Name()})
-	}
-
-	w.WriteHeader(http.StatusOK)
-	render.JSON(w, r, Configs{
-		Rules:  rules,
-		Proxys: proxys,
-	})
+var modeMapping = map[string]tunnel.Mode{
+	"global": tunnel.Global,
+	"rule":   tunnel.Rule,
+	"direct": tunnel.Direct,
 }
 
 func updateConfig(w http.ResponseWriter, r *http.Request) {
-	err := tun.UpdateConfig()
+	general := &General{}
+	err := render.DecodeJSON(r.Body, general)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		render.JSON(w, r, Error{
-			Error: err.Error(),
+			Error: "Format error",
 		})
 		return
 	}
+
+	mode, ok := modeMapping[general.Mode]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		render.JSON(w, r, Error{
+			Error: "Mode error",
+		})
+		return
+	}
+	tun.SetMode(mode)
 	w.WriteHeader(http.StatusNoContent)
 }

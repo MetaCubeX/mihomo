@@ -28,6 +28,8 @@ type Tunnel struct {
 	logCh      chan interface{}
 	configLock *sync.RWMutex
 	traffic    *C.Traffic
+	mode       Mode
+	selector   *adapters.Selector
 }
 
 func (t *Tunnel) Add(req C.ServerAdapter) {
@@ -46,6 +48,10 @@ func (t *Tunnel) Log() *observable.Observable {
 	return t.observable
 }
 
+func (t *Tunnel) SetMode(mode Mode) {
+	t.mode = mode
+}
+
 func (t *Tunnel) UpdateConfig() (err error) {
 	cfg, err := C.GetConfig()
 	if err != nil {
@@ -62,11 +68,10 @@ func (t *Tunnel) UpdateConfig() (err error) {
 
 	// parse proxy
 	for _, key := range proxysConfig.Keys() {
-		proxy := strings.Split(key.Value(), ",")
+		proxy := key.Strings(",")
 		if len(proxy) == 0 {
 			continue
 		}
-		proxy = trimArr(proxy)
 		switch proxy[0] {
 		// ss, server, port, cipter, password
 		case "ss":
@@ -106,12 +111,12 @@ func (t *Tunnel) UpdateConfig() (err error) {
 	// parse proxy groups
 	for _, key := range groupsConfig.Keys() {
 		rule := strings.Split(key.Value(), ",")
-		if len(rule) < 4 {
-			continue
-		}
 		rule = trimArr(rule)
 		switch rule[0] {
 		case "url-test":
+			if len(rule) < 4 {
+				return fmt.Errorf("URLTest need more than 4 param")
+			}
 			proxyNames := rule[1 : len(rule)-2]
 			delay, _ := strconv.Atoi(rule[len(rule)-1])
 			url := rule[len(rule)-2]
@@ -127,6 +132,24 @@ func (t *Tunnel) UpdateConfig() (err error) {
 				return fmt.Errorf("Config error: %s", err.Error())
 			}
 			proxys[key.Name()] = adapter
+		case "select":
+			if len(rule) < 3 {
+				return fmt.Errorf("Selector need more than 3 param")
+			}
+			proxyNames := rule[1:]
+			selectProxy := make(map[string]C.Proxy)
+			for _, name := range proxyNames {
+				proxy, exist := proxys[name]
+				if !exist {
+					return fmt.Errorf("Proxy %s not exist", name)
+				}
+				selectProxy[name] = proxy
+			}
+			selector, err := adapters.NewSelector(key.Name(), selectProxy)
+			if err != nil {
+				return fmt.Errorf("Selector create error: %s", err.Error())
+			}
+			proxys[key.Name()] = selector
 		}
 	}
 
@@ -145,8 +168,14 @@ func (t *Tunnel) UpdateConfig() (err error) {
 		}
 	}
 
+	s, err := adapters.NewSelector("Proxy", proxys)
+	if err != nil {
+		return err
+	}
+
 	t.proxys = proxys
 	t.rules = rules
+	t.selector = s
 
 	return nil
 }
@@ -163,7 +192,17 @@ func (t *Tunnel) process() {
 func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	defer localConn.Close()
 	addr := localConn.Addr()
-	proxy := t.match(addr)
+
+	var proxy C.Proxy
+	switch t.mode {
+	case Direct:
+		proxy = t.proxys["DIRECT"]
+	case Global:
+		proxy = t.selector
+	// Rule
+	default:
+		proxy = t.match(addr)
+	}
 	remoConn, err := proxy.Generator(addr)
 	if err != nil {
 		t.logCh <- newLog(WARNING, "Proxy connect error: %s", err.Error())
@@ -201,6 +240,7 @@ func newTunnel() *Tunnel {
 		logCh:      logCh,
 		configLock: &sync.RWMutex{},
 		traffic:    C.NewTraffic(time.Second),
+		mode:       Rule,
 	}
 	go tunnel.process()
 	go tunnel.subscribeLogs()

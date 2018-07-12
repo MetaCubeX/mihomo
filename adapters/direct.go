@@ -35,6 +35,10 @@ func (d *Direct) Name() string {
 	return "Direct"
 }
 
+func (d *Direct) Type() C.AdapterType {
+	return C.Direct
+}
+
 func (d *Direct) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	c, err := net.Dial("tcp", net.JoinHostPort(addr.String(), addr.Port))
 	if err != nil {
