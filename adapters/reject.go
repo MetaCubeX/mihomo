@@ -31,6 +31,10 @@ func (r *Reject) Name() string {
 	return "Reject"
 }
 
+func (r *Reject) Type() C.AdapterType {
+	return C.Reject
+}
+
 func (r *Reject) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	return &RejectAdapter{}, nil
 }

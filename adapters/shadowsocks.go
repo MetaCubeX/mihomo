@@ -44,6 +44,10 @@ func (ss *ShadowSocks) Name() string {
 	return ss.name
 }
 
+func (ss *ShadowSocks) Type() C.AdapterType {
+	return C.Shadowsocks
+}
+
 func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	c, err := net.Dial("tcp", ss.server)
 	if err != nil {

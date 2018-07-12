@@ -26,6 +26,14 @@ func (u *URLTest) Name() string {
 	return u.name
 }
 
+func (u *URLTest) Type() C.AdapterType {
+	return C.URLTest
+}
+
+func (u *URLTest) Now() string {
+	return u.fast.Name()
+}
+
 func (u *URLTest) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	return u.fast.Generator(addr)
 }
