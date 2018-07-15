@@ -1,7 +1,6 @@
 package socks
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -17,20 +16,41 @@ var (
 	tun = tunnel.GetInstance()
 )
 
-func NewSocksProxy(port string) {
-	l, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
-	defer l.Close()
+func NewSocksProxy(addr string) (*C.ProxySignal, error) {
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		return
+		return nil, err
 	}
-	log.Infof("SOCKS proxy :%s", port)
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			continue
+
+	done := make(chan struct{})
+	closed := make(chan struct{})
+	signal := &C.ProxySignal{
+		Done:   done,
+		Closed: closed,
+	}
+
+	go func() {
+		log.Infof("SOCKS proxy listening at: %s", addr)
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				if _, open := <-done; !open {
+					break
+				}
+				continue
+			}
+			go handleSocks(c)
 		}
-		go handleSocks(c)
-	}
+	}()
+
+	go func() {
+		<-done
+		close(done)
+		l.Close()
+		closed <- struct{}{}
+	}()
+
+	return signal, nil
 }
 
 func handleSocks(conn net.Conn) {

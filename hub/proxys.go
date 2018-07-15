@@ -61,7 +61,7 @@ type GetProxysResponse struct {
 }
 
 func getProxys(w http.ResponseWriter, r *http.Request) {
-	_, rawProxys := tun.Config()
+	_, rawProxys := tunnel.Config()
 	proxys := make(map[string]interface{})
 	for name, proxy := range rawProxys {
 		proxys[name] = transformProxy(proxy)
@@ -71,7 +71,7 @@ func getProxys(w http.ResponseWriter, r *http.Request) {
 
 func getProxy(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	_, proxys := tun.Config()
+	_, proxys := tunnel.Config()
 	proxy, exist := proxys[name]
 	if !exist {
 		w.WriteHeader(http.StatusNotFound)
@@ -98,7 +98,7 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := chi.URLParam(r, "name")
-	_, proxys := tun.Config()
+	_, proxys := tunnel.Config()
 	proxy, exist := proxys[name]
 	if !exist {
 		w.WriteHeader(http.StatusNotFound)
