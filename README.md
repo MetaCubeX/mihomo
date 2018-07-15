@@ -15,6 +15,7 @@
   <a href="https://goreportcard.com/report/github.com/Dreamacro/clash">
       <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
   </a>
+  <a href="https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=shield"/></a>
   <a href="https://github.com/Dreamacro/clash/releases">
     <img src="https://img.shields.io/github/release/Dreamacro/clash/all.svg?style=flat-square">
   </a>
@@ -87,6 +88,9 @@ DOMAIN-SUFFIX,ad.com,REJECT
 GEOIP,CN,DIRECT
 FINAL,,Proxy # note: there is two ","
 ```
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_large)
 
 ## TODO
 
