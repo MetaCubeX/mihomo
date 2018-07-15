@@ -30,7 +30,7 @@ func (s *Selector) Now() string {
 
 func (s *Selector) All() []string {
 	var all []string
-	for k, _ := range s.proxys {
+	for k := range s.proxys {
 		all = append(all, k)
 	}
 	return all
