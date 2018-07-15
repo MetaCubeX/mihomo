@@ -7,38 +7,28 @@ import (
 
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/hub"
-	"github.com/Dreamacro/clash/proxy/http"
-	"github.com/Dreamacro/clash/proxy/socks"
+	"github.com/Dreamacro/clash/proxy"
 	"github.com/Dreamacro/clash/tunnel"
 
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
+	if err := tunnel.GetInstance().UpdateConfig(); err != nil {
+		log.Fatalf("Parse config error: %s", err.Error())
+	}
+
+	if err := proxy.Instance().Run(); err != nil {
+		log.Fatalf("Proxy listen error: %s", err.Error())
+	}
+
+	// Hub
 	cfg, err := C.GetConfig()
 	if err != nil {
 		log.Fatalf("Read config error: %s", err.Error())
 	}
 
-	port, socksPort := C.DefalutHTTPPort, C.DefalutSOCKSPort
 	section := cfg.Section("General")
-	if key, err := section.GetKey("port"); err == nil {
-		port = key.Value()
-	}
-
-	if key, err := section.GetKey("socks-port"); err == nil {
-		socksPort = key.Value()
-	}
-
-	err = tunnel.GetInstance().UpdateConfig()
-	if err != nil {
-		log.Fatalf("Parse config error: %s", err.Error())
-	}
-
-	go http.NewHttpProxy(port)
-	go socks.NewSocksProxy(socksPort)
-
-	// Hub
 	if key, err := section.GetKey("external-controller"); err == nil {
 		go hub.NewHub(key.Value())
 	}

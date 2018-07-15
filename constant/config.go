@@ -16,8 +16,8 @@ import (
 
 const (
 	Name             = "clash"
-	DefalutHTTPPort  = "7890"
-	DefalutSOCKSPort = "7891"
+	DefalutHTTPPort  = 7890
+	DefalutSOCKSPort = 7891
 )
 
 var (
@@ -25,6 +25,13 @@ var (
 	ConfigPath string
 	MMDBPath   string
 )
+
+type General struct {
+	Mode      *string `json:"mode,omitempty"`
+	AllowLan  *bool   `json:"allow-lan,omitempty"`
+	Port      *int    `json:"port,omitempty"`
+	SocksPort *int    `json:"socks-port,omitempty"`
+}
 
 func init() {
 	currentUser, err := user.Current()

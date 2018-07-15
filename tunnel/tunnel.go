@@ -52,6 +52,10 @@ func (t *Tunnel) SetMode(mode Mode) {
 	t.mode = mode
 }
 
+func (t *Tunnel) GetMode() Mode {
+	return t.mode
+}
+
 func (t *Tunnel) UpdateConfig() (err error) {
 	cfg, err := C.GetConfig()
 	if err != nil {

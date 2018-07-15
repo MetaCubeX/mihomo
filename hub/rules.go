@@ -24,7 +24,7 @@ type GetRulesResponse struct {
 }
 
 func getRules(w http.ResponseWriter, r *http.Request) {
-	rulesCfg, _ := tun.Config()
+	rulesCfg, _ := tunnel.Config()
 
 	var rules []Rule
 	for _, rule := range rulesCfg {
@@ -41,7 +41,7 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateRules(w http.ResponseWriter, r *http.Request) {
-	err := tun.UpdateConfig()
+	err := tunnel.UpdateConfig()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		render.JSON(w, r, Error{

@@ -5,24 +5,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Dreamacro/clash/tunnel"
+	T "github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	tun = tunnel.GetInstance()
-)
-
 type Traffic struct {
 	Up   int64 `json:"up"`
 	Down int64 `json:"down"`
-}
-
-type Error struct {
-	Error string `json:"error"`
 }
 
 func NewHub(addr string) {
@@ -44,7 +36,7 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	tick := time.NewTicker(time.Second)
-	t := tun.Traffic()
+	t := tunnel.Traffic()
 	for range tick.C {
 		up, down := t.Now()
 		if err := json.NewEncoder(w).Encode(Traffic{
@@ -73,11 +65,11 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		req.Level = "info"
 	}
 
-	mapping := map[string]tunnel.LogLevel{
-		"info":    tunnel.INFO,
-		"debug":   tunnel.DEBUG,
-		"error":   tunnel.ERROR,
-		"warning": tunnel.WARNING,
+	mapping := map[string]T.LogLevel{
+		"info":    T.INFO,
+		"debug":   T.DEBUG,
+		"error":   T.ERROR,
+		"warning": T.WARNING,
 	}
 
 	level, ok := mapping[req.Level]
@@ -89,7 +81,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	src := tun.Log()
+	src := tunnel.Log()
 	sub, err := src.Subscribe()
 	defer src.UnSubscribe(sub)
 	if err != nil {
@@ -101,7 +93,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	render.Status(r, http.StatusOK)
 	for elm := range sub {
-		log := elm.(tunnel.Log)
+		log := elm.(T.Log)
 		if log.LogLevel > level {
 			continue
 		}

@@ -1,7 +1,7 @@
 package http
 
 import (
-	"fmt"
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -17,9 +17,20 @@ var (
 	tun = tunnel.GetInstance()
 )
 
-func NewHttpProxy(port string) {
+func NewHttpProxy(addr string) (*C.ProxySignal, error) {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	done := make(chan struct{})
+	closed := make(chan struct{})
+	signal := &C.ProxySignal{
+		Done:   done,
+		Closed: closed,
+	}
+
 	server := &http.Server{
-		Addr: fmt.Sprintf(":%s", port),
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodConnect {
 				handleTunneling(w, r)
@@ -28,8 +39,20 @@ func NewHttpProxy(port string) {
 			}
 		}),
 	}
-	log.Infof("HTTP proxy :%s", port)
-	server.ListenAndServe()
+
+	go func() {
+		log.Infof("HTTP proxy listening at: %s", addr)
+		server.Serve(l)
+	}()
+
+	go func() {
+		<-done
+		server.Shutdown(context.Background())
+		l.Close()
+		closed <- struct{}{}
+	}()
+
+	return signal, nil
 }
 
 func handleHTTP(w http.ResponseWriter, r *http.Request) {
