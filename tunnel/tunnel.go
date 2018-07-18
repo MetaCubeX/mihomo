@@ -23,7 +23,7 @@ var (
 type Tunnel struct {
 	queue      *channels.InfiniteChannel
 	rules      []C.Rule
-	proxys     map[string]C.Proxy
+	proxies    map[string]C.Proxy
 	observable *observable.Observable
 	logCh      chan interface{}
 	configLock *sync.RWMutex
@@ -41,7 +41,7 @@ func (t *Tunnel) Traffic() *C.Traffic {
 }
 
 func (t *Tunnel) Config() ([]C.Rule, map[string]C.Proxy) {
-	return t.rules, t.proxys
+	return t.rules, t.proxies
 }
 
 func (t *Tunnel) Log() *observable.Observable {
@@ -62,16 +62,16 @@ func (t *Tunnel) UpdateConfig() (err error) {
 		return
 	}
 
-	// empty proxys and rules
-	proxys := make(map[string]C.Proxy)
+	// empty proxies and rules
+	proxies := make(map[string]C.Proxy)
 	rules := []C.Rule{}
 
-	proxysConfig := cfg.Section("Proxy")
+	proxiesConfig := cfg.Section("Proxy")
 	rulesConfig := cfg.Section("Rule")
 	groupsConfig := cfg.Section("Proxy Group")
 
 	// parse proxy
-	for _, key := range proxysConfig.Keys() {
+	for _, key := range proxiesConfig.Keys() {
 		proxy := key.Strings(",")
 		if len(proxy) == 0 {
 			continue
@@ -87,7 +87,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			if err != nil {
 				return err
 			}
-			proxys[key.Name()] = ss
+			proxies[key.Name()] = ss
 		}
 	}
 
@@ -126,7 +126,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			url := rule[len(rule)-2]
 			var ps []C.Proxy
 			for _, name := range proxyNames {
-				if p, ok := proxys[name]; ok {
+				if p, ok := proxies[name]; ok {
 					ps = append(ps, p)
 				}
 			}
@@ -135,7 +135,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			if err != nil {
 				return fmt.Errorf("Config error: %s", err.Error())
 			}
-			proxys[key.Name()] = adapter
+			proxies[key.Name()] = adapter
 		case "select":
 			if len(rule) < 3 {
 				return fmt.Errorf("Selector need more than 3 param")
@@ -143,7 +143,7 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			proxyNames := rule[1:]
 			selectProxy := make(map[string]C.Proxy)
 			for _, name := range proxyNames {
-				proxy, exist := proxys[name]
+				proxy, exist := proxies[name]
 				if !exist {
 					return fmt.Errorf("Proxy %s not exist", name)
 				}
@@ -153,31 +153,31 @@ func (t *Tunnel) UpdateConfig() (err error) {
 			if err != nil {
 				return fmt.Errorf("Selector create error: %s", err.Error())
 			}
-			proxys[key.Name()] = selector
+			proxies[key.Name()] = selector
 		}
 	}
 
 	// init proxy
-	proxys["DIRECT"] = adapters.NewDirect(t.traffic)
-	proxys["REJECT"] = adapters.NewReject()
+	proxies["DIRECT"] = adapters.NewDirect(t.traffic)
+	proxies["REJECT"] = adapters.NewReject()
 
 	t.configLock.Lock()
 	defer t.configLock.Unlock()
 
 	// stop url-test
-	for _, elm := range t.proxys {
+	for _, elm := range t.proxies {
 		urlTest, ok := elm.(*adapters.URLTest)
 		if ok {
 			urlTest.Close()
 		}
 	}
 
-	s, err := adapters.NewSelector("Proxy", proxys)
+	s, err := adapters.NewSelector("Proxy", proxies)
 	if err != nil {
 		return err
 	}
 
-	t.proxys = proxys
+	t.proxies = proxies
 	t.rules = rules
 	t.selector = s
 
@@ -200,7 +200,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	var proxy C.Proxy
 	switch t.mode {
 	case Direct:
-		proxy = t.proxys["DIRECT"]
+		proxy = t.proxies["DIRECT"]
 	case Global:
 		proxy = t.selector
 	// Rule
@@ -223,7 +223,7 @@ func (t *Tunnel) match(addr *C.Addr) C.Proxy {
 
 	for _, rule := range t.rules {
 		if rule.IsMatch(addr) {
-			a, ok := t.proxys[rule.Adapter()]
+			a, ok := t.proxies[rule.Adapter()]
 			if !ok {
 				continue
 			}
@@ -232,14 +232,14 @@ func (t *Tunnel) match(addr *C.Addr) C.Proxy {
 		}
 	}
 	t.logCh <- newLog(INFO, "%v doesn't match any rule using DIRECT", addr.String())
-	return t.proxys["DIRECT"]
+	return t.proxies["DIRECT"]
 }
 
 func newTunnel() *Tunnel {
 	logCh := make(chan interface{})
 	tunnel := &Tunnel{
 		queue:      channels.NewInfiniteChannel(),
-		proxys:     make(map[string]C.Proxy),
+		proxies:    make(map[string]C.Proxy),
 		observable: observable.NewObservable(logCh),
 		logCh:      logCh,
 		configLock: &sync.RWMutex{},

@@ -13,7 +13,7 @@ import (
 
 func proxyRouter() http.Handler {
 	r := chi.NewRouter()
-	r.Get("/", getProxys)
+	r.Get("/", getProxies)
 	r.Get("/{name}", getProxy)
 	r.Put("/{name}", updateProxy)
 	return r
@@ -56,23 +56,23 @@ func transformProxy(proxy C.Proxy) interface{} {
 	}
 }
 
-type GetProxysResponse struct {
-	Proxys map[string]interface{} `json:"proxys"`
+type GetProxiesResponse struct {
+	Proxies map[string]interface{} `json:"proxies"`
 }
 
-func getProxys(w http.ResponseWriter, r *http.Request) {
-	_, rawProxys := tunnel.Config()
-	proxys := make(map[string]interface{})
-	for name, proxy := range rawProxys {
-		proxys[name] = transformProxy(proxy)
+func getProxies(w http.ResponseWriter, r *http.Request) {
+	_, rawProxies := tunnel.Config()
+	proxies := make(map[string]interface{})
+	for name, proxy := range rawProxies {
+		proxies[name] = transformProxy(proxy)
 	}
-	render.JSON(w, r, GetProxysResponse{Proxys: proxys})
+	render.JSON(w, r, GetProxiesResponse{Proxies: proxies})
 }
 
 func getProxy(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	_, proxys := tunnel.Config()
-	proxy, exist := proxys[name]
+	_, proxies := tunnel.Config()
+	proxy, exist := proxies[name]
 	if !exist {
 		w.WriteHeader(http.StatusNotFound)
 		render.JSON(w, r, Error{
@@ -98,8 +98,8 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := chi.URLParam(r, "name")
-	_, proxys := tunnel.Config()
-	proxy, exist := proxys[name]
+	_, proxies := tunnel.Config()
+	proxy, exist := proxies[name]
 	if !exist {
 		w.WriteHeader(http.StatusNotFound)
 		render.JSON(w, r, Error{

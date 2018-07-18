@@ -12,14 +12,14 @@ import (
 )
 
 type URLTest struct {
-	name   string
-	proxys []C.Proxy
-	url    *url.URL
-	rawURL string
-	addr   *C.Addr
-	fast   C.Proxy
-	delay  time.Duration
-	done   chan struct{}
+	name    string
+	proxies []C.Proxy
+	url     *url.URL
+	rawURL  string
+	addr    *C.Addr
+	fast    C.Proxy
+	delay   time.Duration
+	done    chan struct{}
 }
 
 func (u *URLTest) Name() string {
@@ -58,12 +58,12 @@ Loop:
 
 func (u *URLTest) speedTest() {
 	wg := sync.WaitGroup{}
-	wg.Add(len(u.proxys))
+	wg.Add(len(u.proxies))
 	c := make(chan interface{})
 	fast := selectFast(c)
 	timer := time.NewTimer(u.delay)
 
-	for _, p := range u.proxys {
+	for _, p := range u.proxies {
 		go func(p C.Proxy) {
 			err := getUrl(p, u.addr, u.rawURL)
 			if err == nil {
@@ -129,7 +129,7 @@ func selectFast(in chan interface{}) chan interface{} {
 	return out
 }
 
-func NewURLTest(name string, proxys []C.Proxy, rawURL string, delay time.Duration) (*URLTest, error) {
+func NewURLTest(name string, proxies []C.Proxy, rawURL string, delay time.Duration) (*URLTest, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -154,14 +154,14 @@ func NewURLTest(name string, proxys []C.Proxy, rawURL string, delay time.Duratio
 	}
 
 	urlTest := &URLTest{
-		name:   name,
-		proxys: proxys[:],
-		rawURL: rawURL,
-		url:    u,
-		addr:   addr,
-		fast:   proxys[0],
-		delay:  delay,
-		done:   make(chan struct{}),
+		name:    name,
+		proxies: proxies[:],
+		rawURL:  rawURL,
+		url:     u,
+		addr:    addr,
+		fast:    proxies[0],
+		delay:   delay,
+		done:    make(chan struct{}),
 	}
 	go urlTest.loop()
 	return urlTest, nil
