@@ -26,7 +26,7 @@ type Listener struct {
 	socksSignal *C.ProxySignal
 }
 
-// Info returns the proxys's current configuration
+// Info returns the proxies's current configuration
 func (l *Listener) Info() (info C.General) {
 	return C.General{
 		Port:      &l.httpPort,

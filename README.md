@@ -78,7 +78,7 @@ Proxy2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
 
 [Proxy Group]
 # url-test select which proxy will be used by benchmarking speed to a URL.
-# name = url-test, [proxys], url, interval(second)
+# name = url-test, [proxies], url, interval(second)
 Proxy = url-test, Proxy1, Proxy2, http://www.google.com/generate_204, 300
 
 [Rule]

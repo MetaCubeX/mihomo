@@ -9,7 +9,7 @@ import (
 type Selector struct {
 	name     string
 	selected C.Proxy
-	proxys   map[string]C.Proxy
+	proxies  map[string]C.Proxy
 }
 
 func (s *Selector) Name() string {
@@ -30,14 +30,14 @@ func (s *Selector) Now() string {
 
 func (s *Selector) All() []string {
 	var all []string
-	for k := range s.proxys {
+	for k := range s.proxies {
 		all = append(all, k)
 	}
 	return all
 }
 
 func (s *Selector) Set(name string) error {
-	proxy, exist := s.proxys[name]
+	proxy, exist := s.proxies[name]
 	if !exist {
 		return errors.New("Proxy does not exist")
 	}
@@ -45,21 +45,21 @@ func (s *Selector) Set(name string) error {
 	return nil
 }
 
-func NewSelector(name string, proxys map[string]C.Proxy) (*Selector, error) {
-	if len(proxys) == 0 {
+func NewSelector(name string, proxies map[string]C.Proxy) (*Selector, error) {
+	if len(proxies) == 0 {
 		return nil, errors.New("Provide at least one proxy")
 	}
 
 	mapping := make(map[string]C.Proxy)
 	var init string
-	for k, v := range proxys {
+	for k, v := range proxies {
 		mapping[k] = v
 		init = k
 	}
 	s := &Selector{
 		name:     name,
-		proxys:   mapping,
-		selected: proxys[init],
+		proxies:  mapping,
+		selected: proxies[init],
 	}
 	return s, nil
 }
