@@ -8,6 +8,7 @@ import (
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	log "github.com/sirupsen/logrus"
 )
@@ -19,6 +20,15 @@ type Traffic struct {
 
 func NewHub(addr string) {
 	r := chi.NewRouter()
+
+	cors := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type"},
+		MaxAge:         300,
+	})
+
+	r.Use(cors.Handler)
 
 	r.Get("/traffic", traffic)
 	r.Get("/logs", getLogs)
