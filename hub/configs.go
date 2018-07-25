@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/proxy"
-	T "github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
@@ -19,17 +19,23 @@ func configRouter() http.Handler {
 	return r
 }
 
-var modeMapping = map[string]T.Mode{
-	"Global": T.Global,
-	"Rule":   T.Rule,
-	"Direct": T.Direct,
+type configSchema struct {
+	Port       int    `json:"port"`
+	SocketPort int    `json:"socket-port"`
+	AllowLan   bool   `json:"allow-lan"`
+	Mode       string `json:"mode"`
+	LogLevel   string `json:"log-level"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
-	info := listener.Info()
-	mode := tunnel.GetMode().String()
-	info.Mode = &mode
-	render.JSON(w, r, info)
+	general := cfg.General()
+	render.JSON(w, r, configSchema{
+		Port:       *general.Port,
+		SocketPort: *general.SocketPort,
+		AllowLan:   *general.AllowLan,
+		Mode:       general.Mode.String(),
+		LogLevel:   general.LogLevel.String(),
+	})
 }
 
 func updateConfigs(w http.ResponseWriter, r *http.Request) {
@@ -48,15 +54,19 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 
 	// update proxy
 	listener := proxy.Instance()
-	proxyErr = listener.Update(general.AllowLan, general.Port, general.SocksPort)
+	proxyErr = listener.Update(&config.Base{
+		AllowLan:   general.AllowLan,
+		Port:       general.Port,
+		SocketPort: general.SocksPort,
+	})
 
 	// update mode
 	if general.Mode != nil {
-		mode, ok := modeMapping[*general.Mode]
+		mode, ok := config.ModeMapping[*general.Mode]
 		if !ok {
 			modeErr = fmt.Errorf("Mode error")
 		} else {
-			tunnel.SetMode(mode)
+			cfg.SetMode(mode)
 		}
 	}
 

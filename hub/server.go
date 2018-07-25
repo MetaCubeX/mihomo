@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Dreamacro/clash/config"
+	C "github.com/Dreamacro/clash/constant"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
@@ -18,7 +20,19 @@ type Traffic struct {
 	Down int64 `json:"down"`
 }
 
-func NewHub(addr string) {
+func newHub(signal chan struct{}) {
+	var addr string
+	ch := config.Instance().Subscribe()
+	signal <- struct{}{}
+	for {
+		elm := <-ch
+		event := elm.(*config.Event)
+		if event.Type == "external-controller" {
+			addr = event.Payload.(string)
+			break
+		}
+	}
+
 	r := chi.NewRouter()
 
 	cors := cors.New(cors.Options{
@@ -38,7 +52,7 @@ func NewHub(addr string) {
 
 	err := http.ListenAndServe(addr, r)
 	if err != nil {
-		log.Fatalf("External controller error: %s", err.Error())
+		log.Errorf("External controller error: %s", err.Error())
 	}
 }
 
@@ -75,14 +89,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		req.Level = "info"
 	}
 
-	mapping := map[string]T.LogLevel{
-		"info":    T.INFO,
-		"debug":   T.DEBUG,
-		"error":   T.ERROR,
-		"warning": T.WARNING,
-	}
-
-	level, ok := mapping[req.Level]
+	level, ok := C.LogLevelMapping[req.Level]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		render.JSON(w, r, Error{
@@ -116,4 +123,11 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		w.(http.Flusher).Flush()
 	}
+}
+
+// Run initial hub
+func Run() {
+	signal := make(chan struct{})
+	go newHub(signal)
+	<-signal
 }

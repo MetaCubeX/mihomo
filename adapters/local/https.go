@@ -1,8 +1,7 @@
-package http
+package adapters
 
 import (
 	"bufio"
-	"io"
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -22,9 +21,8 @@ func (h *HttpsAdapter) Addr() *C.Addr {
 	return h.addr
 }
 
-func (h *HttpsAdapter) Connect(proxy C.ProxyAdapter) {
-	go io.Copy(h.conn, proxy.ReadWriter())
-	io.Copy(proxy.ReadWriter(), h.conn)
+func (h *HttpsAdapter) Conn() net.Conn {
+	return h.conn
 }
 
 func NewHttps(host string, conn net.Conn) *HttpsAdapter {

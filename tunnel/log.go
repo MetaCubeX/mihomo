@@ -3,47 +3,29 @@ package tunnel
 import (
 	"fmt"
 
+	C "github.com/Dreamacro/clash/constant"
+
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	ERROR LogLevel = iota
-	WARNING
-	INFO
-	DEBUG
-)
-
-type LogLevel int
-
 type Log struct {
-	LogLevel LogLevel
+	LogLevel C.LogLevel
 	Payload  string
 }
 
 func (l *Log) Type() string {
-	switch l.LogLevel {
-	case INFO:
-		return "Info"
-	case WARNING:
-		return "Warning"
-	case ERROR:
-		return "Error"
-	case DEBUG:
-		return "Debug"
-	default:
-		return "Unknow"
-	}
+	return l.LogLevel.String()
 }
 
 func print(data Log) {
 	switch data.LogLevel {
-	case INFO:
+	case C.INFO:
 		log.Infoln(data.Payload)
-	case WARNING:
+	case C.WARNING:
 		log.Warnln(data.Payload)
-	case ERROR:
+	case C.ERROR:
 		log.Errorln(data.Payload)
-	case DEBUG:
+	case C.DEBUG:
 		log.Debugln(data.Payload)
 	}
 }
@@ -55,11 +37,13 @@ func (t *Tunnel) subscribeLogs() {
 	}
 	for elm := range sub {
 		data := elm.(Log)
-		print(data)
+		if data.LogLevel <= t.logLevel {
+			print(data)
+		}
 	}
 }
 
-func newLog(logLevel LogLevel, format string, v ...interface{}) Log {
+func newLog(logLevel C.LogLevel, format string, v ...interface{}) Log {
 	return Log{
 		LogLevel: logLevel,
 		Payload:  fmt.Sprintf(format, v...),

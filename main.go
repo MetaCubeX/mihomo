@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/hub"
 	"github.com/Dreamacro/clash/proxy"
 	"github.com/Dreamacro/clash/tunnel"
@@ -14,23 +14,13 @@ import (
 )
 
 func main() {
-	if err := tunnel.GetInstance().UpdateConfig(); err != nil {
-		log.Fatalf("Parse config error: %s", err.Error())
-	}
+	tunnel.Instance().Run()
+	proxy.Instance().Run()
+	hub.Run()
 
-	if err := proxy.Instance().Run(); err != nil {
-		log.Fatalf("Proxy listen error: %s", err.Error())
-	}
-
-	// Hub
-	cfg, err := C.GetConfig()
+	err := config.Instance().Parse()
 	if err != nil {
-		log.Fatalf("Read config error: %s", err.Error())
-	}
-
-	section := cfg.Section("General")
-	if key, err := section.GetKey("external-controller"); err == nil {
-		go hub.NewHub(key.Value())
+		log.Fatalf("Parse config error: %s", err.Error())
 	}
 
 	sigCh := make(chan os.Signal, 1)

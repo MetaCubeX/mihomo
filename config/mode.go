@@ -1,6 +1,15 @@
-package tunnel
+package config
 
 type Mode int
+
+var (
+	// ModeMapping is a mapping for Mode enum
+	ModeMapping = map[string]Mode{
+		"Global": Global,
+		"Rule":   Rule,
+		"Direct": Direct,
+	}
+)
 
 const (
 	Global Mode = iota

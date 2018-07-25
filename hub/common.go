@@ -1,12 +1,14 @@
 package hub
 
 import (
+	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/proxy"
 	T "github.com/Dreamacro/clash/tunnel"
 )
 
 var (
-	tunnel   = T.GetInstance()
+	tunnel   = T.Instance()
+	cfg      = config.Instance()
 	listener = proxy.Instance()
 )
 

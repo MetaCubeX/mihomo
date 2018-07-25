@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	A "github.com/Dreamacro/clash/adapters"
+	A "github.com/Dreamacro/clash/adapters/remote"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/go-chi/chi"
@@ -61,7 +61,7 @@ type GetProxiesResponse struct {
 }
 
 func getProxies(w http.ResponseWriter, r *http.Request) {
-	_, rawProxies := tunnel.Config()
+	rawProxies := cfg.Proxies()
 	proxies := make(map[string]interface{})
 	for name, proxy := range rawProxies {
 		proxies[name] = transformProxy(proxy)
@@ -71,7 +71,7 @@ func getProxies(w http.ResponseWriter, r *http.Request) {
 
 func getProxy(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	_, proxies := tunnel.Config()
+	proxies := cfg.Proxies()
 	proxy, exist := proxies[name]
 	if !exist {
 		w.WriteHeader(http.StatusNotFound)
@@ -98,7 +98,7 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := chi.URLParam(r, "name")
-	_, proxies := tunnel.Config()
+	proxies := cfg.Proxies()
 	proxy, exist := proxies[name]
 	if !exist {
 		w.WriteHeader(http.StatusNotFound)
