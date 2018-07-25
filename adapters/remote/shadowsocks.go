@@ -3,7 +3,6 @@ package adapters
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net"
 	"net/url"
 	"strconv"
@@ -19,11 +18,6 @@ type ShadowsocksAdapter struct {
 	conn net.Conn
 }
 
-// ReadWriter is used to handle network traffic
-func (ss *ShadowsocksAdapter) ReadWriter() io.ReadWriter {
-	return ss.conn
-}
-
 // Close is used to close connection
 func (ss *ShadowsocksAdapter) Close() {
 	ss.conn.Close()
@@ -34,10 +28,9 @@ func (ss *ShadowsocksAdapter) Conn() net.Conn {
 }
 
 type ShadowSocks struct {
-	server  string
-	name    string
-	cipher  core.Cipher
-	traffic *C.Traffic
+	server string
+	name   string
+	cipher core.Cipher
 }
 
 func (ss *ShadowSocks) Name() string {
@@ -56,10 +49,10 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 	c.(*net.TCPConn).SetKeepAlive(true)
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(addr))
-	return &ShadowsocksAdapter{conn: NewTrafficTrack(c, ss.traffic)}, err
+	return &ShadowsocksAdapter{conn: c}, err
 }
 
-func NewShadowSocks(name string, ssURL string, traffic *C.Traffic) (*ShadowSocks, error) {
+func NewShadowSocks(name string, ssURL string) (*ShadowSocks, error) {
 	var key []byte
 	server, cipher, password, _ := parseURL(ssURL)
 	ciph, err := core.PickCipher(cipher, key, password)
@@ -67,10 +60,9 @@ func NewShadowSocks(name string, ssURL string, traffic *C.Traffic) (*ShadowSocks
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
 	return &ShadowSocks{
-		server:  server,
-		name:    name,
-		cipher:  ciph,
-		traffic: traffic,
+		server: server,
+		name:   name,
+		cipher: ciph,
 	}, nil
 }
 

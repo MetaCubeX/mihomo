@@ -1,4 +1,4 @@
-package adapters
+package tunnel
 
 import (
 	"net"
@@ -6,6 +6,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
+// TrafficTrack record traffic of net.Conn
 type TrafficTrack struct {
 	net.Conn
 	traffic *C.Traffic
@@ -23,6 +24,6 @@ func (tt *TrafficTrack) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func NewTrafficTrack(conn net.Conn, traffic *C.Traffic) *TrafficTrack {
+func newTrafficTrack(conn net.Conn, traffic *C.Traffic) *TrafficTrack {
 	return &TrafficTrack{traffic: traffic, Conn: conn}
 }

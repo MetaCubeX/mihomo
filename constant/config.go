@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/ini.v1"
 )
 
 const (
@@ -106,14 +105,4 @@ func downloadMMDB(path string) (err error) {
 	}
 
 	return nil
-}
-
-func GetConfig() (*ini.File, error) {
-	if _, err := os.Stat(ConfigPath); os.IsNotExist(err) {
-		return nil, err
-	}
-	return ini.LoadSources(
-		ini.LoadOptions{AllowBooleanKeys: true},
-		ConfigPath,
-	)
 }

@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"io"
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -10,11 +9,6 @@ import (
 // DirectAdapter is a directly connected adapter
 type DirectAdapter struct {
 	conn net.Conn
-}
-
-// ReadWriter is used to handle network traffic
-func (d *DirectAdapter) ReadWriter() io.ReadWriter {
-	return d.conn
 }
 
 // Close is used to close connection
@@ -27,9 +21,7 @@ func (d *DirectAdapter) Conn() net.Conn {
 	return d.conn
 }
 
-type Direct struct {
-	traffic *C.Traffic
-}
+type Direct struct{}
 
 func (d *Direct) Name() string {
 	return "Direct"
@@ -45,9 +37,9 @@ func (d *Direct) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 		return
 	}
 	c.(*net.TCPConn).SetKeepAlive(true)
-	return &DirectAdapter{conn: NewTrafficTrack(c, d.traffic)}, nil
+	return &DirectAdapter{conn: c}, nil
 }
 
-func NewDirect(traffic *C.Traffic) *Direct {
-	return &Direct{traffic: traffic}
+func NewDirect() *Direct {
+	return &Direct{}
 }

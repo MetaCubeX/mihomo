@@ -10,8 +10,11 @@ const (
 	AtypDomainName = 3
 	AtypIPv6       = 4
 
-	TCP = iota
+	TCP NetWork = iota
 	UDP
+
+	HTTP SourceType = iota
+	SOCKS
 )
 
 type NetWork int
@@ -23,9 +26,12 @@ func (n *NetWork) String() string {
 	return "udp"
 }
 
+type SourceType int
+
 // Addr is used to store connection address
 type Addr struct {
 	NetWork  NetWork
+	Source   SourceType
 	AddrType int
 	Host     string
 	IP       *net.IP

@@ -6,15 +6,15 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Dreamacro/clash/adapters/local"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 
-	"github.com/riobard/go-shadowsocks2/socks"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	tun = tunnel.GetInstance()
+	tun = tunnel.Instance()
 )
 
 func NewHttpProxy(addr string) (*C.ProxySignal, error) {
@@ -61,7 +61,7 @@ func handleHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.Contains(addr, ":") {
 		addr += ":80"
 	}
-	req, done := NewHttp(addr, w, r)
+	req, done := adapters.NewHttp(addr, w, r)
 	tun.Add(req)
 	<-done
 }
@@ -77,33 +77,5 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 	}
 	// w.WriteHeader(http.StatusOK) doesn't works in Safari
 	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
-	tun.Add(NewHttps(r.Host, conn))
-}
-
-func parseHttpAddr(target string) *C.Addr {
-	host, port, _ := net.SplitHostPort(target)
-	ipAddr, err := net.ResolveIPAddr("ip", host)
-	var resolveIP *net.IP
-	if err == nil {
-		resolveIP = &ipAddr.IP
-	}
-
-	var addType int
-	ip := net.ParseIP(host)
-	switch {
-	case ip == nil:
-		addType = socks.AtypDomainName
-	case ip.To4() == nil:
-		addType = socks.AtypIPv6
-	default:
-		addType = socks.AtypIPv4
-	}
-
-	return &C.Addr{
-		NetWork:  C.TCP,
-		AddrType: addType,
-		Host:     host,
-		IP:       resolveIP,
-		Port:     port,
-	}
+	tun.Add(adapters.NewHttps(r.Host, conn))
 }

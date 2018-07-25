@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/proxy/http"
 	"github.com/Dreamacro/clash/proxy/socks"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -35,24 +34,24 @@ func (l *Listener) Info() (info C.General) {
 	}
 }
 
-func (l *Listener) Update(allowLan *bool, httpPort *int, socksPort *int) error {
-	if allowLan != nil {
-		l.allowLan = *allowLan
+func (l *Listener) Update(base *config.Base) error {
+	if base.AllowLan != nil {
+		l.allowLan = *base.AllowLan
 	}
 
 	var socksErr, httpErr error
-	if allowLan != nil || httpPort != nil {
+	if base.AllowLan != nil || base.Port != nil {
 		newHTTPPort := l.httpPort
-		if httpPort != nil {
-			newHTTPPort = *httpPort
+		if base.Port != nil {
+			newHTTPPort = *base.Port
 		}
 		httpErr = l.updateHTTP(newHTTPPort)
 	}
 
-	if allowLan != nil || socksPort != nil {
+	if base.AllowLan != nil || base.SocketPort != nil {
 		newSocksPort := l.socksPort
-		if socksPort != nil {
-			newSocksPort = *socksPort
+		if base.SocketPort != nil {
+			newSocksPort = *base.SocketPort
 		}
 		socksErr = l.updateSocks(newSocksPort)
 	}
@@ -112,29 +111,30 @@ func (l *Listener) genAddr(port int) string {
 	return fmt.Sprintf("%s:%d", host, port)
 }
 
-func (l *Listener) Run() error {
-	return l.Update(&l.allowLan, &l.httpPort, &l.socksPort)
+func (l *Listener) process(signal chan<- struct{}) {
+	sub := config.Instance().Subscribe()
+	signal <- struct{}{}
+	for elm := range sub {
+		event := elm.(*config.Event)
+		if event.Type == "base" {
+			base := event.Payload.(config.Base)
+			l.Update(&base)
+		}
+	}
+}
+
+// Run ensure config monitoring
+func (l *Listener) Run() {
+	signal := make(chan struct{})
+	go l.process(signal)
+	<-signal
 }
 
 func newListener() *Listener {
-	cfg, err := C.GetConfig()
-	if err != nil {
-		log.Fatalf("Read config error: %s", err.Error())
-	}
-
-	general := cfg.Section("General")
-
-	port := general.Key("port").RangeInt(C.DefalutHTTPPort, 1, 65535)
-	socksPort := general.Key("socks-port").RangeInt(C.DefalutSOCKSPort, 1, 65535)
-	allowLan := general.Key("allow-lan").MustBool()
-
-	return &Listener{
-		httpPort:  port,
-		socksPort: socksPort,
-		allowLan:  allowLan,
-	}
+	return &Listener{}
 }
 
+// Instance return singleton instance of Listener
 func Instance() *Listener {
 	once.Do(func() {
 		listener = newListener()

@@ -11,11 +11,6 @@ import (
 type RejectAdapter struct {
 }
 
-// ReadWriter is used to handle network traffic
-func (r *RejectAdapter) ReadWriter() io.ReadWriter {
-	return &NopRW{}
-}
-
 // Close is used to close connection
 func (r *RejectAdapter) Close() {}
 
