@@ -18,6 +18,7 @@ func main() {
 	proxy.Instance().Run()
 	hub.Run()
 
+	config.Init()
 	err := config.Instance().Parse()
 	if err != nil {
 		log.Fatalf("Parse config error: %s", err.Error())
