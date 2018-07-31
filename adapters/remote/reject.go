@@ -3,12 +3,14 @@ package adapters
 import (
 	"io"
 	"net"
+	"time"
 
 	C "github.com/Dreamacro/clash/constant"
 )
 
 // RejectAdapter is a reject connected adapter
 type RejectAdapter struct {
+	conn net.Conn
 }
 
 // Close is used to close connection
@@ -16,7 +18,7 @@ func (r *RejectAdapter) Close() {}
 
 // Conn is used to http request
 func (r *RejectAdapter) Conn() net.Conn {
-	return nil
+	return r.conn
 }
 
 type Reject struct {
@@ -31,19 +33,37 @@ func (r *Reject) Type() C.AdapterType {
 }
 
 func (r *Reject) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
-	return &RejectAdapter{}, nil
+	return &RejectAdapter{conn: &NopConn{}}, nil
 }
 
 func NewReject() *Reject {
 	return &Reject{}
 }
 
-type NopRW struct{}
+type NopConn struct{}
 
-func (rw *NopRW) Read(b []byte) (int, error) {
+func (rw *NopConn) Read(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (rw *NopRW) Write(b []byte) (int, error) {
+func (rw *NopConn) Write(b []byte) (int, error) {
 	return 0, io.EOF
 }
+
+// Close is fake function for net.Conn
+func (rw *NopConn) Close() error { return nil }
+
+// LocalAddr is fake function for net.Conn
+func (rw *NopConn) LocalAddr() net.Addr { return nil }
+
+// RemoteAddr is fake function for net.Conn
+func (rw *NopConn) RemoteAddr() net.Addr { return nil }
+
+// SetDeadline is fake function for net.Conn
+func (rw *NopConn) SetDeadline(time.Time) error { return nil }
+
+// SetReadDeadline is fake function for net.Conn
+func (rw *NopConn) SetReadDeadline(time.Time) error { return nil }
+
+// SetWriteDeadline is fake function for net.Conn
+func (rw *NopConn) SetWriteDeadline(time.Time) error { return nil }
