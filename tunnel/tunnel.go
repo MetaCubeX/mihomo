@@ -5,7 +5,6 @@ import (
 	"time"
 
 	LocalAdapter "github.com/Dreamacro/clash/adapters/local"
-	RemoteAdapter "github.com/Dreamacro/clash/adapters/remote"
 	cfg "github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/observable"
@@ -27,8 +26,7 @@ type Tunnel struct {
 	traffic    *C.Traffic
 
 	// Outbound Rule
-	mode     cfg.Mode
-	selector *RemoteAdapter.Selector
+	mode cfg.Mode
 
 	// Log
 	logCh      chan interface{}
@@ -93,7 +91,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	case cfg.Direct:
 		proxy = t.proxies["DIRECT"]
 	case cfg.Global:
-		proxy = t.selector
+		proxy = t.proxies["GLOBAL"]
 	// Rule
 	default:
 		proxy = t.match(addr)
