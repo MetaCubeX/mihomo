@@ -25,6 +25,7 @@ type General struct {
 	AllowLan  *bool   `json:"allow-lan,omitempty"`
 	Port      *int    `json:"port,omitempty"`
 	SocksPort *int    `json:"socks-port,omitempty"`
+	LogLevel  *string `json:"log-level,omitempty"`
 }
 
 func init() {

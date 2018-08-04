@@ -94,6 +94,12 @@ func (c *Config) SetMode(mode Mode) {
 	c.event <- &Event{Type: "mode", Payload: mode}
 }
 
+// SetLogLevel change log level of clash
+func (c *Config) SetLogLevel(level C.LogLevel) {
+	c.general.LogLevel = level
+	c.event <- &Event{Type: "log-level", Payload: level}
+}
+
 // General return clash general config
 func (c *Config) General() General {
 	return *c.general
@@ -225,6 +231,7 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 	}
 
 	// init proxy
+	proxies["GLOBAL"], _ = adapters.NewSelector("GLOBAL", proxies)
 	proxies["DIRECT"] = adapters.NewDirect()
 	proxies["REJECT"] = adapters.NewReject()
 

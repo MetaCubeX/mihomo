@@ -50,7 +50,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update errors
-	var proxyErr, modeErr error
+	var proxyErr, modeErr, logLevelErr error
 
 	// update proxy
 	listener := proxy.Instance()
@@ -70,9 +70,20 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// update log-level
+	if general.LogLevel != nil {
+		level, ok := C.LogLevelMapping[*general.LogLevel]
+		if !ok {
+			logLevelErr = fmt.Errorf("Log Level error")
+		} else {
+			cfg.SetLogLevel(level)
+		}
+	}
+
 	hasError, errors := formatErrors(map[string]error{
-		"proxy": proxyErr,
-		"mode":  modeErr,
+		"proxy":     proxyErr,
+		"mode":      modeErr,
+		"log-level": logLevelErr,
 	})
 
 	if hasError {
