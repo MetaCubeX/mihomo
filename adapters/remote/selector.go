@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"errors"
+	"sort"
 
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -33,6 +34,7 @@ func (s *Selector) All() []string {
 	for k := range s.proxies {
 		all = append(all, k)
 	}
+	sort.Strings(all)
 	return all
 }
 
