@@ -44,8 +44,8 @@ func newHub(signal chan struct{}) {
 
 	r.Use(cors.Handler)
 
-	r.Get("/traffic", traffic)
-	r.Get("/logs", getLogs)
+	r.With(jsonContentType).Get("/traffic", traffic)
+	r.With(jsonContentType).Get("/logs", getLogs)
 	r.Mount("/configs", configRouter())
 	r.Mount("/proxies", proxyRouter())
 	r.Mount("/rules", ruleRouter())
@@ -54,6 +54,14 @@ func newHub(signal chan struct{}) {
 	if err != nil {
 		log.Errorf("External controller error: %s", err.Error())
 	}
+}
+
+func jsonContentType(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
