@@ -1,10 +1,6 @@
 package adapters
 
 import (
-	"fmt"
-	"net"
-	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -14,9 +10,7 @@ import (
 type URLTest struct {
 	name    string
 	proxies []C.Proxy
-	url     *url.URL
 	rawURL  string
-	addr    *C.Addr
 	fast    C.Proxy
 	delay   time.Duration
 	done    chan struct{}
@@ -65,7 +59,7 @@ func (u *URLTest) speedTest() {
 
 	for _, p := range u.proxies {
 		go func(p C.Proxy) {
-			err := getUrl(p, u.addr, u.rawURL)
+			_, err := DelayTest(p, u.rawURL)
 			if err == nil {
 				c <- p
 			}
@@ -89,76 +83,16 @@ func (u *URLTest) speedTest() {
 	}
 }
 
-func getUrl(proxy C.Proxy, addr *C.Addr, rawURL string) (err error) {
-	instance, err := proxy.Generator(addr)
-	if err != nil {
-		return
-	}
-	defer instance.Close()
-	transport := &http.Transport{
-		Dial: func(string, string) (net.Conn, error) {
-			return instance.Conn(), nil
-		},
-		// from http.DefaultTransport
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	client := http.Client{Transport: transport}
-	req, err := client.Get(rawURL)
-	if err != nil {
-		return
-	}
-	req.Body.Close()
-	return nil
-}
-
-func selectFast(in chan interface{}) chan interface{} {
-	out := make(chan interface{})
-	go func() {
-		p, open := <-in
-		if open {
-			out <- p
-		}
-		close(out)
-		for range in {
-		}
-	}()
-
-	return out
-}
-
 func NewURLTest(name string, proxies []C.Proxy, rawURL string, delay time.Duration) (*URLTest, error) {
-	u, err := url.Parse(rawURL)
+	_, err := urlToAddr(rawURL)
 	if err != nil {
 		return nil, err
-	}
-
-	port := u.Port()
-	if port == "" {
-		if u.Scheme == "https" {
-			port = "443"
-		} else if u.Scheme == "http" {
-			port = "80"
-		} else {
-			return nil, fmt.Errorf("%s scheme not Support", rawURL)
-		}
-	}
-
-	addr := &C.Addr{
-		AddrType: C.AtypDomainName,
-		Host:     u.Hostname(),
-		IP:       nil,
-		Port:     port,
 	}
 
 	urlTest := &URLTest{
 		name:    name,
 		proxies: proxies[:],
 		rawURL:  rawURL,
-		url:     u,
-		addr:    addr,
 		fast:    proxies[0],
 		delay:   delay,
 		done:    make(chan struct{}),
