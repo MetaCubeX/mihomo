@@ -3,6 +3,8 @@ package hub
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	A "github.com/Dreamacro/clash/adapters/remote"
 	C "github.com/Dreamacro/clash/constant"
@@ -15,6 +17,7 @@ func proxyRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getProxies)
 	r.Get("/{name}", getProxy)
+	r.Get("/{name}/delay", getProxyDelay)
 	r.Put("/{name}", updateProxy)
 	return r
 }
@@ -126,4 +129,65 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type GetProxyDelayRequest struct {
+	URL     string `json:"url"`
+	Timeout int16  `json:"timeout"`
+}
+
+type GetProxyDelayResponse struct {
+	Delay int16 `json:"delay"`
+}
+
+func getProxyDelay(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	url := query.Get("url")
+	timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		render.JSON(w, r, Error{
+			Error: "Format error",
+		})
+		return
+	}
+
+	name := chi.URLParam(r, "name")
+	proxies := cfg.Proxies()
+	proxy, exist := proxies[name]
+	if !exist {
+		w.WriteHeader(http.StatusNotFound)
+		render.JSON(w, r, Error{
+			Error: "Proxy not found",
+		})
+		return
+	}
+
+	sigCh := make(chan int16)
+	go func() {
+		t, err := A.DelayTest(proxy, url)
+		if err != nil {
+			sigCh <- 0
+		}
+		sigCh <- t
+	}()
+
+	select {
+	case <-time.After(time.Millisecond * time.Duration(timeout)):
+		w.WriteHeader(http.StatusRequestTimeout)
+		render.JSON(w, r, Error{
+			Error: "Proxy delay test timeout",
+		})
+	case t := <-sigCh:
+		if t == 0 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			render.JSON(w, r, Error{
+				Error: "An error occurred in the delay test",
+			})
+		} else {
+			render.JSON(w, r, GetProxyDelayResponse{
+				Delay: t,
+			})
+		}
+	}
 }
