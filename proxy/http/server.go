@@ -1,7 +1,7 @@
 package http
 
 import (
-	"context"
+	"bufio"
 	"net"
 	"net/http"
 	"strings"
@@ -30,24 +30,23 @@ func NewHttpProxy(addr string) (*C.ProxySignal, error) {
 		Closed: closed,
 	}
 
-	server := &http.Server{
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodConnect {
-				handleTunneling(w, r)
-			} else {
-				handleHTTP(w, r)
-			}
-		}),
-	}
-
 	go func() {
 		log.Infof("HTTP proxy listening at: %s", addr)
-		server.Serve(l)
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				if _, open := <-done; !open {
+					break
+				}
+				continue
+			}
+			go handleConn(c)
+		}
 	}()
 
 	go func() {
 		<-done
-		server.Shutdown(context.Background())
+		close(done)
 		l.Close()
 		closed <- struct{}{}
 	}()
@@ -55,27 +54,26 @@ func NewHttpProxy(addr string) (*C.ProxySignal, error) {
 	return signal, nil
 }
 
-func handleHTTP(w http.ResponseWriter, r *http.Request) {
-	addr := r.Host
-	// padding default port
-	if !strings.Contains(addr, ":") {
-		addr += ":80"
+func handleConn(conn net.Conn) {
+	br := bufio.NewReader(conn)
+	method, hostName := httpHostHeader(br)
+	if hostName == "" {
+		return
 	}
-	req, done := adapters.NewHttp(addr, w, r)
-	tun.Add(req)
-	<-done
-}
 
-func handleTunneling(w http.ResponseWriter, r *http.Request) {
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		return
+	if !strings.Contains(hostName, ":") {
+		hostName += ":80"
 	}
-	conn, _, err := hijacker.Hijack()
-	if err != nil {
-		return
+
+	var peeked []byte
+	if method == http.MethodConnect {
+		_, err := conn.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
+		if err != nil {
+			return
+		}
+	} else if n := br.Buffered(); n > 0 {
+		peeked, _ = br.Peek(br.Buffered())
 	}
-	// w.WriteHeader(http.StatusOK) doesn't works in Safari
-	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
-	tun.Add(adapters.NewHttps(r.Host, conn))
+
+	tun.Add(adapters.NewHttp(hostName, peeked, conn))
 }

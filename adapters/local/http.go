@@ -1,32 +1,51 @@
 package adapters
 
 import (
-	"net/http"
+	"net"
 
 	C "github.com/Dreamacro/clash/constant"
 )
 
+type PeekedConn struct {
+	net.Conn
+	Peeked []byte
+}
+
+func (c *PeekedConn) Read(p []byte) (n int, err error) {
+	if len(c.Peeked) > 0 {
+		n = copy(p, c.Peeked)
+		c.Peeked = c.Peeked[n:]
+		if len(c.Peeked) == 0 {
+			c.Peeked = nil
+		}
+		return n, nil
+	}
+	return c.Conn.Read(p)
+}
+
 type HttpAdapter struct {
 	addr *C.Addr
-	R    *http.Request
-	W    http.ResponseWriter
-	done chan struct{}
+	conn *PeekedConn
 }
 
 func (h *HttpAdapter) Close() {
-	h.done <- struct{}{}
+	h.conn.Close()
 }
 
 func (h *HttpAdapter) Addr() *C.Addr {
 	return h.addr
 }
 
-func NewHttp(host string, w http.ResponseWriter, r *http.Request) (*HttpAdapter, chan struct{}) {
-	done := make(chan struct{})
+func (h *HttpAdapter) Conn() net.Conn {
+	return h.conn
+}
+
+func NewHttp(host string, peeked []byte, conn net.Conn) *HttpAdapter {
 	return &HttpAdapter{
 		addr: parseHttpAddr(host),
-		R:    r,
-		W:    w,
-		done: done,
-	}, done
+		conn: &PeekedConn{
+			Peeked: peeked,
+			Conn:   conn,
+		},
+	}
 }

@@ -107,9 +107,6 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	case *LocalAdapter.HttpAdapter:
 		t.handleHTTP(adapter, remoConn)
 		break
-	case *LocalAdapter.HttpsAdapter:
-		t.handleHTTPS(adapter, remoConn)
-		break
 	case *LocalAdapter.SocksAdapter:
 		t.handleSOCKS(adapter, remoConn)
 		break
