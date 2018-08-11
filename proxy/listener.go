@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/Dreamacro/clash/config"
@@ -16,58 +15,12 @@ var (
 )
 
 type Listener struct {
-	httpPort  int
-	socksPort int
-	allowLan  bool
-
 	// signal for update
 	httpSignal  *C.ProxySignal
 	socksSignal *C.ProxySignal
 }
 
-// Info returns the proxies's current configuration
-func (l *Listener) Info() (info C.General) {
-	return C.General{
-		Port:      &l.httpPort,
-		SocksPort: &l.socksPort,
-		AllowLan:  &l.allowLan,
-	}
-}
-
-func (l *Listener) Update(base *config.Base) error {
-	if base.AllowLan != nil {
-		l.allowLan = *base.AllowLan
-	}
-
-	var socksErr, httpErr error
-	if base.AllowLan != nil || base.Port != nil {
-		newHTTPPort := l.httpPort
-		if base.Port != nil {
-			newHTTPPort = *base.Port
-		}
-		httpErr = l.updateHTTP(newHTTPPort)
-	}
-
-	if base.AllowLan != nil || base.SocketPort != nil {
-		newSocksPort := l.socksPort
-		if base.SocketPort != nil {
-			newSocksPort = *base.SocketPort
-		}
-		socksErr = l.updateSocks(newSocksPort)
-	}
-
-	if socksErr != nil && httpErr != nil {
-		return fmt.Errorf("%s\n%s", socksErr.Error(), httpErr.Error())
-	} else if socksErr != nil {
-		return socksErr
-	} else if httpErr != nil {
-		return httpErr
-	} else {
-		return nil
-	}
-}
-
-func (l *Listener) updateHTTP(port int) error {
+func (l *Listener) updateHTTP(addr string) error {
 	if l.httpSignal != nil {
 		signal := l.httpSignal
 		signal.Done <- struct{}{}
@@ -75,17 +28,16 @@ func (l *Listener) updateHTTP(port int) error {
 		l.httpSignal = nil
 	}
 
-	signal, err := http.NewHttpProxy(l.genAddr(port))
+	signal, err := http.NewHttpProxy(addr)
 	if err != nil {
 		return err
 	}
 
 	l.httpSignal = signal
-	l.httpPort = port
 	return nil
 }
 
-func (l *Listener) updateSocks(port int) error {
+func (l *Listener) updateSocks(addr string) error {
 	if l.socksSignal != nil {
 		signal := l.socksSignal
 		signal.Done <- struct{}{}
@@ -93,32 +45,32 @@ func (l *Listener) updateSocks(port int) error {
 		l.socksSignal = nil
 	}
 
-	signal, err := socks.NewSocksProxy(l.genAddr(port))
+	signal, err := socks.NewSocksProxy(addr)
 	if err != nil {
 		return err
 	}
 
 	l.socksSignal = signal
-	l.socksPort = port
 	return nil
-}
-
-func (l *Listener) genAddr(port int) string {
-	host := "127.0.0.1"
-	if l.allowLan {
-		host = ""
-	}
-	return fmt.Sprintf("%s:%d", host, port)
 }
 
 func (l *Listener) process(signal chan<- struct{}) {
 	sub := config.Instance().Subscribe()
 	signal <- struct{}{}
+	reportCH := config.Instance().Report()
 	for elm := range sub {
 		event := elm.(*config.Event)
-		if event.Type == "base" {
-			base := event.Payload.(config.Base)
-			l.Update(&base)
+		switch event.Type {
+		case "http-addr":
+			addr := event.Payload.(string)
+			err := l.updateHTTP(addr)
+			reportCH <- &config.Event{Type: "http-addr", Payload: err == nil}
+			break
+		case "socks-addr":
+			addr := event.Payload.(string)
+			err := l.updateSocks(addr)
+			reportCH <- &config.Event{Type: "socks-addr", Payload: err == nil}
+			break
 		}
 	}
 }

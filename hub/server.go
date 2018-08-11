@@ -50,6 +50,7 @@ func newHub(signal chan struct{}) {
 	r.Mount("/proxies", proxyRouter())
 	r.Mount("/rules", ruleRouter())
 
+	log.Infof("RESTful API listening at: %s", addr)
 	err := http.ListenAndServe(addr, r)
 	if err != nil {
 		log.Errorf("External controller error: %s", err.Error())

@@ -6,7 +6,6 @@ import (
 
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/proxy"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
@@ -20,21 +19,21 @@ func configRouter() http.Handler {
 }
 
 type configSchema struct {
-	Port       int    `json:"port"`
-	SocketPort int    `json:"socket-port"`
-	AllowLan   bool   `json:"allow-lan"`
-	Mode       string `json:"mode"`
-	LogLevel   string `json:"log-level"`
+	Port      int    `json:"port"`
+	SocksPort int    `json:"socket-port"`
+	AllowLan  bool   `json:"allow-lan"`
+	Mode      string `json:"mode"`
+	LogLevel  string `json:"log-level"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
 	general := cfg.General()
 	render.JSON(w, r, configSchema{
-		Port:       *general.Port,
-		SocketPort: *general.SocketPort,
-		AllowLan:   *general.AllowLan,
-		Mode:       general.Mode.String(),
-		LogLevel:   general.LogLevel.String(),
+		Port:      general.Port,
+		SocksPort: general.SocksPort,
+		AllowLan:  general.AllowLan,
+		Mode:      general.Mode.String(),
+		LogLevel:  general.LogLevel.String(),
 	})
 }
 
@@ -50,15 +49,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update errors
-	var proxyErr, modeErr, logLevelErr error
-
-	// update proxy
-	listener := proxy.Instance()
-	proxyErr = listener.Update(&config.Base{
-		AllowLan:   general.AllowLan,
-		Port:       general.Port,
-		SocketPort: general.SocksPort,
-	})
+	var modeErr, logLevelErr error
 
 	// update mode
 	if general.Mode != nil {
@@ -81,7 +72,6 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hasError, errors := formatErrors(map[string]error{
-		"proxy":     proxyErr,
 		"mode":      modeErr,
 		"log-level": logLevelErr,
 	})
@@ -91,5 +81,13 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, errors)
 		return
 	}
+
+	// update proxy
+	cfg.UpdateProxy(config.ProxyConfig{
+		AllowLan:  general.AllowLan,
+		Port:      general.Port,
+		SocksPort: general.SocksPort,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }
