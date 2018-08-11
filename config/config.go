@@ -256,8 +256,8 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 			}
 			proxies[key.Name()] = adapter
 		case "select":
-			if len(rule) < 3 {
-				return fmt.Errorf("Selector need more than 3 param")
+			if len(rule) < 2 {
+				return fmt.Errorf("Selector need more than 2 param")
 			}
 			proxyNames := rule[1:]
 			selectProxy := make(map[string]C.Proxy)

@@ -15,7 +15,6 @@
   <a href="https://goreportcard.com/report/github.com/Dreamacro/clash">
       <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
   </a>
-  <a href="https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=shield"/></a>
   <a href="https://github.com/Dreamacro/clash/releases">
     <img src="https://img.shields.io/github/release/Dreamacro/clash/all.svg?style=flat-square">
   </a>
@@ -66,6 +65,9 @@ Below is a simple demo configuration file:
 port = 7890
 socks-port = 7891
 
+# redir proxy for Linux and macOS
+redir-port = 7892
+
 # A RESTful API for clash
 external-controller = 127.0.0.1:8080
 
@@ -73,13 +75,18 @@ external-controller = 127.0.0.1:8080
 # name = ss, server, port, cipher, password
 # The types of cipher are consistent with go-shadowsocks2
 # support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
-Proxy1 = ss, server1, port, AEAD_CHACHA20_POLY1305, password
-Proxy2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
+ss1 = ss, server1, port, AEAD_CHACHA20_POLY1305, password
+ss2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
 
 [Proxy Group]
 # url-test select which proxy will be used by benchmarking speed to a URL.
 # name = url-test, [proxies], url, interval(second)
-Proxy = url-test, Proxy1, Proxy2, http://www.google.com/generate_204, 300
+auto = url-test, ss1, ss2, http://www.google.com/generate_204, 300
+
+# select is used for selecting proxy or proxy group
+# you can use RESTful API to switch proxy, is recommended for use in GUI.
+# name = select, [proxies]
+Proxy = select, ss1, ss2, auto
 
 [Rule]
 DOMAIN-SUFFIX,google.com,Proxy
@@ -89,9 +96,19 @@ GEOIP,CN,DIRECT
 FINAL,,Proxy # note: there is two ","
 ```
 
+## Thanks
+
+[riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
+
+[google/tcpproxy](https://github.com/google/tcpproxy)
+
 ## License
+
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_large)
 
 ## TODO
 
-- [ ] Complementing the necessary rule operators
+- [x] Complementing the necessary rule operators
+- [x] Redir proxy
+- [ ] UDP support
+- [ ] Connection manager
