@@ -21,6 +21,22 @@ var (
 	once   sync.Once
 )
 
+// General config
+type General struct {
+	Port      int
+	SocksPort int
+	AllowLan  bool
+	Mode      Mode
+	LogLevel  C.LogLevel
+}
+
+// ProxyConfig is update proxy schema
+type ProxyConfig struct {
+	Port      *int
+	SocksPort *int
+	AllowLan  *bool
+}
+
 // Config is clash config manager
 type Config struct {
 	general    *General
@@ -29,7 +45,7 @@ type Config struct {
 	lastUpdate time.Time
 
 	event      chan<- interface{}
-	errCh      chan interface{}
+	reportCh   chan interface{}
 	observable *observable.Observable
 }
 
@@ -45,9 +61,9 @@ func (c *Config) Subscribe() observable.Subscription {
 	return sub
 }
 
-// Report return a channel for collecting error message
+// Report return a channel for collecting report message
 func (c *Config) Report() chan<- interface{} {
-	return c.errCh
+	return c.reportCh
 }
 
 func (c *Config) readConfig() (*ini.File, error) {
@@ -118,8 +134,8 @@ func (c *Config) UpdateRules() error {
 func (c *Config) parseGeneral(cfg *ini.File) error {
 	general := cfg.Section("General")
 
-	port := general.Key("port").RangeInt(C.DefalutHTTPPort, 1, 65535)
-	socksPort := general.Key("socks-port").RangeInt(C.DefalutSOCKSPort, 1, 65535)
+	port := general.Key("port").RangeInt(0, 1, 65535)
+	socksPort := general.Key("socks-port").RangeInt(0, 1, 65535)
 	allowLan := general.Key("allow-lan").MustBool()
 	logLevelString := general.Key("log-level").MustString(C.INFO.String())
 	modeString := general.Key("mode").MustString(Rule.String())
@@ -135,13 +151,11 @@ func (c *Config) parseGeneral(cfg *ini.File) error {
 	}
 
 	c.general = &General{
-		Base: &Base{
-			Port:       &port,
-			SocketPort: &socksPort,
-			AllowLan:   &allowLan,
-		},
-		Mode:     mode,
-		LogLevel: logLevel,
+		Port:      port,
+		SocksPort: socksPort,
+		AllowLan:  allowLan,
+		Mode:      mode,
+		LogLevel:  logLevel,
 	}
 
 	if restAddr := general.Key("external-controller").String(); restAddr != "" {
@@ -154,9 +168,30 @@ func (c *Config) parseGeneral(cfg *ini.File) error {
 
 // UpdateGeneral dispatch update event
 func (c *Config) UpdateGeneral(general General) {
-	c.event <- &Event{Type: "base", Payload: *general.Base}
+	c.UpdateProxy(ProxyConfig{
+		Port:      &general.Port,
+		SocksPort: &general.SocksPort,
+		AllowLan:  &general.AllowLan,
+	})
 	c.event <- &Event{Type: "mode", Payload: general.Mode}
 	c.event <- &Event{Type: "log-level", Payload: general.LogLevel}
+}
+
+// UpdateProxy dispatch update proxy event
+func (c *Config) UpdateProxy(pc ProxyConfig) {
+	if pc.AllowLan != nil {
+		c.general.AllowLan = *pc.AllowLan
+	}
+
+	if (pc.AllowLan != nil || pc.Port != nil) && *pc.Port != 0 {
+		c.general.Port = *pc.Port
+		c.event <- &Event{Type: "http-addr", Payload: genAddr(*pc.Port, c.general.AllowLan)}
+	}
+
+	if (pc.AllowLan != nil || pc.SocksPort != nil) && *pc.SocksPort != 0 {
+		c.general.SocksPort = *pc.SocksPort
+		c.event <- &Event{Type: "socks-addr", Payload: genAddr(*pc.SocksPort, c.general.AllowLan)}
+	}
 }
 
 func (c *Config) parseProxies(cfg *ini.File) error {
@@ -270,18 +305,27 @@ func (c *Config) parseRules(cfg *ini.File) error {
 	return nil
 }
 
-func (c *Config) handleErrorMessage() {
-	for elm := range c.errCh {
-		event := elm.(Event)
+func (c *Config) handleResponseMessage() {
+	for elm := range c.reportCh {
+		event := elm.(*Event)
 		switch event.Type {
-		case "base":
-			c.general.Base = event.Payload.(*Base)
+		case "http-addr":
+			if event.Payload.(bool) == false {
+				c.general.Port = 0
+			}
+			break
+		case "socks-addr":
+			if event.Payload.(bool) == false {
+				c.general.SocksPort = 0
+			}
+			break
 		}
 	}
 }
 
 func newConfig() *Config {
 	event := make(chan interface{})
+	reportCh := make(chan interface{})
 	config := &Config{
 		general:    &General{},
 		proxies:    make(map[string]C.Proxy),
@@ -289,9 +333,10 @@ func newConfig() *Config {
 		lastUpdate: time.Now(),
 
 		event:      event,
+		reportCh:   reportCh,
 		observable: observable.NewObservable(event),
 	}
-	go config.handleErrorMessage()
+	go config.handleResponseMessage()
 	return config
 }
 

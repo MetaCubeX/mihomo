@@ -9,9 +9,7 @@ import (
 )
 
 const (
-	Name             = "clash"
-	DefalutHTTPPort  = 7890
-	DefalutSOCKSPort = 7891
+	Name = "clash"
 )
 
 var (
