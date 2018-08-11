@@ -13,6 +13,7 @@ import (
 	"github.com/Dreamacro/clash/observable"
 	R "github.com/Dreamacro/clash/rules"
 
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -25,6 +26,7 @@ var (
 type General struct {
 	Port      int
 	SocksPort int
+	RedirPort int
 	AllowLan  bool
 	Mode      Mode
 	LogLevel  C.LogLevel
@@ -34,6 +36,7 @@ type General struct {
 type ProxyConfig struct {
 	Port      *int
 	SocksPort *int
+	RedirPort *int
 	AllowLan  *bool
 }
 
@@ -136,6 +139,7 @@ func (c *Config) parseGeneral(cfg *ini.File) error {
 
 	port := general.Key("port").RangeInt(0, 1, 65535)
 	socksPort := general.Key("socks-port").RangeInt(0, 1, 65535)
+	redirPort := general.Key("redir-port").RangeInt(0, 1, 65535)
 	allowLan := general.Key("allow-lan").MustBool()
 	logLevelString := general.Key("log-level").MustString(C.INFO.String())
 	modeString := general.Key("mode").MustString(Rule.String())
@@ -153,6 +157,7 @@ func (c *Config) parseGeneral(cfg *ini.File) error {
 	c.general = &General{
 		Port:      port,
 		SocksPort: socksPort,
+		RedirPort: redirPort,
 		AllowLan:  allowLan,
 		Mode:      mode,
 		LogLevel:  logLevel,
@@ -171,6 +176,7 @@ func (c *Config) UpdateGeneral(general General) {
 	c.UpdateProxy(ProxyConfig{
 		Port:      &general.Port,
 		SocksPort: &general.SocksPort,
+		RedirPort: &general.RedirPort,
 		AllowLan:  &general.AllowLan,
 	})
 	c.event <- &Event{Type: "mode", Payload: general.Mode}
@@ -191,6 +197,11 @@ func (c *Config) UpdateProxy(pc ProxyConfig) {
 	if (pc.AllowLan != nil || pc.SocksPort != nil) && *pc.SocksPort != 0 {
 		c.general.SocksPort = *pc.SocksPort
 		c.event <- &Event{Type: "socks-addr", Payload: genAddr(*pc.SocksPort, c.general.AllowLan)}
+	}
+
+	if (pc.AllowLan != nil || pc.RedirPort != nil) && *pc.RedirPort != 0 {
+		c.general.RedirPort = *pc.RedirPort
+		c.event <- &Event{Type: "redir-addr", Payload: genAddr(*pc.RedirPort, c.general.AllowLan)}
 	}
 }
 
@@ -311,12 +322,20 @@ func (c *Config) handleResponseMessage() {
 		switch event.Type {
 		case "http-addr":
 			if event.Payload.(bool) == false {
+				log.Errorf("Listening HTTP proxy at %s error", c.general.Port)
 				c.general.Port = 0
 			}
 			break
 		case "socks-addr":
 			if event.Payload.(bool) == false {
+				log.Errorf("Listening SOCKS proxy at %s error", c.general.SocksPort)
 				c.general.SocksPort = 0
+			}
+			break
+		case "redir-addr":
+			if event.Payload.(bool) == false {
+				log.Errorf("Listening Redir proxy at %s error", c.general.RedirPort)
+				c.general.RedirPort = 0
 			}
 			break
 		}

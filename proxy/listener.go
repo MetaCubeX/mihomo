@@ -6,6 +6,7 @@ import (
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/proxy/http"
+	"github.com/Dreamacro/clash/proxy/redir"
 	"github.com/Dreamacro/clash/proxy/socks"
 )
 
@@ -18,6 +19,7 @@ type Listener struct {
 	// signal for update
 	httpSignal  *C.ProxySignal
 	socksSignal *C.ProxySignal
+	redirSignal *C.ProxySignal
 }
 
 func (l *Listener) updateHTTP(addr string) error {
@@ -54,6 +56,23 @@ func (l *Listener) updateSocks(addr string) error {
 	return nil
 }
 
+func (l *Listener) updateRedir(addr string) error {
+	if l.redirSignal != nil {
+		signal := l.redirSignal
+		signal.Done <- struct{}{}
+		<-signal.Closed
+		l.redirSignal = nil
+	}
+
+	signal, err := redir.NewRedirProxy(addr)
+	if err != nil {
+		return err
+	}
+
+	l.redirSignal = signal
+	return nil
+}
+
 func (l *Listener) process(signal chan<- struct{}) {
 	sub := config.Instance().Subscribe()
 	signal <- struct{}{}
@@ -70,6 +89,11 @@ func (l *Listener) process(signal chan<- struct{}) {
 			addr := event.Payload.(string)
 			err := l.updateSocks(addr)
 			reportCH <- &config.Event{Type: "socks-addr", Payload: err == nil}
+			break
+		case "redir-addr":
+			addr := event.Payload.(string)
+			err := l.updateRedir(addr)
+			reportCH <- &config.Event{Type: "redir-addr", Payload: err == nil}
 			break
 		}
 	}
