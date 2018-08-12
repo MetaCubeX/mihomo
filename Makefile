@@ -2,7 +2,7 @@ NAME=clash
 BINDIR=bin
 GOBUILD=CGO_ENABLED=0 go build -ldflags '-w -s'
 
-all: linux macos
+all: linux macos win64
 
 linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
