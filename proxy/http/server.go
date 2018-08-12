@@ -56,7 +56,7 @@ func NewHttpProxy(addr string) (*C.ProxySignal, error) {
 
 func handleConn(conn net.Conn) {
 	br := bufio.NewReader(conn)
-	method, hostName := httpHostHeader(br)
+	method, hostName := adapters.ParserHTTPHostHeader(br)
 	if hostName == "" {
 		return
 	}
@@ -75,5 +75,5 @@ func handleConn(conn net.Conn) {
 		peeked, _ = br.Peek(br.Buffered())
 	}
 
-	tun.Add(adapters.NewHttp(hostName, peeked, conn))
+	tun.Add(adapters.NewHttp(hostName, peeked, method != http.MethodConnect, conn))
 }
