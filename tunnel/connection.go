@@ -7,7 +7,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-func (t *Tunnel) handleHTTP(request *adapters.HttpAdapter, proxy C.ProxyAdapter) {
+func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, proxy C.ProxyAdapter) {
 	conn := newTrafficTrack(proxy.Conn(), t.traffic)
 
 	// Before we unwrap src and/or dst, copy any buffered data.

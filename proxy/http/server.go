@@ -75,5 +75,5 @@ func handleConn(conn net.Conn) {
 		peeked, _ = br.Peek(br.Buffered())
 	}
 
-	tun.Add(adapters.NewHttp(hostName, peeked, method != http.MethodConnect, conn))
+	tun.Add(adapters.NewHTTP(hostName, peeked, method != http.MethodConnect, conn))
 }
