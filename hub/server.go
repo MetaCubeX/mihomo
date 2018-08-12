@@ -82,23 +82,18 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type GetLogs struct {
-	Level string `json:"level"`
-}
-
 type Log struct {
 	Type    string `json:"type"`
 	Payload string `json:"payload"`
 }
 
 func getLogs(w http.ResponseWriter, r *http.Request) {
-	req := &GetLogs{}
-	render.DecodeJSON(r.Body, req)
-	if req.Level == "" {
-		req.Level = "info"
+	levelText := r.URL.Query().Get("level")
+	if levelText == "" {
+		levelText = "info"
 	}
 
-	level, ok := C.LogLevelMapping[req.Level]
+	level, ok := C.LogLevelMapping[levelText]
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		render.JSON(w, r, Error{
