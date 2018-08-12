@@ -78,6 +78,9 @@ external-controller = 127.0.0.1:8080
 ss1 = ss, server1, port, AEAD_CHACHA20_POLY1305, password
 ss2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
 
+# name = socks5, server, port
+socks = socks5, server1, port
+
 [Proxy Group]
 # url-test select which proxy will be used by benchmarking speed to a URL.
 # name = url-test, [proxies], url, interval(second)

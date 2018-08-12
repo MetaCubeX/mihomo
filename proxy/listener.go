@@ -84,17 +84,14 @@ func (l *Listener) process(signal chan<- struct{}) {
 			addr := event.Payload.(string)
 			err := l.updateHTTP(addr)
 			reportCH <- &config.Event{Type: "http-addr", Payload: err == nil}
-			break
 		case "socks-addr":
 			addr := event.Payload.(string)
 			err := l.updateSocks(addr)
 			reportCH <- &config.Event{Type: "socks-addr", Payload: err == nil}
-			break
 		case "redir-addr":
 			addr := event.Payload.(string)
 			err := l.updateRedir(addr)
 			reportCH <- &config.Event{Type: "redir-addr", Payload: err == nil}
-			break
 		}
 	}
 }
