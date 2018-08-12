@@ -364,6 +364,7 @@ func newConfig() *Config {
 	return config
 }
 
+// Instance return singleton instance of Config
 func Instance() *Config {
 	once.Do(func() {
 		config = newConfig()

@@ -104,7 +104,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	defer remoConn.Close()
 
 	switch adapter := localConn.(type) {
-	case *LocalAdapter.HttpAdapter:
+	case *LocalAdapter.HTTPAdapter:
 		t.handleHTTP(adapter, remoConn)
 	case *LocalAdapter.SocksAdapter:
 		t.handleSOCKS(adapter, remoConn)
