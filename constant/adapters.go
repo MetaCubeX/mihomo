@@ -10,6 +10,7 @@ const (
 	Reject
 	Selector
 	Shadowsocks
+	Socks5
 	URLTest
 )
 
@@ -42,6 +43,8 @@ func (at AdapterType) String() string {
 		return "Selector"
 	case Shadowsocks:
 		return "Shadowsocks"
+	case Socks5:
+		return "Socks5"
 	case URLTest:
 		return "URLTest"
 	default:

@@ -228,6 +228,14 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 				return err
 			}
 			proxies[key.Name()] = ss
+		// socks5, server, port
+		case "socks5":
+			if len(proxy) < 3 {
+				continue
+			}
+			addr := fmt.Sprintf("%s:%s", proxy[1], proxy[2])
+			socks5 := adapters.NewSocks5(key.Name(), addr)
+			proxies[key.Name()] = socks5
 		}
 	}
 
@@ -325,19 +333,16 @@ func (c *Config) handleResponseMessage() {
 				log.Errorf("Listening HTTP proxy at %s error", c.general.Port)
 				c.general.Port = 0
 			}
-			break
 		case "socks-addr":
 			if event.Payload.(bool) == false {
 				log.Errorf("Listening SOCKS proxy at %s error", c.general.SocksPort)
 				c.general.SocksPort = 0
 			}
-			break
 		case "redir-addr":
 			if event.Payload.(bool) == false {
 				log.Errorf("Listening Redir proxy at %s error", c.general.RedirPort)
 				c.general.RedirPort = 0
 			}
-			break
 		}
 	}
 }
