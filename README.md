@@ -25,6 +25,11 @@
 - HTTP/HTTPS and SOCKS proxy
 - Surge like configuration
 - GeoIP rule support
+- Support for Netfilter TCP redirect
+
+## Discussion
+
+[Telegram Group](https://t.me/clash_discuss)
 
 ## Install
 
