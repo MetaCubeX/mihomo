@@ -40,8 +40,12 @@ func parseSocksAddr(target socks.Addr) *C.Addr {
 	}
 }
 
-func parseHTTPAddr(target string) *C.Addr {
-	host, port, _ := net.SplitHostPort(target)
+func parseHTTPAddr(request *http.Request) *C.Addr {
+	host := request.URL.Hostname()
+	port := request.URL.Port()
+	if port == "" {
+		port = "80"
+	}
 	ipAddr, err := net.ResolveIPAddr("ip", host)
 	var resolveIP *net.IP
 	if err == nil {
@@ -92,6 +96,7 @@ func ParserHTTPHostHeader(br *bufio.Reader) (method, host string) {
 				return
 			}
 			if bytes.Index(b, crlfcrlf) != -1 || bytes.Index(b, lflf) != -1 {
+				println(string(b))
 				req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(b)))
 				if err != nil {
 					return
@@ -102,6 +107,7 @@ func ParserHTTPHostHeader(br *bufio.Reader) (method, host string) {
 					// multiple Host headers?
 					return
 				}
+				println(req.Host)
 				return req.Method, req.Host
 			}
 		}

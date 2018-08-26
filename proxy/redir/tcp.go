@@ -58,5 +58,5 @@ func handleRedir(conn net.Conn) {
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	tun.Add(adapters.NewSocks(target, conn))
+	tun.Add(adapters.NewSocket(target, conn))
 }

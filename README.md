@@ -108,8 +108,6 @@ FINAL,,Proxy # note: there is two ","
 
 [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 
-[google/tcpproxy](https://github.com/google/tcpproxy)
-
 ## License
 
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_large)

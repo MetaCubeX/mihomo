@@ -7,30 +7,30 @@ import (
 	"github.com/riobard/go-shadowsocks2/socks"
 )
 
-// SocksAdapter is a adapter for socks and redir connection
-type SocksAdapter struct {
+// SocketAdapter is a adapter for socks and redir connection
+type SocketAdapter struct {
 	conn net.Conn
 	addr *C.Addr
 }
 
 // Close socks and redir connection
-func (s *SocksAdapter) Close() {
+func (s *SocketAdapter) Close() {
 	s.conn.Close()
 }
 
 // Addr return destination address
-func (s *SocksAdapter) Addr() *C.Addr {
+func (s *SocketAdapter) Addr() *C.Addr {
 	return s.addr
 }
 
 // Conn return raw net.Conn
-func (s *SocksAdapter) Conn() net.Conn {
+func (s *SocketAdapter) Conn() net.Conn {
 	return s.conn
 }
 
-// NewSocks is SocksAdapter generator
-func NewSocks(target socks.Addr, conn net.Conn) *SocksAdapter {
-	return &SocksAdapter{
+// NewSocket is SocketAdapter generator
+func NewSocket(target socks.Addr, conn net.Conn) *SocketAdapter {
+	return &SocketAdapter{
 		conn: conn,
 		addr: parseSocksAddr(target),
 	}

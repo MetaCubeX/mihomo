@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/Dreamacro/clash/adapters/local"
 	C "github.com/Dreamacro/clash/constant"
@@ -56,24 +55,20 @@ func NewHttpProxy(addr string) (*C.ProxySignal, error) {
 
 func handleConn(conn net.Conn) {
 	br := bufio.NewReader(conn)
-	method, hostName := adapters.ParserHTTPHostHeader(br)
-	if hostName == "" {
+	request, err := http.ReadRequest(br)
+	if err != nil {
+		conn.Close()
 		return
 	}
 
-	if !strings.Contains(hostName, ":") {
-		hostName += ":80"
-	}
-
-	var peeked []byte
-	if method == http.MethodConnect {
+	if request.Method == http.MethodConnect {
 		_, err := conn.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
 		if err != nil {
 			return
 		}
-	} else if n := br.Buffered(); n > 0 {
-		peeked, _ = br.Peek(br.Buffered())
+		tun.Add(adapters.NewHTTPS(request, conn))
+		return
 	}
 
-	tun.Add(adapters.NewHTTP(hostName, peeked, method != http.MethodConnect, conn))
+	tun.Add(adapters.NewHTTP(request, conn))
 }
