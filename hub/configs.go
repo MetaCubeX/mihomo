@@ -21,6 +21,7 @@ func configRouter() http.Handler {
 type configSchema struct {
 	Port      int    `json:"port"`
 	SocksPort int    `json:"socket-port"`
+	RedirPort int    `json:"redir-port"`
 	AllowLan  bool   `json:"allow-lan"`
 	Mode      string `json:"mode"`
 	LogLevel  string `json:"log-level"`
@@ -31,6 +32,7 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, configSchema{
 		Port:      general.Port,
 		SocksPort: general.SocksPort,
+		RedirPort: general.RedirPort,
 		AllowLan:  general.AllowLan,
 		Mode:      general.Mode.String(),
 		LogLevel:  general.LogLevel.String(),
@@ -87,6 +89,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		AllowLan:  general.AllowLan,
 		Port:      general.Port,
 		SocksPort: general.SocksPort,
+		RedirPort: general.RedirPort,
 	})
 
 	w.WriteHeader(http.StatusNoContent)

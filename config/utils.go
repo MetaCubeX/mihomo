@@ -18,3 +18,12 @@ func genAddr(port int, allowLan bool) string {
 	}
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
+
+func or(pointers ...*int) *int {
+	for _, p := range pointers {
+		if p != nil {
+			return p
+		}
+	}
+	return pointers[len(pointers)-1]
+}
