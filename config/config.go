@@ -189,19 +189,19 @@ func (c *Config) UpdateProxy(pc ProxyConfig) {
 		c.general.AllowLan = *pc.AllowLan
 	}
 
-	if (pc.AllowLan != nil || pc.Port != nil) && *pc.Port != 0 {
-		c.general.Port = *pc.Port
-		c.event <- &Event{Type: "http-addr", Payload: genAddr(*pc.Port, c.general.AllowLan)}
+	c.general.Port = *or(pc.Port, &c.general.Port)
+	if c.general.Port != 0 && (pc.AllowLan != nil || pc.Port != nil) {
+		c.event <- &Event{Type: "http-addr", Payload: genAddr(c.general.Port, c.general.AllowLan)}
 	}
 
-	if (pc.AllowLan != nil || pc.SocksPort != nil) && *pc.SocksPort != 0 {
-		c.general.SocksPort = *pc.SocksPort
-		c.event <- &Event{Type: "socks-addr", Payload: genAddr(*pc.SocksPort, c.general.AllowLan)}
+	c.general.SocksPort = *or(pc.SocksPort, &c.general.SocksPort)
+	if c.general.SocksPort != 0 && (pc.AllowLan != nil || pc.SocksPort != nil) {
+		c.event <- &Event{Type: "socks-addr", Payload: genAddr(c.general.SocksPort, c.general.AllowLan)}
 	}
 
-	if (pc.AllowLan != nil || pc.RedirPort != nil) && *pc.RedirPort != 0 {
-		c.general.RedirPort = *pc.RedirPort
-		c.event <- &Event{Type: "redir-addr", Payload: genAddr(*pc.RedirPort, c.general.AllowLan)}
+	c.general.RedirPort = *or(pc.RedirPort, &c.general.RedirPort)
+	if c.general.RedirPort != 0 && (pc.AllowLan != nil || pc.RedirPort != nil) {
+		c.event <- &Event{Type: "redir-addr", Payload: genAddr(c.general.RedirPort, c.general.AllowLan)}
 	}
 }
 
