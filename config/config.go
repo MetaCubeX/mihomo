@@ -330,17 +330,17 @@ func (c *Config) handleResponseMessage() {
 		switch event.Type {
 		case "http-addr":
 			if event.Payload.(bool) == false {
-				log.Errorf("Listening HTTP proxy at %s error", c.general.Port)
+				log.Errorf("Listening HTTP proxy at %d error", c.general.Port)
 				c.general.Port = 0
 			}
 		case "socks-addr":
 			if event.Payload.(bool) == false {
-				log.Errorf("Listening SOCKS proxy at %s error", c.general.SocksPort)
+				log.Errorf("Listening SOCKS proxy at %d error", c.general.SocksPort)
 				c.general.SocksPort = 0
 			}
 		case "redir-addr":
 			if event.Payload.(bool) == false {
-				log.Errorf("Listening Redir proxy at %s error", c.general.RedirPort)
+				log.Errorf("Listening Redir proxy at %d error", c.general.RedirPort)
 				c.general.RedirPort = 0
 			}
 		}
