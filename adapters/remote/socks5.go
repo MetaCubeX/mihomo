@@ -44,8 +44,7 @@ func (ss *Socks5) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.addr)
 	}
-	c.(*net.TCPConn).SetKeepAlive(true)
-
+	tcpKeepAlive(c)
 	if err := ss.sharkHand(addr, c); err != nil {
 		return nil, err
 	}

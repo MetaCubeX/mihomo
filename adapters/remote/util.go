@@ -84,3 +84,10 @@ func selectFast(in chan interface{}) chan interface{} {
 
 	return out
 }
+
+func tcpKeepAlive(c net.Conn) {
+	if tcp, ok := c.(*net.TCPConn); ok {
+		tcp.SetKeepAlive(true)
+		tcp.SetKeepAlivePeriod(3 * time.Minute)
+	}
+}
