@@ -46,7 +46,7 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
 	}
-	c.(*net.TCPConn).SetKeepAlive(true)
+	tcpKeepAlive(c)
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(addr))
 	return &ShadowsocksAdapter{conn: c}, err

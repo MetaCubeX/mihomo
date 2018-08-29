@@ -36,7 +36,7 @@ func (d *Direct) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	if err != nil {
 		return
 	}
-	c.(*net.TCPConn).SetKeepAlive(true)
+	tcpKeepAlive(c)
 	return &DirectAdapter{conn: c}, nil
 }
 
