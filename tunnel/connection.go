@@ -36,7 +36,10 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, proxy C.ProxyAdapter)
 		} else {
 			resp.Close = true
 		}
-		resp.Write(request.Conn())
+		err = resp.Write(request.Conn())
+		if err != nil || resp.Close {
+			break
+		}
 
 		req, err = http.ReadRequest(bufio.NewReader(request.Conn()))
 		if err != nil {
