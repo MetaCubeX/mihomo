@@ -1,6 +1,6 @@
 # Gopkg.toml example
 #
-# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
+# Refer to https://golang.github.io/dep/docs/Gopkg.toml.html
 # for detailed Gopkg.toml documentation.
 #
 # required = ["github.com/user/thing/cmd/thing"]
@@ -27,7 +27,7 @@
 
 [[constraint]]
   name = "github.com/go-chi/chi"
-  version = "3.3.2"
+  version = "3.3.3"
 
 [[constraint]]
   name = "github.com/go-chi/cors"
@@ -36,6 +36,10 @@
 [[constraint]]
   name = "github.com/go-chi/render"
   version = "1.0.1"
+
+[[constraint]]
+  name = "github.com/gofrs/uuid"
+  version = "3.1.1"
 
 [[constraint]]
   name = "github.com/oschwald/geoip2-golang"
@@ -47,7 +51,11 @@
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
-  version = "1.0.5"
+  version = "1.0.6"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"
 
 [[constraint]]
   name = "gopkg.in/eapache/channels.v1"
@@ -55,7 +63,7 @@
 
 [[constraint]]
   name = "gopkg.in/ini.v1"
-  version = "1.38.1"
+  version = "1.38.2"
 
 [prune]
   go-tests = true
