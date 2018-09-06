@@ -12,6 +12,7 @@ const (
 	Shadowsocks
 	Socks5
 	URLTest
+	Vmess
 )
 
 type ProxyAdapter interface {
@@ -47,6 +48,8 @@ func (at AdapterType) String() string {
 		return "Socks5"
 	case URLTest:
 		return "URLTest"
+	case Vmess:
+		return "Vmess"
 	default:
 		return "Unknow"
 	}

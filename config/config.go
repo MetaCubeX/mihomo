@@ -236,6 +236,21 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 			addr := fmt.Sprintf("%s:%s", proxy[1], proxy[2])
 			socks5 := adapters.NewSocks5(key.Name(), addr)
 			proxies[key.Name()] = socks5
+		// vmess, server, port, uuid, alterId, security
+		case "vmess":
+			if len(proxy) < 6 {
+				continue
+			}
+			addr := fmt.Sprintf("%s:%s", proxy[1], proxy[2])
+			alterID, err := strconv.Atoi(proxy[4])
+			if err != nil {
+				return err
+			}
+			vmess, err := adapters.NewVmess(key.Name(), addr, proxy[3], uint16(alterID), proxy[5])
+			if err != nil {
+				return err
+			}
+			proxies[key.Name()] = vmess
 		}
 	}
 
