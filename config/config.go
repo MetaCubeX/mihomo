@@ -246,7 +246,8 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 			if err != nil {
 				return err
 			}
-			vmess, err := adapters.NewVmess(key.Name(), addr, proxy[3], uint16(alterID), proxy[5])
+			option := parseOptions(6, proxy...)
+			vmess, err := adapters.NewVmess(key.Name(), addr, proxy[3], uint16(alterID), proxy[5], option)
 			if err != nil {
 				return err
 			}

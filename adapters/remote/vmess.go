@@ -48,16 +48,18 @@ func (ss *Vmess) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 	return &VmessAdapter{conn: c}, err
 }
 
-func NewVmess(name string, server string, uuid string, alterID uint16, security string) (*Vmess, error) {
+func NewVmess(name string, server string, uuid string, alterID uint16, security string, option map[string]string) (*Vmess, error) {
 	security = strings.ToLower(security)
 	client, err := vmess.NewClient(vmess.Config{
 		UUID:     uuid,
 		AlterID:  alterID,
 		Security: security,
+		TLS:      option["tls"] == "true",
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	return &Vmess{
 		name:   name,
 		server: server,
