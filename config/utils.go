@@ -27,3 +27,20 @@ func or(pointers ...*int) *int {
 	}
 	return pointers[len(pointers)-1]
 }
+
+func parseOptions(startIdx int, params ...string) map[string]string {
+	mapping := make(map[string]string)
+	if len(params) <= startIdx {
+		return mapping
+	}
+
+	for _, option := range params[startIdx:] {
+		pair := strings.SplitN(option, "=", 2)
+		if len(pair) != 2 {
+			continue
+		}
+
+		mapping[strings.Trim(pair[0], " ")] = strings.Trim(pair[1], " ")
+	}
+	return mapping
+}

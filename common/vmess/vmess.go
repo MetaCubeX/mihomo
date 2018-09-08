@@ -1,6 +1,7 @@
 package vmess
 
 import (
+	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
@@ -35,6 +36,10 @@ var CipherMapping = map[string]byte{
 	"chacha20-poly1305": SecurityCHACHA20POLY1305,
 }
 
+var tlsConfig = &tls.Config{
+	InsecureSkipVerify: true,
+}
+
 // Command types
 const (
 	CommandTCP byte = 1
@@ -60,6 +65,7 @@ type Client struct {
 	user     []*ID
 	uuid     *uuid.UUID
 	security Security
+	tls      bool
 }
 
 // Config of vmess
@@ -67,11 +73,15 @@ type Config struct {
 	UUID     string
 	AlterID  uint16
 	Security string
+	TLS      bool
 }
 
 // New return a Conn with net.Conn and DstAddr
 func (c *Client) New(conn net.Conn, dst *DstAddr) net.Conn {
 	r := rand.Intn(len(c.user))
+	if c.tls {
+		conn = tls.Client(conn, tlsConfig)
+	}
 	return newConn(conn, c.user[r], dst, c.security)
 }
 
@@ -102,5 +112,6 @@ func NewClient(config Config) (*Client, error) {
 		user:     newAlterIDs(newID(&uid), config.AlterID),
 		uuid:     &uid,
 		security: security,
+		tls:      config.TLS,
 	}, nil
 }
