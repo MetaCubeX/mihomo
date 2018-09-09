@@ -322,6 +322,8 @@ func (c *Config) parseRules(cfg *ini.File) error {
 		}
 		rule = trimArr(rule)
 		switch rule[0] {
+		case "DOMAIN":
+			rules = append(rules, R.NewDomain(rule[1], rule[2]))
 		case "DOMAIN-SUFFIX":
 			rules = append(rules, R.NewDomainSuffix(rule[1], rule[2]))
 		case "DOMAIN-KEYWORD":
