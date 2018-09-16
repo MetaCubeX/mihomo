@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strconv"
@@ -74,7 +75,10 @@ func (c *Config) readConfig() (*ini.File, error) {
 		return nil, err
 	}
 	return ini.LoadSources(
-		ini.LoadOptions{AllowBooleanKeys: true},
+		ini.LoadOptions{
+			AllowBooleanKeys:    true,
+			UnparseableSections: []string{"Rule"},
+		},
 		C.ConfigPath,
 	)
 }
@@ -316,8 +320,14 @@ func (c *Config) parseRules(cfg *ini.File) error {
 
 	rulesConfig := cfg.Section("Rule")
 	// parse rules
-	for _, key := range rulesConfig.Keys() {
-		rule := strings.Split(key.Name(), ",")
+	reader := bufio.NewReader(strings.NewReader(rulesConfig.Body()))
+	for {
+		line, _, err := reader.ReadLine()
+		if err != nil {
+			break
+		}
+
+		rule := strings.Split(string(line), ",")
 		if len(rule) < 3 {
 			continue
 		}
