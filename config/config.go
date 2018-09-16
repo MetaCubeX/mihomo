@@ -223,7 +223,8 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 				continue
 			}
 			ssURL := fmt.Sprintf("ss://%s:%s@%s:%s", proxy[3], proxy[4], proxy[1], proxy[2])
-			ss, err := adapters.NewShadowSocks(key.Name(), ssURL)
+			option := parseOptions(5, proxy...)
+			ss, err := adapters.NewShadowSocks(key.Name(), ssURL, option)
 			if err != nil {
 				return err
 			}

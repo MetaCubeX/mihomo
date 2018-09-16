@@ -9,6 +9,7 @@ import (
 
 	C "github.com/Dreamacro/clash/constant"
 
+	"github.com/Dreamacro/clash/common/simple-obfs"
 	"github.com/riobard/go-shadowsocks2/core"
 	"github.com/riobard/go-shadowsocks2/socks"
 )
@@ -28,9 +29,11 @@ func (ss *ShadowsocksAdapter) Conn() net.Conn {
 }
 
 type ShadowSocks struct {
-	server string
-	name   string
-	cipher core.Cipher
+	server   string
+	name     string
+	obfs     string
+	obfsHost string
+	cipher   core.Cipher
 }
 
 func (ss *ShadowSocks) Name() string {
@@ -47,22 +50,42 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 		return nil, fmt.Errorf("%s connect error", ss.server)
 	}
 	tcpKeepAlive(c)
+	switch ss.obfs {
+	case "tls":
+		c = obfs.NewTLSObfs(c, ss.obfsHost)
+	case "http":
+		_, port, _ := net.SplitHostPort(ss.server)
+		c = obfs.NewHTTPObfs(c, ss.obfsHost, port)
+	}
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(addr))
 	return &ShadowsocksAdapter{conn: c}, err
 }
 
-func NewShadowSocks(name string, ssURL string) (*ShadowSocks, error) {
+func NewShadowSocks(name string, ssURL string, option map[string]string) (*ShadowSocks, error) {
 	var key []byte
 	server, cipher, password, _ := parseURL(ssURL)
 	ciph, err := core.PickCipher(cipher, key, password)
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
+
+	obfs := ""
+	obfsHost := "bing.com"
+	if value, ok := option["obfs"]; ok {
+		obfs = value
+	}
+
+	if value, ok := option["obfs-host"]; ok {
+		obfsHost = value
+	}
+
 	return &ShadowSocks{
-		server: server,
-		name:   name,
-		cipher: ciph,
+		server:   server,
+		name:     name,
+		cipher:   ciph,
+		obfs:     obfs,
+		obfsHost: obfsHost,
 	}, nil
 }
 
