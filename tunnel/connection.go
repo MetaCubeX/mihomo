@@ -3,6 +3,7 @@ package tunnel
 import (
 	"bufio"
 	"io"
+	"net"
 	"net/http"
 
 	"github.com/Dreamacro/clash/adapters/local"
@@ -56,6 +57,18 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, proxy C.ProxyAdapter)
 
 func (t *Tunnel) handleSOCKS(request *adapters.SocketAdapter, proxy C.ProxyAdapter) {
 	conn := newTrafficTrack(proxy.Conn(), t.traffic)
-	go io.Copy(request.Conn(), conn)
-	io.Copy(conn, request.Conn())
+	relay(request.Conn(), conn)
+}
+
+// relay copies between left and right bidirectionally.
+func relay(leftConn, rightConn net.Conn) {
+	ch := make(chan error)
+
+	go func() {
+		_, err := io.Copy(leftConn, rightConn)
+		ch <- err
+	}()
+
+	io.Copy(rightConn, leftConn)
+	<-ch
 }
