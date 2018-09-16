@@ -25,6 +25,7 @@
 - HTTP/HTTPS and SOCKS proxy
 - Surge like configuration
 - GeoIP rule support
+- Support Vmess/Shadowsocks/Socks5
 - Support for Netfilter TCP redirect
 
 ## Discussion
@@ -77,14 +78,18 @@ redir-port = 7892
 external-controller = 127.0.0.1:8080
 
 [Proxy]
-# name = ss, server, port, cipher, password
+# name = ss, server, port, cipher, password(, obfs=tls/http, obfs-host=bing.com)
 # The types of cipher are consistent with go-shadowsocks2
 # support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
 ss1 = ss, server1, port, AEAD_CHACHA20_POLY1305, password
 ss2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
 
+# name = vmess, server, port, uuid, alterId, cipher(, tls=true)
+# cipher support auto/aes-128-gcm/chacha20-poly1305/none
+vmess1 = vmess, server, port, uuid, 32, auto, tls=true
+
 # name = socks5, server, port
-socks = socks5, server1, port
+socks = socks5, server, port
 
 [Proxy Group]
 # url-test select which proxy will be used by benchmarking speed to a URL.
@@ -107,6 +112,8 @@ FINAL,,Proxy # note: there is two ","
 ## Thanks
 
 [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
+
+[v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 
 ## License
 
