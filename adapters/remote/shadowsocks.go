@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/Dreamacro/clash/common/simple-obfs"
 	C "github.com/Dreamacro/clash/constant"
 
-	"github.com/Dreamacro/clash/common/simple-obfs"
 	"github.com/riobard/go-shadowsocks2/core"
 	"github.com/riobard/go-shadowsocks2/socks"
 )
@@ -63,9 +63,8 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 }
 
 func NewShadowSocks(name string, ssURL string, option map[string]string) (*ShadowSocks, error) {
-	var key []byte
 	server, cipher, password, _ := parseURL(ssURL)
-	ciph, err := core.PickCipher(cipher, key, password)
+	ciph, err := core.PickCipher(cipher, nil, password)
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
@@ -120,5 +119,5 @@ func serializesSocksAddr(addr *C.Addr) []byte {
 		host := addr.IP.To16()
 		buf = [][]byte{{aType}, host, port}
 	}
-	return bytes.Join(buf, []byte(""))
+	return bytes.Join(buf, nil)
 }

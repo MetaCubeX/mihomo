@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -226,9 +227,13 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 			if len(proxy) < 5 {
 				continue
 			}
-			ssURL := fmt.Sprintf("ss://%s:%s@%s:%s", proxy[3], proxy[4], proxy[1], proxy[2])
+			ssURL := url.URL{
+				Scheme: "ss",
+				User:   url.UserPassword(proxy[3], proxy[4]),
+				Host:   fmt.Sprintf("%s:%s", proxy[1], proxy[2]),
+			}
 			option := parseOptions(5, proxy...)
-			ss, err := adapters.NewShadowSocks(key.Name(), ssURL, option)
+			ss, err := adapters.NewShadowSocks(key.Name(), ssURL.String(), option)
 			if err != nil {
 				return err
 			}

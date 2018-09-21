@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/Dreamacro/clash/adapters/local"
 	C "github.com/Dreamacro/clash/constant"
@@ -66,9 +67,11 @@ func relay(leftConn, rightConn net.Conn) {
 
 	go func() {
 		_, err := io.Copy(leftConn, rightConn)
+		leftConn.SetReadDeadline(time.Now())
 		ch <- err
 	}()
 
 	io.Copy(rightConn, leftConn)
+	rightConn.SetReadDeadline(time.Now())
 	<-ch
 }
