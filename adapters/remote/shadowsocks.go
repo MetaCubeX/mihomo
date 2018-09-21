@@ -10,8 +10,8 @@ import (
 	"github.com/Dreamacro/clash/common/simple-obfs"
 	C "github.com/Dreamacro/clash/constant"
 
-	"github.com/riobard/go-shadowsocks2/core"
-	"github.com/riobard/go-shadowsocks2/socks"
+	"github.com/Dreamacro/go-shadowsocks2/core"
+	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 // ShadowsocksAdapter is a shadowsocks adapter

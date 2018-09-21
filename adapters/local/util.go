@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/riobard/go-shadowsocks2/socks"
+	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 func parseSocksAddr(target socks.Addr) *C.Addr {

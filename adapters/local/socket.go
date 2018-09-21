@@ -4,7 +4,7 @@ import (
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/riobard/go-shadowsocks2/socks"
+	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 // SocketAdapter is a adapter for socks and redir connection
