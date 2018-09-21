@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/riobard/go-shadowsocks2/socks"
+	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 func parserPacket(conn net.Conn) (socks.Addr, error) {

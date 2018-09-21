@@ -9,7 +9,7 @@ import (
 
 	C "github.com/Dreamacro/clash/constant"
 
-	"github.com/riobard/go-shadowsocks2/socks"
+	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 // Socks5Adapter is a shadowsocks adapter

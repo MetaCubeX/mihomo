@@ -2,6 +2,19 @@
 
 
 [[projects]]
+  digest = "1:d21e998147c1c8cd727bd34148f373d3faa46fd8669c389b53c4eaabbe4eb2b3"
+  name = "github.com/Dreamacro/go-shadowsocks2"
+  packages = [
+    "core",
+    "shadowaead",
+    "shadowstream",
+    "socks",
+  ]
+  pruneopts = "UT"
+  revision = "1c1fd6c192eb76261ea3ccd80e3b141b25f20db4"
+  version = "v0.1.1"
+
+[[projects]]
   branch = "master"
   digest = "1:8fa55a6e302771a90a86ceae1ca3c0df4ef15d21092198e8313f61dde9eea963"
   name = "github.com/Yawning/chacha20"
@@ -66,19 +79,6 @@
   version = "v1.3.0"
 
 [[projects]]
-  digest = "1:2bfa1a73654feb90893014b04779ce5205f3e19e843c0e32a89ea051d31f12d5"
-  name = "github.com/riobard/go-shadowsocks2"
-  packages = [
-    "core",
-    "shadowaead",
-    "shadowstream",
-    "socks",
-  ]
-  pruneopts = "UT"
-  revision = "8346403248229fc7e10d7a259de8e9352a9d8830"
-  version = "v0.1.0"
-
-[[projects]]
   digest = "1:d867dfa6751c8d7a435821ad3b736310c2ed68945d05b50fb9d23aee0540c8cc"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
@@ -99,11 +99,11 @@
     "ssh/terminal",
   ]
   pruneopts = "UT"
-  revision = "0709b304e793a5edb4a2c0145f281ecdc20838a4"
+  revision = "0e37d006457bf46f9e6692014ba72ef82c33022c"
 
 [[projects]]
   branch = "master"
-  digest = "1:576f8d82185dc836ec6d10c0e5568dc4ff94e4d9f101d33ed5d6bae0cbba65b2"
+  digest = "1:ddbafa32d1899456edbf7a64aec7afe5aa287b840e6a12b996f8a8425c1d9a6a"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -111,7 +111,7 @@
     "windows",
   ]
   pruneopts = "UT"
-  revision = "ebe1bf3edb3325c393447059974de898d5133eb8"
+  revision = "d641721ec2dead6fe5ca284096fe4b1fcd49e427"
 
 [[projects]]
   digest = "1:975a4480c40f2d0b95e1f83d3ec1aa29a2774e80179e08a9a4ba2aab86721b23"
@@ -133,13 +133,13 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/Dreamacro/go-shadowsocks2/core",
+    "github.com/Dreamacro/go-shadowsocks2/socks",
     "github.com/go-chi/chi",
     "github.com/go-chi/cors",
     "github.com/go-chi/render",
     "github.com/gofrs/uuid",
     "github.com/oschwald/geoip2-golang",
-    "github.com/riobard/go-shadowsocks2/core",
-    "github.com/riobard/go-shadowsocks2/socks",
     "github.com/sirupsen/logrus",
     "golang.org/x/crypto/chacha20poly1305",
     "gopkg.in/eapache/channels.v1",

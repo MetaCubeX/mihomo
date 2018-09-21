@@ -26,6 +26,10 @@
 
 
 [[constraint]]
+  name = "github.com/Dreamacro/go-shadowsocks2"
+  version = "0.1.1"
+
+[[constraint]]
   name = "github.com/go-chi/chi"
   version = "3.3.3"
 
@@ -44,10 +48,6 @@
 [[constraint]]
   name = "github.com/oschwald/geoip2-golang"
   version = "1.2.1"
-
-[[constraint]]
-  name = "github.com/riobard/go-shadowsocks2"
-  version = "0.1.0"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
