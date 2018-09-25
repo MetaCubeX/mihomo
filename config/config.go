@@ -307,6 +307,25 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 				return fmt.Errorf("Selector create error: %s", err.Error())
 			}
 			proxies[key.Name()] = selector
+		case "fallback":
+			if len(rule) < 4 {
+				return fmt.Errorf("URLTest need more than 4 param")
+			}
+			proxyNames := rule[1 : len(rule)-2]
+			delay, _ := strconv.Atoi(rule[len(rule)-1])
+			url := rule[len(rule)-2]
+			var ps []C.Proxy
+			for _, name := range proxyNames {
+				if p, ok := proxies[name]; ok {
+					ps = append(ps, p)
+				}
+			}
+
+			adapter, err := adapters.NewFallback(key.Name(), ps, url, time.Duration(delay)*time.Second)
+			if err != nil {
+				return fmt.Errorf("Config error: %s", err.Error())
+			}
+			proxies[key.Name()] = adapter
 		}
 	}
 
@@ -315,6 +334,15 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 	proxies["DIRECT"] = adapters.NewDirect()
 	proxies["REJECT"] = adapters.NewReject()
 
+	// close old goroutine
+	for _, proxy := range c.proxies {
+		switch raw := proxy.(type) {
+		case *adapters.URLTest:
+			raw.Close()
+		case *adapters.Fallback:
+			raw.Close()
+		}
+	}
 	c.proxies = proxies
 	c.event <- &Event{Type: "proxies", Payload: proxies}
 	return nil

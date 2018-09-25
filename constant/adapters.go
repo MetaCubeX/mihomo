@@ -7,6 +7,7 @@ import (
 // Adapter Type
 const (
 	Direct AdapterType = iota
+	Fallback
 	Reject
 	Selector
 	Shadowsocks
@@ -38,6 +39,8 @@ func (at AdapterType) String() string {
 	switch at {
 	case Direct:
 		return "Direct"
+	case Fallback:
+		return "Fallback"
 	case Reject:
 		return "Reject"
 	case Selector:

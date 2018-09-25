@@ -37,6 +37,11 @@ type URLTest struct {
 	Now  string `json:"now"`
 }
 
+type Fallback struct {
+	Type string `json:"type"`
+	Now  string `json:"now"`
+}
+
 func transformProxy(proxy C.Proxy) interface{} {
 	t := proxy.Type()
 	switch t {
@@ -51,6 +56,11 @@ func transformProxy(proxy C.Proxy) interface{} {
 		return URLTest{
 			Type: t.String(),
 			Now:  proxy.(*A.URLTest).Now(),
+		}
+	case C.Fallback:
+		return Fallback{
+			Type: t.String(),
+			Now:  proxy.(*A.Fallback).Now(),
 		}
 	default:
 		return SampleProxy{
