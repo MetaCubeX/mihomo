@@ -12,7 +12,7 @@ func (f *Final) RuleType() C.RuleType {
 	return C.FINAL
 }
 
-func (f *Final) IsMatch(addr *C.Addr) bool {
+func (f *Final) IsMatch(metadata *C.Metadata) bool {
 	return true
 }
 

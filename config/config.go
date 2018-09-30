@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/remote"
+	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/common/observable"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/observable"
 	R "github.com/Dreamacro/clash/rules"
 
 	log "github.com/sirupsen/logrus"

@@ -22,14 +22,14 @@ type ProxyAdapter interface {
 }
 
 type ServerAdapter interface {
-	Addr() *Addr
+	Metadata() *Metadata
 	Close()
 }
 
 type Proxy interface {
 	Name() string
 	Type() AdapterType
-	Generator(addr *Addr) (ProxyAdapter, error)
+	Generator(metadata *Metadata) (ProxyAdapter, error)
 }
 
 // AdapterType is enum of adapter type

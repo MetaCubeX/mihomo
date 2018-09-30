@@ -28,8 +28,8 @@ func (n *NetWork) String() string {
 
 type SourceType int
 
-// Addr is used to store connection address
-type Addr struct {
+// Metadata is used to store connection address
+type Metadata struct {
 	NetWork  NetWork
 	Source   SourceType
 	AddrType int
@@ -38,7 +38,7 @@ type Addr struct {
 	Port     string
 }
 
-func (addr *Addr) String() string {
+func (addr *Metadata) String() string {
 	if addr.Host == "" {
 		return addr.IP.String()
 	}

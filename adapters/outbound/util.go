@@ -12,7 +12,7 @@ import (
 
 // DelayTest get the delay for the specified URL
 func DelayTest(proxy C.Proxy, url string) (t int16, err error) {
-	addr, err := urlToAddr(url)
+	addr, err := urlToMetadata(url)
 	if err != nil {
 		return
 	}
@@ -43,7 +43,7 @@ func DelayTest(proxy C.Proxy, url string) (t int16, err error) {
 	return
 }
 
-func urlToAddr(rawURL string) (addr C.Addr, err error) {
+func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return
@@ -61,7 +61,7 @@ func urlToAddr(rawURL string) (addr C.Addr, err error) {
 		}
 	}
 
-	addr = C.Addr{
+	addr = C.Metadata{
 		AddrType: C.AtypDomainName,
 		Host:     u.Hostname(),
 		IP:       nil,

@@ -13,11 +13,11 @@ func (d *Domain) RuleType() C.RuleType {
 	return C.Domain
 }
 
-func (d *Domain) IsMatch(addr *C.Addr) bool {
-	if addr.AddrType != C.AtypDomainName {
+func (d *Domain) IsMatch(metadata *C.Metadata) bool {
+	if metadata.AddrType != C.AtypDomainName {
 		return false
 	}
-	return addr.Host == d.domain
+	return metadata.Host == d.domain
 }
 
 func (d *Domain) Adapter() string {

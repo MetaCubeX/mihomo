@@ -37,7 +37,7 @@ func (f *Fallback) Now() string {
 	return f.proxies[0].RawProxy.Name()
 }
 
-func (f *Fallback) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
+func (f *Fallback) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
 	idx := 0
 	var proxy *proxy
 	for {
@@ -45,7 +45,7 @@ func (f *Fallback) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
 		if proxy == nil {
 			break
 		}
-		adapter, err = proxy.RawProxy.Generator(addr)
+		adapter, err = proxy.RawProxy.Generator(metadata)
 		if err != nil {
 			proxy.Valid = false
 			idx++
@@ -99,7 +99,7 @@ func (f *Fallback) validTest() {
 }
 
 func NewFallback(name string, proxies []C.Proxy, rawURL string, delay time.Duration) (*Fallback, error) {
-	_, err := urlToAddr(rawURL)
+	_, err := urlToMetadata(rawURL)
 	if err != nil {
 		return nil, err
 	}

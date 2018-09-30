@@ -15,12 +15,12 @@ func (i *IPCIDR) RuleType() C.RuleType {
 	return C.IPCIDR
 }
 
-func (i *IPCIDR) IsMatch(addr *C.Addr) bool {
-	if addr.IP == nil {
+func (i *IPCIDR) IsMatch(metadata *C.Metadata) bool {
+	if metadata.IP == nil {
 		return false
 	}
 
-	return i.ipnet.Contains(*addr.IP)
+	return i.ipnet.Contains(*metadata.IP)
 }
 
 func (i *IPCIDR) Adapter() string {

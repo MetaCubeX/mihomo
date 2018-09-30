@@ -9,7 +9,7 @@ import (
 	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
-func parseSocksAddr(target socks.Addr) *C.Addr {
+func parseSocksAddr(target socks.Addr) *C.Metadata {
 	var host, port string
 	var ip net.IP
 
@@ -29,7 +29,7 @@ func parseSocksAddr(target socks.Addr) *C.Addr {
 		port = strconv.Itoa((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
 	}
 
-	return &C.Addr{
+	return &C.Metadata{
 		NetWork:  C.TCP,
 		AddrType: int(target[0]),
 		Host:     host,
@@ -38,7 +38,7 @@ func parseSocksAddr(target socks.Addr) *C.Addr {
 	}
 }
 
-func parseHTTPAddr(request *http.Request) *C.Addr {
+func parseHTTPAddr(request *http.Request) *C.Metadata {
 	host := request.URL.Hostname()
 	port := request.URL.Port()
 	if port == "" {
@@ -61,7 +61,7 @@ func parseHTTPAddr(request *http.Request) *C.Addr {
 		addType = socks.AtypIPv4
 	}
 
-	return &C.Addr{
+	return &C.Metadata{
 		NetWork:  C.TCP,
 		AddrType: addType,
 		Host:     host,
