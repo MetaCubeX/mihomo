@@ -3,7 +3,7 @@ package redir
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/adapters/local"
+	"github.com/Dreamacro/clash/adapters/inbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 

@@ -9,8 +9,8 @@ import (
 
 // SocketAdapter is a adapter for socks and redir connection
 type SocketAdapter struct {
-	conn net.Conn
-	addr *C.Addr
+	conn     net.Conn
+	metadata *C.Metadata
 }
 
 // Close socks and redir connection
@@ -18,9 +18,9 @@ func (s *SocketAdapter) Close() {
 	s.conn.Close()
 }
 
-// Addr return destination address
-func (s *SocketAdapter) Addr() *C.Addr {
-	return s.addr
+// Metadata return destination metadata
+func (s *SocketAdapter) Metadata() *C.Metadata {
+	return s.metadata
 }
 
 // Conn return raw net.Conn
@@ -31,7 +31,7 @@ func (s *SocketAdapter) Conn() net.Conn {
 // NewSocket is SocketAdapter generator
 func NewSocket(target socks.Addr, conn net.Conn) *SocketAdapter {
 	return &SocketAdapter{
-		conn: conn,
-		addr: parseSocksAddr(target),
+		conn:     conn,
+		metadata: parseSocksAddr(target),
 	}
 }

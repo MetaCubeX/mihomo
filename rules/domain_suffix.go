@@ -15,11 +15,11 @@ func (ds *DomainSuffix) RuleType() C.RuleType {
 	return C.DomainSuffix
 }
 
-func (ds *DomainSuffix) IsMatch(addr *C.Addr) bool {
-	if addr.AddrType != C.AtypDomainName {
+func (ds *DomainSuffix) IsMatch(metadata *C.Metadata) bool {
+	if metadata.AddrType != C.AtypDomainName {
 		return false
 	}
-	domain := addr.Host
+	domain := metadata.Host
 	return strings.HasSuffix(domain, "."+ds.suffix) || domain == ds.suffix
 }
 

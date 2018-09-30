@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/Dreamacro/clash/common/simple-obfs"
+	"github.com/Dreamacro/clash/component/simple-obfs"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/Dreamacro/go-shadowsocks2/core"
@@ -44,7 +44,7 @@ func (ss *ShadowSocks) Type() C.AdapterType {
 	return C.Shadowsocks
 }
 
-func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
+func (ss *ShadowSocks) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
 	c, err := net.Dial("tcp", ss.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
@@ -58,7 +58,7 @@ func (ss *ShadowSocks) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err erro
 		c = obfs.NewHTTPObfs(c, ss.obfsHost, port)
 	}
 	c = ss.cipher.StreamConn(c)
-	_, err = c.Write(serializesSocksAddr(addr))
+	_, err = c.Write(serializesSocksAddr(metadata))
 	return &ShadowsocksAdapter{conn: c}, err
 }
 
@@ -102,21 +102,21 @@ func parseURL(s string) (addr, cipher, password string, err error) {
 	return
 }
 
-func serializesSocksAddr(addr *C.Addr) []byte {
+func serializesSocksAddr(metadata *C.Metadata) []byte {
 	var buf [][]byte
-	aType := uint8(addr.AddrType)
-	p, _ := strconv.Atoi(addr.Port)
+	aType := uint8(metadata.AddrType)
+	p, _ := strconv.Atoi(metadata.Port)
 	port := []byte{uint8(p >> 8), uint8(p & 0xff)}
-	switch addr.AddrType {
+	switch metadata.AddrType {
 	case socks.AtypDomainName:
-		len := uint8(len(addr.Host))
-		host := []byte(addr.Host)
+		len := uint8(len(metadata.Host))
+		host := []byte(metadata.Host)
 		buf = [][]byte{{aType, len}, host, port}
 	case socks.AtypIPv4:
-		host := addr.IP.To4()
+		host := metadata.IP.To4()
 		buf = [][]byte{{aType}, host, port}
 	case socks.AtypIPv6:
-		host := addr.IP.To16()
+		host := metadata.IP.To16()
 		buf = [][]byte{{aType}, host, port}
 	}
 	return bytes.Join(buf, nil)

@@ -4,10 +4,10 @@ import (
 	"sync"
 	"time"
 
-	LocalAdapter "github.com/Dreamacro/clash/adapters/local"
+	InboundAdapter "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/common/observable"
 	cfg "github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/observable"
 
 	"gopkg.in/eapache/channels.v1"
 )
@@ -84,7 +84,7 @@ func (t *Tunnel) process() {
 
 func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	defer localConn.Close()
-	addr := localConn.Addr()
+	metadata := localConn.Metadata()
 
 	var proxy C.Proxy
 	switch t.mode {
@@ -94,9 +94,9 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 		proxy = t.proxies["GLOBAL"]
 	// Rule
 	default:
-		proxy = t.match(addr)
+		proxy = t.match(metadata)
 	}
-	remoConn, err := proxy.Generator(addr)
+	remoConn, err := proxy.Generator(metadata)
 	if err != nil {
 		t.logCh <- newLog(C.WARNING, "Proxy connect error: %s", err.Error())
 		return
@@ -104,28 +104,28 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	defer remoConn.Close()
 
 	switch adapter := localConn.(type) {
-	case *LocalAdapter.HTTPAdapter:
+	case *InboundAdapter.HTTPAdapter:
 		t.handleHTTP(adapter, remoConn)
-	case *LocalAdapter.SocketAdapter:
+	case *InboundAdapter.SocketAdapter:
 		t.handleSOCKS(adapter, remoConn)
 	}
 }
 
-func (t *Tunnel) match(addr *C.Addr) C.Proxy {
+func (t *Tunnel) match(metadata *C.Metadata) C.Proxy {
 	t.configLock.RLock()
 	defer t.configLock.RUnlock()
 
 	for _, rule := range t.rules {
-		if rule.IsMatch(addr) {
+		if rule.IsMatch(metadata) {
 			a, ok := t.proxies[rule.Adapter()]
 			if !ok {
 				continue
 			}
-			t.logCh <- newLog(C.INFO, "%v match %s using %s", addr.String(), rule.RuleType().String(), rule.Adapter())
+			t.logCh <- newLog(C.INFO, "%v match %s using %s", metadata.String(), rule.RuleType().String(), rule.Adapter())
 			return a
 		}
 	}
-	t.logCh <- newLog(C.INFO, "%v doesn't match any rule using DIRECT", addr.String())
+	t.logCh <- newLog(C.INFO, "%v doesn't match any rule using DIRECT", metadata.String())
 	return t.proxies["DIRECT"]
 }
 

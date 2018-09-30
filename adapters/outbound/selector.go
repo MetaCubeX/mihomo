@@ -21,8 +21,8 @@ func (s *Selector) Type() C.AdapterType {
 	return C.Selector
 }
 
-func (s *Selector) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
-	return s.selected.Generator(addr)
+func (s *Selector) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+	return s.selected.Generator(metadata)
 }
 
 func (s *Selector) Now() string {

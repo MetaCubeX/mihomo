@@ -32,7 +32,7 @@ func (r *Reject) Type() C.AdapterType {
 	return C.Reject
 }
 
-func (r *Reject) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
+func (r *Reject) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
 	return &RejectAdapter{conn: &NopConn{}}, nil
 }
 

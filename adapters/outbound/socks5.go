@@ -39,19 +39,19 @@ func (ss *Socks5) Type() C.AdapterType {
 	return C.Socks5
 }
 
-func (ss *Socks5) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
+func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
 	c, err := net.Dial("tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.addr)
 	}
 	tcpKeepAlive(c)
-	if err := ss.shakeHand(addr, c); err != nil {
+	if err := ss.shakeHand(metadata, c); err != nil {
 		return nil, err
 	}
 	return &Socks5Adapter{conn: c}, nil
 }
 
-func (ss *Socks5) shakeHand(addr *C.Addr, rw io.ReadWriter) error {
+func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	buf := make([]byte, socks.MaxAddrLen)
 
 	// VER, CMD, RSV
@@ -71,7 +71,7 @@ func (ss *Socks5) shakeHand(addr *C.Addr, rw io.ReadWriter) error {
 	}
 
 	// VER, CMD, RSV, ADDR
-	if _, err := rw.Write(bytes.Join([][]byte{{5, 1, 0}, serializesSocksAddr(addr)}, []byte(""))); err != nil {
+	if _, err := rw.Write(bytes.Join([][]byte{{5, 1, 0}, serializesSocksAddr(metadata)}, []byte(""))); err != nil {
 		return err
 	}
 

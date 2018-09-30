@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/vmess"
+	"github.com/Dreamacro/clash/component/vmess"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -38,13 +38,13 @@ func (ss *Vmess) Type() C.AdapterType {
 	return C.Vmess
 }
 
-func (ss *Vmess) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
+func (ss *Vmess) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
 	c, err := net.Dial("tcp", ss.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
 	}
 	tcpKeepAlive(c)
-	c = ss.client.New(c, parseVmessAddr(addr))
+	c = ss.client.New(c, parseVmessAddr(metadata))
 	return &VmessAdapter{conn: c}, err
 }
 
@@ -67,26 +67,26 @@ func NewVmess(name string, server string, uuid string, alterID uint16, security 
 	}, nil
 }
 
-func parseVmessAddr(info *C.Addr) *vmess.DstAddr {
+func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 	var addrType byte
 	var addr []byte
-	switch info.AddrType {
+	switch metadata.AddrType {
 	case C.AtypIPv4:
 		addrType = byte(vmess.AtypIPv4)
 		addr = make([]byte, net.IPv4len)
-		copy(addr[:], info.IP.To4())
+		copy(addr[:], metadata.IP.To4())
 	case C.AtypIPv6:
 		addrType = byte(vmess.AtypIPv6)
 		addr = make([]byte, net.IPv6len)
-		copy(addr[:], info.IP.To16())
+		copy(addr[:], metadata.IP.To16())
 	case C.AtypDomainName:
 		addrType = byte(vmess.AtypDomainName)
-		addr = make([]byte, len(info.Host)+1)
-		addr[0] = byte(len(info.Host))
-		copy(addr[1:], []byte(info.Host))
+		addr = make([]byte, len(metadata.Host)+1)
+		addr[0] = byte(len(metadata.Host))
+		copy(addr[1:], []byte(metadata.Host))
 	}
 
-	port, _ := strconv.Atoi(info.Port)
+	port, _ := strconv.Atoi(metadata.Port)
 	return &vmess.DstAddr{
 		AddrType: addrType,
 		Addr:     addr,

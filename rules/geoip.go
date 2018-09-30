@@ -23,11 +23,11 @@ func (g *GEOIP) RuleType() C.RuleType {
 	return C.GEOIP
 }
 
-func (g *GEOIP) IsMatch(addr *C.Addr) bool {
-	if addr.IP == nil {
+func (g *GEOIP) IsMatch(metadata *C.Metadata) bool {
+	if metadata.IP == nil {
 		return false
 	}
-	record, _ := mmdb.Country(*addr.IP)
+	record, _ := mmdb.Country(*metadata.IP)
 	return record.Country.IsoCode == g.country
 }
 

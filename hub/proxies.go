@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	A "github.com/Dreamacro/clash/adapters/remote"
+	A "github.com/Dreamacro/clash/adapters/outbound"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/go-chi/chi"

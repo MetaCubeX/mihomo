@@ -28,8 +28,8 @@ func (u *URLTest) Now() string {
 	return u.fast.Name()
 }
 
-func (u *URLTest) Generator(addr *C.Addr) (adapter C.ProxyAdapter, err error) {
-	return u.fast.Generator(addr)
+func (u *URLTest) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+	return u.fast.Generator(metadata)
 }
 
 func (u *URLTest) Close() {
@@ -84,7 +84,7 @@ func (u *URLTest) speedTest() {
 }
 
 func NewURLTest(name string, proxies []C.Proxy, rawURL string, delay time.Duration) (*URLTest, error) {
-	_, err := urlToAddr(rawURL)
+	_, err := urlToMetadata(rawURL)
 	if err != nil {
 		return nil, err
 	}

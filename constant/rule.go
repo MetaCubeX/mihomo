@@ -33,7 +33,7 @@ func (rt RuleType) String() string {
 
 type Rule interface {
 	RuleType() RuleType
-	IsMatch(addr *Addr) bool
+	IsMatch(metadata *Metadata) bool
 	Adapter() string
 	Payload() string
 }
