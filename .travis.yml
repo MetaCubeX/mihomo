@@ -2,14 +2,13 @@ language: go
 sudo: false
 go:
   - "1.11"
-before_install:
-  - go get -u github.com/golang/dep/cmd/dep
 install:
-  - "$GOPATH/bin/dep ensure"
+  - "go mod download"
 env:
   global:
     - NAME=clash
     - BINDIR=bin
+    - GO111MODULE=on
 script:
   - go test ./...
 before_deploy: make -j releases
