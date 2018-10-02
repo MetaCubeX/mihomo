@@ -46,6 +46,6 @@ func init() {
 		}
 	}
 
-	ConfigPath = path.Join(dirPath, "config.ini")
+	ConfigPath = path.Join(dirPath, "config.yml")
 	MMDBPath = path.Join(dirPath, "Country.mmdb")
 }

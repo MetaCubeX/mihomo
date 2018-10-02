@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -14,6 +15,13 @@ type URLTest struct {
 	fast    C.Proxy
 	delay   time.Duration
 	done    chan struct{}
+}
+
+type URLTestOption struct {
+	Name    string   `proxy:"name"`
+	Proxies []string `proxy:"proxies"`
+	URL     string   `proxy:"url"`
+	Delay   int      `proxy:"delay"`
 }
 
 func (u *URLTest) Name() string {
@@ -83,16 +91,20 @@ func (u *URLTest) speedTest() {
 	}
 }
 
-func NewURLTest(name string, proxies []C.Proxy, rawURL string, delay time.Duration) (*URLTest, error) {
-	_, err := urlToMetadata(rawURL)
+func NewURLTest(option URLTestOption, proxies []C.Proxy) (*URLTest, error) {
+	_, err := urlToMetadata(option.URL)
 	if err != nil {
 		return nil, err
 	}
+	if len(proxies) < 1 {
+		return nil, errors.New("The number of proxies cannot be 0")
+	}
 
+	delay := time.Duration(option.Delay) * time.Second
 	urlTest := &URLTest{
-		name:    name,
+		name:    option.Name,
 		proxies: proxies[:],
-		rawURL:  rawURL,
+		rawURL:  option.URL,
 		fast:    proxies[0],
 		delay:   delay,
 		done:    make(chan struct{}),

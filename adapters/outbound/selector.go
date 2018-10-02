@@ -13,6 +13,11 @@ type Selector struct {
 	proxies  map[string]C.Proxy
 }
 
+type SelectorOption struct {
+	Name    string   `proxy:"name"`
+	Proxies []string `proxy:"proxies"`
+}
+
 func (s *Selector) Name() string {
 	return s.name
 }
