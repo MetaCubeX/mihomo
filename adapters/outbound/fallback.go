@@ -21,6 +21,13 @@ type Fallback struct {
 	done    chan struct{}
 }
 
+type FallbackOption struct {
+	Name    string   `proxy:"name"`
+	Proxies []string `proxy:"proxies"`
+	URL     string   `proxy:"url"`
+	Delay   int      `proxy:"delay"`
+}
+
 func (f *Fallback) Name() string {
 	return f.name
 }
@@ -98,8 +105,8 @@ func (f *Fallback) validTest() {
 	wg.Wait()
 }
 
-func NewFallback(name string, proxies []C.Proxy, rawURL string, delay time.Duration) (*Fallback, error) {
-	_, err := urlToMetadata(rawURL)
+func NewFallback(option FallbackOption, proxies []C.Proxy) (*Fallback, error) {
+	_, err := urlToMetadata(option.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +115,7 @@ func NewFallback(name string, proxies []C.Proxy, rawURL string, delay time.Durat
 		return nil, errors.New("The number of proxies cannot be 0")
 	}
 
+	delay := time.Duration(option.Delay) * time.Second
 	warpperProxies := make([]*proxy, len(proxies))
 	for idx := range proxies {
 		warpperProxies[idx] = &proxy{
@@ -117,9 +125,9 @@ func NewFallback(name string, proxies []C.Proxy, rawURL string, delay time.Durat
 	}
 
 	Fallback := &Fallback{
-		name:    name,
+		name:    option.Name,
 		proxies: warpperProxies,
-		rawURL:  rawURL,
+		rawURL:  option.URL,
 		delay:   delay,
 		done:    make(chan struct{}),
 	}

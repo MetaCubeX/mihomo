@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"net/url"
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/simple-obfs"
@@ -36,6 +35,16 @@ type ShadowSocks struct {
 	cipher   core.Cipher
 }
 
+type ShadowSocksOption struct {
+	Name     string `proxy:"name"`
+	Server   string `proxy:"server"`
+	Port     int    `proxy:"port"`
+	Password string `proxy:"password"`
+	Cipher   string `proxy:"cipher"`
+	Obfs     string `proxy:"obfs,omitempty"`
+	ObfsHost string `proxy:"obfs-host,omitempty"`
+}
+
 func (ss *ShadowSocks) Name() string {
 	return ss.name
 }
@@ -62,44 +71,28 @@ func (ss *ShadowSocks) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, 
 	return &ShadowsocksAdapter{conn: c}, err
 }
 
-func NewShadowSocks(name string, ssURL string, option map[string]string) (*ShadowSocks, error) {
-	server, cipher, password, _ := parseURL(ssURL)
+func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
+	server := fmt.Sprintf("%s:%d", option.Server, option.Port)
+	cipher := option.Cipher
+	password := option.Password
 	ciph, err := core.PickCipher(cipher, nil, password)
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
 
-	obfs := ""
+	obfs := option.Obfs
 	obfsHost := "bing.com"
-	if value, ok := option["obfs"]; ok {
-		obfs = value
-	}
-
-	if value, ok := option["obfs-host"]; ok {
-		obfsHost = value
+	if option.ObfsHost != "" {
+		obfsHost = option.ObfsHost
 	}
 
 	return &ShadowSocks{
 		server:   server,
-		name:     name,
+		name:     option.Name,
 		cipher:   ciph,
 		obfs:     obfs,
 		obfsHost: obfsHost,
 	}, nil
-}
-
-func parseURL(s string) (addr, cipher, password string, err error) {
-	u, err := url.Parse(s)
-	if err != nil {
-		return
-	}
-
-	addr = u.Host
-	if u.User != nil {
-		cipher = u.User.Username()
-		password, _ = u.User.Password()
-	}
-	return
 }
 
 func serializesSocksAddr(metadata *C.Metadata) []byte {

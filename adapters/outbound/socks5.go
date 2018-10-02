@@ -31,6 +31,12 @@ type Socks5 struct {
 	name string
 }
 
+type Socks5Option struct {
+	Name   string `proxy:"name"`
+	Server string `proxy:"server"`
+	Port   int    `proxy:"port"`
+}
+
 func (ss *Socks5) Name() string {
 	return ss.name
 }
@@ -82,9 +88,9 @@ func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	return nil
 }
 
-func NewSocks5(name, addr string) *Socks5 {
+func NewSocks5(option Socks5Option) *Socks5 {
 	return &Socks5{
-		addr: addr,
-		name: name,
+		addr: fmt.Sprintf("%s:%d", option.Server, option.Port),
+		name: option.Name,
 	}
 }

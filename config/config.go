@@ -1,22 +1,21 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
-	"net/url"
+	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/common/observable"
+	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 	R "github.com/Dreamacro/clash/rules"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/ini.v1"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var (
@@ -40,6 +39,21 @@ type ProxyConfig struct {
 	SocksPort *int
 	RedirPort *int
 	AllowLan  *bool
+}
+
+// RawConfig is raw config struct
+type RawConfig struct {
+	Port               int    `yaml:"port"`
+	SocksPort          int    `yaml:"socks-port"`
+	RedirPort          int    `yaml:"redir-port"`
+	AllowLan           bool   `yaml:"allow-lan"`
+	Mode               string `yaml:"mode"`
+	LogLevel           string `yaml:"log-level"`
+	ExternalController string `yaml:"external-controller"`
+
+	Proxy      []map[string]interface{} `yaml:"Proxy"`
+	ProxyGroup []map[string]interface{} `yaml:"Proxy Group"`
+	Rule       []string                 `yaml:"Rule"`
 }
 
 // Config is clash config manager
@@ -71,17 +85,25 @@ func (c *Config) Report() chan<- interface{} {
 	return c.reportCh
 }
 
-func (c *Config) readConfig() (*ini.File, error) {
+func (c *Config) readConfig() (*RawConfig, error) {
 	if _, err := os.Stat(C.ConfigPath); os.IsNotExist(err) {
 		return nil, err
 	}
-	return ini.LoadSources(
-		ini.LoadOptions{
-			AllowBooleanKeys:    true,
-			UnparseableSections: []string{"Rule"},
-		},
-		C.ConfigPath,
-	)
+	data, err := ioutil.ReadFile(C.ConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	// config with some default value
+	rawConfig := &RawConfig{
+		AllowLan:   false,
+		Mode:       Rule.String(),
+		LogLevel:   C.INFO.String(),
+		Rule:       []string{},
+		Proxy:      []map[string]interface{}{},
+		ProxyGroup: []map[string]interface{}{},
+	}
+	err = yaml.Unmarshal([]byte(data), &rawConfig)
+	return rawConfig, err
 }
 
 // Parse config
@@ -139,15 +161,13 @@ func (c *Config) UpdateRules() error {
 	return c.parseRules(cfg)
 }
 
-func (c *Config) parseGeneral(cfg *ini.File) error {
-	general := cfg.Section("General")
-
-	port := general.Key("port").RangeInt(0, 1, 65535)
-	socksPort := general.Key("socks-port").RangeInt(0, 1, 65535)
-	redirPort := general.Key("redir-port").RangeInt(0, 1, 65535)
-	allowLan := general.Key("allow-lan").MustBool()
-	logLevelString := general.Key("log-level").MustString(C.INFO.String())
-	modeString := general.Key("mode").MustString(Rule.String())
+func (c *Config) parseGeneral(cfg *RawConfig) error {
+	port := cfg.Port
+	socksPort := cfg.SocksPort
+	redirPort := cfg.RedirPort
+	allowLan := cfg.AllowLan
+	logLevelString := cfg.LogLevel
+	modeString := cfg.Mode
 
 	mode, exist := ModeMapping[modeString]
 	if !exist {
@@ -168,7 +188,7 @@ func (c *Config) parseGeneral(cfg *ini.File) error {
 		LogLevel:  logLevel,
 	}
 
-	if restAddr := general.Key("external-controller").String(); restAddr != "" {
+	if restAddr := cfg.ExternalController; restAddr != "" {
 		c.event <- &Event{Type: "external-controller", Payload: restAddr}
 	}
 
@@ -210,129 +230,128 @@ func (c *Config) UpdateProxy(pc ProxyConfig) {
 	}
 }
 
-func (c *Config) parseProxies(cfg *ini.File) error {
+func (c *Config) parseProxies(cfg *RawConfig) error {
 	proxies := make(map[string]C.Proxy)
-	proxiesConfig := cfg.Section("Proxy")
-	groupsConfig := cfg.Section("Proxy Group")
+	proxiesConfig := cfg.Proxy
+	groupsConfig := cfg.ProxyGroup
+
+	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
+
+	proxies["DIRECT"] = adapters.NewDirect()
+	proxies["REJECT"] = adapters.NewReject()
 
 	// parse proxy
-	for _, key := range proxiesConfig.Keys() {
-		proxy := key.Strings(",")
-		if len(proxy) == 0 {
-			continue
+	for idx, mapping := range proxiesConfig {
+		proxyType, existType := mapping["type"].(string)
+		proxyName, existName := mapping["name"].(string)
+		if !existType && existName {
+			return fmt.Errorf("Proxy %d missing type or name", idx)
 		}
-		switch proxy[0] {
-		// ss, server, port, cipter, password
+
+		if _, exist := proxies[proxyName]; exist {
+			return fmt.Errorf("Proxy %s is the duplicate name", proxyName)
+		}
+		var proxy C.Proxy
+		var err error
+		switch proxyType {
 		case "ss":
-			if len(proxy) < 5 {
-				continue
-			}
-			ssURL := url.URL{
-				Scheme: "ss",
-				User:   url.UserPassword(proxy[3], proxy[4]),
-				Host:   fmt.Sprintf("%s:%s", proxy[1], proxy[2]),
-			}
-			option := parseOptions(5, proxy...)
-			ss, err := adapters.NewShadowSocks(key.Name(), ssURL.String(), option)
+			ssOption := &adapters.ShadowSocksOption{}
+			err = decoder.Decode(mapping, ssOption)
 			if err != nil {
-				return err
+				break
 			}
-			proxies[key.Name()] = ss
-		// socks5, server, port
+			proxy, err = adapters.NewShadowSocks(*ssOption)
 		case "socks5":
-			if len(proxy) < 3 {
-				continue
+			socksOption := &adapters.Socks5Option{}
+			err = decoder.Decode(mapping, socksOption)
+			if err != nil {
+				break
 			}
-			addr := fmt.Sprintf("%s:%s", proxy[1], proxy[2])
-			socks5 := adapters.NewSocks5(key.Name(), addr)
-			proxies[key.Name()] = socks5
-		// vmess, server, port, uuid, alterId, security
+			proxy = adapters.NewSocks5(*socksOption)
 		case "vmess":
-			if len(proxy) < 6 {
-				continue
-			}
-			addr := fmt.Sprintf("%s:%s", proxy[1], proxy[2])
-			alterID, err := strconv.Atoi(proxy[4])
+			vmessOption := &adapters.VmessOption{}
+			err = decoder.Decode(mapping, vmessOption)
 			if err != nil {
-				return err
+				break
 			}
-			option := parseOptions(6, proxy...)
-			vmess, err := adapters.NewVmess(key.Name(), addr, proxy[3], uint16(alterID), proxy[5], option)
-			if err != nil {
-				return err
-			}
-			proxies[key.Name()] = vmess
+			proxy, err = adapters.NewVmess(*vmessOption)
+		default:
+			return fmt.Errorf("Unsupport proxy type: %s", proxyType)
 		}
+		if err != nil {
+			return fmt.Errorf("Proxy %s: %s", proxyName, err.Error())
+		}
+		proxies[proxyName] = proxy
 	}
 
 	// parse proxy group
-	for _, key := range groupsConfig.Keys() {
-		rule := strings.Split(key.Value(), ",")
-		rule = trimArr(rule)
-		switch rule[0] {
+	for idx, mapping := range groupsConfig {
+		groupType, existType := mapping["type"].(string)
+		groupName, existName := mapping["name"].(string)
+		if !existType && existName {
+			return fmt.Errorf("ProxyGroup %d: missing type or name", idx)
+		}
+
+		if _, exist := proxies[groupName]; exist {
+			return fmt.Errorf("ProxyGroup %s: the duplicate name", groupName)
+		}
+		var group C.Proxy
+		var err error
+		switch groupType {
 		case "url-test":
-			if len(rule) < 4 {
-				return fmt.Errorf("URLTest need more than 4 param")
-			}
-			proxyNames := rule[1 : len(rule)-2]
-			delay, _ := strconv.Atoi(rule[len(rule)-1])
-			url := rule[len(rule)-2]
-			var ps []C.Proxy
-			for _, name := range proxyNames {
-				if p, ok := proxies[name]; ok {
-					ps = append(ps, p)
-				}
+			urlTestOption := &adapters.URLTestOption{}
+			err = decoder.Decode(mapping, urlTestOption)
+			if err != nil {
+				break
 			}
 
-			adapter, err := adapters.NewURLTest(key.Name(), ps, url, time.Duration(delay)*time.Second)
-			if err != nil {
-				return fmt.Errorf("Config error: %s", err.Error())
+			var ps []C.Proxy
+			for _, name := range urlTestOption.Proxies {
+				p, ok := proxies[name]
+				if !ok {
+					return fmt.Errorf("ProxyGroup %s: proxy or proxy group '%s' not found", groupName, name)
+				}
+				ps = append(ps, p)
 			}
-			proxies[key.Name()] = adapter
+			group, err = adapters.NewURLTest(*urlTestOption, ps)
 		case "select":
-			if len(rule) < 2 {
-				return fmt.Errorf("Selector need more than 2 param")
+			selectorOption := &adapters.SelectorOption{}
+			err = decoder.Decode(mapping, selectorOption)
+			if err != nil {
+				break
 			}
-			proxyNames := rule[1:]
 			selectProxy := make(map[string]C.Proxy)
-			for _, name := range proxyNames {
+			for _, name := range selectorOption.Proxies {
 				proxy, exist := proxies[name]
 				if !exist {
-					return fmt.Errorf("Proxy %s not exist", name)
+					return fmt.Errorf("ProxyGroup %s: proxy or proxy group '%s' not found", groupName, name)
 				}
 				selectProxy[name] = proxy
 			}
-			selector, err := adapters.NewSelector(key.Name(), selectProxy)
-			if err != nil {
-				return fmt.Errorf("Selector create error: %s", err.Error())
-			}
-			proxies[key.Name()] = selector
+			group, err = adapters.NewSelector(selectorOption.Name, selectProxy)
 		case "fallback":
-			if len(rule) < 4 {
-				return fmt.Errorf("URLTest need more than 4 param")
-			}
-			proxyNames := rule[1 : len(rule)-2]
-			delay, _ := strconv.Atoi(rule[len(rule)-1])
-			url := rule[len(rule)-2]
-			var ps []C.Proxy
-			for _, name := range proxyNames {
-				if p, ok := proxies[name]; ok {
-					ps = append(ps, p)
-				}
-			}
-
-			adapter, err := adapters.NewFallback(key.Name(), ps, url, time.Duration(delay)*time.Second)
+			fallbackOption := &adapters.FallbackOption{}
+			err = decoder.Decode(mapping, fallbackOption)
 			if err != nil {
-				return fmt.Errorf("Config error: %s", err.Error())
+				break
 			}
-			proxies[key.Name()] = adapter
+			var ps []C.Proxy
+			for _, name := range fallbackOption.Proxies {
+				p, ok := proxies[name]
+				if !ok {
+					return fmt.Errorf("ProxyGroup %s: proxy or proxy group '%s' not found", groupName, name)
+				}
+				ps = append(ps, p)
+			}
+			group, err = adapters.NewFallback(*fallbackOption, ps)
 		}
+		if err != nil {
+			return fmt.Errorf("Proxy %s: %s", groupName, err.Error())
+		}
+		proxies[groupName] = group
 	}
 
-	// init proxy
 	proxies["GLOBAL"], _ = adapters.NewSelector("GLOBAL", proxies)
-	proxies["DIRECT"] = adapters.NewDirect()
-	proxies["REJECT"] = adapters.NewReject()
 
 	// close old goroutine
 	for _, proxy := range c.proxies {
@@ -348,19 +367,13 @@ func (c *Config) parseProxies(cfg *ini.File) error {
 	return nil
 }
 
-func (c *Config) parseRules(cfg *ini.File) error {
+func (c *Config) parseRules(cfg *RawConfig) error {
 	rules := []C.Rule{}
 
-	rulesConfig := cfg.Section("Rule")
+	rulesConfig := cfg.Rule
 	// parse rules
-	reader := bufio.NewReader(strings.NewReader(rulesConfig.Body()))
-	for {
-		line, _, err := reader.ReadLine()
-		if err != nil {
-			break
-		}
-
-		rule := strings.Split(string(line), ",")
+	for _, line := range rulesConfig {
+		rule := strings.Split(line, ",")
 		if len(rule) < 3 {
 			continue
 		}

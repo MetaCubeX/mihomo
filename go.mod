@@ -13,5 +13,5 @@ require (
 	github.com/sirupsen/logrus v1.1.0
 	golang.org/x/crypto v0.0.0-20180927165925-5295e8364332
 	gopkg.in/eapache/channels.v1 v1.1.0
-	gopkg.in/ini.v1 v1.38.3
+	gopkg.in/yaml.v2 v2.2.1
 )

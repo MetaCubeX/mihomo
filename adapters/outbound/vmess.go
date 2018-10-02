@@ -30,6 +30,16 @@ type Vmess struct {
 	client *vmess.Client
 }
 
+type VmessOption struct {
+	Name    string `proxy:"name"`
+	Server  string `proxy:"server"`
+	Port    int    `proxy:"port"`
+	UUID    string `proxy:"uuid"`
+	AlterID int    `proxy:"alterId"`
+	Cipher  string `proxy:"cipher"`
+	TLS     bool   `proxy:"tls,omitempty"`
+}
+
 func (ss *Vmess) Name() string {
 	return ss.name
 }
@@ -48,21 +58,21 @@ func (ss *Vmess) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err er
 	return &VmessAdapter{conn: c}, err
 }
 
-func NewVmess(name string, server string, uuid string, alterID uint16, security string, option map[string]string) (*Vmess, error) {
-	security = strings.ToLower(security)
+func NewVmess(option VmessOption) (*Vmess, error) {
+	security := strings.ToLower(option.Cipher)
 	client, err := vmess.NewClient(vmess.Config{
-		UUID:     uuid,
-		AlterID:  alterID,
+		UUID:     option.UUID,
+		AlterID:  uint16(option.AlterID),
 		Security: security,
-		TLS:      option["tls"] == "true",
+		TLS:      option.TLS,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &Vmess{
-		name:   name,
-		server: server,
+		name:   option.Name,
+		server: fmt.Sprintf("%s:%d", option.Server, option.Port),
 		client: client,
 	}, nil
 }

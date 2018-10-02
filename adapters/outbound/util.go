@@ -34,11 +34,11 @@ func DelayTest(proxy C.Proxy, url string) (t int16, err error) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 	client := http.Client{Transport: transport}
-	req, err := client.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
 		return
 	}
-	req.Body.Close()
+	resp.Body.Close()
 	t = int16(time.Since(start) / time.Millisecond)
 	return
 }
