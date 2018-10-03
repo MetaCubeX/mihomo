@@ -62,51 +62,69 @@ If you have Docker installed, you can run clash directly using `docker-compose`.
 
 ## Config
 
-Configuration file at `$HOME/.config/clash/config.ini`
+**NOTE: after v0.7.1, clash using yaml as configuration file**
+
+Configuration file at `$HOME/.config/clash/config.yml`
 
 Below is a simple demo configuration file:
 
-```ini
-[General]
-port = 7890
-socks-port = 7891
+```yml
+# port of HTTP
+port: 7890
+
+# port of SOCKS5
+socks-port: 7891
 
 # redir proxy for Linux and macOS
-redir-port = 7892
+redir-port: 7892
+
+allow-lan: false
+
+# Rule / Global/ Direct
+mode: Rule
+
+# set log level to stdout (default is info)
+# info / warning / error / debug
+log-level: info
 
 # A RESTful API for clash
-external-controller = 127.0.0.1:8080
+external-controller: 127.0.0.1:9090
 
-[Proxy]
-# name = ss, server, port, cipher, password(, obfs=tls/http, obfs-host=bing.com)
+Proxy:
+
+# shadowsocks
 # The types of cipher are consistent with go-shadowsocks2
 # support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
-ss1 = ss, server1, port, AEAD_CHACHA20_POLY1305, password
-ss2 = ss, server2, port, AEAD_CHACHA20_POLY1305, password
+# after v0.7.1 clash support chacha20 rc4-md5
+- { name: "ss1", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password" }
+- { name: "ss2", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password", obfs: tls, obfs-host: bing.com }
 
-# name = vmess, server, port, uuid, alterId, cipher(, tls=true)
+# vmess
 # cipher support auto/aes-128-gcm/chacha20-poly1305/none
-vmess1 = vmess, server, port, uuid, 32, auto, tls=true
+- { name: "vmess1", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto }
+- { name: "vmess2", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, tls: true }
 
-# name = socks5, server, port
-socks = socks5, server, port
+# socks5
+- { name: "socks", type: socks5, server: server, port: 443 }
 
-[Proxy Group]
+Proxy Group:
 # url-test select which proxy will be used by benchmarking speed to a URL.
-# name = url-test, [proxies], url, interval(second)
-auto = url-test, ss1, ss2, http://www.google.com/generate_204, 300
+- { name: "auto", type: url-test, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, delay: 300 }
+
+# fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
+- { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, delay: 300 }
 
 # select is used for selecting proxy or proxy group
 # you can use RESTful API to switch proxy, is recommended for use in GUI.
-# name = select, [proxies]
-Proxy = select, ss1, ss2, auto
+- { name: "Proxy", type: select, proxies: ["ss1", "ss2", "vmess1", "auto"] }
 
-[Rule]
-DOMAIN-SUFFIX,google.com,Proxy
-DOMAIN-KEYWORD,google,Proxy
-DOMAIN-SUFFIX,ad.com,REJECT
-GEOIP,CN,DIRECT
-FINAL,,Proxy # note: there is two ","
+Rule:
+- DOMAIN-SUFFIX,google.com,Proxy
+- DOMAIN-KEYWORD,google,Proxy
+- DOMAIN-SUFFIX,ad.com,REJECT
+- GEOIP,CN,DIRECT
+# note: there is two ","
+- FINAL,,Proxy
 ```
 
 ## Thanks
