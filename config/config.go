@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
+	adapters "github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/common/observable"
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
@@ -50,6 +50,7 @@ type RawConfig struct {
 	Mode               string `yaml:"mode"`
 	LogLevel           string `yaml:"log-level"`
 	ExternalController string `yaml:"external-controller"`
+	Secret             string `yaml:"secret"`
 
 	Proxy      []map[string]interface{} `yaml:"Proxy"`
 	ProxyGroup []map[string]interface{} `yaml:"Proxy Group"`
@@ -190,6 +191,7 @@ func (c *Config) parseGeneral(cfg *RawConfig) error {
 
 	if restAddr := cfg.ExternalController; restAddr != "" {
 		c.event <- &Event{Type: "external-controller", Payload: restAddr}
+		c.event <- &Event{Type: "secret", Payload: cfg.Secret}
 	}
 
 	c.UpdateGeneral(*c.general)

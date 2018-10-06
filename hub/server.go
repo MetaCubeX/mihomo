@@ -3,6 +3,7 @@ package hub
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/config"
@@ -15,6 +16,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var secret = ""
+
 type Traffic struct {
 	Up   int64 `json:"up"`
 	Down int64 `json:"down"`
@@ -24,11 +27,19 @@ func newHub(signal chan struct{}) {
 	var addr string
 	ch := config.Instance().Subscribe()
 	signal <- struct{}{}
+	count := 0
 	for {
 		elm := <-ch
 		event := elm.(*config.Event)
-		if event.Type == "external-controller" {
+		switch event.Type {
+		case "external-controller":
 			addr = event.Payload.(string)
+			count++
+		case "secret":
+			secret = event.Payload.(string)
+			count++
+		}
+		if count == 2 {
 			break
 		}
 	}
@@ -38,11 +49,11 @@ func newHub(signal chan struct{}) {
 	cors := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
 
-	r.Use(cors.Handler)
+	r.Use(cors.Handler, authentication)
 
 	r.With(jsonContentType).Get("/traffic", traffic)
 	r.With(jsonContentType).Get("/logs", getLogs)
@@ -60,6 +71,30 @@ func newHub(signal chan struct{}) {
 func jsonContentType(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func authentication(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+		text := strings.SplitN(header, " ", 2)
+
+		if secret == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		hasUnvalidHeader := text[0] != "Bearer"
+		hasUnvalidSecret := len(text) == 2 && text[1] != secret
+		if hasUnvalidHeader || hasUnvalidSecret {
+			w.WriteHeader(http.StatusUnauthorized)
+			render.JSON(w, r, Error{
+				Error: "Authentication failed",
+			})
+			return
+		}
 		next.ServeHTTP(w, r)
 	}
 	return http.HandlerFunc(fn)
