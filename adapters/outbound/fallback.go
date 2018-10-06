@@ -60,7 +60,7 @@ func (f *Fallback) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err 
 		}
 		return
 	}
-	return nil, errors.New("There are no valid proxy")
+	return f.proxies[0].RawProxy.Generator(metadata)
 }
 
 func (f *Fallback) Close() {
