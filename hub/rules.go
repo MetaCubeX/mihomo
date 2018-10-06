@@ -17,6 +17,7 @@ func ruleRouter() http.Handler {
 type Rule struct {
 	Name    string `json:"name"`
 	Payload string `json:"type"`
+	Proxy   string `json:"proxy"`
 }
 
 type GetRulesResponse struct {
@@ -31,6 +32,7 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 		rules = append(rules, Rule{
 			Name:    rule.RuleType().String(),
 			Payload: rule.Payload(),
+			Proxy:   rule.Adapter(),
 		})
 	}
 
