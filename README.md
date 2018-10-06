@@ -109,10 +109,10 @@ Proxy:
 
 Proxy Group:
 # url-test select which proxy will be used by benchmarking speed to a URL.
-- { name: "auto", type: url-test, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, delay: 300 }
+- { name: "auto", type: url-test, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, interval: 300 }
 
 # fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
-- { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, delay: 300 }
+- { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, interval: 300 }
 
 # select is used for selecting proxy or proxy group
 # you can use RESTful API to switch proxy, is recommended for use in GUI.

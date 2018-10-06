@@ -9,19 +9,19 @@ import (
 )
 
 type URLTest struct {
-	name    string
-	proxies []C.Proxy
-	rawURL  string
-	fast    C.Proxy
-	delay   time.Duration
-	done    chan struct{}
+	name     string
+	proxies  []C.Proxy
+	rawURL   string
+	fast     C.Proxy
+	interval time.Duration
+	done     chan struct{}
 }
 
 type URLTestOption struct {
-	Name    string   `proxy:"name"`
-	Proxies []string `proxy:"proxies"`
-	URL     string   `proxy:"url"`
-	Delay   int      `proxy:"delay"`
+	Name     string   `proxy:"name"`
+	Proxies  []string `proxy:"proxies"`
+	URL      string   `proxy:"url"`
+	Interval int      `proxy:"interval"`
 }
 
 func (u *URLTest) Name() string {
@@ -45,7 +45,7 @@ func (u *URLTest) Close() {
 }
 
 func (u *URLTest) loop() {
-	tick := time.NewTicker(u.delay)
+	tick := time.NewTicker(u.interval)
 	go u.speedTest()
 Loop:
 	for {
@@ -63,7 +63,7 @@ func (u *URLTest) speedTest() {
 	wg.Add(len(u.proxies))
 	c := make(chan interface{})
 	fast := selectFast(c)
-	timer := time.NewTimer(u.delay)
+	timer := time.NewTimer(u.interval)
 
 	for _, p := range u.proxies {
 		go func(p C.Proxy) {
@@ -100,14 +100,14 @@ func NewURLTest(option URLTestOption, proxies []C.Proxy) (*URLTest, error) {
 		return nil, errors.New("The number of proxies cannot be 0")
 	}
 
-	delay := time.Duration(option.Delay) * time.Second
+	interval := time.Duration(option.Interval) * time.Second
 	urlTest := &URLTest{
-		name:    option.Name,
-		proxies: proxies[:],
-		rawURL:  option.URL,
-		fast:    proxies[0],
-		delay:   delay,
-		done:    make(chan struct{}),
+		name:     option.Name,
+		proxies:  proxies[:],
+		rawURL:   option.URL,
+		fast:     proxies[0],
+		interval: interval,
+		done:     make(chan struct{}),
 	}
 	go urlTest.loop()
 	return urlTest, nil
