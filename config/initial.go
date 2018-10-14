@@ -55,16 +55,23 @@ func downloadMMDB(path string) (err error) {
 
 // Init prepare necessary files
 func Init() {
+	// initial homedir
+	if _, err := os.Stat(C.Path.HomeDir()); os.IsNotExist(err) {
+		if err := os.MkdirAll(C.Path.HomeDir(), 0777); err != nil {
+			log.Fatalf("Can't create config directory %s: %s", C.Path.HomeDir(), err.Error())
+		}
+	}
+
 	// initial config.ini
-	if _, err := os.Stat(C.ConfigPath); os.IsNotExist(err) {
+	if _, err := os.Stat(C.Path.Config()); os.IsNotExist(err) {
 		log.Info("Can't find config, create a empty file")
-		os.OpenFile(C.ConfigPath, os.O_CREATE|os.O_WRONLY, 0644)
+		os.OpenFile(C.Path.Config(), os.O_CREATE|os.O_WRONLY, 0644)
 	}
 
 	// initial mmdb
-	if _, err := os.Stat(C.MMDBPath); os.IsNotExist(err) {
+	if _, err := os.Stat(C.Path.MMDB()); os.IsNotExist(err) {
 		log.Info("Can't find MMDB, start download")
-		err := downloadMMDB(C.MMDBPath)
+		err := downloadMMDB(C.Path.MMDB())
 		if err != nil {
 			log.Fatalf("Can't download MMDB: %s", err.Error())
 		}

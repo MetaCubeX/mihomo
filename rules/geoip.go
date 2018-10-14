@@ -42,7 +42,7 @@ func (g *GEOIP) Payload() string {
 func NewGEOIP(country string, adapter string) *GEOIP {
 	once.Do(func() {
 		var err error
-		mmdb, err = geoip2.Open(C.MMDBPath)
+		mmdb, err = geoip2.Open(C.Path.MMDB())
 		if err != nil {
 			log.Fatalf("Can't load mmdb: %s", err.Error())
 		}
