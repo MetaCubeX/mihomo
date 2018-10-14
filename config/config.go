@@ -87,13 +87,18 @@ func (c *Config) Report() chan<- interface{} {
 }
 
 func (c *Config) readConfig() (*RawConfig, error) {
-	if _, err := os.Stat(C.ConfigPath); os.IsNotExist(err) {
+	if _, err := os.Stat(C.Path.Config()); os.IsNotExist(err) {
 		return nil, err
 	}
-	data, err := ioutil.ReadFile(C.ConfigPath)
+	data, err := ioutil.ReadFile(C.Path.Config())
 	if err != nil {
 		return nil, err
 	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("Configuration file %s is empty", C.Path.Config())
+	}
+
 	// config with some default value
 	rawConfig := &RawConfig{
 		AllowLan:   false,
