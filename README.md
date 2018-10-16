@@ -62,9 +62,19 @@ If you have Docker installed, you can run clash directly using `docker-compose`.
 
 ## Config
 
-**NOTE: after v0.7.1, clash using yaml as configuration file**
+**NOTE: after v0.8.0, clash using yaml as configuration file**
 
-Configuration file at `$HOME/.config/clash/config.yml`
+The default configuration directory is `$HOME/.config/clash`
+
+The name of the configuration file is `config.yml`
+
+If you want to use another directory, you can use `-d` to control the configuration directory
+
+For example, you can use the current directory as the configuration directory
+
+```sh
+clash -d .
+```
 
 Below is a simple demo configuration file:
 
@@ -76,11 +86,11 @@ port: 7890
 socks-port: 7891
 
 # redir proxy for Linux and macOS
-redir-port: 7892
+# redir-port: 7892
 
 allow-lan: false
 
-# Rule / Global/ Direct
+# Rule / Global/ Direct (default is Rule)
 mode: Rule
 
 # set log level to stdout (default is info)
@@ -90,12 +100,15 @@ log-level: info
 # A RESTful API for clash
 external-controller: 127.0.0.1:9090
 
+# Secret for RESTful API (Optional)
+secret: ""
+
 Proxy:
 
 # shadowsocks
 # The types of cipher are consistent with go-shadowsocks2
 # support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
-# after v0.7.1 clash support chacha20 rc4-md5
+# In addition to what go-shadowsocks2 supports, it also supports chacha20 rc4-md5 xchacha20-ietf-poly1305
 - { name: "ss1", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password" }
 - { name: "ss2", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password", obfs: tls, obfs-host: bing.com }
 
