@@ -1,7 +1,7 @@
 module github.com/Dreamacro/clash
 
 require (
-	github.com/Dreamacro/go-shadowsocks2 v0.1.2-0.20181010040219-acb54ea41fbd
+	github.com/Dreamacro/go-shadowsocks2 v0.1.2-0.20181016063207-89bf7cffdaf4
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/go-chi/chi v3.3.3+incompatible
 	github.com/go-chi/cors v1.0.0
