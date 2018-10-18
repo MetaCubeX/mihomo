@@ -52,21 +52,20 @@ func (s *Selector) Set(name string) error {
 	return nil
 }
 
-func NewSelector(name string, proxies map[string]C.Proxy) (*Selector, error) {
+func NewSelector(name string, proxies []C.Proxy) (*Selector, error) {
 	if len(proxies) == 0 {
 		return nil, errors.New("Provide at least one proxy")
 	}
 
 	mapping := make(map[string]C.Proxy)
-	var init string
-	for k, v := range proxies {
-		mapping[k] = v
-		init = k
+	for _, proxy := range proxies {
+		mapping[proxy.Name()] = proxy
 	}
+
 	s := &Selector{
 		name:     name,
 		proxies:  mapping,
-		selected: proxies[init],
+		selected: proxies[0],
 	}
 	return s, nil
 }

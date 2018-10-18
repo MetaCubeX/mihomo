@@ -312,13 +312,9 @@ func (c *Config) parseProxies(cfg *RawConfig) error {
 				break
 			}
 
-			var ps []C.Proxy
-			for _, name := range urlTestOption.Proxies {
-				p, ok := proxies[name]
-				if !ok {
-					return fmt.Errorf("ProxyGroup %s: proxy or proxy group '%s' not found", groupName, name)
-				}
-				ps = append(ps, p)
+			ps, err := getProxies(proxies, urlTestOption.Proxies)
+			if err != nil {
+				return fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
 			group, err = adapters.NewURLTest(*urlTestOption, ps)
 		case "select":
@@ -327,28 +323,22 @@ func (c *Config) parseProxies(cfg *RawConfig) error {
 			if err != nil {
 				break
 			}
-			selectProxy := make(map[string]C.Proxy)
-			for _, name := range selectorOption.Proxies {
-				proxy, exist := proxies[name]
-				if !exist {
-					return fmt.Errorf("ProxyGroup %s: proxy or proxy group '%s' not found", groupName, name)
-				}
-				selectProxy[name] = proxy
+
+			ps, err := getProxies(proxies, selectorOption.Proxies)
+			if err != nil {
+				return fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
-			group, err = adapters.NewSelector(selectorOption.Name, selectProxy)
+			group, err = adapters.NewSelector(selectorOption.Name, ps)
 		case "fallback":
 			fallbackOption := &adapters.FallbackOption{}
 			err = decoder.Decode(mapping, fallbackOption)
 			if err != nil {
 				break
 			}
-			var ps []C.Proxy
-			for _, name := range fallbackOption.Proxies {
-				p, ok := proxies[name]
-				if !ok {
-					return fmt.Errorf("ProxyGroup %s: proxy or proxy group '%s' not found", groupName, name)
-				}
-				ps = append(ps, p)
+
+			ps, err := getProxies(proxies, fallbackOption.Proxies)
+			if err != nil {
+				return fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
 			group, err = adapters.NewFallback(*fallbackOption, ps)
 		}
@@ -358,7 +348,12 @@ func (c *Config) parseProxies(cfg *RawConfig) error {
 		proxies[groupName] = group
 	}
 
-	proxies["GLOBAL"], _ = adapters.NewSelector("GLOBAL", proxies)
+	var ps []C.Proxy
+	for _, v := range proxies {
+		ps = append(ps, v)
+	}
+
+	proxies["GLOBAL"], _ = adapters.NewSelector("GLOBAL", ps)
 
 	// close old goroutine
 	for _, proxy := range c.proxies {

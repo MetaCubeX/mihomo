@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 func trimArr(arr []string) (r []string) {
@@ -17,6 +19,18 @@ func genAddr(port int, allowLan bool) string {
 		return fmt.Sprintf(":%d", port)
 	}
 	return fmt.Sprintf("127.0.0.1:%d", port)
+}
+
+func getProxies(mapping map[string]C.Proxy, list []string) ([]C.Proxy, error) {
+	var ps []C.Proxy
+	for _, name := range list {
+		p, ok := mapping[name]
+		if !ok {
+			return nil, fmt.Errorf("'%s' not found", name)
+		}
+		ps = append(ps, p)
+	}
+	return ps, nil
 }
 
 func or(pointers ...*int) *int {
