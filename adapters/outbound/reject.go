@@ -25,7 +25,7 @@ type Reject struct {
 }
 
 func (r *Reject) Name() string {
-	return "Reject"
+	return "REJECT"
 }
 
 func (r *Reject) Type() C.AdapterType {

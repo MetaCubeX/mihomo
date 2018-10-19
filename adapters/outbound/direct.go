@@ -24,7 +24,7 @@ func (d *DirectAdapter) Conn() net.Conn {
 type Direct struct{}
 
 func (d *Direct) Name() string {
-	return "Direct"
+	return "DIRECT"
 }
 
 func (d *Direct) Type() C.AdapterType {
