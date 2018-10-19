@@ -1,5 +1,5 @@
-github.com/Dreamacro/go-shadowsocks2 v0.1.2-0.20181016063207-89bf7cffdaf4 h1:n+F4LoHdFCwsGohVN+4dwfmmx0h2uvdPEeiwdhFeH8g=
-github.com/Dreamacro/go-shadowsocks2 v0.1.2-0.20181016063207-89bf7cffdaf4/go.mod h1:DlkXRxmh5K+99aTPQaVjsZ1fAZNFw42vXGcOjR3Otps=
+github.com/Dreamacro/go-shadowsocks2 v0.1.2-0.20181019110427-0a03f1a25270 h1:ugkI+Yw5ArFnhF8KTbJxyWIyvxMCa8jWyUF+wIAulhM=
+github.com/Dreamacro/go-shadowsocks2 v0.1.2-0.20181019110427-0a03f1a25270/go.mod h1:DlkXRxmh5K+99aTPQaVjsZ1fAZNFw42vXGcOjR3Otps=
 github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da h1:KjTM2ks9d14ZYCvmHS9iAKVt9AyzRSqNU1qabPih5BY=
 github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da/go.mod h1:eHEWzANqSiWQsof+nXEI9bUVUyV6F53Fp89EuCh2EAA=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
