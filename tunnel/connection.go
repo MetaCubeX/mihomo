@@ -5,11 +5,21 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/adapters/inbound"
 	C "github.com/Dreamacro/clash/constant"
 )
+
+const (
+	// io.Copy default buffer size is 32 KiB
+	// but the maximum packet size of vmess/shadowsocks is about 16 KiB
+	// so define a buffer of 20 KiB to reduce the memory of each TCP relay
+	bufferSize = 20 * 1024
+)
+
+var bufPool = sync.Pool{New: func() interface{} { return make([]byte, bufferSize) }}
 
 func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, proxy C.ProxyAdapter) {
 	conn := newTrafficTrack(proxy.Conn(), t.traffic)
@@ -66,12 +76,16 @@ func relay(leftConn, rightConn net.Conn) {
 	ch := make(chan error)
 
 	go func() {
-		_, err := io.Copy(leftConn, rightConn)
+		buf := bufPool.Get().([]byte)
+		_, err := io.CopyBuffer(leftConn, rightConn, buf)
+		bufPool.Put(buf[:cap(buf)])
 		leftConn.SetReadDeadline(time.Now())
 		ch <- err
 	}()
 
-	io.Copy(rightConn, leftConn)
+	buf := bufPool.Get().([]byte)
+	io.CopyBuffer(rightConn, leftConn, buf)
+	bufPool.Put(buf[:cap(buf)])
 	rightConn.SetReadDeadline(time.Now())
 	<-ch
 }
