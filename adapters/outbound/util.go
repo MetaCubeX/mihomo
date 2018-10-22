@@ -10,6 +10,10 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
+const (
+	tcpTimeout = 5 * time.Second
+)
+
 // DelayTest get the delay for the specified URL
 func DelayTest(proxy C.Proxy, url string) (t int16, err error) {
 	addr, err := urlToMetadata(url)

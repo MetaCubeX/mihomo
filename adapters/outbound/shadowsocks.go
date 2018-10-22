@@ -54,7 +54,7 @@ func (ss *ShadowSocks) Type() C.AdapterType {
 }
 
 func (ss *ShadowSocks) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
-	c, err := net.Dial("tcp", ss.server)
+	c, err := net.DialTimeout("tcp", ss.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
 	}

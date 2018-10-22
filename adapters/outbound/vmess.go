@@ -49,7 +49,7 @@ func (ss *Vmess) Type() C.AdapterType {
 }
 
 func (ss *Vmess) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
-	c, err := net.Dial("tcp", ss.server)
+	c, err := net.DialTimeout("tcp", ss.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
 	}
