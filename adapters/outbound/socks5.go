@@ -46,7 +46,7 @@ func (ss *Socks5) Type() C.AdapterType {
 }
 
 func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
-	c, err := net.Dial("tcp", ss.addr)
+	c, err := net.DialTimeout("tcp", ss.addr, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.addr)
 	}
