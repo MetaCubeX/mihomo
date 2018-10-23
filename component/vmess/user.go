@@ -50,5 +50,6 @@ func newAlterIDs(primary *ID, alterIDCount uint16) []*ID {
 		alterIDs[idx] = &ID{UUID: newid, CmdKey: primary.CmdKey[:]}
 		prevID = newid
 	}
+	alterIDs = append(alterIDs, primary)
 	return alterIDs
 }
