@@ -3,6 +3,7 @@ package adapters
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -15,6 +16,7 @@ type URLTest struct {
 	fast     C.Proxy
 	interval time.Duration
 	done     chan struct{}
+	once     int32
 }
 
 type URLTestOption struct {
@@ -37,7 +39,11 @@ func (u *URLTest) Now() string {
 }
 
 func (u *URLTest) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
-	return u.fast.Generator(metadata)
+	a, err := u.fast.Generator(metadata)
+	if err != nil {
+		go u.speedTest()
+	}
+	return a, err
 }
 
 func (u *URLTest) Close() {
@@ -59,6 +65,11 @@ Loop:
 }
 
 func (u *URLTest) speedTest() {
+	if atomic.AddInt32(&u.once, 1) != 1 {
+		return
+	}
+	defer atomic.StoreInt32(&u.once, 0)
+
 	wg := sync.WaitGroup{}
 	wg.Add(len(u.proxies))
 	c := make(chan interface{})
@@ -108,6 +119,7 @@ func NewURLTest(option URLTestOption, proxies []C.Proxy) (*URLTest, error) {
 		fast:     proxies[0],
 		interval: interval,
 		done:     make(chan struct{}),
+		once:     0,
 	}
 	go urlTest.loop()
 	return urlTest, nil
