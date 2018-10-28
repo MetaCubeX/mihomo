@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/url"
 	"runtime"
+	"time"
 
 	"github.com/gofrs/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // Version of vmess
@@ -62,27 +65,69 @@ type DstAddr struct {
 
 // Client is vmess connection generator
 type Client struct {
-	user     []*ID
-	uuid     *uuid.UUID
-	security Security
-	tls      bool
+	user          []*ID
+	uuid          *uuid.UUID
+	security      Security
+	tls           bool
+	host          string
+	websocket     bool
+	websocketPath string
 }
 
 // Config of vmess
 type Config struct {
-	UUID     string
-	AlterID  uint16
-	Security string
-	TLS      bool
+	UUID          string
+	AlterID       uint16
+	Security      string
+	TLS           bool
+	Host          string
+	NetWork       string
+	WebSocketPath string
 }
 
 // New return a Conn with net.Conn and DstAddr
-func (c *Client) New(conn net.Conn, dst *DstAddr) net.Conn {
+func (c *Client) New(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 	r := rand.Intn(len(c.user))
-	if c.tls {
+	if c.websocket {
+		dialer := &websocket.Dialer{
+			NetDial: func(network, addr string) (net.Conn, error) {
+				return conn, nil
+			},
+			ReadBufferSize:   4 * 1024,
+			WriteBufferSize:  4 * 1024,
+			HandshakeTimeout: time.Second * 8,
+		}
+		scheme := "ws"
+		if c.tls {
+			scheme = "wss"
+		}
+
+		host, port, err := net.SplitHostPort(c.host)
+		if (scheme == "ws" && port != "80") || (scheme == "wss" && port != "443") {
+			host = c.host
+		}
+
+		uri := url.URL{
+			Scheme: scheme,
+			Host:   host,
+			Path:   c.websocketPath,
+		}
+
+		wsConn, resp, err := dialer.Dial(uri.String(), nil)
+		if err != nil {
+			var reason string
+			if resp != nil {
+				reason = resp.Status
+			}
+			println(uri.String(), err.Error())
+			return nil, fmt.Errorf("Dial %s error: %s", host, reason)
+		}
+
+		conn = newWebsocketConn(wsConn, conn.RemoteAddr())
+	} else if c.tls {
 		conn = tls.Client(conn, tlsConfig)
 	}
-	return newConn(conn, c.user[r], dst, c.security)
+	return newConn(conn, c.user[r], dst, c.security), nil
 }
 
 // NewClient return Client instance
@@ -108,10 +153,18 @@ func NewClient(config Config) (*Client, error) {
 	default:
 		return nil, fmt.Errorf("Unknown security type: %s", config.Security)
 	}
+
+	if config.NetWork != "" && config.NetWork != "ws" {
+		return nil, fmt.Errorf("Unknown network type: %s", config.NetWork)
+	}
+
 	return &Client{
-		user:     newAlterIDs(newID(&uid), config.AlterID),
-		uuid:     &uid,
-		security: security,
-		tls:      config.TLS,
+		user:          newAlterIDs(newID(&uid), config.AlterID),
+		uuid:          &uid,
+		security:      security,
+		tls:           config.TLS,
+		host:          config.Host,
+		websocket:     config.NetWork == "ws",
+		websocketPath: config.WebSocketPath,
 	}, nil
 }
