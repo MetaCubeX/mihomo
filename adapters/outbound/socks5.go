@@ -28,18 +28,18 @@ func (ss *Socks5Adapter) Conn() net.Conn {
 }
 
 type Socks5 struct {
-	addr string
-	name string
-	tls  bool
-	sni  bool
+	addr           string
+	name           string
+	tls            bool
+	skipCertVerify bool
 }
 
 type Socks5Option struct {
-	Name   string `proxy:"name"`
-	Server string `proxy:"server"`
-	Port   int    `proxy:"port"`
-	TLS    bool   `proxy:"tls"`
-	SNI    bool   `proxy:"sni"`
+	Name           string `proxy:"name"`
+	Server         string `proxy:"server"`
+	Port           int    `proxy:"port"`
+	TLS            bool   `proxy:"tls,omitempty"`
+	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
 func (ss *Socks5) Name() string {
@@ -55,7 +55,7 @@ func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err e
 
 	if err == nil && ss.tls {
 		tlsConfig := tls.Config{
-			InsecureSkipVerify: ss.sni,
+			InsecureSkipVerify: ss.skipCertVerify,
 			MaxVersion:         tls.VersionTLS12,
 		}
 		c = tls.Client(c, &tlsConfig)
@@ -104,9 +104,9 @@ func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 
 func NewSocks5(option Socks5Option) *Socks5 {
 	return &Socks5{
-		addr: fmt.Sprintf("%s:%d", option.Server, option.Port),
-		name: option.Name,
-		tls:  option.TLS,
-		sni:  option.SNI,
+		addr:           fmt.Sprintf("%s:%d", option.Server, option.Port),
+		name:           option.Name,
+		tls:            option.TLS,
+		skipCertVerify: option.SkipCertVerify,
 	}
 }
