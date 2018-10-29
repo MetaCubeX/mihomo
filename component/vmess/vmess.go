@@ -39,10 +39,6 @@ var CipherMapping = map[string]byte{
 	"chacha20-poly1305": SecurityCHACHA20POLY1305,
 }
 
-var tlsConfig = &tls.Config{
-	InsecureSkipVerify: true,
-}
-
 // Command types
 const (
 	CommandTCP byte = 1
@@ -65,24 +61,26 @@ type DstAddr struct {
 
 // Client is vmess connection generator
 type Client struct {
-	user          []*ID
-	uuid          *uuid.UUID
-	security      Security
-	tls           bool
-	host          string
-	websocket     bool
-	websocketPath string
+	user           []*ID
+	uuid           *uuid.UUID
+	security       Security
+	tls            bool
+	host           string
+	websocket      bool
+	websocketPath  string
+	skipCertVerify bool
 }
 
 // Config of vmess
 type Config struct {
-	UUID          string
-	AlterID       uint16
-	Security      string
-	TLS           bool
-	Host          string
-	NetWork       string
-	WebSocketPath string
+	UUID           string
+	AlterID        uint16
+	Security       string
+	TLS            bool
+	Host           string
+	NetWork        string
+	WebSocketPath  string
+	SkipCertVerify bool
 }
 
 // New return a Conn with net.Conn and DstAddr
@@ -100,6 +98,9 @@ func (c *Client) New(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 		scheme := "ws"
 		if c.tls {
 			scheme = "wss"
+			dialer.TLSClientConfig = &tls.Config{
+				InsecureSkipVerify: c.skipCertVerify,
+			}
 		}
 
 		host, port, err := net.SplitHostPort(c.host)
@@ -125,7 +126,9 @@ func (c *Client) New(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 
 		conn = newWebsocketConn(wsConn, conn.RemoteAddr())
 	} else if c.tls {
-		conn = tls.Client(conn, tlsConfig)
+		conn = tls.Client(conn, &tls.Config{
+			InsecureSkipVerify: c.skipCertVerify,
+		})
 	}
 	return newConn(conn, c.user[r], dst, c.security), nil
 }
