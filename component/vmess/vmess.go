@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -39,6 +40,11 @@ var CipherMapping = map[string]byte{
 	"chacha20-poly1305": SecurityCHACHA20POLY1305,
 }
 
+var (
+	clientSessionCache tls.ClientSessionCache
+	once               sync.Once
+)
+
 // Command types
 const (
 	CommandTCP byte = 1
@@ -61,14 +67,14 @@ type DstAddr struct {
 
 // Client is vmess connection generator
 type Client struct {
-	user           []*ID
-	uuid           *uuid.UUID
-	security       Security
-	tls            bool
-	host           string
-	websocket      bool
-	websocketPath  string
-	skipCertVerify bool
+	user          []*ID
+	uuid          *uuid.UUID
+	security      Security
+	tls           bool
+	host          string
+	websocket     bool
+	websocketPath string
+	tlsConfig     *tls.Config
 }
 
 // Config of vmess
@@ -81,6 +87,7 @@ type Config struct {
 	NetWork        string
 	WebSocketPath  string
 	SkipCertVerify bool
+	SessionCacahe  tls.ClientSessionCache
 }
 
 // New return a Conn with net.Conn and DstAddr
@@ -98,9 +105,7 @@ func (c *Client) New(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 		scheme := "ws"
 		if c.tls {
 			scheme = "wss"
-			dialer.TLSClientConfig = &tls.Config{
-				InsecureSkipVerify: c.skipCertVerify,
-			}
+			dialer.TLSClientConfig = c.tlsConfig
 		}
 
 		host, port, err := net.SplitHostPort(c.host)
@@ -125,9 +130,7 @@ func (c *Client) New(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 
 		conn = newWebsocketConn(wsConn, conn.RemoteAddr())
 	} else if c.tls {
-		conn = tls.Client(conn, &tls.Config{
-			InsecureSkipVerify: c.skipCertVerify,
-		})
+		conn = tls.Client(conn, c.tlsConfig)
 	}
 	return newConn(conn, c.user[r], dst, c.security), nil
 }
@@ -160,6 +163,17 @@ func NewClient(config Config) (*Client, error) {
 		return nil, fmt.Errorf("Unknown network type: %s", config.NetWork)
 	}
 
+	var tlsConfig *tls.Config
+	if config.TLS {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: config.SkipCertVerify,
+			ClientSessionCache: config.SessionCacahe,
+		}
+		if tlsConfig.ClientSessionCache == nil {
+			tlsConfig.ClientSessionCache = getClientSessionCache()
+		}
+	}
+
 	return &Client{
 		user:          newAlterIDs(newID(&uid), config.AlterID),
 		uuid:          &uid,
@@ -168,5 +182,13 @@ func NewClient(config Config) (*Client, error) {
 		host:          config.Host,
 		websocket:     config.NetWork == "ws",
 		websocketPath: config.WebSocketPath,
+		tlsConfig:     tlsConfig,
 	}, nil
+}
+
+func getClientSessionCache() tls.ClientSessionCache {
+	once.Do(func() {
+		clientSessionCache = tls.NewLRUClientSessionCache(128)
+	})
+	return clientSessionCache
 }

@@ -72,6 +72,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		NetWork:        option.Network,
 		WebSocketPath:  option.WSPath,
 		SkipCertVerify: option.SkipCertVerify,
+		SessionCacahe:  getClientSessionCache(),
 	})
 	if err != nil {
 		return nil, err

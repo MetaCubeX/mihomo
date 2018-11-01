@@ -1,10 +1,12 @@
 package adapters
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -12,6 +14,11 @@ import (
 
 const (
 	tcpTimeout = 5 * time.Second
+)
+
+var (
+	globalClientSessionCache tls.ClientSessionCache
+	once                     sync.Once
 )
 
 // DelayTest get the delay for the specified URL
@@ -94,4 +101,11 @@ func tcpKeepAlive(c net.Conn) {
 		tcp.SetKeepAlive(true)
 		tcp.SetKeepAlivePeriod(30 * time.Second)
 	}
+}
+
+func getClientSessionCache() tls.ClientSessionCache {
+	once.Do(func() {
+		globalClientSessionCache = tls.NewLRUClientSessionCache(128)
+	})
+	return globalClientSessionCache
 }
