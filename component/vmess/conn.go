@@ -65,11 +65,10 @@ func (vc *Conn) Read(b []byte) (int, error) {
 }
 
 func (vc *Conn) sendRequest() error {
-	timestamp := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestamp, uint64(time.Now().UTC().Unix()))
+	timestamp := time.Now()
 
 	h := hmac.New(md5.New, vc.id.UUID.Bytes())
-	h.Write(timestamp)
+	binary.Write(h, binary.BigEndian, uint64(timestamp.Unix()))
 	_, err := vc.Conn.Write(h.Sum(nil))
 	if err != nil {
 		return err
@@ -111,7 +110,7 @@ func (vc *Conn) sendRequest() error {
 		return err
 	}
 
-	stream := cipher.NewCFBEncrypter(block, hashTimestamp(time.Now().UTC()))
+	stream := cipher.NewCFBEncrypter(block, hashTimestamp(timestamp))
 	stream.XORKeyStream(buf.Bytes(), buf.Bytes())
 	_, err = vc.Conn.Write(buf.Bytes())
 	return err
@@ -145,7 +144,7 @@ func (vc *Conn) recvResponse() error {
 func hashTimestamp(t time.Time) []byte {
 	md5hash := md5.New()
 	ts := make([]byte, 8)
-	binary.BigEndian.PutUint64(ts, uint64(t.UTC().Unix()))
+	binary.BigEndian.PutUint64(ts, uint64(t.Unix()))
 	md5hash.Write(ts)
 	md5hash.Write(ts)
 	md5hash.Write(ts)
