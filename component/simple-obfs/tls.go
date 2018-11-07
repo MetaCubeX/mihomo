@@ -107,9 +107,8 @@ func NewTLSObfs(conn net.Conn, server string) net.Conn {
 }
 
 func makeClientHelloMsg(data []byte, server string) []byte {
-	random := make([]byte, 32)
+	random := make([]byte, 28)
 	sessionID := make([]byte, 32)
-	size := make([]byte, 2)
 	rand.Read(random)
 	rand.Read(sessionID)
 
@@ -124,12 +123,12 @@ func makeClientHelloMsg(data []byte, server string) []byte {
 
 	// clientHello, length, TLS 1.2 version
 	buf.WriteByte(1)
-	binary.BigEndian.PutUint16(size, uint16(208+len(data)+len(server)))
 	buf.WriteByte(0)
-	buf.Write(size)
+	binary.Write(buf, binary.BigEndian, uint16(208+len(data)+len(server)))
 	buf.Write([]byte{0x03, 0x03})
 
-	// random, sid len, sid
+	// random with timestamp, sid len, sid
+	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix()))
 	buf.Write(random)
 	buf.WriteByte(32)
 	buf.Write(sessionID)
@@ -147,24 +146,19 @@ func makeClientHelloMsg(data []byte, server string) []byte {
 	buf.Write([]byte{0x01, 0x00})
 
 	// extension length
-	binary.BigEndian.PutUint16(size, uint16(79+len(data)+len(server)))
-	buf.Write(size)
+	binary.Write(buf, binary.BigEndian, uint16(79+len(data)+len(server)))
 
 	// session ticket
 	buf.Write([]byte{0x00, 0x23})
-	binary.BigEndian.PutUint16(size, uint16(len(data)))
-	buf.Write(size)
+	binary.Write(buf, binary.BigEndian, uint16(len(data)))
 	buf.Write(data)
 
 	// server name
 	buf.Write([]byte{0x00, 0x00})
-	binary.BigEndian.PutUint16(size, uint16(len(server)+5))
-	buf.Write(size)
-	binary.BigEndian.PutUint16(size, uint16(len(server)+3))
-	buf.Write(size)
+	binary.Write(buf, binary.BigEndian, uint16(len(server)+5))
+	binary.Write(buf, binary.BigEndian, uint16(len(server)+3))
 	buf.WriteByte(0)
-	binary.BigEndian.PutUint16(size, uint16(len(server)))
-	buf.Write(size)
+	binary.Write(buf, binary.BigEndian, uint16(len(server)))
 	buf.Write([]byte(server))
 
 	// ec_point
