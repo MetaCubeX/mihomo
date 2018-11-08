@@ -5,7 +5,7 @@
   <br>
 </h1>
 
-<h4 align="center">A rule based proxy in Go.</h4>
+<h4 align="center">A rule based tunnel in Go.</h4>
 
 <p align="center">
   <a href="https://travis-ci.org/Dreamacro/clash">
@@ -22,15 +22,11 @@
 
 ## Features
 
-- HTTP/HTTPS and SOCKS proxy
+- HTTP/HTTPS and SOCKS protocol
 - Surge like configuration
 - GeoIP rule support
 - Support Vmess/Shadowsocks/Socks5
 - Support for Netfilter TCP redirect
-
-## Discussion
-
-[Telegram Group](https://t.me/clash_discuss)
 
 ## Install
 
@@ -85,7 +81,7 @@ port: 7890
 # port of SOCKS5
 socks-port: 7891
 
-# redir proxy for Linux and macOS
+# redir port for Linux and macOS
 # redir-port: 7892
 
 allow-lan: false
