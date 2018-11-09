@@ -31,6 +31,8 @@ func (ss *Socks5Adapter) Conn() net.Conn {
 type Socks5 struct {
 	addr           string
 	name           string
+	user           string
+	pass           string
 	tls            bool
 	skipCertVerify bool
 	tlsConfig      *tls.Config
@@ -40,6 +42,8 @@ type Socks5Option struct {
 	Name           string `proxy:"name"`
 	Server         string `proxy:"server"`
 	Port           int    `proxy:"port"`
+	UserName       string `proxy:"username,omitempty"`
+	Password       string `proxy:"password,omitempty"`
 	TLS            bool   `proxy:"tls,omitempty"`
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
@@ -73,19 +77,47 @@ func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err e
 
 func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	buf := make([]byte, socks.MaxAddrLen)
+	var err error
 
-	// VER, CMD, RSV
-	_, err := rw.Write([]byte{5, 1, 0})
+	// VER, NMETHODS, METHODS
+	if len(ss.user) > 0 {
+		_, err = rw.Write([]byte{5, 1, 2})
+	} else {
+		_, err = rw.Write([]byte{5, 1, 0})
+	}
 	if err != nil {
 		return err
 	}
 
+	// VER, METHOD
 	if _, err := io.ReadFull(rw, buf[:2]); err != nil {
 		return err
 	}
 
 	if buf[0] != 5 {
 		return errors.New("SOCKS version error")
+	}
+
+	if buf[1] == 2 {
+		// password protocol version
+		authMsg := &bytes.Buffer{}
+		authMsg.WriteByte(1)
+		authMsg.WriteByte(uint8(len(ss.user)))
+		authMsg.WriteString(ss.user)
+		authMsg.WriteByte(uint8(len(ss.pass)))
+		authMsg.WriteString(ss.pass)
+
+		if _, err := rw.Write(authMsg.Bytes()); err != nil {
+			return err
+		}
+
+		if _, err := io.ReadFull(rw, buf[:2]); err != nil {
+			return err
+		}
+
+		if buf[1] != 0 {
+			return errors.New("rejected username/password")
+		}
 	} else if buf[1] != 0 {
 		return errors.New("SOCKS need auth")
 	}
@@ -117,6 +149,8 @@ func NewSocks5(option Socks5Option) *Socks5 {
 	return &Socks5{
 		addr:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		name:           option.Name,
+		user:           option.UserName,
+		pass:           option.Password,
 		tls:            option.TLS,
 		skipCertVerify: option.SkipCertVerify,
 		tlsConfig:      tlsConfig,
