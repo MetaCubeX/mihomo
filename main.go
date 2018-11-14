@@ -1,17 +1,17 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
-	"flag"
-	"path"
 
 	"github.com/Dreamacro/clash/config"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/hub"
 	"github.com/Dreamacro/clash/proxy"
 	"github.com/Dreamacro/clash/tunnel"
-	C "github.com/Dreamacro/clash/constant"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -30,10 +30,10 @@ func main() {
 	proxy.Instance().Run()
 	hub.Run()
 
-	if (homedir != "") {
-		if !path.IsAbs(homedir) {
+	if homedir != "" {
+		if !filepath.IsAbs(homedir) {
 			currentDir, _ := os.Getwd()
-			homedir = path.Join(currentDir, homedir)
+			homedir = filepath.Join(currentDir, homedir)
 		}
 		C.SetHomeDir(homedir)
 	}
