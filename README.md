@@ -145,8 +145,9 @@ Rule:
 - DOMAIN-SUFFIX,ad.com,REJECT
 - IP-CIDR,127.0.0.0/8,DIRECT
 - GEOIP,CN,DIRECT
-# note: there is two ","
-- FINAL,,Proxy
+# FINAL would remove after prerelease
+# you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
+- MATCH,Proxy
 ```
 
 ## Thanks
