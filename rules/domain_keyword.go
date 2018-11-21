@@ -33,7 +33,7 @@ func (dk *DomainKeyword) Payload() string {
 
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
 	return &DomainKeyword{
-		keyword: keyword,
+		keyword: strings.ToLower(keyword),
 		adapter: adapter,
 	}
 }

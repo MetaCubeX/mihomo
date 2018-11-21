@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"strings"
+
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -30,7 +32,7 @@ func (d *Domain) Payload() string {
 
 func NewDomain(domain string, adapter string) *Domain {
 	return &Domain{
-		domain:  domain,
+		domain:  strings.ToLower(domain),
 		adapter: adapter,
 	}
 }

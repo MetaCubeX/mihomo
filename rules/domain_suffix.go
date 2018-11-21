@@ -33,7 +33,7 @@ func (ds *DomainSuffix) Payload() string {
 
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
 	return &DomainSuffix{
-		suffix:  suffix,
+		suffix:  strings.ToLower(suffix),
 		adapter: adapter,
 	}
 }
