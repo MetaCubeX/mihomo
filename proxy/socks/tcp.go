@@ -4,7 +4,6 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapters/inbound"
-	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 
 	"github.com/Dreamacro/go-shadowsocks2/socks"
@@ -15,18 +14,14 @@ var (
 	tun = tunnel.Instance()
 )
 
-func NewSocksProxy(addr string) (*C.ProxySignal, error) {
+func NewSocksProxy(addr string) (chan<- struct{}, <-chan struct{}, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	done := make(chan struct{})
 	closed := make(chan struct{})
-	signal := &C.ProxySignal{
-		Done:   done,
-		Closed: closed,
-	}
 
 	go func() {
 		log.Infof("SOCKS proxy listening at: %s", addr)
@@ -44,12 +39,11 @@ func NewSocksProxy(addr string) (*C.ProxySignal, error) {
 
 	go func() {
 		<-done
-		close(done)
 		l.Close()
 		closed <- struct{}{}
 	}()
 
-	return signal, nil
+	return done, closed, nil
 }
 
 func handleSocks(conn net.Conn) {

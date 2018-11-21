@@ -3,6 +3,7 @@ package config
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -54,15 +55,15 @@ func downloadMMDB(path string) (err error) {
 }
 
 // Init prepare necessary files
-func Init() {
+func Init(dir string) error {
 	// initial homedir
-	if _, err := os.Stat(C.Path.HomeDir()); os.IsNotExist(err) {
-		if err := os.MkdirAll(C.Path.HomeDir(), 0777); err != nil {
-			log.Fatalf("Can't create config directory %s: %s", C.Path.HomeDir(), err.Error())
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0777); err != nil {
+			return fmt.Errorf("Can't create config directory %s: %s", dir, err.Error())
 		}
 	}
 
-	// initial config.ini
+	// initial config.yml
 	if _, err := os.Stat(C.Path.Config()); os.IsNotExist(err) {
 		log.Info("Can't find config, create a empty file")
 		os.OpenFile(C.Path.Config(), os.O_CREATE|os.O_WRONLY, 0644)
@@ -73,7 +74,8 @@ func Init() {
 		log.Info("Can't find MMDB, start download")
 		err := downloadMMDB(C.Path.MMDB())
 		if err != nil {
-			log.Fatalf("Can't download MMDB: %s", err.Error())
+			return fmt.Errorf("Can't download MMDB: %s", err.Error())
 		}
 	}
+	return nil
 }

@@ -30,6 +30,7 @@ type Proxy interface {
 	Name() string
 	Type() AdapterType
 	Generator(metadata *Metadata) (ProxyAdapter, error)
+	MarshalJSON() ([]byte, error)
 }
 
 // AdapterType is enum of adapter type

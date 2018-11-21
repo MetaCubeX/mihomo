@@ -1,116 +1,166 @@
 package proxy
 
 import (
-	"sync"
+	"fmt"
+	"net"
+	"strconv"
 
-	"github.com/Dreamacro/clash/config"
-	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/proxy/http"
 	"github.com/Dreamacro/clash/proxy/redir"
 	"github.com/Dreamacro/clash/proxy/socks"
 )
 
 var (
-	listener *Listener
-	once     sync.Once
+	allowLan = false
+
+	socksListener *listener
+	httpListener  *listener
+	redirListener *listener
 )
 
-type Listener struct {
-	// signal for update
-	httpSignal  *C.ProxySignal
-	socksSignal *C.ProxySignal
-	redirSignal *C.ProxySignal
+type listener struct {
+	Address string
+	Done    chan<- struct{}
+	Closed  <-chan struct{}
 }
 
-func (l *Listener) updateHTTP(addr string) error {
-	if l.httpSignal != nil {
-		signal := l.httpSignal
-		signal.Done <- struct{}{}
-		<-signal.Closed
-		l.httpSignal = nil
-	}
-
-	signal, err := http.NewHttpProxy(addr)
-	if err != nil {
-		return err
-	}
-
-	l.httpSignal = signal
-	return nil
+type Ports struct {
+	Port      int `json:"port"`
+	SocksPort int `json:"socks-port"`
+	RedirPort int `json:"redir-port"`
 }
 
-func (l *Listener) updateSocks(addr string) error {
-	if l.socksSignal != nil {
-		signal := l.socksSignal
-		signal.Done <- struct{}{}
-		<-signal.Closed
-		l.socksSignal = nil
-	}
-
-	signal, err := socks.NewSocksProxy(addr)
-	if err != nil {
-		return err
-	}
-
-	l.socksSignal = signal
-	return nil
+func AllowLan() bool {
+	return allowLan
 }
 
-func (l *Listener) updateRedir(addr string) error {
-	if l.redirSignal != nil {
-		signal := l.redirSignal
-		signal.Done <- struct{}{}
-		<-signal.Closed
-		l.redirSignal = nil
-	}
-
-	signal, err := redir.NewRedirProxy(addr)
-	if err != nil {
-		return err
-	}
-
-	l.redirSignal = signal
-	return nil
+func SetAllowLan(al bool) {
+	allowLan = al
 }
 
-func (l *Listener) process(signal chan<- struct{}) {
-	sub := config.Instance().Subscribe()
-	signal <- struct{}{}
-	reportCH := config.Instance().Report()
-	for elm := range sub {
-		event := elm.(*config.Event)
-		switch event.Type {
-		case "http-addr":
-			addr := event.Payload.(string)
-			err := l.updateHTTP(addr)
-			reportCH <- &config.Event{Type: "http-addr", Payload: err == nil}
-		case "socks-addr":
-			addr := event.Payload.(string)
-			err := l.updateSocks(addr)
-			reportCH <- &config.Event{Type: "socks-addr", Payload: err == nil}
-		case "redir-addr":
-			addr := event.Payload.(string)
-			err := l.updateRedir(addr)
-			reportCH <- &config.Event{Type: "redir-addr", Payload: err == nil}
+func ReCreateHTTP(port int) error {
+	addr := genAddr(port, allowLan)
+
+	if httpListener != nil {
+		if httpListener.Address == addr {
+			return nil
 		}
+		httpListener.Done <- struct{}{}
+		<-httpListener.Closed
+		httpListener = nil
 	}
+
+	if portIsZero(addr) {
+		return nil
+	}
+
+	done, closed, err := http.NewHttpProxy(addr)
+	if err != nil {
+		return err
+	}
+
+	httpListener = &listener{
+		Address: addr,
+		Done:    done,
+		Closed:  closed,
+	}
+	return nil
 }
 
-// Run ensure config monitoring
-func (l *Listener) Run() {
-	signal := make(chan struct{})
-	go l.process(signal)
-	<-signal
+func ReCreateSocks(port int) error {
+	addr := genAddr(port, allowLan)
+
+	if socksListener != nil {
+		if socksListener.Address == addr {
+			return nil
+		}
+		socksListener.Done <- struct{}{}
+		<-socksListener.Closed
+		socksListener = nil
+	}
+
+	if portIsZero(addr) {
+		return nil
+	}
+
+	done, closed, err := socks.NewSocksProxy(addr)
+	if err != nil {
+		return err
+	}
+
+	socksListener = &listener{
+		Address: addr,
+		Done:    done,
+		Closed:  closed,
+	}
+	return nil
 }
 
-func newListener() *Listener {
-	return &Listener{}
+func ReCreateRedir(port int) error {
+	addr := genAddr(port, allowLan)
+
+	if redirListener != nil {
+		if redirListener.Address == addr {
+			return nil
+		}
+		redirListener.Done <- struct{}{}
+		<-redirListener.Closed
+		redirListener = nil
+	}
+
+	if portIsZero(addr) {
+		return nil
+	}
+
+	done, closed, err := redir.NewRedirProxy(addr)
+	if err != nil {
+		return err
+	}
+
+	redirListener = &listener{
+		Address: addr,
+		Done:    done,
+		Closed:  closed,
+	}
+	return nil
 }
 
-// Instance return singleton instance of Listener
-func Instance() *Listener {
-	once.Do(func() {
-		listener = newListener()
-	})
-	return listener
+// GetPorts return the ports of proxy servers
+func GetPorts() *Ports {
+	ports := &Ports{}
+
+	if httpListener != nil {
+		_, portStr, _ := net.SplitHostPort(httpListener.Address)
+		port, _ := strconv.Atoi(portStr)
+		ports.Port = port
+	}
+
+	if socksListener != nil {
+		_, portStr, _ := net.SplitHostPort(socksListener.Address)
+		port, _ := strconv.Atoi(portStr)
+		ports.SocksPort = port
+	}
+
+	if redirListener != nil {
+		_, portStr, _ := net.SplitHostPort(redirListener.Address)
+		port, _ := strconv.Atoi(portStr)
+		ports.RedirPort = port
+	}
+
+	return ports
+}
+
+func portIsZero(addr string) bool {
+	_, port, err := net.SplitHostPort(addr)
+	if port == "0" || port == "" || err != nil {
+		return true
+	}
+	return false
+}
+
+func genAddr(port int, allowLan bool) string {
+	if allowLan {
+		return fmt.Sprintf(":%d", port)
+	}
+	return fmt.Sprintf("127.0.0.1:%d", port)
 }

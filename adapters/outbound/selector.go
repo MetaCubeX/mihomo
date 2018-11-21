@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"encoding/json"
 	"errors"
 	"sort"
 
@@ -30,17 +31,21 @@ func (s *Selector) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err 
 	return s.selected.Generator(metadata)
 }
 
-func (s *Selector) Now() string {
-	return s.selected.Name()
-}
-
-func (s *Selector) All() []string {
+func (s *Selector) MarshalJSON() ([]byte, error) {
 	var all []string
 	for k := range s.proxies {
 		all = append(all, k)
 	}
 	sort.Strings(all)
-	return all
+	return json.Marshal(map[string]interface{}{
+		"type": s.Type().String(),
+		"now":  s.Now(),
+		"all":  all,
+	})
+}
+
+func (s *Selector) Now() string {
+	return s.selected.Name()
 }
 
 func (s *Selector) Set(name string) error {

@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 	"time"
@@ -61,6 +62,18 @@ func (f *Fallback) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err 
 		return
 	}
 	return f.proxies[0].RawProxy.Generator(metadata)
+}
+
+func (f *Fallback) MarshalJSON() ([]byte, error) {
+	var all []string
+	for _, proxy := range f.proxies {
+		all = append(all, proxy.RawProxy.Name())
+	}
+	return json.Marshal(map[string]interface{}{
+		"type": f.Type().String(),
+		"now":  f.Now(),
+		"all":  all,
+	})
 }
 
 func (f *Fallback) Close() {

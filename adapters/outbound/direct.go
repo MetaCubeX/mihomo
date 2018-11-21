@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"encoding/json"
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -38,6 +39,12 @@ func (d *Direct) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err er
 	}
 	tcpKeepAlive(c)
 	return &DirectAdapter{conn: c}, nil
+}
+
+func (d *Direct) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{
+		"type": d.Type().String(),
+	})
 }
 
 func NewDirect() *Direct {

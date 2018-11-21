@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -69,6 +70,12 @@ func (ss *ShadowSocks) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, 
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(metadata))
 	return &ShadowsocksAdapter{conn: c}, err
+}
+
+func (ss *ShadowSocks) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{
+		"type": ss.Type().String(),
+	})
 }
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
