@@ -1,7 +1,9 @@
 package adapters
 
 import (
+	"encoding/json"
 	"errors"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +46,19 @@ func (u *URLTest) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err e
 		go u.speedTest()
 	}
 	return a, err
+}
+
+func (u *URLTest) MarshalJSON() ([]byte, error) {
+	var all []string
+	for _, proxy := range u.proxies {
+		all = append(all, proxy.Name())
+	}
+	sort.Strings(all)
+	return json.Marshal(map[string]interface{}{
+		"type": u.Type().String(),
+		"now":  u.Now(),
+		"all":  all,
+	})
 }
 
 func (u *URLTest) Close() {

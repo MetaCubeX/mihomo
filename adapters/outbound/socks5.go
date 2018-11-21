@@ -3,6 +3,7 @@ package adapters
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -73,6 +74,12 @@ func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err e
 		return nil, err
 	}
 	return &Socks5Adapter{conn: c}, nil
+}
+
+func (ss *Socks5) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{
+		"type": ss.Type().String(),
+	})
 }
 
 func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {

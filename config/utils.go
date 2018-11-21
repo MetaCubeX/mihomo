@@ -14,13 +14,6 @@ func trimArr(arr []string) (r []string) {
 	return
 }
 
-func genAddr(port int, allowLan bool) string {
-	if allowLan {
-		return fmt.Sprintf(":%d", port)
-	}
-	return fmt.Sprintf("127.0.0.1:%d", port)
-}
-
 func getProxies(mapping map[string]C.Proxy, list []string) ([]C.Proxy, error) {
 	var ps []C.Proxy
 	for _, name := range list {
