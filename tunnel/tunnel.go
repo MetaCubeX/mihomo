@@ -97,7 +97,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	}
 	remoConn, err := proxy.Generator(metadata)
 	if err != nil {
-		log.Warnln("Proxy connect error: %s", err.Error())
+		log.Warnln("Proxy[%s] connect [%s] error: %s", proxy.Name(), metadata.String(), err.Error())
 		return
 	}
 	defer remoConn.Close()

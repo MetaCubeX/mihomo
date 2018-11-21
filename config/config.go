@@ -275,25 +275,39 @@ func parseRules(cfg *rawConfig) ([]C.Rule, error) {
 
 	rulesConfig := cfg.Rule
 	// parse rules
-	for _, line := range rulesConfig {
-		rule := strings.Split(line, ",")
-		if len(rule) < 3 {
-			continue
+	for idx, line := range rulesConfig {
+		rule := trimArr(strings.Split(line, ","))
+		var (
+			payload string
+			target  string
+		)
+
+		switch len(rule) {
+		case 2:
+			target = rule[1]
+		case 3:
+			payload = rule[1]
+			target = rule[2]
+		default:
+			return nil, fmt.Errorf("Rules[%d] error: format invalid", idx)
 		}
+
 		rule = trimArr(rule)
 		switch rule[0] {
 		case "DOMAIN":
-			rules = append(rules, R.NewDomain(rule[1], rule[2]))
+			rules = append(rules, R.NewDomain(payload, target))
 		case "DOMAIN-SUFFIX":
-			rules = append(rules, R.NewDomainSuffix(rule[1], rule[2]))
+			rules = append(rules, R.NewDomainSuffix(payload, target))
 		case "DOMAIN-KEYWORD":
-			rules = append(rules, R.NewDomainKeyword(rule[1], rule[2]))
+			rules = append(rules, R.NewDomainKeyword(payload, target))
 		case "GEOIP":
-			rules = append(rules, R.NewGEOIP(rule[1], rule[2]))
+			rules = append(rules, R.NewGEOIP(payload, target))
 		case "IP-CIDR", "IP-CIDR6":
-			rules = append(rules, R.NewIPCIDR(rule[1], rule[2]))
+			rules = append(rules, R.NewIPCIDR(payload, target))
+		case "MATCH":
+			fallthrough
 		case "FINAL":
-			rules = append(rules, R.NewFinal(rule[2]))
+			rules = append(rules, R.NewFinal(target))
 		}
 	}
 
