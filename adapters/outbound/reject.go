@@ -50,7 +50,7 @@ func NewReject() *Reject {
 type NopConn struct{}
 
 func (rw *NopConn) Read(b []byte) (int, error) {
-	return len(b), nil
+	return 0, io.EOF
 }
 
 func (rw *NopConn) Write(b []byte) (int, error) {
