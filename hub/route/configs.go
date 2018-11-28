@@ -5,8 +5,8 @@ import (
 
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/log"
-	T "github.com/Dreamacro/clash/tunnel"
 	P "github.com/Dreamacro/clash/proxy"
+	T "github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
@@ -15,6 +15,7 @@ import (
 func configRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getConfigs)
+	r.Patch("/", patchConfigs)
 	return r
 }
 
@@ -32,7 +33,7 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 	render.Respond(w, r, general)
 }
 
-func pointerOrDefault (p *int, def int) int {
+func pointerOrDefault(p *int, def int) int {
 	if p != nil {
 		return *p
 	}
@@ -40,7 +41,7 @@ func pointerOrDefault (p *int, def int) int {
 	return def
 }
 
-func updateConfigs(w http.ResponseWriter, r *http.Request) {
+func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	general := &configSchema{}
 	if err := render.DecodeJSON(r.Body, general); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -51,7 +52,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	if general.AllowLan != nil {
 		P.SetAllowLan(*general.AllowLan)
 	}
-	
+
 	ports := P.GetPorts()
 	P.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port))
 	P.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort))
