@@ -79,7 +79,8 @@ type Config struct {
 	AlterID        uint16
 	Security       string
 	TLS            bool
-	Host           string
+	HostName       string
+	Port           string
 	NetWork        string
 	WebSocketPath  string
 	SkipCertVerify bool
@@ -129,9 +130,12 @@ func NewClient(config Config) (*Client, error) {
 		return nil, fmt.Errorf("Unknown network type: %s", config.NetWork)
 	}
 
+	host := net.JoinHostPort(config.HostName, config.Port)
+
 	var tlsConfig *tls.Config
 	if config.TLS {
 		tlsConfig = &tls.Config{
+			ServerName:         config.HostName,
 			InsecureSkipVerify: config.SkipCertVerify,
 			ClientSessionCache: config.SessionCacahe,
 		}
@@ -143,7 +147,7 @@ func NewClient(config Config) (*Client, error) {
 	var wsConfig *websocketConfig
 	if config.NetWork == "ws" {
 		wsConfig = &websocketConfig{
-			host:      config.Host,
+			host:      host,
 			path:      config.WebSocketPath,
 			tls:       config.TLS,
 			tlsConfig: tlsConfig,
@@ -155,7 +159,7 @@ func NewClient(config Config) (*Client, error) {
 		uuid:      &uid,
 		security:  security,
 		tls:       config.TLS,
-		host:      config.Host,
+		host:      host,
 		wsConfig:  wsConfig,
 		tlsConfig: tlsConfig,
 	}, nil
