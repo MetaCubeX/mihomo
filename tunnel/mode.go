@@ -25,7 +25,7 @@ const (
 // UnmarshalJSON unserialize Mode
 func (m *Mode) UnmarshalJSON(data []byte) error {
 	var tp string
-	json.Unmarshal(data, tp)
+	json.Unmarshal(data, &tp)
 	mode, exist := ModeMapping[tp]
 	if !exist {
 		return errors.New("invalid mode")

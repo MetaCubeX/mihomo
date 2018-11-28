@@ -46,7 +46,7 @@ func (l LogLevel) MarshalYAML() ([]byte, error) {
 // UnmarshalJSON unserialize Mode with json
 func (l *LogLevel) UnmarshalJSON(data []byte) error {
 	var tp string
-	json.Unmarshal(data, tp)
+	json.Unmarshal(data, &tp)
 	level, exist := LogLevelMapping[tp]
 	if !exist {
 		return errors.New("invalid mode")
