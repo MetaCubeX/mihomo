@@ -19,10 +19,12 @@ func ParseWithPath(path string) (*config.Config, error) {
 }
 
 // ApplyConfig dispatch configure to all parts
-func ApplyConfig(cfg *config.Config) {
+func ApplyConfig(cfg *config.Config, force bool) {
+	if force {
+		updateGeneral(cfg.General)
+	}
 	updateProxies(cfg.Proxies)
 	updateRules(cfg.Rules)
-	updateGeneral(cfg.General)
 }
 
 func GetGeneral() *config.General {

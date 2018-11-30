@@ -16,6 +16,6 @@ func Parse() error {
 		go route.Start(cfg.General.ExternalController, cfg.General.Secret)
 	}
 
-	executor.ApplyConfig(cfg)
+	executor.ApplyConfig(cfg, true)
 	return nil
 }
