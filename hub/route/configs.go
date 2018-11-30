@@ -2,6 +2,7 @@ package route
 
 import (
 	"net/http"
+	"path/filepath"
 
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/log"
@@ -15,6 +16,7 @@ import (
 func configRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getConfigs)
+	r.Put("/", updateConfigs)
 	r.Patch("/", patchConfigs)
 	return r
 }
@@ -66,5 +68,35 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		log.SetLevel(*general.LogLevel)
 	}
 
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateConfigRequest struct {
+	Path    string `json:"path"`
+}
+
+func updateConfigs(w http.ResponseWriter, r *http.Request) {
+	req := updateConfigRequest{}
+	if err := render.DecodeJSON(r.Body, &req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		render.Respond(w, r, ErrBadRequest)
+		return
+	}
+
+	if !filepath.IsAbs(req.Path) {
+		w.WriteHeader(http.StatusBadRequest)
+		render.Respond(w, r, newError("path is not a absoluted path"))
+		return
+	}
+
+	force := r.URL.Query().Get("force") == "true"
+	cfg, err := executor.ParseWithPath(req.Path)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		render.Respond(w, r, newError(err.Error()))
+		return
+	}
+
+	executor.ApplyConfig(cfg, force)
 	w.WriteHeader(http.StatusNoContent)
 }
