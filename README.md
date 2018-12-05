@@ -38,7 +38,7 @@ go get -u -v github.com/Dreamacro/clash
 
 Pre-built binaries are available: [release](https://github.com/Dreamacro/clash/releases)
 
-Requires Go >= 1.10.
+Requires Go >= 1.11.
 
 ## Daemon
 
@@ -90,7 +90,7 @@ allow-lan: false
 mode: Rule
 
 # set log level to stdout (default is info)
-# info / warning / error / debug
+# info / warning / error / debug / silent
 log-level: info
 
 # A RESTful API for clash
@@ -98,6 +98,17 @@ external-controller: 127.0.0.1:9090
 
 # Secret for RESTful API (Optional)
 # secret: ""
+
+dns:
+  enable: true # set true to enable dns
+  ipv6: false # default is false
+  listen: 0.0.0.0:53
+  enhanced-mode: redir-host
+  nameserver:
+    - 114.114.114.114
+    - tls://dns.rubyfish.cn:853 # dns over tls
+  fallback: # concurrent request with nameserver, fallback used when GEOIP country isn't CN
+    - 8.8.8.8
 
 Proxy:
 
@@ -122,10 +133,21 @@ Proxy:
 
 # socks5
 - { name: "socks", type: socks5, server: server, port: 443 }
+# socks5 with authentication
+- { name: "socks", type: socks5, server: server, port: 443, username: "username", password: "password" }
 # with tls
 - { name: "socks", type: socks5, server: server, port: 443, tls: true }
 # with tls and skip-cert-verify
 - { name: "socks", type: socks5, server: server, port: 443, tls: true, skip-cert-verify: true }
+
+# http
+- { name: "http", type: http, server: server, port: 443 }
+# http with authentication
+- { name: "http", type: http, server: server, port: 443, username: "username", password: "password" }
+# with tls (https)
+- { name: "http", type: http, server: server, port: 443, tls: true }
+# with tls (https) and skip-cert-verify
+- { name: "http", type: http, server: server, port: 443, tls: true, skip-cert-verify: true }
 
 Proxy Group:
 # url-test select which proxy will be used by benchmarking speed to a URL.
