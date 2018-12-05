@@ -95,6 +95,9 @@ func readConfig(path string) (*rawConfig, error) {
 		Rule:       []string{},
 		Proxy:      []map[string]interface{}{},
 		ProxyGroup: []map[string]interface{}{},
+		DNS: &rawDNS{
+			Enable: false,
+		},
 	}
 	err = yaml.Unmarshal([]byte(data), &rawConfig)
 	return rawConfig, err

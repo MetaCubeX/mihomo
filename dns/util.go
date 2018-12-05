@@ -15,13 +15,15 @@ import (
 var (
 	// EnhancedModeMapping is a mapping for EnhancedMode enum
 	EnhancedModeMapping = map[string]EnhancedMode{
+		NORMAL.String():  NORMAL,
 		FAKEIP.String():  FAKEIP,
 		MAPPING.String(): MAPPING,
 	}
 )
 
 const (
-	FAKEIP EnhancedMode = iota
+	NORMAL EnhancedMode = iota
+	FAKEIP
 	MAPPING
 )
 
@@ -65,6 +67,8 @@ func (e EnhancedMode) MarshalJSON() ([]byte, error) {
 
 func (e EnhancedMode) String() string {
 	switch e {
+	case NORMAL:
+		return "normal"
 	case FAKEIP:
 		return "fakeip"
 	case MAPPING:
