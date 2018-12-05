@@ -72,7 +72,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateConfigRequest struct {
-	Path    string `json:"path"`
+	Path string `json:"path"`
 }
 
 func updateConfigs(w http.ResponseWriter, r *http.Request) {
