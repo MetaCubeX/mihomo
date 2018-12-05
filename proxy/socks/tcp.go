@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapters/inbound"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 
@@ -14,19 +15,19 @@ var (
 	tun = tunnel.Instance()
 )
 
-type sockListener struct {
+type SockListener struct {
 	net.Listener
 	address string
 	closed  bool
 }
 
-func NewSocksProxy(addr string) (*sockListener, error) {
+func NewSocksProxy(addr string) (*SockListener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	sl := &sockListener{l, addr, false}
+	sl := &SockListener{l, addr, false}
 	go func() {
 		log.Infoln("SOCKS proxy listening at: %s", addr)
 		for {
@@ -44,12 +45,12 @@ func NewSocksProxy(addr string) (*sockListener, error) {
 	return sl, nil
 }
 
-func (l *sockListener) Close() {
+func (l *SockListener) Close() {
 	l.closed = true
 	l.Listener.Close()
 }
 
-func (l *sockListener) Address() string {
+func (l *SockListener) Address() string {
 	return l.address
 }
 
@@ -60,5 +61,5 @@ func handleSocks(conn net.Conn) {
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	tun.Add(adapters.NewSocket(target, conn))
+	tun.Add(adapters.NewSocket(target, conn, C.SOCKS))
 }
