@@ -100,15 +100,15 @@ external-controller: 127.0.0.1:9090
 # secret: ""
 
 dns:
-  enable: true # set true to enable dns
-  ipv6: false # default is false
-  listen: 0.0.0.0:53
-  enhanced-mode: redir-host
-  nameserver:
-    - 114.114.114.114
-    - tls://dns.rubyfish.cn:853 # dns over tls
-  fallback: # concurrent request with nameserver, fallback used when GEOIP country isn't CN
-    - 8.8.8.8
+  # enable: true # set true to enable dns (default is false)
+  # ipv6: false # default is false
+  # listen: 0.0.0.0:53
+  # enhanced-mode: redir-host
+  # nameserver:
+  #   - 114.114.114.114
+  #   - tls://dns.rubyfish.cn:853 # dns over tls
+  # fallback: # concurrent request with nameserver, fallback used when GEOIP country isn't CN
+  #   - 8.8.8.8
 
 Proxy:
 
