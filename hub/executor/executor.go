@@ -1,6 +1,7 @@
 package executor
 
 import (
+	adapters "github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -40,7 +41,20 @@ func GetGeneral() *config.General {
 }
 
 func updateProxies(proxies map[string]C.Proxy) {
-	T.Instance().UpdateProxies(proxies)
+	tunnel := T.Instance()
+	oldProxies := tunnel.Proxies()
+
+	// close old goroutine
+	for _, proxy := range oldProxies {
+		switch raw := proxy.(type) {
+		case *adapters.URLTest:
+			raw.Close()
+		case *adapters.Fallback:
+			raw.Close()
+		}
+	}
+
+	tunnel.UpdateProxies(proxies)
 }
 
 func updateRules(rules []C.Rule) {

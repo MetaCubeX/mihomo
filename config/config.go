@@ -264,16 +264,6 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 	}
 
 	proxies["GLOBAL"], _ = adapters.NewSelector("GLOBAL", ps)
-
-	// close old goroutine
-	for _, proxy := range proxies {
-		switch raw := proxy.(type) {
-		case *adapters.URLTest:
-			raw.Close()
-		case *adapters.Fallback:
-			raw.Close()
-		}
-	}
 	return proxies, nil
 }
 
