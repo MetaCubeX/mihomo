@@ -4,6 +4,7 @@ import (
 	adapters "github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	P "github.com/Dreamacro/clash/proxy"
 	T "github.com/Dreamacro/clash/tunnel"
@@ -26,6 +27,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	}
 	updateProxies(cfg.Proxies)
 	updateRules(cfg.Rules)
+	updateGeneral(cfg.General)
+	updateDNS(cfg.DNS)
 }
 
 func GetGeneral() *config.General {
@@ -38,6 +41,22 @@ func GetGeneral() *config.General {
 		Mode:      T.Instance().Mode(),
 		LogLevel:  log.Level(),
 	}
+}
+
+func updateDNS(c *config.DNS) {
+	if c.Enable == false {
+		T.Instance().SetResolver(nil)
+		dns.ReCreateServer("", nil)
+		return
+	}
+	r := dns.New(dns.Config{
+		Main:         c.NameServer,
+		Fallback:     c.Fallback,
+		IPv6:         c.IPv6,
+		EnhancedMode: c.EnhancedMode,
+	})
+	T.Instance().SetResolver(r)
+	dns.ReCreateServer(c.Listen, r)
 }
 
 func updateProxies(proxies map[string]C.Proxy) {

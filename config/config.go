@@ -3,12 +3,15 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 
 	adapters "github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	R "github.com/Dreamacro/clash/rules"
 	T "github.com/Dreamacro/clash/tunnel"
@@ -28,26 +31,47 @@ type General struct {
 	Secret             string       `json:"secret,omitempty"`
 }
 
-type rawConfig struct {
-	Port               int    `yaml:"port"`
-	SocksPort          int    `yaml:"socks-port"`
-	RedirPort          int    `yaml:"redir-port"`
-	AllowLan           bool   `yaml:"allow-lan"`
-	Mode               string `yaml:"mode"`
-	LogLevel           string `yaml:"log-level"`
-	ExternalController string `yaml:"external-controller"`
-	Secret             string `yaml:"secret"`
-
-	Proxy      []map[string]interface{} `yaml:"Proxy"`
-	ProxyGroup []map[string]interface{} `yaml:"Proxy Group"`
-	Rule       []string                 `yaml:"Rule"`
+// DNS config
+type DNS struct {
+	Enable       bool             `yaml:"enable"`
+	IPv6         bool             `yaml:"ipv6"`
+	NameServer   []dns.NameServer `yaml:"nameserver"`
+	Fallback     []dns.NameServer `yaml:"fallback"`
+	Listen       string           `yaml:"listen"`
+	EnhancedMode dns.EnhancedMode `yaml:"enhanced-mode"`
 }
 
 // Config is clash config manager
 type Config struct {
 	General *General
+	DNS     *DNS
 	Rules   []C.Rule
 	Proxies map[string]C.Proxy
+}
+
+type rawDNS struct {
+	Enable       bool             `yaml:"enable"`
+	IPv6         bool             `yaml:"ipv6"`
+	NameServer   []string         `yaml:"nameserver"`
+	Fallback     []string         `yaml:"fallback"`
+	Listen       string           `yaml:"listen"`
+	EnhancedMode dns.EnhancedMode `yaml:"enhanced-mode"`
+}
+
+type rawConfig struct {
+	Port               int          `yaml:"port"`
+	SocksPort          int          `yaml:"socks-port"`
+	RedirPort          int          `yaml:"redir-port"`
+	AllowLan           bool         `yaml:"allow-lan"`
+	Mode               T.Mode       `yaml:"mode"`
+	LogLevel           log.LogLevel `yaml:"log-level"`
+	ExternalController string       `yaml:"external-controller"`
+	Secret             string       `yaml:"secret"`
+
+	DNS        *rawDNS                  `yaml:"dns"`
+	Proxy      []map[string]interface{} `yaml:"Proxy"`
+	ProxyGroup []map[string]interface{} `yaml:"Proxy Group"`
+	Rule       []string                 `yaml:"Rule"`
 }
 
 func readConfig(path string) (*rawConfig, error) {
@@ -66,8 +90,8 @@ func readConfig(path string) (*rawConfig, error) {
 	// config with some default value
 	rawConfig := &rawConfig{
 		AllowLan:   false,
-		Mode:       T.Rule.String(),
-		LogLevel:   log.INFO.String(),
+		Mode:       T.Rule,
+		LogLevel:   log.INFO,
 		Rule:       []string{},
 		Proxy:      []map[string]interface{}{},
 		ProxyGroup: []map[string]interface{}{},
@@ -103,6 +127,12 @@ func Parse(path string) (*Config, error) {
 	}
 	config.Rules = rules
 
+	dnsCfg, err := parseDNS(rawCfg.DNS)
+	if err != nil {
+		return nil, err
+	}
+	config.DNS = dnsCfg
+
 	return config, nil
 }
 
@@ -111,20 +141,10 @@ func parseGeneral(cfg *rawConfig) (*General, error) {
 	socksPort := cfg.SocksPort
 	redirPort := cfg.RedirPort
 	allowLan := cfg.AllowLan
-	logLevelString := cfg.LogLevel
-	modeString := cfg.Mode
 	externalController := cfg.ExternalController
 	secret := cfg.Secret
-
-	mode, exist := T.ModeMapping[modeString]
-	if !exist {
-		return nil, fmt.Errorf("General.mode value invalid")
-	}
-
-	logLevel, exist := log.LogLevelMapping[logLevelString]
-	if !exist {
-		return nil, fmt.Errorf("General.log-level value invalid")
-	}
+	mode := cfg.Mode
+	logLevel := cfg.LogLevel
 
 	general := &General{
 		Port:               port,
@@ -309,4 +329,79 @@ func parseRules(cfg *rawConfig) ([]C.Rule, error) {
 	}
 
 	return rules, nil
+}
+
+func hostWithDefaultPort(host string, defPort string) (string, error) {
+	if !strings.Contains(host, ":") {
+		host += ":"
+	}
+
+	hostname, port, err := net.SplitHostPort(host)
+	if err != nil {
+		return "", err
+	}
+
+	if port == "" {
+		port = defPort
+	}
+
+	return net.JoinHostPort(hostname, port), nil
+}
+
+func parseNameServer(servers []string) ([]dns.NameServer, error) {
+	nameservers := []dns.NameServer{}
+	log.Debugln("%#v", servers)
+
+	for idx, server := range servers {
+		// parse without scheme .e.g 8.8.8.8:53
+		if host, err := hostWithDefaultPort(server, "53"); err == nil {
+			nameservers = append(
+				nameservers,
+				dns.NameServer{Addr: host},
+			)
+			continue
+		}
+
+		u, err := url.Parse(server)
+		if err != nil {
+			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
+		}
+
+		if u.Scheme != "tls" {
+			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
+		}
+
+		host, err := hostWithDefaultPort(u.Host, "853")
+		nameservers = append(
+			nameservers,
+			dns.NameServer{
+				Net:  "tcp-tls",
+				Addr: host,
+			},
+		)
+	}
+
+	return nameservers, nil
+}
+
+func parseDNS(cfg *rawDNS) (*DNS, error) {
+	if cfg.Enable && len(cfg.NameServer) == 0 {
+		return nil, fmt.Errorf("If DNS configuration is turned on, NameServer cannot be empty")
+	}
+
+	dnsCfg := &DNS{
+		Enable:       cfg.Enable,
+		Listen:       cfg.Listen,
+		EnhancedMode: cfg.EnhancedMode,
+	}
+
+	if nameserver, err := parseNameServer(cfg.NameServer); err == nil {
+		dnsCfg.NameServer = nameserver
+	}
+
+	if fallback, err := parseNameServer(cfg.Fallback); err == nil {
+		dnsCfg.Fallback = fallback
+	}
+
+	return dnsCfg, nil
 }
