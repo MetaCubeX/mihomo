@@ -174,20 +174,12 @@ func (r *Resolver) msgToIP(msg *D.Msg) ([]net.IP, error) {
 	var ips []net.IP
 
 	for _, answer := range msg.Answer {
-		if r.ipv6 {
-			ans, ok := answer.(*D.AAAA)
-			if !ok {
-				continue
-			}
+		switch ans := answer.(type) {
+		case *D.AAAA:
 			ips = append(ips, ans.AAAA)
-			continue
+		case *D.A:
+			ips = append(ips, ans.A)
 		}
-
-		ans, ok := answer.(*D.A)
-		if !ok {
-			continue
-		}
-		ips = append(ips, ans.A)
 	}
 
 	if len(ips) == 0 {
