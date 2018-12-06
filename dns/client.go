@@ -131,12 +131,14 @@ func (r *Resolver) resolveIP(m *D.Msg) (msg *D.Msg, err error) {
 			return nil, errors.New("GeoIP can't use")
 		}
 
-		ips, _ := r.msgToIP(res.Msg)
-		if record, _ := mmdb.Country(ips[0]); record.Country.IsoCode == "CN" || record.Country.IsoCode == "" {
-			// release channel
-			go func() { <-fallbackMsg }()
-			msg = res.Msg
-			return
+		ips, err := r.msgToIP(res.Msg)
+		if err == nil {
+			if record, _ := mmdb.Country(ips[0]); record.Country.IsoCode == "CN" || record.Country.IsoCode == "" {
+				// release channel
+				go func() { <-fallbackMsg }()
+				msg = res.Msg
+				return msg, err
+			}
 		}
 	}
 
