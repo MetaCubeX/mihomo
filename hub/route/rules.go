@@ -33,8 +33,7 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.WriteHeader(http.StatusOK)
-	render.Respond(w, r, map[string][]Rule{
+	render.JSON(w, r, map[string][]Rule{
 		"rules": rules,
 	})
 }

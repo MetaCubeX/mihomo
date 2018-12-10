@@ -47,8 +47,8 @@ func findProxyByName(next http.Handler) http.Handler {
 		proxies := T.Instance().Proxies()
 		proxy, exist := proxies[name]
 		if !exist {
-			w.WriteHeader(http.StatusNotFound)
-			render.Respond(w, r, ErrNotFound)
+			render.Status(r, http.StatusNotFound)
+			render.JSON(w, r, ErrNotFound)
 			return
 		}
 
@@ -59,14 +59,14 @@ func findProxyByName(next http.Handler) http.Handler {
 
 func getProxies(w http.ResponseWriter, r *http.Request) {
 	proxies := T.Instance().Proxies()
-	render.Respond(w, r, map[string]map[string]C.Proxy{
+	render.JSON(w, r, map[string]map[string]C.Proxy{
 		"proxies": proxies,
 	})
 }
 
 func getProxy(w http.ResponseWriter, r *http.Request) {
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
-	render.Respond(w, r, proxy)
+	render.JSON(w, r, proxy)
 }
 
 type UpdateProxyRequest struct {
@@ -76,8 +76,8 @@ type UpdateProxyRequest struct {
 func updateProxy(w http.ResponseWriter, r *http.Request) {
 	req := UpdateProxyRequest{}
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, ErrBadRequest)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
 		return
 	}
 
@@ -85,18 +85,18 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 
 	selector, ok := proxy.(*A.Selector)
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, ErrBadRequest)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
 		return
 	}
 
 	if err := selector.Set(req.Name); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, newError(fmt.Sprintf("Selector update error: %s", err.Error())))
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError(fmt.Sprintf("Selector update error: %s", err.Error())))
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	render.NoContent(w, r)
 }
 
 func getProxyDelay(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +104,8 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	url := query.Get("url")
 	timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, ErrBadRequest)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
 		return
 	}
 
@@ -122,14 +122,14 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case <-time.After(time.Millisecond * time.Duration(timeout)):
-		w.WriteHeader(http.StatusRequestTimeout)
-		render.Respond(w, r, ErrRequestTimeout)
+		render.Status(r, http.StatusRequestTimeout)
+		render.JSON(w, r, ErrRequestTimeout)
 	case t := <-sigCh:
 		if t == 0 {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			render.Respond(w, r, newError("An error occurred in the delay test"))
+			render.Status(r, http.StatusServiceUnavailable)
+			render.JSON(w, r, newError("An error occurred in the delay test"))
 		} else {
-			render.Respond(w, r, map[string]int16{
+			render.JSON(w, r, map[string]int16{
 				"delay": t,
 			})
 		}
