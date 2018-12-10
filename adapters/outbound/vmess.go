@@ -32,16 +32,17 @@ type Vmess struct {
 }
 
 type VmessOption struct {
-	Name           string `proxy:"name"`
-	Server         string `proxy:"server"`
-	Port           int    `proxy:"port"`
-	UUID           string `proxy:"uuid"`
-	AlterID        int    `proxy:"alterId"`
-	Cipher         string `proxy:"cipher"`
-	TLS            bool   `proxy:"tls,omitempty"`
-	Network        string `proxy:"network,omitempty"`
-	WSPath         string `proxy:"ws-path,omitempty"`
-	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
+	Name           string            `proxy:"name"`
+	Server         string            `proxy:"server"`
+	Port           int               `proxy:"port"`
+	UUID           string            `proxy:"uuid"`
+	AlterID        int               `proxy:"alterId"`
+	Cipher         string            `proxy:"cipher"`
+	TLS            bool              `proxy:"tls,omitempty"`
+	Network        string            `proxy:"network,omitempty"`
+	WSPath         string            `proxy:"ws-path,omitempty"`
+	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
+	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
 }
 
 func (v *Vmess) Name() string {
@@ -71,16 +72,17 @@ func (v *Vmess) MarshalJSON() ([]byte, error) {
 func NewVmess(option VmessOption) (*Vmess, error) {
 	security := strings.ToLower(option.Cipher)
 	client, err := vmess.NewClient(vmess.Config{
-		UUID:           option.UUID,
-		AlterID:        uint16(option.AlterID),
-		Security:       security,
-		TLS:            option.TLS,
-		HostName:       option.Server,
-		Port:           strconv.Itoa(option.Port),
-		NetWork:        option.Network,
-		WebSocketPath:  option.WSPath,
-		SkipCertVerify: option.SkipCertVerify,
-		SessionCacahe:  getClientSessionCache(),
+		UUID:             option.UUID,
+		AlterID:          uint16(option.AlterID),
+		Security:         security,
+		TLS:              option.TLS,
+		HostName:         option.Server,
+		Port:             strconv.Itoa(option.Port),
+		NetWork:          option.Network,
+		WebSocketPath:    option.WSPath,
+		WebSocketHeaders: option.WSHeaders,
+		SkipCertVerify:   option.SkipCertVerify,
+		SessionCacahe:    getClientSessionCache(),
 	})
 	if err != nil {
 		return nil, err

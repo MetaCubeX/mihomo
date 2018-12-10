@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ type websocketConn struct {
 type websocketConfig struct {
 	host      string
 	path      string
+	headers   map[string]string
 	tls       bool
 	tlsConfig *tls.Config
 }
@@ -127,7 +129,14 @@ func newWebsocketConn(conn net.Conn, c *websocketConfig) (net.Conn, error) {
 		Path:   c.path,
 	}
 
-	wsConn, resp, err := dialer.Dial(uri.String(), nil)
+	headers := http.Header{}
+	if c.headers != nil {
+		for k, v := range c.headers {
+			headers.Set(k, v)
+		}
+	}
+
+	wsConn, resp, err := dialer.Dial(uri.String(), headers)
 	if err != nil {
 		var reason string
 		if resp != nil {

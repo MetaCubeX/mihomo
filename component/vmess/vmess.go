@@ -75,16 +75,17 @@ type Client struct {
 
 // Config of vmess
 type Config struct {
-	UUID           string
-	AlterID        uint16
-	Security       string
-	TLS            bool
-	HostName       string
-	Port           string
-	NetWork        string
-	WebSocketPath  string
-	SkipCertVerify bool
-	SessionCacahe  tls.ClientSessionCache
+	UUID             string
+	AlterID          uint16
+	Security         string
+	TLS              bool
+	HostName         string
+	Port             string
+	NetWork          string
+	WebSocketPath    string
+	WebSocketHeaders map[string]string
+	SkipCertVerify   bool
+	SessionCacahe    tls.ClientSessionCache
 }
 
 // New return a Conn with net.Conn and DstAddr
@@ -149,6 +150,7 @@ func NewClient(config Config) (*Client, error) {
 		wsConfig = &websocketConfig{
 			host:      host,
 			path:      config.WebSocketPath,
+			headers:   config.WebSocketHeaders,
 			tls:       config.TLS,
 			tlsConfig: tlsConfig,
 		}

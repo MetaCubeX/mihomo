@@ -5,7 +5,7 @@
   <br>
 </h1>
 
-<h4 align="center">A rule based tunnel in Go.</h4>
+<h4 align="center">A rule-based tunnel in Go.</h4>
 
 <p align="center">
   <a href="https://travis-ci.org/Dreamacro/clash">
@@ -126,8 +126,8 @@ Proxy:
 - { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, tls: true }
 # with tls and skip-cert-verify
 - { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, tls: true, skip-cert-verify: true }
-# with ws
-- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, network: ws, ws-path: /path }
+# with ws-path and ws-headers
+- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, network: ws, ws-path: /path, ws-headers: { Host: v2ray.com } }
 # with ws + tls
 - { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, network: ws, ws-path: /path, tls: true }
 
