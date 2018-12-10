@@ -120,8 +120,6 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 			log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
 			metadata.IP = &ip
 		}
-	} else {
-		log.Debugln("[DNS] unknown%#v", metadata)
 	}
 
 	var proxy C.Proxy

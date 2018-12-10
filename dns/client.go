@@ -244,8 +244,6 @@ func New(config Config) *Resolver {
 		mmdb, _ = geoip2.Open(C.Path.MMDB())
 	})
 
-	println(config.EnhancedMode)
-
 	r := &Resolver{
 		main:    transform(config.Main),
 		ipv6:    config.IPv6,
