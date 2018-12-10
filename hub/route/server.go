@@ -77,8 +77,8 @@ func authentication(next http.Handler) http.Handler {
 		hasUnvalidHeader := text[0] != "Bearer"
 		hasUnvalidSecret := len(text) == 2 && text[1] != serverSecret
 		if hasUnvalidHeader || hasUnvalidSecret {
-			w.WriteHeader(http.StatusUnauthorized)
-			render.Respond(w, r, ErrUnauthorized)
+			render.Status(r, http.StatusUnauthorized)
+			render.JSON(w, r, ErrUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -87,7 +87,7 @@ func authentication(next http.Handler) http.Handler {
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+	render.Status(r, http.StatusOK)
 
 	tick := time.NewTicker(time.Second)
 	t := T.Instance().Traffic()
@@ -116,8 +116,8 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 
 	level, ok := log.LogLevelMapping[levelText]
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, ErrBadRequest)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
 		return
 	}
 

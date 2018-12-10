@@ -32,7 +32,7 @@ type configSchema struct {
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
 	general := executor.GetGeneral()
-	render.Respond(w, r, general)
+	render.JSON(w, r, general)
 }
 
 func pointerOrDefault(p *int, def int) int {
@@ -46,8 +46,8 @@ func pointerOrDefault(p *int, def int) int {
 func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	general := &configSchema{}
 	if err := render.DecodeJSON(r.Body, general); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, ErrBadRequest)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
 		return
 	}
 
@@ -68,7 +68,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		log.SetLevel(*general.LogLevel)
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	render.NoContent(w, r)
 }
 
 type updateConfigRequest struct {
@@ -78,25 +78,25 @@ type updateConfigRequest struct {
 func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	req := updateConfigRequest{}
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, ErrBadRequest)
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
 		return
 	}
 
 	if !filepath.IsAbs(req.Path) {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, newError("path is not a absoluted path"))
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("path is not a absoluted path"))
 		return
 	}
 
 	force := r.URL.Query().Get("force") == "true"
 	cfg, err := executor.ParseWithPath(req.Path)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		render.Respond(w, r, newError(err.Error()))
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError(err.Error()))
 		return
 	}
 
 	executor.ApplyConfig(cfg, force)
-	w.WriteHeader(http.StatusNoContent)
+	render.NoContent(w, r)
 }
