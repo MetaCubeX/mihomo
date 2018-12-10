@@ -68,7 +68,7 @@ type rawConfig struct {
 	ExternalController string       `yaml:"external-controller"`
 	Secret             string       `yaml:"secret"`
 
-	DNS        *rawDNS                  `yaml:"dns"`
+	DNS        rawDNS                   `yaml:"dns"`
 	Proxy      []map[string]interface{} `yaml:"Proxy"`
 	ProxyGroup []map[string]interface{} `yaml:"Proxy Group"`
 	Rule       []string                 `yaml:"Rule"`
@@ -95,7 +95,7 @@ func readConfig(path string) (*rawConfig, error) {
 		Rule:       []string{},
 		Proxy:      []map[string]interface{}{},
 		ProxyGroup: []map[string]interface{}{},
-		DNS: &rawDNS{
+		DNS: rawDNS{
 			Enable: false,
 		},
 	}
@@ -353,7 +353,6 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 
 func parseNameServer(servers []string) ([]dns.NameServer, error) {
 	nameservers := []dns.NameServer{}
-	log.Debugln("%#v", servers)
 
 	for idx, server := range servers {
 		// parse without scheme .e.g 8.8.8.8:53
@@ -387,7 +386,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 	return nameservers, nil
 }
 
-func parseDNS(cfg *rawDNS) (*DNS, error) {
+func parseDNS(cfg rawDNS) (*DNS, error) {
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("If DNS configuration is turned on, NameServer cannot be empty")
 	}
