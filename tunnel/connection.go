@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,8 +26,13 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, proxy C.ProxyAdapter)
 	conn := newTrafficTrack(proxy.Conn(), t.traffic)
 	req := request.R
 	host := req.Host
+	keepalive := true
 
 	for {
+		if strings.ToLower(req.Header.Get("Connection")) == "close" {
+			keepalive = false
+		}
+
 		req.Header.Set("Connection", "close")
 		req.RequestURI = ""
 		adapters.RemoveHopByHopHeaders(req.Header)
@@ -50,6 +56,10 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, proxy C.ProxyAdapter)
 		}
 		err = resp.Write(request.Conn())
 		if err != nil || resp.Close {
+			break
+		}
+
+		if !keepalive {
 			break
 		}
 
