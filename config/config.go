@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	adapters "github.com/Dreamacro/clash/adapters/outbound"
@@ -27,8 +28,9 @@ type General struct {
 	AllowLan           bool         `json:"allow-lan"`
 	Mode               T.Mode       `json:"mode"`
 	LogLevel           log.LogLevel `json:"log-level"`
-	ExternalController string       `json:"external-controller,omitempty"`
-	Secret             string       `json:"secret,omitempty"`
+	ExternalController string
+	ExternalUI         string
+	Secret             string
 }
 
 // DNS config
@@ -66,6 +68,7 @@ type rawConfig struct {
 	Mode               T.Mode       `yaml:"mode"`
 	LogLevel           log.LogLevel `yaml:"log-level"`
 	ExternalController string       `yaml:"external-controller"`
+	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
 
 	DNS        rawDNS                   `yaml:"dns"`
@@ -145,9 +148,18 @@ func parseGeneral(cfg *rawConfig) (*General, error) {
 	redirPort := cfg.RedirPort
 	allowLan := cfg.AllowLan
 	externalController := cfg.ExternalController
+	externalUI := cfg.ExternalUI
 	secret := cfg.Secret
 	mode := cfg.Mode
 	logLevel := cfg.LogLevel
+
+	if !filepath.IsAbs(externalUI) {
+		externalUI = filepath.Join(C.Path.HomeDir(), externalUI)
+	}
+
+	if _, err := os.Stat(externalUI); os.IsNotExist(err) {
+		return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
+	}
 
 	general := &General{
 		Port:               port,
@@ -157,6 +169,7 @@ func parseGeneral(cfg *rawConfig) (*General, error) {
 		Mode:               mode,
 		LogLevel:           logLevel,
 		ExternalController: externalController,
+		ExternalUI:         externalUI,
 		Secret:             secret,
 	}
 	return general, nil

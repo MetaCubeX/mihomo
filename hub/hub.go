@@ -12,6 +12,10 @@ func Parse() error {
 		return err
 	}
 
+	if cfg.General.ExternalUI != "" {
+		route.SetUIPath(cfg.General.ExternalUI)
+	}
+
 	if cfg.General.ExternalController != "" {
 		go route.Start(cfg.General.ExternalController, cfg.General.Secret)
 	}

@@ -17,11 +17,17 @@ import (
 var (
 	serverSecret = ""
 	serverAddr   = ""
+
+	uiPath = ""
 )
 
 type Traffic struct {
 	Up   int64 `json:"up"`
 	Down int64 `json:"down"`
+}
+
+func SetUIPath(path string) {
+	uiPath = path
 }
 
 func Start(addr string, secret string) {
@@ -48,6 +54,14 @@ func Start(addr string, secret string) {
 	r.Mount("/configs", configRouter())
 	r.Mount("/proxies", proxyRouter())
 	r.Mount("/rules", ruleRouter())
+
+	if uiPath != "" {
+		fs := http.StripPrefix("/ui", http.FileServer(http.Dir(uiPath)))
+		r.Get("/ui", http.RedirectHandler("/ui/", 301).ServeHTTP)
+		r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
+			fs.ServeHTTP(w, r)
+		})
+	}
 
 	log.Infoln("RESTful API listening at: %s", addr)
 	err := http.ListenAndServe(addr, r)
