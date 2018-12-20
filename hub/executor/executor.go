@@ -27,7 +27,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	}
 	updateProxies(cfg.Proxies)
 	updateRules(cfg.Rules)
-	updateGeneral(cfg.General)
 	updateDNS(cfg.DNS)
 }
 
