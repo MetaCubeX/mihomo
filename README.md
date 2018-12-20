@@ -96,6 +96,10 @@ log-level: info
 # A RESTful API for clash
 external-controller: 127.0.0.1:9090
 
+# you can put the static web resource (such as clash-dashboard) to a directory, and clash would serve in `${API}/ui`
+# input is a relative path to the configuration directory or an absolute path
+# external-ui: folder
+
 # Secret for RESTful API (Optional)
 # secret: ""
 
