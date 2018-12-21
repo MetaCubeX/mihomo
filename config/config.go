@@ -28,9 +28,9 @@ type General struct {
 	AllowLan           bool         `json:"allow-lan"`
 	Mode               T.Mode       `json:"mode"`
 	LogLevel           log.LogLevel `json:"log-level"`
-	ExternalController string
-	ExternalUI         string
-	Secret             string
+	ExternalController string       `json:"-"`
+	ExternalUI         string       `json:"-"`
+	Secret             string       `json:"-"`
 }
 
 // DNS config
