@@ -153,12 +153,14 @@ func parseGeneral(cfg *rawConfig) (*General, error) {
 	mode := cfg.Mode
 	logLevel := cfg.LogLevel
 
-	if !filepath.IsAbs(externalUI) {
-		externalUI = filepath.Join(C.Path.HomeDir(), externalUI)
-	}
+	if externalUI != "" {
+		if !filepath.IsAbs(externalUI) {
+			externalUI = filepath.Join(C.Path.HomeDir(), externalUI)
+		}
 
-	if _, err := os.Stat(externalUI); os.IsNotExist(err) {
-		return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
+		if _, err := os.Stat(externalUI); os.IsNotExist(err) {
+			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
+		}
 	}
 
 	general := &General{
