@@ -38,7 +38,7 @@ func parserPacket(conn net.Conn) (socks.Addr, error) {
 func getorigdst(fd uintptr) (socks.Addr, error) {
 	raw := syscall.RawSockaddrInet4{}
 	siz := unsafe.Sizeof(raw)
-	_, _, err := syscall.Syscall6(syscall.SYS_GETSOCKOPT, fd, syscall.IPPROTO_IP, SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&raw)), uintptr(unsafe.Pointer(&siz)), 0);
+	_, _, err := syscall.Syscall6(syscall.SYS_GETSOCKOPT, fd, syscall.IPPROTO_IP, SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&raw)), uintptr(unsafe.Pointer(&siz)), 0)
 	if err != 0 {
 		return nil, err
 	}
