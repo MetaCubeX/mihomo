@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -11,22 +10,8 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-// VmessAdapter is a vmess adapter
-type VmessAdapter struct {
-	conn net.Conn
-}
-
-// Close is used to close connection
-func (v *VmessAdapter) Close() {
-	v.conn.Close()
-}
-
-func (v *VmessAdapter) Conn() net.Conn {
-	return v.conn
-}
-
 type Vmess struct {
-	name   string
+	*Base
 	server string
 	client *vmess.Client
 }
@@ -45,28 +30,14 @@ type VmessOption struct {
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (v *Vmess) Name() string {
-	return v.name
-}
-
-func (v *Vmess) Type() C.AdapterType {
-	return C.Vmess
-}
-
-func (v *Vmess) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+func (v *Vmess) Generator(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", v.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", v.server)
 	}
 	tcpKeepAlive(c)
 	c, err = v.client.New(c, parseVmessAddr(metadata))
-	return &VmessAdapter{conn: c}, err
-}
-
-func (v *Vmess) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		"type": v.Type().String(),
-	})
+	return c, err
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {
@@ -89,7 +60,10 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	}
 
 	return &Vmess{
-		name:   option.Name,
+		Base: &Base{
+			name: option.Name,
+			tp:   C.Vmess,
+		},
 		server: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		client: client,
 	}, nil

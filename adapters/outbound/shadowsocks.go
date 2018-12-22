@@ -7,30 +7,16 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/Dreamacro/clash/component/simple-obfs"
+	obfs "github.com/Dreamacro/clash/component/simple-obfs"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/Dreamacro/go-shadowsocks2/core"
 	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
-// ShadowsocksAdapter is a shadowsocks adapter
-type ShadowsocksAdapter struct {
-	conn net.Conn
-}
-
-// Close is used to close connection
-func (ss *ShadowsocksAdapter) Close() {
-	ss.conn.Close()
-}
-
-func (ss *ShadowsocksAdapter) Conn() net.Conn {
-	return ss.conn
-}
-
 type ShadowSocks struct {
+	*Base
 	server   string
-	name     string
 	obfs     string
 	obfsHost string
 	cipher   core.Cipher
@@ -46,15 +32,7 @@ type ShadowSocksOption struct {
 	ObfsHost string `proxy:"obfs-host,omitempty"`
 }
 
-func (ss *ShadowSocks) Name() string {
-	return ss.name
-}
-
-func (ss *ShadowSocks) Type() C.AdapterType {
-	return C.Shadowsocks
-}
-
-func (ss *ShadowSocks) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+func (ss *ShadowSocks) Generator(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", ss.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", ss.server)
@@ -69,7 +47,7 @@ func (ss *ShadowSocks) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, 
 	}
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(metadata))
-	return &ShadowsocksAdapter{conn: c}, err
+	return c, err
 }
 
 func (ss *ShadowSocks) MarshalJSON() ([]byte, error) {
@@ -94,8 +72,11 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	}
 
 	return &ShadowSocks{
+		Base: &Base{
+			name: option.Name,
+			tp:   C.Shadowsocks,
+		},
 		server:   server,
-		name:     option.Name,
 		cipher:   ciph,
 		obfs:     obfs,
 		obfsHost: obfsHost,

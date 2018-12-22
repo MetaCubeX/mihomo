@@ -3,7 +3,6 @@ package adapters
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,23 +14,9 @@ import (
 	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
-// Socks5Adapter is a shadowsocks adapter
-type Socks5Adapter struct {
-	conn net.Conn
-}
-
-// Close is used to close connection
-func (ss *Socks5Adapter) Close() {
-	ss.conn.Close()
-}
-
-func (ss *Socks5Adapter) Conn() net.Conn {
-	return ss.conn
-}
-
 type Socks5 struct {
+	*Base
 	addr           string
-	name           string
 	user           string
 	pass           string
 	tls            bool
@@ -49,15 +34,7 @@ type Socks5Option struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (ss *Socks5) Name() string {
-	return ss.name
-}
-
-func (ss *Socks5) Type() C.AdapterType {
-	return C.Socks5
-}
-
-func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+func (ss *Socks5) Generator(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", ss.addr, tcpTimeout)
 
 	if err == nil && ss.tls {
@@ -73,13 +50,7 @@ func (ss *Socks5) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err e
 	if err := ss.shakeHand(metadata, c); err != nil {
 		return nil, err
 	}
-	return &Socks5Adapter{conn: c}, nil
-}
-
-func (ss *Socks5) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"type": ss.Type().String(),
-	})
+	return c, nil
 }
 
 func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
@@ -154,8 +125,11 @@ func NewSocks5(option Socks5Option) *Socks5 {
 	}
 
 	return &Socks5{
+		Base: &Base{
+			name: option.Name,
+			tp:   C.Socks5,
+		},
 		addr:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-		name:           option.Name,
 		user:           option.UserName,
 		pass:           option.Password,
 		tls:            option.TLS,

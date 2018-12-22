@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,23 +15,9 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-// HTTPAdapter is a proxy adapter
-type HTTPAdapter struct {
-	conn net.Conn
-}
-
-// Close is used to close connection
-func (ha *HTTPAdapter) Close() {
-	ha.conn.Close()
-}
-
-func (ha *HTTPAdapter) Conn() net.Conn {
-	return ha.conn
-}
-
 type Http struct {
+	*Base
 	addr           string
-	name           string
 	user           string
 	pass           string
 	tls            bool
@@ -50,15 +35,7 @@ type HttpOption struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (h *Http) Name() string {
-	return h.name
-}
-
-func (h *Http) Type() C.AdapterType {
-	return C.Http
-}
-
-func (h *Http) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+func (h *Http) Generator(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", h.addr, tcpTimeout)
 	if err == nil && h.tls {
 		cc := tls.Client(c, h.tlsConfig)
@@ -74,7 +51,7 @@ func (h *Http) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err erro
 		return nil, err
 	}
 
-	return &HTTPAdapter{conn: c}, nil
+	return c, nil
 }
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
@@ -118,12 +95,6 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	return fmt.Errorf("can not connect remote err code: %d", resp.StatusCode)
 }
 
-func (h *Http) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"type": h.Type().String(),
-	})
-}
-
 func NewHttp(option HttpOption) *Http {
 	var tlsConfig *tls.Config
 	if option.TLS {
@@ -137,8 +108,11 @@ func NewHttp(option HttpOption) *Http {
 	}
 
 	return &Http{
+		Base: &Base{
+			name: option.Name,
+			tp:   C.Http,
+		},
 		addr:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-		name:           option.Name,
 		user:           option.UserName,
 		pass:           option.Password,
 		tls:            option.TLS,

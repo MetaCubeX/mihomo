@@ -1,38 +1,16 @@
 package adapters
 
 import (
-	"encoding/json"
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
 )
 
-// DirectAdapter is a directly connected adapter
-type DirectAdapter struct {
-	conn net.Conn
+type Direct struct {
+	*Base
 }
 
-// Close is used to close connection
-func (d *DirectAdapter) Close() {
-	d.conn.Close()
-}
-
-// Conn is used to http request
-func (d *DirectAdapter) Conn() net.Conn {
-	return d.conn
-}
-
-type Direct struct{}
-
-func (d *Direct) Name() string {
-	return "DIRECT"
-}
-
-func (d *Direct) Type() C.AdapterType {
-	return C.Direct
-}
-
-func (d *Direct) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err error) {
+func (d *Direct) Generator(metadata *C.Metadata) (net.Conn, error) {
 	address := net.JoinHostPort(metadata.Host, metadata.Port)
 	if metadata.IP != nil {
 		address = net.JoinHostPort(metadata.IP.String(), metadata.Port)
@@ -40,18 +18,17 @@ func (d *Direct) Generator(metadata *C.Metadata) (adapter C.ProxyAdapter, err er
 
 	c, err := net.DialTimeout("tcp", address, tcpTimeout)
 	if err != nil {
-		return
+		return nil, err
 	}
 	tcpKeepAlive(c)
-	return &DirectAdapter{conn: c}, nil
-}
-
-func (d *Direct) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"type": d.Type().String(),
-	})
+	return c, nil
 }
 
 func NewDirect() *Direct {
-	return &Direct{}
+	return &Direct{
+		Base: &Base{
+			name: "DIRECT",
+			tp:   C.Direct,
+		},
+	}
 }

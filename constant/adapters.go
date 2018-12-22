@@ -17,11 +17,6 @@ const (
 	Vmess
 )
 
-type ProxyAdapter interface {
-	Conn() net.Conn
-	Close()
-}
-
 type ServerAdapter interface {
 	Metadata() *Metadata
 	Close()
@@ -30,7 +25,7 @@ type ServerAdapter interface {
 type Proxy interface {
 	Name() string
 	Type() AdapterType
-	Generator(metadata *Metadata) (ProxyAdapter, error)
+	Generator(metadata *Metadata) (net.Conn, error)
 	MarshalJSON() ([]byte, error)
 }
 
