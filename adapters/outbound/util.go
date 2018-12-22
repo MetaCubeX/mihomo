@@ -36,7 +36,7 @@ func DelayTest(proxy C.Proxy, url string) (t int16, err error) {
 	defer instance.Close()
 	transport := &http.Transport{
 		Dial: func(string, string) (net.Conn, error) {
-			return instance.Conn(), nil
+			return instance, nil
 		},
 		// from http.DefaultTransport
 		MaxIdleConns:          100,
