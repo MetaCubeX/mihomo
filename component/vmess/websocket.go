@@ -118,7 +118,7 @@ func newWebsocketConn(conn net.Conn, c *websocketConfig) (net.Conn, error) {
 		dialer.TLSClientConfig = c.tlsConfig
 	}
 
-	host, port, err := net.SplitHostPort(c.host)
+	host, port, _ := net.SplitHostPort(c.host)
 	if (scheme == "ws" && port != "80") || (scheme == "wss" && port != "443") {
 		host = c.host
 	}
