@@ -23,7 +23,7 @@ func configRouter() http.Handler {
 
 type configSchema struct {
 	Port      *int          `json:"port"`
-	SocksPort *int          `json:"socket-port"`
+	SocksPort *int          `json:"socks-port"`
 	RedirPort *int          `json:"redir-port"`
 	AllowLan  *bool         `json:"allow-lan"`
 	Mode      *T.Mode       `json:"mode"`
