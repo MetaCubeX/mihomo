@@ -42,16 +42,20 @@ func Start(addr string, secret string) {
 
 	cors := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
 
+	root := chi.NewRouter().With(jsonContentType)
+	root.Get("/traffic", traffic)
+	root.Get("/logs", getLogs)
+
+	r.Get("/", hello)
 	r.Group(func(r chi.Router) {
 		r.Use(cors.Handler, authentication)
 
-		r.With(jsonContentType).Get("/traffic", traffic)
-		r.With(jsonContentType).Get("/logs", getLogs)
+		r.Mount("/", root)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
 		r.Mount("/rules", ruleRouter())
@@ -102,6 +106,10 @@ func authentication(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	}
 	return http.HandlerFunc(fn)
+}
+
+func hello(w http.ResponseWriter, r *http.Request) {
+	render.JSON(w, r, render.M{"hello": "clash"})
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
