@@ -55,7 +55,9 @@ func updateDNS(c *config.DNS) {
 		EnhancedMode: c.EnhancedMode,
 	})
 	T.Instance().SetResolver(r)
-	dns.ReCreateServer(c.Listen, r)
+	if err := dns.ReCreateServer(c.Listen, r); err != nil {
+		log.Errorln("Start DNS server error: %s", err.Error())
+	}
 }
 
 func updateProxies(proxies map[string]C.Proxy) {
