@@ -45,7 +45,7 @@ func (c *cache) Get(key interface{}) interface{} {
 }
 
 // GetWithExpire element in Cache with Expire Time
-func (c *cache) GetWithExpire(key interface{}) (item interface{}, expired time.Time) {
+func (c *cache) GetWithExpire(key interface{}) (payload interface{}, expired time.Time) {
 	item, exist := c.mapping.Load(key)
 	if !exist {
 		return
