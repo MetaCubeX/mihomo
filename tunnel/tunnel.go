@@ -141,7 +141,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 
 	remoConn, err := proxy.Generator(metadata)
 	if err != nil {
-		log.Warnln("Proxy[%s] connect [%s] error: %s", proxy.Name(), metadata.String(), err.Error())
+		log.Warnln("Proxy[%s] connect [%s --> %s] error: %s", proxy.Name(), metadata.SourceIP.String(), metadata.String(), err.Error())
 		return
 	}
 	defer remoConn.Close()
@@ -174,12 +174,12 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, error) {
 
 		if rule.IsMatch(metadata) {
 			if a, ok := t.proxies[rule.Adapter()]; ok {
-				log.Infoln("%v match %s using %s", metadata.String(), rule.RuleType().String(), rule.Adapter())
+				log.Infoln("%s --> %v match %s using %s", metadata.SourceIP.String(), metadata.String(), rule.RuleType().String(), rule.Adapter())
 				return a, nil
 			}
 		}
 	}
-	log.Infoln("%v doesn't match any rule using DIRECT", metadata.String())
+	log.Infoln("%s --> %v doesn't match any rule using DIRECT", metadata.SourceIP.String(), metadata.String())
 	return t.proxies["DIRECT"], nil
 }
 
