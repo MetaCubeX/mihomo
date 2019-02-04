@@ -251,6 +251,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 			return nil, fmt.Errorf("ProxyGroup %s: the duplicate name", groupName)
 		}
 		var group C.Proxy
+		var ps []C.Proxy
 		var err error
 		switch groupType {
 		case "url-test":
@@ -260,7 +261,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 				break
 			}
 
-			ps, err := getProxies(proxies, urlTestOption.Proxies)
+			ps, err = getProxies(proxies, urlTestOption.Proxies)
 			if err != nil {
 				return nil, fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
@@ -272,7 +273,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 				break
 			}
 
-			ps, err := getProxies(proxies, selectorOption.Proxies)
+			ps, err = getProxies(proxies, selectorOption.Proxies)
 			if err != nil {
 				return nil, fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
@@ -284,7 +285,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 				break
 			}
 
-			ps, err := getProxies(proxies, fallbackOption.Proxies)
+			ps, err = getProxies(proxies, fallbackOption.Proxies)
 			if err != nil {
 				return nil, fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
