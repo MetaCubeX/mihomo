@@ -219,6 +219,10 @@ func (r *Resolver) resolve(client []*nameserver, msg *D.Msg) <-chan *result {
 	return ch
 }
 
+func (r *Resolver) IsMapping() bool {
+	return r.mapping
+}
+
 type NameServer struct {
 	Net  string
 	Addr string
