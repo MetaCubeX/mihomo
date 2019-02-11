@@ -50,7 +50,3 @@ func (m *Metadata) String() string {
 func (m *Metadata) Valid() bool {
 	return m.Host != "" || m.IP != nil
 }
-
-func (m *Metadata) NeedLoopUpHost() bool {
-	return m.Source == REDIR
-}
