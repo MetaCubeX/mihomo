@@ -107,15 +107,15 @@ func (t *Tunnel) resolveIP(host string) (net.IP, error) {
 	return t.resolver.ResolveIP(host)
 }
 
-func (t *Tunnel) needLookupIP() bool {
-	return t.hasResolver() && t.resolver.IsMapping()
+func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
+	return t.hasResolver() && t.resolver.IsMapping() && metadata.Host == "" && metadata.IP != nil
 }
 
 func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	defer localConn.Close()
 	metadata := localConn.Metadata()
 
-	if t.needLookupIP() {
+	if t.needLookupIP(metadata) {
 		host, exist := t.resolver.IPToHost(*metadata.IP)
 		if exist {
 			metadata.Host = host
