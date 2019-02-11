@@ -69,7 +69,7 @@ type Client struct {
 	security  Security
 	tls       bool
 	host      string
-	wsConfig  *websocketConfig
+	wsConfig  *WebsocketConfig
 	tlsConfig *tls.Config
 }
 
@@ -93,7 +93,7 @@ func (c *Client) New(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 	var err error
 	r := rand.Intn(len(c.user))
 	if c.wsConfig != nil {
-		conn, err = newWebsocketConn(conn, c.wsConfig)
+		conn, err = NewWebsocketConn(conn, c.wsConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -145,14 +145,14 @@ func NewClient(config Config) (*Client, error) {
 		}
 	}
 
-	var wsConfig *websocketConfig
+	var wsConfig *WebsocketConfig
 	if config.NetWork == "ws" {
-		wsConfig = &websocketConfig{
-			host:      host,
-			path:      config.WebSocketPath,
-			headers:   config.WebSocketHeaders,
-			tls:       config.TLS,
-			tlsConfig: tlsConfig,
+		wsConfig = &WebsocketConfig{
+			Host:      host,
+			Path:      config.WebSocketPath,
+			Headers:   config.WebSocketHeaders,
+			TLS:       config.TLS,
+			TLSConfig: tlsConfig,
 		}
 	}
 

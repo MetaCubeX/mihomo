@@ -2,12 +2,15 @@ package adapters
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 
+	"github.com/Dreamacro/clash/common/structure"
 	obfs "github.com/Dreamacro/clash/component/simple-obfs"
+	v2rayObfs "github.com/Dreamacro/clash/component/v2ray-plugin"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/Dreamacro/go-shadowsocks2/core"
@@ -16,34 +19,60 @@ import (
 
 type ShadowSocks struct {
 	*Base
-	server   string
-	obfs     string
-	obfsHost string
-	cipher   core.Cipher
+	server string
+	cipher core.Cipher
+
+	// obfs
+	obfsMode   string
+	obfsOption *simpleObfsOption
+	wsOption   *v2rayObfs.WebsocketOption
 }
 
 type ShadowSocksOption struct {
-	Name     string `proxy:"name"`
-	Server   string `proxy:"server"`
-	Port     int    `proxy:"port"`
-	Password string `proxy:"password"`
-	Cipher   string `proxy:"cipher"`
+	Name       string                 `proxy:"name"`
+	Server     string                 `proxy:"server"`
+	Port       int                    `proxy:"port"`
+	Password   string                 `proxy:"password"`
+	Cipher     string                 `proxy:"cipher"`
+	Plugin     string                 `proxy:"plugin,omitempty"`
+	PluginOpts map[string]interface{} `proxy:"plugin-opts,omitempty"`
+
+	// deprecated when bump to 1.0
 	Obfs     string `proxy:"obfs,omitempty"`
 	ObfsHost string `proxy:"obfs-host,omitempty"`
+}
+
+type simpleObfsOption struct {
+	Mode string `obfs:"mode"`
+	Host string `obfs:"host,omitempty"`
+}
+
+type v2rayObfsOption struct {
+	Mode           string `obfs:"mode"`
+	Host           string `obfs:"host,omitempty"`
+	Path           string `obfs:"path,omitempty"`
+	TLS            bool   `obfs:"tls,omitempty"`
+	SkipCertVerify bool   `obfs:"skip-cert-verify,omitempty"`
 }
 
 func (ss *ShadowSocks) Generator(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", ss.server, tcpTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", ss.server)
+		return nil, fmt.Errorf("%s connect error: %s", ss.server, err.Error())
 	}
 	tcpKeepAlive(c)
-	switch ss.obfs {
+	switch ss.obfsMode {
 	case "tls":
-		c = obfs.NewTLSObfs(c, ss.obfsHost)
+		c = obfs.NewTLSObfs(c, ss.obfsOption.Host)
 	case "http":
 		_, port, _ := net.SplitHostPort(ss.server)
-		c = obfs.NewHTTPObfs(c, ss.obfsHost, port)
+		c = obfs.NewHTTPObfs(c, ss.obfsOption.Host, port)
+	case "websocket":
+		var err error
+		c, err = v2rayObfs.NewWebsocketObfs(c, ss.wsOption)
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %s", ss.server, err.Error())
+		}
 	}
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(metadata))
@@ -65,10 +94,49 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
 
-	obfs := option.Obfs
-	obfsHost := "bing.com"
-	if option.ObfsHost != "" {
-		obfsHost = option.ObfsHost
+	var wsOption *v2rayObfs.WebsocketOption
+	var obfsOption *simpleObfsOption
+	obfsMode := ""
+
+	// forward compatibility before 1.0
+	if option.Obfs != "" {
+		obfsMode = option.Obfs
+		obfsOption = &simpleObfsOption{
+			Host: "bing.com",
+		}
+		if option.ObfsHost != "" {
+			obfsOption.Host = option.ObfsHost
+		}
+	}
+
+	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
+	if option.Plugin == "obfs" {
+		opts := simpleObfsOption{Host: "bing.com"}
+		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
+			return nil, fmt.Errorf("ss %s initialize obfs error: %s", server, err.Error())
+		}
+		obfsMode = opts.Mode
+		obfsOption = &opts
+	} else if option.Plugin == "v2ray-plugin" {
+		opts := v2rayObfsOption{Host: "bing.com"}
+		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
+			return nil, fmt.Errorf("ss %s initialize v2ray-plugin error: %s", server, err.Error())
+		}
+		obfsMode = opts.Mode
+		var tlsConfig *tls.Config
+		if opts.TLS {
+			tlsConfig = &tls.Config{
+				ServerName:         opts.Host,
+				InsecureSkipVerify: opts.SkipCertVerify,
+				ClientSessionCache: getClientSessionCache(),
+			}
+		}
+
+		wsOption = &v2rayObfs.WebsocketOption{
+			Host:      opts.Host,
+			Path:      opts.Path,
+			TLSConfig: tlsConfig,
+		}
 	}
 
 	return &ShadowSocks{
@@ -76,10 +144,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			name: option.Name,
 			tp:   C.Shadowsocks,
 		},
-		server:   server,
-		cipher:   ciph,
-		obfs:     obfs,
-		obfsHost: obfsHost,
+		server: server,
+		cipher: ciph,
+
+		obfsMode:   obfsMode,
+		wsOption:   wsOption,
+		obfsOption: obfsOption,
 	}, nil
 }
 
