@@ -1,8 +1,6 @@
 <h1 align="center">
   <img src="https://github.com/Dreamacro/clash/raw/master/docs/logo.png" alt="Clash" width="200">
-  <br>
-  Clash
-  <br>
+  <br>Clash<br>
 </h1>
 
 <h4 align="center">A rule-based tunnel in Go.</h4>
@@ -13,7 +11,7 @@
          alt="Travis-CI">
   </a>
   <a href="https://goreportcard.com/report/github.com/Dreamacro/clash">
-      <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
+    <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
   </a>
   <a href="https://github.com/Dreamacro/clash/releases">
     <img src="https://img.shields.io/github/release/Dreamacro/clash/all.svg?style=flat-square">
@@ -58,8 +56,6 @@ If you have Docker installed, you can run clash directly using `docker-compose`.
 
 ## Config
 
-**NOTE: after v0.8.0, clash using yaml as configuration file**
-
 The default configuration directory is `$HOME/.config/clash`
 
 The name of the configuration file is `config.yml`
@@ -103,7 +99,7 @@ external-controller: 127.0.0.1:9090
 # Secret for RESTful API (Optional)
 # secret: ""
 
-dns:
+# dns:
   # enable: true # set true to enable dns (default is false)
   # ipv6: false # default is false
   # listen: 0.0.0.0:53
@@ -121,7 +117,32 @@ Proxy:
 # support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
 # In addition to what go-shadowsocks2 supports, it also supports chacha20 rc4-md5 xchacha20-ietf-poly1305
 - { name: "ss1", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password" }
-- { name: "ss2", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password", obfs: tls, obfs-host: bing.com }
+
+# old obfs configuration remove after prerelease
+- name: "ss2"
+  type: ss
+  server: server
+  port: 443
+  cipher: AEAD_CHACHA20_POLY1305
+  password: "password"
+  plugin: obfs
+  plugin-opts:
+    mode: tls # or http
+    # host: bing.com
+
+- name: "ss3"
+  type: ss
+  server: server
+  port: 443
+  cipher: AEAD_CHACHA20_POLY1305
+  password: "password"
+  plugin: v2ray-plugin
+  plugin-opts:
+    mode: websocket # no QUIC now
+    # tls: true # wss
+    # skip-cert-verify: true
+    # host: bing.com
+    # path: "/"
 
 # vmess
 # cipher support auto/aes-128-gcm/chacha20-poly1305/none
@@ -155,10 +176,10 @@ Proxy:
 
 Proxy Group:
 # url-test select which proxy will be used by benchmarking speed to a URL.
-- { name: "auto", type: url-test, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, interval: 300 }
+- { name: "auto", type: url-test, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
 
 # fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
-- { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: http://www.gstatic.com/generate_204, interval: 300 }
+- { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
 
 # select is used for selecting proxy or proxy group
 # you can use RESTful API to switch proxy, is recommended for use in GUI.
