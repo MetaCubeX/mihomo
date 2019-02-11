@@ -74,6 +74,8 @@ func (d *Decoder) decode(name string, data interface{}, val reflect.Value) error
 		return d.decodeSlice(name, data, val)
 	case reflect.Map:
 		return d.decodeMap(name, data, val)
+	case reflect.Interface:
+		return d.setInterface(name, data, val)
 	default:
 		return fmt.Errorf("type %s not support", val.Kind().String())
 	}
@@ -227,5 +229,11 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 		return fmt.Errorf(strings.Join(errors, ","))
 	}
 
+	return nil
+}
+
+func (d *Decoder) setInterface(name string, data interface{}, val reflect.Value) (err error) {
+	dataVal := reflect.ValueOf(data)
+	val.Set(dataVal)
 	return nil
 }
