@@ -59,7 +59,7 @@ func findProxyByName(next http.Handler) http.Handler {
 
 func getProxies(w http.ResponseWriter, r *http.Request) {
 	proxies := T.Instance().Proxies()
-	render.JSON(w, r, map[string]map[string]C.Proxy{
+	render.JSON(w, r, render.M{
 		"proxies": proxies,
 	})
 }
@@ -129,7 +129,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 			render.Status(r, http.StatusServiceUnavailable)
 			render.JSON(w, r, newError("An error occurred in the delay test"))
 		} else {
-			render.JSON(w, r, map[string]int16{
+			render.JSON(w, r, render.M{
 				"delay": t,
 			})
 		}
