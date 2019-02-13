@@ -24,7 +24,7 @@ type Rule struct {
 func getRules(w http.ResponseWriter, r *http.Request) {
 	rawRules := T.Instance().Rules()
 
-	var rules []Rule
+	rules := []Rule{}
 	for _, rule := range rawRules {
 		rules = append(rules, Rule{
 			Type:    rule.RuleType().String(),
@@ -33,7 +33,7 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	render.JSON(w, r, map[string][]Rule{
+	render.JSON(w, r, render.M{
 		"rules": rules,
 	})
 }
