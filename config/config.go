@@ -195,7 +195,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		}
 
 		var proxy C.Proxy
-		var err error
+		err := fmt.Errorf("can't parse")
 		switch proxyType {
 		case "ss":
 			ssOption := &adapters.ShadowSocksOption{}
@@ -251,8 +251,9 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 			return nil, fmt.Errorf("ProxyGroup %s: the duplicate name", groupName)
 		}
 		var group C.Proxy
-		var ps []C.Proxy
-		var err error
+		ps := []C.Proxy{}
+
+		err := fmt.Errorf("can't parse")
 		switch groupType {
 		case "url-test":
 			urlTestOption := &adapters.URLTestOption{}
@@ -290,6 +291,18 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 				return nil, fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
 			group, err = adapters.NewFallback(*fallbackOption, ps)
+		case "load-balance":
+			loadBalanceOption := &adapters.LoadBalanceOption{}
+			err = decoder.Decode(mapping, loadBalanceOption)
+			if err != nil {
+				break
+			}
+
+			ps, err = getProxies(proxies, loadBalanceOption.Proxies)
+			if err != nil {
+				return nil, fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
+			}
+			group, err = adapters.NewLoadBalance(loadBalanceOption.Name, ps)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("Proxy %s: %s", groupName, err.Error())
@@ -297,7 +310,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		proxies[groupName] = group
 	}
 
-	var ps []C.Proxy
+	ps := []C.Proxy{}
 	for _, v := range proxies {
 		ps = append(ps, v)
 	}

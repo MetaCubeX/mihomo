@@ -13,7 +13,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.3.0
 	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613
-	golang.org/x/net v0.0.0-20181108082009-03003ca0c849 // indirect
+	golang.org/x/net v0.0.0-20181108082009-03003ca0c849
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
 	gopkg.in/eapache/channels.v1 v1.1.0
 	gopkg.in/yaml.v2 v2.2.2

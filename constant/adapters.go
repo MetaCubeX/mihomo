@@ -15,6 +15,7 @@ const (
 	Http
 	URLTest
 	Vmess
+	LoadBalance
 )
 
 type ServerAdapter interface {
@@ -52,6 +53,8 @@ func (at AdapterType) String() string {
 		return "URLTest"
 	case Vmess:
 		return "Vmess"
+	case LoadBalance:
+		return "LoadBalance"
 	default:
 		return "Unknow"
 	}
