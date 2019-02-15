@@ -181,21 +181,24 @@ Proxy Group:
 # fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
 - { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
 
+# load-balance: The request of the same eTLD will be dial on the same proxy.
+- { name: "load-balance", type: load-balance, proxies: ["ss1", "ss2", "vmess1"] }
+
 # select is used for selecting proxy or proxy group
 # you can use RESTful API to switch proxy, is recommended for use in GUI.
 - { name: "Proxy", type: select, proxies: ["ss1", "ss2", "vmess1", "auto"] }
 
 Rule:
-- DOMAIN-SUFFIX,google.com,Proxy
-- DOMAIN-KEYWORD,google,Proxy
-- DOMAIN,google.com,Proxy
+- DOMAIN-SUFFIX,google.com,auto
+- DOMAIN-KEYWORD,google,auto
+- DOMAIN,google.com,auto
 - DOMAIN-SUFFIX,ad.com,REJECT
 - IP-CIDR,127.0.0.0/8,DIRECT
 - SOURCE-IP-CIDR,192.168.1.201/32,DIRECT
 - GEOIP,CN,DIRECT
 # FINAL would remove after prerelease
 # you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
-- MATCH,Proxy
+- MATCH,auto
 ```
 
 ## Thanks
