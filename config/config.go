@@ -358,7 +358,7 @@ func parseRules(cfg *rawConfig) ([]C.Rule, error) {
 		case "MATCH":
 			fallthrough
 		case "FINAL":
-			rules = append(rules, R.NewFinal(target))
+			rules = append(rules, R.NewMatch(target))
 		}
 	}
 
