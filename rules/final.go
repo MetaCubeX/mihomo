@@ -4,28 +4,28 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-type Final struct {
+type Match struct {
 	adapter string
 }
 
-func (f *Final) RuleType() C.RuleType {
-	return C.FINAL
+func (f *Match) RuleType() C.RuleType {
+	return C.MATCH
 }
 
-func (f *Final) IsMatch(metadata *C.Metadata) bool {
+func (f *Match) IsMatch(metadata *C.Metadata) bool {
 	return true
 }
 
-func (f *Final) Adapter() string {
+func (f *Match) Adapter() string {
 	return f.adapter
 }
 
-func (f *Final) Payload() string {
+func (f *Match) Payload() string {
 	return ""
 }
 
-func NewFinal(adapter string) *Final {
-	return &Final{
+func NewMatch(adapter string) *Match {
+	return &Match{
 		adapter: adapter,
 	}
 }

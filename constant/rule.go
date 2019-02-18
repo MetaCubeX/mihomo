@@ -8,7 +8,7 @@ const (
 	GEOIP
 	IPCIDR
 	SourceIPCIDR
-	FINAL
+	MATCH
 )
 
 type RuleType int
@@ -27,8 +27,8 @@ func (rt RuleType) String() string {
 		return "IPCIDR"
 	case SourceIPCIDR:
 		return "SourceIPCIDR"
-	case FINAL:
-		return "FINAL"
+	case MATCH:
+		return "MATCH"
 	default:
 		return "Unknow"
 	}
