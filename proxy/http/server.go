@@ -5,7 +5,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/Dreamacro/clash/adapters/inbound"
+	adapters "github.com/Dreamacro/clash/adapters/inbound"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -56,7 +56,7 @@ func (l *HttpListener) Address() string {
 func handleConn(conn net.Conn) {
 	br := bufio.NewReader(conn)
 	request, err := http.ReadRequest(br)
-	if err != nil {
+	if err != nil || !request.URL.IsAbs() {
 		conn.Close()
 		return
 	}
