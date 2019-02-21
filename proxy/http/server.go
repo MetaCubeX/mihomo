@@ -56,7 +56,7 @@ func (l *HttpListener) Address() string {
 func handleConn(conn net.Conn) {
 	br := bufio.NewReader(conn)
 	request, err := http.ReadRequest(br)
-	if err != nil || !request.URL.IsAbs() {
+	if err != nil || request.URL.Host == "" {
 		conn.Close()
 		return
 	}
