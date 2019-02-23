@@ -64,10 +64,9 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 
 		putMsgToCache(r.cache, q.String(), msg)
 		if r.mapping {
-			if ips, err := r.msgToIP(msg); err == nil {
-				for _, ip := range ips {
-					putMsgToCache(r.cache, ip.String(), msg)
-				}
+			ips := r.msgToIP(msg)
+			for _, ip := range ips {
+				putMsgToCache(r.cache, ip.String(), msg)
 			}
 		}
 	}()
@@ -131,8 +130,7 @@ func (r *Resolver) resolveIP(m *D.Msg) (msg *D.Msg, err error) {
 			return nil, errors.New("GeoIP can't use")
 		}
 
-		ips, err := r.msgToIP(res.Msg)
-		if err == nil {
+		if ips := r.msgToIP(res.Msg); len(ips) != 0 {
 			if record, _ := mmdb.Country(ips[0]); record.Country.IsoCode == "CN" || record.Country.IsoCode == "" {
 				// release channel
 				go func() { <-fallbackMsg }()
@@ -165,18 +163,17 @@ func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
 		return nil, err
 	}
 
-	var ips []net.IP
-	ips, err = r.msgToIP(msg)
-	if err != nil {
-		return nil, err
+	ips := r.msgToIP(msg)
+	if len(ips) == 0 {
+		return nil, errors.New("can't found ip")
 	}
 
 	ip = ips[0]
 	return
 }
 
-func (r *Resolver) msgToIP(msg *D.Msg) ([]net.IP, error) {
-	var ips []net.IP
+func (r *Resolver) msgToIP(msg *D.Msg) []net.IP {
+	ips := []net.IP{}
 
 	for _, answer := range msg.Answer {
 		switch ans := answer.(type) {
@@ -187,11 +184,16 @@ func (r *Resolver) msgToIP(msg *D.Msg) ([]net.IP, error) {
 		}
 	}
 
-	if len(ips) == 0 {
-		return nil, errors.New("Can't parse msg")
+	for _, extra := range msg.Extra {
+		switch record := extra.(type) {
+		case *D.AAAA:
+			ips = append(ips, record.AAAA)
+		case *D.A:
+			ips = append(ips, record.A)
+		}
 	}
 
-	return ips, nil
+	return ips
 }
 
 func (r *Resolver) IPToHost(ip net.IP) (string, bool) {
