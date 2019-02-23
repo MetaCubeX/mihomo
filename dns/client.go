@@ -12,7 +12,6 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -55,23 +54,17 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 	cache, expireTime := r.cache.GetWithExpire(q.String())
 	if cache != nil {
 		msg = cache.(*D.Msg).Copy()
-		if len(msg.Answer) > 0 {
-			ttl := uint32(expireTime.Sub(time.Now()).Seconds())
-			for _, answer := range msg.Answer {
-				answer.Header().Ttl = ttl
-			}
-		}
+		setMsgTTL(msg, uint32(expireTime.Sub(time.Now()).Seconds()))
 		return
 	}
 	defer func() {
-		if msg != nil {
-			putMsgToCache(r.cache, q.String(), msg)
-			if r.mapping {
-				ips, err := r.msgToIP(msg)
-				if err != nil {
-					log.Debugln("[DNS] msg to ip error: %s", err.Error())
-					return
-				}
+		if msg == nil {
+			return
+		}
+
+		putMsgToCache(r.cache, q.String(), msg)
+		if r.mapping {
+			if ips, err := r.msgToIP(msg); err == nil {
 				for _, ip := range ips {
 					putMsgToCache(r.cache, ip.String(), msg)
 				}
