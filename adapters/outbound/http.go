@@ -101,8 +101,6 @@ func NewHttp(option HttpOption) *Http {
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: option.SkipCertVerify,
 			ClientSessionCache: getClientSessionCache(),
-			MinVersion:         tls.VersionTLS11,
-			MaxVersion:         tls.VersionTLS12,
 			ServerName:         option.Server,
 		}
 	}

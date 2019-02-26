@@ -24,6 +24,9 @@ func init() {
 }
 
 func main() {
+	// enable tls 1.3 and remove when go 1.13
+	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
+
 	if homedir != "" {
 		if !filepath.IsAbs(homedir) {
 			currentDir, _ := os.Getwd()
