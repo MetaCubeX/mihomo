@@ -36,7 +36,7 @@ go get -u -v github.com/Dreamacro/clash
 
 Pre-built binaries are available: [release](https://github.com/Dreamacro/clash/releases)
 
-Requires Go >= 1.11.
+Requires Go >= 1.12.
 
 ## Daemon
 

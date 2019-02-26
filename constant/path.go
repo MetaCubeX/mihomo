@@ -2,7 +2,6 @@ package constant
 
 import (
 	"os"
-	"os/user"
 	P "path"
 )
 
@@ -16,17 +15,11 @@ type path struct {
 }
 
 func init() {
-	currentUser, err := user.Current()
-	var homedir string
+	homedir, err := os.UserHomeDir()
 	if err != nil {
-		dir := os.Getenv("HOME")
-		if dir == "" {
-			dir, _ = os.Getwd()
-		}
-		homedir = dir
-	} else {
-		homedir = currentUser.HomeDir
+		homedir, _ = os.Getwd()
 	}
+
 	homedir = P.Join(homedir, ".config", Name)
 	Path = &path{homedir: homedir}
 }

@@ -118,8 +118,6 @@ func NewSocks5(option Socks5Option) *Socks5 {
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: option.SkipCertVerify,
 			ClientSessionCache: getClientSessionCache(),
-			MinVersion:         tls.VersionTLS11,
-			MaxVersion:         tls.VersionTLS12,
 			ServerName:         option.Server,
 		}
 	}
