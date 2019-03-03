@@ -184,15 +184,6 @@ func (r *Resolver) msgToIP(msg *D.Msg) []net.IP {
 		}
 	}
 
-	for _, extra := range msg.Extra {
-		switch record := extra.(type) {
-		case *D.AAAA:
-			ips = append(ips, record.AAAA)
-		case *D.A:
-			ips = append(ips, record.A)
-		}
-	}
-
 	return ips
 }
 
