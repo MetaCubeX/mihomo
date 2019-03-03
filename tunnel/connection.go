@@ -25,12 +25,9 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	conn := newTrafficTrack(outbound, t.traffic)
 	req := request.R
 	host := req.Host
-	keepalive := true
 
 	for {
-		if strings.ToLower(req.Header.Get("Connection")) == "close" {
-			keepalive = false
-		}
+		keepAlive := strings.TrimSpace(strings.ToLower(req.Header.Get("Proxy-Connection"))) == "keep-alive"
 
 		req.Header.Set("Connection", "close")
 		req.RequestURI = ""
@@ -58,7 +55,7 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 			break
 		}
 
-		if !keepalive {
+		if !keepAlive {
 			break
 		}
 
