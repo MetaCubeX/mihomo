@@ -48,18 +48,18 @@ func jumpHash(key uint64, buckets int32) int32 {
 	return int32(b)
 }
 
-func (lb *LoadBalance) Generator(metadata *C.Metadata) (net.Conn, error) {
+func (lb *LoadBalance) Dial(metadata *C.Metadata) (net.Conn, error) {
 	key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
 	buckets := int32(len(lb.proxies))
 	for i := 0; i < lb.maxRetry; i++ {
 		idx := jumpHash(key, buckets)
-		if proxy, err := lb.proxies[idx].Generator(metadata); err == nil {
+		if proxy, err := lb.proxies[idx].Dial(metadata); err == nil {
 			return proxy, nil
 		}
 		key++
 	}
 
-	return lb.proxies[0].Generator(metadata)
+	return lb.proxies[0].Dial(metadata)
 }
 
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {

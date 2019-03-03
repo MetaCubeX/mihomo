@@ -38,7 +38,7 @@ func (f *Fallback) Now() string {
 	return f.proxies[0].RawProxy.Name()
 }
 
-func (f *Fallback) Generator(metadata *C.Metadata) (net.Conn, error) {
+func (f *Fallback) Dial(metadata *C.Metadata) (net.Conn, error) {
 	idx := 0
 	var proxy *proxy
 	for {
@@ -46,7 +46,7 @@ func (f *Fallback) Generator(metadata *C.Metadata) (net.Conn, error) {
 		if proxy == nil {
 			break
 		}
-		adapter, err := proxy.RawProxy.Generator(metadata)
+		adapter, err := proxy.RawProxy.Dial(metadata)
 		if err != nil {
 			proxy.Valid = false
 			idx++
@@ -54,7 +54,7 @@ func (f *Fallback) Generator(metadata *C.Metadata) (net.Conn, error) {
 		}
 		return adapter, err
 	}
-	return f.proxies[0].RawProxy.Generator(metadata)
+	return f.proxies[0].RawProxy.Dial(metadata)
 }
 
 func (f *Fallback) MarshalJSON() ([]byte, error) {

@@ -26,7 +26,7 @@ type ServerAdapter interface {
 type Proxy interface {
 	Name() string
 	Type() AdapterType
-	Generator(metadata *Metadata) (net.Conn, error)
+	Dial(metadata *Metadata) (net.Conn, error)
 	MarshalJSON() ([]byte, error)
 }
 

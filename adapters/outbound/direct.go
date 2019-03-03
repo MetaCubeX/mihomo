@@ -10,7 +10,7 @@ type Direct struct {
 	*Base
 }
 
-func (d *Direct) Generator(metadata *C.Metadata) (net.Conn, error) {
+func (d *Direct) Dial(metadata *C.Metadata) (net.Conn, error) {
 	address := net.JoinHostPort(metadata.Host, metadata.Port)
 	if metadata.IP != nil {
 		address = net.JoinHostPort(metadata.IP.String(), metadata.Port)

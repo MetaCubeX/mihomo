@@ -20,8 +20,8 @@ type SelectorOption struct {
 	Proxies []string `proxy:"proxies"`
 }
 
-func (s *Selector) Generator(metadata *C.Metadata) (net.Conn, error) {
-	return s.selected.Generator(metadata)
+func (s *Selector) Dial(metadata *C.Metadata) (net.Conn, error) {
+	return s.selected.Dial(metadata)
 }
 
 func (s *Selector) MarshalJSON() ([]byte, error) {
