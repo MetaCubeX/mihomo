@@ -143,7 +143,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 		}
 	}
 
-	remoConn, err := proxy.Generator(metadata)
+	remoConn, err := proxy.Dial(metadata)
 	if err != nil {
 		log.Warnln("Proxy[%s] connect [%s --> %s] error: %s", proxy.Name(), metadata.SourceIP.String(), metadata.String(), err.Error())
 		return

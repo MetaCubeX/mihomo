@@ -33,8 +33,8 @@ func (u *URLTest) Now() string {
 	return u.fast.Name()
 }
 
-func (u *URLTest) Generator(metadata *C.Metadata) (net.Conn, error) {
-	a, err := u.fast.Generator(metadata)
+func (u *URLTest) Dial(metadata *C.Metadata) (net.Conn, error) {
+	a, err := u.fast.Dial(metadata)
 	if err != nil {
 		go u.speedTest()
 	}

@@ -12,7 +12,7 @@ type Reject struct {
 	*Base
 }
 
-func (r *Reject) Generator(metadata *C.Metadata) (net.Conn, error) {
+func (r *Reject) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return &NopConn{}, nil
 }
 

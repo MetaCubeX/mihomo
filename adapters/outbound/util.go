@@ -29,7 +29,7 @@ func DelayTest(proxy C.Proxy, url string) (t int16, err error) {
 	}
 
 	start := time.Now()
-	instance, err := proxy.Generator(&addr)
+	instance, err := proxy.Dial(&addr)
 	if err != nil {
 		return
 	}

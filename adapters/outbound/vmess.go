@@ -30,7 +30,7 @@ type VmessOption struct {
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (v *Vmess) Generator(metadata *C.Metadata) (net.Conn, error) {
+func (v *Vmess) Dial(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", v.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", v.server)

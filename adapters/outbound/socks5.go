@@ -34,7 +34,7 @@ type Socks5Option struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (ss *Socks5) Generator(metadata *C.Metadata) (net.Conn, error) {
+func (ss *Socks5) Dial(metadata *C.Metadata) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", ss.addr, tcpTimeout)
 
 	if err == nil && ss.tls {
