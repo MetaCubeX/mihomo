@@ -184,8 +184,8 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
 
-	proxies["DIRECT"] = adapters.NewDirect()
-	proxies["REJECT"] = adapters.NewReject()
+	proxies["DIRECT"] = adapters.NewProxy(adapters.NewDirect())
+	proxies["REJECT"] = adapters.NewProxy(adapters.NewReject())
 
 	// parse proxy
 	for idx, mapping := range proxiesConfig {
@@ -194,7 +194,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 			return nil, fmt.Errorf("Proxy %d missing type", idx)
 		}
 
-		var proxy C.Proxy
+		var proxy C.ProxyAdapter
 		err := fmt.Errorf("can't parse")
 		switch proxyType {
 		case "ss":
@@ -236,7 +236,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		if _, exist := proxies[proxy.Name()]; exist {
 			return nil, fmt.Errorf("Proxy %s is the duplicate name", proxy.Name())
 		}
-		proxies[proxy.Name()] = proxy
+		proxies[proxy.Name()] = adapters.NewProxy(proxy)
 	}
 
 	// parse proxy group
@@ -250,7 +250,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		if _, exist := proxies[groupName]; exist {
 			return nil, fmt.Errorf("ProxyGroup %s: the duplicate name", groupName)
 		}
-		var group C.Proxy
+		var group C.ProxyAdapter
 		ps := []C.Proxy{}
 
 		err := fmt.Errorf("can't parse")
@@ -307,7 +307,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Proxy %s: %s", groupName, err.Error())
 		}
-		proxies[groupName] = group
+		proxies[groupName] = adapters.NewProxy(group)
 	}
 
 	ps := []C.Proxy{}
@@ -315,7 +315,8 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		ps = append(ps, v)
 	}
 
-	proxies["GLOBAL"], _ = adapters.NewSelector("GLOBAL", ps)
+	global, _ := adapters.NewSelector("GLOBAL", ps)
+	proxies["GLOBAL"] = adapters.NewProxy(global)
 	return proxies, nil
 }
 

@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Dreamacro/clash/common/picker"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -54,7 +56,7 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (u *URLTest) Close() {
+func (u *URLTest) Destroy() {
 	u.done <- struct{}{}
 }
 
@@ -81,12 +83,12 @@ func (u *URLTest) speedTest() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(u.proxies))
 	c := make(chan interface{})
-	fast := selectFast(c)
+	fast := picker.SelectFast(context.Background(), c)
 	timer := time.NewTimer(u.interval)
 
 	for _, p := range u.proxies {
 		go func(p C.Proxy) {
-			_, err := DelayTest(p, u.rawURL)
+			_, err := p.URLTest(u.rawURL)
 			if err == nil {
 				c <- p
 			}

@@ -23,11 +23,18 @@ type ServerAdapter interface {
 	Close()
 }
 
-type Proxy interface {
+type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
 	Dial(metadata *Metadata) (net.Conn, error)
+	Destroy()
 	MarshalJSON() ([]byte, error)
+}
+
+type Proxy interface {
+	ProxyAdapter
+	Alive() bool
+	URLTest(url string) (int16, error)
 }
 
 // AdapterType is enum of adapter type
