@@ -81,12 +81,11 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
-
-	selector, ok := proxy.(*A.Selector)
+	proxy := r.Context().Value(CtxKeyProxy).(*A.Proxy)
+	selector, ok := proxy.ProxyAdapter.(*A.Selector)
 	if !ok {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, ErrBadRequest)
+		render.JSON(w, r, newError("Must be a Selector"))
 		return
 	}
 
@@ -113,7 +112,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	sigCh := make(chan int16)
 	go func() {
-		t, err := A.DelayTest(proxy, url)
+		t, err := proxy.URLTest(url)
 		if err != nil {
 			sigCh <- 0
 		}
