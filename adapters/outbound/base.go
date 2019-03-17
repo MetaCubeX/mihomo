@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Dreamacro/clash/common/queue"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -32,7 +33,8 @@ func (b *Base) MarshalJSON() ([]byte, error) {
 
 type Proxy struct {
 	C.ProxyAdapter
-	alive bool
+	history *queue.Queue
+	alive   bool
 }
 
 func (p *Proxy) Alive() bool {
@@ -45,8 +47,54 @@ func (p *Proxy) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return conn, err
 }
 
+func (p *Proxy) DelayHistory() []C.DelayHistory {
+	queue := p.history.Copy()
+	histories := []C.DelayHistory{}
+	for _, item := range queue {
+		histories = append(histories, item.(C.DelayHistory))
+	}
+	return histories
+}
+
+func (p *Proxy) LastDelay() (delay uint16) {
+	head := p.history.First()
+	if head == nil {
+		delay--
+		return
+	}
+	history := head.(C.DelayHistory)
+	if history.Delay == 0 {
+		delay--
+		return
+	}
+	return history.Delay
+}
+
+func (p *Proxy) MarshalJSON() ([]byte, error) {
+	inner, err := p.ProxyAdapter.MarshalJSON()
+	if err != nil {
+		return inner, err
+	}
+
+	mapping := map[string]interface{}{}
+	json.Unmarshal(inner, &mapping)
+	mapping["history"] = p.DelayHistory()
+	return json.Marshal(mapping)
+}
+
 // URLTest get the delay for the specified URL
-func (p *Proxy) URLTest(url string) (t int16, err error) {
+func (p *Proxy) URLTest(url string) (t uint16, err error) {
+	defer func() {
+		record := C.DelayHistory{Time: time.Now()}
+		if err == nil {
+			record.Delay = t
+		}
+		p.history.Put(record)
+		if p.history.Len() > 10 {
+			p.history.Pop()
+		}
+	}()
+
 	addr, err := urlToMetadata(url)
 	if err != nil {
 		return
@@ -74,10 +122,10 @@ func (p *Proxy) URLTest(url string) (t int16, err error) {
 		return
 	}
 	resp.Body.Close()
-	t = int16(time.Since(start) / time.Millisecond)
+	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
-	return &Proxy{adapter, true}
+	return &Proxy{adapter, queue.New(10), true}
 }

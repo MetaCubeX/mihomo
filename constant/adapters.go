@@ -2,6 +2,7 @@ package constant
 
 import (
 	"net"
+	"time"
 )
 
 // Adapter Type
@@ -31,10 +32,17 @@ type ProxyAdapter interface {
 	MarshalJSON() ([]byte, error)
 }
 
+type DelayHistory struct {
+	Time  time.Time `json:"time"`
+	Delay uint16    `json:"delay"`
+}
+
 type Proxy interface {
 	ProxyAdapter
 	Alive() bool
-	URLTest(url string) (int16, error)
+	DelayHistory() []DelayHistory
+	LastDelay() uint16
+	URLTest(url string) (uint16, error)
 }
 
 // AdapterType is enum of adapter type

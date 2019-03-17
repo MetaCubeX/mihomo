@@ -38,7 +38,7 @@ func (u *URLTest) Now() string {
 func (u *URLTest) Dial(metadata *C.Metadata) (net.Conn, error) {
 	a, err := u.fast.Dial(metadata)
 	if err != nil {
-		go u.speedTest()
+		u.fallback()
 	}
 	return a, err
 }
@@ -72,6 +72,23 @@ Loop:
 			break Loop
 		}
 	}
+}
+
+func (u *URLTest) fallback() {
+	fast := u.proxies[0]
+	min := fast.LastDelay()
+	for _, proxy := range u.proxies[1:] {
+		if !proxy.Alive() {
+			continue
+		}
+
+		delay := proxy.LastDelay()
+		if delay < min {
+			fast = proxy
+			min = delay
+		}
+	}
+	u.fast = fast
 }
 
 func (u *URLTest) speedTest() {
