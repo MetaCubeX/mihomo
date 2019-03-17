@@ -110,7 +110,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
 
-	sigCh := make(chan int16)
+	sigCh := make(chan uint16)
 	go func() {
 		t, err := proxy.URLTest(url)
 		if err != nil {
