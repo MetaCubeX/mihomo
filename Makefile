@@ -1,6 +1,10 @@
 NAME=clash
 BINDIR=bin
-GOBUILD=CGO_ENABLED=0 go build -ldflags '-w -s'
+VERSION=$(shell git describe --tags --long --dirty || echo "unkown version")
+BUILDTIME=$(shell date -u)
+GOBUILD=CGO_ENABLED=0 go build -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
+		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
+		-w -s'
 
 PLATFORM_LIST = \
 	darwin-amd64 \
@@ -77,10 +81,10 @@ zip_releases=$(addsuffix .zip, $(WINDOWS_ARCH_LIST))
 
 $(gz_releases): %.gz : %
 	chmod +x $(BINDIR)/$(NAME)-$(basename $@)
-	gzip -f $(BINDIR)/$(NAME)-$(basename $@)
+	tar -czf $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).tar.gz -C $(BINDIR) $(NAME)-$(basename $@)
 
 $(zip_releases): %.zip : %
-	zip -m -j $(BINDIR)/$(NAME)-$(basename $@).zip $(BINDIR)/$(NAME)-$(basename $@).exe
+	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
 
 all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 

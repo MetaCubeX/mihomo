@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 
 	"github.com/Dreamacro/clash/config"
@@ -15,15 +17,22 @@ import (
 )
 
 var (
+	version bool
 	homedir string
 )
 
 func init() {
 	flag.StringVar(&homedir, "d", "", "set configuration directory")
+	flag.BoolVar(&version, "v", false, "show current version of clash")
 	flag.Parse()
 }
 
 func main() {
+	if version {
+		fmt.Printf("Clash %s %s %s %s\n", C.Version, runtime.GOOS, runtime.GOARCH, C.BuildTime)
+		return
+	}
+
 	// enable tls 1.3 and remove when go 1.13
 	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
 
