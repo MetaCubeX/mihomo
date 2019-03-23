@@ -56,16 +56,20 @@ func (p *Proxy) DelayHistory() []C.DelayHistory {
 	return histories
 }
 
+// LastDelay return last history record. if proxy is not alive, return the max value of int16.
 func (p *Proxy) LastDelay() (delay uint16) {
+	var max uint16 = 0xffff
+	if !p.alive {
+		return max
+	}
+
 	head := p.history.First()
 	if head == nil {
-		delay--
-		return
+		return max
 	}
 	history := head.(C.DelayHistory)
 	if history.Delay == 0 {
-		delay--
-		return
+		return max
 	}
 	return history.Delay
 }
@@ -101,7 +105,7 @@ func (p *Proxy) URLTest(url string) (t uint16, err error) {
 	}
 
 	start := time.Now()
-	instance, err := p.ProxyAdapter.Dial(&addr)
+	instance, err := p.Dial(&addr)
 	if err != nil {
 		return
 	}
