@@ -34,13 +34,18 @@ func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 	w.WriteMsg(msg)
 }
 
+func (s *Server) setReslover(r *Resolver) {
+	s.r = r
+}
+
 func ReCreateServer(addr string, resolver *Resolver) error {
-	if server.Server != nil {
-		server.Shutdown()
+	if addr == address {
+		server.setReslover(resolver)
+		return nil
 	}
 
-	if addr == address {
-		return nil
+	if server.Server != nil {
+		server.Shutdown()
 	}
 
 	_, port, err := net.SplitHostPort(addr)
