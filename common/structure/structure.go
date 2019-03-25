@@ -47,11 +47,11 @@ func (d *Decoder) Decode(src map[string]interface{}, dst interface{}) error {
 		}
 
 		value, ok := src[key]
-		if !ok {
+		if !ok || value == nil {
 			if omitempty {
 				continue
 			}
-			return fmt.Errorf("key %s missing", key)
+			return fmt.Errorf("key '%s' missing", key)
 		}
 
 		err := d.decode(key, value, v.Field(idx))
@@ -114,7 +114,7 @@ func (d *Decoder) decodeString(name string, data interface{}, val reflect.Value)
 		val.SetString(strconv.FormatInt(dataVal.Int(), 10))
 	default:
 		err = fmt.Errorf(
-			"'%s' expected type'%s', got unconvertible type '%s'",
+			"'%s' expected type '%s', got unconvertible type '%s'",
 			name, val.Type(), dataVal.Type(),
 		)
 	}
@@ -131,7 +131,7 @@ func (d *Decoder) decodeBool(name string, data interface{}, val reflect.Value) (
 		val.SetBool(dataVal.Int() != 0)
 	default:
 		err = fmt.Errorf(
-			"'%s' expected type'%s', got unconvertible type '%s'",
+			"'%s' expected type '%s', got unconvertible type '%s'",
 			name, val.Type(), dataVal.Type(),
 		)
 	}
