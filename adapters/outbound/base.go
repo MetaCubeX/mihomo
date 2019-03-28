@@ -43,7 +43,9 @@ func (p *Proxy) Alive() bool {
 
 func (p *Proxy) Dial(metadata *C.Metadata) (net.Conn, error) {
 	conn, err := p.ProxyAdapter.Dial(metadata)
-	p.alive = err == nil
+	if err != nil {
+		p.alive = false
+	}
 	return conn, err
 }
 
@@ -89,6 +91,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 // URLTest get the delay for the specified URL
 func (p *Proxy) URLTest(url string) (t uint16, err error) {
 	defer func() {
+		p.alive = err == nil
 		record := C.DelayHistory{Time: time.Now()}
 		if err == nil {
 			record.Delay = t

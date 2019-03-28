@@ -302,7 +302,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 			if err != nil {
 				return nil, fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
 			}
-			group, err = adapters.NewLoadBalance(loadBalanceOption.Name, ps)
+			group, err = adapters.NewLoadBalance(*loadBalanceOption, ps)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("Proxy %s: %s", groupName, err.Error())

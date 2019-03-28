@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/common/murmur3"
 	C "github.com/Dreamacro/clash/constant"
@@ -15,6 +17,9 @@ type LoadBalance struct {
 	*Base
 	proxies  []C.Proxy
 	maxRetry int
+	rawURL   string
+	interval time.Duration
+	done     chan struct{}
 }
 
 func getKey(metadata *C.Metadata) string {
@@ -62,6 +67,38 @@ func (lb *LoadBalance) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return lb.proxies[0].Dial(metadata)
 }
 
+func (lb *LoadBalance) Destroy() {
+	lb.done <- struct{}{}
+}
+
+func (lb *LoadBalance) validTest() {
+	wg := sync.WaitGroup{}
+	wg.Add(len(lb.proxies))
+
+	for _, p := range lb.proxies {
+		go func(p C.Proxy) {
+			p.URLTest(lb.rawURL)
+			wg.Done()
+		}(p)
+	}
+
+	wg.Wait()
+}
+
+func (lb *LoadBalance) loop() {
+	tick := time.NewTicker(lb.interval)
+	go lb.validTest()
+Loop:
+	for {
+		select {
+		case <-tick.C:
+			go lb.validTest()
+		case <-lb.done:
+			break Loop
+		}
+	}
+}
+
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range lb.proxies {
@@ -74,21 +111,30 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 }
 
 type LoadBalanceOption struct {
-	Name    string   `proxy:"name"`
-	Proxies []string `proxy:"proxies"`
+	Name     string   `proxy:"name"`
+	Proxies  []string `proxy:"proxies"`
+	URL      string   `proxy:"url"`
+	Interval int      `proxy:"interval"`
 }
 
-func NewLoadBalance(name string, proxies []C.Proxy) (*LoadBalance, error) {
+func NewLoadBalance(option LoadBalanceOption, proxies []C.Proxy) (*LoadBalance, error) {
 	if len(proxies) == 0 {
 		return nil, errors.New("Provide at least one proxy")
 	}
 
-	return &LoadBalance{
+	interval := time.Duration(option.Interval) * time.Second
+
+	lb := &LoadBalance{
 		Base: &Base{
-			name: name,
+			name: option.Name,
 			tp:   C.LoadBalance,
 		},
 		proxies:  proxies,
 		maxRetry: 3,
-	}, nil
+		rawURL:   option.URL,
+		interval: interval,
+		done:     make(chan struct{}),
+	}
+	go lb.loop()
+	return lb, nil
 }
