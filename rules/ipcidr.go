@@ -38,6 +38,7 @@ func (i *IPCIDR) Payload() string {
 func NewIPCIDR(s string, adapter string, isSourceIP bool) *IPCIDR {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
+		return nil
 	}
 	return &IPCIDR{
 		ipnet:      ipnet,
