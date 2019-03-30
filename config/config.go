@@ -339,28 +339,39 @@ func parseRules(cfg *rawConfig) ([]C.Rule, error) {
 			payload = rule[1]
 			target = rule[2]
 		default:
-			return nil, fmt.Errorf("Rules[%d] [- %s] error: format invalid", idx, line)
+			return nil, fmt.Errorf("Rules[%d] [%s] error: format invalid", idx, line)
 		}
 
 		rule = trimArr(rule)
+		var parsed C.Rule
 		switch rule[0] {
 		case "DOMAIN":
-			rules = append(rules, R.NewDomain(payload, target))
+			parsed = R.NewDomain(payload, target)
 		case "DOMAIN-SUFFIX":
-			rules = append(rules, R.NewDomainSuffix(payload, target))
+			parsed = R.NewDomainSuffix(payload, target)
 		case "DOMAIN-KEYWORD":
-			rules = append(rules, R.NewDomainKeyword(payload, target))
+			parsed = R.NewDomainKeyword(payload, target)
 		case "GEOIP":
-			rules = append(rules, R.NewGEOIP(payload, target))
+			parsed = R.NewGEOIP(payload, target)
 		case "IP-CIDR", "IP-CIDR6":
-			rules = append(rules, R.NewIPCIDR(payload, target, false))
+			if rule := R.NewIPCIDR(payload, target, false); rule != nil {
+				parsed = rule
+			}
 		case "SOURCE-IP-CIDR":
-			rules = append(rules, R.NewIPCIDR(payload, target, true))
+			if rule := R.NewIPCIDR(payload, target, true); rule != nil {
+				parsed = rule
+			}
 		case "MATCH":
 			fallthrough
 		case "FINAL":
-			rules = append(rules, R.NewMatch(target))
+			parsed = R.NewMatch(target)
 		}
+
+		if parsed == nil {
+			return nil, fmt.Errorf("Rules[%d] [%s] error: payload invalid", idx, line)
+		}
+
+		rules = append(rules, parsed)
 	}
 
 	return rules, nil
