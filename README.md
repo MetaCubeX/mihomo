@@ -38,6 +38,12 @@ Pre-built binaries are available: [release](https://github.com/Dreamacro/clash/r
 
 Requires Go >= 1.12.
 
+Checkout Clash version:
+
+```sh
+clash -v
+```
+
 ## Daemon
 
 Unfortunately, there is no native elegant way to implement golang's daemon.
@@ -143,6 +149,8 @@ Proxy:
     # skip-cert-verify: true
     # host: bing.com
     # path: "/"
+    # headers:
+    #   custom: value
 
 # vmess
 # cipher support auto/aes-128-gcm/chacha20-poly1305/none
@@ -182,7 +190,7 @@ Proxy Group:
 - { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
 
 # load-balance: The request of the same eTLD will be dial on the same proxy.
-- { name: "load-balance", type: load-balance, proxies: ["ss1", "ss2", "vmess1"] }
+- { name: "load-balance", type: load-balance, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
 
 # select is used for selecting proxy or proxy group
 # you can use RESTful API to switch proxy, is recommended for use in GUI.
