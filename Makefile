@@ -1,6 +1,6 @@
 NAME=clash
 BINDIR=bin
-VERSION=$(shell git describe --tags --long --dirty || echo "unkown version")
+VERSION=$(shell git describe --tags || echo "unkown version")
 BUILDTIME=$(shell date -u)
 GOBUILD=CGO_ENABLED=0 go build -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
@@ -81,7 +81,7 @@ zip_releases=$(addsuffix .zip, $(WINDOWS_ARCH_LIST))
 
 $(gz_releases): %.gz : %
 	chmod +x $(BINDIR)/$(NAME)-$(basename $@)
-	tar -czf $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).tar.gz -C $(BINDIR) $(NAME)-$(basename $@)
+	gzip -f -S -$(VERSION).gz $(BINDIR)/$(NAME)-$(basename $@)
 
 $(zip_releases): %.zip : %
 	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
