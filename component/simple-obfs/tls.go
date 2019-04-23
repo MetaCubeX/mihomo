@@ -6,8 +6,9 @@ import (
 	"io"
 	"math/rand"
 	"net"
-	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/common/pool"
 )
 
 func init() {
@@ -17,8 +18,6 @@ func init() {
 const (
 	chunkSize = 1 << 14 // 2 ** 14 == 16 * 1024
 )
-
-var bufPool = sync.Pool{New: func() interface{} { return make([]byte, 2048) }}
 
 // TLSObfs is shadowsocks tls simple-obfs implementation
 type TLSObfs struct {
@@ -30,12 +29,12 @@ type TLSObfs struct {
 }
 
 func (to *TLSObfs) read(b []byte, discardN int) (int, error) {
-	buf := bufPool.Get().([]byte)
+	buf := pool.BufPool.Get().([]byte)
 	_, err := io.ReadFull(to.Conn, buf[:discardN])
 	if err != nil {
 		return 0, err
 	}
-	bufPool.Put(buf[:cap(buf)])
+	pool.BufPool.Put(buf[:cap(buf)])
 
 	sizeBuf := make([]byte, 2)
 	_, err = io.ReadFull(to.Conn, sizeBuf)
@@ -103,7 +102,7 @@ func (to *TLSObfs) write(b []byte) (int, error) {
 		return len(b), err
 	}
 
-	size := bufPool.Get().([]byte)
+	size := pool.BufPool.Get().([]byte)
 	binary.BigEndian.PutUint16(size[:2], uint16(len(b)))
 
 	buf := &bytes.Buffer{}
@@ -111,7 +110,7 @@ func (to *TLSObfs) write(b []byte) (int, error) {
 	buf.Write(size[:2])
 	buf.Write(b)
 	_, err := to.Conn.Write(buf.Bytes())
-	bufPool.Put(size[:cap(size)])
+	pool.BufPool.Put(size[:cap(size)])
 	return len(b), err
 }
 

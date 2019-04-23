@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+
+	"github.com/Dreamacro/clash/common/pool"
 )
 
 // HTTPObfs is shadowsocks http simple-obfs implementation
@@ -32,15 +34,15 @@ func (ho *HTTPObfs) Read(b []byte) (int, error) {
 	}
 
 	if ho.firstResponse {
-		buf := bufPool.Get().([]byte)
+		buf := pool.BufPool.Get().([]byte)
 		n, err := ho.Conn.Read(buf)
 		if err != nil {
-			bufPool.Put(buf[:cap(buf)])
+			pool.BufPool.Put(buf[:cap(buf)])
 			return 0, err
 		}
 		idx := bytes.Index(buf[:n], []byte("\r\n\r\n"))
 		if idx == -1 {
-			bufPool.Put(buf[:cap(buf)])
+			pool.BufPool.Put(buf[:cap(buf)])
 			return 0, io.EOF
 		}
 		ho.firstResponse = false
@@ -50,7 +52,7 @@ func (ho *HTTPObfs) Read(b []byte) (int, error) {
 			ho.buf = buf[:idx+4+length]
 			ho.offset = idx + 4 + n
 		} else {
-			bufPool.Put(buf[:cap(buf)])
+			pool.BufPool.Put(buf[:cap(buf)])
 		}
 		return n, nil
 	}

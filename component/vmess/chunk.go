@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"sync"
+
+	"github.com/Dreamacro/clash/common/pool"
 )
 
 const (
@@ -12,8 +13,6 @@ const (
 	chunkSize = 1 << 14   // 2 ** 14 == 16 * 1024
 	maxSize   = 17 * 1024 // 2 + chunkSize + aead.Overhead()
 )
-
-var bufPool = sync.Pool{New: func() interface{} { return make([]byte, maxSize) }}
 
 type chunkReader struct {
 	io.Reader
@@ -35,7 +34,7 @@ func (cr *chunkReader) Read(b []byte) (int, error) {
 		n := copy(b, cr.buf[cr.offset:])
 		cr.offset += n
 		if cr.offset == len(cr.buf) {
-			bufPool.Put(cr.buf[:cap(cr.buf)])
+			pool.BufPool.Put(cr.buf[:cap(cr.buf)])
 			cr.buf = nil
 		}
 		return n, nil
@@ -60,10 +59,10 @@ func (cr *chunkReader) Read(b []byte) (int, error) {
 		return size, nil
 	}
 
-	buf := bufPool.Get().([]byte)
+	buf := pool.BufPool.Get().([]byte)
 	_, err = io.ReadFull(cr.Reader, buf[:size])
 	if err != nil {
-		bufPool.Put(buf[:cap(buf)])
+		pool.BufPool.Put(buf[:cap(buf)])
 		return 0, err
 	}
 	n := copy(b, cr.buf[:])
@@ -77,8 +76,8 @@ type chunkWriter struct {
 }
 
 func (cw *chunkWriter) Write(b []byte) (n int, err error) {
-	buf := bufPool.Get().([]byte)
-	defer bufPool.Put(buf[:cap(buf)])
+	buf := pool.BufPool.Get().([]byte)
+	defer pool.BufPool.Put(buf[:cap(buf)])
 	length := len(b)
 	for {
 		if length == 0 {

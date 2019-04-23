@@ -35,6 +35,16 @@ func (f *Fallback) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return proxy.Dial(metadata)
 }
 
+func (f *Fallback) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	proxy := f.findAliveProxy()
+	return proxy.DialUDP(metadata)
+}
+
+func (f *Fallback) SupportUDP() bool {
+	proxy := f.findAliveProxy()
+	return proxy.SupportUDP()
+}
+
 func (f *Fallback) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range f.proxies {

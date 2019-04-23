@@ -20,14 +20,16 @@ const (
 )
 
 type ServerAdapter interface {
+	net.Conn
 	Metadata() *Metadata
-	Close()
 }
 
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
 	Dial(metadata *Metadata) (net.Conn, error)
+	DialUDP(metadata *Metadata) (net.PacketConn, net.Addr, error)
+	SupportUDP() bool
 	Destroy()
 	MarshalJSON() ([]byte, error)
 }

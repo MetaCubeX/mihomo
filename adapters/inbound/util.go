@@ -11,7 +11,6 @@ import (
 
 func parseSocksAddr(target socks.Addr) *C.Metadata {
 	metadata := &C.Metadata{
-		NetWork:  C.TCP,
 		AddrType: int(target[0]),
 	}
 
