@@ -24,11 +24,22 @@ func (d *Direct) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return c, nil
 }
 
+func (d *Direct) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	pc, err := net.ListenPacket("udp", "")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	addr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.Port))
+	return pc, addr, nil
+}
+
 func NewDirect() *Direct {
 	return &Direct{
 		Base: &Base{
 			name: "DIRECT",
 			tp:   C.Direct,
+			udp:  true,
 		},
 	}
 }

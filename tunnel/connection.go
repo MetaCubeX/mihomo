@@ -6,20 +6,11 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/common/pool"
 )
-
-const (
-	// io.Copy default buffer size is 32 KiB
-	// but the maximum packet size of vmess/shadowsocks is about 16 KiB
-	// so define a buffer of 20 KiB to reduce the memory of each TCP relay
-	bufferSize = 20 * 1024
-)
-
-var bufPool = sync.Pool{New: func() interface{} { return make([]byte, bufferSize) }}
 
 func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	conn := newTrafficTrack(outbound, t.traffic)
@@ -50,7 +41,7 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 		} else {
 			resp.Close = true
 		}
-		err = resp.Write(request.Conn())
+		err = resp.Write(request)
 		if err != nil || resp.Close {
 			break
 		}
@@ -59,7 +50,7 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 			break
 		}
 
-		req, err = http.ReadRequest(bufio.NewReader(request.Conn()))
+		req, err = http.ReadRequest(bufio.NewReader(request))
 		if err != nil {
 			break
 		}
@@ -72,9 +63,52 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	}
 }
 
-func (t *Tunnel) handleSOCKS(request *adapters.SocketAdapter, outbound net.Conn) {
+func (t *Tunnel) handleSocket(request *adapters.SocketAdapter, outbound net.Conn) {
 	conn := newTrafficTrack(outbound, t.traffic)
-	relay(request.Conn(), conn)
+	relay(request, conn)
+}
+
+func (t *Tunnel) handleUDPOverTCP(conn net.Conn, pc net.PacketConn, addr net.Addr) error {
+	ch := make(chan error, 1)
+
+	go func() {
+		buf := pool.BufPool.Get().([]byte)
+		defer pool.BufPool.Put(buf)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				ch <- err
+				return
+			}
+			pc.SetReadDeadline(time.Now().Add(120 * time.Second))
+			if _, err = pc.WriteTo(buf[:n], addr); err != nil {
+				ch <- err
+				return
+			}
+			t.traffic.Up() <- int64(n)
+			ch <- nil
+		}
+	}()
+
+	buf := pool.BufPool.Get().([]byte)
+	defer pool.BufPool.Put(buf)
+
+	for {
+		pc.SetReadDeadline(time.Now().Add(120 * time.Second))
+		n, _, err := pc.ReadFrom(buf)
+		if err != nil {
+			break
+		}
+
+		if _, err := conn.Write(buf[:n]); err != nil {
+			break
+		}
+
+		t.traffic.Down() <- int64(n)
+	}
+
+	<-ch
+	return nil
 }
 
 // relay copies between left and right bidirectionally.
@@ -82,16 +116,16 @@ func relay(leftConn, rightConn net.Conn) {
 	ch := make(chan error)
 
 	go func() {
-		buf := bufPool.Get().([]byte)
+		buf := pool.BufPool.Get().([]byte)
 		_, err := io.CopyBuffer(leftConn, rightConn, buf)
-		bufPool.Put(buf[:cap(buf)])
+		pool.BufPool.Put(buf[:cap(buf)])
 		leftConn.SetReadDeadline(time.Now())
 		ch <- err
 	}()
 
-	buf := bufPool.Get().([]byte)
+	buf := pool.BufPool.Get().([]byte)
 	io.CopyBuffer(rightConn, leftConn, buf)
-	bufPool.Put(buf[:cap(buf)])
+	pool.BufPool.Put(buf[:cap(buf)])
 	rightConn.SetReadDeadline(time.Now())
 	<-ch
 }

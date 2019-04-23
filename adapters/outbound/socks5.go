@@ -31,6 +31,7 @@ type Socks5Option struct {
 	UserName       string `proxy:"username,omitempty"`
 	Password       string `proxy:"password,omitempty"`
 	TLS            bool   `proxy:"tls,omitempty"`
+	UDP            bool   `proxy:"udp,omitempty"`
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
@@ -126,6 +127,7 @@ func NewSocks5(option Socks5Option) *Socks5 {
 		Base: &Base{
 			name: option.Name,
 			tp:   C.Socks5,
+			udp:  option.UDP,
 		},
 		addr:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		user:           option.UserName,

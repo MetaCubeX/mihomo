@@ -67,6 +67,24 @@ func (lb *LoadBalance) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return lb.proxies[0].Dial(metadata)
 }
 
+func (lb *LoadBalance) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
+	buckets := int32(len(lb.proxies))
+	for i := 0; i < lb.maxRetry; i, key = i+1, key+1 {
+		idx := jumpHash(key, buckets)
+		proxy := lb.proxies[idx]
+		if proxy.Alive() {
+			return proxy.DialUDP(metadata)
+		}
+	}
+
+	return lb.proxies[0].DialUDP(metadata)
+}
+
+func (lb *LoadBalance) SupportUDP() bool {
+	return true
+}
+
 func (lb *LoadBalance) Destroy() {
 	lb.done <- struct{}{}
 }

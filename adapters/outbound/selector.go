@@ -24,6 +24,14 @@ func (s *Selector) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return s.selected.Dial(metadata)
 }
 
+func (s *Selector) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	return s.selected.DialUDP(metadata)
+}
+
+func (s *Selector) SupportUDP() bool {
+	return s.selected.SupportUDP()
+}
+
 func (s *Selector) MarshalJSON() ([]byte, error) {
 	var all []string
 	for k := range s.proxies {

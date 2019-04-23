@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/structure"
 	obfs "github.com/Dreamacro/clash/component/simple-obfs"
 	v2rayObfs "github.com/Dreamacro/clash/component/v2ray-plugin"
@@ -34,6 +35,7 @@ type ShadowSocksOption struct {
 	Port       int                    `proxy:"port"`
 	Password   string                 `proxy:"password"`
 	Cipher     string                 `proxy:"cipher"`
+	UDP        bool                   `proxy:"udp,omitempty"`
 	Plugin     string                 `proxy:"plugin,omitempty"`
 	PluginOpts map[string]interface{} `proxy:"plugin-opts,omitempty"`
 
@@ -78,6 +80,19 @@ func (ss *ShadowSocks) Dial(metadata *C.Metadata) (net.Conn, error) {
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(metadata))
 	return c, err
+}
+
+func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	pc, err := net.ListenPacket("udp", "")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	addr, _ := net.ResolveUDPAddr("udp", ss.server)
+	remoteAddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.Port))
+
+	pc = ss.cipher.PacketConn(pc)
+	return &ssUDPConn{PacketConn: pc, rAddr: remoteAddr}, addr, nil
 }
 
 func (ss *ShadowSocks) MarshalJSON() ([]byte, error) {
@@ -144,6 +159,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		Base: &Base{
 			name: option.Name,
 			tp:   C.Shadowsocks,
+			udp:  option.UDP,
 		},
 		server: server,
 		cipher: ciph,
@@ -172,4 +188,25 @@ func serializesSocksAddr(metadata *C.Metadata) []byte {
 		buf = [][]byte{{aType}, host, port}
 	}
 	return bytes.Join(buf, nil)
+}
+
+type ssUDPConn struct {
+	net.PacketConn
+	rAddr net.Addr
+}
+
+func (uc *ssUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	buf := pool.BufPool.Get().([]byte)
+	defer pool.BufPool.Put(buf[:cap(buf)])
+	rAddr := socks.ParseAddr(uc.rAddr.String())
+	copy(buf[len(rAddr):], b)
+	copy(buf, rAddr)
+	return uc.PacketConn.WriteTo(buf[:len(rAddr)+len(b)], addr)
+}
+
+func (uc *ssUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, a, e := uc.PacketConn.ReadFrom(b)
+	addr := socks.SplitAddr(b[:n])
+	copy(b, b[len(addr):])
+	return n - len(addr), a, e
 }

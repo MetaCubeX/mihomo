@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+
+	"github.com/Dreamacro/clash/common/pool"
 )
 
 type aeadWriter struct {
@@ -20,8 +22,8 @@ func newAEADWriter(w io.Writer, aead cipher.AEAD, iv []byte) *aeadWriter {
 }
 
 func (w *aeadWriter) Write(b []byte) (n int, err error) {
-	buf := bufPool.Get().([]byte)
-	defer bufPool.Put(buf[:cap(buf)])
+	buf := pool.BufPool.Get().([]byte)
+	defer pool.BufPool.Put(buf[:cap(buf)])
 	length := len(b)
 	for {
 		if length == 0 {
@@ -71,7 +73,7 @@ func (r *aeadReader) Read(b []byte) (int, error) {
 		n := copy(b, r.buf[r.offset:])
 		r.offset += n
 		if r.offset == len(r.buf) {
-			bufPool.Put(r.buf[:cap(r.buf)])
+			pool.BufPool.Put(r.buf[:cap(r.buf)])
 			r.buf = nil
 		}
 		return n, nil
@@ -87,10 +89,10 @@ func (r *aeadReader) Read(b []byte) (int, error) {
 		return 0, errors.New("Buffer is larger than standard")
 	}
 
-	buf := bufPool.Get().([]byte)
+	buf := pool.BufPool.Get().([]byte)
 	_, err = io.ReadFull(r.Reader, buf[:size])
 	if err != nil {
-		bufPool.Put(buf[:cap(buf)])
+		pool.BufPool.Put(buf[:cap(buf)])
 		return 0, err
 	}
 
@@ -105,7 +107,7 @@ func (r *aeadReader) Read(b []byte) (int, error) {
 	realLen := size - r.Overhead()
 	n := copy(b, buf[:realLen])
 	if len(b) >= realLen {
-		bufPool.Put(buf[:cap(buf)])
+		pool.BufPool.Put(buf[:cap(buf)])
 		return n, nil
 	}
 

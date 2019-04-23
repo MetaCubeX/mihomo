@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"time"
@@ -13,6 +14,7 @@ import (
 type Base struct {
 	name string
 	tp   C.AdapterType
+	udp  bool
 }
 
 func (b *Base) Name() string {
@@ -21,6 +23,14 @@ func (b *Base) Name() string {
 
 func (b *Base) Type() C.AdapterType {
 	return b.tp
+}
+
+func (b *Base) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	return nil, nil, errors.New("no support")
+}
+
+func (b *Base) SupportUDP() bool {
+	return b.udp
 }
 
 func (b *Base) Destroy() {}

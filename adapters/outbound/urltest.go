@@ -43,6 +43,14 @@ func (u *URLTest) Dial(metadata *C.Metadata) (net.Conn, error) {
 	return a, err
 }
 
+func (u *URLTest) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	return u.fast.DialUDP(metadata)
+}
+
+func (u *URLTest) SupportUDP() bool {
+	return u.fast.SupportUDP()
+}
+
 func (u *URLTest) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range u.proxies {

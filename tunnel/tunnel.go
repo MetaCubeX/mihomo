@@ -19,7 +19,7 @@ var (
 	once   sync.Once
 )
 
-// Tunnel handle proxy socket and HTTP/SOCKS socket
+// Tunnel handle relay inbound proxy and outbound proxy
 type Tunnel struct {
 	queue      *channels.InfiniteChannel
 	rules      []C.Rule
@@ -143,6 +143,12 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 		}
 	}
 
+	if metadata.NetWork == C.UDP {
+		pc, addr, _ := proxy.DialUDP(metadata)
+		t.handleUDPOverTCP(localConn, pc, addr)
+		return
+	}
+
 	remoConn, err := proxy.Dial(metadata)
 	if err != nil {
 		log.Warnln("Proxy[%s] connect [%s --> %s] error: %s", proxy.Name(), metadata.SourceIP.String(), metadata.String(), err.Error())
@@ -154,7 +160,7 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	case *InboundAdapter.HTTPAdapter:
 		t.handleHTTP(adapter, remoConn)
 	case *InboundAdapter.SocketAdapter:
-		t.handleSOCKS(adapter, remoConn)
+		t.handleSocket(adapter, remoConn)
 	}
 }
 
@@ -177,10 +183,17 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, error) {
 		}
 
 		if rule.IsMatch(metadata) {
-			if a, ok := t.proxies[rule.Adapter()]; ok {
-				log.Infoln("%s --> %v match %s using %s", metadata.SourceIP.String(), metadata.String(), rule.RuleType().String(), rule.Adapter())
-				return a, nil
+			adapter, ok := t.proxies[rule.Adapter()]
+			if !ok {
+				continue
 			}
+
+			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
+				continue
+			}
+
+			log.Infoln("%s --> %v match %s using %s", metadata.SourceIP.String(), metadata.String(), rule.RuleType().String(), rule.Adapter())
+			return adapter, nil
 		}
 	}
 	log.Infoln("%s --> %v doesn't match any rule using DIRECT", metadata.SourceIP.String(), metadata.String())
