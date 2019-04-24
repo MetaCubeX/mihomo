@@ -144,7 +144,12 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 	}
 
 	if metadata.NetWork == C.UDP {
-		pc, addr, _ := proxy.DialUDP(metadata)
+		pc, addr, err := proxy.DialUDP(metadata)
+		defer pc.Close()
+		if err != nil {
+			log.Warnln("Proxy[%s] connect [%s --> %s] error: %s", proxy.Name(), metadata.SourceIP.String(), metadata.String(), err.Error())
+		}
+
 		t.handleUDPOverTCP(localConn, pc, addr)
 		return
 	}
