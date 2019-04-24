@@ -88,8 +88,15 @@ func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, 
 		return nil, nil, err
 	}
 
-	addr, _ := net.ResolveUDPAddr("udp", ss.server)
-	remoteAddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.Port))
+	addr, err := net.ResolveUDPAddr("udp", ss.server)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.Port))
+	if err != nil {
+		return nil, nil, err
+	}
 
 	pc = ss.cipher.PacketConn(pc)
 	return &ssUDPConn{PacketConn: pc, rAddr: remoteAddr}, addr, nil
