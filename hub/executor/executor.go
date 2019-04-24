@@ -27,6 +27,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProxies(cfg.Proxies)
 	updateRules(cfg.Rules)
 	updateDNS(cfg.DNS)
+	updateExperimental(cfg.Experimental)
 }
 
 func GetGeneral() *config.General {
@@ -39,6 +40,10 @@ func GetGeneral() *config.General {
 		Mode:      T.Instance().Mode(),
 		LogLevel:  log.Level(),
 	}
+}
+
+func updateExperimental(c *config.Experimental) {
+	T.Instance().UpdateExperimental(c.IgnoreResolveFail)
 }
 
 func updateDNS(c *config.DNS) {

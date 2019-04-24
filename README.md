@@ -105,6 +105,10 @@ external-controller: 127.0.0.1:9090
 # Secret for RESTful API (Optional)
 # secret: ""
 
+# experimental feature
+experimental:
+  ignore-resolve-fail: true # ignore dns reslove fail, default value is true
+
 # dns:
   # enable: true # set true to enable dns (default is false)
   # ipv6: false # default is false
