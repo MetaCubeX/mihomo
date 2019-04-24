@@ -43,12 +43,18 @@ type DNS struct {
 	EnhancedMode dns.EnhancedMode `yaml:"enhanced-mode"`
 }
 
+// Experimental config
+type Experimental struct {
+	IgnoreResolveFail bool `yaml:"ignore-resolve-fail"`
+}
+
 // Config is clash config manager
 type Config struct {
-	General *General
-	DNS     *DNS
-	Rules   []C.Rule
-	Proxies map[string]C.Proxy
+	General      *General
+	DNS          *DNS
+	Experimental *Experimental
+	Rules        []C.Rule
+	Proxies      map[string]C.Proxy
 }
 
 type rawDNS struct {
@@ -71,10 +77,11 @@ type rawConfig struct {
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
 
-	DNS        rawDNS                   `yaml:"dns"`
-	Proxy      []map[string]interface{} `yaml:"Proxy"`
-	ProxyGroup []map[string]interface{} `yaml:"Proxy Group"`
-	Rule       []string                 `yaml:"Rule"`
+	DNS          rawDNS                   `yaml:"dns"`
+	Experimental Experimental             `yaml:"experimental"`
+	Proxy        []map[string]interface{} `yaml:"Proxy"`
+	ProxyGroup   []map[string]interface{} `yaml:"Proxy Group"`
+	Rule         []string                 `yaml:"Rule"`
 }
 
 func readConfig(path string) (*rawConfig, error) {
@@ -98,6 +105,9 @@ func readConfig(path string) (*rawConfig, error) {
 		Rule:       []string{},
 		Proxy:      []map[string]interface{}{},
 		ProxyGroup: []map[string]interface{}{},
+		Experimental: Experimental{
+			IgnoreResolveFail: true,
+		},
 		DNS: rawDNS{
 			Enable: false,
 		},
@@ -114,6 +124,7 @@ func Parse(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	config.Experimental = &rawCfg.Experimental
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {

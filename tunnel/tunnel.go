@@ -21,12 +21,15 @@ var (
 
 // Tunnel handle relay inbound proxy and outbound proxy
 type Tunnel struct {
-	queue      *channels.InfiniteChannel
-	rules      []C.Rule
-	proxies    map[string]C.Proxy
-	configLock *sync.RWMutex
-	traffic    *C.Traffic
-	resolver   *dns.Resolver
+	queue     *channels.InfiniteChannel
+	rules     []C.Rule
+	proxies   map[string]C.Proxy
+	configMux *sync.RWMutex
+	traffic   *C.Traffic
+	resolver  *dns.Resolver
+
+	// experimental features
+	ignoreResolveFail bool
 
 	// Outbound Rule
 	mode Mode
@@ -49,9 +52,9 @@ func (t *Tunnel) Rules() []C.Rule {
 
 // UpdateRules handle update rules
 func (t *Tunnel) UpdateRules(rules []C.Rule) {
-	t.configLock.Lock()
+	t.configMux.Lock()
 	t.rules = rules
-	t.configLock.Unlock()
+	t.configMux.Unlock()
 }
 
 // Proxies return all proxies
@@ -61,9 +64,16 @@ func (t *Tunnel) Proxies() map[string]C.Proxy {
 
 // UpdateProxies handle update proxies
 func (t *Tunnel) UpdateProxies(proxies map[string]C.Proxy) {
-	t.configLock.Lock()
+	t.configMux.Lock()
 	t.proxies = proxies
-	t.configLock.Unlock()
+	t.configMux.Unlock()
+}
+
+// UpdateExperimental handle update experimental config
+func (t *Tunnel) UpdateExperimental(ignoreResolveFail bool) {
+	t.configMux.Lock()
+	t.ignoreResolveFail = ignoreResolveFail
+	t.configMux.Unlock()
 }
 
 // Mode return current mode
@@ -174,17 +184,23 @@ func (t *Tunnel) shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
 }
 
 func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, error) {
-	t.configLock.RLock()
-	defer t.configLock.RUnlock()
+	t.configMux.RLock()
+	defer t.configMux.RUnlock()
 
+	var resolved bool
 	for _, rule := range t.rules {
-		if t.shouldResolveIP(rule, metadata) {
+		if !resolved && t.shouldResolveIP(rule, metadata) {
 			ip, err := t.resolveIP(metadata.Host)
 			if err != nil {
-				return nil, fmt.Errorf("[DNS] resolve %s error: %s", metadata.Host, err.Error())
+				if !t.ignoreResolveFail {
+					return nil, fmt.Errorf("[DNS] resolve %s error: %s", metadata.Host, err.Error())
+				}
+				log.Debugln("[DNS] resolve %s error: %s", metadata.Host, err.Error())
+			} else {
+				log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
+				metadata.IP = &ip
 			}
-			log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
-			metadata.IP = &ip
+			resolved = true
 		}
 
 		if rule.IsMatch(metadata) {
@@ -207,11 +223,11 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, error) {
 
 func newTunnel() *Tunnel {
 	return &Tunnel{
-		queue:      channels.NewInfiniteChannel(),
-		proxies:    make(map[string]C.Proxy),
-		configLock: &sync.RWMutex{},
-		traffic:    C.NewTraffic(time.Second),
-		mode:       Rule,
+		queue:     channels.NewInfiniteChannel(),
+		proxies:   make(map[string]C.Proxy),
+		configMux: &sync.RWMutex{},
+		traffic:   C.NewTraffic(time.Second),
+		mode:      Rule,
 	}
 }
 
