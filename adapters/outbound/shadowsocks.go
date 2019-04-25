@@ -1,7 +1,6 @@
 package adapters
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -11,11 +10,11 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/structure"
 	obfs "github.com/Dreamacro/clash/component/simple-obfs"
+	"github.com/Dreamacro/clash/component/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/component/v2ray-plugin"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/Dreamacro/go-shadowsocks2/core"
-	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 type ShadowSocks struct {
@@ -177,26 +176,6 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	}, nil
 }
 
-func serializesSocksAddr(metadata *C.Metadata) []byte {
-	var buf [][]byte
-	aType := uint8(metadata.AddrType)
-	p, _ := strconv.Atoi(metadata.Port)
-	port := []byte{uint8(p >> 8), uint8(p & 0xff)}
-	switch metadata.AddrType {
-	case socks.AtypDomainName:
-		len := uint8(len(metadata.Host))
-		host := []byte(metadata.Host)
-		buf = [][]byte{{aType, len}, host, port}
-	case socks.AtypIPv4:
-		host := metadata.IP.To4()
-		buf = [][]byte{{aType}, host, port}
-	case socks.AtypIPv6:
-		host := metadata.IP.To16()
-		buf = [][]byte{{aType}, host, port}
-	}
-	return bytes.Join(buf, nil)
-}
-
 type ssUDPConn struct {
 	net.PacketConn
 	rAddr net.Addr
@@ -205,7 +184,7 @@ type ssUDPConn struct {
 func (uc *ssUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	buf := pool.BufPool.Get().([]byte)
 	defer pool.BufPool.Put(buf[:cap(buf)])
-	rAddr := socks.ParseAddr(uc.rAddr.String())
+	rAddr := socks5.ParseAddr(uc.rAddr.String())
 	copy(buf[len(rAddr):], b)
 	copy(buf, rAddr)
 	return uc.PacketConn.WriteTo(buf[:len(rAddr)+len(b)], addr)
@@ -213,7 +192,7 @@ func (uc *ssUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 
 func (uc *ssUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, a, e := uc.PacketConn.ReadFrom(b)
-	addr := socks.SplitAddr(b[:n])
+	addr := socks5.SplitAddr(b[:n])
 	copy(b, b[len(addr):])
 	return n - len(addr), a, e
 }
