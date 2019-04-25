@@ -24,6 +24,7 @@ type VmessOption struct {
 	AlterID        int               `proxy:"alterId"`
 	Cipher         string            `proxy:"cipher"`
 	TLS            bool              `proxy:"tls,omitempty"`
+	UDP            bool              `proxy:"udp,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
 	WSPath         string            `proxy:"ws-path,omitempty"`
 	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
@@ -38,6 +39,16 @@ func (v *Vmess) Dial(metadata *C.Metadata) (net.Conn, error) {
 	tcpKeepAlive(c)
 	c, err = v.client.New(c, parseVmessAddr(metadata))
 	return c, err
+}
+
+func (v *Vmess) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	c, err := net.DialTimeout("tcp", v.server, tcpTimeout)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s connect error", v.server)
+	}
+	tcpKeepAlive(c)
+	c, err = v.client.New(c, parseVmessAddr(metadata))
+	return &fakeUDPConn{Conn: c}, c.LocalAddr(), err
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {
@@ -63,6 +74,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		Base: &Base{
 			name: option.Name,
 			tp:   C.Vmess,
+			udp:  option.UDP,
 		},
 		server: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		client: client,
@@ -90,6 +102,7 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 
 	port, _ := strconv.Atoi(metadata.Port)
 	return &vmess.DstAddr{
+		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,
 		Addr:     addr,
 		Port:     uint(port),
