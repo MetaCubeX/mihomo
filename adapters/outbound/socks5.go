@@ -1,17 +1,13 @@
 package adapters
 
 import (
-	"bytes"
 	"crypto/tls"
-	"errors"
 	"fmt"
-	"io"
 	"net"
 	"strconv"
 
+	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
-
-	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
 type Socks5 struct {
@@ -48,69 +44,44 @@ func (ss *Socks5) Dial(metadata *C.Metadata) (net.Conn, error) {
 		return nil, fmt.Errorf("%s connect error", ss.addr)
 	}
 	tcpKeepAlive(c)
-	if err := ss.shakeHand(metadata, c); err != nil {
+	var user *socks5.User
+	if ss.user != "" {
+		user = &socks5.User{
+			Username: ss.user,
+			Password: ss.pass,
+		}
+	}
+	if err := socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdConnect, user); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (ss *Socks5) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
-	buf := make([]byte, socks.MaxAddrLen)
-	var err error
+func (ss *Socks5) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+	c, err := net.DialTimeout("tcp", ss.addr, tcpTimeout)
 
-	// VER, NMETHODS, METHODS
-	if len(ss.user) > 0 {
-		_, err = rw.Write([]byte{5, 1, 2})
-	} else {
-		_, err = rw.Write([]byte{5, 1, 0})
+	if err == nil && ss.tls {
+		cc := tls.Client(c, ss.tlsConfig)
+		err = cc.Handshake()
+		c = cc
 	}
+
 	if err != nil {
-		return err
+		return nil, nil, fmt.Errorf("%s connect error", ss.addr)
 	}
-
-	// VER, METHOD
-	if _, err := io.ReadFull(rw, buf[:2]); err != nil {
-		return err
-	}
-
-	if buf[0] != 5 {
-		return errors.New("SOCKS version error")
-	}
-
-	if buf[1] == 2 {
-		// password protocol version
-		authMsg := &bytes.Buffer{}
-		authMsg.WriteByte(1)
-		authMsg.WriteByte(uint8(len(ss.user)))
-		authMsg.WriteString(ss.user)
-		authMsg.WriteByte(uint8(len(ss.pass)))
-		authMsg.WriteString(ss.pass)
-
-		if _, err := rw.Write(authMsg.Bytes()); err != nil {
-			return err
+	tcpKeepAlive(c)
+	var user *socks5.User
+	if ss.user != "" {
+		user = &socks5.User{
+			Username: ss.user,
+			Password: ss.pass,
 		}
-
-		if _, err := io.ReadFull(rw, buf[:2]); err != nil {
-			return err
-		}
-
-		if buf[1] != 0 {
-			return errors.New("rejected username/password")
-		}
-	} else if buf[1] != 0 {
-		return errors.New("SOCKS need auth")
 	}
 
-	// VER, CMD, RSV, ADDR
-	if _, err := rw.Write(bytes.Join([][]byte{{5, 1, 0}, serializesSocksAddr(metadata)}, []byte(""))); err != nil {
-		return err
+	if err := socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdUDPAssociate, user); err != nil {
+		return nil, nil, err
 	}
-
-	if _, err := io.ReadFull(rw, buf[:10]); err != nil {
-		return err
-	}
-
-	return nil
+	return &fakeUDPConn{Conn: c}, c.LocalAddr(), nil
 }
 
 func NewSocks5(option Socks5Option) *Socks5 {

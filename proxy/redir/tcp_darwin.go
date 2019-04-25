@@ -5,10 +5,10 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/Dreamacro/go-shadowsocks2/socks"
+	"github.com/Dreamacro/clash/component/socks5"
 )
 
-func parserPacket(c net.Conn) (socks.Addr, error) {
+func parserPacket(c net.Conn) (socks5.Addr, error) {
 	const (
 		PfInout     = 0
 		PfIn        = 1
@@ -51,7 +51,7 @@ func parserPacket(c net.Conn) (socks.Addr, error) {
 	}
 
 	addr := make([]byte, 1+net.IPv4len+2)
-	addr[0] = socks.AtypIPv4
+	addr[0] = socks5.AtypIPv4
 	copy(addr[1:1+net.IPv4len], nl.rdaddr[:4])
 	copy(addr[1+net.IPv4len:], nl.rdxport[:2])
 	return addr, nil

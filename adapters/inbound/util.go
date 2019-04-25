@@ -5,24 +5,24 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/go-shadowsocks2/socks"
 )
 
-func parseSocksAddr(target socks.Addr) *C.Metadata {
+func parseSocksAddr(target socks5.Addr) *C.Metadata {
 	metadata := &C.Metadata{
 		AddrType: int(target[0]),
 	}
 
 	switch target[0] {
-	case socks.AtypDomainName:
+	case socks5.AtypDomainName:
 		metadata.Host = string(target[2 : 2+target[1]])
 		metadata.Port = strconv.Itoa((int(target[2+target[1]]) << 8) | int(target[2+target[1]+1]))
-	case socks.AtypIPv4:
+	case socks5.AtypIPv4:
 		ip := net.IP(target[1 : 1+net.IPv4len])
 		metadata.IP = &ip
 		metadata.Port = strconv.Itoa((int(target[1+net.IPv4len]) << 8) | int(target[1+net.IPv4len+1]))
-	case socks.AtypIPv6:
+	case socks5.AtypIPv6:
 		ip := net.IP(target[1 : 1+net.IPv6len])
 		metadata.IP = &ip
 		metadata.Port = strconv.Itoa((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
