@@ -230,5 +230,5 @@ https://clash.gitbook.io/
 
 - [x] Complementing the necessary rule operators
 - [x] Redir proxy
-- [ ] UDP support (vmess)
+- [x] UDP support
 - [ ] Connection manager

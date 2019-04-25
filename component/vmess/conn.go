@@ -77,7 +77,11 @@ func (vc *Conn) sendRequest() error {
 	// P Sec Reserve Cmd
 	buf.WriteByte(byte(p<<4) | byte(vc.security))
 	buf.WriteByte(0)
-	buf.WriteByte(CommandTCP)
+	if vc.dst.UDP {
+		buf.WriteByte(CommandUDP)
+	} else {
+		buf.WriteByte(CommandTCP)
+	}
 
 	// Port AddrType Addr
 	binary.Write(buf, binary.BigEndian, uint16(vc.dst.Port))
