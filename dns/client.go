@@ -11,6 +11,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
+	"github.com/Dreamacro/clash/component/fakeip"
 	C "github.com/Dreamacro/clash/constant"
 
 	D "github.com/miekg/dns"
@@ -28,6 +29,8 @@ var (
 type Resolver struct {
 	ipv6     bool
 	mapping  bool
+	fakeip   bool
+	pool     *fakeip.Pool
 	fallback []*nameserver
 	main     []*nameserver
 	cache    *cache.Cache
@@ -209,6 +212,10 @@ func (r *Resolver) IsMapping() bool {
 	return r.mapping
 }
 
+func (r *Resolver) IsFakeIP() bool {
+	return r.fakeip
+}
+
 type NameServer struct {
 	Net  string
 	Addr string
@@ -223,6 +230,7 @@ type Config struct {
 	Main, Fallback []NameServer
 	IPv6           bool
 	EnhancedMode   EnhancedMode
+	Pool           *fakeip.Pool
 }
 
 func transform(servers []NameServer) []*nameserver {
@@ -252,6 +260,8 @@ func New(config Config) *Resolver {
 		ipv6:    config.IPv6,
 		cache:   cache.New(time.Second * 60),
 		mapping: config.EnhancedMode == MAPPING,
+		fakeip:  config.EnhancedMode == FAKEIP,
+		pool:    config.Pool,
 	}
 	if config.Fallback != nil {
 		r.fallback = transform(config.Fallback)

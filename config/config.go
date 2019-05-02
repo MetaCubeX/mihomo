@@ -11,6 +11,7 @@ import (
 
 	adapters "github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/fakeip"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
@@ -41,6 +42,7 @@ type DNS struct {
 	Fallback     []dns.NameServer `yaml:"fallback"`
 	Listen       string           `yaml:"listen"`
 	EnhancedMode dns.EnhancedMode `yaml:"enhanced-mode"`
+	FakeIPRange  *fakeip.Pool
 }
 
 // Experimental config
@@ -64,6 +66,7 @@ type rawDNS struct {
 	Fallback     []string         `yaml:"fallback"`
 	Listen       string           `yaml:"listen"`
 	EnhancedMode dns.EnhancedMode `yaml:"enhanced-mode"`
+	FakeIPRange  string           `yaml:"fake-ip-range"`
 }
 
 type rawConfig struct {
@@ -109,7 +112,8 @@ func readConfig(path string) (*rawConfig, error) {
 			IgnoreResolveFail: true,
 		},
 		DNS: rawDNS{
-			Enable: false,
+			Enable:      false,
+			FakeIPRange: "198.18.0.1/16",
 		},
 	}
 	err = yaml.Unmarshal([]byte(data), &rawConfig)
@@ -464,6 +468,19 @@ func parseDNS(cfg rawDNS) (*DNS, error) {
 
 	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback); err != nil {
 		return nil, err
+	}
+
+	if cfg.EnhancedMode == dns.FAKEIP {
+		_, ipnet, err := net.ParseCIDR(cfg.FakeIPRange)
+		if err != nil {
+			return nil, err
+		}
+		pool, err := fakeip.New(ipnet)
+		if err != nil {
+			return nil, err
+		}
+
+		dnsCfg.FakeIPRange = pool
 	}
 
 	return dnsCfg, nil
