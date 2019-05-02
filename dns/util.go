@@ -70,7 +70,7 @@ func (e EnhancedMode) String() string {
 	case NORMAL:
 		return "normal"
 	case FAKEIP:
-		return "fakeip"
+		return "fake-ip"
 	case MAPPING:
 		return "redir-host"
 	default:

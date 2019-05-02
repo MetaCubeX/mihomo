@@ -118,7 +118,7 @@ func (t *Tunnel) resolveIP(host string) (net.IP, error) {
 }
 
 func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
-	return t.hasResolver() && t.resolver.IsMapping() && metadata.Host == "" && metadata.IP != nil
+	return t.hasResolver() && (t.resolver.IsMapping() || t.resolver.IsFakeIP()) && metadata.Host == "" && metadata.IP != nil
 }
 
 func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
@@ -130,11 +130,15 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 		return
 	}
 
+	// preprocess enhanced-mode metadata
 	if t.needLookupIP(metadata) {
 		host, exist := t.resolver.IPToHost(*metadata.IP)
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
+			if t.resolver.IsFakeIP() {
+				metadata.IP = nil
+			}
 		}
 	}
 

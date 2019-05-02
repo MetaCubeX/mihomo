@@ -1,16 +1,21 @@
 package dns
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/Dreamacro/clash/log"
+	"github.com/miekg/dns"
 	D "github.com/miekg/dns"
 )
 
 var (
 	address string
 	server  = &Server{}
+
+	dnsDefaultTTL uint32 = 600
 )
 
 type Server struct {
@@ -19,6 +24,17 @@ type Server struct {
 }
 
 func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
+	if s.r.IsFakeIP() {
+		msg, err := s.handleFakeIP(r)
+		if err != nil {
+			D.HandleFailed(w, r)
+			return
+		}
+		msg.SetReply(r)
+		w.WriteMsg(msg)
+		return
+	}
+
 	msg, err := s.r.Exchange(r)
 
 	if err != nil {
@@ -32,6 +48,40 @@ func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 	}
 	msg.SetReply(r)
 	w.WriteMsg(msg)
+}
+
+func (s *Server) handleFakeIP(r *D.Msg) (msg *D.Msg, err error) {
+	if len(r.Question) == 0 {
+		err = errors.New("should have one question at least")
+		return
+	}
+
+	q := r.Question[0]
+
+	cache, expireTime := s.r.cache.GetWithExpire("fakeip:" + q.String())
+	if cache != nil {
+		msg = cache.(*D.Msg).Copy()
+		setMsgTTL(msg, uint32(expireTime.Sub(time.Now()).Seconds()))
+		return
+	}
+
+	var ip net.IP
+	defer func() {
+		if msg == nil {
+			return
+		}
+
+		putMsgToCache(s.r.cache, "fakeip:"+q.String(), msg)
+		putMsgToCache(s.r.cache, ip.String(), msg)
+	}()
+
+	rr := &D.A{}
+	rr.Hdr = dns.RR_Header{Name: r.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: dnsDefaultTTL}
+	ip = s.r.pool.Get()
+	rr.A = ip
+	msg = r.Copy()
+	msg.Answer = []D.RR{rr}
+	return
 }
 
 func (s *Server) setReslover(r *Resolver) {

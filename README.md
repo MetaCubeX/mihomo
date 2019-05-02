@@ -113,7 +113,7 @@ experimental:
   # enable: true # set true to enable dns (default is false)
   # ipv6: false # default is false
   # listen: 0.0.0.0:53
-  # enhanced-mode: redir-host
+  # enhanced-mode: redir-host # or fake-ip
   # nameserver:
   #   - 114.114.114.114
   #   - tls://dns.rubyfish.cn:853 # dns over tls
