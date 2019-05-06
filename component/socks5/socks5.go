@@ -166,8 +166,9 @@ func readAddr(r io.Reader, b []byte) (Addr, error) {
 		if err != nil {
 			return nil, err
 		}
-		_, err = io.ReadFull(r, b[2:2+b[1]+2])
-		return b[:1+1+b[1]+2], err
+		domainLength := uint16(b[1])
+		_, err = io.ReadFull(r, b[2:2+domainLength+2])
+		return b[:1+1+domainLength+2], err
 	case AtypIPv4:
 		_, err = io.ReadFull(r, b[1:1+net.IPv4len+2])
 		return b[:1+net.IPv4len+2], err
