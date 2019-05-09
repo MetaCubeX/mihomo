@@ -114,6 +114,7 @@ experimental:
   # ipv6: false # default is false
   # listen: 0.0.0.0:53
   # enhanced-mode: redir-host # or fake-ip
+  # # fake-ip-range: 198.18.0.1/16 # if you don't know what it is, don't change it
   # nameserver:
   #   - 114.114.114.114
   #   - tls://dns.rubyfish.cn:853 # dns over tls
@@ -206,8 +207,11 @@ Rule:
 - DOMAIN,google.com,auto
 - DOMAIN-SUFFIX,ad.com,REJECT
 - IP-CIDR,127.0.0.0/8,DIRECT
-- SOURCE-IP-CIDR,192.168.1.201/32,DIRECT
+# rename SOURCE-IP-CIDR and would remove after prerelease
+- SRC-IP-CIDR,192.168.1.201/32,DIRECT
 - GEOIP,CN,DIRECT
+- DST-PORT,80,DIRECT
+- SRC-PORT,7777,DIRECT
 # FINAL would remove after prerelease
 # you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
 - MATCH,auto
