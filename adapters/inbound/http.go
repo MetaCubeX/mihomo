@@ -23,7 +23,10 @@ func (h *HTTPAdapter) Metadata() *C.Metadata {
 // NewHTTP is HTTPAdapter generator
 func NewHTTP(request *http.Request, conn net.Conn) *HTTPAdapter {
 	metadata := parseHTTPAddr(request)
-	metadata.SourceIP = parseSourceIP(conn)
+	if ip, port, err := parseAddr(conn.RemoteAddr().String()); err == nil {
+		metadata.SrcIP = ip
+		metadata.SrcPort = port
+	}
 	return &HTTPAdapter{
 		metadata: metadata,
 		R:        request,

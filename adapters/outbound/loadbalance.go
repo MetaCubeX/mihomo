@@ -34,11 +34,11 @@ func getKey(metadata *C.Metadata) string {
 		}
 	}
 
-	if metadata.IP == nil {
+	if metadata.DstIP == nil {
 		return ""
 	}
 
-	return metadata.IP.String()
+	return metadata.DstIP.String()
 }
 
 func jumpHash(key uint64, buckets int32) int32 {

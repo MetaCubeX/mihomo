@@ -44,8 +44,8 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	addr = C.Metadata{
 		AddrType: C.AtypDomainName,
 		Host:     u.Hostname(),
-		IP:       nil,
-		Port:     port,
+		DstIP:    nil,
+		DstPort:  port,
 	}
 	return
 }
@@ -67,7 +67,7 @@ func getClientSessionCache() tls.ClientSessionCache {
 func serializesSocksAddr(metadata *C.Metadata) []byte {
 	var buf [][]byte
 	aType := uint8(metadata.AddrType)
-	p, _ := strconv.Atoi(metadata.Port)
+	p, _ := strconv.Atoi(metadata.DstPort)
 	port := []byte{uint8(p >> 8), uint8(p & 0xff)}
 	switch metadata.AddrType {
 	case socks5.AtypDomainName:
@@ -75,10 +75,10 @@ func serializesSocksAddr(metadata *C.Metadata) []byte {
 		host := []byte(metadata.Host)
 		buf = [][]byte{{aType, len}, host, port}
 	case socks5.AtypIPv4:
-		host := metadata.IP.To4()
+		host := metadata.DstIP.To4()
 		buf = [][]byte{{aType}, host, port}
 	case socks5.AtypIPv6:
-		host := metadata.IP.To16()
+		host := metadata.DstIP.To16()
 		buf = [][]byte{{aType}, host, port}
 	}
 	return bytes.Join(buf, nil)

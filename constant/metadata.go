@@ -13,7 +13,7 @@ const (
 	TCP NetWork = iota
 	UDP
 
-	HTTP SourceType = iota
+	HTTP Type = iota
 	SOCKS
 	REDIR
 )
@@ -27,26 +27,27 @@ func (n *NetWork) String() string {
 	return "udp"
 }
 
-type SourceType int
+type Type int
 
 // Metadata is used to store connection address
 type Metadata struct {
 	NetWork  NetWork
-	Source   SourceType
-	SourceIP *net.IP
+	Type     Type
+	SrcIP    *net.IP
+	DstIP    *net.IP
+	SrcPort  string
+	DstPort  string
 	AddrType int
 	Host     string
-	IP       *net.IP
-	Port     string
 }
 
 func (m *Metadata) String() string {
 	if m.Host == "" {
-		return m.IP.String()
+		return m.DstIP.String()
 	}
 	return m.Host
 }
 
 func (m *Metadata) Valid() bool {
-	return m.Host != "" || m.IP != nil
+	return m.Host != "" || m.DstIP != nil
 }

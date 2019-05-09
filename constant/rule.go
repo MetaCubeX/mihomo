@@ -7,7 +7,9 @@ const (
 	DomainKeyword
 	GEOIP
 	IPCIDR
-	SourceIPCIDR
+	SrcIPCIDR
+	SrcPort
+	DstPort
 	MATCH
 )
 
@@ -25,8 +27,12 @@ func (rt RuleType) String() string {
 		return "GEOIP"
 	case IPCIDR:
 		return "IPCIDR"
-	case SourceIPCIDR:
-		return "SourceIPCIDR"
+	case SrcIPCIDR:
+		return "SrcIPCIDR"
+	case SrcPort:
+		return "SrcPort"
+	case DstPort:
+		return "DstPort"
 	case MATCH:
 		return "MATCH"
 	default:

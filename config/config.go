@@ -372,12 +372,24 @@ func parseRules(cfg *rawConfig) ([]C.Rule, error) {
 			if rule := R.NewIPCIDR(payload, target, false); rule != nil {
 				parsed = rule
 			}
+		// deprecated when bump to 1.0
 		case "SOURCE-IP-CIDR":
+			fallthrough
+		case "SRC-IP-CIDR":
 			if rule := R.NewIPCIDR(payload, target, true); rule != nil {
+				parsed = rule
+			}
+		case "SRC-PORT":
+			if rule := R.NewPort(payload, target, true); rule != nil {
+				parsed = rule
+			}
+		case "DST-PORT":
+			if rule := R.NewPort(payload, target, false); rule != nil {
 				parsed = rule
 			}
 		case "MATCH":
 			fallthrough
+		// deprecated when bump to 1.0
 		case "FINAL":
 			parsed = R.NewMatch(target)
 		}
