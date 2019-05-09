@@ -88,11 +88,11 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 	case C.AtypIPv4:
 		addrType = byte(vmess.AtypIPv4)
 		addr = make([]byte, net.IPv4len)
-		copy(addr[:], metadata.IP.To4())
+		copy(addr[:], metadata.DstIP.To4())
 	case C.AtypIPv6:
 		addrType = byte(vmess.AtypIPv6)
 		addr = make([]byte, net.IPv6len)
-		copy(addr[:], metadata.IP.To16())
+		copy(addr[:], metadata.DstIP.To16())
 	case C.AtypDomainName:
 		addrType = byte(vmess.AtypDomainName)
 		addr = make([]byte, len(metadata.Host)+1)
@@ -100,7 +100,7 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 		copy(addr[1:], []byte(metadata.Host))
 	}
 
-	port, _ := strconv.Atoi(metadata.Port)
+	port, _ := strconv.Atoi(metadata.DstPort)
 	return &vmess.DstAddr{
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,

@@ -24,10 +24,10 @@ func (g *GEOIP) RuleType() C.RuleType {
 }
 
 func (g *GEOIP) IsMatch(metadata *C.Metadata) bool {
-	if metadata.IP == nil {
+	if metadata.DstIP == nil {
 		return false
 	}
-	record, _ := mmdb.Country(*metadata.IP)
+	record, _ := mmdb.Country(*metadata.DstIP)
 	return record.Country.IsoCode == g.country
 }
 

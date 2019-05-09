@@ -11,9 +11,9 @@ type Direct struct {
 }
 
 func (d *Direct) Dial(metadata *C.Metadata) (net.Conn, error) {
-	address := net.JoinHostPort(metadata.Host, metadata.Port)
-	if metadata.IP != nil {
-		address = net.JoinHostPort(metadata.IP.String(), metadata.Port)
+	address := net.JoinHostPort(metadata.Host, metadata.DstPort)
+	if metadata.DstIP != nil {
+		address = net.JoinHostPort(metadata.DstIP.String(), metadata.DstPort)
 	}
 
 	c, err := net.DialTimeout("tcp", address, tcpTimeout)
@@ -30,7 +30,7 @@ func (d *Direct) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error)
 		return nil, nil, err
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.Port))
+	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, nil, err
 	}

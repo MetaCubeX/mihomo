@@ -14,15 +14,15 @@ type IPCIDR struct {
 
 func (i *IPCIDR) RuleType() C.RuleType {
 	if i.isSourceIP {
-		return C.SourceIPCIDR
+		return C.SrcIPCIDR
 	}
 	return C.IPCIDR
 }
 
 func (i *IPCIDR) IsMatch(metadata *C.Metadata) bool {
-	ip := metadata.IP
+	ip := metadata.DstIP
 	if i.isSourceIP {
-		ip = metadata.SourceIP
+		ip = metadata.SrcIP
 	}
 	return ip != nil && i.ipnet.Contains(*ip)
 }

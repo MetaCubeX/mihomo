@@ -92,7 +92,7 @@ func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, 
 		return nil, nil, err
 	}
 
-	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.Port))
+	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, nil, err
 	}
