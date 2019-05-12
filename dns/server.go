@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/Dreamacro/clash/log"
 	"github.com/miekg/dns"
@@ -58,10 +57,10 @@ func (s *Server) handleFakeIP(r *D.Msg) (msg *D.Msg, err error) {
 
 	q := r.Question[0]
 
-	cache, expireTime := s.r.cache.GetWithExpire("fakeip:" + q.String())
+	cache, _ := s.r.cache.GetWithExpire("fakeip:" + q.String())
 	if cache != nil {
 		msg = cache.(*D.Msg).Copy()
-		setMsgTTL(msg, uint32(expireTime.Sub(time.Now()).Seconds()))
+		setMsgTTL(msg, 1)
 		return
 	}
 
@@ -73,6 +72,7 @@ func (s *Server) handleFakeIP(r *D.Msg) (msg *D.Msg, err error) {
 
 		putMsgToCache(s.r.cache, "fakeip:"+q.String(), msg)
 		putMsgToCache(s.r.cache, ip.String(), msg)
+		setMsgTTL(msg, 1)
 	}()
 
 	rr := &D.A{}
