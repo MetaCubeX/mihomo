@@ -57,10 +57,9 @@ func (s *Server) handleFakeIP(r *D.Msg) (msg *D.Msg, err error) {
 
 	q := r.Question[0]
 
-	cache, _ := s.r.cache.GetWithExpire("fakeip:" + q.String())
+	cache := s.r.cache.Get("fakeip:" + q.String())
 	if cache != nil {
 		msg = cache.(*D.Msg).Copy()
-		setMsgTTL(msg, 1)
 		return
 	}
 
@@ -72,6 +71,8 @@ func (s *Server) handleFakeIP(r *D.Msg) (msg *D.Msg, err error) {
 
 		putMsgToCache(s.r.cache, "fakeip:"+q.String(), msg)
 		putMsgToCache(s.r.cache, ip.String(), msg)
+
+		// putMsgToCache depend on msg ttl to set cache expired time, then set msg ref ttl to 1
 		setMsgTTL(msg, 1)
 	}()
 
