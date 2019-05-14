@@ -99,7 +99,7 @@ func (r *Resolver) exchange(servers []*nameserver, m *D.Msg) (msg *D.Msg, err er
 			if err != nil || msg.Rcode != D.RcodeSuccess {
 				return
 			}
-			in <- &result{Msg: msg, Error: err}
+			in <- msg
 		}(server)
 	}
 
@@ -114,8 +114,7 @@ func (r *Resolver) exchange(servers []*nameserver, m *D.Msg) (msg *D.Msg, err er
 		return nil, errors.New("All DNS requests failed")
 	}
 
-	resp := elm.(*result)
-	msg, err = resp.Msg, resp.Error
+	msg = elm.(*D.Msg)
 	return
 }
 
