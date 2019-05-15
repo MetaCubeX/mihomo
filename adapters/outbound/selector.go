@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"sort"
 
 	C "github.com/Dreamacro/clash/constant"
 )
 
 type Selector struct {
 	*Base
-	selected C.Proxy
-	proxies  map[string]C.Proxy
+	selected  C.Proxy
+	proxies   map[string]C.Proxy
+	proxyList []string
 }
 
 type SelectorOption struct {
@@ -33,15 +33,10 @@ func (s *Selector) SupportUDP() bool {
 }
 
 func (s *Selector) MarshalJSON() ([]byte, error) {
-	var all []string
-	for k := range s.proxies {
-		all = append(all, k)
-	}
-	sort.Strings(all)
 	return json.Marshal(map[string]interface{}{
 		"type": s.Type().String(),
 		"now":  s.Now(),
-		"all":  all,
+		"all":  s.proxyList,
 	})
 }
 
@@ -64,8 +59,10 @@ func NewSelector(name string, proxies []C.Proxy) (*Selector, error) {
 	}
 
 	mapping := make(map[string]C.Proxy)
-	for _, proxy := range proxies {
+	proxyList := make([]string, len(proxies))
+	for idx, proxy := range proxies {
 		mapping[proxy.Name()] = proxy
+		proxyList[idx] = proxy.Name()
 	}
 
 	s := &Selector{
@@ -73,8 +70,9 @@ func NewSelector(name string, proxies []C.Proxy) (*Selector, error) {
 			name: name,
 			tp:   C.Selector,
 		},
-		proxies:  mapping,
-		selected: proxies[0],
+		proxies:   mapping,
+		selected:  proxies[0],
+		proxyList: proxyList,
 	}
 	return s, nil
 }
