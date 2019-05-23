@@ -3,6 +3,7 @@ package fakeip
 import (
 	"errors"
 	"net"
+	"sync"
 )
 
 // Pool is a implementation about fake ip generator without storage
@@ -10,10 +11,13 @@ type Pool struct {
 	max    uint32
 	min    uint32
 	offset uint32
+	mux    *sync.Mutex
 }
 
 // Get return a new fake ip
 func (p *Pool) Get() net.IP {
+	p.mux.Lock()
+	defer p.mux.Unlock()
 	ip := uintToIP(p.min + p.offset)
 	p.offset = (p.offset + 1) % (p.max - p.min)
 	return ip
@@ -46,5 +50,6 @@ func New(ipnet *net.IPNet) (*Pool, error) {
 	return &Pool{
 		min: min,
 		max: max,
+		mux: &sync.Mutex{},
 	}, nil
 }
