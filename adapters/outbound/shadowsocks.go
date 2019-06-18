@@ -137,6 +137,10 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
 			return nil, fmt.Errorf("ss %s initialize obfs error: %s", server, err.Error())
 		}
+
+		if opts.Mode != "tls" && opts.Mode != "http" {
+			return nil, fmt.Errorf("ss %s obfs mode error: %s", server, opts.Mode)
+		}
 		obfsMode = opts.Mode
 		obfsOption = &opts
 	} else if option.Plugin == "v2ray-plugin" {
@@ -144,7 +148,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
 			return nil, fmt.Errorf("ss %s initialize v2ray-plugin error: %s", server, err.Error())
 		}
+
+		if opts.Mode != "websocket" {
+			return nil, fmt.Errorf("ss %s obfs mode error: %s", server, opts.Mode)
+		}
 		obfsMode = opts.Mode
+
 		var tlsConfig *tls.Config
 		if opts.TLS {
 			tlsConfig = &tls.Config{
