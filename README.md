@@ -64,7 +64,7 @@ If you have Docker installed, you can run clash directly using `docker-compose`.
 
 The default configuration directory is `$HOME/.config/clash`
 
-The name of the configuration file is `config.yml`
+The name of the configuration file is `config.yaml`
 
 If you want to use another directory, you can use `-d` to control the configuration directory
 
