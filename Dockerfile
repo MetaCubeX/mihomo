@@ -18,6 +18,4 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /Country.mmdb /root/.config/clash/
 COPY --from=builder /clash /
 
-EXPOSE 7890 7891
-
 ENTRYPOINT ["/clash"]
