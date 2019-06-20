@@ -240,6 +240,8 @@ func transform(servers []NameServer) []*nameserver {
 				Net: s.Net,
 				TLSConfig: &tls.Config{
 					ClientSessionCache: globalSessionCache,
+					// alpn identifier, see https://tools.ietf.org/html/draft-hoffman-dprive-dns-tls-alpn-00#page-6
+					NextProtos: []string{"dns"},
 				},
 				UDPSize: 4096,
 			},
