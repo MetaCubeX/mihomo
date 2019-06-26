@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Dreamacro/clash/common/observable"
 
@@ -15,6 +16,7 @@ var (
 )
 
 func init() {
+	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
 }
 
