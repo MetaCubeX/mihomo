@@ -116,7 +116,7 @@ func readConfig(path string) (*rawConfig, error) {
 	}
 
 	if len(data) == 0 {
-		return nil, fmt.Errorf("Configuration file %s is empty", C.Path.Config())
+		return nil, fmt.Errorf("Configuration file %s is empty", path)
 	}
 
 	// config with some default value
