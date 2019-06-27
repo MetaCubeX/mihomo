@@ -1,11 +1,13 @@
 package executor
 
 import (
+	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	P "github.com/Dreamacro/clash/proxy"
+	authStore "github.com/Dreamacro/clash/proxy/auth"
 	T "github.com/Dreamacro/clash/tunnel"
 )
 
@@ -21,6 +23,7 @@ func ParseWithPath(path string) (*config.Config, error) {
 
 // ApplyConfig dispatch configure to all parts
 func ApplyConfig(cfg *config.Config, force bool) {
+	updateUsers(cfg.Users)
 	if force {
 		updateGeneral(cfg.General)
 	}
@@ -33,12 +36,13 @@ func ApplyConfig(cfg *config.Config, force bool) {
 func GetGeneral() *config.General {
 	ports := P.GetPorts()
 	return &config.General{
-		Port:      ports.Port,
-		SocksPort: ports.SocksPort,
-		RedirPort: ports.RedirPort,
-		AllowLan:  P.AllowLan(),
-		Mode:      T.Instance().Mode(),
-		LogLevel:  log.Level(),
+		Port:           ports.Port,
+		SocksPort:      ports.SocksPort,
+		RedirPort:      ports.RedirPort,
+		Authentication: authStore.Authenticator().Users(),
+		AllowLan:       P.AllowLan(),
+		Mode:           T.Instance().Mode(),
+		LogLevel:       log.Level(),
 	}
 }
 
@@ -90,6 +94,7 @@ func updateGeneral(general *config.General) {
 	allowLan := general.AllowLan
 
 	P.SetAllowLan(allowLan)
+
 	if err := P.ReCreateHTTP(general.Port); err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
 	}
@@ -100,5 +105,13 @@ func updateGeneral(general *config.General) {
 
 	if err := P.ReCreateRedir(general.RedirPort); err != nil {
 		log.Errorln("Start Redir server error: %s", err.Error())
+	}
+}
+
+func updateUsers(users []auth.AuthUser) {
+	authenticator := auth.NewAuthenticator(users)
+	authStore.SetAuthenticator(authenticator)
+	if authenticator != nil {
+		log.Infoln("Authentication of local server updated")
 	}
 }

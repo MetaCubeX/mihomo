@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"strconv"
+
+	"github.com/Dreamacro/clash/component/auth"
 )
 
 // Error represents a SOCKS error
@@ -35,6 +37,9 @@ const (
 // MaxAddrLen is the maximum size of SOCKS address in bytes.
 const MaxAddrLen = 1 + 1 + 255 + 2
 
+// MaxAuthLen is the maximum size of user/password field in SOCKS5 Auth
+const MaxAuthLen = 255
+
 // Addr represents a SOCKS address as defined in RFC 1928 section 5.
 type Addr = []byte
 
@@ -50,13 +55,16 @@ const (
 	ErrAddressNotSupported  = Error(8)
 )
 
+// Auth errors used to return a specific "Auth failed" error
+var ErrAuth = errors.New("auth failed")
+
 type User struct {
 	Username string
 	Password string
 }
 
 // ServerHandshake fast-tracks SOCKS initialization to get target address to connect on server side.
-func ServerHandshake(rw io.ReadWriter) (addr Addr, command Command, err error) {
+func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, command Command, err error) {
 	// Read RFC 1928 for request and reply structure and sizes.
 	buf := make([]byte, MaxAddrLen)
 	// read VER, NMETHODS, METHODS
@@ -67,10 +75,64 @@ func ServerHandshake(rw io.ReadWriter) (addr Addr, command Command, err error) {
 	if _, err = io.ReadFull(rw, buf[:nmethods]); err != nil {
 		return
 	}
+
 	// write VER METHOD
-	if _, err = rw.Write([]byte{5, 0}); err != nil {
-		return
+	if authenticator != nil {
+		if _, err = rw.Write([]byte{5, 2}); err != nil {
+			return
+		}
+
+		// Get header
+		header := make([]byte, 2)
+		if _, err = io.ReadFull(rw, header); err != nil {
+			return
+		}
+
+		authBuf := make([]byte, MaxAuthLen)
+		// Get username
+		userLen := int(header[1])
+		if userLen <= 0 {
+			rw.Write([]byte{1, 1})
+			err = ErrAuth
+			return
+		}
+		if _, err = io.ReadFull(rw, authBuf[:userLen]); err != nil {
+			return
+		}
+		user := string(authBuf[:userLen])
+
+		// Get password
+		if _, err = rw.Read(header[:1]); err != nil {
+			return
+		}
+		passLen := int(header[0])
+		if passLen <= 0 {
+			rw.Write([]byte{1, 1})
+			err = ErrAuth
+			return
+		}
+		if _, err = io.ReadFull(rw, authBuf[:passLen]); err != nil {
+			return
+		}
+		pass := string(authBuf[:passLen])
+
+		// Verify
+		if ok := authenticator.Verify(string(user), string(pass)); !ok {
+			rw.Write([]byte{1, 1})
+			err = ErrAuth
+			return
+		}
+
+		// Response auth state
+		if _, err = rw.Write([]byte{1, 0}); err != nil {
+			return
+		}
+	} else {
+		if _, err = rw.Write([]byte{5, 0}); err != nil {
+			return
+		}
 	}
+
 	// read VER CMD RSV ATYP DST.ADDR DST.PORT
 	if _, err = io.ReadFull(rw, buf[:3]); err != nil {
 		return

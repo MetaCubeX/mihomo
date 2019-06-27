@@ -7,6 +7,7 @@ import (
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	authStore "github.com/Dreamacro/clash/proxy/auth"
 	"github.com/Dreamacro/clash/tunnel"
 )
 
@@ -54,7 +55,7 @@ func (l *SockListener) Address() string {
 }
 
 func handleSocks(conn net.Conn) {
-	target, command, err := socks5.ServerHandshake(conn)
+	target, command, err := socks5.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
 		return

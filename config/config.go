@@ -11,6 +11,7 @@ import (
 
 	adapters "github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/fakeip"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/dns"
@@ -26,6 +27,7 @@ type General struct {
 	Port               int          `json:"port"`
 	SocksPort          int          `json:"socks-port"`
 	RedirPort          int          `json:"redir-port"`
+	Authentication     []string     `json:"authentication"`
 	AllowLan           bool         `json:"allow-lan"`
 	Mode               T.Mode       `json:"mode"`
 	LogLevel           log.LogLevel `json:"log-level"`
@@ -56,6 +58,7 @@ type Config struct {
 	DNS          *DNS
 	Experimental *Experimental
 	Rules        []C.Rule
+	Users        []auth.AuthUser
 	Proxies      map[string]C.Proxy
 }
 
@@ -73,6 +76,7 @@ type rawConfig struct {
 	Port               int          `yaml:"port"`
 	SocksPort          int          `yaml:"socks-port"`
 	RedirPort          int          `yaml:"redir-port"`
+	Authentication     []string     `yaml:"authentication"`
 	AllowLan           bool         `yaml:"allow-lan"`
 	Mode               T.Mode       `yaml:"mode"`
 	LogLevel           log.LogLevel `yaml:"log-level"`
@@ -117,12 +121,13 @@ func readConfig(path string) (*rawConfig, error) {
 
 	// config with some default value
 	rawConfig := &rawConfig{
-		AllowLan:   false,
-		Mode:       T.Rule,
-		LogLevel:   log.INFO,
-		Rule:       []string{},
-		Proxy:      []map[string]interface{}{},
-		ProxyGroup: []map[string]interface{}{},
+		AllowLan:       false,
+		Mode:           T.Rule,
+		Authentication: []string{},
+		LogLevel:       log.INFO,
+		Rule:           []string{},
+		Proxy:          []map[string]interface{}{},
+		ProxyGroup:     []map[string]interface{}{},
 		Experimental: Experimental{
 			IgnoreResolveFail: true,
 		},
@@ -168,6 +173,8 @@ func Parse(path string) (*Config, error) {
 		return nil, err
 	}
 	config.DNS = dnsCfg
+
+	config.Users = parseAuthentication(rawCfg.Authentication)
 
 	return config, nil
 }
@@ -519,4 +526,15 @@ func parseDNS(cfg rawDNS) (*DNS, error) {
 	}
 
 	return dnsCfg, nil
+}
+
+func parseAuthentication(rawRecords []string) []auth.AuthUser {
+	users := make([]auth.AuthUser, 0)
+	for _, line := range rawRecords {
+		userData := strings.SplitN(line, ":", 2)
+		if len(userData) == 2 {
+			users = append(users, auth.AuthUser{User: userData[0], Pass: userData[1]})
+		}
+	}
+	return users
 }
