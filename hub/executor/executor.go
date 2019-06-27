@@ -35,15 +35,22 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 func GetGeneral() *config.General {
 	ports := P.GetPorts()
-	return &config.General{
+	authenticator := []string{}
+	if auth := authStore.Authenticator(); auth != nil {
+		authenticator = auth.Users()
+	}
+
+	general := &config.General{
 		Port:           ports.Port,
 		SocksPort:      ports.SocksPort,
 		RedirPort:      ports.RedirPort,
-		Authentication: authStore.Authenticator().Users(),
+		Authentication: authenticator,
 		AllowLan:       P.AllowLan(),
 		Mode:           T.Instance().Mode(),
 		LogLevel:       log.Level(),
 	}
+
+	return general
 }
 
 func updateExperimental(c *config.Experimental) {
