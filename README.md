@@ -123,6 +123,7 @@ experimental:
   # nameserver:
   #   - 114.114.114.114
   #   - tls://dns.rubyfish.cn:853 # dns over tls
+  #   - https://1.1.1.1/dns-query # dns over https
   # fallback: # concurrent request with nameserver, fallback used when GEOIP country isn't CN
   #   - tcp://1.1.1.1
 

@@ -18,8 +18,8 @@ github.com/gorilla/websocket v1.4.0 h1:WDFjx/TMzVgy9VdMMQi2K2Emtwi2QcUQsztZ/zLaH
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1 h1:mweAR1A6xJ3oS2pRaGiHgQ4OO8tzTaLawm8vnODuwDk=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
-github.com/miekg/dns v1.1.9 h1:OIdC9wT96RzuZMf2PfKRhFgsStHUUBZLM/lo1LqiM9E=
-github.com/miekg/dns v1.1.9/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
+github.com/miekg/dns v1.1.14 h1:wkQWn9wIp4mZbwW8XV6Km6owkvRPbOiV004ZM2CkGvA=
+github.com/miekg/dns v1.1.14/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/oschwald/geoip2-golang v1.2.1 h1:3iz+jmeJc6fuCyWeKgtXSXu7+zvkxJbHFXkMT5FVebU=
 github.com/oschwald/geoip2-golang v1.2.1/go.mod h1:0LTTzix/Ao1uMvOhAV4iLU0Lz7eCrP94qZWBTDKf0iE=
 github.com/oschwald/maxminddb-golang v1.3.0 h1:oTh8IBSj10S5JNlUDg5WjJ1QdBMdeaZIkPEVfESSWgE=
