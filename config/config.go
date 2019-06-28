@@ -506,6 +506,7 @@ func parseDNS(cfg rawDNS) (*DNS, error) {
 	dnsCfg := &DNS{
 		Enable:       cfg.Enable,
 		Listen:       cfg.Listen,
+		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 	}
 	var err error

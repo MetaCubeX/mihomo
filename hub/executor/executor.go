@@ -59,7 +59,7 @@ func updateExperimental(c *config.Experimental) {
 
 func updateDNS(c *config.DNS) {
 	if c.Enable == false {
-		T.Instance().SetResolver(nil)
+		dns.DefaultResolver = nil
 		dns.ReCreateServer("", nil)
 		return
 	}
@@ -70,12 +70,15 @@ func updateDNS(c *config.DNS) {
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
 	})
-	T.Instance().SetResolver(r)
+	dns.DefaultResolver = r
 	if err := dns.ReCreateServer(c.Listen, r); err != nil {
 		log.Errorln("Start DNS server error: %s", err.Error())
 		return
 	}
-	log.Infoln("DNS server listening at: %s", c.Listen)
+
+	if c.Listen != "" {
+		log.Infoln("DNS server listening at: %s", c.Listen)
+	}
 }
 
 func updateProxies(proxies map[string]C.Proxy) {

@@ -19,6 +19,11 @@ import (
 )
 
 var (
+	// DefaultResolver aim to resolve ip with host
+	DefaultResolver *Resolver
+)
+
+var (
 	globalSessionCache = tls.NewLRUClientSessionCache(64)
 
 	mmdb *geoip2.Reader
@@ -47,11 +52,16 @@ type Resolver struct {
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeAAAA
 func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
+	ip = net.ParseIP(host)
+	if ip != nil {
+		return ip, nil
+	}
+
 	ch := make(chan net.IP)
 	go func() {
+		defer close(ch)
 		ip, err := r.resolveIP(host, D.TypeA)
 		if err != nil {
-			close(ch)
 			return
 		}
 		ch <- ip
@@ -65,8 +75,8 @@ func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
 		return
 	}
 
-	ip, closed := <-ch
-	if closed {
+	ip, open := <-ch
+	if !open {
 		return nil, errors.New("can't found ip")
 	}
 
@@ -275,8 +285,8 @@ func New(config Config) *Resolver {
 	})
 
 	r := &Resolver{
-		main:    transform(config.Main),
 		ipv6:    config.IPv6,
+		main:    transform(config.Main),
 		cache:   cache.New(time.Second * 60),
 		mapping: config.EnhancedMode == MAPPING,
 		fakeip:  config.EnhancedMode == FAKEIP,

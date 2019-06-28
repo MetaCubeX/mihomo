@@ -32,7 +32,7 @@ type VmessOption struct {
 }
 
 func (v *Vmess) Dial(metadata *C.Metadata) (net.Conn, error) {
-	c, err := net.DialTimeout("tcp", v.server, tcpTimeout)
+	c, err := dialTimeout("tcp", v.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", v.server)
 	}
@@ -42,7 +42,7 @@ func (v *Vmess) Dial(metadata *C.Metadata) (net.Conn, error) {
 }
 
 func (v *Vmess) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
-	c, err := net.DialTimeout("tcp", v.server, tcpTimeout)
+	c, err := dialTimeout("tcp", v.server, tcpTimeout)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s connect error", v.server)
 	}

@@ -26,7 +26,6 @@ type Tunnel struct {
 	proxies   map[string]C.Proxy
 	configMux *sync.RWMutex
 	traffic   *C.Traffic
-	resolver  *dns.Resolver
 
 	// experimental features
 	ignoreResolveFail bool
@@ -86,15 +85,6 @@ func (t *Tunnel) SetMode(mode Mode) {
 	t.mode = mode
 }
 
-// SetResolver change the resolver of tunnel
-func (t *Tunnel) SetResolver(resolver *dns.Resolver) {
-	t.resolver = resolver
-}
-
-func (t *Tunnel) hasResolver() bool {
-	return t.resolver != nil
-}
-
 func (t *Tunnel) process() {
 	queue := t.queue.Out()
 	for {
@@ -105,20 +95,11 @@ func (t *Tunnel) process() {
 }
 
 func (t *Tunnel) resolveIP(host string) (net.IP, error) {
-	if t.resolver == nil {
-		ipAddr, err := net.ResolveIPAddr("ip", host)
-		if err != nil {
-			return nil, err
-		}
-
-		return ipAddr.IP, nil
-	}
-
-	return t.resolver.ResolveIP(host)
+	return dns.ResolveIP(host)
 }
 
 func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
-	return t.hasResolver() && (t.resolver.IsMapping() || t.resolver.IsFakeIP()) && metadata.Host == "" && metadata.DstIP != nil
+	return dns.DefaultResolver != nil && (dns.DefaultResolver.IsMapping() || dns.DefaultResolver.IsFakeIP()) && metadata.Host == "" && metadata.DstIP != nil
 }
 
 func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
@@ -132,11 +113,11 @@ func (t *Tunnel) handleConn(localConn C.ServerAdapter) {
 
 	// preprocess enhanced-mode metadata
 	if t.needLookupIP(metadata) {
-		host, exist := t.resolver.IPToHost(*metadata.DstIP)
+		host, exist := dns.DefaultResolver.IPToHost(*metadata.DstIP)
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
-			if t.resolver.IsFakeIP() {
+			if dns.DefaultResolver.IsFakeIP() {
 				metadata.DstIP = nil
 			}
 		}
