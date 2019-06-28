@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gorilla/websocket v1.4.0
-	github.com/miekg/dns v1.1.9
+	github.com/miekg/dns v1.1.14
 	github.com/oschwald/geoip2-golang v1.2.1
 	github.com/oschwald/maxminddb-golang v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.4.1

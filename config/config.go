@@ -475,9 +475,14 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 		case "tls":
 			host, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
+		case "https":
+			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
+			host = clearURL.String()
+			dnsNetType = "https" // DNS over HTTPS
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
