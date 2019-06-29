@@ -234,7 +234,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		}
 
 		var proxy C.ProxyAdapter
-		err := fmt.Errorf("can't parse")
+		err := fmt.Errorf("cannot parse")
 		switch proxyType {
 		case "ss":
 			ssOption := &adapters.ShadowSocksOption{}
@@ -293,7 +293,7 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 		var group C.ProxyAdapter
 		ps := []C.Proxy{}
 
-		err := fmt.Errorf("can't parse")
+		err := fmt.Errorf("cannot parse")
 		switch groupType {
 		case "url-test":
 			urlTestOption := &adapters.URLTestOption{}

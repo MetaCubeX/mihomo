@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	errIPNotFound = errors.New("ip not found")
+	errIPNotFound = errors.New("cannot found ip")
 )
 
 // ResolveIP with a host, return ip

@@ -77,7 +77,7 @@ func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
 
 	ip, open := <-ch
 	if !open {
-		return nil, errors.New("can't found ip")
+		return nil, errIPNotFound
 	}
 
 	return ip, nil
@@ -100,7 +100,7 @@ func (r *Resolver) ResolveIPv4(host string) (ip net.IP, err error) {
 
 	ips := r.msgToIP(msg)
 	if len(ips) == 0 {
-		return nil, errors.New("can't found ip")
+		return nil, errIPNotFound
 	}
 
 	ip = ips[0]
@@ -207,7 +207,7 @@ func (r *Resolver) fallbackExchange(m *D.Msg) (msg *D.Msg, err error) {
 	res := <-msgCh
 	if res.Error == nil {
 		if mmdb == nil {
-			return nil, errors.New("GeoIP can't use")
+			return nil, errors.New("GeoIP cannot use")
 		}
 
 		if ips := r.msgToIP(res.Msg); len(ips) != 0 {
@@ -236,7 +236,7 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 
 	ips := r.msgToIP(msg)
 	if len(ips) == 0 {
-		return nil, errors.New("can't found ip")
+		return nil, errIPNotFound
 	}
 
 	ip = ips[0]
