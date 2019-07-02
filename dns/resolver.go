@@ -163,32 +163,22 @@ func (r *Resolver) IsFakeIP() bool {
 }
 
 func (r *Resolver) batchExchange(clients []resolver, m *D.Msg) (msg *D.Msg, err error) {
-	in := make(chan interface{})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	fast := picker.SelectFast(ctx, in)
+	fast, ctx := picker.WithContext(ctx)
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(clients))
 	for _, r := range clients {
-		go func(r resolver) {
-			defer wg.Done()
+		fast.Go(func() (interface{}, error) {
 			msg, err := r.ExchangeContext(ctx, m)
 			if err != nil || msg.Rcode != D.RcodeSuccess {
-				return
+				return nil, errors.New("resolve error")
 			}
-			in <- msg
-		}(r)
+			return msg, nil
+		})
 	}
 
-	// release in channel
-	go func() {
-		wg.Wait()
-		close(in)
-	}()
-
-	elm, exist := <-fast
-	if !exist {
+	elm := fast.Wait()
+	if elm == nil {
 		return nil, errors.New("All DNS requests failed")
 	}
 

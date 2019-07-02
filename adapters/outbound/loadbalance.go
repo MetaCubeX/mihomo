@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -95,7 +96,7 @@ func (lb *LoadBalance) validTest() {
 
 	for _, p := range lb.proxies {
 		go func(p C.Proxy) {
-			p.URLTest(lb.rawURL)
+			p.URLTest(context.Background(), lb.rawURL)
 			wg.Done()
 		}(p)
 	}
