@@ -11,11 +11,13 @@ import (
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
+	trie "github.com/Dreamacro/clash/component/domain-trie"
 	"github.com/Dreamacro/clash/component/fakeip"
 	C "github.com/Dreamacro/clash/constant"
 
 	D "github.com/miekg/dns"
 	geoip2 "github.com/oschwald/geoip2-golang"
+	"golang.org/x/sync/singleflight"
 )
 
 var (
@@ -44,9 +46,11 @@ type Resolver struct {
 	ipv6     bool
 	mapping  bool
 	fakeip   bool
+	hosts    *trie.Trie
 	pool     *fakeip.Pool
 	fallback []resolver
 	main     []resolver
+	group    singleflight.Group
 	cache    *cache.Cache
 }
 
@@ -134,13 +138,20 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 		}
 	}()
 
-	isIPReq := isIPRequest(q)
-	if isIPReq {
-		msg, err = r.fallbackExchange(m)
-		return
+	ret, err, _ := r.group.Do(q.String(), func() (interface{}, error) {
+		isIPReq := isIPRequest(q)
+		if isIPReq {
+			msg, err := r.fallbackExchange(m)
+			return msg, err
+		}
+
+		return r.batchExchange(r.main, m)
+	})
+
+	if err == nil {
+		msg = ret.(*D.Msg)
 	}
 
-	msg, err = r.batchExchange(r.main, m)
 	return
 }
 
@@ -266,6 +277,7 @@ type Config struct {
 	Main, Fallback []NameServer
 	IPv6           bool
 	EnhancedMode   EnhancedMode
+	Hosts          *trie.Trie
 	Pool           *fakeip.Pool
 }
 
@@ -280,6 +292,7 @@ func New(config Config) *Resolver {
 		cache:   cache.New(time.Second * 60),
 		mapping: config.EnhancedMode == MAPPING,
 		fakeip:  config.EnhancedMode == FAKEIP,
+		hosts:   config.Hosts,
 		pool:    config.Pool,
 	}
 	if len(config.Fallback) != 0 {

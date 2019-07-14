@@ -120,6 +120,12 @@ experimental:
   # listen: 0.0.0.0:53
   # enhanced-mode: redir-host # or fake-ip
   # # fake-ip-range: 198.18.0.1/16 # if you don't know what it is, don't change it
+  # # experimental hosts, support wildcard (e.g. *.clash.dev Even *.foo.*.example.com)
+  # # static domain has a higher priority than wildcard domain (foo.example.com > *.example.com)
+  # # NOTE: hosts don't work with `fake-ip`
+  # hosts:
+  #   '*.clash.dev': 127.0.0.1
+  #   'alpha.clash.dev': '::1'
   # nameserver:
   #   - 114.114.114.114
   #   - tls://dns.rubyfish.cn:853 # dns over tls
