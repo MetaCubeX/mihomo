@@ -19,7 +19,7 @@ func withFakeIP(cache *cache.Cache, pool *fakeip.Pool) handler {
 		q := r.Question[0]
 
 		cacheItem := cache.Get("fakeip:" + q.String())
-		if cache != nil {
+		if cacheItem != nil {
 			msg := cacheItem.(*D.Msg).Copy()
 			setMsgTTL(msg, 1)
 			msg.SetReply(r)
