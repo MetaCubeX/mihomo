@@ -65,11 +65,19 @@ func TestTrie_Boundary(t *testing.T) {
 	tree := New()
 	tree.Insert("*.dev", localIP)
 
-	if err := tree.Insert("com", localIP); err == nil {
+	if err := tree.Insert(".", localIP); err == nil {
+		t.Error("should recv err")
+	}
+
+	if err := tree.Insert(".com", localIP); err == nil {
 		t.Error("should recv err")
 	}
 
 	if tree.Search("dev") != nil {
+		t.Error("should recv nil")
+	}
+
+	if tree.Search(".dev") != nil {
 		t.Error("should recv nil")
 	}
 }
