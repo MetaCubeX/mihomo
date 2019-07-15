@@ -32,7 +32,7 @@ func (s *Server) setHandler(handler handler) {
 }
 
 func ReCreateServer(addr string, resolver *Resolver) error {
-	if addr == address {
+	if addr == address && resolver != nil {
 		handler := newHandler(resolver)
 		server.setHandler(handler)
 		return nil
