@@ -75,6 +75,10 @@ func (t *Trie) Search(domain string) *Node {
 		n = child
 	}
 
+	if n.Data == nil {
+		return nil
+	}
+
 	return n
 }
 
