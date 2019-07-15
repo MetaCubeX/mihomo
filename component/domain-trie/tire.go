@@ -21,17 +21,21 @@ type Trie struct {
 	root *Node
 }
 
+func isValidDomain(domain string) bool {
+	return domain[0] != '.' && domain[len(domain)-1] != '.'
+}
+
 // Insert adds a node to the trie.
 // Support
 // 1. www.example.com
 // 2. *.example.com
 // 3. subdomain.*.example.com
 func (t *Trie) Insert(domain string, data interface{}) error {
-	parts := strings.Split(domain, domainStep)
-	if len(parts) < 2 {
+	if !isValidDomain(domain) {
 		return ErrInvalidDomain
 	}
 
+	parts := strings.Split(domain, domainStep)
 	node := t.root
 	// reverse storage domain part to save space
 	for i := len(parts) - 1; i >= 0; i-- {
@@ -52,10 +56,10 @@ func (t *Trie) Insert(domain string, data interface{}) error {
 // 1. static part
 // 2. wildcard domain
 func (t *Trie) Search(domain string) *Node {
-	parts := strings.Split(domain, domainStep)
-	if len(parts) < 2 {
+	if !isValidDomain(domain) {
 		return nil
 	}
+	parts := strings.Split(domain, domainStep)
 
 	n := t.root
 	for i := len(parts) - 1; i >= 0; i-- {
