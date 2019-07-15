@@ -37,6 +37,7 @@ func withFakeIP(cache *cache.Cache, pool *fakeip.Pool) handler {
 		putMsgToCache(cache, ip.String(), msg)
 
 		setMsgTTL(msg, 1)
+		w.WriteMsg(msg)
 		return
 	}
 }
