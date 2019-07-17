@@ -106,12 +106,13 @@ func (u *URLTest) speedTest() {
 	defer cancel()
 	picker, ctx := picker.WithContext(ctx)
 	for _, p := range u.proxies {
+		proxy := p
 		picker.Go(func() (interface{}, error) {
-			_, err := p.URLTest(ctx, u.rawURL)
-			if err != nil {
-				return nil, err
+			t, err := proxy.URLTest(ctx, u.rawURL)
+			if err != nil || t == 0 {
+				return nil, errors.New("speed test error")
 			}
-			return p, nil
+			return proxy, nil
 		})
 	}
 
