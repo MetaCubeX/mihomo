@@ -111,9 +111,8 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+	picker, ctx, cancel := picker.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
-	picker, ctx := picker.WithContext(ctx)
 	picker.Go(func() (interface{}, error) {
 		return proxy.URLTest(ctx, url)
 	})

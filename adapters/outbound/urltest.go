@@ -102,15 +102,14 @@ func (u *URLTest) speedTest() {
 	}
 	defer atomic.StoreInt32(&u.once, 0)
 
-	ctx, cancel := context.WithTimeout(context.Background(), u.interval)
+	picker, ctx, cancel := picker.WithTimeout(context.Background(), defaultURLTestTimeout)
 	defer cancel()
-	picker, ctx := picker.WithContext(ctx)
 	for _, p := range u.proxies {
 		proxy := p
 		picker.Go(func() (interface{}, error) {
-			t, err := proxy.URLTest(ctx, u.rawURL)
-			if err != nil || t == 0 {
-				return nil, errors.New("speed test error")
+			_, err := proxy.URLTest(ctx, u.rawURL)
+			if err != nil {
+				return nil, err
 			}
 			return proxy, nil
 		})
@@ -120,6 +119,8 @@ func (u *URLTest) speedTest() {
 	if fast != nil {
 		u.fast = fast.(C.Proxy)
 	}
+
+	<-ctx.Done()
 }
 
 func NewURLTest(option URLTestOption, proxies []C.Proxy) (*URLTest, error) {
