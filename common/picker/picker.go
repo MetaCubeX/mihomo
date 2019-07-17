@@ -3,6 +3,7 @@ package picker
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // Picker provides synchronization, and Context cancelation
@@ -18,9 +19,17 @@ type Picker struct {
 }
 
 // WithContext returns a new Picker and an associated Context derived from ctx.
+// and cancel when first element return.
 func WithContext(ctx context.Context) (*Picker, context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	return &Picker{cancel: cancel}, ctx
+}
+
+// WithTimeout returns a new Picker and an associated Context derived from ctx with timeout,
+// but it doesn't cancel when first element return.
+func WithTimeout(ctx context.Context, timeout time.Duration) (*Picker, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	return &Picker{}, ctx, cancel
 }
 
 // Wait blocks until all function calls from the Go method have returned,

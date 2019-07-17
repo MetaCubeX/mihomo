@@ -30,9 +30,9 @@ func TestPicker_Basic(t *testing.T) {
 }
 
 func TestPicker_Timeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*5)
+	picker, ctx, cancel := WithTimeout(context.Background(), time.Millisecond*5)
 	defer cancel()
-	picker, ctx := WithContext(ctx)
+
 	picker.Go(sleepAndSend(ctx, 20, 1))
 
 	number := picker.Wait()
