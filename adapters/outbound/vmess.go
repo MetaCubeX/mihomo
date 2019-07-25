@@ -48,7 +48,10 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) 
 	}
 	tcpKeepAlive(c)
 	c, err = v.client.New(c, parseVmessAddr(metadata))
-	return &fakeUDPConn{Conn: c}, c.LocalAddr(), err
+	if err != nil {
+		return nil, nil, fmt.Errorf("new vmess client error: %v", err)
+	}
+	return &fakeUDPConn{Conn: c}, c.RemoteAddr(), nil
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {
@@ -74,7 +77,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		Base: &Base{
 			name: option.Name,
 			tp:   C.Vmess,
-			udp:  option.UDP,
+			udp:  true,
 		},
 		server: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		client: client,
