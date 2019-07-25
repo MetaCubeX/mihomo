@@ -103,7 +103,6 @@ func updateGeneral(general *config.General) {
 	T.Instance().SetMode(general.Mode)
 
 	allowLan := general.AllowLan
-
 	P.SetAllowLan(allowLan)
 
 	if err := P.ReCreateHTTP(general.Port); err != nil {
