@@ -136,17 +136,20 @@ experimental:
 Proxy:
 
 # shadowsocks
-# The types of cipher are consistent with go-shadowsocks2
-# support AEAD_AES_128_GCM AEAD_AES_192_GCM AEAD_AES_256_GCM AEAD_CHACHA20_POLY1305 AES-128-CTR AES-192-CTR AES-256-CTR AES-128-CFB AES-192-CFB AES-256-CFB CHACHA20-IETF XCHACHA20
-# In addition to what go-shadowsocks2 supports, it also supports chacha20 rc4-md5 xchacha20-ietf-poly1305
-- { name: "ss1", type: ss, server: server, port: 443, cipher: AEAD_CHACHA20_POLY1305, password: "password", udp: true }
+# The supported ciphers(encrypt methods):
+#   aes-128-gcm aes-192-gcm aes-256-gcm
+#   aes-128-cfb aes-192-cfb aes-256-cfb
+#   aes-128-ctr aes-192-ctr aes-256-ctr
+#   rc4-md5 chacha20 chacha20-ietf xchacha20
+#   chacha20-ietf-poly1305 xchacha20-ietf-poly1305
+- { name: "ss1", type: ss, server: server, port: 443, cipher: chacha20-ietf-poly1305, password: "password", udp: true }
 
 # old obfs configuration remove after prerelease
 - name: "ss2"
   type: ss
   server: server
   port: 443
-  cipher: AEAD_CHACHA20_POLY1305
+  cipher: chacha20-ietf-poly1305
   password: "password"
   plugin: obfs
   plugin-opts:
@@ -157,7 +160,7 @@ Proxy:
   type: ss
   server: server
   port: 443
-  cipher: AEAD_CHACHA20_POLY1305
+  cipher: chacha20-ietf-poly1305
   password: "password"
   plugin: v2ray-plugin
   plugin-opts:
