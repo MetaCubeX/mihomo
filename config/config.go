@@ -539,7 +539,7 @@ func parseDNS(cfg rawDNS) (*DNS, error) {
 		if err != nil {
 			return nil, err
 		}
-		pool, err := fakeip.New(ipnet)
+		pool, err := fakeip.New(ipnet, 1000)
 		if err != nil {
 			return nil, err
 		}

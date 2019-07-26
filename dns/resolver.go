@@ -157,6 +157,10 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 
 // IPToHost return fake-ip or redir-host mapping host
 func (r *Resolver) IPToHost(ip net.IP) (string, bool) {
+	if r.fakeip {
+		return r.pool.LookBack(ip)
+	}
+
 	cache := r.cache.Get(ip.String())
 	if cache == nil {
 		return "", false
