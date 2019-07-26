@@ -5,7 +5,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/log"
 
@@ -14,29 +13,20 @@ import (
 
 type handler func(w D.ResponseWriter, r *D.Msg)
 
-func withFakeIP(cache *cache.Cache, pool *fakeip.Pool) handler {
+func withFakeIP(pool *fakeip.Pool) handler {
 	return func(w D.ResponseWriter, r *D.Msg) {
 		q := r.Question[0]
-
-		cacheItem := cache.Get("fakeip:" + q.String())
-		if cacheItem != nil {
-			msg := cacheItem.(*D.Msg).Copy()
-			setMsgTTL(msg, 1)
-			msg.SetReply(r)
-			w.WriteMsg(msg)
-			return
-		}
+		host := strings.TrimRight(q.Name, ".")
 
 		rr := &D.A{}
 		rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
-		ip := pool.Get()
+		ip := pool.Lookup(host)
 		rr.A = ip
 		msg := r.Copy()
 		msg.Answer = []D.RR{rr}
-		putMsgToCache(cache, "fakeip:"+q.String(), msg)
-		putMsgToCache(cache, ip.String(), msg)
 
 		setMsgTTL(msg, 1)
+		msg.SetReply(r)
 		w.WriteMsg(msg)
 		return
 	}
@@ -111,7 +101,7 @@ func withHost(resolver *Resolver, next handler) handler {
 
 func newHandler(resolver *Resolver) handler {
 	if resolver.IsFakeIP() {
-		return withFakeIP(resolver.cache, resolver.pool)
+		return withFakeIP(resolver.pool)
 	}
 
 	if resolver.hosts != nil {
