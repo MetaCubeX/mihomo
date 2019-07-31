@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"runtime"
 	"sync"
 
@@ -132,6 +133,11 @@ func NewClient(config Config) (*Client, error) {
 		return nil, fmt.Errorf("Unknown network type: %s", config.NetWork)
 	}
 
+	header := http.Header{}
+	for k, v := range config.WebSocketHeaders {
+		header.Add(k, v)
+	}
+
 	host := net.JoinHostPort(config.HostName, config.Port)
 
 	var tlsConfig *tls.Config
@@ -144,6 +150,9 @@ func NewClient(config Config) (*Client, error) {
 		if tlsConfig.ClientSessionCache == nil {
 			tlsConfig.ClientSessionCache = getClientSessionCache()
 		}
+		if host := header.Get("Host"); host != "" {
+			tlsConfig.ServerName = host
+		}
 	}
 
 	var wsConfig *WebsocketConfig
@@ -151,7 +160,7 @@ func NewClient(config Config) (*Client, error) {
 		wsConfig = &WebsocketConfig{
 			Host:      host,
 			Path:      config.WebSocketPath,
-			Headers:   config.WebSocketHeaders,
+			Headers:   header,
 			TLS:       config.TLS,
 			TLSConfig: tlsConfig,
 		}
