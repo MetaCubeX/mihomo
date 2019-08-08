@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	allowLan = false
+	allowLan    = false
+	bindAddress = "*"
 
 	socksListener    *socks.SockListener
 	socksUDPListener *socks.SockUDPListener
@@ -34,12 +35,20 @@ func AllowLan() bool {
 	return allowLan
 }
 
+func BindAddress() string {
+	return bindAddress
+}
+
 func SetAllowLan(al bool) {
 	allowLan = al
 }
 
+func SetBindAddress(host string) {
+	bindAddress = host
+}
+
 func ReCreateHTTP(port int) error {
-	addr := genAddr(port, allowLan)
+	addr := genAddr(bindAddress, port, allowLan)
 
 	if httpListener != nil {
 		if httpListener.Address() == addr {
@@ -63,7 +72,7 @@ func ReCreateHTTP(port int) error {
 }
 
 func ReCreateSocks(port int) error {
-	addr := genAddr(port, allowLan)
+	addr := genAddr(bindAddress, port, allowLan)
 
 	if socksListener != nil {
 		if socksListener.Address() == addr {
@@ -83,22 +92,16 @@ func ReCreateSocks(port int) error {
 		return err
 	}
 
-	return reCreateSocksUDP(port)
+	return reCreateSocksUDP(addr)
 }
 
-func reCreateSocksUDP(port int) error {
-	addr := genAddr(port, allowLan)
-
+func reCreateSocksUDP(addr string) error {
 	if socksUDPListener != nil {
 		if socksUDPListener.Address() == addr {
 			return nil
 		}
 		socksUDPListener.Close()
 		socksUDPListener = nil
-	}
-
-	if portIsZero(addr) {
-		return nil
 	}
 
 	var err error
@@ -111,7 +114,7 @@ func reCreateSocksUDP(port int) error {
 }
 
 func ReCreateRedir(port int) error {
-	addr := genAddr(port, allowLan)
+	addr := genAddr(bindAddress, port, allowLan)
 
 	if redirListener != nil {
 		if redirListener.Address() == addr {
@@ -167,9 +170,14 @@ func portIsZero(addr string) bool {
 	return false
 }
 
-func genAddr(port int, allowLan bool) string {
+func genAddr(host string, port int, allowLan bool) string {
 	if allowLan {
-		return fmt.Sprintf(":%d", port)
+		if host == "*" {
+			return fmt.Sprintf(":%d", port)
+		} else {
+			return fmt.Sprintf("%s:%d", host, port)
+		}
 	}
+
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }

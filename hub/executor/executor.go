@@ -46,6 +46,7 @@ func GetGeneral() *config.General {
 		RedirPort:      ports.RedirPort,
 		Authentication: authenticator,
 		AllowLan:       P.AllowLan(),
+		BindAddress:    P.BindAddress(),
 		Mode:           T.Instance().Mode(),
 		LogLevel:       log.Level(),
 	}
@@ -104,6 +105,9 @@ func updateGeneral(general *config.General) {
 
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)
+
+	bindAddress := general.BindAddress
+	P.SetBindAddress(bindAddress)
 
 	if err := P.ReCreateHTTP(general.Port); err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
