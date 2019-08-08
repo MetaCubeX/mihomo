@@ -88,6 +88,12 @@ socks-port: 7891
 
 allow-lan: false
 
+# Only applicable when setting allow-lan to true
+# "*": bind all IP addresses
+# 192.168.122.11: bind a single IPv4 address
+# "[aaaa::a8aa:ff:fe09:57d8]": bind a single IPv6 address
+bind-address: "*"
+
 # Rule / Global/ Direct (default is Rule)
 mode: Rule
 
