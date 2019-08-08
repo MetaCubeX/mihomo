@@ -2,6 +2,7 @@ package constant
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 )
@@ -25,11 +26,39 @@ type ServerAdapter interface {
 	Metadata() *Metadata
 }
 
+type Connection interface {
+	Chains() Chain
+	AppendToChains(adapter ProxyAdapter)
+}
+
+type Chain []string
+
+func (c Chain) String() string {
+	switch len(c) {
+	case 0:
+		return ""
+	case 1:
+		return c[0]
+	default:
+		return fmt.Sprintf("%s[%s]", c[len(c)-1], c[0])
+	}
+}
+
+type Conn interface {
+	net.Conn
+	Connection
+}
+
+type PacketConn interface {
+	net.PacketConn
+	Connection
+}
+
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
-	Dial(metadata *Metadata) (net.Conn, error)
-	DialUDP(metadata *Metadata) (net.PacketConn, net.Addr, error)
+	Dial(metadata *Metadata) (Conn, error)
+	DialUDP(metadata *Metadata) (PacketConn, net.Addr, error)
 	SupportUDP() bool
 	Destroy()
 	MarshalJSON() ([]byte, error)

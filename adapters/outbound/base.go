@@ -30,7 +30,7 @@ func (b *Base) Type() C.AdapterType {
 	return b.tp
 }
 
-func (b *Base) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+func (b *Base) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
 	return nil, nil, errors.New("no support")
 }
 
@@ -46,6 +46,40 @@ func (b *Base) MarshalJSON() ([]byte, error) {
 	})
 }
 
+type conn struct {
+	net.Conn
+	chain C.Chain
+}
+
+func (c *conn) Chains() C.Chain {
+	return c.chain
+}
+
+func (c *conn) AppendToChains(a C.ProxyAdapter) {
+	c.chain = append(c.chain, a.Name())
+}
+
+func newConn(c net.Conn, a C.ProxyAdapter) C.Conn {
+	return &conn{c, []string{a.Name()}}
+}
+
+type packetConn struct {
+	net.PacketConn
+	chain C.Chain
+}
+
+func (c *packetConn) Chains() C.Chain {
+	return c.chain
+}
+
+func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
+	c.chain = append(c.chain, a.Name())
+}
+
+func newPacketConn(c net.PacketConn, a C.ProxyAdapter) C.PacketConn {
+	return &packetConn{c, []string{a.Name()}}
+}
+
 type Proxy struct {
 	C.ProxyAdapter
 	history *queue.Queue
@@ -56,7 +90,7 @@ func (p *Proxy) Alive() bool {
 	return p.alive
 }
 
-func (p *Proxy) Dial(metadata *C.Metadata) (net.Conn, error) {
+func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.Dial(metadata)
 	if err != nil {
 		p.alive = false

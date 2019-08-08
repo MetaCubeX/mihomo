@@ -57,7 +57,7 @@ type v2rayObfsOption struct {
 	SkipCertVerify bool              `obfs:"skip-cert-verify,omitempty"`
 }
 
-func (ss *ShadowSocks) Dial(metadata *C.Metadata) (net.Conn, error) {
+func (ss *ShadowSocks) Dial(metadata *C.Metadata) (C.Conn, error) {
 	c, err := dialTimeout("tcp", ss.server, tcpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", ss.server, err.Error())
@@ -78,10 +78,10 @@ func (ss *ShadowSocks) Dial(metadata *C.Metadata) (net.Conn, error) {
 	}
 	c = ss.cipher.StreamConn(c)
 	_, err = c.Write(serializesSocksAddr(metadata))
-	return c, err
+	return newConn(c, ss), err
 }
 
-func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, error) {
+func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
 	pc, err := net.ListenPacket("udp", "")
 	if err != nil {
 		return nil, nil, err
@@ -98,7 +98,7 @@ func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (net.PacketConn, net.Addr, 
 	}
 
 	pc = ss.cipher.PacketConn(pc)
-	return &ssUDPConn{PacketConn: pc, rAddr: targetAddr}, addr, nil
+	return newPacketConn(&ssUDPConn{PacketConn: pc, rAddr: targetAddr}, ss), addr, nil
 }
 
 func (ss *ShadowSocks) MarshalJSON() ([]byte, error) {
