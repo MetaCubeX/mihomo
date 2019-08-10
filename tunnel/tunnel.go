@@ -165,7 +165,7 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter, metadata *C.Metadata, 
 		addr = naddr
 		pc = rawpc
 		if err != nil {
-			log.Warnln("%s --> %v match %s using %s error: %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), rule.Adapter(), err.Error())
+			log.Warnln("dial %s error: %s", proxy.Name(), err.Error())
 			return
 		}
 
@@ -184,9 +184,8 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter, metadata *C.Metadata, 
 
 func (t *Tunnel) handleTCPConn(localConn C.ServerAdapter, metadata *C.Metadata, proxy C.Proxy, rule C.Rule) {
 	remoConn, err := proxy.Dial(metadata)
-
 	if err != nil {
-		log.Warnln("%s --> %v match %s using %s error: %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), rule.Adapter(), err.Error())
+		log.Warnln("dial %s error: %s", proxy.Name(), err.Error())
 		return
 	}
 	defer remoConn.Close()
