@@ -125,8 +125,6 @@ func (u *URLTest) speedTest() {
 	if fast != nil {
 		u.fast = fast.(C.Proxy)
 	}
-
-	<-ctx.Done()
 }
 
 func NewURLTest(option URLTestOption, proxies []C.Proxy) (*URLTest, error) {
