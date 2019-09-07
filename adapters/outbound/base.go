@@ -107,7 +107,7 @@ func (p *Proxy) DelayHistory() []C.DelayHistory {
 	return histories
 }
 
-// LastDelay return last history record. if proxy is not alive, return the max value of int16.
+// LastDelay return last history record. if proxy is not alive, return the max value of uint16.
 func (p *Proxy) LastDelay() (delay uint16) {
 	var max uint16 = 0xffff
 	if !p.alive {
