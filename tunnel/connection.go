@@ -17,6 +17,9 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	req := request.R
 	host := req.Host
 
+	inboundReeder := bufio.NewReader(request)
+	outboundReeder := bufio.NewReader(conn)
+
 	for {
 		keepAlive := strings.TrimSpace(strings.ToLower(req.Header.Get("Proxy-Connection"))) == "keep-alive"
 
@@ -27,8 +30,9 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 		if err != nil {
 			break
 		}
-		br := bufio.NewReader(conn)
-		resp, err := http.ReadResponse(br, req)
+
+	handleResponse:
+		resp, err := http.ReadResponse(outboundReeder, req)
 		if err != nil {
 			break
 		}
@@ -50,7 +54,11 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 			break
 		}
 
-		req, err = http.ReadRequest(bufio.NewReader(request))
+		if resp.StatusCode == http.StatusContinue {
+			goto handleResponse
+		}
+
+		req, err = http.ReadRequest(inboundReeder)
 		if err != nil {
 			break
 		}
