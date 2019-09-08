@@ -65,7 +65,7 @@ func Start(addr string, secret string) {
 	if uiPath != "" {
 		r.Group(func(r chi.Router) {
 			fs := http.StripPrefix("/ui", http.FileServer(http.Dir(uiPath)))
-			r.Get("/ui", http.RedirectHandler("/ui/", 301).ServeHTTP)
+			r.Get("/ui", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect).ServeHTTP)
 			r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
 				fs.ServeHTTP(w, r)
 			})
