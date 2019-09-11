@@ -21,8 +21,11 @@ import (
 )
 
 var (
-	// DefaultResolver aim to resolve ip with host
+	// DefaultResolver aim to resolve ip
 	DefaultResolver *Resolver
+
+	// DefaultHosts aim to resolve hosts
+	DefaultHosts = trie.New()
 )
 
 var (
@@ -46,7 +49,6 @@ type Resolver struct {
 	ipv6     bool
 	mapping  bool
 	fakeip   bool
-	hosts    *trie.Trie
 	pool     *fakeip.Pool
 	fallback []resolver
 	main     []resolver
@@ -56,11 +58,6 @@ type Resolver struct {
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeAAAA
 func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
-	ip = net.ParseIP(host)
-	if ip != nil {
-		return ip, nil
-	}
-
 	ch := make(chan net.IP)
 	go func() {
 		defer close(ch)
@@ -89,26 +86,12 @@ func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
 
 // ResolveIPv4 request with TypeA
 func (r *Resolver) ResolveIPv4(host string) (ip net.IP, err error) {
-	ip = net.ParseIP(host)
-	if ip != nil {
-		return ip, nil
-	}
+	return r.resolveIP(host, D.TypeA)
+}
 
-	query := &D.Msg{}
-	query.SetQuestion(D.Fqdn(host), D.TypeA)
-
-	msg, err := r.Exchange(query)
-	if err != nil {
-		return nil, err
-	}
-
-	ips := r.msgToIP(msg)
-	if len(ips) == 0 {
-		return nil, errIPNotFound
-	}
-
-	ip = ips[0]
-	return
+// ResolveIPv6 request with TypeAAAA
+func (r *Resolver) ResolveIPv6(host string) (ip net.IP, err error) {
+	return r.resolveIP(host, D.TypeAAAA)
 }
 
 // Exchange a batch of dns request, and it use cache
@@ -232,6 +215,17 @@ func (r *Resolver) fallbackExchange(m *D.Msg) (msg *D.Msg, err error) {
 }
 
 func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error) {
+	ip = net.ParseIP(host)
+	if dnsType == D.TypeAAAA {
+		if ip6 := ip.To16(); ip6 != nil {
+			return ip6, nil
+		}
+	} else {
+		if ip4 := ip.To4(); ip4 != nil {
+			return ip4, nil
+		}
+	}
+
 	query := &D.Msg{}
 	query.SetQuestion(D.Fqdn(host), dnsType)
 
@@ -282,7 +276,6 @@ type Config struct {
 	Main, Fallback []NameServer
 	IPv6           bool
 	EnhancedMode   EnhancedMode
-	Hosts          *trie.Trie
 	Pool           *fakeip.Pool
 }
 
@@ -297,7 +290,6 @@ func New(config Config) *Resolver {
 		cache:   cache.New(time.Second * 60),
 		mapping: config.EnhancedMode == MAPPING,
 		fakeip:  config.EnhancedMode == FAKEIP,
-		hosts:   config.Hosts,
 		pool:    config.Pool,
 	}
 	if len(config.Fallback) != 0 {
