@@ -140,12 +140,9 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 		} else {
 			c, err = dialer.DialContext(ctx, "tcp4", net.JoinHostPort(ip.String(), port))
 		}
-		if err != nil {
-			return
-		}
 
 		select {
-		case results <- dialResult{Conn: c, error: err, ipv6: ipv6}:
+		case results <- dialResult{Conn: c, error: err, ipv6: ipv6, done: true}:
 		case <-returned:
 			if c != nil {
 				c.Close()
