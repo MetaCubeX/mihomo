@@ -105,7 +105,7 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 		return nil, err
 	}
 
-	dialer := net.Dialer{Timeout: timeout}
+	dialer := net.Dialer{}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -122,31 +122,31 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 	var primary, fallback dialResult
 
 	startRacer := func(ctx context.Context, host string, ipv6 bool) {
-		var err error
+		result := dialResult{ipv6: ipv6, done: true}
+		defer func() {
+			select {
+			case results <- result:
+			case <-returned:
+				if result.Conn != nil {
+					result.Conn.Close()
+				}
+			}
+		}()
 
 		var ip net.IP
 		if ipv6 {
-			ip, err = dns.ResolveIPv6(host)
+			ip, result.error = dns.ResolveIPv6(host)
 		} else {
-			ip, err = dns.ResolveIPv4(host)
+			ip, result.error = dns.ResolveIPv4(host)
 		}
-		if err != nil {
+		if result.error != nil {
 			return
 		}
 
-		var c net.Conn
 		if ipv6 {
-			c, err = dialer.DialContext(ctx, "tcp6", net.JoinHostPort(ip.String(), port))
+			result.Conn, result.error = dialer.DialContext(ctx, "tcp6", net.JoinHostPort(ip.String(), port))
 		} else {
-			c, err = dialer.DialContext(ctx, "tcp4", net.JoinHostPort(ip.String(), port))
-		}
-
-		select {
-		case results <- dialResult{Conn: c, error: err, ipv6: ipv6, done: true}:
-		case <-returned:
-			if c != nil {
-				c.Close()
-			}
+			result.Conn, result.error = dialer.DialContext(ctx, "tcp4", net.JoinHostPort(ip.String(), port))
 		}
 	}
 
