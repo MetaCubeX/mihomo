@@ -23,9 +23,9 @@ type ShadowSocks struct {
 	cipher core.Cipher
 
 	// obfs
-	obfsMode   string
-	obfsOption *simpleObfsOption
-	wsOption   *v2rayObfs.WebsocketOption
+	obfsMode    string
+	obfsOption  *simpleObfsOption
+	v2rayOption *v2rayObfs.Option
 }
 
 type ShadowSocksOption struct {
@@ -55,6 +55,7 @@ type v2rayObfsOption struct {
 	TLS            bool              `obfs:"tls,omitempty"`
 	Headers        map[string]string `obfs:"headers,omitempty"`
 	SkipCertVerify bool              `obfs:"skip-cert-verify,omitempty"`
+	Mux            bool              `obfs:"mux,omitempty"`
 }
 
 func (ss *ShadowSocks) Dial(metadata *C.Metadata) (C.Conn, error) {
@@ -71,7 +72,7 @@ func (ss *ShadowSocks) Dial(metadata *C.Metadata) (C.Conn, error) {
 		c = obfs.NewHTTPObfs(c, ss.obfsOption.Host, port)
 	case "websocket":
 		var err error
-		c, err = v2rayObfs.NewWebsocketObfs(c, ss.wsOption)
+		c, err = v2rayObfs.NewV2rayObfs(c, ss.v2rayOption)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %s", ss.server, err.Error())
 		}
@@ -116,7 +117,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
 	}
 
-	var wsOption *v2rayObfs.WebsocketOption
+	var v2rayOption *v2rayObfs.Option
 	var obfsOption *simpleObfsOption
 	obfsMode := ""
 
@@ -144,7 +145,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		obfsMode = opts.Mode
 		obfsOption = &opts
 	} else if option.Plugin == "v2ray-plugin" {
-		opts := v2rayObfsOption{Host: "bing.com"}
+		opts := v2rayObfsOption{Host: "bing.com", Mux: true}
 		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
 			return nil, fmt.Errorf("ss %s initialize v2ray-plugin error: %s", server, err.Error())
 		}
@@ -162,11 +163,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 				ClientSessionCache: getClientSessionCache(),
 			}
 		}
-		wsOption = &v2rayObfs.WebsocketOption{
+		v2rayOption = &v2rayObfs.Option{
 			Host:      opts.Host,
 			Path:      opts.Path,
 			Headers:   opts.Headers,
 			TLSConfig: tlsConfig,
+			Mux:       opts.Mux,
 		}
 	}
 
@@ -179,9 +181,9 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		server: server,
 		cipher: ciph,
 
-		obfsMode:   obfsMode,
-		wsOption:   wsOption,
-		obfsOption: obfsOption,
+		obfsMode:    obfsMode,
+		v2rayOption: v2rayOption,
+		obfsOption:  obfsOption,
 	}, nil
 }
 

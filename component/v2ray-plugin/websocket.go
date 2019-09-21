@@ -8,16 +8,17 @@ import (
 	"github.com/Dreamacro/clash/component/vmess"
 )
 
-// WebsocketOption is options of websocket obfs
-type WebsocketOption struct {
+// Option is options of websocket obfs
+type Option struct {
 	Host      string
 	Path      string
 	Headers   map[string]string
 	TLSConfig *tls.Config
+	Mux       bool
 }
 
-// NewWebsocketObfs return a HTTPObfs
-func NewWebsocketObfs(conn net.Conn, option *WebsocketOption) (net.Conn, error) {
+// NewV2rayObfs return a HTTPObfs
+func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	header := http.Header{}
 	for k, v := range option.Headers {
 		header.Add(k, v)
@@ -36,10 +37,13 @@ func NewWebsocketObfs(conn net.Conn, option *WebsocketOption) (net.Conn, error) 
 	if err != nil {
 		return nil, err
 	}
-	conn = NewMux(conn, MuxOption{
-		ID:   [2]byte{0, 0},
-		Host: "127.0.0.1",
-		Port: 0,
-	})
+
+	if option.Mux {
+		conn = NewMux(conn, MuxOption{
+			ID:   [2]byte{0, 0},
+			Host: "127.0.0.1",
+			Port: 0,
+		})
+	}
 	return conn, nil
 }
