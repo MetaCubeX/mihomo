@@ -52,9 +52,10 @@ func Start(addr string, secret string) {
 		MaxAge:         300,
 	})
 
+	r.Use(cors.Handler)
 	r.Get("/", hello)
 	r.Group(func(r chi.Router) {
-		r.Use(cors.Handler, authentication)
+		r.Use(authentication)
 
 		r.Get("/logs", getLogs)
 		r.Get("/traffic", traffic)
