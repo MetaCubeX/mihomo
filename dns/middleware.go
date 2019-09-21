@@ -16,7 +16,11 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 	return func(next handler) handler {
 		return func(w D.ResponseWriter, r *D.Msg) {
 			q := r.Question[0]
-			if q.Qtype != D.TypeA && q.Qtype != D.TypeAAAA {
+
+			if q.Qtype == D.TypeAAAA {
+				D.HandleFailed(w, r)
+				return
+			} else if q.Qtype != D.TypeA {
 				next(w, r)
 				return
 			}
