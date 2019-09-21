@@ -179,6 +179,7 @@ Proxy:
     # skip-cert-verify: true
     # host: bing.com
     # path: "/"
+    # mux: true
     # headers:
     #   custom: value
 
