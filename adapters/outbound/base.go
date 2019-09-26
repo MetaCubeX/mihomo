@@ -114,11 +114,11 @@ func (p *Proxy) LastDelay() (delay uint16) {
 		return max
 	}
 
-	head := p.history.First()
-	if head == nil {
+	last := p.history.Last()
+	if last == nil {
 		return max
 	}
-	history := head.(C.DelayHistory)
+	history := last.(C.DelayHistory)
 	if history.Delay == 0 {
 		return max
 	}
