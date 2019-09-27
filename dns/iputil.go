@@ -37,8 +37,8 @@ func ResolveIPv4(host string) (net.IP, error) {
 	}
 
 	for _, ip := range ipAddrs {
-		if len(ip) == net.IPv4len {
-			return ip, nil
+		if ip4 := ip.To4(); ip4 != nil {
+			return ip4, nil
 		}
 	}
 
@@ -71,7 +71,7 @@ func ResolveIPv6(host string) (net.IP, error) {
 	}
 
 	for _, ip := range ipAddrs {
-		if len(ip) == net.IPv6len {
+		if ip.To4() == nil {
 			return ip, nil
 		}
 	}
