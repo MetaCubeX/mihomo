@@ -3,10 +3,12 @@ package dns
 import (
 	"errors"
 	"net"
+	"strings"
 )
 
 var (
 	errIPNotFound = errors.New("cannot found ip")
+	errIPVersion  = errors.New("ip version error")
 )
 
 // ResolveIPv4 with a host, return ipv4
@@ -18,8 +20,11 @@ func ResolveIPv4(host string) (net.IP, error) {
 	}
 
 	ip := net.ParseIP(host)
-	if ip4 := ip.To4(); ip4 != nil {
-		return ip4, nil
+	if ip != nil {
+		if !strings.Contains(host, ":") {
+			return ip, nil
+		}
+		return nil, errIPVersion
 	}
 
 	if DefaultResolver != nil {
@@ -32,8 +37,8 @@ func ResolveIPv4(host string) (net.IP, error) {
 	}
 
 	for _, ip := range ipAddrs {
-		if ip4 := ip.To4(); ip4 != nil {
-			return ip4, nil
+		if len(ip) == net.IPv4len {
+			return ip, nil
 		}
 	}
 
@@ -49,8 +54,11 @@ func ResolveIPv6(host string) (net.IP, error) {
 	}
 
 	ip := net.ParseIP(host)
-	if ip6 := ip.To16(); ip6 != nil {
-		return ip6, nil
+	if ip != nil {
+		if strings.Contains(host, ":") {
+			return ip, nil
+		}
+		return nil, errIPVersion
 	}
 
 	if DefaultResolver != nil {
@@ -63,8 +71,8 @@ func ResolveIPv6(host string) (net.IP, error) {
 	}
 
 	for _, ip := range ipAddrs {
-		if ip6 := ip.To16(); ip6 != nil {
-			return ip6, nil
+		if len(ip) == net.IPv6len {
+			return ip, nil
 		}
 	}
 
