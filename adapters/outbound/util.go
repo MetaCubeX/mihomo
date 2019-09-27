@@ -115,8 +115,9 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 	type dialResult struct {
 		net.Conn
 		error
-		ipv6 bool
-		done bool
+		resolved bool
+		ipv6     bool
+		done     bool
 	}
 	results := make(chan dialResult)
 	var primary, fallback dialResult
@@ -142,6 +143,7 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 		if result.error != nil {
 			return
 		}
+		result.resolved = true
 
 		if ipv6 {
 			result.Conn, result.error = dialer.DialContext(ctx, "tcp6", net.JoinHostPort(ip.String(), port))
@@ -160,14 +162,20 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 				return res.Conn, nil
 			}
 
-			if res.ipv6 {
+			if !res.ipv6 {
 				primary = res
 			} else {
 				fallback = res
 			}
 
 			if primary.done && fallback.done {
-				return nil, primary.error
+				if primary.resolved {
+					return nil, primary.error
+				} else if fallback.resolved {
+					return nil, fallback.error
+				} else {
+					return nil, primary.error
+				}
 			}
 		}
 	}

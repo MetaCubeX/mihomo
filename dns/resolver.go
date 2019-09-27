@@ -221,13 +221,11 @@ func (r *Resolver) fallbackExchange(m *D.Msg) (msg *D.Msg, err error) {
 
 func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error) {
 	ip = net.ParseIP(host)
-	if dnsType == D.TypeAAAA {
-		if ip6 := ip.To16(); ip6 != nil {
-			return ip6, nil
-		}
-	} else {
-		if ip4 := ip.To4(); ip4 != nil {
-			return ip4, nil
+	if ip != nil {
+		if dnsType == D.TypeAAAA && len(ip) == net.IPv6len {
+			return ip, nil
+		} else if dnsType == D.TypeA && len(ip) == net.IPv4len {
+			return ip, nil
 		}
 	}
 
