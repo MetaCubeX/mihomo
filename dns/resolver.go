@@ -222,9 +222,10 @@ func (r *Resolver) fallbackExchange(m *D.Msg) (msg *D.Msg, err error) {
 func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error) {
 	ip = net.ParseIP(host)
 	if ip != nil {
-		if dnsType == D.TypeAAAA && len(ip) == net.IPv6len {
+		isIPv4 := ip.To4() != nil
+		if dnsType == D.TypeAAAA && !isIPv4 {
 			return ip, nil
-		} else if dnsType == D.TypeA && len(ip) == net.IPv4len {
+		} else if dnsType == D.TypeA && isIPv4 {
 			return ip, nil
 		}
 	}
