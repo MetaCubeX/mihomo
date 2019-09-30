@@ -23,7 +23,11 @@ var (
 
 	uiPath = ""
 
-	upgrader = websocket.Upgrader{}
+	upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
 )
 
 type Traffic struct {
@@ -84,13 +88,25 @@ func Start(addr string, secret string) {
 
 func authentication(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
-		text := strings.SplitN(header, " ", 2)
-
 		if serverSecret == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		// Browser websocket not support custom header
+		if websocket.IsWebSocketUpgrade(r) && r.URL.Query().Get("token") != "" {
+			token := r.URL.Query().Get("token")
+			if token != serverSecret {
+				render.Status(r, http.StatusUnauthorized)
+				render.JSON(w, r, ErrUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		header := r.Header.Get("Authorization")
+		text := strings.SplitN(header, " ", 2)
 
 		hasUnvalidHeader := text[0] != "Bearer"
 		hasUnvalidSecret := len(text) == 2 && text[1] != serverSecret
