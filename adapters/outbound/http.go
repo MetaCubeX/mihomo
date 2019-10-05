@@ -81,16 +81,20 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 		return err
 	}
 
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		return nil
 	}
 
-	if resp.StatusCode == 407 {
+	if resp.StatusCode == http.StatusProxyAuthRequired {
 		return errors.New("HTTP need auth")
 	}
 
-	if resp.StatusCode == 405 {
+	if resp.StatusCode == http.StatusMethodNotAllowed {
 		return errors.New("CONNECT method not allowed by proxy")
+	}
+
+	if resp.StatusCode >= http.StatusInternalServerError {
+		return errors.New(resp.Status)
 	}
 	return fmt.Errorf("can not connect remote err code: %d", resp.StatusCode)
 }
