@@ -300,6 +300,13 @@ func parseProxies(cfg *rawConfig) (map[string]C.Proxy, error) {
 				break
 			}
 			proxy, err = adapters.NewVmess(*vmessOption)
+		case "snell":
+			snellOption := &adapters.SnellOption{}
+			err = decoder.Decode(mapping, snellOption)
+			if err != nil {
+				break
+			}
+			proxy, err = adapters.NewSnell(*snellOption)
 		default:
 			return nil, fmt.Errorf("Unsupport proxy type: %s", proxyType)
 		}

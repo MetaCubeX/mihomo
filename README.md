@@ -73,7 +73,8 @@ For example, you can use the current directory as the configuration directory:
 $ clash -d .
 ```
 
-Below is an example configuration file:
+<details>
+  <summary>This is an example configuration file</summary>
 
 ```yml
 # port of HTTP
@@ -91,7 +92,7 @@ allow-lan: false
 # "*": bind all IP addresses
 # 192.168.122.11: bind a single IPv4 address
 # "[aaaa::a8aa:ff:fe09:57d8]": bind a single IPv6 address
-bind-address: "*"
+# bind-address: "*"
 
 # Rule / Global/ Direct (default is Rule)
 mode: Rule
@@ -151,9 +152,15 @@ Proxy:
 #   aes-128-ctr aes-192-ctr aes-256-ctr
 #   rc4-md5 chacha20 chacha20-ietf xchacha20
 #   chacha20-ietf-poly1305 xchacha20-ietf-poly1305
-- { name: "ss1", type: ss, server: server, port: 443, cipher: chacha20-ietf-poly1305, password: "password", udp: true }
+- name: "ss1"
+  type: ss
+  server: server
+  port: 443
+  cipher: chacha20-ietf-poly1305
+  password: "password"
+  # udp: true
 
-# old obfs configuration remove after prerelease
+# old obfs configuration format remove after prerelease
 - name: "ss2"
   type: ss
   server: server
@@ -184,47 +191,92 @@ Proxy:
 
 # vmess
 # cipher support auto/aes-128-gcm/chacha20-poly1305/none
-- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto }
-# with tls
-- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, tls: true }
-# with tls and skip-cert-verify
-- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, tls: true, skip-cert-verify: true }
-# with ws-path and ws-headers
-- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, network: ws, ws-path: /path, ws-headers: { Host: v2ray.com } }
-# with ws + tls
-- { name: "vmess", type: vmess, server: server, port: 443, uuid: uuid, alterId: 32, cipher: auto, network: ws, ws-path: /path, tls: true }
+- name: "vmess"
+  type: vmess
+  server: server
+  port: 443
+  uuid: uuid
+  alterId: 32
+  cipher: auto
+  # udp: true
+  # tls: true
+  # skip-cert-verify: true
+  # network: ws
+  # ws-path: /path
+  # ws-headers:
+  #   Host: v2ray.com
 
 # socks5
-- { name: "socks", type: socks5, server: server, port: 443 }
-# socks5 with authentication
-- { name: "socks", type: socks5, server: server, port: 443, username: "username", password: "password" }
-# with tls
-- { name: "socks", type: socks5, server: server, port: 443, tls: true }
-# with tls and skip-cert-verify
-- { name: "socks", type: socks5, server: server, port: 443, tls: true, skip-cert-verify: true }
+- name: "socks"
+  type: socks5
+  server: server
+  port: 443
+  # username: username
+  # password: password
+  # tls: true
+  # skip-cert-verify: true
+  # udp: true
 
 # http
-- { name: "http", type: http, server: server, port: 443 }
-# http with authentication
-- { name: "http", type: http, server: server, port: 443, username: "username", password: "password" }
-# with tls (https)
-- { name: "http", type: http, server: server, port: 443, tls: true }
-# with tls (https) and skip-cert-verify
-- { name: "http", type: http, server: server, port: 443, tls: true, skip-cert-verify: true }
+- name: "http"
+  type: http
+  server: server
+  port: 443
+  # username: username
+  # password: password
+  # tls: true # https
+  # skip-cert-verify: true
+
+# snell
+- name: "snell"
+  type: snell
+  server: server
+  port: 44046
+  psk: yourpsk
+  # obfs-opts:
+    # mode: http # or tls
+    # host: bing.com
 
 Proxy Group:
 # url-test select which proxy will be used by benchmarking speed to a URL.
-- { name: "auto", type: url-test, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
+- name: "auto"
+  type: url-test
+  proxies:
+    - ss1
+    - ss2
+    - vmess1
+  url: 'http://www.gstatic.com/generate_204'
+  interval: 300
 
 # fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
-- { name: "fallback-auto", type: fallback, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
+- name: "fallback-auto"
+  type: fallback
+  proxies:
+    - ss1
+    - ss2
+    - vmess1
+  url: 'http://www.gstatic.com/generate_204'
+  interval: 300
 
 # load-balance: The request of the same eTLD will be dial on the same proxy.
-- { name: "load-balance", type: load-balance, proxies: ["ss1", "ss2", "vmess1"], url: "http://www.gstatic.com/generate_204", interval: 300 }
+- name: "load-balance"
+  type: load-balance
+  proxies:
+    - ss1
+    - ss2
+    - vmess1
+  url: 'http://www.gstatic.com/generate_204'
+  interval: 300
 
 # select is used for selecting proxy or proxy group
 # you can use RESTful API to switch proxy, is recommended for use in GUI.
-- { name: "Proxy", type: select, proxies: ["ss1", "ss2", "vmess1", "auto"] }
+- name: Proxy
+  type: select
+  proxies:
+    - ss1
+    - ss2
+    - vmess1
+    - auto
 
 Rule:
 - DOMAIN-SUFFIX,google.com,auto
@@ -241,6 +293,7 @@ Rule:
 # you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
 - MATCH,auto
 ```
+</details>
 
 ## Documentations
 https://clash.gitbook.io/
