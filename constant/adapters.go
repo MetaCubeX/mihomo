@@ -14,6 +14,7 @@ const (
 	Reject
 	Selector
 	Shadowsocks
+	Snell
 	Socks5
 	Http
 	URLTest
@@ -92,6 +93,8 @@ func (at AdapterType) String() string {
 		return "Selector"
 	case Shadowsocks:
 		return "Shadowsocks"
+	case Snell:
+		return "Snell"
 	case Socks5:
 		return "Socks5"
 	case Http:
