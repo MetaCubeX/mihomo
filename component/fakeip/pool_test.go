@@ -43,6 +43,33 @@ func TestPool_MaxCacheSize(t *testing.T) {
 	assert.False(t, first.Equal(next))
 }
 
+func TestPool_DoubleMapping(t *testing.T) {
+	_, ipnet, _ := net.ParseCIDR("192.168.0.1/24")
+	pool, _ := New(ipnet, 2)
+
+	// fill cache
+	fooIP := pool.Lookup("foo.com")
+	bazIP := pool.Lookup("baz.com")
+
+	// make foo.com hot
+	pool.Lookup("foo.com")
+
+	// should drop baz.com
+	barIP := pool.Lookup("bar.com")
+
+	_, fooExist := pool.LookBack(fooIP)
+	_, bazExist := pool.LookBack(bazIP)
+	_, barExist := pool.LookBack(barIP)
+
+	newBazIP := pool.Lookup("baz.com")
+
+	assert.True(t, fooExist)
+	assert.False(t, bazExist)
+	assert.True(t, barExist)
+
+	assert.False(t, bazIP.Equal(newBazIP))
+}
+
 func TestPool_Error(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/31")
 	_, err := New(ipnet, 10)

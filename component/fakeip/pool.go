@@ -22,8 +22,14 @@ type Pool struct {
 func (p *Pool) Lookup(host string) net.IP {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	if ip, exist := p.cache.Get(host); exist {
-		return ip.(net.IP)
+	if elm, exist := p.cache.Get(host); exist {
+		ip := elm.(net.IP)
+
+		// ensure ip --> host on head of linked list
+		n := ipToUint(ip.To4())
+		offset := n - p.min + 1
+		p.cache.Get(offset)
+		return ip
 	}
 
 	ip := p.get(host)
@@ -43,8 +49,12 @@ func (p *Pool) LookBack(ip net.IP) (string, bool) {
 	n := ipToUint(ip.To4())
 	offset := n - p.min + 1
 
-	if host, exist := p.cache.Get(offset); exist {
-		return host.(string), true
+	if elm, exist := p.cache.Get(offset); exist {
+		host := elm.(string)
+
+		// ensure host --> ip on head of linked list
+		p.cache.Get(host)
+		return host, true
 	}
 
 	return "", false
@@ -64,7 +74,7 @@ func (p *Pool) get(host string) net.IP {
 			break
 		}
 
-		if _, exist := p.cache.Get(p.offset); !exist {
+		if !p.cache.Exist(p.offset) {
 			break
 		}
 	}

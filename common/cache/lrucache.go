@@ -86,6 +86,15 @@ func (c *LruCache) Get(key interface{}) (interface{}, bool) {
 	return value, true
 }
 
+// Exist returns if key exist in cache but not put item to the head of linked list
+func (c *LruCache) Exist(key interface{}) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	_, ok := c.cache[key]
+	return ok
+}
+
 // Set stores the interface{} representation of a response for a given key.
 func (c *LruCache) Set(key interface{}, value interface{}) {
 	c.mu.Lock()
