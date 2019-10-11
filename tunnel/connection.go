@@ -86,11 +86,14 @@ func (t *Tunnel) handleUDPToRemote(conn net.Conn, pc net.PacketConn, addr net.Ad
 	t.traffic.Up() <- int64(n)
 }
 
-func (t *Tunnel) handleUDPToLocal(conn net.Conn, pc net.PacketConn) {
+func (t *Tunnel) handleUDPToLocal(conn net.Conn, pc net.PacketConn, key string, timeout time.Duration) {
 	buf := pool.BufPool.Get().([]byte)
 	defer pool.BufPool.Put(buf[:cap(buf)])
+	defer t.natTable.Delete(key)
+	defer pc.Close()
 
 	for {
+		pc.SetReadDeadline(time.Now().Add(timeout))
 		n, _, err := pc.ReadFrom(buf)
 		if err != nil {
 			return

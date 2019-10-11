@@ -338,6 +338,7 @@ func ParseAddr(s string) Addr {
 	return addr
 }
 
+// DecodeUDPPacket split `packet` to addr payload, and this function is mutable with `packet`
 func DecodeUDPPacket(packet []byte) (addr Addr, payload []byte, err error) {
 	if len(packet) < 5 {
 		err = errors.New("insufficient length of packet")
@@ -360,16 +361,15 @@ func DecodeUDPPacket(packet []byte) (addr Addr, payload []byte, err error) {
 		err = errors.New("failed to read UDP header")
 	}
 
-	payload = bytes.Join([][]byte{packet[3+len(addr):]}, []byte{})
+	payload = packet[3+len(addr):]
 	return
 }
 
-func EncodeUDPPacket(addr string, payload []byte) (packet []byte, err error) {
-	rAddr := ParseAddr(addr)
-	if rAddr == nil {
-		err = errors.New("cannot parse addr")
+func EncodeUDPPacket(addr Addr, payload []byte) (packet []byte, err error) {
+	if addr == nil {
+		err = errors.New("address is invalid")
 		return
 	}
-	packet = bytes.Join([][]byte{{0, 0, 0}, rAddr, payload}, []byte{})
+	packet = bytes.Join([][]byte{{0, 0, 0}, addr, payload}, []byte{})
 	return
 }
