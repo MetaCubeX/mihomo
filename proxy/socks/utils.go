@@ -4,24 +4,16 @@ import (
 	"bytes"
 	"net"
 
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/socks5"
 )
 
 type fakeConn struct {
 	net.PacketConn
-	target     string
 	remoteAddr net.Addr
+	targetAddr socks5.Addr
 	buffer     *bytes.Buffer
-}
-
-func newfakeConn(conn net.PacketConn, target string, remoteAddr net.Addr, buf []byte) *fakeConn {
-	buffer := bytes.NewBuffer(buf)
-	return &fakeConn{
-		PacketConn: conn,
-		target:     target,
-		buffer:     buffer,
-		remoteAddr: remoteAddr,
-	}
+	bufRef     []byte
 }
 
 func (c *fakeConn) Read(b []byte) (n int, err error) {
@@ -29,7 +21,7 @@ func (c *fakeConn) Read(b []byte) (n int, err error) {
 }
 
 func (c *fakeConn) Write(b []byte) (n int, err error) {
-	packet, err := socks5.EncodeUDPPacket(c.target, b)
+	packet, err := socks5.EncodeUDPPacket(c.targetAddr, b)
 	if err != nil {
 		return
 	}
@@ -38,4 +30,10 @@ func (c *fakeConn) Write(b []byte) (n int, err error) {
 
 func (c *fakeConn) RemoteAddr() net.Addr {
 	return c.remoteAddr
+}
+
+func (c *fakeConn) Close() error {
+	err := c.PacketConn.Close()
+	pool.BufPool.Put(c.bufRef[:cap(c.bufRef)])
+	return err
 }
