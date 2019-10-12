@@ -54,7 +54,7 @@ func jumpHash(key uint64, buckets int32) int32 {
 	return int32(b)
 }
 
-func (lb *LoadBalance) Dial(metadata *C.Metadata) (c C.Conn, err error) {
+func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
 	defer func() {
 		if err == nil {
 			c.AppendToChains(lb)
@@ -67,11 +67,11 @@ func (lb *LoadBalance) Dial(metadata *C.Metadata) (c C.Conn, err error) {
 		idx := jumpHash(key, buckets)
 		proxy := lb.proxies[idx]
 		if proxy.Alive() {
-			c, err = proxy.Dial(metadata)
+			c, err = proxy.DialContext(ctx, metadata)
 			return
 		}
 	}
-	c, err = lb.proxies[0].Dial(metadata)
+	c, err = lb.proxies[0].DialContext(ctx, metadata)
 	return
 }
 

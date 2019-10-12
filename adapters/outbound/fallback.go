@@ -31,9 +31,9 @@ func (f *Fallback) Now() string {
 	return proxy.Name()
 }
 
-func (f *Fallback) Dial(metadata *C.Metadata) (C.Conn, error) {
+func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	proxy := f.findAliveProxy()
-	c, err := proxy.Dial(metadata)
+	c, err := proxy.DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(f)
 	}

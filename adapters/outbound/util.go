@@ -86,15 +86,13 @@ func serializesSocksAddr(metadata *C.Metadata) []byte {
 	return bytes.Join(buf, nil)
 }
 
-func dialTimeout(network, address string, timeout time.Duration) (net.Conn, error) {
+func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
 	dialer := net.Dialer{}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	returned := make(chan struct{})
 	defer close(returned)

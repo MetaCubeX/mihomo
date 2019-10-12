@@ -91,7 +91,13 @@ func (p *Proxy) Alive() bool {
 }
 
 func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
-	conn, err := p.ProxyAdapter.Dial(metadata)
+	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+	defer cancel()
+	return p.DialContext(ctx, metadata)
+}
+
+func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	conn, err := p.ProxyAdapter.DialContext(ctx, metadata)
 	if err != nil {
 		p.alive = false
 	}
@@ -157,7 +163,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	}
 
 	start := time.Now()
-	instance, err := p.Dial(&addr)
+	instance, err := p.DialContext(ctx, &addr)
 	if err != nil {
 		return
 	}
