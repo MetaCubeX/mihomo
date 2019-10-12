@@ -110,8 +110,9 @@ func (u *URLTest) speedTest() {
 	}
 	defer atomic.StoreInt32(&u.once, 0)
 
-	picker, ctx, cancel := picker.WithTimeout(context.Background(), defaultURLTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
 	defer cancel()
+	picker := picker.WithoutAutoCancel(ctx)
 	for _, p := range u.proxies {
 		proxy := p
 		picker.Go(func() (interface{}, error) {
@@ -123,10 +124,12 @@ func (u *URLTest) speedTest() {
 		})
 	}
 
-	fast := picker.Wait()
+	fast := picker.WaitWithoutCancel()
 	if fast != nil {
 		u.fast = fast.(C.Proxy)
 	}
+
+	picker.Wait()
 }
 
 func NewURLTest(option URLTestOption, proxies []C.Proxy) (*URLTest, error) {
