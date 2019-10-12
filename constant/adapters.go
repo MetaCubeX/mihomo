@@ -58,7 +58,7 @@ type PacketConn interface {
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
-	Dial(metadata *Metadata) (Conn, error)
+	DialContext(ctx context.Context, metadata *Metadata) (Conn, error)
 	DialUDP(metadata *Metadata) (PacketConn, net.Addr, error)
 	SupportUDP() bool
 	Destroy()
@@ -74,6 +74,7 @@ type Proxy interface {
 	ProxyAdapter
 	Alive() bool
 	DelayHistory() []DelayHistory
+	Dial(metadata *Metadata) (Conn, error)
 	LastDelay() uint16
 	URLTest(ctx context.Context, url string) (uint16, error)
 }

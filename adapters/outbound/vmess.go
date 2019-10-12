@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -31,8 +32,8 @@ type VmessOption struct {
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (v *Vmess) Dial(metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialTimeout("tcp", v.server, tcpTimeout)
+func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := dialContext(ctx, "tcp", v.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error", v.server)
 	}
@@ -42,7 +43,9 @@ func (v *Vmess) Dial(metadata *C.Metadata) (C.Conn, error) {
 }
 
 func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
-	c, err := dialTimeout("tcp", v.server, tcpTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+	defer cancel()
+	c, err := dialContext(ctx, "tcp", v.server)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s connect error", v.server)
 	}

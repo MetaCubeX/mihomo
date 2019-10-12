@@ -3,6 +3,7 @@ package adapters
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
@@ -35,8 +36,8 @@ type HttpOption struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (h *Http) Dial(metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialTimeout("tcp", h.addr, tcpTimeout)
+func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := dialContext(ctx, "tcp", h.addr)
 	if err == nil && h.tls {
 		cc := tls.Client(c, h.tlsConfig)
 		err = cc.Handshake()

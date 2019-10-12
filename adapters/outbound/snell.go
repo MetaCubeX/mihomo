@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -26,8 +27,8 @@ type SnellOption struct {
 	ObfsOpts map[string]interface{} `proxy:"obfs-opts,omitempty"`
 }
 
-func (s *Snell) Dial(metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialTimeout("tcp", s.server, tcpTimeout)
+func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := dialContext(ctx, "tcp", s.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", s.server, err.Error())
 	}

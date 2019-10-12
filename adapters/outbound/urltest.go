@@ -33,9 +33,9 @@ func (u *URLTest) Now() string {
 	return u.fast.Name()
 }
 
-func (u *URLTest) Dial(metadata *C.Metadata) (c C.Conn, err error) {
+func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
 	for i := 0; i < 3; i++ {
-		c, err = u.fast.Dial(metadata)
+		c, err = u.fast.DialContext(ctx, metadata)
 		if err == nil {
 			c.AppendToChains(u)
 			return

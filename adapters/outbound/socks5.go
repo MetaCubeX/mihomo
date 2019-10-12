@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -33,8 +34,8 @@ type Socks5Option struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (ss *Socks5) Dial(metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialTimeout("tcp", ss.addr, tcpTimeout)
+func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := dialContext(ctx, "tcp", ss.addr)
 
 	if err == nil && ss.tls {
 		cc := tls.Client(c, ss.tlsConfig)
@@ -60,7 +61,9 @@ func (ss *Socks5) Dial(metadata *C.Metadata) (C.Conn, error) {
 }
 
 func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, _ net.Addr, err error) {
-	c, err := dialTimeout("tcp", ss.addr, tcpTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+	defer cancel()
+	c, err := dialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		err = fmt.Errorf("%s connect error", ss.addr)
 		return

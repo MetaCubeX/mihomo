@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -20,8 +21,8 @@ type SelectorOption struct {
 	Proxies []string `proxy:"proxies"`
 }
 
-func (s *Selector) Dial(metadata *C.Metadata) (C.Conn, error) {
-	c, err := s.selected.Dial(metadata)
+func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := s.selected.DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(s)
 	}
