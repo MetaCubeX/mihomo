@@ -75,12 +75,15 @@ func (u *URLTest) Destroy() {
 
 func (u *URLTest) loop() {
 	tick := time.NewTicker(u.interval)
-	go u.speedTest()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go u.speedTest(ctx)
 Loop:
 	for {
 		select {
 		case <-tick.C:
-			go u.speedTest()
+			go u.speedTest(ctx)
 		case <-u.done:
 			break Loop
 		}
@@ -104,13 +107,13 @@ func (u *URLTest) fallback() {
 	u.fast = fast
 }
 
-func (u *URLTest) speedTest() {
+func (u *URLTest) speedTest(ctx context.Context) {
 	if !atomic.CompareAndSwapInt32(&u.once, 0, 1) {
 		return
 	}
 	defer atomic.StoreInt32(&u.once, 0)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultURLTestTimeout)
 	defer cancel()
 	picker := picker.WithoutAutoCancel(ctx)
 	for _, p := range u.proxies {
