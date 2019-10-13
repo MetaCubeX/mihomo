@@ -75,40 +75,36 @@ func ReCreateSocks(port int) error {
 	addr := genAddr(bindAddress, port, allowLan)
 
 	if socksListener != nil {
-		if socksListener.Address() == addr {
-			return nil
+		if socksListener.Address() != addr {
+			socksListener.Close()
+			socksListener = nil
 		}
-		socksListener.Close()
-		socksListener = nil
+	}
+
+	if socksUDPListener != nil {
+		if socksUDPListener.Address() != addr {
+			socksUDPListener.Close()
+			socksUDPListener = nil
+		}
 	}
 
 	if portIsZero(addr) {
 		return nil
 	}
 
-	var err error
-	socksListener, err = socks.NewSocksProxy(addr)
+	tcpListener, err := socks.NewSocksProxy(addr)
 	if err != nil {
 		return err
 	}
 
-	return reCreateSocksUDP(addr)
-}
-
-func reCreateSocksUDP(addr string) error {
-	if socksUDPListener != nil {
-		if socksUDPListener.Address() == addr {
-			return nil
-		}
-		socksUDPListener.Close()
-		socksUDPListener = nil
-	}
-
-	var err error
-	socksUDPListener, err = socks.NewSocksUDPProxy(addr)
+	udpListener, err := socks.NewSocksUDPProxy(addr)
 	if err != nil {
+		tcpListener.Close()
 		return err
 	}
+
+	socksListener = tcpListener
+	socksUDPListener = udpListener
 
 	return nil
 }
