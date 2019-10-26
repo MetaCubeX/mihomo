@@ -36,6 +36,7 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 		if err != nil {
 			break
 		}
+		defer resp.Body.Close()
 		adapters.RemoveHopByHopHeaders(resp.Header)
 
 		if resp.StatusCode == http.StatusContinue {
@@ -56,6 +57,13 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 		}
 		err = resp.Write(request)
 		if err != nil || resp.Close {
+			break
+		}
+
+		buf := pool.BufPool.Get().([]byte)
+		_, err = io.CopyBuffer(request, resp.Body, buf)
+		pool.BufPool.Put(buf[:cap(buf)])
+		if err != nil && err != io.EOF {
 			break
 		}
 
