@@ -30,8 +30,7 @@ type Tunnel struct {
 	natTable  *nat.Table
 	rules     []C.Rule
 	proxies   map[string]C.Proxy
-	configMux *sync.RWMutex
-	traffic   *C.Traffic
+	configMux sync.RWMutex
 
 	// experimental features
 	ignoreResolveFail bool
@@ -48,11 +47,6 @@ func (t *Tunnel) Add(req C.ServerAdapter) {
 	case C.UDP:
 		t.udpQueue.In() <- req
 	}
-}
-
-// Traffic return traffic of all connections
-func (t *Tunnel) Traffic() *C.Traffic {
-	return t.traffic
 }
 
 // Rules return all rules
@@ -123,7 +117,7 @@ func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
 func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	// preprocess enhanced-mode metadata
 	if t.needLookupIP(metadata) {
-		host, exist := dns.DefaultResolver.IPToHost(*metadata.DstIP)
+		host, exist := dns.DefaultResolver.IPToHost(metadata.DstIP)
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
@@ -188,8 +182,8 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
 				wg.Done()
 				return
 			}
-			pc = rawPc
 			addr = nAddr
+			pc = newUDPTracker(rawPc, DefaultManager, metadata, rule)
 
 			if rule != nil {
 				log.Infoln("%s --> %v match %s using %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), rawPc.Chains().String())
@@ -231,6 +225,7 @@ func (t *Tunnel) handleTCPConn(localConn C.ServerAdapter) {
 		log.Warnln("dial %s error: %s", proxy.Name(), err.Error())
 		return
 	}
+	remoteConn = newTCPTracker(remoteConn, DefaultManager, metadata, rule)
 	defer remoteConn.Close()
 
 	if rule != nil {
@@ -259,7 +254,7 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 	if node := dns.DefaultHosts.Search(metadata.Host); node != nil {
 		ip := node.Data.(net.IP)
-		metadata.DstIP = &ip
+		metadata.DstIP = ip
 		resolved = true
 	}
 
@@ -273,7 +268,7 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				log.Debugln("[DNS] resolve %s error: %s", metadata.Host, err.Error())
 			} else {
 				log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
-				metadata.DstIP = &ip
+				metadata.DstIP = ip
 			}
 			resolved = true
 		}
@@ -296,13 +291,11 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 func newTunnel() *Tunnel {
 	return &Tunnel{
-		tcpQueue:  channels.NewInfiniteChannel(),
-		udpQueue:  channels.NewInfiniteChannel(),
-		natTable:  nat.New(),
-		proxies:   make(map[string]C.Proxy),
-		configMux: &sync.RWMutex{},
-		traffic:   C.NewTraffic(time.Second),
-		mode:      Rule,
+		tcpQueue: channels.NewInfiniteChannel(),
+		udpQueue: channels.NewInfiniteChannel(),
+		natTable: nat.New(),
+		proxies:  make(map[string]C.Proxy),
+		mode:     Rule,
 	}
 }
 
