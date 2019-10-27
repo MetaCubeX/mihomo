@@ -24,7 +24,7 @@ func (i *IPCIDR) IsMatch(metadata *C.Metadata) bool {
 	if i.isSourceIP {
 		ip = metadata.SrcIP
 	}
-	return ip != nil && i.ipnet.Contains(*ip)
+	return ip != nil && i.ipnet.Contains(ip)
 }
 
 func (i *IPCIDR) Adapter() string {
