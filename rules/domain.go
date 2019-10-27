@@ -15,7 +15,7 @@ func (d *Domain) RuleType() C.RuleType {
 	return C.Domain
 }
 
-func (d *Domain) IsMatch(metadata *C.Metadata) bool {
+func (d *Domain) Match(metadata *C.Metadata) bool {
 	if metadata.AddrType != C.AtypDomainName {
 		return false
 	}
@@ -28,6 +28,10 @@ func (d *Domain) Adapter() string {
 
 func (d *Domain) Payload() string {
 	return d.domain
+}
+
+func (d *Domain) NoResolveIP() bool {
+	return false
 }
 
 func NewDomain(domain string, adapter string) *Domain {

@@ -115,6 +115,11 @@ func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
 }
 
 func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
+	// handle host equal IP string
+	if ip := net.ParseIP(metadata.Host); ip != nil {
+		metadata.DstIP = ip
+	}
+
 	// preprocess enhanced-mode metadata
 	if t.needLookupIP(metadata) {
 		host, exist := dns.DefaultResolver.IPToHost(metadata.DstIP)
@@ -243,7 +248,7 @@ func (t *Tunnel) handleTCPConn(localConn C.ServerAdapter) {
 }
 
 func (t *Tunnel) shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
-	return (rule.RuleType() == C.GEOIP || rule.RuleType() == C.IPCIDR) && metadata.Host != "" && metadata.DstIP == nil
+	return !rule.NoResolveIP() && metadata.Host != "" && metadata.DstIP == nil
 }
 
 func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
@@ -273,7 +278,7 @@ func (t *Tunnel) match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if rule.IsMatch(metadata) {
+		if rule.Match(metadata) {
 			adapter, ok := t.proxies[rule.Adapter()]
 			if !ok {
 				continue
