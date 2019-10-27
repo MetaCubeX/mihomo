@@ -42,7 +42,8 @@ func (rt RuleType) String() string {
 
 type Rule interface {
 	RuleType() RuleType
-	IsMatch(metadata *Metadata) bool
+	Match(metadata *Metadata) bool
 	Adapter() string
 	Payload() string
+	NoResolveIP() bool
 }

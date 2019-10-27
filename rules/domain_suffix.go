@@ -15,7 +15,7 @@ func (ds *DomainSuffix) RuleType() C.RuleType {
 	return C.DomainSuffix
 }
 
-func (ds *DomainSuffix) IsMatch(metadata *C.Metadata) bool {
+func (ds *DomainSuffix) Match(metadata *C.Metadata) bool {
 	if metadata.AddrType != C.AtypDomainName {
 		return false
 	}
@@ -29,6 +29,10 @@ func (ds *DomainSuffix) Adapter() string {
 
 func (ds *DomainSuffix) Payload() string {
 	return ds.suffix
+}
+
+func (ds *DomainSuffix) NoResolveIP() bool {
+	return false
 }
 
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {

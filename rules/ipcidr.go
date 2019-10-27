@@ -6,10 +6,25 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
+type IPCIDROption func(*IPCIDR)
+
+func WithIPCIDRSourceIP(b bool) IPCIDROption {
+	return func(i *IPCIDR) {
+		i.isSourceIP = b
+	}
+}
+
+func WithIPCIDRNoResolve(noResolve bool) IPCIDROption {
+	return func(i *IPCIDR) {
+		i.noResolveIP = !noResolve
+	}
+}
+
 type IPCIDR struct {
-	ipnet      *net.IPNet
-	adapter    string
-	isSourceIP bool
+	ipnet       *net.IPNet
+	adapter     string
+	isSourceIP  bool
+	noResolveIP bool
 }
 
 func (i *IPCIDR) RuleType() C.RuleType {
@@ -19,7 +34,7 @@ func (i *IPCIDR) RuleType() C.RuleType {
 	return C.IPCIDR
 }
 
-func (i *IPCIDR) IsMatch(metadata *C.Metadata) bool {
+func (i *IPCIDR) Match(metadata *C.Metadata) bool {
 	ip := metadata.DstIP
 	if i.isSourceIP {
 		ip = metadata.SrcIP
@@ -35,14 +50,24 @@ func (i *IPCIDR) Payload() string {
 	return i.ipnet.String()
 }
 
-func NewIPCIDR(s string, adapter string, isSourceIP bool) *IPCIDR {
+func (i *IPCIDR) NoResolveIP() bool {
+	return i.noResolveIP
+}
+
+func NewIPCIDR(s string, adapter string, opts ...IPCIDROption) (*IPCIDR, error) {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
-		return nil
+		return nil, errPayload
 	}
-	return &IPCIDR{
-		ipnet:      ipnet,
-		adapter:    adapter,
-		isSourceIP: isSourceIP,
+
+	ipcidr := &IPCIDR{
+		ipnet:   ipnet,
+		adapter: adapter,
 	}
+
+	for _, o := range opts {
+		o(ipcidr)
+	}
+
+	return ipcidr, nil
 }

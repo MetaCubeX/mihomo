@@ -12,7 +12,7 @@ func (f *Match) RuleType() C.RuleType {
 	return C.MATCH
 }
 
-func (f *Match) IsMatch(metadata *C.Metadata) bool {
+func (f *Match) Match(metadata *C.Metadata) bool {
 	return true
 }
 
@@ -22,6 +22,10 @@ func (f *Match) Adapter() string {
 
 func (f *Match) Payload() string {
 	return ""
+}
+
+func (f *Match) NoResolveIP() bool {
+	return false
 }
 
 func NewMatch(adapter string) *Match {
