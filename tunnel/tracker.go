@@ -56,6 +56,11 @@ func (tt *tcpTracker) Close() error {
 
 func newTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
 	uuid, _ := uuid.NewV4()
+	ruleType := ""
+	if rule != nil {
+		ruleType = rule.RuleType().String()
+	}
+
 	t := &tcpTracker{
 		Conn:    conn,
 		manager: manager,
@@ -64,7 +69,7 @@ func newTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 			Start:    time.Now(),
 			Metadata: metadata,
 			Chain:    conn.Chains(),
-			Rule:     rule.RuleType().String(),
+			Rule:     ruleType,
 		},
 	}
 
@@ -105,6 +110,11 @@ func (ut *udpTracker) Close() error {
 
 func newUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
 	uuid, _ := uuid.NewV4()
+	ruleType := ""
+	if rule != nil {
+		ruleType = rule.RuleType().String()
+	}
+
 	ut := &udpTracker{
 		PacketConn: conn,
 		manager:    manager,
@@ -113,7 +123,7 @@ func newUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, ru
 			Start:    time.Now(),
 			Metadata: metadata,
 			Chain:    conn.Chains(),
-			Rule:     rule.RuleType().String(),
+			Rule:     ruleType,
 		},
 	}
 
