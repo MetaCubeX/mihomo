@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func iterator(item []interface{}) chan interface{} {
@@ -23,16 +25,12 @@ func TestObservable(t *testing.T) {
 	iter := iterator([]interface{}{1, 2, 3, 4, 5})
 	src := NewObservable(iter)
 	data, err := src.Subscribe()
-	if err != nil {
-		t.Error(err)
-	}
+	assert.Nil(t, err)
 	count := 0
 	for range data {
 		count++
 	}
-	if count != 5 {
-		t.Error("Revc number error")
-	}
+	assert.Equal(t, count, 5)
 }
 
 func TestObservable_MutilSubscribe(t *testing.T) {
@@ -53,23 +51,17 @@ func TestObservable_MutilSubscribe(t *testing.T) {
 	go waitCh(ch1)
 	go waitCh(ch2)
 	wg.Wait()
-	if count != 10 {
-		t.Error("Revc number error")
-	}
+	assert.Equal(t, count, 10)
 }
 
 func TestObservable_UnSubscribe(t *testing.T) {
 	iter := iterator([]interface{}{1, 2, 3, 4, 5})
 	src := NewObservable(iter)
 	data, err := src.Subscribe()
-	if err != nil {
-		t.Error(err)
-	}
+	assert.Nil(t, err)
 	src.UnSubscribe(data)
 	_, open := <-data
-	if open {
-		t.Error("Revc number error")
-	}
+	assert.False(t, open)
 }
 
 func TestObservable_SubscribeClosedSource(t *testing.T) {
@@ -79,9 +71,7 @@ func TestObservable_SubscribeClosedSource(t *testing.T) {
 	<-data
 
 	_, closed := src.Subscribe()
-	if closed == nil {
-		t.Error("Observable should be closed")
-	}
+	assert.NotNil(t, closed)
 }
 
 func TestObservable_UnSubscribeWithNotExistSubscription(t *testing.T) {
@@ -118,7 +108,5 @@ func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 	}
 	wg.Wait()
 	now := runtime.NumGoroutine()
-	if init != now {
-		t.Errorf("Goroutine Leak: init %d now %d", init, now)
-	}
+	assert.Equal(t, init, now)
 }
