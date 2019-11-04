@@ -482,6 +482,8 @@ func parseRules(cfg *rawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 		// deprecated when bump to 1.0
 		case "FINAL":
 			parsed = R.NewMatch(target)
+		default:
+			parseErr = fmt.Errorf("unsupported rule type %s", rule[0])
 		}
 
 		if parseErr != nil {
