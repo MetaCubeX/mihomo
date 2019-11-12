@@ -121,11 +121,11 @@ func readRawConfig(path string) ([]byte, error) {
 	}
 
 	path = path[:len(path)-5] + ".yml"
-	if _, err = os.Stat(path); err == nil {
+	if _, fallbackErr := os.Stat(path); fallbackErr == nil {
 		return ioutil.ReadFile(path)
 	}
 
-	return data, nil
+	return data, err
 }
 
 func readConfig(path string) (*rawConfig, error) {
