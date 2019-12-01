@@ -2,11 +2,9 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	adapters "github.com/Dreamacro/clash/adapters/outbound"
@@ -109,40 +107,12 @@ type rawConfig struct {
 	Rule         []string                 `yaml:"Rule"`
 }
 
-// forward compatibility before 1.0
-func readRawConfig(path string) ([]byte, error) {
-	data, err := ioutil.ReadFile(path)
-	if err == nil && len(data) != 0 {
-		return data, nil
-	}
-
-	if filepath.Ext(path) != ".yaml" {
-		return nil, err
-	}
-
-	path = path[:len(path)-5] + ".yml"
-	if _, fallbackErr := os.Stat(path); fallbackErr == nil {
-		return ioutil.ReadFile(path)
-	}
-
-	return data, err
-}
-
-func readConfig(path string) (*rawConfig, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, err
-	}
-	data, err := readRawConfig(path)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return nil, fmt.Errorf("Configuration file %s is empty", path)
-	}
+// Parse config
+func Parse(buf []byte) (*Config, error) {
+	config := &Config{}
 
 	// config with some default value
-	rawConfig := &rawConfig{
+	rawCfg := &rawConfig{
 		AllowLan:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
@@ -164,18 +134,10 @@ func readConfig(path string) (*rawConfig, error) {
 			},
 		},
 	}
-	err = yaml.Unmarshal([]byte(data), &rawConfig)
-	return rawConfig, err
-}
-
-// Parse config
-func Parse(path string) (*Config, error) {
-	config := &Config{}
-
-	rawCfg, err := readConfig(path)
-	if err != nil {
+	if err := yaml.Unmarshal(buf, &rawCfg); err != nil {
 		return nil, err
 	}
+
 	config.Experimental = &rawCfg.Experimental
 
 	general, err := parseGeneral(rawCfg)
@@ -226,9 +188,7 @@ func parseGeneral(cfg *rawConfig) (*General, error) {
 	logLevel := cfg.LogLevel
 
 	if externalUI != "" {
-		if !filepath.IsAbs(externalUI) {
-			externalUI = filepath.Join(C.Path.HomeDir(), externalUI)
-		}
+		externalUI = C.Path.Reslove(externalUI)
 
 		if _, err := os.Stat(externalUI); os.IsNotExist(err) {
 			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
