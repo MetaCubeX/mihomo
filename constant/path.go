@@ -3,6 +3,7 @@ package constant
 import (
 	"os"
 	P "path"
+	"path/filepath"
 )
 
 const Name = "clash"
@@ -41,6 +42,15 @@ func (p *path) HomeDir() string {
 
 func (p *path) Config() string {
 	return p.configFile
+}
+
+// Reslove return a absolute path or a relative path with homedir
+func (p *path) Reslove(path string) string {
+	if !filepath.IsAbs(path) {
+		return filepath.Join(p.HomeDir(), path)
+	}
+
+	return path
 }
 
 func (p *path) MMDB() string {

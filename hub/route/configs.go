@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/log"
 	P "github.com/Dreamacro/clash/proxy"
@@ -77,7 +78,8 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateConfigRequest struct {
-	Path string `json:"path"`
+	Path    string `json:"path"`
+	Payload string `json:"payload"`
 }
 
 func updateConfigs(w http.ResponseWriter, r *http.Request) {
@@ -88,18 +90,30 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !filepath.IsAbs(req.Path) {
-		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, newError("path is not a absoluted path"))
-		return
-	}
-
 	force := r.URL.Query().Get("force") == "true"
-	cfg, err := executor.ParseWithPath(req.Path)
-	if err != nil {
-		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, newError(err.Error()))
-		return
+	var cfg *config.Config
+	var err error
+
+	if req.Payload != "" {
+		cfg, err = executor.ParseWithBytes([]byte(req.Payload))
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, newError(err.Error()))
+			return
+		}
+	} else {
+		if !filepath.IsAbs(req.Path) {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, newError("path is not a absoluted path"))
+			return
+		}
+
+		cfg, err = executor.ParseWithPath(req.Path)
+		if err != nil {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, newError(err.Error()))
+			return
+		}
 	}
 
 	executor.ApplyConfig(cfg, force)
