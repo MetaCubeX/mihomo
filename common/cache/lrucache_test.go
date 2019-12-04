@@ -115,3 +115,24 @@ func TestMaxSize(t *testing.T) {
 	_, ok = c.Get("foo")
 	assert.False(t, ok)
 }
+
+func TestExist(t *testing.T) {
+	c := NewLRUCache(WithSize(1))
+	c.Set(1, 2)
+	assert.True(t, c.Exist(1))
+	c.Set(2, 3)
+	assert.False(t, c.Exist(1))
+}
+
+func TestEvict(t *testing.T) {
+	temp := 0
+	evict := func(key interface{}, value interface{}) {
+		temp = key.(int) + value.(int)
+	}
+
+	c := NewLRUCache(WithEvict(evict), WithSize(1))
+	c.Set(1, 2)
+	c.Set(2, 3)
+
+	assert.Equal(t, temp, 3)
+}
