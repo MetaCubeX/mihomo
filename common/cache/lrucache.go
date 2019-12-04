@@ -11,6 +11,16 @@ import (
 // Option is part of Functional Options Pattern
 type Option func(*LruCache)
 
+// EvictCallback is used to get a callback when a cache entry is evicted
+type EvictCallback func(key interface{}, value interface{})
+
+// WithEvict set the evict callback
+func WithEvict(cb EvictCallback) Option {
+	return func(l *LruCache) {
+		l.onEvict = cb
+	}
+}
+
 // WithUpdateAgeOnGet update expires when Get element
 func WithUpdateAgeOnGet() Option {
 	return func(l *LruCache) {
@@ -42,6 +52,7 @@ type LruCache struct {
 	cache          map[interface{}]*list.Element
 	lru            *list.List // Front is least-recent
 	updateAgeOnGet bool
+	onEvict        EvictCallback
 }
 
 // NewLRUCache creates an LruCache
@@ -148,6 +159,9 @@ func (c *LruCache) deleteElement(le *list.Element) {
 	c.lru.Remove(le)
 	e := le.Value.(*entry)
 	delete(c.cache, e.key)
+	if c.onEvict != nil {
+		c.onEvict(e.key, e.value)
+	}
 }
 
 type entry struct {
