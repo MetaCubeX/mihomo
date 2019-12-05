@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -17,6 +18,10 @@ type websocketConn struct {
 	conn       *websocket.Conn
 	reader     io.Reader
 	remoteAddr net.Addr
+
+	// https://godoc.org/github.com/gorilla/websocket#hdr-Concurrency
+	rMux sync.Mutex
+	wMux sync.Mutex
 }
 
 type WebsocketConfig struct {
@@ -29,6 +34,8 @@ type WebsocketConfig struct {
 
 // Read implements net.Conn.Read()
 func (wsc *websocketConn) Read(b []byte) (int, error) {
+	wsc.rMux.Lock()
+	defer wsc.rMux.Unlock()
 	for {
 		reader, err := wsc.getReader()
 		if err != nil {
@@ -46,6 +53,8 @@ func (wsc *websocketConn) Read(b []byte) (int, error) {
 
 // Write implements io.Writer.
 func (wsc *websocketConn) Write(b []byte) (int, error) {
+	wsc.wMux.Lock()
+	defer wsc.wMux.Unlock()
 	if err := wsc.conn.WriteMessage(websocket.BinaryMessage, b); err != nil {
 		return 0, err
 	}
