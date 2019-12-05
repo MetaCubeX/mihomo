@@ -45,7 +45,7 @@ func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, e
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", h.addr)
+		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
 	}
 	tcpKeepAlive(c)
 	if err := h.shakeHand(metadata, c); err != nil {

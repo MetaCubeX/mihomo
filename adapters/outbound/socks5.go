@@ -44,7 +44,7 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", ss.addr)
+		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
 	tcpKeepAlive(c)
 	var user *socks5.User
@@ -65,7 +65,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, _ net.Addr, err
 	defer cancel()
 	c, err := dialContext(ctx, "tcp", ss.addr)
 	if err != nil {
-		err = fmt.Errorf("%s connect error", ss.addr)
+		err = fmt.Errorf("%s connect error: %w", ss.addr, err)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, _ net.Addr, err
 
 	bindAddr, err := socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdUDPAssociate, user)
 	if err != nil {
-		err = fmt.Errorf("%v client hanshake error", err)
+		err = fmt.Errorf("client hanshake error: %w", err)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, _ net.Addr, err
 
 	targetAddr := socks5.ParseAddr(metadata.RemoteAddress())
 	if targetAddr == nil {
-		return nil, nil, fmt.Errorf("parse address error: %v:%v", metadata.String(), metadata.DstPort)
+		return nil, nil, fmt.Errorf("parse address %s error: %s", metadata.String(), metadata.DstPort)
 	}
 
 	pc, err := net.ListenPacket("udp", "")
