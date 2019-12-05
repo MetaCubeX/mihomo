@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
@@ -11,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -18,12 +18,10 @@ import (
 
 type Http struct {
 	*Base
-	addr           string
-	user           string
-	pass           string
-	tls            bool
-	skipCertVerify bool
-	tlsConfig      *tls.Config
+	addr      string
+	user      string
+	pass      string
+	tlsConfig *tls.Config
 }
 
 type HttpOption struct {
@@ -38,7 +36,7 @@ type HttpOption struct {
 
 func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	c, err := dialContext(ctx, "tcp", h.addr)
-	if err == nil && h.tls {
+	if err == nil && h.tlsConfig != nil {
 		cc := tls.Client(c, h.tlsConfig)
 		err = cc.Handshake()
 		c = cc
@@ -56,28 +54,28 @@ func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, e
 }
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
-	var buf bytes.Buffer
-	var err error
-
 	addr := metadata.RemoteAddress()
-	buf.WriteString("CONNECT " + addr + " HTTP/1.1\r\n")
-	buf.WriteString("Host: " + metadata.String() + "\r\n")
-	buf.WriteString("Proxy-Connection: Keep-Alive\r\n")
+	req := &http.Request{
+		Method: http.MethodConnect,
+		URL: &url.URL{
+			Host: addr,
+		},
+		Host: addr,
+		Header: http.Header{
+			"Proxy-Connection": []string{"Keep-Alive"},
+		},
+	}
 
 	if h.user != "" && h.pass != "" {
 		auth := h.user + ":" + h.pass
-		buf.WriteString("Proxy-Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(auth)) + "\r\n")
+		req.Header.Add("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
 	}
-	// header ended
-	buf.WriteString("\r\n")
 
-	_, err = rw.Write(buf.Bytes())
-	if err != nil {
+	if err := req.Write(rw); err != nil {
 		return err
 	}
 
-	var req http.Request
-	resp, err := http.ReadResponse(bufio.NewReader(rw), &req)
+	resp, err := http.ReadResponse(bufio.NewReader(rw), req)
 	if err != nil {
 		return err
 	}
@@ -97,6 +95,7 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	if resp.StatusCode >= http.StatusInternalServerError {
 		return errors.New(resp.Status)
 	}
+
 	return fmt.Errorf("can not connect remote err code: %d", resp.StatusCode)
 }
 
@@ -115,11 +114,9 @@ func NewHttp(option HttpOption) *Http {
 			name: option.Name,
 			tp:   C.Http,
 		},
-		addr:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-		user:           option.UserName,
-		pass:           option.Password,
-		tls:            option.TLS,
-		skipCertVerify: option.SkipCertVerify,
-		tlsConfig:      tlsConfig,
+		addr:      net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+		user:      option.UserName,
+		pass:      option.Password,
+		tlsConfig: tlsConfig,
 	}
 }
