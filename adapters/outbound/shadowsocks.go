@@ -61,7 +61,7 @@ type v2rayObfsOption struct {
 func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	c, err := dialContext(ctx, "tcp", ss.server)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %s", ss.server, err.Error())
+		return nil, fmt.Errorf("%s connect error: %w", ss.server, err)
 	}
 	tcpKeepAlive(c)
 	switch ss.obfsMode {
@@ -74,7 +74,7 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (C
 		var err error
 		c, err = v2rayObfs.NewV2rayObfs(c, ss.v2rayOption)
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %s", ss.server, err.Error())
+			return nil, fmt.Errorf("%s connect error: %w", ss.server, err)
 		}
 	}
 	c = ss.cipher.StreamConn(c)
@@ -95,7 +95,7 @@ func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, er
 
 	targetAddr := socks5.ParseAddr(metadata.RemoteAddress())
 	if targetAddr == nil {
-		return nil, nil, fmt.Errorf("parse address error: %v:%v", metadata.String(), metadata.DstPort)
+		return nil, nil, fmt.Errorf("parse address %s error: %s", metadata.String(), metadata.DstPort)
 	}
 
 	pc = ss.cipher.PacketConn(pc)
@@ -114,7 +114,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	password := option.Password
 	ciph, err := core.PickCipher(cipher, nil, password)
 	if err != nil {
-		return nil, fmt.Errorf("ss %s initialize error: %s", server, err.Error())
+		return nil, fmt.Errorf("ss %s initialize error: %w", server, err)
 	}
 
 	var v2rayOption *v2rayObfs.Option
@@ -136,7 +136,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	if option.Plugin == "obfs" {
 		opts := simpleObfsOption{Host: "bing.com"}
 		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
-			return nil, fmt.Errorf("ss %s initialize obfs error: %s", server, err.Error())
+			return nil, fmt.Errorf("ss %s initialize obfs error: %w", server, err)
 		}
 
 		if opts.Mode != "tls" && opts.Mode != "http" {
@@ -147,7 +147,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	} else if option.Plugin == "v2ray-plugin" {
 		opts := v2rayObfsOption{Host: "bing.com", Mux: true}
 		if err := decoder.Decode(option.PluginOpts, &opts); err != nil {
-			return nil, fmt.Errorf("ss %s initialize v2ray-plugin error: %s", server, err.Error())
+			return nil, fmt.Errorf("ss %s initialize v2ray-plugin error: %w", server, err)
 		}
 
 		if opts.Mode != "websocket" {
