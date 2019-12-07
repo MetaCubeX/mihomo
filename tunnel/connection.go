@@ -35,7 +35,6 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 		if err != nil {
 			break
 		}
-		defer resp.Body.Close()
 		adapters.RemoveHopByHopHeaders(resp.Header)
 
 		if resp.StatusCode == http.StatusContinue {
@@ -59,6 +58,7 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 			break
 		}
 
+		// even if resp.Write write body to the connection, but some http request have to Copy to close it
 		buf := pool.BufPool.Get().([]byte)
 		_, err = io.CopyBuffer(request, resp.Body, buf)
 		pool.BufPool.Put(buf[:cap(buf)])
