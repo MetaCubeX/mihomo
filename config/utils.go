@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	adapters "github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapters/outboundgroup"
 	"github.com/Dreamacro/clash/common/structure"
-	C "github.com/Dreamacro/clash/constant"
 )
 
 func trimArr(arr []string) (r []string) {
@@ -14,18 +13,6 @@ func trimArr(arr []string) (r []string) {
 		r = append(r, strings.Trim(e, " "))
 	}
 	return
-}
-
-func getProxies(mapping map[string]C.Proxy, list []string) ([]C.Proxy, error) {
-	var ps []C.Proxy
-	for _, name := range list {
-		p, ok := mapping[name]
-		if !ok {
-			return nil, fmt.Errorf("'%s' not found", name)
-		}
-		ps = append(ps, p)
-	}
-	return ps, nil
 }
 
 func or(pointers ...*int) *int {
@@ -40,8 +27,7 @@ func or(pointers ...*int) *int {
 // Check if ProxyGroups form DAG(Directed Acyclic Graph), and sort all ProxyGroups by dependency order.
 // Meanwhile, record the original index in the config file.
 // If loop is detected, return an error with location of loop.
-func proxyGroupsDagSort(groupsConfig []map[string]interface{}, decoder *structure.Decoder) error {
-
+func proxyGroupsDagSort(groupsConfig []map[string]interface{}) error {
 	type graphNode struct {
 		indegree int
 		// topological order
@@ -50,34 +36,36 @@ func proxyGroupsDagSort(groupsConfig []map[string]interface{}, decoder *structur
 		data map[string]interface{}
 		// `outdegree` and `from` are used in loop locating
 		outdegree int
+		option    *outboundgroup.GroupCommonOption
 		from      []string
 	}
 
+	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 	graph := make(map[string]*graphNode)
 
 	// Step 1.1 build dependency graph
 	for _, mapping := range groupsConfig {
-		option := &adapters.ProxyGroupOption{}
-		err := decoder.Decode(mapping, option)
-		groupName := option.Name
-		if err != nil {
-			return fmt.Errorf("ProxyGroup %s: %s", groupName, err.Error())
+		option := &outboundgroup.GroupCommonOption{}
+		if err := decoder.Decode(mapping, option); err != nil {
+			return fmt.Errorf("ProxyGroup %s: %s", option.Name, err.Error())
 		}
 
+		groupName := option.Name
 		if node, ok := graph[groupName]; ok {
 			if node.data != nil {
 				return fmt.Errorf("ProxyGroup %s: duplicate group name", groupName)
 			}
 			node.data = mapping
+			node.option = option
 		} else {
-			graph[groupName] = &graphNode{0, -1, mapping, 0, nil}
+			graph[groupName] = &graphNode{0, -1, mapping, 0, option, nil}
 		}
 
 		for _, proxy := range option.Proxies {
 			if node, ex := graph[proxy]; ex {
 				node.indegree++
 			} else {
-				graph[proxy] = &graphNode{1, -1, nil, 0, nil}
+				graph[proxy] = &graphNode{1, -1, nil, 0, nil, nil}
 			}
 		}
 	}
@@ -95,14 +83,19 @@ func proxyGroupsDagSort(groupsConfig []map[string]interface{}, decoder *structur
 	for ; len(queue) > 0; queue = queue[1:] {
 		name := queue[0]
 		node := graph[name]
-		if node.data != nil {
+		if node.option != nil {
 			index++
 			groupsConfig[len(groupsConfig)-index] = node.data
-			for _, proxy := range node.data["proxies"].([]interface{}) {
-				child := graph[proxy.(string)]
+			if len(node.option.Proxies) == 0 {
+				delete(graph, name)
+				continue
+			}
+
+			for _, proxy := range node.option.Proxies {
+				child := graph[proxy]
 				child.indegree--
 				if child.indegree == 0 {
-					queue = append(queue, proxy.(string))
+					queue = append(queue, proxy)
 				}
 			}
 		}
@@ -117,12 +110,17 @@ func proxyGroupsDagSort(groupsConfig []map[string]interface{}, decoder *structur
 	// if loop is detected, locate the loop and throw an error
 	// Step 2.1 rebuild the graph, fill `outdegree` and `from` filed
 	for name, node := range graph {
-		if node.data == nil {
+		if node.option == nil {
 			continue
 		}
-		for _, proxy := range node.data["proxies"].([]interface{}) {
+
+		if len(node.option.Proxies) == 0 {
+			continue
+		}
+
+		for _, proxy := range node.option.Proxies {
 			node.outdegree++
-			child := graph[proxy.(string)]
+			child := graph[proxy]
 			if child.from == nil {
 				child.from = make([]string, 0, child.indegree)
 			}

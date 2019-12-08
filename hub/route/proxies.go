@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	A "github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapters/outboundgroup"
 	C "github.com/Dreamacro/clash/constant"
 	T "github.com/Dreamacro/clash/tunnel"
 
@@ -81,8 +82,8 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxy := r.Context().Value(CtxKeyProxy).(*A.Proxy)
-	selector, ok := proxy.ProxyAdapter.(*A.Selector)
+	proxy := r.Context().Value(CtxKeyProxy).(*outbound.Proxy)
+	selector, ok := proxy.ProxyAdapter.(*outboundgroup.Selector)
 	if !ok {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, newError("Must be a Selector"))

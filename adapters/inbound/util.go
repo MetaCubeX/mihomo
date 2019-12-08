@@ -1,4 +1,4 @@
-package adapters
+package inbound
 
 import (
 	"net"

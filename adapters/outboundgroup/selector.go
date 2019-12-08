@@ -1,4 +1,4 @@
-package adapters
+package outboundgroup
 
 import (
 	"context"
@@ -6,19 +6,15 @@ import (
 	"errors"
 	"net"
 
+	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapters/provider"
 	C "github.com/Dreamacro/clash/constant"
 )
 
 type Selector struct {
-	*Base
+	*outbound.Base
 	selected  C.Proxy
-	proxies   map[string]C.Proxy
-	proxyList []string
-}
-
-type SelectorOption struct {
-	Name    string   `proxy:"name"`
-	Proxies []string `proxy:"proxies"`
+	providers []provider.ProxyProvider
 }
 
 func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
@@ -42,10 +38,15 @@ func (s *Selector) SupportUDP() bool {
 }
 
 func (s *Selector) MarshalJSON() ([]byte, error) {
+	var all []string
+	for _, proxy := range s.proxies() {
+		all = append(all, proxy.Name())
+	}
+
 	return json.Marshal(map[string]interface{}{
 		"type": s.Type().String(),
 		"now":  s.Now(),
-		"all":  s.proxyList,
+		"all":  all,
 	})
 }
 
@@ -54,34 +55,29 @@ func (s *Selector) Now() string {
 }
 
 func (s *Selector) Set(name string) error {
-	proxy, exist := s.proxies[name]
-	if !exist {
-		return errors.New("Proxy does not exist")
+	for _, proxy := range s.proxies() {
+		if proxy.Name() == name {
+			s.selected = proxy
+			return nil
+		}
 	}
-	s.selected = proxy
-	return nil
+
+	return errors.New("Proxy does not exist")
 }
 
-func NewSelector(name string, proxies []C.Proxy) (*Selector, error) {
-	if len(proxies) == 0 {
-		return nil, errors.New("Provide at least one proxy")
+func (s *Selector) proxies() []C.Proxy {
+	proxies := []C.Proxy{}
+	for _, provider := range s.providers {
+		proxies = append(proxies, provider.Proxies()...)
 	}
+	return proxies
+}
 
-	mapping := make(map[string]C.Proxy)
-	proxyList := make([]string, len(proxies))
-	for idx, proxy := range proxies {
-		mapping[proxy.Name()] = proxy
-		proxyList[idx] = proxy.Name()
+func NewSelector(name string, providers []provider.ProxyProvider) *Selector {
+	selected := providers[0].Proxies()[0]
+	return &Selector{
+		Base:      outbound.NewBase(name, C.Selector, false),
+		providers: providers,
+		selected:  selected,
 	}
-
-	s := &Selector{
-		Base: &Base{
-			name: name,
-			tp:   C.Selector,
-		},
-		proxies:   mapping,
-		selected:  proxies[0],
-		proxyList: proxyList,
-	}
-	return s, nil
 }

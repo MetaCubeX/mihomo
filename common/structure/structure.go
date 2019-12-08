@@ -76,6 +76,8 @@ func (d *Decoder) decode(name string, data interface{}, val reflect.Value) error
 		return d.decodeMap(name, data, val)
 	case reflect.Interface:
 		return d.setInterface(name, data, val)
+	case reflect.Struct:
+		return d.decodeStruct(name, data, val)
 	default:
 		return fmt.Errorf("type %s not support", val.Kind().String())
 	}
@@ -224,6 +226,159 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 	}
 
 	val.Set(valMap)
+
+	if len(errors) > 0 {
+		return fmt.Errorf(strings.Join(errors, ","))
+	}
+
+	return nil
+}
+
+func (d *Decoder) decodeStruct(name string, data interface{}, val reflect.Value) error {
+	dataVal := reflect.Indirect(reflect.ValueOf(data))
+
+	// If the type of the value to write to and the data match directly,
+	// then we just set it directly instead of recursing into the structure.
+	if dataVal.Type() == val.Type() {
+		val.Set(dataVal)
+		return nil
+	}
+
+	dataValKind := dataVal.Kind()
+	switch dataValKind {
+	case reflect.Map:
+		return d.decodeStructFromMap(name, dataVal, val)
+	default:
+		return fmt.Errorf("'%s' expected a map, got '%s'", name, dataVal.Kind())
+	}
+}
+
+func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) error {
+	dataValType := dataVal.Type()
+	if kind := dataValType.Key().Kind(); kind != reflect.String && kind != reflect.Interface {
+		return fmt.Errorf(
+			"'%s' needs a map with string keys, has '%s' keys",
+			name, dataValType.Key().Kind())
+	}
+
+	dataValKeys := make(map[reflect.Value]struct{})
+	dataValKeysUnused := make(map[interface{}]struct{})
+	for _, dataValKey := range dataVal.MapKeys() {
+		dataValKeys[dataValKey] = struct{}{}
+		dataValKeysUnused[dataValKey.Interface()] = struct{}{}
+	}
+
+	errors := make([]string, 0)
+
+	// This slice will keep track of all the structs we'll be decoding.
+	// There can be more than one struct if there are embedded structs
+	// that are squashed.
+	structs := make([]reflect.Value, 1, 5)
+	structs[0] = val
+
+	// Compile the list of all the fields that we're going to be decoding
+	// from all the structs.
+	type field struct {
+		field reflect.StructField
+		val   reflect.Value
+	}
+	fields := []field{}
+	for len(structs) > 0 {
+		structVal := structs[0]
+		structs = structs[1:]
+
+		structType := structVal.Type()
+
+		for i := 0; i < structType.NumField(); i++ {
+			fieldType := structType.Field(i)
+			fieldKind := fieldType.Type.Kind()
+
+			// If "squash" is specified in the tag, we squash the field down.
+			squash := false
+			tagParts := strings.Split(fieldType.Tag.Get(d.option.TagName), ",")
+			for _, tag := range tagParts[1:] {
+				if tag == "squash" {
+					squash = true
+					break
+				}
+			}
+
+			if squash {
+				if fieldKind != reflect.Struct {
+					errors = append(errors,
+						fmt.Errorf("%s: unsupported type for squash: %s", fieldType.Name, fieldKind).Error())
+				} else {
+					structs = append(structs, structVal.FieldByName(fieldType.Name))
+				}
+				continue
+			}
+
+			// Normal struct field, store it away
+			fields = append(fields, field{fieldType, structVal.Field(i)})
+		}
+	}
+
+	// for fieldType, field := range fields {
+	for _, f := range fields {
+		field, fieldValue := f.field, f.val
+		fieldName := field.Name
+
+		tagValue := field.Tag.Get(d.option.TagName)
+		tagValue = strings.SplitN(tagValue, ",", 2)[0]
+		if tagValue != "" {
+			fieldName = tagValue
+		}
+
+		rawMapKey := reflect.ValueOf(fieldName)
+		rawMapVal := dataVal.MapIndex(rawMapKey)
+		if !rawMapVal.IsValid() {
+			// Do a slower search by iterating over each key and
+			// doing case-insensitive search.
+			for dataValKey := range dataValKeys {
+				mK, ok := dataValKey.Interface().(string)
+				if !ok {
+					// Not a string key
+					continue
+				}
+
+				if strings.EqualFold(mK, fieldName) {
+					rawMapKey = dataValKey
+					rawMapVal = dataVal.MapIndex(dataValKey)
+					break
+				}
+			}
+
+			if !rawMapVal.IsValid() {
+				// There was no matching key in the map for the value in
+				// the struct. Just ignore.
+				continue
+			}
+		}
+
+		// Delete the key we're using from the unused map so we stop tracking
+		delete(dataValKeysUnused, rawMapKey.Interface())
+
+		if !fieldValue.IsValid() {
+			// This should never happen
+			panic("field is not valid")
+		}
+
+		// If we can't set the field, then it is unexported or something,
+		// and we just continue onwards.
+		if !fieldValue.CanSet() {
+			continue
+		}
+
+		// If the name is empty string, then we're at the root, and we
+		// don't dot-join the fields.
+		if name != "" {
+			fieldName = fmt.Sprintf("%s.%s", name, fieldName)
+		}
+
+		if err := d.decode(fieldName, rawMapVal.Interface(), fieldValue); err != nil {
+			errors = append(errors, err.Error())
+		}
+	}
 
 	if len(errors) > 0 {
 		return fmt.Errorf(strings.Join(errors, ","))

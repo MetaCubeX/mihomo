@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Dreamacro/clash/adapters/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	trie "github.com/Dreamacro/clash/component/domain-trie"
 	"github.com/Dreamacro/clash/config"
@@ -78,7 +79,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	if force {
 		updateGeneral(cfg.General)
 	}
-	updateProxies(cfg.Proxies)
+	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
 	updateDNS(cfg.DNS)
 	updateHosts(cfg.Hosts)
@@ -142,16 +143,16 @@ func updateHosts(tree *trie.Trie) {
 	dns.DefaultHosts = tree
 }
 
-func updateProxies(proxies map[string]C.Proxy) {
+func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.ProxyProvider) {
 	tunnel := T.Instance()
-	oldProxies := tunnel.Proxies()
+	oldProviders := tunnel.Providers()
 
-	// close proxy group goroutine
-	for _, proxy := range oldProxies {
-		proxy.Destroy()
+	// close providers goroutine
+	for _, provider := range oldProviders {
+		provider.Destroy()
 	}
 
-	tunnel.UpdateProxies(proxies)
+	tunnel.UpdateProxies(proxies, providers)
 }
 
 func updateRules(rules []C.Rule) {
