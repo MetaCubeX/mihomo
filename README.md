@@ -6,6 +6,9 @@
 <h4 align="center">A rule-based tunnel in Go.</h4>
 
 <p align="center">
+  <a href="https://github.com/Dreamacro/clash/actions">
+    <img src="https://img.shields.io/github/workflow/status/Dreamacro/clash/Go?style=flat-square" alt="Github Actions">
+  </a>
   <a href="https://goreportcard.com/report/github.com/Dreamacro/clash">
     <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
   </a>
@@ -17,7 +20,6 @@
 ## Features
 
 - Local HTTP/HTTPS/SOCKS server
-- Surge-like configuration format
 - GeoIP rule support
 - Supports Vmess, Shadowsocks, Snell and SOCKS5 protocol
 - Supports Netfilter TCP redirecting
@@ -70,7 +72,7 @@ $ clash -d .
 ```
 
 <details>
-  <summary>This is an example configuration file</summary>
+  <summary>This is an example configuration file (click to expand)</summary>
 
 ```yml
 # port of HTTP
@@ -140,157 +142,159 @@ experimental:
   #     - 240.0.0.0/4
 
 Proxy:
+  # shadowsocks
+  # The supported ciphers(encrypt methods):
+  #   aes-128-gcm aes-192-gcm aes-256-gcm
+  #   aes-128-cfb aes-192-cfb aes-256-cfb
+  #   aes-128-ctr aes-192-ctr aes-256-ctr
+  #   rc4-md5 chacha20 chacha20-ietf xchacha20
+  #   chacha20-ietf-poly1305 xchacha20-ietf-poly1305
+  - name: "ss1"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    # udp: true
 
-# shadowsocks
-# The supported ciphers(encrypt methods):
-#   aes-128-gcm aes-192-gcm aes-256-gcm
-#   aes-128-cfb aes-192-cfb aes-256-cfb
-#   aes-128-ctr aes-192-ctr aes-256-ctr
-#   rc4-md5 chacha20 chacha20-ietf xchacha20
-#   chacha20-ietf-poly1305 xchacha20-ietf-poly1305
-- name: "ss1"
-  type: ss
-  server: server
-  port: 443
-  cipher: chacha20-ietf-poly1305
-  password: "password"
-  # udp: true
+  # old obfs configuration format remove after prerelease
+  - name: "ss2"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    plugin: obfs
+    plugin-opts:
+      mode: tls # or http
+      # host: bing.com
 
-# old obfs configuration format remove after prerelease
-- name: "ss2"
-  type: ss
-  server: server
-  port: 443
-  cipher: chacha20-ietf-poly1305
-  password: "password"
-  plugin: obfs
-  plugin-opts:
-    mode: tls # or http
-    # host: bing.com
+  - name: "ss3"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    plugin: v2ray-plugin
+    plugin-opts:
+      mode: websocket # no QUIC now
+      # tls: true # wss
+      # skip-cert-verify: true
+      # host: bing.com
+      # path: "/"
+      # mux: true
+      # headers:
+      #   custom: value
 
-- name: "ss3"
-  type: ss
-  server: server
-  port: 443
-  cipher: chacha20-ietf-poly1305
-  password: "password"
-  plugin: v2ray-plugin
-  plugin-opts:
-    mode: websocket # no QUIC now
-    # tls: true # wss
+  # vmess
+  # cipher support auto/aes-128-gcm/chacha20-poly1305/none
+  - name: "vmess"
+    type: vmess
+    server: server
+    port: 443
+    uuid: uuid
+    alterId: 32
+    cipher: auto
+    # udp: true
+    # tls: true
     # skip-cert-verify: true
-    # host: bing.com
-    # path: "/"
-    # mux: true
-    # headers:
-    #   custom: value
+    # network: ws
+    # ws-path: /path
+    # ws-headers:
+    #   Host: v2ray.com
 
-# vmess
-# cipher support auto/aes-128-gcm/chacha20-poly1305/none
-- name: "vmess"
-  type: vmess
-  server: server
-  port: 443
-  uuid: uuid
-  alterId: 32
-  cipher: auto
-  # udp: true
-  # tls: true
-  # skip-cert-verify: true
-  # network: ws
-  # ws-path: /path
-  # ws-headers:
-  #   Host: v2ray.com
+  # socks5
+  - name: "socks"
+    type: socks5
+    server: server
+    port: 443
+    # username: username
+    # password: password
+    # tls: true
+    # skip-cert-verify: true
+    # udp: true
 
-# socks5
-- name: "socks"
-  type: socks5
-  server: server
-  port: 443
-  # username: username
-  # password: password
-  # tls: true
-  # skip-cert-verify: true
-  # udp: true
+  # http
+  - name: "http"
+    type: http
+    server: server
+    port: 443
+    # username: username
+    # password: password
+    # tls: true # https
+    # skip-cert-verify: true
 
-# http
-- name: "http"
-  type: http
-  server: server
-  port: 443
-  # username: username
-  # password: password
-  # tls: true # https
-  # skip-cert-verify: true
-
-# snell
-- name: "snell"
-  type: snell
-  server: server
-  port: 44046
-  psk: yourpsk
-  # obfs-opts:
-    # mode: http # or tls
-    # host: bing.com
+  # snell
+  - name: "snell"
+    type: snell
+    server: server
+    port: 44046
+    psk: yourpsk
+    # obfs-opts:
+      # mode: http # or tls
+      # host: bing.com
 
 Proxy Group:
-# url-test select which proxy will be used by benchmarking speed to a URL.
-- name: "auto"
-  type: url-test
-  proxies:
-    - ss1
-    - ss2
-    - vmess1
-  url: 'http://www.gstatic.com/generate_204'
-  interval: 300
+  # url-test select which proxy will be used by benchmarking speed to a URL.
+  - name: "auto"
+    type: url-test
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+    url: 'http://www.gstatic.com/generate_204'
+    interval: 300
 
-# fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
-- name: "fallback-auto"
-  type: fallback
-  proxies:
-    - ss1
-    - ss2
-    - vmess1
-  url: 'http://www.gstatic.com/generate_204'
-  interval: 300
+  # fallback select an available policy by priority. The availability is tested by accessing an URL, just like an auto url-test group.
+  - name: "fallback-auto"
+    type: fallback
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+    url: 'http://www.gstatic.com/generate_204'
+    interval: 300
 
-# load-balance: The request of the same eTLD will be dial on the same proxy.
-- name: "load-balance"
-  type: load-balance
-  proxies:
-    - ss1
-    - ss2
-    - vmess1
-  url: 'http://www.gstatic.com/generate_204'
-  interval: 300
+  # load-balance: The request of the same eTLD will be dial on the same proxy.
+  - name: "load-balance"
+    type: load-balance
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+    url: 'http://www.gstatic.com/generate_204'
+    interval: 300
 
-# select is used for selecting proxy or proxy group
-# you can use RESTful API to switch proxy, is recommended for use in GUI.
-- name: Proxy
-  type: select
-  proxies:
-    - ss1
-    - ss2
-    - vmess1
-    - auto
+  # select is used for selecting proxy or proxy group
+  # you can use RESTful API to switch proxy, is recommended for use in GUI.
+  - name: Proxy
+    type: select
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+      - auto
 
 Rule:
-- DOMAIN-SUFFIX,google.com,auto
-- DOMAIN-KEYWORD,google,auto
-- DOMAIN,google.com,auto
-- DOMAIN-SUFFIX,ad.com,REJECT
-# rename SOURCE-IP-CIDR and would remove after prerelease
-- SRC-IP-CIDR,192.168.1.201/32,DIRECT
-# optional param "no-resolve" for IP rules (GEOIP IP-CIDR)
-- IP-CIDR,127.0.0.0/8,DIRECT
-- GEOIP,CN,DIRECT
-- DST-PORT,80,DIRECT
-- SRC-PORT,7777,DIRECT
-# FINAL would remove after prerelease
-# you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
-- MATCH,auto
+  - DOMAIN-SUFFIX,google.com,auto
+  - DOMAIN-KEYWORD,google,auto
+  - DOMAIN,google.com,auto
+  - DOMAIN-SUFFIX,ad.com,REJECT
+  # rename SOURCE-IP-CIDR and would remove after prerelease
+  - SRC-IP-CIDR,192.168.1.201/32,DIRECT
+  # optional param "no-resolve" for IP rules (GEOIP IP-CIDR)
+  - IP-CIDR,127.0.0.0/8,DIRECT
+  - GEOIP,CN,DIRECT
+  - DST-PORT,80,DIRECT
+  - SRC-PORT,7777,DIRECT
+  # FINAL would remove after prerelease
+  # you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
+  - MATCH,auto
 ```
 </details>
+
+## Advanced
+[Provider](https://github.com/Dreamacro/clash/wiki/Provider)
 
 ## Documentations
 https://clash.gitbook.io/
@@ -310,4 +314,5 @@ https://clash.gitbook.io/
 - [x] Complementing the necessary rule operators
 - [x] Redir proxy
 - [x] UDP support
-- [ ] Connection manager
+- [x] Connection manager
+- [ ] Event API
