@@ -1,13 +1,12 @@
-package adapters
+package outboundgroup
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
-	"sync"
-	"time"
 
+	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapters/provider"
 	"github.com/Dreamacro/clash/common/murmur3"
 	C "github.com/Dreamacro/clash/constant"
 
@@ -15,12 +14,9 @@ import (
 )
 
 type LoadBalance struct {
-	*Base
-	proxies  []C.Proxy
-	maxRetry int
-	rawURL   string
-	interval time.Duration
-	done     chan struct{}
+	*outbound.Base
+	maxRetry  int
+	providers []provider.ProxyProvider
 }
 
 func getKey(metadata *C.Metadata) string {
@@ -62,16 +58,17 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c
 	}()
 
 	key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
-	buckets := int32(len(lb.proxies))
+	proxies := lb.proxies()
+	buckets := int32(len(proxies))
 	for i := 0; i < lb.maxRetry; i, key = i+1, key+1 {
 		idx := jumpHash(key, buckets)
-		proxy := lb.proxies[idx]
+		proxy := proxies[idx]
 		if proxy.Alive() {
 			c, err = proxy.DialContext(ctx, metadata)
 			return
 		}
 	}
-	c, err = lb.proxies[0].DialContext(ctx, metadata)
+	c, err = proxies[0].DialContext(ctx, metadata)
 	return
 }
 
@@ -83,57 +80,34 @@ func (lb *LoadBalance) DialUDP(metadata *C.Metadata) (pc C.PacketConn, addr net.
 	}()
 
 	key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
-	buckets := int32(len(lb.proxies))
+	proxies := lb.proxies()
+	buckets := int32(len(proxies))
 	for i := 0; i < lb.maxRetry; i, key = i+1, key+1 {
 		idx := jumpHash(key, buckets)
-		proxy := lb.proxies[idx]
+		proxy := proxies[idx]
 		if proxy.Alive() {
 			return proxy.DialUDP(metadata)
 		}
 	}
 
-	return lb.proxies[0].DialUDP(metadata)
+	return proxies[0].DialUDP(metadata)
 }
 
 func (lb *LoadBalance) SupportUDP() bool {
 	return true
 }
 
-func (lb *LoadBalance) Destroy() {
-	lb.done <- struct{}{}
-}
-
-func (lb *LoadBalance) validTest() {
-	wg := sync.WaitGroup{}
-	wg.Add(len(lb.proxies))
-
-	for _, p := range lb.proxies {
-		go func(p C.Proxy) {
-			p.URLTest(context.Background(), lb.rawURL)
-			wg.Done()
-		}(p)
+func (lb *LoadBalance) proxies() []C.Proxy {
+	proxies := []C.Proxy{}
+	for _, provider := range lb.providers {
+		proxies = append(proxies, provider.Proxies()...)
 	}
-
-	wg.Wait()
-}
-
-func (lb *LoadBalance) loop() {
-	tick := time.NewTicker(lb.interval)
-	go lb.validTest()
-Loop:
-	for {
-		select {
-		case <-tick.C:
-			go lb.validTest()
-		case <-lb.done:
-			break Loop
-		}
-	}
+	return proxies
 }
 
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	var all []string
-	for _, proxy := range lb.proxies {
+	for _, proxy := range lb.proxies() {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]interface{}{
@@ -142,31 +116,10 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	})
 }
 
-type LoadBalanceOption struct {
-	Name     string   `proxy:"name"`
-	Proxies  []string `proxy:"proxies"`
-	URL      string   `proxy:"url"`
-	Interval int      `proxy:"interval"`
-}
-
-func NewLoadBalance(option LoadBalanceOption, proxies []C.Proxy) (*LoadBalance, error) {
-	if len(proxies) == 0 {
-		return nil, errors.New("Provide at least one proxy")
+func NewLoadBalance(name string, providers []provider.ProxyProvider) *LoadBalance {
+	return &LoadBalance{
+		Base:      outbound.NewBase(name, C.LoadBalance, false),
+		maxRetry:  3,
+		providers: providers,
 	}
-
-	interval := time.Duration(option.Interval) * time.Second
-
-	lb := &LoadBalance{
-		Base: &Base{
-			name: option.Name,
-			tp:   C.LoadBalance,
-		},
-		proxies:  proxies,
-		maxRetry: 3,
-		rawURL:   option.URL,
-		interval: interval,
-		done:     make(chan struct{}),
-	}
-	go lb.loop()
-	return lb, nil
 }

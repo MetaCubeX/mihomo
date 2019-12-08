@@ -1,4 +1,4 @@
-package adapters
+package outbound
 
 import (
 	"context"
