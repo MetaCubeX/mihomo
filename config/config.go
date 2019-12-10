@@ -298,6 +298,18 @@ func parseProxies(cfg *rawConfig) (proxies map[string]C.Proxy, providersMap map[
 		proxies[groupName] = outbound.NewProxy(group)
 	}
 
+	// initial compatible provier
+	for _, pd := range providersMap {
+		if pd.VehicleType() != provider.Compatible {
+			continue
+		}
+
+		log.Infoln("Start initial compatible provider %s", pd.Name())
+		if err := pd.Initial(); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	ps := []C.Proxy{}
 	for _, v := range proxyList {
 		ps = append(ps, proxies[v])
