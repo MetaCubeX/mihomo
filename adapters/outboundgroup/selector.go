@@ -8,11 +8,13 @@ import (
 
 	"github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/common/singledo"
 	C "github.com/Dreamacro/clash/constant"
 )
 
 type Selector struct {
 	*outbound.Base
+	single    *singledo.Single
 	selected  C.Proxy
 	providers []provider.ProxyProvider
 }
@@ -66,17 +68,18 @@ func (s *Selector) Set(name string) error {
 }
 
 func (s *Selector) proxies() []C.Proxy {
-	proxies := []C.Proxy{}
-	for _, provider := range s.providers {
-		proxies = append(proxies, provider.Proxies()...)
-	}
-	return proxies
+	elm, _, _ := s.single.Do(func() (interface{}, error) {
+		return getProvidersProxies(s.providers), nil
+	})
+
+	return elm.([]C.Proxy)
 }
 
 func NewSelector(name string, providers []provider.ProxyProvider) *Selector {
 	selected := providers[0].Proxies()[0]
 	return &Selector{
 		Base:      outbound.NewBase(name, C.Selector, false),
+		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,
 		selected:  selected,
 	}
