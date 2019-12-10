@@ -8,6 +8,7 @@ import (
 	"github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/adapters/provider"
 	"github.com/Dreamacro/clash/common/murmur3"
+	"github.com/Dreamacro/clash/common/singledo"
 	C "github.com/Dreamacro/clash/constant"
 
 	"golang.org/x/net/publicsuffix"
@@ -15,6 +16,7 @@ import (
 
 type LoadBalance struct {
 	*outbound.Base
+	single    *singledo.Single
 	maxRetry  int
 	providers []provider.ProxyProvider
 }
@@ -98,11 +100,11 @@ func (lb *LoadBalance) SupportUDP() bool {
 }
 
 func (lb *LoadBalance) proxies() []C.Proxy {
-	proxies := []C.Proxy{}
-	for _, provider := range lb.providers {
-		proxies = append(proxies, provider.Proxies()...)
-	}
-	return proxies
+	elm, _, _ := lb.single.Do(func() (interface{}, error) {
+		return getProvidersProxies(lb.providers), nil
+	})
+
+	return elm.([]C.Proxy)
 }
 
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
@@ -119,6 +121,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 func NewLoadBalance(name string, providers []provider.ProxyProvider) *LoadBalance {
 	return &LoadBalance{
 		Base:      outbound.NewBase(name, C.LoadBalance, false),
+		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		maxRetry:  3,
 		providers: providers,
 	}

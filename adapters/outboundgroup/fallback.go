@@ -7,11 +7,13 @@ import (
 
 	"github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/common/singledo"
 	C "github.com/Dreamacro/clash/constant"
 )
 
 type Fallback struct {
 	*outbound.Base
+	single    *singledo.Single
 	providers []provider.ProxyProvider
 }
 
@@ -56,29 +58,28 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 }
 
 func (f *Fallback) proxies() []C.Proxy {
-	proxies := []C.Proxy{}
-	for _, provider := range f.providers {
-		proxies = append(proxies, provider.Proxies()...)
-	}
-	return proxies
+	elm, _, _ := f.single.Do(func() (interface{}, error) {
+		return getProvidersProxies(f.providers), nil
+	})
+
+	return elm.([]C.Proxy)
 }
 
 func (f *Fallback) findAliveProxy() C.Proxy {
-	for _, provider := range f.providers {
-		proxies := provider.Proxies()
-		for _, proxy := range proxies {
-			if proxy.Alive() {
-				return proxy
-			}
+	proxies := f.proxies()
+	for _, proxy := range proxies {
+		if proxy.Alive() {
+			return proxy
 		}
 	}
 
-	return f.providers[0].Proxies()[0]
+	return f.proxies()[0]
 }
 
 func NewFallback(name string, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
 		Base:      outbound.NewBase(name, C.Fallback, false),
+		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,
 	}
 }
