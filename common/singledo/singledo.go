@@ -13,8 +13,8 @@ type call struct {
 
 type Single struct {
 	mux    sync.Mutex
-	last   int64
-	wait   int64
+	last   time.Time
+	wait   time.Duration
 	call   *call
 	result *Result
 }
@@ -26,8 +26,8 @@ type Result struct {
 
 func (s *Single) Do(fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
 	s.mux.Lock()
-	now := time.Now().Unix()
-	if now < s.last+s.wait {
+	now := time.Now()
+	if now.Before(s.last.Add(s.wait)) {
 		s.mux.Unlock()
 		return s.result.Val, s.result.Err, true
 	}
@@ -43,6 +43,7 @@ func (s *Single) Do(fn func() (interface{}, error)) (v interface{}, err error, s
 	s.call = call
 	s.mux.Unlock()
 	call.val, call.err = fn()
+	call.wg.Done()
 	s.call = nil
 	s.result = &Result{call.val, call.err}
 	s.last = now
@@ -50,5 +51,5 @@ func (s *Single) Do(fn func() (interface{}, error)) (v interface{}, err error, s
 }
 
 func NewSingle(wait time.Duration) *Single {
-	return &Single{wait: int64(wait)}
+	return &Single{wait: wait}
 }

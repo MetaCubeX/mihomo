@@ -14,6 +14,7 @@ func TestBasic(t *testing.T) {
 	shardCount := 0
 	call := func() (interface{}, error) {
 		foo++
+		time.Sleep(time.Millisecond * 5)
 		return nil, nil
 	}
 
