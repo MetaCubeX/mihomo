@@ -68,6 +68,7 @@ func Start(addr string, secret string) {
 		r.Mount("/proxies", proxyRouter())
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
+		r.Mount("/providers/proxies", proxyProviderRouter())
 	})
 
 	if uiPath != "" {

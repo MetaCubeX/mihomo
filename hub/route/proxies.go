@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -30,13 +29,9 @@ func proxyRouter() http.Handler {
 	return r
 }
 
-// When name is composed of a partial escape string, Golang does not unescape it
 func parseProxyName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		name := chi.URLParam(r, "name")
-		if newName, err := url.PathUnescape(name); err == nil {
-			name = newName
-		}
+		name := getEscapeParam(r, "name")
 		ctx := context.WithValue(r.Context(), CtxKeyProxyName, name)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

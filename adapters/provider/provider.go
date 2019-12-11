@@ -3,6 +3,7 @@ package provider
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -58,6 +59,7 @@ type Provider interface {
 type ProxyProvider interface {
 	Provider
 	Proxies() []C.Proxy
+	HealthCheck()
 }
 
 type ProxySchema struct {
@@ -72,9 +74,20 @@ type ProxySetProvider struct {
 	healthCheck       *healthCheck
 	healthCheckOption *HealthCheckOption
 	ticker            *time.Ticker
+	updatedAt         *time.Time
 
 	// mux for avoiding creating new goroutines when pulling
 	mux sync.Mutex
+}
+
+func (pp *ProxySetProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"name":        pp.Name(),
+		"type":        pp.Type().String(),
+		"vehicleType": pp.VehicleType().String(),
+		"proxies":     pp.Proxies(),
+		"updatedAt":   pp.updatedAt,
+	})
 }
 
 func (pp *ProxySetProvider) Name() string {
@@ -83,6 +96,14 @@ func (pp *ProxySetProvider) Name() string {
 
 func (pp *ProxySetProvider) Reload() error {
 	return nil
+}
+
+func (pp *ProxySetProvider) HealthCheck() {
+	pp.mux.Lock()
+	defer pp.mux.Unlock()
+	if pp.healthCheck != nil {
+		pp.healthCheck.check()
+	}
 }
 
 func (pp *ProxySetProvider) Destroy() error {
@@ -175,6 +196,8 @@ func (pp *ProxySetProvider) pull() error {
 		return err
 	}
 
+	now := time.Now()
+	pp.updatedAt = &now
 	pp.hash = hash
 	pp.setProxies(proxies)
 
@@ -210,9 +233,9 @@ func (pp *ProxySetProvider) setProxies(proxies []C.Proxy) {
 		pp.mux.Lock()
 		if pp.healthCheck != nil {
 			pp.healthCheck.close()
-			pp.healthCheck = newHealthCheck(proxies, pp.healthCheckOption.URL, pp.healthCheckOption.Interval)
-			go pp.healthCheck.process()
 		}
+		pp.healthCheck = newHealthCheck(proxies, pp.healthCheckOption.URL, pp.healthCheckOption.Interval)
+		go pp.healthCheck.process()
 		pp.mux.Unlock()
 	}
 }
@@ -238,6 +261,15 @@ type CompatibleProvier struct {
 	proxies     []C.Proxy
 }
 
+func (cp *CompatibleProvier) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"name":        cp.Name(),
+		"type":        cp.Type().String(),
+		"vehicleType": cp.VehicleType().String(),
+		"proxies":     cp.Proxies(),
+	})
+}
+
 func (cp *CompatibleProvier) Name() string {
 	return cp.name
 }
@@ -251,6 +283,12 @@ func (cp *CompatibleProvier) Destroy() error {
 		cp.healthCheck.close()
 	}
 	return nil
+}
+
+func (cp *CompatibleProvier) HealthCheck() {
+	if cp.healthCheck != nil {
+		cp.healthCheck.check()
+	}
 }
 
 func (cp *CompatibleProvier) Initial() error {
