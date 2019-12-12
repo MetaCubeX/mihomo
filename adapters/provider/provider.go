@@ -60,6 +60,7 @@ type ProxyProvider interface {
 	Provider
 	Proxies() []C.Proxy
 	HealthCheck()
+	Update() error
 }
 
 type ProxySchema struct {
@@ -106,6 +107,10 @@ func (pp *ProxySetProvider) HealthCheck() {
 	}
 }
 
+func (pp *ProxySetProvider) Update() error {
+	return pp.pull()
+}
+
 func (pp *ProxySetProvider) Destroy() error {
 	pp.mux.Lock()
 	defer pp.mux.Unlock()
@@ -124,8 +129,10 @@ func (pp *ProxySetProvider) Destroy() error {
 func (pp *ProxySetProvider) Initial() error {
 	var buf []byte
 	var err error
-	if _, err := os.Stat(pp.vehicle.Path()); err == nil {
+	if stat, err := os.Stat(pp.vehicle.Path()); err == nil {
 		buf, err = ioutil.ReadFile(pp.vehicle.Path())
+		modTime := stat.ModTime()
+		pp.updatedAt = &modTime
 	} else {
 		buf, err = pp.vehicle.Read()
 	}
@@ -180,9 +187,11 @@ func (pp *ProxySetProvider) pull() error {
 		return err
 	}
 
+	now := time.Now()
 	hash := md5.Sum(buf)
 	if bytes.Equal(pp.hash[:], hash[:]) {
 		log.Debugln("[Provider] %s's proxies doesn't change", pp.Name())
+		pp.updatedAt = &now
 		return nil
 	}
 
@@ -196,7 +205,6 @@ func (pp *ProxySetProvider) pull() error {
 		return err
 	}
 
-	now := time.Now()
 	pp.updatedAt = &now
 	pp.hash = hash
 	pp.setProxies(proxies)
@@ -222,6 +230,10 @@ func (pp *ProxySetProvider) parse(buf []byte) ([]C.Proxy, error) {
 			return nil, fmt.Errorf("Proxy %d error: %w", idx, err)
 		}
 		proxies = append(proxies, proxy)
+	}
+
+	if len(proxies) == 0 {
+		return nil, errors.New("File doesn't have any valid proxy")
 	}
 
 	return proxies, nil
@@ -289,6 +301,10 @@ func (cp *CompatibleProvier) HealthCheck() {
 	if cp.healthCheck != nil {
 		cp.healthCheck.check()
 	}
+}
+
+func (cp *CompatibleProvier) Update() error {
+	return nil
 }
 
 func (cp *CompatibleProvier) Initial() error {

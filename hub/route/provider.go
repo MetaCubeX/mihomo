@@ -18,7 +18,8 @@ func proxyProviderRouter() http.Handler {
 	r.Route("/{name}", func(r chi.Router) {
 		r.Use(parseProviderName, findProviderByName)
 		r.Get("/", getProvider)
-		r.Get("/healthcheck", doProviderHealthCheck)
+		r.Put("/", updateProvider)
+		r.Get("/healthcheck", healthCheckProvider)
 	})
 	return r
 }
@@ -35,7 +36,17 @@ func getProvider(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, provider)
 }
 
-func doProviderHealthCheck(w http.ResponseWriter, r *http.Request) {
+func updateProvider(w http.ResponseWriter, r *http.Request) {
+	provider := r.Context().Value(CtxKeyProvider).(provider.ProxyProvider)
+	if err := provider.Update(); err != nil {
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+	render.NoContent(w, r)
+}
+
+func healthCheckProvider(w http.ResponseWriter, r *http.Request) {
 	provider := r.Context().Value(CtxKeyProvider).(provider.ProxyProvider)
 	provider.HealthCheck()
 	render.NoContent(w, r)
