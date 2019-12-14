@@ -13,6 +13,7 @@ var (
 	errFormat            = errors.New("format error")
 	errType              = errors.New("unsupport type")
 	errMissUse           = errors.New("`use` field should not be empty")
+	errMissProxy         = errors.New("`use` or `proxies` missing")
 	errMissHealthCheck   = errors.New("`url` or `interval` missing")
 	errDuplicateProvider = errors.New("`duplicate provider name")
 )
@@ -41,6 +42,11 @@ func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy,
 	groupName := groupOption.Name
 
 	providers := []provider.ProxyProvider{}
+
+	if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
+		return nil, errMissProxy
+	}
+
 	if len(groupOption.Proxies) != 0 {
 		ps, err := getProxies(proxyMap, groupOption.Proxies)
 		if err != nil {
