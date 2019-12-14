@@ -13,9 +13,6 @@ import (
 const (
 	// dotMimeType is the DoH mimetype that should be used.
 	dotMimeType = "application/dns-message"
-
-	// dotPath is the URL path that should be used.
-	dotPath = "/dns-query"
 )
 
 var dohTransport = &http.Transport{
