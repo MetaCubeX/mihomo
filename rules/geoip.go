@@ -4,9 +4,9 @@ import (
 	"sync"
 
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 
 	"github.com/oschwald/geoip2-golang"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -50,7 +50,7 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) *GEOIP {
 		var err error
 		mmdb, err = geoip2.Open(C.Path.MMDB())
 		if err != nil {
-			log.Fatalf("Can't load mmdb: %s", err.Error())
+			log.Fatalln("Can't load mmdb: %s", err.Error())
 		}
 	})
 

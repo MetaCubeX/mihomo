@@ -12,8 +12,7 @@ import (
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/hub"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/Dreamacro/clash/log"
 )
 
 var (
@@ -55,11 +54,11 @@ func main() {
 	}
 
 	if err := config.Init(C.Path.HomeDir()); err != nil {
-		log.Fatalf("Initial configuration directory error: %s", err.Error())
+		log.Fatalln("Initial configuration directory error: %s", err.Error())
 	}
 
 	if err := hub.Parse(); err != nil {
-		log.Fatalf("Parse config error: %s", err.Error())
+		log.Fatalln("Parse config error: %s", err.Error())
 	}
 
 	sigCh := make(chan os.Signal, 1)
