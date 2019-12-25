@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	errIPNotFound = errors.New("cannot found ip")
+	errIPNotFound = errors.New("couldn't find ip")
 	errIPVersion  = errors.New("ip version error")
 )
 
