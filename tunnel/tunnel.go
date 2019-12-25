@@ -182,7 +182,7 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
 			wg.Add(1)
 			proxy, rule, err := t.resolveMetadata(metadata)
 			if err != nil {
-				log.Warnln("Parse metadata failed: %s", err.Error())
+				log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 				t.natTable.Delete(lockKey)
 				wg.Done()
 				return
@@ -190,7 +190,7 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
 
 			rawPc, nAddr, err := proxy.DialUDP(metadata)
 			if err != nil {
-				log.Warnln("dial %s error: %s", proxy.Name(), err.Error())
+				log.Warnln("[UDP] dial %s error: %s", proxy.Name(), err.Error())
 				t.natTable.Delete(lockKey)
 				wg.Done()
 				return
@@ -199,9 +199,9 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
 			pc = newUDPTracker(rawPc, DefaultManager, metadata, rule)
 
 			if rule != nil {
-				log.Infoln("%s --> %v match %s using %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), rawPc.Chains().String())
+				log.Infoln("[UDP] %s --> %v match %s using %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), rawPc.Chains().String())
 			} else {
-				log.Infoln("%s --> %v doesn't match any rule using DIRECT", metadata.SrcIP.String(), metadata.String())
+				log.Infoln("[UDP] %s --> %v doesn't match any rule using DIRECT", metadata.SrcIP.String(), metadata.String())
 			}
 
 			t.natTable.Set(key, pc, addr)
