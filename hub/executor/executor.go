@@ -65,12 +65,12 @@ func ParseWithPath(path string) (*config.Config, error) {
 		return nil, err
 	}
 
-	return config.Parse(buf)
+	return ParseWithBytes(buf)
 }
 
-// Parse config with default config path
+// ParseWithBytes config with buffer
 func ParseWithBytes(buf []byte) (*config.Config, error) {
-	return ParseWithPath(C.Path.Config())
+	return config.Parse(buf)
 }
 
 // ApplyConfig dispatch configure to all parts
