@@ -314,7 +314,8 @@ func parseProxies(cfg *rawConfig) (proxies map[string]C.Proxy, providersMap map[
 	for _, v := range proxyList {
 		ps = append(ps, proxies[v])
 	}
-	pd, _ := provider.NewCompatibleProvier(provider.ReservedName, ps, nil)
+	hc := provider.NewHealthCheck(ps, "", 0)
+	pd, _ := provider.NewCompatibleProvier(provider.ReservedName, ps, hc)
 	providersMap[provider.ReservedName] = pd
 
 	global := outboundgroup.NewSelector("GLOBAL", []provider.ProxyProvider{pd})
