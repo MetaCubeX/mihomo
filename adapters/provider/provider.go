@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/adapters/outbound"
@@ -68,17 +66,13 @@ type ProxySchema struct {
 }
 
 type ProxySetProvider struct {
-	name              string
-	vehicle           Vehicle
-	hash              [16]byte
-	proxies           []C.Proxy
-	healthCheck       *healthCheck
-	healthCheckOption *HealthCheckOption
-	ticker            *time.Ticker
-	updatedAt         *time.Time
-
-	// mux for avoiding creating new goroutines when pulling
-	mux sync.Mutex
+	name        string
+	vehicle     Vehicle
+	hash        [16]byte
+	proxies     []C.Proxy
+	healthCheck *HealthCheck
+	ticker      *time.Ticker
+	updatedAt   *time.Time
 }
 
 func (pp *ProxySetProvider) MarshalJSON() ([]byte, error) {
@@ -100,11 +94,7 @@ func (pp *ProxySetProvider) Reload() error {
 }
 
 func (pp *ProxySetProvider) HealthCheck() {
-	pp.mux.Lock()
-	defer pp.mux.Unlock()
-	if pp.healthCheck != nil {
-		pp.healthCheck.check()
-	}
+	pp.healthCheck.check()
 }
 
 func (pp *ProxySetProvider) Update() error {
@@ -112,12 +102,7 @@ func (pp *ProxySetProvider) Update() error {
 }
 
 func (pp *ProxySetProvider) Destroy() error {
-	pp.mux.Lock()
-	defer pp.mux.Unlock()
-	if pp.healthCheck != nil {
-		pp.healthCheck.close()
-		pp.healthCheck = nil
-	}
+	pp.healthCheck.close()
 
 	if pp.ticker != nil {
 		pp.ticker.Stop()
@@ -241,35 +226,32 @@ func (pp *ProxySetProvider) parse(buf []byte) ([]C.Proxy, error) {
 
 func (pp *ProxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
-	if pp.healthCheckOption != nil {
-		pp.mux.Lock()
-		if pp.healthCheck != nil {
-			pp.healthCheck.close()
-		}
-		pp.healthCheck = newHealthCheck(proxies, pp.healthCheckOption.URL, pp.healthCheckOption.Interval)
-		go pp.healthCheck.process()
-		pp.mux.Unlock()
-	}
+	pp.healthCheck.setProxy(proxies)
+	go pp.healthCheck.check()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, vehicle Vehicle, option *HealthCheckOption) *ProxySetProvider {
+func NewProxySetProvider(name string, interval time.Duration, vehicle Vehicle, hc *HealthCheck) *ProxySetProvider {
 	var ticker *time.Ticker
 	if interval != 0 {
 		ticker = time.NewTicker(interval)
 	}
 
+	if hc.auto() {
+		go hc.process()
+	}
+
 	return &ProxySetProvider{
-		name:              name,
-		vehicle:           vehicle,
-		proxies:           []C.Proxy{},
-		healthCheckOption: option,
-		ticker:            ticker,
+		name:        name,
+		vehicle:     vehicle,
+		proxies:     []C.Proxy{},
+		healthCheck: hc,
+		ticker:      ticker,
 	}
 }
 
 type CompatibleProvier struct {
 	name        string
-	healthCheck *healthCheck
+	healthCheck *HealthCheck
 	proxies     []C.Proxy
 }
 
@@ -291,16 +273,12 @@ func (cp *CompatibleProvier) Reload() error {
 }
 
 func (cp *CompatibleProvier) Destroy() error {
-	if cp.healthCheck != nil {
-		cp.healthCheck.close()
-	}
+	cp.healthCheck.close()
 	return nil
 }
 
 func (cp *CompatibleProvier) HealthCheck() {
-	if cp.healthCheck != nil {
-		cp.healthCheck.check()
-	}
+	cp.healthCheck.check()
 }
 
 func (cp *CompatibleProvier) Update() error {
@@ -308,9 +286,6 @@ func (cp *CompatibleProvier) Update() error {
 }
 
 func (cp *CompatibleProvier) Initial() error {
-	if cp.healthCheck != nil {
-		go cp.healthCheck.process()
-	}
 	return nil
 }
 
@@ -326,17 +301,13 @@ func (cp *CompatibleProvier) Proxies() []C.Proxy {
 	return cp.proxies
 }
 
-func NewCompatibleProvier(name string, proxies []C.Proxy, option *HealthCheckOption) (*CompatibleProvier, error) {
+func NewCompatibleProvier(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvier, error) {
 	if len(proxies) == 0 {
 		return nil, errors.New("Provider need one proxy at least")
 	}
 
-	var hc *healthCheck
-	if option != nil {
-		if _, err := url.Parse(option.URL); err != nil {
-			return nil, fmt.Errorf("URL format error: %w", err)
-		}
-		hc = newHealthCheck(proxies, option.URL, option.Interval)
+	if hc.auto() {
+		go hc.process()
 	}
 
 	return &CompatibleProvier{

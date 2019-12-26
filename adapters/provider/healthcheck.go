@@ -16,20 +16,37 @@ type HealthCheckOption struct {
 	Interval uint
 }
 
-type healthCheck struct {
-	url     string
-	proxies []C.Proxy
-	ticker  *time.Ticker
+type HealthCheck struct {
+	url      string
+	proxies  []C.Proxy
+	interval uint
+	done     chan struct{}
 }
 
-func (hc *healthCheck) process() {
+func (hc *HealthCheck) process() {
+	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
+
 	go hc.check()
-	for range hc.ticker.C {
-		hc.check()
+	for {
+		select {
+		case <-ticker.C:
+			hc.check()
+		case <-hc.done:
+			ticker.Stop()
+			return
+		}
 	}
 }
 
-func (hc *healthCheck) check() {
+func (hc *HealthCheck) setProxy(proxies []C.Proxy) {
+	hc.proxies = proxies
+}
+
+func (hc *HealthCheck) auto() bool {
+	return hc.interval != 0
+}
+
+func (hc *HealthCheck) check() {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
 	for _, proxy := range hc.proxies {
 		go proxy.URLTest(ctx, hc.url)
@@ -39,15 +56,15 @@ func (hc *healthCheck) check() {
 	cancel()
 }
 
-func (hc *healthCheck) close() {
-	hc.ticker.Stop()
+func (hc *HealthCheck) close() {
+	hc.done <- struct{}{}
 }
 
-func newHealthCheck(proxies []C.Proxy, url string, interval uint) *healthCheck {
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
-	return &healthCheck{
-		proxies: proxies,
-		url:     url,
-		ticker:  ticker,
+func NewHealthCheck(proxies []C.Proxy, url string, interval uint) *HealthCheck {
+	return &HealthCheck{
+		proxies:  proxies,
+		url:      url,
+		interval: interval,
+		done:     make(chan struct{}, 1),
 	}
 }

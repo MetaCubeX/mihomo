@@ -35,13 +35,11 @@ func ParseProxyProvider(name string, mapping map[string]interface{}) (ProxyProvi
 		return nil, err
 	}
 
-	var healthCheckOption *HealthCheckOption
+	var hcInterval uint = 0
 	if schema.HealthCheck.Enable {
-		healthCheckOption = &HealthCheckOption{
-			URL:      schema.HealthCheck.URL,
-			Interval: uint(schema.HealthCheck.Interval),
-		}
+		hcInterval = uint(schema.HealthCheck.Interval)
 	}
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval)
 
 	path := C.Path.Reslove(schema.Path)
 
@@ -56,5 +54,5 @@ func ParseProxyProvider(name string, mapping map[string]interface{}) (ProxyProvi
 	}
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
-	return NewProxySetProvider(name, interval, vehicle, healthCheckOption), nil
+	return NewProxySetProvider(name, interval, vehicle, hc), nil
 }
