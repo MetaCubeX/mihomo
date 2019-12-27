@@ -9,7 +9,7 @@ import (
 
 func TestPool_Basic(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
-	pool, _ := New(ipnet, 10)
+	pool, _ := New(ipnet, 10, nil)
 
 	first := pool.Lookup("foo.com")
 	last := pool.Lookup("bar.com")
@@ -23,7 +23,7 @@ func TestPool_Basic(t *testing.T) {
 
 func TestPool_Cycle(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/30")
-	pool, _ := New(ipnet, 10)
+	pool, _ := New(ipnet, 10, nil)
 
 	first := pool.Lookup("foo.com")
 	same := pool.Lookup("baz.com")
@@ -33,7 +33,7 @@ func TestPool_Cycle(t *testing.T) {
 
 func TestPool_MaxCacheSize(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/24")
-	pool, _ := New(ipnet, 2)
+	pool, _ := New(ipnet, 2, nil)
 
 	first := pool.Lookup("foo.com")
 	pool.Lookup("bar.com")
@@ -45,7 +45,7 @@ func TestPool_MaxCacheSize(t *testing.T) {
 
 func TestPool_DoubleMapping(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/24")
-	pool, _ := New(ipnet, 2)
+	pool, _ := New(ipnet, 2, nil)
 
 	// fill cache
 	fooIP := pool.Lookup("foo.com")
@@ -72,7 +72,7 @@ func TestPool_DoubleMapping(t *testing.T) {
 
 func TestPool_Error(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/31")
-	_, err := New(ipnet, 10)
+	_, err := New(ipnet, 10, nil)
 
 	assert.Error(t, err)
 }
