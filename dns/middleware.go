@@ -26,6 +26,10 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 			}
 
 			host := strings.TrimRight(q.Name, ".")
+			if fakePool.LookupHost(host) {
+				next(w, r)
+				return
+			}
 
 			rr := &D.A{}
 			rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}

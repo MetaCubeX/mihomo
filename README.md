@@ -130,6 +130,9 @@ experimental:
   # listen: 0.0.0.0:53
   # enhanced-mode: redir-host # or fake-ip
   # # fake-ip-range: 198.18.0.1/16 # if you don't know what it is, don't change it
+  # fake-ip-filter: # fake ip white domain list
+  #   - *.lan
+  #   - localhost.ptlogin2.qq.com
   # nameserver:
   #   - 114.114.114.114
   #   - tls://dns.rubyfish.cn:853 # dns over tls

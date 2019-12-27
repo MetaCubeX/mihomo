@@ -81,6 +81,7 @@ type rawDNS struct {
 	Listen         string            `yaml:"listen"`
 	EnhancedMode   dns.EnhancedMode  `yaml:"enhanced-mode"`
 	FakeIPRange    string            `yaml:"fake-ip-range"`
+	FakeIPFilter   []string          `yaml:"fake-ip-filter"`
 }
 
 type rawFallbackFilter struct {
@@ -523,7 +524,17 @@ func parseDNS(cfg rawDNS) (*DNS, error) {
 		if err != nil {
 			return nil, err
 		}
-		pool, err := fakeip.New(ipnet, 1000)
+
+		var host *trie.Trie
+		// fake ip skip host filter
+		if len(cfg.FakeIPFilter) != 0 {
+			host = trie.New()
+			for _, domain := range cfg.FakeIPFilter {
+				host.Insert(domain, true)
+			}
+		}
+
+		pool, err := fakeip.New(ipnet, 1000, host)
 		if err != nil {
 			return nil, err
 		}
