@@ -9,6 +9,8 @@ import (
 	"time"
 
 	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	C "github.com/Dreamacro/clash/constant"
+
 	"github.com/Dreamacro/clash/common/pool"
 )
 
@@ -79,21 +81,14 @@ func (t *Tunnel) handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	}
 }
 
-func (t *Tunnel) handleUDPToRemote(conn net.Conn, pc net.PacketConn, addr net.Addr) {
-	buf := pool.BufPool.Get().([]byte)
-	defer pool.BufPool.Put(buf[:cap(buf)])
-
-	n, err := conn.Read(buf)
-	if err != nil {
+func (t *Tunnel) handleUDPToRemote(packet C.UDPPacket, pc net.PacketConn, addr net.Addr) {
+	if _, err := pc.WriteTo(packet.Data(), addr); err != nil {
 		return
 	}
-	if _, err = pc.WriteTo(buf[:n], addr); err != nil {
-		return
-	}
-	DefaultManager.Upload() <- int64(n)
+	DefaultManager.Upload() <- int64(len(packet.Data()))
 }
 
-func (t *Tunnel) handleUDPToLocal(conn net.Conn, pc net.PacketConn, key string, timeout time.Duration) {
+func (t *Tunnel) handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, omitSrcAddr bool, timeout time.Duration) {
 	buf := pool.BufPool.Get().([]byte)
 	defer pool.BufPool.Put(buf[:cap(buf)])
 	defer t.natTable.Delete(key)
@@ -101,12 +96,15 @@ func (t *Tunnel) handleUDPToLocal(conn net.Conn, pc net.PacketConn, key string, 
 
 	for {
 		pc.SetReadDeadline(time.Now().Add(timeout))
-		n, _, err := pc.ReadFrom(buf)
+		n, from, err := pc.ReadFrom(buf)
 		if err != nil {
 			return
 		}
+		if from != nil && omitSrcAddr {
+			from = nil
+		}
 
-		n, err = conn.Write(buf[:n])
+		n, err = packet.WriteBack(buf[:n], from)
 		if err != nil {
 			return
 		}

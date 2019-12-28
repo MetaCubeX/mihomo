@@ -201,8 +201,13 @@ func (uc *ssUDPConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 }
 
 func (uc *ssUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, a, e := uc.PacketConn.ReadFrom(b)
+	n, _, e := uc.PacketConn.ReadFrom(b)
 	addr := socks5.SplitAddr(b[:n])
+	var from net.Addr
+	if e == nil {
+		// Get the source IP/Port of packet.
+		from = addr.UDPAddr()
+	}
 	copy(b, b[len(addr):])
-	return n - len(addr), a, e
+	return n - len(addr), from, e
 }
