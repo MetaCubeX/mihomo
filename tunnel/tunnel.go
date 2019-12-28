@@ -3,6 +3,7 @@ package tunnel
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"sync"
 	"time"
 
@@ -43,12 +44,12 @@ type Tunnel struct {
 
 // Add request to queue
 func (t *Tunnel) Add(req C.ServerAdapter) {
-	switch req.Metadata().NetWork {
-	case C.TCP:
-		t.tcpQueue.In() <- req
-	case C.UDP:
-		t.udpQueue.In() <- req
-	}
+	t.tcpQueue.In() <- req
+}
+
+// AddPacket add udp Packet to queue
+func (t *Tunnel) AddPacket(packet *inbound.PacketAdapter) {
+	t.udpQueue.In() <- packet
 }
 
 // Rules return all rules
@@ -98,14 +99,23 @@ func (t *Tunnel) SetMode(mode Mode) {
 	t.mode = mode
 }
 
+// processUDP starts a loop to handle udp packet
+func (t *Tunnel) processUDP() {
+	queue := t.udpQueue.Out()
+	for elm := range queue {
+		conn := elm.(*inbound.PacketAdapter)
+		t.handleUDPConn(conn)
+	}
+}
+
 func (t *Tunnel) process() {
-	go func() {
-		queue := t.udpQueue.Out()
-		for elm := range queue {
-			conn := elm.(C.ServerAdapter)
-			t.handleUDPConn(conn)
-		}
-	}()
+	numUDPWorkers := 4
+	if runtime.NumCPU() > numUDPWorkers {
+		numUDPWorkers = runtime.NumCPU()
+	}
+	for i := 0; i < numUDPWorkers; i++ {
+		go t.processUDP()
+	}
 
 	queue := t.tcpQueue.Out()
 	for elm := range queue {
@@ -119,7 +129,7 @@ func (t *Tunnel) resolveIP(host string) (net.IP, error) {
 }
 
 func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
-	return dns.DefaultResolver != nil && (dns.DefaultResolver.IsMapping() || dns.DefaultResolver.IsFakeIP()) && metadata.Host == "" && metadata.DstIP != nil
+	return dns.DefaultResolver != nil && (dns.DefaultResolver.IsMapping() || dns.DefaultResolver.FakeIPEnabled()) && metadata.Host == "" && metadata.DstIP != nil
 }
 
 func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
@@ -134,7 +144,7 @@ func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) 
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
-			if dns.DefaultResolver.IsFakeIP() {
+			if dns.DefaultResolver.FakeIPEnabled() {
 				metadata.DstIP = nil
 			}
 		}
@@ -158,25 +168,28 @@ func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) 
 	return proxy, rule, nil
 }
 
-func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
-	metadata := localConn.Metadata()
+func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
+	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
 		return
 	}
 
-	src := localConn.RemoteAddr().String()
+	src := packet.LocalAddr().String()
 	dst := metadata.RemoteAddress()
 	key := src + "-" + dst
 
 	pc, addr := t.natTable.Get(key)
 	if pc != nil {
-		t.handleUDPToRemote(localConn, pc, addr)
+		t.handleUDPToRemote(packet, pc, addr)
 		return
 	}
 
 	lockKey := key + "-lock"
 	wg, loaded := t.natTable.GetOrCreateLock(lockKey)
+
+	isFakeIP := dns.DefaultResolver.IsFakeIP(metadata.DstIP)
+
 	go func() {
 		if !loaded {
 			wg.Add(1)
@@ -207,13 +220,14 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
 			t.natTable.Set(key, pc, addr)
 			t.natTable.Delete(lockKey)
 			wg.Done()
-			go t.handleUDPToLocal(localConn, pc, key, udpTimeout)
+			// in fake-ip mode, Full-Cone NAT can never achieve, fallback to omitting src Addr
+			go t.handleUDPToLocal(packet.UDPPacket, pc, key, isFakeIP, udpTimeout)
 		}
 
 		wg.Wait()
 		pc, addr := t.natTable.Get(key)
 		if pc != nil {
-			t.handleUDPToRemote(localConn, pc, addr)
+			t.handleUDPToRemote(packet, pc, addr)
 		}
 	}()
 }

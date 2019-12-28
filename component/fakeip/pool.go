@@ -62,12 +62,26 @@ func (p *Pool) LookBack(ip net.IP) (string, bool) {
 	return "", false
 }
 
-// LookupHost return if host in host
-func (p *Pool) LookupHost(host string) bool {
+// LookupHost return if domain in host
+func (p *Pool) LookupHost(domain string) bool {
 	if p.host == nil {
 		return false
 	}
-	return p.host.Search(host) != nil
+	return p.host.Search(domain) != nil
+}
+
+// Exist returns if given ip exists in fake-ip pool
+func (p *Pool) Exist(ip net.IP) bool {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
+	if ip = ip.To4(); ip == nil {
+		return false
+	}
+
+	n := ipToUint(ip.To4())
+	offset := n - p.min + 1
+	return p.cache.Exist(offset)
 }
 
 // Gateway return gateway ip

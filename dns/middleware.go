@@ -75,7 +75,7 @@ func compose(middlewares []middleware, endpoint handler) handler {
 func newHandler(resolver *Resolver) handler {
 	middlewares := []middleware{}
 
-	if resolver.IsFakeIP() {
+	if resolver.FakeIPEnabled() {
 		middlewares = append(middlewares, withFakeIP(resolver.pool))
 	}
 

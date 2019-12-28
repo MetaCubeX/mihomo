@@ -1,7 +1,6 @@
 package socks
 
 import (
-	"bytes"
 	"net"
 
 	adapters "github.com/Dreamacro/clash/adapters/inbound"
@@ -57,12 +56,12 @@ func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
 		pool.BufPool.Put(buf[:cap(buf)])
 		return
 	}
-	conn := &fakeConn{
+	packet := &fakeConn{
 		PacketConn: pc,
 		remoteAddr: addr,
 		targetAddr: target,
-		buffer:     bytes.NewBuffer(payload),
+		payload:    payload,
 		bufRef:     buf,
 	}
-	tun.Add(adapters.NewSocket(target, conn, C.SOCKS, C.UDP))
+	tun.AddPacket(adapters.NewPacket(target, packet, C.SOCKS, C.UDP))
 }
