@@ -92,12 +92,9 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := ioutil.WriteFile(h.path, buf, fileMode); err != nil {
 		return nil, err
 	}
 
