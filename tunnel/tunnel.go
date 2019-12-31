@@ -188,7 +188,7 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 	lockKey := key + "-lock"
 	wg, loaded := t.natTable.GetOrCreateLock(lockKey)
 
-	isFakeIP := dns.DefaultResolver.IsFakeIP(metadata.DstIP)
+	isFakeIP := dns.DefaultResolver != nil && dns.DefaultResolver.IsFakeIP(metadata.DstIP)
 
 	go func() {
 		if !loaded {
