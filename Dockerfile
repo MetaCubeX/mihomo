@@ -1,9 +1,7 @@
 FROM golang:alpine as builder
 
 RUN apk add --no-cache make git && \
-    wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz -O /tmp/GeoLite2-Country.tar.gz && \
-    tar zxvf /tmp/GeoLite2-Country.tar.gz -C /tmp && \
-    mv /tmp/GeoLite2-Country_*/GeoLite2-Country.mmdb /Country.mmdb
+    wget -O /Country.mmdb https://github.com/Dreamacro/maxmind-geoip/releases/latest/download/Country.mmdb
 WORKDIR /clash-src
 COPY . /clash-src
 RUN go mod download && \
