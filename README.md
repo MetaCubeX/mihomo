@@ -133,7 +133,7 @@ experimental:
   # enhanced-mode: redir-host # or fake-ip
   # # fake-ip-range: 198.18.0.1/16 # if you don't know what it is, don't change it
   # fake-ip-filter: # fake ip white domain list
-  #   - *.lan
+  #   - '*.lan'
   #   - localhost.ptlogin2.qq.com
   # nameserver:
   #   - 114.114.114.114
