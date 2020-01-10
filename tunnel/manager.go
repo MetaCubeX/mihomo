@@ -61,6 +61,15 @@ func (m *Manager) Snapshot() *Snapshot {
 	}
 }
 
+func (m *Manager) ResetStatistic() {
+	m.uploadTemp = 0
+	m.uploadBlip = 0
+	m.uploadTotal = 0
+	m.downloadTemp = 0
+	m.downloadBlip = 0
+	m.downloadTotal = 0
+}
+
 func (m *Manager) handle() {
 	go m.handleCh(m.upload, &m.uploadTemp, &m.uploadBlip, &m.uploadTotal)
 	go m.handleCh(m.download, &m.downloadTemp, &m.downloadBlip, &m.downloadTotal)
