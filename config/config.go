@@ -72,24 +72,24 @@ type Config struct {
 	Providers    map[string]provider.ProxyProvider
 }
 
-type rawDNS struct {
+type RawDNS struct {
 	Enable         bool              `yaml:"enable"`
 	IPv6           bool              `yaml:"ipv6"`
 	NameServer     []string          `yaml:"nameserver"`
 	Fallback       []string          `yaml:"fallback"`
-	FallbackFilter rawFallbackFilter `yaml:"fallback-filter"`
+	FallbackFilter RawFallbackFilter `yaml:"fallback-filter"`
 	Listen         string            `yaml:"listen"`
 	EnhancedMode   dns.EnhancedMode  `yaml:"enhanced-mode"`
 	FakeIPRange    string            `yaml:"fake-ip-range"`
 	FakeIPFilter   []string          `yaml:"fake-ip-filter"`
 }
 
-type rawFallbackFilter struct {
+type RawFallbackFilter struct {
 	GeoIP  bool     `yaml:"geoip"`
 	IPCIDR []string `yaml:"ipcidr"`
 }
 
-type rawConfig struct {
+type RawConfig struct {
 	Port               int          `yaml:"port"`
 	SocksPort          int          `yaml:"socks-port"`
 	RedirPort          int          `yaml:"redir-port"`
@@ -104,7 +104,7 @@ type rawConfig struct {
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-provider"`
 	Hosts         map[string]string                 `yaml:"hosts"`
-	DNS           rawDNS                            `yaml:"dns"`
+	DNS           RawDNS                            `yaml:"dns"`
 	Experimental  Experimental                      `yaml:"experimental"`
 	Proxy         []map[string]interface{}          `yaml:"Proxy"`
 	ProxyGroup    []map[string]interface{}          `yaml:"Proxy Group"`
@@ -113,10 +113,17 @@ type rawConfig struct {
 
 // Parse config
 func Parse(buf []byte) (*Config, error) {
-	config := &Config{}
+	rawCfg, err := UnmarshalRawConfig(buf)
+	if err != nil {
+		return nil, err
+	}
 
+	return ParseRawConfig(rawCfg)
+}
+
+func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with some default value
-	rawCfg := &rawConfig{
+	rawCfg := &RawConfig{
 		AllowLan:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
@@ -129,18 +136,25 @@ func Parse(buf []byte) (*Config, error) {
 		Experimental: Experimental{
 			IgnoreResolveFail: true,
 		},
-		DNS: rawDNS{
+		DNS: RawDNS{
 			Enable:      false,
 			FakeIPRange: "198.18.0.1/16",
-			FallbackFilter: rawFallbackFilter{
+			FallbackFilter: RawFallbackFilter{
 				GeoIP:  true,
 				IPCIDR: []string{},
 			},
 		},
 	}
+
 	if err := yaml.Unmarshal(buf, &rawCfg); err != nil {
 		return nil, err
 	}
+
+	return rawCfg, nil
+}
+
+func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
+	config := &Config{}
 
 	config.Experimental = &rawCfg.Experimental
 
@@ -176,10 +190,11 @@ func Parse(buf []byte) (*Config, error) {
 	config.Hosts = hosts
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
+
 	return config, nil
 }
 
-func parseGeneral(cfg *rawConfig) (*General, error) {
+func parseGeneral(cfg *RawConfig) (*General, error) {
 	port := cfg.Port
 	socksPort := cfg.SocksPort
 	redirPort := cfg.RedirPort
@@ -214,7 +229,7 @@ func parseGeneral(cfg *rawConfig) (*General, error) {
 	return general, nil
 }
 
-func parseProxies(cfg *rawConfig) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
+func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]provider.ProxyProvider)
 	proxyList := []string{}
@@ -324,7 +339,7 @@ func parseProxies(cfg *rawConfig) (proxies map[string]C.Proxy, providersMap map[
 	return proxies, providersMap, nil
 }
 
-func parseRules(cfg *rawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
+func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 	rules := []C.Rule{}
 
 	rulesConfig := cfg.Rule
@@ -403,7 +418,7 @@ func parseRules(cfg *rawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 	return rules, nil
 }
 
-func parseHosts(cfg *rawConfig) (*trie.Trie, error) {
+func parseHosts(cfg *RawConfig) (*trie.Trie, error) {
 	tree := trie.New()
 	if len(cfg.Hosts) != 0 {
 		for domain, ipStr := range cfg.Hosts {
@@ -496,7 +511,7 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	return ipNets, nil
 }
 
-func parseDNS(cfg rawDNS) (*DNS, error) {
+func parseDNS(cfg RawDNS) (*DNS, error) {
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("If DNS configuration is turned on, NameServer cannot be empty")
 	}
