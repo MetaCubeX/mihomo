@@ -180,7 +180,7 @@ func (r *Resolver) IsFakeIP(ip net.IP) bool {
 }
 
 func (r *Resolver) batchExchange(clients []resolver, m *D.Msg) (msg *D.Msg, err error) {
-	fast, ctx := picker.WithTimeout(context.Background(), time.Second * 5)
+	fast, ctx := picker.WithTimeout(context.Background(), time.Second*5)
 	for _, client := range clients {
 		r := client
 		fast.Go(func() (interface{}, error) {
@@ -192,7 +192,7 @@ func (r *Resolver) batchExchange(clients []resolver, m *D.Msg) (msg *D.Msg, err 
 		})
 	}
 
-	elm := fast.Wait()
+	elm := fast.WaitWithoutCancel()
 	if elm == nil {
 		return nil, errors.New("All DNS requests failed")
 	}
