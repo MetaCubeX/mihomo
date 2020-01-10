@@ -59,6 +59,7 @@ func (p *Picker) Wait() interface{} {
 }
 
 // WaitWithoutCancel blocks until the first result return, if timeout will return nil.
+// The return of this function will not wait for the cancel of context.
 func (p *Picker) WaitWithoutCancel() interface{} {
 	select {
 	case <-p.firstDone:
