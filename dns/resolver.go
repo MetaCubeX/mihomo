@@ -6,17 +6,14 @@ import (
 	"errors"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
 	trie "github.com/Dreamacro/clash/component/domain-trie"
 	"github.com/Dreamacro/clash/component/fakeip"
-	C "github.com/Dreamacro/clash/constant"
 
 	D "github.com/miekg/dns"
-	geoip2 "github.com/oschwald/geoip2-golang"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -30,9 +27,6 @@ var (
 
 var (
 	globalSessionCache = tls.NewLRUClientSessionCache(64)
-
-	mmdb *geoip2.Reader
-	once sync.Once
 )
 
 type resolver interface {
@@ -311,10 +305,6 @@ func New(config Config) *Resolver {
 
 	fallbackFilters := []fallbackFilter{}
 	if config.FallbackFilter.GeoIP {
-		once.Do(func() {
-			mmdb, _ = geoip2.Open(C.Path.MMDB())
-		})
-
 		fallbackFilters = append(fallbackFilters, &geoipFilter{})
 	}
 	for _, ipnet := range config.FallbackFilter.IPCIDR {
