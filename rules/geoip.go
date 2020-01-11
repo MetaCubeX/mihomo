@@ -1,17 +1,8 @@
 package rules
 
 import (
-	"sync"
-
+	"github.com/Dreamacro/clash/component/mmdb"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-
-	"github.com/oschwald/geoip2-golang"
-)
-
-var (
-	mmdb *geoip2.Reader
-	once sync.Once
 )
 
 type GEOIP struct {
@@ -29,7 +20,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 	if ip == nil {
 		return false
 	}
-	record, _ := mmdb.Country(ip)
+	record, _ := mmdb.Instance().Country(ip)
 	return record.Country.IsoCode == g.country
 }
 
@@ -46,14 +37,6 @@ func (g *GEOIP) NoResolveIP() bool {
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool) *GEOIP {
-	once.Do(func() {
-		var err error
-		mmdb, err = geoip2.Open(C.Path.MMDB())
-		if err != nil {
-			log.Fatalln("Can't load mmdb: %s", err.Error())
-		}
-	})
-
 	geoip := &GEOIP{
 		country:     country,
 		adapter:     adapter,
