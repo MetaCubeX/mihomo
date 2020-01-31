@@ -207,10 +207,15 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 			}
 			pc = newUDPTracker(rawPc, DefaultManager, metadata, rule)
 
-			if rule != nil {
-				log.Infoln("[UDP] %s --> %v match %s using %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), rawPc.Chains().String())
-			} else {
-				log.Infoln("[UDP] %s --> %v doesn't match any rule using DIRECT", metadata.SrcIP.String(), metadata.String())
+			switch true {
+			case rule != nil:
+				log.Infoln("[UDP] %s --> %v match %s using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), rawPc.Chains().String())
+			case t.mode == Global:
+				log.Infoln("[UDP] %s --> %v using GLOBAL", metadata.SourceAddress(), metadata.String())
+			case t.mode == Direct:
+				log.Infoln("[UDP] %s --> %v using DIRECT", metadata.SourceAddress(), metadata.String())
+			default:
+				log.Infoln("[UDP] %s --> %v doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.String())
 			}
 
 			t.natTable.Set(key, pc)
@@ -250,10 +255,15 @@ func (t *Tunnel) handleTCPConn(localConn C.ServerAdapter) {
 	remoteConn = newTCPTracker(remoteConn, DefaultManager, metadata, rule)
 	defer remoteConn.Close()
 
-	if rule != nil {
-		log.Infoln("%s --> %v match %s using %s", metadata.SrcIP.String(), metadata.String(), rule.RuleType().String(), remoteConn.Chains().String())
-	} else {
-		log.Infoln("%s --> %v doesn't match any rule using DIRECT", metadata.SrcIP.String(), metadata.String())
+	switch true {
+	case rule != nil:
+		log.Infoln("[TCP] %s --> %v match %s using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), remoteConn.Chains().String())
+	case t.mode == Global:
+		log.Infoln("[TCP] %s --> %v using GLOBAL", metadata.SourceAddress(), metadata.String())
+	case t.mode == Direct:
+		log.Infoln("[TCP] %s --> %v using DIRECT", metadata.SourceAddress(), metadata.String())
+	default:
+		log.Infoln("[TCP] %s --> %v doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.String())
 	}
 
 	switch adapter := localConn.(type) {

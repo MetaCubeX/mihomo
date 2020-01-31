@@ -71,6 +71,10 @@ func (m *Metadata) RemoteAddress() string {
 	return net.JoinHostPort(m.String(), m.DstPort)
 }
 
+func (m *Metadata) SourceAddress() string {
+	return net.JoinHostPort(m.SrcIP.String(), m.SrcPort)
+}
+
 func (m *Metadata) UDPAddr() *net.UDPAddr {
 	if m.NetWork != UDP || m.DstIP == nil {
 		return nil
