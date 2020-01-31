@@ -9,26 +9,16 @@ type Table struct {
 	mapping sync.Map
 }
 
-type element struct {
-	RemoteAddr net.Addr
-	RemoteConn net.PacketConn
+func (t *Table) Set(key string, pc net.PacketConn) {
+	t.mapping.Store(key, pc)
 }
 
-func (t *Table) Set(key string, pc net.PacketConn, addr net.Addr) {
-	// set conn read timeout
-	t.mapping.Store(key, &element{
-		RemoteConn: pc,
-		RemoteAddr: addr,
-	})
-}
-
-func (t *Table) Get(key string) (net.PacketConn, net.Addr) {
+func (t *Table) Get(key string) net.PacketConn {
 	item, exist := t.mapping.Load(key)
 	if !exist {
-		return nil, nil
+		return nil
 	}
-	elm := item.(*element)
-	return elm.RemoteConn, elm.RemoteAddr
+	return item.(net.PacketConn)
 }
 
 func (t *Table) GetOrCreateLock(key string) (*sync.WaitGroup, bool) {
