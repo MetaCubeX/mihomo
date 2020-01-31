@@ -33,6 +33,7 @@ func (c *fakeConn) LocalAddr() net.Addr {
 }
 
 func (c *fakeConn) Close() error {
+	err := c.PacketConn.Close()
 	pool.BufPool.Put(c.bufRef[:cap(c.bufRef)])
-	return nil
+	return err
 }
