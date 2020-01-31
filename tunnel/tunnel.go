@@ -175,6 +175,15 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 		return
 	}
 
+	if metadata.DstIP == nil {
+		ip, err := t.resolveIP(metadata.Host)
+		if err != nil {
+			log.Warnln("[UDP] Resolve %s failed: %s, %#v", metadata.Host, err.Error(), metadata)
+			return
+		}
+		metadata.DstIP = ip
+	}
+
 	key := packet.LocalAddr().String()
 
 	pc := t.natTable.Get(key)
