@@ -59,7 +59,7 @@ type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
 	DialContext(ctx context.Context, metadata *Metadata) (Conn, error)
-	DialUDP(metadata *Metadata) (PacketConn, net.Addr, error)
+	DialUDP(metadata *Metadata) (PacketConn, error)
 	SupportUDP() bool
 	MarshalJSON() ([]byte, error)
 }

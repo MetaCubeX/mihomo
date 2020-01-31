@@ -58,10 +58,9 @@ func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
 	}
 	packet := &fakeConn{
 		PacketConn: pc,
-		remoteAddr: addr,
-		targetAddr: target,
+		rAddr:      addr,
 		payload:    payload,
 		bufRef:     buf,
 	}
-	tun.AddPacket(adapters.NewPacket(target, packet, C.SOCKS, C.UDP))
+	tun.AddPacket(adapters.NewPacket(target, packet, C.SOCKS))
 }

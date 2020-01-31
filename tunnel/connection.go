@@ -88,20 +88,17 @@ func (t *Tunnel) handleUDPToRemote(packet C.UDPPacket, pc net.PacketConn, addr n
 	DefaultManager.Upload() <- int64(len(packet.Data()))
 }
 
-func (t *Tunnel) handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, omitSrcAddr bool, timeout time.Duration) {
+func (t *Tunnel) handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string) {
 	buf := pool.BufPool.Get().([]byte)
 	defer pool.BufPool.Put(buf[:cap(buf)])
 	defer t.natTable.Delete(key)
 	defer pc.Close()
 
 	for {
-		pc.SetReadDeadline(time.Now().Add(timeout))
+		pc.SetReadDeadline(time.Now().Add(udpTimeout))
 		n, from, err := pc.ReadFrom(buf)
 		if err != nil {
 			return
-		}
-		if from != nil && omitSrcAddr {
-			from = nil
 		}
 
 		n, err = packet.WriteBack(buf[:n], from)

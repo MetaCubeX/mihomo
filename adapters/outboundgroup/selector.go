@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 
 	"github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/adapters/provider"
@@ -27,12 +26,12 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 	return c, err
 }
 
-func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
-	pc, addr, err := s.selected.DialUDP(metadata)
+func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+	pc, err := s.selected.DialUDP(metadata)
 	if err == nil {
 		pc.AppendToChains(s)
 	}
-	return pc, addr, err
+	return pc, err
 }
 
 func (s *Selector) SupportUDP() bool {

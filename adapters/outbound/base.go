@@ -30,8 +30,8 @@ func (b *Base) Type() C.AdapterType {
 	return b.tp
 }
 
-func (b *Base) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
-	return nil, nil, errors.New("no support")
+func (b *Base) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+	return nil, errors.New("no support")
 }
 
 func (b *Base) SupportUDP() bool {

@@ -25,17 +25,12 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 	return newConn(c, d), nil
 }
 
-func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
+func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	pc, err := net.ListenPacket("udp", "")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	addr, err := resolveUDPAddr("udp", metadata.RemoteAddress())
-	if err != nil {
-		return nil, nil, err
-	}
-	return newPacketConn(pc, d), addr, nil
+	return newPacketConn(pc, d), nil
 }
 
 func NewDirect() *Direct {

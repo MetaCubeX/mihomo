@@ -42,19 +42,19 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, 
 	return newConn(c, v), err
 }
 
-func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
+func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
 	defer cancel()
 	c, err := dialContext(ctx, "tcp", v.server)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s connect error", v.server)
+		return nil, fmt.Errorf("%s connect error", v.server)
 	}
 	tcpKeepAlive(c)
 	c, err = v.client.New(c, parseVmessAddr(metadata))
 	if err != nil {
-		return nil, nil, fmt.Errorf("new vmess client error: %v", err)
+		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
-	return newPacketConn(&vmessUDPConn{Conn: c}, v), c.RemoteAddr(), nil
+	return newPacketConn(&vmessUDPConn{Conn: c}, v), nil
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {

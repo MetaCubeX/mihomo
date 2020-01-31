@@ -3,7 +3,6 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/adapters/outbound"
@@ -31,12 +30,12 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 	return c, err
 }
 
-func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, net.Addr, error) {
-	pc, addr, err := u.fast().DialUDP(metadata)
+func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+	pc, err := u.fast().DialUDP(metadata)
 	if err == nil {
 		pc.AppendToChains(u)
 	}
-	return pc, addr, err
+	return pc, err
 }
 
 func (u *URLTest) proxies() []C.Proxy {
