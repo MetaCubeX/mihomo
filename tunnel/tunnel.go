@@ -132,8 +132,8 @@ func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
 	return dns.DefaultResolver != nil && (dns.DefaultResolver.IsMapping() || dns.DefaultResolver.FakeIPEnabled()) && metadata.Host == "" && metadata.DstIP != nil
 }
 
-func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
-	// handle host equal IP string
+func (t *Tunnel) preHandleMetadata(metadata *C.Metadata) error {
+	// handle IP string on host
 	if ip := net.ParseIP(metadata.Host); ip != nil {
 		metadata.DstIP = ip
 	}
@@ -147,9 +147,15 @@ func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) 
 			if dns.DefaultResolver.FakeIPEnabled() {
 				metadata.DstIP = nil
 			}
+		} else if dns.DefaultResolver.IsFakeIP(metadata.DstIP) {
+			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}
 
+	return nil
+}
+
+func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	var proxy C.Proxy
 	var rule C.Rule
 	switch t.mode {
@@ -175,21 +181,24 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 		return
 	}
 
-	if metadata.DstIP == nil {
-		ip, err := t.resolveIP(metadata.Host)
-		if err != nil {
-			log.Warnln("[UDP] Resolve %s failed: %s, %#v", metadata.Host, err.Error(), metadata)
-			return
-		}
-		metadata.DstIP = ip
+	if err := t.preHandleMetadata(metadata); err != nil {
+		log.Debugln("[Metadata PreHandle] error: %s", err)
+		return
 	}
 
 	key := packet.LocalAddr().String()
-
 	pc := t.natTable.Get(key)
-	addr := metadata.UDPAddr()
 	if pc != nil {
-		t.handleUDPToRemote(packet, pc, addr)
+		if !metadata.Resolved() {
+			ip, err := t.resolveIP(metadata.Host)
+			if err != nil {
+				log.Warnln("[UDP] Resolve %s failed: %s, %#v", metadata.Host, err.Error(), metadata)
+				return
+			}
+			metadata.DstIP = ip
+		}
+
+		t.handleUDPToRemote(packet, pc, metadata.UDPAddr())
 		return
 	}
 
@@ -236,7 +245,14 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 		wg.Wait()
 		pc := t.natTable.Get(key)
 		if pc != nil {
-			t.handleUDPToRemote(packet, pc, addr)
+			if !metadata.Resolved() {
+				ip, err := dns.ResolveIP(metadata.Host)
+				if err != nil {
+					return
+				}
+				metadata.DstIP = ip
+			}
+			t.handleUDPToRemote(packet, pc, metadata.UDPAddr())
 		}
 	}()
 }
@@ -247,6 +263,11 @@ func (t *Tunnel) handleTCPConn(localConn C.ServerAdapter) {
 	metadata := localConn.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
+		return
+	}
+
+	if err := t.preHandleMetadata(metadata); err != nil {
+		log.Debugln("[Metadata PreHandle] error: %s", err)
 		return
 	}
 
