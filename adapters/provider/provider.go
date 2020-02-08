@@ -128,7 +128,11 @@ func (pp *ProxySetProvider) Initial() error {
 
 	proxies, err := pp.parse(buf)
 	if err != nil {
-		return err
+		// parse local file error, fallback to remote
+		buf, err = pp.vehicle.Read()
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := ioutil.WriteFile(pp.vehicle.Path(), buf, fileMode); err != nil {
