@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/dialer"
 	obfs "github.com/Dreamacro/clash/component/simple-obfs"
 	"github.com/Dreamacro/clash/component/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/component/v2ray-plugin"
@@ -83,7 +84,7 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (C
 }
 
 func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := net.ListenPacket("udp", "")
+	pc, err := dialer.ListenPacket("udp", "")
 	if err != nil {
 		return nil, err
 	}

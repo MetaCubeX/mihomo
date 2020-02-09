@@ -12,7 +12,7 @@ import (
 type Option func(*LruCache)
 
 // EvictCallback is used to get a callback when a cache entry is evicted
-type EvictCallback func(key interface{}, value interface{})
+type EvictCallback = func(key interface{}, value interface{})
 
 // WithEvict set the evict callback
 func WithEvict(cb EvictCallback) Option {

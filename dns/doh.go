@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/Dreamacro/clash/component/dialer"
+
 	D "github.com/miekg/dns"
 )
 
@@ -17,6 +19,7 @@ const (
 
 var dohTransport = &http.Transport{
 	TLSClientConfig: &tls.Config{ClientSessionCache: globalSessionCache},
+	DialContext:     dialer.DialContext,
 }
 
 type dohClient struct {
