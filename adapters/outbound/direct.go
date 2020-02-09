@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -26,7 +27,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 }
 
 func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := net.ListenPacket("udp", "")
+	pc, err := dialer.ListenPacket("udp", "")
 	if err != nil {
 		return nil, err
 	}

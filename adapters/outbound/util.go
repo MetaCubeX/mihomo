@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/dns"
@@ -107,7 +108,7 @@ func dialContext(ctx context.Context, network, address string) (net.Conn, error)
 	var primary, fallback dialResult
 
 	startRacer := func(ctx context.Context, host string, ipv6 bool) {
-		dialer := net.Dialer{}
+		dialer := dialer.Dialer()
 		result := dialResult{ipv6: ipv6, done: true}
 		defer func() {
 			select {

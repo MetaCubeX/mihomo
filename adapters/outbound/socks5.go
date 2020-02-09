@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -96,7 +97,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		return
 	}
 
-	pc, err := net.ListenPacket("udp", "")
+	pc, err := dialer.ListenPacket("udp", "")
 	if err != nil {
 		return
 	}
