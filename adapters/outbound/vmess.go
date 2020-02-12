@@ -54,7 +54,7 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
-	return newPacketConn(&vmessUDPConn{Conn: c}, v), nil
+	return newPacketConn(&vmessUDPConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {
@@ -117,6 +117,7 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 
 type vmessUDPConn struct {
 	net.Conn
+	rAddr net.Addr
 }
 
 func (uc *vmessUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
@@ -125,5 +126,5 @@ func (uc *vmessUDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 
 func (uc *vmessUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, err := uc.Conn.Read(b)
-	return n, uc.RemoteAddr(), err
+	return n, uc.rAddr, err
 }
