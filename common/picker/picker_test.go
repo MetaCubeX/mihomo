@@ -37,30 +37,3 @@ func TestPicker_Timeout(t *testing.T) {
 	number := picker.Wait()
 	assert.Nil(t, number)
 }
-
-func TestPicker_WaitWithoutAutoCancel(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*60)
-	defer cancel()
-	picker := WithoutAutoCancel(ctx)
-
-	trigger := false
-	picker.Go(sleepAndSend(ctx, 10, 1))
-	picker.Go(func() (interface{}, error) {
-		timer := time.NewTimer(time.Millisecond * time.Duration(30))
-		select {
-		case <-timer.C:
-			trigger = true
-			return 2, nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	})
-	elm := picker.WaitWithoutCancel()
-
-	assert.NotNil(t, elm)
-	assert.Equal(t, elm.(int), 1)
-
-	elm = picker.Wait()
-	assert.True(t, trigger)
-	assert.Equal(t, elm.(int), 1)
-}
