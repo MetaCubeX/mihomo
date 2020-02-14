@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"math/rand"
 	"net"
 	"strings"
 	"time"
@@ -178,15 +179,11 @@ func (r *Resolver) batchExchange(clients []resolver, m *D.Msg) (msg *D.Msg, err 
 	for _, client := range clients {
 		r := client
 		fast.Go(func() (interface{}, error) {
-			msg, err := r.ExchangeContext(ctx, m)
-			if err != nil || msg.Rcode != D.RcodeSuccess {
-				return nil, errors.New("resolve error")
-			}
-			return msg, nil
+			return r.ExchangeContext(ctx, m)
 		})
 	}
 
-	elm := fast.WaitWithoutCancel()
+	elm := fast.Wait()
 	if elm == nil {
 		return nil, errors.New("All DNS requests failed")
 	}
@@ -239,11 +236,12 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 	}
 
 	ips := r.msgToIP(msg)
-	if len(ips) == 0 {
+	ipLength := len(ips)
+	if ipLength == 0 {
 		return nil, errIPNotFound
 	}
 
-	ip = ips[0]
+	ip = ips[rand.Intn(ipLength)]
 	return
 }
 
