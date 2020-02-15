@@ -11,26 +11,18 @@ import (
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
-	trie "github.com/Dreamacro/clash/component/domain-trie"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/resolver"
 
 	D "github.com/miekg/dns"
 	"golang.org/x/sync/singleflight"
 )
 
 var (
-	// DefaultResolver aim to resolve ip
-	DefaultResolver *Resolver
-
-	// DefaultHosts aim to resolve hosts
-	DefaultHosts = trie.New()
-)
-
-var (
 	globalSessionCache = tls.NewLRUClientSessionCache(64)
 )
 
-type resolver interface {
+type dnsClient interface {
 	Exchange(m *D.Msg) (msg *D.Msg, err error)
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
 }
@@ -45,8 +37,8 @@ type Resolver struct {
 	mapping         bool
 	fakeip          bool
 	pool            *fakeip.Pool
-	main            []resolver
-	fallback        []resolver
+	main            []dnsClient
+	fallback        []dnsClient
 	fallbackFilters []fallbackFilter
 	group           singleflight.Group
 	cache           *cache.Cache
@@ -74,7 +66,7 @@ func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
 
 	ip, open := <-ch
 	if !open {
-		return nil, errIPNotFound
+		return nil, resolver.ErrIPNotFound
 	}
 
 	return ip, nil
@@ -174,7 +166,7 @@ func (r *Resolver) IsFakeIP(ip net.IP) bool {
 	return false
 }
 
-func (r *Resolver) batchExchange(clients []resolver, m *D.Msg) (msg *D.Msg, err error) {
+func (r *Resolver) batchExchange(clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
 	fast, ctx := picker.WithTimeout(context.Background(), time.Second*5)
 	for _, client := range clients {
 		r := client
@@ -238,7 +230,7 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 	ips := r.msgToIP(msg)
 	ipLength := len(ips)
 	if ipLength == 0 {
-		return nil, errIPNotFound
+		return nil, resolver.ErrIPNotFound
 	}
 
 	ip = ips[rand.Intn(ipLength)]
@@ -260,7 +252,7 @@ func (r *Resolver) msgToIP(msg *D.Msg) []net.IP {
 	return ips
 }
 
-func (r *Resolver) asyncExchange(client []resolver, msg *D.Msg) <-chan *result {
+func (r *Resolver) asyncExchange(client []dnsClient, msg *D.Msg) <-chan *result {
 	ch := make(chan *result)
 	go func() {
 		res, err := r.batchExchange(client, msg)
@@ -272,6 +264,7 @@ func (r *Resolver) asyncExchange(client []resolver, msg *D.Msg) <-chan *result {
 type NameServer struct {
 	Net  string
 	Addr string
+	Host string
 }
 
 type FallbackFilter struct {
@@ -281,6 +274,7 @@ type FallbackFilter struct {
 
 type Config struct {
 	Main, Fallback []NameServer
+	Default        []NameServer
 	IPv6           bool
 	EnhancedMode   EnhancedMode
 	FallbackFilter FallbackFilter
@@ -288,9 +282,14 @@ type Config struct {
 }
 
 func New(config Config) *Resolver {
+	defaultResolver := &Resolver{
+		main:  transform(config.Default, nil),
+		cache: cache.New(time.Second * 60),
+	}
+
 	r := &Resolver{
 		ipv6:    config.IPv6,
-		main:    transform(config.Main),
+		main:    transform(config.Main, defaultResolver),
 		cache:   cache.New(time.Second * 60),
 		mapping: config.EnhancedMode == MAPPING,
 		fakeip:  config.EnhancedMode == FAKEIP,
@@ -298,7 +297,7 @@ func New(config Config) *Resolver {
 	}
 
 	if len(config.Fallback) != 0 {
-		r.fallback = transform(config.Fallback)
+		r.fallback = transform(config.Fallback, defaultResolver)
 	}
 
 	fallbackFilters := []fallbackFilter{}

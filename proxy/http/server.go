@@ -16,10 +16,6 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 )
 
-var (
-	tun = tunnel.Instance()
-)
-
 type HttpListener struct {
 	net.Listener
 	address string
@@ -100,9 +96,9 @@ func handleConn(conn net.Conn, cache *cache.Cache) {
 		if err != nil {
 			return
 		}
-		tun.Add(adapters.NewHTTPS(request, conn))
+		tunnel.Add(adapters.NewHTTPS(request, conn))
 		return
 	}
 
-	tun.Add(adapters.NewHTTP(request, conn))
+	tunnel.Add(adapters.NewHTTP(request, conn))
 }

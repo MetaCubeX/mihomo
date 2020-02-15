@@ -10,7 +10,7 @@ import (
 	"github.com/Dreamacro/clash/adapters/outbound"
 	"github.com/Dreamacro/clash/adapters/outboundgroup"
 	C "github.com/Dreamacro/clash/constant"
-	T "github.com/Dreamacro/clash/tunnel"
+	"github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
@@ -40,7 +40,7 @@ func parseProxyName(next http.Handler) http.Handler {
 func findProxyByName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.Context().Value(CtxKeyProxyName).(string)
-		proxies := T.Instance().Proxies()
+		proxies := tunnel.Proxies()
 		proxy, exist := proxies[name]
 		if !exist {
 			render.Status(r, http.StatusNotFound)
@@ -54,7 +54,7 @@ func findProxyByName(next http.Handler) http.Handler {
 }
 
 func getProxies(w http.ResponseWriter, r *http.Request) {
-	proxies := T.Instance().Proxies()
+	proxies := tunnel.Proxies()
 	render.JSON(w, r, render.M{
 		"proxies": proxies,
 	})

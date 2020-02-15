@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
 
@@ -10,7 +11,9 @@ import (
 
 type client struct {
 	*D.Client
-	Address string
+	r    *Resolver
+	addr string
+	host string
 }
 
 func (c *client) Exchange(m *D.Msg) (msg *D.Msg, err error) {
@@ -18,7 +21,22 @@ func (c *client) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 }
 
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	c.Client.Dialer = dialer.Dialer()
+	network := "udp"
+	if strings.HasPrefix(c.Client.Net, "tcp") {
+		network = "tcp"
+	}
+
+	ip, err := c.r.ResolveIPv4(c.host)
+	if err != nil {
+		return nil, err
+	}
+
+	d := dialer.Dialer()
+	if dialer.DialHook != nil {
+		dialer.DialHook(d, network, ip)
+	}
+
+	c.Client.Dialer = d
 
 	// miekg/dns ExchangeContext doesn't respond to context cancel.
 	// this is a workaround
@@ -28,7 +46,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err
 	}
 	ch := make(chan result, 1)
 	go func() {
-		msg, _, err := c.Client.ExchangeContext(ctx, m, c.Address)
+		msg, _, err := c.Client.Exchange(m, c.addr)
 		ch <- result{msg, err}
 	}()
 

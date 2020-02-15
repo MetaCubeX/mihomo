@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/dialer"
 	obfs "github.com/Dreamacro/clash/component/simple-obfs"
 	"github.com/Dreamacro/clash/component/snell"
 	C "github.com/Dreamacro/clash/constant"
@@ -28,7 +29,7 @@ type SnellOption struct {
 }
 
 func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialContext(ctx, "tcp", s.server)
+	c, err := dialer.DialContext(ctx, "tcp", s.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.server, err)
 	}
