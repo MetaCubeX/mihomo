@@ -18,7 +18,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 		address = net.JoinHostPort(metadata.DstIP.String(), metadata.DstPort)
 	}
 
-	c, err := dialContext(ctx, "tcp", address)
+	c, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, err
 	}

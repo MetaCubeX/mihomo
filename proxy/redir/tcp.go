@@ -9,10 +9,6 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 )
 
-var (
-	tun = tunnel.Instance()
-)
-
 type RedirListener struct {
 	net.Listener
 	address string
@@ -59,5 +55,5 @@ func handleRedir(conn net.Conn) {
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	tun.Add(inbound.NewSocket(target, conn, C.REDIR, C.TCP))
+	tunnel.Add(inbound.NewSocket(target, conn, C.REDIR, C.TCP))
 }

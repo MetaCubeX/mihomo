@@ -114,6 +114,7 @@ external-controller: 127.0.0.1:9090
 # experimental feature
 experimental:
   ignore-resolve-fail: true # ignore dns resolve fail, default value is true
+  # interface-name: en0 # outbound interface name
 
 # authentication of local SOCKS5/HTTP(S) server
 # authentication:
@@ -130,6 +131,9 @@ experimental:
   # enable: true # set true to enable dns (default is false)
   # ipv6: false # default is false
   # listen: 0.0.0.0:53
+  # # default-nameserver: # resolve dns nameserver host, should fill pure IP
+  # #   - 114.114.114.114
+  # #   - 8.8.8.8
   # enhanced-mode: redir-host # or fake-ip
   # # fake-ip-range: 198.18.0.1/16 # if you don't know what it is, don't change it
   # fake-ip-filter: # fake ip white domain list

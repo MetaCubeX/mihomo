@@ -1,15 +1,31 @@
-package dns
+package resolver
 
 import (
 	"errors"
 	"net"
 	"strings"
+
+	trie "github.com/Dreamacro/clash/component/domain-trie"
 )
 
 var (
-	errIPNotFound = errors.New("couldn't find ip")
-	errIPVersion  = errors.New("ip version error")
+	// DefaultResolver aim to resolve ip
+	DefaultResolver Resolver
+
+	// DefaultHosts aim to resolve hosts
+	DefaultHosts = trie.New()
 )
+
+var (
+	ErrIPNotFound = errors.New("couldn't find ip")
+	ErrIPVersion  = errors.New("ip version error")
+)
+
+type Resolver interface {
+	ResolveIP(host string) (ip net.IP, err error)
+	ResolveIPv4(host string) (ip net.IP, err error)
+	ResolveIPv6(host string) (ip net.IP, err error)
+}
 
 // ResolveIPv4 with a host, return ipv4
 func ResolveIPv4(host string) (net.IP, error) {
@@ -24,7 +40,7 @@ func ResolveIPv4(host string) (net.IP, error) {
 		if !strings.Contains(host, ":") {
 			return ip, nil
 		}
-		return nil, errIPVersion
+		return nil, ErrIPVersion
 	}
 
 	if DefaultResolver != nil {
@@ -42,7 +58,7 @@ func ResolveIPv4(host string) (net.IP, error) {
 		}
 	}
 
-	return nil, errIPNotFound
+	return nil, ErrIPNotFound
 }
 
 // ResolveIPv6 with a host, return ipv6
@@ -58,7 +74,7 @@ func ResolveIPv6(host string) (net.IP, error) {
 		if strings.Contains(host, ":") {
 			return ip, nil
 		}
-		return nil, errIPVersion
+		return nil, ErrIPVersion
 	}
 
 	if DefaultResolver != nil {
@@ -76,7 +92,7 @@ func ResolveIPv6(host string) (net.IP, error) {
 		}
 	}
 
-	return nil, errIPNotFound
+	return nil, ErrIPNotFound
 }
 
 // ResolveIP with a host, return ip
@@ -86,10 +102,7 @@ func ResolveIP(host string) (net.IP, error) {
 	}
 
 	if DefaultResolver != nil {
-		if DefaultResolver.ipv6 {
-			return DefaultResolver.ResolveIP(host)
-		}
-		return DefaultResolver.ResolveIPv4(host)
+		return DefaultResolver.ResolveIP(host)
 	}
 
 	ip := net.ParseIP(host)

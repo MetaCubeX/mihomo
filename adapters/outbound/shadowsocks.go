@@ -60,7 +60,7 @@ type v2rayObfsOption struct {
 }
 
 func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialContext(ctx, "tcp", ss.server)
+	c, err := dialer.DialContext(ctx, "tcp", ss.server)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.server, err)
 	}

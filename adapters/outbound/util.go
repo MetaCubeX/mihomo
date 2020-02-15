@@ -2,7 +2,6 @@ package outbound
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -11,10 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/dns"
 )
 
 const (
@@ -88,92 +86,13 @@ func serializesSocksAddr(metadata *C.Metadata) []byte {
 	return bytes.Join(buf, nil)
 }
 
-func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-
-	returned := make(chan struct{})
-	defer close(returned)
-
-	type dialResult struct {
-		net.Conn
-		error
-		resolved bool
-		ipv6     bool
-		done     bool
-	}
-	results := make(chan dialResult)
-	var primary, fallback dialResult
-
-	startRacer := func(ctx context.Context, host string, ipv6 bool) {
-		dialer := dialer.Dialer()
-		result := dialResult{ipv6: ipv6, done: true}
-		defer func() {
-			select {
-			case results <- result:
-			case <-returned:
-				if result.Conn != nil {
-					result.Conn.Close()
-				}
-			}
-		}()
-
-		var ip net.IP
-		if ipv6 {
-			ip, result.error = dns.ResolveIPv6(host)
-		} else {
-			ip, result.error = dns.ResolveIPv4(host)
-		}
-		if result.error != nil {
-			return
-		}
-		result.resolved = true
-
-		if ipv6 {
-			result.Conn, result.error = dialer.DialContext(ctx, "tcp6", net.JoinHostPort(ip.String(), port))
-		} else {
-			result.Conn, result.error = dialer.DialContext(ctx, "tcp4", net.JoinHostPort(ip.String(), port))
-		}
-	}
-
-	go startRacer(ctx, host, false)
-	go startRacer(ctx, host, true)
-
-	for {
-		select {
-		case res := <-results:
-			if res.error == nil {
-				return res.Conn, nil
-			}
-
-			if !res.ipv6 {
-				primary = res
-			} else {
-				fallback = res
-			}
-
-			if primary.done && fallback.done {
-				if primary.resolved {
-					return nil, primary.error
-				} else if fallback.resolved {
-					return nil, fallback.error
-				} else {
-					return nil, primary.error
-				}
-			}
-		}
-	}
-}
-
 func resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
-	ip, err := dns.ResolveIP(host)
+	ip, err := resolver.ResolveIP(host)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"io/ioutil"
+	"net"
 	"net/http"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -17,13 +18,9 @@ const (
 	dotMimeType = "application/dns-message"
 )
 
-var dohTransport = &http.Transport{
-	TLSClientConfig: &tls.Config{ClientSessionCache: globalSessionCache},
-	DialContext:     dialer.DialContext,
-}
-
 type dohClient struct {
-	url string
+	url       string
+	transport *http.Transport
 }
 
 func (dc *dohClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
@@ -58,7 +55,7 @@ func (dc *dohClient) newRequest(m *D.Msg) (*http.Request, error) {
 }
 
 func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
-	client := &http.Client{Transport: dohTransport}
+	client := &http.Client{Transport: dc.transport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -72,4 +69,26 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	msg = &D.Msg{}
 	err = msg.Unpack(buf)
 	return msg, err
+}
+
+func newDoHClient(url string, r *Resolver) *dohClient {
+	return &dohClient{
+		url: url,
+		transport: &http.Transport{
+			TLSClientConfig: &tls.Config{ClientSessionCache: globalSessionCache},
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+
+				ip, err := r.ResolveIPv4(host)
+				if err != nil {
+					return nil, err
+				}
+
+				return dialer.DialContext(ctx, "tcp4", net.JoinHostPort(ip.String(), port))
+			},
+		},
+	}
 }

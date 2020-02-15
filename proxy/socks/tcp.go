@@ -13,10 +13,6 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 )
 
-var (
-	tun = tunnel.Instance()
-)
-
 type SockListener struct {
 	net.Listener
 	address string
@@ -68,5 +64,5 @@ func handleSocks(conn net.Conn) {
 		io.Copy(ioutil.Discard, conn)
 		return
 	}
-	tun.Add(adapters.NewSocket(target, conn, C.SOCKS, C.TCP))
+	tunnel.Add(adapters.NewSocket(target, conn, C.SOCKS, C.TCP))
 }

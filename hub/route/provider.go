@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Dreamacro/clash/adapters/provider"
-	T "github.com/Dreamacro/clash/tunnel"
+	"github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
@@ -25,7 +25,7 @@ func proxyProviderRouter() http.Handler {
 }
 
 func getProviders(w http.ResponseWriter, r *http.Request) {
-	providers := T.Instance().Providers()
+	providers := tunnel.Providers()
 	render.JSON(w, r, render.M{
 		"providers": providers,
 	})
@@ -63,7 +63,7 @@ func parseProviderName(next http.Handler) http.Handler {
 func findProviderByName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.Context().Value(CtxKeyProviderName).(string)
-		providers := T.Instance().Providers()
+		providers := tunnel.Providers()
 		provider, exist := providers[name]
 		if !exist {
 			render.Status(r, http.StatusNotFound)

@@ -7,6 +7,7 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/tunnel"
 )
 
 type SockUDPListener struct {
@@ -62,5 +63,5 @@ func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
 		payload:    payload,
 		bufRef:     buf,
 	}
-	tun.AddPacket(adapters.NewPacket(target, packet, C.SOCKS))
+	tunnel.AddPacket(adapters.NewPacket(target, packet, C.SOCKS))
 }
