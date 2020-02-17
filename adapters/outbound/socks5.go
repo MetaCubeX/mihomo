@@ -110,7 +110,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		pc.Close()
 	}()
 
-	return newPacketConn(&socksUDPConn{PacketConn: pc, rAddr: bindAddr.UDPAddr(), tcpConn: c}, ss), nil
+	return newPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindAddr.UDPAddr(), tcpConn: c}, ss), nil
 }
 
 func NewSocks5(option Socks5Option) *Socks5 {
@@ -138,13 +138,13 @@ func NewSocks5(option Socks5Option) *Socks5 {
 	}
 }
 
-type socksUDPConn struct {
+type socksPacketConn struct {
 	net.PacketConn
 	rAddr   net.Addr
 	tcpConn net.Conn
 }
 
-func (uc *socksUDPConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+func (uc *socksPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddrToSocksAddr(addr), b)
 	if err != nil {
 		return
@@ -152,7 +152,15 @@ func (uc *socksUDPConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	return uc.PacketConn.WriteTo(packet, uc.rAddr)
 }
 
-func (uc *socksUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
+func (uc *socksPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
+	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddr(metadata.RemoteAddress()), p)
+	if err != nil {
+		return
+	}
+	return uc.PacketConn.WriteTo(packet, uc.rAddr)
+}
+
+func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, a, e := uc.PacketConn.ReadFrom(b)
 	if e != nil {
 		return 0, nil, e
@@ -167,7 +175,7 @@ func (uc *socksUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	return n - addrLength - 3, a, nil
 }
 
-func (uc *socksUDPConn) Close() error {
+func (uc *socksPacketConn) Close() error {
 	uc.tcpConn.Close()
 	return uc.PacketConn.Close()
 }

@@ -190,16 +190,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 	key := packet.LocalAddr().String()
 	pc := natTable.Get(key)
 	if pc != nil {
-		if !metadata.Resolved() {
-			ip, err := resolver.ResolveIP(metadata.Host)
-			if err != nil {
-				log.Warnln("[UDP] Resolve %s failed: %s, %#v", metadata.Host, err.Error(), metadata)
-				return
-			}
-			metadata.DstIP = ip
-		}
-
-		handleUDPToRemote(packet, pc, metadata.UDPAddr())
+		handleUDPToRemote(packet, pc, metadata)
 		return
 	}
 
@@ -246,14 +237,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		wg.Wait()
 		pc := natTable.Get(key)
 		if pc != nil {
-			if !metadata.Resolved() {
-				ip, err := resolver.ResolveIP(metadata.Host)
-				if err != nil {
-					return
-				}
-				metadata.DstIP = ip
-			}
-			handleUDPToRemote(packet, pc, metadata.UDPAddr())
+			handleUDPToRemote(packet, pc, metadata)
 		}
 	}()
 }

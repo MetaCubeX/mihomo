@@ -53,6 +53,7 @@ type Conn interface {
 type PacketConn interface {
 	net.PacketConn
 	Connection
+	WriteWithMetadata(p []byte, metadata *Metadata) (n int, err error)
 }
 
 type ProxyAdapter interface {

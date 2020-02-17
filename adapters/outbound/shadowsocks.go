@@ -95,7 +95,7 @@ func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	}
 
 	pc = ss.cipher.PacketConn(pc)
-	return newPacketConn(&ssUDPConn{PacketConn: pc, rAddr: addr}, ss), nil
+	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ss), nil
 }
 
 func (ss *ShadowSocks) MarshalJSON() ([]byte, error) {
@@ -183,21 +183,29 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	}, nil
 }
 
-type ssUDPConn struct {
+type ssPacketConn struct {
 	net.PacketConn
 	rAddr net.Addr
 }
 
-func (uc *ssUDPConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+func (spc *ssPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddrToSocksAddr(addr), b)
 	if err != nil {
 		return
 	}
-	return uc.PacketConn.WriteTo(packet[3:], uc.rAddr)
+	return spc.PacketConn.WriteTo(packet[3:], spc.rAddr)
 }
 
-func (uc *ssUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, _, e := uc.PacketConn.ReadFrom(b)
+func (spc *ssPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
+	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddr(metadata.RemoteAddress()), p)
+	if err != nil {
+		return
+	}
+	return spc.PacketConn.WriteTo(packet[3:], spc.rAddr)
+}
+
+func (spc *ssPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, _, e := spc.PacketConn.ReadFrom(b)
 	addr := socks5.SplitAddr(b[:n])
 	var from net.Addr
 	if e == nil {

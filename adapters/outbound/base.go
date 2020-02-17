@@ -65,8 +65,13 @@ func newConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 	return &conn{c, []string{a.Name()}}
 }
 
-type packetConn struct {
+type PacketConn interface {
 	net.PacketConn
+	WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error)
+}
+
+type packetConn struct {
+	PacketConn
 	chain C.Chain
 }
 
@@ -78,8 +83,8 @@ func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
-func newPacketConn(c net.PacketConn, a C.ProxyAdapter) C.PacketConn {
-	return &packetConn{c, []string{a.Name()}}
+func newPacketConn(pc PacketConn, a C.ProxyAdapter) C.PacketConn {
+	return &packetConn{pc, []string{a.Name()}}
 }
 
 type Proxy struct {
