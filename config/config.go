@@ -441,21 +441,21 @@ func parseHosts(cfg *RawConfig) (*trie.Trie, error) {
 	return tree, nil
 }
 
-func hostWithDefaultPort(host string, defPort string) (string, string, error) {
+func hostWithDefaultPort(host string, defPort string) (string, error) {
 	if !strings.Contains(host, ":") {
 		host += ":"
 	}
 
 	hostname, port, err := net.SplitHostPort(host)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	if port == "" {
 		port = defPort
 	}
 
-	return net.JoinHostPort(hostname, port), hostname, nil
+	return net.JoinHostPort(hostname, port), nil
 }
 
 func parseNameServer(servers []string) ([]dns.NameServer, error) {
@@ -471,21 +471,20 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		var addr, dnsNetType, host string
+		var addr, dnsNetType string
 		switch u.Scheme {
 		case "udp":
-			addr, host, err = hostWithDefaultPort(u.Host, "53")
+			addr, err = hostWithDefaultPort(u.Host, "53")
 			dnsNetType = "" // UDP
 		case "tcp":
-			addr, host, err = hostWithDefaultPort(u.Host, "53")
+			addr, err = hostWithDefaultPort(u.Host, "53")
 			dnsNetType = "tcp" // TCP
 		case "tls":
-			addr, host, err = hostWithDefaultPort(u.Host, "853")
+			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
 			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
 			addr = clearURL.String()
-			_, host, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "https" // DNS over HTTPS
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
@@ -500,7 +499,6 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			dns.NameServer{
 				Net:  dnsNetType,
 				Addr: addr,
-				Host: host,
 			},
 		)
 	}
@@ -552,7 +550,8 @@ func parseDNS(cfg RawDNS) (*DNS, error) {
 	}
 	// check default nameserver is pure ip addr
 	for _, ns := range dnsCfg.DefaultNameserver {
-		if net.ParseIP(ns.Host) == nil {
+		host, _, err := net.SplitHostPort(ns.Addr)
+		if err != nil || net.ParseIP(host) == nil {
 			return nil, errors.New("default nameserver should be pure IP")
 		}
 	}

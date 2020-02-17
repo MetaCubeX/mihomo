@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -125,6 +126,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			continue
 		}
 
+		host, port, _ := net.SplitHostPort(s.Addr)
 		ret = append(ret, &client{
 			Client: &D.Client{
 				Net: s.Net,
@@ -136,8 +138,9 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 				UDPSize: 4096,
 				Timeout: 5 * time.Second,
 			},
-			addr: s.Addr,
-			host: s.Host,
+			port: port,
+			host: host,
+			r:    resolver,
 		})
 	}
 	return ret

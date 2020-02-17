@@ -263,7 +263,6 @@ func (r *Resolver) asyncExchange(client []dnsClient, msg *D.Msg) <-chan *result 
 type NameServer struct {
 	Net  string
 	Addr string
-	Host string
 }
 
 type FallbackFilter struct {

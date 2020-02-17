@@ -2,6 +2,8 @@ package dns
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -12,7 +14,7 @@ import (
 type client struct {
 	*D.Client
 	r    *Resolver
-	addr string
+	port string
 	host string
 }
 
@@ -21,18 +23,24 @@ func (c *client) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 }
 
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	network := "udp"
-	if strings.HasPrefix(c.Client.Net, "tcp") {
-		network = "tcp"
-	}
-
-	ip, err := c.r.ResolveIP(c.host)
-	if err != nil {
-		return nil, err
+	var ip net.IP
+	if c.r == nil {
+		// a default ip dns
+		ip = net.ParseIP(c.host)
+	} else {
+		var err error
+		if ip, err = c.r.ResolveIP(c.host); err != nil {
+			println("?")
+			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+		}
 	}
 
 	d := dialer.Dialer()
 	if dialer.DialHook != nil {
+		network := "udp"
+		if strings.HasPrefix(c.Client.Net, "tcp") {
+			network = "tcp"
+		}
 		dialer.DialHook(d, network, ip)
 	}
 
@@ -46,7 +54,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err
 	}
 	ch := make(chan result, 1)
 	go func() {
-		msg, _, err := c.Client.Exchange(m, c.addr)
+		msg, _, err := c.Client.Exchange(m, net.JoinHostPort(ip.String(), c.port))
 		ch <- result{msg, err}
 	}()
 
