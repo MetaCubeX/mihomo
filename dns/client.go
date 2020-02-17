@@ -26,7 +26,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err
 		network = "tcp"
 	}
 
-	ip, err := c.r.ResolveIPv4(c.host)
+	ip, err := c.r.ResolveIP(c.host)
 	if err != nil {
 		return nil, err
 	}

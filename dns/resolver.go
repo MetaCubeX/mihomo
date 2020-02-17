@@ -44,23 +44,20 @@ type Resolver struct {
 	cache           *cache.Cache
 }
 
-// ResolveIP request with TypeA and TypeAAAA, priority return TypeAAAA
+// ResolveIP request with TypeA and TypeAAAA, priority return TypeA
 func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
-	ch := make(chan net.IP)
+	ch := make(chan net.IP, 1)
 	go func() {
 		defer close(ch)
-		ip, err := r.resolveIP(host, D.TypeA)
+		ip, err := r.resolveIP(host, D.TypeAAAA)
 		if err != nil {
 			return
 		}
 		ch <- ip
 	}()
 
-	ip, err = r.resolveIP(host, D.TypeAAAA)
+	ip, err = r.resolveIP(host, D.TypeA)
 	if err == nil {
-		go func() {
-			<-ch
-		}()
 		return
 	}
 
@@ -216,6 +213,8 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 			return ip, nil
 		} else if dnsType == D.TypeA && isIPv4 {
 			return ip, nil
+		} else {
+			return nil, resolver.ErrIPVersion
 		}
 	}
 
