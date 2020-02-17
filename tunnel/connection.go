@@ -81,8 +81,8 @@ func handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	}
 }
 
-func handleUDPToRemote(packet C.UDPPacket, pc net.PacketConn, addr net.Addr) {
-	if _, err := pc.WriteTo(packet.Data(), addr); err != nil {
+func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) {
+	if _, err := pc.WriteWithMetadata(packet.Data(), metadata); err != nil {
 		return
 	}
 	DefaultManager.Upload() <- int64(len(packet.Data()))

@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -31,7 +32,22 @@ func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newPacketConn(pc, d), nil
+	return newPacketConn(&directPacketConn{pc}, d), nil
+}
+
+type directPacketConn struct {
+	net.PacketConn
+}
+
+func (dp *directPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(metadata.Host)
+		if err != nil {
+			return 0, err
+		}
+		metadata.DstIP = ip
+	}
+	return dp.WriteTo(p, metadata.UDPAddr())
 }
 
 func NewDirect() *Direct {
