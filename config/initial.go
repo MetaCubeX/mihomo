@@ -38,15 +38,19 @@ func Init(dir string) error {
 
 	// initial config.yaml
 	if _, err := os.Stat(C.Path.Config()); os.IsNotExist(err) {
-		log.Infoln("Can't find config, create an empty file")
-		os.OpenFile(C.Path.Config(), os.O_CREATE|os.O_WRONLY, 0644)
+		log.Infoln("Can't find config, create a initial config file")
+		f, err := os.OpenFile(C.Path.Config(), os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("Can't create file %s: %s", C.Path.Config(), err.Error())
+		}
+		f.Write([]byte(`port: 7890`))
+		f.Close()
 	}
 
 	// initial mmdb
 	if _, err := os.Stat(C.Path.MMDB()); os.IsNotExist(err) {
 		log.Infoln("Can't find MMDB, start download")
-		err := downloadMMDB(C.Path.MMDB())
-		if err != nil {
+		if err := downloadMMDB(C.Path.MMDB()); err != nil {
 			return fmt.Errorf("Can't download MMDB: %s", err.Error())
 		}
 	}
