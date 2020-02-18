@@ -206,12 +206,10 @@ func (spc *ssPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n in
 
 func (spc *ssPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, _, e := spc.PacketConn.ReadFrom(b)
-	addr := socks5.SplitAddr(b[:n])
-	var from net.Addr
-	if e == nil {
-		// Get the source IP/Port of packet.
-		from = addr.UDPAddr()
+	if e != nil {
+		return 0, nil, e
 	}
+	addr := socks5.SplitAddr(b[:n])
 	copy(b, b[len(addr):])
-	return n - len(addr), from, e
+	return n - len(addr), addr.UDPAddr(), e
 }
