@@ -30,7 +30,6 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err
 	} else {
 		var err error
 		if ip, err = c.r.ResolveIP(c.host); err != nil {
-			println("?")
 			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
 		}
 	}
