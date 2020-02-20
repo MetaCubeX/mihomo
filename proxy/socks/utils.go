@@ -29,7 +29,7 @@ func (c *fakeConn) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 
 // LocalAddr returns the source IP/Port of UDP Packet
 func (c *fakeConn) LocalAddr() net.Addr {
-	return c.PacketConn.LocalAddr()
+	return c.rAddr
 }
 
 func (c *fakeConn) Close() error {
