@@ -57,10 +57,10 @@ func Start(addr string, secret string) {
 	})
 
 	r.Use(cors.Handler)
-	r.Get("/", hello)
 	r.Group(func(r chi.Router) {
 		r.Use(authentication)
 
+		r.Get("/", hello)
 		r.Get("/logs", getLogs)
 		r.Get("/traffic", traffic)
 		r.Get("/version", version)
