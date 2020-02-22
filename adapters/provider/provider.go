@@ -114,10 +114,12 @@ func (pp *ProxySetProvider) Destroy() error {
 func (pp *ProxySetProvider) Initial() error {
 	var buf []byte
 	var err error
+	var isLocal bool
 	if stat, err := os.Stat(pp.vehicle.Path()); err == nil {
 		buf, err = ioutil.ReadFile(pp.vehicle.Path())
 		modTime := stat.ModTime()
 		pp.updatedAt = &modTime
+		isLocal = true
 	} else {
 		buf, err = pp.vehicle.Read()
 	}
@@ -128,8 +130,17 @@ func (pp *ProxySetProvider) Initial() error {
 
 	proxies, err := pp.parse(buf)
 	if err != nil {
+		if !isLocal {
+			return err
+		}
+
 		// parse local file error, fallback to remote
 		buf, err = pp.vehicle.Read()
+		if err != nil {
+			return err
+		}
+
+		proxies, err = pp.parse(buf)
 		if err != nil {
 			return err
 		}
