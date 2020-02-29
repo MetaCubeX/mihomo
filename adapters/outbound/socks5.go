@@ -161,7 +161,7 @@ func (uc *socksPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n 
 }
 
 func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, a, e := uc.PacketConn.ReadFrom(b)
+	n, _, e := uc.PacketConn.ReadFrom(b)
 	if e != nil {
 		return 0, nil, e
 	}
@@ -170,9 +170,8 @@ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 		return 0, nil, err
 	}
 	// due to DecodeUDPPacket is mutable, record addr length
-	addrLength := len(addr)
 	copy(b, payload)
-	return n - addrLength - 3, a, nil
+	return n - len(addr) - 3, addr.UDPAddr(), nil
 }
 
 func (uc *socksPacketConn) Close() error {
