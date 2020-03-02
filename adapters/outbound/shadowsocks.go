@@ -216,6 +216,11 @@ func (spc *ssPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 		return 0, nil, errors.New("parse addr error")
 	}
 
+	udpAddr := addr.UDPAddr()
+	if udpAddr == nil {
+		return 0, nil, errors.New("parse addr error")
+	}
+
 	copy(b, b[len(addr):])
-	return n - len(addr), addr.UDPAddr(), e
+	return n - len(addr), udpAddr, e
 }
