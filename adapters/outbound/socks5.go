@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -169,9 +170,15 @@ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	if err != nil {
 		return 0, nil, err
 	}
+
+	udpAddr := addr.UDPAddr()
+	if udpAddr == nil {
+		return 0, nil, errors.New("parse udp addr error")
+	}
+
 	// due to DecodeUDPPacket is mutable, record addr length
 	copy(b, payload)
-	return n - len(addr) - 3, addr.UDPAddr(), nil
+	return n - len(addr) - 3, udpAddr, nil
 }
 
 func (uc *socksPacketConn) Close() error {
