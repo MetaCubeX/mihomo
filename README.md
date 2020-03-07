@@ -150,7 +150,7 @@ experimental:
   #   ipcidr: # ips in these subnets will be considered polluted
   #     - 240.0.0.0/4
 
-Proxy:
+proxies:
   # shadowsocks
   # The supported ciphers(encrypt methods):
   #   aes-128-gcm aes-192-gcm aes-256-gcm
@@ -243,7 +243,7 @@ Proxy:
       # mode: http # or tls
       # host: bing.com
 
-Proxy Group:
+proxy-groups:
   # url-test select which proxy will be used by benchmarking speed to a URL.
   - name: "auto"
     type: url-test
@@ -283,8 +283,34 @@ Proxy Group:
       - ss2
       - vmess1
       - auto
+  
+  - name: UseProvider
+    type: select
+    use:
+      - provider1
+    proxies:
+      - Proxy
+      - DIRECT
 
-Rule:
+proxy-providers:
+  provider1:
+    type: http
+    url: "url"
+    interval: 3600
+    path: ./hk.yaml
+    health-check:
+      enable: true
+      interval: 600
+      url: http://www.gstatic.com/generate_204
+  test:
+    type: file
+    path: /test.yaml
+    health-check:
+      enable: true
+      interval: 36000
+      url: http://www.gstatic.com/generate_204
+
+rules:
   - DOMAIN-SUFFIX,google.com,auto
   - DOMAIN-KEYWORD,google,auto
   - DOMAIN,google.com,auto
