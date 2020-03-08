@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/proxy/http"
 	"github.com/Dreamacro/clash/proxy/redir"
 	"github.com/Dreamacro/clash/proxy/socks"
@@ -18,6 +19,7 @@ var (
 	socksUDPListener *socks.SockUDPListener
 	httpListener     *http.HttpListener
 	redirListener    *redir.RedirListener
+	redirUDPListener *redir.RedirUDPListener
 )
 
 type listener interface {
@@ -131,6 +133,14 @@ func ReCreateRedir(port int) error {
 		redirListener = nil
 	}
 
+	if redirUDPListener != nil {
+		if redirUDPListener.Address() == addr {
+			return nil
+		}
+		redirUDPListener.Close()
+		redirUDPListener = nil
+	}
+
 	if portIsZero(addr) {
 		return nil
 	}
@@ -139,6 +149,11 @@ func ReCreateRedir(port int) error {
 	redirListener, err = redir.NewRedirProxy(addr)
 	if err != nil {
 		return err
+	}
+
+	redirUDPListener, err = redir.NewRedirUDPProxy(addr)
+	if err != nil {
+		log.Warnln("Failed to start Redir UDP Listener: %s", err)
 	}
 
 	return nil
