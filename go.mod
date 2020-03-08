@@ -14,8 +14,8 @@ require (
 	github.com/oschwald/geoip2-golang v1.4.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.5.1
-	golang.org/x/crypto v0.0.0-20200221231518-2aa609cf4a9d
-	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
+	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073
+	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	gopkg.in/eapache/channels.v1 v1.1.0
 	gopkg.in/yaml.v2 v2.2.8
