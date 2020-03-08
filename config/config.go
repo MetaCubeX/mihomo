@@ -265,7 +265,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	}
 
 	if len(providersConfig) == 0 {
-		providersConfig = cfg.ProxyProvider
+		providersConfig = cfg.ProxyProviderOld
 	}
 
 	defer func() {
