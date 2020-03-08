@@ -118,8 +118,7 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 	ret, err, _ := r.group.Do(q.String(), func() (interface{}, error) {
 		isIPReq := isIPRequest(q)
 		if isIPReq {
-			msg, err := r.fallbackExchange(m)
-			return msg, err
+			return r.fallbackExchange(m)
 		}
 
 		return r.batchExchange(r.main, m)
@@ -171,7 +170,7 @@ func (r *Resolver) batchExchange(clients []dnsClient, m *D.Msg) (msg *D.Msg, err
 			m, err := r.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
-			} else if m.Rcode == D.RcodeServerFailure {
+			} else if m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused {
 				return nil, errors.New("server failure")
 			}
 			return m, nil
@@ -201,6 +200,7 @@ func (r *Resolver) fallbackExchange(m *D.Msg) (msg *D.Msg, err error) {
 			if r.shouldFallback(ips[0]) {
 				go func() { <-fallbackMsg }()
 				msg = res.Msg
+				err = res.Error
 				return msg, err
 			}
 		}
