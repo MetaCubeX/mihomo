@@ -182,6 +182,12 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		return
 	}
 
+	// make a fAddr if requset ip is fakeip
+	var fAddr net.Addr
+	if enhancedMode != nil && enhancedMode.IsFakeIP(metadata.DstIP) {
+		fAddr = metadata.UDPAddr()
+	}
+
 	if err := preHandleMetadata(metadata); err != nil {
 		log.Debugln("[Metadata PreHandle] error: %s", err)
 		return
@@ -231,7 +237,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 			natTable.Set(key, pc)
 			natTable.Delete(lockKey)
 			wg.Done()
-			go handleUDPToLocal(packet.UDPPacket, pc, key)
+			go handleUDPToLocal(packet.UDPPacket, pc, key, fAddr)
 		}
 
 		wg.Wait()
