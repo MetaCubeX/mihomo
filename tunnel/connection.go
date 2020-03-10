@@ -88,7 +88,7 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	DefaultManager.Upload() <- int64(len(packet.Data()))
 }
 
-func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string) {
+func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr net.Addr) {
 	buf := pool.BufPool.Get().([]byte)
 	defer pool.BufPool.Put(buf[:cap(buf)])
 	defer natTable.Delete(key)
@@ -99,6 +99,10 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string) {
 		n, from, err := pc.ReadFrom(buf)
 		if err != nil {
 			return
+		}
+
+		if fAddr != nil {
+			from = fAddr
 		}
 
 		n, err = packet.WriteBack(buf[:n], from)

@@ -8,18 +8,17 @@ import (
 
 type fakeConn struct {
 	net.PacketConn
-	origDst net.Addr
-	rAddr   net.Addr
-	buf     []byte
+	lAddr *net.UDPAddr
+	buf   []byte
 }
 
 func (c *fakeConn) Data() []byte {
 	return c.buf
 }
 
-// WriteBack opens a new socket binding `origDst` to wirte UDP packet back
+// WriteBack opens a new socket binding `addr` to wirte UDP packet back
 func (c *fakeConn) WriteBack(b []byte, addr net.Addr) (n int, err error) {
-	tc, err := dialUDP("udp", c.origDst.(*net.UDPAddr), c.rAddr.(*net.UDPAddr))
+	tc, err := dialUDP("udp", addr.(*net.UDPAddr), c.lAddr)
 	if err != nil {
 		n = 0
 		return
@@ -31,7 +30,7 @@ func (c *fakeConn) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 
 // LocalAddr returns the source IP/Port of UDP Packet
 func (c *fakeConn) LocalAddr() net.Addr {
-	return c.rAddr
+	return c.lAddr
 }
 
 func (c *fakeConn) Close() error {
