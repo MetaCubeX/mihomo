@@ -14,7 +14,7 @@ type geoipFilter struct{}
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	record, _ := mmdb.Instance().Country(ip)
-	return record.Country.IsoCode == "CN" || record.Country.IsoCode == ""
+	return record.Country.IsoCode != "CN" && record.Country.IsoCode != ""
 }
 
 type ipnetFilter struct {
