@@ -178,7 +178,7 @@ func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, 
 	}
 
 	command = buf[1]
-	addr, err = readAddr(rw, buf)
+	addr, err = ReadAddr(rw, buf)
 	if err != nil {
 		return
 	}
@@ -260,10 +260,10 @@ func ClientHandshake(rw io.ReadWriter, addr Addr, command Command, user *User) (
 		return nil, err
 	}
 
-	return readAddr(rw, buf)
+	return ReadAddr(rw, buf)
 }
 
-func readAddr(r io.Reader, b []byte) (Addr, error) {
+func ReadAddr(r io.Reader, b []byte) (Addr, error) {
 	if len(b) < MaxAddrLen {
 		return nil, io.ErrShortBuffer
 	}
