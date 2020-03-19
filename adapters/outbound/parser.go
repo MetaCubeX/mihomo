@@ -52,6 +52,13 @@ func ParseProxy(mapping map[string]interface{}) (C.Proxy, error) {
 			break
 		}
 		proxy, err = NewSnell(*snellOption)
+	case "trojan":
+		trojanOption := &TrojanOption{}
+		err = decoder.Decode(mapping, trojanOption)
+		if err != nil {
+			break
+		}
+		proxy, err = NewTrojan(*trojanOption)
 	default:
 		return nil, fmt.Errorf("Unsupport proxy type: %s", proxyType)
 	}
