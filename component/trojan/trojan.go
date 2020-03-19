@@ -28,10 +28,11 @@ var (
 )
 
 type Option struct {
-	Password       string
-	ALPN           []string
-	ServerName     string
-	SkipCertVerify bool
+	Password           string
+	ALPN               []string
+	ServerName         string
+	SkipCertVerify     bool
+	ClientSessionCache tls.ClientSessionCache
 }
 
 type Trojan struct {
@@ -50,6 +51,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 		MinVersion:         tls.VersionTLS12,
 		InsecureSkipVerify: t.option.SkipCertVerify,
 		ServerName:         t.option.ServerName,
+		ClientSessionCache: t.option.ClientSessionCache,
 	}
 
 	tlsConn := tls.Client(conn, tlsConfig)
