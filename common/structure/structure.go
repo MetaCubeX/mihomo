@@ -216,6 +216,11 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 		}
 
 		v := dataVal.MapIndex(k).Interface()
+		if v == nil {
+			errors = append(errors, fmt.Sprintf("filed %s invalid", fieldName))
+			continue
+		}
+
 		currentVal := reflect.Indirect(reflect.New(valElemType))
 		if err := d.decode(fieldName, v, currentVal); err != nil {
 			errors = append(errors, err.Error())
