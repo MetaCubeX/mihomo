@@ -243,6 +243,19 @@ proxies:
       # mode: http # or tls
       # host: bing.com
 
+  # trojan
+  - name: "trojan"
+    type: trojan
+    server: server
+    port: 443
+    password: yourpsk
+    # udp: true
+    # sni: example.com # aka server name
+    # alpn:
+    #   - h2
+    #   - http/1.1
+    # skip-cert-verify: true
+
 proxy-groups:
   # url-test select which proxy will be used by benchmarking speed to a URL.
   - name: "auto"
