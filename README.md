@@ -255,6 +255,16 @@ proxies:
     # skip-cert-verify: true
 
 proxy-groups:
+  # relay chains the proxies. proxies shall not contain a proxy-group. No UDP support.
+  # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
+  - name: "relay"
+    type: relay
+    proxies:
+      - http
+      - vmess
+      - ss1
+      - ss2
+
   # url-test select which proxy will be used by benchmarking speed to a URL.
   - name: "auto"
     type: url-test

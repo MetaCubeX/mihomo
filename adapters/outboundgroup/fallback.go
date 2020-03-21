@@ -77,7 +77,7 @@ func (f *Fallback) findAliveProxy() C.Proxy {
 
 func NewFallback(name string, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
-		Base:      outbound.NewBase(name, C.Fallback, false),
+		Base:      outbound.NewBase(name, "", C.Fallback, false),
 		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,
 	}

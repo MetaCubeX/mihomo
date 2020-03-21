@@ -86,7 +86,7 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 
 func NewURLTest(name string, providers []provider.ProxyProvider) *URLTest {
 	return &URLTest{
-		Base:       outbound.NewBase(name, C.URLTest, false),
+		Base:       outbound.NewBase(name, "", C.URLTest, false),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		fastSingle: singledo.NewSingle(time.Second * 10),
 		providers:  providers,
