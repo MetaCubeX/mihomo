@@ -120,7 +120,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 
 func NewLoadBalance(name string, providers []provider.ProxyProvider) *LoadBalance {
 	return &LoadBalance{
-		Base:      outbound.NewBase(name, C.LoadBalance, false),
+		Base:      outbound.NewBase(name, "", C.LoadBalance, false),
 		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		maxRetry:  3,
 		providers: providers,

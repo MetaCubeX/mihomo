@@ -18,6 +18,7 @@ var (
 
 type Base struct {
 	name string
+	addr string
 	tp   C.AdapterType
 	udp  bool
 }
@@ -28,6 +29,10 @@ func (b *Base) Name() string {
 
 func (b *Base) Type() C.AdapterType {
 	return b.tp
+}
+
+func (b *Base) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	return c, errors.New("no support")
 }
 
 func (b *Base) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
@@ -44,8 +49,12 @@ func (b *Base) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func NewBase(name string, tp C.AdapterType, udp bool) *Base {
-	return &Base{name, tp, udp}
+func (b *Base) Addr() string {
+	return b.addr
+}
+
+func NewBase(name string, addr string, tp C.AdapterType, udp bool) *Base {
+	return &Base{name, addr, tp, udp}
 }
 
 type conn struct {
@@ -61,7 +70,7 @@ func (c *conn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
-func newConn(c net.Conn, a C.ProxyAdapter) C.Conn {
+func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 	return &conn{c, []string{a.Name()}}
 }
 

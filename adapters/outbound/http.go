@@ -19,7 +19,6 @@ import (
 
 type Http struct {
 	*Base
-	addr      string
 	user      string
 	pass      string
 	tlsConfig *tls.Config
@@ -35,23 +34,35 @@ type HttpOption struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
-func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialer.DialContext(ctx, "tcp", h.addr)
-	if err == nil && h.tlsConfig != nil {
+func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	if h.tlsConfig != nil {
 		cc := tls.Client(c, h.tlsConfig)
-		err = cc.Handshake()
+		err := cc.Handshake()
 		c = cc
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
+		}
 	}
 
+	if err := h.shakeHand(metadata, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := dialer.DialContext(ctx, "tcp", h.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
 	}
 	tcpKeepAlive(c)
-	if err := h.shakeHand(metadata, c); err != nil {
+
+	c, err = h.StreamConn(c, metadata)
+	if err != nil {
 		return nil, err
 	}
 
-	return newConn(c, h), nil
+	return NewConn(c, h), nil
 }
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
@@ -113,9 +124,9 @@ func NewHttp(option HttpOption) *Http {
 	return &Http{
 		Base: &Base{
 			name: option.Name,
+			addr: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:   C.Http,
 		},
-		addr:      net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		user:      option.UserName,
 		pass:      option.Password,
 		tlsConfig: tlsConfig,

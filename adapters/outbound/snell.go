@@ -15,7 +15,6 @@ import (
 
 type Snell struct {
 	*Base
-	server     string
 	psk        []byte
 	obfsOption *simpleObfsOption
 }
@@ -28,45 +27,51 @@ type SnellOption struct {
 	ObfsOpts map[string]interface{} `proxy:"obfs-opts,omitempty"`
 }
 
-func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialer.DialContext(ctx, "tcp", s.server)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", s.server, err)
-	}
-	tcpKeepAlive(c)
+func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	switch s.obfsOption.Mode {
 	case "tls":
 		c = obfs.NewTLSObfs(c, s.obfsOption.Host)
 	case "http":
-		_, port, _ := net.SplitHostPort(s.server)
+		_, port, _ := net.SplitHostPort(s.addr)
 		c = obfs.NewHTTPObfs(c, s.obfsOption.Host, port)
 	}
 	c = snell.StreamConn(c, s.psk)
 	port, _ := strconv.Atoi(metadata.DstPort)
-	err = snell.WriteHeader(c, metadata.String(), uint(port))
-	return newConn(c, s), err
+	err := snell.WriteHeader(c, metadata.String(), uint(port))
+	return c, err
+}
+
+func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	c, err := dialer.DialContext(ctx, "tcp", s.addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
+	}
+	tcpKeepAlive(c)
+
+	c, err = s.StreamConn(c, metadata)
+	return NewConn(c, s), err
 }
 
 func NewSnell(option SnellOption) (*Snell, error) {
-	server := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
+	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	psk := []byte(option.Psk)
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
 	obfsOption := &simpleObfsOption{Host: "bing.com"}
 	if err := decoder.Decode(option.ObfsOpts, obfsOption); err != nil {
-		return nil, fmt.Errorf("snell %s initialize obfs error: %w", server, err)
+		return nil, fmt.Errorf("snell %s initialize obfs error: %w", addr, err)
 	}
 
 	if obfsOption.Mode != "tls" && obfsOption.Mode != "http" {
-		return nil, fmt.Errorf("snell %s obfs mode error: %s", server, obfsOption.Mode)
+		return nil, fmt.Errorf("snell %s obfs mode error: %s", addr, obfsOption.Mode)
 	}
 
 	return &Snell{
 		Base: &Base{
 			name: option.Name,
+			addr: addr,
 			tp:   C.Snell,
 		},
-		server:     server,
 		psk:        psk,
 		obfsOption: obfsOption,
 	}, nil

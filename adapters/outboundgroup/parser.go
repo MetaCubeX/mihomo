@@ -64,7 +64,7 @@ func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy,
 			providers = append(providers, pd)
 		} else {
 			// select don't need health check
-			if groupOption.Type == "select" {
+			if groupOption.Type == "select" || groupOption.Type == "relay" {
 				hc := provider.NewHealthCheck(ps, "", 0)
 				pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 				if err != nil {
@@ -108,6 +108,8 @@ func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy,
 		group = NewFallback(groupName, providers)
 	case "load-balance":
 		group = NewLoadBalance(groupName, providers)
+	case "relay":
+		group = NewRelay(groupName, providers)
 	default:
 		return nil, fmt.Errorf("%w: %s", errType, groupOption.Type)
 	}

@@ -24,7 +24,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 		return nil, err
 	}
 	tcpKeepAlive(c)
-	return newConn(c, d), nil
+	return NewConn(c, d), nil
 }
 
 func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {

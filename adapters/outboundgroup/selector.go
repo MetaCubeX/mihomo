@@ -77,7 +77,7 @@ func (s *Selector) proxies() []C.Proxy {
 func NewSelector(name string, providers []provider.ProxyProvider) *Selector {
 	selected := providers[0].Proxies()[0]
 	return &Selector{
-		Base:      outbound.NewBase(name, C.Selector, false),
+		Base:      outbound.NewBase(name, "", C.Selector, false),
 		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,
 		selected:  selected,

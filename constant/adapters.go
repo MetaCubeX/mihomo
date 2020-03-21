@@ -19,6 +19,7 @@ const (
 	Vmess
 	Trojan
 
+	Relay
 	Selector
 	Fallback
 	URLTest
@@ -62,10 +63,12 @@ type PacketConn interface {
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
+	StreamConn(c net.Conn, metadata *Metadata) (net.Conn, error)
 	DialContext(ctx context.Context, metadata *Metadata) (Conn, error)
 	DialUDP(metadata *Metadata) (PacketConn, error)
 	SupportUDP() bool
 	MarshalJSON() ([]byte, error)
+	Addr() string
 }
 
 type DelayHistory struct {
@@ -105,6 +108,8 @@ func (at AdapterType) String() string {
 	case Trojan:
 		return "Trojan"
 
+	case Relay:
+		return "Relay"
 	case Selector:
 		return "Selector"
 	case Fallback:

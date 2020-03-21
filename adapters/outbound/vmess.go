@@ -16,7 +16,6 @@ import (
 
 type Vmess struct {
 	*Base
-	server string
 	client *vmess.Client
 }
 
@@ -35,14 +34,19 @@ type VmessOption struct {
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
 }
 
+func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	return v.client.New(c, parseVmessAddr(metadata))
+}
+
 func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := dialer.DialContext(ctx, "tcp", v.server)
+	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", v.server)
+		return nil, fmt.Errorf("%s connect error", v.addr)
 	}
 	tcpKeepAlive(c)
-	c, err = v.client.New(c, parseVmessAddr(metadata))
-	return newConn(c, v), err
+
+	c, err = v.StreamConn(c, metadata)
+	return NewConn(c, v), err
 }
 
 func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
@@ -57,9 +61,9 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
 	defer cancel()
-	c, err := dialer.DialContext(ctx, "tcp", v.server)
+	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", v.server)
+		return nil, fmt.Errorf("%s connect error", v.addr)
 	}
 	tcpKeepAlive(c)
 	c, err = v.client.New(c, parseVmessAddr(metadata))
@@ -91,10 +95,10 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	return &Vmess{
 		Base: &Base{
 			name: option.Name,
+			addr: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:   C.Vmess,
 			udp:  true,
 		},
-		server: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		client: client,
 	}, nil
 }
