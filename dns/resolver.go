@@ -115,7 +115,7 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 		}
 	}()
 
-	ret, err, _ := r.group.Do(q.String(), func() (interface{}, error) {
+	ret, err, shared := r.group.Do(q.String(), func() (interface{}, error) {
 		isIPReq := isIPRequest(q)
 		if isIPReq {
 			return r.fallbackExchange(m)
@@ -126,6 +126,9 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 
 	if err == nil {
 		msg = ret.(*D.Msg)
+		if shared {
+			msg = msg.Copy()
+		}
 	}
 
 	return
