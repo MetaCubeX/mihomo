@@ -85,7 +85,6 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	if _, err := pc.WriteWithMetadata(packet.Data(), metadata); err != nil {
 		return
 	}
-	DefaultManager.Upload() <- int64(len(packet.Data()))
 }
 
 func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr net.Addr) {
@@ -109,7 +108,6 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr n
 		if err != nil {
 			return
 		}
-		DefaultManager.Download() <- int64(n)
 	}
 }
 
