@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 type Vmess struct {
 	*Base
 	client *vmess.Client
+	option *VmessOption
 }
 
 type VmessOption struct {
@@ -29,13 +31,60 @@ type VmessOption struct {
 	TLS            bool              `proxy:"tls,omitempty"`
 	UDP            bool              `proxy:"udp,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
+	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
 	WSPath         string            `proxy:"ws-path,omitempty"`
 	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
 }
 
+type HTTPOptions struct {
+	Method  string              `proxy:"method,omitempty"`
+	Path    []string            `proxy:"path,omitempty"`
+	Headers map[string][]string `proxy:"headers,omitempty"`
+}
+
 func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	return v.client.New(c, parseVmessAddr(metadata))
+	var err error
+	switch v.option.Network {
+	case "ws":
+		host, port, _ := net.SplitHostPort(v.addr)
+		wsOpts := &vmess.WebsocketConfig{
+			Host: host,
+			Port: port,
+			Path: v.option.WSPath,
+		}
+
+		if len(v.option.WSHeaders) != 0 {
+			header := http.Header{}
+			for key, value := range v.option.WSHeaders {
+				header.Add(key, value)
+			}
+			wsOpts.Headers = header
+		}
+
+		if v.option.TLS {
+			wsOpts.TLS = true
+			wsOpts.SessionCache = getClientSessionCache()
+			wsOpts.SkipCertVerify = v.option.SkipCertVerify
+		}
+		c, err = vmess.StreamWebsocketConn(c, wsOpts)
+	case "http":
+		host, _, _ := net.SplitHostPort(v.addr)
+		httpOpts := &vmess.HTTPConfig{
+			Host:    host,
+			Method:  v.option.HTTPOpts.Method,
+			Path:    v.option.HTTPOpts.Path,
+			Headers: v.option.HTTPOpts.Headers,
+		}
+
+		c, err = vmess.StreamHTTPConn(c, httpOpts), nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return v.client.StreamConn(c, parseVmessAddr(metadata))
 }
 
 func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
@@ -66,7 +115,7 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 		return nil, fmt.Errorf("%s connect error", v.addr)
 	}
 	tcpKeepAlive(c)
-	c, err = v.client.New(c, parseVmessAddr(metadata))
+	c, err = v.StreamConn(c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
@@ -76,17 +125,11 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 func NewVmess(option VmessOption) (*Vmess, error) {
 	security := strings.ToLower(option.Cipher)
 	client, err := vmess.NewClient(vmess.Config{
-		UUID:             option.UUID,
-		AlterID:          uint16(option.AlterID),
-		Security:         security,
-		TLS:              option.TLS,
-		HostName:         option.Server,
-		Port:             strconv.Itoa(option.Port),
-		NetWork:          option.Network,
-		WebSocketPath:    option.WSPath,
-		WebSocketHeaders: option.WSHeaders,
-		SkipCertVerify:   option.SkipCertVerify,
-		SessionCache:     getClientSessionCache(),
+		UUID:     option.UUID,
+		AlterID:  uint16(option.AlterID),
+		Security: security,
+		HostName: option.Server,
+		Port:     strconv.Itoa(option.Port),
 	})
 	if err != nil {
 		return nil, err
@@ -100,6 +143,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			udp:  true,
 		},
 		client: client,
+		option: &option,
 	}, nil
 }
 
