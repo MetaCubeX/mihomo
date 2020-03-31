@@ -2,7 +2,6 @@ package outbound
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -156,21 +155,17 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			return nil, fmt.Errorf("ss %s obfs mode error: %s", addr, opts.Mode)
 		}
 		obfsMode = opts.Mode
-
-		var tlsConfig *tls.Config
-		if opts.TLS {
-			tlsConfig = &tls.Config{
-				ServerName:         opts.Host,
-				InsecureSkipVerify: opts.SkipCertVerify,
-				ClientSessionCache: getClientSessionCache(),
-			}
-		}
 		v2rayOption = &v2rayObfs.Option{
-			Host:      opts.Host,
-			Path:      opts.Path,
-			Headers:   opts.Headers,
-			TLSConfig: tlsConfig,
-			Mux:       opts.Mux,
+			Host:    opts.Host,
+			Path:    opts.Path,
+			Headers: opts.Headers,
+			Mux:     opts.Mux,
+		}
+
+		if opts.TLS {
+			v2rayOption.TLS = true
+			v2rayOption.SkipCertVerify = opts.SkipCertVerify
+			v2rayOption.SessionCache = getClientSessionCache()
 		}
 	}
 

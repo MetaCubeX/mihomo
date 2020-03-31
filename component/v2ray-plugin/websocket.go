@@ -10,11 +10,14 @@ import (
 
 // Option is options of websocket obfs
 type Option struct {
-	Host      string
-	Path      string
-	Headers   map[string]string
-	TLSConfig *tls.Config
-	Mux       bool
+	Host           string
+	Port           string
+	Path           string
+	Headers        map[string]string
+	TLS            bool
+	SkipCertVerify bool
+	SessionCache   tls.ClientSessionCache
+	Mux            bool
 }
 
 // NewV2rayObfs return a HTTPObfs
@@ -25,15 +28,17 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	}
 
 	config := &vmess.WebsocketConfig{
-		Host:      option.Host,
-		Path:      option.Path,
-		TLS:       option.TLSConfig != nil,
-		Headers:   header,
-		TLSConfig: option.TLSConfig,
+		Host:           option.Host,
+		Port:           option.Port,
+		Path:           option.Path,
+		TLS:            option.TLS,
+		Headers:        header,
+		SkipCertVerify: option.SkipCertVerify,
+		SessionCache:   option.SessionCache,
 	}
 
 	var err error
-	conn, err = vmess.NewWebsocketConn(conn, config)
+	conn, err = vmess.StreamWebsocketConn(conn, config)
 	if err != nil {
 		return nil, err
 	}
