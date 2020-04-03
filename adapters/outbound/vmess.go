@@ -77,7 +77,18 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			Headers: v.option.HTTPOpts.Headers,
 		}
 
-		c, err = vmess.StreamHTTPConn(c, httpOpts), nil
+		c = vmess.StreamHTTPConn(c, httpOpts)
+	default:
+		// handle TLS
+		if v.option.TLS {
+			host, _, _ := net.SplitHostPort(v.addr)
+			tlsOpts := &vmess.TLSConfig{
+				Host:           host,
+				SkipCertVerify: v.option.SkipCertVerify,
+				SessionCache:   getClientSessionCache(),
+			}
+			c, err = vmess.StreamTLSConn(c, tlsOpts)
+		}
 	}
 
 	if err != nil {
