@@ -3,6 +3,8 @@ package trie
 import (
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var localIP = net.IP{127, 0, 0, 1}
@@ -19,17 +21,9 @@ func TestTrie_Basic(t *testing.T) {
 	}
 
 	node := tree.Search("example.com")
-	if node == nil {
-		t.Error("should not recv nil")
-	}
-
-	if !node.Data.(net.IP).Equal(localIP) {
-		t.Error("should equal 127.0.0.1")
-	}
-
-	if tree.Insert("", localIP) == nil {
-		t.Error("should return error")
-	}
+	assert.NotNil(t, node)
+	assert.True(t, node.Data.(net.IP).Equal(localIP))
+	assert.NotNil(t, tree.Insert("", localIP))
 }
 
 func TestTrie_Wildcard(t *testing.T) {
@@ -38,50 +32,54 @@ func TestTrie_Wildcard(t *testing.T) {
 		"*.example.com",
 		"sub.*.example.com",
 		"*.dev",
+		".org",
+		".example.net",
 	}
 
 	for _, domain := range domains {
 		tree.Insert(domain, localIP)
 	}
 
-	if tree.Search("sub.example.com") == nil {
-		t.Error("should not recv nil")
+	assert.NotNil(t, tree.Search("sub.example.com"))
+	assert.NotNil(t, tree.Search("sub.foo.example.com"))
+	assert.NotNil(t, tree.Search("test.org"))
+	assert.NotNil(t, tree.Search("test.example.net"))
+	assert.Nil(t, tree.Search("foo.sub.example.com"))
+	assert.Nil(t, tree.Search("foo.example.dev"))
+	assert.Nil(t, tree.Search("example.com"))
+}
+
+func TestTrie_Priority(t *testing.T) {
+	tree := New()
+	domains := []string{
+		".dev",
+		"example.dev",
+		"*.example.dev",
+		"test.example.dev",
 	}
 
-	if tree.Search("sub.foo.example.com") == nil {
-		t.Error("should not recv nil")
+	assertFn := func(domain string, data int) {
+		node := tree.Search(domain)
+		assert.NotNil(t, node)
+		assert.Equal(t, data, node.Data)
 	}
 
-	if tree.Search("foo.sub.example.com") != nil {
-		t.Error("should recv nil")
+	for idx, domain := range domains {
+		tree.Insert(domain, idx)
 	}
 
-	if tree.Search("foo.example.dev") != nil {
-		t.Error("should recv nil")
-	}
-
-	if tree.Search("example.com") != nil {
-		t.Error("should recv nil")
-	}
+	assertFn("test.dev", 0)
+	assertFn("foo.bar.dev", 0)
+	assertFn("example.dev", 1)
+	assertFn("foo.example.dev", 2)
+	assertFn("test.example.dev", 3)
 }
 
 func TestTrie_Boundary(t *testing.T) {
 	tree := New()
 	tree.Insert("*.dev", localIP)
 
-	if err := tree.Insert(".", localIP); err == nil {
-		t.Error("should recv err")
-	}
-
-	if err := tree.Insert(".com", localIP); err == nil {
-		t.Error("should recv err")
-	}
-
-	if tree.Search("dev") != nil {
-		t.Error("should recv nil")
-	}
-
-	if tree.Search(".dev") != nil {
-		t.Error("should recv nil")
-	}
+	assert.NotNil(t, tree.Insert(".", localIP))
+	assert.NotNil(t, tree.Insert("..dev", localIP))
+	assert.Nil(t, tree.Search("dev"))
 }

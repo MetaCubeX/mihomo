@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	wildcard   = "*"
-	domainStep = "."
+	wildcard    = "*"
+	dotWildcard = ""
+	domainStep  = "."
 )
 
 var (
@@ -21,8 +22,23 @@ type Trie struct {
 	root *Node
 }
 
-func isValidDomain(domain string) bool {
-	return domain != "" && domain[0] != '.' && domain[len(domain)-1] != '.'
+func validAndSplitDomain(domain string) ([]string, bool) {
+	if domain != "" && domain[len(domain)-1] == '.' {
+		return nil, false
+	}
+
+	parts := strings.Split(domain, domainStep)
+	if len(parts) == 1 {
+		return nil, false
+	}
+
+	for _, part := range parts[1:] {
+		if part == "" {
+			return nil, false
+		}
+	}
+
+	return parts, true
 }
 
 // Insert adds a node to the trie.
@@ -30,12 +46,13 @@ func isValidDomain(domain string) bool {
 // 1. www.example.com
 // 2. *.example.com
 // 3. subdomain.*.example.com
+// 4. .example.com
 func (t *Trie) Insert(domain string, data interface{}) error {
-	if !isValidDomain(domain) {
+	parts, valid := validAndSplitDomain(domain)
+	if !valid {
 		return ErrInvalidDomain
 	}
 
-	parts := strings.Split(domain, domainStep)
 	node := t.root
 	// reverse storage domain part to save space
 	for i := len(parts) - 1; i >= 0; i-- {
@@ -55,28 +72,38 @@ func (t *Trie) Insert(domain string, data interface{}) error {
 // Priority as:
 // 1. static part
 // 2. wildcard domain
+// 2. dot wildcard domain
 func (t *Trie) Search(domain string) *Node {
-	if !isValidDomain(domain) {
+	parts, valid := validAndSplitDomain(domain)
+	if !valid || parts[0] == "" {
 		return nil
 	}
-	parts := strings.Split(domain, domainStep)
 
 	n := t.root
+	var dotWildcardNode *Node
 	for i := len(parts) - 1; i >= 0; i-- {
 		part := parts[i]
 
-		var child *Node
-		if !n.hasChild(part) {
-			if !n.hasChild(wildcard) {
-				return nil
-			}
-
-			child = n.getChild(wildcard)
-		} else {
-			child = n.getChild(part)
+		if node := n.getChild(dotWildcard); node != nil {
+			dotWildcardNode = node
 		}
 
-		n = child
+		if n.hasChild(part) {
+			n = n.getChild(part)
+		} else {
+			n = n.getChild(wildcard)
+		}
+
+		if n == nil {
+			break
+		}
+	}
+
+	if n == nil {
+		if dotWildcardNode != nil {
+			return dotWildcardNode
+		}
+		return nil
 	}
 
 	if n.Data == nil {
