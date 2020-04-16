@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"strings"
@@ -182,7 +183,11 @@ func (r *Resolver) batchExchange(clients []dnsClient, m *D.Msg) (msg *D.Msg, err
 
 	elm := fast.Wait()
 	if elm == nil {
-		return nil, errors.New("All DNS requests failed")
+		err := errors.New("All DNS requests failed")
+		if fErr := fast.Error(); fErr != nil {
+			err = fmt.Errorf("%w, first error: %s", err, fErr.Error())
+		}
+		return nil, err
 	}
 
 	msg = elm.(*D.Msg)
