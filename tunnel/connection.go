@@ -82,6 +82,8 @@ func handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 }
 
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) {
+	defer packet.Drop()
+
 	if _, err := pc.WriteWithMetadata(packet.Data(), metadata); err != nil {
 		return
 	}

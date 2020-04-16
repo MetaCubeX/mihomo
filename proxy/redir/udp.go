@@ -66,10 +66,9 @@ func (l *RedirUDPListener) Address() string {
 
 func handleRedirUDP(pc net.PacketConn, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {
 	target := socks5.ParseAddrToSocksAddr(rAddr)
-	packet := &fakeConn{
-		PacketConn: pc,
-		lAddr:      lAddr,
-		buf:        buf,
+	pkt := &packet{
+		lAddr: lAddr,
+		buf:   buf,
 	}
-	tunnel.AddPacket(adapters.NewPacket(target, packet, C.REDIR))
+	tunnel.AddPacket(adapters.NewPacket(target, pkt, C.REDIR))
 }

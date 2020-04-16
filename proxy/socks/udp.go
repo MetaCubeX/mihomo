@@ -63,11 +63,11 @@ func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
 		pool.BufPool.Put(buf[:cap(buf)])
 		return
 	}
-	packet := &fakeConn{
-		PacketConn: pc,
-		rAddr:      addr,
-		payload:    payload,
-		bufRef:     buf,
+	packet := &packet{
+		pc:      pc,
+		rAddr:   addr,
+		payload: payload,
+		bufRef:  buf,
 	}
 	tunnel.AddPacket(adapters.NewPacket(target, packet, C.SOCKS))
 }
