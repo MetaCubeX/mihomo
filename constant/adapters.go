@@ -135,8 +135,8 @@ type UDPPacket interface {
 	//   this is important when using Fake-IP.
 	WriteBack(b []byte, addr net.Addr) (n int, err error)
 
-	// Close closes the underlaying connection.
-	Close() error
+	// Drop call after packet is used, could recycle buffer in this function.
+	Drop()
 
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr
