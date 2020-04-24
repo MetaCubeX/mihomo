@@ -33,6 +33,6 @@ func (c *packet) LocalAddr() net.Addr {
 }
 
 func (c *packet) Drop() {
-	pool.BufPool.Put(c.bufRef[:cap(c.bufRef)])
+	pool.Put(c.bufRef)
 	return
 }
