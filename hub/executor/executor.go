@@ -158,13 +158,6 @@ func updateHosts(tree *trie.Trie) {
 }
 
 func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.ProxyProvider) {
-	oldProviders := tunnel.Providers()
-
-	// close providers goroutine
-	for _, provider := range oldProviders {
-		provider.Destroy()
-	}
-
 	tunnel.UpdateProxies(proxies, providers)
 }
 
