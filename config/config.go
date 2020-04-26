@@ -268,15 +268,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersConfig = cfg.ProxyProviderOld
 	}
 
-	defer func() {
-		// Destroy already created provider when err != nil
-		if err != nil {
-			for _, provider := range providersMap {
-				provider.Destroy()
-			}
-		}
-	}()
-
 	proxies["DIRECT"] = outbound.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = outbound.NewProxy(outbound.NewReject())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
