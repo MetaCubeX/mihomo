@@ -18,8 +18,8 @@ func handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	req := request.R
 	host := req.Host
 
-	inboundReeder := bufio.NewReader(request)
-	outboundReeder := bufio.NewReader(outbound)
+	inboundReader := bufio.NewReader(request)
+	outboundReader := bufio.NewReader(outbound)
 
 	for {
 		keepAlive := strings.TrimSpace(strings.ToLower(req.Header.Get("Proxy-Connection"))) == "keep-alive"
@@ -33,7 +33,7 @@ func handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 		}
 
 	handleResponse:
-		resp, err := http.ReadResponse(outboundReeder, req)
+		resp, err := http.ReadResponse(outboundReader, req)
 		if err != nil {
 			break
 		}
@@ -68,7 +68,7 @@ func handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 			break
 		}
 
-		req, err = http.ReadRequest(inboundReeder)
+		req, err = http.ReadRequest(inboundReader)
 		if err != nil {
 			break
 		}
