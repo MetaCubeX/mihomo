@@ -59,6 +59,7 @@ func (s *Selector) Set(name string) error {
 	for _, proxy := range getProvidersProxies(s.providers) {
 		if proxy.Name() == name {
 			s.selected = name
+			s.single.Reset()
 			return nil
 		}
 	}
