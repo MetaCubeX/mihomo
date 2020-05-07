@@ -67,6 +67,10 @@ func (s *Selector) Set(name string) error {
 	return errors.New("Proxy does not exist")
 }
 
+func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {
+	return s.selectedProxy()
+}
+
 func (s *Selector) selectedProxy() C.Proxy {
 	elm, _, _ := s.single.Do(func() (interface{}, error) {
 		proxies := getProvidersProxies(s.providers)
