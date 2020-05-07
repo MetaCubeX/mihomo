@@ -273,7 +273,7 @@ proxies:
     # skip-cert-verify: true
 
 proxy-groups:
-  # relay chains the proxies. proxies shall not contain a proxy-group. No UDP support.
+  # relay chains the proxies. proxies shall not contain a relay. No UDP support.
   # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
   - name: "relay"
     type: relay
