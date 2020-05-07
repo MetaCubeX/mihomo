@@ -120,9 +120,10 @@ experimental:
 #  - "user2:pass2"
 
 # # experimental hosts, support wildcard (e.g. *.clash.dev Even *.foo.*.example.com)
-# # static domain has a higher priority than wildcard domain (foo.example.com > *.example.com)
+# # static domain has a higher priority than wildcard domain (foo.example.com > *.example.com > .example.com)
 # hosts:
 #   '*.clash.dev': 127.0.0.1
+#   '.dev': 127.0.0.1
 #   'alpha.clash.dev': '::1'
 
 # dns:
