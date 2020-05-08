@@ -37,7 +37,7 @@ $ go get -u -v github.com/Dreamacro/clash
 ```
 
 Pre-built binaries are available here: [release](https://github.com/Dreamacro/clash/releases)  
-Pre-built TUN mode binaries are available here: [TUN release](https://github.com/Dreamacro/clash/releases/tag/TUN). Source is not currently available.
+Pre-built Premium binaries are available here: [Premium release](https://github.com/Dreamacro/clash/releases/tag/premium). Source is not currently available.
 
 Check Clash version with:
 
