@@ -12,8 +12,8 @@ import (
 	"github.com/Dreamacro/clash/adapters/outboundgroup"
 	"github.com/Dreamacro/clash/adapters/provider"
 	"github.com/Dreamacro/clash/component/auth"
-	trie "github.com/Dreamacro/clash/component/domain-trie"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
@@ -69,7 +69,7 @@ type Config struct {
 	General      *General
 	DNS          *DNS
 	Experimental *Experimental
-	Hosts        *trie.Trie
+	Hosts        *trie.DomainTrie
 	Rules        []C.Rule
 	Users        []auth.AuthUser
 	Proxies      map[string]C.Proxy
@@ -450,7 +450,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 	return rules, nil
 }
 
-func parseHosts(cfg *RawConfig) (*trie.Trie, error) {
+func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 	tree := trie.New()
 	if len(cfg.Hosts) != 0 {
 		for domain, ipStr := range cfg.Hosts {
@@ -586,7 +586,7 @@ func parseDNS(cfg RawDNS) (*DNS, error) {
 			return nil, err
 		}
 
-		var host *trie.Trie
+		var host *trie.DomainTrie
 		// fake ip skip host filter
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New()

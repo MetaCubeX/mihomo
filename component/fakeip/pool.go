@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/common/cache"
-	trie "github.com/Dreamacro/clash/component/domain-trie"
+	"github.com/Dreamacro/clash/component/trie"
 )
 
 // Pool is a implementation about fake ip generator without storage
@@ -16,7 +16,7 @@ type Pool struct {
 	gateway uint32
 	offset  uint32
 	mux     sync.Mutex
-	host    *trie.Trie
+	host    *trie.DomainTrie
 	cache   *cache.LruCache
 }
 
@@ -120,7 +120,7 @@ func uintToIP(v uint32) net.IP {
 }
 
 // New return Pool instance
-func New(ipnet *net.IPNet, size int, host *trie.Trie) (*Pool, error) {
+func New(ipnet *net.IPNet, size int, host *trie.DomainTrie) (*Pool, error) {
 	min := ipToUint(ipnet.IP) + 2
 
 	ones, bits := ipnet.Mask.Size()
