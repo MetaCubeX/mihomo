@@ -119,12 +119,14 @@ experimental:
 #  - "user1:pass1"
 #  - "user2:pass2"
 
-# # experimental hosts, support wildcard (e.g. *.clash.dev Even *.foo.*.example.com)
+# # hosts, support wildcard (e.g. *.clash.dev Even *.foo.*.example.com)
 # # static domain has a higher priority than wildcard domain (foo.example.com > *.example.com > .example.com)
+# # +.foo.com equal .foo.com and foo.com
 # hosts:
 #   '*.clash.dev': 127.0.0.1
 #   '.dev': 127.0.0.1
 #   'alpha.clash.dev': '::1'
+#   '+.foo.dev': 127.0.0.1
 
 # dns:
   # enable: true # set true to enable dns (default is false)
