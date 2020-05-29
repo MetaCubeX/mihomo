@@ -293,6 +293,7 @@ proxy-groups:
       - ss1
       - ss2
       - vmess1
+    # tolerance: 150
     url: 'http://www.gstatic.com/generate_204'
     interval: 300
 
