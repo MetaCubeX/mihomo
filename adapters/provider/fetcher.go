@@ -35,10 +35,12 @@ func (f *fetcher) VehicleType() VehicleType {
 }
 
 func (f *fetcher) Initial() (interface{}, error) {
-	var buf []byte
-	var err error
-	var isLocal bool
-	if stat, err := os.Stat(f.vehicle.Path()); err == nil {
+	var (
+		buf     []byte
+		err     error
+		isLocal bool
+	)
+	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
 		buf, err = ioutil.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
 		f.updatedAt = &modTime
