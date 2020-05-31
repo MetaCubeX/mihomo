@@ -92,8 +92,8 @@ allow-lan: false
 # "[aaaa::a8aa:ff:fe09:57d8]": bind a single IPv6 address
 # bind-address: "*"
 
-# Rule / Global / Direct (default is Rule)
-mode: Rule
+# rule / global / direct (default is rule)
+mode: rule
 
 # set log level to stdout (default is info)
 # info / warning / error / debug / silent
