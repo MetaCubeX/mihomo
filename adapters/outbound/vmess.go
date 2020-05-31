@@ -35,6 +35,7 @@ type VmessOption struct {
 	WSPath         string            `proxy:"ws-path,omitempty"`
 	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
+	ServerName     string            `proxy:"servername,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -66,6 +67,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			wsOpts.TLS = true
 			wsOpts.SessionCache = getClientSessionCache()
 			wsOpts.SkipCertVerify = v.option.SkipCertVerify
+			wsOpts.ServerName = v.option.ServerName
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
@@ -87,6 +89,11 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				SkipCertVerify: v.option.SkipCertVerify,
 				SessionCache:   getClientSessionCache(),
 			}
+
+			if v.option.ServerName != "" {
+				tlsOpts.Host = v.option.ServerName
+			}
+
 			c, err = vmess.StreamTLSConn(c, tlsOpts)
 		}
 	}
