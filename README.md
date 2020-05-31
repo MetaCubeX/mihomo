@@ -208,6 +208,7 @@ proxies:
     # udp: true
     # tls: true
     # skip-cert-verify: true
+    # servername: example.com # priority over wss host
     # network: ws
     # ws-path: /path
     # ws-headers:

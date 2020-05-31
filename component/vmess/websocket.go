@@ -31,6 +31,7 @@ type WebsocketConfig struct {
 	Headers        http.Header
 	TLS            bool
 	SkipCertVerify bool
+	ServerName     string
 	SessionCache   tls.ClientSessionCache
 }
 
@@ -132,7 +133,9 @@ func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 			ClientSessionCache: c.SessionCache,
 		}
 
-		if host := c.Headers.Get("Host"); host != "" {
+		if c.ServerName != "" {
+			dialer.TLSClientConfig.ServerName = c.ServerName
+		} else if host := c.Headers.Get("Host"); host != "" {
 			dialer.TLSClientConfig.ServerName = host
 		}
 	}
