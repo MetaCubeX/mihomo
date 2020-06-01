@@ -44,7 +44,7 @@ func (dc *dohClient) newRequest(m *D.Msg) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, dc.url+"?bla=foo:443", bytes.NewReader(buf))
+	req, err := http.NewRequest(http.MethodPost, dc.url, bytes.NewReader(buf))
 	if err != nil {
 		return req, err
 	}
@@ -75,7 +75,8 @@ func newDoHClient(url string, r *Resolver) *dohClient {
 	return &dohClient{
 		url: url,
 		transport: &http.Transport{
-			TLSClientConfig: &tls.Config{ClientSessionCache: globalSessionCache},
+			TLSClientConfig:   &tls.Config{ClientSessionCache: globalSessionCache},
+			ForceAttemptHTTP2: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, err := net.SplitHostPort(addr)
 				if err != nil {
