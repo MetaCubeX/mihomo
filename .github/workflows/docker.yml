@@ -14,6 +14,8 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
       - name: Set up docker buildx
         id: buildx
