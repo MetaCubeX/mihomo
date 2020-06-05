@@ -404,42 +404,8 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 
 		rule = trimArr(rule)
 		params = trimArr(params)
-		var (
-			parseErr error
-			parsed   C.Rule
-		)
 
-		switch rule[0] {
-		case "DOMAIN":
-			parsed = R.NewDomain(payload, target)
-		case "DOMAIN-SUFFIX":
-			parsed = R.NewDomainSuffix(payload, target)
-		case "DOMAIN-KEYWORD":
-			parsed = R.NewDomainKeyword(payload, target)
-		case "GEOIP":
-			noResolve := R.HasNoResolve(params)
-			parsed = R.NewGEOIP(payload, target, noResolve)
-		case "IP-CIDR", "IP-CIDR6":
-			noResolve := R.HasNoResolve(params)
-			parsed, parseErr = R.NewIPCIDR(payload, target, R.WithIPCIDRNoResolve(noResolve))
-		// deprecated when bump to 1.0
-		case "SOURCE-IP-CIDR":
-			fallthrough
-		case "SRC-IP-CIDR":
-			parsed, parseErr = R.NewIPCIDR(payload, target, R.WithIPCIDRSourceIP(true), R.WithIPCIDRNoResolve(true))
-		case "SRC-PORT":
-			parsed, parseErr = R.NewPort(payload, target, true)
-		case "DST-PORT":
-			parsed, parseErr = R.NewPort(payload, target, false)
-		case "MATCH":
-			fallthrough
-		// deprecated when bump to 1.0
-		case "FINAL":
-			parsed = R.NewMatch(target)
-		default:
-			parseErr = fmt.Errorf("unsupported rule type %s", rule[0])
-		}
-
+		parsed, parseErr := R.ParseRule(rule[0], payload, target, params)
 		if parseErr != nil {
 			return nil, fmt.Errorf("Rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
