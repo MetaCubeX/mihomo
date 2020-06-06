@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Dreamacro/clash/log"
@@ -12,6 +13,7 @@ import (
 
 var (
 	fileMode os.FileMode = 0666
+	dirMode  os.FileMode = 0755
 )
 
 type parser = func([]byte) (interface{}, error)
@@ -71,7 +73,7 @@ func (f *fetcher) Initial() (interface{}, error) {
 		}
 	}
 
-	if err := ioutil.WriteFile(f.vehicle.Path(), buf, fileMode); err != nil {
+	if err := safeWrite(f.vehicle.Path(), buf); err != nil {
 		return nil, err
 	}
 
@@ -103,7 +105,7 @@ func (f *fetcher) Update() (interface{}, bool, error) {
 		return nil, false, err
 	}
 
-	if err := ioutil.WriteFile(f.vehicle.Path(), buf, fileMode); err != nil {
+	if err := safeWrite(f.vehicle.Path(), buf); err != nil {
 		return nil, false, err
 	}
 
@@ -138,6 +140,18 @@ func (f *fetcher) pullLoop() {
 			f.onUpdate(elm)
 		}
 	}
+}
+
+func safeWrite(path string, buf []byte) error {
+	dir := filepath.Dir(path)
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
+			return err
+		}
+	}
+
+	return ioutil.WriteFile(path, buf, fileMode)
 }
 
 func newFetcher(name string, interval time.Duration, vehicle Vehicle, parser parser, onUpdate func(interface{})) *fetcher {
