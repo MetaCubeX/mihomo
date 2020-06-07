@@ -14,6 +14,7 @@ func TestTrie_Basic(t *testing.T) {
 	domains := []string{
 		"example.com",
 		"google.com",
+		"localhost",
 	}
 
 	for _, domain := range domains {
@@ -24,6 +25,8 @@ func TestTrie_Basic(t *testing.T) {
 	assert.NotNil(t, node)
 	assert.True(t, node.Data.(net.IP).Equal(localIP))
 	assert.NotNil(t, tree.Insert("", localIP))
+	assert.Nil(t, tree.Search(""))
+	assert.NotNil(t, tree.Search("localhost"))
 }
 
 func TestTrie_Wildcard(t *testing.T) {

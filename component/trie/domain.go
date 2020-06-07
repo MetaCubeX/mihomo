@@ -30,7 +30,11 @@ func validAndSplitDomain(domain string) ([]string, bool) {
 
 	parts := strings.Split(domain, domainStep)
 	if len(parts) == 1 {
-		return nil, false
+		if parts[0] == "" {
+			return nil, false
+		}
+
+		return parts, true
 	}
 
 	for _, part := range parts[1:] {
