@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/proxy/http"
@@ -23,6 +24,13 @@ var (
 	redirUDPListener *redir.RedirUDPListener
 	mixedListener    *mixed.MixedListener
 	mixedUDPLister   *socks.SockUDPListener
+
+	// lock for recreate function
+	socksMux sync.Mutex
+	httpMux  sync.Mutex
+	redirMux sync.Mutex
+	mixedMux sync.Mutex
+	tunMux   sync.Mutex
 )
 
 type listener interface {
@@ -54,6 +62,9 @@ func SetBindAddress(host string) {
 }
 
 func ReCreateHTTP(port int) error {
+	httpMux.Lock()
+	defer httpMux.Unlock()
+
 	addr := genAddr(bindAddress, port, allowLan)
 
 	if httpListener != nil {
@@ -78,6 +89,9 @@ func ReCreateHTTP(port int) error {
 }
 
 func ReCreateSocks(port int) error {
+	socksMux.Lock()
+	defer socksMux.Unlock()
+
 	addr := genAddr(bindAddress, port, allowLan)
 
 	shouldTCPIgnore := false
@@ -127,6 +141,9 @@ func ReCreateSocks(port int) error {
 }
 
 func ReCreateRedir(port int) error {
+	redirMux.Lock()
+	defer redirMux.Unlock()
+
 	addr := genAddr(bindAddress, port, allowLan)
 
 	if redirListener != nil {
@@ -164,6 +181,9 @@ func ReCreateRedir(port int) error {
 }
 
 func ReCreateMixed(port int) error {
+	mixedMux.Lock()
+	defer mixedMux.Unlock()
+
 	addr := genAddr(bindAddress, port, allowLan)
 
 	shouldTCPIgnore := false
