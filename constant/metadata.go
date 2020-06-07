@@ -23,8 +23,8 @@ const (
 
 type NetWork int
 
-func (n *NetWork) String() string {
-	if *n == TCP {
+func (n NetWork) String() string {
+	if n == TCP {
 		return "tcp"
 	}
 	return "udp"
