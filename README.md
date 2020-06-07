@@ -81,6 +81,9 @@ port: 7890
 # port of SOCKS5
 socks-port: 7891
 
+# (HTTP and SOCKS5 in one port)
+# mixed-port: 7890
+
 # redir port for Linux and macOS
 # redir-port: 7892
 
@@ -394,4 +397,4 @@ https://clash.gitbook.io/
 - [x] Redir proxy
 - [x] UDP support
 - [x] Connection manager
-- [ ] Event API
+- ~~[ ] Event API~~

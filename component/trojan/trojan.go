@@ -70,8 +70,8 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 
 func (t *Trojan) WriteHeader(w io.Writer, command Command, socks5Addr []byte) error {
 	buf := bufPool.Get().(*bytes.Buffer)
-	defer buf.Reset()
 	defer bufPool.Put(buf)
+	defer buf.Reset()
 
 	buf.Write(t.hexPassword)
 	buf.Write(crlf)
@@ -92,8 +92,8 @@ func (t *Trojan) PacketConn(conn net.Conn) net.PacketConn {
 
 func writePacket(w io.Writer, socks5Addr, payload []byte) (int, error) {
 	buf := bufPool.Get().(*bytes.Buffer)
-	defer buf.Reset()
 	defer bufPool.Put(buf)
+	defer buf.Reset()
 
 	buf.Write(socks5Addr)
 	binary.Write(buf, binary.BigEndian, uint16(len(payload)))
