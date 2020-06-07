@@ -418,6 +418,12 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 
 func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 	tree := trie.New()
+
+	// add default hosts
+	if err := tree.Insert("localhost", net.IP{127, 0, 0, 1}); err != nil {
+		println(err.Error())
+	}
+
 	if len(cfg.Hosts) != 0 {
 		for domain, ipStr := range cfg.Hosts {
 			ip := net.ParseIP(ipStr)
