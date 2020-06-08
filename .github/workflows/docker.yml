@@ -43,7 +43,7 @@ jobs:
         id: version
         with:
           script: |
-            return context.payload.ref.replace(/\/refs\/tags\//v, '')
+            return context.payload.ref.replace(/\/refs\/tags\/v/, '')
           result-encoding: string
 
       - name: Docker buildx image and push on release
