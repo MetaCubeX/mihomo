@@ -17,7 +17,8 @@ func parseSocksAddr(target socks5.Addr) *C.Metadata {
 
 	switch target[0] {
 	case socks5.AtypDomainName:
-		metadata.Host = string(target[2 : 2+target[1]])
+		// trim for FQDN
+		metadata.Host = strings.TrimRight(string(target[2:2+target[1]]), ".")
 		metadata.DstPort = strconv.Itoa((int(target[2+target[1]]) << 8) | int(target[2+target[1]+1]))
 	case socks5.AtypIPv4:
 		ip := net.IP(target[1 : 1+net.IPv4len])
