@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
@@ -37,6 +38,9 @@ func parseHTTPAddr(request *http.Request) *C.Metadata {
 	if port == "" {
 		port = "80"
 	}
+
+	// trim FQDN (#737)
+	host = strings.TrimRight(host, ".")
 
 	metadata := &C.Metadata{
 		NetWork:  C.TCP,
