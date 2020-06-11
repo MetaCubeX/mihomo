@@ -108,7 +108,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", v.addr)
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 	tcpKeepAlive(c)
 
@@ -130,7 +130,7 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	defer cancel()
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error", v.addr)
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 	tcpKeepAlive(c)
 	c, err = v.StreamConn(c, metadata)
