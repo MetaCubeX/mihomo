@@ -71,7 +71,7 @@ func (t *Trojan) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	}
 
 	pc := t.instance.PacketConn(c)
-	return newPacketConn(&trojanPacketConn{pc, c}, t), err
+	return newPacketConn(pc, t), err
 }
 
 func (t *Trojan) MarshalJSON() ([]byte, error) {
@@ -104,13 +104,4 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		},
 		instance: trojan.New(tOption),
 	}, nil
-}
-
-type trojanPacketConn struct {
-	net.PacketConn
-	conn net.Conn
-}
-
-func (tpc *trojanPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
-	return trojan.WritePacket(tpc.conn, serializesSocksAddr(metadata), p)
 }

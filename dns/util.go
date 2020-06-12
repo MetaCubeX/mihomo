@@ -89,7 +89,7 @@ func putMsgToCache(c *cache.LruCache, key string, msg *D.Msg) {
 	case len(msg.Extra) != 0:
 		ttl = msg.Extra[0].Header().Ttl
 	default:
-		log.Debugln("[DNS] response msg error: %#v", msg)
+		log.Debugln("[DNS] response msg empty: %#v", msg)
 		return
 	}
 
@@ -111,10 +111,7 @@ func setMsgTTL(msg *D.Msg, ttl uint32) {
 }
 
 func isIPRequest(q D.Question) bool {
-	if q.Qclass == D.ClassINET && (q.Qtype == D.TypeA || q.Qtype == D.TypeAAAA) {
-		return true
-	}
-	return false
+	return q.Qclass == D.ClassINET && (q.Qtype == D.TypeA || q.Qtype == D.TypeAAAA)
 }
 
 func transform(servers []NameServer, resolver *Resolver) []dnsClient {

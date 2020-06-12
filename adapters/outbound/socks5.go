@@ -164,14 +164,6 @@ func (uc *socksPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	return uc.PacketConn.WriteTo(packet, uc.rAddr)
 }
 
-func (uc *socksPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
-	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddr(metadata.RemoteAddress()), p)
-	if err != nil {
-		return
-	}
-	return uc.PacketConn.WriteTo(packet, uc.rAddr)
-}
-
 func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, _, e := uc.PacketConn.ReadFrom(b)
 	if e != nil {

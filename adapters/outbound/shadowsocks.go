@@ -197,14 +197,6 @@ func (spc *ssPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	return spc.PacketConn.WriteTo(packet[3:], spc.rAddr)
 }
 
-func (spc *ssPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
-	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddr(metadata.RemoteAddress()), p)
-	if err != nil {
-		return
-	}
-	return spc.PacketConn.WriteTo(packet[3:], spc.rAddr)
-}
-
 func (spc *ssPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, _, e := spc.PacketConn.ReadFrom(b)
 	if e != nil {

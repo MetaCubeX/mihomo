@@ -105,14 +105,6 @@ func (ut *udpTracker) WriteTo(b []byte, addr net.Addr) (int, error) {
 	return n, err
 }
 
-func (ut *udpTracker) WriteWithMetadata(p []byte, metadata *C.Metadata) (int, error) {
-	n, err := ut.PacketConn.WriteWithMetadata(p, metadata)
-	upload := int64(n)
-	ut.manager.Upload() <- upload
-	ut.UploadTotal += upload
-	return n, err
-}
-
 func (ut *udpTracker) Close() error {
 	ut.manager.Leave(ut)
 	return ut.PacketConn.Close()
