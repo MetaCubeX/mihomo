@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/Dreamacro/clash/common/pool"
@@ -81,12 +83,25 @@ func handleHTTP(request *adapters.HTTPAdapter, outbound net.Conn) {
 	}
 }
 
-func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) {
+func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
 	defer packet.Drop()
 
-	if _, err := pc.WriteWithMetadata(packet.Data(), metadata); err != nil {
-		return
+	// local resolve UDP dns
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(metadata.Host)
+		if err != nil {
+			return err
+		}
+		metadata.DstIP = ip
 	}
+
+	addr := metadata.UDPAddr()
+	if addr == nil {
+		return errors.New("udp addr invalid")
+	}
+
+	_, err := pc.WriteTo(packet.Data(), addr)
+	return err
 }
 
 func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr net.Addr) {

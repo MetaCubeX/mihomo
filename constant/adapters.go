@@ -57,7 +57,8 @@ type Conn interface {
 type PacketConn interface {
 	net.PacketConn
 	Connection
-	WriteWithMetadata(p []byte, metadata *Metadata) (n int, err error)
+	// Deprecate WriteWithMetadata because of remote resolve DNS cause TURN failed
+	// WriteWithMetadata(p []byte, metadata *Metadata) (n int, err error)
 }
 
 type ProxyAdapter interface {

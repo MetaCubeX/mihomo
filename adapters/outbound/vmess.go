@@ -202,10 +202,6 @@ func (uc *vmessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	return uc.Conn.Write(b)
 }
 
-func (uc *vmessPacketConn) WriteWithMetadata(p []byte, metadata *C.Metadata) (n int, err error) {
-	return uc.Conn.Write(p)
-}
-
 func (uc *vmessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, err := uc.Conn.Read(b)
 	return n, uc.rAddr, err
