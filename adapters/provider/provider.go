@@ -142,7 +142,9 @@ func proxiesParse(buf []byte) (interface{}, error) {
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
-	go pp.healthCheck.check()
+	if pp.healthCheck.auto() {
+		go pp.healthCheck.check()
+	}
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
