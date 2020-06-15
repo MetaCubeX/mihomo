@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/sockopt"
+	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
 )
@@ -62,7 +63,7 @@ func ReCreateServer(addr string, resolver *Resolver) error {
 
 	err = sockopt.UDPReuseaddr(p)
 	if err != nil {
-		return err
+		log.Warnln("Failed to Reuse UDP Address: %s", err)
 	}
 
 	address = addr
