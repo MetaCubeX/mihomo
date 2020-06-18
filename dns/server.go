@@ -43,6 +43,7 @@ func ReCreateServer(addr string, resolver *Resolver) error {
 
 	if server.Server != nil {
 		server.Shutdown()
+		server = &Server{}
 		address = ""
 	}
 

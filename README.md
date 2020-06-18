@@ -95,6 +95,8 @@ allow-lan: false
 # "[aaaa::a8aa:ff:fe09:57d8]": bind a single IPv6 address
 # bind-address: "*"
 
+# ipv6: false # when ipv6 is false, each clash dial with ipv6, but it's not affect the response of the dns server, default is false
+
 # rule / global / direct (default is rule)
 mode: rule
 
@@ -133,7 +135,7 @@ experimental:
 
 # dns:
   # enable: true # set true to enable dns (default is false)
-  # ipv6: false # default is false
+  # ipv6: false # it only affect the dns server response, default is false
   # listen: 0.0.0.0:53
   # # default-nameserver: # resolve dns nameserver host, should fill pure IP
   # #   - 114.114.114.114

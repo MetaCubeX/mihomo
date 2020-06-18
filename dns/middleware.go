@@ -58,9 +58,23 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 
 func withResolver(resolver *Resolver) handler {
 	return func(w D.ResponseWriter, r *D.Msg) {
+		q := r.Question[0]
+
+		// return a empty AAAA msg when ipv6 disabled
+		if !resolver.ipv6 && q.Qtype == D.TypeAAAA {
+			msg := &D.Msg{}
+			msg.Answer = []D.RR{}
+
+			msg.SetRcode(r, D.RcodeSuccess)
+			msg.Authoritative = true
+			msg.RecursionAvailable = true
+
+			w.WriteMsg(msg)
+			return
+		}
+
 		msg, err := resolver.Exchange(r)
 		if err != nil {
-			q := r.Question[0]
 			log.Debugln("[DNS Server] Exchange %s failed: %v", q.String(), err)
 			D.HandleFailed(w, r)
 			return

@@ -25,18 +25,29 @@ import (
 
 // General config
 type General struct {
-	Port               int          `json:"port"`
-	SocksPort          int          `json:"socks-port"`
-	RedirPort          int          `json:"redir-port"`
-	MixedPort          int          `json:"mixed-port"`
-	Authentication     []string     `json:"authentication"`
-	AllowLan           bool         `json:"allow-lan"`
-	BindAddress        string       `json:"bind-address"`
-	Mode               T.TunnelMode `json:"mode"`
-	LogLevel           log.LogLevel `json:"log-level"`
-	ExternalController string       `json:"-"`
-	ExternalUI         string       `json:"-"`
-	Secret             string       `json:"-"`
+	Inbound
+	Controller
+	Mode     T.TunnelMode `json:"mode"`
+	LogLevel log.LogLevel `json:"log-level"`
+	IPv6     bool         `json:"ipv6"`
+}
+
+// Inbound
+type Inbound struct {
+	Port           int      `json:"port"`
+	SocksPort      int      `json:"socks-port"`
+	RedirPort      int      `json:"redir-port"`
+	MixedPort      int      `json:"mixed-port"`
+	Authentication []string `json:"authentication"`
+	AllowLan       bool     `json:"allow-lan"`
+	BindAddress    string   `json:"bind-address"`
+}
+
+// Controller
+type Controller struct {
+	ExternalController string `json:"-"`
+	ExternalUI         string `json:"-"`
+	Secret             string `json:"-"`
 }
 
 // DNS config
@@ -104,6 +115,7 @@ type RawConfig struct {
 	BindAddress        string       `yaml:"bind-address"`
 	Mode               T.TunnelMode `yaml:"mode"`
 	LogLevel           log.LogLevel `yaml:"log-level"`
+	IPv6               bool         `yaml:"ipv6"`
 	ExternalController string       `yaml:"external-controller"`
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
@@ -216,18 +228,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 }
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
-	port := cfg.Port
-	socksPort := cfg.SocksPort
-	redirPort := cfg.RedirPort
-	mixedPort := cfg.MixedPort
-	allowLan := cfg.AllowLan
-	bindAddress := cfg.BindAddress
-	externalController := cfg.ExternalController
 	externalUI := cfg.ExternalUI
-	secret := cfg.Secret
-	mode := cfg.Mode
-	logLevel := cfg.LogLevel
 
+	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
 
@@ -236,20 +239,24 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		}
 	}
 
-	general := &General{
-		Port:               port,
-		SocksPort:          socksPort,
-		RedirPort:          redirPort,
-		MixedPort:          mixedPort,
-		AllowLan:           allowLan,
-		BindAddress:        bindAddress,
-		Mode:               mode,
-		LogLevel:           logLevel,
-		ExternalController: externalController,
-		ExternalUI:         externalUI,
-		Secret:             secret,
-	}
-	return general, nil
+	return &General{
+		Inbound: Inbound{
+			Port:        cfg.Port,
+			SocksPort:   cfg.SocksPort,
+			RedirPort:   cfg.RedirPort,
+			MixedPort:   cfg.MixedPort,
+			AllowLan:    cfg.AllowLan,
+			BindAddress: cfg.BindAddress,
+		},
+		Controller: Controller{
+			ExternalController: cfg.ExternalController,
+			ExternalUI:         cfg.ExternalUI,
+			Secret:             cfg.Secret,
+		},
+		Mode:     cfg.Mode,
+		LogLevel: cfg.LogLevel,
+		IPv6:     cfg.IPv6,
+	}, nil
 }
 
 func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
