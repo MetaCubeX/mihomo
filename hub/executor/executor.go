@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/Dreamacro/clash/adapters/provider"
 	"github.com/Dreamacro/clash/component/auth"
@@ -18,6 +19,10 @@ import (
 	P "github.com/Dreamacro/clash/proxy"
 	authStore "github.com/Dreamacro/clash/proxy/auth"
 	"github.com/Dreamacro/clash/tunnel"
+)
+
+var (
+	mux sync.Mutex
 )
 
 // forward compatibility before 1.0
@@ -77,10 +82,11 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 
 // ApplyConfig dispatch configure to all parts
 func ApplyConfig(cfg *config.Config, force bool) {
+	mux.Lock()
+	defer mux.Unlock()
+
 	updateUsers(cfg.Users)
-	if force {
-		updateGeneral(cfg.General)
-	}
+	updateGeneral(cfg.General, force)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
 	updateDNS(cfg.DNS)
@@ -96,15 +102,17 @@ func GetGeneral() *config.General {
 	}
 
 	general := &config.General{
-		Port:           ports.Port,
-		SocksPort:      ports.SocksPort,
-		RedirPort:      ports.RedirPort,
-		MixedPort:      ports.MixedPort,
-		Authentication: authenticator,
-		AllowLan:       P.AllowLan(),
-		BindAddress:    P.BindAddress(),
-		Mode:           tunnel.Mode(),
-		LogLevel:       log.Level(),
+		Inbound: config.Inbound{
+			Port:           ports.Port,
+			SocksPort:      ports.SocksPort,
+			RedirPort:      ports.RedirPort,
+			MixedPort:      ports.MixedPort,
+			Authentication: authenticator,
+			AllowLan:       P.AllowLan(),
+			BindAddress:    P.BindAddress(),
+		},
+		Mode:     tunnel.Mode(),
+		LogLevel: log.Level(),
 	}
 
 	return general
@@ -166,9 +174,14 @@ func updateRules(rules []C.Rule) {
 	tunnel.UpdateRules(rules)
 }
 
-func updateGeneral(general *config.General) {
+func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
+	resolver.DisableIPv6 = !general.IPv6
+
+	if !force {
+		return
+	}
 
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)
