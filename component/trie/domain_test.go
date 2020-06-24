@@ -27,6 +27,7 @@ func TestTrie_Basic(t *testing.T) {
 	assert.NotNil(t, tree.Insert("", localIP))
 	assert.Nil(t, tree.Search(""))
 	assert.NotNil(t, tree.Search("localhost"))
+	assert.Nil(t, tree.Search("www.google.com"))
 }
 
 func TestTrie_Wildcard(t *testing.T) {

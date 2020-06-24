@@ -98,7 +98,7 @@ func (t *DomainTrie) Search(domain string) *Node {
 
 	n := t.search(t.root, parts)
 
-	if n.Data == nil {
+	if n == nil || n.Data == nil {
 		return nil
 	}
 
