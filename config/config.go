@@ -27,9 +27,10 @@ import (
 type General struct {
 	Inbound
 	Controller
-	Mode     T.TunnelMode `json:"mode"`
-	LogLevel log.LogLevel `json:"log-level"`
-	IPv6     bool         `json:"ipv6"`
+	Mode      T.TunnelMode `json:"mode"`
+	LogLevel  log.LogLevel `json:"log-level"`
+	IPv6      bool         `json:"ipv6"`
+	Interface string       `json:"interface-name"`
 }
 
 // Inbound
@@ -70,10 +71,7 @@ type FallbackFilter struct {
 }
 
 // Experimental config
-type Experimental struct {
-	IgnoreResolveFail bool   `yaml:"ignore-resolve-fail"`
-	Interface         string `yaml:"interface-name"`
-}
+type Experimental struct{}
 
 // Config is clash config manager
 type Config struct {
@@ -119,6 +117,7 @@ type RawConfig struct {
 	ExternalController string       `yaml:"external-controller"`
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
+	Interface          string       `yaml:"interface-name"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	Hosts         map[string]string                 `yaml:"hosts"`
@@ -157,9 +156,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Rule:           []string{},
 		Proxy:          []map[string]interface{}{},
 		ProxyGroup:     []map[string]interface{}{},
-		Experimental: Experimental{
-			IgnoreResolveFail: true,
-		},
 		DNS: RawDNS{
 			Enable:      false,
 			FakeIPRange: "198.18.0.1/16",
@@ -253,9 +249,10 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ExternalUI:         cfg.ExternalUI,
 			Secret:             cfg.Secret,
 		},
-		Mode:     cfg.Mode,
-		LogLevel: cfg.LogLevel,
-		IPv6:     cfg.IPv6,
+		Mode:      cfg.Mode,
+		LogLevel:  cfg.LogLevel,
+		IPv6:      cfg.IPv6,
+		Interface: cfg.Interface,
 	}, nil
 }
 

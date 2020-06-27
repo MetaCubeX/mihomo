@@ -118,18 +118,7 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateExperimental(c *config.Config) {
-	cfg := c.Experimental
-
-	tunnel.UpdateExperimental(cfg.IgnoreResolveFail)
-	if cfg.Interface != "" && c.DNS.Enable {
-		dialer.DialHook = dialer.DialerWithInterface(cfg.Interface)
-		dialer.ListenPacketHook = dialer.ListenPacketWithInterface(cfg.Interface)
-	} else {
-		dialer.DialHook = nil
-		dialer.ListenPacketHook = nil
-	}
-}
+func updateExperimental(c *config.Config) {}
 
 func updateDNS(c *config.DNS) {
 	if c.Enable == false {
@@ -178,6 +167,14 @@ func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
+
+	if cfg.Interface != "" {
+		dialer.DialHook = dialer.DialerWithInterface(cfg.Interface)
+		dialer.ListenPacketHook = dialer.ListenPacketWithInterface(cfg.Interface)
+	} else {
+		dialer.DialHook = nil
+		dialer.ListenPacketHook = nil
+	}
 
 	if !force {
 		return

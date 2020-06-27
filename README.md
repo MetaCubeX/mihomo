@@ -37,7 +37,7 @@ $ go get -u -v github.com/Dreamacro/clash
 ```
 
 Pre-built binaries are available here: [release](https://github.com/Dreamacro/clash/releases)  
-Pre-built Premium binaries are available here: [Premium release](https://github.com/Dreamacro/clash/releases/tag/premium). Source is not currently available.
+Pre-built Premium binaries are available here: [premium release](https://github.com/Dreamacro/clash/releases/tag/premium). Source is not currently available.
 
 Check Clash version with:
 
@@ -47,7 +47,7 @@ $ clash -v
 
 ## Daemonize Clash
 
-Unfortunately, there is no native or elegant way to implement daemons on Golang. We recommend using third-party daemon management tools like PM2, Supervisor or the like to keep Clash running as a service.
+We recommend using third-party daemon management tools like PM2, Supervisor or the like to keep Clash running as a service. ([Wiki](https://github.com/Dreamacro/clash/wiki/Clash-as-a-daemon))
 
 In the case of [pm2](https://github.com/Unitech/pm2), start the daemon this way:
 
@@ -114,10 +114,7 @@ external-controller: 127.0.0.1:9090
 # Secret for RESTful API (Optional)
 # secret: ""
 
-# experimental feature
-experimental:
-  ignore-resolve-fail: true # ignore dns resolve fail, default value is true
-  # interface-name: en0 # outbound interface name
+# interface-name: en0 # outbound interface name
 
 # authentication of local SOCKS5/HTTP(S) server
 # authentication:
