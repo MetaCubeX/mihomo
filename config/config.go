@@ -126,12 +126,6 @@ type RawConfig struct {
 	Proxy         []map[string]interface{}          `yaml:"proxies"`
 	ProxyGroup    []map[string]interface{}          `yaml:"proxy-groups"`
 	Rule          []string                          `yaml:"rules"`
-
-	// remove after 1.0
-	ProxyProviderOld map[string]map[string]interface{} `yaml:"proxy-provider"`
-	ProxyOld         []map[string]interface{}          `yaml:"Proxy"`
-	ProxyGroupOld    []map[string]interface{}          `yaml:"Proxy Group"`
-	RuleOld          []string                          `yaml:"Rule"`
 }
 
 // Parse config
@@ -168,11 +162,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"8.8.8.8",
 			},
 		},
-
-		// remove after 1.0
-		RuleOld:       []string{},
-		ProxyOld:      []map[string]interface{}{},
-		ProxyGroupOld: []map[string]interface{}{},
 	}
 
 	if err := yaml.Unmarshal(buf, &rawCfg); err != nil {
@@ -263,18 +252,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
-
-	if len(proxiesConfig) == 0 {
-		proxiesConfig = cfg.ProxyOld
-	}
-
-	if len(groupsConfig) == 0 {
-		groupsConfig = cfg.ProxyGroupOld
-	}
-
-	if len(providersConfig) == 0 {
-		providersConfig = cfg.ProxyProviderOld
-	}
 
 	proxies["DIRECT"] = outbound.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = outbound.NewProxy(outbound.NewReject())
@@ -371,13 +348,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 	rules := []C.Rule{}
-
 	rulesConfig := cfg.Rule
-
-	// remove after 1.0
-	if len(rulesConfig) == 0 {
-		rulesConfig = cfg.RuleOld
-	}
 
 	// parse rules
 	for idx, line := range rulesConfig {
