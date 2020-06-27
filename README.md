@@ -169,7 +169,6 @@ proxies:
     password: "password"
     # udp: true
 
-  # old obfs configuration format remove after prerelease
   - name: "ss2"
     type: ss
     server: server
@@ -368,8 +367,6 @@ rules:
   - GEOIP,CN,DIRECT
   - DST-PORT,80,DIRECT
   - SRC-PORT,7777,DIRECT
-  # FINAL would remove after prerelease
-  # you also can use `FINAL,Proxy` or `FINAL,,Proxy` now
   - MATCH,auto
 ```
 </details>

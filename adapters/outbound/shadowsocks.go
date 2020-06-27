@@ -37,10 +37,6 @@ type ShadowSocksOption struct {
 	UDP        bool                   `proxy:"udp,omitempty"`
 	Plugin     string                 `proxy:"plugin,omitempty"`
 	PluginOpts map[string]interface{} `proxy:"plugin-opts,omitempty"`
-
-	// deprecated when bump to 1.0
-	Obfs     string `proxy:"obfs,omitempty"`
-	ObfsHost string `proxy:"obfs-host,omitempty"`
 }
 
 type simpleObfsOption struct {
@@ -121,17 +117,6 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	var v2rayOption *v2rayObfs.Option
 	var obfsOption *simpleObfsOption
 	obfsMode := ""
-
-	// forward compatibility before 1.0
-	if option.Obfs != "" {
-		obfsMode = option.Obfs
-		obfsOption = &simpleObfsOption{
-			Host: "bing.com",
-		}
-		if option.ObfsHost != "" {
-			obfsOption.Host = option.ObfsHost
-		}
-	}
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
 	if option.Plugin == "obfs" {
