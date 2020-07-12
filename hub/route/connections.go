@@ -63,6 +63,7 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tick := time.NewTicker(time.Millisecond * time.Duration(interval))
+	defer tick.Stop()
 	for range tick.C {
 		if err := sendSnapshot(); err != nil {
 			break
