@@ -115,11 +115,16 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
 	q := m.Question[0]
 
-	defer func() {
-		if msg == nil {
-			return
+	ret, err, shared := r.group.Do(q.String(), func() (interface{}, error) {
+		isIPReq := isIPRequest(q)
+		if isIPReq {
+			return r.fallbackExchange(m)
 		}
 
+		msg, err := r.batchExchange(r.main, m)
+		if err != nil {
+			return nil, err
+		}
 		putMsgToCache(r.lruCache, q.String(), msg)
 		if r.mapping || r.fakeip {
 			ips := r.msgToIP(msg)
@@ -127,15 +132,7 @@ func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
 				putMsgToCache(r.lruCache, ip.String(), msg)
 			}
 		}
-	}()
-
-	ret, err, shared := r.group.Do(q.String(), func() (interface{}, error) {
-		isIPReq := isIPRequest(q)
-		if isIPReq {
-			return r.fallbackExchange(m)
-		}
-
-		return r.batchExchange(r.main, m)
+		return msg, nil
 	})
 
 	if err == nil {
