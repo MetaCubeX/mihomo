@@ -218,7 +218,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 			switch true {
 			case rule != nil:
-				log.Infoln("[UDP] %s --> %v match %s using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), rawPc.Chains().String())
+				log.Infoln("[UDP] %s --> %v match %s(%s) using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
 			case mode == Global:
 				log.Infoln("[UDP] %s --> %v using GLOBAL", metadata.SourceAddress(), metadata.String())
 			case mode == Direct:
@@ -271,7 +271,7 @@ func handleTCPConn(localConn C.ServerAdapter) {
 
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s --> %v match %s using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s --> %v match %s(%s) using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
 	case mode == Global:
 		log.Infoln("[TCP] %s --> %v using GLOBAL", metadata.SourceAddress(), metadata.String())
 	case mode == Direct:
