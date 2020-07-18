@@ -2,6 +2,7 @@ package singledo
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 func TestBasic(t *testing.T) {
 	single := NewSingle(time.Millisecond * 30)
 	foo := 0
-	shardCount := 0
+	var shardCount int32 = 0
 	call := func() (interface{}, error) {
 		foo++
 		time.Sleep(time.Millisecond * 5)
@@ -25,7 +26,7 @@ func TestBasic(t *testing.T) {
 		go func() {
 			_, _, shard := single.Do(call)
 			if shard {
-				shardCount++
+				atomic.AddInt32(&shardCount, 1)
 			}
 			wg.Done()
 		}()
@@ -33,7 +34,7 @@ func TestBasic(t *testing.T) {
 
 	wg.Wait()
 	assert.Equal(t, 1, foo)
-	assert.Equal(t, 4, shardCount)
+	assert.Equal(t, int32(4), shardCount)
 }
 
 func TestTimer(t *testing.T) {
