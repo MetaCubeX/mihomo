@@ -74,8 +74,10 @@ func (f *fetcher) Initial() (interface{}, error) {
 		}
 	}
 
-	if err := safeWrite(f.vehicle.Path(), buf); err != nil {
-		return nil, err
+	if f.vehicle.Type() != File {
+		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
+			return nil, err
+		}
 	}
 
 	f.hash = md5.Sum(buf)
