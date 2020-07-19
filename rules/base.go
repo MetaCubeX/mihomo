@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	errPayload = errors.New("payload error")
-	errParams  = errors.New("params error")
+	errPayload            = errors.New("payload error")
+	errParams             = errors.New("params error")
+	ErrPlatformNotSupport = errors.New("not support on this platform")
 
 	noResolve = "no-resolve"
 )
