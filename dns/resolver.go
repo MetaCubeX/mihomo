@@ -115,24 +115,29 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
 	q := m.Question[0]
 
-	ret, err, shared := r.group.Do(q.String(), func() (interface{}, error) {
+	ret, err, shared := r.group.Do(q.String(), func() (result interface{}, err error) {
+		defer func() {
+			if err != nil {
+				return
+			}
+
+			msg := result.(*D.Msg)
+
+			putMsgToCache(r.lruCache, q.String(), msg)
+			if r.mapping || r.fakeip {
+				ips := r.msgToIP(msg)
+				for _, ip := range ips {
+					putMsgToCache(r.lruCache, ip.String(), msg)
+				}
+			}
+		}()
+
 		isIPReq := isIPRequest(q)
 		if isIPReq {
 			return r.fallbackExchange(m)
 		}
 
-		msg, err := r.batchExchange(r.main, m)
-		if err != nil {
-			return nil, err
-		}
-		putMsgToCache(r.lruCache, q.String(), msg)
-		if r.mapping || r.fakeip {
-			ips := r.msgToIP(msg)
-			for _, ip := range ips {
-				putMsgToCache(r.lruCache, ip.String(), msg)
-			}
-		}
-		return msg, nil
+		return r.batchExchange(r.main, m)
 	})
 
 	if err == nil {
