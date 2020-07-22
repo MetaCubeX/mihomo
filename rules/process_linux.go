@@ -36,7 +36,7 @@ type ProcessNameResolver func(inode, uid int) (name string, err error)
 // export for android
 var (
 	DefaultSocketResolver      SocketResolver      = resolveSocketByNetlink
-	DefaultProcessNameResolver ProcessNameResolver = resolveProcessNameByProcSeach
+	DefaultProcessNameResolver ProcessNameResolver = resolveProcessNameByProcSearch
 )
 
 type Process struct {
@@ -225,7 +225,7 @@ func unpackSocketDiagResponse(msg *syscall.NetlinkMessage) (inode, uid uint32) {
 	return
 }
 
-func resolveProcessNameByProcSeach(inode, _ int) (string, error) {
+func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 	files, err := ioutil.ReadDir(pathProc)
 	if err != nil {
 		return "", err
@@ -235,7 +235,11 @@ func resolveProcessNameByProcSeach(inode, _ int) (string, error) {
 	socket := []byte(fmt.Sprintf("socket:[%d]", inode))
 
 	for _, f := range files {
-		if !isPid(f.Name()) {
+		if !f.IsDir() || !isPid(f.Name()) {
+			continue
+		}
+
+		if f.Sys().(*syscall.Stat_t).Uid != uint32(uid) {
 			continue
 		}
 
