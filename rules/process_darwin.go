@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"path/filepath"
 	"strconv"
@@ -11,9 +12,13 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/Dreamacro/clash/common/cache"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
+
+// store process name for when dealing with multiple PROCESS-NAME rules
+var processCache = cache.NewLRUCache(cache.WithAge(2), cache.WithSize(64))
 
 type Process struct {
 	adapter string
@@ -25,13 +30,19 @@ func (ps *Process) RuleType() C.RuleType {
 }
 
 func (ps *Process) Match(metadata *C.Metadata) bool {
-	name, err := getExecPathFromAddress(metadata.SrcIP, metadata.SrcPort, metadata.NetWork == C.TCP)
-	if err != nil {
-		log.Debugln("[%s] getExecPathFromAddress error: %s", C.Process.String(), err.Error())
-		return false
+	key := fmt.Sprintf("%s:%s:%s", metadata.NetWork.String(), metadata.SrcIP.String(), metadata.SrcPort)
+	cached, hit := processCache.Get(key)
+	if !hit {
+		name, err := getExecPathFromAddress(metadata.SrcIP, metadata.SrcPort, metadata.NetWork == C.TCP)
+		if err != nil {
+			log.Debugln("[%s] getExecPathFromAddress error: %s", C.Process.String(), err.Error())
+			return false
+		}
+
+		cached = name
 	}
 
-	return strings.ToLower(name) == ps.process
+	return strings.EqualFold(cached.(string), ps.process)
 }
 
 func (p *Process) Adapter() string {
