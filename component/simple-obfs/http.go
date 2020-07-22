@@ -28,6 +28,7 @@ func (ho *HTTPObfs) Read(b []byte) (int, error) {
 		n := copy(b, ho.buf[ho.offset:])
 		ho.offset += n
 		if ho.offset == len(ho.buf) {
+			pool.Put(ho.buf)
 			ho.buf = nil
 		}
 		return n, nil
