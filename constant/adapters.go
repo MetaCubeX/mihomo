@@ -13,6 +13,7 @@ const (
 	Reject
 
 	Shadowsocks
+	ShadowsocksR
 	Snell
 	Socks5
 	Http
@@ -100,6 +101,8 @@ func (at AdapterType) String() string {
 
 	case Shadowsocks:
 		return "Shadowsocks"
+	case ShadowsocksR:
+		return "ShadowsocksR"
 	case Snell:
 		return "Snell"
 	case Socks5:
