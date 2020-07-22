@@ -1,4 +1,4 @@
-// +build !darwin
+// +build !darwin,!linux
 
 package rules
 
