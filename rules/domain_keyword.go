@@ -31,8 +31,8 @@ func (dk *DomainKeyword) Payload() string {
 	return dk.keyword
 }
 
-func (dk *DomainKeyword) NoResolveIP() bool {
-	return true
+func (dk *DomainKeyword) ShouldResolveIP() bool {
+	return false
 }
 
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {

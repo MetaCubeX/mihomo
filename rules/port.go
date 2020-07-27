@@ -34,8 +34,8 @@ func (p *Port) Payload() string {
 	return p.port
 }
 
-func (p *Port) NoResolveIP() bool {
-	return true
+func (p *Port) ShouldResolveIP() bool {
+	return false
 }
 
 func NewPort(port string, adapter string, isSource bool) (*Port, error) {

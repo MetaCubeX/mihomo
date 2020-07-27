@@ -48,5 +48,5 @@ type Rule interface {
 	Match(metadata *Metadata) bool
 	Adapter() string
 	Payload() string
-	NoResolveIP() bool
+	ShouldResolveIP() bool
 }

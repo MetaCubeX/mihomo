@@ -32,8 +32,8 @@ func (g *GEOIP) Payload() string {
 	return g.country
 }
 
-func (g *GEOIP) NoResolveIP() bool {
-	return g.noResolveIP
+func (g *GEOIP) ShouldResolveIP() bool {
+	return !g.noResolveIP
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool) *GEOIP {
