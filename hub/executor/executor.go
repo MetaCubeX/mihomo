@@ -113,6 +113,7 @@ func updateDNS(c *config.DNS) {
 		IPv6:         c.IPv6,
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
+		Hosts:        c.Hosts,
 		FallbackFilter: dns.FallbackFilter{
 			GeoIP:  c.FallbackFilter.GeoIP,
 			IPCIDR: c.FallbackFilter.IPCIDR,
