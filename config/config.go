@@ -62,6 +62,7 @@ type DNS struct {
 	EnhancedMode      dns.EnhancedMode `yaml:"enhanced-mode"`
 	DefaultNameserver []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange       *fakeip.Pool
+	Hosts             *trie.DomainTrie
 }
 
 // FallbackFilter config
@@ -88,6 +89,7 @@ type Config struct {
 type RawDNS struct {
 	Enable            bool              `yaml:"enable"`
 	IPv6              bool              `yaml:"ipv6"`
+	UseHosts          bool              `yaml:"use-hosts"`
 	NameServer        []string          `yaml:"nameserver"`
 	Fallback          []string          `yaml:"fallback"`
 	FallbackFilter    RawFallbackFilter `yaml:"fallback-filter"`
@@ -152,6 +154,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:     []map[string]interface{}{},
 		DNS: RawDNS{
 			Enable:      false,
+			UseHosts:    true,
 			FakeIPRange: "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:  true,
@@ -195,17 +198,17 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Rules = rules
 
-	dnsCfg, err := parseDNS(rawCfg.DNS)
-	if err != nil {
-		return nil, err
-	}
-	config.DNS = dnsCfg
-
 	hosts, err := parseHosts(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.Hosts = hosts
+
+	dnsCfg, err := parseDNS(rawCfg.DNS, hosts)
+	if err != nil {
+		return nil, err
+	}
+	config.DNS = dnsCfg
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
@@ -494,7 +497,7 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	return ipNets, nil
 }
 
-func parseDNS(cfg RawDNS) (*DNS, error) {
+func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("If DNS configuration is turned on, NameServer cannot be empty")
 	}
@@ -557,6 +560,10 @@ func parseDNS(cfg RawDNS) (*DNS, error) {
 	dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
 	if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
 		dnsCfg.FallbackFilter.IPCIDR = fallbackip
+	}
+
+	if cfg.UseHosts {
+		dnsCfg.Hosts = hosts
 	}
 
 	return dnsCfg, nil

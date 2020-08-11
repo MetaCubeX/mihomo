@@ -14,6 +14,7 @@ import (
 	"github.com/Dreamacro/clash/common/picker"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/Dreamacro/clash/component/trie"
 
 	D "github.com/miekg/dns"
 	"golang.org/x/sync/singleflight"
@@ -37,6 +38,7 @@ type Resolver struct {
 	ipv6            bool
 	mapping         bool
 	fakeip          bool
+	hosts           *trie.DomainTrie
 	pool            *fakeip.Pool
 	main            []dnsClient
 	fallback        []dnsClient
@@ -308,6 +310,7 @@ type Config struct {
 	EnhancedMode   EnhancedMode
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
+	Hosts          *trie.DomainTrie
 }
 
 func New(config Config) *Resolver {
@@ -323,6 +326,7 @@ func New(config Config) *Resolver {
 		mapping:  config.EnhancedMode == MAPPING,
 		fakeip:   config.EnhancedMode == FAKEIP,
 		pool:     config.Pool,
+		hosts:    config.Hosts,
 	}
 
 	if len(config.Fallback) != 0 {
