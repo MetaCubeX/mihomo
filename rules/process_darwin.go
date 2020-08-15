@@ -36,7 +36,6 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 		name, err := getExecPathFromAddress(metadata)
 		if err != nil {
 			log.Debugln("[%s] getExecPathFromAddress error: %s", C.Process.String(), err.Error())
-			return false
 		}
 
 		processCache.Set(key, name)
