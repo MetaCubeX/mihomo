@@ -257,7 +257,7 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 				continue
 			}
 
-			if bytes.Compare(buffer[:n], socket) == 0 {
+			if bytes.Equal(buffer[:n], socket) {
 				cmdline, err := ioutil.ReadFile(path.Join(processPath, "cmdline"))
 				if err != nil {
 					return "", err
