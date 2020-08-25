@@ -1,12 +1,10 @@
 package vmess
 
 import (
-	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
 	"runtime"
-	"sync"
 
 	"github.com/gofrs/uuid"
 )
@@ -36,11 +34,6 @@ var CipherMapping = map[string]byte{
 	"aes-128-gcm":       SecurityAES128GCM,
 	"chacha20-poly1305": SecurityCHACHA20POLY1305,
 }
-
-var (
-	clientSessionCache tls.ClientSessionCache
-	once               sync.Once
-)
 
 // Command types
 const (
@@ -106,7 +99,7 @@ func NewClient(config Config) (*Client, error) {
 			security = SecurityAES128GCM
 		}
 	default:
-		return nil, fmt.Errorf("Unknown security type: %s", config.Security)
+		return nil, fmt.Errorf("unknown security type: %s", config.Security)
 	}
 
 	return &Client{

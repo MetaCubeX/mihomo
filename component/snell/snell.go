@@ -46,7 +46,7 @@ func (s *Snell) Read(b []byte) (int, error) {
 	if s.buffer[0] == CommandTunnel {
 		return s.Conn.Read(b)
 	} else if s.buffer[0] != CommandError {
-		return 0, errors.New("Command not support")
+		return 0, errors.New("command not support")
 	}
 
 	// CommandError

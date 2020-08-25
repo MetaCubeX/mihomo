@@ -282,7 +282,6 @@ func (a *authChain) packData(outData []byte, data []byte, randLength int) {
 	binary.LittleEndian.PutUint32(key[userKeyLen:], a.chunkID)
 	a.lastClientHash = a.hmac(key, outData[:outLength])
 	copy(outData[outLength:], a.lastClientHash[:2])
-	return
 }
 
 const authHeadLength = 4 + 8 + 4 + 16 + 4

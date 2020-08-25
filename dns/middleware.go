@@ -55,7 +55,6 @@ func withHosts(hosts *trie.DomainTrie) middleware {
 			msg.RecursionAvailable = true
 
 			w.WriteMsg(msg)
-			return
 		}
 	}
 }
@@ -99,7 +98,6 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 			msg.RecursionAvailable = true
 
 			w.WriteMsg(msg)
-			return
 		}
 	}
 }
@@ -130,7 +128,6 @@ func withResolver(resolver *Resolver) handler {
 		msg.SetRcode(r, msg.Rcode)
 		msg.Authoritative = true
 		w.WriteMsg(msg)
-		return
 	}
 }
 

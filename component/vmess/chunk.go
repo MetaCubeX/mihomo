@@ -47,7 +47,7 @@ func (cr *chunkReader) Read(b []byte) (int, error) {
 
 	size := int(binary.BigEndian.Uint16(cr.sizeBuf))
 	if size > maxSize {
-		return 0, errors.New("Buffer is larger than standard")
+		return 0, errors.New("buffer is larger than standard")
 	}
 
 	if len(b) >= size {
