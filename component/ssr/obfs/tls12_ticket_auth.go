@@ -287,5 +287,4 @@ func packData(buffer *bytes.Buffer, suffix []byte) {
 	binary.BigEndian.PutUint16(d[3:5], uint16(len(suffix)&0xFFFF))
 	buffer.Write(d)
 	buffer.Write(suffix)
-	return
 }

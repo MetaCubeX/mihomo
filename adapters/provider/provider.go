@@ -120,20 +120,20 @@ func proxiesParse(buf []byte) (interface{}, error) {
 	}
 
 	if schema.Proxies == nil {
-		return nil, errors.New("File must have a `proxies` field")
+		return nil, errors.New("file must have a `proxies` field")
 	}
 
 	proxies := []C.Proxy{}
 	for idx, mapping := range schema.Proxies {
 		proxy, err := outbound.ParseProxy(mapping)
 		if err != nil {
-			return nil, fmt.Errorf("Proxy %d error: %w", idx, err)
+			return nil, fmt.Errorf("proxy %d error: %w", idx, err)
 		}
 		proxies = append(proxies, proxy)
 	}
 
 	if len(proxies) == 0 {
-		return nil, errors.New("File doesn't have any valid proxy")
+		return nil, errors.New("file doesn't have any valid proxy")
 	}
 
 	return proxies, nil

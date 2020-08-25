@@ -22,7 +22,7 @@ type Relay struct {
 func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	proxies := r.proxies(metadata)
 	if len(proxies) == 0 {
-		return nil, errors.New("Proxy does not exist")
+		return nil, errors.New("proxy does not exist")
 	}
 	first := proxies[0]
 	last := proxies[len(proxies)-1]

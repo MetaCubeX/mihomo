@@ -86,7 +86,7 @@ func (r *aeadReader) Read(b []byte) (int, error) {
 
 	size := int(binary.BigEndian.Uint16(r.sizeBuf))
 	if size > maxSize {
-		return 0, errors.New("Buffer is larger than standard")
+		return 0, errors.New("buffer is larger than standard")
 	}
 
 	buf := pool.Get(size)

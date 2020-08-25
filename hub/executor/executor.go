@@ -34,7 +34,7 @@ func readConfig(path string) ([]byte, error) {
 	}
 
 	if len(data) == 0 {
-		return nil, fmt.Errorf("Configuration file %s is empty", path)
+		return nil, fmt.Errorf("configuration file %s is empty", path)
 	}
 
 	return data, err
@@ -101,7 +101,7 @@ func GetGeneral() *config.General {
 func updateExperimental(c *config.Config) {}
 
 func updateDNS(c *config.DNS) {
-	if c.Enable == false {
+	if !c.Enable {
 		resolver.DefaultResolver = nil
 		tunnel.SetResolver(nil)
 		dns.ReCreateServer("", nil)

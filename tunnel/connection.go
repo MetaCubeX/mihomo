@@ -121,7 +121,7 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr n
 			from = fAddr
 		}
 
-		n, err = packet.WriteBack(buf[:n], from)
+		_, err = packet.WriteBack(buf[:n], from)
 		if err != nil {
 			return
 		}

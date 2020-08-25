@@ -73,7 +73,7 @@ func (wsc *websocketConn) Close() error {
 		errors = append(errors, err.Error())
 	}
 	if len(errors) > 0 {
-		return fmt.Errorf("Failed to close connection: %s", strings.Join(errors, ","))
+		return fmt.Errorf("failed to close connection: %s", strings.Join(errors, ","))
 	}
 	return nil
 }
@@ -159,7 +159,7 @@ func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 		if resp != nil {
 			reason = resp.Status
 		}
-		return nil, fmt.Errorf("Dial %s error: %s", uri.Host, reason)
+		return nil, fmt.Errorf("dial %s error: %s", uri.Host, reason)
 	}
 
 	return &websocketConn{

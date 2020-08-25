@@ -55,6 +55,8 @@ func (alloc *Allocator) Put(buf []byte) error {
 	if cap(buf) == 0 || cap(buf) > 65536 || cap(buf) != 1<<bits {
 		return errors.New("allocator Put() incorrect buffer size")
 	}
+
+	//lint:ignore SA6002 ignore temporarily
 	alloc.buffers[bits].Put(buf)
 	return nil
 }

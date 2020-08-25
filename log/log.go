@@ -64,7 +64,6 @@ func Subscribe() observable.Subscription {
 
 func UnSubscribe(sub observable.Subscription) {
 	source.UnSubscribe(sub)
-	return
 }
 
 func Level() LogLevel {

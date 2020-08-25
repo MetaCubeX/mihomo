@@ -11,11 +11,13 @@ func ParseProxy(mapping map[string]interface{}) (C.Proxy, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
-		return nil, fmt.Errorf("Missing type")
+		return nil, fmt.Errorf("missing type")
 	}
 
-	var proxy C.ProxyAdapter
-	err := fmt.Errorf("Cannot parse")
+	var (
+		proxy C.ProxyAdapter
+		err   error
+	)
 	switch proxyType {
 	case "ss":
 		ssOption := &ShadowSocksOption{}
@@ -72,7 +74,7 @@ func ParseProxy(mapping map[string]interface{}) (C.Proxy, error) {
 		}
 		proxy, err = NewTrojan(*trojanOption)
 	default:
-		return nil, fmt.Errorf("Unsupport proxy type: %s", proxyType)
+		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
 
 	if err != nil {

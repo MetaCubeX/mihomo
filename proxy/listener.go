@@ -30,13 +30,7 @@ var (
 	httpMux  sync.Mutex
 	redirMux sync.Mutex
 	mixedMux sync.Mutex
-	tunMux   sync.Mutex
 )
-
-type listener interface {
-	Close()
-	Address() string
-}
 
 type Ports struct {
 	Port      int `json:"port"`

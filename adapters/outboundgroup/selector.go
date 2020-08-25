@@ -64,7 +64,7 @@ func (s *Selector) Set(name string) error {
 		}
 	}
 
-	return errors.New("Proxy does not exist")
+	return errors.New("proxy not exist")
 }
 
 func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {

@@ -15,15 +15,6 @@ func trimArr(arr []string) (r []string) {
 	return
 }
 
-func or(pointers ...*int) *int {
-	for _, p := range pointers {
-		if p != nil {
-			return p
-		}
-	}
-	return pointers[len(pointers)-1]
-}
-
 // Check if ProxyGroups form DAG(Directed Acyclic Graph), and sort all ProxyGroups by dependency order.
 // Meanwhile, record the original index in the config file.
 // If loop is detected, return an error with location of loop.
@@ -153,5 +144,5 @@ func proxyGroupsDagSort(groupsConfig []map[string]interface{}) error {
 		loopElements = append(loopElements, name)
 		delete(graph, name)
 	}
-	return fmt.Errorf("Loop is detected in ProxyGroup, please check following ProxyGroups: %v", loopElements)
+	return fmt.Errorf("loop is detected in ProxyGroup, please check following ProxyGroups: %v", loopElements)
 }

@@ -12,7 +12,6 @@ import (
 var (
 	errFormat            = errors.New("format error")
 	errType              = errors.New("unsupport type")
-	errMissUse           = errors.New("`use` field should not be empty")
 	errMissProxy         = errors.New("`use` or `proxies` missing")
 	errMissHealthCheck   = errors.New("`url` or `interval` missing")
 	errDuplicateProvider = errors.New("`duplicate provider name")
@@ -63,6 +62,10 @@ func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy,
 
 			providers = append(providers, pd)
 		} else {
+			if _, ok := providersMap[groupName]; ok {
+				return nil, errDuplicateProvider
+			}
+
 			// select don't need health check
 			if groupOption.Type == "select" || groupOption.Type == "relay" {
 				hc := provider.NewHealthCheck(ps, "", 0)

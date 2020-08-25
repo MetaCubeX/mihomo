@@ -24,6 +24,8 @@ type Result struct {
 	Err error
 }
 
+// Do single.Do likes sync.singleFilght
+//lint:ignore ST1008 it likes sync.singleFilght
 func (s *Single) Do(fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
 	s.mux.Lock()
 	now := time.Now()
