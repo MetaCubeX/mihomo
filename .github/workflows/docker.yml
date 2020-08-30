@@ -19,10 +19,9 @@ jobs:
 
       - name: Set up docker buildx
         id: buildx
-        uses: crazy-max/ghaction-docker-buildx@v2
+        uses: crazy-max/ghaction-docker-buildx@v3
         with:
           buildx-version: latest
-          skip-cache: false
           qemu-version: latest
 
       - name: Docker login
@@ -39,7 +38,7 @@ jobs:
 
       - name: Replace tag without `v`
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/github-script@v1
+        uses: actions/github-script@v3
         id: version
         with:
           script: |
