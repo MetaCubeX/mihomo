@@ -186,6 +186,11 @@ func (r *Resolver) IsFakeIP(ip net.IP) bool {
 	return false
 }
 
+// PatchCache overwrite lruCache to the new resolver
+func (r *Resolver) PatchCache(n *Resolver) {
+	r.lruCache.CloneTo(n.lruCache)
+}
+
 func (r *Resolver) batchExchange(clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
 	fast, ctx := picker.WithTimeout(context.Background(), time.Second*5)
 	for _, client := range clients {

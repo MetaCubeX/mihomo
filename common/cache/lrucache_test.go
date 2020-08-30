@@ -164,3 +164,21 @@ func TestStale(t *testing.T) {
 	assert.Equal(t, tenSecBefore, expires)
 	assert.Equal(t, true, exist)
 }
+
+func TestCloneTo(t *testing.T) {
+	o := NewLRUCache(WithSize(10))
+	o.Set("1", 1)
+	o.Set("2", 2)
+
+	n := NewLRUCache(WithSize(2))
+	n.Set("3", 3)
+	n.Set("4", 4)
+
+	o.CloneTo(n)
+
+	assert.False(t, n.Exist("3"))
+	assert.True(t, n.Exist("1"))
+
+	n.Set("5", 5)
+	assert.False(t, n.Exist("1"))
+}
