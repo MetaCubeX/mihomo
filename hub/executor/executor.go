@@ -120,6 +120,14 @@ func updateDNS(c *config.DNS) {
 		},
 		Default: c.DefaultNameserver,
 	})
+
+	// reuse cache of old resolver
+	if resolver.DefaultResolver != nil {
+		if o, ok := resolver.DefaultResolver.(*dns.Resolver); ok {
+			o.PatchCache(r)
+		}
+	}
+
 	resolver.DefaultResolver = r
 	tunnel.SetResolver(r)
 	if err := dns.ReCreateServer(c.Listen, r); err != nil {

@@ -146,6 +146,23 @@ func (c *LruCache) SetWithExpire(key interface{}, value interface{}, expires tim
 	c.maybeDeleteOldest()
 }
 
+// CloneTo clone and overwrite elements to another LruCache
+func (c *LruCache) CloneTo(n *LruCache) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.lru = list.New()
+	n.cache = make(map[interface{}]*list.Element)
+
+	for e := c.lru.Front(); e != nil; e = e.Next() {
+		elm := e.Value.(*entry)
+		n.cache[elm.key] = n.lru.PushBack(elm)
+	}
+}
+
 func (c *LruCache) get(key interface{}) *entry {
 	c.mu.Lock()
 	defer c.mu.Unlock()
