@@ -158,7 +158,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			name: option.Name,
 			addr: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:   C.Vmess,
-			udp:  true,
+			udp:  option.UDP,
 		},
 		client: client,
 		option: &option,
