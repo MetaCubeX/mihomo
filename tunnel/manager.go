@@ -10,7 +10,8 @@ var DefaultManager *Manager
 
 func init() {
 	DefaultManager = &Manager{}
-	DefaultManager.handle()
+
+	go DefaultManager.handle()
 }
 
 type Manager struct {
@@ -69,18 +70,13 @@ func (m *Manager) ResetStatistic() {
 }
 
 func (m *Manager) handle() {
-	go m.handleCh(&m.uploadTemp, &m.uploadBlip)
-	go m.handleCh(&m.downloadTemp, &m.downloadBlip)
-}
-
-func (m *Manager) handleCh(temp *int64, blip *int64) {
 	ticker := time.NewTicker(time.Second)
 
-	for {
-		<-ticker.C
-
-		atomic.StoreInt64(blip, atomic.LoadInt64(temp))
-		atomic.StoreInt64(temp, 0)
+	for range ticker.C {
+		atomic.StoreInt64(&m.uploadBlip, atomic.LoadInt64(&m.uploadTemp))
+		atomic.StoreInt64(&m.uploadTemp, 0)
+		atomic.StoreInt64(&m.downloadBlip, atomic.LoadInt64(&m.downloadTemp))
+		atomic.StoreInt64(&m.downloadTemp, 0)
 	}
 }
 
