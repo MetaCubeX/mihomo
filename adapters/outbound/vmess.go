@@ -71,6 +71,25 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
+		// readability first, so just copy default TLS logic
+		if v.option.TLS {
+			host, _, _ := net.SplitHostPort(v.addr)
+			tlsOpts := &vmess.TLSConfig{
+				Host:           host,
+				SkipCertVerify: v.option.SkipCertVerify,
+				SessionCache:   getClientSessionCache(),
+			}
+
+			if v.option.ServerName != "" {
+				tlsOpts.Host = v.option.ServerName
+			}
+
+			c, err = vmess.StreamTLSConn(c, tlsOpts)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		host, _, _ := net.SplitHostPort(v.addr)
 		httpOpts := &vmess.HTTPConfig{
 			Host:    host,
