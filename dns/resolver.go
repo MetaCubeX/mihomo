@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -36,10 +35,7 @@ type result struct {
 
 type Resolver struct {
 	ipv6            bool
-	mapping         bool
-	fakeip          bool
 	hosts           *trie.DomainTrie
-	pool            *fakeip.Pool
 	main            []dnsClient
 	fallback        []dnsClient
 	fallbackFilters []fallbackFilter
@@ -126,12 +122,6 @@ func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
 			msg := result.(*D.Msg)
 
 			putMsgToCache(r.lruCache, q.String(), msg)
-			if r.mapping || r.fakeip {
-				ips := r.msgToIP(msg)
-				for _, ip := range ips {
-					putMsgToCache(r.lruCache, ip.String(), msg)
-				}
-			}
 		}()
 
 		isIPReq := isIPRequest(q)
@@ -150,45 +140,6 @@ func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
 	}
 
 	return
-}
-
-// IPToHost return fake-ip or redir-host mapping host
-func (r *Resolver) IPToHost(ip net.IP) (string, bool) {
-	if r.fakeip {
-		record, existed := r.pool.LookBack(ip)
-		if existed {
-			return record, true
-		}
-	}
-
-	cache, _ := r.lruCache.Get(ip.String())
-	if cache == nil {
-		return "", false
-	}
-	fqdn := cache.(*D.Msg).Question[0].Name
-	return strings.TrimRight(fqdn, "."), true
-}
-
-func (r *Resolver) IsMapping() bool {
-	return r.mapping
-}
-
-// FakeIPEnabled returns if fake-ip is enabled
-func (r *Resolver) FakeIPEnabled() bool {
-	return r.fakeip
-}
-
-// IsFakeIP determine if given ip is a fake-ip
-func (r *Resolver) IsFakeIP(ip net.IP) bool {
-	if r.FakeIPEnabled() {
-		return r.pool.Exist(ip)
-	}
-	return false
-}
-
-// PatchCache overwrite lruCache to the new resolver
-func (r *Resolver) PatchCache(n *Resolver) {
-	r.lruCache.CloneTo(n.lruCache)
 }
 
 func (r *Resolver) batchExchange(clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
@@ -318,7 +269,7 @@ type Config struct {
 	Hosts          *trie.DomainTrie
 }
 
-func New(config Config) *Resolver {
+func NewResolver(config Config) *Resolver {
 	defaultResolver := &Resolver{
 		main:     transform(config.Default, nil),
 		lruCache: cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true)),
@@ -328,9 +279,6 @@ func New(config Config) *Resolver {
 		ipv6:     config.IPv6,
 		main:     transform(config.Main, defaultResolver),
 		lruCache: cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true)),
-		mapping:  config.EnhancedMode == MAPPING,
-		fakeip:   config.EnhancedMode == FAKEIP,
-		pool:     config.Pool,
 		hosts:    config.Hosts,
 	}
 

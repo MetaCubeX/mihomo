@@ -89,6 +89,11 @@ func (p *Pool) Gateway() net.IP {
 	return uintToIP(p.gateway)
 }
 
+// PatchFrom clone cache from old pool
+func (p *Pool) PatchFrom(o *Pool) {
+	o.cache.CloneTo(p.cache)
+}
+
 func (p *Pool) get(host string) net.IP {
 	current := p.offset
 	for {

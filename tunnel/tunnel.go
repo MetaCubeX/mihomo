@@ -12,21 +12,19 @@ import (
 	"github.com/Dreamacro/clash/component/nat"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 
 	channels "gopkg.in/eapache/channels.v1"
 )
 
 var (
-	tcpQueue     = channels.NewInfiniteChannel()
-	udpQueue     = channels.NewInfiniteChannel()
-	natTable     = nat.New()
-	rules        []C.Rule
-	proxies      = make(map[string]C.Proxy)
-	providers    map[string]provider.ProxyProvider
-	configMux    sync.RWMutex
-	enhancedMode *dns.Resolver
+	tcpQueue  = channels.NewInfiniteChannel()
+	udpQueue  = channels.NewInfiniteChannel()
+	natTable  = nat.New()
+	rules     []C.Rule
+	proxies   = make(map[string]C.Proxy)
+	providers map[string]provider.ProxyProvider
+	configMux sync.RWMutex
 
 	// Outbound Rule
 	mode = Rule
@@ -89,11 +87,6 @@ func SetMode(m TunnelMode) {
 	mode = m
 }
 
-// SetResolver set custom dns resolver for enhanced mode
-func SetResolver(r *dns.Resolver) {
-	enhancedMode = r
-}
-
 // processUDP starts a loop to handle udp packet
 func processUDP() {
 	queue := udpQueue.Out()
@@ -120,7 +113,7 @@ func process() {
 }
 
 func needLookupIP(metadata *C.Metadata) bool {
-	return enhancedMode != nil && (enhancedMode.IsMapping() || enhancedMode.FakeIPEnabled()) && metadata.Host == "" && metadata.DstIP != nil
+	return resolver.MappingEnabled() && metadata.Host == "" && metadata.DstIP != nil
 }
 
 func preHandleMetadata(metadata *C.Metadata) error {
@@ -131,17 +124,17 @@ func preHandleMetadata(metadata *C.Metadata) error {
 
 	// preprocess enhanced-mode metadata
 	if needLookupIP(metadata) {
-		host, exist := enhancedMode.IPToHost(metadata.DstIP)
+		host, exist := resolver.FindHostByIP(metadata.DstIP)
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
-			if enhancedMode.FakeIPEnabled() {
+			if resolver.FakeIPEnabled() {
 				metadata.DstIP = nil
 			} else if node := resolver.DefaultHosts.Search(host); node != nil {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
 			}
-		} else if enhancedMode.IsFakeIP(metadata.DstIP) {
+		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}
@@ -177,7 +170,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 	// make a fAddr if requset ip is fakeip
 	var fAddr net.Addr
-	if enhancedMode != nil && enhancedMode.IsFakeIP(metadata.DstIP) {
+	if resolver.IsFakeIP(metadata.DstIP) {
 		fAddr = metadata.UDPAddr()
 	}
 
