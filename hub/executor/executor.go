@@ -103,11 +103,12 @@ func updateExperimental(c *config.Config) {}
 func updateDNS(c *config.DNS) {
 	if !c.Enable {
 		resolver.DefaultResolver = nil
-		tunnel.SetResolver(nil)
-		dns.ReCreateServer("", nil)
+		resolver.DefaultHostMapper = nil
+		dns.ReCreateServer("", nil, nil)
 		return
 	}
-	r := dns.New(dns.Config{
+
+	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
 		IPv6:         c.IPv6,
@@ -119,18 +120,20 @@ func updateDNS(c *config.DNS) {
 			IPCIDR: c.FallbackFilter.IPCIDR,
 		},
 		Default: c.DefaultNameserver,
-	})
+	}
 
-	// reuse cache of old resolver
-	if resolver.DefaultResolver != nil {
-		if o, ok := resolver.DefaultResolver.(*dns.Resolver); ok {
-			o.PatchCache(r)
-		}
+	r := dns.NewResolver(cfg)
+	m := dns.NewEnhancer(cfg)
+
+	// reuse cache of old host mapper
+	if old := resolver.DefaultHostMapper; old != nil {
+		m.PatchFrom(old.(*dns.ResolverEnhancer))
 	}
 
 	resolver.DefaultResolver = r
-	tunnel.SetResolver(r)
-	if err := dns.ReCreateServer(c.Listen, r); err != nil {
+	resolver.DefaultHostMapper = m
+
+	if err := dns.ReCreateServer(c.Listen, r, m); err != nil {
 		log.Errorln("Start DNS server error: %s", err.Error())
 		return
 	}
