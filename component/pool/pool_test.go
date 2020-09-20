@@ -84,6 +84,7 @@ func TestPool_AutoGC(t *testing.T) {
 	elm, _ := pool.Get()
 	assert.Equal(t, 0, elm.(int))
 	pool.Put(2)
+	pool = nil
 
 	runtime.GC()
 
