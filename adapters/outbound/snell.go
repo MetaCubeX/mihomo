@@ -16,7 +16,9 @@ import (
 type Snell struct {
 	*Base
 	psk        []byte
+	pool       *snell.Pool
 	obfsOption *simpleObfsOption
+	version    int
 }
 
 type SnellOption struct {
@@ -24,24 +26,47 @@ type SnellOption struct {
 	Server   string                 `proxy:"server"`
 	Port     int                    `proxy:"port"`
 	Psk      string                 `proxy:"psk"`
+	Version  int                    `proxy:"version,omitempty"`
 	ObfsOpts map[string]interface{} `proxy:"obfs-opts,omitempty"`
 }
 
-func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	switch s.obfsOption.Mode {
+type streamOption struct {
+	psk        []byte
+	version    int
+	addr       string
+	obfsOption *simpleObfsOption
+}
+
+func streamConn(c net.Conn, option streamOption) *snell.Snell {
+	switch option.obfsOption.Mode {
 	case "tls":
-		c = obfs.NewTLSObfs(c, s.obfsOption.Host)
+		c = obfs.NewTLSObfs(c, option.obfsOption.Host)
 	case "http":
-		_, port, _ := net.SplitHostPort(s.addr)
-		c = obfs.NewHTTPObfs(c, s.obfsOption.Host, port)
+		_, port, _ := net.SplitHostPort(option.addr)
+		c = obfs.NewHTTPObfs(c, option.obfsOption.Host, port)
 	}
-	c = snell.StreamConn(c, s.psk)
+	return snell.StreamConn(c, option.psk, option.version)
+}
+
+func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 	port, _ := strconv.Atoi(metadata.DstPort)
-	err := snell.WriteHeader(c, metadata.String(), uint(port))
+	err := snell.WriteHeader(c, metadata.String(), uint(port), s.version)
 	return c, err
 }
 
 func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+	if s.version == snell.Version2 {
+		c, err := s.pool.Get()
+		if err != nil {
+			return nil, err
+		}
+
+		port, _ := strconv.Atoi(metadata.DstPort)
+		err = snell.WriteHeader(c, metadata.String(), uint(port), s.version)
+		return NewConn(c, s), err
+	}
+
 	c, err := dialer.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
@@ -66,7 +91,15 @@ func NewSnell(option SnellOption) (*Snell, error) {
 		return nil, fmt.Errorf("snell %s obfs mode error: %s", addr, obfsOption.Mode)
 	}
 
-	return &Snell{
+	// backward compatible
+	if option.Version == 0 {
+		option.Version = snell.DefaultSnellVersion
+	}
+	if option.Version != snell.Version1 && option.Version != snell.Version2 {
+		return nil, fmt.Errorf("snell version error: %d", option.Version)
+	}
+
+	s := &Snell{
 		Base: &Base{
 			name: option.Name,
 			addr: addr,
@@ -74,5 +107,19 @@ func NewSnell(option SnellOption) (*Snell, error) {
 		},
 		psk:        psk,
 		obfsOption: obfsOption,
-	}, nil
+		version:    option.Version,
+	}
+
+	if option.Version == snell.Version2 {
+		s.pool = snell.NewPool(func(ctx context.Context) (*snell.Snell, error) {
+			c, err := dialer.DialContext(ctx, "tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+
+			tcpKeepAlive(c)
+			return streamConn(c, streamOption{psk, option.Version, addr, obfsOption}), nil
+		})
+	}
+	return s, nil
 }
