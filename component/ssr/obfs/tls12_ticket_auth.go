@@ -6,13 +6,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/ssr/tools"
+	"github.com/Dreamacro/clash/log"
 )
 
 type tlsAuthData struct {
@@ -63,7 +63,7 @@ func (t *tls12Ticket) Decode(b []byte) ([]byte, bool, error) {
 			var h [5]byte
 			t.recvBuffer.Read(h[:])
 			if !bytes.Equal(h[:3], []byte{0x17, 0x3, 0x3}) {
-				log.Println("incorrect magic number", h[:3], ", 0x170303 is expected")
+				log.Warnln("incorrect magic number %x, 0x170303 is expected", h[:3])
 				return nil, false, errTLS12TicketAuthIncorrectMagicNumber
 			}
 			size := int(binary.BigEndian.Uint16(h[3:5]))
