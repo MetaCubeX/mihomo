@@ -121,7 +121,7 @@ func ipToUint(ip net.IP) uint32 {
 }
 
 func uintToIP(v uint32) net.IP {
-	return net.IPv4(byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	return net.IP{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}
 }
 
 // New return Pool instance
