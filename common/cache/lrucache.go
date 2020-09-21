@@ -188,7 +188,7 @@ func (c *LruCache) get(key interface{}) *entry {
 }
 
 // Delete removes the value associated with a key.
-func (c *LruCache) Delete(key string) {
+func (c *LruCache) Delete(key interface{}) {
 	c.mu.Lock()
 
 	if le, ok := c.cache[key]; ok {
