@@ -2,7 +2,6 @@ package pool
 
 import (
 	"context"
-	"runtime"
 	"testing"
 	"time"
 
@@ -71,27 +70,4 @@ func TestPool_MaxAge(t *testing.T) {
 	time.Sleep(time.Millisecond * 22)
 	elm, _ = pool.Get()
 	assert.Equal(t, 1, elm.(int))
-}
-
-func TestPool_AutoGC(t *testing.T) {
-	g := lg()
-
-	sign := make(chan int)
-	pool := New(g, WithEvict(func(item interface{}) {
-		sign <- item.(int)
-	}))
-
-	elm, _ := pool.Get()
-	assert.Equal(t, 0, elm.(int))
-	pool.Put(2)
-	pool = nil
-
-	runtime.GC()
-
-	select {
-	case num := <-sign:
-		assert.Equal(t, 2, num)
-	case <-time.After(time.Second * 3):
-		assert.Fail(t, "something wrong")
-	}
 }
