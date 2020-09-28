@@ -69,6 +69,7 @@ type DNS struct {
 type FallbackFilter struct {
 	GeoIP  bool         `yaml:"geoip"`
 	IPCIDR []*net.IPNet `yaml:"ipcidr"`
+	Domain []string     `yaml:"domain"`
 }
 
 // Experimental config
@@ -103,6 +104,7 @@ type RawDNS struct {
 type RawFallbackFilter struct {
 	GeoIP  bool     `yaml:"geoip"`
 	IPCIDR []string `yaml:"ipcidr"`
+	Domain []string `yaml:"domain"`
 }
 
 type RawConfig struct {
@@ -561,6 +563,7 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 	if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
 		dnsCfg.FallbackFilter.IPCIDR = fallbackip
 	}
+	dnsCfg.FallbackFilter.Domain = cfg.FallbackFilter.Domain
 
 	if cfg.UseHosts {
 		dnsCfg.Hosts = hosts
