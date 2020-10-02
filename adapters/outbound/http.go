@@ -31,6 +31,7 @@ type HttpOption struct {
 	UserName       string `proxy:"username,omitempty"`
 	Password       string `proxy:"password,omitempty"`
 	TLS            bool   `proxy:"tls,omitempty"`
+	SNI            string `proxy:"sni,omitempty"`
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
@@ -114,10 +115,14 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 func NewHttp(option HttpOption) *Http {
 	var tlsConfig *tls.Config
 	if option.TLS {
+		sni := option.Server
+		if option.SNI != "" {
+			sni = option.SNI
+		}
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: option.SkipCertVerify,
 			ClientSessionCache: getClientSessionCache(),
-			ServerName:         option.Server,
+			ServerName:         sni,
 		}
 	}
 
