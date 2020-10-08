@@ -102,6 +102,11 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 		return func(r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
 
+			host := strings.TrimRight(q.Name, ".")
+			if fakePool.LookupHost(host) {
+				return next(r)
+			}
+
 			if q.Qtype == D.TypeAAAA {
 				msg := &D.Msg{}
 				msg.Answer = []D.RR{}
@@ -112,11 +117,6 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 
 				return msg, nil
 			} else if q.Qtype != D.TypeA {
-				return next(r)
-			}
-
-			host := strings.TrimRight(q.Name, ".")
-			if fakePool.LookupHost(host) {
 				return next(r)
 			}
 
