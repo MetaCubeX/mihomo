@@ -142,3 +142,14 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	}
 	return ret
 }
+
+func handleMsgWithEmptyAnswer(r *D.Msg) *D.Msg {
+	msg := &D.Msg{}
+	msg.Answer = []D.RR{}
+
+	msg.SetRcode(r, D.RcodeSuccess)
+	msg.Authoritative = true
+	msg.RecursionAvailable = true
+
+	return msg
+}
