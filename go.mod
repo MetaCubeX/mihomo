@@ -10,14 +10,14 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/gorilla/websocket v1.4.2
-	github.com/miekg/dns v1.1.31
+	github.com/miekg/dns v1.1.32
 	github.com/oschwald/geoip2-golang v1.4.0
-	github.com/sirupsen/logrus v1.6.0
+	github.com/sirupsen/logrus v1.7.0
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
-	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
-	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed
+	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
+	golang.org/x/net v0.0.0-20201010224723-4f7140c49acb
+	golang.org/x/sync v0.0.0-20201008141435-b3e1573b7520
+	golang.org/x/sys v0.0.0-20201009025420-dfb3f7c4e634
 	gopkg.in/eapache/channels.v1 v1.1.0
 	gopkg.in/yaml.v2 v2.3.0
 )

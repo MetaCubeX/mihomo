@@ -107,16 +107,12 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 				return next(r)
 			}
 
-			if q.Qtype == D.TypeAAAA {
-				msg := &D.Msg{}
-				msg.Answer = []D.RR{}
+			switch q.Qtype {
+			case D.TypeAAAA, D.TypeSVCB, D.TypeHTTPS:
+				return handleMsgWithEmptyAnswer(r), nil
+			}
 
-				msg.SetRcode(r, D.RcodeSuccess)
-				msg.Authoritative = true
-				msg.RecursionAvailable = true
-
-				return msg, nil
-			} else if q.Qtype != D.TypeA {
+			if q.Qtype != D.TypeA {
 				return next(r)
 			}
 
@@ -143,14 +139,7 @@ func withResolver(resolver *Resolver) handler {
 
 		// return a empty AAAA msg when ipv6 disabled
 		if !resolver.ipv6 && q.Qtype == D.TypeAAAA {
-			msg := &D.Msg{}
-			msg.Answer = []D.RR{}
-
-			msg.SetRcode(r, D.RcodeSuccess)
-			msg.Authoritative = true
-			msg.RecursionAvailable = true
-
-			return msg, nil
+			return handleMsgWithEmptyAnswer(r), nil
 		}
 
 		msg, err := resolver.Exchange(r)
