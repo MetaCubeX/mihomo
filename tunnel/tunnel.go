@@ -170,7 +170,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 	// make a fAddr if requset ip is fakeip
 	var fAddr net.Addr
-	if resolver.IsFakeIP(metadata.DstIP) {
+	if resolver.IsExistFakeIP(metadata.DstIP) {
 		fAddr = metadata.UDPAddr()
 	}
 
