@@ -21,13 +21,25 @@ func (h *ResolverEnhancer) MappingEnabled() bool {
 	return h.mode == FAKEIP || h.mode == MAPPING
 }
 
-func (h *ResolverEnhancer) IsFakeIP(ip net.IP) bool {
+func (h *ResolverEnhancer) IsExistFakeIP(ip net.IP) bool {
 	if !h.FakeIPEnabled() {
 		return false
 	}
 
 	if pool := h.fakePool; pool != nil {
 		return pool.Exist(ip)
+	}
+
+	return false
+}
+
+func (h *ResolverEnhancer) IsFakeIP(ip net.IP) bool {
+	if !h.FakeIPEnabled() {
+		return false
+	}
+
+	if pool := h.fakePool; pool != nil {
+		return pool.IPNet().Contains(ip) && !pool.Gateway().Equal(ip)
 	}
 
 	return false
