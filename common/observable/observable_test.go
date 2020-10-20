@@ -113,3 +113,34 @@ func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 	_, more := <-list[0]
 	assert.False(t, more)
 }
+
+func Benchmark_Observable_1000(b *testing.B) {
+	ch := make(chan interface{})
+	o := NewObservable(ch)
+	num := 1000
+
+	subs := []Subscription{}
+	for i := 0; i < num; i++ {
+		sub, _ := o.Subscribe()
+		subs = append(subs, sub)
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(num)
+
+	b.ResetTimer()
+	for _, sub := range subs {
+		go func(s Subscription) {
+			for range s {
+			}
+			wg.Done()
+		}(sub)
+	}
+
+	for i := 0; i < b.N; i++ {
+		ch <- i
+	}
+
+	close(ch)
+	wg.Wait()
+}
