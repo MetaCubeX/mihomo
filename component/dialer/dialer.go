@@ -19,17 +19,6 @@ func Dialer() (*net.Dialer, error) {
 	return dialer, nil
 }
 
-func ListenConfig() (*net.ListenConfig, error) {
-	cfg := &net.ListenConfig{}
-	if ListenConfigHook != nil {
-		if err := ListenConfigHook(cfg); err != nil {
-			return nil, err
-		}
-	}
-
-	return cfg, nil
-}
-
 func Dial(network, address string) (net.Conn, error) {
 	return DialContext(context.Background(), network, address)
 }
@@ -73,19 +62,16 @@ func DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
 func ListenPacket(network, address string) (net.PacketConn, error) {
-	lc, err := ListenConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	if ListenPacketHook != nil && address == "" {
-		ip, err := ListenPacketHook()
+	cfg := &net.ListenConfig{}
+	if ListenPacketHook != nil {
+		var err error
+		address, err = ListenPacketHook(cfg, address)
 		if err != nil {
 			return nil, err
 		}
-		address = net.JoinHostPort(ip.String(), "0")
 	}
-	return lc.ListenPacket(context.Background(), network, address)
+
+	return cfg.ListenPacket(context.Background(), network, address)
 }
 
 func dualStackDialContext(ctx context.Context, network, address string) (net.Conn, error) {
