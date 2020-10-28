@@ -42,7 +42,10 @@ func Add(req C.ServerAdapter) {
 
 // AddPacket add udp Packet to queue
 func AddPacket(packet *inbound.PacketAdapter) {
-	udpQueue <- packet
+	select {
+	case udpQueue <- packet:
+	default:
+	}
 }
 
 // Rules return all rules
