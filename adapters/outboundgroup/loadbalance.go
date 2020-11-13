@@ -20,6 +20,7 @@ type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy
 
 type LoadBalance struct {
 	*outbound.Base
+	disableUDP bool
 	single     *singledo.Single
 	providers  []provider.ProxyProvider
 	strategyFn strategyFn
@@ -93,7 +94,7 @@ func (lb *LoadBalance) DialUDP(metadata *C.Metadata) (pc C.PacketConn, err error
 }
 
 func (lb *LoadBalance) SupportUDP() bool {
-	return true
+	return !lb.disableUDP
 }
 
 func strategyRoundRobin() strategyFn {
@@ -153,7 +154,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func NewLoadBalance(name string, providers []provider.ProxyProvider, strategy string) (lb *LoadBalance, err error) {
+func NewLoadBalance(options *GroupCommonOption, providers []provider.ProxyProvider, strategy string) (lb *LoadBalance, err error) {
 	var strategyFn strategyFn
 	switch strategy {
 	case "consistent-hashing":
@@ -164,9 +165,10 @@ func NewLoadBalance(name string, providers []provider.ProxyProvider, strategy st
 		return nil, fmt.Errorf("%w: %s", errStrategy, strategy)
 	}
 	return &LoadBalance{
-		Base:       outbound.NewBase(name, "", C.LoadBalance, false),
+		Base:       outbound.NewBase(options.Name, "", C.LoadBalance, false),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,
 		strategyFn: strategyFn,
+		disableUDP: options.DisableUDP,
 	}, nil
 }
