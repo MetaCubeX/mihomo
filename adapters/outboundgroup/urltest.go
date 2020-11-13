@@ -22,6 +22,7 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 type URLTest struct {
 	*outbound.Base
 	tolerance  uint16
+	disableUDP bool
 	fastNode   C.Proxy
 	single     *singledo.Single
 	fastSingle *singledo.Single
@@ -89,6 +90,10 @@ func (u *URLTest) fast() C.Proxy {
 }
 
 func (u *URLTest) SupportUDP() bool {
+	if u.disableUDP {
+		return false
+	}
+
 	return u.fast().SupportUDP()
 }
 
@@ -117,12 +122,13 @@ func parseURLTestOption(config map[string]interface{}) []urlTestOption {
 	return opts
 }
 
-func NewURLTest(name string, providers []provider.ProxyProvider, options ...urlTestOption) *URLTest {
+func NewURLTest(commonOptions *GroupCommonOption, providers []provider.ProxyProvider, options ...urlTestOption) *URLTest {
 	urlTest := &URLTest{
-		Base:       outbound.NewBase(name, "", C.URLTest, false),
+		Base:       outbound.NewBase(commonOptions.Name, "", C.URLTest, false),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		fastSingle: singledo.NewSingle(time.Second * 10),
 		providers:  providers,
+		disableUDP: commonOptions.DisableUDP,
 	}
 
 	for _, option := range options {

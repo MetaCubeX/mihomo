@@ -18,12 +18,13 @@ var (
 )
 
 type GroupCommonOption struct {
-	Name     string   `group:"name"`
-	Type     string   `group:"type"`
-	Proxies  []string `group:"proxies,omitempty"`
-	Use      []string `group:"use,omitempty"`
-	URL      string   `group:"url,omitempty"`
-	Interval int      `group:"interval,omitempty"`
+	Name       string   `group:"name"`
+	Type       string   `group:"type"`
+	Proxies    []string `group:"proxies,omitempty"`
+	Use        []string `group:"use,omitempty"`
+	URL        string   `group:"url,omitempty"`
+	Interval   int      `group:"interval,omitempty"`
+	DisableUDP bool     `group:"disable-udp,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy, providersMap map[string]provider.ProxyProvider) (C.ProxyAdapter, error) {
@@ -105,16 +106,16 @@ func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy,
 	switch groupOption.Type {
 	case "url-test":
 		opts := parseURLTestOption(config)
-		group = NewURLTest(groupName, providers, opts...)
+		group = NewURLTest(groupOption, providers, opts...)
 	case "select":
-		group = NewSelector(groupName, providers)
+		group = NewSelector(groupOption, providers)
 	case "fallback":
-		group = NewFallback(groupName, providers)
+		group = NewFallback(groupOption, providers)
 	case "load-balance":
 		strategy := parseStrategy(config)
-		return NewLoadBalance(groupName, providers, strategy)
+		return NewLoadBalance(groupOption, providers, strategy)
 	case "relay":
-		group = NewRelay(groupName, providers)
+		group = NewRelay(groupOption, providers)
 	default:
 		return nil, fmt.Errorf("%w: %s", errType, groupOption.Type)
 	}

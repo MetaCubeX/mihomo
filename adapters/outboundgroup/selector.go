@@ -13,9 +13,10 @@ import (
 
 type Selector struct {
 	*outbound.Base
-	single    *singledo.Single
-	selected  string
-	providers []provider.ProxyProvider
+	disableUDP bool
+	single     *singledo.Single
+	selected   string
+	providers  []provider.ProxyProvider
 }
 
 func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
@@ -35,6 +36,10 @@ func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 }
 
 func (s *Selector) SupportUDP() bool {
+	if s.disableUDP {
+		return false
+	}
+
 	return s.selectedProxy().SupportUDP()
 }
 
@@ -86,12 +91,13 @@ func (s *Selector) selectedProxy() C.Proxy {
 	return elm.(C.Proxy)
 }
 
-func NewSelector(name string, providers []provider.ProxyProvider) *Selector {
+func NewSelector(options *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
 	selected := providers[0].Proxies()[0].Name()
 	return &Selector{
-		Base:      outbound.NewBase(name, "", C.Selector, false),
-		single:    singledo.NewSingle(defaultGetProxiesDuration),
-		providers: providers,
-		selected:  selected,
+		Base:       outbound.NewBase(options.Name, "", C.Selector, false),
+		single:     singledo.NewSingle(defaultGetProxiesDuration),
+		providers:  providers,
+		selected:   selected,
+		disableUDP: options.DisableUDP,
 	}
 }
