@@ -131,13 +131,13 @@ func strategyConsistentHashing() strategyFn {
 }
 
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata) C.Proxy {
-	proxies := lb.proxies()
+	proxies := lb.proxies(true)
 	return lb.strategyFn(proxies, metadata)
 }
 
-func (lb *LoadBalance) proxies() []C.Proxy {
+func (lb *LoadBalance) proxies(touch bool) []C.Proxy {
 	elm, _, _ := lb.single.Do(func() (interface{}, error) {
-		return getProvidersProxies(lb.providers), nil
+		return getProvidersProxies(lb.providers, touch), nil
 	})
 
 	return elm.([]C.Proxy)
@@ -145,7 +145,7 @@ func (lb *LoadBalance) proxies() []C.Proxy {
 
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	var all []string
-	for _, proxy := range lb.proxies() {
+	for _, proxy := range lb.proxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]interface{}{

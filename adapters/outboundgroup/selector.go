@@ -20,7 +20,7 @@ type Selector struct {
 }
 
 func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := s.selectedProxy().DialContext(ctx, metadata)
+	c, err := s.selectedProxy(true).DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(s)
 	}
@@ -28,7 +28,7 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := s.selectedProxy().DialUDP(metadata)
+	pc, err := s.selectedProxy(true).DialUDP(metadata)
 	if err == nil {
 		pc.AppendToChains(s)
 	}
@@ -40,12 +40,12 @@ func (s *Selector) SupportUDP() bool {
 		return false
 	}
 
-	return s.selectedProxy().SupportUDP()
+	return s.selectedProxy(false).SupportUDP()
 }
 
 func (s *Selector) MarshalJSON() ([]byte, error) {
 	var all []string
-	for _, proxy := range getProvidersProxies(s.providers) {
+	for _, proxy := range getProvidersProxies(s.providers, false) {
 		all = append(all, proxy.Name())
 	}
 
@@ -57,11 +57,11 @@ func (s *Selector) MarshalJSON() ([]byte, error) {
 }
 
 func (s *Selector) Now() string {
-	return s.selectedProxy().Name()
+	return s.selectedProxy(false).Name()
 }
 
 func (s *Selector) Set(name string) error {
-	for _, proxy := range getProvidersProxies(s.providers) {
+	for _, proxy := range getProvidersProxies(s.providers, false) {
 		if proxy.Name() == name {
 			s.selected = name
 			s.single.Reset()
@@ -73,12 +73,12 @@ func (s *Selector) Set(name string) error {
 }
 
 func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {
-	return s.selectedProxy()
+	return s.selectedProxy(true)
 }
 
-func (s *Selector) selectedProxy() C.Proxy {
+func (s *Selector) selectedProxy(touch bool) C.Proxy {
 	elm, _, _ := s.single.Do(func() (interface{}, error) {
-		proxies := getProvidersProxies(s.providers)
+		proxies := getProvidersProxies(s.providers, touch)
 		for _, proxy := range proxies {
 			if proxy.Name() == s.selected {
 				return proxy, nil

@@ -50,6 +50,9 @@ type Provider interface {
 type ProxyProvider interface {
 	Provider
 	Proxies() []C.Proxy
+	// ProxiesWithTouch is used to inform the provider that the proxy is actually being used while getting the list of proxies.
+	// Commonly used in Dial and DialUDP
+	ProxiesWithTouch() []C.Proxy
 	HealthCheck()
 }
 
@@ -110,6 +113,11 @@ func (pp *proxySetProvider) Type() ProviderType {
 
 func (pp *proxySetProvider) Proxies() []C.Proxy {
 	return pp.proxies
+}
+
+func (pp *proxySetProvider) ProxiesWithTouch() []C.Proxy {
+	pp.healthCheck.touch()
+	return pp.Proxies()
 }
 
 func proxiesParse(buf []byte) (interface{}, error) {
@@ -221,6 +229,11 @@ func (cp *compatibleProvider) Type() ProviderType {
 
 func (cp *compatibleProvider) Proxies() []C.Proxy {
 	return cp.proxies
+}
+
+func (cp *compatibleProvider) ProxiesWithTouch() []C.Proxy {
+	cp.healthCheck.touch()
+	return cp.Proxies()
 }
 
 func stopCompatibleProvider(pd *CompatibleProvider) {

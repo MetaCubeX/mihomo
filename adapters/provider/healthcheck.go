@@ -5,6 +5,8 @@ import (
 	"time"
 
 	C "github.com/Dreamacro/clash/constant"
+
+	"go.uber.org/atomic"
 )
 
 const (
@@ -17,10 +19,12 @@ type HealthCheckOption struct {
 }
 
 type HealthCheck struct {
-	url      string
-	proxies  []C.Proxy
-	interval uint
-	done     chan struct{}
+	url       string
+	proxies   []C.Proxy
+	interval  uint
+	lazy      bool
+	lastTouch *atomic.Int64
+	done      chan struct{}
 }
 
 func (hc *HealthCheck) process() {
@@ -30,7 +34,10 @@ func (hc *HealthCheck) process() {
 	for {
 		select {
 		case <-ticker.C:
-			hc.check()
+			now := time.Now().Unix()
+			if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
+				hc.check()
+			}
 		case <-hc.done:
 			ticker.Stop()
 			return
@@ -44,6 +51,10 @@ func (hc *HealthCheck) setProxy(proxies []C.Proxy) {
 
 func (hc *HealthCheck) auto() bool {
 	return hc.interval != 0
+}
+
+func (hc *HealthCheck) touch() {
+	hc.lastTouch.Store(time.Now().Unix())
 }
 
 func (hc *HealthCheck) check() {
@@ -60,11 +71,13 @@ func (hc *HealthCheck) close() {
 	hc.done <- struct{}{}
 }
 
-func NewHealthCheck(proxies []C.Proxy, url string, interval uint) *HealthCheck {
+func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool) *HealthCheck {
 	return &HealthCheck{
-		proxies:  proxies,
-		url:      url,
-		interval: interval,
-		done:     make(chan struct{}, 1),
+		proxies:   proxies,
+		url:       url,
+		interval:  interval,
+		lazy:      lazy,
+		lastTouch: atomic.NewInt64(0),
+		done:      make(chan struct{}, 1),
 	}
 }
