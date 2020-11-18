@@ -30,11 +30,11 @@ type URLTest struct {
 }
 
 func (u *URLTest) Now() string {
-	return u.fast().Name()
+	return u.fast(false).Name()
 }
 
 func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
-	c, err = u.fast().DialContext(ctx, metadata)
+	c, err = u.fast(true).DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(u)
 	}
@@ -42,7 +42,7 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 }
 
 func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := u.fast().DialUDP(metadata)
+	pc, err := u.fast(true).DialUDP(metadata)
 	if err == nil {
 		pc.AppendToChains(u)
 	}
@@ -50,20 +50,20 @@ func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 }
 
 func (u *URLTest) Unwrap(metadata *C.Metadata) C.Proxy {
-	return u.fast()
+	return u.fast(true)
 }
 
-func (u *URLTest) proxies() []C.Proxy {
+func (u *URLTest) proxies(touch bool) []C.Proxy {
 	elm, _, _ := u.single.Do(func() (interface{}, error) {
-		return getProvidersProxies(u.providers), nil
+		return getProvidersProxies(u.providers, touch), nil
 	})
 
 	return elm.([]C.Proxy)
 }
 
-func (u *URLTest) fast() C.Proxy {
+func (u *URLTest) fast(touch bool) C.Proxy {
 	elm, _, _ := u.fastSingle.Do(func() (interface{}, error) {
-		proxies := u.proxies()
+		proxies := u.proxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
 		for _, proxy := range proxies[1:] {
@@ -94,12 +94,12 @@ func (u *URLTest) SupportUDP() bool {
 		return false
 	}
 
-	return u.fast().SupportUDP()
+	return u.fast(false).SupportUDP()
 }
 
 func (u *URLTest) MarshalJSON() ([]byte, error) {
 	var all []string
-	for _, proxy := range u.proxies() {
+	for _, proxy := range u.proxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]interface{}{

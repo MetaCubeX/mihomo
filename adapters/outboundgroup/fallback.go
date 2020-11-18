@@ -18,12 +18,12 @@ type Fallback struct {
 }
 
 func (f *Fallback) Now() string {
-	proxy := f.findAliveProxy()
+	proxy := f.findAliveProxy(false)
 	return proxy.Name()
 }
 
 func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	proxy := f.findAliveProxy()
+	proxy := f.findAliveProxy(true)
 	c, err := proxy.DialContext(ctx, metadata)
 	if err == nil {
 		c.AppendToChains(f)
@@ -32,7 +32,7 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 func (f *Fallback) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	proxy := f.findAliveProxy()
+	proxy := f.findAliveProxy(true)
 	pc, err := proxy.DialUDP(metadata)
 	if err == nil {
 		pc.AppendToChains(f)
@@ -45,13 +45,13 @@ func (f *Fallback) SupportUDP() bool {
 		return false
 	}
 
-	proxy := f.findAliveProxy()
+	proxy := f.findAliveProxy(false)
 	return proxy.SupportUDP()
 }
 
 func (f *Fallback) MarshalJSON() ([]byte, error) {
 	var all []string
-	for _, proxy := range f.proxies() {
+	for _, proxy := range f.proxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]interface{}{
@@ -62,27 +62,27 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 }
 
 func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
-	proxy := f.findAliveProxy()
+	proxy := f.findAliveProxy(true)
 	return proxy
 }
 
-func (f *Fallback) proxies() []C.Proxy {
+func (f *Fallback) proxies(touch bool) []C.Proxy {
 	elm, _, _ := f.single.Do(func() (interface{}, error) {
-		return getProvidersProxies(f.providers), nil
+		return getProvidersProxies(f.providers, touch), nil
 	})
 
 	return elm.([]C.Proxy)
 }
 
-func (f *Fallback) findAliveProxy() C.Proxy {
-	proxies := f.proxies()
+func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
+	proxies := f.proxies(touch)
 	for _, proxy := range proxies {
 		if proxy.Alive() {
 			return proxy
 		}
 	}
 
-	return f.proxies()[0]
+	return proxies[0]
 }
 
 func NewFallback(options *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
