@@ -218,7 +218,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		rawPc, err := proxy.DialUDP(metadata)
 		if err != nil {
-			log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.String(), err.Error())
+			log.Warnln("[UDP] dial %s (match %s/%s) to %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.String(), err.Error())
 			return
 		}
 		pc := newUDPTracker(rawPc, DefaultManager, metadata, rule)
@@ -263,7 +263,7 @@ func handleTCPConn(localConn C.ServerAdapter) {
 
 	remoteConn, err := proxy.Dial(metadata)
 	if err != nil {
-		log.Warnln("dial %s to %s error: %s", proxy.Name(), metadata.String(), err.Error())
+		log.Warnln("[TCP] dial %s (match %s/%s) to %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.String(), err.Error())
 		return
 	}
 	remoteConn = newTCPTracker(remoteConn, DefaultManager, metadata, rule)
