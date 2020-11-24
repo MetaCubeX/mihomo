@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -59,11 +60,18 @@ func (hc *HealthCheck) touch() {
 
 func (hc *HealthCheck) check() {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
+	wg := &sync.WaitGroup{}
+
 	for _, proxy := range hc.proxies {
-		go proxy.URLTest(ctx, hc.url)
+		wg.Add(1)
+
+		go func(p C.Proxy) {
+			p.URLTest(ctx, hc.url)
+			wg.Done()
+		}(proxy)
 	}
 
-	<-ctx.Done()
+	wg.Wait()
 	cancel()
 }
 
