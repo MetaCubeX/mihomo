@@ -3,7 +3,13 @@ package dialer
 import (
 	"errors"
 	"net"
+	"time"
+
+	"github.com/Dreamacro/clash/common/singledo"
 )
+
+// In some OS, such as Windows, it takes a little longer to get interface information
+var ifaceSingle = singledo.NewSingle(time.Second * 20)
 
 var (
 	errPlatformNotSupport = errors.New("unsupport platform")
@@ -56,12 +62,14 @@ func fallbackBindToDialer(dialer *net.Dialer, network string, ip net.IP, name st
 		return nil
 	}
 
-	iface, err := net.InterfaceByName(name)
+	iface, err, _ := ifaceSingle.Do(func() (interface{}, error) {
+		return net.InterfaceByName(name)
+	})
 	if err != nil {
 		return err
 	}
 
-	addrs, err := iface.Addrs()
+	addrs, err := iface.(*net.Interface).Addrs()
 	if err != nil {
 		return err
 	}
@@ -85,12 +93,14 @@ func fallbackBindToDialer(dialer *net.Dialer, network string, ip net.IP, name st
 }
 
 func fallbackBindToListenConfig(name string) (string, error) {
-	iface, err := net.InterfaceByName(name)
+	iface, err, _ := ifaceSingle.Do(func() (interface{}, error) {
+		return net.InterfaceByName(name)
+	})
 	if err != nil {
 		return "", err
 	}
 
-	addrs, err := iface.Addrs()
+	addrs, err := iface.(*net.Interface).Addrs()
 	if err != nil {
 		return "", err
 	}

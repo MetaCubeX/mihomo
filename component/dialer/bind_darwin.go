@@ -29,23 +29,25 @@ func bindControl(ifaceIdx int) controlFn {
 }
 
 func bindIfaceToDialer(dialer *net.Dialer, ifaceName string) error {
-	iface, err := net.InterfaceByName(ifaceName)
+	iface, err, _ := ifaceSingle.Do(func() (interface{}, error) {
+		return net.InterfaceByName(ifaceName)
+	})
 	if err != nil {
 		return err
 	}
 
-	dialer.Control = bindControl(iface.Index)
-
+	dialer.Control = bindControl(iface.(*net.Interface).Index)
 	return nil
 }
 
 func bindIfaceToListenConfig(lc *net.ListenConfig, ifaceName string) error {
-	iface, err := net.InterfaceByName(ifaceName)
+	iface, err, _ := ifaceSingle.Do(func() (interface{}, error) {
+		return net.InterfaceByName(ifaceName)
+	})
 	if err != nil {
 		return err
 	}
 
-	lc.Control = bindControl(iface.Index)
-
+	lc.Control = bindControl(iface.(*net.Interface).Index)
 	return nil
 }
