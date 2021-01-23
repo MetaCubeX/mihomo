@@ -6,33 +6,18 @@ import (
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/context"
 )
 
-// HTTPAdapter is a adapter for HTTP connection
-type HTTPAdapter struct {
-	net.Conn
-	metadata *C.Metadata
-	R        *http.Request
-}
-
-// Metadata return destination metadata
-func (h *HTTPAdapter) Metadata() *C.Metadata {
-	return h.metadata
-}
-
-// NewHTTP is HTTPAdapter generator
-func NewHTTP(request *http.Request, conn net.Conn) *HTTPAdapter {
+// NewHTTP recieve normal http request and return HTTPContext
+func NewHTTP(request *http.Request, conn net.Conn) *context.HTTPContext {
 	metadata := parseHTTPAddr(request)
 	metadata.Type = C.HTTP
 	if ip, port, err := parseAddr(conn.RemoteAddr().String()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}
-	return &HTTPAdapter{
-		metadata: metadata,
-		R:        request,
-		Conn:     conn,
-	}
+	return context.NewHTTPContext(conn, request, metadata)
 }
 
 // RemoveHopByHopHeaders remove hop-by-hop header

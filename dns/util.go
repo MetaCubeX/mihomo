@@ -153,3 +153,18 @@ func handleMsgWithEmptyAnswer(r *D.Msg) *D.Msg {
 
 	return msg
 }
+
+func msgToIP(msg *D.Msg) []net.IP {
+	ips := []net.IP{}
+
+	for _, answer := range msg.Answer {
+		switch ans := answer.(type) {
+		case *D.AAAA:
+			ips = append(ips, ans.AAAA)
+		case *D.A:
+			ips = append(ips, ans.A)
+		}
+	}
+
+	return ips
+}

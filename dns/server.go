@@ -1,9 +1,11 @@
 package dns
 
 import (
+	"errors"
 	"net"
 
 	"github.com/Dreamacro/clash/common/sockopt"
+	"github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
@@ -21,19 +23,23 @@ type Server struct {
 	handler handler
 }
 
+// ServeDNS implement D.Handler ServeDNS
 func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
-	if len(r.Question) == 0 {
-		D.HandleFailed(w, r)
-		return
-	}
-
-	msg, err := s.handler(r)
+	msg, err := handlerWithContext(s.handler, r)
 	if err != nil {
 		D.HandleFailed(w, r)
 		return
 	}
-
 	w.WriteMsg(msg)
+}
+
+func handlerWithContext(handler handler, msg *D.Msg) (*D.Msg, error) {
+	if len(msg.Question) == 0 {
+		return nil, errors.New("at least one question is required")
+	}
+
+	ctx := context.NewDNSContext(msg)
+	return handler(ctx, msg)
 }
 
 func (s *Server) setHandler(handler handler) {

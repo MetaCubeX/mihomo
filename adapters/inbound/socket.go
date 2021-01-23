@@ -5,21 +5,11 @@ import (
 
 	"github.com/Dreamacro/clash/component/socks5"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/context"
 )
 
-// SocketAdapter is a adapter for socks and redir connection
-type SocketAdapter struct {
-	net.Conn
-	metadata *C.Metadata
-}
-
-// Metadata return destination metadata
-func (s *SocketAdapter) Metadata() *C.Metadata {
-	return s.metadata
-}
-
-// NewSocket is SocketAdapter generator
-func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *SocketAdapter {
+// NewSocket recieve TCP inbound and return ConnContext
+func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnContext {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
@@ -28,8 +18,5 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *SocketAdapter 
 		metadata.SrcPort = port
 	}
 
-	return &SocketAdapter{
-		Conn:     conn,
-		metadata: metadata,
-	}
+	return context.NewConnContext(conn, metadata)
 }
