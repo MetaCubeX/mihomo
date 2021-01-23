@@ -1,4 +1,4 @@
-package tunnel
+package statistic
 
 import (
 	"net"
@@ -57,7 +57,7 @@ func (tt *tcpTracker) Close() error {
 	return tt.Conn.Close()
 }
 
-func newTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
 	uuid, _ := uuid.NewV4()
 
 	t := &tcpTracker{
@@ -114,7 +114,7 @@ func (ut *udpTracker) Close() error {
 	return ut.PacketConn.Close()
 }
 
-func newUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
+func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
 	uuid, _ := uuid.NewV4()
 
 	ut := &udpTracker{

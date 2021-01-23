@@ -212,7 +212,7 @@ func (r *Resolver) ipExchange(m *D.Msg) (msg *D.Msg, err error) {
 	fallbackMsg := r.asyncExchange(r.fallback, m)
 	res := <-msgCh
 	if res.Error == nil {
-		if ips := r.msgToIP(res.Msg); len(ips) != 0 {
+		if ips := msgToIP(res.Msg); len(ips) != 0 {
 			if !r.shouldIPFallback(ips[0]) {
 				msg = res.Msg // no need to wait for fallback result
 				err = res.Error
@@ -247,7 +247,7 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 		return nil, err
 	}
 
-	ips := r.msgToIP(msg)
+	ips := msgToIP(msg)
 	ipLength := len(ips)
 	if ipLength == 0 {
 		return nil, resolver.ErrIPNotFound
@@ -255,21 +255,6 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 
 	ip = ips[rand.Intn(ipLength)]
 	return
-}
-
-func (r *Resolver) msgToIP(msg *D.Msg) []net.IP {
-	ips := []net.IP{}
-
-	for _, answer := range msg.Answer {
-		switch ans := answer.(type) {
-		case *D.AAAA:
-			ips = append(ips, ans.AAAA)
-		case *D.A:
-			ips = append(ips, ans.A)
-		}
-	}
-
-	return ips
 }
 
 func (r *Resolver) msgToDomain(msg *D.Msg) string {
