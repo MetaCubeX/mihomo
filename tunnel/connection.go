@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapters/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -141,14 +142,16 @@ func relay(leftConn, rightConn net.Conn) {
 
 	go func() {
 		buf := pool.Get(pool.RelayBufferSize)
-		_, err := io.CopyBuffer(leftConn, rightConn, buf)
+		// Wrapping to avoid using *net.TCPConn.(ReadFrom)
+		// See also https://github.com/Dreamacro/clash/pull/1209
+		_, err := io.CopyBuffer(N.WriteOnlyWriter{Writer: leftConn}, N.ReadOnlyReader{Reader: rightConn}, buf)
 		pool.Put(buf)
 		leftConn.SetReadDeadline(time.Now())
 		ch <- err
 	}()
 
 	buf := pool.Get(pool.RelayBufferSize)
-	io.CopyBuffer(rightConn, leftConn, buf)
+	io.CopyBuffer(N.WriteOnlyWriter{Writer: rightConn}, N.ReadOnlyReader{Reader: leftConn}, buf)
 	pool.Put(buf)
 	rightConn.SetReadDeadline(time.Now())
 	<-ch
