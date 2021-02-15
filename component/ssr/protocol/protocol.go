@@ -4,60 +4,73 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"strings"
-	"sync"
+	"math/rand"
+	"net"
 )
 
 var (
-	errAuthAES128IncorrectMAC      = errors.New("auth_aes128_* post decrypt incorrect mac")
-	errAuthAES128DataLengthError   = errors.New("auth_aes128_* post decrypt length mismatch")
-	errAuthAES128IncorrectChecksum = errors.New("auth_aes128_* post decrypt incorrect checksum")
-	errAuthAES128PositionTooLarge  = errors.New("auth_aes128_* post decrypt position is too large")
-	errAuthSHA1v4CRC32Error        = errors.New("auth_sha1_v4 post decrypt data crc32 error")
-	errAuthSHA1v4DataLengthError   = errors.New("auth_sha1_v4 post decrypt data length error")
-	errAuthSHA1v4IncorrectChecksum = errors.New("auth_sha1_v4 post decrypt incorrect checksum")
-	errAuthChainDataLengthError    = errors.New("auth_chain_* post decrypt length mismatch")
-	errAuthChainHMACError          = errors.New("auth_chain_* post decrypt hmac error")
+	errAuthSHA1V4CRC32Error   = errors.New("auth_sha1_v4 decode data wrong crc32")
+	errAuthSHA1V4LengthError  = errors.New("auth_sha1_v4 decode data wrong length")
+	errAuthSHA1V4Adler32Error = errors.New("auth_sha1_v4 decode data wrong adler32")
+	errAuthAES128MACError     = errors.New("auth_aes128 decode data wrong mac")
+	errAuthAES128LengthError  = errors.New("auth_aes128 decode data wrong length")
+	errAuthAES128ChksumError  = errors.New("auth_aes128 decode data wrong checksum")
+	errAuthChainLengthError   = errors.New("auth_chain decode data wrong length")
+	errAuthChainChksumError   = errors.New("auth_chain decode data wrong checksum")
 )
 
-type authData struct {
-	clientID     []byte
-	connectionID uint32
-	mutex        sync.Mutex
-}
-
-type recvInfo struct {
-	recvID uint32
-	buffer *bytes.Buffer
-}
-
-type hmacMethod func(key []byte, data []byte) []byte
-type hashDigestMethod func(data []byte) []byte
-type rndMethod func(dataSize int, random *shift128PlusContext, lastHash []byte, dataSizeList, dataSizeList2 []int, overhead int) int
-
-// Protocol provides methods for decoding, encoding and iv setting
 type Protocol interface {
-	initForConn(iv []byte) Protocol
-	GetProtocolOverhead() int
-	SetOverhead(int)
-	Decode([]byte) ([]byte, int, error)
-	Encode([]byte) ([]byte, error)
-	DecodePacket([]byte) ([]byte, int, error)
-	EncodePacket([]byte) ([]byte, error)
+	StreamConn(net.Conn, []byte) net.Conn
+	PacketConn(net.PacketConn) net.PacketConn
+	Decode(dst, src *bytes.Buffer) error
+	Encode(buf *bytes.Buffer, b []byte) error
+	DecodePacket([]byte) ([]byte, error)
+	EncodePacket(buf *bytes.Buffer, b []byte) error
 }
 
 type protocolCreator func(b *Base) Protocol
 
-var protocolList = make(map[string]protocolCreator)
+var protocolList = make(map[string]struct {
+	overhead int
+	new      protocolCreator
+})
 
-func register(name string, c protocolCreator) {
-	protocolList[name] = c
+func register(name string, c protocolCreator, o int) {
+	protocolList[name] = struct {
+		overhead int
+		new      protocolCreator
+	}{overhead: o, new: c}
 }
 
-// PickProtocol returns a protocol of the given name
 func PickProtocol(name string, b *Base) (Protocol, error) {
-	if protocolCreator, ok := protocolList[strings.ToLower(name)]; ok {
-		return protocolCreator(b), nil
+	if choice, ok := protocolList[name]; ok {
+		b.Overhead += choice.overhead
+		return choice.new(b), nil
 	}
-	return nil, fmt.Errorf("Protocol %s not supported", name)
+	return nil, fmt.Errorf("protocol %s not supported", name)
+}
+
+func getHeadSize(b []byte, defaultValue int) int {
+	if len(b) < 2 {
+		return defaultValue
+	}
+	headType := b[0] & 7
+	switch headType {
+	case 1:
+		return 7
+	case 4:
+		return 19
+	case 3:
+		return 4 + int(b[1])
+	}
+	return defaultValue
+}
+
+func getDataLength(b []byte) int {
+	bLength := len(b)
+	dataLength := getHeadSize(b, 30) + rand.Intn(32)
+	if bLength < dataLength {
+		return bLength
+	}
+	return dataLength
 }

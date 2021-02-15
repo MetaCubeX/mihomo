@@ -5,31 +5,21 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/component/ssr/tools"
 )
 
-// NewConn wraps a stream-oriented net.Conn with protocol decoding/encoding
-func NewConn(c net.Conn, p Protocol, iv []byte) net.Conn {
-	return &Conn{Conn: c, Protocol: p.initForConn(iv)}
-}
-
-// Conn represents a protocol connection
 type Conn struct {
 	net.Conn
 	Protocol
-	buf          []byte
-	offset       int
+	decoded      bytes.Buffer
 	underDecoded bytes.Buffer
 }
 
 func (c *Conn) Read(b []byte) (int, error) {
-	if c.buf != nil {
-		n := copy(b, c.buf[c.offset:])
-		c.offset += n
-		if c.offset == len(c.buf) {
-			c.buf = nil
-		}
-		return n, nil
+	if c.decoded.Len() > 0 {
+		return c.decoded.Read(b)
 	}
+
 	buf := pool.Get(pool.RelayBufferSize)
 	defer pool.Put(buf)
 	n, err := c.Conn.Read(buf)
@@ -37,32 +27,26 @@ func (c *Conn) Read(b []byte) (int, error) {
 		return 0, err
 	}
 	c.underDecoded.Write(buf[:n])
-	underDecoded := c.underDecoded.Bytes()
-	decoded, length, err := c.Decode(underDecoded)
+	err = c.Decode(&c.decoded, &c.underDecoded)
 	if err != nil {
-		c.underDecoded.Reset()
-		return 0, nil
+		return 0, err
 	}
-	if length == 0 {
-		return 0, nil
-	}
-	c.underDecoded.Next(length)
-	n = copy(b, decoded)
-	if len(decoded) > len(b) {
-		c.buf = decoded
-		c.offset = n
-	}
+	n, _ = c.decoded.Read(b)
 	return n, nil
 }
 
 func (c *Conn) Write(b []byte) (int, error) {
-	encoded, err := c.Encode(b)
+	bLength := len(b)
+	buf := tools.BufPool.Get().(*bytes.Buffer)
+	defer tools.BufPool.Put(buf)
+	defer buf.Reset()
+	err := c.Encode(buf, b)
 	if err != nil {
 		return 0, err
 	}
-	_, err = c.Conn.Write(encoded)
+	_, err = c.Conn.Write(buf.Bytes())
 	if err != nil {
 		return 0, err
 	}
-	return len(b), nil
+	return bLength, nil
 }

@@ -1,7 +1,7 @@
 package obfs
 
 func init() {
-	register("http_post", newHTTPPost)
+	register("http_post", newHTTPPost, 0)
 }
 
 func newHTTPPost(b *Base) Obfs {

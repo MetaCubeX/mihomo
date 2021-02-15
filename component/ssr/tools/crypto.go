@@ -11,13 +11,13 @@ const HmacSHA1Len = 10
 func HmacMD5(key, data []byte) []byte {
 	hmacMD5 := hmac.New(md5.New, key)
 	hmacMD5.Write(data)
-	return hmacMD5.Sum(nil)[:16]
+	return hmacMD5.Sum(nil)
 }
 
 func HmacSHA1(key, data []byte) []byte {
 	hmacSHA1 := hmac.New(sha1.New, key)
 	hmacSHA1.Write(data)
-	return hmacSHA1.Sum(nil)[:20]
+	return hmacSHA1.Sum(nil)
 }
 
 func MD5Sum(b []byte) []byte {
