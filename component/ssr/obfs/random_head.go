@@ -4,72 +4,68 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"math/rand"
+	"net"
+
+	"github.com/Dreamacro/clash/common/pool"
 )
+
+func init() {
+	register("random_head", newRandomHead, 0)
+}
 
 type randomHead struct {
 	*Base
-	firstRequest  bool
-	firstResponse bool
-	headerSent    bool
-	buffer        []byte
-}
-
-func init() {
-	register("random_head", newRandomHead)
 }
 
 func newRandomHead(b *Base) Obfs {
 	return &randomHead{Base: b}
 }
 
-func (r *randomHead) initForConn() Obfs {
-	return &randomHead{
-		Base:          r.Base,
-		firstRequest:  true,
-		firstResponse: true,
-	}
+type randomHeadConn struct {
+	net.Conn
+	*randomHead
+	hasSentHeader bool
+	rawTransSent  bool
+	rawTransRecv  bool
+	buf           []byte
 }
 
-func (r *randomHead) GetObfsOverhead() int {
-	return 0
+func (r *randomHead) StreamConn(c net.Conn) net.Conn {
+	return &randomHeadConn{Conn: c, randomHead: r}
 }
 
-func (r *randomHead) Encode(b []byte) (encoded []byte, err error) {
-	if !r.firstRequest {
-		return b, nil
+func (c *randomHeadConn) Read(b []byte) (int, error) {
+	if c.rawTransRecv {
+		return c.Conn.Read(b)
 	}
-
-	bSize := len(b)
-	if r.headerSent {
-		if bSize > 0 {
-			d := make([]byte, len(r.buffer)+bSize)
-			copy(d, r.buffer)
-			copy(d[len(r.buffer):], b)
-			r.buffer = d
-		} else {
-			encoded = r.buffer
-			r.buffer = nil
-			r.firstRequest = false
-		}
-	} else {
-		size := rand.Intn(96) + 8
-		encoded = make([]byte, size)
-		rand.Read(encoded)
-		crc := (0xFFFFFFFF - crc32.ChecksumIEEE(encoded[:size-4])) & 0xFFFFFFFF
-		binary.LittleEndian.PutUint32(encoded[size-4:], crc)
-
-		d := make([]byte, bSize)
-		copy(d, b)
-		r.buffer = d
-	}
-	r.headerSent = true
-	return encoded, nil
+	buf := pool.Get(pool.RelayBufferSize)
+	defer pool.Put(buf)
+	c.Conn.Read(buf)
+	c.rawTransRecv = true
+	c.Write(nil)
+	return 0, nil
 }
 
-func (r *randomHead) Decode(b []byte) ([]byte, bool, error) {
-	if r.firstResponse {
-		r.firstResponse = false
-		return b, true, nil
+func (c *randomHeadConn) Write(b []byte) (int, error) {
+	if c.rawTransSent {
+		return c.Conn.Write(b)
 	}
-	return b, false, nil
+	c.buf = append(c.buf, b...)
+	if !c.hasSentHeader {
+		c.hasSentHeader = true
+		dataLength := rand.Intn(96) + 4
+		buf := pool.Get(dataLength + 4)
+		defer pool.Put(buf)
+		rand.Read(buf[:dataLength])
+		binary.LittleEndian.PutUint32(buf[dataLength:], 0xffffffff-crc32.ChecksumIEEE(buf[:dataLength]))
+		_, err := c.Conn.Write(buf)
+		return len(b), err
+	}
+	if c.rawTransRecv {
+		_, err := c.Conn.Write(c.buf)
+		c.buf = nil
+		c.rawTransSent = true
+		return len(b), err
+	}
+	return len(b), nil
 }

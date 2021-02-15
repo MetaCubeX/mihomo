@@ -3,7 +3,7 @@ package obfs
 import (
 	"errors"
 	"fmt"
-	"strings"
+	"net"
 )
 
 var (
@@ -12,26 +12,31 @@ var (
 	errTLS12TicketAuthHMACError            = errors.New("tls1.2_ticket_auth hmac verifying failed")
 )
 
-// Obfs provides methods for decoding and encoding
+type authData struct {
+	clientID [32]byte
+}
+
 type Obfs interface {
-	initForConn() Obfs
-	GetObfsOverhead() int
-	Decode(b []byte) ([]byte, bool, error)
-	Encode(b []byte) ([]byte, error)
+	StreamConn(net.Conn) net.Conn
 }
 
 type obfsCreator func(b *Base) Obfs
 
-var obfsList = make(map[string]obfsCreator)
+var obfsList = make(map[string]struct {
+	overhead int
+	new      obfsCreator
+})
 
-func register(name string, c obfsCreator) {
-	obfsList[name] = c
+func register(name string, c obfsCreator, o int) {
+	obfsList[name] = struct {
+		overhead int
+		new      obfsCreator
+	}{overhead: o, new: c}
 }
 
-// PickObfs returns an obfs of the given name
-func PickObfs(name string, b *Base) (Obfs, error) {
-	if obfsCreator, ok := obfsList[strings.ToLower(name)]; ok {
-		return obfsCreator(b), nil
+func PickObfs(name string, b *Base) (Obfs, int, error) {
+	if choice, ok := obfsList[name]; ok {
+		return choice.new(b), choice.overhead, nil
 	}
-	return nil, fmt.Errorf("Obfs %s not supported", name)
+	return nil, 0, fmt.Errorf("Obfs %s not supported", name)
 }
