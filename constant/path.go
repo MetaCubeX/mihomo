@@ -56,3 +56,7 @@ func (p *path) Resolve(path string) string {
 func (p *path) MMDB() string {
 	return P.Join(p.homeDir, "Country.mmdb")
 }
+
+func (p *path) Cache() string {
+	return P.Join(p.homeDir, ".cache")
+}

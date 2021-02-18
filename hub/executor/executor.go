@@ -6,9 +6,13 @@ import (
 	"os"
 	"sync"
 
+	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapters/outboundgroup"
 	"github.com/Dreamacro/clash/adapters/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/profile"
+	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
@@ -72,6 +76,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateDNS(cfg.DNS)
 	updateHosts(cfg.Hosts)
 	updateExperimental(cfg)
+	updateProfile(cfg)
 }
 
 func GetGeneral() *config.General {
@@ -207,5 +212,40 @@ func updateUsers(users []auth.AuthUser) {
 	authStore.SetAuthenticator(authenticator)
 	if authenticator != nil {
 		log.Infoln("Authentication of local server updated")
+	}
+}
+
+func updateProfile(cfg *config.Config) {
+	profileCfg := cfg.Profile
+
+	profile.StoreSelected.Store(profileCfg.StoreSelected)
+	if profileCfg.StoreSelected {
+		patchSelectGroup(cfg.Proxies)
+	}
+}
+
+func patchSelectGroup(proxies map[string]C.Proxy) {
+	mapping := cachefile.Cache().SelectedMap()
+	if mapping == nil {
+		return
+	}
+
+	for name, proxy := range proxies {
+		outbound, ok := proxy.(*outbound.Proxy)
+		if !ok {
+			continue
+		}
+
+		selector, ok := outbound.ProxyAdapter.(*outboundgroup.Selector)
+		if !ok {
+			continue
+		}
+
+		selected, exist := mapping[name]
+		if !exist {
+			continue
+		}
+
+		selector.Set(selected)
 	}
 }
