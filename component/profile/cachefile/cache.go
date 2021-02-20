@@ -26,7 +26,6 @@ type cache struct {
 type CacheFile struct {
 	path  string
 	model *cache
-	enc   *gob.Encoder
 	buf   *bytes.Buffer
 	mux   sync.Mutex
 }
@@ -39,15 +38,11 @@ func (c *CacheFile) SetSelected(group, selected string) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	model, err := c.element()
-	if err != nil {
-		log.Warnln("[CacheFile] read cache %s failed: %s", c.path, err.Error())
-		return
-	}
+	model := c.element()
 
 	model.Selected[group] = selected
 	c.buf.Reset()
-	if err := c.enc.Encode(model); err != nil {
+	if err := gob.NewEncoder(c.buf).Encode(model); err != nil {
 		log.Warnln("[CacheFile] encode gob failed: %s", err.Error())
 		return
 	}
@@ -66,11 +61,7 @@ func (c *CacheFile) SelectedMap() map[string]string {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	model, err := c.element()
-	if err != nil {
-		log.Warnln("[CacheFile] read cache %s failed: %s", c.path, err.Error())
-		return nil
-	}
+	model := c.element()
 
 	mapping := map[string]string{}
 	for k, v := range model.Selected {
@@ -79,9 +70,9 @@ func (c *CacheFile) SelectedMap() map[string]string {
 	return mapping
 }
 
-func (c *CacheFile) element() (*cache, error) {
+func (c *CacheFile) element() *cache {
 	if c.model != nil {
-		return c.model, nil
+		return c.model
 	}
 
 	model := &cache{
@@ -90,24 +81,19 @@ func (c *CacheFile) element() (*cache, error) {
 
 	if buf, err := ioutil.ReadFile(c.path); err == nil {
 		bufReader := bytes.NewBuffer(buf)
-		dec := gob.NewDecoder(bufReader)
-		if err := dec.Decode(model); err != nil {
-			return nil, err
-		}
+		gob.NewDecoder(bufReader).Decode(model)
 	}
 
 	c.model = model
-	return c.model, nil
+	return c.model
 }
 
 // Cache return singleton of CacheFile
 func Cache() *CacheFile {
 	initOnce.Do(func() {
-		buf := &bytes.Buffer{}
 		defaultCache = &CacheFile{
 			path: C.Path.Cache(),
-			buf:  buf,
-			enc:  gob.NewEncoder(buf),
+			buf:  &bytes.Buffer{},
 		}
 	})
 
