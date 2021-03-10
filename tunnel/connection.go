@@ -20,11 +20,12 @@ import (
 func handleHTTP(ctx *context.HTTPContext, outbound net.Conn) {
 	req := ctx.Request()
 	conn := ctx.Conn()
-	host := req.Host
 
 	inboundReader := bufio.NewReader(conn)
 	outboundReader := bufio.NewReader(outbound)
 
+	inbound.RemoveExtraHTTPHostPort(req)
+	host := req.Host
 	for {
 		keepAlive := strings.TrimSpace(strings.ToLower(req.Header.Get("Proxy-Connection"))) == "keep-alive"
 
@@ -79,6 +80,7 @@ func handleHTTP(ctx *context.HTTPContext, outbound net.Conn) {
 			break
 		}
 
+		inbound.RemoveExtraHTTPHostPort(req)
 		// Sometimes firefox just open a socket to process multiple domains in HTTP
 		// The temporary solution is close connection when encountering different HOST
 		if req.Host != host {

@@ -43,3 +43,19 @@ func RemoveHopByHopHeaders(header http.Header) {
 		header.Del(strings.TrimSpace(h))
 	}
 }
+
+// RemoveExtraHTTPHostPort remove extra host port (example.com:80 --> example.com)
+// It resolves the behavior of some HTTP servers that do not handle host:80 (e.g. baidu.com)
+func RemoveExtraHTTPHostPort(req *http.Request) {
+	host := req.Host
+	if host == "" {
+		host = req.URL.Host
+	}
+
+	if pHost, port, err := net.SplitHostPort(host); err == nil && port == "80" {
+		host = pHost
+	}
+
+	req.Host = host
+	req.URL.Host = host
+}
