@@ -81,6 +81,8 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 			g.buf = nil
 		}
 		return
+	} else if g.response == nil {
+		return 0, net.ErrClosed
 	}
 
 	buf := make([]byte, 5)
