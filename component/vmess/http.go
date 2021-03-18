@@ -1,6 +1,7 @@
 package vmess
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
@@ -12,7 +13,7 @@ import (
 type httpConn struct {
 	net.Conn
 	cfg        *HTTPConfig
-	rhandshake bool
+	reader     *bufio.Reader
 	whandshake bool
 }
 
@@ -25,8 +26,8 @@ type HTTPConfig struct {
 
 // Read implements net.Conn.Read()
 func (hc *httpConn) Read(b []byte) (int, error) {
-	if hc.rhandshake {
-		n, err := hc.Conn.Read(b)
+	if hc.reader != nil {
+		n, err := hc.reader.Read(b)
 		return n, err
 	}
 
@@ -40,8 +41,8 @@ func (hc *httpConn) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	hc.rhandshake = true
-	return hc.Conn.Read(b)
+	hc.reader = reader.R
+	return reader.R.Read(b)
 }
 
 // Write implements io.Writer.
