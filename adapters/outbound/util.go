@@ -98,3 +98,9 @@ func resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 	}
 	return net.ResolveUDPAddr(network, net.JoinHostPort(ip.String(), port))
 }
+
+func safeConnClose(c net.Conn, err error) {
+	if err != nil {
+		c.Close()
+	}
+}

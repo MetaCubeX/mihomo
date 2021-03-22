@@ -55,8 +55,8 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 	return c, err
 }
 
-func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	// gun transport, TODO: Optimize mux dial code
+func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	// gun transport
 	if t.transport != nil {
 		c, err := gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
@@ -76,6 +76,9 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 	tcpKeepAlive(c)
+
+	defer safeConnClose(c, err)
+
 	c, err = t.StreamConn(c, metadata)
 	if err != nil {
 		return nil, err
@@ -84,30 +87,27 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 	return NewConn(c, t), err
 }
 
-func (t *Trojan) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	// gun transport, TODO: Optimize mux dial code
+func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
+	var c net.Conn
+
+	// grpc transport
 	if t.transport != nil {
-		c, err := gun.StreamGunWithTransport(t.transport, t.gunConfig)
+		c, err = gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
-
-		if err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata)); err != nil {
-			c.Close()
-			return nil, err
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+		defer cancel()
+		c, err = dialer.DialContext(ctx, "tcp", t.addr)
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
-
-		pc := t.instance.PacketConn(c)
-		return newPacketConn(pc, t), err
+		tcpKeepAlive(c)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
-	defer cancel()
-	c, err := dialer.DialContext(ctx, "tcp", t.addr)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
-	}
-	tcpKeepAlive(c)
+	defer safeConnClose(c, err)
+
 	c, err = t.instance.StreamConn(c)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)

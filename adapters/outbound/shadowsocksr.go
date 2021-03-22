@@ -57,12 +57,14 @@ func (ssr *ShadowSocksR) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn,
 	return c, err
 }
 
-func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", ssr.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ssr.addr, err)
 	}
 	tcpKeepAlive(c)
+
+	defer safeConnClose(c, err)
 
 	c, err = ssr.StreamConn(c, metadata)
 	return NewConn(c, ssr), err
@@ -76,6 +78,7 @@ func (ssr *ShadowSocksR) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 
 	addr, err := resolveUDPAddr("udp", ssr.addr)
 	if err != nil {
+		pc.Close()
 		return nil, err
 	}
 

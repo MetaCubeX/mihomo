@@ -55,7 +55,7 @@ func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, err
 }
 
-func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	if s.version == snell.Version2 {
 		c, err := s.pool.Get()
 		if err != nil {
@@ -63,7 +63,10 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, 
 		}
 
 		port, _ := strconv.Atoi(metadata.DstPort)
-		err = snell.WriteHeader(c, metadata.String(), uint(port), s.version)
+		if err = snell.WriteHeader(c, metadata.String(), uint(port), s.version); err != nil {
+			c.Close()
+			return nil, err
+		}
 		return NewConn(c, s), err
 	}
 
@@ -72,6 +75,8 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, 
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
 	}
 	tcpKeepAlive(c)
+
+	defer safeConnClose(c, err)
 
 	c, err = s.StreamConn(c, metadata)
 	return NewConn(c, s), err
