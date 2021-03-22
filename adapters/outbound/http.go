@@ -51,12 +51,14 @@ func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, nil
 }
 
-func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", h.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
 	}
 	tcpKeepAlive(c)
+
+	defer safeConnClose(c, err)
 
 	c, err = h.StreamConn(c, metadata)
 	if err != nil {

@@ -58,12 +58,14 @@ func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error)
 	return c, nil
 }
 
-func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
 	tcpKeepAlive(c)
+
+	defer safeConnClose(c, err)
 
 	c, err = ss.StreamConn(c, metadata)
 	if err != nil {
@@ -88,11 +90,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		c = cc
 	}
 
-	defer func() {
-		if err != nil {
-			c.Close()
-		}
-	}()
+	defer safeConnClose(c, err)
 
 	tcpKeepAlive(c)
 	var user *socks5.User
