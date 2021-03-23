@@ -122,11 +122,7 @@ func (t *DomainTrie) search(node *Node, parts []string) *Node {
 		}
 	}
 
-	if c := node.getChild(dotWildcard); c != nil {
-		return c
-	}
-
-	return nil
+	return node.getChild(dotWildcard)
 }
 
 // New returns a new, empty Trie.

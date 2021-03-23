@@ -40,7 +40,7 @@ func ParseProxyProvider(name string, mapping map[string]interface{}) (ProxyProvi
 		return nil, err
 	}
 
-	var hcInterval uint = 0
+	var hcInterval uint
 	if schema.HealthCheck.Enable {
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
