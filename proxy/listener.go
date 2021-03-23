@@ -19,7 +19,7 @@ var (
 
 	socksListener     *socks.SockListener
 	socksUDPListener  *socks.SockUDPListener
-	httpListener      *http.HttpListener
+	httpListener      *http.HTTPListener
 	redirListener     *redir.RedirListener
 	redirUDPListener  *redir.RedirUDPListener
 	tproxyListener    *redir.TProxyListener
@@ -78,7 +78,7 @@ func ReCreateHTTP(port int) error {
 	}
 
 	var err error
-	httpListener, err = http.NewHttpProxy(addr)
+	httpListener, err = http.NewHTTPProxy(addr)
 	if err != nil {
 		return err
 	}
@@ -316,9 +316,8 @@ func genAddr(host string, port int, allowLan bool) string {
 	if allowLan {
 		if host == "*" {
 			return fmt.Sprintf(":%d", port)
-		} else {
-			return fmt.Sprintf("%s:%d", host, port)
 		}
+		return fmt.Sprintf("%s:%d", host, port)
 	}
 
 	return fmt.Sprintf("127.0.0.1:%d", port)

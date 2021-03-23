@@ -90,10 +90,7 @@ func (hc *h2Conn) Close() error {
 	if err := hc.ClientConn.Shutdown(hc.res.Request.Context()); err != nil {
 		return err
 	}
-	if err := hc.Conn.Close(); err != nil {
-		return err
-	}
-	return nil
+	return hc.Conn.Close()
 }
 
 func StreamH2Conn(conn net.Conn, cfg *H2Config) (net.Conn, error) {

@@ -173,7 +173,7 @@ func (s *searcher) searchSocketPid(socket uint64) (uint32, error) {
 }
 
 func newSearcher(major int) *searcher {
-	var s *searcher = nil
+	var s *searcher
 	switch major {
 	case 11:
 		s = &searcher{

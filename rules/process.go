@@ -45,15 +45,15 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 	return strings.EqualFold(cached.(string), ps.process)
 }
 
-func (p *Process) Adapter() string {
-	return p.adapter
+func (ps *Process) Adapter() string {
+	return ps.adapter
 }
 
-func (p *Process) Payload() string {
-	return p.process
+func (ps *Process) Payload() string {
+	return ps.process
 }
 
-func (p *Process) ShouldResolveIP() bool {
+func (ps *Process) ShouldResolveIP() bool {
 	return false
 }
 

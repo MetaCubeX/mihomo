@@ -16,19 +16,19 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 )
 
-type HttpListener struct {
+type HTTPListener struct {
 	net.Listener
 	address string
 	closed  bool
 	cache   *cache.Cache
 }
 
-func NewHttpProxy(addr string) (*HttpListener, error) {
+func NewHTTPProxy(addr string) (*HTTPListener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	hl := &HttpListener{l, addr, false, cache.New(30 * time.Second)}
+	hl := &HTTPListener{l, addr, false, cache.New(30 * time.Second)}
 
 	go func() {
 		log.Infoln("HTTP proxy listening at: %s", addr)
@@ -48,12 +48,12 @@ func NewHttpProxy(addr string) (*HttpListener, error) {
 	return hl, nil
 }
 
-func (l *HttpListener) Close() {
+func (l *HTTPListener) Close() {
 	l.closed = true
 	l.Listener.Close()
 }
 
-func (l *HttpListener) Address() string {
+func (l *HTTPListener) Address() string {
 	return l.address
 }
 
