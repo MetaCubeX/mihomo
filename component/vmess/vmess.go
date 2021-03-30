@@ -61,6 +61,7 @@ type Client struct {
 	user     []*ID
 	uuid     *uuid.UUID
 	security Security
+	isAead   bool
 }
 
 // Config of vmess
@@ -70,12 +71,13 @@ type Config struct {
 	Security string
 	Port     string
 	HostName string
+	IsAead   bool
 }
 
 // StreamConn return a Conn with net.Conn and DstAddr
 func (c *Client) StreamConn(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 	r := rand.Intn(len(c.user))
-	return newConn(conn, c.user[r], dst, c.security)
+	return newConn(conn, c.user[r], dst, c.security, c.isAead)
 }
 
 // NewClient return Client instance
@@ -106,5 +108,6 @@ func NewClient(config Config) (*Client, error) {
 		user:     newAlterIDs(newID(&uid), config.AlterID),
 		uuid:     &uid,
 		security: security,
+		isAead:   config.IsAead,
 	}, nil
 }

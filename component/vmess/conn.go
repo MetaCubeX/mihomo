@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"hash/fnv"
@@ -34,6 +35,7 @@ type Conn struct {
 	respBodyKey []byte
 	respV       byte
 	security    byte
+	isAead      bool
 
 	received bool
 }
@@ -57,11 +59,12 @@ func (vc *Conn) Read(b []byte) (int, error) {
 func (vc *Conn) sendRequest() error {
 	timestamp := time.Now()
 
-	h := hmac.New(md5.New, vc.id.UUID.Bytes())
-	binary.Write(h, binary.BigEndian, uint64(timestamp.Unix()))
-	_, err := vc.Conn.Write(h.Sum(nil))
-	if err != nil {
-		return err
+	if !vc.isAead {
+		h := hmac.New(md5.New, vc.id.UUID.Bytes())
+		binary.Write(h, binary.BigEndian, uint64(timestamp.Unix()))
+		if _, err := vc.Conn.Write(h.Sum(nil)); err != nil {
+			return err
+		}
 	}
 
 	buf := &bytes.Buffer{}
@@ -99,30 +102,77 @@ func (vc *Conn) sendRequest() error {
 	fnv1a.Write(buf.Bytes())
 	buf.Write(fnv1a.Sum(nil))
 
-	block, err := aes.NewCipher(vc.id.CmdKey)
-	if err != nil {
+	if !vc.isAead {
+		block, err := aes.NewCipher(vc.id.CmdKey)
+		if err != nil {
+			return err
+		}
+
+		stream := cipher.NewCFBEncrypter(block, hashTimestamp(timestamp))
+		stream.XORKeyStream(buf.Bytes(), buf.Bytes())
+		_, err = vc.Conn.Write(buf.Bytes())
 		return err
 	}
 
-	stream := cipher.NewCFBEncrypter(block, hashTimestamp(timestamp))
-	stream.XORKeyStream(buf.Bytes(), buf.Bytes())
-	_, err = vc.Conn.Write(buf.Bytes())
+	var fixedLengthCmdKey [16]byte
+	copy(fixedLengthCmdKey[:], vc.id.CmdKey)
+	vmessout := sealVMessAEADHeader(fixedLengthCmdKey, buf.Bytes(), timestamp)
+	_, err := vc.Conn.Write(vmessout)
 	return err
 }
 
 func (vc *Conn) recvResponse() error {
-	block, err := aes.NewCipher(vc.respBodyKey[:])
-	if err != nil {
-		return err
-	}
+	var buf []byte
+	if !vc.isAead {
+		block, err := aes.NewCipher(vc.respBodyKey[:])
+		if err != nil {
+			return err
+		}
 
-	stream := cipher.NewCFBDecrypter(block, vc.respBodyIV[:])
-	buf := make([]byte, 4)
-	_, err = io.ReadFull(vc.Conn, buf)
-	if err != nil {
-		return err
+		stream := cipher.NewCFBDecrypter(block, vc.respBodyIV[:])
+		buf = make([]byte, 4)
+		_, err = io.ReadFull(vc.Conn, buf)
+		if err != nil {
+			return err
+		}
+		stream.XORKeyStream(buf, buf)
+	} else {
+		aeadResponseHeaderLengthEncryptionKey := kdf(vc.respBodyKey[:], kdfSaltConstAEADRespHeaderLenKey)[:16]
+		aeadResponseHeaderLengthEncryptionIV := kdf(vc.respBodyIV[:], kdfSaltConstAEADRespHeaderLenIV)[:12]
+
+		aeadResponseHeaderLengthEncryptionKeyAESBlock, _ := aes.NewCipher(aeadResponseHeaderLengthEncryptionKey)
+		aeadResponseHeaderLengthEncryptionAEAD, _ := cipher.NewGCM(aeadResponseHeaderLengthEncryptionKeyAESBlock)
+
+		aeadEncryptedResponseHeaderLength := make([]byte, 18)
+		if _, err := io.ReadFull(vc.Conn, aeadEncryptedResponseHeaderLength); err != nil {
+			return err
+		}
+
+		decryptedResponseHeaderLengthBinaryBuffer, err := aeadResponseHeaderLengthEncryptionAEAD.Open(nil, aeadResponseHeaderLengthEncryptionIV, aeadEncryptedResponseHeaderLength[:], nil)
+		if err != nil {
+			return err
+		}
+
+		decryptedResponseHeaderLength := binary.BigEndian.Uint16(decryptedResponseHeaderLengthBinaryBuffer)
+		aeadResponseHeaderPayloadEncryptionKey := kdf(vc.respBodyKey[:], kdfSaltConstAEADRespHeaderPayloadKey)[:16]
+		aeadResponseHeaderPayloadEncryptionIV := kdf(vc.respBodyIV[:], kdfSaltConstAEADRespHeaderPayloadIV)[:12]
+		aeadResponseHeaderPayloadEncryptionKeyAESBlock, _ := aes.NewCipher(aeadResponseHeaderPayloadEncryptionKey)
+		aeadResponseHeaderPayloadEncryptionAEAD, _ := cipher.NewGCM(aeadResponseHeaderPayloadEncryptionKeyAESBlock)
+
+		encryptedResponseHeaderBuffer := make([]byte, decryptedResponseHeaderLength+16)
+		if _, err := io.ReadFull(vc.Conn, encryptedResponseHeaderBuffer); err != nil {
+			return err
+		}
+
+		buf, err = aeadResponseHeaderPayloadEncryptionAEAD.Open(nil, aeadResponseHeaderPayloadEncryptionIV, encryptedResponseHeaderBuffer, nil)
+		if err != nil {
+			return err
+		}
+
+		if len(buf) < 4 {
+			return errors.New("unexpected buffer length")
+		}
 	}
-	stream.XORKeyStream(buf, buf)
 
 	if buf[0] != vc.respV {
 		return errors.New("unexpected response header")
@@ -147,7 +197,7 @@ func hashTimestamp(t time.Time) []byte {
 }
 
 // newConn return a Conn instance
-func newConn(conn net.Conn, id *ID, dst *DstAddr, security Security) (*Conn, error) {
+func newConn(conn net.Conn, id *ID, dst *DstAddr, security Security, isAead bool) (*Conn, error) {
 	randBytes := make([]byte, 33)
 	rand.Read(randBytes)
 	reqBodyIV := make([]byte, 16)
@@ -156,8 +206,22 @@ func newConn(conn net.Conn, id *ID, dst *DstAddr, security Security) (*Conn, err
 	copy(reqBodyKey[:], randBytes[16:32])
 	respV := randBytes[32]
 
-	respBodyKey := md5.Sum(reqBodyKey[:])
-	respBodyIV := md5.Sum(reqBodyIV[:])
+	var (
+		respBodyKey []byte
+		respBodyIV  []byte
+	)
+
+	if isAead {
+		bodyKey := sha256.Sum256(reqBodyKey)
+		bodyIV := sha256.Sum256(reqBodyIV)
+		respBodyKey = bodyKey[:16]
+		respBodyIV = bodyIV[:16]
+	} else {
+		bodyKey := md5.Sum(reqBodyKey)
+		bodyIV := md5.Sum(reqBodyIV)
+		respBodyKey = bodyKey[:]
+		respBodyIV = bodyIV[:]
+	}
 
 	var writer io.Writer
 	var reader io.Reader
@@ -202,6 +266,7 @@ func newConn(conn net.Conn, id *ID, dst *DstAddr, security Security) (*Conn, err
 		reader:      reader,
 		writer:      writer,
 		security:    security,
+		isAead:      isAead,
 	}
 	if err := c.sendRequest(); err != nil {
 		return nil, err
