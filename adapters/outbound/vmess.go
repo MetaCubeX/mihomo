@@ -246,6 +246,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		Security: security,
 		HostName: option.Server,
 		Port:     strconv.Itoa(option.Port),
+		IsAead:   option.AlterID == 0,
 	})
 	if err != nil {
 		return nil, err
