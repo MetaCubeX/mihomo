@@ -54,7 +54,12 @@ func handleHTTP(ctx *context.HTTPContext, outbound net.Conn) {
 			goto handleResponse
 		}
 
-		if keepAlive || resp.ContentLength >= 0 {
+		// close conn when header `Connection` is `close`
+		if resp.Header.Get("Connection") == "close" {
+			keepAlive = false
+		}
+
+		if keepAlive {
 			resp.Header.Set("Proxy-Connection", "keep-alive")
 			resp.Header.Set("Connection", "keep-alive")
 			resp.Header.Set("Keep-Alive", "timeout=4")
