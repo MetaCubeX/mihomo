@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
 
 	D "github.com/miekg/dns"
 )
@@ -83,12 +84,12 @@ func newDoHClient(url string, r *Resolver) *dohClient {
 					return nil, err
 				}
 
-				ip, err := r.ResolveIPv4(host)
+				ip, err := resolver.ResolveIPWithResolver(host, r)
 				if err != nil {
 					return nil, err
 				}
 
-				return dialer.DialContext(ctx, "tcp4", net.JoinHostPort(ip.String(), port))
+				return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
 			},
 		},
 	}

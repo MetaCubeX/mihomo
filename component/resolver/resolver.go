@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"net"
 	"strings"
 	"time"
@@ -66,7 +67,7 @@ func ResolveIPv4(host string) (net.IP, error) {
 		return nil, ErrIPNotFound
 	}
 
-	return ipAddrs[0], nil
+	return ipAddrs[rand.Intn(len(ipAddrs))], nil
 }
 
 // ResolveIPv6 with a host, return ipv6
@@ -102,20 +103,20 @@ func ResolveIPv6(host string) (net.IP, error) {
 		return nil, ErrIPNotFound
 	}
 
-	return ipAddrs[0], nil
+	return ipAddrs[rand.Intn(len(ipAddrs))], nil
 }
 
-// ResolveIP with a host, return ip
-func ResolveIP(host string) (net.IP, error) {
+// ResolveIPWithResolver same as ResolveIP, but with a resolver
+func ResolveIPWithResolver(host string, r Resolver) (net.IP, error) {
 	if node := DefaultHosts.Search(host); node != nil {
 		return node.Data.(net.IP), nil
 	}
 
-	if DefaultResolver != nil {
+	if r != nil {
 		if DisableIPv6 {
-			return DefaultResolver.ResolveIPv4(host)
+			return r.ResolveIPv4(host)
 		}
-		return DefaultResolver.ResolveIP(host)
+		return r.ResolveIP(host)
 	} else if DisableIPv6 {
 		return ResolveIPv4(host)
 	}
@@ -131,4 +132,9 @@ func ResolveIP(host string) (net.IP, error) {
 	}
 
 	return ipAddr.IP, nil
+}
+
+// ResolveIP with a host, return ip
+func ResolveIP(host string) (net.IP, error) {
+	return ResolveIPWithResolver(host, DefaultResolver)
 }
