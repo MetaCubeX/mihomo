@@ -145,7 +145,7 @@ func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
 }
 
 func (r *Resolver) batchExchange(clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
-	fast, ctx := picker.WithTimeout(context.Background(), time.Second*5)
+	fast, ctx := picker.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
 	for _, client := range clients {
 		r := client
 		fast.Go(func() (interface{}, error) {
