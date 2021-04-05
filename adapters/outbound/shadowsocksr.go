@@ -11,6 +11,7 @@ import (
 	"github.com/Dreamacro/clash/component/ssr/obfs"
 	"github.com/Dreamacro/clash/component/ssr/protocol"
 	C "github.com/Dreamacro/clash/constant"
+
 	"github.com/Dreamacro/go-shadowsocks2/core"
 	"github.com/Dreamacro/go-shadowsocks2/shadowaead"
 	"github.com/Dreamacro/go-shadowsocks2/shadowstream"
