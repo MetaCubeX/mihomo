@@ -335,7 +335,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}
 
 			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
-				log.Debugln("%v UDP is not supported", adapter.Name())
+				log.Debugln("%s UDP is not supported", adapter.Name())
 				continue
 			}
 			return adapter, rule, nil
