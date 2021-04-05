@@ -167,7 +167,7 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config) *http2.Transport {
 		state := cn.ConnectionState()
 		if p := state.NegotiatedProtocol; p != http2.NextProtoTLS {
 			cn.Close()
-			return nil, errors.New("http2: unexpected ALPN protocol " + p + "; want q" + http2.NextProtoTLS)
+			return nil, fmt.Errorf("http2: unexpected ALPN protocol %s, want %s", p, http2.NextProtoTLS)
 		}
 		return cn, nil
 	}

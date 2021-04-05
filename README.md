@@ -57,4 +57,3 @@ This software is released under the GPL-3.0 license.
 - [x] Redir proxy
 - [x] UDP support
 - [x] Connection manager
-- [ ] ~~Event API~~

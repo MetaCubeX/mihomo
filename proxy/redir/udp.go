@@ -75,5 +75,5 @@ func handleRedirUDP(pc net.PacketConn, buf []byte, lAddr *net.UDPAddr, rAddr *ne
 		lAddr: lAddr,
 		buf:   buf,
 	}
-	tunnel.AddPacket(adapters.NewPacket(target, pkt, C.REDIR))
+	tunnel.AddPacket(adapters.NewPacket(target, pkt, C.TPROXY))
 }
