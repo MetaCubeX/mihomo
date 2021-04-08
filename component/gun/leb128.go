@@ -14,26 +14,6 @@ var sevenbits = [...]byte{
 	0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
 }
 
-func decodeUleb128(b []byte) (u uint64, n uint8) {
-	l := uint8(len(b) & 0xff)
-	// The longest LEB128 encoded sequence is 10 byte long (9 0xff's and 1 0x7f)
-	// so make sure we won't overflow.
-	if l > 10 {
-		l = 10
-	}
-
-	var i uint8
-	for i = 0; i < l; i++ {
-		u |= uint64(b[i]&0x7f) << (7 * i)
-		if b[i]&0x80 == 0 {
-			n = uint8(i + 1)
-			return
-		}
-	}
-
-	return
-}
-
 func appendUleb128(b []byte, v uint64) []byte {
 	// If it's less than or equal to 7-bit
 	if v < 0x80 {
