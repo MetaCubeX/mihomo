@@ -83,7 +83,7 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 			g.br = nil
 		}
 		return
-	} else if g.remain != 0 {
+	} else if g.remain > 0 {
 		size := g.remain
 		if len(b) < size {
 			size = len(b)
@@ -113,7 +113,11 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 	if len(b) < bufferedSize {
 		n, err = br.Read(b)
 		g.br = br
-		g.remain = int(protobufPayloadLen) - n - g.br.Buffered()
+		remain := int(protobufPayloadLen) - n - g.br.Buffered()
+		if remain < 0 {
+			return 0, ErrInvalidLength
+		}
+		g.remain = remain
 		return
 	}
 
