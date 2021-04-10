@@ -273,7 +273,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	switch option.Network {
 	case "h2":
 		if len(option.HTTP2Opts.Host) == 0 {
-			option.HTTP2Opts.Host = append(option.HTTP2Opts.Host, option.Server)
+			option.HTTP2Opts.Host = append(option.HTTP2Opts.Host, "www.example.com")
 		}
 	case "grpc":
 		dialFn := func(network, addr string) (net.Conn, error) {
