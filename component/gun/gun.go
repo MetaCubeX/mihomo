@@ -64,6 +64,7 @@ func (g *Conn) initRequest() {
 
 	if !g.close.Load() {
 		g.response = response
+		g.br = bufio.NewReader(response.Body)
 	} else {
 		response.Body.Close()
 	}
@@ -75,24 +76,13 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 		return 0, g.err
 	}
 
-	if g.br != nil {
-		remain := g.br.Buffered()
-		if len(b) < remain {
-			remain = len(b)
-		}
-
-		n, err = g.br.Read(b[:remain])
-		if g.br.Buffered() == 0 {
-			g.br = nil
-		}
-		return
-	} else if g.remain > 0 {
+	if g.remain > 0 {
 		size := g.remain
 		if len(b) < size {
 			size = len(b)
 		}
 
-		n, err = g.response.Body.Read(b[:size])
+		n, err = io.ReadFull(g.br, b[:size])
 		g.remain -= n
 		return
 	} else if g.response == nil {
@@ -100,55 +90,32 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 	}
 
 	// 0x00 grpclength(uint32) 0x0A uleb128 payload
-	buf := make([]byte, 6)
-	_, err = io.ReadFull(g.response.Body, buf)
+	_, err = g.br.Discard(6)
 	if err != nil {
 		return 0, err
 	}
 
-	br := bufio.NewReaderSize(g.response.Body, 16)
-	protobufPayloadLen, err := binary.ReadUvarint(br)
+	protobufPayloadLen, err := binary.ReadUvarint(g.br)
 	if err != nil {
 		return 0, ErrInvalidLength
 	}
 
-	bufferedSize := br.Buffered()
-	if len(b) < bufferedSize {
-		n, err = br.Read(b)
-		g.br = br
-		remain := int(protobufPayloadLen) - n - g.br.Buffered()
-		if remain < 0 {
-			return 0, ErrInvalidLength
-		}
-		g.remain = remain
-		return
+	size := int(protobufPayloadLen)
+	if len(b) < size {
+		size = len(b)
 	}
 
-	_, err = br.Read(b[:bufferedSize])
+	n, err = io.ReadFull(g.br, b[:size])
 	if err != nil {
 		return
 	}
 
-	offset := int(protobufPayloadLen)
-	if len(b) < int(protobufPayloadLen) {
-		offset = len(b)
-	}
-
-	if offset == bufferedSize {
-		return bufferedSize, nil
-	}
-
-	n, err = io.ReadFull(g.response.Body, b[bufferedSize:offset])
-	if err != nil {
-		return
-	}
-
-	remain := int(protobufPayloadLen) - offset
+	remain := int(protobufPayloadLen) - n
 	if remain > 0 {
 		g.remain = remain
 	}
 
-	return offset, nil
+	return n, nil
 }
 
 func (g *Conn) Write(b []byte) (n int, err error) {
