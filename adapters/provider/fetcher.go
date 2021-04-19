@@ -72,6 +72,8 @@ func (f *fetcher) Initial() (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		isLocal = false
 	}
 
 	if f.vehicle.Type() != File && !isLocal {
