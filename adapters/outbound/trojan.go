@@ -96,6 +96,7 @@ func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
+		defer safeConnClose(c, err)
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
 		defer cancel()
@@ -103,15 +104,13 @@ func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
+		defer safeConnClose(c, err)
 		tcpKeepAlive(c)
 		c, err = t.instance.StreamConn(c)
 		if err != nil {
-			c.Close()
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
 	}
-
-	defer safeConnClose(c, err)
 
 	err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
 	if err != nil {
