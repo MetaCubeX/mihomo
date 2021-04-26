@@ -22,7 +22,8 @@ PLATFORM_LIST = \
 	linux-mips64 \
 	linux-mips64le \
 	freebsd-386 \
-	freebsd-amd64
+	freebsd-amd64 \
+	freebsd-arm64
 
 WINDOWS_ARCH_LIST = \
 	windows-386 \

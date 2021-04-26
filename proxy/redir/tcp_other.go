@@ -1,3 +1,5 @@
+// +build !darwin,!linux,!freebsd
+
 package redir
 
 import (
@@ -8,5 +10,5 @@ import (
 )
 
 func parserPacket(conn net.Conn) (socks5.Addr, error) {
-	return nil, errors.New("Windows not support yet")
+	return nil, errors.New("system not support yet")
 }
