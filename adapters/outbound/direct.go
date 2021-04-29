@@ -12,6 +12,7 @@ type Direct struct {
 	*Base
 }
 
+// DialContext implements C.ProxyAdapter
 func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	address := net.JoinHostPort(metadata.String(), metadata.DstPort)
 
@@ -23,6 +24,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 	return NewConn(c, d), nil
 }
 
+// DialUDP implements C.ProxyAdapter
 func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	pc, err := dialer.ListenPacket("udp", "")
 	if err != nil {

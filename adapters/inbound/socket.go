@@ -8,7 +8,7 @@ import (
 	"github.com/Dreamacro/clash/context"
 )
 
-// NewSocket recieve TCP inbound and return ConnContext
+// NewSocket receive TCP inbound and return ConnContext
 func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnContext {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP

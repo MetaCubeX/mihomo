@@ -54,6 +54,7 @@ type v2rayObfsOption struct {
 	Mux            bool              `obfs:"mux,omitempty"`
 }
 
+// StreamConn implements C.ProxyAdapter
 func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	switch ss.obfsMode {
 	case "tls":
@@ -73,6 +74,7 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 	return c, err
 }
 
+// DialContext implements C.ProxyAdapter
 func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
@@ -86,6 +88,7 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (_
 	return NewConn(c, ss), err
 }
 
+// DialUDP implements C.ProxyAdapter
 func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	pc, err := dialer.ListenPacket("udp", "")
 	if err != nil {
@@ -102,6 +105,7 @@ func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ss), nil
 }
 
+// MarshalJSON implements C.ProxyAdapter
 func (ss *ShadowSocks) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{
 		"type": ss.Type().String(),

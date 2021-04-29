@@ -14,10 +14,12 @@ type Reject struct {
 	*Base
 }
 
+// DialContext implements C.ProxyAdapter
 func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	return NewConn(&NopConn{}, r), nil
 }
 
+// DialUDP implements C.ProxyAdapter
 func (r *Reject) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	return nil, errors.New("match reject rule")
 }

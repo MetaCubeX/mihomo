@@ -35,6 +35,7 @@ type HttpOption struct {
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
 }
 
+// StreamConn implements C.ProxyAdapter
 func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if h.tlsConfig != nil {
 		cc := tls.Client(c, h.tlsConfig)
@@ -51,6 +52,7 @@ func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, nil
 }
 
+// DialContext implements C.ProxyAdapter
 func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", h.addr)
 	if err != nil {

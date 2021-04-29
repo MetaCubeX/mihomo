@@ -19,6 +19,7 @@ type Selector struct {
 	providers  []provider.ProxyProvider
 }
 
+// DialContext implements C.ProxyAdapter
 func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	c, err := s.selectedProxy(true).DialContext(ctx, metadata)
 	if err == nil {
@@ -27,6 +28,7 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 	return c, err
 }
 
+// DialUDP implements C.ProxyAdapter
 func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	pc, err := s.selectedProxy(true).DialUDP(metadata)
 	if err == nil {
@@ -35,6 +37,7 @@ func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	return pc, err
 }
 
+// SupportUDP implements C.ProxyAdapter
 func (s *Selector) SupportUDP() bool {
 	if s.disableUDP {
 		return false
@@ -43,6 +46,7 @@ func (s *Selector) SupportUDP() bool {
 	return s.selectedProxy(false).SupportUDP()
 }
 
+// MarshalJSON implements C.ProxyAdapter
 func (s *Selector) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range getProvidersProxies(s.providers, false) {
@@ -72,6 +76,7 @@ func (s *Selector) Set(name string) error {
 	return errors.New("proxy not exist")
 }
 
+// Unwrap implements C.ProxyAdapter
 func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {
 	return s.selectedProxy(true)
 }
