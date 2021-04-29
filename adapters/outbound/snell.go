@@ -48,6 +48,7 @@ func streamConn(c net.Conn, option streamOption) *snell.Snell {
 	return snell.StreamConn(c, option.psk, option.version)
 }
 
+// StreamConn implements C.ProxyAdapter
 func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 	port, _ := strconv.Atoi(metadata.DstPort)
@@ -55,6 +56,7 @@ func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, err
 }
 
+// DialContext implements C.ProxyAdapter
 func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	if s.version == snell.Version2 {
 		c, err := s.pool.Get()

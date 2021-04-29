@@ -68,6 +68,7 @@ func jumpHash(key uint64, buckets int32) int32 {
 	return int32(b)
 }
 
+// DialContext implements C.ProxyAdapter
 func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
 	defer func() {
 		if err == nil {
@@ -81,6 +82,7 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c
 	return
 }
 
+// DialUDP implements C.ProxyAdapter
 func (lb *LoadBalance) DialUDP(metadata *C.Metadata) (pc C.PacketConn, err error) {
 	defer func() {
 		if err == nil {
@@ -93,6 +95,7 @@ func (lb *LoadBalance) DialUDP(metadata *C.Metadata) (pc C.PacketConn, err error
 	return proxy.DialUDP(metadata)
 }
 
+// SupportUDP implements C.ProxyAdapter
 func (lb *LoadBalance) SupportUDP() bool {
 	return !lb.disableUDP
 }
@@ -130,6 +133,7 @@ func strategyConsistentHashing() strategyFn {
 	}
 }
 
+// Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata) C.Proxy {
 	proxies := lb.proxies(true)
 	return lb.strategyFn(proxies, metadata)
@@ -143,6 +147,7 @@ func (lb *LoadBalance) proxies(touch bool) []C.Proxy {
 	return elm.([]C.Proxy)
 }
 
+// MarshalJSON implements C.ProxyAdapter
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range lb.proxies(false) {

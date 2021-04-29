@@ -33,6 +33,7 @@ func (u *URLTest) Now() string {
 	return u.fast(false).Name()
 }
 
+// DialContext implements C.ProxyAdapter
 func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
 	c, err = u.fast(true).DialContext(ctx, metadata)
 	if err == nil {
@@ -41,6 +42,7 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 	return c, err
 }
 
+// DialUDP implements C.ProxyAdapter
 func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	pc, err := u.fast(true).DialUDP(metadata)
 	if err == nil {
@@ -49,6 +51,7 @@ func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	return pc, err
 }
 
+// Unwrap implements C.ProxyAdapter
 func (u *URLTest) Unwrap(metadata *C.Metadata) C.Proxy {
 	return u.fast(true)
 }
@@ -89,6 +92,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 	return elm.(C.Proxy)
 }
 
+// SupportUDP implements C.ProxyAdapter
 func (u *URLTest) SupportUDP() bool {
 	if u.disableUDP {
 		return false
@@ -97,6 +101,7 @@ func (u *URLTest) SupportUDP() bool {
 	return u.fast(false).SupportUDP()
 }
 
+// MarshalJSON implements C.ProxyAdapter
 func (u *URLTest) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range u.proxies(false) {

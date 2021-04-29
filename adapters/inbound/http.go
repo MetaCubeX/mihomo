@@ -9,7 +9,7 @@ import (
 	"github.com/Dreamacro/clash/context"
 )
 
-// NewHTTP recieve normal http request and return HTTPContext
+// NewHTTP receive normal http request and return HTTPContext
 func NewHTTP(request *http.Request, conn net.Conn) *context.HTTPContext {
 	metadata := parseHTTPAddr(request)
 	metadata.Type = C.HTTP

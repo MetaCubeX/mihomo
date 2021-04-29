@@ -19,6 +19,7 @@ type Relay struct {
 	providers []provider.ProxyProvider
 }
 
+// DialContext implements C.ProxyAdapter
 func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	proxies := r.proxies(metadata, true)
 	if len(proxies) == 0 {
@@ -56,6 +57,7 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, 
 	return outbound.NewConn(c, r), nil
 }
 
+// MarshalJSON implements C.ProxyAdapter
 func (r *Relay) MarshalJSON() ([]byte, error) {
 	var all []string
 	for _, proxy := range r.rawProxies(false) {
