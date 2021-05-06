@@ -29,9 +29,9 @@ func handleHTTP(ctx *context.HTTPContext, outbound net.Conn) {
 	for {
 		keepAlive := strings.TrimSpace(strings.ToLower(req.Header.Get("Proxy-Connection"))) == "keep-alive"
 
-		req.Header.Set("Connection", "close")
 		req.RequestURI = ""
 		inbound.RemoveHopByHopHeaders(req.Header)
+		req.Header.Set("Connection", "close")
 		err := req.Write(outbound)
 		if err != nil {
 			break
@@ -69,14 +69,6 @@ func handleHTTP(ctx *context.HTTPContext, outbound net.Conn) {
 		}
 		err = resp.Write(conn)
 		if err != nil || resp.Close {
-			break
-		}
-
-		// even if resp.Write write body to the connection, but some http request have to Copy to close it
-		buf := pool.Get(pool.RelayBufferSize)
-		_, err = io.CopyBuffer(conn, resp.Body, buf)
-		pool.Put(buf)
-		if err != nil && err != io.EOF {
 			break
 		}
 
