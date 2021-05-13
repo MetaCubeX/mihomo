@@ -6,7 +6,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/Dreamacro/clash/component/socks5"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 func parserPacket(conn net.Conn) (socks5.Addr, error) {
