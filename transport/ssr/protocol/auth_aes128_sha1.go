@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/component/ssr/tools"
 	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/transport/ssr/tools"
 )
 
 type hmacMethod func(key, data []byte) []byte

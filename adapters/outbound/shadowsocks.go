@@ -10,10 +10,10 @@ import (
 
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
-	obfs "github.com/Dreamacro/clash/component/simple-obfs"
-	"github.com/Dreamacro/clash/component/socks5"
-	v2rayObfs "github.com/Dreamacro/clash/component/v2ray-plugin"
 	C "github.com/Dreamacro/clash/constant"
+	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
+	"github.com/Dreamacro/clash/transport/socks5"
+	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	"github.com/Dreamacro/go-shadowsocks2/core"
 )
