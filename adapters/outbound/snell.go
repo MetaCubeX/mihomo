@@ -8,9 +8,9 @@ import (
 
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
-	obfs "github.com/Dreamacro/clash/component/simple-obfs"
-	"github.com/Dreamacro/clash/component/snell"
 	C "github.com/Dreamacro/clash/constant"
+	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
+	"github.com/Dreamacro/clash/transport/snell"
 )
 
 type Snell struct {

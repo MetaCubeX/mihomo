@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/component/socks5"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 type packet struct {

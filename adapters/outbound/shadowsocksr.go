@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/ssr/obfs"
-	"github.com/Dreamacro/clash/component/ssr/protocol"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/ssr/obfs"
+	"github.com/Dreamacro/clash/transport/ssr/protocol"
 
 	"github.com/Dreamacro/go-shadowsocks2/core"
 	"github.com/Dreamacro/go-shadowsocks2/shadowaead"

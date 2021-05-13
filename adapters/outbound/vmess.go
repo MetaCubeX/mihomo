@@ -11,10 +11,10 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/gun"
 	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/component/vmess"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/gun"
+	"github.com/Dreamacro/clash/transport/vmess"
 
 	"golang.org/x/net/http2"
 )

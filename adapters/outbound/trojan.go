@@ -9,9 +9,9 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/gun"
-	"github.com/Dreamacro/clash/component/trojan"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/gun"
+	"github.com/Dreamacro/clash/transport/trojan"
 
 	"golang.org/x/net/http2"
 )

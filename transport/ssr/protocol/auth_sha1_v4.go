@@ -9,7 +9,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/component/ssr/tools"
+	"github.com/Dreamacro/clash/transport/ssr/tools"
 )
 
 func init() {
