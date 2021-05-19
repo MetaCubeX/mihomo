@@ -64,6 +64,7 @@ type DNS struct {
 	DefaultNameserver []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange       *fakeip.Pool
 	Hosts             *trie.DomainTrie
+	NameServerPolicy  map[string]dns.NameServer
 }
 
 // FallbackFilter config
@@ -106,6 +107,7 @@ type RawDNS struct {
 	FakeIPRange       string            `yaml:"fake-ip-range"`
 	FakeIPFilter      []string          `yaml:"fake-ip-filter"`
 	DefaultNameserver []string          `yaml:"default-nameserver"`
+	NameServerPolicy  map[string]string `yaml:"nameserver-policy"`
 }
 
 type RawFallbackFilter struct {
@@ -500,6 +502,23 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 	return nameservers, nil
 }
 
+func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServer, error) {
+	policy := map[string]dns.NameServer{}
+
+	for domain, server := range nsPolicy {
+		nameservers, err := parseNameServer([]string{server})
+		if err != nil {
+			return nil, err
+		}
+		if _, valid := trie.ValidAndSplitDomain(domain); !valid {
+			return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
+		}
+		policy[domain] = nameservers[0]
+	}
+
+	return policy, nil
+}
+
 func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	ipNets := []*net.IPNet{}
 
@@ -534,6 +553,10 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 	}
 
 	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback); err != nil {
+		return nil, err
+	}
+
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy); err != nil {
 		return nil, err
 	}
 
