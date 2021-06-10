@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"

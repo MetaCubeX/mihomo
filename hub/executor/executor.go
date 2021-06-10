@@ -6,9 +6,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
-	"github.com/Dreamacro/clash/adapters/outboundgroup"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/profile"
@@ -232,7 +232,7 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 
 	for name, proxy := range proxies {
-		outbound, ok := proxy.(*outbound.Proxy)
+		outbound, ok := proxy.(*adapter.Proxy)
 		if !ok {
 			continue
 		}

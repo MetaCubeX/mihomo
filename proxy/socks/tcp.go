@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"net"
 
-	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	authStore "github.com/Dreamacro/clash/proxy/auth"
@@ -66,5 +66,5 @@ func HandleSocks(conn net.Conn) {
 		io.Copy(ioutil.Discard, conn)
 		return
 	}
-	tunnel.Add(adapters.NewSocket(target, conn, C.SOCKS))
+	tunnel.Add(inbound.NewSocket(target, conn, C.SOCKS))
 }

@@ -79,7 +79,7 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 
 // DialUDP implements C.ProxyAdapter
 func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {

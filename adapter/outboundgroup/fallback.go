@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/singledo"
 	C "github.com/Dreamacro/clash/constant"
 )

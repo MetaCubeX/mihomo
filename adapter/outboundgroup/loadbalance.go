@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/murmur3"
 	"github.com/Dreamacro/clash/common/singledo"
 	C "github.com/Dreamacro/clash/constant"

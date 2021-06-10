@@ -27,6 +27,10 @@ const (
 	LoadBalance
 )
 
+const (
+	DefaultTCPTimeout = 5 * time.Second
+)
+
 type Connection interface {
 	Chains() Chain
 	AppendToChains(adapter ProxyAdapter)

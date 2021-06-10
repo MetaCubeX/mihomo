@@ -3,7 +3,7 @@ package socks
 import (
 	"net"
 
-	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
@@ -70,5 +70,5 @@ func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
 		payload: payload,
 		bufRef:  buf,
 	}
-	tunnel.AddPacket(adapters.NewPacket(target, packet, C.SOCKS))
+	tunnel.AddPacket(inbound.NewPacket(target, packet, C.SOCKS))
 }

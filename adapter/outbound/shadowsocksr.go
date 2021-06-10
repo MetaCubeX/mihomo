@@ -2,7 +2,6 @@ package outbound
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -89,13 +88,6 @@ func (ssr *ShadowSocksR) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
 	pc = ssr.cipher.PacketConn(pc)
 	pc = ssr.protocol.PacketConn(pc)
 	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ssr), nil
-}
-
-// MarshalJSON implements C.ProxyAdapter
-func (ssr *ShadowSocksR) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"type": ssr.Type().String(),
-	})
 }
 
 func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
