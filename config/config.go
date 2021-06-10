@@ -8,16 +8,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
-	"github.com/Dreamacro/clash/adapters/outboundgroup"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rules"
+	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	yaml "gopkg.in/yaml.v2"
@@ -274,13 +275,13 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
 
-	proxies["DIRECT"] = outbound.NewProxy(outbound.NewDirect())
-	proxies["REJECT"] = outbound.NewProxy(outbound.NewReject())
+	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
+	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
 
 	// parse proxy
 	for idx, mapping := range proxiesConfig {
-		proxy, err := outbound.ParseProxy(mapping)
+		proxy, err := adapter.ParseProxy(mapping)
 		if err != nil {
 			return nil, nil, fmt.Errorf("proxy %d: %w", idx, err)
 		}
@@ -339,7 +340,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			return nil, nil, fmt.Errorf("proxy group %s: the duplicate name", groupName)
 		}
 
-		proxies[groupName] = outbound.NewProxy(group)
+		proxies[groupName] = adapter.NewProxy(group)
 	}
 
 	// initial compatible provider
@@ -368,7 +369,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		},
 		[]provider.ProxyProvider{pd},
 	)
-	proxies["GLOBAL"] = outbound.NewProxy(global)
+	proxies["GLOBAL"] = adapter.NewProxy(global)
 	return proxies, providersMap, nil
 }
 

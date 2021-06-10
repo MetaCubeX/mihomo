@@ -3,7 +3,7 @@ package redir
 import (
 	"net"
 
-	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -75,5 +75,5 @@ func handleRedirUDP(pc net.PacketConn, buf []byte, lAddr *net.UDPAddr, rAddr *ne
 		lAddr: lAddr,
 		buf:   buf,
 	}
-	tunnel.AddPacket(adapters.NewPacket(target, pkt, C.TPROXY))
+	tunnel.AddPacket(inbound.NewPacket(target, pkt, C.TPROXY))
 }

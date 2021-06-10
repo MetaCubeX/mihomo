@@ -1,8 +1,9 @@
-package outbound
+package adapter
 
 import (
 	"fmt"
 
+	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -20,36 +21,36 @@ func ParseProxy(mapping map[string]interface{}) (C.Proxy, error) {
 	)
 	switch proxyType {
 	case "ss":
-		ssOption := &ShadowSocksOption{}
+		ssOption := &outbound.ShadowSocksOption{}
 		err = decoder.Decode(mapping, ssOption)
 		if err != nil {
 			break
 		}
-		proxy, err = NewShadowSocks(*ssOption)
+		proxy, err = outbound.NewShadowSocks(*ssOption)
 	case "ssr":
-		ssrOption := &ShadowSocksROption{}
+		ssrOption := &outbound.ShadowSocksROption{}
 		err = decoder.Decode(mapping, ssrOption)
 		if err != nil {
 			break
 		}
-		proxy, err = NewShadowSocksR(*ssrOption)
+		proxy, err = outbound.NewShadowSocksR(*ssrOption)
 	case "socks5":
-		socksOption := &Socks5Option{}
+		socksOption := &outbound.Socks5Option{}
 		err = decoder.Decode(mapping, socksOption)
 		if err != nil {
 			break
 		}
-		proxy = NewSocks5(*socksOption)
+		proxy = outbound.NewSocks5(*socksOption)
 	case "http":
-		httpOption := &HttpOption{}
+		httpOption := &outbound.HttpOption{}
 		err = decoder.Decode(mapping, httpOption)
 		if err != nil {
 			break
 		}
-		proxy = NewHttp(*httpOption)
+		proxy = outbound.NewHttp(*httpOption)
 	case "vmess":
-		vmessOption := &VmessOption{
-			HTTPOpts: HTTPOptions{
+		vmessOption := &outbound.VmessOption{
+			HTTPOpts: outbound.HTTPOptions{
 				Method: "GET",
 				Path:   []string{"/"},
 			},
@@ -58,21 +59,21 @@ func ParseProxy(mapping map[string]interface{}) (C.Proxy, error) {
 		if err != nil {
 			break
 		}
-		proxy, err = NewVmess(*vmessOption)
+		proxy, err = outbound.NewVmess(*vmessOption)
 	case "snell":
-		snellOption := &SnellOption{}
+		snellOption := &outbound.SnellOption{}
 		err = decoder.Decode(mapping, snellOption)
 		if err != nil {
 			break
 		}
-		proxy, err = NewSnell(*snellOption)
+		proxy, err = outbound.NewSnell(*snellOption)
 	case "trojan":
-		trojanOption := &TrojanOption{}
+		trojanOption := &outbound.TrojanOption{}
 		err = decoder.Decode(mapping, trojanOption)
 		if err != nil {
 			break
 		}
-		proxy, err = NewTrojan(*trojanOption)
+		proxy, err = outbound.NewTrojan(*trojanOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}

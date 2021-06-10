@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapter"
 	C "github.com/Dreamacro/clash/constant"
 
 	"gopkg.in/yaml.v2"
@@ -133,7 +133,7 @@ func proxiesParse(buf []byte) (interface{}, error) {
 
 	proxies := []C.Proxy{}
 	for idx, mapping := range schema.Proxies {
-		proxy, err := outbound.ParseProxy(mapping)
+		proxy, err := adapter.ParseProxy(mapping)
 		if err != nil {
 			return nil, fmt.Errorf("proxy %d error: %w", idx, err)
 		}

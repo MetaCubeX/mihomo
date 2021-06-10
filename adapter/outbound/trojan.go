@@ -3,7 +3,6 @@ package outbound
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -101,7 +100,7 @@ func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		}
 		defer safeConnClose(c, err)
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 		defer cancel()
 		c, err = dialer.DialContext(ctx, "tcp", t.addr)
 		if err != nil {
@@ -122,12 +121,6 @@ func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 
 	pc := t.instance.PacketConn(c)
 	return newPacketConn(pc, t), err
-}
-
-func (t *Trojan) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"type": t.Type().String(),
-	})
 }
 
 func NewTrojan(option TrojanOption) (*Trojan, error) {

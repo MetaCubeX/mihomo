@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	adapters "github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/log"
@@ -106,9 +106,9 @@ keepAlive:
 			conn.Close()
 			return
 		}
-		tunnel.Add(adapters.NewHTTPS(request, conn))
+		tunnel.Add(inbound.NewHTTPS(request, conn))
 		return
 	}
 
-	tunnel.Add(adapters.NewHTTP(request, conn))
+	tunnel.Add(inbound.NewHTTP(request, conn))
 }

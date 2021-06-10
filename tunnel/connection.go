@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/inbound"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/resolver"

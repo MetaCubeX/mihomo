@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/inbound"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/nat"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"

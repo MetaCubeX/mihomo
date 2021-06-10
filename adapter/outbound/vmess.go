@@ -222,7 +222,7 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 
 		c, err = v.client.StreamConn(c, parseVmessAddr(metadata))
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), tcpTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 		defer cancel()
 		c, err = dialer.DialContext(ctx, "tcp", v.addr)
 		if err != nil {

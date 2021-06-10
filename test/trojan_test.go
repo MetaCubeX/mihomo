@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
+	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/docker/docker/api/types/container"
