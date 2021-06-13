@@ -5,25 +5,22 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
 )
 
-type RedirListener struct {
+type Listener struct {
 	net.Listener
 	address string
 	closed  bool
 }
 
-func NewRedirProxy(addr string) (*RedirListener, error) {
+func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	rl := &RedirListener{l, addr, false}
+	rl := &Listener{l, addr, false}
 
 	go func() {
-		log.Infoln("Redir proxy listening at: %s", addr)
 		for {
 			c, err := l.Accept()
 			if err != nil {
@@ -32,28 +29,28 @@ func NewRedirProxy(addr string) (*RedirListener, error) {
 				}
 				continue
 			}
-			go handleRedir(c)
+			go handleRedir(c, in)
 		}
 	}()
 
 	return rl, nil
 }
 
-func (l *RedirListener) Close() {
+func (l *Listener) Close() {
 	l.closed = true
 	l.Listener.Close()
 }
 
-func (l *RedirListener) Address() string {
+func (l *Listener) Address() string {
 	return l.address
 }
 
-func handleRedir(conn net.Conn) {
+func handleRedir(conn net.Conn, in chan<- C.ConnContext) {
 	target, err := parserPacket(conn)
 	if err != nil {
 		conn.Close()
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	tunnel.Add(inbound.NewSocket(target, conn, C.REDIR))
+	in <- inbound.NewSocket(target, conn, C.REDIR)
 }

@@ -37,17 +37,14 @@ func init() {
 	go process()
 }
 
-// Add request to queue
-func Add(ctx C.ConnContext) {
-	tcpQueue <- ctx
+// TCPIn return fan-in queue
+func TCPIn() chan<- C.ConnContext {
+	return tcpQueue
 }
 
-// AddPacket add udp Packet to queue
-func AddPacket(packet *inbound.PacketAdapter) {
-	select {
-	case udpQueue <- packet:
-	default:
-	}
+// UDPIn return fan-in udp queue
+func UDPIn() chan<- *inbound.PacketAdapter {
+	return udpQueue
 }
 
 // Rules return all rules

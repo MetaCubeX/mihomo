@@ -1,22 +1,20 @@
-package redir
+package tproxy
 
 import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/tunnel"
 )
 
-type TProxyListener struct {
+type Listener struct {
 	net.Listener
 	address string
 	closed  bool
 }
 
-func NewTProxy(addr string) (*TProxyListener, error) {
+func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -33,13 +31,12 @@ func NewTProxy(addr string) (*TProxyListener, error) {
 		return nil, err
 	}
 
-	rl := &TProxyListener{
+	rl := &Listener{
 		Listener: l,
 		address:  addr,
 	}
 
 	go func() {
-		log.Infoln("TProxy server listening at: %s", addr)
 		for {
 			c, err := l.Accept()
 			if err != nil {
@@ -48,24 +45,24 @@ func NewTProxy(addr string) (*TProxyListener, error) {
 				}
 				continue
 			}
-			go rl.handleTProxy(c)
+			go rl.handleTProxy(c, in)
 		}
 	}()
 
 	return rl, nil
 }
 
-func (l *TProxyListener) Close() {
+func (l *Listener) Close() {
 	l.closed = true
 	l.Listener.Close()
 }
 
-func (l *TProxyListener) Address() string {
+func (l *Listener) Address() string {
 	return l.address
 }
 
-func (l *TProxyListener) handleTProxy(conn net.Conn) {
+func (l *Listener) handleTProxy(conn net.Conn, in chan<- C.ConnContext) {
 	target := socks5.ParseAddrToSocksAddr(conn.LocalAddr())
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	tunnel.Add(inbound.NewSocket(target, conn, C.TPROXY))
+	in <- inbound.NewSocket(target, conn, C.TPROXY)
 }

@@ -6,26 +6,29 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/listener/http"
+	"github.com/Dreamacro/clash/listener/mixed"
+	"github.com/Dreamacro/clash/listener/redir"
+	"github.com/Dreamacro/clash/listener/socks"
+	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/proxy/http"
-	"github.com/Dreamacro/clash/proxy/mixed"
-	"github.com/Dreamacro/clash/proxy/redir"
-	"github.com/Dreamacro/clash/proxy/socks"
 )
 
 var (
 	allowLan    = false
 	bindAddress = "*"
 
-	socksListener     *socks.SockListener
-	socksUDPListener  *socks.SockUDPListener
-	httpListener      *http.HTTPListener
-	redirListener     *redir.RedirListener
-	redirUDPListener  *redir.RedirUDPListener
-	tproxyListener    *redir.TProxyListener
-	tproxyUDPListener *redir.RedirUDPListener
-	mixedListener     *mixed.MixedListener
-	mixedUDPLister    *socks.SockUDPListener
+	socksListener     *socks.Listener
+	socksUDPListener  *socks.UDPListener
+	httpListener      *http.Listener
+	redirListener     *redir.Listener
+	redirUDPListener  *tproxy.UDPListener
+	tproxyListener    *tproxy.Listener
+	tproxyUDPListener *tproxy.UDPListener
+	mixedListener     *mixed.Listener
+	mixedUDPLister    *socks.UDPListener
 
 	// lock for recreate function
 	socksMux  sync.Mutex
@@ -59,7 +62,7 @@ func SetBindAddress(host string) {
 	bindAddress = host
 }
 
-func ReCreateHTTP(port int) error {
+func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) error {
 	httpMux.Lock()
 	defer httpMux.Unlock()
 
@@ -78,15 +81,16 @@ func ReCreateHTTP(port int) error {
 	}
 
 	var err error
-	httpListener, err = http.NewHTTPProxy(addr)
+	httpListener, err = http.New(addr, tcpIn)
 	if err != nil {
 		return err
 	}
 
+	log.Infoln("HTTP proxy listening at: %s", httpListener.Address())
 	return nil
 }
 
-func ReCreateSocks(port int) error {
+func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) error {
 	socksMux.Lock()
 	defer socksMux.Unlock()
 
@@ -121,12 +125,12 @@ func ReCreateSocks(port int) error {
 		return nil
 	}
 
-	tcpListener, err := socks.NewSocksProxy(addr)
+	tcpListener, err := socks.New(addr, tcpIn)
 	if err != nil {
 		return err
 	}
 
-	udpListener, err := socks.NewSocksUDPProxy(addr)
+	udpListener, err := socks.NewUDP(addr, udpIn)
 	if err != nil {
 		tcpListener.Close()
 		return err
@@ -135,10 +139,11 @@ func ReCreateSocks(port int) error {
 	socksListener = tcpListener
 	socksUDPListener = udpListener
 
+	log.Infoln("SOCKS5 proxy listening at: %s", socksListener.Address())
 	return nil
 }
 
-func ReCreateRedir(port int) error {
+func ReCreateRedir(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) error {
 	redirMux.Lock()
 	defer redirMux.Unlock()
 
@@ -165,20 +170,21 @@ func ReCreateRedir(port int) error {
 	}
 
 	var err error
-	redirListener, err = redir.NewRedirProxy(addr)
+	redirListener, err = redir.New(addr, tcpIn)
 	if err != nil {
 		return err
 	}
 
-	redirUDPListener, err = redir.NewRedirUDPProxy(addr)
+	redirUDPListener, err = tproxy.NewUDP(addr, udpIn)
 	if err != nil {
 		log.Warnln("Failed to start Redir UDP Listener: %s", err)
 	}
 
+	log.Infoln("Redirect proxy listening at: %s", redirListener.Address())
 	return nil
 }
 
-func ReCreateTProxy(port int) error {
+func ReCreateTProxy(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) error {
 	tproxyMux.Lock()
 	defer tproxyMux.Unlock()
 
@@ -205,20 +211,21 @@ func ReCreateTProxy(port int) error {
 	}
 
 	var err error
-	tproxyListener, err = redir.NewTProxy(addr)
+	tproxyListener, err = tproxy.New(addr, tcpIn)
 	if err != nil {
 		return err
 	}
 
-	tproxyUDPListener, err = redir.NewRedirUDPProxy(addr)
+	tproxyUDPListener, err = tproxy.NewUDP(addr, udpIn)
 	if err != nil {
 		log.Warnln("Failed to start TProxy UDP Listener: %s", err)
 	}
 
+	log.Infoln("TProxy server listening at: %s", tproxyListener.Address())
 	return nil
 }
 
-func ReCreateMixed(port int) error {
+func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) error {
 	mixedMux.Lock()
 	defer mixedMux.Unlock()
 
@@ -253,17 +260,18 @@ func ReCreateMixed(port int) error {
 	}
 
 	var err error
-	mixedListener, err = mixed.NewMixedProxy(addr)
+	mixedListener, err = mixed.New(addr, tcpIn)
 	if err != nil {
 		return err
 	}
 
-	mixedUDPLister, err = socks.NewSocksUDPProxy(addr)
+	mixedUDPLister, err = socks.NewUDP(addr, udpIn)
 	if err != nil {
 		mixedListener.Close()
 		return err
 	}
 
+	log.Infoln("Mixed(http+socks5) proxy listening at: %s", mixedListener.Address())
 	return nil
 }
 

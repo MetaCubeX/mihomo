@@ -1,6 +1,6 @@
 // +build !linux
 
-package redir
+package tproxy
 
 import (
 	"errors"

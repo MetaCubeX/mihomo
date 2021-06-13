@@ -7,27 +7,24 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	authStore "github.com/Dreamacro/clash/proxy/auth"
+	authStore "github.com/Dreamacro/clash/listener/auth"
 	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/tunnel"
 )
 
-type SockListener struct {
+type Listener struct {
 	net.Listener
 	address string
 	closed  bool
 }
 
-func NewSocksProxy(addr string) (*SockListener, error) {
+func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	sl := &SockListener{l, addr, false}
+	sl := &Listener{l, addr, false}
 	go func() {
-		log.Infoln("SOCKS proxy listening at: %s", addr)
 		for {
 			c, err := l.Accept()
 			if err != nil {
@@ -36,23 +33,23 @@ func NewSocksProxy(addr string) (*SockListener, error) {
 				}
 				continue
 			}
-			go HandleSocks(c)
+			go HandleSocks(c, in)
 		}
 	}()
 
 	return sl, nil
 }
 
-func (l *SockListener) Close() {
+func (l *Listener) Close() {
 	l.closed = true
 	l.Listener.Close()
 }
 
-func (l *SockListener) Address() string {
+func (l *Listener) Address() string {
 	return l.address
 }
 
-func HandleSocks(conn net.Conn) {
+func HandleSocks(conn net.Conn, in chan<- C.ConnContext) {
 	target, command, err := socks5.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
@@ -66,5 +63,5 @@ func HandleSocks(conn net.Conn) {
 		io.Copy(ioutil.Discard, conn)
 		return
 	}
-	tunnel.Add(inbound.NewSocket(target, conn, C.SOCKS))
+	in <- inbound.NewSocket(target, conn, C.SOCKS)
 }

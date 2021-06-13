@@ -11,28 +11,25 @@ import (
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/auth"
+	C "github.com/Dreamacro/clash/constant"
+	authStore "github.com/Dreamacro/clash/listener/auth"
 	"github.com/Dreamacro/clash/log"
-	authStore "github.com/Dreamacro/clash/proxy/auth"
-	"github.com/Dreamacro/clash/tunnel"
 )
 
-type HTTPListener struct {
+type Listener struct {
 	net.Listener
 	address string
 	closed  bool
 	cache   *cache.Cache
 }
 
-func NewHTTPProxy(addr string) (*HTTPListener, error) {
+func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	hl := &HTTPListener{l, addr, false, cache.New(30 * time.Second)}
-
+	hl := &Listener{l, addr, false, cache.New(30 * time.Second)}
 	go func() {
-		log.Infoln("HTTP proxy listening at: %s", addr)
-
 		for {
 			c, err := hl.Accept()
 			if err != nil {
@@ -41,19 +38,19 @@ func NewHTTPProxy(addr string) (*HTTPListener, error) {
 				}
 				continue
 			}
-			go HandleConn(c, hl.cache)
+			go HandleConn(c, in, hl.cache)
 		}
 	}()
 
 	return hl, nil
 }
 
-func (l *HTTPListener) Close() {
+func (l *Listener) Close() {
 	l.closed = true
 	l.Listener.Close()
 }
 
-func (l *HTTPListener) Address() string {
+func (l *Listener) Address() string {
 	return l.address
 }
 
@@ -70,7 +67,7 @@ func canActivate(loginStr string, authenticator auth.Authenticator, cache *cache
 	return
 }
 
-func HandleConn(conn net.Conn, cache *cache.Cache) {
+func HandleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 	br := bufio.NewReader(conn)
 
 keepAlive:
@@ -106,9 +103,9 @@ keepAlive:
 			conn.Close()
 			return
 		}
-		tunnel.Add(inbound.NewHTTPS(request, conn))
+		in <- inbound.NewHTTPS(request, conn)
 		return
 	}
 
-	tunnel.Add(inbound.NewHTTP(request, conn))
+	in <- inbound.NewHTTP(request, conn)
 }
