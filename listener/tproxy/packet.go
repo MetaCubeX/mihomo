@@ -1,4 +1,4 @@
-package redir
+package tproxy
 
 import (
 	"net"

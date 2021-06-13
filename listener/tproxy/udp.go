@@ -1,4 +1,4 @@
-package redir
+package tproxy
 
 import (
 	"net"
@@ -7,22 +7,21 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/tunnel"
 )
 
-type RedirUDPListener struct {
+type UDPListener struct {
 	net.PacketConn
 	address string
 	closed  bool
 }
 
-func NewRedirUDPProxy(addr string) (*RedirUDPListener, error) {
+func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	rl := &RedirUDPListener{l, addr, false}
+	rl := &UDPListener{l, addr, false}
 
 	c := l.(*net.UDPConn)
 
@@ -53,27 +52,30 @@ func NewRedirUDPProxy(addr string) (*RedirUDPListener, error) {
 			if err != nil {
 				continue
 			}
-			handleRedirUDP(l, buf[:n], lAddr, rAddr)
+			handlePacketConn(l, in, buf[:n], lAddr, rAddr)
 		}
 	}()
 
 	return rl, nil
 }
 
-func (l *RedirUDPListener) Close() error {
+func (l *UDPListener) Close() error {
 	l.closed = true
 	return l.PacketConn.Close()
 }
 
-func (l *RedirUDPListener) Address() string {
+func (l *UDPListener) Address() string {
 	return l.address
 }
 
-func handleRedirUDP(pc net.PacketConn, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {
+func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {
 	target := socks5.ParseAddrToSocksAddr(rAddr)
 	pkt := &packet{
 		lAddr: lAddr,
 		buf:   buf,
 	}
-	tunnel.AddPacket(inbound.NewPacket(target, pkt, C.TPROXY))
+	select {
+	case in <- inbound.NewPacket(target, pkt, C.TPROXY):
+	default:
+	}
 }

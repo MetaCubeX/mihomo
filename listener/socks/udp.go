@@ -9,27 +9,25 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/tunnel"
 )
 
-type SockUDPListener struct {
+type UDPListener struct {
 	net.PacketConn
 	address string
 	closed  bool
 }
 
-func NewSocksUDPProxy(addr string) (*SockUDPListener, error) {
+func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	err = sockopt.UDPReuseaddr(l.(*net.UDPConn))
-	if err != nil {
+	if err := sockopt.UDPReuseaddr(l.(*net.UDPConn)); err != nil {
 		log.Warnln("Failed to Reuse UDP Address: %s", err)
 	}
 
-	sl := &SockUDPListener{l, addr, false}
+	sl := &UDPListener{l, addr, false}
 	go func() {
 		for {
 			buf := pool.Get(pool.RelayBufferSize)
@@ -41,23 +39,23 @@ func NewSocksUDPProxy(addr string) (*SockUDPListener, error) {
 				}
 				continue
 			}
-			handleSocksUDP(l, buf[:n], remoteAddr)
+			handleSocksUDP(l, in, buf[:n], remoteAddr)
 		}
 	}()
 
 	return sl, nil
 }
 
-func (l *SockUDPListener) Close() error {
+func (l *UDPListener) Close() error {
 	l.closed = true
 	return l.PacketConn.Close()
 }
 
-func (l *SockUDPListener) Address() string {
+func (l *UDPListener) Address() string {
 	return l.address
 }
 
-func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, addr net.Addr) {
 	target, payload, err := socks5.DecodeUDPPacket(buf)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
@@ -70,5 +68,8 @@ func handleSocksUDP(pc net.PacketConn, buf []byte, addr net.Addr) {
 		payload: payload,
 		bufRef:  buf,
 	}
-	tunnel.AddPacket(inbound.NewPacket(target, packet, C.SOCKS))
+	select {
+	case in <- inbound.NewPacket(target, packet, C.TPROXY):
+	default:
+	}
 }
