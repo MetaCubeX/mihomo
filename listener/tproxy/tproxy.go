@@ -9,9 +9,9 @@ import (
 )
 
 type Listener struct {
-	net.Listener
-	address string
-	closed  bool
+	listener net.Listener
+	address  string
+	closed   bool
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
@@ -32,7 +32,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	}
 
 	rl := &Listener{
-		Listener: l,
+		listener: l,
 		address:  addr,
 	}
 
@@ -54,7 +54,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 
 func (l *Listener) Close() {
 	l.closed = true
-	l.Listener.Close()
+	l.listener.Close()
 }
 
 func (l *Listener) Address() string {

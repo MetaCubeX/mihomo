@@ -12,10 +12,10 @@ import (
 )
 
 type Listener struct {
-	net.Listener
-	address string
-	closed  bool
-	cache   *cache.Cache
+	listener net.Listener
+	address  string
+	closed   bool
+	cache    *cache.Cache
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
@@ -27,7 +27,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	ml := &Listener{l, addr, false, cache.New(30 * time.Second)}
 	go func() {
 		for {
-			c, err := ml.Accept()
+			c, err := ml.listener.Accept()
 			if err != nil {
 				if ml.closed {
 					break
@@ -43,7 +43,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 
 func (l *Listener) Close() {
 	l.closed = true
-	l.Listener.Close()
+	l.listener.Close()
 }
 
 func (l *Listener) Address() string {
