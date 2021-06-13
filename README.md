@@ -40,6 +40,9 @@ Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash
 ## Premium Release
 [Release](https://github.com/Dreamacro/clash/releases/tag/premium)
 
+## Development
+If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
+
 ## Credits
 
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
