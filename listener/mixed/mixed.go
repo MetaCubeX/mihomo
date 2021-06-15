@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
 	"github.com/Dreamacro/clash/listener/socks"
@@ -51,7 +52,7 @@ func (l *Listener) Address() string {
 }
 
 func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
-	bufConn := NewBufferedConn(conn)
+	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {
 		return
