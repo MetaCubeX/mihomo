@@ -10,6 +10,7 @@ type Port struct {
 	adapter  string
 	port     string
 	isSource bool
+	network  C.NetWork
 }
 
 func (p *Port) RuleType() C.RuleType {
@@ -38,7 +39,11 @@ func (p *Port) ShouldResolveIP() bool {
 	return false
 }
 
-func NewPort(port string, adapter string, isSource bool) (*Port, error) {
+func (p *Port) NetWork() C.NetWork {
+	return p.network
+}
+
+func NewPort(port string, adapter string, isSource bool, network C.NetWork) (*Port, error) {
 	_, err := strconv.Atoi(port)
 	if err != nil {
 		return nil, errPayload
@@ -47,5 +52,6 @@ func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 		adapter:  adapter,
 		port:     port,
 		isSource: isSource,
+		network:  network,
 	}, nil
 }

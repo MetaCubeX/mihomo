@@ -9,6 +9,7 @@ import (
 type Domain struct {
 	domain  string
 	adapter string
+	network C.NetWork
 }
 
 func (d *Domain) RuleType() C.RuleType {
@@ -34,9 +35,14 @@ func (d *Domain) ShouldResolveIP() bool {
 	return false
 }
 
-func NewDomain(domain string, adapter string) *Domain {
+func (d *Domain) NetWork() C.NetWork {
+	return d.network
+}
+
+func NewDomain(domain string, adapter string, network C.NetWork) *Domain {
 	return &Domain{
 		domain:  strings.ToLower(domain),
 		adapter: adapter,
+		network: network,
 	}
 }

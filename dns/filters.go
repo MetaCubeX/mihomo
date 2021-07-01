@@ -3,9 +3,14 @@ package dns
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
+	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/rule/geodata"
+	"github.com/Dreamacro/clash/rule/geodata/router"
+	_ "github.com/Dreamacro/clash/rule/geodata/standard"
 )
+
+var geoIPMatcher *router.GeoIPMatcher
 
 type fallbackIPFilter interface {
 	Match(net.IP) bool
@@ -14,8 +19,35 @@ type fallbackIPFilter interface {
 type geoipFilter struct{}
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
-	record, _ := mmdb.Instance().Country(ip)
-	return record.Country.IsoCode != "CN" && record.Country.IsoCode != ""
+	if geoIPMatcher == nil {
+		countryCode := "cn"
+		geoLoader, err := geodata.GetGeoDataLoader("standard")
+		if err != nil {
+			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
+			return false
+		}
+
+		records, err := geoLoader.LoadGeoIP(countryCode)
+		if err != nil {
+			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
+			return false
+		}
+
+		geoIP := &router.GeoIP{
+			CountryCode:  countryCode,
+			Cidr:         records,
+			ReverseMatch: false,
+		}
+
+		geoIPMatcher, err = router.NewGeoIPMatcher(geoIP)
+
+		if err != nil {
+			log.Errorln("[GeoIPFilter] NewGeoIPMatcher error: %s", err.Error())
+			return false
+		}
+	}
+
+	return !geoIPMatcher.Match(ip)
 }
 
 type ipnetFilter struct {

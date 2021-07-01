@@ -1,5 +1,5 @@
 name: Go
-on: [push, pull_request]
+on: [push]
 jobs:
 
   build:
@@ -30,11 +30,23 @@ jobs:
           staticcheck -- $(go list ./...)
 
       - name: Build
-        if: startsWith(github.ref, 'refs/tags/')
+        #if: startsWith(github.ref, 'refs/tags/')
         env:
           NAME: clash
           BINDIR: bin
         run: make -j releases
+
+      - name: Prepare upload
+        run: |
+          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+          echo "FILE_SHA=$(git describe --tags --always 2>/dev/null)" >> $GITHUB_ENV
+
+      - name: Upload files to Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: clash_${{ env.FILE_SHA }}${{ env.FILE_DATE }}
+          path: |
+            bin/*
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1
@@ -44,3 +56,18 @@ jobs:
         with:
           files: bin/*
           draft: true
+
+      - name: Delete workflow runs
+        uses: GitRML/delete-workflow-runs@main
+        with:
+          retain_days: 1
+          keep_minimum_runs: 2
+
+      - name: Remove old Releases
+        uses: dev-drprasad/delete-older-releases@v0.2.0
+        if: startsWith(github.ref, 'refs/tags/') && !cancelled()
+        with:
+          keep_latest: 1
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
