@@ -3,7 +3,11 @@ package executor
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -20,6 +24,8 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/listener/tproxy"
+	"github.com/Dreamacro/clash/listener/tun/dev"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -70,13 +76,16 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	defer mux.Unlock()
 
 	updateUsers(cfg.Users)
+	updateDNS(cfg.DNS, cfg.General)
 	updateGeneral(cfg.General, force)
+	log.SetLevel(log.DEBUG)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
-	updateDNS(cfg.DNS)
 	updateHosts(cfg.Hosts)
 	updateExperimental(cfg)
 	updateProfile(cfg)
+	updateIPTables(cfg.DNS, cfg.General)
+	log.SetLevel(cfg.General.LogLevel)
 }
 
 func GetGeneral() *config.General {
@@ -93,6 +102,7 @@ func GetGeneral() *config.General {
 			RedirPort:      ports.RedirPort,
 			TProxyPort:     ports.TProxyPort,
 			MixedPort:      ports.MixedPort,
+			Tun:            P.Tun(),
 			Authentication: authenticator,
 			AllowLan:       P.AllowLan(),
 			BindAddress:    P.BindAddress(),
@@ -107,7 +117,7 @@ func GetGeneral() *config.General {
 
 func updateExperimental(c *config.Config) {}
 
-func updateDNS(c *config.DNS) {
+func updateDNS(c *config.DNS, general *config.General) {
 	if !c.Enable {
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
@@ -141,6 +151,9 @@ func updateDNS(c *config.DNS) {
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
+	if general.Tun.Enable && strings.EqualFold(general.Tun.Stack, "system") {
+		resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
+	}
 
 	if err := dns.ReCreateServer(c.Listen, r, m); err != nil {
 		log.Errorln("Start DNS server error: %s", err.Error())
@@ -165,9 +178,23 @@ func updateRules(rules []C.Rule) {
 }
 
 func updateGeneral(general *config.General, force bool) {
-	log.SetLevel(general.LogLevel)
+	log.SetLevel(log.DEBUG)
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
+
+	if (general.Tun.Enable || general.TProxyPort != 0) && general.Interface == "" {
+		autoDetectInterfaceName, err := dev.GetAutoDetectInterface()
+		if err == nil {
+			if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
+				general.Interface = autoDetectInterfaceName
+				log.Infoln("Use auto detect interface: %s", general.Interface)
+			} else {
+				log.Debugln("Auto detect interface is empty.")
+			}
+		} else {
+			log.Debugln("Can not find auto detect interface. %s", err.Error())
+		}
+	}
 
 	if general.Interface != "" {
 		dialer.DialHook = dialer.DialerWithInterface(general.Interface)
@@ -178,6 +205,7 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	if !force {
+		log.SetLevel(general.LogLevel)
 		return
 	}
 
@@ -209,6 +237,13 @@ func updateGeneral(general *config.General, force bool) {
 	if err := P.ReCreateMixed(general.MixedPort, tcpIn, udpIn); err != nil {
 		log.Errorln("Start Mixed(http and socks5) server error: %s", err.Error())
 	}
+
+	if err := P.ReCreateTun(general.Tun, tcpIn, udpIn); err != nil {
+		log.Errorln("Start Tun interface error: %s", err.Error())
+		os.Exit(2)
+	}
+
+	log.SetLevel(general.LogLevel)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -251,5 +286,36 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 		}
 
 		selector.Set(selected)
+	}
+}
+
+func updateIPTables(dns *config.DNS, general *config.General) {
+	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || general.Tun.Enable {
+		return
+	}
+
+	_, dnsPortStr, err := net.SplitHostPort(dns.Listen)
+	if dnsPortStr == "0" || dnsPortStr == "" || err != nil {
+		return
+	}
+
+	dnsPort, err := strconv.Atoi(dnsPortStr)
+	if err != nil {
+		return
+	}
+
+	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
+
+	if err != nil {
+		log.Errorln("Can not setting iptables for TProxy on linux, %s", err.Error())
+		os.Exit(2)
+	}
+}
+
+func CleanUp() {
+	P.CleanUp()
+
+	if runtime.GOOS == "linux" {
+		tproxy.CleanUpTProxyLinuxIPTables()
 	}
 }

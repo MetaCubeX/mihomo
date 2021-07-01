@@ -14,12 +14,14 @@ const (
 
 	TCP NetWork = iota
 	UDP
+	ALLNet
 
 	HTTP Type = iota
 	HTTPCONNECT
 	SOCKS
 	REDIR
 	TPROXY
+	TUN
 )
 
 type NetWork int
@@ -27,8 +29,10 @@ type NetWork int
 func (n NetWork) String() string {
 	if n == TCP {
 		return "tcp"
+	} else if n == UDP {
+		return "udp"
 	}
-	return "udp"
+	return "all"
 }
 
 func (n NetWork) MarshalJSON() ([]byte, error) {
@@ -49,6 +53,8 @@ func (t Type) String() string {
 		return "Redir"
 	case TPROXY:
 		return "TProxy"
+	case TUN:
+		return "Tun"
 	default:
 		return "Unknown"
 	}
@@ -68,6 +74,7 @@ type Metadata struct {
 	DstPort  string  `json:"destinationPort"`
 	AddrType int     `json:"-"`
 	Host     string  `json:"host"`
+	Process  string  `json:"process"`
 }
 
 func (m *Metadata) RemoteAddress() string {

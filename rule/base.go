@@ -2,6 +2,8 @@ package rules
 
 import (
 	"errors"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (
@@ -17,4 +19,15 @@ func HasNoResolve(params []string) bool {
 		}
 	}
 	return false
+}
+
+func findNetwork(params []string) C.NetWork {
+	for _, p := range params {
+		if p == "tcp" {
+			return C.TCP
+		} else if p == "udp" {
+			return C.UDP
+		}
+	}
+	return C.ALLNet
 }

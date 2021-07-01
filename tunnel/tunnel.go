@@ -14,6 +14,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
+	R "github.com/Dreamacro/clash/rule"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 )
 
@@ -31,6 +32,11 @@ var (
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
+
+	preProcessCacheFinder, _ = R.NewProcess("", "", C.ALLNet)
+
+	fakeIpMask  = net.IPv4Mask(0, 0, 0xff, 0xff)
+	fakeIpMaxIp = net.IPv4(0, 0, 255, 255)
 )
 
 func init() {
@@ -138,7 +144,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
 			}
-		} else if resolver.IsFakeIP(metadata.DstIP) {
+		} else if resolver.IsFakeIP(metadata.DstIP) && !fakeIpMaxIp.Equal(metadata.DstIP.Mask(fakeIpMask)) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}
@@ -230,13 +236,13 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		switch true {
 		case rule != nil:
-			log.Infoln("[UDP] %s --> %v match %s(%s) using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
+			log.Infoln("[UDP] %s(%s) --> %s:%s match %s(%s) %s using %s", metadata.SourceAddress(), metadata.Process, metadata.String(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rule.NetWork().String(), rawPc.Chains().String())
 		case mode == Global:
-			log.Infoln("[UDP] %s --> %v using GLOBAL", metadata.SourceAddress(), metadata.String())
+			log.Infoln("[UDP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.String())
 		case mode == Direct:
-			log.Infoln("[UDP] %s --> %v using DIRECT", metadata.SourceAddress(), metadata.String())
+			log.Infoln("[UDP] %s(%s) --> %s using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.String())
 		default:
-			log.Infoln("[UDP] %s --> %v doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.String())
+			log.Infoln("[UDP] %s(%s) --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.String())
 		}
 
 		go handleUDPToLocal(packet.UDPPacket, pc, key, fAddr)
@@ -280,13 +286,13 @@ func handleTCPConn(ctx C.ConnContext) {
 
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s --> %v match %s(%s) using %s", metadata.SourceAddress(), metadata.String(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s(%s) --> %s:%s match %s(%s) %s using %s", metadata.SourceAddress(), metadata.Process, metadata.String(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rule.NetWork().String(), remoteConn.Chains().String())
 	case mode == Global:
-		log.Infoln("[TCP] %s --> %v using GLOBAL", metadata.SourceAddress(), metadata.String())
+		log.Infoln("[TCP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.String())
 	case mode == Direct:
-		log.Infoln("[TCP] %s --> %v using DIRECT", metadata.SourceAddress(), metadata.String())
+		log.Infoln("[TCP] %s(%s) --> %s using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.String())
 	default:
-		log.Infoln("[TCP] %s --> %v doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.String())
+		log.Infoln("[TCP] %s(%s) --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.String())
 	}
 
 	handleSocket(ctx, remoteConn)
@@ -308,6 +314,9 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		resolved = true
 	}
 
+	// preset process name and cache it
+	preProcessCacheFinder.Match(metadata)
+
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			ip, err := resolver.ResolveIP(metadata.Host)
@@ -328,6 +337,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
 				log.Debugln("%s UDP is not supported", adapter.Name())
+				continue
+			}
+
+			if rule.NetWork() != C.ALLNet && rule.NetWork() != metadata.NetWork {
 				continue
 			}
 			return adapter, rule, nil

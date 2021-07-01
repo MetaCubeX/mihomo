@@ -28,14 +28,97 @@
 - Netfilter TCP redirecting. Deploy Clash on your Internet gateway with `iptables`.
 - Comprehensive HTTP RESTful API controller
 
-## Premium Features
-
-- TUN mode on macOS, Linux and Windows. [Doc](https://github.com/Dreamacro/clash/wiki/premium-core-features#tun-device)
-- Match your tunnel by [Script](https://github.com/Dreamacro/clash/wiki/premium-core-features#script)
-- [Rule Provider](https://github.com/Dreamacro/clash/wiki/premium-core-features#rule-providers)
-
 ## Getting Started
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
+
+## Advanced usage for this fork repository
+### TUN configuration
+Support macOS Linux and Windows.
+
+For Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into the System32 directory.
+```yaml
+# Enable the TUN listener
+tun:
+  enable: true
+  stack: system # system or gvisor
+  dns-listen: 0.0.0.0:53 # additional dns server listen on TUN
+  auto-route: true # auto set global route
+```
+### Rules configuration
+- Support rule `GEOSITE`
+- Support rule `GEOIP` not match condition
+- Support `network` condition for all rules
+
+The `GEOSITE` and `GEOIP` databases via https://github.com/Loyalsoldier/v2ray-rules-dat
+```yaml
+rules:
+  # network condition for rules
+  - DOMAIN-SUFFIX,tabao.com,DIRECT,tcp
+  - DST-PORT,123,DIRECT,udp
+  
+  # rule GEOSITE
+  - GEOSITE,category-ads-all,REJECT
+  - GEOSITE,icloud@cn,DIRECT
+  - GEOSITE,apple@cn,DIRECT
+  - GEOSITE,microsoft@cn,DIRECT
+  - GEOSITE,youtube,PROXY
+  - GEOSITE,geolocation-cn,DIRECT
+  #- GEOSITE,geolocation-!cn,PROXY
+
+  - GEOIP,private,DIRECT,no-resolve
+  - GEOIP,cn,DIRECT
+    
+  # Not match condition for rule GEOIP
+  #- GEOIP,!cn,PROXY
+
+  - MATCH,PROXY
+```
+### IPTABLES auto-configuration
+Only work on Linux OS who support `iptables`, Clash will auto-configuration iptables for tproxy listener when `tproxy-port` value isn't zero.
+
+When `TPROXY` is enabled, the `TUN` must be disabled.
+```yaml
+# Enable the TPROXY listener
+tproxy-port: 9898
+# Disable the TUN listener
+tun:
+  enable: false
+```
+Create user give name `clash`, run `$ sudo useradd -M clash` in command line.
+
+Run Clash by user `clash` as a daemon.
+
+Create the systemd configuration file at /etc/systemd/system/clash.service:
+```shell
+[Unit]
+Description=Clash daemon, A rule-based proxy in Go.
+After=network.target
+
+[Service]
+Type=simple
+User=clash
+Group=clash
+CapabilityBoundingSet=cap_net_admin
+AmbientCapabilities=cap_net_admin
+Restart=always
+ExecStart=/usr/local/bin/clash -d /etc/clash
+
+[Install]
+WantedBy=multi-user.target
+```
+Launch clashd on system startup with:
+```shell
+$ systemctl enable clash
+```
+Launch clashd immediately with:
+```shell
+$ systemctl start clash
+```
+
+### Display Process name
+Add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`
+
+To display process name in GUI please use https://yaling888.github.io/yacd/
 
 ## Premium Release
 [Release](https://github.com/Dreamacro/clash/releases/tag/premium)
