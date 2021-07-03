@@ -2,10 +2,8 @@ package outbound
 
 import (
 	"bytes"
-	"crypto/tls"
 	"net"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/component/resolver"
@@ -13,23 +11,11 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
-var (
-	globalClientSessionCache tls.ClientSessionCache
-	once                     sync.Once
-)
-
 func tcpKeepAlive(c net.Conn) {
 	if tcp, ok := c.(*net.TCPConn); ok {
 		tcp.SetKeepAlive(true)
 		tcp.SetKeepAlivePeriod(30 * time.Second)
 	}
-}
-
-func getClientSessionCache() tls.ClientSessionCache {
-	once.Do(func() {
-		globalClientSessionCache = tls.NewLRUClientSessionCache(128)
-	})
-	return globalClientSessionCache
 }
 
 func serializesSocksAddr(metadata *C.Metadata) []byte {
