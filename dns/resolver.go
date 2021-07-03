@@ -2,7 +2,6 @@ package dns
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -18,10 +17,6 @@ import (
 
 	D "github.com/miekg/dns"
 	"golang.org/x/sync/singleflight"
-)
-
-var (
-	globalSessionCache = tls.NewLRUClientSessionCache(64)
 )
 
 type dnsClient interface {

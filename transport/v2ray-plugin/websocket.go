@@ -1,7 +1,6 @@
 package obfs
 
 import (
-	"crypto/tls"
 	"net"
 	"net/http"
 
@@ -16,7 +15,6 @@ type Option struct {
 	Headers        map[string]string
 	TLS            bool
 	SkipCertVerify bool
-	SessionCache   tls.ClientSessionCache
 	Mux            bool
 }
 
@@ -34,7 +32,6 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 		TLS:            option.TLS,
 		Headers:        header,
 		SkipCertVerify: option.SkipCertVerify,
-		SessionCache:   option.SessionCache,
 	}
 
 	var err error

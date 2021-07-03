@@ -145,7 +145,6 @@ func NewSocks5(option Socks5Option) *Socks5 {
 	if option.TLS {
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: option.SkipCertVerify,
-			ClientSessionCache: getClientSessionCache(),
 			ServerName:         option.Server,
 		}
 	}
