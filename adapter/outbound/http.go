@@ -125,7 +125,6 @@ func NewHttp(option HttpOption) *Http {
 		}
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: option.SkipCertVerify,
-			ClientSessionCache: getClientSessionCache(),
 			ServerName:         sni,
 		}
 	}
