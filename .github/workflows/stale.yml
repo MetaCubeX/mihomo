@@ -2,10 +2,9 @@
 name: Mark stale issues and pull requests
 
 on:
-  branches:
-    - rm
-    tags:
-      - '*'
+  push:
+    branches:
+      - rm
 
 jobs:
   stale:
