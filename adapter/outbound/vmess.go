@@ -86,7 +86,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		if v.option.TLS {
 			wsOpts.TLS = true
-			wsOpts.SessionCache = getClientSessionCache()
 			wsOpts.SkipCertVerify = v.option.SkipCertVerify
 			wsOpts.ServerName = v.option.ServerName
 		}
@@ -98,7 +97,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			tlsOpts := &vmess.TLSConfig{
 				Host:           host,
 				SkipCertVerify: v.option.SkipCertVerify,
-				SessionCache:   getClientSessionCache(),
 			}
 
 			if v.option.ServerName != "" {
@@ -125,7 +123,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		tlsOpts := vmess.TLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
-			SessionCache:   getClientSessionCache(),
 			NextProtos:     []string{"h2"},
 		}
 
@@ -153,7 +150,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			tlsOpts := &vmess.TLSConfig{
 				Host:           host,
 				SkipCertVerify: v.option.SkipCertVerify,
-				SessionCache:   getClientSessionCache(),
 			}
 
 			if v.option.ServerName != "" {
