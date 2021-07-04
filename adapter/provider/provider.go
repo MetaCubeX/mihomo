@@ -9,6 +9,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter"
 	C "github.com/Dreamacro/clash/constant"
+	types "github.com/Dreamacro/clash/constant/provider"
 
 	"gopkg.in/yaml.v2"
 )
@@ -16,45 +17,6 @@ import (
 const (
 	ReservedName = "default"
 )
-
-// Provider Type
-const (
-	Proxy ProviderType = iota
-	Rule
-)
-
-// ProviderType defined
-type ProviderType int
-
-func (pt ProviderType) String() string {
-	switch pt {
-	case Proxy:
-		return "Proxy"
-	case Rule:
-		return "Rule"
-	default:
-		return "Unknown"
-	}
-}
-
-// Provider interface
-type Provider interface {
-	Name() string
-	VehicleType() VehicleType
-	Type() ProviderType
-	Initial() error
-	Update() error
-}
-
-// ProxyProvider interface
-type ProxyProvider interface {
-	Provider
-	Proxies() []C.Proxy
-	// ProxiesWithTouch is used to inform the provider that the proxy is actually being used while getting the list of proxies.
-	// Commonly used in Dial and DialUDP
-	ProxiesWithTouch() []C.Proxy
-	HealthCheck()
-}
 
 type ProxySchema struct {
 	Proxies []map[string]interface{} `yaml:"proxies"`
@@ -107,8 +69,8 @@ func (pp *proxySetProvider) Initial() error {
 	return nil
 }
 
-func (pp *proxySetProvider) Type() ProviderType {
-	return Proxy
+func (pp *proxySetProvider) Type() types.ProviderType {
+	return types.Proxy
 }
 
 func (pp *proxySetProvider) Proxies() []C.Proxy {
@@ -160,7 +122,7 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	pd.fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, vehicle Vehicle, hc *HealthCheck) *ProxySetProvider {
+func NewProxySetProvider(name string, interval time.Duration, vehicle types.Vehicle, hc *HealthCheck) *ProxySetProvider {
 	if hc.auto() {
 		go hc.process()
 	}
@@ -219,12 +181,12 @@ func (cp *compatibleProvider) Initial() error {
 	return nil
 }
 
-func (cp *compatibleProvider) VehicleType() VehicleType {
-	return Compatible
+func (cp *compatibleProvider) VehicleType() types.VehicleType {
+	return types.Compatible
 }
 
-func (cp *compatibleProvider) Type() ProviderType {
-	return Proxy
+func (cp *compatibleProvider) Type() types.ProviderType {
+	return types.Proxy
 }
 
 func (cp *compatibleProvider) Proxies() []C.Proxy {
