@@ -204,7 +204,7 @@ func stopCompatibleProvider(pd *CompatibleProvider) {
 
 func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvider, error) {
 	if len(proxies) == 0 {
-		return nil, errors.New("Provider need one proxy at least")
+		return nil, errors.New("provider need one proxy at least")
 	}
 
 	if hc.auto() {
