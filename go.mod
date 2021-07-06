@@ -13,6 +13,7 @@ require (
 	github.com/miekg/dns v1.1.43
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
+	github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499
 	go.uber.org/atomic v1.8.0
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e

@@ -4,29 +4,21 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 
 	"github.com/gofrs/uuid"
+	xtls "github.com/xtls/go"
+	"google.golang.org/protobuf/proto"
 )
-
-/*var (
-
-	//proto.Marshal(addons) bytes for Flow: "xtls-rprx-direct"
-	addOnBytes, _ = hex.DecodeString("120a1078746c732d727072782d646972656374")
-	addOnBytesLen = len(addOnBytes)
-
-	//proto.Marshal(addons) bytes for Flow: ""
-	//addOnEmptyBytes, _ = hex.DecodeString("00")
-	//addOnEmptyBytesLen  = len(addOnEmptyBytes)
-)*/
 
 type Conn struct {
 	net.Conn
-	dst *DstAddr
-	id  *uuid.UUID
-
+	dst      *DstAddr
+	id       *uuid.UUID
+	addons   *Addons
 	received bool
 }
 
@@ -48,16 +40,22 @@ func (vc *Conn) sendRequest() error {
 	buf.WriteByte(Version)   // protocol version
 	buf.Write(vc.id.Bytes()) // 16 bytes of uuid
 
-	// command
-	if vc.dst.UDP {
-		buf.WriteByte(0) // addon data length. 0 means no addon data
-		//buf.WriteByte(byte(addOnEmptyBytesLen))
-		//buf.Write(addOnEmptyBytes)
-		buf.WriteByte(CommandUDP)
+	if vc.addons != nil {
+		bytes, err := proto.Marshal(vc.addons)
+		if err != nil {
+			return err
+		}
+
+		buf.WriteByte(byte(len(bytes)))
+		buf.Write(bytes)
 	} else {
 		buf.WriteByte(0) // addon data length. 0 means no addon data
-		//buf.WriteByte(byte(addOnBytesLen))
-		//buf.Write(addOnBytes)
+	}
+
+	// command
+	if vc.dst.UDP {
+		buf.WriteByte(CommandUDP)
+	} else {
 		buf.WriteByte(CommandTCP)
 	}
 
@@ -96,12 +94,34 @@ func (vc *Conn) recvResponse() error {
 }
 
 // newConn return a Conn instance
-func newConn(conn net.Conn, id *uuid.UUID, dst *DstAddr) (*Conn, error) {
+func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 	c := &Conn{
 		Conn: conn,
-		id:   id,
+		id:   client.uuid,
 		dst:  dst,
 	}
+
+	if !dst.UDP && client.Addons != nil {
+		switch client.Addons.Flow {
+		case XRO, XRD, XRS:
+			if xtlsConn, ok := conn.(*xtls.Conn); ok {
+				xtlsConn.RPRX = true
+				xtlsConn.SHOW = client.XTLSShow
+				xtlsConn.MARK = "XTLS"
+				if client.Addons.Flow == XRS {
+					client.Addons.Flow = XRD
+				}
+
+				if client.Addons.Flow == XRD {
+					xtlsConn.DirectMode = true
+				}
+				c.addons = client.Addons
+			} else {
+				return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", client.Addons.Flow)
+			}
+		}
+	}
+
 	if err := c.sendRequest(); err != nil {
 		return nil, err
 	}
