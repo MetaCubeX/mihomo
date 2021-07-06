@@ -34,6 +34,8 @@ type VlessOption struct {
 	Server         string            `proxy:"server"`
 	Port           int               `proxy:"port"`
 	UUID           string            `proxy:"uuid"`
+	Flow           string            `proxy:"flow,omitempty"`
+	FlowShow       bool              `proxy:"flow_show,omitempty"`
 	TLS            bool              `proxy:"tls,omitempty"`
 	UDP            bool              `proxy:"udp,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
@@ -73,21 +75,9 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
 		// readability first, so just copy default TLS logic
-		if v.option.TLS {
-			host, _, _ := net.SplitHostPort(v.addr)
-			tlsOpts := &vmess.TLSConfig{
-				Host:           host,
-				SkipCertVerify: v.option.SkipCertVerify,
-			}
-
-			if v.option.ServerName != "" {
-				tlsOpts.Host = v.option.ServerName
-			}
-
-			c, err = vmess.StreamTLSConn(c, tlsOpts)
-			if err != nil {
-				return nil, err
-			}
+		c, err = v.streamTLSOrXTLSConn(c, false)
+		if err != nil {
+			return nil, err
 		}
 
 		host, _, _ := net.SplitHostPort(v.addr)
@@ -100,18 +90,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		c = vmess.StreamHTTPConn(c, httpOpts)
 	case "h2":
-		host, _, _ := net.SplitHostPort(v.addr)
-		tlsOpts := vmess.TLSConfig{
-			Host:           host,
-			SkipCertVerify: v.option.SkipCertVerify,
-			NextProtos:     []string{"h2"},
-		}
-
-		if v.option.ServerName != "" {
-			tlsOpts.Host = v.option.ServerName
-		}
-
-		c, err = vmess.StreamTLSConn(c, &tlsOpts)
+		c, err = v.streamTLSOrXTLSConn(c, true)
 		if err != nil {
 			return nil, err
 		}
@@ -123,23 +102,14 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		c, err = vmess.StreamH2Conn(c, h2Opts)
 	case "grpc":
-		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
-	default:
-		// handle TLS
-		if v.option.TLS {
-			host, _, _ := net.SplitHostPort(v.addr)
-			tlsOpts := &vmess.TLSConfig{
-				Host:           host,
-				SkipCertVerify: v.option.SkipCertVerify,
-				NextProtos:     []string{"h2"},
-			}
-
-			if v.option.ServerName != "" {
-				tlsOpts.Host = v.option.ServerName
-			}
-
-			c, err = vmess.StreamTLSConn(c, tlsOpts)
+		if v.isXTLSEnabled() {
+			c, err = gun.StreamGunWithXTLSConn(c, v.gunTLSConfig, v.gunConfig)
+		} else {
+			c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
 		}
+	default:
+		// handle TLS And XTLS
+		c, err = v.streamTLSOrXTLSConn(c, true)
 	}
 
 	if err != nil {
@@ -147,6 +117,49 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	}
 
 	return v.client.StreamConn(c, parseVlessAddr(metadata))
+}
+
+func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
+	host, _, _ := net.SplitHostPort(v.addr)
+
+	if v.isXTLSEnabled() {
+		xtlsOpts := vless.XTLSConfig{
+			Host:           host,
+			SkipCertVerify: v.option.SkipCertVerify,
+		}
+
+		if isH2 {
+			xtlsOpts.NextProtos = []string{"h2"}
+		}
+
+		if v.option.ServerName != "" {
+			xtlsOpts.Host = v.option.ServerName
+		}
+
+		return vless.StreamXTLSConn(conn, &xtlsOpts)
+
+	} else if v.option.TLS {
+		tlsOpts := vmess.TLSConfig{
+			Host:           host,
+			SkipCertVerify: v.option.SkipCertVerify,
+		}
+
+		if isH2 {
+			tlsOpts.NextProtos = []string{"h2"}
+		}
+
+		if v.option.ServerName != "" {
+			tlsOpts.Host = v.option.ServerName
+		}
+
+		return vmess.StreamTLSConn(conn, &tlsOpts)
+	}
+
+	return conn, nil
+}
+
+func (v *Vless) isXTLSEnabled() bool {
+	return v.client.Addons != nil
 }
 
 // DialContext implements C.ProxyAdapter
@@ -262,14 +275,24 @@ func (uc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 }
 
 func NewVless(option VlessOption) (*Vless, error) {
-	client, err := vless.NewClient(option.UUID)
-	if err != nil {
-		return nil, err
+	var addons *vless.Addons
+	if option.Network != "ws" && len(option.Flow) >= 16 {
+		option.Flow = option.Flow[:16]
+		switch option.Flow {
+		case vless.XRO, vless.XRD, vless.XRS:
+			addons = &vless.Addons{
+				Flow: option.Flow,
+			}
+		default:
+			return nil, fmt.Errorf("unsupported vless flow type: %s", option.Flow)
+		}
 	}
 
-	if option.Network != "ws" {
-		option.TLS = true
-		option.SkipCertVerify = false
+	option.TLS = true
+
+	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
+	if err != nil {
+		return nil, err
 	}
 
 	v := &Vless{
@@ -315,7 +338,11 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
-		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+		if v.isXTLSEnabled() {
+			v.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)
+		} else {
+			v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+		}
 	}
 
 	return v, nil

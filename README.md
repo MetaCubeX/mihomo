@@ -64,6 +64,7 @@ rules:
   - GEOSITE,category-ads-all,REJECT
   - GEOSITE,icloud@cn,DIRECT
   - GEOSITE,apple@cn,DIRECT
+  - GEOSITE,apple-cn,DIRECT
   - GEOSITE,microsoft@cn,DIRECT
   - GEOSITE,facebook,PROXY
   - GEOSITE,youtube,PROXY
@@ -81,6 +82,67 @@ rules:
 
   - MATCH,PROXY
 ```
+
+### Proxies configuration
+Support outbound transport protocol `VLESS`
+```yaml
+proxies:
+  - name: "vless"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    # udp: true
+    # skip-cert-verify: true
+    # servername: example.com # priority over wss host
+    # network: ws # not support xtls
+    # ws-path: /path
+    # ws-headers:
+    #   Host: v2ray.com
+
+  - name: "vless-h2"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    network: h2
+    # flow: xtls-rprx-direct # xtls-rprx-origin xtls-rprx-direct # enable xtls
+    h2-opts:
+      host:
+        - http.example.com
+        - http-alt.example.com
+      path: /
+
+  - name: "vless-http"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    # udp: true
+    # network: http
+    # flow: xtls-rprx-direct # xtls-rprx-origin xtls-rprx-direct # enable xtls
+    # http-opts:
+    #   # method: "GET"
+    #   # path:
+    #   #   - '/'
+    #   #   - '/video'
+    #   # headers:
+    #   #   Connection:
+    #   #     - keep-alive
+
+  - name: vless-grpc
+    server: server
+    port: 443
+    type: vless
+    uuid: uuid
+    network: grpc
+    # flow: xtls-rprx-direct # xtls-rprx-origin xtls-rprx-direct # enable xtls
+    servername: example.com
+    # skip-cert-verify: true
+    grpc-opts:
+      grpc-service-name: "example"
+```
+
 ### IPTABLES auto-configuration
 Only work on Linux OS who support `iptables`, Clash will auto-configuration iptables for tproxy listener when `tproxy-port` value isn't zero.
 
