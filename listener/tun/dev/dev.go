@@ -19,7 +19,7 @@ type TunDevice interface {
 }
 
 func SetLinuxAutoRoute() {
-	log.Infoln("Tun adapter auto setting MacOS route")
+	log.Infoln("Tun adapter auto setting global route")
 	addLinuxSystemRoute("1")
 	addLinuxSystemRoute("2/7")
 	addLinuxSystemRoute("4/6")
@@ -32,7 +32,7 @@ func SetLinuxAutoRoute() {
 }
 
 func RemoveLinuxAutoRoute() {
-	log.Infoln("Tun adapter removing MacOS route")
+	log.Infoln("Tun adapter removing global route")
 	delLinuxSystemRoute("1")
 	delLinuxSystemRoute("2/7")
 	delLinuxSystemRoute("4/6")
@@ -50,7 +50,7 @@ func addLinuxSystemRoute(net string) {
 	}
 	cmd := exec.Command("route", "add", "-net", net, "198.18.0.1")
 	if err := cmd.Run(); err != nil {
-		log.Errorln("[MacOS auto route] Failed to add system route: %s, cmd: %s", err.Error(), cmd.String())
+		log.Errorln("[auto route] Failed to add system route: %s, cmd: %s", err.Error(), cmd.String())
 	}
 }
 
@@ -61,6 +61,6 @@ func delLinuxSystemRoute(net string) {
 	cmd := exec.Command("route", "delete", "-net", net, "198.18.0.1")
 	_ = cmd.Run()
 	//if err := cmd.Run(); err != nil {
-	//	log.Errorln("[MacOS auto route]Failed to delete system route: %s, cmd: %s", err.Error(), cmd.String())
+	//	log.Errorln("[auto route]Failed to delete system route: %s, cmd: %s", err.Error(), cmd.String())
 	//}
 }

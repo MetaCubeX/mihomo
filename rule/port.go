@@ -1,15 +1,23 @@
 package rules
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
 )
+
+type portReal struct {
+	portStart int
+	portEnd   int
+}
 
 type Port struct {
 	adapter  string
 	port     string
 	isSource bool
+	portList []portReal
 	network  C.NetWork
 }
 
@@ -22,9 +30,9 @@ func (p *Port) RuleType() C.RuleType {
 
 func (p *Port) Match(metadata *C.Metadata) bool {
 	if p.isSource {
-		return metadata.SrcPort == p.port
+		return p.matchPortReal(metadata.SrcPort)
 	}
-	return metadata.DstPort == p.port
+	return p.matchPortReal(metadata.DstPort)
 }
 
 func (p *Port) Adapter() string {
@@ -43,15 +51,72 @@ func (p *Port) NetWork() C.NetWork {
 	return p.network
 }
 
+func (p *Port) matchPortReal(portRef string) bool {
+	port, _ := strconv.Atoi(portRef)
+	var rs bool
+	for _, pr := range p.portList {
+		if pr.portEnd == -1 {
+			rs = port == pr.portStart
+		} else {
+			rs = port >= pr.portStart && port <= pr.portEnd
+		}
+		if rs {
+			return true
+		}
+	}
+	return false
+}
+
 func NewPort(port string, adapter string, isSource bool, network C.NetWork) (*Port, error) {
-	_, err := strconv.Atoi(port)
-	if err != nil {
+	ports := strings.Split(port, "/")
+	if len(ports) > 28 {
+		return nil, fmt.Errorf("%s, too many ports to use, maximum support 28 ports", errPayload.Error())
+	}
+
+	var portList []portReal
+	for _, p := range ports {
+		if p == "" {
+			continue
+		}
+
+		subPort := strings.Split(strings.Trim(p, "[ ]"), "-")
+		subPortLen := len(subPort)
+		if subPortLen > 2 {
+			return nil, errPayload
+		}
+
+		portStart, err := strconv.Atoi(subPort[0])
+		if err != nil || portStart < 0 || portStart > 65535 {
+			return nil, errPayload
+		}
+
+		if subPortLen == 1 {
+			portList = append(portList, portReal{portStart, -1})
+
+		} else if subPortLen == 2 {
+			portEnd, err1 := strconv.Atoi(subPort[1])
+			if err1 != nil || portEnd < 0 || portEnd > 65535 {
+				return nil, errPayload
+			}
+
+			shouldReverse := portStart > portEnd
+			if shouldReverse {
+				portList = append(portList, portReal{portEnd, portStart})
+			} else {
+				portList = append(portList, portReal{portStart, portEnd})
+			}
+		}
+	}
+
+	if len(portList) == 0 {
 		return nil, errPayload
 	}
+
 	return &Port{
 		adapter:  adapter,
 		port:     port,
 		isSource: isSource,
+		portList: portList,
 		network:  network,
 	}, nil
 }

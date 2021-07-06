@@ -31,7 +31,7 @@
 ## Getting Started
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
-## Advanced usage for this fork repository
+## Advanced usage for this fork branch
 ### TUN configuration
 Support macOS Linux and Windows.
 
@@ -46,25 +46,33 @@ tun:
 ```
 ### Rules configuration
 - Support rule `GEOSITE`
-- Support rule `GEOIP` not match condition
+- Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`
+- Support not match condition for rule `GEOIP`
 - Support `network` condition for all rules
 
 The `GEOSITE` and `GEOIP` databases via https://github.com/Loyalsoldier/v2ray-rules-dat
 ```yaml
 rules:
   # network condition for rules
-  - DOMAIN-SUFFIX,tabao.com,DIRECT,tcp
-  - DST-PORT,123,DIRECT,udp
+  - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
+  - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
+    
+  # multiport condition for rule SRC-PORT and DST-PORT
+  - DST-PORT,123/136/137-139,DIRECT,udp
   
   # rule GEOSITE
   - GEOSITE,category-ads-all,REJECT
   - GEOSITE,icloud@cn,DIRECT
   - GEOSITE,apple@cn,DIRECT
   - GEOSITE,microsoft@cn,DIRECT
+  - GEOSITE,facebook,PROXY
   - GEOSITE,youtube,PROXY
   - GEOSITE,geolocation-cn,DIRECT
+  - GEOSITE,gfw,PROXY
+  - GEOSITE,greatfire,PROXY
   #- GEOSITE,geolocation-!cn,PROXY
 
+  - GEOIP,telegram,PROXY,no-resolve
   - GEOIP,private,DIRECT,no-resolve
   - GEOIP,cn,DIRECT
     
@@ -76,7 +84,7 @@ rules:
 ### IPTABLES auto-configuration
 Only work on Linux OS who support `iptables`, Clash will auto-configuration iptables for tproxy listener when `tproxy-port` value isn't zero.
 
-When `TPROXY` is enabled, the `TUN` must be disabled.
+If `TPROXY` is enabled, the `TUN` must be disabled.
 ```yaml
 # Enable the TPROXY listener
 tproxy-port: 9898
@@ -84,7 +92,7 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user give name `clash`, run `$ sudo useradd -M clash` in command line.
+Create user given name `clash`
 
 Run Clash by user `clash` as a daemon.
 

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -432,6 +433,8 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 
 		rules = append(rules, parsed)
 	}
+
+	runtime.GC()
 
 	return rules, nil
 }
