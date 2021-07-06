@@ -7,6 +7,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
+	types "github.com/Dreamacro/clash/constant/provider"
 )
 
 var (
@@ -28,7 +29,7 @@ type proxyProviderSchema struct {
 	HealthCheck healthCheckSchema `provider:"health-check,omitempty"`
 }
 
-func ParseProxyProvider(name string, mapping map[string]interface{}) (ProxyProvider, error) {
+func ParseProxyProvider(name string, mapping map[string]interface{}) (types.ProxyProvider, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 
 	schema := &proxyProviderSchema{
@@ -48,7 +49,7 @@ func ParseProxyProvider(name string, mapping map[string]interface{}) (ProxyProvi
 
 	path := C.Path.Resolve(schema.Path)
 
-	var vehicle Vehicle
+	var vehicle types.Vehicle
 	switch schema.Type {
 	case "file":
 		vehicle = NewFileVehicle(path)
