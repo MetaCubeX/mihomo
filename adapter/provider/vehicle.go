@@ -8,43 +8,15 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	types "github.com/Dreamacro/clash/constant/provider"
 )
-
-// Vehicle Type
-const (
-	File VehicleType = iota
-	HTTP
-	Compatible
-)
-
-// VehicleType defined
-type VehicleType int
-
-func (v VehicleType) String() string {
-	switch v {
-	case File:
-		return "File"
-	case HTTP:
-		return "HTTP"
-	case Compatible:
-		return "Compatible"
-	default:
-		return "Unknown"
-	}
-}
-
-type Vehicle interface {
-	Read() ([]byte, error)
-	Path() string
-	Type() VehicleType
-}
 
 type FileVehicle struct {
 	path string
 }
 
-func (f *FileVehicle) Type() VehicleType {
-	return File
+func (f *FileVehicle) Type() types.VehicleType {
+	return types.File
 }
 
 func (f *FileVehicle) Path() string {
@@ -64,8 +36,8 @@ type HTTPVehicle struct {
 	path string
 }
 
-func (h *HTTPVehicle) Type() VehicleType {
-	return HTTP
+func (h *HTTPVehicle) Type() types.VehicleType {
+	return types.HTTP
 }
 
 func (h *HTTPVehicle) Path() string {

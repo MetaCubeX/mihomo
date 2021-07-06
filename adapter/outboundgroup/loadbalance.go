@@ -8,10 +8,10 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/murmur3"
 	"github.com/Dreamacro/clash/common/singledo"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 
 	"golang.org/x/net/publicsuffix"
 )
