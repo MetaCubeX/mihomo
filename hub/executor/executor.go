@@ -304,6 +304,8 @@ func updateIPTables(dns *config.DNS, general *config.General) {
 		return
 	}
 
+	tproxy.CleanUpTProxyLinuxIPTables()
+
 	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
 
 	if err != nil {

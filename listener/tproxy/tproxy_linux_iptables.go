@@ -29,17 +29,13 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 		return fmt.Errorf("current operations system [%s] are not support iptables or command iptables does not exist", runtime.GOOS)
 	}
 
-	//if _, err = execCmd("modprobe xt_TPROXY"); err != nil {
-	//	return errors.New("xt_TPROXY module does not exist, please install it")
-	//}
-
 	user, err := U.Lookup(USERNAME)
 	if err != nil {
 		return fmt.Errorf("the user \" %s\" does not exist, please create it", USERNAME)
 	}
 
 	if ifname == "" {
-		return errors.New("interface name can not be empty")
+		return errors.New("the 'interface-name' can not be empty")
 	}
 
 	ownerUid := user.Uid

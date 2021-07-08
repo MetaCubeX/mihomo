@@ -35,7 +35,7 @@ type VlessOption struct {
 	Port           int               `proxy:"port"`
 	UUID           string            `proxy:"uuid"`
 	Flow           string            `proxy:"flow,omitempty"`
-	FlowShow       bool              `proxy:"flow_show,omitempty"`
+	FlowShow       bool              `proxy:"flow-show,omitempty"`
 	TLS            bool              `proxy:"tls,omitempty"`
 	UDP            bool              `proxy:"udp,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
