@@ -68,6 +68,7 @@ func (p *Port) matchPortReal(portRef string) bool {
 }
 
 func NewPort(port string, adapter string, isSource bool, network C.NetWork) (*Port, error) {
+	//the port format should be like this: "123/136/137-139" or "[123]/[136-139]"
 	ports := strings.Split(port, "/")
 	if len(ports) > 28 {
 		return nil, fmt.Errorf("%s, too many ports to use, maximum support 28 ports", errPayload.Error())
@@ -79,22 +80,22 @@ func NewPort(port string, adapter string, isSource bool, network C.NetWork) (*Po
 			continue
 		}
 
-		subPort := strings.Split(strings.Trim(p, "[ ]"), "-")
-		subPortLen := len(subPort)
-		if subPortLen > 2 {
+		subPorts := strings.Split(p, "-")
+		subPortsLen := len(subPorts)
+		if subPortsLen > 2 {
 			return nil, errPayload
 		}
 
-		portStart, err := strconv.Atoi(subPort[0])
+		portStart, err := strconv.Atoi(strings.Trim(subPorts[0], "[ ]"))
 		if err != nil || portStart < 0 || portStart > 65535 {
 			return nil, errPayload
 		}
 
-		if subPortLen == 1 {
+		if subPortsLen == 1 {
 			portList = append(portList, portReal{portStart, -1})
 
-		} else if subPortLen == 2 {
-			portEnd, err1 := strconv.Atoi(subPort[1])
+		} else if subPortsLen == 2 {
+			portEnd, err1 := strconv.Atoi(strings.Trim(subPorts[1], "[ ]"))
 			if err1 != nil || portEnd < 0 || portEnd > 65535 {
 				return nil, errPayload
 			}
