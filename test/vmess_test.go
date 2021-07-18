@@ -345,3 +345,41 @@ func TestClash_VmessGrpc(t *testing.T) {
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
 }
+
+func Benchmark_Vmess(b *testing.B) {
+	configPath := C.Path.Resolve("vmess.json")
+
+	cfg := &container.Config{
+		Image:        ImageVmess,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds:        []string{fmt.Sprintf("%s:/etc/v2ray/config.json", configPath)},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "vmess")
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	b.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewVmess(outbound.VmessOption{
+		Name:    "vmess",
+		Server:  localIP.String(),
+		Port:    10002,
+		UUID:    "b831381d-6324-4d53-ad4f-8cda48b30811",
+		Cipher:  "auto",
+		AlterID: 32,
+		UDP:     true,
+	})
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	time.Sleep(waitTime)
+	benchmarkProxy(b, proxy)
+}
