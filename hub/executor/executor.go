@@ -195,7 +195,7 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	if err := P.ReCreateSocks(general.SocksPort, tcpIn, udpIn); err != nil {
-		log.Errorln("Start SOCKS5 server error: %s", err.Error())
+		log.Errorln("Start SOCKS server error: %s", err.Error())
 	}
 
 	if err := P.ReCreateRedir(general.RedirPort, tcpIn, udpIn); err != nil {
@@ -207,7 +207,7 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	if err := P.ReCreateMixed(general.MixedPort, tcpIn, udpIn); err != nil {
-		log.Errorln("Start Mixed(http and socks5) server error: %s", err.Error())
+		log.Errorln("Start Mixed(http and socks) server error: %s", err.Error())
 	}
 }
 

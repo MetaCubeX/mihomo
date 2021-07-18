@@ -9,6 +9,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
 	"github.com/Dreamacro/clash/listener/socks"
+	"github.com/Dreamacro/clash/transport/socks4"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
@@ -58,10 +59,12 @@ func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 		return
 	}
 
-	if head[0] == socks5.Version {
-		socks.HandleSocks(bufConn, in)
-		return
+	switch head[0] {
+	case socks4.Version:
+		socks.HandleSocks4(bufConn, in)
+	case socks5.Version:
+		socks.HandleSocks5(bufConn, in)
+	default:
+		http.HandleConn(bufConn, in, cache)
 	}
-
-	http.HandleConn(bufConn, in, cache)
 }

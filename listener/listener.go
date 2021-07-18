@@ -139,7 +139,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	socksListener = tcpListener
 	socksUDPListener = udpListener
 
-	log.Infoln("SOCKS5 proxy listening at: %s", socksListener.Address())
+	log.Infoln("SOCKS proxy listening at: %s", socksListener.Address())
 	return nil
 }
 
@@ -271,7 +271,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return err
 	}
 
-	log.Infoln("Mixed(http+socks5) proxy listening at: %s", mixedListener.Address())
+	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 	return nil
 }
 
