@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -70,7 +71,7 @@ func init() {
 		}
 	}
 
-	c, err := client.NewClientWithOpts(client.FromEnv)
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		panic(err)
 	}
@@ -667,4 +668,9 @@ log-level: silent
 
 	time.Sleep(waitTime)
 	testPingPongWithSocksPort(t, 10000)
+}
+
+func Benchmark_Direct(b *testing.B) {
+	proxy := outbound.NewDirect()
+	benchmarkProxy(b, proxy)
 }
