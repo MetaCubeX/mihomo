@@ -92,3 +92,43 @@ func TestClash_TrojanGrpc(t *testing.T) {
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
 }
+
+func Benchmark_Trojan(b *testing.B) {
+	cfg := &container.Config{
+		Image:        ImageTrojan,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds: []string{
+			fmt.Sprintf("%s:/config/config.json", C.Path.Resolve("trojan.json")),
+			fmt.Sprintf("%s:/path/to/certificate.crt", C.Path.Resolve("example.org.pem")),
+			fmt.Sprintf("%s:/path/to/private.key", C.Path.Resolve("example.org-key.pem")),
+		},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "trojan")
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	b.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewTrojan(outbound.TrojanOption{
+		Name:           "trojan",
+		Server:         localIP.String(),
+		Port:           10002,
+		Password:       "password",
+		SNI:            "example.org",
+		SkipCertVerify: true,
+		UDP:            true,
+	})
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	time.Sleep(waitTime)
+	benchmarkProxy(b, proxy)
+}

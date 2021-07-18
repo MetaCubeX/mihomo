@@ -619,6 +619,41 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	assert.NoError(t, testPacketConnTimeout(t, pc))
 }
 
+func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
+	l, err := net.Listen("tcp", ":10001")
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			assert.FailNow(b, err.Error())
+		}
+
+		io.Copy(io.Discard, c)
+		c.Close()
+	}()
+
+	chunk := make([]byte, 1024)
+	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
+		Host:     localIP.String(),
+		DstPort:  "10001",
+		AddrType: socks5.AtypDomainName,
+	})
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	b.SetBytes(1024)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := conn.Write(chunk); err != nil {
+			assert.FailNow(b, err.Error())
+		}
+	}
+}
+
 func TestClash_Basic(t *testing.T) {
 	basic := `
 mixed-port: 10000
