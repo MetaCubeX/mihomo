@@ -347,7 +347,7 @@ func TestClash_VmessGrpc(t *testing.T) {
 }
 
 func Benchmark_Vmess(b *testing.B) {
-	configPath := C.Path.Resolve("vmess.json")
+	configPath := C.Path.Resolve("vmess-aead.json")
 
 	cfg := &container.Config{
 		Image:        ImageVmess,
@@ -358,7 +358,7 @@ func Benchmark_Vmess(b *testing.B) {
 		Binds:        []string{fmt.Sprintf("%s:/etc/v2ray/config.json", configPath)},
 	}
 
-	id, err := startContainer(cfg, hostCfg, "vmess")
+	id, err := startContainer(cfg, hostCfg, "vmess-aead")
 	if err != nil {
 		assert.FailNow(b, err.Error())
 	}
@@ -373,7 +373,7 @@ func Benchmark_Vmess(b *testing.B) {
 		Port:    10002,
 		UUID:    "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:  "auto",
-		AlterID: 32,
+		AlterID: 0,
 		UDP:     true,
 	})
 	if err != nil {
