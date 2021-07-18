@@ -174,7 +174,7 @@ func TestClash_ShadowsocksV2RayPlugin(t *testing.T) {
 func Benchmark_Shadowsocks(b *testing.B) {
 	cfg := &container.Config{
 		Image:        ImageShadowsocks,
-		Env:          []string{"SS_MODULE=ss-server", "SS_CONFIG=-s 0.0.0.0 -u -v -p 10002 -m chacha20-ietf-poly1305 -k FzcLbKs2dY9mhL"},
+		Env:          []string{"SS_MODULE=ss-server", "SS_CONFIG=-s 0.0.0.0 -u -v -p 10002 -m aes-256-gcm -k FzcLbKs2dY9mhL"},
 		ExposedPorts: defaultExposedPorts,
 	}
 	hostCfg := &container.HostConfig{
@@ -195,7 +195,7 @@ func Benchmark_Shadowsocks(b *testing.B) {
 		Server:   localIP.String(),
 		Port:     10002,
 		Password: "FzcLbKs2dY9mhL",
-		Cipher:   "chacha20-ietf-poly1305",
+		Cipher:   "aes-256-gcm",
 		UDP:      true,
 	})
 	if err != nil {
