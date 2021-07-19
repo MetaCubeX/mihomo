@@ -11,7 +11,6 @@ import (
 
 type UDPListener struct {
 	packetConn net.PacketConn
-	address    string
 	closed     bool
 }
 
@@ -21,7 +20,9 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 		return nil, err
 	}
 
-	rl := &UDPListener{l, addr, false}
+	rl := &UDPListener{
+		packetConn: l,
+	}
 
 	c := l.(*net.UDPConn)
 
@@ -65,7 +66,7 @@ func (l *UDPListener) Close() error {
 }
 
 func (l *UDPListener) Address() string {
-	return l.address
+	return l.packetConn.LocalAddr().String()
 }
 
 func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {

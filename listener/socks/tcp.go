@@ -15,7 +15,6 @@ import (
 
 type Listener struct {
 	listener net.Listener
-	address  string
 	closed   bool
 }
 
@@ -25,7 +24,9 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 		return nil, err
 	}
 
-	sl := &Listener{l, addr, false}
+	sl := &Listener{
+		listener: l,
+	}
 	go func() {
 		for {
 			c, err := l.Accept()
@@ -48,7 +49,7 @@ func (l *Listener) Close() {
 }
 
 func (l *Listener) Address() string {
-	return l.address
+	return l.listener.Addr().String()
 }
 
 func handleSocks(conn net.Conn, in chan<- C.ConnContext) {
