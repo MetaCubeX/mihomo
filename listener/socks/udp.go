@@ -13,7 +13,6 @@ import (
 
 type UDPListener struct {
 	packetConn net.PacketConn
-	address    string
 	closed     bool
 }
 
@@ -27,7 +26,9 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 		log.Warnln("Failed to Reuse UDP Address: %s", err)
 	}
 
-	sl := &UDPListener{l, addr, false}
+	sl := &UDPListener{
+		packetConn: l,
+	}
 	go func() {
 		for {
 			buf := pool.Get(pool.RelayBufferSize)
@@ -52,7 +53,7 @@ func (l *UDPListener) Close() error {
 }
 
 func (l *UDPListener) Address() string {
-	return l.address
+	return l.packetConn.LocalAddr().String()
 }
 
 func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, addr net.Addr) {
