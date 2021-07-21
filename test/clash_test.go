@@ -636,7 +636,8 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 		c.Close()
 	}()
 
-	chunk := make([]byte, 1024)
+	chunkSize := int64(16 * 1024)
+	chunk := make([]byte, chunkSize)
 	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 		Host:     localIP.String(),
 		DstPort:  "10001",
@@ -646,7 +647,7 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 		assert.FailNow(b, err.Error())
 	}
 
-	b.SetBytes(1024)
+	b.SetBytes(chunkSize)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := conn.Write(chunk); err != nil {
