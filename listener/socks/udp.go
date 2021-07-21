@@ -70,7 +70,7 @@ func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []b
 		bufRef:  buf,
 	}
 	select {
-	case in <- inbound.NewPacket(target, packet, C.TPROXY):
+	case in <- inbound.NewPacket(target, packet, C.SOCKS):
 	default:
 	}
 }
