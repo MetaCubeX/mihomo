@@ -47,3 +47,13 @@ Prerequisite
 ```
 $ go test -p 1 -v
 ```
+
+benchmark (Linux)
+
+> Cannot represent the throughput of the protocol on your machine
+> but you can compare the corresponding throughput of the protocol on clash
+> (change chunkSize to measure the maximum throughput of clash on your machine)
+
+```
+$ go test -benchmem -run=^$ -bench .
+```
