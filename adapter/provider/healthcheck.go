@@ -2,9 +2,9 @@ package provider
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/common/batch"
 	C "github.com/Dreamacro/clash/constant"
 
 	"go.uber.org/atomic"
@@ -60,19 +60,16 @@ func (hc *HealthCheck) touch() {
 
 func (hc *HealthCheck) check() {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
-	wg := &sync.WaitGroup{}
+	defer cancel()
 
+	b, ctx := batch.WithContext(ctx, batch.WithConcurrencyNum(10))
 	for _, proxy := range hc.proxies {
-		wg.Add(1)
-
-		go func(p C.Proxy) {
-			p.URLTest(ctx, hc.url)
-			wg.Done()
-		}(proxy)
+		p := proxy
+		b.Go(p.Name(), func() (interface{}, error) {
+			return p.URLTest(ctx, hc.url)
+		})
 	}
-
-	wg.Wait()
-	cancel()
+	b.Wait()
 }
 
 func (hc *HealthCheck) close() {
