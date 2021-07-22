@@ -11,7 +11,7 @@ import (
 )
 
 func TestBatch(t *testing.T) {
-	b := New()
+	b, _ := New(context.Background())
 
 	now := time.Now()
 	b.Go("foo", func() (interface{}, error) {
@@ -37,7 +37,8 @@ func TestBatch(t *testing.T) {
 }
 
 func TestBatchWithConcurrencyNum(t *testing.T) {
-	b := New(
+	b, _ := New(
+		context.Background(),
 		WithConcurrencyNum(3),
 	)
 
@@ -61,7 +62,7 @@ func TestBatchWithConcurrencyNum(t *testing.T) {
 }
 
 func TestBatchContext(t *testing.T) {
-	b, ctx := WithContext(context.Background())
+	b, ctx := New(context.Background())
 
 	b.Go("error", func() (interface{}, error) {
 		time.Sleep(time.Millisecond * 100)

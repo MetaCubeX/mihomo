@@ -89,7 +89,9 @@ func (b *Batch) Result() map[string]Result {
 	return copy
 }
 
-func New(opts ...Option) *Batch {
+func New(ctx context.Context, opts ...Option) (*Batch, context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+
 	b := &Batch{
 		result: map[string]Result{},
 	}
@@ -98,14 +100,6 @@ func New(opts ...Option) *Batch {
 		o(b)
 	}
 
-	return b
-}
-
-func WithContext(ctx context.Context, opts ...Option) (*Batch, context.Context) {
-	ctx, cancel := context.WithCancel(ctx)
-
-	b := New(opts...)
 	b.cancel = cancel
-
 	return b, ctx
 }
