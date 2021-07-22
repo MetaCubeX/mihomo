@@ -59,7 +59,7 @@ func (hc *HealthCheck) touch() {
 }
 
 func (hc *HealthCheck) check() {
-	b := batch.New(batch.WithConcurrencyNum(10))
+	b, _ := batch.New(context.Background(), batch.WithConcurrencyNum(10))
 	for _, proxy := range hc.proxies {
 		p := proxy
 		b.Go(p.Name(), func() (interface{}, error) {
