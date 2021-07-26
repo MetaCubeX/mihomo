@@ -175,7 +175,7 @@ func CreateDNSServer(s *stack.Stack, resolver *dns.Resolver, mapper *dns.Resolve
 		*id,
 		endpoint,
 		ports.Flags{LoadBalanced: true}, // it's actually the SO_REUSEPORT. Not sure it take effect.
-		nicID); err != nil {
+		nicID); tcpiperr != nil {
 		log.Errorln("Unable to start UDP DNS on tun:  %v", tcpiperr.String())
 	}
 
