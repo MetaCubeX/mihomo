@@ -79,7 +79,7 @@ func HandleSocks4(conn net.Conn, in chan<- C.ConnContext) {
 	if c, ok := conn.(*net.TCPConn); ok {
 		c.SetKeepAlive(true)
 	}
-	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS)
+	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4)
 }
 
 func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
@@ -96,5 +96,5 @@ func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
 		io.Copy(ioutil.Discard, conn)
 		return
 	}
-	in <- inbound.NewSocket(target, conn, C.SOCKS)
+	in <- inbound.NewSocket(target, conn, C.SOCKS5)
 }
