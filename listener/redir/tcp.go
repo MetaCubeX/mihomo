@@ -9,7 +9,6 @@ import (
 
 type Listener struct {
 	listener net.Listener
-	address  string
 	closed   bool
 }
 
@@ -18,7 +17,9 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	rl := &Listener{l, addr, false}
+	rl := &Listener{
+		listener: l,
+	}
 
 	go func() {
 		for {
@@ -42,7 +43,7 @@ func (l *Listener) Close() {
 }
 
 func (l *Listener) Address() string {
-	return l.address
+	return l.listener.Addr().String()
 }
 
 func handleRedir(conn net.Conn, in chan<- C.ConnContext) {

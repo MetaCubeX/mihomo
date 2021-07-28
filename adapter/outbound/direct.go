@@ -14,9 +14,7 @@ type Direct struct {
 
 // DialContext implements C.ProxyAdapter
 func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	address := net.JoinHostPort(metadata.String(), metadata.DstPort)
-
-	c, err := dialer.DialContext(ctx, "tcp", address)
+	c, err := dialer.DialContext(ctx, "tcp", metadata.RemoteAddress())
 	if err != nil {
 		return nil, err
 	}

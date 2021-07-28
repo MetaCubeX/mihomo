@@ -3,6 +3,7 @@ package route
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -81,10 +82,15 @@ func Start(addr string, secret string) {
 		})
 	}
 
-	log.Infoln("RESTful API listening at: %s", addr)
-	err := http.ListenAndServe(addr, r)
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Errorln("External controller error: %s", err.Error())
+		log.Errorln("External controller listen error: %s", err)
+		return
+	}
+	serverAddr = l.Addr().String()
+	log.Infoln("RESTful API listening at: %s", serverAddr)
+	if err = http.Serve(l, r); err != nil {
+		log.Errorln("External controller serve error: %s", err)
 	}
 }
 

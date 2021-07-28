@@ -18,7 +18,8 @@ const (
 
 	HTTP Type = iota
 	HTTPCONNECT
-	SOCKS
+	SOCKS4
+	SOCKS5
 	REDIR
 	TPROXY
 	TUN
@@ -47,7 +48,9 @@ func (t Type) String() string {
 		return "HTTP"
 	case HTTPCONNECT:
 		return "HTTP Connect"
-	case SOCKS:
+	case SOCKS4:
+		return "Socks4"
+	case SOCKS5:
 		return "Socks5"
 	case REDIR:
 		return "Redir"
