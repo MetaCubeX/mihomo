@@ -10,7 +10,6 @@ import (
 
 type Listener struct {
 	listener net.Listener
-	address  string
 	closed   bool
 }
 
@@ -31,7 +30,6 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 
 	hl := &Listener{
 		listener: l,
-		address:  addr,
 	}
 	go func() {
 		for {
@@ -55,5 +53,5 @@ func (l *Listener) Close() {
 }
 
 func (l *Listener) Address() string {
-	return l.address
+	return l.listener.Addr().String()
 }

@@ -10,7 +10,6 @@ import (
 
 type Listener struct {
 	listener net.Listener
-	address  string
 	closed   bool
 }
 
@@ -33,7 +32,6 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 
 	rl := &Listener{
 		listener: l,
-		address:  addr,
 	}
 
 	go func() {
@@ -58,7 +56,7 @@ func (l *Listener) Close() {
 }
 
 func (l *Listener) Address() string {
-	return l.address
+	return l.listener.Addr().String()
 }
 
 func (l *Listener) handleTProxy(conn net.Conn, in chan<- C.ConnContext) {
