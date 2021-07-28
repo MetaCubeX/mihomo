@@ -170,3 +170,38 @@ func TestClash_ShadowsocksV2RayPlugin(t *testing.T) {
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
 }
+
+func Benchmark_Shadowsocks(b *testing.B) {
+	cfg := &container.Config{
+		Image:        ImageShadowsocks,
+		Env:          []string{"SS_MODULE=ss-server", "SS_CONFIG=-s 0.0.0.0 -u -v -p 10002 -m aes-256-gcm -k FzcLbKs2dY9mhL"},
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+	}
+
+	id, err := startContainer(cfg, hostCfg, "ss")
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	b.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewShadowSocks(outbound.ShadowSocksOption{
+		Name:     "ss",
+		Server:   localIP.String(),
+		Port:     10002,
+		Password: "FzcLbKs2dY9mhL",
+		Cipher:   "aes-256-gcm",
+		UDP:      true,
+	})
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	time.Sleep(waitTime)
+	benchmarkProxy(b, proxy)
+}

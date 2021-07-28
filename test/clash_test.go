@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -70,7 +71,7 @@ func init() {
 		}
 	}
 
-	c, err := client.NewClientWithOpts(client.FromEnv)
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		panic(err)
 	}
@@ -619,6 +620,42 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	assert.NoError(t, testPacketConnTimeout(t, pc))
 }
 
+func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
+	l, err := net.Listen("tcp", ":10001")
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			assert.FailNow(b, err.Error())
+		}
+
+		io.Copy(io.Discard, c)
+		c.Close()
+	}()
+
+	chunkSize := int64(16 * 1024)
+	chunk := make([]byte, chunkSize)
+	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
+		Host:     localIP.String(),
+		DstPort:  "10001",
+		AddrType: socks5.AtypDomainName,
+	})
+	if err != nil {
+		assert.FailNow(b, err.Error())
+	}
+
+	b.SetBytes(chunkSize)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := conn.Write(chunk); err != nil {
+			assert.FailNow(b, err.Error())
+		}
+	}
+}
+
 func TestClash_Basic(t *testing.T) {
 	basic := `
 mixed-port: 10000
@@ -632,4 +669,9 @@ log-level: silent
 
 	time.Sleep(waitTime)
 	testPingPongWithSocksPort(t, 10000)
+}
+
+func Benchmark_Direct(b *testing.B) {
+	proxy := outbound.NewDirect()
+	benchmarkProxy(b, proxy)
 }

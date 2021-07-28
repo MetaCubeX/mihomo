@@ -11,7 +11,7 @@ import (
 var isDarwin = false
 
 func startContainer(cfg *container.Config, hostCfg *container.HostConfig, name string) (string, error) {
-	c, err := client.NewClientWithOpts(client.FromEnv)
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +34,7 @@ func startContainer(cfg *container.Config, hostCfg *container.HostConfig, name s
 }
 
 func cleanContainer(id string) error {
-	c, err := client.NewClientWithOpts(client.FromEnv)
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return err
 	}

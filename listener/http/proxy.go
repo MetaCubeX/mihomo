@@ -45,6 +45,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 			if request.Method == http.MethodConnect {
 				resp = responseWith(200)
 				resp.Status = "Connection established"
+				resp.ContentLength = -1
 
 				if resp.Write(conn) != nil {
 					break // close connection

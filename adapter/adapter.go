@@ -136,6 +136,8 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 			return http.ErrUseLastResponse
 		},
 	}
+	defer client.CloseIdleConnections()
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return
