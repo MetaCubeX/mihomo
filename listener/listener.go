@@ -20,15 +20,15 @@ var (
 	allowLan    = false
 	bindAddress = "*"
 
-	socksListener     C.Listener
-	socksUDPListener  C.Listener
-	httpListener      C.Listener
-	redirListener     C.Listener
-	redirUDPListener  C.Listener
-	tproxyListener    C.Listener
-	tproxyUDPListener C.Listener
-	mixedListener     C.Listener
-	mixedUDPLister    C.Listener
+	socksListener     *socks.Listener
+	socksUDPListener  *socks.UDPListener
+	httpListener      *http.Listener
+	redirListener     *redir.Listener
+	redirUDPListener  *tproxy.UDPListener
+	tproxyListener    *tproxy.Listener
+	tproxyUDPListener *tproxy.UDPListener
+	mixedListener     *mixed.Listener
+	mixedUDPLister    *socks.UDPListener
 
 	// lock for recreate function
 	socksMux  sync.Mutex
