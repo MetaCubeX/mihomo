@@ -15,8 +15,25 @@ import (
 
 type Listener struct {
 	listener net.Listener
-	closed   bool
+	addr     string
 	cache    *cache.Cache
+	closed   bool
+}
+
+// RawAddress implements C.Listener
+func (l *Listener) RawAddress() string {
+	return l.addr
+}
+
+// Address implements C.Listener
+func (l *Listener) Address() string {
+	return l.listener.Addr().String()
+}
+
+// Close implements C.Listener
+func (l *Listener) Close() error {
+	l.closed = true
+	return l.listener.Close()
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
@@ -27,6 +44,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 
 	ml := &Listener{
 		listener: l,
+		addr:     addr,
 		cache:    cache.New(30 * time.Second),
 	}
 	go func() {
@@ -43,15 +61,6 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	}()
 
 	return ml, nil
-}
-
-func (l *Listener) Close() {
-	l.closed = true
-	l.listener.Close()
-}
-
-func (l *Listener) Address() string {
-	return l.listener.Addr().String()
 }
 
 func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
