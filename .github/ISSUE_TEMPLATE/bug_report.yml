@@ -1,6 +1,6 @@
 name: Bug report
 description: Create a report to help us improve
-title: '[Bug] '
+title: "[Bug] "
 body:
   - type: checkboxes
     id: ensure
@@ -36,10 +36,9 @@ I have read the [documentation](https://github.com/Dreamacro/clash/wiki/) and wa
 This is an issue of the Clash core *per se*, not to the derivatives of Clash, like OpenClash or KoolClash.
 "
           required: true
-  - type: textarea
+  - type: input
     attributes:
-      render: yaml
-      label: "Clash version"
+      label: Clash version
     validations:
       required: true
   - type: dropdown
@@ -64,14 +63,14 @@ Paste the Clash core configuration below.
       required: true
   - type: textarea
     attributes:
-      render: yaml
-      label: "Clash log"
+      render: shell
+      label: Clash log
       description: "
 在下方附上 Clash Core 的日志，log level 使用 DEBUG
 Paste the Clash core log below with the log level set to `DEBUG`.
 "
   - type: textarea
     attributes:
-      label: "Description"
+      label: Description
     validations:
       required: true
