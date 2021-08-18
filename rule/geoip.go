@@ -20,6 +20,10 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 	if ip == nil {
 		return false
 	}
+
+	if g.country == "LAN" {
+		return ip.IsPrivate()
+	}
 	record, _ := mmdb.Instance().Country(ip)
 	return record.Country.IsoCode == g.country
 }
