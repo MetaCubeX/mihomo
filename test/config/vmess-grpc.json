@@ -24,7 +24,7 @@
                     ]
                 },
                 "grpcSettings": {
-                    "serviceName": "example"
+                    "serviceName": "example!"
                 }
             }
         }
