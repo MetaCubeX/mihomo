@@ -335,7 +335,7 @@ func TestClash_VmessGrpc(t *testing.T) {
 		UDP:            true,
 		ServerName:     "example.org",
 		GrpcOpts: outbound.GrpcOptions{
-			GrpcServiceName: "example",
+			GrpcServiceName: "example!",
 		},
 	})
 	if err != nil {
