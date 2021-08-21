@@ -346,6 +346,47 @@ func TestClash_VmessGrpc(t *testing.T) {
 	testSuit(t, proxy)
 }
 
+func TestClash_VmessWebsocket0RTT(t *testing.T) {
+	cfg := &container.Config{
+		Image:        ImageXray,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds: []string{
+			fmt.Sprintf("%s:/etc/xray/config.json", C.Path.Resolve("vmess-ws-0rtt.json")),
+		},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "vmess-ws-0rtt")
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+	defer cleanContainer(id)
+
+	proxy, err := outbound.NewVmess(outbound.VmessOption{
+		Name:       "vmess",
+		Server:     localIP.String(),
+		Port:       10002,
+		UUID:       "b831381d-6324-4d53-ad4f-8cda48b30811",
+		Cipher:     "auto",
+		AlterID:    32,
+		Network:    "ws",
+		UDP:        true,
+		ServerName: "example.org",
+		WSOpts: outbound.WSOptions{
+			MaxEarlyData:        2048,
+			EarlyDataHeaderName: "Sec-WebSocket-Protocol",
+		},
+	})
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+
+	time.Sleep(waitTime)
+	testSuit(t, proxy)
+}
+
 func Benchmark_Vmess(b *testing.B) {
 	configPath := C.Path.Resolve("vmess-aead.json")
 
