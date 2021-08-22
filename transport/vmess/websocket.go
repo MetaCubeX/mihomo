@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -305,6 +306,18 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 }
 
 func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
+	if u, err := url.Parse(c.Path); err == nil {
+		if q := u.Query(); q.Get("ed") != "" {
+			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
+				c.MaxEarlyData = ed
+				c.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				q.Del("ed")
+				u.RawQuery = q.Encode()
+				c.Path = u.String()
+			}
+		}
+	}
+
 	if c.MaxEarlyData > 0 {
 		return streamWebsocketWithEarlyDataConn(conn, c)
 	}
