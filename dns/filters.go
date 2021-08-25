@@ -11,11 +11,13 @@ type fallbackIPFilter interface {
 	Match(net.IP) bool
 }
 
-type geoipFilter struct{}
+type geoipFilter struct {
+	code string
+}
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	record, _ := mmdb.Instance().Country(ip)
-	return record.Country.IsoCode != "CN" && !ip.IsPrivate()
+	return record.Country.IsoCode != gf.code && !ip.IsPrivate()
 }
 
 type ipnetFilter struct {

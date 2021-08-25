@@ -302,9 +302,10 @@ type NameServer struct {
 }
 
 type FallbackFilter struct {
-	GeoIP  bool
-	IPCIDR []*net.IPNet
-	Domain []string
+	GeoIP     bool
+	GeoIPCode string
+	IPCIDR    []*net.IPNet
+	Domain    []string
 }
 
 type Config struct {
@@ -344,7 +345,9 @@ func NewResolver(config Config) *Resolver {
 
 	fallbackIPFilters := []fallbackIPFilter{}
 	if config.FallbackFilter.GeoIP {
-		fallbackIPFilters = append(fallbackIPFilters, &geoipFilter{})
+		fallbackIPFilters = append(fallbackIPFilters, &geoipFilter{
+			code: config.FallbackFilter.GeoIPCode,
+		})
 	}
 	for _, ipnet := range config.FallbackFilter.IPCIDR {
 		fallbackIPFilters = append(fallbackIPFilters, &ipnetFilter{ipnet: ipnet})
