@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
@@ -17,7 +18,7 @@ type geoipFilter struct {
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	record, _ := mmdb.Instance().Country(ip)
-	return record.Country.IsoCode != gf.code && !ip.IsPrivate()
+	return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
 }
 
 type ipnetFilter struct {
