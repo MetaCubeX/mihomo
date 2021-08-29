@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"strings"
+
 	"github.com/Dreamacro/clash/component/mmdb"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -21,11 +23,11 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 		return false
 	}
 
-	if g.country == "LAN" {
+	if strings.EqualFold(g.country, "LAN") {
 		return ip.IsPrivate()
 	}
 	record, _ := mmdb.Instance().Country(ip)
-	return record.Country.IsoCode == g.country
+	return strings.EqualFold(record.Country.IsoCode, g.country)
 }
 
 func (g *GEOIP) Adapter() string {
