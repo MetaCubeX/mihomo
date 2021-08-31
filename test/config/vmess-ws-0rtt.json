@@ -13,18 +13,11 @@
                 ]
             },
             "streamSettings": {
-                "network": "grpc",
-                "security": "tls",
-                "tlsSettings": {
-                    "certificates": [
-                        {
-                            "certificateFile": "/etc/ssl/v2ray/fullchain.pem",
-                            "keyFile": "/etc/ssl/v2ray/privkey.pem"
-                        }
-                    ]
-                },
-                "grpcSettings": {
-                    "serviceName": "example!"
+                "network": "ws",
+                "security": "none",
+                "wsSettings": {
+                    "maxEarlyData": 128,
+                    "earlyDataHeaderName": "Sec-WebSocket-Protocol"
                 }
             }
         }
@@ -33,8 +26,5 @@
         {
             "protocol": "freedom"
         }
-    ],
-    "log": {
-        "loglevel": "debug"
-    }
+    ]
 }
