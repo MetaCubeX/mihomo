@@ -211,6 +211,8 @@ func StreamGunWithTransport(transport *http2.Transport, cfg *Config) (net.Conn, 
 			Scheme: "https",
 			Host:   cfg.Host,
 			Path:   fmt.Sprintf("/%s/Tun", serviceName),
+			// for unescape path
+			Opaque: fmt.Sprintf("//%s/%s/Tun", cfg.Host, serviceName),
 		},
 		Proto:      "HTTP/2",
 		ProtoMajor: 2,

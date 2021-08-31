@@ -28,6 +28,10 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 	if ip == nil {
 		return false
 	}
+
+	if strings.EqualFold(g.country, "LAN") {
+		return ip.IsPrivate()
+	}
 	return g.geoIPMatcher.Match(ip)
 }
 

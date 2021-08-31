@@ -24,7 +24,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 	trusted := cache == nil // disable authenticate if cache is nil
 
 	for keepAlive {
-		request, err := ReadRequest(conn.Reader(), false)
+		request, err := ReadRequest(conn.Reader())
 		if err != nil {
 			break
 		}
