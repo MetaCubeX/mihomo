@@ -3,7 +3,6 @@ package rules
 import (
 	"errors"
 	"net"
-	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -16,7 +15,6 @@ var (
 
 func HasNoResolve(params []string) bool {
 	for _, p := range params {
-		p = strings.Trim(p, " ")
 		if p == noResolve {
 			return true
 		}
@@ -26,7 +24,6 @@ func HasNoResolve(params []string) bool {
 
 func findNetwork(params []string) C.NetWork {
 	for _, p := range params {
-		p = strings.Trim(p, " ")
 		if p == "tcp" {
 			return C.TCP
 		} else if p == "udp" {
@@ -39,7 +36,6 @@ func findNetwork(params []string) C.NetWork {
 func findSourceIPs(params []string) []*net.IPNet {
 	var ips []*net.IPNet
 	for _, p := range params {
-		p = strings.Trim(p, " ")
 		if p == noResolve || len(p) < 7 {
 			continue
 		}
