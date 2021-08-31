@@ -16,11 +16,13 @@ type fallbackIPFilter interface {
 	Match(net.IP) bool
 }
 
-type geoipFilter struct{}
+type geoipFilter struct {
+	code string
+}
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	if multiGeoIPMatcher == nil {
-		countryCodeCN := "cn"
+		countryCodeCN := gf.code
 		countryCodePrivate := "private"
 		geoLoader, err := geodata.GetGeoDataLoader("standard")
 		if err != nil {

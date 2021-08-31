@@ -42,6 +42,7 @@ type VlessOption struct {
 	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
 	HTTP2Opts      HTTP2Options      `proxy:"h2-opts,omitempty"`
 	GrpcOpts       GrpcOptions       `proxy:"grpc-opts,omitempty"`
+	WSOpts         WSOptions         `proxy:"ws-opts,omitempty"`
 	WSPath         string            `proxy:"ws-path,omitempty"`
 	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
@@ -52,11 +53,20 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	switch v.option.Network {
 	case "ws":
+		if v.option.WSOpts.Path == "" {
+			v.option.WSOpts.Path = v.option.WSPath
+		}
+		if len(v.option.WSOpts.Headers) == 0 {
+			v.option.WSOpts.Headers = v.option.WSHeaders
+		}
+
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
-			Host: host,
-			Port: port,
-			Path: v.option.WSPath,
+			Host:                host,
+			Port:                port,
+			Path:                v.option.WSPath,
+			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
+			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
 		}
 
 		if len(v.option.WSHeaders) != 0 {
