@@ -52,5 +52,5 @@ type Rule interface {
 	Adapter() string
 	Payload() string
 	ShouldResolveIP() bool
-	NetWork() NetWork
+	RuleExtra() *RuleExtra
 }

@@ -12,10 +12,10 @@ import (
 )
 
 type GEOSITE struct {
-	country string
-	adapter string
-	network C.NetWork
-	matcher *router.DomainMatcher
+	country   string
+	adapter   string
+	ruleExtra *C.RuleExtra
+	matcher   *router.DomainMatcher
 }
 
 func (gs *GEOSITE) RuleType() C.RuleType {
@@ -43,11 +43,11 @@ func (gs *GEOSITE) ShouldResolveIP() bool {
 	return false
 }
 
-func (gs *GEOSITE) NetWork() C.NetWork {
-	return gs.network
+func (gs *GEOSITE) RuleExtra() *C.RuleExtra {
+	return gs.ruleExtra
 }
 
-func NewGEOSITE(country string, adapter string, network C.NetWork) (*GEOSITE, error) {
+func NewGEOSITE(country string, adapter string, ruleExtra *C.RuleExtra) (*GEOSITE, error) {
 	geoLoaderName := "standard"
 	//geoLoaderName := "memconservative"
 	geoLoader, err := geodata.GetGeoDataLoader(geoLoaderName)
@@ -72,10 +72,10 @@ func NewGEOSITE(country string, adapter string, network C.NetWork) (*GEOSITE, er
 	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, len(domains))
 
 	geoSite := &GEOSITE{
-		country: country,
-		adapter: adapter,
-		network: network,
-		matcher: matcher,
+		country:   country,
+		adapter:   adapter,
+		ruleExtra: ruleExtra,
+		matcher:   matcher,
 	}
 
 	return geoSite, nil

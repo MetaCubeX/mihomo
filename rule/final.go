@@ -28,8 +28,8 @@ func (f *Match) ShouldResolveIP() bool {
 	return false
 }
 
-func (f *Match) NetWork() C.NetWork {
-	return C.ALLNet
+func (f *Match) RuleExtra() *C.RuleExtra {
+	return nil
 }
 
 func NewMatch(adapter string) *Match {

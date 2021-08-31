@@ -14,11 +14,11 @@ type portReal struct {
 }
 
 type Port struct {
-	adapter  string
-	port     string
-	isSource bool
-	portList []portReal
-	network  C.NetWork
+	adapter   string
+	port      string
+	isSource  bool
+	portList  []portReal
+	ruleExtra *C.RuleExtra
 }
 
 func (p *Port) RuleType() C.RuleType {
@@ -47,8 +47,8 @@ func (p *Port) ShouldResolveIP() bool {
 	return false
 }
 
-func (p *Port) NetWork() C.NetWork {
-	return p.network
+func (p *Port) RuleExtra() *C.RuleExtra {
+	return p.ruleExtra
 }
 
 func (p *Port) matchPortReal(portRef string) bool {
@@ -67,7 +67,7 @@ func (p *Port) matchPortReal(portRef string) bool {
 	return false
 }
 
-func NewPort(port string, adapter string, isSource bool, network C.NetWork) (*Port, error) {
+func NewPort(port string, adapter string, isSource bool, ruleExtra *C.RuleExtra) (*Port, error) {
 	//the port format should be like this: "123/136/137-139" or "[123]/[136-139]"
 	ports := strings.Split(port, "/")
 	if len(ports) > 28 {
@@ -114,10 +114,10 @@ func NewPort(port string, adapter string, isSource bool, network C.NetWork) (*Po
 	}
 
 	return &Port{
-		adapter:  adapter,
-		port:     port,
-		isSource: isSource,
-		portList: portList,
-		network:  network,
+		adapter:   adapter,
+		port:      port,
+		isSource:  isSource,
+		portList:  portList,
+		ruleExtra: ruleExtra,
 	}, nil
 }

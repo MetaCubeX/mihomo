@@ -23,7 +23,7 @@ func WithIPCIDRNoResolve(noResolve bool) IPCIDROption {
 type IPCIDR struct {
 	ipnet       *net.IPNet
 	adapter     string
-	network     C.NetWork
+	ruleExtra   *C.RuleExtra
 	isSourceIP  bool
 	noResolveIP bool
 }
@@ -55,20 +55,20 @@ func (i *IPCIDR) ShouldResolveIP() bool {
 	return !i.noResolveIP
 }
 
-func (i *IPCIDR) NetWork() C.NetWork {
-	return i.network
+func (i *IPCIDR) RuleExtra() *C.RuleExtra {
+	return i.ruleExtra
 }
 
-func NewIPCIDR(s string, adapter string, network C.NetWork, opts ...IPCIDROption) (*IPCIDR, error) {
+func NewIPCIDR(s string, adapter string, ruleExtra *C.RuleExtra, opts ...IPCIDROption) (*IPCIDR, error) {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
 		return nil, errPayload
 	}
-
+	ruleExtra.SourceIPs = nil
 	ipcidr := &IPCIDR{
-		ipnet:   ipnet,
-		adapter: adapter,
-		network: network,
+		ipnet:     ipnet,
+		adapter:   adapter,
+		ruleExtra: ruleExtra,
 	}
 
 	for _, o := range opts {

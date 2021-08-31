@@ -7,9 +7,9 @@ import (
 )
 
 type DomainSuffix struct {
-	suffix  string
-	adapter string
-	network C.NetWork
+	suffix    string
+	adapter   string
+	ruleExtra *C.RuleExtra
 }
 
 func (ds *DomainSuffix) RuleType() C.RuleType {
@@ -36,14 +36,14 @@ func (ds *DomainSuffix) ShouldResolveIP() bool {
 	return false
 }
 
-func (ds *DomainSuffix) NetWork() C.NetWork {
-	return ds.network
+func (ds *DomainSuffix) RuleExtra() *C.RuleExtra {
+	return ds.ruleExtra
 }
 
-func NewDomainSuffix(suffix string, adapter string, network C.NetWork) *DomainSuffix {
+func NewDomainSuffix(suffix string, adapter string, ruleExtra *C.RuleExtra) *DomainSuffix {
 	return &DomainSuffix{
-		suffix:  strings.ToLower(suffix),
-		adapter: adapter,
-		network: network,
+		suffix:    strings.ToLower(suffix),
+		adapter:   adapter,
+		ruleExtra: ruleExtra,
 	}
 }
