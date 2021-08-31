@@ -14,9 +14,9 @@ import (
 var processCache = cache.NewLRUCache(cache.WithAge(2), cache.WithSize(64))
 
 type Process struct {
-	adapter string
-	process string
-	network C.NetWork
+	adapter   string
+	process   string
+	ruleExtra *C.RuleExtra
 }
 
 func (ps *Process) RuleType() C.RuleType {
@@ -71,14 +71,14 @@ func (ps *Process) ShouldResolveIP() bool {
 	return false
 }
 
-func (ps *Process) NetWork() C.NetWork {
-	return ps.network
+func (ps *Process) RuleExtra() *C.RuleExtra {
+	return ps.ruleExtra
 }
 
-func NewProcess(process string, adapter string, network C.NetWork) (*Process, error) {
+func NewProcess(process string, adapter string, ruleExtra *C.RuleExtra) (*Process, error) {
 	return &Process{
-		adapter: adapter,
-		process: process,
-		network: network,
+		adapter:   adapter,
+		process:   process,
+		ruleExtra: ruleExtra,
 	}, nil
 }

@@ -33,7 +33,7 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	preProcessCacheFinder, _ = R.NewProcess("", "", C.ALLNet)
+	preProcessCacheFinder, _ = R.NewProcess("", "", nil)
 
 	tunBroadcastAddr = net.IPv4(198, 18, 255, 255)
 )
@@ -235,7 +235,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		switch true {
 		case rule != nil:
-			log.Infoln("[UDP] %s(%s) --> %s:%s match %s(%s) %s using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rule.NetWork().String(), rawPc.Chains().String())
+			log.Infoln("[UDP] %s(%s) --> %s:%s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
 		case mode == Global:
 			log.Infoln("[UDP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 		case mode == Direct:
@@ -285,7 +285,7 @@ func handleTCPConn(ctx C.ConnContext) {
 
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s(%s) --> %s:%s match %s(%s) %s using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rule.NetWork().String(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s(%s) --> %s:%s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
 	case mode == Global:
 		log.Infoln("[TCP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 	case mode == Direct:
@@ -339,12 +339,21 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				continue
 			}
 
-			if rule.NetWork() != C.ALLNet && rule.NetWork() != metadata.NetWork {
-				continue
+			extra := rule.RuleExtra()
+			if extra != nil {
+				if extra.NotMatchNetwork(metadata.NetWork) {
+					continue
+				}
+
+				if extra.NotMatchSourceIP(metadata.SrcIP) {
+					continue
+				}
 			}
+
 			return adapter, rule, nil
 		}
 	}
 
-	return proxies["DIRECT"], nil, nil
+	//return proxies["DIRECT"], nil, nil
+	return proxies["REJECT"], nil, nil
 }
