@@ -64,7 +64,7 @@ func NewIPCIDR(s string, adapter string, ruleExtra *C.RuleExtra, opts ...IPCIDRO
 	if err != nil {
 		return nil, errPayload
 	}
-	ruleExtra.SourceIPs = nil
+
 	ipcidr := &IPCIDR{
 		ipnet:     ipnet,
 		adapter:   adapter,
