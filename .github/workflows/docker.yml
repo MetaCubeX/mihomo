@@ -52,7 +52,7 @@ jobs:
 
       - name: Get all docker tags
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/github-script@v3
+        uses: actions/github-script@v4
         id: tags
         with:
           script: |

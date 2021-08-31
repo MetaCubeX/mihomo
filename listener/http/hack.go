@@ -7,4 +7,4 @@ import (
 )
 
 //go:linkname ReadRequest net/http.readRequest
-func ReadRequest(b *bufio.Reader, deleteHostHeader bool) (req *http.Request, err error)
+func ReadRequest(b *bufio.Reader) (req *http.Request, err error)

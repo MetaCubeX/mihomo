@@ -152,7 +152,7 @@ func (a *authAES128) Encode(buf *bytes.Buffer, b []byte) error {
 }
 
 func (a *authAES128) DecodePacket(b []byte) ([]byte, error) {
-	if !bytes.Equal(a.hmac(a.Key, b[:len(b)-4])[:4], b[len(b)-4:]) {
+	if !bytes.Equal(a.hmac(a.userKey, b[:len(b)-4])[:4], b[len(b)-4:]) {
 		return nil, errAuthAES128ChksumError
 	}
 	return b[:len(b)-4], nil
