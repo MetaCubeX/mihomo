@@ -404,15 +404,22 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 	for idx, line := range rulesConfig {
 		rule := trimArr(strings.Split(line, ","))
 		var (
-			payload string
-			target  string
-			params  = []string{}
+			payload  string
+			target   string
+			params   = []string{}
+			ruleName = strings.ToUpper(rule[0])
 		)
 
 		switch l := len(rule); {
 		case l == 2:
 			target = rule[1]
 		case l == 3:
+			if ruleName == "MATCH" {
+				payload = ""
+				target = rule[1]
+				params = rule[2:]
+				break
+			}
 			payload = rule[1]
 			target = rule[2]
 		case l >= 4:
@@ -427,10 +434,10 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 			return nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
 		}
 
-		rule = trimArr(rule)
+		//rule = trimArr(rule)
 		params = trimArr(params)
 
-		parsed, parseErr := R.ParseRule(rule[0], payload, target, params)
+		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
 			return nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
