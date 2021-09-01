@@ -22,7 +22,7 @@ type geoipFilter struct {
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	if multiGeoIPMatcher == nil {
-		countryCodeCN := gf.code
+		countryCode := gf.code
 		countryCodePrivate := "private"
 		geoLoader, err := geodata.GetGeoDataLoader("standard")
 		if err != nil {
@@ -30,7 +30,7 @@ func (gf *geoipFilter) Match(ip net.IP) bool {
 			return false
 		}
 
-		recordsCN, err := geoLoader.LoadGeoIP(countryCodeCN)
+		recordsCN, err := geoLoader.LoadGeoIP(countryCode)
 		if err != nil {
 			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
 			return false
@@ -44,7 +44,7 @@ func (gf *geoipFilter) Match(ip net.IP) bool {
 
 		geoips := []*router.GeoIP{
 			{
-				CountryCode:  countryCodeCN,
+				CountryCode:  countryCode,
 				Cidr:         recordsCN,
 				ReverseMatch: false,
 			},
