@@ -210,7 +210,7 @@ func newLargeDataPair() (chan hashPair, chan hashPair, func(t *testing.T) error)
 func testPingPongWithSocksPort(t *testing.T, port int) {
 	pingCh, pongCh, test := newPingPongPair()
 	go func() {
-		l, err := net.Listen("tcp", ":10001")
+		l, err := Listen("tcp", ":10001")
 		if err != nil {
 			assert.FailNow(t, err.Error())
 		}
@@ -259,7 +259,7 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 }
 
 func testPingPongWithConn(t *testing.T, c net.Conn) error {
-	l, err := net.Listen("tcp", ":10001")
+	l, err := Listen("tcp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -300,7 +300,7 @@ func testPingPongWithConn(t *testing.T, c net.Conn) error {
 }
 
 func testPingPongWithPacketConn(t *testing.T, pc net.PacketConn) error {
-	l, err := net.ListenPacket("udp", ":10001")
+	l, err := ListenPacket("udp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ type hashPair struct {
 }
 
 func testLargeDataWithConn(t *testing.T, c net.Conn) error {
-	l, err := net.Listen("tcp", ":10001")
+	l, err := Listen("tcp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -438,7 +438,7 @@ func testLargeDataWithConn(t *testing.T, c net.Conn) error {
 }
 
 func testLargeDataWithPacketConn(t *testing.T, pc net.PacketConn) error {
-	l, err := net.ListenPacket("udp", ":10001")
+	l, err := ListenPacket("udp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -622,7 +622,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 }
 
 func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
-	l, err := net.Listen("tcp", ":10001")
+	l, err := Listen("tcp", ":10001")
 	if err != nil {
 		assert.FailNow(b, err.Error())
 	}
@@ -639,6 +639,7 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 
 	chunkSize := int64(16 * 1024)
 	chunk := make([]byte, chunkSize)
+	rand.Read(chunk)
 	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 		Host:     localIP.String(),
 		DstPort:  "10001",
