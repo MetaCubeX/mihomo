@@ -27,11 +27,12 @@ import (
 )
 
 const (
-	ImageShadowsocks = "mritd/shadowsocks:latest"
-	ImageVmess       = "v2fly/v2fly-core:latest"
-	ImageTrojan      = "trojangfw/trojan:latest"
-	ImageSnell       = "icpz/snell-server:latest"
-	ImageXray        = "teddysun/xray:latest"
+	ImageShadowsocks     = "mritd/shadowsocks:latest"
+	ImageShadowsocksRust = "ghcr.io/shadowsocks/ssserver-rust:latest"
+	ImageVmess           = "v2fly/v2fly-core:latest"
+	ImageTrojan          = "trojangfw/trojan:latest"
+	ImageSnell           = "icpz/snell-server:latest"
+	ImageXray            = "teddysun/xray:latest"
 )
 
 var (
