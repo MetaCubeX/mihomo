@@ -3,13 +3,15 @@ module clash-test
 go 1.17
 
 require (
-	github.com/Dreamacro/clash v1.6.6-0.20210821162529-0267b2efad9a
+	github.com/Dreamacro/clash v1.6.6-0.20210905062555-c7b718f6512d
 	github.com/docker/docker v20.10.8+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/miekg/dns v1.1.43
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 )
+
+replace github.com/Dreamacro/clash => ../
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7 // indirect
