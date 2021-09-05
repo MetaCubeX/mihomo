@@ -214,6 +214,7 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		if err != nil {
 			assert.FailNow(t, err.Error())
 		}
+		defer l.Close()
 
 		c, err := l.Accept()
 		if err != nil {
@@ -229,7 +230,6 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		if _, err := c.Write([]byte("pong")); err != nil {
 			assert.FailNow(t, err.Error())
 		}
-		l.Close()
 	}()
 
 	go func() {
@@ -237,6 +237,7 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		if err != nil {
 			assert.FailNow(t, err.Error())
 		}
+		defer c.Close()
 
 		if _, err := socks5.ClientHandshake(c, socks5.ParseAddr("127.0.0.1:10001"), socks5.CmdConnect, nil); err != nil {
 			assert.FailNow(t, err.Error())
@@ -252,7 +253,6 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		}
 
 		pongCh <- buf
-		c.Close()
 	}()
 
 	test(t)
@@ -380,6 +380,7 @@ func testLargeDataWithConn(t *testing.T, c net.Conn) error {
 		if err != nil {
 			return
 		}
+		defer c.Close()
 
 		hashMap := map[int][]byte{}
 		buf := make([]byte, chunkSize)
@@ -626,15 +627,16 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 	if err != nil {
 		assert.FailNow(b, err.Error())
 	}
+	defer l.Close()
 
 	go func() {
 		c, err := l.Accept()
 		if err != nil {
 			assert.FailNow(b, err.Error())
 		}
+		defer c.Close()
 
 		io.Copy(io.Discard, c)
-		c.Close()
 	}()
 
 	chunkSize := int64(16 * 1024)
