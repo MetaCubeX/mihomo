@@ -10,6 +10,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -171,12 +172,12 @@ func updateGeneral(general *config.General, force bool) {
 	resolver.DisableIPv6 = !general.IPv6
 
 	if general.Interface != "" {
-		dialer.DialHook = dialer.DialerWithInterface(general.Interface)
-		dialer.ListenPacketHook = dialer.ListenPacketWithInterface(general.Interface)
+		dialer.DefaultOptions = []dialer.Option{dialer.WithInterface(general.Interface)}
 	} else {
-		dialer.DialHook = nil
-		dialer.ListenPacketHook = nil
+		dialer.DefaultOptions = nil
 	}
+
+	iface.FlushCache()
 
 	if !force {
 		return
