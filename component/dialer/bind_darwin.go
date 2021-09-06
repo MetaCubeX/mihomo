@@ -3,51 +3,57 @@ package dialer
 import (
 	"net"
 	"syscall"
+
+	"golang.org/x/sys/unix"
+
+	"github.com/Dreamacro/clash/component/iface"
 )
 
 type controlFn = func(network, address string, c syscall.RawConn) error
 
-func bindControl(ifaceIdx int) controlFn {
-	return func(network, address string, c syscall.RawConn) error {
+func bindControl(ifaceIdx int, chain controlFn) controlFn {
+	return func(network, address string, c syscall.RawConn) (err error) {
+		defer func() {
+			if err == nil && chain != nil {
+				err = chain(network, address, c)
+			}
+		}()
+
 		ipStr, _, err := net.SplitHostPort(address)
 		if err == nil {
 			ip := net.ParseIP(ipStr)
 			if ip != nil && !ip.IsGlobalUnicast() {
-				return nil
+				return
 			}
 		}
 
 		return c.Control(func(fd uintptr) {
 			switch network {
 			case "tcp4", "udp4":
-				syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifaceIdx)
+				unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_BOUND_IF, ifaceIdx)
 			case "tcp6", "udp6":
-				syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_BOUND_IF, ifaceIdx)
+				unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_BOUND_IF, ifaceIdx)
 			}
 		})
 	}
 }
 
-func bindIfaceToDialer(dialer *net.Dialer, ifaceName string) error {
-	iface, err, _ := ifaceSingle.Do(func() (interface{}, error) {
-		return net.InterfaceByName(ifaceName)
-	})
+func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ net.IP) error {
+	ifaceObj, err := iface.ResolveInterface(ifaceName)
 	if err != nil {
 		return err
 	}
 
-	dialer.Control = bindControl(iface.(*net.Interface).Index)
+	dialer.Control = bindControl(ifaceObj.Index, dialer.Control)
 	return nil
 }
 
-func bindIfaceToListenConfig(lc *net.ListenConfig, ifaceName string) error {
-	iface, err, _ := ifaceSingle.Do(func() (interface{}, error) {
-		return net.InterfaceByName(ifaceName)
-	})
+func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
+	ifaceObj, err := iface.ResolveInterface(ifaceName)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	lc.Control = bindControl(iface.(*net.Interface).Index)
-	return nil
+	lc.Control = bindControl(ifaceObj.Index, lc.Control)
+	return address, nil
 }

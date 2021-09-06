@@ -117,8 +117,12 @@ func isIPRequest(q D.Question) bool {
 func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	ret := []dnsClient{}
 	for _, s := range servers {
-		if s.Net == "https" {
+		switch s.Net {
+		case "https":
 			ret = append(ret, newDoHClient(s.Addr, resolver))
+			continue
+		case "dhcp":
+			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		}
 
