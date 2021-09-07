@@ -516,6 +516,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
+		case "dhcp":
+			addr = u.Host
+			dnsNetType = "dhcp" // UDP from DHCP
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}
