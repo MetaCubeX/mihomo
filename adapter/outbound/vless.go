@@ -69,7 +69,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
 		}
 
-		if len(v.option.WSHeaders) != 0 {
+		if len(v.option.WSOpts.Headers) != 0 {
 			header := http.Header{}
 			for key, value := range v.option.WSHeaders {
 				header.Add(key, value)
