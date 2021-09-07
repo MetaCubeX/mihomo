@@ -110,7 +110,7 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		return
 	}
 
-	pc, err := dialer.ListenPacket("udp", "")
+	pc, err := dialer.ListenPacket(context.Background(), "udp", "")
 	if err != nil {
 		return
 	}
