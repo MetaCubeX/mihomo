@@ -12,8 +12,9 @@ import (
 
 func TestClash_Shadowsocks(t *testing.T) {
 	cfg := &container.Config{
-		Image:        ImageShadowsocks,
-		Env:          []string{"SS_MODULE=ss-server", "SS_CONFIG=-s 0.0.0.0 -u -v -p 10002 -m chacha20-ietf-poly1305 -k FzcLbKs2dY9mhL"},
+		Image:        ImageShadowsocksRust,
+		Entrypoint:   []string{"ssserver"},
+		Cmd:          []string{"-s", "0.0.0.0:10002", "-m", "chacha20-ietf-poly1305", "-k", "FzcLbKs2dY9mhL", "-U"},
 		ExposedPorts: defaultExposedPorts,
 	}
 	hostCfg := &container.HostConfig{
@@ -173,8 +174,9 @@ func TestClash_ShadowsocksV2RayPlugin(t *testing.T) {
 
 func Benchmark_Shadowsocks(b *testing.B) {
 	cfg := &container.Config{
-		Image:        ImageShadowsocks,
-		Env:          []string{"SS_MODULE=ss-server", "SS_CONFIG=-s 0.0.0.0 -u -v -p 10002 -m aes-256-gcm -k FzcLbKs2dY9mhL"},
+		Image:        ImageShadowsocksRust,
+		Entrypoint:   []string{"ssserver"},
+		Cmd:          []string{"-s", "0.0.0.0:10002", "-m", "aes-256-gcm", "-k", "FzcLbKs2dY9mhL", "-U"},
 		ExposedPorts: defaultExposedPorts,
 	}
 	hostCfg := &container.HostConfig{

@@ -27,11 +27,12 @@ import (
 )
 
 const (
-	ImageShadowsocks = "mritd/shadowsocks:latest"
-	ImageVmess       = "v2fly/v2fly-core:latest"
-	ImageTrojan      = "trojangfw/trojan:latest"
-	ImageSnell       = "icpz/snell-server:latest"
-	ImageXray        = "teddysun/xray:latest"
+	ImageShadowsocks     = "mritd/shadowsocks:latest"
+	ImageShadowsocksRust = "ghcr.io/shadowsocks/ssserver-rust:latest"
+	ImageVmess           = "v2fly/v2fly-core:latest"
+	ImageTrojan          = "trojangfw/trojan:latest"
+	ImageSnell           = "icpz/snell-server:latest"
+	ImageXray            = "teddysun/xray:latest"
 )
 
 var (
@@ -209,10 +210,11 @@ func newLargeDataPair() (chan hashPair, chan hashPair, func(t *testing.T) error)
 func testPingPongWithSocksPort(t *testing.T, port int) {
 	pingCh, pongCh, test := newPingPongPair()
 	go func() {
-		l, err := net.Listen("tcp", ":10001")
+		l, err := Listen("tcp", ":10001")
 		if err != nil {
 			assert.FailNow(t, err.Error())
 		}
+		defer l.Close()
 
 		c, err := l.Accept()
 		if err != nil {
@@ -228,7 +230,6 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		if _, err := c.Write([]byte("pong")); err != nil {
 			assert.FailNow(t, err.Error())
 		}
-		l.Close()
 	}()
 
 	go func() {
@@ -236,6 +237,7 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		if err != nil {
 			assert.FailNow(t, err.Error())
 		}
+		defer c.Close()
 
 		if _, err := socks5.ClientHandshake(c, socks5.ParseAddr("127.0.0.1:10001"), socks5.CmdConnect, nil); err != nil {
 			assert.FailNow(t, err.Error())
@@ -251,14 +253,13 @@ func testPingPongWithSocksPort(t *testing.T, port int) {
 		}
 
 		pongCh <- buf
-		c.Close()
 	}()
 
 	test(t)
 }
 
 func testPingPongWithConn(t *testing.T, c net.Conn) error {
-	l, err := net.Listen("tcp", ":10001")
+	l, err := Listen("tcp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -299,7 +300,7 @@ func testPingPongWithConn(t *testing.T, c net.Conn) error {
 }
 
 func testPingPongWithPacketConn(t *testing.T, pc net.PacketConn) error {
-	l, err := net.ListenPacket("udp", ":10001")
+	l, err := ListenPacket("udp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -344,7 +345,7 @@ type hashPair struct {
 }
 
 func testLargeDataWithConn(t *testing.T, c net.Conn) error {
-	l, err := net.Listen("tcp", ":10001")
+	l, err := Listen("tcp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -379,6 +380,7 @@ func testLargeDataWithConn(t *testing.T, c net.Conn) error {
 		if err != nil {
 			return
 		}
+		defer c.Close()
 
 		hashMap := map[int][]byte{}
 		buf := make([]byte, chunkSize)
@@ -437,7 +439,7 @@ func testLargeDataWithConn(t *testing.T, c net.Conn) error {
 }
 
 func testLargeDataWithPacketConn(t *testing.T, pc net.PacketConn) error {
-	l, err := net.ListenPacket("udp", ":10001")
+	l, err := ListenPacket("udp", ":10001")
 	if err != nil {
 		return err
 	}
@@ -621,23 +623,25 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 }
 
 func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
-	l, err := net.Listen("tcp", ":10001")
+	l, err := Listen("tcp", ":10001")
 	if err != nil {
 		assert.FailNow(b, err.Error())
 	}
+	defer l.Close()
 
 	go func() {
 		c, err := l.Accept()
 		if err != nil {
 			assert.FailNow(b, err.Error())
 		}
+		defer c.Close()
 
 		io.Copy(io.Discard, c)
-		c.Close()
 	}()
 
 	chunkSize := int64(16 * 1024)
 	chunk := make([]byte, chunkSize)
+	rand.Read(chunk)
 	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 		Host:     localIP.String(),
 		DstPort:  "10001",
