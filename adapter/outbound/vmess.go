@@ -95,7 +95,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		if len(v.option.WSOpts.Headers) != 0 {
 			header := http.Header{}
-			for key, value := range v.option.WSHeaders {
+			for key, value := range v.option.WSOpts.Headers {
 				header.Add(key, value)
 			}
 			wsOpts.Headers = header
