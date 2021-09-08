@@ -29,6 +29,10 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck -- $(go list ./...)
 
+      - name: SSH connection to Actions
+        uses: P3TERX/ssh2actions@v1.0.0
+        if: github.actor == github.repository_owner && contains(github.event.head_commit.message, '[ssh]')
+
       - name: Build
         #if: startsWith(github.ref, 'refs/tags/')
         env:
