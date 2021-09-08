@@ -64,14 +64,14 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		wsOpts := &vmess.WebsocketConfig{
 			Host:                host,
 			Port:                port,
-			Path:                v.option.WSPath,
+			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {
 			header := http.Header{}
-			for key, value := range v.option.WSHeaders {
+			for key, value := range v.option.WSOpts.Headers {
 				header.Add(key, value)
 			}
 			wsOpts.Headers = header
