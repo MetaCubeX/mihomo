@@ -40,7 +40,7 @@ func TestClash_VlessTLS(t *testing.T) {
 		TLS:            true,
 		SkipCertVerify: true,
 		ServerName:     "example.org",
-		UDP:            true,
+		UDP:            false,
 	})
 	if err != nil {
 		assert.FailNow(t, err.Error())
@@ -71,16 +71,16 @@ func TestClash_VlessXTLS(t *testing.T) {
 	defer cleanContainer(id)
 
 	proxy, err := outbound.NewVless(outbound.VlessOption{
-		Name:           "vless",
-		Server:         localIP.String(),
-		Port:           10002,
-		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
-		TLS:            true,
-		Flow:           "xtls-rprx-direct",
-		FlowShow:       true,
+		Name:   "vless",
+		Server: localIP.String(),
+		Port:   10002,
+		UUID:   "b831381d-6324-4d53-ad4f-8cda48b30811",
+		TLS:    true,
+		Flow:   "xtls-rprx-direct",
+		//FlowShow:       true,
 		SkipCertVerify: true,
 		ServerName:     "example.org",
-		UDP:            true,
+		UDP:            false,
 	})
 	if err != nil {
 		assert.FailNow(t, err.Error())
