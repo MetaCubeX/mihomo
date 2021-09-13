@@ -20,15 +20,20 @@ type client struct {
 	host string
 }
 
-func (c *client) Exchange(m *D.Msg) (msg *D.Msg, err error) {
+func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
 	return c.ExchangeContext(context.Background(), m)
 }
 
-func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	var ip net.IP
+func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {
+	var (
+		ip  net.IP
+		err error
+	)
 	if c.r == nil {
 		// a default ip dns
-		ip = net.ParseIP(c.host)
+		if ip = net.ParseIP(c.host); ip == nil {
+			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
+		}
 	} else {
 		if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
 			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
@@ -58,7 +63,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err
 			conn = tls.Client(conn, c.Client.TLSConfig)
 		}
 
-		msg, _, err = c.Client.ExchangeWithConn(m, &D.Conn{
+		msg, _, err := c.Client.ExchangeWithConn(m, &D.Conn{
 			Conn:         conn,
 			UDPSize:      c.Client.UDPSize,
 			TsigSecret:   c.Client.TsigSecret,
