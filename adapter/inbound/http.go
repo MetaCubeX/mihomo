@@ -9,8 +9,8 @@ import (
 )
 
 // NewHTTP receive normal http request and return HTTPContext
-func NewHTTP(target string, source net.Addr, conn net.Conn) *context.ConnContext {
-	metadata := parseSocksAddr(socks5.ParseAddr(target))
+func NewHTTP(target socks5.Addr, source net.Addr, conn net.Conn) *context.ConnContext {
+	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = C.HTTP
 	if ip, port, err := parseAddr(source.String()); err == nil {
