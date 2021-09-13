@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// RemoveHopByHopHeaders remove hop-by-hop header
-func RemoveHopByHopHeaders(header http.Header) {
+// removeHopByHopHeaders remove hop-by-hop header
+func removeHopByHopHeaders(header http.Header) {
 	// Strip hop-by-hop header based on RFC:
 	// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.5.1
 	// https://www.mnot.net/blog/2011/07/11/what_proxies_must_do
@@ -32,9 +32,9 @@ func RemoveHopByHopHeaders(header http.Header) {
 	}
 }
 
-// RemoveExtraHTTPHostPort remove extra host port (example.com:80 --> example.com)
+// removeExtraHTTPHostPort remove extra host port (example.com:80 --> example.com)
 // It resolves the behavior of some HTTP servers that do not handle host:80 (e.g. baidu.com)
-func RemoveExtraHTTPHostPort(req *http.Request) {
+func removeExtraHTTPHostPort(req *http.Request) {
 	host := req.Host
 	if host == "" {
 		host = req.URL.Host
@@ -48,8 +48,8 @@ func RemoveExtraHTTPHostPort(req *http.Request) {
 	req.URL.Host = host
 }
 
-// ParseBasicProxyAuthorization parse header Proxy-Authorization and return base64-encoded credential
-func ParseBasicProxyAuthorization(request *http.Request) string {
+// parseBasicProxyAuthorization parse header Proxy-Authorization and return base64-encoded credential
+func parseBasicProxyAuthorization(request *http.Request) string {
 	value := request.Header.Get("Proxy-Authorization")
 	if !strings.HasPrefix(value, "Basic ") {
 		return ""
@@ -58,8 +58,8 @@ func ParseBasicProxyAuthorization(request *http.Request) string {
 	return value[6:] // value[len("Basic "):]
 }
 
-// DecodeBasicProxyAuthorization decode base64-encoded credential
-func DecodeBasicProxyAuthorization(credential string) (string, string, error) {
+// decodeBasicProxyAuthorization decode base64-encoded credential
+func decodeBasicProxyAuthorization(credential string) (string, string, error) {
 	plain, err := base64.StdEncoding.DecodeString(credential)
 	if err != nil {
 		return "", "", err

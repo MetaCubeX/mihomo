@@ -63,8 +63,8 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 
 			request.RequestURI = ""
 
-			RemoveHopByHopHeaders(request.Header)
-			RemoveExtraHTTPHostPort(request)
+			removeHopByHopHeaders(request.Header)
+			removeExtraHTTPHostPort(request)
 
 			if request.URL.Scheme == "" || request.URL.Host == "" {
 				resp = responseWith(http.StatusBadRequest)
@@ -74,9 +74,9 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 					resp = responseWith(http.StatusBadGateway)
 				}
 			}
-		}
 
-		RemoveHopByHopHeaders(resp.Header)
+			removeHopByHopHeaders(resp.Header)
+		}
 
 		if keepAlive {
 			resp.Header.Set("Proxy-Connection", "keep-alive")
@@ -98,7 +98,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 func authenticate(request *http.Request, cache *cache.Cache) *http.Response {
 	authenticator := authStore.Authenticator()
 	if authenticator != nil {
-		credential := ParseBasicProxyAuthorization(request)
+		credential := parseBasicProxyAuthorization(request)
 		if credential == "" {
 			resp := responseWith(http.StatusProxyAuthRequired)
 			resp.Header.Set("Proxy-Authenticate", "Basic")
@@ -107,7 +107,7 @@ func authenticate(request *http.Request, cache *cache.Cache) *http.Response {
 
 		var authed interface{}
 		if authed = cache.Get(credential); authed == nil {
-			user, pass, err := DecodeBasicProxyAuthorization(credential)
+			user, pass, err := decodeBasicProxyAuthorization(credential)
 			authed = err == nil && authenticator.Verify(user, pass)
 			cache.Put(credential, authed, time.Minute)
 		}
