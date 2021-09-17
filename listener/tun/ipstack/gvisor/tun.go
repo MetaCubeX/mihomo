@@ -78,7 +78,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tunAddress string, tcpIn 
 	// So FindRoute will return correct route to tun NIC
 	subnet, _ := tcpip.NewSubnet(tcpip.Address(strings.Repeat("\x00", 4)), tcpip.AddressMask(strings.Repeat("\x00", 4)))
 	ipstack.AddRoute(tcpip.Route{Destination: subnet, Gateway: "", NIC: nicID})
-	subnet, _ = tcpip.NewSubnet(tcpip.Address(strings.Repeat("\x00", 6)), tcpip.AddressMask(strings.Repeat("\x00", 6)))
+	subnet, _ = tcpip.NewSubnet(tcpip.Address(strings.Repeat("\x00", 16)), tcpip.AddressMask(strings.Repeat("\x00", 16)))
 	ipstack.AddRoute(tcpip.Route{Destination: subnet, Gateway: "", NIC: nicID})
 
 	// TCP handler
