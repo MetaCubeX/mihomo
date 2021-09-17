@@ -23,7 +23,7 @@ import (
 	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 // General config
@@ -206,7 +206,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 	}
 
-	if err := yaml.Unmarshal(buf, &rawCfg); err != nil {
+	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
 		return nil, err
 	}
 
