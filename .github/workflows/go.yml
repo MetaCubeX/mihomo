@@ -6,10 +6,15 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Get latest go version
+        id: version
+        run: |
+          echo ::set-output name=go_version::$(curl -s https://raw.githubusercontent.com/actions/go-versions/main/versions-manifest.json | grep -oE '"version": "[0-9]{1}.[0-9]{1,}(.[0-9]{1,})?"' | head -1 | cut -d':' -f2 | sed 's/ //g; s/"//g')
+
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17.x
+          go-version: ${{ steps.version.outputs.go_version }}
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
