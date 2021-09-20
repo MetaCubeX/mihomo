@@ -2,17 +2,10 @@ package tools
 
 import (
 	"bytes"
-	"math/rand"
-	"sync"
-
-	"github.com/Dreamacro/clash/common/pool"
+	"crypto/rand"
+	"io"
 )
 
-var BufPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
-
 func AppendRandBytes(b *bytes.Buffer, length int) {
-	randBytes := pool.Get(length)
-	defer pool.Put(randBytes)
-	rand.Read(randBytes)
-	b.Write(randBytes)
+	b.ReadFrom(io.LimitReader(rand.Reader, int64(length)))
 }

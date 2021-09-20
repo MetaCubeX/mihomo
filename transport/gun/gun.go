@@ -5,7 +5,6 @@ package gun
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
@@ -16,6 +15,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/common/pool"
 
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
@@ -31,7 +32,6 @@ var (
 		"content-type": []string{"application/grpc"},
 		"user-agent":   []string{"grpc-go/1.36.0"},
 	}
-	bufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 )
 
 type DialFn = func(network, addr string) (net.Conn, error)
@@ -127,9 +127,8 @@ func (g *Conn) Write(b []byte) (n int, err error) {
 	grpcPayloadLen := uint32(varuintSize + 1 + len(b))
 	binary.BigEndian.PutUint32(grpcHeader[1:5], grpcPayloadLen)
 
-	buf := bufferPool.Get().(*bytes.Buffer)
-	defer bufferPool.Put(buf)
-	defer buf.Reset()
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	buf.Write(grpcHeader)
 	buf.Write(protobufHeader[:varuintSize+1])
 	buf.Write(b)

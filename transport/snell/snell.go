@@ -1,13 +1,13 @@
 package snell
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"sync"
+
+	"github.com/Dreamacro/clash/common/pool"
 
 	"github.com/Dreamacro/go-shadowsocks2/shadowaead"
 )
@@ -31,8 +31,7 @@ const (
 )
 
 var (
-	bufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
-	endSignal  = []byte{}
+	endSignal = []byte{}
 )
 
 type Snell struct {
@@ -79,9 +78,8 @@ func (s *Snell) Read(b []byte) (int, error) {
 }
 
 func WriteHeader(conn net.Conn, host string, port uint, version int) error {
-	buf := bufferPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufferPool.Put(buf)
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	buf.WriteByte(Version)
 	if version == Version2 {
 		buf.WriteByte(CommandConnectV2)

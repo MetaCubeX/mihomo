@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/ssr/tools"
 )
 
 type Conn struct {
@@ -37,9 +36,8 @@ func (c *Conn) Read(b []byte) (int, error) {
 
 func (c *Conn) Write(b []byte) (int, error) {
 	bLength := len(b)
-	buf := tools.BufPool.Get().(*bytes.Buffer)
-	defer tools.BufPool.Put(buf)
-	defer buf.Reset()
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	err := c.Encode(buf, b)
 	if err != nil {
 		return 0, err
