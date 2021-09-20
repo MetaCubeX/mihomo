@@ -12,8 +12,12 @@
   <a href="https://goreportcard.com/report/github.com/Dreamacro/clash">
     <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
   </a>
+  <img src="https://img.shields.io/github/go-mod/go-version/Dreamacro/clash?style=flat-square">
   <a href="https://github.com/Dreamacro/clash/releases">
     <img src="https://img.shields.io/github/release/Dreamacro/clash/all.svg?style=flat-square">
+  </a>
+  <a href="https://github.com/Dreamacro/clash/releases/tag/premium">
+    <img src="https://img.shields.io/badge/release-Premium-00b4f0?style=flat-square">
   </a>
 </p>
 
@@ -22,7 +26,7 @@
 - Local HTTP/HTTPS/SOCKS server with authentication support
 - VMess, Shadowsocks, Trojan, Snell protocol support for remote connections
 - Built-in DNS server that aims to minimize DNS pollution attack impact, supports DoH/DoT upstream and fake IP.
-- Rules based off domains, GEOIP, IP CIDR or ports to forward packets to different nodes
+- Rules based off domains, GEOIP, IPCIDR or Process to forward packets to different nodes
 - Remote groups allow users to implement powerful rules. Supports automatic fallback, load balancing or auto select node based off latency
 - Remote providers, allowing users to get node lists remotely instead of hardcoding in config
 - Netfilter TCP redirecting. Deploy Clash on your Internet gateway with `iptables`.
@@ -47,16 +51,10 @@ If you want to build an application that uses clash as a library, check out the 
 
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
+* [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
 
 ## License
 
 This software is released under the GPL-3.0 license.
 
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_large)
-
-## TODO
-
-- [x] Complementing the necessary rule operators
-- [x] Redir proxy
-- [x] UDP support
-- [x] Connection manager
