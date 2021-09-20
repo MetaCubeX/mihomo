@@ -87,9 +87,8 @@ func (c *tls12TicketConn) Read(b []byte) (int, error) {
 func (c *tls12TicketConn) Write(b []byte) (int, error) {
 	length := len(b)
 	if c.handshakeStatus == 8 {
-		buf := tools.BufPool.Get().(*bytes.Buffer)
-		defer tools.BufPool.Put(buf)
-		defer buf.Reset()
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
 		for len(b) > 2048 {
 			size := rand.Intn(4096) + 100
 			if len(b) < size {
@@ -115,9 +114,8 @@ func (c *tls12TicketConn) Write(b []byte) (int, error) {
 	if c.handshakeStatus == 0 {
 		c.handshakeStatus = 1
 
-		data := tools.BufPool.Get().(*bytes.Buffer)
-		defer tools.BufPool.Put(data)
-		defer data.Reset()
+		data := pool.GetBuffer()
+		defer pool.PutBuffer(data)
 
 		data.Write([]byte{3, 3})
 		c.packAuthData(data)
@@ -126,9 +124,8 @@ func (c *tls12TicketConn) Write(b []byte) (int, error) {
 		data.Write([]byte{0x00, 0x1c, 0xc0, 0x2b, 0xc0, 0x2f, 0xcc, 0xa9, 0xcc, 0xa8, 0xcc, 0x14, 0xcc, 0x13, 0xc0, 0x0a, 0xc0, 0x14, 0xc0, 0x09, 0xc0, 0x13, 0x00, 0x9c, 0x00, 0x35, 0x00, 0x2f, 0x00, 0x0a})
 		data.Write([]byte{0x1, 0x0})
 
-		ext := tools.BufPool.Get().(*bytes.Buffer)
-		defer tools.BufPool.Put(ext)
-		defer ext.Reset()
+		ext := pool.GetBuffer()
+		defer pool.PutBuffer(ext)
 
 		host := c.getHost()
 		ext.Write([]byte{0xff, 0x01, 0x00, 0x01, 0x00})
@@ -145,9 +142,8 @@ func (c *tls12TicketConn) Write(b []byte) (int, error) {
 		binary.Write(data, binary.BigEndian, uint16(ext.Len()))
 		data.ReadFrom(ext)
 
-		ret := tools.BufPool.Get().(*bytes.Buffer)
-		defer tools.BufPool.Put(ret)
-		defer ret.Reset()
+		ret := pool.GetBuffer()
+		defer pool.PutBuffer(ret)
 
 		ret.Write([]byte{0x16, 3, 1})
 		binary.Write(ret, binary.BigEndian, uint16(data.Len()+4))
@@ -161,9 +157,8 @@ func (c *tls12TicketConn) Write(b []byte) (int, error) {
 		}
 		return length, nil
 	} else if c.handshakeStatus == 1 && len(b) == 0 {
-		buf := tools.BufPool.Get().(*bytes.Buffer)
-		defer tools.BufPool.Put(buf)
-		defer buf.Reset()
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
 
 		buf.Write([]byte{0x14, 3, 3, 0, 1, 1, 0x16, 3, 3, 0, 0x20})
 		tools.AppendRandBytes(buf, 22)
