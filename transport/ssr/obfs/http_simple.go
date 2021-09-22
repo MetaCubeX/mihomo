@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/ssr/tools"
 )
 
 func init() {
@@ -102,9 +101,8 @@ func (c *httpConn) Write(b []byte) (int, error) {
 	hosts := strings.Split(host, ",")
 	host = hosts[rand.Intn(len(hosts))]
 
-	buf := tools.BufPool.Get().(*bytes.Buffer)
-	defer tools.BufPool.Put(buf)
-	defer buf.Reset()
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	if c.post {
 		buf.WriteString("POST /")
 	} else {

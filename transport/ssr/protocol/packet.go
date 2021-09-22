@@ -1,10 +1,9 @@
 package protocol
 
 import (
-	"bytes"
 	"net"
 
-	"github.com/Dreamacro/clash/transport/ssr/tools"
+	"github.com/Dreamacro/clash/common/pool"
 )
 
 type PacketConn struct {
@@ -13,9 +12,8 @@ type PacketConn struct {
 }
 
 func (c *PacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	buf := tools.BufPool.Get().(*bytes.Buffer)
-	defer tools.BufPool.Put(buf)
-	defer buf.Reset()
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	err := c.EncodePacket(buf, b)
 	if err != nil {
 		return 0, err
