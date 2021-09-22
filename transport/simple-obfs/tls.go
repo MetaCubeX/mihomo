@@ -102,7 +102,8 @@ func (to *TLSObfs) write(b []byte) (int, error) {
 		return len(b), err
 	}
 
-	buf := &bytes.Buffer{}
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	buf.Write([]byte{0x17, 0x03, 0x03})
 	binary.Write(buf, binary.BigEndian, uint16(len(b)))
 	buf.Write(b)
