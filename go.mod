@@ -22,12 +22,12 @@ require (
 	golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20210519191755-bd7eb2c99ba9
+	gvisor.dev/gvisor v0.0.0-20210922003438-b39716d116fd
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/btree v1.0.0 // indirect
+	github.com/google/btree v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
 	golang.org/x/text v0.3.6 // indirect
