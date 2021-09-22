@@ -133,16 +133,26 @@ func CreateDNSServer(s *stack.Stack, resolver *dns.Resolver, mapper *dns.Resolve
 	var err error
 
 	address := tcpip.FullAddress{NIC: nicID, Port: uint16(port)}
+	var protocol tcpip.NetworkProtocolNumber
 	if ip.To4() != nil {
 		v4 = true
 		address.Addr = tcpip.Address(ip.To4())
-		// netstack will only reassemble IP fragments when its' dest ip address is registered in NIC.endpoints
-		s.AddAddress(nicID, ipv4.ProtocolNumber, address.Addr)
+		protocol = ipv4.ProtocolNumber
+
 	} else {
 		v4 = false
 		address.Addr = tcpip.Address(ip.To16())
-		s.AddAddress(nicID, ipv6.ProtocolNumber, address.Addr)
+		protocol = ipv6.ProtocolNumber
 	}
+	protocolAddr := tcpip.ProtocolAddress{
+		Protocol:          protocol,
+		AddressWithPrefix: address.Addr.WithPrefix(),
+	}
+	// netstack will only reassemble IP fragments when its' dest ip address is registered in NIC.endpoints
+	if err := s.AddProtocolAddress(nicID, protocolAddr, stack.AddressProperties{}); err != nil {
+		log.Errorln("AddProtocolAddress(%d, %+v, {}): %s", nicID, protocolAddr, err)
+	}
+
 	if address.Addr == ipv4Zero || address.Addr == ipv6Zero {
 		address.Addr = ""
 	}
