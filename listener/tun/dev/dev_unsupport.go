@@ -1,3 +1,4 @@
+//go:build !linux && !android && !darwin && !windows
 // +build !linux,!android,!darwin,!windows
 
 package dev

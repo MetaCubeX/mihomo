@@ -1,5 +1,11 @@
+//go:build windows && (amd64 || arm64)
 // +build windows
 // +build amd64 arm64
+
+/* SPDX-License-Identifier: MIT
+ *
+ * Copyright (C) 2019-2021 WireGuard LLC. All Rights Reserved.
+ */
 
 package winipcfg
 

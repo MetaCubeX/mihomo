@@ -41,12 +41,12 @@ func (module *Module) headerDirectory(idx int) *IMAGE_DATA_DIRECTORY {
 	return &module.headers.OptionalHeader.DataDirectory[idx]
 }
 
-func (module *Module) copySections(address uintptr, size uintptr, old_headers *IMAGE_NT_HEADERS) error {
+func (module *Module) copySections(address uintptr, size uintptr, oldHeaders *IMAGE_NT_HEADERS) error {
 	sections := module.headers.Sections()
 	for i := range sections {
 		if sections[i].SizeOfRawData == 0 {
 			// Section doesn't contain data in the dll itself, but may define uninitialized data.
-			sectionSize := old_headers.OptionalHeader.SectionAlignment
+			sectionSize := oldHeaders.OptionalHeader.SectionAlignment
 			if sectionSize == 0 {
 				continue
 			}
@@ -159,6 +159,16 @@ func (module *Module) finalizeSection(sectionData *sectionFinalizeData) error {
 	return nil
 }
 
+var rtlAddFunctionTable = windows.NewLazySystemDLL("ntdll.dll").NewProc("RtlAddFunctionTable")
+
+func (module *Module) registerExceptionHandlers() {
+	directory := module.headerDirectory(IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+	if directory.Size == 0 || directory.VirtualAddress == 0 {
+		return
+	}
+	rtlAddFunctionTable.Call(module.codeBase+uintptr(directory.VirtualAddress), uintptr(directory.Size)/unsafe.Sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY{}), module.codeBase)
+}
+
 func (module *Module) finalizeSections() error {
 	sections := module.headers.Sections()
 	imageOffset := module.headers.OptionalHeader.imageOffset()
@@ -166,6 +176,7 @@ func (module *Module) finalizeSections() error {
 	sectionData.address = uintptr(sections[0].PhysicalAddress()) | imageOffset
 	sectionData.alignedAddress = alignDown(sectionData.address, uintptr(module.headers.OptionalHeader.SectionAlignment))
 	sectionData.size = module.realSectionSize(&sections[0])
+	sections[0].SetVirtualSize(uint32(sectionData.size))
 	sectionData.characteristics = sections[0].Characteristics
 
 	// Loop through all sections and change access flags.
@@ -173,6 +184,7 @@ func (module *Module) finalizeSections() error {
 		sectionAddress := uintptr(sections[i].PhysicalAddress()) | imageOffset
 		alignedAddress := alignDown(sectionAddress, uintptr(module.headers.OptionalHeader.SectionAlignment))
 		sectionSize := module.realSectionSize(&sections[i])
+		sections[i].SetVirtualSize(uint32(sectionSize))
 		// Combine access flags of all sections that share a page.
 		// TODO: We currently share flags of a trailing large section with the page of a first small section. This should be optimized.
 		if sectionData.alignedAddress == alignedAddress || sectionData.address+sectionData.size > alignedAddress {
@@ -497,6 +509,9 @@ func LoadLibrary(data []byte) (module *Module, err error) {
 		err = fmt.Errorf("Error finalizing sections: %w", err)
 		return
 	}
+
+	// Register exception tables, if they exist.
+	module.registerExceptionHandlers()
 
 	// TLS callbacks are executed BEFORE the main loading.
 	module.executeTLS()

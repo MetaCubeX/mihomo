@@ -1,4 +1,6 @@
-// +build windows,386 windows,arm
+//go:build windows && (386 || arm)
+// +build windows
+// +build 386 arm
 
 /* SPDX-License-Identifier: MIT
  *
