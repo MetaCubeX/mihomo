@@ -1,4 +1,8 @@
+//go:build windows
 // +build windows
+
+// Modified from: https://git.zx2c4.com/wireguard-go/tree/tun/tun_windows.go and https://git.zx2c4.com/wireguard-windows/tree/tunnel/addressconfig.go
+// SPDX-License-Identifier: MIT
 
 package dev
 
@@ -38,8 +42,8 @@ type rateJuggler struct {
 type tunWindows struct {
 	wt        *wintun.Adapter
 	handle    windows.Handle
-	closed    bool
-	closing   sync.RWMutex
+	close     int32
+	running   sync.WaitGroup
 	forcedMTU int
 	rate      rateJuggler
 	session   wintun.Session
@@ -152,31 +156,30 @@ func CreateTUNWithRequestedGUID(ifname string, requestedGUID *windows.GUID, mtu 
 }
 
 func (tun *tunWindows) getName() (string, error) {
-	tun.closing.RLock()
-	defer tun.closing.RUnlock()
-	if tun.closed {
+	tun.running.Add(1)
+	defer tun.running.Done()
+	if atomic.LoadInt32(&tun.close) == 1 {
 		return "", os.ErrClosed
 	}
 	return tun.wt.Name()
 }
 
 func (tun *tunWindows) IsClose() bool {
-	return tun.closed
+	return atomic.LoadInt32(&tun.close) == 1
 }
 
 func (tun *tunWindows) Close() error {
 	tun.stopOnce.Do(func() {
-		//tun.closing.Lock()
-		//defer tun.closing.Unlock()
-		tun.closed = true
+		atomic.StoreInt32(&tun.close, 1)
+		//tun.running.Wait()
 		tun.session.End()
 		if tun.wt != nil {
 			forceCloseSessions := false
 			rebootRequired, err := tun.wt.Delete(forceCloseSessions)
 			if rebootRequired {
-				log.Infoln("Delete Wintun failure, Windows indicated a reboot is required.")
+				log.Infoln("Remove Wintun failure, Windows indicated a reboot is required.")
 			} else {
-				log.Infoln("Delete Wintun success.")
+				log.Infoln("Remove Wintun adapter success.")
 			}
 			if err != nil {
 				log.Errorln("Close Wintun Sessions failure: %v", err)
@@ -202,16 +205,16 @@ func (tun *tunWindows) Read(buff []byte) (int, error) {
 // Note: Read() and Write() assume the caller comes only from a single thread; there's no locking.
 
 func (tun *tunWindows) ReadO(buff []byte, offset int) (int, error) {
-	tun.closing.RLock()
-	defer tun.closing.RUnlock()
+	tun.running.Add(1)
+	defer tun.running.Done()
 retry:
-	if tun.closed {
+	if atomic.LoadInt32(&tun.close) == 1 {
 		return 0, os.ErrClosed
 	}
 	start := nanotime()
 	shouldSpin := atomic.LoadUint64(&tun.rate.current) >= spinloopRateThreshold && uint64(start-atomic.LoadInt64(&tun.rate.nextStartTime)) <= rateMeasurementGranularity*2
 	for {
-		if tun.closed {
+		if atomic.LoadInt32(&tun.close) == 1 {
 			return 0, os.ErrClosed
 		}
 		packet, err := tun.session.ReceivePacket()
@@ -247,12 +250,15 @@ func (tun *tunWindows) Write(buff []byte) (int, error) {
 }
 
 func (tun *tunWindows) WriteO(buff []byte, offset int) (int, error) {
-	tun.closing.RLock()
-	defer tun.closing.RUnlock()
-	if tun.closed {
+	tun.running.Add(1)
+	defer tun.running.Done()
+	if atomic.LoadInt32(&tun.close) == 1 {
 		return 0, os.ErrClosed
 	}
 
+	if len(buff) == 0 {
+		return 0, nil
+	}
 	packetSize := len(buff) - offset
 	tun.rate.update(uint64(packetSize))
 
@@ -273,9 +279,9 @@ func (tun *tunWindows) WriteO(buff []byte, offset int) (int, error) {
 
 // LUID returns Windows interface instance ID.
 func (tun *tunWindows) LUID() uint64 {
-	tun.closing.RLock()
-	defer tun.closing.RUnlock()
-	if tun.closed {
+	tun.running.Add(1)
+	defer tun.running.Done()
+	if atomic.LoadInt32(&tun.close) == 1 {
 		return 0
 	}
 	return tun.wt.LUID()
@@ -311,7 +317,7 @@ func (t *tunWindows) URL() string {
 
 func (tun *tunWindows) configureInterface() error {
 	luid := winipcfg.LUID(tun.LUID())
-
+	log.Infoln("[wintun]: tun adapter LUID: %d", luid)
 	mtu, err := tun.MTU()
 
 	if err != nil {
@@ -338,18 +344,17 @@ func (tun *tunWindows) configureInterface() error {
 		return err
 	}
 	err = luid.FlushRoutes(familyV6)
-	if err != nil {
-		return err
-	}
+	//if err != nil {
+	//	return err
+	//}
 
 	err = luid.SetIPAddressesForFamily(family, addresses)
-
 	if err == windows.ERROR_OBJECT_ALREADY_EXISTS {
 		cleanupAddressesOnDisconnectedInterfaces(family, addresses)
 		err = luid.SetIPAddressesForFamily(family, addresses)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to set ips %+v: %w", addresses, err)
 	}
 
 	foundDefault4 := false
@@ -357,6 +362,7 @@ func (tun *tunWindows) configureInterface() error {
 
 	if tun.autoRoute {
 		allowedIPs := []*winipcfg.IPCidr{
+			//winipcfg.ParseIPCidr("0.0.0.0/0"),
 			winipcfg.ParseIPCidr("1.0.0.0/8"),
 			winipcfg.ParseIPCidr("2.0.0.0/7"),
 			winipcfg.ParseIPCidr("4.0.0.0/6"),
@@ -427,7 +433,7 @@ func (tun *tunWindows) configureInterface() error {
 
 		err = luid.SetRoutesForFamily(family, deduplicatedRoutes)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to set routes %+v: %w", deduplicatedRoutes, err)
 		}
 	}
 
@@ -435,38 +441,42 @@ func (tun *tunWindows) configureInterface() error {
 	if err != nil {
 		return err
 	}
+	ipif.RouterDiscoveryBehavior = winipcfg.RouterDiscoveryDisabled
+	ipif.DadTransmits = 0
+	ipif.ManagedAddressConfigurationSupported = false
+	ipif.OtherStatefulConfigurationSupported = false
 
 	ipif.NLMTU = uint32(mtu)
 
-	if family == windows.AF_INET {
-		if foundDefault4 {
-			ipif.UseAutomaticMetric = false
-			ipif.Metric = 0
-		}
-	} else if family == windows.AF_INET6 {
-		if foundDefault6 {
-			ipif.UseAutomaticMetric = false
-			ipif.Metric = 0
-		}
-		ipif.DadTransmits = 0
-		ipif.RouterDiscoveryBehavior = winipcfg.RouterDiscoveryDisabled
+	if (family == windows.AF_INET && foundDefault4) || (family == windows.AF_INET6 && foundDefault6) {
+		ipif.UseAutomaticMetric = false
+		ipif.Metric = 0
 	}
 
 	err = ipif.Set()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to set metric and MTU: %w", err)
 	}
 
 	ipif6, err := luid.IPInterface(familyV6)
+	ipif6.RouterDiscoveryBehavior = winipcfg.RouterDiscoveryDisabled
+	ipif6.DadTransmits = 0
+	ipif6.ManagedAddressConfigurationSupported = false
+	ipif6.OtherStatefulConfigurationSupported = false
 	if err != nil {
 		return err
 	}
 	err = ipif6.Set()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to set v6 metric and MTU: %w", err)
 	}
 
-	return luid.SetDNS(family, []net.IP{net.ParseIP("198.18.0.2")}, nil)
+	err = luid.SetDNS(family, []net.IP{net.ParseIP("198.18.0.2")}, nil)
+	if err != nil {
+		return fmt.Errorf("unable to set DNS %s %s: %w", "198.18.0.2", "nil", err)
+	}
+
+	return nil
 }
 
 func cleanupAddressesOnDisconnectedInterfaces(family winipcfg.AddressFamily, addresses []net.IPNet) {

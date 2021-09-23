@@ -1,4 +1,11 @@
+//go:build windows && (386 || arm)
+// +build windows
 // +build 386 arm
+
+/* SPDX-License-Identifier: MIT
+ *
+ * Copyright (C) 2019-2021 WireGuard LLC. All Rights Reserved.
+ */
 
 package winipcfg
 

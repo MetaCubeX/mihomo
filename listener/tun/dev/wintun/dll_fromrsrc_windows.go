@@ -1,3 +1,4 @@
+//go:build load_wintun_from_rsrc
 // +build load_wintun_from_rsrc
 
 package wintun

@@ -1,4 +1,10 @@
+//go:build windows
 // +build windows
+
+/* SPDX-License-Identifier: MIT
+ *
+ * Copyright (C) 2019-2021 WireGuard LLC. All Rights Reserved.
+ */
 
 package winipcfg
 
@@ -167,18 +173,18 @@ func GetIPForwardTable2(family AddressFamily) ([]MibIPforwardRow2, error) {
 //sys	cancelMibChangeNotify2(notificationHandle windows.Handle) (ret error) = iphlpapi.CancelMibChangeNotify2
 
 //
-// Undocumented DNS API
+// DNS-related functions
 //
 
-//sys	setInterfaceDnsSettingsByPtr(guid *windows.GUID, settings *dnsInterfaceSettings) (ret error) = iphlpapi.SetInterfaceDnsSettings?
-//sys	setInterfaceDnsSettingsByQwords(guid1 uintptr, guid2 uintptr, settings *dnsInterfaceSettings) (ret error) = iphlpapi.SetInterfaceDnsSettings?
-//sys	setInterfaceDnsSettingsByDwords(guid1 uintptr, guid2 uintptr, guid3 uintptr, guid4 uintptr, settings *dnsInterfaceSettings) (ret error) = iphlpapi.SetInterfaceDnsSettings?
+//sys	setInterfaceDnsSettingsByPtr(guid *windows.GUID, settings *DnsInterfaceSettings) (ret error) = iphlpapi.SetInterfaceDnsSettings?
+//sys	setInterfaceDnsSettingsByQwords(guid1 uintptr, guid2 uintptr, settings *DnsInterfaceSettings) (ret error) = iphlpapi.SetInterfaceDnsSettings?
+//sys	setInterfaceDnsSettingsByDwords(guid1 uintptr, guid2 uintptr, guid3 uintptr, guid4 uintptr, settings *DnsInterfaceSettings) (ret error) = iphlpapi.SetInterfaceDnsSettings?
 
 // The GUID is passed by value, not by reference, which means different
 // things on different calling conventions.  On amd64, this means it's
 // passed by reference anyway, while on arm, arm64, and 386, it's split
 // into words.
-func setInterfaceDnsSettings(guid windows.GUID, settings *dnsInterfaceSettings) error {
+func SetInterfaceDnsSettings(guid windows.GUID, settings *DnsInterfaceSettings) error {
 	words := (*[4]uintptr)(unsafe.Pointer(&guid))
 	switch runtime.GOARCH {
 	case "amd64":

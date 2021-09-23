@@ -175,6 +175,21 @@ func (ishdr *IMAGE_SECTION_HEADER) SetVirtualSize(addr uint32) {
 }
 
 const (
+	// Dll characteristics.
+	IMAGE_DLL_CHARACTERISTICS_HIGH_ENTROPY_VA       = 0x0020
+	IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE          = 0x0040
+	IMAGE_DLL_CHARACTERISTICS_FORCE_INTEGRITY       = 0x0080
+	IMAGE_DLL_CHARACTERISTICS_NX_COMPAT             = 0x0100
+	IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION          = 0x0200
+	IMAGE_DLL_CHARACTERISTICS_NO_SEH                = 0x0400
+	IMAGE_DLL_CHARACTERISTICS_NO_BIND               = 0x0800
+	IMAGE_DLL_CHARACTERISTICS_APPCONTAINER          = 0x1000
+	IMAGE_DLL_CHARACTERISTICS_WDM_DRIVER            = 0x2000
+	IMAGE_DLL_CHARACTERISTICS_GUARD_CF              = 0x4000
+	IMAGE_DLL_CHARACTERISTICS_TERMINAL_SERVER_AWARE = 0x8000
+)
+
+const (
 	// Section characteristics.
 	IMAGE_SCN_TYPE_REG    = 0x00000000 // Reserved.
 	IMAGE_SCN_TYPE_DSECT  = 0x00000001 // Reserved.
@@ -315,6 +330,50 @@ func (imgimpdesc *IMAGE_IMPORT_DESCRIPTOR) Characteristics() uint32 {
 
 func (imgimpdesc *IMAGE_IMPORT_DESCRIPTOR) OriginalFirstThunk() uint32 {
 	return imgimpdesc.characteristicsOrOriginalFirstThunk
+}
+
+type IMAGE_DELAYLOAD_DESCRIPTOR struct {
+	Attributes                 uint32
+	DllNameRVA                 uint32
+	ModuleHandleRVA            uint32
+	ImportAddressTableRVA      uint32
+	ImportNameTableRVA         uint32
+	BoundImportAddressTableRVA uint32
+	UnloadInformationTableRVA  uint32
+	TimeDateStamp              uint32
+}
+
+type IMAGE_LOAD_CONFIG_CODE_INTEGRITY struct {
+	Flags         uint16
+	Catalog       uint16
+	CatalogOffset uint32
+	Reserved      uint32
+}
+
+const (
+	IMAGE_GUARD_CF_INSTRUMENTED                    = 0x00000100
+	IMAGE_GUARD_CFW_INSTRUMENTED                   = 0x00000200
+	IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT          = 0x00000400
+	IMAGE_GUARD_SECURITY_COOKIE_UNUSED             = 0x00000800
+	IMAGE_GUARD_PROTECT_DELAYLOAD_IAT              = 0x00001000
+	IMAGE_GUARD_DELAYLOAD_IAT_IN_ITS_OWN_SECTION   = 0x00002000
+	IMAGE_GUARD_CF_EXPORT_SUPPRESSION_INFO_PRESENT = 0x00004000
+	IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION       = 0x00008000
+	IMAGE_GUARD_CF_LONGJUMP_TABLE_PRESENT          = 0x00010000
+	IMAGE_GUARD_RF_INSTRUMENTED                    = 0x00020000
+	IMAGE_GUARD_RF_ENABLE                          = 0x00040000
+	IMAGE_GUARD_RF_STRICT                          = 0x00080000
+	IMAGE_GUARD_RETPOLINE_PRESENT                  = 0x00100000
+	IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT      = 0x00400000
+	IMAGE_GUARD_XFG_ENABLED                        = 0x00800000
+	IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_MASK        = 0xF0000000
+	IMAGE_GUARD_CF_FUNCTION_TABLE_SIZE_SHIFT       = 28
+)
+
+type IMAGE_RUNTIME_FUNCTION_ENTRY struct {
+	BeginAddress      uint32
+	EndAddress        uint32
+	UnwindInfoAddress uint32
 }
 
 const (

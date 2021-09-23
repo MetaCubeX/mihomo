@@ -1,9 +1,16 @@
+//go:build windows
 // +build windows
+
+/* SPDX-License-Identifier: MIT
+ *
+ * Copyright (C) 2019-2021 WireGuard LLC. All Rights Reserved.
+ */
 
 package winipcfg
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 
@@ -95,6 +102,9 @@ func (luid LUID) AddIPAddress(address net.IPNet) error {
 	row := &MibUnicastIPAddressRow{}
 	row.Init()
 	row.InterfaceLUID = luid
+	row.DadState = DadStatePreferred
+	row.ValidLifetime = 0xffffffff
+	row.PreferredLifetime = 0xffffffff
 	err := row.Address.SetIP(address.IP, 0)
 	if err != nil {
 		return err
@@ -186,6 +196,8 @@ func (luid LUID) Route(destination net.IPNet, nextHop net.IP) (*MibIPforwardRow2
 	row := &MibIPforwardRow2{}
 	row.Init()
 	row.InterfaceLUID = luid
+	row.ValidLifetime = 0xffffffff
+	row.PreferredLifetime = 0xffffffff
 	err := row.DestinationPrefix.SetIPNet(destination)
 	if err != nil {
 		return nil, err
@@ -210,14 +222,19 @@ func (luid LUID) AddRoute(destination net.IPNet, nextHop net.IP, metric uint32) 
 	row.InterfaceLUID = luid
 	err := row.DestinationPrefix.SetIPNet(destination)
 	if err != nil {
-		return err
+		return fmt.Errorf("AddRoute1: %w", err)
 	}
 	err = row.NextHop.SetIP(nextHop, 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("AddRoute2: %w", err)
 	}
 	row.Metric = metric
-	return row.Create()
+
+	err = row.Create()
+	if err != nil {
+		return fmt.Errorf("AddRoute3: %w", err)
+	}
+	return nil
 }
 
 // AddRoutes method adds multiple routes to the interface.
@@ -242,10 +259,11 @@ func (luid LUID) SetRoutes(routesData []*RouteData) error {
 
 // SetRoutesForFamily method sets (flush than add) multiple routes for a specific family to the interface.
 func (luid LUID) SetRoutesForFamily(family AddressFamily, routesData []*RouteData) error {
-	err := luid.FlushRoutes(family)
-	if err != nil {
-		return err
-	}
+	//err := luid.FlushRoutes(family)
+	//if err != nil {
+	//	return err
+	//}
+	_ = luid.FlushRoutes(family)
 	for _, rd := range routesData {
 		asV4 := rd.Destination.IP.To4()
 		if asV4 == nil && family == windows.AF_INET {
@@ -288,7 +306,7 @@ func (luid LUID) FlushRoutes(family AddressFamily) error {
 	var tab *mibIPforwardTable2
 	err := getIPForwardTable2(family, &tab)
 	if err != nil {
-		return err
+		return fmt.Errorf("FlushRoutes1: %w", err)
 	}
 	t := tab.get()
 	for i := range t {
@@ -300,7 +318,10 @@ func (luid LUID) FlushRoutes(family AddressFamily) error {
 		}
 	}
 	tab.free()
-	return err
+	if err != nil {
+		return fmt.Errorf("FlushRoutes2: %w", err)
+	}
+	return nil
 }
 
 // DNS method returns all DNS server addresses associated with the adapter.
@@ -350,17 +371,17 @@ func (luid LUID) SetDNS(family AddressFamily, servers []net.IP, domains []string
 	if err != nil {
 		return err
 	}
-	var maybeV6 uint64
-	if family == windows.AF_INET6 {
-		maybeV6 = disFlagsIPv6
-	}
-	// For >= Windows 10 1809
-	err = setInterfaceDnsSettings(*guid, &dnsInterfaceSettings{
-		Version:    disVersion1,
-		Flags:      disFlagsNameServer | disFlagsSearchList | maybeV6,
+	dnsInterfaceSettings := &DnsInterfaceSettings{
+		Version:    DnsInterfaceSettingsVersion1,
+		Flags:      DnsInterfaceSettingsFlagNameserver | DnsInterfaceSettingsFlagSearchList,
 		NameServer: servers16,
 		SearchList: domains16,
-	})
+	}
+	if family == windows.AF_INET6 {
+		dnsInterfaceSettings.Flags |= DnsInterfaceSettingsFlagIPv6
+	}
+	// For >= Windows 10 1809
+	err = SetInterfaceDnsSettings(*guid, dnsInterfaceSettings)
 	if err == nil || !errors.Is(err, windows.ERROR_PROC_NOT_FOUND) {
 		return err
 	}

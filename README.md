@@ -37,9 +37,9 @@ Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash
 
 ## Advanced usage for this fork branch
 ### TUN configuration
-Support macOS,Linux and Windows.
+Supports macOS, Linux and Windows.
 
-For Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into the System32 directory.
+On Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into Clash home directory.
 ```yaml
 # Enable the TUN listener
 tun:
@@ -53,11 +53,12 @@ tun:
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
 - Support not match condition for rule `GEOIP`.
 - Support `network` condition for all rules.
+- Support source IPCIDR condition for all rules, just append to the end.
 
 The `GEOSITE` and `GEOIP` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
 ```yaml
 rules:
-  # network condition for rules
+  # network condition for all rules
   - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
   - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
     
@@ -83,6 +84,9 @@ rules:
     
   # Not match condition for rule GEOIP
   #- GEOIP,!cn,PROXY
+    
+  # source IPCIDR condition for all rules in gateway proxy
+  #- GEOIP,!cn,PROXY,192.168.1.88/32,192.168.1.99/32
 
   - MATCH,PROXY
 ```
@@ -100,7 +104,6 @@ proxies:
     uuid: uuid
     network: tcp
     servername: example.com # AKA SNI
-    # udp: true
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
     
@@ -116,49 +119,6 @@ proxies:
     ws-path: /path
     ws-headers:
       Host: example.com
-
-  - name: "vless-h2"
-    type: vless
-    server: server
-    port: 443
-    uuid: uuid
-    network: h2
-    servername: example.com
-    # skip-cert-verify: true
-    h2-opts:
-      host:
-        - http.example.com
-        - http-alt.example.com
-      path: /
-
-  - name: "vless-http"
-    type: vless
-    server: server
-    port: 443
-    uuid: uuid
-    # udp: true
-    network: http
-    servername: example.com
-    # skip-cert-verify: true
-    http-opts:
-      method: "GET"
-      path:
-        - '/'
-        - '/video'
-      headers:
-        Connection:
-          - keep-alive
-
-  - name: vless-grpc
-    server: server
-    port: 443
-    type: vless
-    uuid: uuid
-    network: grpc
-    servername: example.com
-    # skip-cert-verify: true
-    grpc-opts:
-      grpc-service-name: "example"
 ```
 
 ### IPTABLES auto-configuration
