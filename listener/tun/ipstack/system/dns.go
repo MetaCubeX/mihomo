@@ -6,10 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/Dreamacro/clash/component/resolver"
-
-	D "github.com/miekg/dns"
-
+	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/kr328/tun2socket/binding"
 	"github.com/kr328/tun2socket/redirect"
 )
@@ -26,7 +23,7 @@ func shouldHijackDns(dnsAddr binding.Address, targetAddr binding.Address) bool {
 
 func hijackUDPDns(pkt []byte, ep *binding.Endpoint, sender redirect.UDPSender) {
 	go func() {
-		answer, err := relayDnsPacket(pkt)
+		answer, err := D.RelayDnsPacket(pkt)
 
 		if err != nil {
 			return
@@ -41,7 +38,9 @@ func hijackUDPDns(pkt []byte, ep *binding.Endpoint, sender redirect.UDPSender) {
 
 func hijackTCPDns(conn net.Conn) {
 	go func() {
-		defer conn.Close()
+		defer func(conn net.Conn) {
+			_ = conn.Close()
+		}(conn)
 
 		for {
 			if err := conn.SetReadDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
@@ -60,7 +59,7 @@ func hijackTCPDns(conn net.Conn) {
 				return
 			}
 
-			rb, err := relayDnsPacket(data)
+			rb, err := D.RelayDnsPacket(data)
 			if err != nil {
 				continue
 			}
@@ -74,28 +73,4 @@ func hijackTCPDns(conn net.Conn) {
 			}
 		}
 	}()
-}
-
-func relayDnsPacket(payload []byte) ([]byte, error) {
-	msg := &D.Msg{}
-	if err := msg.Unpack(payload); err != nil {
-		return nil, err
-	}
-
-	r, err := resolver.ServeMsg(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, ans := range r.Answer {
-		header := ans.Header()
-
-		if header.Class == D.ClassINET && (header.Rrtype == D.TypeA || header.Rrtype == D.TypeAAAA) {
-			header.Ttl = 1
-		}
-	}
-
-	r.SetRcode(msg, r.Rcode)
-	r.Compress = true
-	return r.Pack()
 }

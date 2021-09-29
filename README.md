@@ -39,12 +39,14 @@ Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash
 ### TUN configuration
 Supports macOS, Linux and Windows.
 
+Support lwIP stack, a lightweight TCP/IP stack, recommend set to tun.
+
 On Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into Clash home directory.
 ```yaml
 # Enable the TUN listener
 tun:
   enable: true
-  stack: system # system or gvisor
+  stack: lwip # lwip(recommend), system or gvisor
   dns-listen: 0.0.0.0:53 # additional dns server listen on TUN
   auto-route: true # auto set global route
 ```
