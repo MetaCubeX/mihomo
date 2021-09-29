@@ -195,6 +195,7 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 			n, err := t.device.Read(packet)
 			if err != nil && !t.device.IsClose() {
 				log.Errorln("can not read from tun: %v", err)
+				continue
 			}
 			var p tcpip.NetworkProtocolNumber
 			switch header.IPVersion(packet) {

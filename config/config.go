@@ -183,7 +183,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:     []map[string]interface{}{},
 		Tun: Tun{
 			Enable:    false,
-			Stack:     "system",
+			Stack:     "lwip",
 			DNSListen: "0.0.0.0:53",
 			AutoRoute: true,
 		},

@@ -151,8 +151,10 @@ func updateDNS(c *config.DNS, general *config.General) {
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
-	if general.Tun.Enable && strings.EqualFold(general.Tun.Stack, "system") {
+	if general.Tun.Enable && !strings.EqualFold(general.Tun.Stack, "gvisor") {
 		resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
+	} else {
+		resolver.DefaultLocalServer = nil
 	}
 
 	if err := dns.ReCreateServer(c.Listen, r, m); err != nil {
