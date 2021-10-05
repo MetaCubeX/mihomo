@@ -36,6 +36,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
+	go.etcd.io/bbolt v1.3.6 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect

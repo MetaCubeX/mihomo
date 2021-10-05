@@ -75,6 +75,7 @@ func (c *CacheFile) Close() error {
 	return c.db.Close()
 }
 
+// TODO: remove migrateCache until 2022
 func migrateCache() {
 	defer func() {
 		db, err := bolt.Open(C.Path.Cache(), fileMode, nil)
