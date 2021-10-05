@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/component/profile"
 	C "github.com/Dreamacro/clash/constant"
@@ -78,7 +79,7 @@ func (c *CacheFile) Close() error {
 // TODO: remove migrateCache until 2022
 func migrateCache() {
 	defer func() {
-		db, err := bolt.Open(C.Path.Cache(), fileMode, nil)
+		db, err := bolt.Open(C.Path.Cache(), fileMode, &bolt.Options{Timeout: time.Second})
 		if err != nil {
 			log.Warnln("[CacheFile] can't open cache file: %s", err.Error())
 		}
