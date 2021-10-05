@@ -138,9 +138,10 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 				UDPSize: 4096,
 				Timeout: 5 * time.Second,
 			},
-			port: port,
-			host: host,
-			r:    resolver,
+			port:  port,
+			host:  host,
+			iface: s.Interface,
+			r:     resolver,
 		})
 	}
 	return ret
