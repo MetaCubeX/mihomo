@@ -68,8 +68,11 @@ func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
 			dns, err := dhcp.ResolveDNSFromDHCP(ctx, d.ifaceName)
 			if err == nil {
 				nameserver := make([]NameServer, 0, len(dns))
-				for _, d := range dns {
-					nameserver = append(nameserver, NameServer{Addr: net.JoinHostPort(d.String(), "53")})
+				for _, item := range dns {
+					nameserver = append(nameserver, NameServer{
+						Addr:      net.JoinHostPort(item.String(), "53"),
+						Interface: d.ifaceName,
+					})
 				}
 
 				res = NewResolver(Config{
