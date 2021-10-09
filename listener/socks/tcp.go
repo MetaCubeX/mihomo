@@ -2,7 +2,6 @@ package socks
 
 import (
 	"io"
-	"io/ioutil"
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -102,7 +101,7 @@ func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
 	}
 	if command == socks5.CmdUDPAssociate {
 		defer conn.Close()
-		io.Copy(ioutil.Discard, conn)
+		io.Copy(io.Discard, conn)
 		return
 	}
 	in <- inbound.NewSocket(target, conn, C.SOCKS5)

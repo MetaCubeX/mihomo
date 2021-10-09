@@ -3,7 +3,6 @@ package provider
 import (
 	"bytes"
 	"crypto/md5"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,7 +44,7 @@ func (f *fetcher) Initial() (interface{}, error) {
 		isLocal bool
 	)
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
-		buf, err = ioutil.ReadFile(f.vehicle.Path())
+		buf, err = os.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
 		f.updatedAt = &modTime
 		isLocal = true
@@ -165,7 +164,7 @@ func safeWrite(path string, buf []byte) error {
 		}
 	}
 
-	return ioutil.WriteFile(path, buf, fileMode)
+	return os.WriteFile(path, buf, fileMode)
 }
 
 func newFetcher(name string, interval time.Duration, vehicle types.Vehicle, parser parser, onUpdate func(interface{})) *fetcher {
