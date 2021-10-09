@@ -2,10 +2,11 @@ package provider
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -25,7 +26,7 @@ func (f *FileVehicle) Path() string {
 }
 
 func (f *FileVehicle) Read() ([]byte, error) {
-	return ioutil.ReadFile(f.path)
+	return os.ReadFile(f.path)
 }
 
 func NewFileVehicle(path string) *FileVehicle {
@@ -84,7 +85,7 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

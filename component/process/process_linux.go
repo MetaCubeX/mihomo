@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"path"
 	"path/filepath"
 	"syscall"
@@ -167,7 +167,7 @@ func unpackSocketDiagResponse(msg *syscall.NetlinkMessage) (inode, uid uint32) {
 }
 
 func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
-	files, err := ioutil.ReadDir(pathProc)
+	files, err := os.ReadDir(pathProc)
 	if err != nil {
 		return "", err
 	}
@@ -180,14 +180,18 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 			continue
 		}
 
-		if f.Sys().(*syscall.Stat_t).Uid != uint32(uid) {
+		info, err := f.Info()
+		if err != nil {
+			return "", err
+		}
+		if info.Sys().(*syscall.Stat_t).Uid != uint32(uid) {
 			continue
 		}
 
 		processPath := path.Join(pathProc, f.Name())
 		fdPath := path.Join(processPath, "fd")
 
-		fds, err := ioutil.ReadDir(fdPath)
+		fds, err := os.ReadDir(fdPath)
 		if err != nil {
 			continue
 		}
@@ -199,7 +203,7 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 			}
 
 			if bytes.Equal(buffer[:n], socket) {
-				cmdline, err := ioutil.ReadFile(path.Join(processPath, "cmdline"))
+				cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
 				if err != nil {
 					return "", err
 				}

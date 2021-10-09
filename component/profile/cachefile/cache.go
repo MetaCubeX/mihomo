@@ -3,7 +3,6 @@ package cachefile
 import (
 	"bytes"
 	"encoding/gob"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -88,7 +87,7 @@ func migrateCache() {
 		}
 	}()
 
-	buf, err := ioutil.ReadFile(C.Path.OldCache())
+	buf, err := os.ReadFile(C.Path.OldCache())
 	if err != nil {
 		return
 	}
