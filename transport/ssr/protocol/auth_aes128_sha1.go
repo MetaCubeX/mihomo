@@ -14,8 +14,10 @@ import (
 	"github.com/Dreamacro/clash/transport/ssr/tools"
 )
 
-type hmacMethod func(key, data []byte) []byte
-type hashDigestMethod func([]byte) []byte
+type (
+	hmacMethod       func(key, data []byte) []byte
+	hashDigestMethod func([]byte) []byte
+)
 
 func init() {
 	register("auth_aes128_sha1", newAuthAES128SHA1, 9)

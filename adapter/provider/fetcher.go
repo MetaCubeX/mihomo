@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	fileMode os.FileMode = 0666
-	dirMode  os.FileMode = 0755
+	fileMode os.FileMode = 0o666
+	dirMode  os.FileMode = 0o755
 )
 
 type parser = func([]byte) (interface{}, error)

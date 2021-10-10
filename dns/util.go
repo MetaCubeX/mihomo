@@ -13,14 +13,12 @@ import (
 	D "github.com/miekg/dns"
 )
 
-var (
-	// EnhancedModeMapping is a mapping for EnhancedMode enum
-	EnhancedModeMapping = map[string]EnhancedMode{
-		NORMAL.String():  NORMAL,
-		FAKEIP.String():  FAKEIP,
-		MAPPING.String(): MAPPING,
-	}
-)
+// EnhancedModeMapping is a mapping for EnhancedMode enum
+var EnhancedModeMapping = map[string]EnhancedMode{
+	NORMAL.String():  NORMAL,
+	FAKEIP.String():  FAKEIP,
+	MAPPING.String(): MAPPING,
+}
 
 const (
 	NORMAL EnhancedMode = iota

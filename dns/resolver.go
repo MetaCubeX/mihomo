@@ -215,7 +215,6 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 }
 
 func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-
 	if matched := r.matchPolicy(m); len(matched) != 0 {
 		res := <-r.asyncExchange(ctx, matched, m)
 		return res.Msg, res.Error

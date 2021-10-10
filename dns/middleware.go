@@ -14,8 +14,10 @@ import (
 	D "github.com/miekg/dns"
 )
 
-type handler func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error)
-type middleware func(next handler) handler
+type (
+	handler    func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error)
+	middleware func(next handler) handler
+)
 
 func withHosts(hosts *trie.DomainTrie) middleware {
 	return func(next handler) handler {

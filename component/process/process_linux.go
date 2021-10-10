@@ -25,8 +25,10 @@ var nativeEndian = func() binary.ByteOrder {
 	return binary.LittleEndian
 }()
 
-type SocketResolver func(network string, ip net.IP, srcPort int) (inode, uid int, err error)
-type ProcessNameResolver func(inode, uid int) (name string, err error)
+type (
+	SocketResolver      func(network string, ip net.IP, srcPort int) (inode, uid int, err error)
+	ProcessNameResolver func(inode, uid int) (name string, err error)
+)
 
 // export for android
 var (

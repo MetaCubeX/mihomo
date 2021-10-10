@@ -24,9 +24,7 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 )
 
-var (
-	mux sync.Mutex
-)
+var mux sync.Mutex
 
 func readConfig(path string) ([]byte, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {

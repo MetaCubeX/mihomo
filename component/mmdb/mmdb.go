@@ -9,8 +9,10 @@ import (
 	"github.com/oschwald/geoip2-golang"
 )
 
-var mmdb *geoip2.Reader
-var once sync.Once
+var (
+	mmdb *geoip2.Reader
+	once sync.Once
+)
 
 func LoadFromBytes(buffer []byte) {
 	once.Do(func() {
