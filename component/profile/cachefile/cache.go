@@ -16,7 +16,7 @@ import (
 
 var (
 	initOnce     sync.Once
-	fileMode     os.FileMode = 0666
+	fileMode     os.FileMode = 0o666
 	defaultCache *CacheFile
 
 	bucketSelected = []byte("selected")
@@ -41,7 +41,6 @@ func (c *CacheFile) SetSelected(group, selected string) {
 		}
 		return bucket.Put([]byte(group), []byte(selected))
 	})
-
 	if err != nil {
 		log.Warnln("[CacheFile] write cache to %s failed: %s", c.db.Path(), err.Error())
 		return

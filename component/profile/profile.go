@@ -4,7 +4,5 @@ import (
 	"go.uber.org/atomic"
 )
 
-var (
-	// StoreSelected is a global switch for storing selected proxy to cache
-	StoreSelected = atomic.NewBool(true)
-)
+// StoreSelected is a global switch for storing selected proxy to cache
+var StoreSelected = atomic.NewBool(true)

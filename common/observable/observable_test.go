@@ -38,7 +38,7 @@ func TestObservable_MultiSubscribe(t *testing.T) {
 	src := NewObservable(iter)
 	ch1, _ := src.Subscribe()
 	ch2, _ := src.Subscribe()
-	var count = atomic.NewInt32(0)
+	count := atomic.NewInt32(0)
 
 	var wg sync.WaitGroup
 	wg.Add(2)

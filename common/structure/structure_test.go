@@ -5,8 +5,10 @@ import (
 	"testing"
 )
 
-var decoder = NewDecoder(Option{TagName: "test"})
-var weakTypeDecoder = NewDecoder(Option{TagName: "test", WeaklyTypedInput: true})
+var (
+	decoder         = NewDecoder(Option{TagName: "test"})
+	weakTypeDecoder = NewDecoder(Option{TagName: "test", WeaklyTypedInput: true})
+)
 
 type Baz struct {
 	Foo int    `test:"foo"`

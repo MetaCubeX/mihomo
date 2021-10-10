@@ -32,6 +32,7 @@ func (inf *ipnetFilter) Match(ip net.IP) bool {
 type fallbackDomainFilter interface {
 	Match(domain string) bool
 }
+
 type domainFilter struct {
 	tree *trie.DomainTrie
 }

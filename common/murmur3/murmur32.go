@@ -67,7 +67,6 @@ func (d *digest32) bmix(p []byte) (tail []byte) {
 }
 
 func (d *digest32) Sum32() (h1 uint32) {
-
 	h1 = d.h1
 
 	var k1 uint32

@@ -30,9 +30,8 @@ jobs:
       - name: Get dependencies, run test and static check
         run: |
           go test ./...
-          go vet ./...
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck -- $(go list ./...)
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run --disable-all -E govet -E gofumpt -E megacheck ./...
 
       - name: Build
         if: startsWith(github.ref, 'refs/tags/')
