@@ -39,7 +39,9 @@ func (dc *dohClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg,
 
 	req = req.WithContext(ctx)
 	msg, err = dc.doRequest(req)
-	msg.Id = m.Id
+	if err == nil {
+		msg.Id = m.Id
+	}
 	return
 }
 
