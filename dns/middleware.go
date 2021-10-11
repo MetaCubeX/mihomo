@@ -107,7 +107,7 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 			q := r.Question[0]
 
 			host := strings.TrimRight(q.Name, ".")
-			if fakePool.LookupHost(host) {
+			if fakePool.ShouldSkipped(host) {
 				return next(ctx, r)
 			}
 

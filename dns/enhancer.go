@@ -67,7 +67,7 @@ func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	}
 
 	if h.fakePool != nil && o.fakePool != nil {
-		h.fakePool.PatchFrom(o.fakePool)
+		h.fakePool.CloneFrom(o.fakePool)
 	}
 }
 
