@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -30,8 +31,8 @@ func (b *Base) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, errors.New("no support")
 }
 
-// DialUDP implements C.ProxyAdapter
-func (b *Base) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+// ListenPacketContext implements C.ProxyAdapter
+func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	return nil, errors.New("no support")
 }
 

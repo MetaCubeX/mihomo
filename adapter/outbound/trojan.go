@@ -88,8 +88,8 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 	return NewConn(c, t), err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
+// ListenPacketContext implements C.ProxyAdapter
+func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	var c net.Conn
 
 	// grpc transport
@@ -100,8 +100,6 @@ func (t *Trojan) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		}
 		defer safeConnClose(c, err)
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-		defer cancel()
 		c, err = dialer.DialContext(ctx, "tcp", t.addr)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)

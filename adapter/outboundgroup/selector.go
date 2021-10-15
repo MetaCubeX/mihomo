@@ -28,9 +28,9 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 	return c, err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (s *Selector) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := s.selectedProxy(true).DialUDP(metadata)
+// ListenPacketContext implements C.ProxyAdapter
+func (s *Selector) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	pc, err := s.selectedProxy(true).ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(s)
 	}

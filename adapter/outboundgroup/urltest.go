@@ -42,9 +42,9 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 	return c, err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (u *URLTest) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := u.fast(true).DialUDP(metadata)
+// ListenPacketContext implements C.ProxyAdapter
+func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	pc, err := u.fast(true).ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(u)
 	}
