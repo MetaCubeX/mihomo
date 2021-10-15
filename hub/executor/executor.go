@@ -18,6 +18,7 @@ import (
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
+	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -68,6 +69,9 @@ func ParseWithPath(path string) (*config.Config, error) {
 
 // ParseWithBytes config with buffer
 func ParseWithBytes(buf []byte) (*config.Config, error) {
+	mux.Lock()
+	defer mux.Unlock()
+
 	return config.Parse(buf)
 }
 
@@ -79,6 +83,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
+	updateRuleProviders(cfg.RuleProviders)
 	updateHosts(cfg.Hosts)
 	updateProfile(cfg)
 	updateIPTables(cfg.DNS, cfg.General)
@@ -177,6 +182,10 @@ func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.Pro
 
 func updateRules(rules []C.Rule) {
 	tunnel.UpdateRules(rules)
+}
+
+func updateRuleProviders(providers map[string]C.Rule) {
+	S.UpdateRuleProviders(providers)
 }
 
 func updateGeneral(general *config.General, force bool) {
@@ -321,4 +330,6 @@ func CleanUp() {
 	if runtime.GOOS == "linux" {
 		tproxy.CleanUpTProxyLinuxIPTables()
 	}
+
+	S.Py_Finalize()
 }

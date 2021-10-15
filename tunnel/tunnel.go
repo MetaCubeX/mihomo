@@ -10,6 +10,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
 	"github.com/Dreamacro/clash/component/resolver"
+	S "github.com/Dreamacro/clash/component/script"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/context"
@@ -34,8 +35,6 @@ var (
 	udpTimeout = 60 * time.Second
 
 	preProcessCacheFinder, _ = R.NewProcess("", "", nil)
-
-	tunBroadcastAddr = net.IPv4(198, 18, 255, 255)
 )
 
 func init() {
@@ -143,7 +142,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
 			}
-		} else if resolver.IsFakeIP(metadata.DstIP) && !tunBroadcastAddr.Equal(metadata.DstIP) {
+		} else if resolver.IsFakeIP(metadata.DstIP) && !C.TunBroadcastAddr.Equal(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}
@@ -157,6 +156,8 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 		proxy = proxies["DIRECT"]
 	case Global:
 		proxy = proxies["GLOBAL"]
+	case Script:
+		proxy, err = matchScript(metadata)
 	// Rule
 	default:
 		proxy, rule, err = match(metadata)
@@ -235,7 +236,9 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		switch true {
 		case rule != nil:
-			log.Infoln("[UDP] %s(%s) --> %s:%s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
+			log.Infoln("[UDP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
+		case mode == Script:
+			log.Infoln("[UDP] %s --> %s using SCRIPT %s", metadata.SourceAddress(), metadata.RemoteAddress(), rawPc.Chains().String())
 		case mode == Global:
 			log.Infoln("[UDP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 		case mode == Direct:
@@ -285,7 +288,9 @@ func handleTCPConn(ctx C.ConnContext) {
 
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s(%s) --> %s:%s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
+	case mode == Script:
+		log.Infoln("[TCP] %s(%s) --> %s using SCRIPT %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), remoteConn.Chains().String())
 	case mode == Global:
 		log.Infoln("[TCP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 	case mode == Direct:
@@ -356,4 +361,29 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 	//return proxies["DIRECT"], nil, nil
 	return proxies["REJECT"], nil, nil
+}
+
+func matchScript(metadata *C.Metadata) (C.Proxy, error) {
+	configMux.RLock()
+	defer configMux.RUnlock()
+
+	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
+		ip := node.Data.(net.IP)
+		metadata.DstIP = ip
+	}
+
+	// preset process name and cache it
+	preProcessCacheFinder.Match(metadata)
+
+	adapter, err := S.CallPyMainFunction(metadata)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := proxies[adapter]; !ok {
+		return nil, fmt.Errorf("proxy [%s] not found by script", adapter)
+	}
+
+	return proxies[adapter], nil
 }

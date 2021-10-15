@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/fakeip"
+	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
@@ -92,21 +94,28 @@ type Tun struct {
 	AutoRoute bool   `yaml:"auto-route" json:"auto-route"`
 }
 
+// Script config
+type Script struct {
+	MainCode      string            `yaml:"code" json:"code"`
+	ShortcutsCode map[string]string `yaml:"shortcuts" json:"shortcuts"`
+}
+
 // Experimental config
 type Experimental struct{}
 
 // Config is clash config manager
 type Config struct {
-	General      *General
-	Tun          *Tun
-	DNS          *DNS
-	Experimental *Experimental
-	Hosts        *trie.DomainTrie
-	Profile      *Profile
-	Rules        []C.Rule
-	Users        []auth.AuthUser
-	Proxies      map[string]C.Proxy
-	Providers    map[string]providerTypes.ProxyProvider
+	General       *General
+	Tun           *Tun
+	DNS           *DNS
+	Experimental  *Experimental
+	Hosts         *trie.DomainTrie
+	Profile       *Profile
+	Rules         []C.Rule
+	RuleProviders map[string]C.Rule
+	Users         []auth.AuthUser
+	Proxies       map[string]C.Proxy
+	Providers     map[string]providerTypes.ProxyProvider
 }
 
 type RawDNS struct {
@@ -157,6 +166,7 @@ type RawConfig struct {
 	Proxy         []map[string]interface{}          `yaml:"proxies"`
 	ProxyGroup    []map[string]interface{}          `yaml:"proxy-groups"`
 	Rule          []string                          `yaml:"rules"`
+	Script        Script                            `yaml:"script"`
 }
 
 // Parse config
@@ -204,6 +214,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Profile: Profile{
 			StoreSelected: true,
 		},
+		Script: Script{
+			MainCode:      "",
+			ShortcutsCode: map[string]string{},
+		},
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
@@ -232,11 +246,17 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.Proxies = proxies
 	config.Providers = providers
 
-	rules, err := parseRules(rawCfg, proxies)
+	err = parseScript(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	rules, ruleProviders, err := parseRules(rawCfg, proxies)
 	if err != nil {
 		return nil, err
 	}
 	config.Rules = rules
+	config.RuleProviders = ruleProviders
 
 	hosts, err := parseHosts(rawCfg)
 	if err != nil {
@@ -396,9 +416,80 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	return proxies, providersMap, nil
 }
 
-func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
+func parseScript(cfg *RawConfig) error {
+	mode := cfg.Mode
+	script := cfg.Script
+	mainCode := cleanPyKeywords(script.MainCode)
+	shortcutsCode := script.ShortcutsCode
+
+	if mode != T.Script && len(shortcutsCode) == 0 {
+		return nil
+	} else if mode == T.Script && len(mainCode) == 0 {
+		return fmt.Errorf("initialized script module failure, can't find script code in the config file")
+	}
+
+	content :=
+		`# -*- coding: UTF-8 -*-
+
+from datetime import datetime as whatever
+
+class ClashTime:
+  def now(self):
+    return whatever.now()
+  
+  def unix(self):
+    return int(whatever.now().timestamp())
+
+  def unix_nano(self):
+    return int(round(whatever.now().timestamp() * 1000))
+
+time = ClashTime()
+
+`
+
+	var shouldInitPy bool
+	if mode == T.Script {
+		content += mainCode + "\n\n"
+		shouldInitPy = true
+	}
+
+	for k, v := range shortcutsCode {
+		v = cleanPyKeywords(v)
+		v = strings.TrimSpace(v)
+		if len(v) == 0 {
+			return fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code invalid syntax", k)
+		}
+
+		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
+		shouldInitPy = true
+	}
+
+	if !shouldInitPy {
+		return nil
+	}
+
+	err := os.WriteFile(C.Path.Script(), []byte(content), 0644)
+	if err != nil {
+		return fmt.Errorf("initialized script module failure, %s", err.Error())
+	}
+
+	if err = S.Py_Initialize(C.Path.ScriptDir()); err != nil {
+		return fmt.Errorf("initialized script module failure, %s", err.Error())
+	} else {
+		log.Infoln("Start initial script module successful")
+	}
+
+	return nil
+}
+
+func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]C.Rule, error) {
 	rules := []C.Rule{}
+	ruleProviders := map[string]C.Rule{}
 	rulesConfig := cfg.Rule
+	mode := cfg.Mode
+
+	providerNames := []string{}
+	isPyInit := S.Py_IsInitialized()
 
 	// parse rules
 	for idx, line := range rulesConfig {
@@ -409,6 +500,10 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 			params   = []string{}
 			ruleName = strings.ToUpper(rule[0])
 		)
+
+		if mode == T.Script && ruleName != "GEOSITE" {
+			continue
+		}
 
 		switch l := len(rule); {
 		case l == 2:
@@ -427,11 +522,11 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 			target = rule[2]
 			params = rule[3:]
 		default:
-			return nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
+			return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 		}
 
-		if _, ok := proxies[target]; !ok {
-			return nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
+		if _, ok := proxies[target]; mode != T.Script && !ok {
+			return nil, nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
 		}
 
 		//rule = trimArr(rule)
@@ -439,15 +534,34 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
-			return nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
+			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
 
-		rules = append(rules, parsed)
+		if isPyInit {
+			if ruleName == "GEOSITE" {
+				pvName := "geosite:" + strings.ToLower(payload)
+				providerNames = append(providerNames, pvName)
+				ruleProviders[pvName] = parsed
+			}
+		}
+
+		if mode != T.Script {
+			rules = append(rules, parsed)
+		}
 	}
 
 	runtime.GC()
 
-	return rules, nil
+	if isPyInit {
+		err := S.NewClashPyContext(providerNames)
+		if err != nil {
+			return nil, nil, err
+		} else {
+			log.Infoln("Start initial script context successful")
+		}
+	}
+
+	return rules, ruleProviders, nil
 }
 
 func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
@@ -656,4 +770,17 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 		}
 	}
 	return users
+}
+
+func cleanPyKeywords(code string) string {
+	if len(code) == 0 {
+		return code
+	}
+	keywords := []string{"import", "print"}
+
+	for _, kw := range keywords {
+		reg := regexp.MustCompile("(?m)[\r\n]+^.*" + kw + ".*$")
+		code = reg.ReplaceAllString(code, "")
+	}
+	return code
 }

@@ -22,6 +22,7 @@ var Path = func() *path {
 type path struct {
 	homeDir    string
 	configFile string
+	scriptDir  string
 }
 
 // SetHomeDir is used to set the configuration path
@@ -65,6 +66,23 @@ func (p *path) GeoIP() string {
 
 func (p *path) GeoSite() string {
 	return P.Join(p.homeDir, "geosite.dat")
+}
+
+func (p *path) ScriptDir() string {
+	if len(p.scriptDir) != 0 {
+		return p.scriptDir
+	}
+	if dir, err := os.MkdirTemp("", Name+"-"); err == nil {
+		p.scriptDir = dir
+	} else {
+		p.scriptDir = P.Join(os.TempDir(), Name)
+		os.MkdirAll(p.scriptDir, 0644)
+	}
+	return p.scriptDir
+}
+
+func (p *path) Script() string {
+	return P.Join(p.ScriptDir(), "clash_script.py")
 }
 
 func (p *path) GetAssetLocation(file string) string {
