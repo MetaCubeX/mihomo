@@ -1,6 +1,6 @@
 GOCMD=go
-XGOCMD=xgo -go go-1.17.x
-GOBUILD=CGO_ENABLED=1 $(GOCMD) build -a -trimpath
+XGOCMD=xgo -go=go-1.17.x
+GOBUILD=CGO_ENABLED=1 $(GOCMD) build -trimpath
 GOCLEAN=$(GOCMD) clean
 NAME=clash
 BINDIR=$(shell pwd)/bin
@@ -72,11 +72,11 @@ all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 releases: $(gz_releases) $(zip_releases)
 
 clean:
-	rm -rf $(BINDIR)
+	rm -rf $(BINDIR)/
 	mkdir -p $(BINDIR)
 
 cleancache:
 	# go build cache may need to cleanup if changing C source code
 	$(GOCLEAN) -cache
-	rm -rf $(BINDIR)
+	rm -rf $(BINDIR)/
 	mkdir -p $(BINDIR)

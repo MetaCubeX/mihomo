@@ -52,12 +52,12 @@ func NewGEOSITE(country string, adapter string, ruleExtra *C.RuleExtra) (*GEOSIT
 	//geoLoaderName := "memconservative"
 	geoLoader, err := geodata.GetGeoDataLoader(geoLoaderName)
 	if err != nil {
-		return nil, fmt.Errorf("[GeoSite] %s", err.Error())
+		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
 	}
 
 	domains, err := geoLoader.LoadGeoSite(country)
 	if err != nil {
-		return nil, fmt.Errorf("[GeoSite] %s", err.Error())
+		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
 	}
 
 	//linear: linear algorithm
@@ -66,7 +66,7 @@ func NewGEOSITE(country string, adapter string, ruleExtra *C.RuleExtra) (*GEOSIT
 	//mph：minimal perfect hash algorithm
 	matcher, err := router.NewMphMatcherGroup(domains)
 	if err != nil {
-		return nil, fmt.Errorf("[GeoSite] %s", err.Error())
+		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
 	}
 
 	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, len(domains))

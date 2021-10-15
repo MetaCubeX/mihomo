@@ -1,5 +1,7 @@
 package constant
 
+import "net"
+
 // Rule Type
 const (
 	Domain RuleType = iota
@@ -12,6 +14,7 @@ const (
 	SrcPort
 	DstPort
 	Process
+	Script
 	MATCH
 )
 
@@ -39,6 +42,8 @@ func (rt RuleType) String() string {
 		return "DstPort"
 	case Process:
 		return "Process"
+	case Script:
+		return "Script"
 	case MATCH:
 		return "Match"
 	default:
@@ -54,3 +59,5 @@ type Rule interface {
 	ShouldResolveIP() bool
 	RuleExtra() *RuleExtra
 }
+
+var TunBroadcastAddr = net.IPv4(198, 18, 255, 255)
