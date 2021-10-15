@@ -96,6 +96,7 @@ func init() {
 
 	images := []string{
 		ImageShadowsocks,
+		ImageShadowsocksRust,
 		ImageVmess,
 		ImageTrojan,
 		ImageSnell,
@@ -582,7 +583,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 		return
 	}
 
-	pc, err := proxy.DialUDP(&C.Metadata{
+	pc, err := proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork:  C.UDP,
 		DstIP:    localIP,
 		DstPort:  "10001",
@@ -595,7 +596,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 
 	assert.NoError(t, testPingPongWithPacketConn(t, pc))
 
-	pc, err = proxy.DialUDP(&C.Metadata{
+	pc, err = proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork:  C.UDP,
 		DstIP:    localIP,
 		DstPort:  "10001",
@@ -608,7 +609,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 
 	assert.NoError(t, testLargeDataWithPacketConn(t, pc))
 
-	pc, err = proxy.DialUDP(&C.Metadata{
+	pc, err = proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork:  C.UDP,
 		DstIP:    localIP,
 		DstPort:  "10001",

@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"runtime"
@@ -12,7 +13,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/context"
+	icontext "github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 )
@@ -209,14 +210,16 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 			cond.Broadcast()
 		}()
 
-		ctx := context.NewPacketConnContext(metadata)
-		proxy, rule, err := resolveMetadata(ctx, metadata)
+		pCtx := icontext.NewPacketConnContext(metadata)
+		proxy, rule, err := resolveMetadata(pCtx, metadata)
 		if err != nil {
 			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 			return
 		}
 
-		rawPc, err := proxy.DialUDP(metadata)
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
+		defer cancel()
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata)
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -225,7 +228,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 			}
 			return
 		}
-		ctx.InjectPacketConn(rawPc)
+		pCtx.InjectPacketConn(rawPc)
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
 
 		switch true {
@@ -246,10 +249,10 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 	}()
 }
 
-func handleTCPConn(ctx C.ConnContext) {
-	defer ctx.Conn().Close()
+func handleTCPConn(connCtx C.ConnContext) {
+	defer connCtx.Conn().Close()
 
-	metadata := ctx.Metadata()
+	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
 		return
@@ -260,13 +263,15 @@ func handleTCPConn(ctx C.ConnContext) {
 		return
 	}
 
-	proxy, rule, err := resolveMetadata(ctx, metadata)
+	proxy, rule, err := resolveMetadata(connCtx, metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
 	}
 
-	remoteConn, err := proxy.Dial(metadata)
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
+	defer cancel()
+	remoteConn, err := proxy.DialContext(ctx, metadata)
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -289,7 +294,7 @@ func handleTCPConn(ctx C.ConnContext) {
 		log.Infoln("[TCP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.RemoteAddress())
 	}
 
-	handleSocket(ctx, remoteConn)
+	handleSocket(connCtx, remoteConn)
 }
 
 func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
