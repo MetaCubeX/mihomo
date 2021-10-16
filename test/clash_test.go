@@ -31,6 +31,7 @@ const (
 	ImageShadowsocksRust = "ghcr.io/shadowsocks/ssserver-rust:latest"
 	ImageVmess           = "v2fly/v2fly-core:latest"
 	ImageTrojan          = "trojangfw/trojan:latest"
+	ImageTrojanGo        = "p4gefau1t/trojan-go:latest"
 	ImageSnell           = "icpz/snell-server:latest"
 	ImageXray            = "teddysun/xray:latest"
 )
@@ -99,6 +100,7 @@ func init() {
 		ImageShadowsocksRust,
 		ImageVmess,
 		ImageTrojan,
+		ImageTrojanGo,
 		ImageSnell,
 		ImageXray,
 	}
