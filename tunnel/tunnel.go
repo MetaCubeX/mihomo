@@ -133,13 +133,13 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
+			metadata.DNSMode = C.DNSMapping
 			if resolver.FakeIPEnabled() {
 				metadata.DstIP = nil
 				metadata.DNSMode = C.DNSFakeIP
 			} else if node := resolver.DefaultHosts.Search(host); node != nil {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
-				metadata.DNSMode = C.DNSMapping
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
