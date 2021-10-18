@@ -5,20 +5,21 @@ import (
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 type ResolverEnhancer struct {
-	mode     EnhancedMode
+	mode     C.DNSMode
 	fakePool *fakeip.Pool
 	mapping  *cache.LruCache
 }
 
 func (h *ResolverEnhancer) FakeIPEnabled() bool {
-	return h.mode == FAKEIP
+	return h.mode == C.DNSFakeIP
 }
 
 func (h *ResolverEnhancer) MappingEnabled() bool {
-	return h.mode == FAKEIP || h.mode == MAPPING
+	return h.mode == C.DNSFakeIP || h.mode == C.DNSMapping
 }
 
 func (h *ResolverEnhancer) IsExistFakeIP(ip net.IP) bool {
@@ -75,7 +76,7 @@ func NewEnhancer(cfg Config) *ResolverEnhancer {
 	var fakePool *fakeip.Pool
 	var mapping *cache.LruCache
 
-	if cfg.EnhancedMode != NORMAL {
+	if cfg.EnhancedMode != C.DNSNormal {
 		fakePool = cfg.Pool
 		mapping = cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true))
 	}
