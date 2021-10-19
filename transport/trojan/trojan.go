@@ -22,8 +22,10 @@ const (
 )
 
 var (
-	defaultALPN = []string{"h2", "http/1.1"}
-	crlf        = []byte{'\r', '\n'}
+	defaultALPN          = []string{"h2", "http/1.1"}
+	defaultWebsocketALPN = []string{"http/1.1"}
+
+	crlf = []byte{'\r', '\n'}
 )
 
 type Command = byte
@@ -74,7 +76,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 }
 
 func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
-	alpn := defaultALPN
+	alpn := defaultWebsocketALPN
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
 	}
