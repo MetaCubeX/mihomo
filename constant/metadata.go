@@ -78,6 +78,7 @@ type Metadata struct {
 	AddrType int     `json:"-"`
 	Host     string  `json:"host"`
 	Process  string  `json:"process"`
+	DNSMode  DNSMode `json:"dnsMode"`
 }
 
 func (m *Metadata) RemoteAddress() string {
@@ -90,6 +91,23 @@ func (m *Metadata) SourceAddress() string {
 
 func (m *Metadata) Resolved() bool {
 	return m.DstIP != nil
+}
+
+// Pure is used to solve unexpected behavior
+// when dialing proxy connection in DNSMapping mode.
+func (m *Metadata) Pure() *Metadata {
+	if m.DNSMode == DNSMapping && m.DstIP != nil {
+		copy := *m
+		copy.Host = ""
+		if copy.DstIP.To4() != nil {
+			copy.AddrType = AtypIPv4
+		} else {
+			copy.AddrType = AtypIPv6
+		}
+		return &copy
+	}
+
+	return m
 }
 
 func (m *Metadata) UDPAddr() *net.UDPAddr {

@@ -22,20 +22,19 @@ func handleTCP(conn net.Conn, endpoint *binding.Endpoint, tcpIn chan<- C.ConnCon
 		Zone: "",
 	}
 
-	addrType := C.AtypIPv4
-	if dst.IP.To4() == nil {
-		addrType = C.AtypIPv6
-	}
+	//addrType := C.AtypIPv4
+	//if dst.IP.To4() == nil {
+	//	addrType = C.AtypIPv6
+	//}
 
 	metadata := &C.Metadata{
-		NetWork:  C.TCP,
-		Type:     C.TUN,
-		SrcIP:    src.IP,
-		DstIP:    dst.IP,
-		SrcPort:  strconv.Itoa(src.Port),
-		DstPort:  strconv.Itoa(dst.Port),
-		AddrType: addrType,
-		Host:     "",
+		NetWork: C.TCP,
+		Type:    C.TUN,
+		SrcIP:   src.IP,
+		DstIP:   dst.IP,
+		SrcPort: strconv.Itoa(src.Port),
+		DstPort: strconv.Itoa(dst.Port),
+		Host:    "",
 	}
 
 	tcpIn <- context.NewConnContext(conn, metadata)

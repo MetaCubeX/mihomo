@@ -3,7 +3,7 @@ package dns
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 
@@ -28,13 +28,21 @@ func (dc *dohClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 }
 
 func (dc *dohClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	req, err := dc.newRequest(m)
+	// https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
+	// In order to maximize cache friendliness, SHOULD use a DNS ID of 0 in every DNS request.
+	newM := *m
+	newM.Id = 0
+	req, err := dc.newRequest(&newM)
 	if err != nil {
 		return nil, err
 	}
 
 	req = req.WithContext(ctx)
-	return dc.doRequest(req)
+	msg, err = dc.doRequest(req)
+	if err == nil {
+		msg.Id = m.Id
+	}
+	return
 }
 
 // newRequest returns a new DoH request given a dns.Msg.
@@ -62,7 +70,7 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	}
 	defer resp.Body.Close()
 
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

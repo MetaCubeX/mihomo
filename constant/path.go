@@ -56,8 +56,12 @@ func (p *path) MMDB() string {
 	return P.Join(p.homeDir, "Country.mmdb")
 }
 
-func (p *path) Cache() string {
+func (p *path) OldCache() string {
 	return P.Join(p.homeDir, ".cache")
+}
+
+func (p *path) Cache() string {
+	return P.Join(p.homeDir, "cache.db")
 }
 
 func (p *path) GeoIP() string {
@@ -76,7 +80,7 @@ func (p *path) ScriptDir() string {
 		p.scriptDir = dir
 	} else {
 		p.scriptDir = P.Join(os.TempDir(), Name)
-		os.MkdirAll(p.scriptDir, 0644)
+		os.MkdirAll(p.scriptDir, 0o644)
 	}
 	return p.scriptDir
 }

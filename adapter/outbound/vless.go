@@ -79,8 +79,16 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		if v.option.TLS {
 			wsOpts.TLS = true
-			wsOpts.SkipCertVerify = v.option.SkipCertVerify
-			wsOpts.ServerName = v.option.ServerName
+			wsOpts.TLSConfig = &tls.Config{
+				ServerName:         host,
+				InsecureSkipVerify: v.option.SkipCertVerify,
+				NextProtos:         []string{"http/1.1"},
+			}
+			if v.option.ServerName != "" {
+				wsOpts.TLSConfig.ServerName = v.option.ServerName
+			} else if host := wsOpts.Headers.Get("Host"); host != "" {
+				wsOpts.TLSConfig.ServerName = host
+			}
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":

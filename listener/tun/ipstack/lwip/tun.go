@@ -36,8 +36,6 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, tcpIn chan<- C.C
 	adapter.lock.Lock()
 	defer adapter.lock.Unlock()
 
-	//adapter.stopLocked()
-
 	dnsHost, _, err := net.SplitHostPort(conf.DNSListen)
 	if err != nil {
 		return nil, err

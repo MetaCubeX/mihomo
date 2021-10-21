@@ -53,7 +53,6 @@ func (c *fakeConn) Close() error {
 }
 
 func (c *fakeConn) Drop() {
-
 }
 
 func (c *fakeConn) FakeIP() bool {

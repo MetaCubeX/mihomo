@@ -45,7 +45,7 @@ Prerequisite
 * docker (support Linux and macOS)
 
 ```
-$ go test -p 1 -v
+$ make test
 ```
 
 benchmark (Linux)
@@ -55,5 +55,5 @@ benchmark (Linux)
 > (change chunkSize to measure the maximum throughput of clash on your machine)
 
 ```
-$ go test -benchmem -run=^$ -bench .
+$ make benchmark
 ```

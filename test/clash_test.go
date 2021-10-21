@@ -31,6 +31,7 @@ const (
 	ImageShadowsocksRust = "ghcr.io/shadowsocks/ssserver-rust:latest"
 	ImageVmess           = "v2fly/v2fly-core:latest"
 	ImageTrojan          = "trojangfw/trojan:latest"
+	ImageTrojanGo        = "p4gefau1t/trojan-go:latest"
 	ImageSnell           = "icpz/snell-server:latest"
 	ImageXray            = "teddysun/xray:latest"
 )
@@ -96,8 +97,10 @@ func init() {
 
 	images := []string{
 		ImageShadowsocks,
+		ImageShadowsocksRust,
 		ImageVmess,
 		ImageTrojan,
+		ImageTrojanGo,
 		ImageSnell,
 		ImageXray,
 	}
@@ -582,7 +585,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 		return
 	}
 
-	pc, err := proxy.DialUDP(&C.Metadata{
+	pc, err := proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork:  C.UDP,
 		DstIP:    localIP,
 		DstPort:  "10001",
@@ -595,7 +598,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 
 	assert.NoError(t, testPingPongWithPacketConn(t, pc))
 
-	pc, err = proxy.DialUDP(&C.Metadata{
+	pc, err = proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork:  C.UDP,
 		DstIP:    localIP,
 		DstPort:  "10001",
@@ -608,7 +611,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 
 	assert.NoError(t, testLargeDataWithPacketConn(t, pc))
 
-	pc, err = proxy.DialUDP(&C.Metadata{
+	pc, err = proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork:  C.UDP,
 		DstIP:    localIP,
 		DstPort:  "10001",
