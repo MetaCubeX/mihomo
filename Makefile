@@ -16,27 +16,29 @@ STATIC_LDFLAGS='-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
                		-w -s -buildid='
 
 PLATFORM_LIST = \
-	darwin-10.12-amd64 \
-	darwin-10.15-arm64 \
-	linux-386 \
+	darwin-amd64 \
+	darwin-arm64 \
 	linux-amd64 \
 	linux-arm64
+#	linux-386
 
 WINDOWS_ARCH_LIST = \
-	windows-4.0-amd64 \
-	windows-4.0-386
+	windows-amd64 \
+	windows-386
 #	windows-arm64
 
-all: linux-amd64 darwin-10.12-amd64 windows-4.0-amd64 # Most used
+all: linux-amd64 darwin-amd64 windows-amd64 # Most used
 
 build:
-	$(GOBUILD) -ldflags $(RELEASE_LDFLAGS) -o $(BINDIR)/$(NAME)-$@
+	$(GOBUILD) -ldflags $(RELEASE_LDFLAGS) -tags build_local -o $(BINDIR)/$(NAME)-$@
 
-darwin-10.12-amd64:
-	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=darwin-10.12/amd64 $(BUILD_PACKAGE)
+darwin-amd64:
+	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=darwin-10.12/amd64 $(BUILD_PACKAGE) && \
+	mv $(BINDIR)/$(NAME)-darwin-10.12-amd64 $(BINDIR)/$(NAME)-darwin-amd64
 
-darwin-10.15-arm64:
-	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=darwin-10.15/arm64 $(BUILD_PACKAGE)
+darwin-arm64:
+	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=darwin-11.1/arm64 $(BUILD_PACKAGE) && \
+	mv $(BINDIR)/$(NAME)-darwin-11.1-arm64 $(BINDIR)/$(NAME)-darwin-arm64
 
 linux-386:
 	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(STATIC_LDFLAGS) -targets=linux/386 $(BUILD_PACKAGE)
@@ -48,14 +50,17 @@ linux-amd64:
 linux-arm64:
 	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(STATIC_LDFLAGS) -targets=linux/arm64 $(BUILD_PACKAGE)
 
-windows-4.0-386:
-	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-4.0/386 $(BUILD_PACKAGE)
+windows-386:
+	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-4.0/386 $(BUILD_PACKAGE) && \
+	mv $(BINDIR)/$(NAME)-windows-4.0-386.exe $(BINDIR)/$(NAME)-windows-386.exe
 
-windows-4.0-amd64:
-	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-4.0/amd64 $(BUILD_PACKAGE)
+windows-amd64:
+	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-4.0/amd64 $(BUILD_PACKAGE) && \
+	mv $(BINDIR)/$(NAME)-windows-4.0-amd64.exe $(BINDIR)/$(NAME)-windows-amd64.exe
 
 #windows-arm64:
 #	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows/arm64 $(BUILD_PACKAGE)
+#	mv $(NAME)-windows-4.0-arm64.exe $(NAME)-windows-arm64.exe
 
 gz_releases=$(addsuffix .gz, $(PLATFORM_LIST))
 zip_releases=$(addsuffix .zip, $(WINDOWS_ARCH_LIST))

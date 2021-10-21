@@ -37,8 +37,6 @@ void init_python(const char *path) {
         import can be deferred until the embedded script
         imports it. */
     clash_module = PyImport_ImportModule("clash");
-
-    main_fn = load_func(CLASH_SCRIPT_MODULE_NAME, "main");
 }
 
 // Load function, same as "import module_name.func_name as obj" in Python
@@ -85,6 +83,10 @@ const char *py_last_error() {
 
 void py_clear(PyObject *obj) {
     Py_CLEAR(obj);
+}
+
+void load_main_func() {
+    main_fn = load_func(CLASH_SCRIPT_MODULE_NAME, "main");
 }
 
 /** callback function, that call go function by python3 script. **/

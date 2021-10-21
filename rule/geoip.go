@@ -5,9 +5,6 @@ import (
 
 	"github.com/Dreamacro/clash/component/mmdb"
 	C "github.com/Dreamacro/clash/constant"
-	//"github.com/Dreamacro/clash/rule/geodata"
-	//"github.com/Dreamacro/clash/rule/geodata/router"
-	//_ "github.com/Dreamacro/clash/rule/geodata/standard"
 )
 
 type GEOIP struct {
@@ -15,7 +12,6 @@ type GEOIP struct {
 	adapter     string
 	noResolveIP bool
 	ruleExtra   *C.RuleExtra
-	//geoIPMatcher *router.GeoIPMatcher
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -56,38 +52,11 @@ func (g *GEOIP) GetCountry() string {
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.RuleExtra) (*GEOIP, error) {
-	//geoLoaderName := "standard"
-	////geoLoaderName := "memconservative"
-	//geoLoader, err := geodata.GetGeoDataLoader(geoLoaderName)
-	//if err != nil {
-	//	return nil, fmt.Errorf("load GeoIP data error, %s", err.Error())
-	//}
-	//
-	//records, err := geoLoader.LoadGeoIP(strings.ReplaceAll(country, "!", ""))
-	//if err != nil {
-	//	return nil, fmt.Errorf("load GeoIP data error, %s", err.Error())
-	//}
-	//
-	//geoIP := &router.GeoIP{
-	//	CountryCode:  country,
-	//	Cidr:         records,
-	//	ReverseMatch: strings.Contains(country, "!"),
-	//}
-	//
-	//geoIPMatcher, err := router.NewGeoIPMatcher(geoIP)
-	//
-	//if err != nil {
-	//	return nil, fmt.Errorf("load GeoIP data error, %s", err.Error())
-	//}
-	//
-	//log.Infoln("Start initial GeoIP rule %s => %s, records: %d, reverse match: %v", country, adapter, len(records), geoIP.ReverseMatch)
-
 	geoip := &GEOIP{
 		country:     country,
 		adapter:     adapter,
 		noResolveIP: noResolveIP,
 		ruleExtra:   ruleExtra,
-		//geoIPMatcher: geoIPMatcher,
 	}
 
 	return geoip, nil
