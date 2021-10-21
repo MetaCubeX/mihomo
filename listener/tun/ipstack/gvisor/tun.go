@@ -48,7 +48,6 @@ type gvisorAdapter struct {
 
 // GvisorAdapter create GvisorAdapter
 func NewAdapter(device dev.TunDevice, conf config.Tun, tunAddress string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.TunAdapter, error) {
-
 	ipstack := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
@@ -180,7 +179,6 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 	}
 
 	mtu, err := t.device.MTU()
-
 	if err != nil {
 		return nil, errors.New("unable to get device mtu")
 	}

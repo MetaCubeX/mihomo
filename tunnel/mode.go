@@ -8,15 +8,13 @@ import (
 
 type TunnelMode int
 
-var (
-	// ModeMapping is a mapping for Mode enum
-	ModeMapping = map[string]TunnelMode{
-		Global.String(): Global,
-		Rule.String():   Rule,
-		Script.String(): Script,
-		Direct.String(): Direct,
-	}
-)
+// ModeMapping is a mapping for Mode enum
+var ModeMapping = map[string]TunnelMode{
+	Global.String(): Global,
+	Rule.String():   Rule,
+	Script.String(): Script,
+	Direct.String(): Direct,
+}
 
 const (
 	Global TunnelMode = iota

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"strconv"
 
@@ -77,10 +76,8 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 	return NewConn(c, ss), nil
 }
 
-// DialUDP implements C.ProxyAdapter
-func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-	defer cancel()
+// ListenPacketContext implements C.ProxyAdapter
+func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		err = fmt.Errorf("%s connect error: %w", ss.addr, err)
@@ -110,13 +107,13 @@ func (ss *Socks5) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 		return
 	}
 
-	pc, err := dialer.ListenPacket(context.Background(), "udp", "")
+	pc, err := dialer.ListenPacket(ctx, "udp", "")
 	if err != nil {
 		return
 	}
 
 	go func() {
-		io.Copy(ioutil.Discard, c)
+		io.Copy(io.Discard, c)
 		c.Close()
 		// A UDP association terminates when the TCP connection that the UDP
 		// ASSOCIATE request arrived on terminates. RFC1928

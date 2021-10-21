@@ -2,11 +2,12 @@ package rules
 
 import (
 	"fmt"
+	"runtime"
+	"strings"
+
 	S "github.com/Dreamacro/clash/component/script"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"runtime"
-	"strings"
 )
 
 type Script struct {

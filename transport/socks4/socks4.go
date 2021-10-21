@@ -184,7 +184,7 @@ func isReservedIP(ip net.IP) bool {
 }
 
 func readUntilNull(r io.Reader) ([]byte, error) {
-	var buf = &bytes.Buffer{}
+	buf := &bytes.Buffer{}
 	var data [1]byte
 
 	for {

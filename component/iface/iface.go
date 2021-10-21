@@ -15,8 +15,10 @@ type Interface struct {
 	HardwareAddr net.HardwareAddr
 }
 
-var ErrIfaceNotFound = errors.New("interface not found")
-var ErrAddrNotFound = errors.New("addr not found")
+var (
+	ErrIfaceNotFound = errors.New("interface not found")
+	ErrAddrNotFound  = errors.New("addr not found")
+)
 
 var interfaces = singledo.NewSingle(time.Second * 20)
 

@@ -22,9 +22,9 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 	return NewConn(c, d), nil
 }
 
-// DialUDP implements C.ProxyAdapter
-func (d *Direct) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := dialer.ListenPacket(context.Background(), "udp", "")
+// ListenPacketContext implements C.ProxyAdapter
+func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	pc, err := dialer.ListenPacket(ctx, "udp", "")
 	if err != nil {
 		return nil, err
 	}

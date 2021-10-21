@@ -304,13 +304,13 @@ func TestClash_VmessWebsocketTLS(t *testing.T) {
 
 func TestClash_VmessGrpc(t *testing.T) {
 	cfg := &container.Config{
-		Image:        ImageXray,
+		Image:        ImageVmess,
 		ExposedPorts: defaultExposedPorts,
 	}
 	hostCfg := &container.HostConfig{
 		PortBindings: defaultPortBindings,
 		Binds: []string{
-			fmt.Sprintf("%s:/etc/xray/config.json", C.Path.Resolve("vmess-grpc.json")),
+			fmt.Sprintf("%s:/etc/v2ray/config.json", C.Path.Resolve("vmess-grpc.json")),
 			fmt.Sprintf("%s:/etc/ssl/v2ray/fullchain.pem", C.Path.Resolve("example.org.pem")),
 			fmt.Sprintf("%s:/etc/ssl/v2ray/privkey.pem", C.Path.Resolve("example.org-key.pem")),
 		},

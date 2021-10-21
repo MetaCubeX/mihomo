@@ -19,8 +19,8 @@ func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 	return NewConn(&NopConn{}, r), nil
 }
 
-// DialUDP implements C.ProxyAdapter
-func (r *Reject) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+// ListenPacketContext implements C.ProxyAdapter
+func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	return nil, errors.New("match reject rule")
 }
 

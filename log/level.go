@@ -5,16 +5,14 @@ import (
 	"errors"
 )
 
-var (
-	// LogLevelMapping is a mapping for LogLevel enum
-	LogLevelMapping = map[string]LogLevel{
-		ERROR.String():   ERROR,
-		WARNING.String(): WARNING,
-		INFO.String():    INFO,
-		DEBUG.String():   DEBUG,
-		SILENT.String():  SILENT,
-	}
-)
+// LogLevelMapping is a mapping for LogLevel enum
+var LogLevelMapping = map[string]LogLevel{
+	ERROR.String():   ERROR,
+	WARNING.String(): WARNING,
+	INFO.String():    INFO,
+	DEBUG.String():   DEBUG,
+	SILENT.String():  SILENT,
+}
 
 const (
 	DEBUG LogLevel = iota

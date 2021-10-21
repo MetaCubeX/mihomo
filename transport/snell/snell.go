@@ -30,9 +30,7 @@ const (
 	Version byte = 1
 )
 
-var (
-	endSignal = []byte{}
-)
+var endSignal = []byte{}
 
 type Snell struct {
 	net.Conn

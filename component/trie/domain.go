@@ -12,10 +12,8 @@ const (
 	domainStep      = "."
 )
 
-var (
-	// ErrInvalidDomain means insert domain is invalid
-	ErrInvalidDomain = errors.New("invalid domain")
-)
+// ErrInvalidDomain means insert domain is invalid
+var ErrInvalidDomain = errors.New("invalid domain")
 
 // DomainTrie contains the main logic for adding and searching nodes for domain segments.
 // support wildcard domain (e.g *.google.com)

@@ -24,7 +24,6 @@ func shouldHijackDns(dnsAddr binding.Address, targetAddr binding.Address) bool {
 func hijackUDPDns(pkt []byte, ep *binding.Endpoint, sender redirect.UDPSender) {
 	go func() {
 		answer, err := D.RelayDnsPacket(pkt)
-
 		if err != nil {
 			return
 		}

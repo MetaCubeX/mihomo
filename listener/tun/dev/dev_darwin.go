@@ -20,41 +20,36 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 )
 
-const utunControlName = "com.apple.net.utun_control"
-const _IOC_OUT = 0x40000000
-const _IOC_IN = 0x80000000
-const _IOC_INOUT = _IOC_IN | _IOC_OUT
+const (
+	utunControlName = "com.apple.net.utun_control"
+	iocOut          = 0x40000000
+	iocIn           = 0x80000000
+	iocInout        = iocIn | iocOut
+)
 
 // _CTLIOCGINFO value derived from /usr/include/sys/{kern_control,ioccom}.h
 // https://github.com/apple/darwin-xnu/blob/master/bsd/sys/ioccom.h
 
 // #define CTLIOCGINFO     _IOWR('N', 3, struct ctl_info)	/* get id from name */ = 0xc0644e03
-const _CTLIOCGINFO = _IOC_INOUT | ((100 & 0x1fff) << 16) | uint32(byte('N'))<<8 | 3
-
-// #define	SIOCAIFADDR_IN6		_IOW('i', 26, struct in6_aliasreq) = 0x8080691a
-//const _SIOCAIFADDR_IN6 = _IOC_IN | ((128 & 0x1fff) << 16) | uint32(byte('i'))<<8 | 26
+const _CTLIOCGINFO = iocInout | ((100 & 0x1fff) << 16) | uint32(byte('N'))<<8 | 3
 
 // #define	SIOCPROTOATTACH_IN6	_IOWR('i', 110, struct in6_aliasreq_64)
-const _SIOCPROTOATTACH_IN6 = _IOC_INOUT | ((128 & 0x1fff) << 16) | uint32(byte('i'))<<8 | 110
+const siocprotoattachIn6 = iocInout | ((128 & 0x1fff) << 16) | uint32(byte('i'))<<8 | 110
 
-// #define	SIOCLL_START		_IOWR('i', 130, struct in6_aliasreq)
-const _SIOCLL_START = _IOC_INOUT | ((128 & 0x1fff) << 16) | uint32(byte('i'))<<8 | 130
-
-// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/nd6.h#L469
-const ND6_INFINITE_LIFETIME = 0xffffffff
+// #define	SIOCLL_START		_IOWR('i', 130, struct in6Aliasreq)
+const siocllStart = iocInout | ((128 & 0x1fff) << 16) | uint32(byte('i'))<<8 | 130
 
 // Following the wireguard-go solution:
 // These unix.SYS_* constants were removed from golang.org/x/sys/unix
 // so copy them here for now.
 // See https://github.com/golang/go/issues/41868
 const (
-	sys_IOCTL      = 54
-	sys_CONNECT    = 98
-	sys_GETSOCKOPT = 118
+	sysIoctl      = 54
+	sysConnect    = 98
+	sysGetsockopt = 118
 )
 
 type tunDarwin struct {
-	//url       string
 	name       string
 	tunAddress string
 	autoRoute  bool
@@ -75,6 +70,37 @@ type sockaddrCtl struct {
 	scReserved [5]uint32
 }
 
+type ctlInfo struct {
+	ctlID   uint32
+	ctlName [96]byte
+}
+
+// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/sys/sockio.h#L107
+// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/net/if.h#L570-L575
+// https://man.openbsd.org/netintro.4#SIOCAIFADDR
+type aliasreq struct {
+	ifraName    [unix.IFNAMSIZ]byte
+	ifraAddr    unix.RawSockaddrInet4
+	ifraDstaddr unix.RawSockaddrInet4
+	ifraMask    unix.RawSockaddrInet4
+}
+
+// SIOCAIFADDR_IN6
+// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/in6_var.h#L114-L119
+// https://opensource.apple.com/source/network_cmds/network_cmds-543.260.3/
+type in6Addrlifetime struct{}
+
+// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/in6_var.h#L336-L343
+// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/in6.h#L174-L181
+type in6Aliasreq struct {
+	ifraName       [unix.IFNAMSIZ]byte
+	ifraAddr       unix.RawSockaddrInet6
+	ifraDstaddr    unix.RawSockaddrInet6
+	ifraPrefixmask unix.RawSockaddrInet6
+	ifraFlags      int32
+	ifraLifetime   in6Addrlifetime
+}
+
 // https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/net/if.h#L402-L563
 
 //type ifreqAddr struct {
@@ -87,7 +113,6 @@ var sockaddrCtlSize uintptr = 32
 
 // OpenTunDevice return a TunDevice according a URL
 func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
-
 	name := "utun"
 	// TODO: configure the MTU
 	mtu := 9000
@@ -101,23 +126,19 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 	}
 
 	fd, err := unix.Socket(unix.AF_SYSTEM, unix.SOCK_DGRAM, 2)
-
 	if err != nil {
 		return nil, err
 	}
 
-	var ctlInfo = &struct {
-		ctlID   uint32
-		ctlName [96]byte
-	}{}
+	ctlInfo1 := &ctlInfo{}
 
-	copy(ctlInfo.ctlName[:], []byte(utunControlName))
+	copy(ctlInfo1.ctlName[:], []byte(utunControlName))
 
 	_, _, errno := unix.Syscall(
-		sys_IOCTL,
+		sysIoctl,
 		uintptr(fd),
 		uintptr(_CTLIOCGINFO),
-		uintptr(unsafe.Pointer(ctlInfo)),
+		uintptr(unsafe.Pointer(ctlInfo1)),
 	)
 
 	if errno != 0 {
@@ -128,14 +149,14 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 		scLen:     uint8(sockaddrCtlSize),
 		scFamily:  unix.AF_SYSTEM,
 		ssSysaddr: 2,
-		scID:      ctlInfo.ctlID,
+		scID:      ctlInfo1.ctlID,
 		scUnit:    uint32(ifIndex) + 1,
 	}
 
 	scPointer := unsafe.Pointer(&sc)
 
 	_, _, errno = unix.RawSyscall(
-		sys_CONNECT,
+		sysConnect,
 		uintptr(fd),
 		uintptr(scPointer),
 		uintptr(sockaddrCtlSize),
@@ -151,7 +172,6 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 	}
 
 	tun, err := CreateTUNFromFile(os.NewFile(uintptr(fd), ""), mtu, tunAddress, autoRoute)
-
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +291,6 @@ func (t *tunDarwin) Close() error {
 }
 
 func (t *tunDarwin) getInterfaceMtu() (int, error) {
-
 	// open datagram socket
 
 	fd, err := unix.Socket(
@@ -279,7 +298,6 @@ func (t *tunDarwin) getInterfaceMtu() (int, error) {
 		unix.SOCK_DGRAM,
 		0,
 	)
-
 	if err != nil {
 		return 0, err
 	}
@@ -291,7 +309,7 @@ func (t *tunDarwin) getInterfaceMtu() (int, error) {
 	var ifr [64]byte
 	copy(ifr[:], t.name)
 	_, _, errno := unix.Syscall(
-		sys_IOCTL,
+		sysIoctl,
 		uintptr(fd),
 		uintptr(unix.SIOCGIFMTU),
 		uintptr(unsafe.Pointer(&ifr[0])),
@@ -312,7 +330,7 @@ func (t *tunDarwin) getName() (string, error) {
 	var errno syscall.Errno
 	t.operateOnFd(func(fd uintptr) {
 		_, _, errno = unix.Syscall6(
-			sys_GETSOCKOPT,
+			sysGetsockopt,
 			fd,
 			2, /* #define SYSPROTO_CONTROL 2 */
 			2, /* #define UTUN_OPT_IFNAME 2 */
@@ -335,7 +353,6 @@ func (t *tunDarwin) setMTU(n int) error {
 		unix.SOCK_DGRAM,
 		0,
 	)
-
 	if err != nil {
 		return err
 	}
@@ -348,7 +365,7 @@ func (t *tunDarwin) setMTU(n int) error {
 	copy(ifr[:], t.name)
 	*(*uint32)(unsafe.Pointer(&ifr[unix.IFNAMSIZ])) = uint32(n)
 	_, _, errno := unix.Syscall(
-		sys_IOCTL,
+		sysIoctl,
 		uintptr(fd),
 		uintptr(unix.SIOCSIFMTU),
 		uintptr(unsafe.Pointer(&ifr[0])),
@@ -389,32 +406,22 @@ func (t *tunDarwin) setTunAddress(addr net.IP) error {
 	}
 	defer syscall.Close(fd4)
 
-	// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/sys/sockio.h#L107
-	// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/net/if.h#L570-L575
-	// https://man.openbsd.org/netintro.4#SIOCAIFADDR
-	type aliasreq struct {
-		ifra_name    [unix.IFNAMSIZ]byte
-		ifra_addr    unix.RawSockaddrInet4
-		ifra_dstaddr unix.RawSockaddrInet4
-		ifra_mask    unix.RawSockaddrInet4
-	}
-
 	var ip4 [4]byte
 	copy(ip4[:], addr.To4())
 	ip4mask := [4]byte{255, 255, 0, 0}
 	ifra4 := aliasreq{
-		ifra_name: ifr,
-		ifra_addr: unix.RawSockaddrInet4{
+		ifraName: ifr,
+		ifraAddr: unix.RawSockaddrInet4{
 			Len:    unix.SizeofSockaddrInet4,
 			Family: unix.AF_INET,
 			Addr:   ip4,
 		},
-		ifra_dstaddr: unix.RawSockaddrInet4{
+		ifraDstaddr: unix.RawSockaddrInet4{
 			Len:    unix.SizeofSockaddrInet4,
 			Family: unix.AF_INET,
 			Addr:   ip4,
 		},
-		ifra_mask: unix.RawSockaddrInet4{
+		ifraMask: unix.RawSockaddrInet4{
 			Len:    unix.SizeofSockaddrInet4,
 			Family: unix.AF_INET,
 			Addr:   ip4mask,
@@ -422,7 +429,7 @@ func (t *tunDarwin) setTunAddress(addr net.IP) error {
 	}
 
 	if _, _, errno := unix.Syscall(
-		sys_IOCTL,
+		sysIoctl,
 		uintptr(fd4),
 		uintptr(unix.SIOCAIFADDR),
 		uintptr(unsafe.Pointer(&ifra4)),
@@ -447,42 +454,24 @@ func (t *tunDarwin) attachLinkLocal() error {
 		return err
 	}
 	defer syscall.Close(fd6)
-	// SIOCAIFADDR_IN6
-	// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/in6_var.h#L114-L119
-	// https://opensource.apple.com/source/network_cmds/network_cmds-543.260.3/
-	type in6_addrlifetime struct {
-		//ia6t_expire    uint64
-		//ia6t_preferred uint64
-		//ia6t_vltime    uint32
-		//ia6t_pltime    uint32
-	}
-	// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/in6_var.h#L336-L343
-	// https://github.com/apple/darwin-xnu/blob/a449c6a3b8014d9406c2ddbdc81795da24aa7443/bsd/netinet6/in6.h#L174-L181
-	type in6_aliasreq struct {
-		ifra_name       [unix.IFNAMSIZ]byte
-		ifra_addr       unix.RawSockaddrInet6
-		ifra_dstaddr    unix.RawSockaddrInet6
-		ifra_prefixmask unix.RawSockaddrInet6
-		ifra_flags      int32
-		ifra_lifetime   in6_addrlifetime
-	}
+
 	// Attach link-local address
-	ifra6 := in6_aliasreq{
-		ifra_name: ifr,
+	ifra6 := in6Aliasreq{
+		ifraName: ifr,
 	}
 	if _, _, errno := unix.Syscall(
-		sys_IOCTL,
+		sysIoctl,
 		uintptr(fd6),
-		uintptr(_SIOCPROTOATTACH_IN6),
+		uintptr(siocprotoattachIn6),
 		uintptr(unsafe.Pointer(&ifra6)),
 	); errno != 0 {
 		return fmt.Errorf("failed to attach link-local address on %s: SIOCPROTOATTACH_IN6 %v", t.name, errno)
 	}
 
 	if _, _, errno := unix.Syscall(
-		sys_IOCTL,
+		sysIoctl,
 		uintptr(fd6),
-		uintptr(_SIOCLL_START),
+		uintptr(siocllStart),
 		uintptr(unsafe.Pointer(&ifra6)),
 	); errno != 0 {
 		return fmt.Errorf("failed to set ipv6 address on %s: SIOCLL_START %v", t.name, errno)
