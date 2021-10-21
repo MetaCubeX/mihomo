@@ -98,7 +98,7 @@ func ruleProviderCallbackFn(cProviderName *C.char, cMetadata *C.struct_Metadata)
 
 	rule, ok := ruleProviders[providerName]
 	if !ok {
-		log.Warnln("rule provider [%s] not found", providerName)
+		log.Warnln("[Script] rule provider [%s] not found", providerName)
 		return C.int(0)
 	}
 

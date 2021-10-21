@@ -475,9 +475,13 @@ time = ClashTime()
 
 	if err = S.Py_Initialize(C.Path.ScriptDir()); err != nil {
 		return fmt.Errorf("initialized script module failure, %s", err.Error())
-	} else {
-		log.Infoln("Start initial script module successful")
+	} else if mode == T.Script {
+		if err = S.LoadMainFunction(); err != nil {
+			return fmt.Errorf("initialized script module failure, %s", err.Error())
+		}
 	}
+
+	log.Infoln("Start initial script module successful")
 
 	return nil
 }

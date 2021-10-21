@@ -2,7 +2,6 @@ package router
 
 import (
 	"fmt"
-	"net"
 	"strings"
 
 	"github.com/Dreamacro/clash/rule/geodata/strmatcher"
@@ -68,45 +67,4 @@ func NewDomainMatcher(domains []*Domain) (*DomainMatcher, error) {
 
 func (m *DomainMatcher) ApplyDomain(domain string) bool {
 	return len(m.matchers.Match(strings.ToLower(domain))) > 0
-}
-
-type MultiGeoIPMatcher struct {
-	matchers []*GeoIPMatcher
-}
-
-func NewMultiGeoIPMatcher(geoips []*GeoIP) (*MultiGeoIPMatcher, error) {
-	var matchers []*GeoIPMatcher
-	for _, geoip := range geoips {
-		matcher, err := globalGeoIPContainer.Add(geoip)
-		if err != nil {
-			return nil, err
-		}
-		matchers = append(matchers, matcher)
-	}
-
-	matcher := &MultiGeoIPMatcher{
-		matchers: matchers,
-	}
-
-	return matcher, nil
-}
-
-func (m *MultiGeoIPMatcher) ApplyIp(ip net.IP) bool {
-
-	for _, matcher := range m.matchers {
-		if matcher.Match(ip) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func NewGeoIPMatcher(geoip *GeoIP) (*GeoIPMatcher, error) {
-	matcher, err := globalGeoIPContainer.Add(geoip)
-	if err != nil {
-		return nil, err
-	}
-
-	return matcher, nil
 }

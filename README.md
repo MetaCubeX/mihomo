@@ -67,16 +67,16 @@ script:
     privacy: '"analytics" in host or "adservice" in host or "firebase" in host or "safebrowsing" in host or "doubleclick" in host'
 
 rules:
-  # network condition for all rules
+  # rule SCRIPT
+  - SCRIPT,quic,REJECT # Disable QUIC, same as rule "DST-PORT,443,REJECT,udp"
+  - SCRIPT,privacy,REJECT
+    
+  # network(tcp/udp) condition for all rules
   - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
   - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
     
   # multiport condition for rules SRC-PORT and DST-PORT
   - DST-PORT,123/136/137-139,DIRECT,udp
-  
-  # rule SCRIPT
-  - SCRIPT,quic,REJECT # Disable QUIC, same as rule "- DST-PORT,443,REJECT,udp"
-  - SCRIPT,privacy,REJECT
   
   # rule GEOSITE
   - GEOSITE,category-ads-all,REJECT
@@ -106,7 +106,7 @@ Script enables users to programmatically select a policy for the packets with mo
 mode: script
 
 rules:
-  # the rule GEOSITE just as a rule provider in script mode
+  # the rule GEOSITE just as a rule provider in mode script
   - GEOSITE,category-ads-all,Whatever
   - GEOSITE,youtube,Whatever
   - GEOSITE,geolocation-cn,Whatever
@@ -138,7 +138,7 @@ script:
 
       if ctx.rule_providers["geosite:geolocation-cn"].match(metadata):
         ctx.log('[Script] domain %s matched geolocation-cn' % host)
-        return "CN"
+        return "DIRECT"
     
       ip = metadata["dst_ip"] 
       if host != "":
@@ -153,23 +153,23 @@ script:
       return "Proxy" # default policy for requests which are not matched by any other script
 ```
 the context and metadata
-```python
+```ts
 interface Metadata {
-type: string // socks5、http
-network: string // tcp
-host: string
-process_name: string
-src_ip: string
-src_port: int
-dst_ip: string
-dst_port: int
+  type: string // socks5、http
+  network: string // tcp
+  host: string
+  process_name: string
+  src_ip: string
+  src_port: int
+  dst_ip: string
+  dst_port: int
 }
 
 interface Context {
-resolve_ip: (host: string) => string // ip string
-geoip: (ip: string) => string // country code
-log: (log: string) => void
-rule_providers: Record<string, { match: (metadata: Metadata) => boolean }>
+  resolve_ip: (host: string) => string // ip string
+  geoip: (ip: string) => string // country code
+  log: (log: string) => void
+  rule_providers: Record<string, { match: (metadata: Metadata) => boolean }>
 }
 ```
 
@@ -219,7 +219,7 @@ Create user given name `clash`.
 Run Clash by user `clash` as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/clash.service:
-```shell
+```
 [Unit]
 Description=Clash daemon, A rule-based proxy in Go.
 After=network.target
@@ -246,7 +246,7 @@ $ systemctl start clash
 ```
 
 ### Display Process name
-Add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
+Clash add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
 
 To display process name in GUI please use https://yaling888.github.io/yacd/.
 

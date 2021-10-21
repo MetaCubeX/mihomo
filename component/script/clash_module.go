@@ -1,10 +1,6 @@
 package script
 
 /*
-#cgo pkg-config: python3-embed
-//#cgo pkg-config: python3
-//#cgo LDFLAGS: -lpython3
-
 #include "clash_module.h"
 
 extern const char *resolveIPCallbackFn(const char *host);
@@ -42,6 +38,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -88,6 +85,7 @@ func Py_Initialize(path string) error {
 		C.finalize_Python()
 	}
 
+	path = strings.ReplaceAll(path, "\\", "/")
 	cPath := C.CString(path)
 	//defer C.free(unsafe.Pointer(cPath))
 
@@ -182,6 +180,15 @@ func LoadShortcutFunction(shortcut string) (*PyObject, error) {
 	return togo(fnc), nil
 }
 
+func LoadMainFunction() error {
+	C.load_main_func()
+	err := PyLastError()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 //CallPyMainFunction call python script main function
 //return the proxy adapter name.
 func CallPyMainFunction(mtd *constant.Metadata) (string, error) {
@@ -226,7 +233,7 @@ func CallPyMainFunction(mtd *constant.Metadata) (string, error) {
 		err := PyLastError()
 		if err != nil {
 			log.Errorln("[Script] script code error: %s", err.Error())
-			syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			killSelf()
 			return "", fmt.Errorf("script code error: %w", err)
 		} else {
 			return "", fmt.Errorf("script code error, result: %v", rs)
@@ -281,7 +288,7 @@ func CallPyShortcut(fn *PyObject, mtd *constant.Metadata) (bool, error) {
 		err := PyLastError()
 		if err != nil {
 			log.Errorln("[Script] script shortcut code error: %s", err.Error())
-			syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			killSelf()
 			return false, fmt.Errorf("script shortcut code error: %w", err)
 		} else {
 			return false, fmt.Errorf("script shortcut code error: result: %d", rs)
@@ -318,4 +325,15 @@ func NewClashPyContext(ruleProvidersName []string) error {
 	}
 
 	return nil
+}
+
+func killSelf() {
+	p, err := os.FindProcess(os.Getpid())
+
+	if err != nil {
+		os.Exit(int(syscall.SIGINT))
+		return
+	}
+
+	p.Signal(syscall.SIGINT)
 }
