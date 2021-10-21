@@ -75,8 +75,7 @@ func hijackTCPDns(conn net.Conn) {
 	}()
 }
 
-type dnsHandler struct {
-}
+type dnsHandler struct{}
 
 func NewDnsHandler() golwip.DnsHandler {
 	return &dnsHandler{}

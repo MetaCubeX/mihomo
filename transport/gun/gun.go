@@ -27,12 +27,10 @@ var (
 	ErrSmallBuffer   = errors.New("buffer too small")
 )
 
-var (
-	defaultHeader = http.Header{
-		"content-type": []string{"application/grpc"},
-		"user-agent":   []string{"grpc-go/1.36.0"},
-	}
-)
+var defaultHeader = http.Header{
+	"content-type": []string{"application/grpc"},
+	"user-agent":   []string{"grpc-go/1.36.0"},
+}
 
 type DialFn = func(network, addr string) (net.Conn, error)
 

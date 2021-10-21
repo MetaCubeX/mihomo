@@ -28,6 +28,7 @@ type websocketConn struct {
 	rMux sync.Mutex
 	wMux sync.Mutex
 }
+
 type websocketWithEarlyDataConn struct {
 	net.Conn
 	underlay net.Conn
@@ -44,8 +45,7 @@ type WebsocketConfig struct {
 	Path                string
 	Headers             http.Header
 	TLS                 bool
-	SkipCertVerify      bool
-	ServerName          string
+	TLSConfig           *tls.Config
 	MaxEarlyData        int
 	EarlyDataHeaderName string
 }
@@ -253,17 +253,7 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 	scheme := "ws"
 	if c.TLS {
 		scheme = "wss"
-		dialer.TLSClientConfig = &tls.Config{
-			ServerName:         c.Host,
-			InsecureSkipVerify: c.SkipCertVerify,
-			NextProtos:         []string{"http/1.1"},
-		}
-
-		if c.ServerName != "" {
-			dialer.TLSClientConfig.ServerName = c.ServerName
-		} else if host := c.Headers.Get("Host"); host != "" {
-			dialer.TLSClientConfig.ServerName = host
-		}
+		dialer.TLSClientConfig = c.TLSConfig
 	}
 
 	uri := url.URL{

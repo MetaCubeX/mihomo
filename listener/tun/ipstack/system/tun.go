@@ -26,7 +26,6 @@ type systemAdapter struct {
 }
 
 func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror string, onStop func(), tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.TunAdapter, error) {
-
 	adapter := &systemAdapter{
 		device:    device,
 		stackName: conf.Stack,
@@ -36,8 +35,6 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror 
 
 	adapter.lock.Lock()
 	defer adapter.lock.Unlock()
-
-	//adapter.stopLocked()
 
 	dnsHost, dnsPort, err := net.SplitHostPort(conf.DNSListen)
 	if err != nil {

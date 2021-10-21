@@ -48,8 +48,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 		DstIP:   dst.IP,
 		SrcPort: strconv.Itoa(src.Port),
 		DstPort: strconv.Itoa(dst.Port),
-		//AddrType: addrType,
-		Host: "",
+		Host:    "",
 	}
 
 	go func(conn net.Conn, metadata *C.Metadata) {
