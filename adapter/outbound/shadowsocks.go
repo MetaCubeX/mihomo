@@ -87,9 +87,9 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (_
 	return NewConn(c, ss), err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (ss *ShadowSocks) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := dialer.ListenPacket(context.Background(), "udp", "")
+// ListenPacketContext implements C.ProxyAdapter
+func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+	pc, err := dialer.ListenPacket(ctx, "udp", "")
 	if err != nil {
 		return nil, err
 	}

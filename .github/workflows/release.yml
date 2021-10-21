@@ -1,9 +1,7 @@
-name: Go
+name: Release
 on: [push]
 jobs:
-
   build:
-    name: Build
     runs-on: ubuntu-latest
     steps:
       - name: Get latest go version
@@ -27,7 +25,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Get dependencies, run test and static check
+      - name: Get dependencies, run test
         run: |
           # fetch python cross compile source files
           mkdir -p bin/python/
@@ -50,9 +48,6 @@ jobs:
           cd ../../
 
           go test ./...
-          go vet ./...
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck -- $(go list ./...)
 
           # init xgo
           docker pull techknowlogick/xgo:latest

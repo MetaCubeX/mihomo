@@ -76,6 +76,9 @@ all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 
 releases: $(gz_releases) $(zip_releases)
 
+lint:
+	golangci-lint run --build-tags=build_local --disable-all -E govet -E gofumpt -E megacheck ./...
+
 clean:
 	rm -rf $(BINDIR)/
 	mkdir -p $(BINDIR)

@@ -1,8 +1,6 @@
 package dialer
 
-var (
-	DefaultOptions []Option
-)
+var DefaultOptions []Option
 
 type config struct {
 	skipDefault   bool

@@ -1,6 +1,7 @@
 package obfs
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 
@@ -26,12 +27,22 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	}
 
 	config := &vmess.WebsocketConfig{
-		Host:           option.Host,
-		Port:           option.Port,
-		Path:           option.Path,
-		TLS:            option.TLS,
-		Headers:        header,
-		SkipCertVerify: option.SkipCertVerify,
+		Host:    option.Host,
+		Port:    option.Port,
+		Path:    option.Path,
+		Headers: header,
+	}
+
+	if option.TLS {
+		config.TLS = true
+		config.TLSConfig = &tls.Config{
+			ServerName:         option.Host,
+			InsecureSkipVerify: option.SkipCertVerify,
+			NextProtos:         []string{"http/1.1"},
+		}
+		if host := config.Headers.Get("Host"); host != "" {
+			config.TLSConfig.ServerName = host
+		}
 	}
 
 	var err error

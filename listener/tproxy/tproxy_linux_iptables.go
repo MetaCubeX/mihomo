@@ -109,7 +109,6 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 }
 
 func CleanUpTProxyLinuxIPTables() {
-
 	if interfaceName == "" || tproxyPort == 0 || dnsPort == 0 {
 		return
 	}
@@ -125,7 +124,6 @@ func CleanUpTProxyLinuxIPTables() {
 	execCmd(fmt.Sprintf("ip -f inet route del local default dev %s table %s", interfaceName, PROXY_ROUTE_TABLE))
 
 	// clean FORWARD
-	//execCmd("sysctl -w net.ipv4.ip_forward=0")
 	execCmd(fmt.Sprintf("iptables -t filter -D FORWARD -i %s ! -o %s -j ACCEPT", interfaceName, interfaceName))
 	execCmd(fmt.Sprintf("iptables -t filter -D FORWARD -i %s -o %s -j ACCEPT", interfaceName, interfaceName))
 	execCmd(fmt.Sprintf("iptables -t filter -D FORWARD -o %s -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT", interfaceName))

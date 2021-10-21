@@ -53,6 +53,7 @@ func (alloc *Allocator) Put(buf []byte) error {
 	}
 
 	//lint:ignore SA6002 ignore temporarily
+	//nolint
 	alloc.buffers[bits].Put(buf)
 	return nil
 }

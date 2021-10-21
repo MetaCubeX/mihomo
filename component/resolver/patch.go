@@ -2,9 +2,7 @@ package resolver
 
 import D "github.com/miekg/dns"
 
-var (
-	DefaultLocalServer LocalServer
-)
+var DefaultLocalServer LocalServer
 
 type LocalServer interface {
 	ServeMsg(msg *D.Msg) (*D.Msg, error)

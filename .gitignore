@@ -12,7 +12,7 @@ bin/*
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# dep
+# go mod vendor
 vendor
 
 # GoLand
@@ -20,3 +20,6 @@ vendor
 
 # macOS file
 .DS_Store
+
+# test suite
+test/config/cache*
