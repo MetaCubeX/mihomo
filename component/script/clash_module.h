@@ -29,7 +29,7 @@ void set_log_callback(log_callback cb);
 /*---------------------------------------------------------------*/
 
 void append_inittab();
-void init_python(const char *path);
+void init_python(const char *program, const char *path);
 void load_main_func();
 void finalize_Python();
 void py_clear(PyObject *obj);

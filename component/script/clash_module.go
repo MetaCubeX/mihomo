@@ -74,7 +74,7 @@ func (pyObject *PyObject) Clear() {
 }
 
 // Py_Initialize initialize Python3
-func Py_Initialize(path string) error {
+func Py_Initialize(program string, path string) error {
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -89,8 +89,7 @@ func Py_Initialize(path string) error {
 	cPath := C.CString(path)
 	//defer C.free(unsafe.Pointer(cPath))
 
-	C.init_python(cPath)
-	//C.Py_Initialize()
+	C.init_python(C.CString(program), cPath)
 	err := PyLastError()
 
 	if err != nil {
@@ -129,17 +128,10 @@ func Py_Finalize() {
 	}
 }
 
+//Py_GetVersion get
 func Py_GetVersion() string {
 	cversion := C.Py_GetVersion()
-	return C.GoString(cversion)
-}
-
-func PyRun_SimpleString(command string) int {
-	ccommand := C.CString(command)
-	defer C.free(unsafe.Pointer(ccommand))
-
-	// C.PyRun_SimpleString is a macro, using C.PyRun_SimpleStringFlags instead
-	return int(C.PyRun_SimpleStringFlags(ccommand, nil))
+	return strings.Split(C.GoString(cversion), "\n")[0]
 }
 
 // loadPyFunc loads a Python function by module and function name
@@ -311,13 +303,19 @@ func initPython3Callback() {
 
 //NewClashPyContext new clash context for python
 func NewClashPyContext(ruleProvidersName []string) error {
-	cStringArr := make([]*C.char, len(ruleProvidersName))
+	length := len(ruleProvidersName)
+	cStringArr := make([]*C.char, length)
 	for i, v := range ruleProvidersName {
 		cStringArr[i] = C.CString(v)
 		defer C.free(unsafe.Pointer(cStringArr[i]))
 	}
 
-	rs := int(C.new_clash_py_context((**C.char)(unsafe.Pointer(&cStringArr[0])), C.int(len(ruleProvidersName))))
+	cArrPointer := unsafe.Pointer(nil)
+	if length > 0 {
+		cArrPointer = unsafe.Pointer(&cStringArr[0])
+	}
+
+	rs := int(C.new_clash_py_context((**C.char)(cArrPointer), C.int(length)))
 
 	if rs == 0 {
 		err := PyLastError()
@@ -335,5 +333,5 @@ func killSelf() {
 		return
 	}
 
-	p.Signal(syscall.SIGINT)
+	_ = p.Signal(syscall.SIGINT)
 }

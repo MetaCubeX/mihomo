@@ -46,17 +46,14 @@ func NewUDPHandler(dnsIP net.IP, udpIn chan<- *inbound.PacketAdapter) golwip.UDP
 	return &udpHandler{dnsIP, udpIn}
 }
 
-func (h *udpHandler) Connect(conn golwip.UDPConn, target *net.UDPAddr) error {
+func (h *udpHandler) Connect(golwip.UDPConn, *net.UDPAddr) error {
 	return nil
 }
 
 func (h *udpHandler) ReceiveTo(conn golwip.UDPConn, data []byte, addr *net.UDPAddr) error {
 	if shouldHijackDns(h.dnsIP, addr.IP, addr.Port) {
 		hijackUDPDns(conn, data, addr)
-
-		if log.Level() == log.DEBUG {
-			log.Debugln("[TUN] hijack dns udp: %s:%d", addr.IP.String(), addr.Port)
-		}
+		log.Debugln("[TUN] hijack dns udp: %s:%d", addr.IP.String(), addr.Port)
 		return nil
 	}
 
