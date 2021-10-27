@@ -27,6 +27,10 @@ jobs:
 
       - name: Get dependencies, run test
         run: |
+          # install python3.9
+          sudo add-apt-repository -y ppa:deadsnakes/ppa
+          sudo apt install -y python3.9 python3.9-dev
+
           # fetch python cross compile source files
           mkdir -p bin/python/
           cd bin/python/
@@ -34,20 +38,21 @@ jobs:
           curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-darwin-arm64.tar.xz
           curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-windows-amd64.tar.xz
           curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-windows-386.tar.xz
-          curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-linux-amd64.tar.xz
-          curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-linux-arm64.tar.xz
+          #curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-linux-amd64.tar.xz
+          #curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-linux-arm64.tar.xz
           #curl -LO https://raw.githubusercontent.com/yaling888/snack/main/python-3.9.7-linux-386.tar.xz
           tar -Jxf python-3.9.7-darwin-amd64.tar.xz
           tar -Jxf python-3.9.7-darwin-arm64.tar.xz
           tar -Jxf python-3.9.7-windows-amd64.tar.xz
           tar -Jxf python-3.9.7-windows-386.tar.xz
-          tar -Jxf python-3.9.7-linux-amd64.tar.xz
-          tar -Jxf python-3.9.7-linux-arm64.tar.xz
+          #tar -Jxf python-3.9.7-linux-amd64.tar.xz
+          #tar -Jxf python-3.9.7-linux-arm64.tar.xz
           #tar -Jxf python-3.9.7-linux-386.tar.xz
           rm python-3.9.7-*.tar.xz
           cd ../../
 
-          go test ./...
+          # go test
+          go test -tags build_local ./...
 
           # init xgo
           docker pull techknowlogick/xgo:latest
@@ -66,6 +71,7 @@ jobs:
           BINDIR: bin
         run: |
           make -j releases
+          #ls -lahF bin/python/
 
       - name: Prepare upload
         if: startsWith(github.ref, 'refs/tags/') == false

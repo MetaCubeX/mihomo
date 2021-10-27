@@ -85,13 +85,25 @@ func ruleProviderCallbackFn(cProviderName *C.char, cMetadata *C.struct_Metadata)
 	dstIp := C.GoString(cMetadata.dst_ip)
 	dstPort := strconv.Itoa(int(cMetadata.dst_port))
 
+	dst := net.ParseIP(dstIp)
+	addrType := constant.AtypDomainName
+
+	if dst != nil {
+		if dst.To4() != nil {
+			addrType = constant.AtypIPv4
+		} else {
+			addrType = constant.AtypIPv6
+		}
+	}
+
 	metadata := &constant.Metadata{
-		Process: processName,
-		SrcIP:   net.ParseIP(srcIp),
-		DstIP:   net.ParseIP(dstIp),
-		SrcPort: srcPort,
-		DstPort: dstPort,
-		Host:    host,
+		Process:  processName,
+		SrcIP:    net.ParseIP(srcIp),
+		DstIP:    dst,
+		SrcPort:  srcPort,
+		DstPort:  dstPort,
+		AddrType: addrType,
+		Host:     host,
 	}
 
 	providerName := C.GoString(cProviderName)

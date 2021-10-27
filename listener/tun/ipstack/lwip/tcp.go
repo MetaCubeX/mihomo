@@ -22,10 +22,7 @@ func NewTCPHandler(dnsIP net.IP, tcpIn chan<- C.ConnContext) golwip.TCPConnHandl
 func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	if shouldHijackDns(h.dnsIP, target.IP, target.Port) {
 		hijackTCPDns(conn)
-
-		if log.Level() == log.DEBUG {
-			log.Debugln("[TUN] hijack dns tcp: %s:%d", target.IP.String(), target.Port)
-		}
+		log.Debugln("[TUN] hijack dns tcp: %s:%d", target.IP.String(), target.Port)
 		return nil
 	}
 
@@ -36,22 +33,27 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 
 	src, _ := conn.LocalAddr().(*net.TCPAddr)
 	dst, _ := conn.RemoteAddr().(*net.TCPAddr)
-	//addrType := C.AtypIPv4
-	//if dst.IP.To4() == nil {
-	//	addrType = C.AtypIPv6
-	//}
+
+	addrType := C.AtypIPv4
+	if dst.IP.To4() == nil {
+		addrType = C.AtypIPv6
+	}
 
 	metadata := &C.Metadata{
-		NetWork: C.TCP,
-		Type:    C.TUN,
-		SrcIP:   src.IP,
-		DstIP:   dst.IP,
-		SrcPort: strconv.Itoa(src.Port),
-		DstPort: strconv.Itoa(dst.Port),
-		Host:    "",
+		NetWork:  C.TCP,
+		Type:     C.TUN,
+		SrcIP:    src.IP,
+		DstIP:    dst.IP,
+		SrcPort:  strconv.Itoa(src.Port),
+		DstPort:  strconv.Itoa(dst.Port),
+		AddrType: addrType,
+		Host:     "",
 	}
 
 	go func(conn net.Conn, metadata *C.Metadata) {
+		//if c, ok := conn.(*net.TCPConn); ok {
+		//	c.SetKeepAlive(true)
+		//}
 		h.tcpIn <- context.NewConnContext(conn, metadata)
 	}(conn, metadata)
 

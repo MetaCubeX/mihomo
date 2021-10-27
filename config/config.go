@@ -365,10 +365,10 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 	}
 
-	for _, provider := range providersMap {
-		log.Infoln("Start initial provider %s", provider.Name())
-		if err := provider.Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", provider.Name(), err)
+	for _, rp := range providersMap {
+		log.Infoln("Start initial provider %s", rp.Name())
+		if err := rp.Initial(); err != nil {
+			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", rp.Name(), err)
 		}
 	}
 
@@ -474,7 +474,7 @@ time = ClashTime()
 		return fmt.Errorf("initialized script module failure, %s", err.Error())
 	}
 
-	if err = S.Py_Initialize(C.Path.ScriptDir()); err != nil {
+	if err = S.Py_Initialize(C.Path.GetExecutableFullPath(), C.Path.ScriptDir()); err != nil {
 		return fmt.Errorf("initialized script module failure, %s", err.Error())
 	} else if mode == T.Script {
 		if err = S.LoadMainFunction(); err != nil {
@@ -482,7 +482,7 @@ time = ClashTime()
 		}
 	}
 
-	log.Infoln("Start initial script module successful")
+	log.Infoln("Start initial script module successful, version: %s", S.Py_GetVersion())
 
 	return nil
 }
@@ -561,7 +561,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		if err != nil {
 			return nil, nil, err
 		} else {
-			log.Infoln("Start initial script context successful")
+			log.Infoln("Start initial script context successful, provider records: %v", len(providerNames))
 		}
 	}
 
@@ -582,7 +582,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 			if ip == nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
-			tree.Insert(domain, ip)
+			_ = tree.Insert(domain, ip)
 		}
 	}
 
@@ -740,7 +740,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New()
 			for _, domain := range cfg.FakeIPFilter {
-				host.Insert(domain, true)
+				_ = host.Insert(domain, true)
 			}
 		}
 

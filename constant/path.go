@@ -80,7 +80,7 @@ func (p *path) ScriptDir() string {
 		p.scriptDir = dir
 	} else {
 		p.scriptDir = P.Join(os.TempDir(), Name)
-		os.MkdirAll(p.scriptDir, 0o644)
+		_ = os.MkdirAll(p.scriptDir, 0o644)
 	}
 	return p.scriptDir
 }
@@ -91,4 +91,13 @@ func (p *path) Script() string {
 
 func (p *path) GetAssetLocation(file string) string {
 	return P.Join(p.homeDir, file)
+}
+
+func (p *path) GetExecutableFullPath() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "clash"
+	}
+	res, _ := filepath.EvalSymlinks(exePath)
+	return res
 }

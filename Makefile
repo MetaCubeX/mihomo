@@ -18,8 +18,8 @@ STATIC_LDFLAGS='-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
-	linux-amd64 \
-	linux-arm64
+	linux-amd64
+#	linux-arm64
 #	linux-386
 
 WINDOWS_ARCH_LIST = \
@@ -44,7 +44,8 @@ linux-386:
 	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(STATIC_LDFLAGS) -targets=linux/386 $(BUILD_PACKAGE)
 
 linux-amd64:
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags $(STATIC_LDFLAGS) -o $(BINDIR)/$(NAME)-$@
+	$(GOBUILD) -ldflags $(RELEASE_LDFLAGS) -o $(BINDIR)/$(NAME)-$@
+	#GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags $(RELEASE_LDFLAGS) -o $(BINDIR)/$(NAME)-$@
 	#$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(STATIC_LDFLAGS) -targets=linux/amd64 $(BUILD_PACKAGE)
 
 linux-arm64:
@@ -75,6 +76,9 @@ $(zip_releases): %.zip : %
 all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 
 releases: $(gz_releases) $(zip_releases)
+
+vet:
+	$(GOCMD) vet -tags build_local ./...
 
 lint:
 	golangci-lint run --build-tags=build_local --disable-all -E govet -E gofumpt -E megacheck ./...

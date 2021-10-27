@@ -8,22 +8,29 @@ PyObject *main_fn;
 PyObject *clash_context;
 
 // init_python
-void init_python(const char *path) {
+void init_python(const char *program, const char *path) {
+
+//    Py_NoSiteFlag = 1;
+//    Py_FrozenFlag = 1;
+//    Py_IgnoreEnvironmentFlag = 1;
+//    Py_IsolatedFlag = 1;
 
     append_inittab();
 
-    Py_Initialize();
-
-    wchar_t *program = Py_DecodeLocale("clash", NULL);
-    if (program != NULL) {
-        Py_SetProgramName(program);
-        PyMem_RawFree(program);
+    wchar_t *programName = Py_DecodeLocale(program, NULL);
+    if (programName != NULL) {
+        Py_SetProgramName(programName);
+        PyMem_RawFree(programName);
     }
 
 //    wchar_t *newPath = Py_DecodeLocale(path, NULL);
 //    if (newPath != NULL) {
 //        Py_SetPath(newPath);
+//        PyMem_RawFree(newPath);
 //    }
+
+//    Py_Initialize();
+    Py_InitializeEx(0);
 
     char *pathPrefix = "import sys; sys.path.append('";
     char *pathSuffix = "')";
