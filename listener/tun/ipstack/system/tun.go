@@ -26,7 +26,6 @@ type systemAdapter struct {
 }
 
 func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror string, onStop func(), tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.TunAdapter, error) {
-
 	adapter := &systemAdapter{
 		device:    device,
 		stackName: conf.Stack,
@@ -36,8 +35,6 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror 
 
 	adapter.lock.Lock()
 	defer adapter.lock.Unlock()
-
-	//adapter.stopLocked()
 
 	dnsHost, dnsPort, err := net.SplitHostPort(conf.DNSListen)
 	if err != nil {
@@ -63,10 +60,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror 
 	t.SetTCPHandler(func(conn net.Conn, endpoint *binding.Endpoint) {
 		if shouldHijackDns(dnsAddr, endpoint.Target) {
 			hijackTCPDns(conn)
-
-			if log.Level() == log.DEBUG {
-				log.Debugln("[TUN] hijack dns tcp: %s:%d", endpoint.Target.IP.String(), endpoint.Target.Port)
-			}
+			log.Debugln("[TUN] hijack dns tcp: %s:%d", endpoint.Target.IP.String(), endpoint.Target.Port)
 			return
 		}
 
@@ -75,10 +69,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror 
 	t.SetUDPHandler(func(payload []byte, endpoint *binding.Endpoint, sender redirect.UDPSender) {
 		if shouldHijackDns(dnsAddr, endpoint.Target) {
 			hijackUDPDns(payload, endpoint, sender)
-
-			if log.Level() == log.DEBUG {
-				log.Debugln("[TUN] hijack dns udp: %s:%d", endpoint.Target.IP.String(), endpoint.Target.Port)
-			}
+			log.Debugln("[TUN] hijack dns udp: %s:%d", endpoint.Target.IP.String(), endpoint.Target.Port)
 			return
 		}
 

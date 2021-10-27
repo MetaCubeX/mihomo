@@ -73,7 +73,6 @@ func (e *dnsEndpoint) Close() {
 }
 
 func (e *dnsEndpoint) Wait() {
-
 }
 
 func (e *dnsEndpoint) HandleError(transErr stack.TransportError, pkt *stack.PacketBuffer) {
@@ -102,13 +101,16 @@ func (w *dnsResponseWriter) WriteMsg(msg *D.Msg) error {
 	_, err = w.Write(b)
 	return err
 }
+
 func (w *dnsResponseWriter) TsigStatus() error {
 	// Unsupported
 	return nil
 }
+
 func (w *dnsResponseWriter) TsigTimersOnly(bool) {
 	// Unsupported
 }
+
 func (w *dnsResponseWriter) Hijack() {
 	// Unsupported
 }
@@ -128,7 +130,6 @@ func (w *dnsResponseWriter) Close() error {
 
 // CreateDNSServer create a dns server on given netstack
 func CreateDNSServer(s *stack.Stack, resolver *dns.Resolver, mapper *dns.ResolverEnhancer, ip net.IP, port int, nicID tcpip.NICID) (*DNSServer, error) {
-
 	var v4 bool
 	var err error
 

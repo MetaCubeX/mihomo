@@ -2,7 +2,7 @@ package memconservative
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -54,7 +54,7 @@ func (g GeoIPCache) Unmarshal(filename, code string) (*router.GeoIP, error) {
 	case errFailedToReadBytes, errFailedToReadExpectedLenBytes,
 		errInvalidGeodataFile, errInvalidGeodataVarintLength:
 		log.Warnln("failed to decode geoip file: %s%s", filename, ", fallback to the original ReadFile method")
-		geoipBytes, err = ioutil.ReadFile(asset)
+		geoipBytes, err = os.ReadFile(asset)
 		if err != nil {
 			return nil, err
 		}
@@ -119,7 +119,7 @@ func (g GeoSiteCache) Unmarshal(filename, code string) (*router.GeoSite, error) 
 	case errFailedToReadBytes, errFailedToReadExpectedLenBytes,
 		errInvalidGeodataFile, errInvalidGeodataVarintLength:
 		log.Warnln("failed to decode geoip file: %s%s", filename, ", fallback to the original ReadFile method")
-		geositeBytes, err = ioutil.ReadFile(asset)
+		geositeBytes, err = os.ReadFile(asset)
 		if err != nil {
 			return nil, err
 		}

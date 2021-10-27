@@ -34,8 +34,6 @@ var (
 	udpTimeout = 60 * time.Second
 
 	preProcessCacheFinder, _ = R.NewProcess("", "", nil)
-
-	tunBroadcastAddr = net.IPv4(198, 18, 255, 255)
 )
 
 func init() {
@@ -143,7 +141,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
 			}
-		} else if resolver.IsFakeIP(metadata.DstIP) && !tunBroadcastAddr.Equal(metadata.DstIP) {
+		} else if resolver.IsFakeIP(metadata.DstIP) && !C.TunBroadcastAddr.Equal(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}
@@ -235,7 +233,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		switch true {
 		case rule != nil:
-			log.Infoln("[UDP] %s(%s) --> %s:%s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
+			log.Infoln("[UDP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
 		case mode == Global:
 			log.Infoln("[UDP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 		case mode == Direct:
@@ -285,7 +283,7 @@ func handleTCPConn(ctx C.ConnContext) {
 
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s(%s) --> %s:%s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), metadata.DstPort, rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
 	case mode == Global:
 		log.Infoln("[TCP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 	case mode == Direct:

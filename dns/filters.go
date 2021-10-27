@@ -2,15 +2,12 @@ package dns
 
 import (
 	"net"
+	"strings"
 
+	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/rule/geodata"
-	"github.com/Dreamacro/clash/rule/geodata/router"
-	_ "github.com/Dreamacro/clash/rule/geodata/standard"
+	C "github.com/Dreamacro/clash/constant"
 )
-
-var multiGeoIPMatcher *router.MultiGeoIPMatcher
 
 type fallbackIPFilter interface {
 	Match(net.IP) bool
@@ -21,49 +18,8 @@ type geoipFilter struct {
 }
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
-	if multiGeoIPMatcher == nil {
-		countryCode := gf.code
-		countryCodePrivate := "private"
-		geoLoader, err := geodata.GetGeoDataLoader("standard")
-		if err != nil {
-			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
-			return false
-		}
-
-		recordsCN, err := geoLoader.LoadGeoIP(countryCode)
-		if err != nil {
-			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
-			return false
-		}
-
-		recordsPrivate, err := geoLoader.LoadGeoIP(countryCodePrivate)
-		if err != nil {
-			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
-			return false
-		}
-
-		geoips := []*router.GeoIP{
-			{
-				CountryCode:  countryCode,
-				Cidr:         recordsCN,
-				ReverseMatch: false,
-			},
-			{
-				CountryCode:  countryCodePrivate,
-				Cidr:         recordsPrivate,
-				ReverseMatch: false,
-			},
-		}
-
-		multiGeoIPMatcher, err = router.NewMultiGeoIPMatcher(geoips)
-
-		if err != nil {
-			log.Errorln("[GeoIPFilter] NewMultiGeoIPMatcher error: %s", err.Error())
-			return false
-		}
-	}
-
-	return !multiGeoIPMatcher.ApplyIp(ip)
+	record, _ := mmdb.Instance().Country(ip)
+	return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate() && !ip.Equal(C.TunBroadcastAddr)
 }
 
 type ipnetFilter struct {

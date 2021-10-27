@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 
 	"github.com/gofrs/uuid"
@@ -87,7 +86,7 @@ func (vc *Conn) recvResponse() error {
 
 	length := int64(buf[0])
 	if length != 0 { // addon data length > 0
-		io.CopyN(ioutil.Discard, vc.Conn, length) // just discard
+		io.CopyN(io.Discard, vc.Conn, length) // just discard
 	}
 
 	return nil
