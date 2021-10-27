@@ -1,22 +1,17 @@
 package rules
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/Dreamacro/clash/component/mmdb"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/rule/geodata"
-	"github.com/Dreamacro/clash/rule/geodata/router"
-	_ "github.com/Dreamacro/clash/rule/geodata/standard"
 )
 
 type GEOIP struct {
-	country      string
-	adapter      string
-	noResolveIP  bool
-	ruleExtra    *C.RuleExtra
-	geoIPMatcher *router.GeoIPMatcher
+	country     string
+	adapter     string
+	noResolveIP bool
+	ruleExtra   *C.RuleExtra
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -29,10 +24,11 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 		return false
 	}
 
-	if strings.EqualFold(g.country, "LAN") {
+	if strings.EqualFold(g.country, "LAN") || C.TunBroadcastAddr.Equal(ip) {
 		return ip.IsPrivate()
 	}
-	return g.geoIPMatcher.Match(ip)
+	record, _ := mmdb.Instance().Country(ip)
+	return strings.EqualFold(record.Country.IsoCode, g.country)
 }
 
 func (g *GEOIP) Adapter() string {
@@ -51,39 +47,16 @@ func (g *GEOIP) RuleExtra() *C.RuleExtra {
 	return g.ruleExtra
 }
 
+func (g *GEOIP) GetCountry() string {
+	return g.country
+}
+
 func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.RuleExtra) (*GEOIP, error) {
-	geoLoaderName := "standard"
-	//geoLoaderName := "memconservative"
-	geoLoader, err := geodata.GetGeoDataLoader(geoLoaderName)
-	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
-	}
-
-	records, err := geoLoader.LoadGeoIP(strings.ReplaceAll(country, "!", ""))
-	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
-	}
-
-	geoIP := &router.GeoIP{
-		CountryCode:  country,
-		Cidr:         records,
-		ReverseMatch: strings.Contains(country, "!"),
-	}
-
-	geoIPMatcher, err := router.NewGeoIPMatcher(geoIP)
-
-	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
-	}
-
-	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, len(records))
-
 	geoip := &GEOIP{
-		country:      country,
-		adapter:      adapter,
-		noResolveIP:  noResolveIP,
-		ruleExtra:    ruleExtra,
-		geoIPMatcher: geoIPMatcher,
+		country:     country,
+		adapter:     adapter,
+		noResolveIP: noResolveIP,
+		ruleExtra:   ruleExtra,
 	}
 
 	return geoip, nil

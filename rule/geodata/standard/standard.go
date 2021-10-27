@@ -2,7 +2,7 @@ package standard
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -19,7 +19,7 @@ func ReadFile(path string) ([]byte, error) {
 	}
 	defer reader.Close()
 
-	return ioutil.ReadAll(reader)
+	return io.ReadAll(reader)
 }
 
 func ReadAsset(file string) ([]byte, error) {

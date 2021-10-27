@@ -1,5 +1,7 @@
 package constant
 
+import "net"
+
 // Rule Type
 const (
 	Domain RuleType = iota
@@ -54,3 +56,5 @@ type Rule interface {
 	ShouldResolveIP() bool
 	RuleExtra() *RuleExtra
 }
+
+var TunBroadcastAddr = net.IPv4(198, 18, 255, 255)
