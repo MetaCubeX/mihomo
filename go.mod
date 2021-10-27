@@ -16,6 +16,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
+	go.uber.org/automaxprocs v1.4.0
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 	golang.org/x/net v0.0.0-20210903162142-ad29c8ab022f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
