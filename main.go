@@ -46,7 +46,7 @@ func init() {
 }
 
 func main() {
-	maxprocs.Set(maxprocs.Logger(func(string, ...interface{}) {}))
+	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...interface{}) {}))
 	if version {
 		fmt.Printf("Clash Plus Pro %s %s %s with %s %s\n", C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
 		return
