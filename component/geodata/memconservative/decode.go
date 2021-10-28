@@ -74,13 +74,13 @@ Loop:
 			if strings.EqualFold(string(container), code) {
 				count++
 				offset := -(1 + int64(varintLenByteLen) + int64(codeVarintLength))
-				f.Seek(offset, 1)               // back to the start of GeoIP or GeoSite varint
+				_, _ = f.Seek(offset, 1)        // back to the start of GeoIP or GeoSite varint
 				advancedN = geoDataVarintLength // the number of bytes to be read in next round
 			} else {
 				count = 1
 				offset := int64(geoDataVarintLength) - int64(codeVarintLength) - int64(varintLenByteLen) - 1
-				f.Seek(offset, 1) // skip the unmatched GeoIP or GeoSite varint
-				advancedN = 1     // the next round will be the start of another GeoIPList or GeoSiteList
+				_, _ = f.Seek(offset, 1) // skip the unmatched GeoIP or GeoSite varint
+				advancedN = 1            // the next round will be the start of another GeoIPList or GeoSiteList
 			}
 		case 6: // matched GeoIP or GeoSite varint
 			result = container
@@ -95,7 +95,9 @@ func Decode(filename, code string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
 	geoBytes, err := emitBytes(f, code)
 	if err != nil {

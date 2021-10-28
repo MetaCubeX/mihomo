@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/rule/geodata"
-	"github.com/Dreamacro/clash/rule/geodata/router"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -17,7 +17,9 @@ func ReadFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func(reader *os.File) {
+		_ = reader.Close()
+	}(reader)
 
 	return io.ReadAll(reader)
 }

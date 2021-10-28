@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Dreamacro/clash/rule/geodata/strmatcher"
+	"github.com/Dreamacro/clash/component/geodata/strmatcher"
 )
 
 var matcherTypeMap = map[Domain_Type]strmatcher.Type{
@@ -50,6 +50,7 @@ func NewMphMatcherGroup(domains []*Domain) (*DomainMatcher, error) {
 	}, nil
 }
 
+// NewDomainMatcher new domain matcher.
 func NewDomainMatcher(domains []*Domain) (*DomainMatcher, error) {
 	g := new(strmatcher.MatcherGroup)
 	for _, d := range domains {

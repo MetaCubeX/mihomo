@@ -315,9 +315,9 @@ func NewClashPyContext(ruleProvidersName []string) error {
 		cArrPointer = unsafe.Pointer(&cStringArr[0])
 	}
 
-	rs := int(C.new_clash_py_context((**C.char)(cArrPointer), C.int(length)))
+	rs := C.new_clash_py_context((**C.char)(cArrPointer), C.int(length))
 
-	if rs == 0 {
+	if int(rs) == 0 {
 		err := PyLastError()
 		return fmt.Errorf("new script module context failure: %s", err.Error())
 	}
