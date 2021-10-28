@@ -15,9 +15,10 @@ import (
 
 type client struct {
 	*D.Client
-	r    *Resolver
-	port string
-	host string
+	r     *Resolver
+	port  string
+	host  string
+	iface string
 }
 
 func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
@@ -45,7 +46,11 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		network = "tcp"
 	}
 
-	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port))
+	options := []dialer.Option{}
+	if c.iface != "" {
+		options = append(options, dialer.WithInterface(c.iface))
+	}
+	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
 	if err != nil {
 		return nil, err
 	}

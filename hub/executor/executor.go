@@ -2,7 +2,6 @@ package executor
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
@@ -31,15 +30,13 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 )
 
-var (
-	mux sync.Mutex
-)
+var mux sync.Mutex
 
 func readConfig(path string) ([]byte, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, err
 	}
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ func (sc *snellCipher) SaltSize() int { return 16 }
 func (sc *snellCipher) Encrypter(salt []byte) (cipher.AEAD, error) {
 	return sc.makeAEAD(snellKDF(sc.psk, salt, sc.KeySize()))
 }
+
 func (sc *snellCipher) Decrypter(salt []byte) (cipher.AEAD, error) {
 	return sc.makeAEAD(snellKDF(sc.psk, salt, sc.KeySize()))
 }
