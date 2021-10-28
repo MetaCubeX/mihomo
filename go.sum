@@ -570,8 +570,8 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499 h1:QHESTXtfgc1ABV+ArlbPVqUx9Ht5I0dDkYhxYoXFxNo=
 github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499/go.mod h1:5TB2+k58gx4A4g2Nf5miSHNDF6CuAzHKpWBooLAshTs=
-github.com/yaling888/go-lwip v0.0.0-20210928231210-94b50cb51cc1 h1:bhAo5qI3SrfsNP0/91NJ5Rl4cqauE4CeNRplsIuRZTE=
-github.com/yaling888/go-lwip v0.0.0-20210928231210-94b50cb51cc1/go.mod h1:Y+f95PkWh183q1oDJxdlxTHa2mpdHG5zvBhV0TUhhSY=
+github.com/yaling888/go-lwip v0.0.0-20211028052310-b19ac3bf89ed h1:hcrNxK6PNZwl2VJYZFe77pkOrcFjuxaAuCAiNOOI5+w=
+github.com/yaling888/go-lwip v0.0.0-20211028052310-b19ac3bf89ed/go.mod h1:Y+f95PkWh183q1oDJxdlxTHa2mpdHG5zvBhV0TUhhSY=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
