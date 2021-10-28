@@ -16,7 +16,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499
-	github.com/yaling888/go-lwip v0.0.0-20210928231210-94b50cb51cc1
+	github.com/yaling888/go-lwip v0.0.0-20211028052310-b19ac3bf89ed
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.4.0
