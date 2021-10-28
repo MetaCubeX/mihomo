@@ -1,9 +1,7 @@
-name: Go
+name: Release
 on: [push]
 jobs:
-
   build:
-    name: Build
     runs-on: ubuntu-latest
     steps:
       - name: Get latest go version
@@ -27,12 +25,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Get dependencies, run test and static check
+      - name: Get dependencies, run test
         run: |
           go test ./...
-          go vet ./...
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck -- $(go list ./...)
 
       - name: SSH connection to Actions
         uses: P3TERX/ssh2actions@v1.0.0
@@ -76,5 +71,6 @@ jobs:
         with:
           keep_latest: 1
           delete_tags: true
+          delete_tag_pattern: tun
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

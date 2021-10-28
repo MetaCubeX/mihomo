@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -43,11 +44,8 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 
 		if trusted {
 			if request.Method == http.MethodConnect {
-				resp = responseWith(200)
-				resp.Status = "Connection established"
-				resp.ContentLength = -1
-
-				if resp.Write(conn) != nil {
+				// Manual writing to support CONNECT for http 1.0 (workaround for uplay client)
+				if _, err = fmt.Fprintf(conn, "HTTP/%d.%d %03d %s\r\n\r\n", request.ProtoMajor, request.ProtoMinor, http.StatusOK, "Connection established"); err != nil {
 					break // close connection
 				}
 
@@ -67,11 +65,11 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 			removeExtraHTTPHostPort(request)
 
 			if request.URL.Scheme == "" || request.URL.Host == "" {
-				resp = responseWith(http.StatusBadRequest)
+				resp = responseWith(request, http.StatusBadRequest)
 			} else {
 				resp, err = client.Do(request)
 				if err != nil {
-					resp = responseWith(http.StatusBadGateway)
+					resp = responseWith(request, http.StatusBadGateway)
 				}
 			}
 
@@ -100,7 +98,7 @@ func authenticate(request *http.Request, cache *cache.Cache) *http.Response {
 	if authenticator != nil {
 		credential := parseBasicProxyAuthorization(request)
 		if credential == "" {
-			resp := responseWith(http.StatusProxyAuthRequired)
+			resp := responseWith(request, http.StatusProxyAuthRequired)
 			resp.Header.Set("Proxy-Authenticate", "Basic")
 			return resp
 		}
@@ -114,20 +112,20 @@ func authenticate(request *http.Request, cache *cache.Cache) *http.Response {
 		if !authed.(bool) {
 			log.Infoln("Auth failed from %s", request.RemoteAddr)
 
-			return responseWith(http.StatusForbidden)
+			return responseWith(request, http.StatusForbidden)
 		}
 	}
 
 	return nil
 }
 
-func responseWith(statusCode int) *http.Response {
+func responseWith(request *http.Request, statusCode int) *http.Response {
 	return &http.Response{
 		StatusCode: statusCode,
 		Status:     http.StatusText(statusCode),
-		Proto:      "HTTP/1.1",
-		ProtoMajor: 1,
-		ProtoMinor: 1,
+		Proto:      request.Proto,
+		ProtoMajor: request.ProtoMajor,
+		ProtoMinor: request.ProtoMinor,
 		Header:     http.Header{},
 	}
 }

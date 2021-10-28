@@ -19,7 +19,6 @@ func newClient(source net.Addr, in chan<- C.ConnContext) *http.Client {
 			MaxIdleConns:          100,
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			DialContext: func(context context.Context, network, address string) (net.Conn, error) {
 				if network != "tcp" && network != "tcp4" && network != "tcp6" {

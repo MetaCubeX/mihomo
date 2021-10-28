@@ -92,7 +92,7 @@ func sealVMessAEADHeader(key [16]byte, data []byte, t time.Time) []byte {
 		payloadHeaderAEADEncrypted = payloadHeaderAEAD.Seal(nil, payloadHeaderAEADNonce, data, generatedAuthID[:])
 	}
 
-	var outputBuffer = &bytes.Buffer{}
+	outputBuffer := &bytes.Buffer{}
 
 	outputBuffer.Write(generatedAuthID[:])
 	outputBuffer.Write(payloadHeaderLengthAEADEncrypted)
