@@ -235,8 +235,6 @@ func (ac *ACAutomaton) Match(s string) bool {
 			if fullMatch {
 				return true
 			}
-			//default:
-			//	//break // ineffective break statement, code "break" can not pass staticcheck check. don't sure that mean, so just block it.
 		}
 	}
 	return fullMatch && ac.exists[node].exist

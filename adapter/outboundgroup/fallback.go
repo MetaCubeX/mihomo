@@ -32,10 +32,10 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 	return c, err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (f *Fallback) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
+// ListenPacketContext implements C.ProxyAdapter
+func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	proxy := f.findAliveProxy(true)
-	pc, err := proxy.DialUDP(metadata)
+	pc, err := proxy.ListenPacketContext(ctx, metadata)
 	if err == nil {
 		pc.AppendToChains(f)
 	}
