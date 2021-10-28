@@ -11,6 +11,9 @@ type BufferedConn struct {
 }
 
 func NewBufferedConn(c net.Conn) *BufferedConn {
+	if bc, ok := c.(*BufferedConn); ok {
+		return bc
+	}
 	return &BufferedConn{bufio.NewReader(c), c}
 }
 

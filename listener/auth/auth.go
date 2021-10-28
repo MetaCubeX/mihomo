@@ -4,9 +4,7 @@ import (
 	"github.com/Dreamacro/clash/component/auth"
 )
 
-var (
-	authenticator auth.Authenticator
-)
+var authenticator auth.Authenticator
 
 func Authenticator() auth.Authenticator {
 	return authenticator

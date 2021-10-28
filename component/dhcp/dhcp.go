@@ -3,8 +3,9 @@ package dhcp
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"net"
+
+	"github.com/Dreamacro/clash/component/iface"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 )
@@ -23,7 +24,12 @@ func ResolveDNSFromDHCP(context context.Context, ifaceName string) ([]net.IP, er
 
 	result := make(chan []net.IP, 1)
 
-	discovery, err := dhcpv4.NewDiscovery(randomHardware(), dhcpv4.WithBroadcast(true), dhcpv4.WithRequestedOptions(dhcpv4.OptionDomainNameServer))
+	ifaceObj, err := iface.ResolveInterface(ifaceName)
+	if err != nil {
+		return nil, err
+	}
+
+	discovery, err := dhcpv4.NewDiscovery(ifaceObj.HardwareAddr, dhcpv4.WithBroadcast(true), dhcpv4.WithRequestedOptions(dhcpv4.OptionDomainNameServer))
 	if err != nil {
 		return nil, err
 	}
@@ -79,16 +85,4 @@ func receiveOffer(conn net.PacketConn, id dhcpv4.TransactionID, result chan<- []
 
 		return
 	}
-}
-
-func randomHardware() net.HardwareAddr {
-	addr := make(net.HardwareAddr, 6)
-
-	addr[0] = 0xff
-
-	for i := 1; i < len(addr); i++ {
-		addr[i] = byte(rand.Intn(254) + 1)
-	}
-
-	return addr
 }

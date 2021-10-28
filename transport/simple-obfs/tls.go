@@ -78,6 +78,7 @@ func (to *TLSObfs) Read(b []byte) (int, error) {
 	// type + ver = 3
 	return to.read(b, 3)
 }
+
 func (to *TLSObfs) Write(b []byte) (int, error) {
 	length := len(b)
 	for i := 0; i < length; i += chunkSize {

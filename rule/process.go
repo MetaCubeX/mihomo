@@ -24,9 +24,7 @@ func (ps *Process) RuleType() C.RuleType {
 }
 
 func (ps *Process) Match(metadata *C.Metadata) bool {
-
 	if metadata.Process != "" {
-		//log.Debugln("Use cache process: %s", metadata.Process)
 		return strings.EqualFold(metadata.Process, ps.process)
 	}
 

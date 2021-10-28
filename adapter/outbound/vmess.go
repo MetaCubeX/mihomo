@@ -31,23 +31,25 @@ type Vmess struct {
 }
 
 type VmessOption struct {
-	Name           string            `proxy:"name"`
-	Server         string            `proxy:"server"`
-	Port           int               `proxy:"port"`
-	UUID           string            `proxy:"uuid"`
-	AlterID        int               `proxy:"alterId"`
-	Cipher         string            `proxy:"cipher"`
-	TLS            bool              `proxy:"tls,omitempty"`
-	UDP            bool              `proxy:"udp,omitempty"`
-	Network        string            `proxy:"network,omitempty"`
-	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
-	HTTP2Opts      HTTP2Options      `proxy:"h2-opts,omitempty"`
-	GrpcOpts       GrpcOptions       `proxy:"grpc-opts,omitempty"`
-	WSOpts         WSOptions         `proxy:"ws-opts,omitempty"`
-	WSPath         string            `proxy:"ws-path,omitempty"`
-	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
-	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
-	ServerName     string            `proxy:"servername,omitempty"`
+	Name           string       `proxy:"name"`
+	Server         string       `proxy:"server"`
+	Port           int          `proxy:"port"`
+	UUID           string       `proxy:"uuid"`
+	AlterID        int          `proxy:"alterId"`
+	Cipher         string       `proxy:"cipher"`
+	UDP            bool         `proxy:"udp,omitempty"`
+	Network        string       `proxy:"network,omitempty"`
+	TLS            bool         `proxy:"tls,omitempty"`
+	SkipCertVerify bool         `proxy:"skip-cert-verify,omitempty"`
+	ServerName     string       `proxy:"servername,omitempty"`
+	HTTPOpts       HTTPOptions  `proxy:"http-opts,omitempty"`
+	HTTP2Opts      HTTP2Options `proxy:"h2-opts,omitempty"`
+	GrpcOpts       GrpcOptions  `proxy:"grpc-opts,omitempty"`
+	WSOpts         WSOptions    `proxy:"ws-opts,omitempty"`
+
+	// TODO: remove these until 2022
+	WSHeaders map[string]string `proxy:"ws-headers,omitempty"`
+	WSPath    string            `proxy:"ws-path,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -103,8 +105,16 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		if v.option.TLS {
 			wsOpts.TLS = true
-			wsOpts.SkipCertVerify = v.option.SkipCertVerify
-			wsOpts.ServerName = v.option.ServerName
+			wsOpts.TLSConfig = &tls.Config{
+				ServerName:         host,
+				InsecureSkipVerify: v.option.SkipCertVerify,
+				NextProtos:         []string{"http/1.1"},
+			}
+			if v.option.ServerName != "" {
+				wsOpts.TLSConfig.ServerName = v.option.ServerName
+			} else if host := wsOpts.Headers.Get("Host"); host != "" {
+				wsOpts.TLSConfig.ServerName = host
+			}
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
@@ -213,8 +223,8 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	return NewConn(c, v), err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (v *Vmess) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
+// ListenPacketContext implements C.ProxyAdapter
+func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(metadata.Host)
@@ -235,8 +245,6 @@ func (v *Vmess) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 
 		c, err = v.client.StreamConn(c, parseVmessAddr(metadata))
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-		defer cancel()
 		c, err = dialer.DialContext(ctx, "tcp", v.addr)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
