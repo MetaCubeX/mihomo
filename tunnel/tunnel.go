@@ -102,8 +102,8 @@ func processUDP() {
 
 func process() {
 	numUDPWorkers := 4
-	if runtime.NumCPU() > numUDPWorkers {
-		numUDPWorkers = runtime.NumCPU()
+	if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
+		numUDPWorkers = num
 	}
 	for i := 0; i < numUDPWorkers; i++ {
 		go processUDP()
