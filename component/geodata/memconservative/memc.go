@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/Dreamacro/clash/rule/geodata"
-	"github.com/Dreamacro/clash/rule/geodata/router"
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
 )
 
 type memConservativeLoader struct {
