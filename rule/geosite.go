@@ -3,12 +3,12 @@ package rules
 import (
 	"fmt"
 
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/rule/geodata"
-	//_ "github.com/Dreamacro/clash/rule/geodata/memconservative"
-	"github.com/Dreamacro/clash/rule/geodata/router"
-	_ "github.com/Dreamacro/clash/rule/geodata/standard"
+
+	_ "github.com/Dreamacro/clash/component/geodata/standard"
 )
 
 type GEOSITE struct {

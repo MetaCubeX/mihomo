@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/rule/geodata/router"
 )
 
 type loader struct {

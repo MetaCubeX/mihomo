@@ -1,6 +1,8 @@
 package geodata
 
-import "github.com/Dreamacro/clash/rule/geodata/router"
+import (
+	"github.com/Dreamacro/clash/component/geodata/router"
+)
 
 type LoaderImplementation interface {
 	LoadSite(filename, list string) ([]*router.Domain, error)
