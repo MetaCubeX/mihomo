@@ -35,7 +35,7 @@
 ## Getting Started
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
-## Advanced usage for this fork branch
+## Advanced usage for this branch
 ### TUN configuration
 Supports macOS, Linux and Windows.
 
@@ -55,7 +55,7 @@ tun:
 - Support `network` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
 
-The `GEOSITE` and `GEOIP` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
+The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
 ```yaml
 rules:
   # network condition for all rules

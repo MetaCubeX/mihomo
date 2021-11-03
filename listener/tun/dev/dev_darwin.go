@@ -114,7 +114,6 @@ var sockaddrCtlSize uintptr = 32
 // OpenTunDevice return a TunDevice according a URL
 func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 	name := "utun"
-	// TODO: configure the MTU
 	mtu := 9000
 
 	ifIndex := -1
@@ -212,8 +211,7 @@ func CreateTUNFromFile(file *os.File, mtu int, tunAddress string, autoRoute bool
 	}
 
 	// This address doesn't mean anything here. NIC just net an IP address to set route upon.
-	// TODO: maybe let user config it. And I'm doubt whether we really need it.
-	p2pAddress := net.ParseIP("198.18.0.1")
+	p2pAddress := net.ParseIP(tunAddress)
 	err = tun.setTunAddress(p2pAddress)
 	if err != nil {
 		tun.Close()
