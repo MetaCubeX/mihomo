@@ -183,9 +183,8 @@ func updateGeneral(general *config.General, force bool) {
 		if err == nil {
 			if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
 				general.Interface = autoDetectInterfaceName
-				log.Infoln("Use auto detect interface: %s", general.Interface)
 			} else {
-				log.Debugln("Auto detect interface is empty.")
+				log.Debugln("Auto detect interface name is empty.")
 			}
 		} else {
 			log.Debugln("Can not find auto detect interface. %s", err.Error())
@@ -194,6 +193,7 @@ func updateGeneral(general *config.General, force bool) {
 
 	if general.Interface != "" {
 		dialer.DefaultOptions = []dialer.Option{dialer.WithInterface(general.Interface)}
+		log.Infoln("Use interface name: %s", general.Interface)
 	} else {
 		dialer.DefaultOptions = nil
 	}

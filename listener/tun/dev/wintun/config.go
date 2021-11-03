@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package winipcfg
+package wintun
 
 import (
 	"fmt"
