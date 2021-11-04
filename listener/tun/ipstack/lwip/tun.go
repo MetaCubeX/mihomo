@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/tun/dev"
@@ -43,12 +44,19 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, tcpIn chan<- C.C
 
 	dnsIP := net.ParseIP(dnsHost)
 
+	// Register output function, write packets from lwip stack to tun device
 	golwip.RegisterOutputFn(func(data []byte) (int, error) {
 		return device.Write(data)
 	})
 
+	// Set custom buffer pool
+	golwip.SetPoolAllocator(&lwipPool{})
+
 	// Setup TCP/IP stack.
-	lwipStack := golwip.NewLWIPStack(mtu)
+	lwipStack, err := golwip.NewLWIPStack(mtu)
+	if err != nil {
+		return nil, err
+	}
 	adapter.lwipStack = lwipStack
 
 	golwip.RegisterDnsHandler(NewDnsHandler())
@@ -59,7 +67,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, tcpIn chan<- C.C
 	go func(lwipStack golwip.LWIPStack, device dev.TunDevice, mtu int) {
 		_, err := io.CopyBuffer(lwipStack.(io.Writer), device, make([]byte, mtu))
 		if err != nil {
-			log.Errorln("copying data failed: %v", err)
+			log.Debugln("copying data failed: %v", err)
 		}
 	}(lwipStack, device, mtu)
 
@@ -96,4 +104,14 @@ func (l *lwipAdapter) stopLocked() {
 
 	l.lwipStack = nil
 	l.device = nil
+}
+
+type lwipPool struct{}
+
+func (p lwipPool) Get(size int) []byte {
+	return pool.Get(size)
+}
+
+func (p lwipPool) Put(buf []byte) error {
+	return pool.Put(buf)
 }

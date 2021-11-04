@@ -244,6 +244,7 @@ func updateGeneral(general *config.General, force bool) {
 
 	if err := P.ReCreateTun(general.Tun, tcpIn, udpIn); err != nil {
 		log.Errorln("Start Tun interface error: %s", err.Error())
+		S.Py_Finalize()
 		os.Exit(2)
 	}
 
