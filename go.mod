@@ -16,7 +16,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499
-	github.com/yaling888/go-lwip v0.0.0-20211028052310-b19ac3bf89ed
+	github.com/yaling888/go-lwip v0.0.0-20211103185822-c9d650538091
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.4.0
@@ -27,12 +27,13 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.1
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20211102011804-04d474e716e0
+	gvisor.dev/gvisor v0.0.0-20211104052249-2de3450f76d6
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/btree v1.0.1 // indirect
+	github.com/kr/pretty v0.2.1 // indirect
 	github.com/oschwald/maxminddb-golang v1.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect

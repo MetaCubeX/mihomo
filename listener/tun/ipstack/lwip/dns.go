@@ -12,7 +12,7 @@ import (
 	"github.com/yaling888/go-lwip"
 )
 
-const defaultDnsReadTimeout = time.Second * 30
+const defaultDnsReadTimeout = time.Second * 8
 
 func shouldHijackDns(dnsIP net.IP, targetIp net.IP, targetPort int) bool {
 	if targetPort != 53 {
@@ -28,6 +28,10 @@ func hijackUDPDns(conn golwip.UDPConn, pkt []byte, addr *net.UDPAddr) {
 			_ = conn.Close()
 		}(conn)
 
+		if err := conn.SetDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
+			return
+		}
+
 		answer, err := D.RelayDnsPacket(pkt)
 		if err != nil {
 			return
@@ -42,11 +46,11 @@ func hijackTCPDns(conn net.Conn) {
 			_ = conn.Close()
 		}(conn)
 
-		for {
-			if err := conn.SetDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
-				return
-			}
+		if err := conn.SetDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
+			return
+		}
 
+		for {
 			var length uint16
 			if binary.Read(conn, binary.BigEndian, &length) != nil {
 				return
@@ -68,7 +72,7 @@ func hijackTCPDns(conn net.Conn) {
 				return
 			}
 
-			if _, err := conn.Write(rb); err != nil {
+			if _, err = conn.Write(rb); err != nil {
 				return
 			}
 		}

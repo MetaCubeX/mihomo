@@ -11,7 +11,7 @@ import (
 	"github.com/kr328/tun2socket/redirect"
 )
 
-const defaultDnsReadTimeout = time.Second * 30
+const defaultDnsReadTimeout = time.Second * 10
 
 func shouldHijackDns(dnsAddr binding.Address, targetAddr binding.Address) bool {
 	if targetAddr.Port != 53 {
@@ -41,11 +41,11 @@ func hijackTCPDns(conn net.Conn) {
 			_ = conn.Close()
 		}(conn)
 
-		for {
-			if err := conn.SetReadDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
-				return
-			}
+		if err := conn.SetReadDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
+			return
+		}
 
+		for {
 			var length uint16
 			if binary.Read(conn, binary.BigEndian, &length) != nil {
 				return
@@ -67,7 +67,7 @@ func hijackTCPDns(conn net.Conn) {
 				return
 			}
 
-			if _, err := conn.Write(rb); err != nil {
+			if _, err = conn.Write(rb); err != nil {
 				return
 			}
 		}
