@@ -353,7 +353,7 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 		copy(addr[1:], []byte(metadata.Host))
 	}
 
-	port, _ := strconv.Atoi(metadata.DstPort)
+	port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 	return &vmess.DstAddr{
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,
