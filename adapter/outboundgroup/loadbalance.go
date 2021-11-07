@@ -10,6 +10,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/murmur3"
 	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 
@@ -69,7 +70,7 @@ func jumpHash(key uint64, buckets int32) int32 {
 }
 
 // DialContext implements C.ProxyAdapter
-func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Conn, err error) {
+func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
 	defer func() {
 		if err == nil {
 			c.AppendToChains(lb)
@@ -78,12 +79,12 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata) (c
 
 	proxy := lb.Unwrap(metadata)
 
-	c, err = proxy.DialContext(ctx, metadata)
+	c, err = proxy.DialContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
 	return
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (pc C.PacketConn, err error) {
+func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (pc C.PacketConn, err error) {
 	defer func() {
 		if err == nil {
 			pc.AppendToChains(lb)
@@ -91,7 +92,7 @@ func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Meta
 	}()
 
 	proxy := lb.Unwrap(metadata)
-	return proxy.ListenPacketContext(ctx, metadata)
+	return proxy.ListenPacketContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
 }
 
 // SupportUDP implements C.ProxyAdapter
@@ -158,7 +159,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func NewLoadBalance(options *GroupCommonOption, providers []provider.ProxyProvider, strategy string) (lb *LoadBalance, err error) {
+func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvider, strategy string) (lb *LoadBalance, err error) {
 	var strategyFn strategyFn
 	switch strategy {
 	case "consistent-hashing":
@@ -169,10 +170,14 @@ func NewLoadBalance(options *GroupCommonOption, providers []provider.ProxyProvid
 		return nil, fmt.Errorf("%w: %s", errStrategy, strategy)
 	}
 	return &LoadBalance{
-		Base:       outbound.NewBase(options.Name, "", C.LoadBalance, false),
+		Base: outbound.NewBase(outbound.BaseOption{
+			Name:      option.Name,
+			Type:      C.LoadBalance,
+			Interface: option.Interface,
+		}),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,
 		strategyFn: strategyFn,
-		disableUDP: options.DisableUDP,
+		disableUDP: option.DisableUDP,
 	}, nil
 }

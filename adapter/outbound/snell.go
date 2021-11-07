@@ -22,6 +22,7 @@ type Snell struct {
 }
 
 type SnellOption struct {
+	BasicOption
 	Name     string                 `proxy:"name"`
 	Server   string                 `proxy:"server"`
 	Port     int                    `proxy:"port"`
@@ -57,8 +58,8 @@ func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 }
 
 // DialContext implements C.ProxyAdapter
-func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
-	if s.version == snell.Version2 {
+func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
+	if s.version == snell.Version2 && len(opts) == 0 {
 		c, err := s.pool.Get()
 		if err != nil {
 			return nil, err
@@ -72,7 +73,7 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 		return NewConn(c, s), err
 	}
 
-	c, err := dialer.DialContext(ctx, "tcp", s.addr)
+	c, err := dialer.DialContext(ctx, "tcp", s.addr, s.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
 	}
@@ -111,9 +112,10 @@ func NewSnell(option SnellOption) (*Snell, error) {
 
 	s := &Snell{
 		Base: &Base{
-			name: option.Name,
-			addr: addr,
-			tp:   C.Snell,
+			name:  option.Name,
+			addr:  addr,
+			tp:    C.Snell,
+			iface: option.Interface,
 		},
 		psk:        psk,
 		obfsOption: obfsOption,
@@ -122,7 +124,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 
 	if option.Version == snell.Version2 {
 		s.pool = snell.NewPool(func(ctx context.Context) (*snell.Snell, error) {
-			c, err := dialer.DialContext(ctx, "tcp", addr)
+			c, err := dialer.DialContext(ctx, "tcp", addr, s.Base.DialOptions()...)
 			if err != nil {
 				return nil, err
 			}

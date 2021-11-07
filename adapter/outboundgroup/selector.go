@@ -7,6 +7,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 )
@@ -20,8 +21,8 @@ type Selector struct {
 }
 
 // DialContext implements C.ProxyAdapter
-func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := s.selectedProxy(true).DialContext(ctx, metadata)
+func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
+	c, err := s.selectedProxy(true).DialContext(ctx, metadata, s.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(s)
 	}
@@ -29,8 +30,8 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (s *Selector) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := s.selectedProxy(true).ListenPacketContext(ctx, metadata)
+func (s *Selector) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	pc, err := s.selectedProxy(true).ListenPacketContext(ctx, metadata, s.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(s)
 	}
@@ -96,13 +97,17 @@ func (s *Selector) selectedProxy(touch bool) C.Proxy {
 	return elm.(C.Proxy)
 }
 
-func NewSelector(options *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
+func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
 	selected := providers[0].Proxies()[0].Name()
 	return &Selector{
-		Base:       outbound.NewBase(options.Name, "", C.Selector, false),
+		Base: outbound.NewBase(outbound.BaseOption{
+			Name:      option.Name,
+			Type:      C.Selector,
+			Interface: option.Interface,
+		}),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,
 		selected:   selected,
-		disableUDP: options.DisableUDP,
+		disableUDP: option.DisableUDP,
 	}
 }
