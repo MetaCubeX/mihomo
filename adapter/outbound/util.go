@@ -21,7 +21,7 @@ func tcpKeepAlive(c net.Conn) {
 func serializesSocksAddr(metadata *C.Metadata) []byte {
 	var buf [][]byte
 	aType := uint8(metadata.AddrType)
-	p, _ := strconv.Atoi(metadata.DstPort)
+	p, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 	port := []byte{uint8(p >> 8), uint8(p & 0xff)}
 	switch metadata.AddrType {
 	case socks5.AtypDomainName:
