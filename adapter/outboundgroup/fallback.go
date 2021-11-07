@@ -6,6 +6,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 )
@@ -23,9 +24,9 @@ func (f *Fallback) Now() string {
 }
 
 // DialContext implements C.ProxyAdapter
-func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	proxy := f.findAliveProxy(true)
-	c, err := proxy.DialContext(ctx, metadata)
+	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
 	}
@@ -33,9 +34,9 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	proxy := f.findAliveProxy(true)
-	pc, err := proxy.ListenPacketContext(ctx, metadata)
+	pc, err := proxy.ListenPacketContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(f)
 	}
@@ -90,11 +91,15 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	return proxies[0]
 }
 
-func NewFallback(options *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
+func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
-		Base:       outbound.NewBase(options.Name, "", C.Fallback, false),
+		Base: outbound.NewBase(outbound.BaseOption{
+			Name:      option.Name,
+			Type:      C.Fallback,
+			Interface: option.Interface,
+		}),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,
-		disableUDP: options.DisableUDP,
+		disableUDP: option.DisableUDP,
 	}
 }

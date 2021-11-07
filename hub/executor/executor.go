@@ -168,11 +168,7 @@ func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
 
-	if general.Interface != "" {
-		dialer.DefaultOptions = []dialer.Option{dialer.WithInterface(general.Interface)}
-	} else {
-		dialer.DefaultOptions = nil
-	}
+	dialer.DefaultInterface.Store(general.Interface)
 
 	iface.FlushCache()
 

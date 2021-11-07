@@ -36,12 +36,12 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
-	cfg := &config{}
+	cfg := &option{
+		interfaceName: DefaultInterface.Load(),
+	}
 
-	if !cfg.skipDefault {
-		for _, o := range DefaultOptions {
-			o(cfg)
-		}
+	for _, o := range DefaultOptions {
+		o(cfg)
 	}
 
 	for _, o := range options {
@@ -64,12 +64,12 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 }
 
 func dialContext(ctx context.Context, network string, destination net.IP, port string, options []Option) (net.Conn, error) {
-	opt := &config{}
+	opt := &option{
+		interfaceName: DefaultInterface.Load(),
+	}
 
-	if !opt.skipDefault {
-		for _, o := range DefaultOptions {
-			o(opt)
-		}
+	for _, o := range DefaultOptions {
+		o(opt)
 	}
 
 	for _, o := range options {
