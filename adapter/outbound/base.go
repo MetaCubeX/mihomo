@@ -70,7 +70,7 @@ func (b *Base) DialOptions(opts ...dialer.Option) []dialer.Option {
 }
 
 type BasicOption struct {
-	Interface string `proxy:"interface-name"`
+	Interface string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
 }
 
 type BaseOption struct {
