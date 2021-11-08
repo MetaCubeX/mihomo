@@ -103,9 +103,10 @@ func (r *Relay) proxies(metadata *C.Metadata, touch bool) []C.Proxy {
 func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
 	return &Relay{
 		Base: outbound.NewBase(outbound.BaseOption{
-			Name:      option.Name,
-			Type:      C.Relay,
-			Interface: option.Interface,
+			Name:        option.Name,
+			Type:        C.Relay,
+			Interface:   option.Interface,
+			RoutingMark: option.RoutingMark,
 		}),
 		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,

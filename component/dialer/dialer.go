@@ -59,6 +59,9 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 	if cfg.addrReuse {
 		addrReuseToListenConfig(lc)
 	}
+	if cfg.routingMark != 0 {
+		bindMarkToListenConfig(cfg.routingMark, lc, network, address)
+	}
 
 	return lc.ListenPacket(ctx, network, address)
 }
@@ -81,6 +84,9 @@ func dialContext(ctx context.Context, network string, destination net.IP, port s
 		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
 			return nil, err
 		}
+	}
+	if opt.routingMark != 0 {
+		bindMarkToDialer(opt.routingMark, dialer, network, destination)
 	}
 
 	return dialer.DialContext(ctx, network, net.JoinHostPort(destination.String(), port))
