@@ -24,7 +24,7 @@ type Socks5 struct {
 }
 
 type Socks5Option struct {
-	*BaseOption
+	BasicOption
 	Name           string `proxy:"name"`
 	Server         string `proxy:"server"`
 	Port           int    `proxy:"port"`

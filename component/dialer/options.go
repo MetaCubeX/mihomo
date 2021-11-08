@@ -10,6 +10,7 @@ var (
 type option struct {
 	interfaceName string
 	addrReuse     bool
+	routingMark   int
 }
 
 type Option func(opt *option)
@@ -23,5 +24,11 @@ func WithInterface(name string) Option {
 func WithAddrReuse(reuse bool) Option {
 	return func(opt *option) {
 		opt.addrReuse = reuse
+	}
+}
+
+func WithRoutingMark(mark int) Option {
+	return func(opt *option) {
+		opt.routingMark = mark
 	}
 }

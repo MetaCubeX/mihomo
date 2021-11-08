@@ -101,9 +101,10 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 	selected := providers[0].Proxies()[0].Name()
 	return &Selector{
 		Base: outbound.NewBase(outbound.BaseOption{
-			Name:      option.Name,
-			Type:      C.Selector,
-			Interface: option.Interface,
+			Name:        option.Name,
+			Type:        C.Selector,
+			Interface:   option.Interface,
+			RoutingMark: option.RoutingMark,
 		}),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,

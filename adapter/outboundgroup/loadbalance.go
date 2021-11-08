@@ -171,9 +171,10 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 	}
 	return &LoadBalance{
 		Base: outbound.NewBase(outbound.BaseOption{
-			Name:      option.Name,
-			Type:      C.LoadBalance,
-			Interface: option.Interface,
+			Name:        option.Name,
+			Type:        C.LoadBalance,
+			Interface:   option.Interface,
+			RoutingMark: option.RoutingMark,
 		}),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,

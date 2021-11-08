@@ -16,6 +16,7 @@ type Base struct {
 	iface string
 	tp    C.AdapterType
 	udp   bool
+	rmark int
 }
 
 // Name implements C.ProxyAdapter
@@ -66,19 +67,25 @@ func (b *Base) DialOptions(opts ...dialer.Option) []dialer.Option {
 		opts = append(opts, dialer.WithInterface(b.iface))
 	}
 
+	if b.rmark != 0 {
+		opts = append(opts, dialer.WithRoutingMark(b.rmark))
+	}
+
 	return opts
 }
 
 type BasicOption struct {
-	Interface string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
+	Interface   string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
+	RoutingMark int    `proxy:"routing-mark,omitempty" group:"routing-mark,omitempty"`
 }
 
 type BaseOption struct {
-	Name      string
-	Addr      string
-	Type      C.AdapterType
-	UDP       bool
-	Interface string
+	Name        string
+	Addr        string
+	Type        C.AdapterType
+	UDP         bool
+	Interface   string
+	RoutingMark int
 }
 
 func NewBase(opt BaseOption) *Base {
@@ -88,6 +95,7 @@ func NewBase(opt BaseOption) *Base {
 		tp:    opt.Type,
 		udp:   opt.UDP,
 		iface: opt.Interface,
+		rmark: opt.RoutingMark,
 	}
 }
 
