@@ -1,8 +1,9 @@
 package structure
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -39,12 +40,8 @@ func TestStructure_Basic(t *testing.T) {
 
 	s := &Baz{}
 	err := decoder.Decode(rawMap, s)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	if !reflect.DeepEqual(s, goal) {
-		t.Fatalf("bad: %#v", s)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, goal, s)
 }
 
 func TestStructure_Slice(t *testing.T) {
@@ -60,12 +57,8 @@ func TestStructure_Slice(t *testing.T) {
 
 	s := &BazSlice{}
 	err := decoder.Decode(rawMap, s)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	if !reflect.DeepEqual(s, goal) {
-		t.Fatalf("bad: %#v", s)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, goal, s)
 }
 
 func TestStructure_Optional(t *testing.T) {
@@ -79,12 +72,8 @@ func TestStructure_Optional(t *testing.T) {
 
 	s := &BazOptional{}
 	err := decoder.Decode(rawMap, s)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	if !reflect.DeepEqual(s, goal) {
-		t.Fatalf("bad: %#v", s)
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, goal, s)
 }
 
 func TestStructure_MissingKey(t *testing.T) {
@@ -94,18 +83,14 @@ func TestStructure_MissingKey(t *testing.T) {
 
 	s := &Baz{}
 	err := decoder.Decode(rawMap, s)
-	if err == nil {
-		t.Fatalf("should throw error: %#v", s)
-	}
+	assert.NotNilf(t, err, "should throw error: %#v", s)
 }
 
 func TestStructure_ParamError(t *testing.T) {
 	rawMap := map[string]interface{}{}
 	s := Baz{}
 	err := decoder.Decode(rawMap, s)
-	if err == nil {
-		t.Fatalf("should throw error: %#v", s)
-	}
+	assert.NotNilf(t, err, "should throw error: %#v", s)
 }
 
 func TestStructure_SliceTypeError(t *testing.T) {
@@ -116,9 +101,7 @@ func TestStructure_SliceTypeError(t *testing.T) {
 
 	s := &BazSlice{}
 	err := decoder.Decode(rawMap, s)
-	if err == nil {
-		t.Fatalf("should throw error: %#v", s)
-	}
+	assert.NotNilf(t, err, "should throw error: %#v", s)
 }
 
 func TestStructure_WeakType(t *testing.T) {
@@ -134,10 +117,23 @@ func TestStructure_WeakType(t *testing.T) {
 
 	s := &BazSlice{}
 	err := weakTypeDecoder.Decode(rawMap, s)
-	if err != nil {
-		t.Fatal(err.Error())
+	assert.Nil(t, err)
+	assert.Equal(t, goal, s)
+}
+
+func TestStructure_Nest(t *testing.T) {
+	rawMap := map[string]interface{}{
+		"foo": 1,
 	}
-	if !reflect.DeepEqual(s, goal) {
-		t.Fatalf("bad: %#v", s)
+
+	goal := BazOptional{
+		Foo: 1,
 	}
+
+	s := &struct {
+		BazOptional
+	}{}
+	err := decoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.Equal(t, s.BazOptional, goal)
 }
