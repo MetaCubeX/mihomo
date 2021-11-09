@@ -30,6 +30,7 @@ type Vless struct {
 }
 
 type VlessOption struct {
+	BasicOption
 	Name           string            `proxy:"name"`
 	Server         string            `proxy:"server"`
 	Port           int               `proxy:"port"`
@@ -181,9 +182,9 @@ func (v *Vless) isXTLSEnabled() bool {
 }
 
 // DialContext implements C.ProxyAdapter
-func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	// gun transport
-	if v.transport != nil {
+	if v.transport != nil && len(opts) == 0 {
 		c, err := gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
@@ -198,7 +199,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 		return NewConn(c, v), nil
 	}
 
-	c, err := dialer.DialContext(ctx, "tcp", v.addr)
+	c, err := dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
@@ -210,7 +211,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(metadata.Host)
@@ -222,7 +223,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 	var c net.Conn
 	// gun transport
-	if v.transport != nil {
+	if v.transport != nil && len(opts) == 0 {
 		c, err = gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
@@ -231,7 +232,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 	} else {
-		c, err = dialer.DialContext(ctx, "tcp", v.addr)
+		c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 		}
@@ -242,7 +243,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("new vmess client error: %v", err)
+		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
@@ -291,6 +292,10 @@ func (uc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 }
 
 func NewVless(option VlessOption) (*Vless, error) {
+	if !option.TLS {
+		return nil, fmt.Errorf("TLS must be true with vless")
+	}
+
 	var addons *vless.Addons
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
@@ -304,8 +309,6 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 	}
 
-	option.TLS = true
-
 	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
 	if err != nil {
 		return nil, err
@@ -313,10 +316,11 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 	v := &Vless{
 		Base: &Base{
-			name: option.Name,
-			addr: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:   C.Vless,
-			udp:  option.UDP,
+			name:  option.Name,
+			addr:  net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			tp:    C.Vless,
+			udp:   option.UDP,
+			iface: option.Interface,
 		},
 		client: client,
 		option: &option,
@@ -329,7 +333,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 	case "grpc":
 		dialFn := func(network, addr string) (net.Conn, error) {
-			c, err := dialer.DialContext(context.Background(), "tcp", v.addr)
+			c, err := dialer.DialContext(context.Background(), "tcp", v.addr, v.Base.DialOptions()...)
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
@@ -342,7 +346,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 			Host:        v.option.ServerName,
 		}
 		tlsConfig := &tls.Config{
-			InsecureSkipVerify: false,
+			InsecureSkipVerify: v.option.SkipCertVerify,
 			ServerName:         v.option.ServerName,
 		}
 

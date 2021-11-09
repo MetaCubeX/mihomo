@@ -4,12 +4,12 @@ go 1.17
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7
-	github.com/go-chi/chi/v5 v5.0.4
+	github.com/go-chi/chi/v5 v5.0.5
 	github.com/go-chi/cors v1.2.0
 	github.com/go-chi/render v1.0.1
-	github.com/gofrs/uuid v4.0.0+incompatible
+	github.com/gofrs/uuid v4.1.0+incompatible
 	github.com/gorilla/websocket v1.4.2
-	github.com/insomniacslk/dhcp v0.0.0-20210827173440-b95caade3eac
+	github.com/insomniacslk/dhcp v0.0.0-20211026125128-ad197bcd36fd
 	github.com/kr328/tun2socket v0.0.0-20210412191540-3d56c47e2d99
 	github.com/miekg/dns v1.1.43
 	github.com/oschwald/geoip2-golang v1.5.0
@@ -21,9 +21,9 @@ require (
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.4.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/net v0.0.0-20211029160332-540bb53d3b2e
+	golang.org/x/net v0.0.0-20211105192438-b53810dc28af
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20211029165221-6e7872819dc8
+	golang.org/x/sys v0.0.0-20211107104306-e0b2ad06fe42
 	golang.zx2c4.com/wireguard/windows v0.5.1
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0

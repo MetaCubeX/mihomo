@@ -28,6 +28,7 @@ type Trojan struct {
 }
 
 type TrojanOption struct {
+	BasicOption
 	Name           string      `proxy:"name"`
 	Server         string      `proxy:"server"`
 	Port           int         `proxy:"port"`
@@ -86,9 +87,9 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 }
 
 // DialContext implements C.ProxyAdapter
-func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	// gun transport
-	if t.transport != nil {
+	if t.transport != nil && len(opts) == 0 {
 		c, err := gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
 			return nil, err
@@ -102,7 +103,7 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 		return NewConn(c, t), nil
 	}
 
-	c, err := dialer.DialContext(ctx, "tcp", t.addr)
+	c, err := dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
@@ -119,18 +120,18 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	var c net.Conn
 
 	// grpc transport
-	if t.transport != nil {
+	if t.transport != nil && len(opts) == 0 {
 		c, err = gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
 		defer safeConnClose(c, err)
 	} else {
-		c, err = dialer.DialContext(ctx, "tcp", t.addr)
+		c, err = dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
@@ -167,10 +168,11 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 
 	t := &Trojan{
 		Base: &Base{
-			name: option.Name,
-			addr: addr,
-			tp:   C.Trojan,
-			udp:  option.UDP,
+			name:  option.Name,
+			addr:  addr,
+			tp:    C.Trojan,
+			udp:   option.UDP,
+			iface: option.Interface,
 		},
 		instance: trojan.New(tOption),
 		option:   &option,
@@ -178,7 +180,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 
 	if option.Network == "grpc" {
 		dialFn := func(network, addr string) (net.Conn, error) {
-			c, err := dialer.DialContext(context.Background(), "tcp", t.addr)
+			c, err := dialer.DialContext(context.Background(), "tcp", t.addr, t.Base.DialOptions()...)
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", t.addr, err.Error())
 			}

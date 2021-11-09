@@ -24,6 +24,7 @@ type ShadowSocksR struct {
 }
 
 type ShadowSocksROption struct {
+	BasicOption
 	Name          string `proxy:"name"`
 	Server        string `proxy:"server"`
 	Port          int    `proxy:"port"`
@@ -59,8 +60,8 @@ func (ssr *ShadowSocksR) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn,
 }
 
 // DialContext implements C.ProxyAdapter
-func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
-	c, err := dialer.DialContext(ctx, "tcp", ssr.addr)
+func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", ssr.addr, ssr.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ssr.addr, err)
 	}
@@ -73,8 +74,8 @@ func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata) 
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := dialer.ListenPacket(ctx, "udp", "")
+func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	pc, err := dialer.ListenPacket(ctx, "udp", "", ssr.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -136,10 +137,11 @@ func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 
 	return &ShadowSocksR{
 		Base: &Base{
-			name: option.Name,
-			addr: addr,
-			tp:   C.ShadowsocksR,
-			udp:  option.UDP,
+			name:  option.Name,
+			addr:  addr,
+			tp:    C.ShadowsocksR,
+			udp:   option.UDP,
+			iface: option.Interface,
 		},
 		cipher:   coreCiph,
 		obfs:     obfs,

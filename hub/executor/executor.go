@@ -203,11 +203,7 @@ func updateGeneral(general *config.General, force bool) {
 		}
 	}
 
-	if general.Interface != "" {
-		dialer.DefaultOptions = []dialer.Option{dialer.WithInterface(general.Interface)}
-	} else {
-		dialer.DefaultOptions = nil
-	}
+	dialer.DefaultInterface.Store(general.Interface)
 
 	log.Infoln("Use interface name: %s", general.Interface)
 
