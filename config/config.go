@@ -87,7 +87,7 @@ type FallbackFilter struct {
 // Profile config
 type Profile struct {
 	StoreSelected bool `yaml:"store-selected"`
-	StoreFakeIP   bool `yaml:"store-fakeip"`
+	StoreFakeIP   bool `yaml:"store-fake-ip"`
 }
 
 // Tun config
