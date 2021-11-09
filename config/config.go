@@ -16,6 +16,8 @@ import (
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
 	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -75,10 +77,11 @@ type DNS struct {
 
 // FallbackFilter config
 type FallbackFilter struct {
-	GeoIP     bool         `yaml:"geoip"`
-	GeoIPCode string       `yaml:"geoip-code"`
-	IPCIDR    []*net.IPNet `yaml:"ipcidr"`
-	Domain    []string     `yaml:"domain"`
+	GeoIP     bool                    `yaml:"geoip"`
+	GeoIPCode string                  `yaml:"geoip-code"`
+	IPCIDR    []*net.IPNet            `yaml:"ipcidr"`
+	Domain    []string                `yaml:"domain"`
+	GeoSite   []*router.DomainMatcher `yaml:"geosite"`
 }
 
 // Profile config
@@ -139,6 +142,7 @@ type RawFallbackFilter struct {
 	GeoIPCode string   `yaml:"geoip-code"`
 	IPCIDR    []string `yaml:"ipcidr"`
 	Domain    []string `yaml:"domain"`
+	GeoSite   []string `yaml:"geosite"`
 }
 
 type RawConfig struct {
@@ -206,6 +210,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				GeoIP:     true,
 				GeoIPCode: "CN",
 				IPCIDR:    []string{},
+				GeoSite:   []string{},
 			},
 			DefaultNameserver: []string{
 				"114.114.114.114",
@@ -265,7 +270,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
-	dnsCfg, err := parseDNS(rawCfg, hosts)
+	dnsCfg, err := parseDNS(rawCfg, hosts, rules)
 	if err != nil {
 		return nil, err
 	}
@@ -648,8 +653,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 		nameservers = append(
 			nameservers,
 			dns.NameServer{
-				Net:  dnsNetType,
-				Addr: addr,
+				Net:          dnsNetType,
+				Addr:         addr,
+				ProxyAdapter: u.Fragment,
 			},
 		)
 	}
@@ -687,7 +693,37 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	return ipNets, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
+func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
+	sites := []*router.DomainMatcher{}
+
+	for _, country := range countries {
+		found := false
+		for _, rule := range rules {
+			if rule.RuleType() == C.GEOSITE {
+				if strings.EqualFold(country, rule.Payload()) {
+					found = true
+					sites = append(sites, rule.(C.RuleGeoSite).GetDomainMatcher())
+					log.Infoln("Start initial GeoSite dns fallback filter from rule `%s`", country)
+				}
+			}
+		}
+
+		if !found {
+			matcher, recordsCount, err := geodata.LoadGeoSiteMatcher(country)
+			if err != nil {
+				return nil, err
+			}
+
+			sites = append(sites, matcher)
+
+			log.Infoln("Start initial GeoSite dns fallback filter `%s`, records: %d", country, recordsCount)
+		}
+	}
+	runtime.GC()
+	return sites, nil
+}
+
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -699,7 +735,8 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
-			IPCIDR: []*net.IPNet{},
+			IPCIDR:  []*net.IPNet{},
+			GeoSite: []*router.DomainMatcher{},
 		},
 	}
 	var err error
@@ -744,6 +781,18 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 			}
 		}
 
+		if len(dnsCfg.Fallback) != 0 {
+			if host == nil {
+				host = trie.New()
+			}
+			for _, fb := range dnsCfg.Fallback {
+				if net.ParseIP(fb.Addr) != nil {
+					continue
+				}
+				host.Insert(fb.Addr, true)
+			}
+		}
+
 		pool, err := fakeip.New(fakeip.Options{
 			IPNet:       ipnet,
 			Size:        1000,
@@ -757,12 +806,19 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 		dnsCfg.FakeIPRange = pool
 	}
 
-	dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
-	dnsCfg.FallbackFilter.GeoIPCode = cfg.FallbackFilter.GeoIPCode
-	if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
-		dnsCfg.FallbackFilter.IPCIDR = fallbackip
+	if len(cfg.Fallback) != 0 {
+		dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
+		dnsCfg.FallbackFilter.GeoIPCode = cfg.FallbackFilter.GeoIPCode
+		if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
+			dnsCfg.FallbackFilter.IPCIDR = fallbackip
+		}
+		dnsCfg.FallbackFilter.Domain = cfg.FallbackFilter.Domain
+		fallbackGeoSite, err := parseFallbackGeoSite(cfg.FallbackFilter.GeoSite, rules)
+		if err != nil {
+			return nil, fmt.Errorf("load GeoSite dns fallback filter error, %w", err)
+		}
+		dnsCfg.FallbackFilter.GeoSite = fallbackGeoSite
 	}
-	dnsCfg.FallbackFilter.Domain = cfg.FallbackFilter.Domain
 
 	if cfg.UseHosts {
 		dnsCfg.Hosts = hosts
