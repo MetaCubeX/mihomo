@@ -19,7 +19,7 @@ type Relay struct {
 }
 
 // DialContext implements C.ProxyAdapter
-func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	var proxies []C.Proxy
 	for _, proxy := range r.proxies(metadata, true) {
 		if proxy.Type() != C.Direct {
@@ -29,15 +29,15 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, 
 
 	switch len(proxies) {
 	case 0:
-		return outbound.NewDirect().DialContext(ctx, metadata)
+		return outbound.NewDirect().DialContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	case 1:
-		return proxies[0].DialContext(ctx, metadata)
+		return proxies[0].DialContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	}
 
 	first := proxies[0]
 	last := proxies[len(proxies)-1]
 
-	c, err := dialer.DialContext(ctx, "tcp", first.Addr())
+	c, err := dialer.DialContext(ctx, "tcp", first.Addr(), r.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
 	}
@@ -100,9 +100,14 @@ func (r *Relay) proxies(metadata *C.Metadata, touch bool) []C.Proxy {
 	return proxies
 }
 
-func NewRelay(options *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
+func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
 	return &Relay{
-		Base:      outbound.NewBase(options.Name, "", C.Relay, false),
+		Base: outbound.NewBase(outbound.BaseOption{
+			Name:        option.Name,
+			Type:        C.Relay,
+			Interface:   option.Interface,
+			RoutingMark: option.RoutingMark,
+		}),
 		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,
 	}
