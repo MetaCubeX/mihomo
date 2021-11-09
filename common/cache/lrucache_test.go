@@ -149,7 +149,6 @@ func TestSetWithExpire(t *testing.T) {
 	assert.Equal(t, nil, res)
 	assert.Equal(t, time.Time{}, expires)
 	assert.Equal(t, false, exist)
-
 }
 
 func TestStale(t *testing.T) {

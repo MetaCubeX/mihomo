@@ -3,34 +3,42 @@ package dialer
 import (
 	"net"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 type controlFn = func(network, address string, c syscall.RawConn) error
 
-func bindControl(ifaceName string) controlFn {
-	return func(network, address string, c syscall.RawConn) error {
+func bindControl(ifaceName string, chain controlFn) controlFn {
+	return func(network, address string, c syscall.RawConn) (err error) {
+		defer func() {
+			if err == nil && chain != nil {
+				err = chain(network, address, c)
+			}
+		}()
+
 		ipStr, _, err := net.SplitHostPort(address)
 		if err == nil {
 			ip := net.ParseIP(ipStr)
 			if ip != nil && !ip.IsGlobalUnicast() {
-				return nil
+				return
 			}
 		}
 
 		return c.Control(func(fd uintptr) {
-			syscall.BindToDevice(int(fd), ifaceName)
+			unix.BindToDevice(int(fd), ifaceName)
 		})
 	}
 }
 
-func bindIfaceToDialer(dialer *net.Dialer, ifaceName string) error {
-	dialer.Control = bindControl(ifaceName)
+func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ net.IP) error {
+	dialer.Control = bindControl(ifaceName, dialer.Control)
 
 	return nil
 }
 
-func bindIfaceToListenConfig(lc *net.ListenConfig, ifaceName string) error {
-	lc.Control = bindControl(ifaceName)
+func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
+	lc.Control = bindControl(ifaceName, lc.Control)
 
-	return nil
+	return address, nil
 }

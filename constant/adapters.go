@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/Dreamacro/clash/component/dialer"
 )
 
 // Adapter Type
@@ -25,6 +27,11 @@ const (
 	Fallback
 	URLTest
 	LoadBalance
+)
+
+const (
+	DefaultTCPTimeout = 5 * time.Second
+	DefaultUDPTimeout = DefaultTCPTimeout
 )
 
 type Connection interface {
@@ -69,11 +76,14 @@ type PacketConn interface {
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
+	Addr() string
+	SupportUDP() bool
+	MarshalJSON() ([]byte, error)
 
 	// StreamConn wraps a protocol around net.Conn with Metadata.
 	//
 	// Examples:
-	//	conn, _ := net.Dial("tcp", "host:port")
+	//	conn, _ := net.DialContext(context.Background(), "tcp", "host:port")
 	//	conn, _ = adapter.StreamConn(conn, metadata)
 	//
 	// It returns a C.Conn with protocol which start with
@@ -82,12 +92,10 @@ type ProxyAdapter interface {
 
 	// DialContext return a C.Conn with protocol which
 	// contains multiplexing-related reuse logic (if any)
-	DialContext(ctx context.Context, metadata *Metadata) (Conn, error)
+	DialContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (Conn, error)
 
-	DialUDP(metadata *Metadata) (PacketConn, error)
-	SupportUDP() bool
-	MarshalJSON() ([]byte, error)
-	Addr() string
+	ListenPacketContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (PacketConn, error)
+
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata) Proxy
 }
@@ -101,9 +109,14 @@ type Proxy interface {
 	ProxyAdapter
 	Alive() bool
 	DelayHistory() []DelayHistory
-	Dial(metadata *Metadata) (Conn, error)
 	LastDelay() uint16
 	URLTest(ctx context.Context, url string) (uint16, error)
+
+	// Deprecated: use DialContext instead.
+	Dial(metadata *Metadata) (Conn, error)
+
+	// Deprecated: use DialPacketConn instead.
+	DialUDP(metadata *Metadata) (PacketConn, error)
 }
 
 // AdapterType is enum of adapter type

@@ -37,6 +37,12 @@ func (d *Decoder) Decode(src map[string]interface{}, dst interface{}) error {
 	v := reflect.ValueOf(dst).Elem()
 	for idx := 0; idx < v.NumField(); idx++ {
 		field := t.Field(idx)
+		if field.Anonymous {
+			if err := d.decodeStruct(field.Name, src, v.Field(idx)); err != nil {
+				return err
+			}
+			continue
+		}
 
 		tag := field.Tag.Get(d.option.TagName)
 		str := strings.SplitN(tag, ",", 2)
