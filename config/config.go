@@ -8,19 +8,21 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapters/outbound"
-	"github.com/Dreamacro/clash/adapters/outboundgroup"
-	"github.com/Dreamacro/clash/adapters/provider"
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rules"
+	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 // General config
@@ -60,22 +62,25 @@ type DNS struct {
 	Fallback          []dns.NameServer `yaml:"fallback"`
 	FallbackFilter    FallbackFilter   `yaml:"fallback-filter"`
 	Listen            string           `yaml:"listen"`
-	EnhancedMode      dns.EnhancedMode `yaml:"enhanced-mode"`
+	EnhancedMode      C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange       *fakeip.Pool
 	Hosts             *trie.DomainTrie
+	NameServerPolicy  map[string]dns.NameServer
 }
 
 // FallbackFilter config
 type FallbackFilter struct {
-	GeoIP  bool         `yaml:"geoip"`
-	IPCIDR []*net.IPNet `yaml:"ipcidr"`
-	Domain []string     `yaml:"domain"`
+	GeoIP     bool         `yaml:"geoip"`
+	GeoIPCode string       `yaml:"geoip-code"`
+	IPCIDR    []*net.IPNet `yaml:"ipcidr"`
+	Domain    []string     `yaml:"domain"`
 }
 
 // Profile config
 type Profile struct {
 	StoreSelected bool `yaml:"store-selected"`
+	StoreFakeIP   bool `yaml:"store-fake-ip"`
 }
 
 // Experimental config
@@ -91,7 +96,7 @@ type Config struct {
 	Rules        []C.Rule
 	Users        []auth.AuthUser
 	Proxies      map[string]C.Proxy
-	Providers    map[string]provider.ProxyProvider
+	Providers    map[string]providerTypes.ProxyProvider
 }
 
 type RawDNS struct {
@@ -102,16 +107,18 @@ type RawDNS struct {
 	Fallback          []string          `yaml:"fallback"`
 	FallbackFilter    RawFallbackFilter `yaml:"fallback-filter"`
 	Listen            string            `yaml:"listen"`
-	EnhancedMode      dns.EnhancedMode  `yaml:"enhanced-mode"`
+	EnhancedMode      C.DNSMode         `yaml:"enhanced-mode"`
 	FakeIPRange       string            `yaml:"fake-ip-range"`
 	FakeIPFilter      []string          `yaml:"fake-ip-filter"`
 	DefaultNameserver []string          `yaml:"default-nameserver"`
+	NameServerPolicy  map[string]string `yaml:"nameserver-policy"`
 }
 
 type RawFallbackFilter struct {
-	GeoIP  bool     `yaml:"geoip"`
-	IPCIDR []string `yaml:"ipcidr"`
-	Domain []string `yaml:"domain"`
+	GeoIP     bool     `yaml:"geoip"`
+	GeoIPCode string   `yaml:"geoip-code"`
+	IPCIDR    []string `yaml:"ipcidr"`
+	Domain    []string `yaml:"domain"`
 }
 
 type RawConfig struct {
@@ -168,8 +175,9 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			UseHosts:    true,
 			FakeIPRange: "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
-				GeoIP:  true,
-				IPCIDR: []string{},
+				GeoIP:     true,
+				GeoIPCode: "CN",
+				IPCIDR:    []string{},
 			},
 			DefaultNameserver: []string{
 				"114.114.114.114",
@@ -181,7 +189,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 	}
 
-	if err := yaml.Unmarshal(buf, &rawCfg); err != nil {
+	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
 		return nil, err
 	}
 
@@ -219,7 +227,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
-	dnsCfg, err := parseDNS(rawCfg.DNS, hosts)
+	dnsCfg, err := parseDNS(rawCfg, hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -264,21 +272,21 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	}, nil
 }
 
-func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
+func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]providerTypes.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
-	providersMap = make(map[string]provider.ProxyProvider)
+	providersMap = make(map[string]providerTypes.ProxyProvider)
 	proxyList := []string{}
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
 
-	proxies["DIRECT"] = outbound.NewProxy(outbound.NewDirect())
-	proxies["REJECT"] = outbound.NewProxy(outbound.NewReject())
+	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
+	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
 
 	// parse proxy
 	for idx, mapping := range proxiesConfig {
-		proxy, err := outbound.ParseProxy(mapping)
+		proxy, err := adapter.ParseProxy(mapping)
 		if err != nil {
 			return nil, nil, fmt.Errorf("proxy %d: %w", idx, err)
 		}
@@ -337,12 +345,12 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			return nil, nil, fmt.Errorf("proxy group %s: the duplicate name", groupName)
 		}
 
-		proxies[groupName] = outbound.NewProxy(group)
+		proxies[groupName] = adapter.NewProxy(group)
 	}
 
 	// initial compatible provider
 	for _, pd := range providersMap {
-		if pd.VehicleType() != provider.Compatible {
+		if pd.VehicleType() != providerTypes.Compatible {
 			continue
 		}
 
@@ -364,9 +372,9 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		&outboundgroup.GroupCommonOption{
 			Name: "GLOBAL",
 		},
-		[]provider.ProxyProvider{pd},
+		[]providerTypes.ProxyProvider{pd},
 	)
-	proxies["GLOBAL"] = outbound.NewProxy(global)
+	proxies["GLOBAL"] = adapter.NewProxy(global)
 	return proxies, providersMap, nil
 }
 
@@ -481,6 +489,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
+		case "dhcp":
+			addr = u.Host
+			dnsNetType = "dhcp" // UDP from DHCP
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}
@@ -500,6 +511,23 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 	return nameservers, nil
 }
 
+func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServer, error) {
+	policy := map[string]dns.NameServer{}
+
+	for domain, server := range nsPolicy {
+		nameservers, err := parseNameServer([]string{server})
+		if err != nil {
+			return nil, err
+		}
+		if _, valid := trie.ValidAndSplitDomain(domain); !valid {
+			return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
+		}
+		policy[domain] = nameservers[0]
+	}
+
+	return policy, nil
+}
+
 func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	ipNets := []*net.IPNet{}
 
@@ -514,7 +542,8 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	return ipNets, nil
 }
 
-func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
+	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
 	}
@@ -537,6 +566,10 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 		return nil, err
 	}
 
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy); err != nil {
+		return nil, err
+	}
+
 	if len(cfg.DefaultNameserver) == 0 {
 		return nil, errors.New("default nameserver should have at least one nameserver")
 	}
@@ -551,7 +584,7 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 		}
 	}
 
-	if cfg.EnhancedMode == dns.FAKEIP {
+	if cfg.EnhancedMode == C.DNSFakeIP {
 		_, ipnet, err := net.ParseCIDR(cfg.FakeIPRange)
 		if err != nil {
 			return nil, err
@@ -566,7 +599,12 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 			}
 		}
 
-		pool, err := fakeip.New(ipnet, 1000, host)
+		pool, err := fakeip.New(fakeip.Options{
+			IPNet:       ipnet,
+			Size:        1000,
+			Host:        host,
+			Persistence: rawCfg.Profile.StoreFakeIP,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -575,6 +613,7 @@ func parseDNS(cfg RawDNS, hosts *trie.DomainTrie) (*DNS, error) {
 	}
 
 	dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
+	dnsCfg.FallbackFilter.GeoIPCode = cfg.FallbackFilter.GeoIPCode
 	if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
 		dnsCfg.FallbackFilter.IPCIDR = fallbackip
 	}

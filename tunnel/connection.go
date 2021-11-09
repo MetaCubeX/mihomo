@@ -1,92 +1,16 @@
 package tunnel
 
 import (
-	"bufio"
 	"errors"
 	"io"
 	"net"
-	"net/http"
-	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapters/inbound"
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/context"
 )
-
-func handleHTTP(ctx *context.HTTPContext, outbound net.Conn) {
-	req := ctx.Request()
-	conn := ctx.Conn()
-
-	// make outbound close after inbound error or close
-	conn = &connLinker{conn, outbound}
-
-	inboundReader := bufio.NewReader(conn)
-	outboundReader := bufio.NewReader(outbound)
-
-	inbound.RemoveExtraHTTPHostPort(req)
-	host := req.Host
-	for {
-		keepAlive := strings.TrimSpace(strings.ToLower(req.Header.Get("Proxy-Connection"))) == "keep-alive"
-
-		req.RequestURI = ""
-		inbound.RemoveHopByHopHeaders(req.Header)
-		err := req.Write(outbound)
-		if err != nil {
-			break
-		}
-
-	handleResponse:
-		// resp will be closed after we call resp.Write()
-		// see https://golang.org/pkg/net/http/#Response.Write
-		resp, err := http.ReadResponse(outboundReader, req)
-		if err != nil {
-			break
-		}
-		inbound.RemoveHopByHopHeaders(resp.Header)
-
-		if resp.StatusCode == http.StatusContinue {
-			err = resp.Write(conn)
-			if err != nil {
-				break
-			}
-			goto handleResponse
-		}
-
-		// close conn when header `Connection` is `close`
-		if resp.Header.Get("Connection") == "close" {
-			keepAlive = false
-		}
-
-		if keepAlive {
-			resp.Header.Set("Proxy-Connection", "keep-alive")
-			resp.Header.Set("Connection", "keep-alive")
-			resp.Header.Set("Keep-Alive", "timeout=4")
-			resp.Close = false
-		} else {
-			resp.Close = true
-		}
-		err = resp.Write(conn)
-		if err != nil || resp.Close {
-			break
-		}
-
-		req, err = http.ReadRequest(inboundReader)
-		if err != nil {
-			break
-		}
-
-		inbound.RemoveExtraHTTPHostPort(req)
-		// Sometimes firefox just open a socket to process multiple domains in HTTP
-		// The temporary solution is close connection when encountering different HOST
-		if req.Host != host {
-			break
-		}
-	}
-}
 
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
 	defer packet.Drop()
@@ -115,7 +39,7 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 }
 
 func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr net.Addr) {
-	buf := pool.Get(pool.RelayBufferSize)
+	buf := pool.Get(pool.UDPBufferSize)
 	defer pool.Put(buf)
 	defer natTable.Delete(key)
 	defer pc.Close()
@@ -161,32 +85,4 @@ func relay(leftConn, rightConn net.Conn) {
 	pool.Put(buf)
 	rightConn.SetReadDeadline(time.Now())
 	<-ch
-}
-
-// connLinker make the two net.Conn correlated, for temporary resolution of leaks.
-// There is no better way to do this for now.
-type connLinker struct {
-	net.Conn
-	linker net.Conn
-}
-
-func (conn *connLinker) Read(b []byte) (n int, err error) {
-	n, err = conn.Conn.Read(b)
-	if err != nil {
-		conn.linker.Close()
-	}
-	return n, err
-}
-
-func (conn *connLinker) Write(b []byte) (n int, err error) {
-	n, err = conn.Conn.Write(b)
-	if err != nil {
-		conn.linker.Close()
-	}
-	return n, err
-}
-
-func (conn *connLinker) Close() error {
-	conn.linker.Close()
-	return conn.Conn.Close()
 }

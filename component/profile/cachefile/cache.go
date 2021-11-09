@@ -3,52 +3,47 @@ package cachefile
 import (
 	"bytes"
 	"encoding/gob"
-	"io/ioutil"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/component/profile"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"go.etcd.io/bbolt"
 )
 
 var (
 	initOnce     sync.Once
-	fileMode     os.FileMode = 0666
+	fileMode     os.FileMode = 0o666
 	defaultCache *CacheFile
-)
 
-type cache struct {
-	Selected map[string]string
-}
+	bucketSelected = []byte("selected")
+	bucketFakeip   = []byte("fakeip")
+)
 
 // CacheFile store and update the cache file
 type CacheFile struct {
-	path  string
-	model *cache
-	buf   *bytes.Buffer
-	mux   sync.Mutex
+	DB *bbolt.DB
 }
 
 func (c *CacheFile) SetSelected(group, selected string) {
 	if !profile.StoreSelected.Load() {
 		return
-	}
-
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	model := c.element()
-
-	model.Selected[group] = selected
-	c.buf.Reset()
-	if err := gob.NewEncoder(c.buf).Encode(model); err != nil {
-		log.Warnln("[CacheFile] encode gob failed: %s", err.Error())
+	} else if c.DB == nil {
 		return
 	}
 
-	if err := ioutil.WriteFile(c.path, c.buf.Bytes(), fileMode); err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.path, err.Error())
+	err := c.DB.Batch(func(t *bbolt.Tx) error {
+		bucket, err := t.CreateBucketIfNotExists(bucketSelected)
+		if err != nil {
+			return err
+		}
+		return bucket.Put([]byte(group), []byte(selected))
+	})
+	if err != nil {
+		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
 		return
 	}
 }
@@ -56,46 +51,131 @@ func (c *CacheFile) SetSelected(group, selected string) {
 func (c *CacheFile) SelectedMap() map[string]string {
 	if !profile.StoreSelected.Load() {
 		return nil
+	} else if c.DB == nil {
+		return nil
 	}
-
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	model := c.element()
 
 	mapping := map[string]string{}
-	for k, v := range model.Selected {
-		mapping[k] = v
-	}
+	c.DB.View(func(t *bbolt.Tx) error {
+		bucket := t.Bucket(bucketSelected)
+		if bucket == nil {
+			return nil
+		}
+
+		c := bucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			mapping[string(k)] = string(v)
+		}
+		return nil
+	})
 	return mapping
 }
 
-func (c *CacheFile) element() *cache {
-	if c.model != nil {
-		return c.model
+func (c *CacheFile) PutFakeip(key, value []byte) error {
+	if c.DB == nil {
+		return nil
 	}
 
+	err := c.DB.Batch(func(t *bbolt.Tx) error {
+		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
+		if err != nil {
+			return err
+		}
+		return bucket.Put(key, value)
+	})
+	if err != nil {
+		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
+	}
+
+	return err
+}
+
+func (c *CacheFile) GetFakeip(key []byte) []byte {
+	if c.DB == nil {
+		return nil
+	}
+
+	tx, err := c.DB.Begin(false)
+	if err != nil {
+		return nil
+	}
+	defer tx.Rollback()
+
+	bucket := tx.Bucket(bucketFakeip)
+	if bucket == nil {
+		return nil
+	}
+
+	return bucket.Get(key)
+}
+
+func (c *CacheFile) Close() error {
+	return c.DB.Close()
+}
+
+// TODO: remove migrateCache until 2022
+func migrateCache() {
+	defer func() {
+		options := bbolt.Options{Timeout: time.Second}
+		db, err := bbolt.Open(C.Path.Cache(), fileMode, &options)
+		switch err {
+		case bbolt.ErrInvalid, bbolt.ErrChecksum, bbolt.ErrVersionMismatch:
+			if err = os.Remove(C.Path.Cache()); err != nil {
+				log.Warnln("[CacheFile] remove invalid cache file error: %s", err.Error())
+				break
+			}
+			log.Infoln("[CacheFile] remove invalid cache file and create new one")
+			db, err = bbolt.Open(C.Path.Cache(), fileMode, &options)
+		}
+		if err != nil {
+			log.Warnln("[CacheFile] can't open cache file: %s", err.Error())
+		}
+
+		defaultCache = &CacheFile{
+			DB: db,
+		}
+	}()
+
+	buf, err := os.ReadFile(C.Path.OldCache())
+	if err != nil {
+		return
+	}
+	defer os.Remove(C.Path.OldCache())
+
+	// read old cache file
+	type cache struct {
+		Selected map[string]string
+	}
 	model := &cache{
 		Selected: map[string]string{},
 	}
+	bufReader := bytes.NewBuffer(buf)
+	gob.NewDecoder(bufReader).Decode(model)
 
-	if buf, err := ioutil.ReadFile(c.path); err == nil {
-		bufReader := bytes.NewBuffer(buf)
-		gob.NewDecoder(bufReader).Decode(model)
+	// write to new cache file
+	db, err := bbolt.Open(C.Path.Cache(), fileMode, nil)
+	if err != nil {
+		return
 	}
+	defer db.Close()
 
-	c.model = model
-	return c.model
+	db.Batch(func(t *bbolt.Tx) error {
+		bucket, err := t.CreateBucketIfNotExists(bucketSelected)
+		if err != nil {
+			return err
+		}
+		for group, selected := range model.Selected {
+			if err := bucket.Put([]byte(group), []byte(selected)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Cache return singleton of CacheFile
 func Cache() *CacheFile {
-	initOnce.Do(func() {
-		defaultCache = &CacheFile{
-			path: C.Path.Cache(),
-			buf:  &bytes.Buffer{},
-		}
-	})
+	initOnce.Do(migrateCache)
 
 	return defaultCache
 }

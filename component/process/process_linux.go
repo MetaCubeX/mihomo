@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"path"
 	"path/filepath"
 	"syscall"
@@ -16,17 +16,19 @@ import (
 )
 
 // from https://github.com/vishvananda/netlink/blob/bca67dfc8220b44ef582c9da4e9172bf1c9ec973/nl/nl_linux.go#L52-L62
-func init() {
+var nativeEndian = func() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
-		nativeEndian = binary.BigEndian
-	} else {
-		nativeEndian = binary.LittleEndian
+		return binary.BigEndian
 	}
-}
 
-type SocketResolver func(network string, ip net.IP, srcPort int) (inode, uid int, err error)
-type ProcessNameResolver func(inode, uid int) (name string, err error)
+	return binary.LittleEndian
+}()
+
+type (
+	SocketResolver      func(network string, ip net.IP, srcPort int) (inode, uid int, err error)
+	ProcessNameResolver func(inode, uid int) (name string, err error)
+)
 
 // export for android
 var (
@@ -39,8 +41,6 @@ const (
 	socketDiagByFamily      = 20
 	pathProc                = "/proc"
 )
-
-var nativeEndian binary.ByteOrder = binary.LittleEndian
 
 func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
 	inode, uid, err := DefaultSocketResolver(network, ip, srcPort)
@@ -169,7 +169,7 @@ func unpackSocketDiagResponse(msg *syscall.NetlinkMessage) (inode, uid uint32) {
 }
 
 func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
-	files, err := ioutil.ReadDir(pathProc)
+	files, err := os.ReadDir(pathProc)
 	if err != nil {
 		return "", err
 	}
@@ -182,14 +182,18 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 			continue
 		}
 
-		if f.Sys().(*syscall.Stat_t).Uid != uint32(uid) {
+		info, err := f.Info()
+		if err != nil {
+			return "", err
+		}
+		if info.Sys().(*syscall.Stat_t).Uid != uint32(uid) {
 			continue
 		}
 
 		processPath := path.Join(pathProc, f.Name())
 		fdPath := path.Join(processPath, "fd")
 
-		fds, err := ioutil.ReadDir(fdPath)
+		fds, err := os.ReadDir(fdPath)
 		if err != nil {
 			continue
 		}
@@ -201,7 +205,7 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 			}
 
 			if bytes.Equal(buffer[:n], socket) {
-				cmdline, err := ioutil.ReadFile(path.Join(processPath, "cmdline"))
+				cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
 				if err != nil {
 					return "", err
 				}
