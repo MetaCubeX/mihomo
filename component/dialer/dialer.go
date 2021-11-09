@@ -9,6 +9,22 @@ import (
 )
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
+	opt := &config{}
+
+	for _, o := range options {
+		o(opt)
+	}
+
+	if !opt.skipDefault {
+		for _, o := range DefaultOptions {
+			o(opt)
+		}
+	}
+
+	for _, o := range options {
+		o(opt)
+	}
+
 	switch network {
 	case "tcp4", "tcp6", "udp4", "udp6":
 		host, port, err := net.SplitHostPort(address)
@@ -19,17 +35,25 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 		var ip net.IP
 		switch network {
 		case "tcp4", "udp4":
-			ip, err = resolver.ResolveIPv4(host)
+			if opt.interfaceName != "" {
+				ip, err = resolver.ResolveIPv4WithMain(host)
+			} else {
+				ip, err = resolver.ResolveIPv4(host)
+			}
 		default:
-			ip, err = resolver.ResolveIPv6(host)
+			if opt.interfaceName != "" {
+				ip, err = resolver.ResolveIPv6WithMain(host)
+			} else {
+				ip, err = resolver.ResolveIPv6(host)
+			}
 		}
 		if err != nil {
 			return nil, err
 		}
 
-		return dialContext(ctx, network, ip, port, options)
+		return dialContext(ctx, network, ip, port, opt)
 	case "tcp", "udp":
-		return dualStackDialContext(ctx, network, address, options)
+		return dualStackDialContext(ctx, network, address, opt)
 	default:
 		return nil, errors.New("network invalid")
 	}
@@ -37,6 +61,10 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
 	cfg := &config{}
+
+	for _, o := range options {
+		o(cfg)
+	}
 
 	if !cfg.skipDefault {
 		for _, o := range DefaultOptions {
@@ -63,19 +91,7 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 	return lc.ListenPacket(ctx, network, address)
 }
 
-func dialContext(ctx context.Context, network string, destination net.IP, port string, options []Option) (net.Conn, error) {
-	opt := &config{}
-
-	if !opt.skipDefault {
-		for _, o := range DefaultOptions {
-			o(opt)
-		}
-	}
-
-	for _, o := range options {
-		o(opt)
-	}
-
+func dialContext(ctx context.Context, network string, destination net.IP, port string, opt *config) (net.Conn, error) {
 	dialer := &net.Dialer{}
 	if opt.interfaceName != "" {
 		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
@@ -86,7 +102,7 @@ func dialContext(ctx context.Context, network string, destination net.IP, port s
 	return dialer.DialContext(ctx, network, net.JoinHostPort(destination.String(), port))
 }
 
-func dualStackDialContext(ctx context.Context, network, address string, options []Option) (net.Conn, error) {
+func dualStackDialContext(ctx context.Context, network, address string, opt *config) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
@@ -119,16 +135,24 @@ func dualStackDialContext(ctx context.Context, network, address string, options 
 
 		var ip net.IP
 		if ipv6 {
-			ip, result.error = resolver.ResolveIPv6(host)
+			if opt.interfaceName != "" {
+				ip, result.error = resolver.ResolveIPv6WithMain(host)
+			} else {
+				ip, result.error = resolver.ResolveIPv6(host)
+			}
 		} else {
-			ip, result.error = resolver.ResolveIPv4(host)
+			if opt.interfaceName != "" {
+				ip, result.error = resolver.ResolveIPv4WithMain(host)
+			} else {
+				ip, result.error = resolver.ResolveIPv4(host)
+			}
 		}
 		if result.error != nil {
 			return
 		}
 		result.resolved = true
 
-		result.Conn, result.error = dialContext(ctx, network, ip, port, options)
+		result.Conn, result.error = dialContext(ctx, network, ip, port, opt)
 	}
 
 	go startRacer(ctx, network+"4", host, false)

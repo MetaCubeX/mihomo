@@ -42,7 +42,7 @@ type udpHandler struct {
 	udpIn chan<- *inbound.PacketAdapter
 }
 
-func NewUDPHandler(dnsIP net.IP, udpIn chan<- *inbound.PacketAdapter) golwip.UDPConnHandler {
+func newUDPHandler(dnsIP net.IP, udpIn chan<- *inbound.PacketAdapter) golwip.UDPConnHandler {
 	return &udpHandler{dnsIP, udpIn}
 }
 

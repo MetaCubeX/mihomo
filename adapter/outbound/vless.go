@@ -209,8 +209,8 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	return NewConn(c, v), err
 }
 
-// DialUDP implements C.ProxyAdapter
-func (v *Vless) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
+// ListenPacketContext implements C.ProxyAdapter
+func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(metadata.Host)
@@ -231,8 +231,6 @@ func (v *Vless) DialUDP(metadata *C.Metadata) (_ C.PacketConn, err error) {
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-		defer cancel()
 		c, err = dialer.DialContext(ctx, "tcp", v.addr)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())

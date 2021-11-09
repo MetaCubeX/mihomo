@@ -1,12 +1,16 @@
 package dns
 
 import (
+	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/tunnel"
 
 	D "github.com/miekg/dns"
 )
@@ -51,7 +55,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver))
+			ret = append(ret, newDoHClient(s.Addr, resolver, s.ProxyAdapter))
 			continue
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
@@ -70,10 +74,11 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 				UDPSize: 4096,
 				Timeout: 5 * time.Second,
 			},
-			port:  port,
-			host:  host,
-			iface: s.Interface,
-			r:     resolver,
+			port:         port,
+			host:         host,
+			iface:        s.Interface,
+			r:            resolver,
+			proxyAdapter: s.ProxyAdapter,
 		})
 	}
 	return ret
@@ -103,4 +108,27 @@ func msgToIP(msg *D.Msg) []net.IP {
 	}
 
 	return ips
+}
+
+func dialContextWithProxyAdapter(ctx context.Context, adapterName string, dstIP net.IP, port string) (net.Conn, error) {
+	adapter, ok := tunnel.Proxies()[adapterName]
+	if !ok {
+		return nil, fmt.Errorf("proxy dapter [%s] not found", adapterName)
+	}
+
+	addrType := C.AtypIPv4
+
+	if dstIP.To4() == nil {
+		addrType = C.AtypIPv6
+	}
+
+	metadata := &C.Metadata{
+		NetWork:  C.TCP,
+		AddrType: addrType,
+		Host:     "",
+		DstIP:    dstIP,
+		DstPort:  port,
+	}
+
+	return adapter.DialContext(ctx, metadata)
 }

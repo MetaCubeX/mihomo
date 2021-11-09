@@ -50,7 +50,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, tcpIn chan<- C.C
 	})
 
 	// Set custom buffer pool
-	golwip.SetPoolAllocator(&lwipPool{})
+	golwip.SetPoolAllocator(newLWIPPool())
 
 	// Setup TCP/IP stack.
 	lwipStack, err := golwip.NewLWIPStack(mtu)
@@ -59,9 +59,9 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, tcpIn chan<- C.C
 	}
 	adapter.lwipStack = lwipStack
 
-	golwip.RegisterDnsHandler(NewDnsHandler())
-	golwip.RegisterTCPConnHandler(NewTCPHandler(dnsIP, tcpIn))
-	golwip.RegisterUDPConnHandler(NewUDPHandler(dnsIP, udpIn))
+	golwip.RegisterDnsHandler(newDnsHandler())
+	golwip.RegisterTCPConnHandler(newTCPHandler(dnsIP, tcpIn))
+	golwip.RegisterUDPConnHandler(newUDPHandler(dnsIP, udpIn))
 
 	// Copy packets from tun device to lwip stack, it's the loop.
 	go func(lwipStack golwip.LWIPStack, device dev.TunDevice, mtu int) {
@@ -95,7 +95,7 @@ func (l *lwipAdapter) Close() {
 
 func (l *lwipAdapter) stopLocked() {
 	if l.lwipStack != nil {
-		l.lwipStack.Close()
+		_ = l.lwipStack.Close()
 	}
 
 	if l.device != nil {
@@ -114,4 +114,8 @@ func (p lwipPool) Get(size int) []byte {
 
 func (p lwipPool) Put(buf []byte) error {
 	return pool.Put(buf)
+}
+
+func newLWIPPool() golwip.LWIPPool {
+	return &lwipPool{}
 }

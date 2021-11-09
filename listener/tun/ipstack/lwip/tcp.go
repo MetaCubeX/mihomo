@@ -15,7 +15,7 @@ type tcpHandler struct {
 	tcpIn chan<- C.ConnContext
 }
 
-func NewTCPHandler(dnsIP net.IP, tcpIn chan<- C.ConnContext) golwip.TCPConnHandler {
+func newTCPHandler(dnsIP net.IP, tcpIn chan<- C.ConnContext) golwip.TCPConnHandler {
 	return &tcpHandler{dnsIP, tcpIn}
 }
 

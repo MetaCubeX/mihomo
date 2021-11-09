@@ -28,10 +28,6 @@ func hijackUDPDns(conn golwip.UDPConn, pkt []byte, addr *net.UDPAddr) {
 			_ = conn.Close()
 		}(conn)
 
-		if err := conn.SetDeadline(time.Now().Add(defaultDnsReadTimeout)); err != nil {
-			return
-		}
-
 		answer, err := D.RelayDnsPacket(pkt)
 		if err != nil {
 			return
@@ -81,7 +77,7 @@ func hijackTCPDns(conn net.Conn) {
 
 type dnsHandler struct{}
 
-func NewDnsHandler() golwip.DnsHandler {
+func newDnsHandler() golwip.DnsHandler {
 	return &dnsHandler{}
 }
 
