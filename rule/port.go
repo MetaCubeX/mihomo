@@ -52,7 +52,11 @@ func (p *Port) RuleExtra() *C.RuleExtra {
 }
 
 func (p *Port) matchPortReal(portRef string) bool {
-	port, _ := strconv.Atoi(portRef)
+	port, err := strconv.Atoi(portRef)
+	if err != nil {
+		return false
+	}
+
 	var rs bool
 	for _, pr := range p.portList {
 		if pr.portEnd == -1 {
