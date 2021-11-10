@@ -27,14 +27,21 @@ func bindControl(ifaceIdx int, chain controlFn) controlFn {
 			}
 		}
 
-		return c.Control(func(fd uintptr) {
+		var innerErr error
+		err = c.Control(func(fd uintptr) {
 			switch network {
 			case "tcp4", "udp4":
-				unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_BOUND_IF, ifaceIdx)
+				innerErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_BOUND_IF, ifaceIdx)
 			case "tcp6", "udp6":
-				unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_BOUND_IF, ifaceIdx)
+				innerErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_BOUND_IF, ifaceIdx)
 			}
 		})
+
+		if innerErr != nil {
+			err = innerErr
+		}
+
+		return
 	}
 }
 
