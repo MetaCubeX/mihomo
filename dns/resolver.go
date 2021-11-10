@@ -379,6 +379,7 @@ func NewMainResolver(old *Resolver) *Resolver {
 		main:     old.main,
 		lruCache: old.lruCache,
 		hosts:    old.hosts,
+		policy:   old.policy,
 	}
 	return r
 }
