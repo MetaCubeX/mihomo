@@ -110,24 +110,61 @@ func msgToIP(msg *D.Msg) []net.IP {
 	return ips
 }
 
-func dialContextWithProxyAdapter(ctx context.Context, adapterName string, dstIP net.IP, port string) (net.Conn, error) {
+type wrapPacketConn struct {
+	net.PacketConn
+	rAddr net.Addr
+}
+
+func (wpc *wrapPacketConn) Read(b []byte) (n int, err error) {
+	n, _, err = wpc.PacketConn.ReadFrom(b)
+	return n, err
+}
+
+func (wpc *wrapPacketConn) Write(b []byte) (n int, err error) {
+	return wpc.PacketConn.WriteTo(b, wpc.rAddr)
+}
+
+func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
+	return wpc.rAddr
+}
+
+func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP net.IP, port string) (net.Conn, error) {
 	adapter, ok := tunnel.Proxies()[adapterName]
 	if !ok {
-		return nil, fmt.Errorf("proxy dapter [%s] not found", adapterName)
+		return nil, fmt.Errorf("proxy adapter [%s] not found", adapterName)
+	}
+
+	networkType := C.TCP
+	if network == "udp" {
+		if !adapter.SupportUDP() {
+			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
+		}
+		networkType = C.UDP
 	}
 
 	addrType := C.AtypIPv4
-
 	if dstIP.To4() == nil {
 		addrType = C.AtypIPv6
 	}
 
 	metadata := &C.Metadata{
-		NetWork:  C.TCP,
+		NetWork:  networkType,
 		AddrType: addrType,
 		Host:     "",
 		DstIP:    dstIP,
 		DstPort:  port,
+	}
+
+	if networkType == C.UDP {
+		packetConn, err := adapter.ListenPacketContext(ctx, metadata)
+		if err != nil {
+			return nil, err
+		}
+
+		return &wrapPacketConn{
+			PacketConn: packetConn,
+			rAddr:      metadata.UDPAddr(),
+		}, nil
 	}
 
 	return adapter.DialContext(ctx, metadata)
