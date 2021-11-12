@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -128,7 +129,7 @@ func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
 	return wpc.rAddr
 }
 
-func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP net.IP, port string) (net.Conn, error) {
+func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP net.IP, port string, opts ...dialer.Option) (net.Conn, error) {
 	adapter, ok := tunnel.Proxies()[adapterName]
 	if !ok {
 		return nil, fmt.Errorf("proxy adapter [%s] not found", adapterName)
@@ -156,7 +157,7 @@ func dialContextWithProxyAdapter(ctx context.Context, adapterName string, networ
 	}
 
 	if networkType == C.UDP {
-		packetConn, err := adapter.ListenPacketContext(ctx, metadata)
+		packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -167,5 +168,5 @@ func dialContextWithProxyAdapter(ctx context.Context, adapterName string, networ
 		}, nil
 	}
 
-	return adapter.DialContext(ctx, metadata)
+	return adapter.DialContext(ctx, metadata, opts...)
 }
