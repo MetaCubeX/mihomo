@@ -1,6 +1,7 @@
 package config
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"net"
@@ -76,6 +77,12 @@ type FallbackFilter struct {
 	IPCIDR    []*net.IPNet `yaml:"ipcidr"`
 	Domain    []string     `yaml:"domain"`
 }
+
+var (
+	GroupsList             = list.New()
+	ProxiesList            = list.New()
+	ParsingProxiesCallback func(groupsList *list.List, proxiesList *list.List)
+)
 
 // Profile config
 type Profile struct {
@@ -276,6 +283,8 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]providerTypes.ProxyProvider)
 	proxyList := []string{}
+	_proxiesList := list.New()
+	_groupsList := list.New()
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
@@ -296,6 +305,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 		proxies[proxy.Name()] = proxy
 		proxyList = append(proxyList, proxy.Name())
+		_proxiesList.PushBack(mapping)
 	}
 
 	// keep the original order of ProxyGroups in config file
@@ -305,6 +315,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			return nil, nil, fmt.Errorf("proxy group %d: missing name", idx)
 		}
 		proxyList = append(proxyList, groupName)
+		_groupsList.PushBack(mapping)
 	}
 
 	// check if any loop exists and sort the ProxyGroups
@@ -375,6 +386,12 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		[]providerTypes.ProxyProvider{pd},
 	)
 	proxies["GLOBAL"] = adapter.NewProxy(global)
+	ProxiesList = _proxiesList
+	GroupsList = _groupsList
+	if ParsingProxiesCallback != nil {
+		// refresh tray menu
+		go ParsingProxiesCallback(GroupsList, ProxiesList)
+	}
 	return proxies, providersMap, nil
 }
 
