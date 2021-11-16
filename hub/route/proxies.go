@@ -17,6 +17,10 @@ import (
 	"github.com/go-chi/render"
 )
 
+var (
+	SwitchProxiesCallback func(sGroup string, sProxy string)
+)
+
 func proxyRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getProxies)
