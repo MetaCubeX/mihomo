@@ -7,8 +7,9 @@ import (
 )
 
 type DomainKeyword struct {
-	keyword string
-	adapter string
+	keyword   string
+	adapter   string
+	ruleExtra *C.RuleExtra
 }
 
 func (dk *DomainKeyword) RuleType() C.RuleType {
@@ -35,9 +36,14 @@ func (dk *DomainKeyword) ShouldResolveIP() bool {
 	return false
 }
 
-func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
+func (dk *DomainKeyword) RuleExtra() *C.RuleExtra {
+	return dk.ruleExtra
+}
+
+func NewDomainKeyword(keyword string, adapter string, ruleExtra *C.RuleExtra) *DomainKeyword {
 	return &DomainKeyword{
-		keyword: strings.ToLower(keyword),
-		adapter: adapter,
+		keyword:   strings.ToLower(keyword),
+		adapter:   adapter,
+		ruleExtra: ruleExtra,
 	}
 }

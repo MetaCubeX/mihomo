@@ -20,6 +20,7 @@ const (
 	Socks5
 	Http
 	Vmess
+	Vless
 	Trojan
 
 	Relay
@@ -141,6 +142,8 @@ func (at AdapterType) String() string {
 		return "Http"
 	case Vmess:
 		return "Vmess"
+	case Vless:
+		return "Vless"
 	case Trojan:
 		return "Trojan"
 

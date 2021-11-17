@@ -14,8 +14,9 @@ import (
 var processCache = cache.NewLRUCache(cache.WithAge(2), cache.WithSize(64))
 
 type Process struct {
-	adapter string
-	process string
+	adapter   string
+	process   string
+	ruleExtra *C.RuleExtra
 }
 
 func (ps *Process) RuleType() C.RuleType {
@@ -23,6 +24,15 @@ func (ps *Process) RuleType() C.RuleType {
 }
 
 func (ps *Process) Match(metadata *C.Metadata) bool {
+	if metadata.Process != "" {
+		return strings.EqualFold(metadata.Process, ps.process)
+	}
+
+	// ignore match in proxy type "tproxy"
+	if metadata.Type == C.TPROXY {
+		return false
+	}
+
 	key := fmt.Sprintf("%s:%s:%s", metadata.NetWork.String(), metadata.SrcIP.String(), metadata.SrcPort)
 	cached, hit := processCache.Get(key)
 	if !hit {
@@ -42,7 +52,9 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 		cached = name
 	}
 
-	return strings.EqualFold(cached.(string), ps.process)
+	metadata.Process = cached.(string)
+
+	return strings.EqualFold(metadata.Process, ps.process)
 }
 
 func (ps *Process) Adapter() string {
@@ -57,9 +69,14 @@ func (ps *Process) ShouldResolveIP() bool {
 	return false
 }
 
-func NewProcess(process string, adapter string) (*Process, error) {
+func (ps *Process) RuleExtra() *C.RuleExtra {
+	return ps.ruleExtra
+}
+
+func NewProcess(process string, adapter string, ruleExtra *C.RuleExtra) (*Process, error) {
 	return &Process{
-		adapter: adapter,
-		process: process,
+		adapter:   adapter,
+		process:   process,
+		ruleExtra: ruleExtra,
 	}, nil
 }

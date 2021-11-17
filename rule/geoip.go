@@ -11,6 +11,7 @@ type GEOIP struct {
 	country     string
 	adapter     string
 	noResolveIP bool
+	ruleExtra   *C.RuleExtra
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -23,7 +24,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 		return false
 	}
 
-	if strings.EqualFold(g.country, "LAN") {
+	if strings.EqualFold(g.country, "LAN") || C.TunBroadcastAddr.Equal(ip) {
 		return ip.IsPrivate()
 	}
 	record, _ := mmdb.Instance().Country(ip)
@@ -42,12 +43,21 @@ func (g *GEOIP) ShouldResolveIP() bool {
 	return !g.noResolveIP
 }
 
-func NewGEOIP(country string, adapter string, noResolveIP bool) *GEOIP {
+func (g *GEOIP) RuleExtra() *C.RuleExtra {
+	return g.ruleExtra
+}
+
+func (g *GEOIP) GetCountry() string {
+	return g.country
+}
+
+func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.RuleExtra) (*GEOIP, error) {
 	geoip := &GEOIP{
 		country:     country,
 		adapter:     adapter,
 		noResolveIP: noResolveIP,
+		ruleExtra:   ruleExtra,
 	}
 
-	return geoip
+	return geoip, nil
 }

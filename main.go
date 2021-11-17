@@ -46,9 +46,9 @@ func init() {
 }
 
 func main() {
-	maxprocs.Set(maxprocs.Logger(func(string, ...interface{}) {}))
+	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...interface{}) {}))
 	if version {
-		fmt.Printf("Clash %s %s %s with %s %s\n", C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
+		fmt.Printf("Clash Plus Pro %s %s %s with %s %s\n", C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
 		return
 	}
 
@@ -101,6 +101,12 @@ func main() {
 	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
+
+	// clean up
+	log.Warnln("Clash clean up")
+	hub.CleanUp()
+
+	log.Warnln("Clash shutting down")
 }
