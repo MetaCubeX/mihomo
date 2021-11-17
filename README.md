@@ -289,6 +289,7 @@ If you want to build an application that uses clash as a library, check out the 
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 * [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
+* [yaling888/clash-plus-pro](https://github.com/yaling888/clash)
 
 ## License
 
