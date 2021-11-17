@@ -292,9 +292,9 @@ func (uc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 }
 
 func NewVless(option VlessOption) (*Vless, error) {
-	//if !option.TLS {
-	//	return nil, fmt.Errorf("TLS must be true with vless")
-	//}
+	if !option.TLS && option.Network =="grpc"{
+		return nil, fmt.Errorf("TLS must be true with vless-grpc")
+	}
 
 	var addons *vless.Addons
 	if option.Network != "ws" && len(option.Flow) >= 16 {
