@@ -12,6 +12,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -149,7 +150,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	return
 }
 
-func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
+func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (*D.Msg, error) {
 	fast, ctx := picker.WithTimeout(ctx, resolver.DefaultDNSTimeout)
 	for _, client := range clients {
 		r := client
@@ -173,8 +174,8 @@ func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.
 		return nil, err
 	}
 
-	msg = elm.(*D.Msg)
-	return
+	msg := elm.(*D.Msg)
+	return msg, nil
 }
 
 func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
@@ -215,7 +216,7 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 	return false
 }
 
-func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
+func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (*D.Msg, error) {
 	if matched := r.matchPolicy(m); len(matched) != 0 {
 		res := <-r.asyncExchange(ctx, matched, m)
 		return res.Msg, res.Error
@@ -230,27 +231,22 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 
 	msgCh := r.asyncExchange(ctx, r.main, m)
 
-	if r.fallback == nil { // directly return if no fallback servers are available
+	if r.fallback == nil || len(r.fallback) == 0 { // directly return if no fallback servers are available
 		res := <-msgCh
-		msg, err = res.Msg, res.Error
-		return
+		return res.Msg, res.Error
 	}
 
-	fallbackMsg := r.asyncExchange(ctx, r.fallback, m)
 	res := <-msgCh
 	if res.Error == nil {
 		if ips := msgToIP(res.Msg); len(ips) != 0 {
 			if !r.shouldIPFallback(ips[0]) {
-				msg = res.Msg // no need to wait for fallback result
-				err = res.Error
-				return msg, err
+				return res.Msg, res.Error // no need to wait for fallback result
 			}
 		}
 	}
 
-	res = <-fallbackMsg
-	msg, err = res.Msg, res.Error
-	return
+	res = <-r.asyncExchange(ctx, r.fallback, m)
+	return res.Msg, res.Error
 }
 
 func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error) {
@@ -302,9 +298,10 @@ func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D
 }
 
 type NameServer struct {
-	Net       string
-	Addr      string
-	Interface string
+	Net          string
+	Addr         string
+	Interface    string
+	ProxyAdapter string
 }
 
 type FallbackFilter struct {
@@ -312,6 +309,7 @@ type FallbackFilter struct {
 	GeoIPCode string
 	IPCIDR    []*net.IPNet
 	Domain    []string
+	GeoSite   []*router.DomainMatcher
 }
 
 type Config struct {
@@ -360,10 +358,28 @@ func NewResolver(config Config) *Resolver {
 	}
 	r.fallbackIPFilters = fallbackIPFilters
 
+	fallbackDomainFilters := []fallbackDomainFilter{}
 	if len(config.FallbackFilter.Domain) != 0 {
-		fallbackDomainFilters := []fallbackDomainFilter{NewDomainFilter(config.FallbackFilter.Domain)}
-		r.fallbackDomainFilters = fallbackDomainFilters
+		fallbackDomainFilters = append(fallbackDomainFilters, NewDomainFilter(config.FallbackFilter.Domain))
 	}
 
+	if len(config.FallbackFilter.GeoSite) != 0 {
+		fallbackDomainFilters = append(fallbackDomainFilters, &geoSiteFilter{
+			matchers: config.FallbackFilter.GeoSite,
+		})
+	}
+	r.fallbackDomainFilters = fallbackDomainFilters
+
+	return r
+}
+
+func NewMainResolver(old *Resolver) *Resolver {
+	r := &Resolver{
+		ipv6:     old.ipv6,
+		main:     old.main,
+		lruCache: old.lruCache,
+		hosts:    old.hosts,
+		policy:   old.policy,
+	}
 	return r
 }

@@ -1,6 +1,0 @@
-blank_issues_enabled: false
-
-contact_links:
-  - name: Get help in GitHub Discussions
-    url: https://github.com/Dreamacro/clash/discussions
-    about: Have a question? Not sure if your issue affects everyone reproducibly? The quickest way to get help is on Clash's GitHub Discussions!

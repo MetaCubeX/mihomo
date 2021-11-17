@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -15,6 +17,9 @@ import (
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/geodata/router"
+	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
@@ -43,6 +48,7 @@ type Inbound struct {
 	RedirPort      int      `json:"redir-port"`
 	TProxyPort     int      `json:"tproxy-port"`
 	MixedPort      int      `json:"mixed-port"`
+	Tun            Tun      `json:"tun"`
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
@@ -72,10 +78,11 @@ type DNS struct {
 
 // FallbackFilter config
 type FallbackFilter struct {
-	GeoIP     bool         `yaml:"geoip"`
-	GeoIPCode string       `yaml:"geoip-code"`
-	IPCIDR    []*net.IPNet `yaml:"ipcidr"`
-	Domain    []string     `yaml:"domain"`
+	GeoIP     bool                    `yaml:"geoip"`
+	GeoIPCode string                  `yaml:"geoip-code"`
+	IPCIDR    []*net.IPNet            `yaml:"ipcidr"`
+	Domain    []string                `yaml:"domain"`
+	GeoSite   []*router.DomainMatcher `yaml:"geosite"`
 }
 
 var (
@@ -90,20 +97,36 @@ type Profile struct {
 	StoreFakeIP   bool `yaml:"store-fake-ip"`
 }
 
+// Tun config
+type Tun struct {
+	Enable    bool   `yaml:"enable" json:"enable"`
+	Stack     string `yaml:"stack" json:"stack"`
+	DNSListen string `yaml:"dns-listen" json:"dns-listen"`
+	AutoRoute bool   `yaml:"auto-route" json:"auto-route"`
+}
+
+// Script config
+type Script struct {
+	MainCode      string            `yaml:"code" json:"code"`
+	ShortcutsCode map[string]string `yaml:"shortcuts" json:"shortcuts"`
+}
+
 // Experimental config
 type Experimental struct{}
 
 // Config is clash config manager
 type Config struct {
-	General      *General
-	DNS          *DNS
-	Experimental *Experimental
-	Hosts        *trie.DomainTrie
-	Profile      *Profile
-	Rules        []C.Rule
-	Users        []auth.AuthUser
-	Proxies      map[string]C.Proxy
-	Providers    map[string]providerTypes.ProxyProvider
+	General       *General
+	Tun           *Tun
+	DNS           *DNS
+	Experimental  *Experimental
+	Hosts         *trie.DomainTrie
+	Profile       *Profile
+	Rules         []C.Rule
+	RuleProviders map[string]C.Rule
+	Users         []auth.AuthUser
+	Proxies       map[string]C.Proxy
+	Providers     map[string]providerTypes.ProxyProvider
 }
 
 type RawDNS struct {
@@ -126,6 +149,7 @@ type RawFallbackFilter struct {
 	GeoIPCode string   `yaml:"geoip-code"`
 	IPCIDR    []string `yaml:"ipcidr"`
 	Domain    []string `yaml:"domain"`
+	GeoSite   []string `yaml:"geosite"`
 }
 
 type RawConfig struct {
@@ -148,11 +172,13 @@ type RawConfig struct {
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	Hosts         map[string]string                 `yaml:"hosts"`
 	DNS           RawDNS                            `yaml:"dns"`
+	Tun           Tun                               `yaml:"tun"`
 	Experimental  Experimental                      `yaml:"experimental"`
 	Profile       Profile                           `yaml:"profile"`
 	Proxy         []map[string]interface{}          `yaml:"proxies"`
 	ProxyGroup    []map[string]interface{}          `yaml:"proxy-groups"`
 	Rule          []string                          `yaml:"rules"`
+	Script        Script                            `yaml:"script"`
 }
 
 // Parse config
@@ -177,6 +203,12 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Rule:           []string{},
 		Proxy:          []map[string]interface{}{},
 		ProxyGroup:     []map[string]interface{}{},
+		Tun: Tun{
+			Enable:    false,
+			Stack:     "lwip",
+			DNSListen: "0.0.0.0:53",
+			AutoRoute: true,
+		},
 		DNS: RawDNS{
 			Enable:      false,
 			UseHosts:    true,
@@ -185,14 +217,19 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				GeoIP:     true,
 				GeoIPCode: "CN",
 				IPCIDR:    []string{},
+				GeoSite:   []string{},
 			},
 			DefaultNameserver: []string{
 				"114.114.114.114",
-				"8.8.8.8",
+				"223.5.5.5",
 			},
 		},
 		Profile: Profile{
 			StoreSelected: true,
+		},
+		Script: Script{
+			MainCode:      "",
+			ShortcutsCode: map[string]string{},
 		},
 	}
 
@@ -222,11 +259,17 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.Proxies = proxies
 	config.Providers = providers
 
-	rules, err := parseRules(rawCfg, proxies)
+	err = parseScript(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	rules, ruleProviders, err := parseRules(rawCfg, proxies)
 	if err != nil {
 		return nil, err
 	}
 	config.Rules = rules
+	config.RuleProviders = ruleProviders
 
 	hosts, err := parseHosts(rawCfg)
 	if err != nil {
@@ -234,7 +277,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
-	dnsCfg, err := parseDNS(rawCfg, hosts)
+	dnsCfg, err := parseDNS(rawCfg, hosts, rules)
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +307,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			RedirPort:   cfg.RedirPort,
 			TProxyPort:  cfg.TProxyPort,
 			MixedPort:   cfg.MixedPort,
+			Tun:         cfg.Tun,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
 		},
@@ -337,10 +381,10 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 	}
 
-	for _, provider := range providersMap {
-		log.Infoln("Start initial provider %s", provider.Name())
-		if err := provider.Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", provider.Name(), err)
+	for _, rp := range providersMap {
+		log.Infoln("Start initial provider %s", rp.Name())
+		if err := rp.Initial(); err != nil {
+			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", rp.Name(), err)
 		}
 	}
 
@@ -395,23 +439,109 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	return proxies, providersMap, nil
 }
 
-func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
+func parseScript(cfg *RawConfig) error {
+	mode := cfg.Mode
+	script := cfg.Script
+	mainCode := cleanPyKeywords(script.MainCode)
+	shortcutsCode := script.ShortcutsCode
+
+	if mode != T.Script && len(shortcutsCode) == 0 {
+		return nil
+	} else if mode == T.Script && len(mainCode) == 0 {
+		return fmt.Errorf("initialized script module failure, can't find script code in the config file")
+	}
+
+	content :=
+		`# -*- coding: UTF-8 -*-
+
+from datetime import datetime as whatever
+
+class ClashTime:
+  def now(self):
+    return whatever.now()
+  
+  def unix(self):
+    return int(whatever.now().timestamp())
+
+  def unix_nano(self):
+    return int(round(whatever.now().timestamp() * 1000))
+
+time = ClashTime()
+
+`
+
+	var shouldInitPy bool
+	if mode == T.Script {
+		content += mainCode + "\n\n"
+		shouldInitPy = true
+	}
+
+	for k, v := range shortcutsCode {
+		v = cleanPyKeywords(v)
+		v = strings.TrimSpace(v)
+		if len(v) == 0 {
+			return fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code invalid syntax", k)
+		}
+
+		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
+		shouldInitPy = true
+	}
+
+	if !shouldInitPy {
+		return nil
+	}
+
+	err := os.WriteFile(C.Path.Script(), []byte(content), 0o644)
+	if err != nil {
+		return fmt.Errorf("initialized script module failure, %s", err.Error())
+	}
+
+	if err = S.Py_Initialize(C.Path.GetExecutableFullPath(), C.Path.ScriptDir()); err != nil {
+		return fmt.Errorf("initialized script module failure, %s", err.Error())
+	} else if mode == T.Script {
+		if err = S.LoadMainFunction(); err != nil {
+			return fmt.Errorf("initialized script module failure, %s", err.Error())
+		}
+	}
+
+	log.Infoln("Start initial script module successful, version: %s", S.Py_GetVersion())
+
+	return nil
+}
+
+func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]C.Rule, error) {
 	rules := []C.Rule{}
+	ruleProviders := map[string]C.Rule{}
 	rulesConfig := cfg.Rule
+	mode := cfg.Mode
+
+	providerNames := []string{}
+	isPyInit := S.Py_IsInitialized()
 
 	// parse rules
 	for idx, line := range rulesConfig {
 		rule := trimArr(strings.Split(line, ","))
 		var (
-			payload string
-			target  string
-			params  = []string{}
+			payload  string
+			target   string
+			params   = []string{}
+			ruleName = strings.ToUpper(rule[0])
 		)
+
+		if mode == T.Script && ruleName != "GEOSITE" {
+			continue
+		}
 
 		switch l := len(rule); {
 		case l == 2:
 			target = rule[1]
 		case l == 3:
+			if ruleName == "MATCH" {
+				payload = ""
+				target = rule[1]
+				params = rule[2:]
+				break
+			}
 			payload = rule[1]
 			target = rule[2]
 		case l >= 4:
@@ -419,25 +549,45 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 			target = rule[2]
 			params = rule[3:]
 		default:
-			return nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
+			return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 		}
 
-		if _, ok := proxies[target]; !ok {
-			return nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
+		if _, ok := proxies[target]; mode != T.Script && !ok {
+			return nil, nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
 		}
 
-		rule = trimArr(rule)
 		params = trimArr(params)
 
-		parsed, parseErr := R.ParseRule(rule[0], payload, target, params)
+		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
-			return nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
+			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
 
-		rules = append(rules, parsed)
+		if isPyInit {
+			if ruleName == "GEOSITE" {
+				pvName := "geosite:" + strings.ToLower(payload)
+				providerNames = append(providerNames, pvName)
+				ruleProviders[pvName] = parsed
+			}
+		}
+
+		if mode != T.Script {
+			rules = append(rules, parsed)
+		}
 	}
 
-	return rules, nil
+	runtime.GC()
+
+	if isPyInit {
+		err := S.NewClashPyContext(providerNames)
+		if err != nil {
+			return nil, nil, err
+		} else {
+			log.Infoln("Start initial script context successful, provider records: %v", len(providerNames))
+		}
+	}
+
+	return rules, ruleProviders, nil
 }
 
 func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
@@ -454,7 +604,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 			if ip == nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
-			tree.Insert(domain, ip)
+			_ = tree.Insert(domain, ip)
 		}
 	}
 
@@ -520,8 +670,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 		nameservers = append(
 			nameservers,
 			dns.NameServer{
-				Net:  dnsNetType,
-				Addr: addr,
+				Net:          dnsNetType,
+				Addr:         addr,
+				ProxyAdapter: u.Fragment,
 			},
 		)
 	}
@@ -559,7 +710,37 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 	return ipNets, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
+func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
+	sites := []*router.DomainMatcher{}
+
+	for _, country := range countries {
+		found := false
+		for _, rule := range rules {
+			if rule.RuleType() == C.GEOSITE {
+				if strings.EqualFold(country, rule.Payload()) {
+					found = true
+					sites = append(sites, rule.(C.RuleGeoSite).GetDomainMatcher())
+					log.Infoln("Start initial GeoSite dns fallback filter from rule `%s`", country)
+				}
+			}
+		}
+
+		if !found {
+			matcher, recordsCount, err := geodata.LoadGeoSiteMatcher(country)
+			if err != nil {
+				return nil, err
+			}
+
+			sites = append(sites, matcher)
+
+			log.Infoln("Start initial GeoSite dns fallback filter `%s`, records: %d", country, recordsCount)
+		}
+	}
+	runtime.GC()
+	return sites, nil
+}
+
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -571,7 +752,8 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
-			IPCIDR: []*net.IPNet{},
+			IPCIDR:  []*net.IPNet{},
+			GeoSite: []*router.DomainMatcher{},
 		},
 	}
 	var err error
@@ -612,7 +794,19 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New()
 			for _, domain := range cfg.FakeIPFilter {
-				host.Insert(domain, true)
+				_ = host.Insert(domain, true)
+			}
+		}
+
+		if len(dnsCfg.Fallback) != 0 {
+			if host == nil {
+				host = trie.New()
+			}
+			for _, fb := range dnsCfg.Fallback {
+				if net.ParseIP(fb.Addr) != nil {
+					continue
+				}
+				host.Insert(fb.Addr, true)
 			}
 		}
 
@@ -629,12 +823,19 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie) (*DNS, error) {
 		dnsCfg.FakeIPRange = pool
 	}
 
-	dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
-	dnsCfg.FallbackFilter.GeoIPCode = cfg.FallbackFilter.GeoIPCode
-	if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
-		dnsCfg.FallbackFilter.IPCIDR = fallbackip
+	if len(cfg.Fallback) != 0 {
+		dnsCfg.FallbackFilter.GeoIP = cfg.FallbackFilter.GeoIP
+		dnsCfg.FallbackFilter.GeoIPCode = cfg.FallbackFilter.GeoIPCode
+		if fallbackip, err := parseFallbackIPCIDR(cfg.FallbackFilter.IPCIDR); err == nil {
+			dnsCfg.FallbackFilter.IPCIDR = fallbackip
+		}
+		dnsCfg.FallbackFilter.Domain = cfg.FallbackFilter.Domain
+		fallbackGeoSite, err := parseFallbackGeoSite(cfg.FallbackFilter.GeoSite, rules)
+		if err != nil {
+			return nil, fmt.Errorf("load GeoSite dns fallback filter error, %w", err)
+		}
+		dnsCfg.FallbackFilter.GeoSite = fallbackGeoSite
 	}
-	dnsCfg.FallbackFilter.Domain = cfg.FallbackFilter.Domain
 
 	if cfg.UseHosts {
 		dnsCfg.Hosts = hosts
@@ -652,4 +853,17 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 		}
 	}
 	return users
+}
+
+func cleanPyKeywords(code string) string {
+	if len(code) == 0 {
+		return code
+	}
+	keywords := []string{"import", "print"}
+
+	for _, kw := range keywords {
+		reg := regexp.MustCompile("(?m)[\r\n]+^.*" + kw + ".*$")
+		code = reg.ReplaceAllString(code, "")
+	}
+	return code
 }
