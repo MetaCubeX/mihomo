@@ -21,7 +21,7 @@ func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 
 // ListenPacketContext implements C.ProxyAdapter
 func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	return newPacketConn(newNopPacketConn(), r), nil
+	return newPacketConn(&nopPacketConn{}, r), nil
 }
 
 func NewReject() *Reject {
@@ -51,31 +51,12 @@ func (rw *nopConn) SetDeadline(time.Time) error      { return nil }
 func (rw *nopConn) SetReadDeadline(time.Time) error  { return nil }
 func (rw *nopConn) SetWriteDeadline(time.Time) error { return nil }
 
-type nopPacketConn struct {
-	ch chan struct{}
-}
+type nopPacketConn struct{}
 
-func (npc *nopPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
-	return len(b), nil
-}
-
-func (npc *nopPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	<-npc.ch
-	return 0, nil, io.EOF
-}
-
-func (npc *nopPacketConn) Close() error {
-	close(npc.ch)
-	return nil
-}
-
-func (npc *nopPacketConn) LocalAddr() net.Addr              { return &net.UDPAddr{IP: net.IPv4zero, Port: 0} }
-func (npc *nopPacketConn) SetDeadline(time.Time) error      { return nil }
-func (npc *nopPacketConn) SetReadDeadline(time.Time) error  { return nil }
-func (npc *nopPacketConn) SetWriteDeadline(time.Time) error { return nil }
-
-func newNopPacketConn() *nopPacketConn {
-	return &nopPacketConn{
-		ch: make(chan struct{}),
-	}
-}
+func (npc *nopPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) { return len(b), nil }
+func (npc *nopPacketConn) ReadFrom(b []byte) (int, net.Addr, error)           { return 0, nil, io.EOF }
+func (npc *nopPacketConn) Close() error                                       { return nil }
+func (npc *nopPacketConn) LocalAddr() net.Addr                                { return &net.UDPAddr{IP: net.IPv4zero, Port: 0} }
+func (npc *nopPacketConn) SetDeadline(time.Time) error                        { return nil }
+func (npc *nopPacketConn) SetReadDeadline(time.Time) error                    { return nil }
+func (npc *nopPacketConn) SetWriteDeadline(time.Time) error                   { return nil }
