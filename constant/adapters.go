@@ -93,7 +93,6 @@ type ProxyAdapter interface {
 	// DialContext return a C.Conn with protocol which
 	// contains multiplexing-related reuse logic (if any)
 	DialContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (Conn, error)
-
 	ListenPacketContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (PacketConn, error)
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
