@@ -96,7 +96,11 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	pd.fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) *ProxySetProvider {
+func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+	if _, err := regexp.Compile(filter); err != nil {
+		return nil, fmt.Errorf("invalid filter regex: %w", err)
+	}
+
 	if hc.auto() {
 		go hc.process()
 	}
@@ -150,7 +154,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
-	return wrapper
+	return wrapper, nil
 }
 
 // for auto gc
