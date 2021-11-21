@@ -60,5 +60,5 @@ func ParseProxyProvider(name string, mapping map[string]interface{}) (types.Prox
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
-	return NewProxySetProvider(name, interval, filter, vehicle, hc), nil
+	return NewProxySetProvider(name, interval, filter, vehicle, hc)
 }
