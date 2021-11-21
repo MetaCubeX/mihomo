@@ -97,6 +97,10 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cachefile.Cache().SetSelected(proxy.Name(), req.Name)
+	if SwitchProxiesCallback != nil {
+		// refresh tray menu
+		go SwitchProxiesCallback(proxy.Name(), req.Name)
+	}
 	render.NoContent(w, r)
 }
 
