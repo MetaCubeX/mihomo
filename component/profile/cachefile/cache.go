@@ -90,6 +90,31 @@ func (c *CacheFile) PutFakeip(key, value []byte) error {
 	return err
 }
 
+func (c *CacheFile) DelFakeipPair(ip, host []byte) error {
+	if c.DB == nil {
+		return nil
+	}
+
+	err := c.DB.Batch(func(t *bbolt.Tx) error {
+		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
+		if err != nil {
+			return err
+		}
+		err = bucket.Delete(ip)
+		if len(host) > 0 {
+			if err := bucket.Delete(host); err != nil {
+				return err
+			}
+		}
+		return err
+	})
+	if err != nil {
+		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
+	}
+
+	return err
+}
+
 func (c *CacheFile) GetFakeip(key []byte) []byte {
 	if c.DB == nil {
 		return nil

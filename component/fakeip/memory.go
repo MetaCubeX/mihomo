@@ -46,6 +46,15 @@ func (m *memoryStore) PutByIP(ip net.IP, host string) {
 	m.cache.Set(ipToUint(ip.To4()), host)
 }
 
+// DelByIP implements store.DelByIP
+func (m *memoryStore) DelByIP(ip net.IP) {
+	ipNum := ipToUint(ip.To4())
+	if elm, exist := m.cache.Get(ipNum); exist {
+		m.cache.Delete(elm.(string))
+	}
+	m.cache.Delete(ipNum)
+}
+
 // Exist implements store.Exist
 func (m *memoryStore) Exist(ip net.IP) bool {
 	return m.cache.Exist(ipToUint(ip.To4()))
