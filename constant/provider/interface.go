@@ -1,6 +1,9 @@
 package provider
 
+import "C"
 import (
+	"errors"
+	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/constant"
 )
 
@@ -102,4 +105,27 @@ type RuleProvider interface {
 	Match(*constant.Metadata) bool
 	ShouldResolveIP() bool
 	AsRule(adaptor string) constant.Rule
+}
+
+var (
+	parse = func(ruleType, rule string, params []string) (C.Rule, error) {
+		return nil, errors.New("unimplemented function")
+	}
+
+	ruleProviders = map[string]*RuleProvider{}
+)
+
+func RuleProviders() map[string]*RuleProvider {
+	return ruleProviders
+}
+
+type ruleSetProvider struct {
+	count          int
+	DomainRules    *trie.DomainTrie
+	IPCIDRRules    *trie.IpCidrTrie
+	ClassicalRules []C.Rule
+}
+
+type RuleSetProvider struct {
+	*ruleSetProvider
 }
