@@ -170,6 +170,7 @@ type RawConfig struct {
 	Interface          string       `yaml:"interface-name"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
+	RuleProvider  map[string]map[string]interface{} `yaml:"rule-providers"`
 	Hosts         map[string]string                 `yaml:"hosts"`
 	DNS           RawDNS                            `yaml:"dns"`
 	Tun           Tun                               `yaml:"tun"`
