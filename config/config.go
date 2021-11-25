@@ -114,7 +114,7 @@ type Script struct {
 // Experimental config
 type Experimental struct{}
 
-// Config is clash config manager
+// Config is clash core config manager
 type Config struct {
 	General       *General
 	Tun           *Tun
