@@ -2,6 +2,7 @@ package provider
 
 import "C"
 import (
+	"errors"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/constant"
 )
@@ -107,6 +108,9 @@ type RuleProvider interface {
 }
 
 var (
+	parse = func(ruleType, rule string, params []string) (constant.Rule, error) {
+		return nil, errors.New("unimplemented function")
+	}
 	ruleProviders = map[string]*RuleProvider{}
 )
 
@@ -118,7 +122,7 @@ type ruleSetProvider struct {
 	count          int
 	DomainRules    *trie.DomainTrie
 	IPCIDRRules    *trie.IpCidrTrie
-	ClassicalRules []C.Rule
+	ClassicalRules []constant.Rule
 }
 
 type RuleSetProvider struct {
