@@ -2,6 +2,7 @@ package provider
 
 import "C"
 import (
+	"errors"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/constant"
 )
@@ -107,6 +108,10 @@ type RuleProvider interface {
 }
 
 var (
+	parse = func(ruleType, rule string, params []string) (C.Rule, error) {
+		return nil, errors.New("unimplemented function")
+	}
+
 	ruleProviders = map[string]*RuleProvider{}
 )
 
