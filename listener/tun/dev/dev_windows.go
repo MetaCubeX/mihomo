@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
 	"sync/atomic"
 	"time"
 	_ "unsafe"
@@ -31,7 +32,7 @@ type rateJuggler struct {
 	changing      int32
 }
 
-var WintunTunnelType = "Clash"
+var WintunTunnelType = "Clash.Meta"
 var WintunStaticRequestedGUID *windows.GUID
 
 //go:linkname procyield runtime.procyield
@@ -67,6 +68,7 @@ func (tun *tunWindows) ForceMTU(mtu int) {
 
 func (tun *tunWindows) Read0(buff []byte, offset int) (int, error) {
 	tun.running.Add(1)
+
 	defer tun.running.Done()
 retry:
 	if atomic.LoadInt32(&tun.close) == 1 {
