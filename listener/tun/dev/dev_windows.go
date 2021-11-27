@@ -32,7 +32,7 @@ type rateJuggler struct {
 	changing      int32
 }
 
-var WintunTunnelType = "Clash.Meta"
+var WintunTunnelType = "Meta"
 var WintunStaticRequestedGUID *windows.GUID
 
 //go:linkname procyield runtime.procyield
