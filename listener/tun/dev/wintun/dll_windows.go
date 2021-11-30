@@ -7,6 +7,7 @@ package wintun
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/listener/tun/dev/wintun/embed_dll"
 	"golang.zx2c4.com/wireguard/windows/driver/memmod"
 	"sync"
 	"sync/atomic"
@@ -76,7 +77,7 @@ func (d *lazyDLL) Load() error {
 		return nil
 	}
 
-	module, err := memmod.LoadLibrary(ddlContent)
+	module, err := memmod.LoadLibrary(embed_dll.DDlContent)
 	if err != nil {
 		return fmt.Errorf("Unable to load library: %w", err)
 	}

@@ -1,4 +1,4 @@
-package wintun
+package embed_dll
 
 // Copyright 2020 MeshStep Authors.
 //
@@ -17,5 +17,5 @@ import (
 	_ "embed"
 )
 
-//go:embed static/amd64/wintun.dll
-var ddlContent []byte
+//go:embed amd64/wintun.dll
+var DDlContent []byte
