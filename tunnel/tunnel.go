@@ -11,7 +11,6 @@ import (
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
 	"github.com/Dreamacro/clash/component/resolver"
-	S "github.com/Dreamacro/clash/component/script"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	icontext "github.com/Dreamacro/clash/context"
@@ -159,8 +158,6 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 		proxy = proxies["DIRECT"]
 	case Global:
 		proxy = proxies["GLOBAL"]
-	case Script:
-		proxy, err = matchScript(metadata)
 	// Rule
 	default:
 		proxy, rule, err = match(metadata)
@@ -367,28 +364,4 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	return proxies["REJECT"], nil, nil
-}
-
-func matchScript(metadata *C.Metadata) (C.Proxy, error) {
-	configMux.RLock()
-	defer configMux.RUnlock()
-
-	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		ip := node.Data.(net.IP)
-		metadata.DstIP = ip
-	}
-
-	// preset process name and cache it
-	preProcessCacheFinder.Match(metadata)
-
-	adapter, err := S.CallPyMainFunction(metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, ok := proxies[adapter]; !ok {
-		return nil, fmt.Errorf("proxy [%s] not found by script", adapter)
-	}
-
-	return proxies[adapter], nil
 }

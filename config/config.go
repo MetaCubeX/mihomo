@@ -19,7 +19,6 @@ import (
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
-	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
@@ -470,13 +469,6 @@ class ClashTime:
 time = ClashTime()
 
 `
-
-	var shouldInitPy bool
-	if mode == T.Script {
-		content += mainCode + "\n\n"
-		shouldInitPy = true
-	}
-
 	for k, v := range shortcutsCode {
 		v = cleanPyKeywords(v)
 		v = strings.TrimSpace(v)
@@ -485,27 +477,7 @@ time = ClashTime()
 		}
 
 		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
-		shouldInitPy = true
 	}
-
-	if !shouldInitPy {
-		return nil
-	}
-
-	err := os.WriteFile(C.Path.Script(), []byte(content), 0o644)
-	if err != nil {
-		return fmt.Errorf("initialized script module failure, %s", err.Error())
-	}
-
-	if err = S.Py_Initialize(C.Path.GetExecutableFullPath(), C.Path.ScriptDir()); err != nil {
-		return fmt.Errorf("initialized script module failure, %s", err.Error())
-	} else if mode == T.Script {
-		if err = S.LoadMainFunction(); err != nil {
-			return fmt.Errorf("initialized script module failure, %s", err.Error())
-		}
-	}
-
-	log.Infoln("Start initial script module successful, version: %s", S.Py_GetVersion())
 
 	return nil
 }
@@ -515,9 +487,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 	ruleProviders := map[string]C.Rule{}
 	rulesConfig := cfg.Rule
 	mode := cfg.Mode
-
-	providerNames := []string{}
-	isPyInit := S.Py_IsInitialized()
 
 	// parse rules
 	for idx, line := range rulesConfig {
@@ -564,29 +533,12 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
 
-		if isPyInit {
-			if ruleName == "GEOSITE" {
-				pvName := "geosite:" + strings.ToLower(payload)
-				providerNames = append(providerNames, pvName)
-				ruleProviders[pvName] = parsed
-			}
-		}
-
 		if mode != T.Script {
 			rules = append(rules, parsed)
 		}
 	}
 
 	runtime.GC()
-
-	if isPyInit {
-		err := S.NewClashPyContext(providerNames)
-		if err != nil {
-			return nil, nil, err
-		} else {
-			log.Infoln("Start initial script context successful, provider records: %v", len(providerNames))
-		}
-	}
 
 	return rules, ruleProviders, nil
 }
