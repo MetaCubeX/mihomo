@@ -20,13 +20,14 @@ import (
 )
 
 var (
-	tcpQueue  = make(chan C.ConnContext, 200)
-	udpQueue  = make(chan *inbound.PacketAdapter, 200)
-	natTable  = nat.New()
-	rules     []C.Rule
-	proxies   = make(map[string]C.Proxy)
-	providers map[string]provider.ProxyProvider
-	configMux sync.RWMutex
+	tcpQueue      = make(chan C.ConnContext, 200)
+	udpQueue      = make(chan *inbound.PacketAdapter, 200)
+	natTable      = nat.New()
+	rules         []C.Rule
+	ruleProviders map[string]provider.RuleProvider
+	proxies       = make(map[string]C.Proxy)
+	providers     map[string]provider.ProxyProvider
+	configMux     sync.RWMutex
 
 	// Outbound Rule
 	mode = Rule
@@ -57,9 +58,10 @@ func Rules() []C.Rule {
 }
 
 // UpdateRules handle update rules
-func UpdateRules(newRules []C.Rule) {
+func UpdateRules(newRules []C.Rule, rp map[string]provider.RuleProvider) {
 	configMux.Lock()
 	rules = newRules
+	ruleProviders = rp
 	configMux.Unlock()
 }
 
@@ -79,6 +81,10 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 	proxies = newProxies
 	providers = newProviders
 	configMux.Unlock()
+}
+
+func RuleProviders() map[string]provider.RuleProvider {
+	return ruleProviders
 }
 
 // Mode return current mode

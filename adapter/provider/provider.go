@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/component/trie"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -132,9 +134,10 @@ func NewProxySetProvider(name string, interval time.Duration, vehicle types.Vehi
 		healthCheck: hc,
 	}
 
-	onUpdate := func(elm interface{}) {
+	onUpdate := func(elm interface{}) error {
 		ret := elm.([]C.Proxy)
 		pd.setProxies(ret)
+		return nil
 	}
 
 	fetcher := newFetcher(name, interval, vehicle, proxiesParse, onUpdate)
@@ -220,4 +223,279 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 	wrapper := &CompatibleProvider{pd}
 	runtime.SetFinalizer(wrapper, stopCompatibleProvider)
 	return wrapper, nil
+}
+
+// Rule
+
+type Behavior int
+
+var (
+	parse = func(ruleType, rule string, params []string) (C.Rule, error) {
+		return nil, errors.New("unimplemented function")
+	}
+
+	ruleProviders = map[string]types.RuleProvider{}
+)
+
+func SetClassicalRuleParser(function func(ruleType, rule string, params []string) (C.Rule, error)) {
+	parse = function
+}
+
+func RuleProviders() map[string]types.RuleProvider {
+	return ruleProviders
+}
+
+func SetRuleProvider(ruleProvider types.RuleProvider) {
+	if ruleProvider != nil {
+		ruleProviders[(ruleProvider).Name()] = ruleProvider
+	}
+}
+
+type ruleSetProvider struct {
+	*fetcher
+	behavior       Behavior
+	count          int
+	DomainRules    *trie.DomainTrie
+	IPCIDRRules    *trie.IpCidrTrie
+	ClassicalRules []C.Rule
+}
+
+type RuleSetProvider struct {
+	*ruleSetProvider
+}
+
+func (r RuleSetProvider) Behavior() types.RuleType {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r RuleSetProvider) ShouldResolveIP() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r RuleSetProvider) AsRule(adaptor string) C.Rule {
+	//TODO implement me
+	panic("implement me")
+}
+
+func NewRuleSetProvider(name string, behavior Behavior, interval time.Duration, vehicle types.Vehicle) *RuleSetProvider {
+	rp := &ruleSetProvider{
+		behavior: behavior,
+	}
+
+	onUpdate := func(elm interface{}) error {
+		rulesRaw := elm.([]string)
+		rp.count = len(rulesRaw)
+		rules, err := constructRules(rp.behavior, rulesRaw)
+		if err != nil {
+			return err
+		}
+		rp.setRules(rules)
+		return nil
+	}
+
+	fetcher := newFetcher(name, interval, vehicle, rulesParse, onUpdate)
+	rp.fetcher = fetcher
+	wrapper := &RuleSetProvider{
+		rp,
+	}
+
+	runtime.SetFinalizer(wrapper, stopRuleSetProvider)
+	return wrapper
+}
+
+func (rp *ruleSetProvider) Name() string {
+	return rp.name
+}
+
+func (rp *ruleSetProvider) RuleCount() int {
+	return rp.count
+}
+
+const (
+	Domain = iota
+	IPCIDR
+	Classical
+)
+
+// RuleType defined
+
+func (b Behavior) String() string {
+	switch b {
+	case Domain:
+		return "Domain"
+	case IPCIDR:
+		return "IPCIDR"
+	case Classical:
+		return "Classical"
+	default:
+		return ""
+	}
+}
+
+func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
+	switch rp.behavior {
+	case Domain:
+		return rp.DomainRules.Search(metadata.Host) != nil
+	case IPCIDR:
+		return rp.IPCIDRRules.IsContain(metadata.DstIP)
+	case Classical:
+		for _, rule := range rp.ClassicalRules {
+			if rule.Match(metadata) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func (rp *ruleSetProvider) Behavior() Behavior {
+	return rp.behavior
+}
+
+func (rp *ruleSetProvider) VehicleType() types.VehicleType {
+	return rp.vehicle.Type()
+}
+
+func (rp *ruleSetProvider) Type() types.ProviderType {
+	return types.Rule
+}
+
+func (rp *ruleSetProvider) Initial() error {
+	elm, err := rp.fetcher.Initial()
+	if err != nil {
+		return err
+	}
+	return rp.fetcher.onUpdate(elm)
+}
+
+func (rp *ruleSetProvider) Update() error {
+	elm, same, err := rp.fetcher.Update()
+	if err == nil && !same {
+		return rp.fetcher.onUpdate(elm)
+	}
+	return err
+}
+
+func (rp *ruleSetProvider) setRules(rules interface{}) {
+	switch rp.behavior {
+	case Domain:
+		rp.DomainRules = rules.(*trie.DomainTrie)
+	case Classical:
+		rp.ClassicalRules = rules.([]C.Rule)
+	case IPCIDR:
+		rp.IPCIDRRules = rules.(*trie.IpCidrTrie)
+	default:
+	}
+}
+
+func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal(
+		map[string]interface{}{
+			"behavior":    rp.behavior.String(),
+			"name":        rp.Name(),
+			"ruleCount":   rp.RuleCount(),
+			"type":        rp.Type().String(),
+			"updatedAt":   rp.updatedAt,
+			"vehicleType": rp.VehicleType().String(),
+		})
+}
+
+type RulePayload struct {
+	/**
+	key: Domain or IP Cidr
+	value: Rule type or is empty
+	*/
+	Rules []string `yaml:"payload"`
+}
+
+func rulesParse(buf []byte) (interface{}, error) {
+	rulePayload := RulePayload{}
+	err := yaml.Unmarshal(buf, &rulePayload)
+	if err != nil {
+		return nil, err
+	}
+
+	return rulePayload.Rules, nil
+}
+
+func constructRules(behavior Behavior, rules []string) (interface{}, error) {
+	switch behavior {
+	case Domain:
+		return handleDomainRules(rules)
+	case IPCIDR:
+		return handleIpCidrRules(rules)
+	case Classical:
+		return handleClassicalRules(rules)
+	default:
+		return nil, errors.New("unknown behavior type")
+	}
+}
+
+func handleDomainRules(rules []string) (interface{}, error) {
+	domainRules := trie.New()
+	for _, rawRule := range rules {
+		ruleType, rule, _ := ruleParse(rawRule)
+		if ruleType != "" {
+			return nil, errors.New("error format of domain")
+		}
+
+		if err := domainRules.Insert(rule, ""); err != nil {
+			return nil, err
+		}
+	}
+	return domainRules, nil
+}
+
+func handleIpCidrRules(rules []string) (interface{}, error) {
+	ipCidrRules := trie.NewIpCidrTrie()
+	for _, rawRule := range rules {
+		ruleType, rule, _ := ruleParse(rawRule)
+		if ruleType != "" {
+			return nil, errors.New("error format of ip-cidr")
+		}
+
+		if err := ipCidrRules.AddIpCidrForString(rule); err != nil {
+			return nil, err
+		}
+	}
+	return ipCidrRules, nil
+}
+
+func handleClassicalRules(rules []string) (interface{}, error) {
+	var classicalRules []C.Rule
+	for _, rawRule := range rules {
+		ruleType, rule, params := ruleParse(rawRule)
+		if ruleType == "RULE-SET" {
+			return nil, errors.New("error rule type")
+		}
+
+		r, err := parse(ruleType, rule, params)
+		if err != nil {
+			return nil, err
+		}
+
+		classicalRules = append(classicalRules, r)
+	}
+	return classicalRules, nil
+}
+
+func ruleParse(ruleRaw string) (string, string, []string) {
+	item := strings.Split(ruleRaw, ",")
+	if len(item) == 1 {
+		return "", item[0], nil
+	} else if len(item) == 2 {
+		return item[0], item[1], nil
+	} else if len(item) > 2 {
+		return item[0], item[1], item[2:]
+	}
+
+	return "", "", nil
+}
+
+func stopRuleSetProvider(rp *RuleSetProvider) {
+	rp.fetcher.Destroy()
 }
