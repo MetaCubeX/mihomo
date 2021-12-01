@@ -17,7 +17,6 @@ import (
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
-	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -77,7 +76,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
-	updateRuleProviders(cfg.RuleProviders)
 	updateHosts(cfg.Hosts)
 	updateProfile(cfg)
 	updateIPTables(cfg.DNS, cfg.General)
@@ -182,10 +180,6 @@ func updateRules(rules []C.Rule) {
 	tunnel.UpdateRules(rules)
 }
 
-func updateRuleProviders(providers map[string]C.Rule) {
-	S.UpdateRuleProviders(providers)
-}
-
 func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
@@ -245,7 +239,6 @@ func updateGeneral(general *config.General, force bool) {
 
 	if err := P.ReCreateTun(general.Tun, tcpIn, udpIn); err != nil {
 		log.Errorln("Start Tun interface error: %s", err.Error())
-		S.Py_Finalize()
 		os.Exit(2)
 	}
 
@@ -326,6 +319,4 @@ func CleanUp() {
 	if runtime.GOOS == "linux" {
 		tproxy.CleanUpTProxyLinuxIPTables()
 	}
-
-	S.Py_Finalize()
 }
