@@ -11,7 +11,6 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/dev"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/lwip"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system"
 	"github.com/Dreamacro/clash/log"
 )
@@ -34,9 +33,7 @@ func New(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Pack
 		return nil, errors.New("unable to get device mtu")
 	}
 
-	if strings.EqualFold(stack, "lwip") {
-		tunAdapter, err = lwip.NewAdapter(device, conf, mtu, tcpIn, udpIn)
-	} else if strings.EqualFold(stack, "system") {
+	if strings.EqualFold(stack, "system") {
 		tunAdapter, err = system.NewAdapter(device, conf, mtu, tunAddress, tunAddress, func() {}, tcpIn, udpIn)
 	} else if strings.EqualFold(stack, "gvisor") {
 		tunAdapter, err = gvisor.NewAdapter(device, conf, tunAddress, tcpIn, udpIn)
