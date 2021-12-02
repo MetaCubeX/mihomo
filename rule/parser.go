@@ -46,7 +46,7 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	case "MATCH":
 		parsed = NewMatch(target, ruleExtra)
 	case "RULE-SET":
-		parsed, parseErr = NewRuleSet(payload, target)
+		parsed, parseErr = NewRuleSet(payload, target, ruleExtra)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
