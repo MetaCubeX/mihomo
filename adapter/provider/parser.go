@@ -60,3 +60,44 @@ func ParseProxyProvider(name string, mapping map[string]interface{}) (types.Prox
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	return NewProxySetProvider(name, interval, vehicle, hc), nil
 }
+
+type ruleProviderSchema struct {
+	Type     string `provider:"type"`
+	Behavior string `provider:"behavior"`
+	Path     string `provider:"path"`
+	URL      string `provider:"url,omitempty"`
+	Interval int    `provider:"interval,omitempty"`
+}
+
+func ParseRuleProvider(name string, mapping map[string]interface{}) (types.RuleProvider, error) {
+	schema := &ruleProviderSchema{}
+	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
+	if err := decoder.Decode(mapping, schema); err != nil {
+		return nil, err
+	}
+	var behavior Behavior
+
+	switch schema.Behavior {
+	case "domain":
+		behavior = Domain
+	case "ipcidr":
+		behavior = IPCIDR
+	case "classical":
+		behavior = Classical
+	default:
+		return nil, fmt.Errorf("unsupported behavior type: %s", schema.Behavior)
+	}
+
+	path := C.Path.Resolve(schema.Path)
+	var vehicle types.Vehicle
+	switch schema.Type {
+	case "file":
+		vehicle = NewFileVehicle(path)
+	case "http":
+		vehicle = NewHTTPVehicle(schema.URL, path)
+	default:
+		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
+	}
+	interval := time.Duration(uint(schema.Interval)) * time.Second
+	return NewRuleSetProvider(name, behavior, interval, vehicle), nil
+}

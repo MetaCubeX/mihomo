@@ -1,5 +1,6 @@
 package provider
 
+import "C"
 import (
 	"github.com/Dreamacro/clash/constant"
 )
@@ -78,6 +79,8 @@ const (
 	IPCIDR
 	Classical
 )
+
+type Behavior int
 
 // RuleType defined
 type RuleType int
