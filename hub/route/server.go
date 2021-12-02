@@ -70,6 +70,7 @@ func Start(addr string, secret string) {
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
+		r.Mount("/providers/rules", ruleProviderRouter())
 	})
 
 	if uiPath != "" {
