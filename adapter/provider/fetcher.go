@@ -26,7 +26,7 @@ type fetcher struct {
 	done      chan struct{}
 	hash      [16]byte
 	parser    parser
-	onUpdate  func(interface{}) error
+	onUpdate  func(interface{})
 }
 
 func (f *fetcher) Name() string {
@@ -167,7 +167,7 @@ func safeWrite(path string, buf []byte) error {
 	return os.WriteFile(path, buf, fileMode)
 }
 
-func newFetcher(name string, interval time.Duration, vehicle types.Vehicle, parser parser, onUpdate func(interface{}) error) *fetcher {
+func newFetcher(name string, interval time.Duration, vehicle types.Vehicle, parser parser, onUpdate func(interface{})) *fetcher {
 	var ticker *time.Ticker
 	if interval != 0 {
 		ticker = time.NewTicker(interval)

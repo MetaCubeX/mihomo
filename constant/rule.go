@@ -12,7 +12,6 @@ const (
 	SrcPort
 	DstPort
 	Process
-	RuleSet
 	Script
 	MATCH
 )
@@ -41,8 +40,6 @@ func (rt RuleType) String() string {
 		return "DstPort"
 	case Process:
 		return "Process"
-	case RuleSet:
-		return "RuleSet"
 	case Script:
 		return "Script"
 	case MATCH:
