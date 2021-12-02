@@ -122,10 +122,10 @@ type Config struct {
 	Hosts         *trie.DomainTrie
 	Profile       *Profile
 	Rules         []C.Rule
-	RuleProviders map[string]C.Rule
 	Users         []auth.AuthUser
 	Proxies       map[string]C.Proxy
 	Providers     map[string]providerTypes.ProxyProvider
+	RuleProviders map[string]*providerTypes.RuleProvider
 }
 
 type RawDNS struct {
@@ -482,9 +482,28 @@ time = ClashTime()
 	return nil
 }
 
-func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]C.Rule, error) {
+func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]*providerTypes.RuleProvider, error) {
+	ruleProviders := map[string]*providerTypes.RuleProvider{}
+
+	// parse rule provider
+	for name, mapping := range cfg.RuleProvider {
+		rp, err := R.ParseRuleProvider(name, mapping)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ruleProviders[name] = &rp
+		R.SetRuleProvider(&rp)
+	}
+
+	for _, provider := range ruleProviders {
+		log.Infoln("Start initial provider %s", (*provider).Name())
+		if err := (*provider).Initial(); err != nil {
+			return nil, nil, fmt.Errorf("initial rule provider %s error: %w", (*provider).Name(), err)
+		}
+	}
+
 	rules := []C.Rule{}
-	ruleProviders := map[string]C.Rule{}
 	rulesConfig := cfg.Rule
 	mode := cfg.Mode
 
