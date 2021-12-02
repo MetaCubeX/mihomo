@@ -10,6 +10,7 @@ type RuleSet struct {
 	ruleProviderName string
 	adapter          string
 	ruleProvider     *P.RuleProvider
+	ruleExtra        *C.RuleExtra
 }
 
 func (rs *RuleSet) RuleType() C.RuleType {
@@ -44,7 +45,7 @@ func (rs *RuleSet) RuleExtra() *C.RuleExtra {
 	return nil
 }
 
-func NewRuleSet(ruleProviderName string, adapter string) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, ruleExtra *C.RuleExtra) (*RuleSet, error) {
 	rp, ok := RuleProviders()[ruleProviderName]
 	if !ok {
 		return nil, fmt.Errorf("rule set %s not found", ruleProviderName)
@@ -53,5 +54,6 @@ func NewRuleSet(ruleProviderName string, adapter string) (*RuleSet, error) {
 		ruleProviderName: ruleProviderName,
 		adapter:          adapter,
 		ruleProvider:     rp,
+		ruleExtra:        ruleExtra,
 	}, nil
 }
