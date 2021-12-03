@@ -240,5 +240,5 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func version(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"Meta": C.Meta, "version": C.Version})
+	render.JSON(w, r, render.M{"meta": C.Meta, "version": C.Version})
 }
