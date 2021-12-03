@@ -3,6 +3,8 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+	"github.com/Dreamacro/clash/log"
+	"go.uber.org/atomic"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -22,12 +24,14 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 
 type URLTest struct {
 	*outbound.Base
-	tolerance  uint16
-	disableUDP bool
-	fastNode   C.Proxy
-	single     *singledo.Single
-	fastSingle *singledo.Single
-	providers  []provider.ProxyProvider
+	tolerance   uint16
+	disableUDP  bool
+	fastNode    C.Proxy
+	single      *singledo.Single
+	fastSingle  *singledo.Single
+	providers   []provider.ProxyProvider
+	failedTimes *atomic.Int32
+	failedTime  *atomic.Int64
 }
 
 func (u *URLTest) Now() string {
@@ -39,7 +43,10 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
+	} else {
+		u.onDialFailed()
 	}
+
 	return c, err
 }
 
@@ -48,7 +55,10 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	pc, err := u.fast(true).ListenPacketContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(u)
+	} else {
+		u.onDialFailed()
 	}
+
 	return pc, err
 }
 
@@ -121,6 +131,30 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (u *URLTest) onDialFailed() {
+	if u.failedTime.Load() == -1 {
+		log.Warnln("%s first failed", u.Name())
+		now := time.Now().UnixMilli()
+		u.failedTime.Store(now)
+		u.failedTimes.Store(1)
+	} else {
+		if u.failedTime.Load()-time.Now().UnixMilli() > 5*1000 {
+			u.failedTimes.Store(-1)
+			u.failedTime.Store(-1)
+		} else {
+			u.failedTimes.Inc()
+			failedCount := u.failedTimes.Load()
+			log.Warnln("%s failed count: %d", u.Name(), failedCount)
+			if failedCount > 5 {
+				log.Debugln("%s failed multiple times.", u.Name())
+				for _, proxyProvider := range u.providers {
+					go proxyProvider.HealthCheck()
+				}
+			}
+		}
+	}
+}
+
 func parseURLTestOption(config map[string]interface{}) []urlTestOption {
 	opts := []urlTestOption{}
 
@@ -142,10 +176,12 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 			Interface:   option.Interface,
 			RoutingMark: option.RoutingMark,
 		}),
-		single:     singledo.NewSingle(defaultGetProxiesDuration),
-		fastSingle: singledo.NewSingle(time.Second * 10),
-		providers:  providers,
-		disableUDP: option.DisableUDP,
+		single:      singledo.NewSingle(defaultGetProxiesDuration),
+		fastSingle:  singledo.NewSingle(time.Second * 10),
+		providers:   providers,
+		disableUDP:  option.DisableUDP,
+		failedTimes: atomic.NewInt32(-1),
+		failedTime:  atomic.NewInt64(-1),
 	}
 
 	for _, option := range options {

@@ -3,6 +3,9 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+	"github.com/Dreamacro/clash/log"
+	"go.uber.org/atomic"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/singledo"
@@ -13,9 +16,11 @@ import (
 
 type Fallback struct {
 	*outbound.Base
-	disableUDP bool
-	single     *singledo.Single
-	providers  []provider.ProxyProvider
+	disableUDP  bool
+	single      *singledo.Single
+	providers   []provider.ProxyProvider
+	failedTimes *atomic.Int32
+	failedTime  *atomic.Int64
 }
 
 func (f *Fallback) Now() string {
@@ -29,6 +34,8 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
+	} else {
+		f.onDialFailed()
 	}
 	return c, err
 }
@@ -39,8 +46,34 @@ func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	pc, err := proxy.ListenPacketContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(f)
+	} else {
+		f.onDialFailed()
 	}
 	return pc, err
+}
+
+func (f *Fallback) onDialFailed() {
+	if f.failedTime.Load() == -1 {
+		log.Warnln("%s first failed", f.Name())
+		now := time.Now().UnixMilli()
+		f.failedTime.Store(now)
+		f.failedTimes.Store(1)
+	} else {
+		if f.failedTime.Load()-time.Now().UnixMilli() > 5*1000 {
+			f.failedTimes.Store(-1)
+			f.failedTime.Store(-1)
+		} else {
+			f.failedTimes.Inc()
+			failedCount := f.failedTimes.Load()
+			log.Warnln("%s failed count: %d", f.Name(), failedCount)
+			if failedCount > 5 {
+				log.Debugln("%s failed multiple times.", f.Name())
+				for _, proxyProvider := range f.providers {
+					go proxyProvider.HealthCheck()
+				}
+			}
+		}
+	}
 }
 
 // SupportUDP implements C.ProxyAdapter
