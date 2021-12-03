@@ -34,9 +34,12 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
+		f.failedTimes.Store(-1)
+		f.failedTime.Store(-1)
 	} else {
 		f.onDialFailed()
 	}
+
 	return c, err
 }
 
@@ -46,9 +49,12 @@ func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	pc, err := proxy.ListenPacketContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(f)
+		f.failedTimes.Store(-1)
+		f.failedTime.Store(-1)
 	} else {
 		f.onDialFailed()
 	}
+
 	return pc, err
 }
 
@@ -132,8 +138,10 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			Interface:   option.Interface,
 			RoutingMark: option.RoutingMark,
 		}),
-		single:     singledo.NewSingle(defaultGetProxiesDuration),
-		providers:  providers,
-		disableUDP: option.DisableUDP,
+		single:      singledo.NewSingle(defaultGetProxiesDuration),
+		providers:   providers,
+		disableUDP:  option.DisableUDP,
+		failedTimes: atomic.NewInt32(-1),
+		failedTime:  atomic.NewInt64(-1),
 	}
 }
