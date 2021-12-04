@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/Clash.Meta/adapter/outbound"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
