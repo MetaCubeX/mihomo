@@ -6,6 +6,11 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clas
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
+GOBUILDOP=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
+		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
+		-X "github.com/Dreamacro/clash/constant.OpenWrt:=true"  \
+		-w -s -buildid='
+
 PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
@@ -30,7 +35,7 @@ WINDOWS_ARCH_LIST = \
 	windows-amd64 \
 	windows-arm32v7
 
-all: linux-amd64 darwin-amd64 windows-amd64 # Most used
+all: linux-arm64-openwrt linux-amd64-openwrt linux-arm64 linux-amd64 darwin-amd64 darwin-arm64 windows-amd64 windows-386  # Most used
 
 docker:
 	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -47,20 +52,38 @@ linux-386:
 linux-amd64:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
+linux-amd64-openwrt:
+	GOARCH=amd64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
+
 linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+linux-arm64-openwrt:
+	GOARCH=arm64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv5:
 	GOARCH=arm GOOS=linux GOARM=5 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
+linux-armv5-openwrt:
+	GOARCH=arm GOOS=linux GOARM=5 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
+
 linux-armv6:
 	GOARCH=arm GOOS=linux GOARM=6 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+linux-armv6-openwrt:
+	GOARCH=arm GOOS=linux GOARM=6 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv7:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
+linux-armv7-openwrt:
+	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
+
 linux-armv8:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+linux-armv8-openwrt:
+	GOARCH=arm64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat:
 	GOARCH=mips GOMIPS=softfloat GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -94,7 +117,7 @@ windows-386:
 
 windows-amd64:
 	GOARCH=amd64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
-	
+
 windows-arm32v7:
 	GOARCH=arm GOOS=windows GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
