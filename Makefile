@@ -55,25 +55,25 @@ linux-arm64-AutoIptables:
 linux-armv5:
 	GOARCH=arm GOOS=linux GOARM=5 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv5-openwrt:
+linux-armv5-AutoIptables:
 	GOARCH=arm GOOS=linux GOARM=5 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv6:
 	GOARCH=arm GOOS=linux GOARM=6 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv6-openwrt:
+linux-armv6-AutoIptables:
 	GOARCH=arm GOOS=linux GOARM=6 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv7:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv7-openwrt:
+linux-armv7-AutoIptables:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv8:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv8-openwrt:
+linux-armv8-AutoIptables:
 	GOARCH=arm64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat:
