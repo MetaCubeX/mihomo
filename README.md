@@ -1,23 +1,23 @@
 <h1 align="center">
-  <img src="https://github.com/Dreamacro/clash/raw/master/docs/logo.png" alt="Clash" width="200">
-  <br>Clash<br>
+  <img src="https://raw.githubusercontent.com/Clash-Mini/Clash.Mini/master/icon/Clash.Mini.ico" alt="Clash" width="200">
+  <br>Meta Kennel<br>
 </h1>
 
-<h4 align="center">A rule-based tunnel in Go.</h4>
+<h3 align="center">Another Clash Kennel.</h3>
 
 <p align="center">
-  <a href="https://github.com/Dreamacro/clash/actions">
-    <img src="https://img.shields.io/github/workflow/status/Dreamacro/clash/Go?style=flat-square" alt="Github Actions">
+  <a href="https://github.com/Clash-Mini/Clash.Meta/actions">
+    <img src="https://img.shields.io/github/workflow/status/Clash-Mini/Clash.Meta/Go?style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/Dreamacro/clash">
-    <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/Clash-Mini/Clash.Meta">
+    <img src="https://goreportcard.com/badge/github.com/Clash-Mini/Clash.Meta?style=flat-square">
   </a>
   <img src="https://img.shields.io/github/go-mod/go-version/Dreamacro/clash?style=flat-square">
-  <a href="https://github.com/Dreamacro/clash/releases">
-    <img src="https://img.shields.io/github/release/Dreamacro/clash/all.svg?style=flat-square">
+  <a href="https://github.com/Clash-Mini/Clash.Meta/releases">
+    <img src="https://img.shields.io/github/release/Clash-Mini/Clash.Meta/all.svg?style=flat-square">
   </a>
-  <a href="https://github.com/Dreamacro/clash/releases/tag/premium">
-    <img src="https://img.shields.io/badge/release-Premium-00b4f0?style=flat-square">
+  <a href="https://github.com/Clash-Mini/Clash.Meta">
+    <img src="https://img.shields.io/badge/release-Meta-00b4f0?style=flat-square">
   </a>
 </p>
 
@@ -68,40 +68,28 @@ dns:
 ```
 
 ### TUN configuration
+
 Supports macOS, Linux and Windows.
 
-Support lwIP stack, a lightweight TCP/IP stack, it's recommended set to tun.
+Built-in [Wintun](https://www.wintun.net) driver.
 
-On Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into Clash home directory.
 ```yaml
 # Enable the TUN listener
 tun:
   enable: true
-  stack: lwip # lwip(recommended), system or gvisor
+  stack: gvisor #  system or gvisor
   dns-listen: 0.0.0.0:53 # additional dns server listen on TUN
   auto-route: true # auto set global route
 ```
 ### Rules configuration
 - Support rule `GEOSITE`.
-- Support rule `SCRIPT`.
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
 - Support `network` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
-
-The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
+- The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
 ```yaml
-mode: rule
-
-script:
-  shortcuts:
-    quic: 'network == "udp" and dst_port == 443'
-    privacy: '"analytics" in host or "adservice" in host or "firebase" in host or "safebrowsing" in host or "doubleclick" in host'
-
 rules:
-  # rule SCRIPT
-  - SCRIPT,quic,REJECT # Disable QUIC, same as rule "DST-PORT,443,REJECT,udp"
-  - SCRIPT,privacy,REJECT
-    
+
   # network(tcp/udp) condition for all rules
   - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
   - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
@@ -130,79 +118,6 @@ rules:
   - MATCH,PROXY
 ```
 
-### Script configuration
-Script enables users to programmatically select a policy for the packets with more flexibility.
-
-```yaml
-mode: script
-
-rules:
-  # the rule GEOSITE just as a rule provider in mode script
-  - GEOSITE,category-ads-all,Whatever
-  - GEOSITE,youtube,Whatever
-  - GEOSITE,geolocation-cn,Whatever
-  
-script:
-  code: |
-    def main(ctx, metadata):
-      if metadata["process_name"] == 'apsd':
-        return "DIRECT"
-
-      if metadata["network"] == 'udp' and metadata["dst_port"] == 443:
-        return "REJECT"
-    
-      host = metadata["host"]
-      for kw in ['analytics', 'adservice', 'firebase', 'bugly', 'safebrowsing', 'doubleclick']:
-        if kw in host:
-          return "REJECT"
-    
-      now = time.now()
-      if (now.hour < 8 or now.hour > 17) and metadata["src_ip"] == '192.168.1.99':
-        return "REJECT"
-      
-      if ctx.rule_providers["geosite:category-ads-all"].match(metadata):
-        return "REJECT"
-    
-      if ctx.rule_providers["geosite:youtube"].match(metadata):
-        ctx.log('[Script] domain %s matched youtube' % host)
-        return "Proxy"
-
-      if ctx.rule_providers["geosite:geolocation-cn"].match(metadata):
-        ctx.log('[Script] domain %s matched geolocation-cn' % host)
-        return "DIRECT"
-    
-      ip = metadata["dst_ip"] 
-      if host != "":
-        ip = ctx.resolve_ip(host)
-        if ip == "":
-          return "Proxy"
-
-      code = ctx.geoip(ip)
-      if code == "LAN" or code == "CN":
-        return "DIRECT"
-
-      return "Proxy" # default policy for requests which are not matched by any other script
-```
-the context and metadata
-```ts
-interface Metadata {
-  type: string // socks5、http
-  network: string // tcp
-  host: string
-  process_name: string
-  src_ip: string
-  src_port: int
-  dst_ip: string
-  dst_port: int
-}
-
-interface Context {
-  resolve_ip: (host: string) => string // ip string
-  geoip: (ip: string) => string // country code
-  log: (log: string) => void
-  rule_providers: Record<string, { match: (metadata: Metadata) => boolean }>
-}
-```
 
 ### Proxies configuration
 Support outbound transport protocol `VLESS`.
@@ -253,7 +168,7 @@ Create the systemd configuration file at /etc/systemd/system/clash.service:
 
 ```
 [Unit]
-Description=Clash.Meta daemon, A rule-based proxy in Go.
+Description=Clash.Meta Daemon, Another Clash Kennel.
 After=network.target
 
 [Service]
@@ -270,23 +185,25 @@ WantedBy=multi-user.target
 ```
 Launch clashd on system startup with:
 ```shell
-$ systemctl enable clash
+$ systemctl enable Clash.Meta
 ```
 Launch clashd immediately with:
 ```shell
-$ systemctl start clash
+$ systemctl start Clash.Meta
 ```
 
 ### Display Process name
+
 Clash add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
 
-To display process name in GUI please use https://yaling888.github.io/yacd/.
+To display process name in GUI please use [Dashboard For Meta](https://github.com/Clash-Mini/Dashboard).
 
 ## Development
 If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
 ## Credits
 
+* [Dreamacro/clash](https://github.com/Dreamacro/clash)
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 * [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
