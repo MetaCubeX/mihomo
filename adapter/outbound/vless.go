@@ -83,7 +83,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			wsOpts.TLSConfig = &tls.Config{
 				ServerName:         host,
 				InsecureSkipVerify: v.option.SkipCertVerify,
-				NextProtos:         []string{"http/1.1"},
+				NextProtos:         []string{"h2", "http/1.1"},
 			}
 			if v.option.ServerName != "" {
 				wsOpts.TLSConfig.ServerName = v.option.ServerName
@@ -292,7 +292,7 @@ func (uc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 }
 
 func NewVless(option VlessOption) (*Vless, error) {
-	if !option.TLS && option.Network =="grpc"{
+	if !option.TLS && option.Network == "grpc" {
 		return nil, fmt.Errorf("TLS must be true with vless-grpc")
 	}
 
