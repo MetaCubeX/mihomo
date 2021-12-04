@@ -80,6 +80,7 @@ tun:
 ```
 ### Rules configuration
 - Support rule `GEOSITE`.
+- Support rule-providers `RULE-SET`.
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
 - Support `network` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
