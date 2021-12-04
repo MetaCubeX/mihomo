@@ -245,24 +245,25 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user given name `clash`.
+Create user given name `Clash.Meta`.
 
-Run Clash by user `clash` as a daemon.
+Run Meta Kennel by user `Clash.Meta` as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/clash.service:
+
 ```
 [Unit]
-Description=Clash daemon, A rule-based proxy in Go.
+Description=Clash.Meta daemon, A rule-based proxy in Go.
 After=network.target
 
 [Service]
 Type=simple
-User=clash
-Group=clash
+User=Clash.Meta
+Group=Clash.Meta
 CapabilityBoundingSet=cap_net_admin
 AmbientCapabilities=cap_net_admin
 Restart=always
-ExecStart=/usr/local/bin/clash -d /etc/clash
+ExecStart=/usr/local/bin/Clash.Meta -d /etc/Clash.Meta
 
 [Install]
 WantedBy=multi-user.target

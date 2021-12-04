@@ -289,7 +289,8 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 }
 
 func updateIPTables(dns *config.DNS, general *config.General) {
-	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || general.Tun.Enable || C.OpenWrt {
+	AutoIptables := C.AutoIptables
+	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || general.Tun.Enable || AutoIptables != "Enable" {
 		return
 	}
 
@@ -315,8 +316,8 @@ func updateIPTables(dns *config.DNS, general *config.General) {
 
 func CleanUp() {
 	P.CleanUp()
-
-	if runtime.GOOS == "linux" && C.OpenWrt {
+	AutoIptables := C.AutoIptables
+	if runtime.GOOS == "linux" && AutoIptables == "Enable" {
 		tproxy.CleanUpTProxyLinuxIPTables()
 	}
 }

@@ -2,40 +2,31 @@ NAME=Clash.Meta
 BINDIR=bin
 VERSION=$(shell git describe --tags || echo "unknown version")
 BUILDTIME=$(shell date -u)
+AUTOIPTABLES=Enable
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
 GOBUILDOP=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
-		-X "github.com/Dreamacro/clash/constant.OpenWrt:=true"  \
+		-X "github.com/Dreamacro/clash/constant.AutoIptables=$(AUTOIPTABLES)"  \
 		-w -s -buildid='
 
 PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
-	linux-386 \
+	linux-arm64 \
 	linux-amd64 \
-	linux-armv5 \
-	linux-armv6 \
-	linux-armv7 \
-	linux-armv8 \
-	linux-mips-softfloat \
-	linux-mips-hardfloat \
-	linux-mipsle-softfloat \
-	linux-mipsle-hardfloat \
-	linux-mips64 \
-	linux-mips64le \
-	freebsd-386 \
-	freebsd-amd64 \
-	freebsd-arm64
+	linux-arm64-AutoIptables\
+	linux-amd64-AutoIptables
+
 
 WINDOWS_ARCH_LIST = \
 	windows-386 \
-	windows-amd64 \
-	windows-arm32v7
+	windows-amd64
 
-all: linux-arm64-openwrt linux-amd64-openwrt linux-arm64 linux-amd64 darwin-amd64 darwin-arm64 windows-amd64 windows-386  # Most used
+
+all: linux-arm64-AutoIptables linux-amd64-AutoIptables linux-arm64 linux-amd64 darwin-amd64 darwin-arm64 windows-amd64 windows-386  # Most used
 
 docker:
 	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -52,13 +43,13 @@ linux-386:
 linux-amd64:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-amd64-openwrt:
+linux-amd64-AutoIptables:
 	GOARCH=amd64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-arm64-openwrt:
+linux-arm64-AutoIptables:
 	GOARCH=arm64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv5:
