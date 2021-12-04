@@ -28,7 +28,9 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 		return strings.EqualFold(metadata.Process, ps.process)
 	}
 	// ignore match in proxy type "tproxy"
-	if metadata.Type == C.TPROXY || !C.OpenWrt {
+	//if metadata.Type == C.TPROXY || !C.AutoIptables {
+
+	if C.AutoIptables == "Enable" {
 		return false
 	}
 
