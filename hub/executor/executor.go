@@ -2,10 +2,7 @@ package executor
 
 import (
 	"fmt"
-	"net"
 	"os"
-	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -24,7 +21,6 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
-	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/listener/tun/dev"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -78,7 +74,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateHosts(cfg.Hosts)
 	updateProfile(cfg)
-	updateIPTables(cfg.DNS, cfg.General)
+	//updateIPTables(cfg.DNS, cfg.General)
 	updateDNS(cfg.DNS, cfg.General)
 	updateGeneral(cfg.General, force)
 	updateExperimental(cfg)
@@ -288,35 +284,35 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func updateIPTables(dns *config.DNS, general *config.General) {
-	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || general.Tun.Enable {
-		return
-	}
-
-	_, dnsPortStr, err := net.SplitHostPort(dns.Listen)
-	if dnsPortStr == "0" || dnsPortStr == "" || err != nil {
-		return
-	}
-
-	dnsPort, err := strconv.Atoi(dnsPortStr)
-	if err != nil {
-		return
-	}
-
-	tproxy.CleanUpTProxyLinuxIPTables()
-
-	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
-
-	if err != nil {
-		log.Errorln("Can not setting iptables for TProxy on linux, %s", err.Error())
-		os.Exit(2)
-	}
-}
+//func updateIPTables(dns *config.DNS, general *config.General) {
+//	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || general.Tun.Enable {
+//		return
+//	}
+//
+//	_, dnsPortStr, err := net.SplitHostPort(dns.Listen)
+//	if dnsPortStr == "0" || dnsPortStr == "" || err != nil {
+//		return
+//	}
+//
+//	dnsPort, err := strconv.Atoi(dnsPortStr)
+//	if err != nil {
+//		return
+//	}
+//
+//	tproxy.CleanUpTProxyLinuxIPTables()
+//
+//	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
+//
+//	if err != nil {
+//		log.Errorln("Can not setting iptables for TProxy on linux, %s", err.Error())
+//		os.Exit(2)
+//	}
+//}
 
 func CleanUp() {
 	P.CleanUp()
 
-	if runtime.GOOS == "linux" {
-		tproxy.CleanUpTProxyLinuxIPTables()
-	}
+	//if runtime.GOOS == "linux" {
+	//	tproxy.CleanUpTProxyLinuxIPTables()
+	//}
 }
