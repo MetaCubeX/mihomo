@@ -6,9 +6,6 @@
 <h3 align="center">Another Clash Kennel.</h3>
 
 <p align="center">
-  <a href="https://github.com/Clash-Mini/Clash.Meta/actions">
-    <img src="https://img.shields.io/github/workflow/status/Clash-Mini/Clash.Meta/Go?style=flat-square" alt="Github Actions">
-  </a>
   <a href="https://goreportcard.com/report/github.com/Clash-Mini/Clash.Meta">
     <img src="https://goreportcard.com/badge/github.com/Clash-Mini/Clash.Meta?style=flat-square">
   </a>
@@ -188,6 +185,7 @@ Launch clashd on system startup with:
 $ systemctl enable Clash.Meta
 ```
 Launch clashd immediately with:
+
 ```shell
 $ systemctl start Clash.Meta
 ```
@@ -198,8 +196,12 @@ Clash add field `Process` to `Metadata` and prepare to get process name for Rest
 
 To display process name in GUI please use [Dashboard For Meta](https://github.com/Clash-Mini/Dashboard).
 
+![img.png](https://github.com/Clash-Mini/Dashboard/raw/master/View/Dashboard-Process.png)
+
 ## Development
-If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
+
+If you want to build an application that uses clash as a library, check out the
+the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
 ## Credits
 
