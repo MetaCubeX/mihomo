@@ -83,7 +83,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			wsOpts.TLSConfig = &tls.Config{
 				ServerName:         host,
 				InsecureSkipVerify: v.option.SkipCertVerify,
-				NextProtos:         []string{"h2", "http/1.1"},
+				NextProtos:         []string{"http/1.1"},
 			}
 			if v.option.ServerName != "" {
 				wsOpts.TLSConfig.ServerName = v.option.ServerName
