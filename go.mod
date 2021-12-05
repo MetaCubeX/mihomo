@@ -40,6 +40,3 @@ require (
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
-replace (
-	github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499  => github.com/Clash-Mini/go v0.0.0-20211204194702-64aa679557f7
-)

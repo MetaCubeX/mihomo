@@ -128,7 +128,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		}
 	default:
 		// handle TLS And XTLS
-		c, err = v.streamTLSOrXTLSConn(c, true)
+		c, err = v.streamTLSOrXTLSConn(c, false)
 	}
 
 	if err != nil {
