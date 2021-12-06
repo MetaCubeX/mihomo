@@ -30,7 +30,7 @@ func (rs *RuleSet) Payload() string {
 }
 
 func (rs *RuleSet) ShouldResolveIP() bool {
-	return rs.getProviders().Behavior() != P.Domain
+	return rs.getProviders().ShouldResolveIP()
 }
 func (rs *RuleSet) getProviders() P.RuleProvider {
 	if rs.ruleProvider == nil {
