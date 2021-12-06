@@ -126,7 +126,6 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 			return err
 		}
 
-		rp.shouldResolveIP = false
 		rp.setRules(rules)
 		return nil
 	}
@@ -242,5 +241,6 @@ func (rp *ruleSetProvider) setRules(rules interface{}) {
 		rp.IPCIDRRules = rules.(*trie.IpCidrTrie)
 		rp.shouldResolveIP = true
 	default:
+		rp.shouldResolveIP = false
 	}
 }
