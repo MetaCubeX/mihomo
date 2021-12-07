@@ -493,7 +493,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		}
 
 		ruleProviders[name] = &rp
-		R.SetRuleProvider(&rp)
+		R.SetRuleProvider(rp)
 	}
 
 	for _, provider := range ruleProviders {

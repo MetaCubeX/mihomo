@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	ruleProviders = map[string]*P.RuleProvider{}
+	ruleProviders = map[string]P.RuleProvider{}
 )
 
 type ruleSetProvider struct {
@@ -38,13 +38,13 @@ type RulePayload struct {
 	Rules []string `yaml:"payload"`
 }
 
-func RuleProviders() map[string]*P.RuleProvider {
+func RuleProviders() map[string]P.RuleProvider {
 	return ruleProviders
 }
 
-func SetRuleProvider(ruleProvider *P.RuleProvider) {
+func SetRuleProvider(ruleProvider P.RuleProvider) {
 	if ruleProvider != nil {
-		ruleProviders[(*ruleProvider).Name()] = ruleProvider
+		ruleProviders[(ruleProvider).Name()] = ruleProvider
 	}
 }
 

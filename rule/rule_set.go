@@ -9,7 +9,7 @@ import (
 type RuleSet struct {
 	ruleProviderName string
 	adapter          string
-	ruleProvider     *P.RuleProvider
+	ruleProvider     P.RuleProvider
 	ruleExtra        *C.RuleExtra
 }
 
@@ -38,7 +38,7 @@ func (rs *RuleSet) getProviders() P.RuleProvider {
 		rs.ruleProvider = rp
 	}
 
-	return *rs.ruleProvider
+	return rs.ruleProvider
 }
 
 func (rs *RuleSet) RuleExtra() *C.RuleExtra {
