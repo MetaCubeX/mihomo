@@ -251,6 +251,8 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
+	//TODO 暂未使用
+	config.Tun = &rawCfg.Tun
 
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
