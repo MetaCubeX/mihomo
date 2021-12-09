@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/config"
@@ -24,7 +25,17 @@ func New(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Pack
 
 	device, err := dev.OpenTunDevice(tunAddress, autoRoute)
 	if err != nil {
-		return nil, fmt.Errorf("can't open tun: %v", err)
+		for i := 1; i < 3; i++ {
+			time.Sleep(time.Second * 1)
+			device, err = dev.OpenTunDevice(tunAddress, autoRoute)
+			if err == nil {
+				break
+			}
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("can't open tun: %v", err)
+		}
 	}
 
 	mtu, err := device.MTU()
