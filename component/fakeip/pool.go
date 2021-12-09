@@ -15,6 +15,7 @@ type store interface {
 	PutByHost(host string, ip net.IP)
 	GetByIP(ip net.IP) (string, bool)
 	PutByIP(ip net.IP, host string)
+	DelByIP(ip net.IP)
 	Exist(ip net.IP) bool
 	CloneTo(store)
 }
@@ -97,6 +98,9 @@ func (p *Pool) get(host string) net.IP {
 		p.offset = (p.offset + 1) % (p.max - p.min)
 		// Avoid infinite loops
 		if p.offset == current {
+			p.offset = (p.offset + 1) % (p.max - p.min)
+			ip := uintToIP(p.min + p.offset - 1)
+			p.store.DelByIP(ip)
 			break
 		}
 

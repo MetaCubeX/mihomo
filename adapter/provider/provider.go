@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"runtime"
 	"time"
 
@@ -82,33 +83,6 @@ func (pp *proxySetProvider) ProxiesWithTouch() []C.Proxy {
 	return pp.Proxies()
 }
 
-func proxiesParse(buf []byte) (interface{}, error) {
-	schema := &ProxySchema{}
-
-	if err := yaml.Unmarshal(buf, schema); err != nil {
-		return nil, err
-	}
-
-	if schema.Proxies == nil {
-		return nil, errors.New("file must have a `proxies` field")
-	}
-
-	proxies := []C.Proxy{}
-	for idx, mapping := range schema.Proxies {
-		proxy, err := adapter.ParseProxy(mapping)
-		if err != nil {
-			return nil, fmt.Errorf("proxy %d error: %w", idx, err)
-		}
-		proxies = append(proxies, proxy)
-	}
-
-	if len(proxies) == 0 {
-		return nil, errors.New("file doesn't have any valid proxy")
-	}
-
-	return proxies, nil
-}
-
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
@@ -122,7 +96,11 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	pd.fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, vehicle types.Vehicle, hc *HealthCheck) *ProxySetProvider {
+func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+	if _, err := regexp.Compile(filter); err != nil {
+		return nil, fmt.Errorf("invalid filter regex: %w", err)
+	}
+
 	if hc.auto() {
 		go hc.process()
 	}
@@ -137,12 +115,46 @@ func NewProxySetProvider(name string, interval time.Duration, vehicle types.Vehi
 		pd.setProxies(ret)
 	}
 
-	fetcher := newFetcher(name, interval, vehicle, proxiesParse, onUpdate)
+	proxiesParseAndFilter := func(buf []byte) (interface{}, error) {
+		schema := &ProxySchema{}
+
+		if err := yaml.Unmarshal(buf, schema); err != nil {
+			return nil, err
+		}
+
+		if schema.Proxies == nil {
+			return nil, errors.New("file must have a `proxies` field")
+		}
+
+		proxies := []C.Proxy{}
+		filterReg := regexp.MustCompile(filter)
+		for idx, mapping := range schema.Proxies {
+			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
+				continue
+			}
+			proxy, err := adapter.ParseProxy(mapping)
+			if err != nil {
+				return nil, fmt.Errorf("proxy %d error: %w", idx, err)
+			}
+			proxies = append(proxies, proxy)
+		}
+
+		if len(proxies) == 0 {
+			if len(filter) > 0 {
+				return nil, errors.New("doesn't match any proxy, please check your filter")
+			}
+			return nil, errors.New("file doesn't have any proxy")
+		}
+
+		return proxies, nil
+	}
+
+	fetcher := newFetcher(name, interval, vehicle, proxiesParseAndFilter, onUpdate)
 	pd.fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
-	return wrapper
+	return wrapper, nil
 }
 
 // for auto gc
