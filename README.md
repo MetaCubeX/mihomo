@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="https://raw.githubusercontent.com/Clash-Mini/Clash.Mini/master/icon/Clash.Mini.ico" alt="Clash" width="200">
+  <img src="Meta.png" alt="Meta Kennel" width="200">
   <br>Meta Kennel<br>
 </h1>
 
