@@ -114,7 +114,7 @@ func GetGeneral() *config.General {
 func updateExperimental(c *config.Config) {}
 
 func updateDNS(c *config.DNS, general *config.General) {
-	if !c.Enable {
+	if !c.Enable && !general.Tun.Enable {
 		resolver.DefaultResolver = nil
 		resolver.MainResolver = nil
 		resolver.DefaultHostMapper = nil
@@ -158,13 +158,15 @@ func updateDNS(c *config.DNS, general *config.General) {
 		resolver.DefaultLocalServer = nil
 	}
 
-	if err := dns.ReCreateServer(c.Listen, r, m); err != nil {
-		log.Errorln("Start DNS server error: %s", err.Error())
-		return
-	}
+	if c.Enable {
+		if err := dns.ReCreateServer(c.Listen, r, m); err != nil {
+			log.Errorln("Start DNS server error: %s", err.Error())
+			return
+		}
 
-	if c.Listen != "" {
-		log.Infoln("DNS server listening at: %s", c.Listen)
+		if c.Listen != "" {
+			log.Infoln("DNS server listening at: %s", c.Listen)
+		}
 	}
 }
 
