@@ -86,5 +86,7 @@ func (session Session) AllocateSendPacket(packetSize int) (packet []byte, err er
 }
 
 func (session Session) SendPacket(packet []byte) {
-	syscall.Syscall(procWintunSendPacket.Addr(), 2, session.handle, uintptr(unsafe.Pointer(&packet[0])), 0)
+	if packet != nil && len(packet) > 0 {
+		syscall.Syscall(procWintunSendPacket.Addr(), 2, session.handle, uintptr(unsafe.Pointer(&packet[0])), 0)
+	}
 }
