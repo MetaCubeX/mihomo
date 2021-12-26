@@ -97,7 +97,8 @@ func stopProxyProvider(pd *ProxySetProvider) {
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
-	if _, err := regexp.Compile(filter); err != nil {
+	filterReg, err := regexp.Compile(filter)
+	if err != nil {
 		return nil, fmt.Errorf("invalid filter regex: %w", err)
 	}
 
@@ -127,7 +128,6 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		}
 
 		proxies := []C.Proxy{}
-		filterReg := regexp.MustCompile(filter)
 		for idx, mapping := range schema.Proxies {
 			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
 				continue
