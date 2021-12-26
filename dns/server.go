@@ -47,11 +47,11 @@ func (s *Server) setHandler(handler handler) {
 	s.handler = handler
 }
 
-func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) error {
+func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 	if addr == address && resolver != nil {
 		handler := newHandler(resolver, mapper)
 		server.setHandler(handler)
-		return nil
+		return
 	}
 
 	if server.Server != nil {
@@ -60,24 +60,33 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) e
 		address = ""
 	}
 
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start DNS server error: %s", err.Error())
+		}
+	}()
+
 	_, port, err := net.SplitHostPort(addr)
 	if port == "0" || port == "" || err != nil {
-		return nil
+		return
 	}
 
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
-		return err
+		return
 	}
 
 	p, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		return err
+		return
 	}
 
 	err = sockopt.UDPReuseaddr(p)
 	if err != nil {
 		log.Warnln("Failed to Reuse UDP Address: %s", err)
+
+		err = nil
 	}
 
 	address = addr
@@ -88,5 +97,6 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) e
 	go func() {
 		server.ActivateAndServe()
 	}()
-	return nil
+
+	log.Infoln("DNS server listening at: %s", p.LocalAddr().String())
 }
