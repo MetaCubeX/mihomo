@@ -185,6 +185,7 @@ func updateRules(rules []C.Rule, ruleProviders map[string]*provider.RuleProvider
 func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
+	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 
 	if (general.Tun.Enable || general.TProxyPort != 0) && general.Interface == "" {
 		autoDetectInterfaceName, err := dev.GetAutoDetectInterface()
