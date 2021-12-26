@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"bytes"
 	"os/exec"
 	"runtime"
 
@@ -49,8 +50,10 @@ func addLinuxSystemRoute(net string) {
 		return
 	}
 	cmd := exec.Command("route", "add", "-net", net, "198.18.0.1")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		log.Errorln("[auto route] Failed to add system route: %s, cmd: %s", err.Error(), cmd.String())
+		log.Errorln("[auto route] Failed to add system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
 	}
 }
 

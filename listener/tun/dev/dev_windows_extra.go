@@ -50,7 +50,7 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 		log.Warnln("Error parese GUID from string: %v", err)
 	}
 
-	interfaceName := "Clash.Mini"
+	interfaceName := "Meta Tunnel"
 	mtu := 9000
 
 	tun, err := CreateTUN(interfaceName, mtu, tunAddress, autoRoute)

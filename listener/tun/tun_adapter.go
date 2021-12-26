@@ -47,7 +47,7 @@ func New(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Pack
 	if strings.EqualFold(stack, "system") {
 		tunAdapter, err = system.NewAdapter(device, conf, mtu, tunAddress, tunAddress, func() {}, tcpIn, udpIn)
 	} else if strings.EqualFold(stack, "gvisor") {
-		tunAdapter, err = gvisor.NewAdapter(device, conf, tunAddress, tcpIn, udpIn)
+		tunAdapter, err = gvisor.NewAdapter(device, conf, tcpIn, udpIn)
 	} else {
 		err = fmt.Errorf("can not support tun ip stack: %s, only support \"lwip\" \"system\" and \"gvisor\"", stack)
 	}

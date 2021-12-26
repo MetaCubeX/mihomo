@@ -38,7 +38,7 @@ type tunLinux struct {
 
 // OpenTunDevice return a TunDevice according a URL
 func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
-	deviceURL, _ := url.Parse("dev://clash0")
+	deviceURL, _ := url.Parse("dev://utun")
 	mtu, _ := strconv.ParseInt(deviceURL.Query().Get("mtu"), 0, 32)
 
 	t := &tunLinux{
@@ -204,7 +204,7 @@ func (t *tunLinux) configInterface() error {
 	}
 
 	// set netmask for tun
-	netmask := []byte{255, 255, 255, 0}
+	netmask := []byte{255, 255, 0, 0}
 	copy(ifr[unix.IFNAMSIZ+4:], netmask)
 
 	_, _, errno = unix.Syscall(
