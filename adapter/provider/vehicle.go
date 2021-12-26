@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	netHttp "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	types "github.com/Dreamacro/clash/constant/provider"
 )
@@ -56,6 +57,8 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, uri.String(), nil)
+	req.Header.Set("user-agent", netHttp.UA)
+
 	if err != nil {
 		return nil, err
 	}
