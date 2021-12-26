@@ -21,6 +21,7 @@ type TunDevice interface {
 
 func SetLinuxAutoRoute() {
 	log.Infoln("Tun adapter auto setting global route")
+	addLinuxSystemRoute("0")
 	addLinuxSystemRoute("1")
 	addLinuxSystemRoute("2/7")
 	addLinuxSystemRoute("4/6")
@@ -34,6 +35,7 @@ func SetLinuxAutoRoute() {
 
 func RemoveLinuxAutoRoute() {
 	log.Infoln("Tun adapter removing global route")
+	delLinuxSystemRoute("0")
 	delLinuxSystemRoute("1")
 	delLinuxSystemRoute("2/7")
 	delLinuxSystemRoute("4/6")
