@@ -58,11 +58,11 @@ func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, network string, des
 		return nil
 	}
 
-	local := int64(0)
+	local := uint64(0)
 	if dialer.LocalAddr != nil {
 		_, port, err := net.SplitHostPort(dialer.LocalAddr.String())
 		if err == nil {
-			local, _ = strconv.ParseInt(port, 10, 16)
+			local, _ = strconv.ParseUint(port, 10, 16)
 		}
 	}
 
@@ -82,7 +82,7 @@ func bindIfaceToListenConfig(ifaceName string, _ *net.ListenConfig, network, add
 		port = "0"
 	}
 
-	local, _ := strconv.ParseInt(port, 10, 16)
+	local, _ := strconv.ParseUint(port, 10, 16)
 
 	addr, err := lookupLocalAddr(ifaceName, network, nil, int(local))
 	if err != nil {
