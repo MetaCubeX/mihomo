@@ -16,7 +16,7 @@ var (
 	errType              = errors.New("unsupport type")
 	errMissProxy         = errors.New("`use` or `proxies` missing")
 	errMissHealthCheck   = errors.New("`url` or `interval` missing")
-	errDuplicateProvider = errors.New("`duplicate provider name")
+	errDuplicateProvider = errors.New("duplicate provider name")
 )
 
 type GroupCommonOption struct {
