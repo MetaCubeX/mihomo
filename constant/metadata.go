@@ -114,7 +114,7 @@ func (m *Metadata) UDPAddr() *net.UDPAddr {
 	if m.NetWork != UDP || m.DstIP == nil {
 		return nil
 	}
-	port, _ := strconv.ParseInt(m.DstPort, 10, 16)
+	port, _ := strconv.ParseUint(m.DstPort, 10, 16)
 	return &net.UDPAddr{
 		IP:   m.DstIP,
 		Port: int(port),
