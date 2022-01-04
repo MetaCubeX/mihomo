@@ -1,8 +1,6 @@
 package cachefile
 
 import (
-	"bytes"
-	"encoding/gob"
 	"os"
 	"sync"
 	"time"
@@ -138,69 +136,30 @@ func (c *CacheFile) Close() error {
 	return c.DB.Close()
 }
 
-// TODO: remove migrateCache until 2022
-func migrateCache() {
-	defer func() {
-		options := bbolt.Options{Timeout: time.Second}
-		db, err := bbolt.Open(C.Path.Cache(), fileMode, &options)
-		switch err {
-		case bbolt.ErrInvalid, bbolt.ErrChecksum, bbolt.ErrVersionMismatch:
-			if err = os.Remove(C.Path.Cache()); err != nil {
-				log.Warnln("[CacheFile] remove invalid cache file error: %s", err.Error())
-				break
-			}
-			log.Infoln("[CacheFile] remove invalid cache file and create new one")
-			db, err = bbolt.Open(C.Path.Cache(), fileMode, &options)
+func initCache() {
+	options := bbolt.Options{Timeout: time.Second}
+	db, err := bbolt.Open(C.Path.Cache(), fileMode, &options)
+	switch err {
+	case bbolt.ErrInvalid, bbolt.ErrChecksum, bbolt.ErrVersionMismatch:
+		if err = os.Remove(C.Path.Cache()); err != nil {
+			log.Warnln("[CacheFile] remove invalid cache file error: %s", err.Error())
+			break
 		}
-		if err != nil {
-			log.Warnln("[CacheFile] can't open cache file: %s", err.Error())
-		}
-
-		defaultCache = &CacheFile{
-			DB: db,
-		}
-	}()
-
-	buf, err := os.ReadFile(C.Path.OldCache())
+		log.Infoln("[CacheFile] remove invalid cache file and create new one")
+		db, err = bbolt.Open(C.Path.Cache(), fileMode, &options)
+	}
 	if err != nil {
-		return
+		log.Warnln("[CacheFile] can't open cache file: %s", err.Error())
 	}
-	defer os.Remove(C.Path.OldCache())
 
-	// read old cache file
-	type cache struct {
-		Selected map[string]string
+	defaultCache = &CacheFile{
+		DB: db,
 	}
-	model := &cache{
-		Selected: map[string]string{},
-	}
-	bufReader := bytes.NewBuffer(buf)
-	gob.NewDecoder(bufReader).Decode(model)
-
-	// write to new cache file
-	db, err := bbolt.Open(C.Path.Cache(), fileMode, nil)
-	if err != nil {
-		return
-	}
-	defer db.Close()
-
-	db.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketSelected)
-		if err != nil {
-			return err
-		}
-		for group, selected := range model.Selected {
-			if err := bucket.Put([]byte(group), []byte(selected)); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 // Cache return singleton of CacheFile
 func Cache() *CacheFile {
-	initOnce.Do(migrateCache)
+	initOnce.Do(initCache)
 
 	return defaultCache
 }
