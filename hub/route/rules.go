@@ -23,7 +23,6 @@ type Rule struct {
 
 func getRules(w http.ResponseWriter, r *http.Request) {
 	rawRules := tunnel.Rules()
-
 	rules := []Rule{}
 	for _, rule := range rawRules {
 		rules = append(rules, Rule{
@@ -31,6 +30,7 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 			Payload: rule.Payload(),
 			Proxy:   rule.Adapter(),
 		})
+
 	}
 
 	render.JSON(w, r, render.M{

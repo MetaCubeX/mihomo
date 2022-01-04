@@ -71,7 +71,7 @@ func Tun() config.Tun {
 	return config.Tun{
 		Enable:    true,
 		Stack:     tunAdapter.Stack(),
-		DNSListen: tunAdapter.DNSListen(),
+		DnsHijack: tunAdapter.DnsHijack(),
 		AutoRoute: tunAdapter.AutoRoute(),
 	}
 }
