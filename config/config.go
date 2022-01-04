@@ -98,11 +98,10 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable              bool     `yaml:"enable" json:"enable"`
-	Stack               string   `yaml:"stack" json:"stack"`
-	DnsHijack           []string `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           bool     `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface bool     `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	Enable    bool     `yaml:"enable" json:"enable"`
+	Stack     string   `yaml:"stack" json:"stack"`
+	DnsHijack []string `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute bool     `yaml:"auto-route" json:"auto-route"`
 }
 
 // Script config
@@ -207,11 +206,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]interface{}{},
 		ProxyGroup:     []map[string]interface{}{},
 		Tun: Tun{
-			Enable:              false,
-			Stack:               "gvisor",
-			DnsHijack:           []string{"192.18.0.2:53"},
-			AutoRoute:           true,
-			AutoDetectInterface: true,
+			Enable:    false,
+			Stack:     "gvisor",
+			DnsHijack: []string{"192.18.0.2:53"},
+			AutoRoute: true,
 		},
 		DNS: RawDNS{
 			Enable:      false,
