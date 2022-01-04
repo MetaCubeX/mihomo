@@ -38,8 +38,8 @@ type tunLinux struct {
 
 // OpenTunDevice return a TunDevice according a URL
 func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
-	deviceURL, _ := url.Parse("dev://meta?mtu=9000")
-	mtu, _ := strconv.ParseUint(deviceURL.Query().Get("mtu"), 10, 32)
+	deviceURL, _ := url.Parse("dev://meta")
+	mtu, _ := strconv.ParseInt(deviceURL.Query().Get("mtu"), 0, 32)
 
 	t := &tunLinux{
 		url:        deviceURL.String(),
