@@ -1,0 +1,76 @@
+name: Publish Docker Image
+on:
+  push:
+    branches:
+      - dev
+    tags:
+      - '*'
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: all
+
+      - name: Set up docker buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          version: latest
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Login to Github Package
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: Dreamacro
+          password: ${{ secrets.PACKAGE_TOKEN }}
+
+      - name: Build dev branch and push
+        if: github.ref == 'refs/heads/dev'
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+          push: true
+          tags: 'dreamacro/clash:dev,ghcr.io/dreamacro/clash:dev'
+
+      - name: Get all docker tags
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/github-script@v4
+        id: tags
+        with:
+          script: |
+            const ref = `${context.payload.ref.replace(/\/?refs\/tags\//, '')}`
+            const tags = [
+              'dreamacro/clash:latest',
+              `dreamacro/clash:${ref}`,
+              'ghcr.io/dreamacro/clash:latest',
+              `ghcr.io/dreamacro/clash:${ref}`
+            ]
+            return tags.join(',')
+          result-encoding: string
+
+      - name: Build release and push
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
+          push: true
+          tags: ${{steps.tags.outputs.result}}
