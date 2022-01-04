@@ -15,15 +15,27 @@ GOBUILDOP=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/cl
 PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
-	linux-arm64 \
 	linux-amd64 \
-	linux-arm64-AutoIptables\
-	linux-amd64-AutoIptables
+	linux-armv5 \
+	linux-armv6 \
+	linux-armv7 \
+	linux-armv8 \
+	linux-mips64 \
+	linux-mips64le \
+	linux-mips-softfloat \
+	linux-mips-hardfloat \
+	linux-mipsle-softfloat \
+	linux-mipsle-hardfloat \
+	freebsd-386 \
+	freebsd-amd64 \
+	freebsd-arm64
 
 
 WINDOWS_ARCH_LIST = \
 	windows-386 \
-	windows-amd64
+	windows-amd64 \
+	windows-arm64 \
+    windows-arm32v7
 
 
 all: linux-arm64-AutoIptables linux-amd64-AutoIptables linux-arm64 linux-amd64 darwin-amd64 darwin-arm64 windows-amd64 windows-386  # Most used
@@ -108,6 +120,9 @@ windows-386:
 
 windows-amd64:
 	GOARCH=amd64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
+
+windows-arm64:
+	GOARCH=arm64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
 windows-arm32v7:
 	GOARCH=arm GOOS=windows GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe

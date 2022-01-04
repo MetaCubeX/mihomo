@@ -241,51 +241,55 @@ func (s *DNSServer) Stop() {
 		s.NICID)
 }
 
-// DNSListen return the listening address of DNS Server
-func (t *gvisorAdapter) DNSListen() string {
-	if t.dnsserver != nil {
-		id := t.dnsserver.udpEndpointID
-		return fmt.Sprintf("%s:%d", id.LocalAddress.String(), id.LocalPort)
+// DnsHijack return the listening address of DNS Server
+func (t *gvisorAdapter) DnsHijack() []string {
+	results := make([]string, len(t.dnsServers))
+	for i, dnsServer := range t.dnsServers {
+		id := dnsServer.udpEndpointID
+		results[i] = fmt.Sprintf("%s:%d", id.LocalAddress.String(), id.LocalPort)
 	}
-	return ""
+
+	return results
 }
 
-// Stop stop the DNS Server on tun
-func (t *gvisorAdapter) ReCreateDNSServer(resolver *dns.Resolver, mapper *dns.ResolverEnhancer, addr string) error {
-	if addr == "" && t.dnsserver == nil {
-		return nil
+func (t *gvisorAdapter) StopAllDNSServer() {
+	for _, dnsServer := range t.dnsServers {
+		dnsServer.Stop()
 	}
+	log.Debugln("tun DNS server stoped")
+	t.dnsServers = nil
+}
 
-	if addr == t.DNSListen() && t.dnsserver != nil && t.dnsserver.resolver == resolver {
-		return nil
-	}
-
-	if t.dnsserver != nil {
-		t.dnsserver.Stop()
-		t.dnsserver = nil
-		log.Debugln("tun DNS server stoped")
-	}
-
-	var err error
-	_, port, err := net.SplitHostPort(addr)
-	if port == "0" || port == "" || err != nil {
-		return nil
-	}
+// ReCreateDNSServer recreate the DNS Server on tun
+func (t *gvisorAdapter) ReCreateDNSServer(resolver *dns.Resolver, mapper *dns.ResolverEnhancer, addrs []string) error {
+	t.StopAllDNSServer()
 
 	if resolver == nil {
 		return fmt.Errorf("failed to create DNS server on tun: resolver not provided")
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return err
+	if len(addrs) == 0 {
+		return fmt.Errorf("failed to create DNS server on tun: len(addrs) == 0")
+	}
+	for _, addr := range addrs {
+		var err error
+		_, port, err := net.SplitHostPort(addr)
+		if port == "0" || port == "" || err != nil {
+			return nil
+		}
+
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return err
+		}
+
+		server, err := CreateDNSServer(t.ipstack, resolver, mapper, udpAddr.IP, udpAddr.Port, nicID)
+		if err != nil {
+			return err
+		}
+		t.dnsServers = append(t.dnsServers, server)
+		log.Infoln("Tun DNS server listening at: %s, fake ip enabled: %v", addr, mapper.FakeIPEnabled())
 	}
 
-	server, err := CreateDNSServer(t.ipstack, resolver, mapper, udpAddr.IP, udpAddr.Port, nicID)
-	if err != nil {
-		return err
-	}
-	t.dnsserver = server
-	log.Infoln("Tun DNS server listening at: %s, fake ip enabled: %v", addr, mapper.FakeIPEnabled())
 	return nil
 }

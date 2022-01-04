@@ -78,9 +78,10 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateHosts(cfg.Hosts)
 	updateProfile(cfg)
-	updateIPTables(cfg.DNS, cfg.General)
-	updateDNS(cfg.DNS, cfg.General)
+	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
+	updateDNS(cfg.DNS, cfg.Tun)
 	updateGeneral(cfg.General, force)
+	updateTun(cfg.General, cfg.Tun)
 	updateExperimental(cfg)
 }
 
@@ -98,7 +99,6 @@ func GetGeneral() *config.General {
 			RedirPort:      ports.RedirPort,
 			TProxyPort:     ports.TProxyPort,
 			MixedPort:      ports.MixedPort,
-			Tun:            P.Tun(),
 			Authentication: authenticator,
 			AllowLan:       P.AllowLan(),
 			BindAddress:    P.BindAddress(),
@@ -113,8 +113,8 @@ func GetGeneral() *config.General {
 
 func updateExperimental(c *config.Config) {}
 
-func updateDNS(c *config.DNS, general *config.General) {
-	if !c.Enable && !general.Tun.Enable {
+func updateDNS(c *config.DNS, Tun *config.Tun) {
+	if !c.Enable && !Tun.Enable {
 		resolver.DefaultResolver = nil
 		resolver.MainResolver = nil
 		resolver.DefaultHostMapper = nil
@@ -152,7 +152,7 @@ func updateDNS(c *config.DNS, general *config.General) {
 	resolver.DefaultResolver = r
 	resolver.MainResolver = mr
 	resolver.DefaultHostMapper = m
-	if general.Tun.Enable && !strings.EqualFold(general.Tun.Stack, "gvisor") {
+	if Tun.Enable && !strings.EqualFold(Tun.Stack, "gVisor") {
 		resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
 	} else {
 		resolver.DefaultLocalServer = nil
@@ -179,20 +179,6 @@ func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
-
-	if (general.Tun.Enable || general.TProxyPort != 0) && general.Interface == "" {
-		autoDetectInterfaceName, err := dev.GetAutoDetectInterface()
-		if err == nil {
-			if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
-				general.Interface = autoDetectInterfaceName
-			} else {
-				log.Debugln("Auto detect interface name is empty.")
-			}
-		} else {
-			log.Debugln("Can not find auto detect interface. %s", err.Error())
-		}
-	}
-
 	dialer.DefaultInterface.Store(general.Interface)
 
 	log.Infoln("Use interface name: %s", general.Interface)
@@ -219,12 +205,33 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 
-	if err := P.ReCreateTun(general.Tun, tcpIn, udpIn); err != nil {
-		log.Errorln("Start Tun interface error: %s", err.Error())
-		os.Exit(2)
+	log.SetLevel(general.LogLevel)
+}
+
+func updateTun(General *config.General, Tun *config.Tun) {
+	if Tun == nil {
+		return
 	}
 
-	log.SetLevel(general.LogLevel)
+	if (Tun.Enable || General.TProxyPort != 0) && General.Interface == "" {
+		autoDetectInterfaceName, err := dev.GetAutoDetectInterface()
+		if err == nil {
+			if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
+				General.Interface = autoDetectInterfaceName
+			} else {
+				log.Debugln("Auto detect interface name is empty.")
+			}
+		} else {
+			log.Debugln("Can not find auto detect interface. %s", err.Error())
+		}
+	}
+
+	tcpIn := tunnel.TCPIn()
+	udpIn := tunnel.UDPIn()
+
+	if err := P.ReCreateTun(*Tun, tcpIn, udpIn); err != nil {
+		log.Errorln("Start Tun interface error: %s", err.Error())
+	}
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -270,9 +277,9 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func updateIPTables(dns *config.DNS, general *config.General) {
+func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 	AutoIptables := C.AutoIptables
-	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || general.Tun.Enable || AutoIptables != "Enable" {
+	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || tun.Enable || AutoIptables != "Enable" {
 		return
 	}
 

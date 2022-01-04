@@ -34,10 +34,10 @@ import (
 const nicID tcpip.NICID = 1
 
 type gvisorAdapter struct {
-	device    dev.TunDevice
-	ipstack   *stack.Stack
-	dnsserver *DNSServer
-	udpIn     chan<- *inbound.PacketAdapter
+	device     dev.TunDevice
+	ipstack    *stack.Stack
+	dnsServers []*DNSServer
+	udpIn      chan<- *inbound.PacketAdapter
 
 	stackName string
 	autoRoute bool
@@ -113,7 +113,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tcpIn chan<- C.ConnContex
 	ipstack.SetTransportProtocolHandler(udp.ProtocolNumber, adapter.udpHandlePacket)
 
 	if resolver.DefaultResolver != nil {
-		err = adapter.ReCreateDNSServer(resolver.DefaultResolver.(*dns.Resolver), resolver.DefaultHostMapper.(*dns.ResolverEnhancer), conf.DNSListen)
+		err = adapter.ReCreateDNSServer(resolver.DefaultResolver.(*dns.Resolver), resolver.DefaultHostMapper.(*dns.ResolverEnhancer), conf.DnsHijack)
 		if err != nil {
 			return nil, err
 		}
@@ -132,9 +132,7 @@ func (t *gvisorAdapter) AutoRoute() bool {
 
 // Close close the TunAdapter
 func (t *gvisorAdapter) Close() {
-	if t.dnsserver != nil {
-		t.dnsserver.Stop()
-	}
+	t.StopAllDNSServer()
 	if t.ipstack != nil {
 		t.ipstack.Close()
 	}

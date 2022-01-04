@@ -17,26 +17,26 @@ import (
 )
 
 type systemAdapter struct {
-	device    dev.TunDevice
-	tun       *tun2socket.Tun2Socket
-	lock      sync.Mutex
-	stackName string
-	dnsListen string
-	autoRoute bool
+	device      dev.TunDevice
+	tun         *tun2socket.Tun2Socket
+	lock        sync.Mutex
+	stackName   string
+	dnsHackjack []string
+	autoRoute   bool
 }
 
 func NewAdapter(device dev.TunDevice, conf config.Tun, mtu int, gateway, mirror string, onStop func(), tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.TunAdapter, error) {
 	adapter := &systemAdapter{
-		device:    device,
-		stackName: conf.Stack,
-		dnsListen: conf.DNSListen,
-		autoRoute: conf.AutoRoute,
+		device:      device,
+		stackName:   conf.Stack,
+		dnsHackjack: conf.DnsHijack,
+		autoRoute:   conf.AutoRoute,
 	}
 
 	adapter.lock.Lock()
 	defer adapter.lock.Unlock()
 
-	dnsHost, dnsPort, err := net.SplitHostPort(conf.DNSListen)
+	dnsHost, dnsPort, err := net.SplitHostPort(conf.DnsHijack[0])
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +91,8 @@ func (t *systemAdapter) AutoRoute() bool {
 	return t.autoRoute
 }
 
-func (t *systemAdapter) DNSListen() string {
-	return t.dnsListen
+func (t *systemAdapter) DnsHijack() []string {
+	return t.dnsHackjack
 }
 
 func (t *systemAdapter) Close() {

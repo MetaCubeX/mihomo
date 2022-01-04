@@ -2,6 +2,7 @@ package constant
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"strconv"
 )
@@ -87,6 +88,14 @@ func (m *Metadata) RemoteAddress() string {
 
 func (m *Metadata) SourceAddress() string {
 	return net.JoinHostPort(m.SrcIP.String(), m.SrcPort)
+}
+
+func (m *Metadata) SourceDetail() string {
+	if m.Process != "" {
+		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
+	} else {
+		return fmt.Sprintf("%s", m.SourceAddress())
+	}
 }
 
 func (m *Metadata) Resolved() bool {

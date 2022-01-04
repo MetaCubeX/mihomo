@@ -48,7 +48,6 @@ type Inbound struct {
 	RedirPort      int      `json:"redir-port"`
 	TProxyPort     int      `json:"tproxy-port"`
 	MixedPort      int      `json:"mixed-port"`
-	Tun            Tun      `json:"tun"`
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
@@ -99,10 +98,11 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable    bool   `yaml:"enable" json:"enable"`
-	Stack     string `yaml:"stack" json:"stack"`
-	DNSListen string `yaml:"dns-listen" json:"dns-listen"`
-	AutoRoute bool   `yaml:"auto-route" json:"auto-route"`
+	Enable              bool     `yaml:"enable" json:"enable"`
+	Stack               string   `yaml:"stack" json:"stack"`
+	DnsHijack           []string `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool     `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool     `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 }
 
 // Script config
@@ -207,10 +207,11 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]interface{}{},
 		ProxyGroup:     []map[string]interface{}{},
 		Tun: Tun{
-			Enable:    false,
-			Stack:     "gvisor",
-			DNSListen: "0.0.0.0:53",
-			AutoRoute: true,
+			Enable:              false,
+			Stack:               "gvisor",
+			DnsHijack:           []string{"192.18.0.2:53"},
+			AutoRoute:           true,
+			AutoDetectInterface: true,
 		},
 		DNS: RawDNS{
 			Enable:      false,
@@ -225,6 +226,17 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			DefaultNameserver: []string{
 				"114.114.114.114",
 				"223.5.5.5",
+				"8.8.8.8",
+				"1.0.0.1",
+			},
+			NameServer: []string{
+				"https://8.8.8.8/dns-query",
+				"https://1.0.0.1/dns-query",
+			},
+			FakeIPFilter: []string{
+				"dns.msftnsci.com",
+				"www.msftnsci.com",
+				"www.msftconnecttest.com",
 			},
 		},
 		Profile: Profile{
@@ -254,7 +266,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
-	//TODO 暂未使用
+
 	config.Tun = &rawCfg.Tun
 
 	proxies, providers, err := parseProxies(rawCfg)
@@ -312,7 +324,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			RedirPort:   cfg.RedirPort,
 			TProxyPort:  cfg.TProxyPort,
 			MixedPort:   cfg.MixedPort,
-			Tun:         cfg.Tun,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
 		},
@@ -332,7 +343,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]providerTypes.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]providerTypes.ProxyProvider)
-	proxyList := []string{}
+	var proxyList []string
 	_proxiesList := list.New()
 	_groupsList := list.New()
 	proxiesConfig := cfg.Proxy
@@ -421,7 +432,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 	}
 
-	ps := []C.Proxy{}
+	var ps []C.Proxy
 	for _, v := range proxyList {
 		ps = append(ps, proxies[v])
 	}
@@ -502,14 +513,14 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		R.SetRuleProvider(rp)
 	}
 
-	for _, provider := range ruleProviders {
-		log.Infoln("Start initial provider %s", (*provider).Name())
-		if err := (*provider).Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial rule provider %s error: %w", (*provider).Name(), err)
+	for _, ruleProvider := range ruleProviders {
+		log.Infoln("Start initial provider %s", (*ruleProvider).Name())
+		if err := (*ruleProvider).Initial(); err != nil {
+			return nil, nil, fmt.Errorf("initial rule provider %s error: %w", (*ruleProvider).Name(), err)
 		}
 	}
 
-	rules := []C.Rule{}
+	var rules []C.Rule
 	rulesConfig := cfg.Rule
 	mode := cfg.Mode
 
@@ -519,7 +530,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		var (
 			payload  string
 			target   string
-			params   = []string{}
+			params   []string
 			ruleName = strings.ToUpper(rule[0])
 		)
 
@@ -607,7 +618,7 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 }
 
 func parseNameServer(servers []string) ([]dns.NameServer, error) {
-	nameservers := []dns.NameServer{}
+	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
 		// parse without scheme .e.g 8.8.8.8:53
@@ -675,7 +686,7 @@ func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServe
 }
 
 func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
-	ipNets := []*net.IPNet{}
+	var ipNets []*net.IPNet
 
 	for idx, ip := range ips {
 		_, ipnet, err := net.ParseCIDR(ip)
@@ -689,7 +700,7 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 }
 
 func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
-	sites := []*router.DomainMatcher{}
+	var sites []*router.DomainMatcher
 
 	for _, country := range countries {
 		found := false
@@ -784,7 +795,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 				if net.ParseIP(fb.Addr) != nil {
 					continue
 				}
-				host.Insert(fb.Addr, true)
+				_ = host.Insert(fb.Addr, true)
 			}
 		}
 

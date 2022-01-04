@@ -242,17 +242,24 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		pCtx.InjectPacketConn(rawPc)
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
 
+		var ruleDetail string
+		if rule.Payload() != "" {
+			ruleDetail = fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload())
+		} else {
+			ruleDetail = rule.RuleType().String()
+		}
+
 		switch true {
 		case rule != nil:
-			log.Infoln("[UDP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
+			log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), ruleDetail, rawPc.Chains().String())
 		case mode == Script:
-			log.Infoln("[UDP] %s --> %s using SCRIPT %s", metadata.SourceAddress(), metadata.RemoteAddress(), rawPc.Chains().String())
+			log.Infoln("[UDP] %s --> %s using SCRIPT %s", metadata.SourceDetail(), metadata.RemoteAddress(), rawPc.Chains().String())
 		case mode == Global:
-			log.Infoln("[UDP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
+			log.Infoln("[UDP] %s --> %s using GLOBAL", metadata.SourceDetail(), metadata.RemoteAddress())
 		case mode == Direct:
-			log.Infoln("[UDP] %s(%s) --> %s using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
+			log.Infoln("[UDP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		default:
-			log.Infoln("[UDP] %s(%s) --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
+			log.Infoln("[UDP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		}
 
 		go handleUDPToLocal(packet.UDPPacket, pc, key, fAddr)
@@ -296,17 +303,25 @@ func handleTCPConn(connCtx C.ConnContext) {
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
 	defer remoteConn.Close()
 
+	var ruleDetail string
+
+	if rule.Payload() != "" {
+		ruleDetail = fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload())
+	} else {
+		ruleDetail = rule.RuleType().String()
+	}
+
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), ruleDetail, remoteConn.Chains().String())
 	case mode == Script:
-		log.Infoln("[TCP] %s(%s) --> %s using SCRIPT %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), remoteConn.Chains().String())
+		log.Infoln("[TCP] %s --> %s using SCRIPT %s", metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
 	case mode == Global:
-		log.Infoln("[TCP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
+		log.Infoln("[TCP] %s --> %s using GLOBAL", metadata.SourceDetail(), metadata.RemoteAddress())
 	case mode == Direct:
-		log.Infoln("[TCP] %s(%s) --> %s using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
+		log.Infoln("[TCP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 	default:
-		log.Infoln("[TCP] %s(%s) --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
+		log.Infoln("[TCP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.RemoteAddress())
 	}
 
 	handleSocket(connCtx, remoteConn)
