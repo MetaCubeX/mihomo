@@ -10,8 +10,8 @@ require (
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gorilla/websocket v1.4.2
 	github.com/insomniacslk/dhcp v0.0.0-20211214070828-5297eed8f489
-	github.com/miekg/dns v1.1.45
 	github.com/kr328/tun2socket v0.0.0-20210412191540-3d56c47e2d99
+	github.com/miekg/dns v1.1.45
 	github.com/oschwald/geoip2-golang v1.5.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
@@ -37,10 +37,9 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
 	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/text v0.3.6 // indirect
-	golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	golang.org/x/text v0.3.8-0.20211004125949-5bd84dd9b33b // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
+	golang.org/x/tools v0.1.7 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
