@@ -81,7 +81,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateIPTables(cfg.DNS, cfg.General)
 	updateDNS(cfg.DNS, cfg.General)
 	updateGeneral(cfg.General, force)
-	updateDNS(cfg.DNS)
 	updateExperimental(cfg)
 }
 
@@ -161,6 +160,7 @@ func updateDNS(c *config.DNS, general *config.General) {
 
 	if c.Enable {
 		dns.ReCreateServer(c.Listen, r, m)
+	}
 }
 
 func updateHosts(tree *trie.DomainTrie) {
@@ -218,6 +218,13 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+
+	if err := P.ReCreateTun(general.Tun, tcpIn, udpIn); err != nil {
+		log.Errorln("Start Tun interface error: %s", err.Error())
+		os.Exit(2)
+	}
+
+	log.SetLevel(general.LogLevel)
 }
 
 func updateUsers(users []auth.AuthUser) {

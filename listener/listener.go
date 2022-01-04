@@ -107,6 +107,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 
 	httpListener, err = http.New(addr, tcpIn)
 	if err != nil {
+		log.Errorln("Start HTTP server error: %s", err.Error())
 		return
 	}
 
