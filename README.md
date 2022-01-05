@@ -33,16 +33,32 @@
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
 ## Advanced usage for this branch
+
 ### DNS configuration
-Support resolve ip with a proxy tunnel.
 
 Support `geosite` with `fallback-filter`.
+
+Restore `Redir remote resolution`.
+
+Support resolve ip with a `Proxy Tunnel`.
+
+```yaml
+proxy-groups:
+
+  - name: DNS
+    type: url-test
+    use:
+      - HK
+    url: http://cp.cloudflare.com
+    interval: 180
+    lazy: true
+```
 ```yaml
 dns:
   enable: true
   use-hosts: true
   ipv6: false
-  enhanced-mode: fake-ip
+  enhanced-mode: redir-host
   fake-ip-range: 198.18.0.1/16
   listen: 127.0.0.1:6868
   default-nameserver:
@@ -52,8 +68,8 @@ dns:
     - https://doh.pub/dns-query
     - tls://223.5.5.5:853
   fallback:
-    - 'https://1.0.0.1/dns-query#Proxy'  # append the proxy adapter name to the end of DNS URL with '#' prefix.
-    - 'tls://8.8.4.4:853#Proxy'
+    - 'https://1.0.0.1/dns-query#DNS'  # append the proxy adapter name or group name to the end of DNS URL with '#' prefix.
+    - 'tls://8.8.4.4:853#DNS'
   fallback-filter:
     geoip: false
     geosite:
@@ -74,8 +90,9 @@ Built-in [Wintun](https://www.wintun.net) driver.
 # Enable the TUN listener
 tun:
   enable: true
-  stack: gvisor #  system or gvisor
-  dns-listen: 0.0.0.0:53 # additional dns server listen on TUN
+  stack: gvisor #  only gvisor
+  dns-hijack: 
+    - 0.0.0.0:53 # additional dns server listen on TUN
   auto-route: true # auto set global route
 ```
 ### Rules configuration
@@ -118,6 +135,41 @@ rules:
 
 
 ### Proxies configuration
+
+Active health detection `urltest / fallback` (based on tcp handshake, multiple failures within a limited time will actively trigger health detection to use the node)
+
+Support `Policy Group Filter`
+
+```yaml
+proxy-groups:
+
+  - name: 🚀 HK Group
+    type: select
+    use:
+      - ALL
+    filter: 'HK'
+
+  - name: 🚀 US Group
+    type: select
+    use:
+      - ALL
+    filter: 'US'
+
+proxy-providers:
+  ALL:
+    type: http
+    url: "xxxxx"
+    interval: 3600
+    path: "xxxxx"
+    health-check:
+      enable: true
+      interval: 600
+      url: http://www.gstatic.com/generate_204
+
+```
+
+
+
 Support outbound transport protocol `VLESS`.
 
 The XTLS only support TCP transport by the XRAY-CORE.
