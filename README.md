@@ -172,7 +172,7 @@ proxy-providers:
 
 Support outbound transport protocol `VLESS`.
 
-The XTLS only support TCP transport by the XRAY-CORE.
+The XTLS support TCP/UDP by the XRAY-CORE.
 ```yaml
 proxies:
   - name: "vless-tcp"
