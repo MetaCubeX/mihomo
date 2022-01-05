@@ -80,8 +80,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
 	updateDNS(cfg.DNS, cfg.Tun)
-	updateGeneral(cfg.General, force)
-	updateTun(cfg.General, cfg.Tun)
+	updateGeneral(cfg.General, cfg.Tun, force)
+	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 }
 
@@ -175,10 +175,24 @@ func updateRules(rules []C.Rule, ruleProviders map[string]*provider.RuleProvider
 	tunnel.UpdateRules(rules, ruleProviders)
 }
 
-func updateGeneral(general *config.General, force bool) {
+func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
+
+	if (Tun.Enable || general.TProxyPort != 0) && general.Interface == "" {
+		autoDetectInterfaceName, err := dev.GetAutoDetectInterface()
+		if err == nil {
+			if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
+				general.Interface = autoDetectInterfaceName
+			} else {
+				log.Debugln("Auto detect interface name is empty.")
+			}
+		} else {
+			log.Debugln("Can not find auto detect interface. %s", err.Error())
+		}
+	}
+
 	dialer.DefaultInterface.Store(general.Interface)
 
 	log.Infoln("Use interface name: %s", general.Interface)
@@ -208,22 +222,9 @@ func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
 }
 
-func updateTun(General *config.General, Tun *config.Tun) {
+func updateTun(Tun *config.Tun) {
 	if Tun == nil {
 		return
-	}
-
-	if (Tun.Enable || General.TProxyPort != 0) && General.Interface == "" {
-		autoDetectInterfaceName, err := dev.GetAutoDetectInterface()
-		if err == nil {
-			if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
-				General.Interface = autoDetectInterfaceName
-			} else {
-				log.Debugln("Auto detect interface name is empty.")
-			}
-		} else {
-			log.Debugln("Can not find auto detect interface. %s", err.Error())
-		}
 	}
 
 	tcpIn := tunnel.TCPIn()
@@ -231,6 +232,7 @@ func updateTun(General *config.General, Tun *config.Tun) {
 
 	if err := P.ReCreateTun(*Tun, tcpIn, udpIn); err != nil {
 		log.Errorln("Start Tun interface error: %s", err.Error())
+		os.Exit(2)
 	}
 }
 
