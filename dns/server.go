@@ -60,6 +60,10 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 		address = ""
 	}
 
+	if addr == "" {
+		return
+	}
+
 	var err error
 	defer func() {
 		if err != nil {
