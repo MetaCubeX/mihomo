@@ -158,7 +158,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	switch mode {
 	case Direct:
 		proxy = proxies["DIRECT"]
@@ -222,7 +222,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		}()
 
 		pCtx := icontext.NewPacketConnContext(metadata)
-		proxy, rule, err := resolveMetadata(pCtx, metadata)
+		proxy, rule, err := resolveMetadata(metadata)
 		if err != nil {
 			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 			return
@@ -242,16 +242,13 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		pCtx.InjectPacketConn(rawPc)
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
 
-		var ruleDetail string
-		if rule.Payload() != "" {
-			ruleDetail = fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload())
-		} else {
-			ruleDetail = rule.RuleType().String()
-		}
-
 		switch true {
 		case rule != nil:
-			log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), ruleDetail, rawPc.Chains().String())
+			if rule.Payload() != "" {
+				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), rawPc.Chains().String())
+			} else {
+				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.Payload(), rawPc.Chains().String())
+			}
 		case mode == Script:
 			log.Infoln("[UDP] %s --> %s using SCRIPT %s", metadata.SourceDetail(), metadata.RemoteAddress(), rawPc.Chains().String())
 		case mode == Global:
@@ -283,7 +280,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	proxy, rule, err := resolveMetadata(connCtx, metadata)
+	proxy, rule, err := resolveMetadata(metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -303,17 +300,13 @@ func handleTCPConn(connCtx C.ConnContext) {
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
 	defer remoteConn.Close()
 
-	var ruleDetail string
-
-	if rule.Payload() != "" {
-		ruleDetail = fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload())
-	} else {
-		ruleDetail = rule.RuleType().String()
-	}
-
 	switch true {
 	case rule != nil:
-		log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), ruleDetail, remoteConn.Chains().String())
+		if rule.Payload() != "" {
+			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
+		} else {
+			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.RuleType().String(), remoteConn.Chains().String())
+		}
 	case mode == Script:
 		log.Infoln("[TCP] %s --> %s using SCRIPT %s", metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
 	case mode == Global:
