@@ -29,6 +29,7 @@ type GroupCommonOption struct {
 	Interval   int      `group:"interval,omitempty"`
 	Lazy       bool     `group:"lazy,omitempty"`
 	DisableUDP bool     `group:"disable-udp,omitempty"`
+	Filter     string   `group:"filter,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
@@ -95,6 +96,8 @@ func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy,
 			return nil, err
 		}
 		providers = append(providers, list...)
+	} else {
+		groupOption.Filter = ""
 	}
 
 	var group C.ProxyAdapter
