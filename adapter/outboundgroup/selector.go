@@ -17,6 +17,7 @@ type Selector struct {
 	disableUDP bool
 	single     *singledo.Single
 	selected   string
+	filter     string
 	providers  []provider.ProxyProvider
 }
 
@@ -50,7 +51,7 @@ func (s *Selector) SupportUDP() bool {
 // MarshalJSON implements C.ProxyAdapter
 func (s *Selector) MarshalJSON() ([]byte, error) {
 	var all []string
-	for _, proxy := range getProvidersProxies(s.providers, false) {
+	for _, proxy := range getProvidersProxies(s.providers, false, s.filter) {
 		all = append(all, proxy.Name())
 	}
 
@@ -66,7 +67,7 @@ func (s *Selector) Now() string {
 }
 
 func (s *Selector) Set(name string) error {
-	for _, proxy := range getProvidersProxies(s.providers, false) {
+	for _, proxy := range getProvidersProxies(s.providers, false, s.filter) {
 		if proxy.Name() == name {
 			s.selected = name
 			s.single.Reset()
@@ -84,7 +85,7 @@ func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {
 
 func (s *Selector) selectedProxy(touch bool) C.Proxy {
 	elm, _, _ := s.single.Do(func() (interface{}, error) {
-		proxies := getProvidersProxies(s.providers, touch)
+		proxies := getProvidersProxies(s.providers, touch, s.filter)
 		for _, proxy := range proxies {
 			if proxy.Name() == s.selected {
 				return proxy, nil
@@ -110,5 +111,6 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 		providers:  providers,
 		selected:   selected,
 		disableUDP: option.DisableUDP,
+		filter:     option.Filter,
 	}
 }
