@@ -20,7 +20,7 @@ var (
 const (
 	PROXY_FWMARK      = "0x2d0"
 	PROXY_ROUTE_TABLE = "0x2d0"
-	USERNAME          = "root"
+	USERNAME          = "Clash.Meta"
 )
 
 func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
