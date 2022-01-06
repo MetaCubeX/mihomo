@@ -1,9 +1,9 @@
 <h1 align="center">
   <img src="Meta.png" alt="Meta Kennel" width="200">
-  <br>Meta Kennel<br>
+  <br>Meta Kernel<br>
 </h1>
 
-<h3 align="center">Another Clash Kennel.</h3>
+<h3 align="center">Another Clash Kernel.</h3>
 
 <p align="center">
   <a href="https://goreportcard.com/report/github.com/Clash-Mini/Clash.Meta">
@@ -212,13 +212,13 @@ tun:
 ```
 Create user given name `Clash.Meta`.
 
-Run Meta Kennel by user `Clash.Meta` as a daemon.
+Run Meta Kernel by user `Clash.Meta` as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/clash.service:
 
 ```
 [Unit]
-Description=Clash.Meta Daemon, Another Clash Kennel.
+Description=Clash.Meta Daemon, Another Clash Kernel.
 After=network.target
 
 [Service]
