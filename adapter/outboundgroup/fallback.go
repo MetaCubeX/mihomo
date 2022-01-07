@@ -70,11 +70,10 @@ func (f *Fallback) onDialFailed() {
 			f.failedTimes.Store(-1)
 			f.failedTime.Store(-1)
 		} else {
-			f.failedTimes.Inc()
-			failedCount := f.failedTimes.Load()
+			failedCount := f.failedTimes.Inc()
 			log.Warnln("%s failed count: %d", f.Name(), failedCount)
 			if failedCount > 5 {
-				log.Debugln("%s failed multiple times.", f.Name())
+				log.Warnln("because %s failed multiple times, active health check", f.Name())
 				for _, proxyProvider := range f.providers {
 					go proxyProvider.HealthCheck()
 				}
