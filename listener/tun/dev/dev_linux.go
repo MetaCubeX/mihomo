@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ type tunLinux struct {
 
 // OpenTunDevice return a TunDevice according a URL
 func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
-	deviceURL, _ := url.Parse("dev://meta")
+	deviceURL, _ := url.Parse("dev://utun")
 	mtu, _ := strconv.ParseInt(deviceURL.Query().Get("mtu"), 0, 32)
 
 	t := &tunLinux{
@@ -62,7 +63,7 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 		}
 
 		if autoRoute {
-			SetLinuxAutoRoute()
+			log.Warnln("linux unsupported automatic route")
 		}
 		return dev, nil
 	case "fd":
@@ -76,7 +77,7 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 			return nil, err
 		}
 		if autoRoute {
-			SetLinuxAutoRoute()
+			log.Warnln("linux unsupported automatic route")
 		}
 		return dev, nil
 	}
@@ -105,9 +106,6 @@ func (t *tunLinux) IsClose() bool {
 
 func (t *tunLinux) Close() error {
 	t.stopOnce.Do(func() {
-		if t.autoRoute {
-			RemoveLinuxAutoRoute()
-		}
 		t.closed = true
 		t.tunFile.Close()
 	})
