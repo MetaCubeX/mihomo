@@ -208,8 +208,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Tun: Tun{
 			Enable:    false,
 			Stack:     "gvisor",
-			DnsHijack: []string{"192.18.0.2:53"},
-			AutoRoute: true,
+			DnsHijack: []string{},
+			AutoRoute: false,
 		},
 		DNS: RawDNS{
 			Enable:      false,
@@ -228,8 +228,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"1.0.0.1",
 			},
 			NameServer: []string{
-				"https://8.8.8.8/dns-query",
-				"https://1.0.0.1/dns-query",
+				"223.5.5.5",
+				"119.29.29",
 			},
 			FakeIPFilter: []string{
 				"dns.msftnsci.com",
