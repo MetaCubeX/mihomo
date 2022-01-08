@@ -149,11 +149,14 @@ func (u *URLTest) onDialFailed() {
 		} else {
 			failedCount := u.failedTimes.Inc()
 			log.Warnln("%s failed count: %d", u.Name(), failedCount)
-			if failedCount > 5 {
+			if failedCount >= 5 && failedCount < 6 {
 				log.Warnln("because %s failed multiple times, active health check", u.Name())
 				for _, proxyProvider := range u.providers {
 					go proxyProvider.HealthCheck()
 				}
+
+				u.failedTimes.Store(-1)
+				u.failedTime.Store(-1)
 			}
 		}
 	}
