@@ -282,7 +282,7 @@ func (t *tunDarwin) IsClose() bool {
 func (t *tunDarwin) Close() error {
 	t.stopOnce.Do(func() {
 		if t.autoRoute {
-			RemoveLinuxAutoRoute()
+			resetAutoRoute(t.tunAddress)
 		}
 		t.closed = true
 		t.tunFile.Close()
@@ -510,11 +510,32 @@ func setAutoRoute(tunGateway string) {
 	addRoute("198.18.0/16", tunGateway)
 }
 
+func resetAutoRoute(tunGateway string) {
+	delRoute("1", tunGateway)
+	delRoute("2/7", tunGateway)
+	delRoute("4/6", tunGateway)
+	delRoute("8/5", tunGateway)
+	delRoute("16/4", tunGateway)
+	delRoute("32/3", tunGateway)
+	delRoute("64/2", tunGateway)
+	delRoute("128.0/1", tunGateway)
+	delRoute("198.18.0/16", tunGateway)
+}
+
 func addRoute(net, name string) {
 	cmd := exec.Command("route", "add", "-net", net, name)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		log.Errorln("[auto route] Failed to add system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
+	}
+}
+
+func delRoute(net, name string) {
+	cmd := exec.Command("route", "delete", "-net", net, name)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to delete system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
 	}
 }
