@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/transport/socks5"
 
 	"github.com/Dreamacro/go-shadowsocks2/shadowaead"
 )
@@ -15,13 +17,19 @@ import (
 const (
 	Version1            = 1
 	Version2            = 2
+	Version3            = 3
 	DefaultSnellVersion = Version1
+
+	// max packet length
+	maxLength = 0x3FFF
 )
 
 const (
-	CommandPing      byte = 0
-	CommandConnect   byte = 1
-	CommandConnectV2 byte = 5
+	CommandPing       byte = 0
+	CommandConnect    byte = 1
+	CommandConnectV2  byte = 5
+	CommandUDP        byte = 6
+	CommondUDPForward byte = 1
 
 	CommandTunnel byte = 0
 	CommandPong   byte = 1
@@ -100,6 +108,16 @@ func WriteHeader(conn net.Conn, host string, port uint, version int) error {
 	return nil
 }
 
+func WriteUDPHeader(conn net.Conn, version int) error {
+	if version < Version3 {
+		return errors.New("unsupport UDP version")
+	}
+
+	// version, command, clientID length
+	_, err := conn.Write([]byte{Version, CommandUDP, 0x00})
+	return err
+}
+
 // HalfClose works only on version2
 func HalfClose(conn net.Conn) error {
 	if _, err := conn.Write(endSignal); err != nil {
@@ -114,10 +132,147 @@ func HalfClose(conn net.Conn) error {
 
 func StreamConn(conn net.Conn, psk []byte, version int) *Snell {
 	var cipher shadowaead.Cipher
-	if version == Version2 {
+	if version != Version1 {
 		cipher = NewAES128GCM(psk)
 	} else {
 		cipher = NewChacha20Poly1305(psk)
 	}
 	return &Snell{Conn: shadowaead.NewConn(conn, cipher)}
+}
+
+func PacketConn(conn net.Conn) net.PacketConn {
+	return &packetConn{
+		Conn: conn,
+	}
+}
+
+func writePacket(w io.Writer, socks5Addr, payload []byte) (int, error) {
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
+
+	// compose snell UDP address format (refer: icpz/snell-server-reversed)
+	// a brand new wheel to replace socks5 address format, well done Yachen
+	buf.WriteByte(CommondUDPForward)
+	switch socks5Addr[0] {
+	case socks5.AtypDomainName:
+		hostLen := socks5Addr[1]
+		buf.Write(socks5Addr[1 : 1+1+hostLen+2])
+	case socks5.AtypIPv4:
+		buf.Write([]byte{0x00, 0x04})
+		buf.Write(socks5Addr[1 : 1+net.IPv4len+2])
+	case socks5.AtypIPv6:
+		buf.Write([]byte{0x00, 0x06})
+		buf.Write(socks5Addr[1 : 1+net.IPv6len+2])
+	}
+
+	buf.Write(payload)
+	_, err := w.Write(buf.Bytes())
+	if err != nil {
+		return 0, err
+	}
+	return len(payload), nil
+}
+
+func WritePacket(w io.Writer, socks5Addr, payload []byte) (int, error) {
+	if len(payload) <= maxLength {
+		return writePacket(w, socks5Addr, payload)
+	}
+
+	offset := 0
+	total := len(payload)
+	for {
+		cursor := offset + maxLength
+		if cursor > total {
+			cursor = total
+		}
+
+		n, err := writePacket(w, socks5Addr, payload[offset:cursor])
+		if err != nil {
+			return offset + n, err
+		}
+
+		offset = cursor
+		if offset == total {
+			break
+		}
+	}
+
+	return total, nil
+}
+
+func ReadPacket(r io.Reader, payload []byte) (net.Addr, int, error) {
+	buf := pool.Get(pool.UDPBufferSize)
+	defer pool.Put(buf)
+
+	n, err := r.Read(buf)
+	headLen := 1
+	if err != nil {
+		return nil, 0, err
+	}
+	if n < headLen {
+		return nil, 0, errors.New("insufficient UDP length")
+	}
+
+	// parse snell UDP response address format
+	switch buf[0] {
+	case 0x04:
+		headLen += net.IPv4len + 2
+		if n < headLen {
+			err = errors.New("insufficient UDP length")
+			break
+		}
+		buf[0] = socks5.AtypIPv4
+	case 0x06:
+		headLen += net.IPv6len + 2
+		if n < headLen {
+			err = errors.New("insufficient UDP length")
+			break
+		}
+		buf[0] = socks5.AtypIPv6
+	default:
+		err = errors.New("ip version invalid")
+	}
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	addr := socks5.SplitAddr(buf[0:])
+	if addr == nil {
+		return nil, 0, errors.New("remote address invalid")
+	}
+	uAddr := addr.UDPAddr()
+
+	length := len(payload)
+	if n-headLen < length {
+		length = n - headLen
+	}
+	copy(payload[:], buf[headLen:headLen+length])
+
+	return uAddr, length, nil
+}
+
+type packetConn struct {
+	net.Conn
+	rMux sync.Mutex
+	wMux sync.Mutex
+}
+
+func (pc *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	pc.wMux.Lock()
+	defer pc.wMux.Unlock()
+
+	return WritePacket(pc, socks5.ParseAddr(addr.String()), b)
+}
+
+func (pc *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	pc.rMux.Lock()
+	defer pc.rMux.Unlock()
+
+	addr, n, err := ReadPacket(pc.Conn, b)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return n, addr, nil
 }
