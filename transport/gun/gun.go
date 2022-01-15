@@ -5,6 +5,7 @@ package gun
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/pool"
+	C "github.com/Dreamacro/clash/constant"
 
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
@@ -173,7 +175,11 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config) *http2.Transport {
 		}
 
 		cn := tls.Client(pconn, cfg)
-		if err := cn.Handshake(); err != nil {
+
+		// fix tls handshake not timeout
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		if err := cn.HandshakeContext(ctx); err != nil {
 			pconn.Close()
 			return nil, err
 		}
