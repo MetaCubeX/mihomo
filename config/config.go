@@ -350,6 +350,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
+	proxies["COMPATIBLE"] = adapter.NewProxy(outbound.NewCompatible())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
 
 	// parse proxy
@@ -396,13 +397,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 	}
 
-	for _, rp := range providersMap {
-		log.Infoln("Start initial provider %s", rp.Name())
-		if err := rp.Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", rp.Name(), err)
-		}
-	}
-
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
 		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap)
@@ -416,18 +410,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 
 		proxies[groupName] = adapter.NewProxy(group)
-	}
-
-	// initial compatible provider
-	for _, pd := range providersMap {
-		if pd.VehicleType() != providerTypes.Compatible {
-			continue
-		}
-
-		log.Infoln("Start initial compatible provider %s", pd.Name())
-		if err := pd.Initial(); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	var ps []C.Proxy
@@ -509,13 +491,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 
 		ruleProviders[name] = &rp
 		R.SetRuleProvider(rp)
-	}
-
-	for _, ruleProvider := range ruleProviders {
-		log.Infoln("Start initial provider %s", (*ruleProvider).Name())
-		if err := (*ruleProvider).Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial rule provider %s error: %w", (*ruleProvider).Name(), err)
-		}
 	}
 
 	var rules []C.Rule

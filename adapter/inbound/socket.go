@@ -20,3 +20,16 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnCo
 
 	return context.NewConnContext(conn, metadata)
 }
+
+func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
+	metadata := &C.Metadata{}
+	metadata.NetWork = C.TCP
+	metadata.Type = C.INNER
+	metadata.DNSMode = C.DNSMapping
+	metadata.AddrType = C.AtypDomainName
+	metadata.Host = host
+	if _, port, err := parseAddr(dst); err == nil {
+		metadata.DstPort = port
+	}
+	return context.NewConnContext(conn, metadata)
+}

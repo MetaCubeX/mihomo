@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/listener/inner"
 	"net"
 	"runtime"
 	"strconv"
@@ -124,6 +125,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 			log.Errorln("Start SOCKS server error: %s", err.Error())
 		}
 	}()
+	inner.New(tcpIn)
 
 	addr := genAddr(bindAddress, port, allowLan)
 

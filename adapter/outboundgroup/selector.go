@@ -50,7 +50,8 @@ func (s *Selector) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (s *Selector) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := make([]string, 0)
+
 	for _, proxy := range getProvidersProxies(s.providers, false, s.filter) {
 		all = append(all, proxy.Name())
 	}

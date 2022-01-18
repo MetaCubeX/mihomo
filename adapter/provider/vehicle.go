@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"github.com/Dreamacro/clash/listener/inner"
 	"io"
 	"net"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	netHttp "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/dialer"
 	types "github.com/Dreamacro/clash/constant/provider"
 )
 
@@ -77,7 +77,8 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			return dialer.DialContext(ctx, network, address)
+			conn := inner.HandleTcp(address, uri.Hostname())
+			return conn, nil
 		},
 	}
 

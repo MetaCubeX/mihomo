@@ -13,7 +13,7 @@ import (
 const (
 	Direct AdapterType = iota
 	Reject
-
+	Compatible
 	Shadowsocks
 	ShadowsocksR
 	Snell
@@ -128,7 +128,8 @@ func (at AdapterType) String() string {
 		return "Direct"
 	case Reject:
 		return "Reject"
-
+	case Compatible:
+		return "Compatible"
 	case Shadowsocks:
 		return "Shadowsocks"
 	case ShadowsocksR:
