@@ -75,6 +75,10 @@ func (rp *ruleSetProvider) Behavior() P.RuleType {
 }
 
 func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
+	if rp.count == 0 {
+		return false
+	}
+
 	switch rp.behavior {
 	case P.Domain:
 		return rp.DomainRules.Search(metadata.Host) != nil

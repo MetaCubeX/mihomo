@@ -72,7 +72,7 @@ func (f *Fallback) onDialFailed() {
 		} else {
 			failedCount := f.failedTimes.Inc()
 			log.Warnln("%s failed count: %d", f.Name(), failedCount)
-			if failedCount >= 5 && failedCount < 6 {
+			if failedCount >= 5 {
 				log.Warnln("because %s failed multiple times, active health check", f.Name())
 				for _, proxyProvider := range f.providers {
 					go proxyProvider.HealthCheck()
@@ -97,10 +97,11 @@ func (f *Fallback) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := make([]string, 0)
 	for _, proxy := range f.proxies(false) {
 		all = append(all, proxy.Name())
 	}
+
 	return json.Marshal(map[string]interface{}{
 		"type": f.Type().String(),
 		"now":  f.Now(),

@@ -125,10 +125,12 @@ func (u *URLTest) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (u *URLTest) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := make([]string, 0)
+
 	for _, proxy := range u.proxies(false) {
 		all = append(all, proxy.Name())
 	}
+
 	return json.Marshal(map[string]interface{}{
 		"type": u.Type().String(),
 		"now":  u.Now(),
@@ -149,7 +151,7 @@ func (u *URLTest) onDialFailed() {
 		} else {
 			failedCount := u.failedTimes.Inc()
 			log.Warnln("%s failed count: %d", u.Name(), failedCount)
-			if failedCount >= 5 && failedCount < 6 {
+			if failedCount >= 5 {
 				log.Warnln("because %s failed multiple times, active health check", u.Name())
 				for _, proxyProvider := range u.providers {
 					go proxyProvider.HealthCheck()

@@ -1,6 +1,7 @@
 package outboundgroup
 
 import (
+	"github.com/Dreamacro/clash/tunnel"
 	"regexp"
 	"time"
 
@@ -21,6 +22,7 @@ func getProvidersProxies(providers []provider.ProxyProvider, touch bool, filter 
 			proxies = append(proxies, provider.Proxies()...)
 		}
 	}
+
 	var filterReg *regexp.Regexp = nil
 	matchedProxies := []C.Proxy{}
 	if len(filter) > 0 {
@@ -32,8 +34,16 @@ func getProvidersProxies(providers []provider.ProxyProvider, touch bool, filter 
 		}
 		//if no proxy matched, means bad filter, return all proxies
 		if len(matchedProxies) > 0 {
-			proxies = matchedProxies
+			return matchedProxies
+		} else {
+			return append([]C.Proxy{}, tunnel.Proxies()["COMPATIBLE"])
+		}
+	} else {
+		if len(proxies) == 0 {
+			return append(proxies, tunnel.Proxies()["COMPATIBLE"])
+		} else {
+			return proxies
 		}
 	}
-	return proxies
+
 }
