@@ -208,7 +208,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Tun: Tun{
 			Enable:    false,
 			Stack:     "gvisor",
-			DnsHijack: []string{"192.18.0.2:53"},
+			DnsHijack: []string{"198.18.0.2:53"},
 			AutoRoute: true,
 		},
 		DNS: RawDNS{
