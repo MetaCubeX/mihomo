@@ -32,7 +32,7 @@ func getProvidersProxies(providers []provider.ProxyProvider, touch bool, filter 
 				matchedProxies = append(matchedProxies, p)
 			}
 		}
-		//if no proxy matched, means bad filter, return all proxies
+
 		if len(matchedProxies) > 0 {
 			return matchedProxies
 		} else {
