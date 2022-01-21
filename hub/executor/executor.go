@@ -2,13 +2,14 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/tproxy"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/Dreamacro/clash/listener/tproxy"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
@@ -75,7 +76,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	updateUsers(cfg.Users)
 	updateHosts(cfg.Hosts)
-	updateProfile(cfg)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
@@ -83,8 +83,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateGeneral(cfg.General, cfg.Tun, force)
 	updateTun(cfg.Tun)
 	updateExperimental(cfg)
-
 	loadProvider(cfg.RuleProviders, cfg.Providers)
+	updateProfile(cfg)
+
 }
 
 func GetGeneral() *config.General {
