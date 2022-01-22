@@ -4,6 +4,8 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	R "github.com/Dreamacro/clash/rule"
+	RP "github.com/Dreamacro/clash/rule/provider"
 	"net"
 	"net/url"
 	"os"
@@ -24,7 +26,6 @@ import (
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"gopkg.in/yaml.v2"
@@ -484,13 +485,13 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
-		rp, err := R.ParseRuleProvider(name, mapping)
+		rp, err := RP.ParseRuleProvider(name, mapping)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		ruleProviders[name] = &rp
-		R.SetRuleProvider(rp)
+		RP.SetRuleProvider(rp)
 	}
 
 	var rules []C.Rule
@@ -511,24 +512,29 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			continue
 		}
 
-		switch l := len(rule); {
-		case l == 2:
-			target = rule[1]
-		case l == 3:
-			if ruleName == "MATCH" {
-				payload = ""
+		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" {
+			payload = strings.Join(rule[1:len(rule)-1], ",")
+			target = rule[len(rule)-1]
+		} else {
+			switch l := len(rule); {
+			case l == 2:
 				target = rule[1]
-				params = rule[2:]
-				break
+			case l == 3:
+				if ruleName == "MATCH" {
+					payload = ""
+					target = rule[1]
+					params = rule[2:]
+					break
+				}
+				payload = rule[1]
+				target = rule[2]
+			case l >= 4:
+				payload = rule[1]
+				target = rule[2]
+				params = rule[3:]
+			default:
+				return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 			}
-			payload = rule[1]
-			target = rule[2]
-		case l >= 4:
-			payload = rule[1]
-			target = rule[2]
-			params = rule[3:]
-		default:
-			return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 		}
 
 		if _, ok := proxies[target]; mode != T.Script && !ok {
