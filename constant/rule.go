@@ -14,7 +14,12 @@ const (
 	Process
 	Script
 	RuleSet
+	Network
+	Combination
 	MATCH
+	AND
+	OR
+	NOT
 )
 
 type RuleType int
@@ -47,6 +52,14 @@ func (rt RuleType) String() string {
 		return "Match"
 	case RuleSet:
 		return "RuleSet"
+	case Network:
+		return "Network"
+	case AND:
+		return "AND"
+	case OR:
+		return "OR"
+	case NOT:
+		return "NOT"
 	default:
 		return "Unknown"
 	}

@@ -1,4 +1,4 @@
-package rules
+package provider
 
 import (
 	"encoding/json"
@@ -205,7 +205,7 @@ func handleClassicalRules(rules []string) (interface{}, error) {
 			return nil, errors.New("error rule type")
 		}
 
-		r, err := ParseRule(ruleType, rule, "", params)
+		r, err := parseRule(ruleType, rule, "", params)
 		if err != nil {
 			return nil, err
 		}
