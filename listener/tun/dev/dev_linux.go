@@ -63,8 +63,9 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 		}
 
 		if autoRoute {
-			log.Warnln("linux unsupported automatic route")
+			addRoute(tunAddress)
 		}
+
 		return dev, nil
 	case "fd":
 		fd, err := strconv.ParseInt(deviceURL.Host, 10, 32)
@@ -327,4 +328,22 @@ func GetAutoDetectInterface() (string, error) {
 		return "", err
 	}
 	return out.String(), nil
+}
+
+func addRoute(gateway string) {
+	cmd := exec.Command("route", "add", "default", "gw", gateway)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to add system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
+	}
+}
+
+func delRoute(gateway string) {
+	cmd := exec.Command("ip", "route", "delete", "gw")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to delete system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
+	}
 }
