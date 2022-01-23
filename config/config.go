@@ -543,15 +543,14 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 
 		params = trimArr(params)
 
+		if ruleName == "GEOSITE" {
+			if err := initGeoSite(); err != nil {
+				return nil, nil, fmt.Errorf("can't initial GeoSite: %w", err)
+			}
+		}
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
-		} else {
-			if parsed.RuleType() == C.GEOSITE {
-				if err := initGeoSite(); err != nil {
-					return nil, nil, fmt.Errorf("can't initial GeoSite: %w", err)
-				}
-			}
 		}
 
 		if mode != T.Script {
