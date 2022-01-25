@@ -32,7 +32,7 @@ jobs:
         env:
           NAME: Clash.Meta
           BINDIR: bin
-        run: make -j all-arch
+        run: make -j releases
 
       - name: Upload Dev
         uses: softprops/action-gh-release@v1
