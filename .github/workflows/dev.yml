@@ -23,9 +23,9 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Get dependencies, run test
-        run: |
-          go test ./...
+#      - name: Get dependencies, run test
+#        run: |
+#          go test ./...
       - name: Build
         if: success()
         env:
