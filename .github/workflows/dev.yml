@@ -2,6 +2,7 @@ name: Dev
 on: [push]
 jobs:
   build:
+    if: ${{ !contains(github.event.head_commit.message, '[Skip CI]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Get latest go version
@@ -31,7 +32,7 @@ jobs:
         env:
           NAME: Clash.Meta
           BINDIR: bin
-        run: make -j releases
+        run: make -j linux-arm64
 
       - name: Upload Dev
         uses: softprops/action-gh-release@v1
