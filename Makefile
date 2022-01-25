@@ -38,7 +38,11 @@ WINDOWS_ARCH_LIST = \
     windows-arm32v7
 
 
-all: linux-arm64-AutoIptables linux-amd64-AutoIptables linux-arm64 linux-amd64 darwin-amd64 darwin-arm64 windows-amd64 windows-386  # Most used
+all:linux-amd64-AutoIptables  linux-amd64\
+	linux-arm64 linux-arm64-AutoIptables linux-armv7\
+	darwin-amd64 darwin-arm64\
+ 	windows-amd64 windows-386 \
+ 	linux-mips-hardfloat linux-mips-softfloat linux-mips64 linux-mips64le linux-mipsle-hardfloat linux-mipsle-softfloat# Most used
 
 docker:
 	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
