@@ -12,7 +12,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v1
       - name: Build
-        run: make
+        run: make all
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
