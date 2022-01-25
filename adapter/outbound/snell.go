@@ -27,6 +27,7 @@ type SnellOption struct {
 	Server   string                 `proxy:"server"`
 	Port     int                    `proxy:"port"`
 	Psk      string                 `proxy:"psk"`
+	UDP      bool                   `proxy:"udp,omitempty"`
 	Version  int                    `proxy:"version,omitempty"`
 	ObfsOpts map[string]interface{} `proxy:"obfs-opts,omitempty"`
 }
@@ -85,6 +86,24 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 	return NewConn(c, s), err
 }
 
+// ListenPacketContext implements C.ProxyAdapter
+func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	c, err := dialer.DialContext(ctx, "tcp", s.addr, s.Base.DialOptions(opts...)...)
+	if err != nil {
+		return nil, err
+	}
+	tcpKeepAlive(c)
+	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
+
+	err = snell.WriteUDPHeader(c, s.version)
+	if err != nil {
+		return nil, err
+	}
+
+	pc := snell.PacketConn(c)
+	return newPacketConn(pc, s), nil
+}
+
 func NewSnell(option SnellOption) (*Snell, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	psk := []byte(option.Psk)
@@ -106,7 +125,13 @@ func NewSnell(option SnellOption) (*Snell, error) {
 	if option.Version == 0 {
 		option.Version = snell.DefaultSnellVersion
 	}
-	if option.Version != snell.Version1 && option.Version != snell.Version2 {
+	switch option.Version {
+	case snell.Version1, snell.Version2:
+		if option.UDP {
+			return nil, fmt.Errorf("snell version %d not support UDP", option.Version)
+		}
+	case snell.Version3:
+	default:
 		return nil, fmt.Errorf("snell version error: %d", option.Version)
 	}
 
@@ -115,6 +140,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			name:  option.Name,
 			addr:  addr,
 			tp:    C.Snell,
+			udp:   option.UDP,
 			iface: option.Interface,
 		},
 		psk:        psk,

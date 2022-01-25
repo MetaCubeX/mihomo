@@ -33,6 +33,7 @@ const (
 const (
 	DefaultTCPTimeout = 5 * time.Second
 	DefaultUDPTimeout = DefaultTCPTimeout
+	DefaultTLSTimeout = DefaultTCPTimeout
 )
 
 type Connection interface {

@@ -102,6 +102,7 @@ func (f *fetcher) Update() (interface{}, bool, error) {
 	hash := md5.Sum(buf)
 	if bytes.Equal(f.hash[:], hash[:]) {
 		f.updatedAt = &now
+		os.Chtimes(f.vehicle.Path(), now, now)
 		return nil, true, nil
 	}
 
