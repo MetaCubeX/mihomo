@@ -1,6 +1,10 @@
 NAME=Clash.Meta
 BINDIR=bin
-VERSION=$(shell git describe --tags || echo "unknown version")
+BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
+VERSION=$(shell git describe --tags || echo "unknown version" )
+ifeq ($(BRANCH),Dev)
+VERSION=$(shell git rev-parse --short HEAD)
+endif
 BUILDTIME=$(shell date -u)
 AUTOIPTABLES=Enable
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
