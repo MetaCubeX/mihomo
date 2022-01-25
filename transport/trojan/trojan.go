@@ -1,6 +1,7 @@
 package trojan
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
@@ -12,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/common/pool"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vmess"
 )
@@ -68,7 +70,11 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 	}
 
 	tlsConn := tls.Client(conn, tlsConfig)
-	if err := tlsConn.Handshake(); err != nil {
+
+	// fix tls handshake not timeout
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+	defer cancel()
+	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return nil, err
 	}
 
