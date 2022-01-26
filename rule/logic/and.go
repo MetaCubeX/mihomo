@@ -11,7 +11,7 @@ type AND struct {
 
 func NewAND(payload string, adapter string) (*AND, error) {
 	and := &AND{payload: payload, adapter: adapter}
-	rules, err := parseRule(payload)
+	rules, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
 	}
