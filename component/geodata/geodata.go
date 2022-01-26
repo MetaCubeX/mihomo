@@ -14,7 +14,7 @@ type loader struct {
 }
 
 func (l *loader) LoadGeoSite(list string) ([]*router.Domain, error) {
-	return l.LoadGeoSiteWithAttr("geosite.dat", list)
+	return l.LoadGeoSiteWithAttr("GeoSite.dat", list)
 }
 
 func (l *loader) LoadGeoSiteWithAttr(file string, siteWithAttr string) ([]*router.Domain, error) {
@@ -58,7 +58,7 @@ func (l *loader) LoadGeoSiteWithAttr(file string, siteWithAttr string) ([]*route
 }
 
 func (l *loader) LoadGeoIP(country string) ([]*router.CIDR, error) {
-	return l.LoadIP("geoip.dat", country)
+	return l.LoadIP("GeoIP.dat", country)
 }
 
 var loaders map[string]func() LoaderImplementation

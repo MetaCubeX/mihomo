@@ -20,6 +20,7 @@ PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
 	linux-amd64 \
+	linux-amd64-AutoIptables\
 	linux-armv5 \
 	linux-armv6 \
 	linux-armv7 \

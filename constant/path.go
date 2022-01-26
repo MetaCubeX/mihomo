@@ -65,11 +65,11 @@ func (p *path) Cache() string {
 }
 
 func (p *path) GeoIP() string {
-	return P.Join(p.homeDir, "geoip.dat")
+	return P.Join(p.homeDir, "GeoIP.dat")
 }
 
 func (p *path) GeoSite() string {
-	return P.Join(p.homeDir, "geosite.dat")
+	return P.Join(p.homeDir, "GeoSite.dat")
 }
 
 func (p *path) ScriptDir() string {

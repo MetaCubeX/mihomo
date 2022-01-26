@@ -1,13 +1,11 @@
 package dns
 
 import (
-	"net"
-	"strings"
-
+	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
+	"net"
 )
 
 type fallbackIPFilter interface {
@@ -18,9 +16,38 @@ type geoipFilter struct {
 	code string
 }
 
+var geoIPMatcher *router.GeoIPMatcher
+
 func (gf *geoipFilter) Match(ip net.IP) bool {
-	record, _ := mmdb.Instance().Country(ip)
-	return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate() && !ip.Equal(C.TunBroadcastAddr)
+	if geoIPMatcher == nil {
+		countryCode := "cn"
+		geoLoader, err := geodata.GetGeoDataLoader("standard")
+		if err != nil {
+			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
+			return false
+		}
+
+		records, err := geoLoader.LoadGeoIP(countryCode)
+		if err != nil {
+			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
+			return false
+		}
+
+		geoIP := &router.GeoIP{
+			CountryCode:  countryCode,
+			Cidr:         records,
+			ReverseMatch: false,
+		}
+
+		geoIPMatcher, err = router.NewGeoIPMatcher(geoIP)
+
+		if err != nil {
+			log.Errorln("[GeoIPFilter] NewGeoIPMatcher error: %s", err.Error())
+			return false
+		}
+	}
+
+	return !geoIPMatcher.Match(ip)
 }
 
 type ipnetFilter struct {
