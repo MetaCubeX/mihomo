@@ -41,7 +41,7 @@ func (or *OR) RuleExtra() *C.RuleExtra {
 
 func NewOR(payload string, adapter string) (*OR, error) {
 	or := &OR{payload: payload, adapter: adapter}
-	rules, err := parseRule(payload)
+	rules, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
 	}
