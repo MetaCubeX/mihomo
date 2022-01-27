@@ -172,15 +172,14 @@ proxy-providers:
 
 Support outbound transport protocol `VLESS`.
 
-The XTLS only support TCP transport by the XRAY-CORE.
+The XTLS support (TCP/UDP) transport by the XRAY-CORE.
 ```yaml
 proxies:
-  - name: "vless-tcp"
+  - name: "vless"
     type: vless
     server: server
     port: 443
     uuid: uuid
-    network: tcp
     servername: example.com # AKA SNI
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
@@ -190,13 +189,27 @@ proxies:
     server: server
     port: 443
     uuid: uuid
+    tls: true
     udp: true
     network: ws
     servername: example.com # priority over wss host
     # skip-cert-verify: true
-    ws-path: /path
-    ws-headers:
-      Host: example.com
+    ws-opts:
+      path: /path
+      headers: { Host: example.com, Edge: "12a00c4.fm.huawei.com:82897" }
+
+  - name: "vless-grpc"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    tls: true
+    udp: true
+    network: grpc
+    servername: example.com # priority over wss host
+    # skip-cert-verify: true
+    grpc-opts: 
+      grpc-service-name: grpcname
 ```
 
 ### IPTABLES auto-configuration

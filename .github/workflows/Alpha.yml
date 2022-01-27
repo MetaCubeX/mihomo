@@ -1,7 +1,7 @@
-name: Dev
+name: Alpha
 on: [push]
 jobs:
-  build:
+  Feature-build:
     if: ${{ !contains(github.event.head_commit.message, '[Skip CI]') }}
     runs-on: ubuntu-latest
     steps:
@@ -24,9 +24,9 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-#      - name: Get dependencies, run test
-#        run: |
-#          go test ./...
+      #      - name: Get dependencies, run test
+      #        run: |
+      #          go test ./...
       - name: Build
         if: success()
         env:
@@ -38,5 +38,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
         with:
+          tag_name: Alpha
           files: bin/*
-          draft: true
+          prerelease: true
