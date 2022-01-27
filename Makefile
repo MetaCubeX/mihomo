@@ -2,8 +2,8 @@ NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 VERSION=$(shell git describe --tags || echo "unknown version" )
-ifeq ($(BRANCH),Dev)
-VERSION=$(shell git rev-parse --short HEAD)
+ifeq ($(BRANCH),Feature)
+VERSION=alpha-$(shell git rev-parse --short HEAD)
 endif
 BUILDTIME=$(shell date -u)
 AUTOIPTABLES=Enable
@@ -20,7 +20,6 @@ PLATFORM_LIST = \
 	darwin-amd64 \
 	darwin-arm64 \
 	linux-amd64 \
-	linux-amd64-AutoIptables\
 	linux-armv5 \
 	linux-armv6 \
 	linux-armv7 \
