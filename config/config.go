@@ -210,7 +210,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:    false,
 			Stack:     "gvisor",
 			DnsHijack: []string{"198.18.0.2:53"},
-			AutoRoute: false,
+			AutoRoute: true,
 		},
 		DNS: RawDNS{
 			Enable:      false,
@@ -632,6 +632,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 		case "dhcp":
 			addr = u.Host
 			dnsNetType = "dhcp" // UDP from DHCP
+		case "quic":
+			addr, err = hostWithDefaultPort(u.Host, "784")
+			dnsNetType = "quic" // DNS over QUIC
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}

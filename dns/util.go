@@ -61,6 +61,9 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
+		case "quic":
+			ret = append(ret, &quicClient{addr: s.Addr})
+			continue
 		}
 
 		host, port, _ := net.SplitHostPort(s.Addr)

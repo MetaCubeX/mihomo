@@ -38,35 +38,27 @@ type Vless struct {
 
 type VlessOption struct {
 	BasicOption
-	Name           string            `proxy:"name"`
-	Server         string            `proxy:"server"`
-	Port           int               `proxy:"port"`
-	UUID           string            `proxy:"uuid"`
-	Flow           string            `proxy:"flow,omitempty"`
-	FlowShow       bool              `proxy:"flow-show,omitempty"`
-	TLS            bool              `proxy:"tls,omitempty"`
-	UDP            bool              `proxy:"udp,omitempty"`
-	Network        string            `proxy:"network,omitempty"`
-	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
-	HTTP2Opts      HTTP2Options      `proxy:"h2-opts,omitempty"`
-	GrpcOpts       GrpcOptions       `proxy:"grpc-opts,omitempty"`
-	WSOpts         WSOptions         `proxy:"ws-opts,omitempty"`
-	WSPath         string            `proxy:"ws-path,omitempty"`
-	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
-	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
-	ServerName     string            `proxy:"servername,omitempty"`
+	Name           string       `proxy:"name"`
+	Server         string       `proxy:"server"`
+	Port           int          `proxy:"port"`
+	UUID           string       `proxy:"uuid"`
+	Flow           string       `proxy:"flow,omitempty"`
+	FlowShow       bool         `proxy:"flow-show,omitempty"`
+	TLS            bool         `proxy:"tls,omitempty"`
+	UDP            bool         `proxy:"udp,omitempty"`
+	Network        string       `proxy:"network,omitempty"`
+	HTTPOpts       HTTPOptions  `proxy:"http-opts,omitempty"`
+	HTTP2Opts      HTTP2Options `proxy:"h2-opts,omitempty"`
+	GrpcOpts       GrpcOptions  `proxy:"grpc-opts,omitempty"`
+	WSOpts         WSOptions    `proxy:"ws-opts,omitempty"`
+	SkipCertVerify bool         `proxy:"skip-cert-verify,omitempty"`
+	ServerName     string       `proxy:"servername,omitempty"`
 }
 
 func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	switch v.option.Network {
 	case "ws":
-		if v.option.WSOpts.Path == "" {
-			v.option.WSOpts.Path = v.option.WSPath
-		}
-		if len(v.option.WSOpts.Headers) == 0 {
-			v.option.WSOpts.Headers = v.option.WSHeaders
-		}
 
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
@@ -286,7 +278,7 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 
 type vlessPacketConn struct {
 	net.Conn
-	rAddr net.Addr
+	rAddr  net.Addr
 	remain int
 	mux    sync.Mutex
 	cache  []byte
@@ -331,7 +323,6 @@ func (c *vlessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	return total, nil
 }
 
-
 func (c *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
@@ -364,7 +355,6 @@ func (c *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 	return n, c.rAddr, err
 }
-
 
 func NewVless(option VlessOption) (*Vless, error) {
 	if !option.TLS && option.Network == "grpc" {
