@@ -360,6 +360,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				if extra.NotMatchSourceIP(metadata.SrcIP) {
 					continue
 				}
+
+				if extra.NotMatchProcessName(metadata.Process) {
+					continue
+				}
 			}
 
 			return adapter, rule, nil
