@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -85,10 +86,13 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tunAddress string, tcpIn 
 	// maximum number of half-open tcp connection set to 1024
 	// receive buffer size set to 20k
 	tcpFwd := tcp.NewForwarder(ipstack, pool.RelayBufferSize, 1024, func(r *tcp.ForwarderRequest) {
+		src := net.JoinHostPort(r.ID().RemoteAddress.String(), strconv.Itoa((int)(r.ID().RemotePort)))
+		dst := net.JoinHostPort(r.ID().LocalAddress.String(), strconv.Itoa((int)(r.ID().LocalPort)))
+		log.Debugln("Get TCP Syn %v -> %s in ipstack", src, dst)
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
-			log.Warnln("Can't create TCP Endpoint in ipstack: %v", err)
+			log.Warnln("Can't create TCP Endpoint(%s -> %s) in ipstack: %v", src, dst, err)
 			r.Complete(true)
 			return
 		}
@@ -224,19 +228,17 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 
 // WriteNotify implements channel.Notification.WriteNotify.
 func (t *gvisorAdapter) WriteNotify() {
-	packet, ok := t.linkCache.Read()
-	if ok {
-		var vv buffer.VectorisedView
-		// Append upper headers.
-		vv.AppendView(packet.Pkt.NetworkHeader().View())
-		vv.AppendView(packet.Pkt.TransportHeader().View())
-		// Append data payload.
-		vv.Append(packet.Pkt.Data().ExtractVV())
+	packetBuffer := t.linkCache.Read()
+	var vv buffer.VectorisedView
+	// Append upper headers.
+	vv.AppendView(packetBuffer.NetworkHeader().View())
+	vv.AppendView(packetBuffer.TransportHeader().View())
+	// Append data payload.
+	vv.Append(packetBuffer.Data().ExtractVV())
 
-		_, err := t.device.Write(vv.ToView())
-		if err != nil && !t.device.IsClose() {
-			log.Errorln("can not write to tun: %v", err)
-		}
+	_, err := t.device.Write(vv.ToView())
+	if err != nil && !t.device.IsClose() {
+		log.Errorln("can not write to tun: %v", err)
 	}
 }
 
