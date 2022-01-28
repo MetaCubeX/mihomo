@@ -86,6 +86,7 @@ tun:
 - Support rule `SCRIPT`.
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
 - Support `network` condition for all rules.
+- Support `process` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
 
 The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
@@ -105,7 +106,10 @@ rules:
   # network(tcp/udp) condition for all rules
   - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
   - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
-    
+
+  # process(add 'P:' prefix) condition for all rules
+  - DOMAIN-SUFFIX,qq.com,REJECT,P:Google Chrome Helper
+  
   # multiport condition for rules SRC-PORT and DST-PORT
   - DST-PORT,123/136/137-139,DIRECT,udp
   
