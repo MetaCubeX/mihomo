@@ -56,5 +56,5 @@ require (
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
-	gvisor.dev/gvisor v0.0.0-20220128012612-3e0de812d7bb // indirect
+	gvisor.dev/gvisor v0.0.0-20211104052249-2de3450f76d6 // indirect
 )
