@@ -434,8 +434,7 @@ func parseScript(cfg *RawConfig) error {
 		return fmt.Errorf("initialized script module failure, can't find script code in the config file")
 	}
 
-	content :=
-		`# -*- coding: UTF-8 -*-
+	content := `# -*- coding: UTF-8 -*-
 
 from datetime import datetime as whatever
 
