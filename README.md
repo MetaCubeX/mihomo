@@ -223,19 +223,6 @@ proxies:
     servername: example.com # AKA SNI
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
-    
-  - name: "vless-ws"
-    type: vless
-    server: server
-    port: 443
-    uuid: uuid
-    udp: true
-    network: ws
-    servername: example.com # priority over wss host
-    # skip-cert-verify: true
-    ws-path: /path
-    ws-headers:
-      Host: example.com
 ```
 
 ### IPTABLES auto-configuration
@@ -249,9 +236,8 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user given name `clash`.
 
-Run Clash by user `clash` as a daemon.
+Run Clash as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/clash.service:
 ```
@@ -261,10 +247,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=clash
-Group=clash
 CapabilityBoundingSet=cap_net_admin
-AmbientCapabilities=cap_net_admin
 Restart=always
 ExecStart=/usr/local/bin/clash -d /etc/clash
 
