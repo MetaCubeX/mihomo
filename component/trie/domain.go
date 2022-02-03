@@ -109,13 +109,13 @@ func (t *DomainTrie) search(node *Node, parts []string) *Node {
 	}
 
 	if c := node.getChild(parts[len(parts)-1]); c != nil {
-		if n := t.search(c, parts[:len(parts)-1]); n != nil {
+		if n := t.search(c, parts[:len(parts)-1]); n != nil && n.Data != nil {
 			return n
 		}
 	}
 
 	if c := node.getChild(wildcard); c != nil {
-		if n := t.search(c, parts[:len(parts)-1]); n != nil {
+		if n := t.search(c, parts[:len(parts)-1]); n != nil && n.Data != nil {
 			return n
 		}
 	}
