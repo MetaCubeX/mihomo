@@ -2,8 +2,8 @@ package trie
 
 // Node is the trie's node
 type Node struct {
-	Data     interface{}
 	children map[string]*Node
+	Data     interface{}
 }
 
 func (n *Node) getChild(s string) *Node {
