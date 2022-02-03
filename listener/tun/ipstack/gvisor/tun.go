@@ -54,7 +54,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tcpIn chan<- C.ConnContex
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
 	})
-
+	adapter := &gvisorAdapter{
 		device:    device,
 		ipstack:   ipstack,
 		udpIn:     udpIn,
@@ -116,7 +116,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tcpIn chan<- C.ConnContex
 	ipstack.SetTransportProtocolHandler(udp.ProtocolNumber, adapter.udpHandlePacket)
 
 	if resolver.DefaultResolver != nil {
-		err = adapter.ReCreateDNSServer(resolver.DefaultResolver.(*dns.Resolver), resolver.DefaultHostMapper.(*dns.ResolverEnhancer), conf.DNSListen)
+		err = adapter.ReCreateDNSServer(resolver.DefaultResolver.(*dns.Resolver), resolver.DefaultHostMapper.(*dns.ResolverEnhancer), conf.DnsHijack)
 		if err != nil {
 			return nil, err
 		}

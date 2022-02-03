@@ -261,14 +261,10 @@ func updateTun(Tun *config.Tun) {
 	if Tun == nil {
 		return
 	}
-
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
-	if err := P.ReCreateTun(*Tun, tcpIn, udpIn); err != nil {
-		log.Errorln("Start Tun interface error: %s", err.Error())
-		os.Exit(2)
-	}
+	P.ReCreateTun(*Tun, tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -331,6 +327,7 @@ func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 	}
 
 	tproxy.CleanUpTProxyLinuxIPTables()
+	dialer.DefaultRoutingMark.Store(2158)
 
 	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
 

@@ -3,6 +3,7 @@ package common
 import (
 	"errors"
 	"net"
+	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -48,6 +49,20 @@ func FindSourceIPs(params []string) []*net.IPNet {
 
 	if len(ips) > 0 {
 		return ips
+	}
+	return nil
+}
+
+func FindProcessName(params []string) []string {
+	var processNames []string
+	for _, p := range params {
+		if strings.HasPrefix(p, "P:") {
+			processNames = append(processNames, strings.TrimPrefix(p, "P:"))
+		}
+	}
+
+	if len(processNames) > 0 {
+		return processNames
 	}
 	return nil
 }
