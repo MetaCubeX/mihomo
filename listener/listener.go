@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -322,9 +323,36 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) error {
+//func ReCreateTun(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) error {
+//	tunMux.Lock()
+//	defer tunMux.Unlock()
+//
+//	if tunAdapter != nil {
+//		tunAdapter.Close()
+//		tunAdapter = nil
+//	}
+//
+//	if !conf.Enable {
+//		return nil
+//	}
+//
+//	var err error
+//	tunAdapter, err = tun.New(conf, tcpIn, udpIn)
+//
+//	return err
+//}
+
+func ReCreateTun(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start TUN interface error: %s", err.Error())
+			os.Exit(2)
+		}
+	}()
 
 	if tunAdapter != nil {
 		tunAdapter.Close()
@@ -332,13 +360,13 @@ func ReCreateTun(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbo
 	}
 
 	if !conf.Enable {
-		return nil
+		return
 	}
 
-	var err error
 	tunAdapter, err = tun.New(conf, tcpIn, udpIn)
-
-	return err
+	if err != nil {
+		log.Warnln("Failed to start TUN interface: %s", err.Error())
+	}
 }
 
 // GetPorts return the ports of proxy servers
