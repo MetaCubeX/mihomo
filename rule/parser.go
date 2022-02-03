@@ -17,6 +17,7 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	ruleExtra := &C.RuleExtra{
 		Network:   RC.FindNetwork(params),
 		SourceIPs: RC.FindSourceIPs(params),
+		ProcessNames: RC.FindProcessName(params),
 	}
 
 	switch tp {

@@ -30,7 +30,7 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 	// ignore match in proxy type "tproxy"
 	//if metadata.Type == C.TPROXY || !C.AutoIptables {
 
-	if C.AutoIptables == "Enable" {
+	if metadata.Type == C.TPROXY || C.AutoIptables == "Enable" {
 		return false
 	}
 
