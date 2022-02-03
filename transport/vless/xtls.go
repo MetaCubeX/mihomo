@@ -1,8 +1,10 @@
 package vless
 
 import (
+	"context"
 	"net"
 
+	C "github.com/Dreamacro/clash/constant"
 	xtls "github.com/xtls/go"
 )
 
@@ -20,6 +22,10 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 	}
 
 	xtlsConn := xtls.Client(conn, xtlsConfig)
-	err := xtlsConn.Handshake()
+
+	// fix tls handshake not timeout
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+	defer cancel()
+	err := xtlsConn.HandshakeContext(ctx)
 	return xtlsConn, err
 }

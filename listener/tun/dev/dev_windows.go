@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-
 	"sync/atomic"
 	"time"
 	_ "unsafe"
