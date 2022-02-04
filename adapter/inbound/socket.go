@@ -28,7 +28,7 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 	metadata.DNSMode = C.DNSMapping
 	metadata.Host = host
 	metadata.AddrType = C.AtypDomainName
-
+	metadata.Process = C.ClashName
 	if ip, port, err := parseAddr(dst); err == nil {
 		metadata.DstPort = port
 		if host == "" {
