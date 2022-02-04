@@ -55,33 +55,18 @@ func (g *GEOIP) GetCountry() string {
 	return g.country
 }
 
+func (g *GEOIP) GetIPMatcher() *router.GeoIPMatcher {
+	return g.geoIPMatcher
+}
+
 func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.RuleExtra) (*GEOIP, error) {
-
-	geoLoaderName := "standard"
-	//geoLoaderName := "memconservative"
-	geoLoader, err := geodata.GetGeoDataLoader(geoLoaderName)
+	geoIPMatcher, recordsCount, err := geodata.LoadGeoIPMatcher(country)
 	if err != nil {
 		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
 	}
 
-	records, err := geoLoader.LoadGeoIP(strings.ReplaceAll(country, "!", ""))
-	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
-	}
+	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, recordsCount)
 
-	geoIP := &router.GeoIP{
-		CountryCode:  country,
-		Cidr:         records,
-		ReverseMatch: strings.Contains(country, "!"),
-	}
-
-	geoIPMatcher, err := router.NewGeoIPMatcher(geoIP)
-
-	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
-	}
-
-	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, len(records))
 	geoip := &GEOIP{
 		country:      country,
 		adapter:      adapter,

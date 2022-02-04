@@ -40,6 +40,7 @@ type General struct {
 	LogLevel     log.LogLevel `json:"log-level"`
 	IPv6         bool         `json:"ipv6"`
 	Interface    string       `json:"-"`
+	Geodataload  string       `json:"geodataload"`
 }
 
 // Inbound
@@ -169,6 +170,7 @@ type RawConfig struct {
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
+	Geodataloader      string       `yaml:"geodata-loader"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]interface{} `yaml:"rule-providers"`
@@ -199,6 +201,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		AllowLan:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
+		Geodataloader:  "standard",
 		UnifiedDelay:   false,
 		Authentication: []string{},
 		LogLevel:       log.INFO,
