@@ -26,10 +26,20 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 	metadata.NetWork = C.TCP
 	metadata.Type = C.INNER
 	metadata.DNSMode = C.DNSMapping
-	metadata.AddrType = C.AtypDomainName
 	metadata.Host = host
-	if _, port, err := parseAddr(dst); err == nil {
+	metadata.AddrType = C.AtypDomainName
+	metadata.Process = C.ClashName
+	if ip, port, err := parseAddr(dst); err == nil {
 		metadata.DstPort = port
+		if host == "" {
+			metadata.DstIP = ip
+			if ip.To4() == nil {
+				metadata.AddrType = C.AtypIPv6
+			} else {
+				metadata.AddrType = C.AtypIPv4
+			}
+		}
 	}
+
 	return context.NewConnContext(conn, metadata)
 }

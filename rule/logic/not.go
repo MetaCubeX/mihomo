@@ -13,7 +13,7 @@ type NOT struct {
 
 func NewNOT(payload string, adapter string) (*NOT, error) {
 	not := &NOT{payload: payload, adapter: adapter}
-	rule, err := parseRule(payload)
+	rule, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
 	}
