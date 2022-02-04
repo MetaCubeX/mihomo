@@ -78,11 +78,11 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	updateUsers(cfg.Users)
 	updateHosts(cfg.Hosts)
+	updateGeneral(cfg.General, cfg.Tun, force)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
 	updateDNS(cfg.DNS, cfg.Tun)
-	updateGeneral(cfg.General, cfg.Tun, force)
 	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
@@ -241,9 +241,6 @@ func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
 		log.SetLevel(general.LogLevel)
 		return
 	}
-
-	geodataLoader := general.GeodataLoader
-	G.SetLoader(geodataLoader)
 
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)

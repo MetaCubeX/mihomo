@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -309,7 +310,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
 	externalUI := cfg.ExternalUI
-
+	geodata.SetLoader(cfg.GeodataLoader)
 	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
@@ -334,11 +335,12 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ExternalUI:         cfg.ExternalUI,
 			Secret:             cfg.Secret,
 		},
-		UnifiedDelay: cfg.UnifiedDelay,
-		Mode:         cfg.Mode,
-		LogLevel:     cfg.LogLevel,
-		IPv6:         cfg.IPv6,
-		Interface:    cfg.Interface,
+		UnifiedDelay:  cfg.UnifiedDelay,
+		Mode:          cfg.Mode,
+		LogLevel:      cfg.LogLevel,
+		IPv6:          cfg.IPv6,
+		Interface:     cfg.Interface,
+		GeodataLoader: cfg.GeodataLoader,
 	}, nil
 }
 
@@ -486,6 +488,7 @@ time = ClashTime()
 func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]*providerTypes.RuleProvider, error) {
 	ruleProviders := map[string]*providerTypes.RuleProvider{}
 
+	startTime := time.Now()
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
 		rp, err := RP.ParseRuleProvider(name, mapping)
@@ -560,7 +563,9 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			rules = append(rules, parsed)
 		}
 	}
-
+	elapsedTime := time.Since(startTime) / time.Millisecond       // duration in ms
+	log.Infoln("Initialization time consuming %dms", elapsedTime) //Segment finished in xxm
+	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	runtime.GC()
 
 	return rules, ruleProviders, nil
