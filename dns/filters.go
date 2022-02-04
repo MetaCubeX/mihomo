@@ -21,7 +21,7 @@ var geoIPMatcher *router.GeoIPMatcher
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	if geoIPMatcher == nil {
 		countryCode := "cn"
-		geoLoader, err := geodata.GetGeoDataLoader("standard")
+		geoLoader, err := geodata.GetGeoDataLoader(geodata.LoaderName())
 		if err != nil {
 			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
 			return false

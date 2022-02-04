@@ -5,8 +5,19 @@ import (
 	"strings"
 )
 
+var geoLoaderName = "memconservative"
+
+//  geoLoaderName = "standard"
+
+func LoaderName() string {
+	return geoLoaderName
+}
+
+func SetLoader(newLoader string) {
+	geoLoaderName = newLoader
+}
+
 func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) {
-	geoLoaderName := "memconservative"
 	geoLoader, err := GetGeoDataLoader(geoLoaderName)
 	if err != nil {
 		return nil, 0, err
@@ -31,7 +42,6 @@ func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) 
 }
 
 func LoadGeoIPMatcher(country string) (*router.GeoIPMatcher, int, error) {
-	geoLoaderName := "memconservative"
 	geoLoader, err := GetGeoDataLoader(geoLoaderName)
 	if err != nil {
 		return nil, 0, err
