@@ -8,6 +8,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 
+	_ "github.com/Dreamacro/clash/component/geodata/memconservative"
 	_ "github.com/Dreamacro/clash/component/geodata/standard"
 )
 
