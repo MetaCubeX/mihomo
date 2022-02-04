@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+
 	"net"
 	"os"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
+	G "github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
@@ -106,9 +108,10 @@ func GetGeneral() *config.General {
 			AllowLan:       P.AllowLan(),
 			BindAddress:    P.BindAddress(),
 		},
-		Mode:     tunnel.Mode(),
-		LogLevel: log.Level(),
-		IPv6:     !resolver.DisableIPv6,
+		Mode:          tunnel.Mode(),
+		LogLevel:      log.Level(),
+		IPv6:          !resolver.DisableIPv6,
+		GeodataLoader: G.LoaderName(),
 	}
 
 	return general
@@ -238,6 +241,9 @@ func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
 		log.SetLevel(general.LogLevel)
 		return
 	}
+
+	geodataLoader := general.GeodataLoader
+	G.SetLoader(geodataLoader)
 
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)
