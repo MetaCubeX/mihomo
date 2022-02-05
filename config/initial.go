@@ -44,7 +44,7 @@ func downloadGeoSite(path string) (err error) {
 	return err
 }
 
-func initGeoSite() error {
+func InitGeoSite() error {
 	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
 		log.Infoln("Need GeoSite but can't find GeoSite.dat, start download")
 		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {

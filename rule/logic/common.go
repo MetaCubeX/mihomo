@@ -3,7 +3,9 @@ package logic
 import (
 	"fmt"
 	"github.com/Dreamacro/clash/common/collections"
+	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 	RC "github.com/Dreamacro/clash/rule/common"
 	"github.com/Dreamacro/clash/rule/provider"
 	"regexp"
@@ -51,6 +53,11 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	payload := splitStr[1]
 	if tp == "NOT" || tp == "OR" || tp == "AND" {
 		return parseRule(tp, payload, nil)
+	}
+	if tp == "GEOSITE" {
+		if err := config.InitGeoSite(); err != nil {
+			log.Errorln("can't initial GeoSite: %w", err)
+		}
 	}
 
 	param := strings.Split(payload, ",")
