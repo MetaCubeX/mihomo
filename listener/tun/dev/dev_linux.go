@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ type tunLinux struct {
 
 // OpenTunDevice return a TunDevice according a URL
 func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
-	deviceURL, _ := url.Parse("dev://meta")
+	deviceURL, _ := url.Parse("dev://utun")
 	mtu, _ := strconv.ParseInt(deviceURL.Query().Get("mtu"), 0, 32)
 
 	t := &tunLinux{
@@ -62,8 +63,9 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 		}
 
 		if autoRoute {
-			SetLinuxAutoRoute()
+			addRoute(tunAddress)
 		}
+
 		return dev, nil
 	case "fd":
 		fd, err := strconv.ParseInt(deviceURL.Host, 10, 32)
@@ -76,7 +78,7 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 			return nil, err
 		}
 		if autoRoute {
-			SetLinuxAutoRoute()
+			log.Warnln("linux unsupported automatic route")
 		}
 		return dev, nil
 	}
@@ -105,9 +107,6 @@ func (t *tunLinux) IsClose() bool {
 
 func (t *tunLinux) Close() error {
 	t.stopOnce.Do(func() {
-		if t.autoRoute {
-			RemoveLinuxAutoRoute()
-		}
 		t.closed = true
 		t.tunFile.Close()
 	})
@@ -329,4 +328,22 @@ func GetAutoDetectInterface() (string, error) {
 		return "", err
 	}
 	return out.String(), nil
+}
+
+func addRoute(gateway string) {
+	cmd := exec.Command("route", "add", "default", "gw", gateway)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to add system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
+	}
+}
+
+func delRoute(gateway string) {
+	cmd := exec.Command("ip", "route", "delete", "gw")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to delete system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
+	}
 }

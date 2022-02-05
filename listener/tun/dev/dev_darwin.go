@@ -5,11 +5,13 @@ package dev
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/log"
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -176,7 +178,7 @@ func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
 	}
 
 	if autoRoute {
-		SetLinuxAutoRoute()
+		setAutoRoute(tunAddress)
 	}
 
 	return tun, nil
@@ -280,7 +282,7 @@ func (t *tunDarwin) IsClose() bool {
 func (t *tunDarwin) Close() error {
 	t.stopOnce.Do(func() {
 		if t.autoRoute {
-			RemoveLinuxAutoRoute()
+			resetAutoRoute(t.tunAddress)
 		}
 		t.closed = true
 		t.tunFile.Close()
@@ -480,15 +482,60 @@ func (t *tunDarwin) attachLinkLocal() error {
 
 // GetAutoDetectInterface get ethernet interface
 func GetAutoDetectInterface() (string, error) {
-	cmd := exec.Command("bash", "-c", "netstat -rnf inet | grep 'default' | awk -F ' ' 'NR==1{print $6}' | xargs echo -n")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
+	cmd := exec.Command("route", "-n", "get", "default")
+	if result, err := cmd.Output(); err != nil {
 		return "", err
+	} else {
+		resultString := string(result)
+		reg, err := regexp.Compile("(interface:)(.*)")
+		if err != nil {
+			return "", err
+		}
+		matchResult := reg.FindStringSubmatch(resultString)
+		interfaceName := strings.TrimSpace(matchResult[len(matchResult)-1])
+		return interfaceName, nil
 	}
-	if out.Len() == 0 {
-		return "", errors.New("interface not found by default route")
+
+}
+
+func setAutoRoute(tunGateway string) {
+	addRoute("1", tunGateway)
+	addRoute("2/7", tunGateway)
+	addRoute("4/6", tunGateway)
+	addRoute("8/5", tunGateway)
+	addRoute("16/4", tunGateway)
+	addRoute("32/3", tunGateway)
+	addRoute("64/2", tunGateway)
+	addRoute("128.0/1", tunGateway)
+	addRoute("198.18.0/16", tunGateway)
+}
+
+func resetAutoRoute(tunGateway string) {
+	delRoute("1", tunGateway)
+	delRoute("2/7", tunGateway)
+	delRoute("4/6", tunGateway)
+	delRoute("8/5", tunGateway)
+	delRoute("16/4", tunGateway)
+	delRoute("32/3", tunGateway)
+	delRoute("64/2", tunGateway)
+	delRoute("128.0/1", tunGateway)
+	delRoute("198.18.0/16", tunGateway)
+}
+
+func addRoute(net, name string) {
+	cmd := exec.Command("route", "add", "-net", net, name)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to add system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
 	}
-	return out.String(), nil
+}
+
+func delRoute(net, name string) {
+	cmd := exec.Command("route", "delete", "-net", net, name)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		log.Errorln("[auto route] Failed to delete system route: %s: %s , cmd: %s", err.Error(), stderr.String(), cmd.String())
+	}
 }

@@ -1,4 +1,4 @@
-package rules
+package common
 
 import (
 	C "github.com/Dreamacro/clash/constant"

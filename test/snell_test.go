@@ -120,6 +120,42 @@ func TestClash_Snell(t *testing.T) {
 	testSuit(t, proxy)
 }
 
+func TestClash_Snellv3(t *testing.T) {
+	cfg := &container.Config{
+		Image:        ImageSnell,
+		ExposedPorts: defaultExposedPorts,
+		Cmd:          []string{"-c", "/config.conf"},
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds:        []string{fmt.Sprintf("%s:/config.conf", C.Path.Resolve("snell.conf"))},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "snell")
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewSnell(outbound.SnellOption{
+		Name:    "snell",
+		Server:  localIP.String(),
+		Port:    10002,
+		Psk:     "password",
+		UDP:     true,
+		Version: 3,
+	})
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+
+	time.Sleep(waitTime)
+	testSuit(t, proxy)
+}
+
 func Benchmark_Snell(b *testing.B) {
 	cfg := &container.Config{
 		Image:        ImageSnell,

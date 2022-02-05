@@ -1,4 +1,4 @@
-package rules
+package common
 
 import (
 	"errors"
@@ -22,7 +22,7 @@ func HasNoResolve(params []string) bool {
 	return false
 }
 
-func findNetwork(params []string) C.NetWork {
+func FindNetwork(params []string) C.NetWork {
 	for _, p := range params {
 		if p == "tcp" {
 			return C.TCP
@@ -33,7 +33,7 @@ func findNetwork(params []string) C.NetWork {
 	return C.ALLNet
 }
 
-func findSourceIPs(params []string) []*net.IPNet {
+func FindSourceIPs(params []string) []*net.IPNet {
 	var ips []*net.IPNet
 	for _, p := range params {
 		if p == noResolve || len(p) < 7 {

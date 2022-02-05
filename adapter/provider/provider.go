@@ -67,6 +67,10 @@ func (pp *proxySetProvider) Initial() error {
 	}
 
 	pp.onUpdate(elm)
+	if pp.healthCheck.auto() {
+		go pp.healthCheck.process()
+	}
+
 	return nil
 }
 
@@ -100,10 +104,6 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 	filterReg, err := regexp.Compile(filter)
 	if err != nil {
 		return nil, fmt.Errorf("invalid filter regex: %w", err)
-	}
-
-	if hc.auto() {
-		go hc.process()
 	}
 
 	pd := &proxySetProvider{
@@ -190,6 +190,10 @@ func (cp *compatibleProvider) Update() error {
 }
 
 func (cp *compatibleProvider) Initial() error {
+	if cp.healthCheck.auto() {
+		go cp.healthCheck.process()
+	}
+
 	return nil
 }
 
@@ -217,10 +221,6 @@ func stopCompatibleProvider(pd *CompatibleProvider) {
 func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvider, error) {
 	if len(proxies) == 0 {
 		return nil, errors.New("provider need one proxy at least")
-	}
-
-	if hc.auto() {
-		go hc.process()
 	}
 
 	pd := &compatibleProvider{
