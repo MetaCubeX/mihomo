@@ -556,7 +556,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		params = trimArr(params)
 
 		if ruleName == "GEOSITE" {
-			if err := InitGeoSite(); err != nil {
+			if err := initGeoSite(); err != nil {
 				return nil, nil, fmt.Errorf("can't initial GeoSite: %w", err)
 			}
 		}
@@ -701,7 +701,7 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
 	var sites []*router.DomainMatcher
 	if len(countries) > 0 {
-		if err := InitGeoSite(); err != nil {
+		if err := initGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %w", err)
 		}
 	}
