@@ -175,6 +175,7 @@ Support outbound transport protocol `VLESS`.
 The XTLS support TCP/UDP by the XRAY-CORE.
 ```yaml
 proxies:
+  # Vless + TCP Sample
   - name: "vless-tcp"
     type: vless
     server: server
@@ -184,7 +185,8 @@ proxies:
     servername: example.com # AKA SNI
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
-    
+  
+  # Vless + WS Sample
   - name: "vless-ws"
     type: vless
     server: server
@@ -197,6 +199,17 @@ proxies:
     ws-path: /path
     ws-headers:
       Host: example.com
+
+  # Trojan + XTLS Sample
+  - name: "proxy name"
+    type: trojan
+    server: server name
+    port: 443
+    password: password
+    udp: true
+    servername: server name # AKA SNI
+    flow: xtls-rprx-direct #  Enable XTLS: xtls-rprx-direct | xtls-rprx-origin 
+    skip-cert-verify: false
 ```
 
 ### IPTABLES auto-configuration
