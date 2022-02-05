@@ -266,6 +266,13 @@ To display process name in GUI please use [Dashboard For Meta](https://github.co
 
 ## Development
 
+Build the Clash.Meta locally  
+```shell
+$ git clone https://github.com/MetaCubeX/Clash.Meta.git
+$ cd Clash.Meta
+$ make # build for all platform or 'make darwin-amd64' for specific platform, darwin-amd64
+```
+
 If you want to build an application that uses clash as a library, check out the
 the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
