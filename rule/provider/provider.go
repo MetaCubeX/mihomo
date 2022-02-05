@@ -1,4 +1,4 @@
-package rules
+package provider
 
 import (
 	"encoding/json"
@@ -75,6 +75,10 @@ func (rp *ruleSetProvider) Behavior() P.RuleType {
 }
 
 func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
+	if rp.count == 0 {
+		return false
+	}
+
 	switch rp.behavior {
 	case P.Domain:
 		return rp.DomainRules.Search(metadata.Host) != nil
@@ -201,7 +205,7 @@ func handleClassicalRules(rules []string) (interface{}, error) {
 			return nil, errors.New("error rule type")
 		}
 
-		r, err := ParseRule(ruleType, rule, "", params)
+		r, err := parseRule(ruleType, rule, "", params)
 		if err != nil {
 			return nil, err
 		}

@@ -23,7 +23,7 @@ type Relay struct {
 func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	var proxies []C.Proxy
 	for _, proxy := range r.proxies(metadata, true) {
-		if proxy.Type() != C.Direct {
+		if proxy.Type() != C.Direct && proxy.Type() != C.Compatible {
 			proxies = append(proxies, proxy)
 		}
 	}
@@ -69,10 +69,12 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // MarshalJSON implements C.ProxyAdapter
 func (r *Relay) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := make([]string, 0)
+
 	for _, proxy := range r.rawProxies(false) {
 		all = append(all, proxy.Name())
 	}
+
 	return json.Marshal(map[string]interface{}{
 		"type": r.Type().String(),
 		"all":  all,

@@ -4,6 +4,8 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	R "github.com/Dreamacro/clash/rule"
+	RP "github.com/Dreamacro/clash/rule/provider"
 	"net"
 	"net/url"
 	"os"
@@ -24,7 +26,6 @@ import (
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"gopkg.in/yaml.v2"
@@ -209,7 +210,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:    false,
 			Stack:     "gvisor",
 			DnsHijack: []string{"198.18.0.2:53"},
-			AutoRoute: true,
+			AutoRoute: false,
 		},
 		DNS: RawDNS{
 			Enable:      false,
@@ -228,8 +229,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"1.0.0.1",
 			},
 			NameServer: []string{
-				"https://8.8.8.8/dns-query",
-				"https://1.0.0.1/dns-query",
+				"223.5.5.5",
+				"119.29.29",
 			},
 			FakeIPFilter: []string{
 				"dns.msftnsci.com",
@@ -350,6 +351,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
+	proxies["COMPATIBLE"] = adapter.NewProxy(outbound.NewCompatible())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
 
 	// parse proxy
@@ -396,13 +398,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 	}
 
-	for _, rp := range providersMap {
-		log.Infoln("Start initial provider %s", rp.Name())
-		if err := rp.Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", rp.Name(), err)
-		}
-	}
-
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
 		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap)
@@ -416,18 +411,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 
 		proxies[groupName] = adapter.NewProxy(group)
-	}
-
-	// initial compatible provider
-	for _, pd := range providersMap {
-		if pd.VehicleType() != providerTypes.Compatible {
-			continue
-		}
-
-		log.Infoln("Start initial compatible provider %s", pd.Name())
-		if err := pd.Initial(); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	var ps []C.Proxy
@@ -502,20 +485,13 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
-		rp, err := R.ParseRuleProvider(name, mapping)
+		rp, err := RP.ParseRuleProvider(name, mapping)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		ruleProviders[name] = &rp
-		R.SetRuleProvider(rp)
-	}
-
-	for _, ruleProvider := range ruleProviders {
-		log.Infoln("Start initial provider %s", (*ruleProvider).Name())
-		if err := (*ruleProvider).Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial rule provider %s error: %w", (*ruleProvider).Name(), err)
-		}
+		RP.SetRuleProvider(rp)
 	}
 
 	var rules []C.Rule
@@ -536,24 +512,29 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			continue
 		}
 
-		switch l := len(rule); {
-		case l == 2:
-			target = rule[1]
-		case l == 3:
-			if ruleName == "MATCH" {
-				payload = ""
+		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" {
+			payload = strings.Join(rule[1:len(rule)-1], ",")
+			target = rule[len(rule)-1]
+		} else {
+			switch l := len(rule); {
+			case l == 2:
 				target = rule[1]
-				params = rule[2:]
-				break
+			case l == 3:
+				if ruleName == "MATCH" {
+					payload = ""
+					target = rule[1]
+					params = rule[2:]
+					break
+				}
+				payload = rule[1]
+				target = rule[2]
+			case l >= 4:
+				payload = rule[1]
+				target = rule[2]
+				params = rule[3:]
+			default:
+				return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 			}
-			payload = rule[1]
-			target = rule[2]
-		case l >= 4:
-			payload = rule[1]
-			target = rule[2]
-			params = rule[3:]
-		default:
-			return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 		}
 
 		if _, ok := proxies[target]; mode != T.Script && !ok {
@@ -562,6 +543,11 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 
 		params = trimArr(params)
 
+		if ruleName == "GEOSITE" {
+			if err := initGeoSite(); err != nil {
+				return nil, nil, fmt.Errorf("can't initial GeoSite: %w", err)
+			}
+		}
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
@@ -699,6 +685,11 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 
 func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
 	var sites []*router.DomainMatcher
+	if len(countries) > 0 {
+		if err := initGeoSite(); err != nil {
+			return nil, fmt.Errorf("can't initial GeoSite: %w", err)
+		}
+	}
 
 	for _, country := range countries {
 		found := false

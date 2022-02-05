@@ -3,6 +3,7 @@ package tunnel
 import (
 	"context"
 	"fmt"
+	R "github.com/Dreamacro/clash/rule/common"
 	"net"
 	"runtime"
 	"sync"
@@ -15,7 +16,6 @@ import (
 	"github.com/Dreamacro/clash/constant/provider"
 	icontext "github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rule"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 )
 

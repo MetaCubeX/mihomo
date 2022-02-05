@@ -23,3 +23,5 @@ vendor
 
 # test suite
 test/config/cache*
+/output
+/.vscode

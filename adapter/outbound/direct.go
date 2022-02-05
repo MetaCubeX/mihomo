@@ -44,3 +44,13 @@ func NewDirect() *Direct {
 		},
 	}
 }
+
+func NewCompatible() *Direct {
+	return &Direct{
+		Base: &Base{
+			name: "COMPATIBLE",
+			tp:   C.Compatible,
+			udp:  true,
+		},
+	}
+}

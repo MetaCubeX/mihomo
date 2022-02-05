@@ -50,7 +50,8 @@ func (s *Selector) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (s *Selector) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := make([]string, 0)
+
 	for _, proxy := range getProvidersProxies(s.providers, false, s.filter) {
 		all = append(all, proxy.Name())
 	}
@@ -99,7 +100,6 @@ func (s *Selector) selectedProxy(touch bool) C.Proxy {
 }
 
 func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
-	selected := providers[0].Proxies()[0].Name()
 	return &Selector{
 		Base: outbound.NewBase(outbound.BaseOption{
 			Name:        option.Name,
@@ -109,7 +109,7 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 		}),
 		single:     singledo.NewSingle(defaultGetProxiesDuration),
 		providers:  providers,
-		selected:   selected,
+		selected:   "COMPATIBLE",
 		disableUDP: option.DisableUDP,
 		filter:     option.Filter,
 	}

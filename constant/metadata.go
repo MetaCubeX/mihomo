@@ -24,6 +24,7 @@ const (
 	REDIR
 	TPROXY
 	TUN
+	INNER
 )
 
 type NetWork int
@@ -59,6 +60,8 @@ func (t Type) String() string {
 		return "TProxy"
 	case TUN:
 		return "Tun"
+	case INNER:
+		return "Inner"
 	default:
 		return "Unknown"
 	}
@@ -94,6 +97,10 @@ func (m *Metadata) SourceDetail() string {
 	if m.Process != "" {
 		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
 	} else {
+		if m.Type == INNER {
+			return fmt.Sprintf("[Clash]")
+		}
+
 		return fmt.Sprintf("%s", m.SourceAddress())
 	}
 }

@@ -97,3 +97,11 @@ func TestTrie_Boundary(t *testing.T) {
 	assert.NotNil(t, tree.Insert("..dev", localIP))
 	assert.Nil(t, tree.Search("dev"))
 }
+
+func TestTrie_WildcardBoundary(t *testing.T) {
+	tree := New()
+	tree.Insert("+.*", localIP)
+	tree.Insert("stun.*.*.*", localIP)
+
+	assert.NotNil(t, tree.Search("example.com"))
+}
