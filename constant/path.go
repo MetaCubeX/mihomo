@@ -1,12 +1,19 @@
 package constant
 
 import (
+	"io/ioutil"
 	"os"
 	P "path"
 	"path/filepath"
+	"strings"
 )
 
 const Name = "clash"
+
+var (
+	GeositeName = "GeoSite.dat"
+	GeoipName   = "GeoIP.dat"
+)
 
 // Path is used to get the configuration path
 var Path = func() *path {
@@ -48,7 +55,6 @@ func (p *path) Resolve(path string) string {
 	if !filepath.IsAbs(path) {
 		return filepath.Join(p.HomeDir(), path)
 	}
-
 	return path
 }
 
@@ -65,11 +71,41 @@ func (p *path) Cache() string {
 }
 
 func (p *path) GeoIP() string {
-	return P.Join(p.homeDir, "geoip.dat")
+	files, err := ioutil.ReadDir(p.homeDir)
+	if err != nil {
+		return ""
+	}
+	for _, fi := range files {
+		if fi.IsDir() {
+			// 目录则直接跳过
+			continue
+		} else {
+			if strings.EqualFold(fi.Name(), "GeoIP.dat") {
+				GeoipName = fi.Name()
+				return P.Join(p.homeDir, fi.Name())
+			}
+		}
+	}
+	return P.Join(p.homeDir, "GeoIP.dat")
 }
 
 func (p *path) GeoSite() string {
-	return P.Join(p.homeDir, "geosite.dat")
+	files, err := ioutil.ReadDir(p.homeDir)
+	if err != nil {
+		return ""
+	}
+	for _, fi := range files {
+		if fi.IsDir() {
+			// 目录则直接跳过
+			continue
+		} else {
+			if strings.EqualFold(fi.Name(), "GeoSite.dat") {
+				GeositeName = fi.Name()
+				return P.Join(p.homeDir, fi.Name())
+			}
+		}
+	}
+	return P.Join(p.homeDir, "GeoSite.dat")
 }
 
 func (p *path) ScriptDir() string {
