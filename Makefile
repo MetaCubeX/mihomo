@@ -2,7 +2,7 @@ NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 VERSION=$(shell git describe --tags || echo "unknown version" )
-ifeq ($(BRANCH),Feature)
+ifeq ($(BRANCH),Alpha)
 VERSION=alpha-$(shell git rev-parse --short HEAD)
 endif
 BUILDTIME=$(shell date -u)
