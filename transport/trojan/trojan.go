@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	xtls "github.com/xtls/go"
 	"io"
 	"net"
 	"net/http"
@@ -21,6 +22,9 @@ import (
 const (
 	// max packet length
 	maxLength = 8192
+
+	XRD = "xtls-rprx-direct"
+	XRO = "xtls-rprx-origin"
 )
 
 var (
@@ -35,13 +39,18 @@ type Command = byte
 var (
 	CommandTCP byte = 1
 	CommandUDP byte = 3
+	CommandXRD byte = 0xf0
+	CommandXRO byte = 0xf1
 )
 
 type Option struct {
-	Password       string
-	ALPN           []string
-	ServerName     string
-	SkipCertVerify bool
+	Password            string
+	Flow                string
+	ALPN                []string
+	ServerName          string
+	SkipCertVerify      bool
+	ClientSessionCache  tls.ClientSessionCache
+	ClientXSessionCache xtls.ClientSessionCache
 }
 
 type WebsocketOption struct {
@@ -56,29 +65,54 @@ type Trojan struct {
 	hexPassword []byte
 }
 
+func (t *Trojan) GetFlow() string {
+	return t.option.Flow
+}
+
 func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 	alpn := defaultALPN
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
 	}
-
-	tlsConfig := &tls.Config{
-		NextProtos:         alpn,
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: t.option.SkipCertVerify,
-		ServerName:         t.option.ServerName,
+	switch t.option.Flow {
+	case XRD, XRO:
+		xtlsConfig := &xtls.Config{
+			NextProtos:         alpn,
+			MinVersion:         xtls.VersionTLS12,
+			InsecureSkipVerify: t.option.SkipCertVerify,
+			ServerName:         t.option.ServerName,
+			ClientSessionCache: t.option.ClientXSessionCache,
+		}
+		xtlsConn := xtls.Client(conn, xtlsConfig)
+		if err := xtlsConn.Handshake(); err != nil {
+			return nil, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		if err := xtlsConn.HandshakeContext(ctx); err != nil {
+			return nil, err
+		}
+		return xtlsConn, nil
+	default:
+		tlsConfig := &tls.Config{
+			NextProtos:         alpn,
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: t.option.SkipCertVerify,
+			ServerName:         t.option.ServerName,
+			ClientSessionCache: t.option.ClientSessionCache,
+		}
+		tlsConn := tls.Client(conn, tlsConfig)
+		if err := tlsConn.Handshake(); err != nil {
+			return nil, err
+		}
+		// fix tls handshake not timeout
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return nil, err
+		}
+		return tlsConn, nil
 	}
-
-	tlsConn := tls.Client(conn, tlsConfig)
-
-	// fix tls handshake not timeout
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-	defer cancel()
-	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		return nil, err
-	}
-
-	return tlsConn, nil
 }
 
 func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {

@@ -3,8 +3,8 @@ package tproxy
 import (
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/component/dialer"
 	"os/exec"
-	U "os/user"
 	"runtime"
 	"strings"
 
@@ -20,7 +20,6 @@ var (
 const (
 	PROXY_FWMARK      = "0x2d0"
 	PROXY_ROUTE_TABLE = "0x2d0"
-	USERNAME          = "Clash.Meta"
 )
 
 func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
@@ -29,16 +28,9 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 		return fmt.Errorf("current operations system [%s] are not support iptables or command iptables does not exist", runtime.GOOS)
 	}
 
-	user, err := U.Lookup(USERNAME)
-	if err != nil {
-		return fmt.Errorf("the user \" %s\" does not exist, please create it", USERNAME)
-	}
-
 	if ifname == "" {
 		return errors.New("the 'interface-name' can not be empty")
 	}
-
-	ownerUid := user.Uid
 
 	interfaceName = ifname
 	tproxyPort = tport
@@ -84,7 +76,7 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 	// set output
 	execCmd("iptables -t mangle -N clash_output")
 	execCmd("iptables -t mangle -F clash_output")
-	execCmd(fmt.Sprintf("iptables -t mangle -A clash_output -m owner --uid-owner %s -j RETURN", ownerUid))
+	execCmd(fmt.Sprintf("iptables -t mangle -A clash_output -m mark --mark %#x -j RETURN", dialer.DefaultRoutingMark.Load()))
 	execCmd("iptables -t mangle -A clash_output -p udp -m multiport --dports 53,123,137 -j ACCEPT")
 	execCmd("iptables -t mangle -A clash_output -p tcp --dport 53 -j ACCEPT")
 	execCmd("iptables -t mangle -A clash_output -m addrtype --dst-type LOCAL -j RETURN")
@@ -97,7 +89,7 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 	// set dns output
 	execCmd("iptables -t nat -N clash_dns_output")
 	execCmd("iptables -t nat -F clash_dns_output")
-	execCmd(fmt.Sprintf("iptables -t nat -A clash_dns_output -m owner --uid-owner %s -j RETURN", ownerUid))
+	execCmd(fmt.Sprintf("iptables -t nat -A clash_dns_output -m mark --mark %#x -j RETURN", dialer.DefaultRoutingMark.Load()))
 	execCmd("iptables -t nat -A clash_dns_output -s 172.17.0.0/16 -j RETURN")
 	execCmd(fmt.Sprintf("iptables -t nat -A clash_dns_output -p udp -j REDIRECT --to-ports %d", dnsPort))
 	execCmd(fmt.Sprintf("iptables -t nat -A clash_dns_output -p tcp -j REDIRECT --to-ports %d", dnsPort))
@@ -114,6 +106,8 @@ func CleanUpTProxyLinuxIPTables() {
 	}
 
 	log.Warnln("Clean up tproxy linux iptables")
+
+	dialer.DefaultRoutingMark.Store(0)
 
 	if _, err := execCmd("iptables -t mangle -L clash_divert"); err != nil {
 		return

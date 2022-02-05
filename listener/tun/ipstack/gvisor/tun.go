@@ -222,14 +222,14 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 
 // WriteNotify implements channel.Notification.WriteNotify.
 func (t *gvisorAdapter) WriteNotify() {
-	packet, ok := t.linkCache.Read()
-	if ok {
+	packetBuffer := t.linkCache.Read()
+	if packetBuffer != nil {
 		var vv buffer.VectorisedView
 		// Append upper headers.
-		vv.AppendView(packet.Pkt.NetworkHeader().View())
-		vv.AppendView(packet.Pkt.TransportHeader().View())
+		vv.AppendView(packetBuffer.NetworkHeader().View())
+		vv.AppendView(packetBuffer.TransportHeader().View())
 		// Append data payload.
-		vv.Append(packet.Pkt.Data().ExtractVV())
+		vv.Append(packetBuffer.Data().ExtractVV())
 
 		_, err := t.device.Write(vv.ToView())
 		if err != nil && !t.device.IsClose() {

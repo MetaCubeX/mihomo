@@ -30,9 +30,9 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 	// ignore match in proxy type "tproxy"
 	//if metadata.Type == C.TPROXY || !C.AutoIptables {
 
-	if C.AutoIptables == "Enable" {
-		return false
-	}
+	//if C.AutoIptables == "Enable" {
+	//	return false
+	//}
 
 	key := fmt.Sprintf("%s:%s:%s", metadata.NetWork.String(), metadata.SrcIP.String(), metadata.SrcPort)
 	if strings.TrimSpace(metadata.Process) == "" {
