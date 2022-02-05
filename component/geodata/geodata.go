@@ -3,6 +3,7 @@ package geodata
 import (
 	"errors"
 	"fmt"
+	C "github.com/Dreamacro/clash/constant"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -14,7 +15,7 @@ type loader struct {
 }
 
 func (l *loader) LoadGeoSite(list string) ([]*router.Domain, error) {
-	return l.LoadGeoSiteWithAttr("GeoSite.dat", list)
+	return l.LoadGeoSiteWithAttr(C.GeositeName, list)
 }
 
 func (l *loader) LoadGeoSiteWithAttr(file string, siteWithAttr string) ([]*router.Domain, error) {
@@ -58,7 +59,7 @@ func (l *loader) LoadGeoSiteWithAttr(file string, siteWithAttr string) ([]*route
 }
 
 func (l *loader) LoadGeoIP(country string) ([]*router.CIDR, error) {
-	return l.LoadIP("GeoIP.dat", country)
+	return l.LoadIP(C.GeoipName, country)
 }
 
 var loaders map[string]func() LoaderImplementation

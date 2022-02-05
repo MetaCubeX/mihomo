@@ -42,6 +42,7 @@ type General struct {
 	IPv6          bool         `json:"ipv6"`
 	Interface     string       `json:"-"`
 	GeodataLoader string       `json:"geodata-loader"`
+	AutoIptables  bool         `json:"auto-iptables"`
 }
 
 // Inbound
@@ -172,6 +173,7 @@ type RawConfig struct {
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
+	AutoIptables       bool         `yaml:"auto-iptables"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]interface{} `yaml:"rule-providers"`
@@ -203,6 +205,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		BindAddress:    "*",
 		Mode:           T.Rule,
 		GeodataLoader:  "memconservative",
+		AutoIptables:   false,
 		UnifiedDelay:   false,
 		Authentication: []string{},
 		LogLevel:       log.INFO,
@@ -260,7 +263,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
-
+	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
+	startTime := time.Now()
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
 
@@ -305,6 +309,8 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
+	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
+	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
 	return config, nil
 }
 
@@ -341,6 +347,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		IPv6:          cfg.IPv6,
 		Interface:     cfg.Interface,
 		GeodataLoader: cfg.GeodataLoader,
+		AutoIptables:  cfg.AutoIptables,
 	}, nil
 }
 
@@ -487,8 +494,7 @@ time = ClashTime()
 
 func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]*providerTypes.RuleProvider, error) {
 	ruleProviders := map[string]*providerTypes.RuleProvider{}
-
-	startTime := time.Now()
+	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
 		rp, err := RP.ParseRuleProvider(name, mapping)
@@ -563,9 +569,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			rules = append(rules, parsed)
 		}
 	}
-	elapsedTime := time.Since(startTime) / time.Millisecond       // duration in ms
-	log.Infoln("Initialization time consuming %dms", elapsedTime) //Segment finished in xxm
-	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
+
 	runtime.GC()
 
 	return rules, ruleProviders, nil

@@ -28,10 +28,6 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 		return strings.EqualFold(metadata.Process, ps.process)
 	}
 
-	if C.AutoIptables == "Enable" {
-		return false
-	}
-
 	key := fmt.Sprintf("%s:%s:%s", metadata.NetWork.String(), metadata.SrcIP.String(), metadata.SrcPort)
 	if strings.TrimSpace(metadata.Process) == "" {
 		cached, hit := processCache.Get(key)
