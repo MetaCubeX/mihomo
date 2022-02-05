@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+
 	"net"
 	"os"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
+	G "github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
@@ -106,9 +108,10 @@ func GetGeneral() *config.General {
 			AllowLan:       P.AllowLan(),
 			BindAddress:    P.BindAddress(),
 		},
-		Mode:     tunnel.Mode(),
-		LogLevel: log.Level(),
-		IPv6:     !resolver.DisableIPv6,
+		Mode:          tunnel.Mode(),
+		LogLevel:      log.Level(),
+		IPv6:          !resolver.DisableIPv6,
+		GeodataLoader: G.LoaderName(),
 	}
 
 	return general
@@ -239,6 +242,9 @@ func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
 		return
 	}
 
+	geodataLoader := general.GeodataLoader
+	G.SetLoader(geodataLoader)
+
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)
 
@@ -315,8 +321,7 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 }
 
 func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
-	AutoIptables := C.AutoIptables
-	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || tun.Enable || AutoIptables != "Enable" {
+	if runtime.GOOS != "linux" || dns.Listen == "" || general.TProxyPort == 0 || tun.Enable || !general.AutoIptables {
 		return
 	}
 
@@ -342,8 +347,7 @@ func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 
 func CleanUp() {
 	P.CleanUp()
-	AutoIptables := C.AutoIptables
-	if runtime.GOOS == "linux" && AutoIptables == "Enable" {
+	if runtime.GOOS == "linux" {
 		tproxy.CleanUpTProxyLinuxIPTables()
 	}
 }

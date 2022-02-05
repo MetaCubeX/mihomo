@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -35,11 +36,13 @@ import (
 type General struct {
 	Inbound
 	Controller
-	Mode         T.TunnelMode `json:"mode"`
-	UnifiedDelay bool
-	LogLevel     log.LogLevel `json:"log-level"`
-	IPv6         bool         `json:"ipv6"`
-	Interface    string       `json:"-"`
+	Mode          T.TunnelMode `json:"mode"`
+	UnifiedDelay  bool
+	LogLevel      log.LogLevel `json:"log-level"`
+	IPv6          bool         `json:"ipv6"`
+	Interface     string       `json:"-"`
+	GeodataLoader string       `json:"geodata-loader"`
+	AutoIptables  bool         `json:"auto-iptables"`
 }
 
 // Inbound
@@ -169,6 +172,8 @@ type RawConfig struct {
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
+	GeodataLoader      string       `yaml:"geodata-loader"`
+	AutoIptables       bool         `yaml:"auto-iptables"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]interface{} `yaml:"rule-providers"`
@@ -199,6 +204,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		AllowLan:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
+		GeodataLoader:  "memconservative",
+		AutoIptables:   false,
 		UnifiedDelay:   false,
 		Authentication: []string{},
 		LogLevel:       log.INFO,
@@ -306,7 +313,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
 	externalUI := cfg.ExternalUI
-
+	geodata.SetLoader(cfg.GeodataLoader)
 	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
@@ -331,11 +338,13 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ExternalUI:         cfg.ExternalUI,
 			Secret:             cfg.Secret,
 		},
-		UnifiedDelay: cfg.UnifiedDelay,
-		Mode:         cfg.Mode,
-		LogLevel:     cfg.LogLevel,
-		IPv6:         cfg.IPv6,
-		Interface:    cfg.Interface,
+		UnifiedDelay:  cfg.UnifiedDelay,
+		Mode:          cfg.Mode,
+		LogLevel:      cfg.LogLevel,
+		IPv6:          cfg.IPv6,
+		Interface:     cfg.Interface,
+		GeodataLoader: cfg.GeodataLoader,
+		AutoIptables:  cfg.AutoIptables,
 	}, nil
 }
 
@@ -483,6 +492,7 @@ time = ClashTime()
 func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]*providerTypes.RuleProvider, error) {
 	ruleProviders := map[string]*providerTypes.RuleProvider{}
 
+	startTime := time.Now()
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
 		rp, err := RP.ParseRuleProvider(name, mapping)
@@ -557,7 +567,9 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			rules = append(rules, parsed)
 		}
 	}
-
+	elapsedTime := time.Since(startTime) / time.Millisecond       // duration in ms
+	log.Infoln("Initialization time consuming %dms", elapsedTime) //Segment finished in xxm
+	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	runtime.GC()
 
 	return rules, ruleProviders, nil
