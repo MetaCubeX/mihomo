@@ -1,4 +1,4 @@
-name: Release
+name: Dev
 on: [push]
 jobs:
   dev-build:
@@ -38,7 +38,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
         with:
-          tag_name: v1.9.1
+          tag_name: Dev
           files: bin/*
-          release: true
+          prerelease: true
 
