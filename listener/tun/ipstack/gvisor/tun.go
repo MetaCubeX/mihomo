@@ -200,6 +200,9 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 				p = header.IPv4ProtocolNumber
 			case header.IPv6Version:
 				p = header.IPv6ProtocolNumber
+			default:
+				log.Warnln("invalid IP version:%d", header.IPVersion(packet))
+				continue
 			}
 			if linkEP.IsAttached() {
 				linkEP.InjectInbound(p, stack.NewPacketBuffer(stack.PacketBufferOptions{
