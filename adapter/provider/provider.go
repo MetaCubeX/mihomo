@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
+	"github.com/dlclark/regexp2"
 	"runtime"
 	"time"
 
@@ -101,7 +101,8 @@ func stopProxyProvider(pd *ProxySetProvider) {
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
-	filterReg, err := regexp.Compile(filter)
+	//filterReg, err := regexp.Compile(filter)
+	filterReg, err := regexp2.Compile(filter, 0)
 	if err != nil {
 		return nil, fmt.Errorf("invalid filter regex: %w", err)
 	}
@@ -129,7 +130,9 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 
 		proxies := []C.Proxy{}
 		for idx, mapping := range schema.Proxies {
-			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
+			name, ok := mapping["name"]
+			mat, _ := filterReg.FindStringMatch(name.(string))
+			if ok && len(filter) > 0 && mat == nil {
 				continue
 			}
 			proxy, err := adapter.ParseProxy(mapping)
