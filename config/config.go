@@ -29,10 +29,11 @@ import (
 type General struct {
 	Inbound
 	Controller
-	Mode      T.TunnelMode `json:"mode"`
-	LogLevel  log.LogLevel `json:"log-level"`
-	IPv6      bool         `json:"ipv6"`
-	Interface string       `json:"-"`
+	Mode        T.TunnelMode `json:"mode"`
+	LogLevel    log.LogLevel `json:"log-level"`
+	IPv6        bool         `json:"ipv6"`
+	Interface   string       `json:"-"`
+	RoutingMark int          `json:"-"`
 }
 
 // Inbound
@@ -137,6 +138,7 @@ type RawConfig struct {
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
+	RoutingMark        int          `yaml:"routing-mark"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	Hosts         map[string]string                 `yaml:"hosts"`
@@ -265,10 +267,11 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ExternalUI:         cfg.ExternalUI,
 			Secret:             cfg.Secret,
 		},
-		Mode:      cfg.Mode,
-		LogLevel:  cfg.LogLevel,
-		IPv6:      cfg.IPv6,
-		Interface: cfg.Interface,
+		Mode:        cfg.Mode,
+		LogLevel:    cfg.LogLevel,
+		IPv6:        cfg.IPv6,
+		Interface:   cfg.Interface,
+		RoutingMark: cfg.RoutingMark,
 	}, nil
 }
 
