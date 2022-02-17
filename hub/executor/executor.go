@@ -162,6 +162,7 @@ func updateGeneral(general *config.General, force bool) {
 	resolver.DisableIPv6 = !general.IPv6
 
 	dialer.DefaultInterface.Store(general.Interface)
+	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
 
 	iface.FlushCache()
 
