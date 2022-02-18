@@ -1,0 +1,14 @@
+linters:
+  disable-all: true
+  enable:
+    - gofumpt
+    - megacheck
+    - govet
+    - gci
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - prefix(github.com/Dreamacro/clash)
+      - default

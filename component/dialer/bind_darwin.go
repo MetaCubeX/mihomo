@@ -4,9 +4,9 @@ import (
 	"net"
 	"syscall"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/Dreamacro/clash/component/iface"
+
+	"golang.org/x/sys/unix"
 )
 
 type controlFn = func(network, address string, c syscall.RawConn) error
