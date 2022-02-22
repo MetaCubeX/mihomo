@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/Dreamacro/clash/common/pool"
+
 	"golang.org/x/net/ipv6"
 	"golang.org/x/sys/unix"
-
-	"github.com/Dreamacro/clash/common/pool"
 )
 
 const (

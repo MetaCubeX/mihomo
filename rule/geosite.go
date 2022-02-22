@@ -5,10 +5,9 @@ import (
 
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
+	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-
-	_ "github.com/Dreamacro/clash/component/geodata/standard"
 )
 
 type GEOSITE struct {

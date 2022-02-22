@@ -8,6 +8,7 @@ import (
 	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
 	"google.golang.org/protobuf/proto"
 )
 

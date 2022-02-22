@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/component/resolver"
+
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip/header"

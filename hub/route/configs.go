@@ -79,15 +79,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tcpIn, udpIn)
 
 	if general.Tun != nil {
-		err := P.ReCreateTun(*general.Tun, nil, nil)
-		if err == nil {
-			log.Infoln("Recreate tun success.")
-		} else {
-			log.Errorln("Recreate tun failed: %s", err.Error())
-			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, newError(err.Error()))
-			return
-		}
+		P.ReCreateTun(*general.Tun, tcpIn, udpIn)
 	}
 
 	if general.Mode != nil {

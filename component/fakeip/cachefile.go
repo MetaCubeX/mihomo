@@ -38,6 +38,12 @@ func (c *cachefileStore) PutByIP(ip net.IP, host string) {
 	c.cache.PutFakeip(ip.To4(), []byte(host))
 }
 
+// DelByIP implements store.DelByIP
+func (c *cachefileStore) DelByIP(ip net.IP) {
+	ip = ip.To4()
+	c.cache.DelFakeipPair(ip, c.cache.GetFakeip(ip.To4()))
+}
+
 // Exist implements store.Exist
 func (c *cachefileStore) Exist(ip net.IP) bool {
 	_, exist := c.GetByIP(ip)

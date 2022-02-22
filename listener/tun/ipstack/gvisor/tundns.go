@@ -6,6 +6,7 @@ import (
 
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
+
 	D "github.com/miekg/dns"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"

@@ -4,10 +4,10 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/kr328/tun2socket/binding"
-
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
+
+	"github.com/kr328/tun2socket/binding"
 )
 
 func handleTCP(conn net.Conn, endpoint *binding.Endpoint, tcpIn chan<- C.ConnContext) {

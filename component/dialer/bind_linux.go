@@ -25,9 +25,16 @@ func bindControl(ifaceName string, chain controlFn) controlFn {
 			}
 		}
 
-		return c.Control(func(fd uintptr) {
-			unix.BindToDevice(int(fd), ifaceName)
+		var innerErr error
+		err = c.Control(func(fd uintptr) {
+			innerErr = unix.BindToDevice(int(fd), ifaceName)
 		})
+
+		if innerErr != nil {
+			err = innerErr
+		}
+
+		return
 	}
 }
 

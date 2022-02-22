@@ -32,7 +32,7 @@ const (
 	ImageVmess           = "v2fly/v2fly-core:latest"
 	ImageTrojan          = "trojangfw/trojan:latest"
 	ImageTrojanGo        = "p4gefau1t/trojan-go:latest"
-	ImageSnell           = "icpz/snell-server:latest"
+	ImageSnell           = "ghcr.io/icpz/snell-server:latest"
 	ImageXray            = "teddysun/xray:latest"
 )
 
