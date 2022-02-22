@@ -46,29 +46,17 @@ func (gs *GEOSITE) RuleExtra() *C.RuleExtra {
 	return gs.ruleExtra
 }
 
+func (gs *GEOSITE) GetDomainMatcher() *router.DomainMatcher {
+	return gs.matcher
+}
+
 func NewGEOSITE(country string, adapter string, ruleExtra *C.RuleExtra) (*GEOSITE, error) {
-	geoLoaderName := "standard"
-	geoLoader, err := geodata.GetGeoDataLoader(geoLoaderName)
+	matcher, recordsCount, err := geodata.LoadGeoSiteMatcher(country)
 	if err != nil {
 		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
 	}
 
-	domains, err := geoLoader.LoadGeoSite(country)
-	if err != nil {
-		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
-	}
-
-	/**
-	linear: linear algorithm
-	matcher, err := router.NewDomainMatcher(domains)
-	mph：minimal perfect hash algorithm
-	*/
-	matcher, err := router.NewMphMatcherGroup(domains)
-	if err != nil {
-		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
-	}
-
-	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, len(domains))
+	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, recordsCount)
 
 	geoSite := &GEOSITE{
 		country:   country,

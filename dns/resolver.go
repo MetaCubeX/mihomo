@@ -12,6 +12,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/picker"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -230,13 +231,12 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 
 	msgCh := r.asyncExchange(ctx, r.main, m)
 
-	if r.fallback == nil { // directly return if no fallback servers are available
+	if r.fallback == nil || len(r.fallback) == 0 { // directly return if no fallback servers are available
 		res := <-msgCh
 		msg, err = res.Msg, res.Error
 		return
 	}
 
-	fallbackMsg := r.asyncExchange(ctx, r.fallback, m)
 	res := <-msgCh
 	if res.Error == nil {
 		if ips := msgToIP(res.Msg); len(ips) != 0 {
@@ -248,7 +248,7 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 		}
 	}
 
-	res = <-fallbackMsg
+	res = <-r.asyncExchange(ctx, r.fallback, m)
 	msg, err = res.Msg, res.Error
 	return
 }
@@ -302,9 +302,10 @@ func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D
 }
 
 type NameServer struct {
-	Net       string
-	Addr      string
-	Interface string
+	Net          string
+	Addr         string
+	Interface    string
+	ProxyAdapter string
 }
 
 type FallbackFilter struct {
@@ -312,6 +313,7 @@ type FallbackFilter struct {
 	GeoIPCode string
 	IPCIDR    []*net.IPNet
 	Domain    []string
+	GeoSite   []*router.DomainMatcher
 }
 
 type Config struct {
@@ -360,10 +362,28 @@ func NewResolver(config Config) *Resolver {
 	}
 	r.fallbackIPFilters = fallbackIPFilters
 
+	fallbackDomainFilters := []fallbackDomainFilter{}
 	if len(config.FallbackFilter.Domain) != 0 {
-		fallbackDomainFilters := []fallbackDomainFilter{NewDomainFilter(config.FallbackFilter.Domain)}
-		r.fallbackDomainFilters = fallbackDomainFilters
+		fallbackDomainFilters = append(fallbackDomainFilters, NewDomainFilter(config.FallbackFilter.Domain))
 	}
 
+	if len(config.FallbackFilter.GeoSite) != 0 {
+		fallbackDomainFilters = append(fallbackDomainFilters, &geoSiteFilter{
+			matchers: config.FallbackFilter.GeoSite,
+		})
+	}
+	r.fallbackDomainFilters = fallbackDomainFilters
+
+	return r
+}
+
+func NewMainResolver(old *Resolver) *Resolver {
+	r := &Resolver{
+		ipv6:     old.ipv6,
+		main:     old.main,
+		lruCache: old.lruCache,
+		hosts:    old.hosts,
+		policy:   old.policy,
+	}
 	return r
 }
