@@ -8,21 +8,21 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/miekg/dns v1.1.43
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/net v0.0.0-20210903162142-ad29c8ab022f
+	golang.org/x/net v0.0.0-20211029160332-540bb53d3b2e
 )
 
 replace github.com/Dreamacro/clash => ../
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7 // indirect
-	github.com/Microsoft/go-winio v0.5.0 // indirect
+	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/containerd/containerd v1.5.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.0 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
@@ -41,15 +41,16 @@ require (
 	github.com/xtls/go v0.0.0-20201118062508-3632bf3b7499 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34 // indirect
-	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
+	golang.org/x/text v0.3.8-0.20211029042148-bb1c79828956 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	google.golang.org/genproto v0.0.0-20210312152112-fc591d9ea70f // indirect
-	google.golang.org/grpc v1.40.0 // indirect
+	golang.zx2c4.com/wireguard/windows v0.5.1 // indirect
+	google.golang.org/genproto v0.0.0-20210722135532-667f2b7c528f // indirect
+	google.golang.org/grpc v1.42.0-dev.0.20211020220737-f00baa6c3c84 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
-	gvisor.dev/gvisor v0.0.0-20210922003438-b39716d116fd // indirect
+	gvisor.dev/gvisor v0.0.0-20220219072855-035c8f659916 // indirect
 )

@@ -22,16 +22,17 @@ require (
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/net v0.0.0-20211029160332-540bb53d3b2e
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20211029165221-6e7872819dc8
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
 	golang.zx2c4.com/wireguard/windows v0.5.1
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20211102011804-04d474e716e0
+	gvisor.dev/gvisor v0.0.0-20220219072855-035c8f659916
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/btree v1.0.1 // indirect
+	github.com/kr/pretty v0.2.1 // indirect
 	github.com/oschwald/maxminddb-golang v1.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect

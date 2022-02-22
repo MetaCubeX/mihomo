@@ -195,6 +195,9 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 				log.Errorln("can not read from tun: %v", err)
 				continue
 			}
+			if n == 0 {
+				continue
+			}
 			var p tcpip.NetworkProtocolNumber
 			switch header.IPVersion(packet) {
 			case header.IPv4Version:
@@ -203,9 +206,12 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 				p = header.IPv6ProtocolNumber
 			}
 			if linkEP.IsAttached() {
-				linkEP.InjectInbound(p, stack.NewPacketBuffer(stack.PacketBufferOptions{
+				packetBuffer := stack.NewPacketBuffer(stack.PacketBufferOptions{
 					Data: buffer.View(packet[:n]).ToVectorisedView(),
-				}))
+				})
+				linkEP.InjectInbound(p, packetBuffer)
+
+				packetBuffer.DecRef()
 			} else {
 				log.Debugln("received packet from tun when %s is not attached to any dispatcher.", t.device.Name())
 			}
@@ -223,14 +229,14 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 
 // WriteNotify implements channel.Notification.WriteNotify.
 func (t *gvisorAdapter) WriteNotify() {
-	packet, ok := t.linkCache.Read()
-	if ok {
+	packetBuffer := t.linkCache.Read()
+	if packetBuffer != nil {
 		var vv buffer.VectorisedView
 		// Append upper headers.
-		vv.AppendView(packet.Pkt.NetworkHeader().View())
-		vv.AppendView(packet.Pkt.TransportHeader().View())
+		vv.AppendView(packetBuffer.NetworkHeader().View())
+		vv.AppendView(packetBuffer.TransportHeader().View())
 		// Append data payload.
-		vv.Append(packet.Pkt.Data().ExtractVV())
+		vv.Append(packetBuffer.Data().ExtractVV())
 
 		_, err := t.device.Write(vv.ToView())
 		if err != nil && !t.device.IsClose() {
