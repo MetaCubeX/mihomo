@@ -57,7 +57,7 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 	go func() {
 		oob := make([]byte, 1024)
 		for {
-			buf := pool.Get(pool.RelayBufferSize)
+			buf := pool.Get(pool.UDPBufferSize)
 			n, oobn, _, lAddr, err := c.ReadMsgUDP(buf, oob)
 			if err != nil {
 				pool.Put(buf)

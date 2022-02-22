@@ -1,6 +1,7 @@
 package fakeip
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -75,7 +76,7 @@ func TestPool_Basic(t *testing.T) {
 }
 
 func TestPool_CycleUsed(t *testing.T) {
-	_, ipnet, _ := net.ParseCIDR("192.168.0.1/30")
+	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
 	pools, tempfile, err := createPools(Options{
 		IPNet: ipnet,
 		Size:  10,
@@ -84,9 +85,15 @@ func TestPool_CycleUsed(t *testing.T) {
 	defer os.Remove(tempfile)
 
 	for _, pool := range pools {
-		first := pool.Lookup("foo.com")
-		same := pool.Lookup("baz.com")
-		assert.True(t, first.Equal(same))
+		foo := pool.Lookup("foo.com")
+		bar := pool.Lookup("bar.com")
+		for i := 0; i < 3; i++ {
+			pool.Lookup(fmt.Sprintf("%d.com", i))
+		}
+		baz := pool.Lookup("baz.com")
+		next := pool.Lookup("foo.com")
+		assert.True(t, foo.Equal(baz))
+		assert.True(t, next.Equal(bar))
 	}
 }
 

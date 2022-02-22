@@ -31,6 +31,7 @@ type Vmess struct {
 }
 
 type VmessOption struct {
+	BasicOption
 	Name           string       `proxy:"name"`
 	Server         string       `proxy:"server"`
 	Port           int          `proxy:"port"`
@@ -46,10 +47,6 @@ type VmessOption struct {
 	HTTP2Opts      HTTP2Options `proxy:"h2-opts,omitempty"`
 	GrpcOpts       GrpcOptions  `proxy:"grpc-opts,omitempty"`
 	WSOpts         WSOptions    `proxy:"ws-opts,omitempty"`
-
-	// TODO: remove these until 2022
-	WSHeaders map[string]string `proxy:"ws-headers,omitempty"`
-	WSPath    string            `proxy:"ws-path,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -79,13 +76,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	switch v.option.Network {
 	case "ws":
-		if v.option.WSOpts.Path == "" {
-			v.option.WSOpts.Path = v.option.WSPath
-		}
-		if len(v.option.WSOpts.Headers) == 0 {
-			v.option.WSOpts.Headers = v.option.WSHeaders
-		}
-
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
 			Host:                host,
@@ -195,9 +185,9 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 }
 
 // DialContext implements C.ProxyAdapter
-func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	// gun transport
-	if v.transport != nil {
+	if v.transport != nil && len(opts) == 0 {
 		c, err := gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
@@ -212,7 +202,7 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 		return NewConn(c, v), nil
 	}
 
-	c, err := dialer.DialContext(ctx, "tcp", v.addr)
+	c, err := dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
@@ -224,7 +214,7 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(metadata.Host)
@@ -236,7 +226,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 	var c net.Conn
 	// gun transport
-	if v.transport != nil {
+	if v.transport != nil && len(opts) == 0 {
 		c, err = gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
@@ -245,7 +235,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 		c, err = v.client.StreamConn(c, parseVmessAddr(metadata))
 	} else {
-		c, err = dialer.DialContext(ctx, "tcp", v.addr)
+		c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 		}
@@ -285,10 +275,11 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 
 	v := &Vmess{
 		Base: &Base{
-			name: option.Name,
-			addr: net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:   C.Vmess,
-			udp:  option.UDP,
+			name:  option.Name,
+			addr:  net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			tp:    C.Vmess,
+			udp:   option.UDP,
+			iface: option.Interface,
 		},
 		client: client,
 		option: &option,
@@ -301,7 +292,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		}
 	case "grpc":
 		dialFn := func(network, addr string) (net.Conn, error) {
-			c, err := dialer.DialContext(context.Background(), "tcp", v.addr)
+			c, err := dialer.DialContext(context.Background(), "tcp", v.addr, v.Base.DialOptions()...)
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
@@ -351,7 +342,7 @@ func parseVmessAddr(metadata *C.Metadata) *vmess.DstAddr {
 		copy(addr[1:], []byte(metadata.Host))
 	}
 
-	port, _ := strconv.Atoi(metadata.DstPort)
+	port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 	return &vmess.DstAddr{
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,

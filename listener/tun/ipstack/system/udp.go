@@ -8,6 +8,7 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
+
 	"github.com/kr328/tun2socket/binding"
 	"github.com/kr328/tun2socket/redirect"
 )

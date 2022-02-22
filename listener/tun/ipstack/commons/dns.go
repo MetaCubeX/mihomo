@@ -2,6 +2,7 @@ package commons
 
 import (
 	"github.com/Dreamacro/clash/component/resolver"
+
 	D "github.com/miekg/dns"
 )
 
