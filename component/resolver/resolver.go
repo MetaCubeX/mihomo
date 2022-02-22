@@ -15,6 +15,9 @@ var (
 	// DefaultResolver aim to resolve ip
 	DefaultResolver Resolver
 
+	// MainResolver resolve ip with main domain server
+	MainResolver Resolver
+
 	// DisableIPv6 means don't resolve ipv6 host
 	// default value is true
 	DisableIPv6 = true
@@ -40,6 +43,14 @@ type Resolver interface {
 
 // ResolveIPv4 with a host, return ipv4
 func ResolveIPv4(host string) (net.IP, error) {
+	return ResolveIPv4WithResolver(host, DefaultResolver)
+}
+
+func ResolveIPv4WithMain(host string) (net.IP, error) {
+	return ResolveIPv4WithResolver(host, MainResolver)
+}
+
+func ResolveIPv4WithResolver(host string, r Resolver) (net.IP, error) {
 	if node := DefaultHosts.Search(host); node != nil {
 		if ip := node.Data.(net.IP).To4(); ip != nil {
 			return ip, nil
@@ -54,8 +65,8 @@ func ResolveIPv4(host string) (net.IP, error) {
 		return nil, ErrIPVersion
 	}
 
-	if DefaultResolver != nil {
-		return DefaultResolver.ResolveIPv4(host)
+	if r != nil {
+		return r.ResolveIPv4(host)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
@@ -72,6 +83,14 @@ func ResolveIPv4(host string) (net.IP, error) {
 
 // ResolveIPv6 with a host, return ipv6
 func ResolveIPv6(host string) (net.IP, error) {
+	return ResolveIPv6WithResolver(host, DefaultResolver)
+}
+
+func ResolveIPv6WithMain(host string) (net.IP, error) {
+	return ResolveIPv6WithResolver(host, MainResolver)
+}
+
+func ResolveIPv6WithResolver(host string, r Resolver) (net.IP, error) {
 	if DisableIPv6 {
 		return nil, ErrIPv6Disabled
 	}
@@ -90,8 +109,8 @@ func ResolveIPv6(host string) (net.IP, error) {
 		return nil, ErrIPVersion
 	}
 
-	if DefaultResolver != nil {
-		return DefaultResolver.ResolveIPv6(host)
+	if r != nil {
+		return r.ResolveIPv6(host)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
@@ -137,4 +156,9 @@ func ResolveIPWithResolver(host string, r Resolver) (net.IP, error) {
 // ResolveIP with a host, return ip
 func ResolveIP(host string) (net.IP, error) {
 	return ResolveIPWithResolver(host, DefaultResolver)
+}
+
+// ResolveIPWithMainResolver with a host, use main resolver, return ip
+func ResolveIPWithMainResolver(host string) (net.IP, error) {
+	return ResolveIPWithResolver(host, MainResolver)
 }

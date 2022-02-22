@@ -36,6 +36,37 @@
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
 ## Advanced usage for this branch
+### DNS configuration
+Support resolve ip with a proxy tunnel.
+
+Support `geosite` with `fallback-filter`.
+ ```yaml
+ dns:
+   enable: true
+   use-hosts: true
+   ipv6: false
+   enhanced-mode: fake-ip
+   fake-ip-range: 198.18.0.1/16
+   listen: 127.0.0.1:6868
+   default-nameserver:
+     - 119.29.29.29
+     - 114.114.114.114
+   nameserver:
+     - https://doh.pub/dns-query
+     - tls://223.5.5.5:853
+   fallback:
+     - 'https://1.0.0.1/dns-query#Proxy'  # append the proxy adapter name to the end of DNS URL with '#' prefix.
+     - 'tls://8.8.4.4:853#Proxy'
+   fallback-filter:
+     geoip: false
+     geosite:
+       - gfw  # `geosite` filter only use fallback server to resolve ip, prevent DNS leaks to unsafe DNS providers.
+     domain:
+       - +.example.com
+     ipcidr:
+       - 0.0.0.0/32
+ ```
+
 ### TUN configuration
 Supports macOS, Linux and Windows.
 
@@ -86,7 +117,7 @@ rules:
   #- GEOIP,!cn,PROXY
     
   # source IPCIDR condition for all rules in gateway proxy
-  #- GEOIP,!cn,PROXY,192.168.1.88/32,192.168.1.99/32
+  #- GEOSITE,geolocation-!cn,REJECT,192.168.1.88/32,192.168.1.99/32
 
   - MATCH,PROXY
 ```
@@ -103,22 +134,9 @@ proxies:
     port: 443
     uuid: uuid
     network: tcp
-    servername: example.com # AKA SNI
+    servername: example.com
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
-    
-  - name: "vless-ws"
-    type: vless
-    server: server
-    port: 443
-    uuid: uuid
-    udp: true
-    network: ws
-    servername: example.com # priority over wss host
-    # skip-cert-verify: true
-    ws-path: /path
-    ws-headers:
-      Host: example.com
 ```
 
 ### IPTABLES auto-configuration

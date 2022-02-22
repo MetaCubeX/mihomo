@@ -15,10 +15,11 @@ import (
 
 type client struct {
 	*D.Client
-	r     *Resolver
-	port  string
-	host  string
-	iface string
+	r            *Resolver
+	port         string
+	host         string
+	iface        string
+	proxyAdapter string
 }
 
 func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
@@ -50,7 +51,14 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	if c.iface != "" {
 		options = append(options, dialer.WithInterface(c.iface))
 	}
-	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
+
+	var conn net.Conn
+	if c.proxyAdapter == "" {
+		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
+	} else {
+		conn, err = dialContextWithProxyAdapter(ctx, c.proxyAdapter, network, ip, c.port, options...)
+	}
+
 	if err != nil {
 		return nil, err
 	}

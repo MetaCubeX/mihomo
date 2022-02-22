@@ -4,6 +4,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -48,4 +49,17 @@ func NewDomainFilter(domains []string) *domainFilter {
 
 func (df *domainFilter) Match(domain string) bool {
 	return df.tree.Search(domain) != nil
+}
+
+type geoSiteFilter struct {
+	matchers []*router.DomainMatcher
+}
+
+func (gsf *geoSiteFilter) Match(domain string) bool {
+	for _, matcher := range gsf.matchers {
+		if matcher.ApplyDomain(domain) {
+			return true
+		}
+	}
+	return false
 }

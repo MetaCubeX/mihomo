@@ -19,8 +19,9 @@ const (
 )
 
 type dohClient struct {
-	url       string
-	transport *http.Transport
+	url          string
+	proxyAdapter string
+	transport    *http.Transport
 }
 
 func (dc *dohClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
@@ -79,9 +80,10 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	return msg, err
 }
 
-func newDoHClient(url string, r *Resolver) *dohClient {
+func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
 	return &dohClient{
-		url: url,
+		url:          url,
+		proxyAdapter: proxyAdapter,
 		transport: &http.Transport{
 			ForceAttemptHTTP2: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -95,7 +97,11 @@ func newDoHClient(url string, r *Resolver) *dohClient {
 					return nil, err
 				}
 
-				return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
+				if proxyAdapter == "" {
+					return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
+				} else {
+					return dialContextWithProxyAdapter(ctx, proxyAdapter, "tcp", ip, port)
+				}
 			},
 		},
 	}
