@@ -19,7 +19,12 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 	client := newClient(c.RemoteAddr(), in)
 	defer client.CloseIdleConnections()
 
-	conn := N.NewBufferedConn(c)
+	var conn *N.BufferedConn
+	if bufConn, ok := c.(*N.BufferedConn); ok {
+		conn = bufConn
+	} else {
+		conn = N.NewBufferedConn(c)
+	}
 
 	keepAlive := true
 	trusted := cache == nil // disable authenticate if cache is nil
