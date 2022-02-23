@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -84,11 +86,14 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tunAddress string, tcpIn 
 	// TCP handler
 	// maximum number of half-open tcp connection set to 1024
 	// receive buffer size set to 20k
-	tcpFwd := tcp.NewForwarder(ipstack, 20*1024, 1024, func(r *tcp.ForwarderRequest) {
+	tcpFwd := tcp.NewForwarder(ipstack, pool.RelayBufferSize, 1024, func(r *tcp.ForwarderRequest) {
+		src := net.JoinHostPort(r.ID().RemoteAddress.String(), strconv.Itoa((int)(r.ID().RemotePort)))
+		dst := net.JoinHostPort(r.ID().LocalAddress.String(), strconv.Itoa((int)(r.ID().LocalPort)))
+		log.Debugln("Get TCP Syn %v -> %s in ipstack", src, dst)
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
-			log.Warnln("Can't create TCP Endpoint in ipstack: %v", err)
+			log.Warnln("Can't create TCP Endpoint(%s -> %s) in ipstack: %v", src, dst, err)
 			r.Complete(true)
 			return
 		}
