@@ -479,8 +479,8 @@ github.com/kr/pty v1.1.4-0.20190131011033-7dc38fb350b1/go.mod h1:pFQYn66WHrOpPYN
 github.com/kr/pty v1.1.5/go.mod h1:9r2w37qlBe7rQ6e1fg1S/9xpWHSnaqNdHD3WcMdbPDA=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/kr328/tun2socket v0.0.0-20210412191540-3d56c47e2d99 h1:dkEFEnGUg2z/FAPywWr4yfR/sWDQK76qn3J4Y5H2hJs=
-github.com/kr328/tun2socket v0.0.0-20210412191540-3d56c47e2d99/go.mod h1:FWfSixjrLgtK+dHkDoN6lHMNhvER24gnjUZd/wt8Z9o=
+github.com/yaling888/tun2socket v0.0.0-20220222131921-1354a6a41c94 h1:+8PkDs3mqiFRlpRpUdU0eF1iyacO5IfrhHnwieWXXIo=
+github.com/yaling888/tun2socket v0.0.0-20220222131921-1354a6a41c94/go.mod h1:CKx8EO2u1jWiDY1pndf6JIrgEMZqKlSjpgudni/d0UM=
 github.com/lxn/walk v0.0.0-20210112085537-c389da54e794/go.mod h1:E23UucZGqpuUANJooIbHWCufXvOcT6E7Stq81gU+CSQ=
 github.com/lxn/win v0.0.0-20210218163916-a377121e959e/go.mod h1:KxxjdtRkfNoYDCUP5ryK7XJJNTnpC8atvtmTheChOtk=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
@@ -1160,8 +1160,8 @@ gotest.tools v2.2.0+incompatible/go.mod h1:DsYFclhRJ6vuDpmuTbkuFWG+y2sxOXAzmJt81
 gotest.tools/v3 v3.0.2/go.mod h1:3SzNCllyD9/Y+b5r9JIKQ474KzkZyqLqEfYqMsX94Bk=
 gotest.tools/v3 v3.0.3 h1:4AuOwCGf4lLR9u3YOe2awrHygurzhO/HeQ6laiA6Sx0=
 gotest.tools/v3 v3.0.3/go.mod h1:Z7Lb0S5l+klDB31fvDQX8ss/FlKDxtlFlw3Oa8Ymbl8=
-gvisor.dev/gvisor v0.0.0-20220219072855-035c8f659916 h1:J3qsmIGiSzUraxqmCExo0ZcEHNxTS0KJ82gjgSt/SOQ=
-gvisor.dev/gvisor v0.0.0-20220219072855-035c8f659916/go.mod h1:V4WNP2Uwtx69eOhvLDSQ734EaTJTaBI3P8KgRAlROsg=
+gvisor.dev/gvisor v0.0.0-20220223011539-80f79b70dca2 h1:UirT7GHYD5mbuvNXDEmE/DiXSyllHDbMPrPkliCud04=
+gvisor.dev/gvisor v0.0.0-20220223011539-80f79b70dca2/go.mod h1:V4WNP2Uwtx69eOhvLDSQ734EaTJTaBI3P8KgRAlROsg=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190106161140-3f1c8253044a/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190418001031-e561f6794a2a/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=

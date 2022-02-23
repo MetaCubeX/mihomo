@@ -26,8 +26,10 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.1
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220219072855-035c8f659916
+	gvisor.dev/gvisor v0.0.0-20220223011539-80f79b70dca2
 )
+
+replace github.com/kr328/tun2socket => github.com/yaling888/tun2socket v0.0.0-20220222131921-1354a6a41c94
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
