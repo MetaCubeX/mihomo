@@ -64,6 +64,8 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 }
 
 func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
+	conn.(*net.TCPConn).SetKeepAlive(true)
+
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {
