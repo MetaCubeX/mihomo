@@ -82,17 +82,20 @@ tun:
 ### Rules configuration
 - Support rule `GEOSITE`.
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
-- Support not match condition for rule `GEOIP`.
 - Support `network` condition for all rules.
+- Support `process` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
 
 The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
 ```yaml
 rules:
   # network condition for all rules
-  - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
-  - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
-    
+  - DOMAIN-SUFFIX,example.com,DIRECT,tcp
+  - DOMAIN-SUFFIX,example.com,REJECT,udp
+
+  # process(add 'P:' prefix) condition for all rules
+  - DOMAIN-SUFFIX,example.com,REJECT,P:Google Chrome Helper
+
   # multiport condition for rules SRC-PORT and DST-PORT
   - DST-PORT,123/136/137-139,DIRECT,udp
   
