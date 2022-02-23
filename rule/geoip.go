@@ -24,9 +24,14 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 		return false
 	}
 
-	if strings.EqualFold(g.country, "LAN") || C.TunBroadcastAddr.Equal(ip) {
-		return ip.IsPrivate()
+	if strings.EqualFold(g.country, "LAN") {
+		return ip.IsPrivate() ||
+			ip.IsUnspecified() ||
+			ip.IsLoopback() ||
+			ip.IsMulticast() ||
+			C.TunBroadcastAddr.Equal(ip)
 	}
+
 	record, _ := mmdb.Instance().Country(ip)
 	return strings.EqualFold(record.Country.IsoCode, g.country)
 }
