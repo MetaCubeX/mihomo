@@ -280,6 +280,10 @@ func updateIPTables(dns *config.DNS, general *config.General) {
 
 	tproxy.CleanUpTProxyLinuxIPTables()
 
+	if dialer.DefaultRoutingMark.Load() == 0 {
+		dialer.DefaultRoutingMark.Store(2158)
+	}
+
 	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
 
 	if err != nil {

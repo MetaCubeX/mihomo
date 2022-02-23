@@ -153,9 +153,7 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user given name `clash`.
-
-Run Clash by user `clash` as a daemon.
+Run Clash as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/clash.service:
 ```shell
@@ -165,10 +163,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=clash
-Group=clash
 CapabilityBoundingSet=cap_net_admin
-AmbientCapabilities=cap_net_admin
 Restart=always
 ExecStart=/usr/local/bin/clash -d /etc/clash
 
