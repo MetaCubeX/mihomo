@@ -14,6 +14,13 @@ const (
 	Direct AdapterType = iota
 	Reject
 	Compatible
+
+	Relay
+	Selector
+	Fallback
+	URLTest
+	LoadBalance
+
 	Shadowsocks
 	ShadowsocksR
 	Snell
@@ -22,12 +29,6 @@ const (
 	Vmess
 	Vless
 	Trojan
-
-	Relay
-	Selector
-	Fallback
-	URLTest
-	LoadBalance
 )
 
 const (
