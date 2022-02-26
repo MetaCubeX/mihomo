@@ -30,6 +30,7 @@ PLATFORM_LIST = \
 	linux-mips-hardfloat \
 	linux-mipsle-softfloat \
 	linux-mipsle-hardfloat \
+	android-armv8 \
 	freebsd-386 \
 	freebsd-amd64 \
 	freebsd-arm64
@@ -113,6 +114,9 @@ linux-mips64:
 
 linux-mips64le:
 	GOARCH=mips64le GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+android-armv8:
+	GOARCH=arm64 GOOS=android $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 freebsd-386:
 	GOARCH=386 GOOS=freebsd $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
