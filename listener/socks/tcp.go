@@ -61,6 +61,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 }
 
 func handleSocks(conn net.Conn, in chan<- C.ConnContext) {
+	conn.(*net.TCPConn).SetKeepAlive(true)
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {
@@ -84,9 +85,6 @@ func HandleSocks4(conn net.Conn, in chan<- C.ConnContext) {
 		conn.Close()
 		return
 	}
-	if c, ok := conn.(*net.TCPConn); ok {
-		c.SetKeepAlive(true)
-	}
 	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4)
 }
 
@@ -95,9 +93,6 @@ func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
 	if err != nil {
 		conn.Close()
 		return
-	}
-	if c, ok := conn.(*net.TCPConn); ok {
-		c.SetKeepAlive(true)
 	}
 	if command == socks5.CmdUDPAssociate {
 		defer conn.Close()
