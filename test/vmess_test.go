@@ -34,51 +34,12 @@ func TestClash_Vmess(t *testing.T) {
 	})
 
 	proxy, err := outbound.NewVmess(outbound.VmessOption{
-		Name:    "vmess",
-		Server:  localIP.String(),
-		Port:    10002,
-		UUID:    "b831381d-6324-4d53-ad4f-8cda48b30811",
-		Cipher:  "auto",
-		AlterID: 32,
-		UDP:     true,
-	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-
-	time.Sleep(waitTime)
-	testSuit(t, proxy)
-}
-
-func TestClash_VmessAEAD(t *testing.T) {
-	configPath := C.Path.Resolve("vmess-aead.json")
-
-	cfg := &container.Config{
-		Image:        ImageVmess,
-		ExposedPorts: defaultExposedPorts,
-	}
-	hostCfg := &container.HostConfig{
-		PortBindings: defaultPortBindings,
-		Binds:        []string{fmt.Sprintf("%s:/etc/v2ray/config.json", configPath)},
-	}
-
-	id, err := startContainer(cfg, hostCfg, "vmess-aead")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-
-	t.Cleanup(func() {
-		cleanContainer(id)
-	})
-
-	proxy, err := outbound.NewVmess(outbound.VmessOption{
-		Name:    "vmess",
-		Server:  localIP.String(),
-		Port:    10002,
-		UUID:    "b831381d-6324-4d53-ad4f-8cda48b30811",
-		Cipher:  "auto",
-		AlterID: 0,
-		UDP:     true,
+		Name:   "vmess",
+		Server: localIP.String(),
+		Port:   10002,
+		UUID:   "b831381d-6324-4d53-ad4f-8cda48b30811",
+		Cipher: "auto",
+		UDP:    true,
 	})
 	if err != nil {
 		assert.FailNow(t, err.Error())
@@ -114,7 +75,6 @@ func TestClash_VmessTLS(t *testing.T) {
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:         "auto",
-		AlterID:        32,
 		TLS:            true,
 		SkipCertVerify: true,
 		ServerName:     "example.org",
@@ -154,7 +114,6 @@ func TestClash_VmessHTTP2(t *testing.T) {
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:         "auto",
-		AlterID:        32,
 		Network:        "h2",
 		TLS:            true,
 		SkipCertVerify: true,
@@ -197,7 +156,6 @@ func TestClash_VmessHTTP(t *testing.T) {
 		Port:    10002,
 		UUID:    "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:  "auto",
-		AlterID: 32,
 		Network: "http",
 		UDP:     true,
 		HTTPOpts: outbound.HTTPOptions{
@@ -250,7 +208,6 @@ func TestClash_VmessWebsocket(t *testing.T) {
 		Port:    10002,
 		UUID:    "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:  "auto",
-		AlterID: 32,
 		Network: "ws",
 		UDP:     true,
 	})
@@ -288,7 +245,6 @@ func TestClash_VmessWebsocketTLS(t *testing.T) {
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:         "auto",
-		AlterID:        32,
 		Network:        "ws",
 		TLS:            true,
 		SkipCertVerify: true,
@@ -328,7 +284,6 @@ func TestClash_VmessGrpc(t *testing.T) {
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:         "auto",
-		AlterID:        32,
 		Network:        "grpc",
 		TLS:            true,
 		SkipCertVerify: true,
@@ -370,7 +325,6 @@ func TestClash_VmessWebsocket0RTT(t *testing.T) {
 		Port:       10002,
 		UUID:       "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:     "auto",
-		AlterID:    32,
 		Network:    "ws",
 		UDP:        true,
 		ServerName: "example.org",
@@ -411,7 +365,6 @@ func TestClash_VmessWebsocketXray0RTT(t *testing.T) {
 		Port:       10002,
 		UUID:       "b831381d-6324-4d53-ad4f-8cda48b30811",
 		Cipher:     "auto",
-		AlterID:    32,
 		Network:    "ws",
 		UDP:        true,
 		ServerName: "example.org",
