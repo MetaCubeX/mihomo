@@ -192,7 +192,10 @@ func updateGeneral(general *config.General, force bool) {
 	log.Infoln("Use interface name: %s", general.Interface)
 
 	dialer.DefaultInterface.Store(general.Interface)
-	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
+
+	if general.RoutingMark > 0 {
+		dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
+	}
 
 	iface.FlushCache()
 
@@ -280,10 +283,7 @@ func updateIPTables(dns *config.DNS, general *config.General) {
 
 	tproxy.CleanUpTProxyLinuxIPTables()
 
-	if dialer.DefaultRoutingMark.Load() == 0 {
-		dialer.DefaultRoutingMark.Store(2158)
-	}
-
+	dialer.DefaultRoutingMark.Store(2158)
 	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
 
 	if err != nil {
