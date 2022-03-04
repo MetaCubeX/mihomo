@@ -223,11 +223,22 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user given name `meta`.
 
-Run Meta Kernel by user `meta` as a daemon.
 
-Create the systemd configuration file at /etc/systemd/system/Clash-Meta.service:
+### General install guide for Linux  
++ Create user given name `Clash-Meta`
+
++ Download and decompress pre-built binaries from [releases](https://github.com/MetaCubeX/Clash.Meta/releases)  
+
++ Rename executable file to `Clash-Meta` and move to `/usr/local/bin/` 
+
++ Create folder `/etc/Clash-Meta/` as working directory 
+
+
+
+Run Meta Kernel by user `Clash-Meta` as a daemon.
+
+Create the systemd configuration file at `/etc/systemd/system/Clash-Meta.service`:
 
 ```
 [Unit]
@@ -236,12 +247,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=meta
-Group=meta
+User=Clash-Meta
+Group=Clash-Meta
 CapabilityBoundingSet=cap_net_admin
 AmbientCapabilities=cap_net_admin
 Restart=always
-ExecStart=/usr/local/bin/Clash.Meta -d /etc/Clash.Meta
+ExecStart=/usr/local/bin/Clash-Meta -d /etc/Clash-Meta
 
 [Install]
 WantedBy=multi-user.target
