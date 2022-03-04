@@ -81,9 +81,9 @@ func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
 
 	switch rp.behavior {
 	case P.Domain:
-		return rp.DomainRules.Search(metadata.Host) != nil
+		return rp.DomainRules != nil && rp.DomainRules.Search(metadata.Host) != nil
 	case P.IPCIDR:
-		return rp.IPCIDRRules.IsContain(metadata.DstIP)
+		return rp.IPCIDRRules != nil && rp.IPCIDRRules.IsContain(metadata.DstIP)
 	case P.Classical:
 		for _, rule := range rp.ClassicalRules {
 			if rule.Match(metadata) {
