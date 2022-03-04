@@ -26,12 +26,20 @@ func TestIpv4AddFail(t *testing.T) {
 
 func TestIpv4Search(t *testing.T) {
 	trie := NewIpCidrTrie()
+	// Boundary testing
+	assert.NoError(t, trie.AddIpCidrForString("149.154.160.0/20"))
+	assert.Equal(t, true, trie.IsContainForString("149.154.160.0"))
+	assert.Equal(t, true, trie.IsContainForString("149.154.175.255"))
+	assert.Equal(t, false, trie.IsContainForString("149.154.176.0"))
+	assert.Equal(t, false, trie.IsContainForString("149.154.159.255"))
+
 	assert.NoError(t, trie.AddIpCidrForString("129.2.36.0/16"))
 	assert.NoError(t, trie.AddIpCidrForString("10.2.36.0/18"))
 	assert.NoError(t, trie.AddIpCidrForString("16.2.23.0/24"))
 	assert.NoError(t, trie.AddIpCidrForString("11.2.13.2/26"))
 	assert.NoError(t, trie.AddIpCidrForString("55.5.6.3/8"))
 	assert.NoError(t, trie.AddIpCidrForString("66.23.25.4/6"))
+
 	assert.Equal(t, true, trie.IsContainForString("129.2.3.65"))
 	assert.Equal(t, false, trie.IsContainForString("15.2.3.1"))
 	assert.Equal(t, true, trie.IsContainForString("11.2.13.1"))
@@ -41,6 +49,7 @@ func TestIpv4Search(t *testing.T) {
 
 	assert.Equal(t, false, trie.IsContain(net.ParseIP("22")))
 	assert.Equal(t, false, trie.IsContain(net.ParseIP("")))
+
 }
 
 func TestIpv6AddSuccess(t *testing.T) {
@@ -66,6 +75,14 @@ func TestIpv6AddFail(t *testing.T) {
 
 func TestIpv6Search(t *testing.T) {
 	trie := NewIpCidrTrie()
+
+	// Boundary testing
+	assert.NoError(t, trie.AddIpCidrForString("2a0a:f280::/32"))
+	assert.Equal(t, true, trie.IsContainForString("2a0a:f280:0000:0000:0000:0000:0000:0000"))
+	assert.Equal(t, true, trie.IsContainForString("2a0a:f280:ffff:ffff:ffff:ffff:ffff:ffff"))
+	assert.Equal(t, false, trie.IsContainForString("2a0a:f279:ffff:ffff:ffff:ffff:ffff:ffff"))
+	assert.Equal(t, false, trie.IsContainForString("2a0a:f281:0000:0000:0000:0000:0000:0000"))
+
 	assert.NoError(t, trie.AddIpCidrForString("2001:b28:f23d:f001::e/128"))
 	assert.NoError(t, trie.AddIpCidrForString("2001:67c:4e8:f002::e/12"))
 	assert.NoError(t, trie.AddIpCidrForString("2001:b28:f23d:f003::e/96"))
@@ -79,4 +96,5 @@ func TestIpv6Search(t *testing.T) {
 	assert.Equal(t, true, trie.IsContainForString("2001:67c:4e8:9666::1213"))
 
 	assert.Equal(t, false, trie.IsContain(net.ParseIP("22233:22")))
+
 }
