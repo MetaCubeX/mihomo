@@ -223,9 +223,9 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user given name `Clash-Meta`.
+Create user given name `meta`.
 
-Run Meta Kernel by user `Clash-Meta` as a daemon.
+Run Meta Kernel by user `meta` as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/Clash-Meta.service:
 
@@ -236,8 +236,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=Clash-Meta
-Group=Clash-Meta
+User=meta
+Group=meta
 CapabilityBoundingSet=cap_net_admin
 AmbientCapabilities=cap_net_admin
 Restart=always
