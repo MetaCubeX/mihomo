@@ -223,21 +223,21 @@ tproxy-port: 9898
 tun:
   enable: false
 ```
-Create user given name `Clash.Meta`.
+Create user given name `Clash-Meta`.
 
-Run Meta Kernel by user `Clash.Meta` as a daemon.
+Run Meta Kernel by user `Clash-Meta` as a daemon.
 
-Create the systemd configuration file at /etc/systemd/system/clash.service:
+Create the systemd configuration file at /etc/systemd/system/Clash-Meta.service:
 
 ```
 [Unit]
-Description=Clash.Meta Daemon, Another Clash Kernel.
+Description=Clash-Meta Daemon, Another Clash Kernel.
 After=network.target
 
 [Service]
 Type=simple
-User=Clash.Meta
-Group=Clash.Meta
+User=Clash-Meta
+Group=Clash-Meta
 CapabilityBoundingSet=cap_net_admin
 AmbientCapabilities=cap_net_admin
 Restart=always
@@ -248,12 +248,12 @@ WantedBy=multi-user.target
 ```
 Launch clashd on system startup with:
 ```shell
-$ systemctl enable Clash.Meta
+$ systemctl enable Clash-Meta
 ```
 Launch clashd immediately with:
 
 ```shell
-$ systemctl start Clash.Meta
+$ systemctl start Clash-Meta
 ```
 
 ### Display Process name
