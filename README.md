@@ -225,7 +225,7 @@ tun:
 ```
 
 
-### General install guide for Linux  
+### General installation guide for Linux  
 + Create user given name `Clash-Meta`
 
 + Download and decompress pre-built binaries from [releases](https://github.com/MetaCubeX/Clash.Meta/releases)  
