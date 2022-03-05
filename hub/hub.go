@@ -49,6 +49,6 @@ func Parse(options ...Option) error {
 	return nil
 }
 
-func CleanUp() {
-	executor.CleanUp()
+func Cleanup() {
+	executor.Cleanup()
 }

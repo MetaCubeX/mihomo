@@ -6,7 +6,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -73,6 +72,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 
+	log.SetLevel(log.DEBUG)
+
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
@@ -82,6 +83,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateDNS(cfg.DNS, cfg.General)
 	updateGeneral(cfg.General, force)
 	updateExperimental(cfg)
+
+	log.SetLevel(cfg.General.LogLevel)
 }
 
 func GetGeneral() *config.General {
@@ -152,9 +155,7 @@ func updateDNS(c *config.DNS, general *config.General) {
 	resolver.DefaultResolver = r
 	resolver.MainResolver = mr
 	resolver.DefaultHostMapper = m
-	if general.Tun.Enable && strings.EqualFold(general.Tun.Stack, "system") {
-		resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
-	}
+	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
 
 	dns.ReCreateServer(c.Listen, r, m)
 }
@@ -172,7 +173,6 @@ func updateRules(rules []C.Rule) {
 }
 
 func updateGeneral(general *config.General, force bool) {
-	log.SetLevel(log.DEBUG)
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
 
@@ -200,7 +200,6 @@ func updateGeneral(general *config.General, force bool) {
 	iface.FlushCache()
 
 	if !force {
-		log.SetLevel(general.LogLevel)
 		return
 	}
 
@@ -219,8 +218,6 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 	P.ReCreateTun(general.Tun, tcpIn, udpIn)
-
-	log.SetLevel(general.LogLevel)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -283,7 +280,10 @@ func updateIPTables(dns *config.DNS, general *config.General) {
 
 	tproxy.CleanUpTProxyLinuxIPTables()
 
-	dialer.DefaultRoutingMark.Store(2158)
+	if dialer.DefaultRoutingMark.Load() == 0 {
+		dialer.DefaultRoutingMark.Store(2158)
+	}
+
 	err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
 
 	if err != nil {
@@ -292,8 +292,8 @@ func updateIPTables(dns *config.DNS, general *config.General) {
 	}
 }
 
-func CleanUp() {
-	P.CleanUp()
+func Cleanup() {
+	P.Cleanup()
 
 	if runtime.GOOS == "linux" {
 		tproxy.CleanUpTProxyLinuxIPTables()

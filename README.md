@@ -75,7 +75,7 @@ On Windows, you should download the [Wintun](https://www.wintun.net) driver and 
 # Enable the TUN listener
 tun:
   enable: true
-  stack: system # system or gvisor
+  stack: gvisor # system or gvisor
   dns-listen: 0.0.0.0:53 # additional dns server listen on TUN
   auto-route: true # auto set global route
 ```
@@ -93,7 +93,7 @@ rules:
   - DOMAIN-SUFFIX,example.com,DIRECT,tcp
   - DOMAIN-SUFFIX,example.com,REJECT,udp
 
-  # process(add 'P:' prefix) condition for all rules
+  # process condition for all rules (add 'P:' prefix)
   - DOMAIN-SUFFIX,example.com,REJECT,P:Google Chrome Helper
 
   # multiport condition for rules SRC-PORT and DST-PORT
@@ -108,19 +108,14 @@ rules:
   - GEOSITE,facebook,PROXY
   - GEOSITE,youtube,PROXY
   - GEOSITE,geolocation-cn,DIRECT
-  - GEOSITE,gfw,PROXY
-  - GEOSITE,greatfire,PROXY
-  #- GEOSITE,geolocation-!cn,PROXY
+  - GEOSITE,geolocation-!cn,PROXY
 
+  # source IPCIDR condition for all rules in gateway proxy
+  #- GEOSITE,geolocation-!cn,REJECT,192.168.1.88/32,192.168.1.99/32
+  
   - GEOIP,telegram,PROXY,no-resolve
   - GEOIP,private,DIRECT,no-resolve
   - GEOIP,cn,DIRECT
-    
-  # Not match condition for rule GEOIP
-  #- GEOIP,!cn,PROXY
-    
-  # source IPCIDR condition for all rules in gateway proxy
-  #- GEOSITE,geolocation-!cn,REJECT,192.168.1.88/32,192.168.1.99/32
 
   - MATCH,PROXY
 ```
@@ -183,9 +178,6 @@ $ systemctl start clash
 Add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
 
 To display process name in GUI please use https://yaling888.github.io/yacd/.
-
-## Premium Release
-[Release](https://github.com/Dreamacro/clash/releases/tag/premium)
 
 ## Development
 If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
