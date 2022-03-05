@@ -403,8 +403,8 @@ func genAddr(host string, port int, allowLan bool) string {
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-// CleanUp clean up something
-func CleanUp() {
+// Cleanup clean up something
+func Cleanup() {
 	if runtime.GOOS == "windows" {
 		if tunAdapter != nil {
 			tunAdapter.Close()

@@ -104,9 +104,9 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
-	// clean up
-	log.Warnln("Clash clean up")
-	hub.CleanUp()
+	// cleanup
+	log.Warnln("Clash cleanup")
+	hub.Cleanup()
 
 	log.Warnln("Clash shutting down")
 }

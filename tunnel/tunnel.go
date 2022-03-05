@@ -34,7 +34,8 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	preProcessCacheFinder, _ = R.NewProcess("", "", nil)
+	// a default rule type of process, use to pre resolve process name
+	defaultProcessRule, _ = R.NewProcess("", "", nil)
 )
 
 func init() {
@@ -148,6 +149,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}
+
+	// pre resolve process name
+	defaultProcessRule.Match(metadata)
 
 	return nil
 }
@@ -317,9 +321,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		metadata.DstIP = ip
 		resolved = true
 	}
-
-	// preset process name and cache it
-	preProcessCacheFinder.Match(metadata)
 
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
