@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -11,7 +12,11 @@ import (
 	"github.com/Dreamacro/clash/log"
 )
 
-var processCache = cache.NewLRUCache(cache.WithAge(2), cache.WithSize(64))
+var (
+	processCache = cache.NewLRUCache(cache.WithAge(2), cache.WithSize(64))
+
+	localIPs = getLocalIPs()
+)
 
 type Process struct {
 	adapter   string
@@ -28,8 +33,8 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 		return strings.EqualFold(metadata.Process, ps.process)
 	}
 
-	// ignore match in proxy type "tproxy"
-	if metadata.Type == C.TPROXY {
+	// ignore source IP not on local machine
+	if !isLocalIP(metadata.SrcIP) {
 		return false
 	}
 
@@ -79,4 +84,36 @@ func NewProcess(process string, adapter string, ruleExtra *C.RuleExtra) (*Proces
 		process:   process,
 		ruleExtra: ruleExtra,
 	}, nil
+}
+
+func getLocalIPs() []net.IP {
+	ips := []net.IP{net.IPv4(198, 18, 0, 1), net.IPv4zero, net.IPv6zero}
+
+	netInterfaces, err := net.Interfaces()
+	if err != nil {
+		return ips
+	}
+
+	for i := 0; i < len(netInterfaces); i++ {
+		if (netInterfaces[i].Flags & net.FlagUp) != 0 {
+			adds, _ := netInterfaces[i].Addrs()
+
+			for _, address := range adds {
+				if ipNet, ok := address.(*net.IPNet); ok {
+					ips = append(ips, ipNet.IP)
+				}
+			}
+		}
+	}
+
+	return ips
+}
+
+func isLocalIP(srcIP net.IP) bool {
+	for _, ip := range localIPs {
+		if ip.Equal(srcIP) {
+			return true
+		}
+	}
+	return false
 }
