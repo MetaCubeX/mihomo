@@ -1,8 +1,8 @@
-name: "CodeQL"
+name: CodeQL
 
 on:
   push:
-    branches: [ master, dev ]
+    branches: [master, dev]
 
 jobs:
   analyze:
@@ -12,11 +12,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'go' ]
+        language: ['go']
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v1
