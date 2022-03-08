@@ -15,7 +15,7 @@ jobs:
           go-version: ${{ steps.version.outputs.go_version }}
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cache go module
         uses: actions/cache@v2
