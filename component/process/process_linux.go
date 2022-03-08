@@ -9,7 +9,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"unicode"
 	"unsafe"
 
 	"github.com/Dreamacro/clash/common/pool"
@@ -219,24 +221,15 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 }
 
 func splitCmdline(cmdline []byte) string {
-	indexOfEndOfString := len(cmdline)
+	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	})
 
-	for i, c := range cmdline {
-		if c == 0 {
-			indexOfEndOfString = i
-			break
-		}
-	}
-
-	return filepath.Base(string(cmdline[:indexOfEndOfString]))
+	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {
-	for _, s := range s {
-		if s < '0' || s > '9' {
-			return false
-		}
-	}
-
-	return true
+	return strings.IndexFunc(s, func(r rune) bool {
+		return !unicode.IsDigit(r)
+	}) == -1
 }
