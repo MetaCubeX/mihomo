@@ -14,7 +14,7 @@ PLATFORM_LIST = \
 	linux-armv5 \
 	linux-armv6 \
 	linux-armv7 \
-	linux-armv8 \
+	linux-arm64 \
 	linux-mips-softfloat \
 	linux-mips-hardfloat \
 	linux-mipsle-softfloat \
@@ -57,7 +57,7 @@ linux-armv6:
 linux-armv7:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv8:
+linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat:

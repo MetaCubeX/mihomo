@@ -6,7 +6,7 @@
  * Copyright (C) 2019-2021 WireGuard LLC. All Rights Reserved.
  */
 
-package wintun
+package commons
 
 import (
 	"errors"

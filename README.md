@@ -60,7 +60,7 @@ Support `geosite` with `fallback-filter`.
    fallback-filter:
      geoip: false
      geosite:
-       - gfw  # `geosite` filter only use fallback server to resolve ip, prevent DNS leaks to unsafe DNS providers.
+       - gfw  # `geosite` filter only use fallback server to resolve ip, prevent DNS leaks to untrusted DNS providers.
      domain:
        - +.example.com
      ipcidr:
@@ -70,13 +70,15 @@ Support `geosite` with `fallback-filter`.
 ### TUN configuration
 Supports macOS, Linux and Windows.
 
-On Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into Clash home directory.
+On Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into the system32 directory.
 ```yaml
 # Enable the TUN listener
 tun:
   enable: true
-  stack: gvisor # system or gvisor
-  dns-listen: 0.0.0.0:53 # additional dns server listen on TUN
+  stack: gvisor # System or gVisor
+  # device: tun://utun8 # or fd://xxx, it's optional
+  dns-hijack: 
+    - 0.0.0.0:53 # hijack all
   auto-route: true # auto set global route
 ```
 ### Rules configuration
@@ -114,7 +116,7 @@ rules:
   #- GEOSITE,geolocation-!cn,REJECT,192.168.1.88/32,192.168.1.99/32
   
   - GEOIP,telegram,PROXY,no-resolve
-  - GEOIP,private,DIRECT,no-resolve
+  - GEOIP,lan,DIRECT,no-resolve
   - GEOIP,cn,DIRECT
 
   - MATCH,PROXY
