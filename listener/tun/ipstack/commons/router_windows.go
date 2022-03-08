@@ -1,7 +1,4 @@
-//go:build windows
-// +build windows
-
-package dev
+package commons
 
 import (
 	"bytes"
@@ -9,128 +6,27 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/Dreamacro/clash/listener/tun/dev/wintun"
+	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device/tun"
 	"github.com/Dreamacro/clash/log"
 
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
-const messageTransportHeaderSize = 0 // size of data preceding content in transport message
-
-type tunWindows struct {
-	wt        *wintun.Adapter
-	handle    windows.Handle
-	close     int32
-	running   sync.WaitGroup
-	forcedMTU int
-	rate      rateJuggler
-	session   wintun.Session
-	readWait  windows.Handle
-	closeOnce sync.Once
-
-	url        string
-	name       string
-	tunAddress string
-	autoRoute  bool
-}
-
-// OpenTunDevice return a TunDevice according a URL
-func OpenTunDevice(tunAddress string, autoRoute bool) (TunDevice, error) {
-
-	requestedGUID, err := windows.GUIDFromString("{330EAEF8-7578-5DF2-D97B-8DADC0EA85CB}")
+func GetAutoDetectInterface() (string, error) {
+	ifname, err := getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET))
 	if err == nil {
-		WintunStaticRequestedGUID = &requestedGUID
-		log.Debugln("Generate GUID: %s", WintunStaticRequestedGUID.String())
-	} else {
-		log.Warnln("Error parese GUID from string: %v", err)
+		return ifname, err
 	}
 
-	interfaceName := "Clash"
-	mtu := 9000
-
-	tun, err := CreateTUN(interfaceName, mtu, tunAddress, autoRoute)
-	if err != nil {
-		return nil, err
-	}
-
-	return tun, nil
+	return getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET6))
 }
 
-//
-// CreateTUN creates a Wintun interface with the given name. Should a Wintun
-// interface with the same name exist, it is reused.
-//
-func CreateTUN(ifname string, mtu int, tunAddress string, autoRoute bool) (TunDevice, error) {
-	return CreateTUNWithRequestedGUID(ifname, WintunStaticRequestedGUID, mtu, tunAddress, autoRoute)
-}
-
-//
-// CreateTUNWithRequestedGUID creates a Wintun interface with the given name and
-// a requested GUID. Should a Wintun interface with the same name exist, it is reused.
-//
-func CreateTUNWithRequestedGUID(ifname string, requestedGUID *windows.GUID, mtu int, tunAddress string, autoRoute bool) (TunDevice, error) {
-	wt, err := wintun.CreateAdapter(ifname, WintunTunnelType, requestedGUID)
-	if err != nil {
-		return nil, fmt.Errorf("Error creating interface: %w", err)
-	}
-
-	forcedMTU := 1420
-	if mtu > 0 {
-		forcedMTU = mtu
-	}
-
-	tun := &tunWindows{
-		name:       ifname,
-		wt:         wt,
-		handle:     windows.InvalidHandle,
-		forcedMTU:  forcedMTU,
-		tunAddress: tunAddress,
-		autoRoute:  autoRoute,
-	}
-
-	// config tun ip
-	err = tun.configureInterface()
-	if err != nil {
-		tun.wt.Close()
-		return nil, fmt.Errorf("Error configure interface: %w", err)
-	}
-
-	tun.session, err = wt.StartSession(0x800000) // Ring capacity, 8 MiB
-	if err != nil {
-		tun.wt.Close()
-		return nil, fmt.Errorf("Error starting session: %w", err)
-	}
-	tun.readWait = tun.session.ReadWaitEvent()
-	return tun, nil
-}
-
-func (tun *tunWindows) Name() string {
-	return tun.name
-}
-
-func (tun *tunWindows) IsClose() bool {
-	return atomic.LoadInt32(&tun.close) == 1
-}
-
-func (tun *tunWindows) Read(buff []byte) (int, error) {
-	return tun.Read0(buff, messageTransportHeaderSize)
-}
-
-func (tun *tunWindows) Write(buff []byte) (int, error) {
-	return tun.Write0(buff, messageTransportHeaderSize)
-}
-
-func (tun *tunWindows) URL() string {
-	return fmt.Sprintf("dev://%s", tun.Name())
-}
-
-func (tun *tunWindows) configureInterface() error {
-	retryOnFailure := wintun.StartedAtBoot()
+func ConfigInterfaceAddress(dev device.Device, addr *net.IPNet, forceMTU int, autoRoute bool) error {
+	retryOnFailure := StartedAtBoot()
 	tryTimes := 0
 startOver:
 	var err error
@@ -141,20 +37,22 @@ startOver:
 	}
 	tryTimes++
 
-	luid := winipcfg.LUID(tun.LUID())
-	log.Infoln("[wintun]: tun adapter LUID: %d", luid)
-	mtu, err := tun.MTU()
+	luid := winipcfg.LUID(dev.(*tun.TUN).LUID())
 
-	if err != nil {
-		return errors.New("unable to get device mtu")
+	if guid, err1 := luid.GUID(); err1 == nil {
+		log.Infoln("[wintun]: tun adapter GUID: %s", guid.String())
 	}
+
+	tunAddress := ParseIPCidr(addr.String())
+	addresses := []net.IPNet{tunAddress.IPNet()}
 
 	family := winipcfg.AddressFamily(windows.AF_INET)
 	familyV6 := winipcfg.AddressFamily(windows.AF_INET6)
 
-	tunAddress := wintun.ParseIPCidr(tun.tunAddress + "/16")
-
-	addresses := []net.IPNet{tunAddress.IPNet()}
+	currentFamily := winipcfg.AddressFamily(windows.AF_INET6)
+	if addr.IP.To4() != nil {
+		currentFamily = winipcfg.AddressFamily(windows.AF_INET)
+	}
 
 	err = luid.FlushIPAddresses(familyV6)
 	if err == windows.ERROR_NOT_FOUND && retryOnFailure {
@@ -184,19 +82,12 @@ startOver:
 	foundDefault4 := false
 	foundDefault6 := false
 
-	if tun.autoRoute {
-		allowedIPs := []*wintun.IPCidr{
-			//wintun.ParseIPCidr("0.0.0.0/0"),
-			wintun.ParseIPCidr("1.0.0.0/8"),
-			wintun.ParseIPCidr("2.0.0.0/7"),
-			wintun.ParseIPCidr("4.0.0.0/6"),
-			wintun.ParseIPCidr("8.0.0.0/5"),
-			wintun.ParseIPCidr("16.0.0.0/4"),
-			wintun.ParseIPCidr("32.0.0.0/3"),
-			wintun.ParseIPCidr("64.0.0.0/2"),
-			wintun.ParseIPCidr("128.0.0.0/1"),
-			wintun.ParseIPCidr("224.0.0.0/4"),
-			wintun.ParseIPCidr("255.255.255.255/32"),
+	if autoRoute {
+		allowedIPs := []*IPCidr{}
+		routeArr := append(ROUTES, "224.0.0.0/4", "255.255.255.255/32")
+
+		for _, route := range routeArr {
+			allowedIPs = append(allowedIPs, ParseIPCidr(route))
 		}
 
 		estimatedRouteCount := len(allowedIPs)
@@ -260,10 +151,10 @@ startOver:
 		}
 	}
 
-	err = luid.SetIPAddressesForFamily(family, addresses)
+	err = luid.SetIPAddressesForFamily(currentFamily, addresses)
 	if err == windows.ERROR_OBJECT_ALREADY_EXISTS {
-		cleanupAddressesOnDisconnectedInterfaces(family, addresses)
-		err = luid.SetIPAddressesForFamily(family, addresses)
+		cleanupAddressesOnDisconnectedInterfaces(currentFamily, addresses)
+		err = luid.SetIPAddressesForFamily(currentFamily, addresses)
 	}
 	if err == windows.ERROR_NOT_FOUND && retryOnFailure {
 		goto startOver
@@ -280,10 +171,10 @@ startOver:
 	ipif.DadTransmits = 0
 	ipif.ManagedAddressConfigurationSupported = false
 	ipif.OtherStatefulConfigurationSupported = false
-	if mtu > 0 {
-		ipif.NLMTU = uint32(mtu)
+	if forceMTU > 0 {
+		ipif.NLMTU = uint32(forceMTU)
 	}
-	if (family == windows.AF_INET && foundDefault4) || (family == windows.AF_INET6 && foundDefault6) {
+	if foundDefault4 {
 		ipif.UseAutomaticMetric = false
 		ipif.Metric = 0
 	}
@@ -303,7 +194,13 @@ startOver:
 	ipif6.DadTransmits = 0
 	ipif6.ManagedAddressConfigurationSupported = false
 	ipif6.OtherStatefulConfigurationSupported = false
-
+	if forceMTU > 0 {
+		ipif6.NLMTU = uint32(forceMTU)
+	}
+	if foundDefault6 {
+		ipif6.UseAutomaticMetric = false
+		ipif6.Metric = 0
+	}
 	err = ipif6.Set()
 	if err == windows.ERROR_NOT_FOUND && retryOnFailure {
 		goto startOver
@@ -351,16 +248,6 @@ func cleanupAddressesOnDisconnectedInterfaces(family winipcfg.AddressFamily, add
 			}
 		}
 	}
-}
-
-// GetAutoDetectInterface get ethernet interface
-func GetAutoDetectInterface() (string, error) {
-	ifname, err := getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET))
-	if err == nil {
-		return ifname, err
-	}
-
-	return getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET6))
 }
 
 func getAutoDetectInterfaceByFamily(family winipcfg.AddressFamily) (string, error) {

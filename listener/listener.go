@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 	"sync"
 
@@ -34,7 +33,7 @@ var (
 	tproxyUDPListener *tproxy.UDPListener
 	mixedListener     *mixed.Listener
 	mixedUDPLister    *socks.UDPListener
-	tunAdapter        ipstack.TunAdapter
+	tunStackListener  ipstack.Stack
 
 	// lock for recreate function
 	socksMux  sync.Mutex
@@ -63,18 +62,6 @@ func BindAddress() string {
 
 func SetAllowLan(al bool) {
 	allowLan = al
-}
-
-func Tun() config.Tun {
-	if tunAdapter == nil {
-		return config.Tun{}
-	}
-	return config.Tun{
-		Enable:    true,
-		Stack:     tunAdapter.Stack(),
-		DNSListen: tunAdapter.DNSListen(),
-		AutoRoute: tunAdapter.AutoRoute(),
-	}
 }
 
 func SetBindAddress(host string) {
@@ -320,30 +307,30 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(conf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
 
 	var err error
 	defer func() {
 		if err != nil {
-			log.Errorln("Start TUN interface error: %s", err.Error())
+			log.Errorln("Start TUN listening error: %s", err.Error())
 			os.Exit(2)
 		}
 	}()
 
-	if tunAdapter != nil {
-		tunAdapter.Close()
-		tunAdapter = nil
+	if tunStackListener != nil {
+		tunStackListener.Close()
+		tunStackListener = nil
 	}
 
-	if !conf.Enable {
+	if !tunConf.Enable {
 		return
 	}
 
-	tunAdapter, err = tun.New(conf, tcpIn, udpIn)
+	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
 	if err != nil {
-		log.Warnln("Failed to start TUN interface: %s", err.Error())
+		log.Warnln("Failed to start TUN listening: %s", err.Error())
 	}
 }
 
@@ -401,13 +388,4 @@ func genAddr(host string, port int, allowLan bool) string {
 	}
 
 	return fmt.Sprintf("127.0.0.1:%d", port)
-}
-
-// Cleanup clean up something
-func Cleanup() {
-	if runtime.GOOS == "windows" {
-		if tunAdapter != nil {
-			tunAdapter.Close()
-		}
-	}
 }

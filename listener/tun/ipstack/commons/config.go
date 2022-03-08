@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package wintun
+package commons
 
 import (
 	"fmt"
