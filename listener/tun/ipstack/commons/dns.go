@@ -1,7 +1,7 @@
 package commons
 
 import (
-	"net"
+	"net/netip"
 	"time"
 
 	"github.com/Dreamacro/clash/component/resolver"
@@ -11,17 +11,12 @@ import (
 
 const DefaultDnsReadTimeout = time.Second * 10
 
-func ShouldHijackDns(dnsAdds []net.IP, targetAddr net.IP, targetPort int) bool {
-	if targetPort != 53 {
-		return false
-	}
-
-	for _, ip := range dnsAdds {
-		if ip.IsUnspecified() || ip.Equal(targetAddr) {
+func ShouldHijackDns(dnsAdds []netip.AddrPort, targetAddr netip.AddrPort) bool {
+	for _, addrPort := range dnsAdds {
+		if addrPort == targetAddr || (addrPort.Addr().IsUnspecified() && targetAddr.Port() == 53) {
 			return true
 		}
 	}
-
 	return false
 }
 

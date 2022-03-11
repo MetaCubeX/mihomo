@@ -2,7 +2,7 @@ package commons
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/tun/device"
@@ -12,14 +12,14 @@ func GetAutoDetectInterface() (string, error) {
 	return cmd.ExecCmd("bash -c netstat -rnf inet | grep 'default' | awk -F ' ' 'NR==1{print $6}' | xargs echo -n")
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr *net.IPNet, forceMTU int, autoRoute bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
 	interfaceName := dev.Name()
-	if addr.IP.To4() == nil {
+	if !addr.Addr().Is4() {
 		return fmt.Errorf("supported ipv4 only")
 	}
 
-	ip := addr.IP.String()
-	netmask := IPv4MaskString(addr.Mask)
+	ip := addr.Addr()
+	netmask := IPv4MaskString(addr.Bits())
 	cmdStr := fmt.Sprintf("ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, ip)
 
 	_, err := cmd.ExecCmd(cmdStr)
@@ -27,10 +27,10 @@ func ConfigInterfaceAddress(dev device.Device, addr *net.IPNet, forceMTU int, au
 		return err
 	}
 
-	_, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
-	if err != nil {
-		return err
-	}
+	// _, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
+	// if err != nil {
+	//	return err
+	// }
 
 	if autoRoute {
 		err = configInterfaceRouting(interfaceName, addr)
@@ -38,7 +38,7 @@ func ConfigInterfaceAddress(dev device.Device, addr *net.IPNet, forceMTU int, au
 	return err
 }
 
-func configInterfaceRouting(interfaceName string, addr *net.IPNet) error {
+func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	routes := append(ROUTES, addr.String())
 
 	for _, route := range routes {
@@ -47,7 +47,8 @@ func configInterfaceRouting(interfaceName string, addr *net.IPNet) error {
 		}
 	}
 
-	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
+	// return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
+	return nil
 }
 
 func execRouterCmd(action, inet, route string, interfaceName string) error {

@@ -389,3 +389,9 @@ func genAddr(host string, port int, allowLan bool) string {
 
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
+
+func Cleanup() {
+	if tunStackListener != nil {
+		_ = tunStackListener.Close()
+	}
+}

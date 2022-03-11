@@ -2,7 +2,7 @@ package tun
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"net/url"
 	"runtime"
 	"strings"
@@ -28,7 +28,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 		devName = generateDeviceName()
 	}
 
-	tunAddrIPNet := &net.IPNet{IP: net.IP{198, 18, 0, 1}, Mask: net.CIDRMask(16, 32)}
+	tunAddress := netip.MustParsePrefix("198.18.0.1/16")
 	autoRoute := tunConf.AutoRoute
 	stackType := tunConf.Stack
 	mtu := 9000
@@ -71,7 +71,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 			return nil, fmt.Errorf("can't attach endpoint to tun: %w", err)
 		}
 
-		tunStack, err = system.New(tunDevice, tunConf.DNSHijack, tunAddrIPNet.IP, tcpIn, udpIn)
+		tunStack, err = system.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn)
 		if err != nil {
 			_ = tunDevice.Close()
 			return nil, fmt.Errorf("can't New system stack: %w", err)
@@ -81,7 +81,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 	}
 
 	// setting address and routing
-	err = commons.ConfigInterfaceAddress(tunDevice, tunAddrIPNet, mtu, autoRoute)
+	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute)
 	if err != nil {
 		_ = tunDevice.Close()
 		return nil, fmt.Errorf("setting interface address and routing failed: %w", err)
@@ -89,7 +89,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 
 	setAtLatest(stackType)
 
-	log.Infoln("TUN stack listening at: %s(%s), mtu: %d, auto route: %v, ip stack: %s", tunDevice.Name(), tunAddrIPNet.IP.String(), mtu, autoRoute, stackType)
+	log.Infoln("TUN stack listening at: %s(%s), mtu: %d, auto route: %v, ip stack: %s", tunDevice.Name(), tunAddress.Addr().String(), mtu, autoRoute, stackType)
 	return tunStack, nil
 }
 

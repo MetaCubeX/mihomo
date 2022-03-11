@@ -3,6 +3,7 @@ package gvisor
 import (
 	"encoding/binary"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -17,7 +18,7 @@ import (
 var _ adapter.Handler = (*GVHandler)(nil)
 
 type GVHandler struct {
-	DNSAdds []net.IP
+	DNSAdds []netip.AddrPort
 
 	TCPIn chan<- C.ConnContext
 	UDPIn chan<- *inbound.PacketAdapter
@@ -32,9 +33,12 @@ func (gh *GVHandler) HandleTCPConn(tunConn adapter.TCPConn) {
 		Zone: "",
 	}
 
-	if D.ShouldHijackDns(gh.DNSAdds, rAddr.IP, rAddr.Port) {
+	addrIp, _ := netip.AddrFromSlice(rAddr.IP)
+	addrPort := netip.AddrPortFrom(addrIp, id.LocalPort)
+
+	if D.ShouldHijackDns(gh.DNSAdds, addrPort) {
 		go func() {
-			log.Debugln("[TUN] hijack dns tcp: %s", rAddr.String())
+			log.Debugln("[TUN] hijack dns tcp: %s", addrPort.String())
 
 			defer tunConn.Close()
 
@@ -46,21 +50,21 @@ func (gh *GVHandler) HandleTCPConn(tunConn adapter.TCPConn) {
 
 				length := uint16(0)
 				if err := binary.Read(tunConn, binary.BigEndian, &length); err != nil {
-					return
+					break
 				}
 
 				if int(length) > len(buf) {
-					return
+					break
 				}
 
 				n, err := tunConn.Read(buf[:length])
 				if err != nil {
-					return
+					break
 				}
 
 				msg, err := D.RelayDnsPacket(buf[:n])
 				if err != nil {
-					return
+					break
 				}
 
 				_, _ = tunConn.Write(msg)
@@ -82,6 +86,8 @@ func (gh *GVHandler) HandleUDPConn(tunConn adapter.UDPConn) {
 		Zone: "",
 	}
 
+	addrIp, _ := netip.AddrFromSlice(rAddr.IP)
+	addrPort := netip.AddrPortFrom(addrIp, id.LocalPort)
 	target := socks5.ParseAddrToSocksAddr(rAddr)
 
 	go func() {
@@ -91,12 +97,12 @@ func (gh *GVHandler) HandleUDPConn(tunConn adapter.UDPConn) {
 			n, addr, err := tunConn.ReadFrom(buf)
 			if err != nil {
 				pool.Put(buf)
-				return
+				break
 			}
 
 			payload := buf[:n]
 
-			if D.ShouldHijackDns(gh.DNSAdds, rAddr.IP, rAddr.Port) {
+			if D.ShouldHijackDns(gh.DNSAdds, addrPort) {
 				go func() {
 					defer pool.Put(buf)
 
