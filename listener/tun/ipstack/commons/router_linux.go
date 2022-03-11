@@ -2,7 +2,7 @@ package commons
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/tun/device"
@@ -12,7 +12,7 @@ func GetAutoDetectInterface() (string, error) {
 	return cmd.ExecCmd("bash -c ip route show | grep 'default via' | awk -F ' ' 'NR==1{print $5}' | xargs echo -n")
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr *net.IPNet, forceMTU int, autoRoute bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
 	interfaceName := dev.Name()
 	_, err := cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", addr.String(), interfaceName))
 	if err != nil {
@@ -30,9 +30,9 @@ func ConfigInterfaceAddress(dev device.Device, addr *net.IPNet, forceMTU int, au
 	return err
 }
 
-func configInterfaceRouting(interfaceName string, addr *net.IPNet) error {
+func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	for _, route := range ROUTES {
-		if err := execRouterCmd("add", route, interfaceName, addr.IP.String()); err != nil {
+		if err := execRouterCmd("add", route, interfaceName, addr.Addr().String()); err != nil {
 			return err
 		}
 	}

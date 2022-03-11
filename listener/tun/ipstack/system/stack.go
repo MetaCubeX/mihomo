@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -35,9 +36,10 @@ func (s sysStack) Close() error {
 	return nil
 }
 
-var _, ipv4LoopBack, _ = net.ParseCIDR("127.0.0.0/8")
+var ipv4LoopBack = netip.MustParsePrefix("127.0.0.0/8")
 
-func New(device device.Device, dnsHijack []net.IP, portal net.IP, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+	portal := tunAddress.Addr()
 	gateway := portal
 
 	stack, err := tun2socket.StartTun2Socket(device, gateway, portal)
@@ -64,15 +66,18 @@ func New(device device.Device, dnsHijack []net.IP, portal net.IP, tcpIn chan<- C
 			lAddr := conn.LocalAddr().(*net.TCPAddr)
 			rAddr := conn.RemoteAddr().(*net.TCPAddr)
 
-			if ipv4LoopBack.Contains(rAddr.IP) {
+			addrIp, _ := netip.AddrFromSlice(rAddr.IP)
+			addrPort := netip.AddrPortFrom(addrIp, uint16(rAddr.Port))
+
+			if ipv4LoopBack.Contains(addrIp) {
 				conn.Close()
 
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, rAddr.IP, rAddr.Port) {
+			if D.ShouldHijackDns(dnsAddr, addrPort) {
 				go func() {
-					log.Debugln("[TUN] hijack dns tcp: %s", rAddr.String())
+					log.Debugln("[TUN] hijack dns tcp: %s", addrPort.String())
 
 					defer conn.Close()
 
@@ -84,21 +89,21 @@ func New(device device.Device, dnsHijack []net.IP, portal net.IP, tcpIn chan<- C
 
 						length := uint16(0)
 						if err := binary.Read(conn, binary.BigEndian, &length); err != nil {
-							return
+							break
 						}
 
 						if int(length) > len(buf) {
-							return
+							break
 						}
 
 						n, err := conn.Read(buf[:length])
 						if err != nil {
-							return
+							break
 						}
 
 						msg, err := D.RelayDnsPacket(buf[:n])
 						if err != nil {
-							return
+							break
 						}
 
 						_, _ = conn.Write(msg)
@@ -139,13 +144,16 @@ func New(device device.Device, dnsHijack []net.IP, portal net.IP, tcpIn chan<- C
 			lAddr := lRAddr.(*net.UDPAddr)
 			rAddr := rRAddr.(*net.UDPAddr)
 
-			if ipv4LoopBack.Contains(rAddr.IP) {
+			addrIp, _ := netip.AddrFromSlice(rAddr.IP)
+			addrPort := netip.AddrPortFrom(addrIp, uint16(rAddr.Port))
+
+			if ipv4LoopBack.Contains(addrIp) {
 				pool.Put(buf)
 
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, rAddr.IP, rAddr.Port) {
+			if D.ShouldHijackDns(dnsAddr, addrPort) {
 				go func() {
 					defer pool.Put(buf)
 
@@ -156,7 +164,7 @@ func New(device device.Device, dnsHijack []net.IP, portal net.IP, tcpIn chan<- C
 
 					_, _ = stack.UDP().WriteTo(msg, rAddr, lAddr)
 
-					log.Debugln("[TUN] hijack dns udp: %s", rAddr.String())
+					log.Debugln("[TUN] hijack dns udp: %s", addrPort.String())
 				}()
 
 				continue

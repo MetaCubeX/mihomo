@@ -11,8 +11,11 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v2
+        #with:
+        #  go-version: ${{ steps.version.outputs.go_version }}
         with:
-          go-version: ${{ steps.version.outputs.go_version }}
+          go-version: 1.18.0-rc1
+          stable: false
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3

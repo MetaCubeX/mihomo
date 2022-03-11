@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.17
+go 1.18
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7
@@ -25,13 +25,13 @@ require (
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	golang.zx2c4.com/wireguard v0.0.0-20220202223031-3b95c81cc178
-	golang.zx2c4.com/wireguard/windows v0.5.1
+	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220201002028-22d54a5eb477
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220308041304-8e3b9b36c99e
+	gvisor.dev/gvisor v0.0.0-20220311014831-b314d81fbac7
 )
 
-replace github.com/Kr328/tun2socket => github.com/yaling888/tun2socket v0.0.0-20220308132430-288573ddac86
+replace github.com/Kr328/tun2socket => github.com/yaling888/tun2socket v0.0.0-20220311175825-946fa2efc456
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -41,7 +41,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
 	golang.org/x/mod v0.5.1 // indirect
-	golang.org/x/text v0.3.8-0.20211105212822-18b340fc7af2 // indirect
+	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
 	golang.org/x/tools v0.1.9 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect

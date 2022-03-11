@@ -304,6 +304,7 @@ func updateIPTables(dns *config.DNS, tProxyPort int, interfaceName string, tunEn
 }
 
 func Cleanup() {
+	P.Cleanup()
 	if runtime.GOOS == "linux" {
 		tproxy.CleanUpTProxyLinuxIPTables()
 	}

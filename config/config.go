@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"runtime"
@@ -92,11 +93,11 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable    bool       `yaml:"enable" json:"enable"`
-	Device    string     `yaml:"device" json:"device"`
-	Stack     C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack []net.IP   `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute bool       `yaml:"auto-route" json:"auto-route"`
+	Enable    bool             `yaml:"enable" json:"enable"`
+	Device    string           `yaml:"device" json:"device"`
+	Stack     C.TUNStack       `yaml:"stack" json:"stack"`
+	DNSHijack []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute bool             `yaml:"auto-route" json:"auto-route"`
 }
 
 // Experimental config
@@ -564,6 +565,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 				Net:          dnsNetType,
 				Addr:         addr,
 				ProxyAdapter: u.Fragment,
+				Interface:    dialer.DefaultInterface.Load(),
 			},
 		)
 	}
@@ -756,19 +758,19 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		general.Interface = autoDetectInterfaceName
 	}
 
-	var dnsHijack []net.IP
+	var dnsHijack []netip.AddrPort
+
 	for _, dns := range rawTun.DNSHijack {
-		host, _, err := net.SplitHostPort(dns)
+		if _, after, ok := strings.Cut(dns, "://"); ok {
+			dns = after
+		}
+
+		addrPort, err := netip.ParseAddrPort(dns)
 		if err != nil {
-			return nil, fmt.Errorf("dns-hijack error: %w", err)
+			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
 		}
 
-		ip := net.ParseIP(host)
-		if ip == nil {
-			return nil, fmt.Errorf("dns-hijack error: invaid host format")
-		}
-
-		dnsHijack = append(dnsHijack, ip)
+		dnsHijack = append(dnsHijack, addrPort)
 	}
 
 	return &Tun{

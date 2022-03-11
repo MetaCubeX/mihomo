@@ -64,11 +64,11 @@ func (t *TUN) Read(packet []byte) (int, error) {
 		return t.nt.Read(packet, t.offset)
 	}
 
-	buff := make([]byte, t.offset+int(t.mtu))
+	buff := make([]byte, t.offset+cap(packet))
 
 	n, err := t.nt.Read(buff, t.offset)
 	if err != nil {
-		return n, err
+		return 0, err
 	}
 
 	copy(packet, buff[t.offset:t.offset+n])
