@@ -34,6 +34,10 @@ func (d *Domain) ShouldResolveIP() bool {
 	return false
 }
 
+func (d *Domain) ShouldFindProcess() bool {
+	return false
+}
+
 func NewDomain(domain string, adapter string) *Domain {
 	return &Domain{
 		domain:  strings.ToLower(domain),

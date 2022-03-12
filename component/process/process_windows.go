@@ -3,7 +3,6 @@ package process
 import (
 	"fmt"
 	"net"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -220,5 +219,5 @@ func getExecPathFromPID(pid uint32) (string, error) {
 	if r1 == 0 {
 		return "", err
 	}
-	return filepath.Base(syscall.UTF16ToString(buf[:size])), nil
+	return syscall.UTF16ToString(buf[:size]), nil
 }

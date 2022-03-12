@@ -54,6 +54,10 @@ func (i *IPCIDR) ShouldResolveIP() bool {
 	return !i.noResolveIP
 }
 
+func (i *IPCIDR) ShouldFindProcess() bool {
+	return false
+}
+
 func NewIPCIDR(s string, adapter string, opts ...IPCIDROption) (*IPCIDR, error) {
 	_, ipnet, err := net.ParseCIDR(s)
 	if err != nil {

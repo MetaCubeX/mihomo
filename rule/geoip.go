@@ -42,6 +42,10 @@ func (g *GEOIP) ShouldResolveIP() bool {
 	return !g.noResolveIP
 }
 
+func (g *GEOIP) ShouldFindProcess() bool {
+	return false
+}
+
 func NewGEOIP(country string, adapter string, noResolveIP bool) *GEOIP {
 	geoip := &GEOIP{
 		country:     country,

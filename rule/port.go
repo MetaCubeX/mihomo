@@ -38,6 +38,10 @@ func (p *Port) ShouldResolveIP() bool {
 	return false
 }
 
+func (p *Port) ShouldFindProcess() bool {
+	return false
+}
+
 func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 	_, err := strconv.ParseUint(port, 10, 16)
 	if err != nil {

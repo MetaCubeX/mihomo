@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"unicode"
@@ -68,9 +67,8 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 	}
 	defer syscall.Close(socket)
 
-	syscall.SetNonblock(socket, true)
-	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 50})
-	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 50})
+	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 100})
+	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 100})
 
 	if err := syscall.Connect(socket, &syscall.SockaddrNetlink{
 		Family: syscall.AF_NETLINK,
@@ -198,25 +196,12 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 			}
 
 			if bytes.Equal(buffer[:n], socket) {
-				cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
-				if err != nil {
-					return "", err
-				}
-
-				return splitCmdline(cmdline), nil
+				return os.Readlink(path.Join(processPath, "exe"))
 			}
 		}
 	}
 
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
-}
-
-func splitCmdline(cmdline []byte) string {
-	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r)
-	})
-
-	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {
