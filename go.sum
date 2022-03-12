@@ -69,8 +69,6 @@ github.com/u-root/uio v0.0.0-20210528114334-82958018845c h1:BFvcl34IGnw8yvJi8hlq
 github.com/u-root/uio v0.0.0-20210528114334-82958018845c/go.mod h1:LpEX5FO/cB+WF4TYGY1V5qktpaZLkKkSegbr0V4eYXA=
 github.com/xtls/go v0.0.0-20210920065950-d4af136d3672 h1:4mkzGhKqt3JO1BWYjtD3iRFyAx4ow67hmSqOcGjuxqQ=
 github.com/xtls/go v0.0.0-20210920065950-d4af136d3672/go.mod h1:YGGVbz9cOxyKFUmhW7LGaLZaMA0cPlHJinvAmVxEMSU=
-github.com/yaling888/tun2socket v0.0.0-20220311175825-946fa2efc456 h1:nQJinYmzP/QPw3ZUMUx1kktQe3krU+aIXtq/zTAzy5k=
-github.com/yaling888/tun2socket v0.0.0-20220311175825-946fa2efc456/go.mod h1:S+eXY++0DlzcTSRC3nyKJtboVNPZpwvGG/W5/kuvTl0=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 go.etcd.io/bbolt v1.3.6 h1:/ecaJf0sk1l4l6V4awd65v2C3ILy7MSj+s/x1ADCIMU=
 go.etcd.io/bbolt v1.3.6/go.mod h1:qXsaaIqmgQH0T+OPdb99Bf+PKfBBQVAdyD6TY9G8XM4=

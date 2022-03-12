@@ -12,40 +12,48 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed   C.Rule
 	)
 
+	switch tp {
+	case "DOMAIN":
+		parsed = NewDomain(payload, target)
+	case "DOMAIN-SUFFIX":
+		parsed = NewDomainSuffix(payload, target)
+	case "DOMAIN-KEYWORD":
+		parsed = NewDomainKeyword(payload, target)
+	case "GEOSITE":
+		parsed, parseErr = NewGEOSITE(payload, target)
+	case "GEOIP":
+		noResolve := HasNoResolve(params)
+		parsed = NewGEOIP(payload, target, noResolve)
+	case "IP-CIDR", "IP-CIDR6":
+		noResolve := HasNoResolve(params)
+		parsed, parseErr = NewIPCIDR(payload, target, WithIPCIDRNoResolve(noResolve))
+	case "SRC-IP-CIDR":
+		parsed, parseErr = NewIPCIDR(payload, target, WithIPCIDRSourceIP(true), WithIPCIDRNoResolve(true))
+	case "SRC-PORT":
+		parsed, parseErr = NewPort(payload, target, true)
+	case "DST-PORT":
+		parsed, parseErr = NewPort(payload, target, false)
+	case "PROCESS-NAME":
+		parsed, parseErr = NewProcess(payload, target, true)
+	case "PROCESS-PATH":
+		parsed, parseErr = NewProcess(payload, target, false)
+	case "MATCH":
+		parsed = NewMatch(target)
+	default:
+		parseErr = fmt.Errorf("unsupported rule type %s", tp)
+	}
+
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
 	ruleExtra := &C.RuleExtra{
 		Network:      findNetwork(params),
 		SourceIPs:    findSourceIPs(params),
 		ProcessNames: findProcessName(params),
 	}
 
-	switch tp {
-	case "DOMAIN":
-		parsed = NewDomain(payload, target, ruleExtra)
-	case "DOMAIN-SUFFIX":
-		parsed = NewDomainSuffix(payload, target, ruleExtra)
-	case "DOMAIN-KEYWORD":
-		parsed = NewDomainKeyword(payload, target, ruleExtra)
-	case "GEOSITE":
-		parsed, parseErr = NewGEOSITE(payload, target, ruleExtra)
-	case "GEOIP":
-		noResolve := HasNoResolve(params)
-		parsed, parseErr = NewGEOIP(payload, target, noResolve, ruleExtra)
-	case "IP-CIDR", "IP-CIDR6":
-		noResolve := HasNoResolve(params)
-		parsed, parseErr = NewIPCIDR(payload, target, ruleExtra, WithIPCIDRNoResolve(noResolve))
-	case "SRC-IP-CIDR":
-		parsed, parseErr = NewIPCIDR(payload, target, ruleExtra, WithIPCIDRSourceIP(true), WithIPCIDRNoResolve(true))
-	case "SRC-PORT":
-		parsed, parseErr = NewPort(payload, target, true, ruleExtra)
-	case "DST-PORT":
-		parsed, parseErr = NewPort(payload, target, false, ruleExtra)
-	case "PROCESS-NAME":
-		parsed, parseErr = NewProcess(payload, target, ruleExtra)
-	case "MATCH":
-		parsed = NewMatch(target, ruleExtra)
-	default:
-		parseErr = fmt.Errorf("unsupported rule type %s", tp)
-	}
+	parsed.SetRuleExtra(ruleExtra)
 
-	return parsed, parseErr
+	return parsed, nil
 }

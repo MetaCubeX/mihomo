@@ -439,7 +439,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 		var (
 			payload  string
 			target   string
-			params   = []string{}
+			params   []string
 			ruleName = strings.ToUpper(rule[0])
 		)
 
@@ -456,6 +456,12 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 			payload = rule[1]
 			target = rule[2]
 		case l >= 4:
+			if ruleName == "MATCH" {
+				payload = ""
+				target = rule[1]
+				params = rule[2:]
+				break
+			}
 			payload = rule[1]
 			target = rule[2]
 			params = rule[3:]

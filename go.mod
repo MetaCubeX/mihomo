@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7
-	github.com/Kr328/tun2socket v0.0.0-20211231120722-962f339492e8
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.0
 	github.com/go-chi/render v1.0.1
@@ -30,8 +29,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gvisor.dev/gvisor v0.0.0-20220311014831-b314d81fbac7
 )
-
-replace github.com/Kr328/tun2socket => github.com/yaling888/tun2socket v0.0.0-20220311175825-946fa2efc456
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

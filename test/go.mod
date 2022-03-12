@@ -1,6 +1,6 @@
 module clash-test
 
-go 1.17
+go 1.18
 
 require (
 	github.com/Dreamacro/clash v1.7.2-0.20211108085948-bd2ea2b917aa
@@ -15,7 +15,6 @@ replace github.com/Dreamacro/clash => ../
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7 // indirect
-	github.com/Kr328/tun2socket v0.0.0-20211231120722-962f339492e8 // indirect
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/containerd/containerd v1.5.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
