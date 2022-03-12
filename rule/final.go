@@ -5,8 +5,8 @@ import (
 )
 
 type Match struct {
-	adapter   string
-	ruleExtra *C.RuleExtra
+	*Base
+	adapter string
 }
 
 func (f *Match) RuleType() C.RuleType {
@@ -29,16 +29,11 @@ func (f *Match) ShouldResolveIP() bool {
 	return false
 }
 
-func (f *Match) RuleExtra() *C.RuleExtra {
-	return f.ruleExtra
+func NewMatch(adapter string) *Match {
+	return &Match{
+		Base:    &Base{},
+		adapter: adapter,
+	}
 }
 
-func NewMatch(adapter string, ruleExtra *C.RuleExtra) *Match {
-	if ruleExtra.SourceIPs == nil {
-		ruleExtra = nil
-	}
-	return &Match{
-		adapter:   adapter,
-		ruleExtra: ruleExtra,
-	}
-}
+var _ C.Rule = (*Match)(nil)

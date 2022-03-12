@@ -14,6 +14,22 @@ var (
 	noResolve = "no-resolve"
 )
 
+type Base struct {
+	ruleExtra *C.RuleExtra
+}
+
+func (b *Base) RuleExtra() *C.RuleExtra {
+	return b.ruleExtra
+}
+
+func (b *Base) SetRuleExtra(re *C.RuleExtra) {
+	b.ruleExtra = re
+}
+
+func (b *Base) ShouldFindProcess() bool {
+	return false
+}
+
 func HasNoResolve(params []string) bool {
 	for _, p := range params {
 		if p == noResolve {

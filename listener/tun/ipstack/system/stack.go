@@ -15,10 +15,9 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
-
-	"github.com/Kr328/tun2socket"
 )
 
 type sysStack struct {
@@ -42,7 +41,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 	portal := tunAddress.Addr()
 	gateway := portal
 
-	stack, err := tun2socket.StartTun2Socket(device, gateway, portal)
+	stack, err := mars.StartListener(device, gateway, portal)
 	if err != nil {
 		_ = device.Close()
 
@@ -66,18 +65,18 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			lAddr := conn.LocalAddr().(*net.TCPAddr)
 			rAddr := conn.RemoteAddr().(*net.TCPAddr)
 
-			addrIp, _ := netip.AddrFromSlice(rAddr.IP)
-			addrPort := netip.AddrPortFrom(addrIp, uint16(rAddr.Port))
+			rAddrIp, _ := netip.AddrFromSlice(rAddr.IP)
+			rAddrPort := netip.AddrPortFrom(rAddrIp, uint16(rAddr.Port))
 
-			if ipv4LoopBack.Contains(addrIp) {
+			if ipv4LoopBack.Contains(rAddrIp) {
 				conn.Close()
 
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, addrPort) {
+			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
-					log.Debugln("[TUN] hijack dns tcp: %s", addrPort.String())
+					log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
 
 					defer conn.Close()
 
@@ -144,16 +143,16 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			lAddr := lRAddr.(*net.UDPAddr)
 			rAddr := rRAddr.(*net.UDPAddr)
 
-			addrIp, _ := netip.AddrFromSlice(rAddr.IP)
-			addrPort := netip.AddrPortFrom(addrIp, uint16(rAddr.Port))
+			rAddrIp, _ := netip.AddrFromSlice(rAddr.IP)
+			rAddrPort := netip.AddrPortFrom(rAddrIp, uint16(rAddr.Port))
 
-			if ipv4LoopBack.Contains(addrIp) {
+			if ipv4LoopBack.Contains(rAddrIp) {
 				pool.Put(buf)
 
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, addrPort) {
+			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
 					defer pool.Put(buf)
 
@@ -164,7 +163,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 					_, _ = stack.UDP().WriteTo(msg, rAddr, lAddr)
 
-					log.Debugln("[TUN] hijack dns udp: %s", addrPort.String())
+					log.Debugln("[TUN] hijack dns udp: %s", rAddrPort.String())
 				}()
 
 				continue

@@ -4,7 +4,7 @@ linters:
     - gofumpt
     - megacheck
     - govet
-    - gci
+#    - gci
 
 linters-settings:
   gci:

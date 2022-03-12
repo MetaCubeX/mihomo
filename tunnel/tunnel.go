@@ -4,18 +4,20 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
+	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	icontext "github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rule"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 )
 
@@ -33,9 +35,6 @@ var (
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
-
-	// a default rule type of process, use to pre resolve process name
-	defaultProcessRule, _ = R.NewProcess("", "", nil)
 )
 
 func init() {
@@ -151,7 +150,17 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	}
 
 	// pre resolve process name
-	defaultProcessRule.Match(metadata)
+	srcPort, err := strconv.Atoi(metadata.SrcPort)
+	if err == nil && P.ShouldFindProcess(metadata) {
+		path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
+		if err != nil {
+			log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+		} else {
+			log.Debugln("[Process] %s from process %s", metadata.String(), path)
+			metadata.Process = filepath.Base(path)
+			metadata.ProcessPath = path
+		}
+	}
 
 	return nil
 }

@@ -20,6 +20,9 @@ jobs:
           stable: false
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
+        #uses: golangci/golangci-lint-action@v3
+        #with:
+        #  version: latest
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@93a0015
+          golangci-lint run ./...
