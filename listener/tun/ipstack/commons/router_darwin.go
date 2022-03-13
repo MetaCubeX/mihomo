@@ -13,14 +13,18 @@ func GetAutoDetectInterface() (string, error) {
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
-	interfaceName := dev.Name()
 	if !addr.Addr().Is4() {
 		return fmt.Errorf("supported ipv4 only")
 	}
 
-	ip := addr.Addr()
-	netmask := IPv4MaskString(addr.Bits())
-	cmdStr := fmt.Sprintf("ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, ip)
+	var (
+		interfaceName = dev.Name()
+		ip            = addr.Masked().Addr().Next()
+		gw            = addr.Addr()
+		netmask       = IPv4MaskString(addr.Bits())
+	)
+
+	cmdStr := fmt.Sprintf("ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, gw)
 
 	_, err := cmd.ExecCmd(cmdStr)
 	if err != nil {

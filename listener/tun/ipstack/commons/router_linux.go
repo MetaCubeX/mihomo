@@ -13,8 +13,12 @@ func GetAutoDetectInterface() (string, error) {
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
-	interfaceName := dev.Name()
-	_, err := cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", addr.String(), interfaceName))
+	var (
+		interfaceName = dev.Name()
+		ip            = addr.Masked().Addr().Next()
+	)
+
+	_, err := cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", ip.String(), interfaceName))
 	if err != nil {
 		return err
 	}
@@ -31,8 +35,9 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 }
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
+	linkIP := addr.Masked().Addr().Next()
 	for _, route := range ROUTES {
-		if err := execRouterCmd("add", route, interfaceName, addr.Addr().String()); err != nil {
+		if err := execRouterCmd("add", route, interfaceName, linkIP.String()); err != nil {
 			return err
 		}
 	}
