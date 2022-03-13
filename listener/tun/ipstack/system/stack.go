@@ -38,8 +38,10 @@ func (s sysStack) Close() error {
 var ipv4LoopBack = netip.MustParsePrefix("127.0.0.0/8")
 
 func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
-	portal := tunAddress.Addr()
-	gateway := portal
+	var (
+		portal  = tunAddress.Addr()
+		gateway = tunAddress.Masked().Addr().Next()
+	)
 
 	stack, err := mars.StartListener(device, gateway, portal)
 	if err != nil {

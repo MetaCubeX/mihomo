@@ -40,12 +40,15 @@ startOver:
 		log.Infoln("[wintun]: tun adapter GUID: %s", guid.String())
 	}
 
-	addresses := []netip.Prefix{addr}
+	var (
+		ip        = addr.Masked().Addr().Next()
+		addresses = []netip.Prefix{netip.PrefixFrom(ip, addr.Bits())}
 
-	family := winipcfg.AddressFamily(windows.AF_INET)
-	familyV6 := winipcfg.AddressFamily(windows.AF_INET6)
+		family4       = winipcfg.AddressFamily(windows.AF_INET)
+		familyV6      = winipcfg.AddressFamily(windows.AF_INET6)
+		currentFamily = winipcfg.AddressFamily(windows.AF_INET6)
+	)
 
-	currentFamily := winipcfg.AddressFamily(windows.AF_INET6)
 	if addr.Addr().Is4() {
 		currentFamily = winipcfg.AddressFamily(windows.AF_INET)
 	}
@@ -114,7 +117,14 @@ startOver:
 			deduplicatedRoutes = append(deduplicatedRoutes, &r)
 		}
 
-		err = luid.SetRoutesForFamily(family, deduplicatedRoutes)
+		// append the gateway
+		deduplicatedRoutes = append(deduplicatedRoutes, &winipcfg.RouteData{
+			Destination: addr.Masked(),
+			NextHop:     addr.Addr(),
+			Metric:      0,
+		})
+
+		err = luid.SetRoutesForFamily(currentFamily, deduplicatedRoutes)
 		if err == windows.ERROR_NOT_FOUND && retryOnFailure {
 			goto startOver
 		} else if err != nil {
@@ -134,7 +144,7 @@ startOver:
 	}
 
 	var ipif *winipcfg.MibIPInterfaceRow
-	ipif, err = luid.IPInterface(family)
+	ipif, err = luid.IPInterface(family4)
 	if err != nil {
 		return err
 	}
@@ -181,7 +191,7 @@ startOver:
 	}
 
 	dnsAdds := []netip.Addr{netip.MustParseAddr("198.18.0.2")}
-	err = luid.SetDNS(family, dnsAdds, nil)
+	err = luid.SetDNS(family4, dnsAdds, nil)
 	if err == windows.ERROR_NOT_FOUND && retryOnFailure {
 		goto startOver
 	} else if err != nil {

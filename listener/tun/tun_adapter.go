@@ -28,7 +28,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 		devName = generateDeviceName()
 	}
 
-	tunAddress := netip.MustParsePrefix("198.18.0.1/16")
+	tunAddress := netip.MustParsePrefix("198.18.255.254/16")
 	autoRoute := tunConf.AutoRoute
 	stackType := tunConf.Stack
 	mtu := 9000
@@ -87,9 +87,9 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 		return nil, fmt.Errorf("setting interface address and routing failed: %w", err)
 	}
 
-	setAtLatest(stackType)
+	setAtLatest(stackType, devName)
 
-	log.Infoln("TUN stack listening at: %s(%s), mtu: %d, auto route: %v, ip stack: %s", tunDevice.Name(), tunAddress.Addr().String(), mtu, autoRoute, stackType)
+	log.Infoln("TUN stack listening at: %s(%s), mtu: %d, auto route: %v, ip stack: %s", tunDevice.Name(), tunAddress.Masked().Addr().Next().String(), mtu, autoRoute, stackType)
 	return tunStack, nil
 }
 
@@ -127,7 +127,7 @@ func parseDevice(s string, mtu uint32) (device.Device, error) {
 	}
 }
 
-func setAtLatest(stackType C.TUNStack) {
+func setAtLatest(stackType C.TUNStack, devName string) {
 	if stackType != C.TunSystem {
 		return
 	}
@@ -137,6 +137,18 @@ func setAtLatest(stackType C.TUNStack) {
 		_, _ = cmd.ExecCmd("ipconfig /renew")
 	case "linux":
 		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.ip_forward=1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.all.forwarding = 1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.all.accept_local = 1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.all.accept_redirects = 1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.all.rp_filter = 2")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.default.forwarding = 1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.default.accept_local = 1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.default.accept_redirects = 1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.default.rp_filter = 2")
+		// _, _ = cmd.ExecCmd(fmt.Sprintf("sysctl -w net.ipv4.conf.%s.forwarding = 1", devName))
+		// _, _ = cmd.ExecCmd(fmt.Sprintf("sysctl -w net.ipv4.conf.%s.accept_local = 1", devName))
+		// _, _ = cmd.ExecCmd(fmt.Sprintf("sysctl -w net.ipv4.conf.%s.accept_redirects = 1", devName))
+		// _, _ = cmd.ExecCmd(fmt.Sprintf("sysctl -w net.ipv4.conf.%s.rp_filter = 2", devName))
 		// _, _ = cmd.ExecCmd("iptables -t filter -P FORWARD ACCEPT")
 	}
 }
