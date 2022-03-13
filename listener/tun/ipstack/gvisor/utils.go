@@ -2,6 +2,9 @@ package gvisor
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/log"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"net"
 
 	"github.com/Dreamacro/clash/component/resolver"
@@ -40,8 +43,15 @@ func (c *fakeConn) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		localPort = uint16(udpaddr.Port)
 	}
 
-	r, _ := c.s.FindRoute(c.pkt.NICID, localAddress, c.id.RemoteAddress, c.pkt.NetworkProtocolNumber, false /* multicastLoop */)
-	return writeUDP(r, data, localPort, c.id.RemotePort)
+	if !c.pkt.NetworkHeader().View().IsEmpty() &&
+		(c.pkt.NetworkProtocolNumber == ipv4.ProtocolNumber ||
+			c.pkt.NetworkProtocolNumber == ipv6.ProtocolNumber) {
+		r, _ := c.s.FindRoute(c.pkt.NICID, localAddress, c.id.RemoteAddress, c.pkt.NetworkProtocolNumber, false /* multicastLoop */)
+		return writeUDP(r, data, localPort, c.id.RemotePort)
+	} else {
+		log.Debugln("the network protocl[%d] is not available", c.pkt.NetworkProtocolNumber)
+		return 0, fmt.Errorf("the network protocl[%d] is not available", c.pkt.NetworkProtocolNumber)
+	}
 }
 
 func (c *fakeConn) LocalAddr() net.Addr {
