@@ -92,7 +92,8 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tcpIn chan<- C.ConnContex
 			r.Complete(true)
 			return
 		}
-		r.Complete(false)
+
+		defer r.Complete(false)
 
 		conn := gonet.NewTCPConn(&wq, ep)
 
@@ -107,6 +108,7 @@ func NewAdapter(device dev.TunDevice, conf config.Tun, tcpIn chan<- C.ConnContex
 		target := getAddr(ep.Info().(*stack.TransportEndpointInfo).ID)
 		tcpIn <- inbound.NewSocket(target, conn, C.TUN)
 	})
+
 	ipstack.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpFwd.HandlePacket)
 
 	// UDP handler
@@ -194,6 +196,7 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 				log.Errorln("can not read from tun: %v", err)
 				continue
 			}
+
 			var p tcpip.NetworkProtocolNumber
 			switch header.IPVersion(packet) {
 			case header.IPv4Version:
@@ -204,14 +207,20 @@ func (t *gvisorAdapter) AsLinkEndpoint() (result stack.LinkEndpoint, err error) 
 				log.Warnln("invalid IP version:%d", header.IPVersion(packet))
 				continue
 			}
+
 			if linkEP.IsAttached() {
-				linkEP.InjectInbound(p, stack.NewPacketBuffer(stack.PacketBufferOptions{
+				pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
 					Data: buffer.View(packet[:n]).ToVectorisedView(),
-				}))
+				})
+
+				linkEP.InjectInbound(p, pkt)
+				// release memory
+				pkt.DecRef()
 			} else {
 				log.Debugln("received packet from tun when %s is not attached to any dispatcher.", t.device.Name())
 			}
 		}
+
 		t.wg.Done()
 		t.Close()
 		log.Debugln("%v stop read loop", t.device.Name())
