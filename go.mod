@@ -14,6 +14,7 @@ require (
 	github.com/kr328/tun2socket v0.0.0-20210412191540-3d56c47e2d99
 	github.com/lucas-clemente/quic-go v0.25.0
 	github.com/miekg/dns v1.1.45
+	github.com/oschwald/geoip2-golang v1.6.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
@@ -42,6 +43,7 @@ require (
 	github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
+	github.com/oschwald/maxminddb-golang v1.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
 	golang.org/x/mod v0.4.2 // indirect
