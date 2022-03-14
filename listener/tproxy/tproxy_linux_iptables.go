@@ -3,11 +3,11 @@ package tproxy
 import (
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/component/dialer"
 	"os/exec"
 	"runtime"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/log"
 )
 

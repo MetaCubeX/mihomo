@@ -242,6 +242,9 @@ func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
 		return
 	}
 
+	geodataLoader := general.GeodataLoader
+	G.SetLoader(geodataLoader)
+
 	allowLan := general.AllowLan
 	P.SetAllowLan(allowLan)
 

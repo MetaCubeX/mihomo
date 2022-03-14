@@ -85,7 +85,8 @@ func (e *dnsEndpoint) HandlePacket(id stack.TransportEndpointID, pkt *stack.Pack
 	var msg D.Msg
 	msg.Unpack(pkt.Data().AsRange().ToOwnedView())
 	writer := dnsResponseWriter{s: e.stack, pkt: pkt, id: id}
-	log.Debugln("[DNS] hijack udp:%s:%d", id.LocalAddress.String(), id.LocalPort)
+	log.Debugln("[DNS] hijack udp:%s:%d from %s:%d", id.LocalAddress.String(), id.LocalPort,
+		id.RemoteAddress.String(), id.RemotePort)
 	go e.server.ServeDNS(&writer, &msg)
 }
 
@@ -139,9 +140,17 @@ func (w *dnsResponseWriter) Write(b []byte) (int, error) {
 	v := buffer.NewView(len(b))
 	copy(v, b)
 	data := v.ToVectorisedView()
+
 	// w.id.LocalAddress is the source ip of DNS response
-	r, _ := w.s.FindRoute(w.pkt.NICID, w.id.LocalAddress, w.id.RemoteAddress, w.pkt.NetworkProtocolNumber, false /* multicastLoop */)
-	return writeUDP(r, data, w.id.LocalPort, w.id.RemotePort)
+	if !w.pkt.NetworkHeader().View().IsEmpty() &&
+		(w.pkt.NetworkProtocolNumber == ipv4.ProtocolNumber ||
+			w.pkt.NetworkProtocolNumber == ipv6.ProtocolNumber) {
+		r, _ := w.s.FindRoute(w.pkt.NICID, w.id.LocalAddress, w.id.RemoteAddress, w.pkt.NetworkProtocolNumber, false /* multicastLoop */)
+		return writeUDP(r, data, w.id.LocalPort, w.id.RemotePort)
+	} else {
+		log.Debugln("the network protocl[%d] is not available", w.pkt.NetworkProtocolNumber)
+		return 0, fmt.Errorf("the network protocl[%d] is not available", w.pkt.NetworkProtocolNumber)
+	}
 }
 
 func (w *dnsResponseWriter) Close() error {
