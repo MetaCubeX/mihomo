@@ -124,12 +124,12 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 
 	onUpdate := func(elm interface{}) error {
 		rulesRaw := elm.([]string)
-		rp.count = len(rulesRaw)
 		rules, err := constructRules(rp.behavior, rulesRaw)
 		if err != nil {
 			return err
 		}
 
+		rp.count = len(rulesRaw)
 		rp.setRules(rules)
 		return nil
 	}
