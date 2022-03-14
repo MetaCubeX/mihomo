@@ -49,7 +49,7 @@ require (
 	golang.org/x/tools v0.1.9 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
-	golang.zx2c4.com/wireguard v0.0.0-20220202223031-3b95c81cc178 // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220201002028-22d54a5eb477 // indirect
 	google.golang.org/genproto v0.0.0-20210722135532-667f2b7c528f // indirect
 	google.golang.org/grpc v1.43.0 // indirect

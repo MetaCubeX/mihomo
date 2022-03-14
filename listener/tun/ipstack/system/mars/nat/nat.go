@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
@@ -26,7 +27,7 @@ func Start(
 	udp := &UDP{
 		calls:  map[*call]struct{}{},
 		device: device,
-		buf:    [65535]byte{},
+		buf:    [pool.UDPBufferSize]byte{},
 	}
 	tcp := &TCP{
 		listener: listener,
@@ -40,7 +41,7 @@ func Start(
 		defer tcp.Close()
 		defer udp.Close()
 
-		buf := make([]byte, 65535)
+		buf := make([]byte, pool.RelayBufferSize)
 
 		for {
 			n, err := device.Read(buf)
@@ -137,7 +138,6 @@ func Start(
 					t.SetSourcePort(port)
 					t.SetDestinationPort(gatewayPort)
 
-					ip.DecTimeToLive()
 					ip.ResetChecksum()
 					t.ResetChecksum(ip.PseudoSum())
 
@@ -164,7 +164,6 @@ func Start(
 				ip.SetSourceIP(destination)
 				ip.SetDestinationIP(source)
 
-				ip.DecTimeToLive()
 				ip.ResetChecksum()
 				i.ResetChecksum()
 
@@ -183,7 +182,6 @@ func Start(
 				ip.SetSourceIP(destination)
 				ip.SetDestinationIP(source)
 
-				ip.DecTimeToLive()
 				ip.ResetChecksum()
 				i.ResetChecksum(ip.PseudoSum())
 

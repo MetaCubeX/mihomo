@@ -23,7 +23,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.zx2c4.com/wireguard v0.0.0-20220202223031-3b95c81cc178
+	golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220201002028-22d54a5eb477
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0

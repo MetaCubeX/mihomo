@@ -36,7 +36,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	linkIP := addr.Masked().Addr().Next()
-	for _, route := range ROUTES {
+	for _, route := range Routes {
 		if err := execRouterCmd("add", route, interfaceName, linkIP.String()); err != nil {
 			return err
 		}

@@ -26,8 +26,8 @@ func GetAutoDetectInterface() (string, error) {
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
 	retryOnFailure := StartedAtBoot()
 	tryTimes := 0
-startOver:
 	var err error
+startOver:
 	if tryTimes > 0 {
 		log.Infoln("Retrying interface configuration after failure because system just booted (T+%v): %v", windows.DurationSinceBoot(), err)
 		time.Sleep(time.Second)
@@ -35,12 +35,8 @@ startOver:
 	}
 	tryTimes++
 
-	luid := winipcfg.LUID(dev.(*tun.TUN).LUID())
-	if guid, err1 := luid.GUID(); err1 == nil {
-		log.Infoln("[wintun]: tun adapter GUID: %s", guid.String())
-	}
-
 	var (
+		luid      = winipcfg.LUID(dev.(*tun.TUN).LUID())
 		ip        = addr.Masked().Addr().Next()
 		addresses = []netip.Prefix{netip.PrefixFrom(ip, addr.Bits())}
 
@@ -82,8 +78,12 @@ startOver:
 	foundDefault6 := false
 
 	if autoRoute {
-		var allowedIPs []netip.Prefix
-		routeArr := ROUTES
+		var (
+			allowedIPs []netip.Prefix
+
+			// add default
+			routeArr = []string{"0.0.0.0/0"}
+		)
 
 		for _, route := range routeArr {
 			allowedIPs = append(allowedIPs, netip.MustParsePrefix(route))
@@ -117,7 +117,7 @@ startOver:
 			deduplicatedRoutes = append(deduplicatedRoutes, &r)
 		}
 
-		// append the gateway
+		// add gateway
 		deduplicatedRoutes = append(deduplicatedRoutes, &winipcfg.RouteData{
 			Destination: addr.Masked(),
 			NextHop:     addr.Addr(),
@@ -221,7 +221,7 @@ func cleanupAddressesOnDisconnectedInterfaces(family winipcfg.AddressFamily, add
 			if ip, _ := netip.AddrFromSlice(address.Address.IP()); addrHash[ip] {
 				prefix := netip.PrefixFrom(ip, int(address.OnLinkPrefixLength))
 				log.Infoln("Cleaning up stale address %s from interface ‘%s’", prefix.String(), iface.FriendlyName())
-				iface.LUID.DeleteIPAddress(prefix)
+				_ = iface.LUID.DeleteIPAddress(prefix)
 			}
 		}
 	}

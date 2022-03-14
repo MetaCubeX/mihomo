@@ -144,7 +144,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
 			}
-		} else if resolver.IsFakeIP(metadata.DstIP) && !C.TunBroadcastAddr.Equal(metadata.DstIP) {
+		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
 	}

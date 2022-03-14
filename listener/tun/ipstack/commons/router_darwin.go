@@ -43,7 +43,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 }
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
-	routes := append(ROUTES, addr.String())
+	routes := append(Routes, addr.String())
 
 	for _, route := range routes {
 		if err := execRouterCmd("add", "-inet", route, interfaceName); err != nil {
