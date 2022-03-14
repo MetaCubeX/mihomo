@@ -103,7 +103,7 @@ func subIpCidr(ip net.IP, maskSize int, isIpv4 bool) ([]net.IP, int, error) {
 	lastByteMaskSize := maskSize % 8
 	lastByteMaskIndex := maskSize / 8
 	subIpCidrNum := 0xFF >> lastByteMaskSize
-	for i := 0; i < subIpCidrNum; i++ {
+	for i := 0; i <= subIpCidrNum; i++ {
 		subIpCidr := make([]byte, len(ip))
 		copy(subIpCidr, ip)
 		subIpCidr[lastByteMaskIndex] += byte(i)

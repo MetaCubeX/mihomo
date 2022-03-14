@@ -55,7 +55,6 @@ func (p *path) Resolve(path string) string {
 	if !filepath.IsAbs(path) {
 		return filepath.Join(p.HomeDir(), path)
 	}
-
 	return path
 }
 

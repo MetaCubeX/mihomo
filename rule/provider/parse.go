@@ -82,6 +82,9 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = RC.NewPort(payload, target, false, ruleExtra)
 	case "PROCESS-NAME":
 		parsed, parseErr = RC.NewProcess(payload, target, ruleExtra)
+	case "GEOIP":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RC.NewGEOIP(payload, target, noResolve, ruleExtra)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
