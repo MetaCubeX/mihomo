@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/device/iobased"
 
@@ -19,6 +20,7 @@ type TUN struct {
 	mtu    uint32
 	name   string
 	offset int
+	buff   []byte
 }
 
 func Open(name string, mtu uint32) (_ device.Device, err error) {
@@ -37,7 +39,12 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 		defaultMTU = 0 /* auto */
 	}
 
-	t := &TUN{name: name, mtu: mtu, offset: offset}
+	t := &TUN{
+		name:   name,
+		mtu:    mtu,
+		offset: offset,
+		buff:   make([]byte, offset+pool.RelayBufferSize),
+	}
 
 	forcedMTU := defaultMTU
 	if t.mtu > 0 {
@@ -64,14 +71,14 @@ func (t *TUN) Read(packet []byte) (int, error) {
 		return t.nt.Read(packet, t.offset)
 	}
 
-	buff := make([]byte, t.offset+cap(packet))
-
-	n, err := t.nt.Read(buff, t.offset)
+	n, err := t.nt.Read(t.buff, t.offset)
 	if err != nil {
 		return 0, err
 	}
 
-	copy(packet, buff[t.offset:t.offset+n])
+	_ = t.buff[:t.offset]
+
+	copy(packet, t.buff[t.offset:t.offset+n])
 
 	return n, err
 }

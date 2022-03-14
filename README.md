@@ -78,7 +78,7 @@ tun:
   stack: gvisor # System or gVisor
   # device: tun://utun8 # or fd://xxx, it's optional
   dns-hijack: 
-    - 0.0.0.0:53 # hijack all
+    - 0.0.0.0:53 # hijack all public
   auto-route: true # auto set global route
 ```
 ### Rules configuration
@@ -88,7 +88,9 @@ tun:
 - Support `process` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
 
-The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
+The `GEOIP` databases via [https://github.com/Loyalsoldier/geoip](https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb).
+
+The `GEOSITE` databases via [https://github.com/Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat).
 ```yaml
 rules:
   # network condition for all rules

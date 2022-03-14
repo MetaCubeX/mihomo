@@ -329,9 +329,6 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	}
 
 	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
-	if err != nil {
-		log.Warnln("Failed to start TUN listening: %s", err.Error())
-	}
 }
 
 // GetPorts return the ports of proxy servers

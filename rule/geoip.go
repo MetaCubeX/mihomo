@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/component/mmdb"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -29,7 +30,8 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 			ip.IsUnspecified() ||
 			ip.IsLoopback() ||
 			ip.IsMulticast() ||
-			C.TunBroadcastAddr.Equal(ip)
+			ip.IsLinkLocalUnicast() ||
+			resolver.IsFakeBroadcastIP(ip)
 	}
 
 	record, _ := mmdb.Instance().Country(ip)

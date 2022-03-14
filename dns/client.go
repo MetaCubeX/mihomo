@@ -31,14 +31,14 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		ip  net.IP
 		err error
 	)
-	if c.r == nil {
-		// a default ip dns
-		if ip = net.ParseIP(c.host); ip == nil {
+	if ip = net.ParseIP(c.host); ip == nil {
+		if c.r == nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
-		}
-	} else {
-		if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
-			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+		} else {
+			if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
+				return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+			}
+			c.host = ip.String()
 		}
 	}
 

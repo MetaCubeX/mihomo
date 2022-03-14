@@ -42,7 +42,7 @@ type General struct {
 	RoutingMark int          `json:"-"`
 }
 
-// Inbound
+// Inbound config
 type Inbound struct {
 	Port           int      `json:"port"`
 	SocksPort      int      `json:"socks-port"`
@@ -54,7 +54,7 @@ type Inbound struct {
 	BindAddress    string   `json:"bind-address"`
 }
 
-// Controller
+// Controller config
 type Controller struct {
 	ExternalController string `json:"-"`
 	ExternalUI         string `json:"-"`
@@ -326,10 +326,11 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]providerTypes.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]providerTypes.ProxyProvider)
-	proxyList := []string{}
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
+
+	var proxyList []string
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
@@ -377,10 +378,10 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 	}
 
-	for _, provider := range providersMap {
-		log.Infoln("Start initial provider %s", provider.Name())
-		if err := provider.Initial(); err != nil {
-			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", provider.Name(), err)
+	for _, proxyProvider := range providersMap {
+		log.Infoln("Start initial provider %s", proxyProvider.Name())
+		if err := proxyProvider.Initial(); err != nil {
+			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", proxyProvider.Name(), err)
 		}
 	}
 
@@ -411,7 +412,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 	}
 
-	ps := []C.Proxy{}
+	var ps []C.Proxy
 	for _, v := range proxyList {
 		ps = append(ps, proxies[v])
 	}
@@ -430,8 +431,9 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 }
 
 func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
-	rules := []C.Rule{}
 	rulesConfig := cfg.Rule
+
+	var rules []C.Rule
 
 	// parse rules
 	for idx, line := range rulesConfig {
@@ -443,31 +445,27 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 			ruleName = strings.ToUpper(rule[0])
 		)
 
-		switch l := len(rule); {
-		case l == 2:
-			target = rule[1]
-		case l == 3:
-			if ruleName == "MATCH" {
-				payload = ""
-				target = rule[1]
-				params = rule[2:]
-				break
-			}
-			payload = rule[1]
-			target = rule[2]
-		case l >= 4:
-			if ruleName == "MATCH" {
-				payload = ""
-				target = rule[1]
-				params = rule[2:]
-				break
-			}
-			payload = rule[1]
-			target = rule[2]
-			params = rule[3:]
-		default:
+		l := len(rule)
+
+		if l < 2 {
 			return nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 		}
+
+		if l < 4 {
+			rule = append(rule, make([]string, 4-l)...)
+		}
+
+		if ruleName == "MATCH" {
+			l = 2
+		}
+
+		if l >= 3 {
+			l = 3
+			payload = rule[1]
+		}
+
+		target = rule[l-1]
+		params = rule[l:]
 
 		if _, ok := proxies[target]; !ok {
 			return nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
@@ -502,7 +500,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 			if ip == nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
-			tree.Insert(domain, ip)
+			_ = tree.Insert(domain, ip)
 		}
 	}
 
@@ -527,7 +525,7 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 }
 
 func parseNameServer(servers []string) ([]dns.NameServer, error) {
-	nameservers := []dns.NameServer{}
+	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
 		// parse without scheme .e.g 8.8.8.8:53
@@ -596,7 +594,7 @@ func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServe
 }
 
 func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
-	ipNets := []*net.IPNet{}
+	var ipNets []*net.IPNet
 
 	for idx, ip := range ips {
 		_, ipnet, err := net.ParseCIDR(ip)
@@ -610,7 +608,7 @@ func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
 }
 
 func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
-	sites := []*router.DomainMatcher{}
+	var sites []*router.DomainMatcher
 
 	for _, country := range countries {
 		found := false
@@ -693,7 +691,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New()
 			for _, domain := range cfg.FakeIPFilter {
-				host.Insert(domain, true)
+				_ = host.Insert(domain, true)
 			}
 		}
 
@@ -705,7 +703,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 				if net.ParseIP(fb.Addr) != nil {
 					continue
 				}
-				host.Insert(fb.Addr, true)
+				_ = host.Insert(fb.Addr, true)
 			}
 		}
 
@@ -766,12 +764,12 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 
 	var dnsHijack []netip.AddrPort
 
-	for _, dns := range rawTun.DNSHijack {
-		if _, after, ok := strings.Cut(dns, "://"); ok {
-			dns = after
+	for _, d := range rawTun.DNSHijack {
+		if _, after, ok := strings.Cut(d, "://"); ok {
+			d = after
 		}
 
-		addrPort, err := netip.ParseAddrPort(dns)
+		addrPort, err := netip.ParseAddrPort(d)
 		if err != nil {
 			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
 		}

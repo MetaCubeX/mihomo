@@ -23,22 +23,24 @@ import (
 
 // New TunAdapter
 func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
-	devName := tunConf.Device
+	var (
+		tunAddress = netip.MustParsePrefix("198.18.255.254/16")
+		devName    = tunConf.Device
+		stackType  = tunConf.Stack
+		autoRoute  = tunConf.AutoRoute
+		mtu        = 9000
+
+		tunDevice device.Device
+		tunStack  ipstack.Stack
+
+		err error
+	)
+
 	if devName == "" {
 		devName = generateDeviceName()
 	}
 
-	tunAddress := netip.MustParsePrefix("198.18.255.254/16")
-	autoRoute := tunConf.AutoRoute
-	stackType := tunConf.Stack
-	mtu := 9000
-
-	var tunDevice device.Device
-	var tunStack ipstack.Stack
-
-	var err error
-
-	// new tun device
+	// open tun device
 	tunDevice, err = parseDevice(devName, uint32(mtu))
 	if err != nil {
 		return nil, fmt.Errorf("can't open tun: %w", err)
@@ -58,7 +60,8 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 				DNSAdds: tunConf.DNSHijack,
 				TCPIn:   tcpIn, UDPIn: udpIn,
 			},
-			gvisor.WithDefault())
+			gvisor.WithDefault(),
+		)
 
 		if err != nil {
 			_ = tunDevice.Close()
@@ -68,7 +71,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 		err = tunDevice.UseIOBased()
 		if err != nil {
 			_ = tunDevice.Close()
-			return nil, fmt.Errorf("can't attach endpoint to tun: %w", err)
+			return nil, fmt.Errorf("can't New system stack: %w", err)
 		}
 
 		tunStack, err = system.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn)
@@ -77,7 +80,7 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 			return nil, fmt.Errorf("can't New system stack: %w", err)
 		}
 	default:
-		// ignore it, should never happen
+		// never happen
 	}
 
 	// setting address and routing

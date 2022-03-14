@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"sync"
 
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
@@ -24,7 +25,7 @@ type UDP struct {
 	calls   map[*call]struct{}
 	device  io.Writer
 	bufLock sync.Mutex
-	buf     [65535]byte
+	buf     [pool.UDPBufferSize]byte
 }
 
 func (u *UDP) ReadFrom(buf []byte) (int, net.Addr, net.Addr, error) {

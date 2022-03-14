@@ -7,7 +7,6 @@ import (
 	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
 )
 
 type fallbackIPFilter interface {
@@ -20,11 +19,7 @@ type geoipFilter struct {
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
 	record, _ := mmdb.Instance().Country(ip)
-	return !strings.EqualFold(record.Country.IsoCode, gf.code) &&
-		!ip.IsPrivate() &&
-		!ip.IsLoopback() &&
-		!ip.IsUnspecified() &&
-		!ip.Equal(C.TunBroadcastAddr)
+	return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
 }
 
 type ipnetFilter struct {
