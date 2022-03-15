@@ -6,14 +6,8 @@ ifeq ($(BRANCH),Alpha)
 VERSION=alpha-$(shell git rev-parse --short HEAD)
 endif
 BUILDTIME=$(shell date -u)
-AUTOIPTABLES=Enable
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
-		-w -s -buildid='
-
-GOBUILDOP=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
-		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
-		-X "github.com/Dreamacro/clash/constant.AutoIptables=$(AUTOIPTABLES)"  \
 		-w -s -buildid='
 
 PLATFORM_LIST = \
@@ -43,8 +37,8 @@ WINDOWS_ARCH_LIST = \
     windows-arm32v7
 
 
-all:linux-amd64-AutoIptables  linux-amd64\
-	linux-arm64 linux-arm64-AutoIptables linux-armv7\
+all:linux-amd64\
+	linux-armv7\
 	darwin-amd64 darwin-arm64\
  	windows-amd64 windows-386 \
  	linux-mips-hardfloat linux-mips-softfloat linux-mips64 linux-mips64le linux-mipsle-hardfloat linux-mipsle-softfloat# Most used

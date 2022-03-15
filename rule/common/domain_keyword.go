@@ -44,7 +44,7 @@ func (dk *DomainKeyword) RuleExtra() *C.RuleExtra {
 	return dk.ruleExtra
 }
 
-func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
+func NewDomainKeyword(keyword string, adapter string, ruleExtra *C.RuleExtra) *DomainKeyword {
 	return &DomainKeyword{
 		keyword:   strings.ToLower(keyword),
 		adapter:   adapter,

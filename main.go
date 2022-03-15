@@ -73,12 +73,12 @@ func main() {
 		C.SetConfig(configFile)
 	}
 
-	if err := config.Init(C.Path.HomeDir()); err != nil {
-		log.Fatalln("Initial configuration directory error: %s", err.Error())
+	if geodataMode || executor.GetGeneral().GeodataMode {
+		config.GeodataMode = true
 	}
 
-	if geodataMode {
-		config.GeodataMode = true
+	if err := config.Init(C.Path.HomeDir()); err != nil {
+		log.Fatalln("Initial configuration directory error: %s", err.Error())
 	}
 
 	if testConfig {

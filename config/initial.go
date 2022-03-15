@@ -15,7 +15,7 @@ import (
 var GeodataMode bool
 
 func downloadMMDB(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb")
+	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/geoip/release/Country.mmdb")
 	if err != nil {
 		return
 	}
@@ -32,7 +32,7 @@ func downloadMMDB(path string) (err error) {
 }
 
 func downloadGeoIP(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat")
+	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat")
 	if err != nil {
 		return
 	}
@@ -49,7 +49,7 @@ func downloadGeoIP(path string) (err error) {
 }
 
 func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat")
+	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat")
 	if err != nil {
 		return
 	}
@@ -148,7 +148,6 @@ func Init(dir string) error {
 		f.Write([]byte(`mixed-port: 7890`))
 		f.Close()
 	}
-
 	// initial GeoIP
 	if err := initGeoIP(); err != nil {
 		return fmt.Errorf("can't initial GeoIP: %w", err)

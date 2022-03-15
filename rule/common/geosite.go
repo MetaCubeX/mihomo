@@ -44,6 +44,10 @@ func (gs *GEOSITE) ShouldResolveIP() bool {
 	return false
 }
 
+func (gs *GEOSITE) ShouldFindProcess() bool {
+	return false
+}
+
 func (gs *GEOSITE) RuleExtra() *C.RuleExtra {
 	return gs.ruleExtra
 }
