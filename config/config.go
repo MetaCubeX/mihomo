@@ -41,6 +41,7 @@ type General struct {
 	LogLevel      log.LogLevel `json:"log-level"`
 	IPv6          bool         `json:"ipv6"`
 	Interface     string       `json:"-"`
+	GeodataMode   string       `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
 	AutoIptables  bool         `json:"auto-iptables"`
 }
@@ -172,6 +173,7 @@ type RawConfig struct {
 	ExternalUI         string       `yaml:"external-ui"`
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
+	GeodataMode        string       `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	AutoIptables       bool         `yaml:"auto-iptables"`
 
@@ -204,6 +206,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		AllowLan:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
+		GeodataMode:    "dat",
 		GeodataLoader:  "memconservative",
 		AutoIptables:   false,
 		UnifiedDelay:   false,
