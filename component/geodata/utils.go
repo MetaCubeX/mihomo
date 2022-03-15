@@ -2,6 +2,7 @@ package geodata
 
 import (
 	"github.com/Dreamacro/clash/component/geodata/router"
+	C "github.com/Dreamacro/clash/constant"
 	"strings"
 )
 
@@ -15,6 +16,19 @@ func LoaderName() string {
 
 func SetLoader(newLoader string) {
 	geoLoaderName = newLoader
+}
+
+func Verify(name string) bool {
+	switch name {
+	case C.GeositeName:
+		_, _, err := LoadGeoSiteMatcher("CN")
+		return err == nil
+	case C.GeoipName:
+		_, _, err := LoadGeoIPMatcher("CN")
+		return err == nil
+	default:
+		return false
+	}
 }
 
 func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) {

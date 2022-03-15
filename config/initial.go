@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/mmdb"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
+
+var GeodataMode bool
 
 func downloadMMDB(path string) (err error) {
 	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb")
@@ -71,16 +74,38 @@ func initGeoSite() error {
 		log.Infoln("Download GeoSite.dat finish")
 	}
 
+	if !geodata.Verify(C.GeositeName) {
+		log.Warnln("GeoSite.dat invalid, remove and download")
+		if err := os.Remove(C.Path.GeoSite()); err != nil {
+			return fmt.Errorf("can't remove invalid GeoSite.dat: %s", err.Error())
+		}
+		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
+			return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
+		}
+	}
 	return nil
 }
 
 func initGeoIP() error {
-	if _, err := os.Stat(C.Path.GeoIP()); os.IsNotExist(err) {
-		log.Infoln("Need GeoIP but can't find GeoIP.dat, start download")
-		if err := downloadGeoIP(C.Path.GeoIP()); err != nil {
-			return fmt.Errorf("can't download GeoIP.dat: %s", err.Error())
+	if GeodataMode {
+		if _, err := os.Stat(C.Path.GeoIP()); os.IsNotExist(err) {
+			log.Infoln("Need GeoIP but can't find GeoIP.dat, start download")
+			if err := downloadGeoIP(C.Path.GeoIP()); err != nil {
+				return fmt.Errorf("can't download GeoIP.dat: %s", err.Error())
+			}
+			log.Infoln("Download GeoIP.dat finish")
 		}
-		log.Infoln("Download GeoIP.dat finish")
+
+		if !geodata.Verify(C.GeoipName) {
+			log.Warnln("GeoIP.dat invalid, remove and download")
+			if err := os.Remove(C.Path.GeoIP()); err != nil {
+				return fmt.Errorf("can't remove invalid GeoIP.dat: %s", err.Error())
+			}
+			if err := downloadGeoIP(C.Path.GeoIP()); err != nil {
+				return fmt.Errorf("can't download GeoIP.dat: %s", err.Error())
+			}
+		}
+		return nil
 	}
 
 	if _, err := os.Stat(C.Path.MMDB()); os.IsNotExist(err) {
