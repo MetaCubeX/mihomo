@@ -176,6 +176,7 @@ type RawConfig struct {
 	GeodataMode        string       `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	AutoIptables       bool         `yaml:"auto-iptables"`
+	RoutingMark        int          `yaml:"routing-mark"`
 
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]interface{} `yaml:"rule-providers"`
@@ -240,7 +241,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			},
 			NameServer: []string{
 				"223.5.5.5",
-				"119.29.29",
+				"119.29.29.29",
 			},
 			FakeIPFilter: []string{
 				"dns.msftnsci.com",
@@ -351,6 +352,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		Interface:     cfg.Interface,
 		GeodataLoader: cfg.GeodataLoader,
 		AutoIptables:  cfg.AutoIptables,
+		RoutingMark: cfg.RoutingMark,
 	}, nil
 }
 

@@ -39,6 +39,10 @@ func (d *Domain) RuleExtra() *C.RuleExtra {
 	return d.ruleExtra
 }
 
+func (d *Domain) ShouldFindProcess() bool {
+	return false
+}
+
 func NewDomain(domain string, adapter string, ruleExtra *C.RuleExtra) *Domain {
 	return &Domain{
 		domain:    strings.ToLower(domain),

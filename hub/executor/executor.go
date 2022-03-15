@@ -232,6 +232,7 @@ func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
 	}
 
 	dialer.DefaultInterface.Store(general.Interface)
+	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
 
 	log.Infoln("Use interface name: %s", general.Interface)
 

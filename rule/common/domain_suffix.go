@@ -40,6 +40,11 @@ func (ds *DomainSuffix) RuleExtra() *C.RuleExtra {
 	return ds.ruleExtra
 }
 
+
+func (ds *DomainSuffix) ShouldFindProcess() bool {
+	return false
+}
+
 func NewDomainSuffix(suffix string, adapter string, ruleExtra *C.RuleExtra) *DomainSuffix {
 	return &DomainSuffix{
 		suffix:    strings.ToLower(suffix),
