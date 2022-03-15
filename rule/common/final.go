@@ -29,6 +29,10 @@ func (f *Match) ShouldResolveIP() bool {
 	return false
 }
 
+func (f *Match) ShouldFindProcess() bool {
+	return false
+}
+
 func (f *Match) RuleExtra() *C.RuleExtra {
 	return f.ruleExtra
 }

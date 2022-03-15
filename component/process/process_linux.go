@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path"
-	"path/filepath"
+	"strings"
 	"syscall"
+	"unicode"
 	"unsafe"
 
 	"github.com/Dreamacro/clash/common/pool"
@@ -25,17 +25,6 @@ var nativeEndian = func() binary.ByteOrder {
 	return binary.LittleEndian
 }()
 
-type (
-	SocketResolver      func(network string, ip net.IP, srcPort int) (inode, uid int, err error)
-	ProcessNameResolver func(inode, uid int) (name string, err error)
-)
-
-// export for android
-var (
-	DefaultSocketResolver      SocketResolver      = resolveSocketByNetlink
-	DefaultProcessNameResolver ProcessNameResolver = resolveProcessNameByProcSearch
-)
-
 const (
 	sizeOfSocketDiagRequest = syscall.SizeofNlMsghdr + 8 + 48
 	socketDiagByFamily      = 20
@@ -43,15 +32,15 @@ const (
 )
 
 func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
-	inode, uid, err := DefaultSocketResolver(network, ip, srcPort)
+	inode, uid, err := resolveSocketByNetlink(network, ip, srcPort)
 	if err != nil {
 		return "", err
 	}
 
-	return DefaultProcessNameResolver(inode, uid)
+	return resolveProcessNameByProcSearch(inode, uid)
 }
 
-func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int, int, error) {
+func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int32, error) {
 	var family byte
 	var protocol byte
 
@@ -74,13 +63,12 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int, int, e
 
 	socket, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_DGRAM, syscall.NETLINK_INET_DIAG)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("dial netlink: %w", err)
 	}
 	defer syscall.Close(socket)
 
-	syscall.SetNonblock(socket, true)
-	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 50})
-	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 50})
+	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 100})
+	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 100})
 
 	if err := syscall.Connect(socket, &syscall.SockaddrNetlink{
 		Family: syscall.AF_NETLINK,
@@ -92,7 +80,7 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int, int, e
 	}
 
 	if _, err := syscall.Write(socket, req); err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("write request: %w", err)
 	}
 
 	rb := pool.Get(pool.RelayBufferSize)
@@ -100,24 +88,27 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int, int, e
 
 	n, err := syscall.Read(socket, rb)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("read response: %w", err)
 	}
 
 	messages, err := syscall.ParseNetlinkMessage(rb[:n])
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("parse netlink message: %w", err)
 	} else if len(messages) == 0 {
-		return 0, 0, io.ErrUnexpectedEOF
+		return 0, 0, fmt.Errorf("unexcepted netlink response")
 	}
 
 	message := messages[0]
 	if message.Header.Type&syscall.NLMSG_ERROR != 0 {
-		return 0, 0, syscall.ESRCH
+		return 0, 0, fmt.Errorf("netlink message: NLMSG_ERROR")
 	}
 
 	uid, inode := unpackSocketDiagResponse(&messages[0])
+	if uid < 0 || inode < 0 {
+		return 0, 0, fmt.Errorf("invalid uid(%d) or inode(%d)", uid, inode)
+	}
 
-	return int(uid), int(inode), nil
+	return uid, inode, nil
 }
 
 func packSocketDiagRequest(family, protocol byte, source net.IP, sourcePort uint16) []byte {
@@ -155,20 +146,20 @@ func packSocketDiagRequest(family, protocol byte, source net.IP, sourcePort uint
 	return buf
 }
 
-func unpackSocketDiagResponse(msg *syscall.NetlinkMessage) (inode, uid uint32) {
+func unpackSocketDiagResponse(msg *syscall.NetlinkMessage) (inode, uid int32) {
 	if len(msg.Data) < 72 {
 		return 0, 0
 	}
 
 	data := msg.Data
 
-	uid = nativeEndian.Uint32(data[64:68])
-	inode = nativeEndian.Uint32(data[68:72])
+	uid = int32(nativeEndian.Uint32(data[64:68]))
+	inode = int32(nativeEndian.Uint32(data[68:72]))
 
 	return
 }
 
-func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
+func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 	files, err := os.ReadDir(pathProc)
 	if err != nil {
 		return "", err
@@ -205,38 +196,16 @@ func resolveProcessNameByProcSearch(inode, uid int) (string, error) {
 			}
 
 			if bytes.Equal(buffer[:n], socket) {
-				cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
-				if err != nil {
-					return "", err
-				}
-
-				return splitCmdline(cmdline), nil
+				return os.Readlink(path.Join(processPath, "exe"))
 			}
 		}
 	}
 
-	return "", syscall.ESRCH
-}
-
-func splitCmdline(cmdline []byte) string {
-	indexOfEndOfString := len(cmdline)
-
-	for i, c := range cmdline {
-		if c == 0 {
-			indexOfEndOfString = i
-			break
-		}
-	}
-
-	return filepath.Base(string(cmdline[:indexOfEndOfString]))
+	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
 }
 
 func isPid(s string) bool {
-	for _, s := range s {
-		if s < '0' || s > '9' {
-			return false
-		}
-	}
-
-	return true
+	return strings.IndexFunc(s, func(r rune) bool {
+		return !unicode.IsDigit(r)
+	}) == -1
 }

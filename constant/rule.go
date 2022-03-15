@@ -12,6 +12,7 @@ const (
 	SrcPort
 	DstPort
 	Process
+	ProcessPath
 	Script
 	RuleSet
 	Network
@@ -46,6 +47,8 @@ func (rt RuleType) String() string {
 		return "DstPort"
 	case Process:
 		return "Process"
+	case ProcessPath:
+		return "ProcessPath"
 	case Script:
 		return "Script"
 	case MATCH:
@@ -71,5 +74,6 @@ type Rule interface {
 	Adapter() string
 	Payload() string
 	ShouldResolveIP() bool
+	ShouldFindProcess() bool
 	RuleExtra() *RuleExtra
 }

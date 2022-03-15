@@ -83,6 +83,7 @@ type Metadata struct {
 	Host     string  `json:"host"`
 	Process  string  `json:"process"`
 	DNSMode  DNSMode `json:"dnsMode"`
+	ProcessPath string  `json:"processPath"`
 }
 
 func (m *Metadata) RemoteAddress() string {

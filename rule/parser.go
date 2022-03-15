@@ -1,4 +1,4 @@
-package rule
+package rules
 
 import (
 	"fmt"
@@ -42,7 +42,9 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	case "DST-PORT":
 		parsed, parseErr = RC.NewPort(payload, target, false, ruleExtra)
 	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, target, ruleExtra)
+		parsed, parseErr = RC.NewProcess(payload, target, true,ruleExtra)
+	case "PROCESS-PATH":
+		parsed, parseErr = RC.NewProcess(payload, target, false,ruleExtra)
 	case "MATCH":
 		parsed = RC.NewMatch(target, ruleExtra)
 	case "RULE-SET":

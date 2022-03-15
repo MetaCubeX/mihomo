@@ -55,6 +55,10 @@ func (i *IPCIDR) ShouldResolveIP() bool {
 	return !i.noResolveIP
 }
 
+func (i *IPCIDR) ShouldFindProcess() bool {
+	return false
+}
+
 func (i *IPCIDR) RuleExtra() *C.RuleExtra {
 	return i.ruleExtra
 }
