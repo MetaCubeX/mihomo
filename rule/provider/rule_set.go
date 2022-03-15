@@ -13,6 +13,10 @@ type RuleSet struct {
 	ruleExtra        *C.RuleExtra
 }
 
+func (rs *RuleSet) ShouldFindProcess() bool {
+	return false
+}
+
 func (rs *RuleSet) RuleType() C.RuleType {
 	return C.RuleSet
 }

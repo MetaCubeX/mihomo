@@ -3,9 +3,12 @@ package dns
 import (
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
+	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
+	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/log"
 	"net"
+	"strings"
 )
 
 type fallbackIPFilter interface {
@@ -19,6 +22,11 @@ type geoipFilter struct {
 var geoIPMatcher *router.GeoIPMatcher
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
+	if !config.GeodataMode {
+		record, _ := mmdb.Instance().Country(ip)
+		return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
+	}
+
 	if geoIPMatcher == nil {
 		countryCode := "cn"
 		geoLoader, err := geodata.GetGeoDataLoader(geodata.LoaderName())
@@ -46,7 +54,6 @@ func (gf *geoipFilter) Match(ip net.IP) bool {
 			return false
 		}
 	}
-
 	return !geoIPMatcher.Match(ip)
 }
 

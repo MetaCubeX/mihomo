@@ -9,6 +9,10 @@ type OR struct {
 	needIP  bool
 }
 
+func (or *OR) ShouldFindProcess() bool {
+	return false
+}
+
 func (or *OR) RuleType() C.RuleType {
 	return C.OR
 }

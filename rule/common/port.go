@@ -21,6 +21,10 @@ type Port struct {
 	ruleExtra *C.RuleExtra
 }
 
+func (p *Port) ShouldFindProcess() bool {
+	return false
+}
+
 func (p *Port) RuleType() C.RuleType {
 	if p.isSource {
 		return C.SrcPort

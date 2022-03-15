@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
+	"github.com/Dreamacro/clash/component/mmdb"
+	"github.com/Dreamacro/clash/config"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -16,6 +18,10 @@ type GEOIP struct {
 	noResolveIP  bool
 	ruleExtra    *C.RuleExtra
 	geoIPMatcher *router.GeoIPMatcher
+}
+
+func (g *GEOIP) ShouldFindProcess() bool {
+	return false
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -31,7 +37,10 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 	if strings.EqualFold(g.country, "LAN") || C.TunBroadcastAddr.Equal(ip) {
 		return ip.IsPrivate()
 	}
-
+	if !config.GeodataMode {
+		record, _ := mmdb.Instance().Country(ip)
+		return strings.EqualFold(record.Country.IsoCode, g.country)
+	}
 	return g.geoIPMatcher.Match(ip)
 }
 

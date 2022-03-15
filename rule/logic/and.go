@@ -9,6 +9,10 @@ type AND struct {
 	needIP  bool
 }
 
+func (A *AND) ShouldFindProcess() bool {
+	return false
+}
+
 func NewAND(payload string, adapter string) (*AND, error) {
 	and := &AND{payload: payload, adapter: adapter}
 	rules, err := parseRuleByPayload(payload)

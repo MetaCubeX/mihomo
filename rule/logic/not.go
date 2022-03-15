@@ -11,6 +11,10 @@ type NOT struct {
 	adapter string
 }
 
+func (not *NOT) ShouldFindProcess() bool {
+	return false
+}
+
 func NewNOT(payload string, adapter string) (*NOT, error) {
 	not := &NOT{payload: payload, adapter: adapter}
 	rule, err := parseRuleByPayload(payload)

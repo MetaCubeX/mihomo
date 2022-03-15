@@ -11,6 +11,10 @@ type NetworkType struct {
 	adapter string
 }
 
+func (n *NetworkType) ShouldFindProcess() bool {
+	return false
+}
+
 func NewNetworkType(network, adapter string) (*NetworkType, error) {
 	ntType := new(NetworkType)
 	ntType.adapter = adapter
