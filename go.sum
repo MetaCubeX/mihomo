@@ -352,8 +352,12 @@ golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1N
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1NKEZ+0owSTG1fDTci4IqFcE=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+golang.zx2c4.com/go118/netip v0.0.0-20211106132939-9d41d90554dd h1:gUHae7sCd+tFJLcCximWeBFD2b6Jg3O7UaNaPvjIJHc=
+golang.zx2c4.com/go118/netip v0.0.0-20211106132939-9d41d90554dd/go.mod h1:5yyfuiqVIJ7t+3MqrpTQ+QqRkMWiESiyDvPNvKYCecg=
 golang.zx2c4.com/wireguard/windows v0.5.1 h1:OnYw96PF+CsIMrqWo5QP3Q59q5hY1rFErk/yN3cS+JQ=
 golang.zx2c4.com/wireguard/windows v0.5.1/go.mod h1:EApyTk/ZNrkbZjurHL1nleDYnsPpJYBO7LZEBCyDAHk=
+golang.zx2c4.com/wireguard/windows v0.5.2 h1:C3kUahG6QPhXUYSMesW0t1mDo1XCwls2c8Bz16umS44=
+golang.zx2c4.com/wireguard/windows v0.5.2/go.mod h1:KptYG5fXTsP1sHafw0BnWHxobtR6QZHWY6SVWq5R0PM=
 google.golang.org/api v0.0.0-20180910000450-7ca32eb868bf/go.mod h1:4mhQ8q/RsB7i+udVvVy5NUi08OU8ZlA0gRVgrF7VFY0=
 google.golang.org/api v0.0.0-20181030000543-1d582fd0359e/go.mod h1:4mhQ8q/RsB7i+udVvVy5NUi08OU8ZlA0gRVgrF7VFY0=
 google.golang.org/api v0.1.0/go.mod h1:UGEZY7KEX120AnNLIHFMKIo4obdJhkp2tPbaPlQx13Y=

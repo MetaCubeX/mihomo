@@ -66,7 +66,7 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 }
 
 // Unwrap implements C.ProxyAdapter
-func (u *URLTest) Unwrap(metadata *C.Metadata) C.Proxy {
+func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
 	return u.fast(true)
 }
 
