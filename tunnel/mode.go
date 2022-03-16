@@ -36,7 +36,7 @@ func (m *TunnelMode) UnmarshalJSON(data []byte) error {
 }
 
 // UnmarshalYAML unserialize Mode with yaml
-func (m *TunnelMode) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (m *TunnelMode) UnmarshalYAML(unmarshal func(any) error) error {
 	var tp string
 	unmarshal(&tp)
 	mode, exist := ModeMapping[strings.ToLower(tp)]
@@ -53,7 +53,7 @@ func (m TunnelMode) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML serialize TunnelMode with yaml
-func (m TunnelMode) MarshalYAML() (interface{}, error) {
+func (m TunnelMode) MarshalYAML() (any, error) {
 	return m.String(), nil
 }
 

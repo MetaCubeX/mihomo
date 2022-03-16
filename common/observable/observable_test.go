@@ -9,8 +9,8 @@ import (
 	"go.uber.org/atomic"
 )
 
-func iterator(item []interface{}) chan interface{} {
-	ch := make(chan interface{})
+func iterator(item []any) chan any {
+	ch := make(chan any)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		for _, elm := range item {
@@ -22,7 +22,7 @@ func iterator(item []interface{}) chan interface{} {
 }
 
 func TestObservable(t *testing.T) {
-	iter := iterator([]interface{}{1, 2, 3, 4, 5})
+	iter := iterator([]any{1, 2, 3, 4, 5})
 	src := NewObservable(iter)
 	data, err := src.Subscribe()
 	assert.Nil(t, err)
@@ -34,7 +34,7 @@ func TestObservable(t *testing.T) {
 }
 
 func TestObservable_MultiSubscribe(t *testing.T) {
-	iter := iterator([]interface{}{1, 2, 3, 4, 5})
+	iter := iterator([]any{1, 2, 3, 4, 5})
 	src := NewObservable(iter)
 	ch1, _ := src.Subscribe()
 	ch2, _ := src.Subscribe()
@@ -42,7 +42,7 @@ func TestObservable_MultiSubscribe(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	waitCh := func(ch <-chan interface{}) {
+	waitCh := func(ch <-chan any) {
 		for range ch {
 			count.Inc()
 		}
@@ -55,7 +55,7 @@ func TestObservable_MultiSubscribe(t *testing.T) {
 }
 
 func TestObservable_UnSubscribe(t *testing.T) {
-	iter := iterator([]interface{}{1, 2, 3, 4, 5})
+	iter := iterator([]any{1, 2, 3, 4, 5})
 	src := NewObservable(iter)
 	data, err := src.Subscribe()
 	assert.Nil(t, err)
@@ -65,7 +65,7 @@ func TestObservable_UnSubscribe(t *testing.T) {
 }
 
 func TestObservable_SubscribeClosedSource(t *testing.T) {
-	iter := iterator([]interface{}{1})
+	iter := iterator([]any{1})
 	src := NewObservable(iter)
 	data, _ := src.Subscribe()
 	<-data
@@ -75,14 +75,14 @@ func TestObservable_SubscribeClosedSource(t *testing.T) {
 }
 
 func TestObservable_UnSubscribeWithNotExistSubscription(t *testing.T) {
-	sub := Subscription(make(chan interface{}))
-	iter := iterator([]interface{}{1})
+	sub := Subscription(make(chan any))
+	iter := iterator([]any{1})
 	src := NewObservable(iter)
 	src.UnSubscribe(sub)
 }
 
 func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
-	iter := iterator([]interface{}{1, 2, 3, 4, 5})
+	iter := iterator([]any{1, 2, 3, 4, 5})
 	src := NewObservable(iter)
 	max := 100
 
@@ -94,7 +94,7 @@ func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(max)
-	waitCh := func(ch <-chan interface{}) {
+	waitCh := func(ch <-chan any) {
 		for range ch {
 		}
 		wg.Done()
@@ -115,7 +115,7 @@ func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 }
 
 func Benchmark_Observable_1000(b *testing.B) {
-	ch := make(chan interface{})
+	ch := make(chan any)
 	o := NewObservable(ch)
 	num := 1000
 

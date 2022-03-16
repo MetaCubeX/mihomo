@@ -12,7 +12,7 @@ import (
 type Option func(*LruCache)
 
 // EvictCallback is used to get a callback when a cache entry is evicted
-type EvictCallback = func(key interface{}, value interface{})
+type EvictCallback = func(key any, value any)
 
 // WithEvict set the evict callback
 func WithEvict(cb EvictCallback) Option {
@@ -57,7 +57,7 @@ type LruCache struct {
 	maxAge         int64
 	maxSize        int
 	mu             sync.Mutex
-	cache          map[interface{}]*list.Element
+	cache          map[any]*list.Element
 	lru            *list.List // Front is least-recent
 	updateAgeOnGet bool
 	staleReturn    bool
@@ -68,7 +68,7 @@ type LruCache struct {
 func NewLRUCache(options ...Option) *LruCache {
 	lc := &LruCache{
 		lru:   list.New(),
-		cache: make(map[interface{}]*list.Element),
+		cache: make(map[any]*list.Element),
 	}
 
 	for _, option := range options {
@@ -78,9 +78,9 @@ func NewLRUCache(options ...Option) *LruCache {
 	return lc
 }
 
-// Get returns the interface{} representation of a cached response and a bool
+// Get returns the any representation of a cached response and a bool
 // set to true if the key was found.
-func (c *LruCache) Get(key interface{}) (interface{}, bool) {
+func (c *LruCache) Get(key any) (any, bool) {
 	entry := c.get(key)
 	if entry == nil {
 		return nil, false
@@ -90,11 +90,11 @@ func (c *LruCache) Get(key interface{}) (interface{}, bool) {
 	return value, true
 }
 
-// GetWithExpire returns the interface{} representation of a cached response,
+// GetWithExpire returns the any representation of a cached response,
 // a time.Time Give expected expires,
 // and a bool set to true if the key was found.
 // This method will NOT check the maxAge of element and will NOT update the expires.
-func (c *LruCache) GetWithExpire(key interface{}) (interface{}, time.Time, bool) {
+func (c *LruCache) GetWithExpire(key any) (any, time.Time, bool) {
 	entry := c.get(key)
 	if entry == nil {
 		return nil, time.Time{}, false
@@ -104,7 +104,7 @@ func (c *LruCache) GetWithExpire(key interface{}) (interface{}, time.Time, bool)
 }
 
 // Exist returns if key exist in cache but not put item to the head of linked list
-func (c *LruCache) Exist(key interface{}) bool {
+func (c *LruCache) Exist(key any) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -112,8 +112,8 @@ func (c *LruCache) Exist(key interface{}) bool {
 	return ok
 }
 
-// Set stores the interface{} representation of a response for a given key.
-func (c *LruCache) Set(key interface{}, value interface{}) {
+// Set stores the any representation of a response for a given key.
+func (c *LruCache) Set(key any, value any) {
 	expires := int64(0)
 	if c.maxAge > 0 {
 		expires = time.Now().Unix() + c.maxAge
@@ -121,9 +121,9 @@ func (c *LruCache) Set(key interface{}, value interface{}) {
 	c.SetWithExpire(key, value, time.Unix(expires, 0))
 }
 
-// SetWithExpire stores the interface{} representation of a response for a given key and given expires.
+// SetWithExpire stores the any representation of a response for a given key and given expires.
 // The expires time will round to second.
-func (c *LruCache) SetWithExpire(key interface{}, value interface{}, expires time.Time) {
+func (c *LruCache) SetWithExpire(key any, value any, expires time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -155,7 +155,7 @@ func (c *LruCache) CloneTo(n *LruCache) {
 	defer n.mu.Unlock()
 
 	n.lru = list.New()
-	n.cache = make(map[interface{}]*list.Element)
+	n.cache = make(map[any]*list.Element)
 
 	for e := c.lru.Front(); e != nil; e = e.Next() {
 		elm := e.Value.(*entry)
@@ -163,7 +163,7 @@ func (c *LruCache) CloneTo(n *LruCache) {
 	}
 }
 
-func (c *LruCache) get(key interface{}) *entry {
+func (c *LruCache) get(key any) *entry {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -188,7 +188,7 @@ func (c *LruCache) get(key interface{}) *entry {
 }
 
 // Delete removes the value associated with a key.
-func (c *LruCache) Delete(key interface{}) {
+func (c *LruCache) Delete(key any) {
 	c.mu.Lock()
 
 	if le, ok := c.cache[key]; ok {
@@ -217,7 +217,7 @@ func (c *LruCache) deleteElement(le *list.Element) {
 }
 
 type entry struct {
-	key     interface{}
-	value   interface{}
+	key     any
+	value   any
 	expires int64
 }
