@@ -16,7 +16,6 @@ const (
 	Script
 	RuleSet
 	Network
-	Combination
 	MATCH
 	AND
 	OR

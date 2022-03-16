@@ -12,8 +12,6 @@ import (
 	"github.com/Dreamacro/clash/log"
 )
 
-var GeodataMode bool
-
 func downloadMMDB(path string) (err error) {
 	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/geoip/release/Country.mmdb")
 	if err != nil {
@@ -87,7 +85,7 @@ func initGeoSite() error {
 }
 
 func initGeoIP() error {
-	if GeodataMode {
+	if C.GeodataMode {
 		if _, err := os.Stat(C.Path.GeoIP()); os.IsNotExist(err) {
 			log.Infoln("Need GeoIP but can't find GeoIP.dat, start download")
 			if err := downloadGeoIP(C.Path.GeoIP()); err != nil {

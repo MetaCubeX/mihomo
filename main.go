@@ -74,7 +74,7 @@ func main() {
 	}
 
 	if geodataMode || executor.GetGeneral().GeodataMode {
-		config.GeodataMode = true
+		C.GeodataMode = true
 	}
 
 	if err := config.Init(C.Path.HomeDir()); err != nil {

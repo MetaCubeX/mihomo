@@ -208,7 +208,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		AllowLan:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
-		GeodataMode:    GeodataMode,
+		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
 		AutoIptables:   false,
 		UnifiedDelay:   false,
