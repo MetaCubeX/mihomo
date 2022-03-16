@@ -34,8 +34,12 @@ func ShouldFindProcess(metadata *C.Metadata) bool {
 	return false
 }
 
+func AppendLocalIPs(ip ...net.IP) {
+	localIPs = append(ip, localIPs...)
+}
+
 func getLocalIPs() []net.IP {
-	ips := []net.IP{net.IPv4(198, 18, 0, 1), net.IPv4zero, net.IPv6zero}
+	ips := []net.IP{net.IPv4zero, net.IPv6zero}
 
 	netInterfaces, err := net.Interfaces()
 	if err != nil {
