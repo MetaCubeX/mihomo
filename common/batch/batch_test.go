@@ -14,11 +14,11 @@ func TestBatch(t *testing.T) {
 	b, _ := New(context.Background())
 
 	now := time.Now()
-	b.Go("foo", func() (interface{}, error) {
+	b.Go("foo", func() (any, error) {
 		time.Sleep(time.Millisecond * 100)
 		return "foo", nil
 	})
-	b.Go("bar", func() (interface{}, error) {
+	b.Go("bar", func() (any, error) {
 		time.Sleep(time.Millisecond * 150)
 		return "bar", nil
 	})
@@ -45,7 +45,7 @@ func TestBatchWithConcurrencyNum(t *testing.T) {
 	now := time.Now()
 	for i := 0; i < 7; i++ {
 		idx := i
-		b.Go(strconv.Itoa(idx), func() (interface{}, error) {
+		b.Go(strconv.Itoa(idx), func() (any, error) {
 			time.Sleep(time.Millisecond * 100)
 			return strconv.Itoa(idx), nil
 		})
@@ -64,12 +64,12 @@ func TestBatchWithConcurrencyNum(t *testing.T) {
 func TestBatchContext(t *testing.T) {
 	b, ctx := New(context.Background())
 
-	b.Go("error", func() (interface{}, error) {
+	b.Go("error", func() (any, error) {
 		time.Sleep(time.Millisecond * 100)
 		return nil, errors.New("test error")
 	})
 
-	b.Go("ctx", func() (interface{}, error) {
+	b.Go("ctx", func() (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})

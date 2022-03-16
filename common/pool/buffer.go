@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-var bufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
+var bufferPool = sync.Pool{New: func() any { return &bytes.Buffer{} }}
 
 func GetBuffer() *bytes.Buffer {
 	return bufferPool.Get().(*bytes.Buffer)

@@ -7,7 +7,7 @@ import (
 
 type call struct {
 	wg  sync.WaitGroup
-	val interface{}
+	val any
 	err error
 }
 
@@ -20,13 +20,13 @@ type Single struct {
 }
 
 type Result struct {
-	Val interface{}
+	Val any
 	Err error
 }
 
 // Do single.Do likes sync.singleFlight
 //lint:ignore ST1008 it likes sync.singleFlight
-func (s *Single) Do(fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
+func (s *Single) Do(fn func() (any, error)) (v any, err error, shared bool) {
 	s.mux.Lock()
 	now := time.Now()
 	if now.Before(s.last.Add(s.wait)) {

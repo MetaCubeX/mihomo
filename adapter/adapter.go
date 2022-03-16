@@ -91,7 +91,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 		return inner, err
 	}
 
-	mapping := map[string]interface{}{}
+	mapping := map[string]any{}
 	json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["name"] = p.Name()

@@ -23,7 +23,7 @@ var (
 var interfaces = singledo.NewSingle(time.Second * 20)
 
 func ResolveInterface(name string) (*Interface, error) {
-	value, err, _ := interfaces.Do(func() (interface{}, error) {
+	value, err, _ := interfaces.Do(func() (any, error) {
 		ifaces, err := net.Interfaces()
 		if err != nil {
 			return nil, err
