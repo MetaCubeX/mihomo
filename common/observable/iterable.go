@@ -1,3 +1,3 @@
 package observable
 
-type Iterable <-chan interface{}
+type Iterable <-chan any

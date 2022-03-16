@@ -166,15 +166,15 @@ type RawConfig struct {
 	Interface          string       `yaml:"interface-name"`
 	RoutingMark        int          `yaml:"routing-mark"`
 
-	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
-	Hosts         map[string]string                 `yaml:"hosts"`
-	DNS           RawDNS                            `yaml:"dns"`
-	Tun           RawTun                            `yaml:"tun"`
-	Experimental  Experimental                      `yaml:"experimental"`
-	Profile       Profile                           `yaml:"profile"`
-	Proxy         []map[string]interface{}          `yaml:"proxies"`
-	ProxyGroup    []map[string]interface{}          `yaml:"proxy-groups"`
-	Rule          []string                          `yaml:"rules"`
+	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
+	Hosts         map[string]string         `yaml:"hosts"`
+	DNS           RawDNS                    `yaml:"dns"`
+	Tun           RawTun                    `yaml:"tun"`
+	Experimental  Experimental              `yaml:"experimental"`
+	Profile       Profile                   `yaml:"profile"`
+	Proxy         []map[string]any          `yaml:"proxies"`
+	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
+	Rule          []string                  `yaml:"rules"`
 }
 
 // Parse config
@@ -197,8 +197,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		LogLevel:       log.INFO,
 		Hosts:          map[string]string{},
 		Rule:           []string{},
-		Proxy:          []map[string]interface{}{},
-		ProxyGroup:     []map[string]interface{}{},
+		Proxy:          []map[string]any{},
+		ProxyGroup:     []map[string]any{},
 		Tun: RawTun{
 			Enable:    false,
 			Device:    "",
@@ -742,11 +742,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 }
 
 func parseAuthentication(rawRecords []string) []auth.AuthUser {
-	users := make([]auth.AuthUser, 0)
+	users := []auth.AuthUser{}
 	for _, line := range rawRecords {
-		userData := strings.SplitN(line, ":", 2)
-		if len(userData) == 2 {
-			users = append(users, auth.AuthUser{User: userData[0], Pass: userData[1]})
+		if user, pass, found := strings.Cut(line, ":"); found {
+			users = append(users, auth.AuthUser{User: user, Pass: pass})
 		}
 	}
 	return users

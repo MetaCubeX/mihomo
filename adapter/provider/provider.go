@@ -20,7 +20,7 @@ const (
 )
 
 type ProxySchema struct {
-	Proxies []map[string]interface{} `yaml:"proxies"`
+	Proxies []map[string]any `yaml:"proxies"`
 }
 
 // for auto gc
@@ -35,7 +35,7 @@ type proxySetProvider struct {
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"name":        pp.Name(),
 		"type":        pp.Type().String(),
 		"vehicleType": pp.VehicleType().String(),
@@ -111,12 +111,12 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	onUpdate := func(elm interface{}) {
+	onUpdate := func(elm any) {
 		ret := elm.([]C.Proxy)
 		pd.setProxies(ret)
 	}
 
-	proxiesParseAndFilter := func(buf []byte) (interface{}, error) {
+	proxiesParseAndFilter := func(buf []byte) (any, error) {
 		schema := &ProxySchema{}
 
 		if err := yaml.Unmarshal(buf, schema); err != nil {
@@ -169,7 +169,7 @@ type compatibleProvider struct {
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"name":        cp.Name(),
 		"type":        cp.Type().String(),
 		"vehicleType": cp.VehicleType().String(),

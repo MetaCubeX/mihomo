@@ -108,7 +108,7 @@ func authenticate(request *http.Request, cache *cache.Cache) *http.Response {
 			return resp
 		}
 
-		var authed interface{}
+		var authed any
 		if authed = cache.Get(credential); authed == nil {
 			user, pass, err := decodeBasicProxyAuthorization(credential)
 			authed = err == nil && authenticator.Verify(user, pass)

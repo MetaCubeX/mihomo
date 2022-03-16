@@ -36,7 +36,7 @@ func NewAuthenticator(users []AuthUser) Authenticator {
 		au.storage.Store(user.User, user.Pass)
 	}
 	usernames := make([]string, 0, len(users))
-	au.storage.Range(func(key, value interface{}) bool {
+	au.storage.Range(func(key, value any) bool {
 		usernames = append(usernames, key.(string))
 		return true
 	})

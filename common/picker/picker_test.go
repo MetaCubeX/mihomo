@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func sleepAndSend(ctx context.Context, delay int, input interface{}) func() (interface{}, error) {
-	return func() (interface{}, error) {
+func sleepAndSend(ctx context.Context, delay int, input any) func() (any, error) {
+	return func() (any, error) {
 		timer := time.NewTimer(time.Millisecond * time.Duration(delay))
 		select {
 		case <-timer.C:
