@@ -9,8 +9,8 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gorilla/websocket v1.5.0
-	github.com/insomniacslk/dhcp v0.0.0-20211214070828-5297eed8f489
-	github.com/miekg/dns v1.1.46
+	github.com/insomniacslk/dhcp v0.0.0-20220119180841-3c283ff8b7dd
+	github.com/miekg/dns v1.1.47
 	github.com/oschwald/geoip2-golang v1.6.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
@@ -18,16 +18,17 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.4.0
-	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
+	golang.org/x/crypto v0.0.0-20220314234724-5d542ad81a58
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9
-	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
-	golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1
-	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220201002028-22d54a5eb477
+	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5
+	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
+	//golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1
+	golang.zx2c4.com/wireguard v0.0.0-20220202223031-3b95c81cc178
+	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220311014831-b314d81fbac7
+	gvisor.dev/gvisor v0.0.0-20220314190221-89a04115dfa4
 )
 
 require (

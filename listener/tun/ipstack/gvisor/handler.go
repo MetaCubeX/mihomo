@@ -125,7 +125,10 @@ func (gh *GVHandler) HandleUDPConn(tunConn adapter.UDPConn) {
 				payload: payload,
 			}
 
-			gh.UDPIn <- inbound.NewPacket(target, gvPacket, C.TUN)
+			select {
+			case gh.UDPIn <- inbound.NewPacket(target, gvPacket, C.TUN):
+			default:
+			}
 		}
 	}()
 }
