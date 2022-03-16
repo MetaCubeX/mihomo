@@ -5,7 +5,6 @@ import (
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/mmdb"
-	"github.com/Dreamacro/clash/config"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -37,7 +36,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 	if strings.EqualFold(g.country, "LAN") || C.TunBroadcastAddr.Equal(ip) {
 		return ip.IsPrivate()
 	}
-	if !config.GeodataMode {
+	if !C.GeodataMode {
 		record, _ := mmdb.Instance().Country(ip)
 		return strings.EqualFold(record.Country.IsoCode, g.country)
 	}
@@ -69,13 +68,22 @@ func (g *GEOIP) GetIPMatcher() *router.GeoIPMatcher {
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.RuleExtra) (*GEOIP, error) {
+	if !C.GeodataMode {
+		geoip := &GEOIP{
+			country:     country,
+			adapter:     adapter,
+			noResolveIP: noResolveIP,
+			ruleExtra:   ruleExtra,
+		}
+		return geoip, nil
+	}
+
 	geoIPMatcher, recordsCount, err := geodata.LoadGeoIPMatcher(country)
 	if err != nil {
 		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
 	}
 
 	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, recordsCount)
-
 	geoip := &GEOIP{
 		country:      country,
 		adapter:      adapter,
@@ -83,6 +91,5 @@ func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.Rul
 		ruleExtra:    ruleExtra,
 		geoIPMatcher: geoIPMatcher,
 	}
-
 	return geoip, nil
 }
