@@ -12,6 +12,8 @@ import (
 	"github.com/Dreamacro/clash/log"
 )
 
+var initMode = true
+
 func downloadMMDB(path string) (err error) {
 	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/geoip/release/Country.mmdb")
 	if err != nil {
@@ -71,14 +73,15 @@ func initGeoSite() error {
 		}
 		log.Infoln("Download GeoSite.dat finish")
 	}
-
-	if !geodata.Verify(C.GeositeName) {
-		log.Warnln("GeoSite.dat invalid, remove and download")
-		if err := os.Remove(C.Path.GeoSite()); err != nil {
-			return fmt.Errorf("can't remove invalid GeoSite.dat: %s", err.Error())
-		}
-		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
-			return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
+	if initMode {
+		if !geodata.Verify(C.GeositeName) {
+			log.Warnln("GeoSite.dat invalid, remove and download")
+			if err := os.Remove(C.Path.GeoSite()); err != nil {
+				return fmt.Errorf("can't remove invalid GeoSite.dat: %s", err.Error())
+			}
+			if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
+				return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
+			}
 		}
 	}
 	return nil

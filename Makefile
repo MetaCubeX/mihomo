@@ -1,10 +1,7 @@
 NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
-VERSION=$(shell git describe --tags || echo "unknown version" )
-ifeq ($(BRANCH),Alpha)
 VERSION=alpha-$(shell git rev-parse --short HEAD)
-endif
 BUILDTIME=$(shell date -u)
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
@@ -64,32 +61,17 @@ linux-amd64-AutoIptables:
 linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-arm64-AutoIptables:
-	GOARCH=arm64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
-
 linux-armv5:
 	GOARCH=arm GOOS=linux GOARM=5 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-armv5-AutoIptables:
-	GOARCH=arm GOOS=linux GOARM=5 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-armv6:
 	GOARCH=arm GOOS=linux GOARM=6 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv6-AutoIptables:
-	GOARCH=arm GOOS=linux GOARM=6 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
-
 linux-armv7:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv7-AutoIptables:
-	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
-
 linux-armv8:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-armv8-AutoIptables:
-	GOARCH=arm64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat:
 	GOARCH=mips GOMIPS=softfloat GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
