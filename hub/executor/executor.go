@@ -81,7 +81,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg.DNS, cfg.General.TProxyPort, cfg.General.Interface, cfg.Tun.Enable)
-	updateTun(cfg.Tun)
+	updateTun(cfg.Tun, cfg.DNS.FakeIPRange.IPNet().String())
 	updateExperimental(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -176,8 +176,8 @@ func updateRules(rules []C.Rule) {
 	tunnel.UpdateRules(rules)
 }
 
-func updateTun(tun *config.Tun) {
-	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
+func updateTun(tun *config.Tun, tunAddressPrefix string) {
+	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateGeneral(general *config.General, force bool) {

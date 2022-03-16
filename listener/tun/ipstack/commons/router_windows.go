@@ -121,7 +121,7 @@ startOver:
 		// add gateway
 		deduplicatedRoutes = append(deduplicatedRoutes, &winipcfg.RouteData{
 			Destination: addr.Masked(),
-			NextHop:     addr.Addr(),
+			NextHop:     addr.Masked().Addr().Next().Next(),
 			Metric:      0,
 		})
 

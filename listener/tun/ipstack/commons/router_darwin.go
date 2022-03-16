@@ -20,7 +20,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
-		gw            = addr.Addr()
+		gw            = ip
 		netmask       = IPv4MaskString(addr.Bits())
 	)
 
