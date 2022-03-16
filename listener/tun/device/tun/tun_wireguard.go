@@ -20,7 +20,6 @@ type TUN struct {
 	mtu    uint32
 	name   string
 	offset int
-	buff   []byte
 }
 
 func Open(name string, mtu uint32) (_ device.Device, err error) {
@@ -43,7 +42,6 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 		name:   name,
 		mtu:    mtu,
 		offset: offset,
-		buff:   make([]byte, offset+pool.RelayBufferSize),
 	}
 
 	forcedMTU := defaultMTU
@@ -71,14 +69,17 @@ func (t *TUN) Read(packet []byte) (int, error) {
 		return t.nt.Read(packet, t.offset)
 	}
 
-	n, err := t.nt.Read(t.buff, t.offset)
+	buff := pool.Get(t.offset + cap(packet))
+	defer pool.Put(buff)
+
+	n, err := t.nt.Read(buff, t.offset)
 	if err != nil {
 		return 0, err
 	}
 
-	_ = t.buff[:t.offset]
+	_ = buff[:t.offset]
 
-	copy(packet, t.buff[t.offset:t.offset+n])
+	copy(packet, buff[t.offset:t.offset+n])
 
 	return n, err
 }

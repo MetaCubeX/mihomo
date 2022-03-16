@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -182,13 +183,22 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 				},
 			}
 
-			udpIn <- inbound.NewPacket(socks5.ParseAddrToSocksAddr(rAddr), pkt, C.TUN)
+			select {
+			case udpIn <- inbound.NewPacket(socks5.ParseAddrToSocksAddr(rAddr), pkt, C.TUN):
+			default:
+			}
 		}
 	}
 
 	go tcp()
-	go udp()
-	go udp()
+
+	numUDPWorkers := 4
+	if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
+		numUDPWorkers = num
+	}
+	for i := 0; i < numUDPWorkers; i++ {
+		go udp()
+	}
 
 	return &sysStack{stack: stack, device: device}, nil
 }
