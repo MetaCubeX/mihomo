@@ -73,7 +73,7 @@ func main() {
 		C.SetConfig(configFile)
 	}
 
-	if geodataMode || executor.GetGeneral().GeodataMode {
+	if geodataMode {
 		C.GeodataMode = true
 	}
 
