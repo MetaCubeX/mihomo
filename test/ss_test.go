@@ -76,7 +76,7 @@ func TestClash_ShadowsocksObfsHTTP(t *testing.T) {
 		Cipher:   "chacha20-ietf-poly1305",
 		UDP:      true,
 		Plugin:   "obfs",
-		PluginOpts: map[string]interface{}{
+		PluginOpts: map[string]any{
 			"mode": "http",
 		},
 	})
@@ -118,7 +118,7 @@ func TestClash_ShadowsocksObfsTLS(t *testing.T) {
 		Cipher:   "chacha20-ietf-poly1305",
 		UDP:      true,
 		Plugin:   "obfs",
-		PluginOpts: map[string]interface{}{
+		PluginOpts: map[string]any{
 			"mode": "tls",
 		},
 	})
@@ -160,7 +160,7 @@ func TestClash_ShadowsocksV2RayPlugin(t *testing.T) {
 		Cipher:   "chacha20-ietf-poly1305",
 		UDP:      true,
 		Plugin:   "v2ray-plugin",
-		PluginOpts: map[string]interface{}{
+		PluginOpts: map[string]any{
 			"mode": "websocket",
 		},
 	})

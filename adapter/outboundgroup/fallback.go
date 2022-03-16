@@ -97,12 +97,11 @@ func (f *Fallback) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
-	all := make([]string, 0)
+	var all []string
 	for _, proxy := range f.proxies(false) {
 		all = append(all, proxy.Name())
 	}
-
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type": f.Type().String(),
 		"now":  f.Now(),
 		"all":  all,
@@ -116,8 +115,8 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 }
 
 func (f *Fallback) proxies(touch bool) []C.Proxy {
-	elm, _, _ := f.single.Do(func() (interface{}, error) {
-		return getProvidersProxies(f.providers, touch, f.filter), nil
+	elm, _, _ := f.single.Do(func() (any, error) {
+		return getProvidersProxies(f.providers, touch), nil
 	})
 
 	return elm.([]C.Proxy)

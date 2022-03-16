@@ -10,7 +10,7 @@ import (
 
 func lg() Factory {
 	initial := -1
-	return func(context.Context) (interface{}, error) {
+	return func(context.Context) (any, error) {
 		initial++
 		return initial, nil
 	}
@@ -34,7 +34,7 @@ func TestPool_MaxSize(t *testing.T) {
 	size := 5
 	pool := New(g, WithSize(size))
 
-	items := []interface{}{}
+	items := []any{}
 
 	for i := 0; i < size; i++ {
 		item, _ := pool.Get()

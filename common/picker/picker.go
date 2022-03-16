@@ -17,7 +17,7 @@ type Picker struct {
 
 	once    sync.Once
 	errOnce sync.Once
-	result  interface{}
+	result  any
 	err     error
 }
 
@@ -43,7 +43,7 @@ func WithTimeout(ctx context.Context, timeout time.Duration) (*Picker, context.C
 
 // Wait blocks until all function calls from the Go method have returned,
 // then returns the first nil error result (if any) from them.
-func (p *Picker) Wait() interface{} {
+func (p *Picker) Wait() any {
 	p.wg.Wait()
 	if p.cancel != nil {
 		p.cancel()
@@ -58,7 +58,7 @@ func (p *Picker) Error() error {
 
 // Go calls the given function in a new goroutine.
 // The first call to return a nil error cancels the group; its result will be returned by Wait.
-func (p *Picker) Go(f func() (interface{}, error)) {
+func (p *Picker) Go(f func() (any, error)) {
 	p.wg.Add(1)
 
 	go func() {

@@ -2,7 +2,7 @@ linters:
   disable-all: true
   enable:
     - gofumpt
-    - megacheck
+    - staticcheck
     - govet
     - gci
 
@@ -12,3 +12,5 @@ linters-settings:
       - standard
       - prefix(github.com/Dreamacro/clash)
       - default
+  staticcheck:
+    go: '1.18'

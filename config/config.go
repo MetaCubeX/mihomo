@@ -186,8 +186,8 @@ type RawConfig struct {
 	Tun           Tun                               `yaml:"tun"`
 	Experimental  Experimental                      `yaml:"experimental"`
 	Profile       Profile                           `yaml:"profile"`
-	Proxy         []map[string]interface{}          `yaml:"proxies"`
-	ProxyGroup    []map[string]interface{}          `yaml:"proxy-groups"`
+	Proxy         []map[string]any          `yaml:"proxies"`
+	ProxyGroup    []map[string]any
 	Rule          []string                          `yaml:"rules"`
 	Script        Script                            `yaml:"script"`
 }
@@ -216,8 +216,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		LogLevel:       log.INFO,
 		Hosts:          map[string]string{},
 		Rule:           []string{},
-		Proxy:          []map[string]interface{}{},
-		ProxyGroup:     []map[string]interface{}{},
+		Proxy:          []map[string]any{},
+		ProxyGroup:     []map[string]any{},
 		Tun: Tun{
 			Enable:    false,
 			Stack:     "gvisor",
@@ -432,7 +432,19 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		proxies[groupName] = adapter.NewProxy(group)
 	}
 
-	var ps []C.Proxy
+	// initial compatible provider
+	for _, pd := range providersMap {
+		if pd.VehicleType() != providerTypes.Compatible {
+			continue
+		}
+
+		log.Infoln("Start initial compatible provider %s", pd.Name())
+		if err := pd.Initial(); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	ps := []C.Proxy{}
 	for _, v := range proxyList {
 		ps = append(ps, proxies[v])
 	}
@@ -597,7 +609,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 			if ip == nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
-			_ = tree.Insert(domain, ip)
+			tree.Insert(domain, ip)
 		}
 	}
 
@@ -622,7 +634,7 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 }
 
 func parseNameServer(servers []string) ([]dns.NameServer, error) {
-	var nameservers []dns.NameServer
+	nameservers := []dns.NameServer{}
 
 	for idx, server := range servers {
 		// parse without scheme .e.g 8.8.8.8:53
@@ -693,7 +705,7 @@ func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServe
 }
 
 func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
-	var ipNets []*net.IPNet
+	ipNets := []*net.IPNet{}
 
 	for idx, ip := range ips {
 		_, ipnet, err := net.ParseCIDR(ip)
@@ -795,7 +807,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New()
 			for _, domain := range cfg.FakeIPFilter {
-				_ = host.Insert(domain, true)
+				host.Insert(domain, true)
 			}
 		}
 
@@ -846,11 +858,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 }
 
 func parseAuthentication(rawRecords []string) []auth.AuthUser {
-	users := make([]auth.AuthUser, 0)
+	users := []auth.AuthUser{}
 	for _, line := range rawRecords {
-		userData := strings.SplitN(line, ":", 2)
-		if len(userData) == 2 {
-			users = append(users, auth.AuthUser{User: userData[0], Pass: userData[1]})
+		if user, pass, found := strings.Cut(line, ":"); found {
+			users = append(users, auth.AuthUser{User: user, Pass: pass})
 		}
 	}
 	return users

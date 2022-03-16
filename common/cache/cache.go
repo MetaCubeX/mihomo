@@ -18,11 +18,11 @@ type cache struct {
 
 type element struct {
 	Expired time.Time
-	Payload interface{}
+	Payload any
 }
 
 // Put element in Cache with its ttl
-func (c *cache) Put(key interface{}, payload interface{}, ttl time.Duration) {
+func (c *cache) Put(key any, payload any, ttl time.Duration) {
 	c.mapping.Store(key, &element{
 		Payload: payload,
 		Expired: time.Now().Add(ttl),
@@ -30,7 +30,7 @@ func (c *cache) Put(key interface{}, payload interface{}, ttl time.Duration) {
 }
 
 // Get element in Cache, and drop when it expired
-func (c *cache) Get(key interface{}) interface{} {
+func (c *cache) Get(key any) any {
 	item, exist := c.mapping.Load(key)
 	if !exist {
 		return nil
@@ -45,7 +45,7 @@ func (c *cache) Get(key interface{}) interface{} {
 }
 
 // GetWithExpire element in Cache with Expire Time
-func (c *cache) GetWithExpire(key interface{}) (payload interface{}, expired time.Time) {
+func (c *cache) GetWithExpire(key any) (payload any, expired time.Time) {
 	item, exist := c.mapping.Load(key)
 	if !exist {
 		return
@@ -60,7 +60,7 @@ func (c *cache) GetWithExpire(key interface{}) (payload interface{}, expired tim
 }
 
 func (c *cache) cleanup() {
-	c.mapping.Range(func(k, v interface{}) bool {
+	c.mapping.Range(func(k, v any) bool {
 		key := k.(string)
 		elm := v.(*element)
 		if time.Since(elm.Expired) > 0 {

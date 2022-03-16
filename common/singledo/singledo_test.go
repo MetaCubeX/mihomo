@@ -13,7 +13,7 @@ func TestBasic(t *testing.T) {
 	single := NewSingle(time.Millisecond * 30)
 	foo := 0
 	shardCount := atomic.NewInt32(0)
-	call := func() (interface{}, error) {
+	call := func() (any, error) {
 		foo++
 		time.Sleep(time.Millisecond * 5)
 		return nil, nil
@@ -40,7 +40,7 @@ func TestBasic(t *testing.T) {
 func TestTimer(t *testing.T) {
 	single := NewSingle(time.Millisecond * 30)
 	foo := 0
-	call := func() (interface{}, error) {
+	call := func() (any, error) {
 		foo++
 		return nil, nil
 	}
@@ -56,7 +56,7 @@ func TestTimer(t *testing.T) {
 func TestReset(t *testing.T) {
 	single := NewSingle(time.Millisecond * 30)
 	foo := 0
-	call := func() (interface{}, error) {
+	call := func() (any, error) {
 		foo++
 		return nil, nil
 	}
