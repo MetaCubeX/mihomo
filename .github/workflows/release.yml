@@ -14,8 +14,7 @@ jobs:
         #with:
         #  go-version: ${{ steps.version.outputs.go_version }}
         with:
-          go-version: 1.18.0-rc1
-          stable: false
+          go-version: 1.18.x
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3

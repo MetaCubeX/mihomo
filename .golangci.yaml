@@ -5,6 +5,8 @@ linters:
     - staticcheck
     - govet
 #    - gci
+    - gofmt
+    - goimports
 
 linters-settings:
   gci:

@@ -19,7 +19,7 @@ const (
 type TUNStack int
 
 // UnmarshalYAML unserialize TUNStack with yaml
-func (e *TUNStack) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (e *TUNStack) UnmarshalYAML(unmarshal func(any) error) error {
 	var tp string
 	if err := unmarshal(&tp); err != nil {
 		return err
@@ -33,7 +33,7 @@ func (e *TUNStack) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML serialize TUNStack with yaml
-func (e TUNStack) MarshalYAML() (interface{}, error) {
+func (e TUNStack) MarshalYAML() (any, error) {
 	return e.String(), nil
 }
 

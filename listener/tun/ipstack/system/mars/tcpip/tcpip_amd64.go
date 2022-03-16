@@ -1,5 +1,4 @@
 //go:build !noasm
-// +build !noasm
 
 package tcpip
 

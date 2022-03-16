@@ -11,6 +11,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 
 	"golang.org/x/sys/windows"
+	"golang.zx2c4.com/wireguard/windows/services"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
@@ -24,7 +25,7 @@ func GetAutoDetectInterface() (string, error) {
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
-	retryOnFailure := StartedAtBoot()
+	retryOnFailure := services.StartedAtBoot()
 	tryTimes := 0
 	var err error
 startOver:
