@@ -116,7 +116,7 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 
 func (f *Fallback) proxies(touch bool) []C.Proxy {
 	elm, _, _ := f.single.Do(func() (any, error) {
-		return getProvidersProxies(f.providers, touch), nil
+		return getProvidersProxies(f.providers, touch, f.filter), nil
 	})
 
 	return elm.([]C.Proxy)

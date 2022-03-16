@@ -79,7 +79,7 @@ func (s *Selector) Set(name string) error {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {
+func (s *Selector) Unwrap(*C.Metadata) C.Proxy {
 	return s.selectedProxy(true)
 }
 
