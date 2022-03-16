@@ -81,7 +81,9 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	case "DST-PORT":
 		parsed, parseErr = RC.NewPort(payload, target, false, ruleExtra)
 	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, target, ruleExtra)
+		parsed, parseErr = RC.NewProcess(payload, target, true, ruleExtra)
+	case "PROCESS-PATH":
+		parsed, parseErr = RC.NewProcess(payload, target, false, ruleExtra)
 	case "GEOIP":
 		noResolve := RC.HasNoResolve(params)
 		parsed, parseErr = RC.NewGEOIP(payload, target, noResolve, ruleExtra)

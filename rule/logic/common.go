@@ -94,7 +94,9 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 	case "DST-PORT":
 		parsed, parseErr = RC.NewPort(payload, "", false, nil)
 	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, "", nil)
+		parsed, parseErr = RC.NewProcess(payload, "", true, nil)
+	case "PROCESS-PATH":
+		parsed, parseErr = RC.NewProcess(payload, "", false, nil)
 	case "RULE-SET":
 		parsed, parseErr = provider.NewRuleSet(payload, "", nil)
 	case "NOT":

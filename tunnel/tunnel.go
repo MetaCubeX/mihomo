@@ -36,7 +36,7 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	preProcessCacheFinder, _ = R.NewProcess("", "", nil)
+	preProcessCacheFinder, _ = R.NewProcess("", "", false, nil)
 )
 
 func init() {
