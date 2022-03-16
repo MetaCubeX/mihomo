@@ -5,7 +5,7 @@ import (
 	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
-	"github.com/Dreamacro/clash/config"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"net"
 	"strings"
@@ -22,7 +22,7 @@ type geoipFilter struct {
 var geoIPMatcher *router.GeoIPMatcher
 
 func (gf *geoipFilter) Match(ip net.IP) bool {
-	if !config.GeodataMode {
+	if !C.GeodataMode {
 		record, _ := mmdb.Instance().Country(ip)
 		return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
 	}
