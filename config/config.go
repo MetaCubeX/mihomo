@@ -566,6 +566,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			if err := initGeoSite(); err != nil {
 				return nil, nil, fmt.Errorf("can't initial GeoSite: %w", err)
 			}
+			initMode = false
 		}
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
