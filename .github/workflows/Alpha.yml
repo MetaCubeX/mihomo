@@ -38,6 +38,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
         with:
-          tag_name: Alpha
+          tag_name: alpha
           files: bin/*
           prerelease: true
