@@ -31,7 +31,7 @@ type GroupCommonOption struct {
 	DisableUDP bool     `group:"disable-udp,omitempty"`
 }
 
-func ParseProxyGroup(config map[string]interface{}, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
+func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 
 	groupOption := &GroupCommonOption{

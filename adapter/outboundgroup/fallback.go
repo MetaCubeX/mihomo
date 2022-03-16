@@ -59,7 +59,7 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 	for _, proxy := range f.proxies(false) {
 		all = append(all, proxy.Name())
 	}
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type": f.Type().String(),
 		"now":  f.Now(),
 		"all":  all,
@@ -73,7 +73,7 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 }
 
 func (f *Fallback) proxies(touch bool) []C.Proxy {
-	elm, _, _ := f.single.Do(func() (interface{}, error) {
+	elm, _, _ := f.single.Do(func() (any, error) {
 		return getProvidersProxies(f.providers, touch), nil
 	})
 

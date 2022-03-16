@@ -56,7 +56,7 @@ jobs:
         id: tags
         with:
           script: |
-            const ref = `${context.payload.ref.replace(/\/?refs\/tags\//, '')}`
+            const ref = context.payload.ref.replace(/\/?refs\/tags\//, '')
             const tags = [
               'dreamacro/clash:latest',
               `dreamacro/clash:${ref}`,

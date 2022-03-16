@@ -4,10 +4,10 @@ go 1.18
 
 require (
 	github.com/Dreamacro/clash v1.7.2-0.20211108085948-bd2ea2b917aa
-	github.com/docker/docker v20.10.12+incompatible
+	github.com/docker/docker v20.10.13+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/miekg/dns v1.1.46
-	github.com/stretchr/testify v1.7.0
+	github.com/miekg/dns v1.1.47
+	github.com/stretchr/testify v1.7.1
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 )
 
@@ -15,10 +15,10 @@ replace github.com/Dreamacro/clash => ../
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.7 // indirect
-	github.com/Microsoft/go-winio v0.5.1 // indirect
-	github.com/containerd/containerd v1.5.8 // indirect
+	github.com/Microsoft/go-winio v0.5.2 // indirect
+	github.com/containerd/containerd v1.6.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/docker/distribution v2.7.1+incompatible // indirect
+	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -26,9 +26,8 @@ require (
 	github.com/google/btree v1.0.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/insomniacslk/dhcp v0.0.0-20211214070828-5297eed8f489 // indirect
+	github.com/insomniacslk/dhcp v0.0.0-20220119180841-3c283ff8b7dd // indirect
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
-	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/oschwald/geoip2-golang v1.6.1 // indirect
@@ -40,21 +39,22 @@ require (
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
+	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd // indirect
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
+	golang.org/x/sys v0.0.0-20220315194320-039c03cc5b86 // indirect
 	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
-	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
+	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65 // indirect
 	golang.org/x/tools v0.1.9 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220201002028-22d54a5eb477 // indirect
-	google.golang.org/genproto v0.0.0-20210722135532-667f2b7c528f // indirect
-	google.golang.org/grpc v1.43.0 // indirect
+	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
+	google.golang.org/grpc v1.45.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
-	gvisor.dev/gvisor v0.0.0-20220311014831-b314d81fbac7 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gotest.tools/v3 v3.1.0 // indirect
+	gvisor.dev/gvisor v0.0.0-20220314190221-89a04115dfa4 // indirect
 )

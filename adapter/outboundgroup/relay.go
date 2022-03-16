@@ -72,14 +72,14 @@ func (r *Relay) MarshalJSON() ([]byte, error) {
 	for _, proxy := range r.rawProxies(false) {
 		all = append(all, proxy.Name())
 	}
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type": r.Type().String(),
 		"all":  all,
 	})
 }
 
 func (r *Relay) rawProxies(touch bool) []C.Proxy {
-	elm, _, _ := r.single.Do(func() (interface{}, error) {
+	elm, _, _ := r.single.Do(func() (any, error) {
 		return getProvidersProxies(r.providers, touch), nil
 	})
 
