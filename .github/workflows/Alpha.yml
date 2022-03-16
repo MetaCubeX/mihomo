@@ -34,7 +34,7 @@ jobs:
           BINDIR: bin
         run: make -j releases
 
-      - name: Upload Dev
+      - name: Upload Alpha
         uses: softprops/action-gh-release@v1
         if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
         with:
