@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	logCh  = make(chan interface{})
+	logCh  = make(chan any)
 	source = observable.NewObservable(logCh)
 	level  = INFO
 )
@@ -29,31 +29,31 @@ func (e *Event) Type() string {
 	return e.LogLevel.String()
 }
 
-func Infoln(format string, v ...interface{}) {
+func Infoln(format string, v ...any) {
 	event := newLog(INFO, format, v...)
 	logCh <- event
 	print(event)
 }
 
-func Warnln(format string, v ...interface{}) {
+func Warnln(format string, v ...any) {
 	event := newLog(WARNING, format, v...)
 	logCh <- event
 	print(event)
 }
 
-func Errorln(format string, v ...interface{}) {
+func Errorln(format string, v ...any) {
 	event := newLog(ERROR, format, v...)
 	logCh <- event
 	print(event)
 }
 
-func Debugln(format string, v ...interface{}) {
+func Debugln(format string, v ...any) {
 	event := newLog(DEBUG, format, v...)
 	logCh <- event
 	print(event)
 }
 
-func Fatalln(format string, v ...interface{}) {
+func Fatalln(format string, v ...any) {
 	log.Fatalf(format, v...)
 }
 
@@ -91,7 +91,7 @@ func print(data *Event) {
 	}
 }
 
-func newLog(logLevel LogLevel, format string, v ...interface{}) *Event {
+func newLog(logLevel LogLevel, format string, v ...any) *Event {
 	return &Event{
 		LogLevel: logLevel,
 		Payload:  fmt.Sprintf(format, v...),

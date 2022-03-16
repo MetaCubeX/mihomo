@@ -6,12 +6,12 @@ import (
 
 // Queue is a simple concurrent safe queue
 type Queue struct {
-	items []interface{}
+	items []any
 	lock  sync.RWMutex
 }
 
 // Put add the item to the queue.
-func (q *Queue) Put(items ...interface{}) {
+func (q *Queue) Put(items ...any) {
 	if len(items) == 0 {
 		return
 	}
@@ -22,7 +22,7 @@ func (q *Queue) Put(items ...interface{}) {
 }
 
 // Pop returns the head of items.
-func (q *Queue) Pop() interface{} {
+func (q *Queue) Pop() any {
 	if len(q.items) == 0 {
 		return nil
 	}
@@ -35,7 +35,7 @@ func (q *Queue) Pop() interface{} {
 }
 
 // Last returns the last of item.
-func (q *Queue) Last() interface{} {
+func (q *Queue) Last() any {
 	if len(q.items) == 0 {
 		return nil
 	}
@@ -47,8 +47,8 @@ func (q *Queue) Last() interface{} {
 }
 
 // Copy get the copy of queue.
-func (q *Queue) Copy() []interface{} {
-	items := []interface{}{}
+func (q *Queue) Copy() []any {
+	items := []any{}
 	q.lock.RLock()
 	items = append(items, q.items...)
 	q.lock.RUnlock()
@@ -66,6 +66,6 @@ func (q *Queue) Len() int64 {
 // New is a constructor for a new concurrent safe queue.
 func New(hint int64) *Queue {
 	return &Queue{
-		items: make([]interface{}, 0, hint),
+		items: make([]any, 0, hint),
 	}
 }

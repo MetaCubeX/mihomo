@@ -117,7 +117,7 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	q := m.Question[0]
 
-	ret, err, shared := r.group.Do(q.String(), func() (result interface{}, err error) {
+	ret, err, shared := r.group.Do(q.String(), func() (result any, err error) {
 		defer func() {
 			if err != nil {
 				return
@@ -153,7 +153,7 @@ func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.
 	fast, ctx := picker.WithTimeout(ctx, resolver.DefaultDNSTimeout)
 	for _, client := range clients {
 		r := client
-		fast.Go(func() (interface{}, error) {
+		fast.Go(func() (any, error) {
 			m, err := r.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err

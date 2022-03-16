@@ -54,7 +54,7 @@ func (s *Selector) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type": s.Type().String(),
 		"now":  s.Now(),
 		"all":  all,
@@ -83,7 +83,7 @@ func (s *Selector) Unwrap(metadata *C.Metadata) C.Proxy {
 }
 
 func (s *Selector) selectedProxy(touch bool) C.Proxy {
-	elm, _, _ := s.single.Do(func() (interface{}, error) {
+	elm, _, _ := s.single.Do(func() (any, error) {
 		proxies := getProvidersProxies(s.providers, touch)
 		for _, proxy := range proxies {
 			if proxy.Name() == s.selected {
