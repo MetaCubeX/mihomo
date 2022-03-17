@@ -69,7 +69,7 @@ func main() {
 		}
 		C.SetConfig(configFile)
 	} else {
-		configFile := filepath.Join(C.Path.HomeDir(), C.Path.Config())
+		configFile = filepath.Join(C.Path.HomeDir(), C.Path.Config())
 		C.SetConfig(configFile)
 	}
 
@@ -110,9 +110,9 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
-	// clean up
-	log.Warnln("Clash clean up")
-	hub.CleanUp()
+	// cleanup
+	log.Warnln("Clash cleanup")
+	hub.Cleanup()
 
 	log.Warnln("Clash shutting down")
 }

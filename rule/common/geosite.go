@@ -13,10 +13,10 @@ import (
 )
 
 type GEOSITE struct {
-	country   string
-	adapter   string
-	ruleExtra *C.RuleExtra
-	matcher   *router.DomainMatcher
+	*Base
+	country string
+	adapter string
+	matcher *router.DomainMatcher
 }
 
 func (gs *GEOSITE) RuleType() C.RuleType {
@@ -48,10 +48,6 @@ func (gs *GEOSITE) ShouldFindProcess() bool {
 	return false
 }
 
-func (gs *GEOSITE) RuleExtra() *C.RuleExtra {
-	return gs.ruleExtra
-}
-
 func (gs *GEOSITE) GetDomainMatcher() *router.DomainMatcher {
 	return gs.matcher
 }
@@ -65,11 +61,13 @@ func NewGEOSITE(country string, adapter string, ruleExtra *C.RuleExtra) (*GEOSIT
 	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, recordsCount)
 
 	geoSite := &GEOSITE{
-		country:   country,
-		adapter:   adapter,
-		ruleExtra: ruleExtra,
-		matcher:   matcher,
+		Base:    &Base{},
+		country: country,
+		adapter: adapter,
+		matcher: matcher,
 	}
 
 	return geoSite, nil
 }
+
+var _ C.Rule = (*GEOSITE)(nil)

@@ -34,7 +34,7 @@ func TestPool_MaxSize(t *testing.T) {
 	size := 5
 	pool := New(g, WithSize(size))
 
-	items := []any{}
+	var items []any
 
 	for i := 0; i < size; i++ {
 		item, _ := pool.Get()
