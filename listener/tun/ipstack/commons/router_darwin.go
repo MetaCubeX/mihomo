@@ -20,7 +20,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
-		gw            = ip
+		gw            = ip.Next()
 		netmask       = IPv4MaskString(addr.Bits())
 	)
 
@@ -31,10 +31,10 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	// _, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
-	// if err != nil {
-	//	return err
-	// }
+	_, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
+	if err != nil {
+		return err
+	}
 
 	if autoRoute {
 		err = configInterfaceRouting(interfaceName, addr)
@@ -43,15 +43,18 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 }
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
-	routes := append(Routes, addr.String())
+	var (
+		routes  = append(Routes, addr.String())
+		gateway = addr.Masked().Addr().Next()
+	)
 
-	for _, route := range routes {
-		if err := execRouterCmd("add", "-inet", route, interfaceName); err != nil {
+	for _, destination := range routes {
+		if _, err := cmd.ExecCmd(fmt.Sprintf("route add -net %s %s", destination, gateway)); err != nil {
 			return err
 		}
 	}
 
-	// return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
+	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
 	return nil
 }
 

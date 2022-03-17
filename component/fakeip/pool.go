@@ -147,10 +147,10 @@ type Options struct {
 
 // New return Pool instance
 func New(options Options) (*Pool, error) {
-	min := ipToUint(options.IPNet.IP) + 2
+	min := ipToUint(options.IPNet.IP) + 3
 
 	ones, bits := options.IPNet.Mask.Size()
-	total := 1<<uint(bits-ones) - 3
+	total := 1<<uint(bits-ones) - 4
 
 	if total <= 0 {
 		return nil, errors.New("ipnet don't have valid ip")
@@ -160,7 +160,7 @@ func New(options Options) (*Pool, error) {
 	pool := &Pool{
 		min:       min,
 		max:       max,
-		gateway:   min - 1,
+		gateway:   min - 2,
 		broadcast: max + 1,
 		host:      options.Host,
 		ipnet:     options.IPNet,

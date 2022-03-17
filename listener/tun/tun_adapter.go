@@ -25,11 +25,11 @@ import (
 // New TunAdapter
 func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 	var (
-		tunAddress = netip.MustParsePrefix(tunAddressPrefix)
-		devName    = tunConf.Device
-		stackType  = tunConf.Stack
-		autoRoute  = tunConf.AutoRoute
-		mtu        = 9000
+		tunAddress, _ = netip.ParsePrefix(tunAddressPrefix)
+		devName       = tunConf.Device
+		stackType     = tunConf.Stack
+		autoRoute     = tunConf.AutoRoute
+		mtu           = 9000
 
 		tunDevice device.Device
 		tunStack  ipstack.Stack
