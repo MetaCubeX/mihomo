@@ -55,7 +55,6 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	}
 
 	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
-	return nil
 }
 
 func execRouterCmd(action, inet, route string, interfaceName string) error {
