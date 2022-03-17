@@ -74,7 +74,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 
-	log.SetLevel(log.DEBUG)
+	log.SetLevel(log.INFO)
 
 	updateUsers(cfg.Users)
 	updateHosts(cfg.Hosts)

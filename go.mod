@@ -59,6 +59,5 @@ require (
 )
 
 replace (
-	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220317154339-1f3234fb4766
-
+	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220317161916-5dcd44f3c355
 )
