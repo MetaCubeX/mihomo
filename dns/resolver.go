@@ -150,7 +150,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	return
 }
 
-func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (*D.Msg, error) {
+func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
 	fast, ctx := picker.WithTimeout(ctx, resolver.DefaultDNSTimeout)
 	for _, client := range clients {
 		r := client
@@ -174,8 +174,8 @@ func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.
 		return nil, err
 	}
 
-	msg := elm.(*D.Msg)
-	return msg, nil
+	msg = elm.(*D.Msg)
+	return
 }
 
 func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
@@ -216,7 +216,7 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 	return false
 }
 
-func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (*D.Msg, error) {
+func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	if matched := r.matchPolicy(m); len(matched) != 0 {
 		res := <-r.asyncExchange(ctx, matched, m)
 		return res.Msg, res.Error
@@ -233,20 +233,23 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (*D.Msg, error) {
 
 	if r.fallback == nil || len(r.fallback) == 0 { // directly return if no fallback servers are available
 		res := <-msgCh
-		return res.Msg, res.Error
+		msg, err = res.Msg, res.Error
+		return
 	}
 
 	res := <-msgCh
 	if res.Error == nil {
 		if ips := msgToIP(res.Msg); len(ips) != 0 {
 			if !r.shouldIPFallback(ips[0]) {
-				return res.Msg, res.Error // no need to wait for fallback result
+				msg, err = res.Msg, res.Error // no need to wait for fallback result
+				return
 			}
 		}
 	}
 
 	res = <-r.asyncExchange(ctx, r.fallback, m)
-	return res.Msg, res.Error
+	msg, err = res.Msg, res.Error
+	return
 }
 
 func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error) {

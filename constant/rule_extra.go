@@ -7,8 +7,6 @@ import (
 	"github.com/Dreamacro/clash/component/geodata/router"
 )
 
-var TunBroadcastAddr = net.IPv4(198, 18, 255, 255)
-
 type RuleExtra struct {
 	Network      NetWork
 	SourceIPs    []*net.IPNet

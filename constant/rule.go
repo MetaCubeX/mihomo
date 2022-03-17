@@ -75,4 +75,5 @@ type Rule interface {
 	ShouldResolveIP() bool
 	ShouldFindProcess() bool
 	RuleExtra() *RuleExtra
+	SetRuleExtra(re *RuleExtra)
 }

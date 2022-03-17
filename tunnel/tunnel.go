@@ -5,6 +5,7 @@ import (
 	"fmt"
 	R "github.com/Dreamacro/clash/rule/common"
 	"net"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
@@ -35,8 +36,6 @@ var (
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
-
-	preProcessCacheFinder, _ = R.NewProcess("", "", false, nil)
 )
 
 func init() {
@@ -152,15 +151,28 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				// redir-host should lookup the hosts
 				metadata.DstIP = node.Data.(net.IP)
 			}
-		} else if resolver.IsFakeIP(metadata.DstIP) && !C.TunBroadcastAddr.Equal(metadata.DstIP) {
+		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
+		}
+	}
+
+	// pre resolve process name
+	srcPort, err := strconv.Atoi(metadata.SrcPort)
+	if err == nil && P.ShouldFindProcess(metadata) {
+		path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
+		if err != nil {
+			log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+		} else {
+			log.Debugln("[Process] %s from process %s", metadata.String(), path)
+			metadata.Process = filepath.Base(path)
+			metadata.ProcessPath = path
 		}
 	}
 
 	return nil
 }
 
-func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	switch mode {
 	case Direct:
 		proxy = proxies["DIRECT"]
@@ -224,7 +236,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		}()
 
 		pCtx := icontext.NewPacketConnContext(metadata)
-		proxy, rule, err := resolveMetadata(metadata)
+		proxy, rule, err := resolveMetadata(pCtx, metadata)
 		if err != nil {
 			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 			return
@@ -232,7 +244,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
-		rawPc, err := proxy.ListenPacketContext(ctx, metadata)
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -282,7 +294,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	proxy, rule, err := resolveMetadata(metadata)
+	proxy, rule, err := resolveMetadata(connCtx, metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -290,7 +302,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
-	remoteConn, err := proxy.DialContext(ctx, metadata)
+	remoteConn, err := proxy.DialContext(ctx, metadata.Pure())
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -339,9 +351,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		resolved = true
 	}
 
-	// preset process name and cache it
-	preProcessCacheFinder.Match(metadata)
-
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			ip, err := resolver.ResolveIP(metadata.Host)
@@ -352,21 +361,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				metadata.DstIP = ip
 			}
 			resolved = true
-		}
-
-		if !processFound && rule.ShouldFindProcess() {
-			processFound = true
-
-			srcPort, err := strconv.Atoi(metadata.SrcPort)
-			if err == nil {
-				path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
-				if err != nil {
-					log.Debugln("[Process] find process %s: %v", metadata.String(), err)
-				} else {
-					log.Debugln("[Process] %s from process %s", metadata.String(), path)
-					metadata.ProcessPath = path
-				}
-			}
 		}
 
 		if rule.Match(metadata) {
@@ -387,6 +381,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				}
 
 				if extra.NotMatchSourceIP(metadata.SrcIP) {
+					continue
+				}
+
+				if extra.NotMatchProcessName(metadata.Process) {
 					continue
 				}
 			}

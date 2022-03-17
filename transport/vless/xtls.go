@@ -23,7 +23,7 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 
 	xtlsConn := xtls.Client(conn, xtlsConfig)
 
-	// fix tls handshake not timeout
+	// fix xtls handshake not timeout
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 	defer cancel()
 	err := xtlsConn.HandshakeContext(ctx)

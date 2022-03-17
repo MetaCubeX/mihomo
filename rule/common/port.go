@@ -14,11 +14,11 @@ type portReal struct {
 }
 
 type Port struct {
-	adapter   string
-	port      string
-	isSource  bool
-	portList  []portReal
-	ruleExtra *C.RuleExtra
+	*Base
+	adapter  string
+	port     string
+	isSource bool
+	portList []portReal
 }
 
 func (p *Port) ShouldFindProcess() bool {
@@ -51,16 +51,8 @@ func (p *Port) ShouldResolveIP() bool {
 	return false
 }
 
-func (p *Port) RuleExtra() *C.RuleExtra {
-	return p.ruleExtra
-}
-
 func (p *Port) matchPortReal(portRef string) bool {
-	port, err := strconv.Atoi(portRef)
-	if err != nil {
-		return false
-	}
-
+	port, _ := strconv.Atoi(portRef)
 	var rs bool
 	for _, pr := range p.portList {
 		if pr.portEnd == -1 {
@@ -75,7 +67,7 @@ func (p *Port) matchPortReal(portRef string) bool {
 	return false
 }
 
-func NewPort(port string, adapter string, isSource bool, ruleExtra *C.RuleExtra) (*Port, error) {
+func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 	ports := strings.Split(port, "/")
 	if len(ports) > 28 {
 		return nil, fmt.Errorf("%s, too many ports to use, maximum support 28 ports", errPayload.Error())
@@ -93,24 +85,25 @@ func NewPort(port string, adapter string, isSource bool, ruleExtra *C.RuleExtra)
 			return nil, errPayload
 		}
 
-		portStart, err := strconv.Atoi(strings.Trim(subPorts[0], "[ ]"))
-		if err != nil || portStart < 0 || portStart > 65535 {
+		portStart, err := strconv.ParseUint(strings.Trim(subPorts[0], "[ ]"), 10, 16)
+		if err != nil {
 			return nil, errPayload
 		}
 
-		if subPortsLen == 1 {
-			portList = append(portList, portReal{portStart, -1})
-		} else if subPortsLen == 2 {
-			portEnd, err1 := strconv.Atoi(strings.Trim(subPorts[1], "[ ]"))
-			if err1 != nil || portEnd < 0 || portEnd > 65535 {
+		switch subPortsLen {
+		case 1:
+			portList = append(portList, portReal{int(portStart), -1})
+		case 2:
+			portEnd, err := strconv.ParseUint(strings.Trim(subPorts[1], "[ ]"), 10, 16)
+			if err != nil {
 				return nil, errPayload
 			}
 
 			shouldReverse := portStart > portEnd
 			if shouldReverse {
-				portList = append(portList, portReal{portEnd, portStart})
+				portList = append(portList, portReal{int(portEnd), int(portStart)})
 			} else {
-				portList = append(portList, portReal{portStart, portEnd})
+				portList = append(portList, portReal{int(portStart), int(portEnd)})
 			}
 		}
 	}
@@ -120,10 +113,12 @@ func NewPort(port string, adapter string, isSource bool, ruleExtra *C.RuleExtra)
 	}
 
 	return &Port{
-		adapter:   adapter,
-		port:      port,
-		isSource:  isSource,
-		portList:  portList,
-		ruleExtra: ruleExtra,
+		Base:     &Base{},
+		adapter:  adapter,
+		port:     port,
+		isSource: isSource,
+		portList: portList,
 	}, nil
 }
+
+var _ C.Rule = (*Port)(nil)

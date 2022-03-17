@@ -67,7 +67,7 @@ func downloadGeoSite(path string) (err error) {
 
 func initGeoSite() error {
 	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
-		log.Infoln("Need GeoSite but can't find GeoSite.dat, start download")
+		log.Infoln("Can't find GeoSite.dat, start download")
 		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
 			return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
 		}
@@ -90,7 +90,7 @@ func initGeoSite() error {
 func initGeoIP() error {
 	if C.GeodataMode {
 		if _, err := os.Stat(C.Path.GeoIP()); os.IsNotExist(err) {
-			log.Infoln("Need GeoIP but can't find GeoIP.dat, start download")
+			log.Infoln("Can't find GeoIP.dat, start download")
 			if err := downloadGeoIP(C.Path.GeoIP()); err != nil {
 				return fmt.Errorf("can't download GeoIP.dat: %s", err.Error())
 			}

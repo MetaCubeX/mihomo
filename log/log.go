@@ -97,9 +97,3 @@ func newLog(logLevel LogLevel, format string, v ...any) *Event {
 		Payload:  fmt.Sprintf(format, v...),
 	}
 }
-
-func PrintLog(logLevel LogLevel, format string, v ...interface{}) {
-	event := newLog(logLevel, format, v...)
-	logCh <- event
-	print(event)
-}

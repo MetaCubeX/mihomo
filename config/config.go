@@ -7,6 +7,7 @@ import (
 	R "github.com/Dreamacro/clash/rule"
 	RP "github.com/Dreamacro/clash/rule/provider"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"regexp"
@@ -19,6 +20,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/component/auth"
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -26,6 +28,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/log"
 	T "github.com/Dreamacro/clash/tunnel"
 
@@ -47,7 +50,7 @@ type General struct {
 	AutoIptables  bool         `json:"auto-iptables"`
 }
 
-// Inbound
+// Inbound config
 type Inbound struct {
 	Port           int      `json:"port"`
 	SocksPort      int      `json:"socks-port"`
@@ -59,7 +62,7 @@ type Inbound struct {
 	BindAddress    string   `json:"bind-address"`
 }
 
-// Controller
+// Controller config
 type Controller struct {
 	ExternalController string `json:"-"`
 	ExternalUI         string `json:"-"`
@@ -104,10 +107,11 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable    bool     `yaml:"enable" json:"enable"`
-	Stack     string   `yaml:"stack" json:"stack"`
-	DnsHijack []string `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute bool     `yaml:"auto-route" json:"auto-route"`
+	Enable    bool             `yaml:"enable" json:"enable"`
+	Device    string           `yaml:"device" json:"device"`
+	Stack     C.TUNStack       `yaml:"stack" json:"stack"`
+	DNSHijack []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute bool             `yaml:"auto-route" json:"auto-route"`
 }
 
 // Script config
@@ -157,6 +161,14 @@ type RawFallbackFilter struct {
 	GeoSite   []string `yaml:"geosite"`
 }
 
+type RawTun struct {
+	Enable    bool       `yaml:"enable" json:"enable"`
+	Device    string     `yaml:"device" json:"device"`
+	Stack     C.TUNStack `yaml:"stack" json:"stack"`
+	DNSHijack []string   `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute bool       `yaml:"auto-route" json:"auto-route"`
+}
+
 type RawConfig struct {
 	Port               int          `yaml:"port"`
 	SocksPort          int          `yaml:"socks-port"`
@@ -179,17 +191,17 @@ type RawConfig struct {
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	AutoIptables       bool         `yaml:"auto-iptables"`
 
-	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
-	RuleProvider  map[string]map[string]interface{} `yaml:"rule-providers"`
-	Hosts         map[string]string                 `yaml:"hosts"`
-	DNS           RawDNS                            `yaml:"dns"`
-	Tun           Tun                               `yaml:"tun"`
-	Experimental  Experimental                      `yaml:"experimental"`
-	Profile       Profile                           `yaml:"profile"`
-	Proxy         []map[string]any                  `yaml:"proxies"`
-	ProxyGroup    []map[string]any                  `yaml:"proxy-groups"`
-	Rule          []string                          `yaml:"rules"`
-	Script        Script                            `yaml:"script"`
+	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
+	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
+	Hosts         map[string]string         `yaml:"hosts"`
+	DNS           RawDNS                    `yaml:"dns"`
+	Tun           RawTun                    `yaml:"tun"`
+	Experimental  Experimental              `yaml:"experimental"`
+	Profile       Profile                   `yaml:"profile"`
+	Proxy         []map[string]any          `yaml:"proxies"`
+	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
+	Rule          []string                  `yaml:"rules"`
+	Script        Script                    `yaml:"script"`
 }
 
 // Parse config
@@ -218,16 +230,27 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Rule:           []string{},
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
-		Tun: Tun{
+		Tun: RawTun{
 			Enable:    false,
-			Stack:     "gvisor",
-			DnsHijack: []string{"198.18.0.2:53"},
+			Device:    "",
+			Stack:     C.TunGvisor,
+			DNSHijack: []string{"198.18.0.2:53"}, // default hijack all dns query
+			AutoRoute: true,
+		},
+		Proxy:          []map[string]any{},
+		ProxyGroup:     []map[string]any{},
+		Tun: RawTun{
+			Enable:    false,
+			Device:    "",
+			Stack:     C.TunGvisor,
+			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute: true,
 		},
 		DNS: RawDNS{
-			Enable:      false,
-			UseHosts:    true,
-			FakeIPRange: "198.18.0.1/16",
+			Enable:       false,
+			UseHosts:     true,
+			EnhancedMode: C.DNSMapping,
+			FakeIPRange:  "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:     true,
 				GeoIPCode: "CN",
@@ -243,6 +266,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			NameServer: []string{
 				"223.5.5.5",
 				"119.29.29.29",
+				"https://doh.pub/dns-query",
+				"tls://223.5.5.5:853",
 			},
 			FakeIPFilter: []string{
 				"dns.msftnsci.com",
@@ -279,7 +304,13 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	config.Tun = &rawCfg.Tun
+	tunCfg, err := parseTun(rawCfg.Tun, config.General)
+	if err != nil {
+		return nil, err
+	}
+	config.Tun = tunCfg
+
+	dialer.DefaultInterface.Store(config.General.Interface)
 
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
@@ -361,12 +392,13 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]providerTypes.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]providerTypes.ProxyProvider)
-	var proxyList []string
-	_proxiesList := list.New()
-	_groupsList := list.New()
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
+
+	var proxyList []string
+	_proxiesList := list.New()
+	_groupsList := list.New()
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
@@ -417,6 +449,13 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 	}
 
+	for _, proxyProvider := range providersMap {
+		log.Infoln("Start initial provider %s", proxyProvider.Name())
+		if err := proxyProvider.Initial(); err != nil {
+			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", proxyProvider.Name(), err)
+		}
+	}
+
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
 		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap)
@@ -444,7 +483,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 	}
 
-	ps := []C.Proxy{}
+	var ps []C.Proxy
 	for _, v := range proxyList {
 		ps = append(ps, proxies[v])
 	}
@@ -543,28 +582,27 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			continue
 		}
 
+		l := len(rule)
+
 		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" {
-			payload = strings.Join(rule[1:len(rule)-1], ",")
-			target = rule[len(rule)-1]
+			target = rule[l-1]
+			payload = strings.Join(rule[1:l-1], ",")
 		} else {
-			switch l := len(rule); {
-			case l == 2:
-				target = rule[1]
-			case l == 3:
-				if ruleName == "MATCH" {
-					payload = ""
-					target = rule[1]
-					params = rule[2:]
-					break
-				}
+			if l < 2 {
+				return nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
+			}
+			if l < 4 {
+				rule = append(rule, make([]string, 4-l)...)
+			}
+			if ruleName == "MATCH" {
+				l = 2
+			}
+			if l >= 3 {
+				l = 3
 				payload = rule[1]
-				target = rule[2]
-			case l >= 4:
-				payload = rule[1]
-				target = rule[2]
-				params = rule[3:]
-			default:
-				return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
+			}
+			target = rule[l-1]
+			params = rule[l:]
 			}
 		}
 
@@ -681,6 +719,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 				Net:          dnsNetType,
 				Addr:         addr,
 				ProxyAdapter: u.Fragment,
+				Interface:    dialer.DefaultInterface.Load(),
 			},
 		)
 	}
@@ -878,4 +917,38 @@ func cleanPyKeywords(code string) string {
 		code = reg.ReplaceAllString(code, "")
 	}
 	return code
+}
+
+func parseTun(rawTun RawTun, general *General) (*Tun, error) {
+	if (rawTun.Enable || general.TProxyPort != 0) && general.Interface == "" {
+		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
+		if err != nil || autoDetectInterfaceName == "" {
+			return nil, fmt.Errorf("can not find auto detect interface: %w. you must be detect `interface-name` if tun set to enable or `tproxy-port` isn't zore", err)
+		}
+
+		general.Interface = autoDetectInterfaceName
+	}
+
+	var dnsHijack []netip.AddrPort
+
+	for _, d := range rawTun.DNSHijack {
+		if _, after, ok := strings.Cut(d, "://"); ok {
+			d = after
+		}
+
+		addrPort, err := netip.ParseAddrPort(d)
+		if err != nil {
+			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
+		}
+
+		dnsHijack = append(dnsHijack, addrPort)
+	}
+
+	return &Tun{
+		Enable:    rawTun.Enable,
+		Device:    rawTun.Device,
+		Stack:     rawTun.Stack,
+		DNSHijack: dnsHijack,
+		AutoRoute: rawTun.AutoRoute,
+	}, nil
 }

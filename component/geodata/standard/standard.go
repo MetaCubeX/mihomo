@@ -9,6 +9,7 @@ import (
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
+
 	"google.golang.org/protobuf/proto"
 )
 
