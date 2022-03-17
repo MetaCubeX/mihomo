@@ -14,7 +14,7 @@ PLATFORM_LIST = \
 	linux-armv5 \
 	linux-armv6 \
 	linux-armv7 \
-	linux-armv8 \
+	linux-arm64 \
 	linux-mips64 \
 	linux-mips64le \
 	linux-mips-softfloat \
@@ -26,20 +26,15 @@ PLATFORM_LIST = \
 	freebsd-amd64 \
 	freebsd-arm64
 
-
 WINDOWS_ARCH_LIST = \
 	windows-386 \
 	windows-amd64 \
 	windows-arm64 \
     windows-arm32v7
 
-
-all:linux-amd64\
-	linux-armv7\
+all:linux-amd64 linux-arm64\
 	darwin-amd64 darwin-arm64\
- 	windows-amd64 windows-386 \
- 	linux-mips-hardfloat linux-mips-softfloat linux-mips64 linux-mips64le linux-mipsle-hardfloat linux-mipsle-softfloat# Most used
-
+ 	windows-amd64 windows-arm64 \
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
@@ -55,9 +50,6 @@ linux-386:
 linux-amd64:
 	GOARCH=amd64 GOOS=linux GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-amd64-AutoIptables:
-	GOARCH=amd64 GOOS=linux $(GOBUILDOP) -o $(BINDIR)/$(NAME)-$@
-
 linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
@@ -70,7 +62,7 @@ linux-armv6:
 linux-armv7:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv8:
+linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat:
@@ -91,7 +83,7 @@ linux-mips64:
 linux-mips64le:
 	GOARCH=mips64le GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-android-armv8:
+android-arm64:
 	GOARCH=arm64 GOOS=android $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 freebsd-386:
@@ -128,5 +120,12 @@ $(zip_releases): %.zip : %
 all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 
 releases: $(gz_releases) $(zip_releases)
+
+vet:
+	go vet ./...
+
+lint:
+	golangci-lint run ./...
+
 clean:
 	rm $(BINDIR)/*

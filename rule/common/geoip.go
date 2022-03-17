@@ -4,23 +4,20 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/mmdb"
 	"strings"
 
+	"github.com/Dreamacro/clash/component/mmdb"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
 
 type GEOIP struct {
+	*Base
 	country      string
 	adapter      string
 	noResolveIP  bool
-	ruleExtra    *C.RuleExtra
 	geoIPMatcher *router.GeoIPMatcher
-}
-
-func (g *GEOIP) ShouldFindProcess() bool {
-	return false
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -33,8 +30,13 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 		return false
 	}
 
-	if strings.EqualFold(g.country, "LAN") || C.TunBroadcastAddr.Equal(ip) {
-		return ip.IsPrivate()
+	if strings.EqualFold(g.country, "LAN") {
+		return ip.IsPrivate() ||
+			ip.IsUnspecified() ||
+			ip.IsLoopback() ||
+			ip.IsMulticast() ||
+			ip.IsLinkLocalUnicast() ||
+			resolver.IsFakeBroadcastIP(ip)
 	}
 	if !C.GeodataMode {
 		record, _ := mmdb.Instance().Country(ip)
@@ -55,10 +57,6 @@ func (g *GEOIP) ShouldResolveIP() bool {
 	return !g.noResolveIP
 }
 
-func (g *GEOIP) RuleExtra() *C.RuleExtra {
-	return g.ruleExtra
-}
-
 func (g *GEOIP) GetCountry() string {
 	return g.country
 }
@@ -67,13 +65,13 @@ func (g *GEOIP) GetIPMatcher() *router.GeoIPMatcher {
 	return g.geoIPMatcher
 }
 
-func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.RuleExtra) (*GEOIP, error) {
+func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) {
 	if !C.GeodataMode {
 		geoip := &GEOIP{
+			Base:        &Base{},
 			country:     country,
 			adapter:     adapter,
 			noResolveIP: noResolveIP,
-			ruleExtra:   ruleExtra,
 		}
 		return geoip, nil
 	}
@@ -85,11 +83,13 @@ func NewGEOIP(country string, adapter string, noResolveIP bool, ruleExtra *C.Rul
 
 	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, recordsCount)
 	geoip := &GEOIP{
+		Base:         &Base{},
 		country:      country,
 		adapter:      adapter,
 		noResolveIP:  noResolveIP,
-		ruleExtra:    ruleExtra,
 		geoIPMatcher: geoIPMatcher,
 	}
 	return geoip, nil
 }
+
+var _ C.Rule = (*GEOIP)(nil)

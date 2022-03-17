@@ -69,7 +69,7 @@ func findProcessName(network string, ip net.IP, port int) (string, error) {
 			continue
 		}
 
-		if !ip.Equal(srcIP) {
+		if !ip.Equal(srcIP) && (network == TCP || !srcIP.IsUnspecified()) {
 			continue
 		}
 

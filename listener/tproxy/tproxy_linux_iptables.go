@@ -3,18 +3,17 @@ package tproxy
 import (
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/component/dialer"
-	"os/exec"
 	"runtime"
-	"strings"
 
+	"github.com/Dreamacro/clash/common/cmd"
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/log"
 )
 
 var (
-	interfaceName = ""
-	tproxyPort    = 0
 	dnsPort       = 0
+	tProxyPort    = 0
+	interfaceName = ""
 )
 
 const (
@@ -24,7 +23,7 @@ const (
 
 func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 	var err error
-	if _, err = execCmd("iptables -V"); err != nil {
+	if err = execCmd("iptables -V"); err != nil {
 		return fmt.Errorf("current operations system [%s] are not support iptables or command iptables does not exist", runtime.GOOS)
 	}
 
@@ -33,7 +32,7 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 	}
 
 	interfaceName = ifname
-	tproxyPort = tport
+	tProxyPort = tport
 	dnsPort = dport
 
 	// add route
@@ -63,8 +62,8 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 	addLocalnetworkToChain("clash_prerouting")
 	execCmd("iptables -t mangle -A clash_prerouting -p tcp -m socket -j clash_divert")
 	execCmd("iptables -t mangle -A clash_prerouting -p udp -m socket -j clash_divert")
-	execCmd(fmt.Sprintf("iptables -t mangle -A clash_prerouting -p tcp -j TPROXY --on-port %d --tproxy-mark %s/%s", tproxyPort, PROXY_FWMARK, PROXY_FWMARK))
-	execCmd(fmt.Sprintf("iptables -t mangle -A clash_prerouting -p udp -j TPROXY --on-port %d --tproxy-mark %s/%s", tproxyPort, PROXY_FWMARK, PROXY_FWMARK))
+	execCmd(fmt.Sprintf("iptables -t mangle -A clash_prerouting -p tcp -j TPROXY --on-port %d --tproxy-mark %s/%s", tProxyPort, PROXY_FWMARK, PROXY_FWMARK))
+	execCmd(fmt.Sprintf("iptables -t mangle -A clash_prerouting -p udp -j TPROXY --on-port %d --tproxy-mark %s/%s", tProxyPort, PROXY_FWMARK, PROXY_FWMARK))
 	execCmd("iptables -t mangle -A PREROUTING -j clash_prerouting")
 
 	execCmd(fmt.Sprintf("iptables -t nat -I PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p tcp --dport 53 -j REDIRECT --to %d", dnsPort))
@@ -96,20 +95,22 @@ func SetTProxyLinuxIPTables(ifname string, tport int, dport int) error {
 	execCmd("iptables -t nat -I OUTPUT -p tcp --dport 53 -j clash_dns_output")
 	execCmd("iptables -t nat -I OUTPUT -p udp --dport 53 -j clash_dns_output")
 
-	log.Infoln("[TProxy] Setting iptables completed")
+	log.Infoln("[TPROXY] Setting iptables completed")
 	return nil
 }
 
 func CleanUpTProxyLinuxIPTables() {
-	if interfaceName == "" || tproxyPort == 0 || dnsPort == 0 {
+	if interfaceName == "" || tProxyPort == 0 || dnsPort == 0 {
 		return
 	}
 
 	log.Warnln("Clean up tproxy linux iptables")
 
-	dialer.DefaultRoutingMark.Store(0)
+	if int(dialer.DefaultRoutingMark.Load()) == 2158 {
+		dialer.DefaultRoutingMark.Store(0)
+	}
 
-	if _, err := execCmd("iptables -t mangle -L clash_divert"); err != nil {
+	if err := execCmd("iptables -t mangle -L clash_divert"); err != nil {
 		return
 	}
 
@@ -165,16 +166,13 @@ func addLocalnetworkToChain(chain string) {
 	execCmd(fmt.Sprintf("iptables -t mangle -A %s -d 255.255.255.255/32 -j RETURN", chain))
 }
 
-func execCmd(cmdstr string) (string, error) {
-	log.Debugln("[TProxy] %s", cmdstr)
+func execCmd(cmdStr string) error {
+	log.Debugln("[TPROXY] %s", cmdStr)
 
-	args := strings.Split(cmdstr, " ")
-	cmd := exec.Command(args[0], args[1:]...)
-	out, err := cmd.CombinedOutput()
+	_, err := cmd.ExecCmd(cmdStr)
 	if err != nil {
-		log.Errorln("[TProxy] error: %s, %s", err.Error(), string(out))
-		return "", err
+		log.Warnln("[TPROXY] exec cmd: %v", err)
 	}
 
-	return string(out), nil
+	return err
 }

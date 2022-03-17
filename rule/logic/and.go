@@ -1,8 +1,12 @@
 package logic
 
-import C "github.com/Dreamacro/clash/constant"
+import (
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/rule/common"
+)
 
 type AND struct {
+	common.Base
 	rules   []C.Rule
 	payload string
 	adapter string
@@ -55,8 +59,4 @@ func (A *AND) Payload() string {
 
 func (A *AND) ShouldResolveIP() bool {
 	return A.needIP
-}
-
-func (A *AND) RuleExtra() *C.RuleExtra {
-	return nil
 }
