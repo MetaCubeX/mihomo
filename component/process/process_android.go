@@ -1,5 +1,3 @@
-//go:build !android
-
 package process
 
 import (
@@ -9,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unicode"
@@ -198,12 +197,25 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 			}
 
 			if bytes.Equal(buffer[:n], socket) {
-				return os.Readlink(path.Join(processPath, "exe"))
+				cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
+				if err != nil {
+					return "", err
+				}
+
+				return splitCmdline(cmdline), nil
 			}
 		}
 	}
 
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
+}
+
+func splitCmdline(cmdline []byte) string {
+	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	})
+
+	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {
