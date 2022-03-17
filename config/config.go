@@ -186,8 +186,8 @@ type RawConfig struct {
 	Tun           Tun                               `yaml:"tun"`
 	Experimental  Experimental                      `yaml:"experimental"`
 	Profile       Profile                           `yaml:"profile"`
-	Proxy         []map[string]any          `yaml:"proxies"`
-	ProxyGroup    []map[string]any
+	Proxy         []map[string]any                  `yaml:"proxies"`
+	ProxyGroup    []map[string]any                  `yaml:"proxy-groups"`
 	Rule          []string                          `yaml:"rules"`
 	Script        Script                            `yaml:"script"`
 }
