@@ -28,6 +28,8 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	T "github.com/Dreamacro/clash/tunnel"
+
+	"gopkg.in/yaml.v2"
 )
 
 // General config
