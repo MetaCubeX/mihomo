@@ -31,7 +31,6 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		ip  net.IP
 		err error
 	)
-
 	if ip = net.ParseIP(c.host); ip == nil {
 		if c.r == nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)

@@ -7,12 +7,9 @@ import (
 )
 
 type NetworkType struct {
+	*Base
 	network C.NetWork
 	adapter string
-}
-
-func (n *NetworkType) ShouldFindProcess() bool {
-	return false
 }
 
 func NewNetworkType(network, adapter string) (*NetworkType, error) {
@@ -46,12 +43,4 @@ func (n *NetworkType) Adapter() string {
 
 func (n *NetworkType) Payload() string {
 	return n.network.String()
-}
-
-func (n *NetworkType) ShouldResolveIP() bool {
-	return false
-}
-
-func (n *NetworkType) RuleExtra() *C.RuleExtra {
-	return nil
 }

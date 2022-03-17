@@ -70,6 +70,9 @@ func handleSocket(ctx C.ConnContext, outbound net.Conn) {
 func relay(leftConn, rightConn net.Conn) {
 	ch := make(chan error)
 
+	tcpKeepAlive(leftConn)
+	tcpKeepAlive(rightConn)
+
 	go func() {
 		buf := pool.Get(pool.RelayBufferSize)
 		// Wrapping to avoid using *net.TCPConn.(ReadFrom)
@@ -85,4 +88,10 @@ func relay(leftConn, rightConn net.Conn) {
 	pool.Put(buf)
 	rightConn.SetReadDeadline(time.Now())
 	<-ch
+}
+
+func tcpKeepAlive(c net.Conn) {
+	if tcp, ok := c.(*net.TCPConn); ok {
+		tcp.SetKeepAlive(true)
+	}
 }

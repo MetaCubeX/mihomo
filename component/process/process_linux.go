@@ -110,7 +110,7 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 		return 0, 0, fmt.Errorf("invalid uid(%d) or inode(%d)", uid, inode)
 	}
 
-	return uid, inode, nil
+	return inode, uid, nil
 }
 
 func packSocketDiagRequest(family, protocol byte, source net.IP, sourcePort uint16) []byte {
