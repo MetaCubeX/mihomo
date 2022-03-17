@@ -29,12 +29,15 @@ PLATFORM_LIST = \
 WINDOWS_ARCH_LIST = \
 	windows-386 \
 	windows-amd64 \
+	windows-amd64v2 \
+	windows-amd64v3 \
 	windows-arm64 \
     windows-arm32v7
 
 all:linux-amd64 linux-arm64\
 	darwin-amd64 darwin-arm64\
- 	windows-amd64 windows-arm64 \
+ 	windows-amd64 windows-arm64\
+
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
@@ -98,8 +101,14 @@ freebsd-arm64:
 windows-386:
 	GOARCH=386 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
-windows-amd64:
+windows-amd64v3:
 	GOARCH=amd64 GOOS=windows GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
+
+windows-amd64v2:
+	GOARCH=amd64 GOOS=windows GOAMD64=v2 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
+
+windows-amd64:
+	GOARCH=amd64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
 windows-arm64:
 	GOARCH=arm64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
