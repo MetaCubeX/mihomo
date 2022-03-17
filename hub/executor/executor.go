@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/listener/tproxy"
@@ -28,7 +27,6 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
-	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -83,9 +81,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateGeneral(cfg.General, cfg.Tun, force)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
-	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
+	updateIPTables(cfg.DNS, cfg.General.TProxyPort, cfg.General.Interface, cfg.Tun.Enable)
 	updateDNS(cfg.DNS, cfg.Tun)
-	updateTun(cfg.Tun)
+	updateTun(cfg.Tun, cfg.DNS.FakeIPRange.IPNet().String())
 	updateExperimental(cfg)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
 	updateProfile(cfg)

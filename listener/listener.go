@@ -5,7 +5,6 @@ import (
 	"github.com/Dreamacro/clash/listener/inner"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 	"sync"
 

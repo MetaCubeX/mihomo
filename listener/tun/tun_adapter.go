@@ -53,7 +53,7 @@ func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContex
 	if err != nil {
 		for i := 1; i < 3; i++ {
 			time.Sleep(time.Second * 1)
-			device, err = dev.OpenTunDevice(tunAddress, autoRoute)
+			tunDevice, err = parseDevice(devName, uint32(mtu))
 			if err == nil {
 				break
 			}

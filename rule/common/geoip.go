@@ -14,14 +14,10 @@ import (
 
 type GEOIP struct {
 	*Base
-	country     string
-	adapter     string
-	noResolveIP bool
+	country      string
+	adapter      string
+	noResolveIP  bool
 	geoIPMatcher *router.GeoIPMatcher
-}
-
-func (g *GEOIP) ShouldFindProcess() bool {
-	return false
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -87,7 +83,7 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) 
 
 	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, recordsCount)
 	geoip := &GEOIP{
-		Base:        &Base{},
+		Base:         &Base{},
 		country:      country,
 		adapter:      adapter,
 		noResolveIP:  noResolveIP,

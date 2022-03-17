@@ -32,14 +32,6 @@ func (dk *DomainKeyword) Payload() string {
 	return dk.keyword
 }
 
-func (dk *DomainKeyword) ShouldResolveIP() bool {
-	return false
-}
-
-func (dk *DomainKeyword) ShouldFindProcess() bool {
-	return false
-}
-
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
 	return &DomainKeyword{
 		Base:    &Base{},

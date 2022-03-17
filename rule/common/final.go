@@ -25,14 +25,6 @@ func (f *Match) Payload() string {
 	return ""
 }
 
-func (f *Match) ShouldResolveIP() bool {
-	return false
-}
-
-func (f *Match) ShouldFindProcess() bool {
-	return false
-}
-
 func NewMatch(adapter string) *Match {
 	return &Match{
 		Base:    &Base{},

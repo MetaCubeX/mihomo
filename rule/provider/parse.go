@@ -57,39 +57,38 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed   C.Rule
 	)
 
+	switch tp {
+	case "DOMAIN":
+		parsed = RC.NewDomain(payload, target)
+	case "DOMAIN-SUFFIX":
+		parsed = RC.NewDomainSuffix(payload, target)
+	case "DOMAIN-KEYWORD":
+		parsed = RC.NewDomainKeyword(payload, target)
+	case "GEOSITE":
+		parsed, parseErr = RC.NewGEOSITE(payload, target)
+	case "IP-CIDR", "IP-CIDR6":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RC.NewIPCIDR(payload, target, RC.WithIPCIDRNoResolve(noResolve))
+	case "SRC-IP-CIDR":
+		parsed, parseErr = RC.NewIPCIDR(payload, target, RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
+	case "SRC-PORT":
+		parsed, parseErr = RC.NewPort(payload, target, true)
+	case "DST-PORT":
+		parsed, parseErr = RC.NewPort(payload, target, false)
+	case "PROCESS-NAME":
+		parsed, parseErr = RC.NewProcess(payload, target, true)
+	case "PROCESS-PATH":
+		parsed, parseErr = RC.NewProcess(payload, target, false)
+	case "GEOIP":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RC.NewGEOIP(payload, target, noResolve)
+	default:
+		parseErr = fmt.Errorf("unsupported rule type %s", tp)
+	}
 	ruleExtra := &C.RuleExtra{
 		Network:   RC.FindNetwork(params),
 		SourceIPs: RC.FindSourceIPs(params),
 	}
-
-	switch tp {
-	case "DOMAIN":
-		parsed = RC.NewDomain(payload, target, ruleExtra)
-	case "DOMAIN-SUFFIX":
-		parsed = RC.NewDomainSuffix(payload, target, ruleExtra)
-	case "DOMAIN-KEYWORD":
-		parsed = RC.NewDomainKeyword(payload, target, ruleExtra)
-	case "GEOSITE":
-		parsed, parseErr = RC.NewGEOSITE(payload, target, ruleExtra)
-	case "IP-CIDR", "IP-CIDR6":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewIPCIDR(payload, target, ruleExtra, RC.WithIPCIDRNoResolve(noResolve))
-	case "SRC-IP-CIDR":
-		parsed, parseErr = RC.NewIPCIDR(payload, target, ruleExtra, RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
-	case "SRC-PORT":
-		parsed, parseErr = RC.NewPort(payload, target, true, ruleExtra)
-	case "DST-PORT":
-		parsed, parseErr = RC.NewPort(payload, target, false, ruleExtra)
-	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, target, true, ruleExtra)
-	case "PROCESS-PATH":
-		parsed, parseErr = RC.NewProcess(payload, target, false, ruleExtra)
-	case "GEOIP":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewGEOIP(payload, target, noResolve, ruleExtra)
-	default:
-		parseErr = fmt.Errorf("unsupported rule type %s", tp)
-	}
-
+	parsed.SetRuleExtra(ruleExtra)
 	return parsed, parseErr
 }

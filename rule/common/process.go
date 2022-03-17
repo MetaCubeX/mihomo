@@ -14,14 +14,10 @@ import (
 var processCache = cache.NewLRUCache(cache.WithAge(2), cache.WithSize(64))
 
 type Process struct {
-	adapter   string
-	process   string
-	nameOnly  bool
-	ruleExtra *C.RuleExtra
-}
-
-func (ps *Process) ShouldFindProcess() bool {
-	return false
+	*Base
+	adapter  string
+	process  string
+	nameOnly bool
 }
 
 func (ps *Process) RuleType() C.RuleType {
@@ -67,19 +63,11 @@ func (ps *Process) Payload() string {
 	return ps.process
 }
 
-func (ps *Process) ShouldResolveIP() bool {
-	return false
-}
-
-func (ps *Process) RuleExtra() *C.RuleExtra {
-	return ps.ruleExtra
-}
-
-func NewProcess(process string, adapter string, nameOnly bool, ruleExtra *C.RuleExtra) (*Process, error) {
+func NewProcess(process string, adapter string, nameOnly bool) (*Process, error) {
 	return &Process{
-		adapter:   adapter,
-		process:   process,
-		nameOnly:  nameOnly,
-		ruleExtra: ruleExtra,
+		Base:     &Base{},
+		adapter:  adapter,
+		process:  process,
+		nameOnly: nameOnly,
 	}, nil
 }

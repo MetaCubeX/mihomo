@@ -32,14 +32,6 @@ func (ds *DomainSuffix) Payload() string {
 	return ds.suffix
 }
 
-func (ds *DomainSuffix) ShouldResolveIP() bool {
-	return false
-}
-
-func (ds *DomainSuffix) ShouldFindProcess() bool {
-	return false
-}
-
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
 	return &DomainSuffix{
 		Base:    &Base{},

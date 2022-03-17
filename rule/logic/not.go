@@ -3,9 +3,11 @@ package logic
 import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/rule/common"
 )
 
 type NOT struct {
+	common.Base
 	rule    C.Rule
 	payload string
 	adapter string
@@ -48,8 +50,4 @@ func (not *NOT) Payload() string {
 
 func (not *NOT) ShouldResolveIP() bool {
 	return not.rule.ShouldResolveIP()
-}
-
-func (not *NOT) RuleExtra() *C.RuleExtra {
-	return nil
 }
