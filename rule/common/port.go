@@ -21,10 +21,6 @@ type Port struct {
 	portList []portReal
 }
 
-func (p *Port) ShouldFindProcess() bool {
-	return false
-}
-
 func (p *Port) RuleType() C.RuleType {
 	if p.isSource {
 		return C.SrcPort
@@ -45,10 +41,6 @@ func (p *Port) Adapter() string {
 
 func (p *Port) Payload() string {
 	return p.port
-}
-
-func (p *Port) ShouldResolveIP() bool {
-	return false
 }
 
 func (p *Port) matchPortReal(portRef string) bool {

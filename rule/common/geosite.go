@@ -40,19 +40,11 @@ func (gs *GEOSITE) Payload() string {
 	return gs.country
 }
 
-func (gs *GEOSITE) ShouldResolveIP() bool {
-	return false
-}
-
-func (gs *GEOSITE) ShouldFindProcess() bool {
-	return false
-}
-
 func (gs *GEOSITE) GetDomainMatcher() *router.DomainMatcher {
 	return gs.matcher
 }
 
-func NewGEOSITE(country string, adapter string, ruleExtra *C.RuleExtra) (*GEOSITE, error) {
+func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 	matcher, recordsCount, err := geodata.LoadGeoSiteMatcher(country)
 	if err != nil {
 		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())

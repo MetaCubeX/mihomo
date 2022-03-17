@@ -237,15 +237,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			DNSHijack: []string{"198.18.0.2:53"}, // default hijack all dns query
 			AutoRoute: true,
 		},
-		Proxy:          []map[string]any{},
-		ProxyGroup:     []map[string]any{},
-		Tun: RawTun{
-			Enable:    false,
-			Device:    "",
-			Stack:     C.TunGvisor,
-			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute: true,
-		},
 		DNS: RawDNS{
 			Enable:       false,
 			UseHosts:     true,
@@ -589,7 +580,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			payload = strings.Join(rule[1:l-1], ",")
 		} else {
 			if l < 2 {
-				return nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
+				return nil, nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
 			}
 			if l < 4 {
 				rule = append(rule, make([]string, 4-l)...)
@@ -603,7 +594,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			}
 			target = rule[l-1]
 			params = rule[l:]
-			}
 		}
 
 		if _, ok := proxies[target]; mode != T.Script && !ok {

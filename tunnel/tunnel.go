@@ -3,7 +3,6 @@ package tunnel
 import (
 	"context"
 	"fmt"
-	R "github.com/Dreamacro/clash/rule/common"
 	"net"
 	"path/filepath"
 	"runtime"
@@ -343,7 +342,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	defer configMux.RUnlock()
 
 	var resolved bool
-	var processFound bool
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
 		ip := node.Data.(net.IP)
