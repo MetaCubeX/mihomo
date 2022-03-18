@@ -910,7 +910,7 @@ func cleanPyKeywords(code string) string {
 }
 
 func parseTun(rawTun RawTun, general *General) (*Tun, error) {
-	if (rawTun.Enable || general.TProxyPort != 0) && general.Interface == "" {
+	if (rawTun.Enable || general.TProxyPort != 0) && runtime.GOOS != "android" && general.Interface == "" {
 		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
 		if err != nil || autoDetectInterfaceName == "" {
 			return nil, fmt.Errorf("can not find auto detect interface: %w. you must be detect `interface-name` if tun set to enable or `tproxy-port` isn't zore", err)
