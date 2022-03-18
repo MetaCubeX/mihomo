@@ -913,7 +913,9 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 	if (rawTun.Enable || general.TProxyPort != 0) && general.Interface == "" {
 		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
 		if err != nil || autoDetectInterfaceName == "" {
-			return nil, fmt.Errorf("can not find auto detect interface: %w. you must be detect `interface-name` if tun set to enable or `tproxy-port` isn't zore", err)
+			log.Warnln("Can not find auto detect interface.[%s]", err)
+		} else {
+			log.Warnln("Auto detect interface: %s", autoDetectInterfaceName)
 		}
 
 		general.Interface = autoDetectInterfaceName
