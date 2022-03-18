@@ -8,7 +8,7 @@ import (
 func init() {
 	guid, _ := windows.GUIDFromString("{330EAEF8-7578-5DF2-D97B-8DADC0EA85CB}")
 
-	tun.WintunTunnelType = "Clash"
+	tun.WintunTunnelType = "Meta"
 	tun.WintunStaticRequestedGUID = &guid
 }
 

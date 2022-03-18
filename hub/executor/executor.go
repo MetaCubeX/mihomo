@@ -78,12 +78,12 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	updateUsers(cfg.Users)
 	updateHosts(cfg.Hosts)
-	updateGeneral(cfg.General, cfg.Tun, force)
+	updateGeneral(cfg.General, force)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
-	updateIPTables(cfg.DNS, cfg.General.TProxyPort, cfg.General.Interface, cfg.Tun.Enable)
+	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
 	updateDNS(cfg.DNS, cfg.Tun)
-	updateTun(cfg.Tun, cfg.DNS.FakeIPRange.IPNet().String())
+	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
 	updateProfile(cfg)
@@ -213,11 +213,11 @@ func loadProvider(ruleProviders map[string]*provider.RuleProvider, proxyProvider
 	}
 }
 
-func updateTun(tun *config.Tun, tunAddressPrefix string) {
-	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
+func updateTun(tun *config.Tun) {
+	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
-func updateGeneral(general *config.General, Tun *config.Tun, force bool) {
+func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
@@ -302,10 +302,10 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func updateIPTables(dns *config.DNS, tProxyPort int, interfaceName string, tunEnable bool) {
+func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 	tproxy.CleanUpTProxyLinuxIPTables()
 
-	if runtime.GOOS != "linux" || tProxyPort == 0 {
+	if runtime.GOOS != "linux" || general.TProxyPort == 0 {
 		return
 	}
 
@@ -322,7 +322,7 @@ func updateIPTables(dns *config.DNS, tProxyPort int, interfaceName string, tunEn
 		return
 	}
 
-	if tunEnable {
+	if tun.Enable {
 		err = fmt.Errorf("TUN device must be disabe")
 		return
 	}
@@ -340,8 +340,9 @@ func updateIPTables(dns *config.DNS, tProxyPort int, interfaceName string, tunEn
 	if dialer.DefaultRoutingMark.Load() == 0 {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
-
-	err = tproxy.SetTProxyLinuxIPTables(interfaceName, tProxyPort, dnsPort)
+	if general.AutoIptables {
+		err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
+	}
 }
 
 func Cleanup() {

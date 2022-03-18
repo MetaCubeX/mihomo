@@ -310,7 +310,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
 
@@ -330,8 +330,7 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.Co
 	if !tunConf.Enable {
 		return
 	}
-
-	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn)
+	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
 	if err != nil {
 		log.Warnln("Failed to start TUN interface: %s", err.Error())
 	}
