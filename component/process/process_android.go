@@ -211,10 +211,15 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 }
 
 func splitCmdline(cmdline []byte) string {
+	cmdline = bytes.Trim(cmdline, " ")
+
 	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
 		return unicode.IsControl(r) || unicode.IsSpace(r)
 	})
 
+	if idx == -1 {
+		return filepath.Base(string(cmdline))
+	}
 	return filepath.Base(string(cmdline[:idx]))
 }
 

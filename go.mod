@@ -23,9 +23,9 @@ require (
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220317061510-51cd9980dadf
+	golang.org/x/sys v0.0.0-20220318055525-2edf467146b5
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
-	golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1
+	golang.zx2c4.com/wireguard v0.0.0-20220318042302-193cf8d6a5d6
 	golang.zx2c4.com/wireguard/windows v0.5.3
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -57,4 +57,4 @@ require (
 
 )
 
-replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220317182248-e32f9221663c
+replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => ./listener/tun/device/tun/wintun

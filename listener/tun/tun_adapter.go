@@ -24,9 +24,9 @@ import (
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 	var (
-		tunAddress = netip.MustParsePrefix(tunAddressPrefix)
+		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
 		devName    = tunConf.Device
 		stackType  = tunConf.Stack
 		autoRoute  = tunConf.AutoRoute
@@ -42,9 +42,9 @@ func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContex
 		devName = generateDeviceName()
 	}
 
-	if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
-		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
-	}
+	//if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
+	//	tunAddress = netip.MustParsePrefix("198.18.0.1/16")
+	//}
 
 	process.AppendLocalIPs(tunAddress.Masked().Addr().Next().AsSlice())
 
@@ -116,7 +116,7 @@ func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContex
 func generateDeviceName() string {
 	switch runtime.GOOS {
 	case "darwin":
-		return tun.Driver + "://Meta"
+		return tun.Driver + "://utun"
 	case "windows":
 		return tun.Driver + "://Meta"
 	default:
