@@ -58,7 +58,7 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	}
 	if tp == "GEOSITE" {
 		if err := initGeoSite(); err != nil {
-			log.Errorln("can't initial GeoSite: %w", err)
+			log.Errorln("can't initial GeoSite: %s", err)
 		}
 	}
 
