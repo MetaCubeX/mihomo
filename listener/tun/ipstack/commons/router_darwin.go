@@ -9,7 +9,7 @@ import (
 )
 
 func GetAutoDetectInterface() (string, error) {
-	return cmd.ExecCmd("bash -c netstat -rnf inet | grep 'default' | awk -F ' ' 'NR==1{print $6}' | xargs echo -n")
+	return cmd.ExecCmd("bash -c route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
@@ -21,7 +21,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
 		gw            = ip.Next()
-		netmask       = IPv4MaskString(addr.Bits())
+		netmask       = ipv4MaskString(addr.Bits())
 	)
 
 	cmdStr := fmt.Sprintf("ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, gw)
@@ -44,7 +44,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	var (
-		routes  = append(Routes, addr.String())
+		routes  = append(defaultRoutes, addr.String())
 		gateway = addr.Masked().Addr().Next()
 	)
 
@@ -53,6 +53,8 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 			return err
 		}
 	}
+
+	go defaultInterfaceChangeMonitor()
 
 	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
 }

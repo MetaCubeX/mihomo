@@ -15,6 +15,8 @@ import (
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
+var wintunInterfaceName string
+
 func GetAutoDetectInterface() (string, error) {
 	ifname, err := getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET))
 	if err == nil {
@@ -30,7 +32,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	var err error
 startOver:
 	if tryTimes > 0 {
-		log.Infoln("Retrying interface configuration after failure because system just booted (T+%v): %v", windows.DurationSinceBoot(), err)
+		log.Infoln("[TUN] retrying interface configuration after failure because system just booted (T+%v): %v", windows.DurationSinceBoot(), err)
 		time.Sleep(time.Second)
 		retryOnFailure = retryOnFailure && tryTimes < 15
 	}
@@ -199,6 +201,10 @@ startOver:
 		return fmt.Errorf("unable to set DNS %s %s: %w", "198.18.0.2", "nil", err)
 	}
 
+	wintunInterfaceName = dev.Name()
+
+	go defaultInterfaceChangeMonitor()
+
 	return nil
 }
 
@@ -221,7 +227,7 @@ func cleanupAddressesOnDisconnectedInterfaces(family winipcfg.AddressFamily, add
 		for address := iface.FirstUnicastAddress; address != nil; address = address.Next {
 			if ip, _ := netip.AddrFromSlice(address.Address.IP()); addrHash[ip] {
 				prefix := netip.PrefixFrom(ip, int(address.OnLinkPrefixLength))
-				log.Infoln("Cleaning up stale address %s from interface ‘%s’", prefix.String(), iface.FriendlyName())
+				log.Infoln("[TUN] cleaning up stale address %s from interface ‘%s’", prefix.String(), iface.FriendlyName())
 				_ = iface.LUID.DeleteIPAddress(prefix)
 			}
 		}
@@ -247,6 +253,10 @@ func getAutoDetectInterfaceByFamily(family winipcfg.AddressFamily) (string, erro
 		}
 
 		ifname := iface.FriendlyName()
+
+		if wintunInterfaceName == ifname {
+			continue
+		}
 
 		for gatewayAddress := iface.FirstGatewayAddress; gatewayAddress != nil; gatewayAddress = gatewayAddress.Next {
 			nextHop, _ := netip.AddrFromSlice(gatewayAddress.Address.IP())
