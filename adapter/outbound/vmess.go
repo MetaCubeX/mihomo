@@ -291,6 +291,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			tp:    C.Vmess,
 			udp:   option.UDP,
 			iface: option.Interface,
+			rmark: option.RoutingMark,
 		},
 		client: client,
 		option: &option,

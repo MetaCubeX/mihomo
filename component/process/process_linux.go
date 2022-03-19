@@ -105,9 +105,9 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 		return 0, 0, fmt.Errorf("netlink message: NLMSG_ERROR")
 	}
 
-	uid, inode := unpackSocketDiagResponse(&messages[0])
-	if uid < 0 || inode < 0 {
-		return 0, 0, fmt.Errorf("invalid uid(%d) or inode(%d)", uid, inode)
+	inode, uid := unpackSocketDiagResponse(&messages[0])
+	if inode < 0 || uid < 0 {
+		return 0, 0, fmt.Errorf("invalid inode(%d) or uid(%d)", inode, uid)
 	}
 
 	return inode, uid, nil
