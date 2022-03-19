@@ -8,7 +8,9 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clas
 		-w -s -buildid='
 
 PLATFORM_LIST = \
-	darwin-amd64 \
+	darwin-amd64v1 \
+	darwin-amd64v2 \
+	darwin-amd64v3 \
 	darwin-arm64 \
 	linux-amd64v1 \
 	linux-amd64v2 \
@@ -43,8 +45,14 @@ all:linux-amd64 linux-arm64\
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-darwin-amd64:
+darwin-amd64v3:
 	GOARCH=amd64 GOOS=darwin GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+darwin-amd64v2:
+	GOARCH=amd64 GOOS=darwin GOAMD64=v2 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+darwin-amd64v1:
+	GOARCH=amd64 GOOS=darwin GOAMD64=v1 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 darwin-arm64:
 	GOARCH=arm64 GOOS=darwin $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
