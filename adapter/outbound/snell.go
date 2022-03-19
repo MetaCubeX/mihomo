@@ -142,6 +142,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			tp:    C.Snell,
 			udp:   option.UDP,
 			iface: option.Interface,
+			rmark: option.RoutingMark,
 		},
 		psk:        psk,
 		obfsOption: obfsOption,

@@ -142,6 +142,7 @@ func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 			tp:    C.ShadowsocksR,
 			udp:   option.UDP,
 			iface: option.Interface,
+			rmark: option.RoutingMark,
 		},
 		cipher:   coreCiph,
 		obfs:     obfs,
