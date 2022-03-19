@@ -111,7 +111,19 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
 
-	return parsed, parseErr
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
+	ruleExtra := &C.RuleExtra{
+		Network:      RC.FindNetwork(params),
+		SourceIPs:    RC.FindSourceIPs(params),
+		ProcessNames: RC.FindProcessName(params),
+	}
+
+	parsed.SetRuleExtra(ruleExtra)
+
+	return parsed, nil
 }
 
 type Range struct {

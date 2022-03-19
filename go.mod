@@ -57,4 +57,4 @@ require (
 
 )
 
-replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => ./listener/tun/device/tun/wintun
+replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e

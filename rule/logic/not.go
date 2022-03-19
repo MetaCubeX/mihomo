@@ -7,7 +7,7 @@ import (
 )
 
 type NOT struct {
-	common.Base
+	*common.Base
 	rule    C.Rule
 	payload string
 	adapter string
@@ -18,7 +18,7 @@ func (not *NOT) ShouldFindProcess() bool {
 }
 
 func NewNOT(payload string, adapter string) (*NOT, error) {
-	not := &NOT{payload: payload, adapter: adapter}
+	not := &NOT{Base: &common.Base{}, payload: payload, adapter: adapter}
 	rule, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
