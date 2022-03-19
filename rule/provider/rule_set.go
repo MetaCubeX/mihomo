@@ -8,7 +8,7 @@ import (
 )
 
 type RuleSet struct {
-	common.Base
+	*common.Base
 	ruleProviderName string
 	adapter          string
 	ruleProvider     P.RuleProvider
@@ -52,6 +52,7 @@ func NewRuleSet(ruleProviderName string, adapter string) (*RuleSet, error) {
 		return nil, fmt.Errorf("rule set %s not found", ruleProviderName)
 	}
 	return &RuleSet{
+		Base:             &common.Base{},
 		ruleProviderName: ruleProviderName,
 		adapter:          adapter,
 		ruleProvider:     rp,

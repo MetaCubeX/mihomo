@@ -6,7 +6,7 @@ import (
 )
 
 type OR struct {
-	common.Base
+	*common.Base
 	rules   []C.Rule
 	payload string
 	adapter string
@@ -44,7 +44,7 @@ func (or *OR) ShouldResolveIP() bool {
 }
 
 func NewOR(payload string, adapter string) (*OR, error) {
-	or := &OR{payload: payload, adapter: adapter}
+	or := &OR{Base: &common.Base{}, payload: payload, adapter: adapter}
 	rules, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err

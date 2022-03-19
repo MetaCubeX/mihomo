@@ -6,7 +6,7 @@ import (
 )
 
 type AND struct {
-	common.Base
+	*common.Base
 	rules   []C.Rule
 	payload string
 	adapter string
@@ -18,7 +18,7 @@ func (A *AND) ShouldFindProcess() bool {
 }
 
 func NewAND(payload string, adapter string) (*AND, error) {
-	and := &AND{payload: payload, adapter: adapter}
+	and := &AND{Base: &common.Base{}, payload: payload, adapter: adapter}
 	rules, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
