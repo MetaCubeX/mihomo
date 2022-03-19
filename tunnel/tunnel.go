@@ -28,8 +28,9 @@ var (
 	rules         []C.Rule
 	proxies       = make(map[string]C.Proxy)
 	providers     map[string]provider.ProxyProvider
-	configMux     sync.RWMutex
 	ruleProviders map[string]*provider.RuleProvider
+	configMux     sync.RWMutex
+
 	// Outbound Rule
 	mode = Rule
 
