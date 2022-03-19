@@ -9,7 +9,7 @@ import (
 )
 
 func GetAutoDetectInterface() (string, error) {
-	return cmd.ExecCmd("bash -c netstat -rnf inet | grep 'default' | awk -F ' ' 'NR==1{print $6}' | xargs echo -n")
+	return cmd.ExecCmd("bash -c route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
@@ -20,8 +20,8 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
-		gw            = ip
-		netmask       = IPv4MaskString(addr.Bits())
+		gw            = ip.Next()
+		netmask       = ipv4MaskString(addr.Bits())
 	)
 
 	cmdStr := fmt.Sprintf("ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, gw)
@@ -31,10 +31,10 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	// _, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
-	// if err != nil {
-	//	return err
-	// }
+	_, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
+	if err != nil {
+		return err
+	}
 
 	if autoRoute {
 		err = configInterfaceRouting(interfaceName, addr)
@@ -43,16 +43,20 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 }
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
-	routes := append(Routes, addr.String())
+	var (
+		routes  = append(defaultRoutes, addr.String())
+		gateway = addr.Masked().Addr().Next()
+	)
 
-	for _, route := range routes {
-		if err := execRouterCmd("add", "-inet", route, interfaceName); err != nil {
+	for _, destination := range routes {
+		if _, err := cmd.ExecCmd(fmt.Sprintf("route add -net %s %s", destination, gateway)); err != nil {
 			return err
 		}
 	}
 
-	// return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
-	return nil
+	go defaultInterfaceChangeMonitor()
+
+	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
 }
 
 func execRouterCmd(action, inet, route string, interfaceName string) error {

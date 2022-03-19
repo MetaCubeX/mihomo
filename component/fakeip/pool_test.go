@@ -49,7 +49,7 @@ func createCachefileStore(options Options) (*Pool, string, error) {
 }
 
 func TestPool_Basic(t *testing.T) {
-	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
+	_, ipnet, _ := net.ParseCIDR("192.168.0.0/28")
 	pools, tempfile, err := createPools(Options{
 		IPNet: ipnet,
 		Size:  10,
@@ -62,21 +62,22 @@ func TestPool_Basic(t *testing.T) {
 		last := pool.Lookup("bar.com")
 		bar, exist := pool.LookBack(last)
 
-		assert.True(t, first.Equal(net.IP{192, 168, 0, 2}))
-		assert.Equal(t, pool.Lookup("foo.com"), net.IP{192, 168, 0, 2})
-		assert.True(t, last.Equal(net.IP{192, 168, 0, 3}))
+		assert.True(t, first.Equal(net.IP{192, 168, 0, 3}))
+		assert.Equal(t, pool.Lookup("foo.com"), net.IP{192, 168, 0, 3})
+		assert.True(t, last.Equal(net.IP{192, 168, 0, 4}))
 		assert.True(t, exist)
 		assert.Equal(t, bar, "bar.com")
 		assert.Equal(t, pool.Gateway(), net.IP{192, 168, 0, 1})
+		assert.Equal(t, pool.Broadcast(), net.IP{192, 168, 0, 15})
 		assert.Equal(t, pool.IPNet().String(), ipnet.String())
-		assert.True(t, pool.Exist(net.IP{192, 168, 0, 3}))
-		assert.False(t, pool.Exist(net.IP{192, 168, 0, 4}))
+		assert.True(t, pool.Exist(net.IP{192, 168, 0, 4}))
+		assert.False(t, pool.Exist(net.IP{192, 168, 0, 5}))
 		assert.False(t, pool.Exist(net.ParseIP("::1")))
 	}
 }
 
 func TestPool_CycleUsed(t *testing.T) {
-	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
+	_, ipnet, _ := net.ParseCIDR("192.168.0.16/28")
 	pools, tempfile, err := createPools(Options{
 		IPNet: ipnet,
 		Size:  10,
@@ -87,7 +88,7 @@ func TestPool_CycleUsed(t *testing.T) {
 	for _, pool := range pools {
 		foo := pool.Lookup("foo.com")
 		bar := pool.Lookup("bar.com")
-		for i := 0; i < 2; i++ {
+		for i := 0; i < 9; i++ {
 			pool.Lookup(fmt.Sprintf("%d.com", i))
 		}
 		baz := pool.Lookup("baz.com")
@@ -98,7 +99,7 @@ func TestPool_CycleUsed(t *testing.T) {
 }
 
 func TestPool_Skip(t *testing.T) {
-	_, ipnet, _ := net.ParseCIDR("192.168.0.1/30")
+	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
 	tree := trie.New()
 	tree.Insert("example.com", tree)
 	pools, tempfile, err := createPools(Options{
@@ -169,8 +170,8 @@ func TestPool_Clone(t *testing.T) {
 
 	first := pool.Lookup("foo.com")
 	last := pool.Lookup("bar.com")
-	assert.True(t, first.Equal(net.IP{192, 168, 0, 2}))
-	assert.True(t, last.Equal(net.IP{192, 168, 0, 3}))
+	assert.True(t, first.Equal(net.IP{192, 168, 0, 3}))
+	assert.True(t, last.Equal(net.IP{192, 168, 0, 4}))
 
 	newPool, _ := New(Options{
 		IPNet: ipnet,
