@@ -74,16 +74,14 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 
-	log.SetLevel(log.INFO)
-
 	updateUsers(cfg.Users)
 	updateHosts(cfg.Hosts)
-	updateGeneral(cfg.General, force)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
-	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
+	updateGeneral(cfg.General, force)
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateTun(cfg.Tun)
+	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
 	updateExperimental(cfg)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
 	updateProfile(cfg)
@@ -93,7 +91,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 func GetGeneral() *config.General {
 	ports := P.GetPorts()
-	authenticator := []string{}
+	var authenticator []string
 	if auth := authStore.Authenticator(); auth != nil {
 		authenticator = auth.Users()
 	}
@@ -218,20 +216,21 @@ func updateTun(tun *config.Tun) {
 }
 
 func updateGeneral(general *config.General, force bool) {
+	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
 	resolver.DisableIPv6 = !general.IPv6
+
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 
 	dialer.DefaultInterface.Store(general.Interface)
+
 	if dialer.DefaultInterface.Load() != "" {
 		log.Infoln("Use interface name: %s", general.Interface)
 	}
 
-	if general.RoutingMark > 0 || (general.RoutingMark == 0 && general.TProxyPort == 0) {
-		dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
-		if general.RoutingMark > 0 {
-			log.Infoln("Use routing mark: %#x", general.RoutingMark)
-		}
+	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
+	if general.RoutingMark > 0 {
+		log.Infoln("Use routing mark: %#x", general.RoutingMark)
 	}
 
 	iface.FlushCache()
