@@ -85,6 +85,9 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
+	if parseErr != nil {
+		return nil, parseErr
+	}
 	ruleExtra := &C.RuleExtra{
 		Network:   RC.FindNetwork(params),
 		SourceIPs: RC.FindSourceIPs(params),
