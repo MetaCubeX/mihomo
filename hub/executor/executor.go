@@ -302,15 +302,6 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 }
 
 func autoUpdateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
-	updateIPTables(dns, general, tun)
-	go commons.DefaultInterfaceChangeMonitor(func(_ string) {
-		updateIPTables(dns, general, tun)
-	})
-}
-
-func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
-	tproxy.CleanUpTProxyLinuxIPTables()
-
 	if runtime.GOOS != "linux" || general.TProxyPort == 0 {
 		return
 	}
@@ -333,14 +324,23 @@ func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 		return
 	}
 
+	err = updateIPTables(dns, general)
+	go commons.DefaultInterfaceChangeMonitor(func(_ string) {
+		updateIPTables(dns, general)
+	})
+}
+
+func updateIPTables(dns *config.DNS, general *config.General) error {
+	tproxy.CleanUpTProxyLinuxIPTables()
+
 	_, dnsPortStr, err := net.SplitHostPort(dns.Listen)
 	if dnsPortStr == "0" || dnsPortStr == "" || err != nil {
-		return
+		return err
 	}
 
 	dnsPort, err := strconv.Atoi(dnsPortStr)
 	if err != nil {
-		return
+		return err
 	}
 
 	if dialer.DefaultRoutingMark.Load() == 0 {
@@ -349,6 +349,7 @@ func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 	if general.AutoIptables {
 		err = tproxy.SetTProxyLinuxIPTables(dialer.DefaultInterface.Load(), general.TProxyPort, dnsPort)
 	}
+	return err
 }
 
 func Cleanup() {
