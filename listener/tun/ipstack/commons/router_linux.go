@@ -42,7 +42,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 		}
 	}
 
-	go defaultInterfaceChangeMonitor()
+	go DefaultInterfaceChangeMonitor(nil)
 
 	return nil
 }

@@ -2,7 +2,7 @@ package executor
 
 import (
 	"fmt"
-
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"os"
 	"runtime"
@@ -75,14 +75,14 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	defer mux.Unlock()
 
 	updateUsers(cfg.Users)
-	updateHosts(cfg.Hosts)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateTun(cfg.Tun)
-	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
+	autoUpdateIPTables(cfg.DNS, cfg.General, cfg.Tun)
 	updateExperimental(cfg)
+	updateHosts(cfg.Hosts)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
 	updateProfile(cfg)
 
@@ -301,6 +301,13 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
+func autoUpdateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
+	updateIPTables(dns, general, tun)
+	go commons.DefaultInterfaceChangeMonitor(func(_ string) {
+		updateIPTables(dns, general, tun)
+	})
+}
+
 func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 	tproxy.CleanUpTProxyLinuxIPTables()
 
@@ -340,7 +347,7 @@ func updateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
 	if general.AutoIptables {
-		err = tproxy.SetTProxyLinuxIPTables(general.Interface, general.TProxyPort, dnsPort)
+		err = tproxy.SetTProxyLinuxIPTables(dialer.DefaultInterface.Load(), general.TProxyPort, dnsPort)
 	}
 }
 
