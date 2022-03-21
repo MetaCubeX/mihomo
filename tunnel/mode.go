@@ -12,12 +12,14 @@ type TunnelMode int
 var ModeMapping = map[string]TunnelMode{
 	Global.String(): Global,
 	Rule.String():   Rule,
+	Script.String(): Script,
 	Direct.String(): Direct,
 }
 
 const (
 	Global TunnelMode = iota
 	Rule
+	Script
 	Direct
 )
 
@@ -61,6 +63,8 @@ func (m TunnelMode) String() string {
 		return "global"
 	case Rule:
 		return "rule"
+	case Script:
+		return "script"
 	case Direct:
 		return "direct"
 	default:

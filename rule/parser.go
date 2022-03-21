@@ -37,6 +37,8 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = NewProcess(payload, target, true)
 	case "PROCESS-PATH":
 		parsed, parseErr = NewProcess(payload, target, false)
+	case "SCRIPT":
+		parsed, parseErr = NewScript(payload, target)
 	case "MATCH":
 		parsed = NewMatch(target)
 	default:

@@ -92,7 +92,18 @@ The `GEOIP` databases via [https://github.com/Loyalsoldier/geoip](https://raw.gi
 
 The `GEOSITE` databases via [https://github.com/Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat).
 ```yaml
+mode: rule
+
+script:
+  shortcuts:
+    quic: 'network == "udp" and dst_port == 443'
+    privacy: '"analytics" in host or "adservice" in host or "firebase" in host or "safebrowsing" in host or "doubleclick" in host'
+
 rules:
+  # rule SCRIPT
+  - SCRIPT,quic,REJECT # Disable QUIC, same as rule "DST-PORT,443,REJECT,udp"
+  - SCRIPT,privacy,REJECT
+    
   # network condition for all rules
   - DOMAIN-SUFFIX,example.com,DIRECT,tcp
   - DOMAIN-SUFFIX,example.com,REJECT,udp
@@ -122,6 +133,80 @@ rules:
   - GEOIP,cn,DIRECT
 
   - MATCH,PROXY
+```
+
+### Script configuration
+Script enables users to programmatically select a policy for the packets with more flexibility.
+
+```yaml
+mode: script
+
+rules:
+  # the rule GEOSITE just as a rule provider in mode script
+  - GEOSITE,category-ads-all,Whatever
+  - GEOSITE,youtube,Whatever
+  - GEOSITE,geolocation-cn,Whatever
+  
+script:
+  code: |
+    def main(ctx, metadata):
+      if metadata["process_name"] == 'apsd':
+        return "DIRECT"
+
+      if metadata["network"] == 'udp' and metadata["dst_port"] == 443:
+        return "REJECT"
+    
+      host = metadata["host"]
+      for kw in ['analytics', 'adservice', 'firebase', 'bugly', 'safebrowsing', 'doubleclick']:
+        if kw in host:
+          return "REJECT"
+    
+      now = time.now()
+      if (now.hour < 8 or now.hour > 17) and metadata["src_ip"] == '192.168.1.99':
+        return "REJECT"
+      
+      if ctx.rule_providers["geosite:category-ads-all"].match(metadata):
+        return "REJECT"
+    
+      if ctx.rule_providers["geosite:youtube"].match(metadata):
+        ctx.log('[Script] domain %s matched youtube' % host)
+        return "Proxy"
+
+      if ctx.rule_providers["geosite:geolocation-cn"].match(metadata):
+        ctx.log('[Script] domain %s matched geolocation-cn' % host)
+        return "DIRECT"
+    
+      ip = metadata["dst_ip"] 
+      if host != "":
+        ip = ctx.resolve_ip(host)
+        if ip == "":
+          return "Proxy"
+
+      code = ctx.geoip(ip)
+      if code == "LAN" or code == "CN":
+        return "DIRECT"
+
+      return "Proxy" # default policy for requests which are not matched by any other script
+```
+the context and metadata
+```ts
+interface Metadata {
+  type: string // socks5、http
+  network: string // tcp
+  host: string
+  process_name: string
+  src_ip: string
+  src_port: int
+  dst_ip: string
+  dst_port: int
+}
+
+interface Context {
+  resolve_ip: (host: string) => string // ip string
+  geoip: (ip: string) => string // country code
+  log: (log: string) => void
+  rule_providers: Record<string, { match: (metadata: Metadata) => boolean }>
+}
 ```
 
 ### Proxies configuration

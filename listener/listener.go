@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
@@ -315,6 +316,7 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.Co
 	defer func() {
 		if err != nil {
 			log.Errorln("Start TUN listening error: %s", err.Error())
+			S.Py_Finalize()
 			os.Exit(2)
 		}
 	}()

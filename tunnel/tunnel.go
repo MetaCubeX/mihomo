@@ -14,6 +14,7 @@ import (
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
+	S "github.com/Dreamacro/clash/component/script"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	icontext "github.com/Dreamacro/clash/context"
@@ -171,6 +172,8 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 		proxy = proxies["DIRECT"]
 	case Global:
 		proxy = proxies["GLOBAL"]
+	case Script:
+		proxy, err = matchScript(metadata)
 	// Rule
 	default:
 		proxy, rule, err = match(metadata)
@@ -252,6 +255,8 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		switch true {
 		case rule != nil:
 			log.Infoln("[UDP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), rawPc.Chains().String())
+		case mode == Script:
+			log.Infoln("[UDP] %s(%s) --> %s using SCRIPT %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rawPc.Chains().String())
 		case mode == Global:
 			log.Infoln("[UDP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 		case mode == Direct:
@@ -304,6 +309,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 	switch true {
 	case rule != nil:
 		log.Infoln("[TCP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
+	case mode == Script:
+		log.Infoln("[TCP] %s(%s) --> %s using SCRIPT %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), remoteConn.Chains().String())
 	case mode == Global:
 		log.Infoln("[TCP] %s(%s) --> %s using GLOBAL", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress())
 	case mode == Direct:
@@ -374,4 +381,25 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	return proxies["REJECT"], nil, nil
+}
+
+func matchScript(metadata *C.Metadata) (C.Proxy, error) {
+	configMux.RLock()
+	defer configMux.RUnlock()
+
+	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
+		ip := node.Data.(net.IP)
+		metadata.DstIP = ip
+	}
+
+	adapter, err := S.CallPyMainFunction(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := proxies[adapter]; !ok {
+		return nil, fmt.Errorf("proxy [%s] not found by script", adapter)
+	}
+
+	return proxies[adapter], nil
 }
