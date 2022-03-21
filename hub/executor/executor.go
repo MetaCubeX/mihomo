@@ -75,14 +75,14 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	defer mux.Unlock()
 
 	updateUsers(cfg.Users)
-	updateHosts(cfg.Hosts)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
-	updateGeneral(cfg.General, force)
 	updateDNS(cfg.DNS, cfg.Tun)
+	updateGeneral(cfg.General, force)
 	updateTun(cfg.Tun)
 	updateIPTables(cfg.DNS, cfg.General, cfg.Tun)
 	updateExperimental(cfg)
+	updateHosts(cfg.Hosts)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
 	updateProfile(cfg)
 
