@@ -80,8 +80,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateGeneral(cfg.General, force)
-	updateIPTables(cfg.DNS, cfg.General.TProxyPort, cfg.General.Interface, cfg.Tun.Enable)
-	updateTun(cfg.Tun, cfg.DNS.FakeIPRange.IPNet().String())
+	updateIPTables(cfg)
+	updateTun(cfg.Tun, cfg.DNS)
 	updateExperimental(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -176,7 +176,12 @@ func updateRules(rules []C.Rule) {
 	tunnel.UpdateRules(rules)
 }
 
-func updateTun(tun *config.Tun, tunAddressPrefix string) {
+func updateTun(tun *config.Tun, dns *config.DNS) {
+	var tunAddressPrefix string
+	if dns.FakeIPRange != nil {
+		tunAddressPrefix = dns.FakeIPRange.IPNet().String()
+	}
+
 	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
@@ -261,51 +266,67 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func updateIPTables(dns *config.DNS, tProxyPort int, interfaceName string, tunEnable bool) {
-	tproxy.CleanUpTProxyLinuxIPTables()
+func updateIPTables(cfg *config.Config) {
+	tproxy.CleanupTProxyIPTables()
 
-	if runtime.GOOS != "linux" || tProxyPort == 0 {
+	iptables := cfg.IPTables
+	if runtime.GOOS != "linux" || !iptables.Enable {
 		return
 	}
 
 	var err error
 	defer func() {
 		if err != nil {
-			log.Errorln("Setting iptables failed: %s", err.Error())
+			log.Errorln("[IPTABLES] setting iptables failed: %s", err.Error())
 			os.Exit(2)
 		}
 	}()
 
-	if !dns.Enable || dns.Listen == "" {
+	var (
+		inboundInterface = "lo"
+		tProxyPort       = cfg.General.TProxyPort
+		dnsCfg           = cfg.DNS
+	)
+
+	if tProxyPort == 0 {
+		err = fmt.Errorf("tproxy-port must be greater than zero")
+		return
+	}
+
+	if !dnsCfg.Enable {
 		err = fmt.Errorf("DNS server must be enable")
 		return
 	}
 
-	if tunEnable {
-		err = fmt.Errorf("TUN device must be disabe")
-		return
-	}
-
-	_, dnsPortStr, err := net.SplitHostPort(dns.Listen)
-	if dnsPortStr == "0" || dnsPortStr == "" || err != nil {
-		return
-	}
-
-	dnsPort, err := strconv.Atoi(dnsPortStr)
+	_, dnsPortStr, err := net.SplitHostPort(dnsCfg.Listen)
 	if err != nil {
+		err = fmt.Errorf("DNS server must be enable")
 		return
+	}
+
+	dnsPort, err := strconv.ParseUint(dnsPortStr, 10, 16)
+	if err != nil {
+		err = fmt.Errorf("DNS server must be enable")
+		return
+	}
+
+	if iptables.InboundInterface != "" {
+		inboundInterface = iptables.InboundInterface
 	}
 
 	if dialer.DefaultRoutingMark.Load() == 0 {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
 
-	err = tproxy.SetTProxyLinuxIPTables(interfaceName, tProxyPort, dnsPort)
+	err = tproxy.SetTProxyIPTables(inboundInterface, uint16(tProxyPort), uint16(dnsPort))
+	if err != nil {
+		return
+	}
+
+	log.Infoln("[IPTABLES] Setting iptables completed")
 }
 
 func Cleanup() {
 	P.Cleanup()
-	if runtime.GOOS == "linux" {
-		tproxy.CleanUpTProxyLinuxIPTables()
-	}
+	tproxy.CleanupTProxyIPTables()
 }

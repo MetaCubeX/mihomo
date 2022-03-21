@@ -141,16 +141,16 @@ proxies:
     # skip-cert-verify: true
 ```
 
-### IPTABLES auto-configuration
-Only work on Linux OS who support `iptables`, Clash will auto-configuration iptables for tproxy listener when `tproxy-port` value isn't zero.
+### IPTABLES configuration
+Work on Linux OS who's supported `iptables`
 
-If `TPROXY` is enabled, the `TUN` must be disabled.
 ```yaml
 # Enable the TPROXY listener
 tproxy-port: 9898
-# Disable the TUN listener
-tun:
-  enable: false
+
+iptables:
+  enable: true # default is false
+  inbound-interface: eth0 # detect the inbound interface, default is 'lo'
 ```
 Run Clash as a daemon.
 
