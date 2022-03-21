@@ -24,7 +24,7 @@ func ipv4MaskString(bits int) string {
 	return fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
 }
 
-func defaultInterfaceChangeMonitor() {
+func DefaultInterfaceChangeMonitor(cb func(ifName string)) {
 	t := time.NewTicker(defaultInterfaceMonitorDuration)
 	defer t.Stop()
 
@@ -43,6 +43,9 @@ func defaultInterfaceChangeMonitor() {
 		}
 
 		dialer.DefaultInterface.Store(interfaceName)
+		if cb != nil {
+			cb(interfaceName)
+		}
 
 		log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, interfaceName)
 	}

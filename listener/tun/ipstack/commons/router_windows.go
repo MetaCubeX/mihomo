@@ -203,7 +203,7 @@ startOver:
 
 	wintunInterfaceName = dev.Name()
 
-	go defaultInterfaceChangeMonitor()
+	go DefaultInterfaceChangeMonitor(nil)
 
 	return nil
 }
