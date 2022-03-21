@@ -6,10 +6,12 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/log"
 	"gopkg.in/yaml.v2"
 	"runtime"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 var (
@@ -129,7 +131,12 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 			return err
 		}
 
-		rp.count = len(rulesRaw)
+		if rp.behavior == P.Classical {
+			rp.count = len(*(*[]C.Rule)(unsafe.Pointer(&rules)))
+		} else {
+			rp.count = len(rulesRaw)
+		}
+
 		rp.setRules(rules)
 		return nil
 	}
@@ -201,13 +208,12 @@ func handleClassicalRules(rules []string) (interface{}, error) {
 	var classicalRules []C.Rule
 	for _, rawRule := range rules {
 		ruleType, rule, params := ruleParse(rawRule)
-		if ruleType == "RULE-SET" {
-			return nil, errors.New("error rule type")
-		}
 
 		r, err := parseRule(ruleType, rule, "", params)
 		if err != nil {
-			return nil, err
+			//return nil, err
+			log.Warnln("%s", err)
+			continue
 		}
 
 		classicalRules = append(classicalRules, r)
