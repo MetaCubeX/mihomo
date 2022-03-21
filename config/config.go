@@ -108,6 +108,12 @@ type Script struct {
 	ShortcutsCode map[string]string `yaml:"shortcuts" json:"shortcuts"`
 }
 
+// IPTables config
+type IPTables struct {
+	Enable           bool   `yaml:"enable" json:"enable"`
+	InboundInterface string `yaml:"inbound-interface" json:"inbound-interface"`
+}
+
 // Experimental config
 type Experimental struct{}
 
@@ -115,6 +121,7 @@ type Experimental struct{}
 type Config struct {
 	General       *General
 	Tun           *Tun
+	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
 	Hosts         *trie.DomainTrie
@@ -179,6 +186,7 @@ type RawConfig struct {
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
+	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
 	Proxy         []map[string]any          `yaml:"proxies"`
@@ -215,6 +223,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Stack:     C.TunGvisor,
 			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute: true,
+		},
+		IPTables: IPTables{
+			Enable:           false,
+			InboundInterface: "lo",
 		},
 		DNS: RawDNS{
 			Enable:       false,
@@ -253,6 +265,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
+	config.IPTables = &rawCfg.IPTables
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {

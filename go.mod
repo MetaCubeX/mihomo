@@ -23,11 +23,11 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220315194320-039c03cc5b86
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
-	golang.zx2c4.com/wireguard v0.0.0-20220310012736-ae6bc4dd64e1
-	golang.zx2c4.com/wireguard/windows v0.5.3
+	golang.zx2c4.com/wireguard v0.0.0-20220318042302-193cf8d6a5d6
+	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220315202956-f1399ecf1672
+	gvisor.dev/gvisor v0.0.0-20220319025644-e785bfc153f5
 )
 
 require (
