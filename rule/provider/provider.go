@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 var (
@@ -132,7 +131,7 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 		}
 
 		if rp.behavior == P.Classical {
-			rp.count = len(*(*[]C.Rule)(unsafe.Pointer(&rules)))
+			rp.count = len(rules.([]C.Rule))
 		} else {
 			rp.count = len(rulesRaw)
 		}
