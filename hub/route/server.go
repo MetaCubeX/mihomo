@@ -71,6 +71,7 @@ func Start(addr string, secret string) {
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
+		r.Mount("/cache", cacheRouter())
 	})
 
 	if uiPath != "" {
@@ -130,7 +131,7 @@ func authentication(next http.Handler) http.Handler {
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"hello": "clash"})
+	render.JSON(w, r, render.M{"hello": "clash with tun"})
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
