@@ -2,12 +2,6 @@ package tun
 
 import (
 	"fmt"
-	"net/netip"
-	"net/url"
-	"runtime"
-	"strings"
-	"time"
-
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/component/process"
@@ -21,12 +15,21 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system"
 	"github.com/Dreamacro/clash/log"
+	"net/netip"
+	"net/url"
+	"runtime"
+	"strings"
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, dnsConf *config.DNS, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+	var tunAddressPrefix string
+	if dnsConf.FakeIPRange != nil {
+		tunAddressPrefix = dnsConf.FakeIPRange.IPNet().String()
+	}
+
 	var (
-		tunAddress, _ = netip.ParsePrefix("198.18.0.1/16")
+		tunAddress, _ = netip.ParsePrefix(tunAddressPrefix)
 		devName       = tunConf.Device
 		stackType     = tunConf.Stack
 		autoRoute     = tunConf.AutoRoute
@@ -42,21 +45,19 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 		devName = generateDeviceName()
 	}
 
-	//if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
-	//	tunAddress = netip.MustParsePrefix("198.18.0.1/16")
-	//}
+	if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
+		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
+	}
 
 	process.AppendLocalIPs(tunAddress.Masked().Addr().Next().AsSlice())
 
 	// open tun device
-	for i := 1; i < 3; i++ {
-		time.Sleep(time.Second * 1)
-		tunDevice, err = parseDevice(devName, uint32(mtu))
-		if err != nil {
-			return nil, fmt.Errorf("can't open tun: %w", err)
-		}
-		break
+
+	tunDevice, err = parseDevice(devName, uint32(mtu))
+	if err != nil {
+		return nil, fmt.Errorf("can't open tun: %w", err)
 	}
+
 	// new ip stack
 	switch stackType {
 	case C.TunGvisor:

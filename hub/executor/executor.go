@@ -2,14 +2,11 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
-
-	"github.com/Dreamacro/clash/listener/tproxy"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
@@ -27,6 +24,7 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -79,8 +77,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateGeneral(cfg.General, force)
-	updateTun(cfg.Tun)
-	autoUpdateIPTables(cfg.DNS, cfg.General, cfg.Tun)
+	updateIPTables(cfg)
+	updateTun(cfg.Tun, cfg.DNS)
 	updateExperimental(cfg)
 	updateHosts(cfg.Hosts)
 	loadProvider(cfg.RuleProviders, cfg.Providers)
@@ -211,8 +209,8 @@ func loadProvider(ruleProviders map[string]*provider.RuleProvider, proxyProvider
 	}
 }
 
-func updateTun(tun *config.Tun) {
-	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
+func updateTun(tun *config.Tun, dns *config.DNS) {
+	P.ReCreateTun(tun, dns, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateGeneral(general *config.General, force bool) {
@@ -301,60 +299,67 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func autoUpdateIPTables(dns *config.DNS, general *config.General, tun *config.Tun) {
-	if runtime.GOOS != "linux" || general.TProxyPort == 0 {
+func updateIPTables(cfg *config.Config) {
+	tproxy.CleanupTProxyIPTables()
+
+	iptables := cfg.IPTables
+	if runtime.GOOS != "linux" || !iptables.Enable {
 		return
 	}
 
 	var err error
 	defer func() {
 		if err != nil {
-			log.Errorln("Setting iptables failed: %s", err.Error())
+			log.Errorln("[IPTABLES] setting iptables failed: %s", err.Error())
 			os.Exit(2)
 		}
 	}()
 
-	if !dns.Enable || dns.Listen == "" {
+	var (
+		inboundInterface = "lo"
+		tProxyPort       = cfg.General.TProxyPort
+		dnsCfg           = cfg.DNS
+	)
+
+	if tProxyPort == 0 {
+		err = fmt.Errorf("tproxy-port must be greater than zero")
+		return
+	}
+
+	if !dnsCfg.Enable {
 		err = fmt.Errorf("DNS server must be enable")
 		return
 	}
 
-	if tun.Enable {
-		err = fmt.Errorf("TUN device must be disabe")
+	_, dnsPortStr, err := net.SplitHostPort(dnsCfg.Listen)
+	if err != nil {
+		err = fmt.Errorf("DNS server must be correct")
 		return
 	}
 
-	err = updateIPTables(dns, general)
-	go commons.DefaultInterfaceChangeMonitor(func(_ string) {
-		updateIPTables(dns, general)
-	})
-}
-
-func updateIPTables(dns *config.DNS, general *config.General) error {
-	tproxy.CleanUpTProxyLinuxIPTables()
-
-	_, dnsPortStr, err := net.SplitHostPort(dns.Listen)
-	if dnsPortStr == "0" || dnsPortStr == "" || err != nil {
-		return err
+	dnsPort, err := strconv.ParseUint(dnsPortStr, 10, 16)
+	if err != nil {
+		err = fmt.Errorf("DNS server must be correct")
+		return
 	}
 
-	dnsPort, err := strconv.Atoi(dnsPortStr)
-	if err != nil {
-		return err
+	if iptables.InboundInterface != "" {
+		inboundInterface = iptables.InboundInterface
 	}
 
 	if dialer.DefaultRoutingMark.Load() == 0 {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
-	if general.AutoIptables {
-		err = tproxy.SetTProxyLinuxIPTables(dialer.DefaultInterface.Load(), general.TProxyPort, dnsPort)
+
+	err = tproxy.SetTProxyIPTables(inboundInterface, uint16(tProxyPort), uint16(dnsPort))
+	if err != nil {
+		return
 	}
-	return err
+
+	log.Infoln("[IPTABLES] Setting iptables completed")
 }
 
 func Cleanup() {
 	P.Cleanup()
-	if runtime.GOOS == "linux" {
-		tproxy.CleanUpTProxyLinuxIPTables()
-	}
+	tproxy.CleanupTProxyIPTables()
 }

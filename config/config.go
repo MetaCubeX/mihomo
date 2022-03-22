@@ -120,6 +120,12 @@ type Script struct {
 	ShortcutsCode map[string]string `yaml:"shortcuts" json:"shortcuts"`
 }
 
+// IPTables config
+type IPTables struct {
+	Enable           bool   `yaml:"enable" json:"enable"`
+	InboundInterface string `yaml:"inbound-interface" json:"inbound-interface"`
+}
+
 // Experimental config
 type Experimental struct{}
 
@@ -127,6 +133,7 @@ type Experimental struct{}
 type Config struct {
 	General       *General
 	Tun           *Tun
+	IPTables     *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
 	Hosts         *trie.DomainTrie
@@ -196,6 +203,7 @@ type RawConfig struct {
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
+	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
 	Proxy         []map[string]any          `yaml:"proxies"`
@@ -234,8 +242,12 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:    false,
 			Device:    "",
 			Stack:     C.TunGvisor,
-			DNSHijack: []string{"198.18.0.2:53"}, // default hijack all dns query
+			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute: true,
+		},
+		IPTables: IPTables{
+			Enable:           false,
+			InboundInterface: "lo",
 		},
 		DNS: RawDNS{
 			Enable:       false,
@@ -255,8 +267,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"1.0.0.1",
 			},
 			NameServer: []string{
-				"223.5.5.5",
-				"119.29.29.29",
 				"https://doh.pub/dns-query",
 				"tls://223.5.5.5:853",
 			},
@@ -288,6 +298,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	startTime := time.Now()
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
+	config.IPTables = &rawCfg.IPTables
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {
@@ -630,7 +641,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
 			if ip == nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
-			tree.Insert(domain, ip)
+			_ = tree.Insert(domain, ip)
 		}
 	}
 
@@ -655,7 +666,7 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 }
 
 func parseNameServer(servers []string) ([]dns.NameServer, error) {
-	nameservers := []dns.NameServer{}
+	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
 		// parse without scheme .e.g 8.8.8.8:53
@@ -727,7 +738,7 @@ func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServe
 }
 
 func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
-	ipNets := []*net.IPNet{}
+	var ipNets []*net.IPNet
 
 	for idx, ip := range ips {
 		_, ipnet, err := net.ParseCIDR(ip)
@@ -829,7 +840,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New()
 			for _, domain := range cfg.FakeIPFilter {
-				host.Insert(domain, true)
+				_ = host.Insert(domain, true)
 			}
 		}
 
