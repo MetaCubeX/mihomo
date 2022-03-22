@@ -5,6 +5,7 @@ package tun
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/device"
@@ -50,9 +51,18 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 	}
 
 	nt, err := tun.CreateTUN(t.name, forcedMTU) // forcedMTU do not work on wintun, need to be setting by other way
+
+	// retry if abnormal exit on Windows at last time
+	if err != nil && runtime.GOOS == "windows" &&
+		strings.HasSuffix(err.Error(), "file already exists.") {
+
+		nt, err = tun.CreateTUN(t.name, forcedMTU)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("create tun: %w", err)
 	}
+
 	t.nt = nt.(*tun.NativeTun)
 
 	tunMTU, err := nt.MTU()

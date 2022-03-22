@@ -39,9 +39,11 @@ startOver:
 	tryTimes++
 
 	var (
-		luid      = winipcfg.LUID(dev.(*tun.TUN).LUID())
-		ip        = addr.Masked().Addr().Next()
-		addresses = []netip.Prefix{netip.PrefixFrom(ip, addr.Bits())}
+		luid       = winipcfg.LUID(dev.(*tun.TUN).LUID())
+		ip         = addr.Masked().Addr().Next()
+		gw         = ip.Next()
+		addresses  = []netip.Prefix{netip.PrefixFrom(ip, addr.Bits())}
+		dnsAddress = []netip.Addr{gw}
 
 		family4       = winipcfg.AddressFamily(windows.AF_INET)
 		familyV6      = winipcfg.AddressFamily(windows.AF_INET6)
@@ -123,7 +125,7 @@ startOver:
 		// add gateway
 		deduplicatedRoutes = append(deduplicatedRoutes, &winipcfg.RouteData{
 			Destination: addr.Masked(),
-			NextHop:     addr.Masked().Addr().Next().Next(),
+			NextHop:     gw,
 			Metric:      0,
 		})
 
@@ -193,12 +195,11 @@ startOver:
 		return fmt.Errorf("unable to set v6 metric and MTU: %w", err)
 	}
 
-	dnsAdds := []netip.Addr{netip.MustParseAddr("198.18.0.2")}
-	err = luid.SetDNS(family4, dnsAdds, nil)
+	err = luid.SetDNS(family4, dnsAddress, nil)
 	if err == windows.ERROR_NOT_FOUND && retryOnFailure {
 		goto startOver
 	} else if err != nil {
-		return fmt.Errorf("unable to set DNS %s %s: %w", "198.18.0.2", "nil", err)
+		return fmt.Errorf("unable to set DNS %s %s: %w", dnsAddress[0].String(), "nil", err)
 	}
 
 	wintunInterfaceName = dev.Name()
