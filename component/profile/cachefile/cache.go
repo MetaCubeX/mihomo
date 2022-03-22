@@ -132,6 +132,17 @@ func (c *CacheFile) GetFakeip(key []byte) []byte {
 	return bucket.Get(key)
 }
 
+func (c *CacheFile) FlushFakeIP() error {
+	err := c.DB.Batch(func(t *bbolt.Tx) error {
+		bucket := t.Bucket(bucketFakeip)
+		if bucket == nil {
+			return nil
+		}
+		return t.DeleteBucket(bucketFakeip)
+	})
+	return err
+}
+
 func (c *CacheFile) Close() error {
 	return c.DB.Close()
 }

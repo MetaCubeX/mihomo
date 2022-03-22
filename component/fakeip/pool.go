@@ -18,6 +18,7 @@ type store interface {
 	DelByIP(ip net.IP)
 	Exist(ip net.IP) bool
 	CloneTo(store)
+	FlushFakeIP() error
 }
 
 // Pool is a implementation about fake ip generator without storage
@@ -118,6 +119,10 @@ func (p *Pool) get(host string) net.IP {
 	ip := uintToIP(p.min + p.offset - 1)
 	p.store.PutByIP(ip, host)
 	return ip
+}
+
+func (p *Pool) FlushFakeIP() error {
+	return p.store.FlushFakeIP()
 }
 
 func ipToUint(ip net.IP) uint32 {
