@@ -84,6 +84,13 @@ func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	}
 }
 
+func (h *ResolverEnhancer) FlushFakeIP() error {
+	if h.fakePool != nil {
+		return h.fakePool.FlushFakeIP()
+	}
+	return nil
+}
+
 func NewEnhancer(cfg Config) *ResolverEnhancer {
 	var fakePool *fakeip.Pool
 	var mapping *cache.LruCache

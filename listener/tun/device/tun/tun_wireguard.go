@@ -3,9 +3,10 @@
 package tun
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"runtime"
-	"strings"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/device"
@@ -53,9 +54,7 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 	nt, err := tun.CreateTUN(t.name, forcedMTU) // forcedMTU do not work on wintun, need to be setting by other way
 
 	// retry if abnormal exit on Windows at last time
-	if err != nil && runtime.GOOS == "windows" &&
-		strings.HasSuffix(err.Error(), "file already exists.") {
-
+	if err != nil && runtime.GOOS == "windows" && errors.Is(err, os.ErrExist) {
 		nt, err = tun.CreateTUN(t.name, forcedMTU)
 	}
 
@@ -80,7 +79,9 @@ func (t *TUN) Read(packet []byte) (int, error) {
 	}
 
 	buff := pool.Get(t.offset + cap(packet))
-	defer pool.Put(buff)
+	defer func() {
+		_ = pool.Put(buff)
+	}()
 
 	n, err := t.nt.Read(buff, t.offset)
 	if err != nil {

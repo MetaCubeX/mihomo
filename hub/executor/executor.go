@@ -334,6 +334,6 @@ func updateIPTables(cfg *config.Config) {
 
 func Cleanup() {
 	P.Cleanup()
-	tproxy.CleanupTProxyIPTables()
 	S.Py_Finalize()
+	tproxy.CleanupTProxyIPTables()
 }
