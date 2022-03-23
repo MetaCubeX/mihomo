@@ -69,7 +69,7 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // MarshalJSON implements C.ProxyAdapter
 func (r *Relay) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := []string{}
 	for _, proxy := range r.rawProxies(false) {
 		all = append(all, proxy.Name())
 	}

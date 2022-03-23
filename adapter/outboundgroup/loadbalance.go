@@ -150,7 +150,7 @@ func (lb *LoadBalance) proxies(touch bool) []C.Proxy {
 
 // MarshalJSON implements C.ProxyAdapter
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := []string{}
 	for _, proxy := range lb.proxies(false) {
 		all = append(all, proxy.Name())
 	}

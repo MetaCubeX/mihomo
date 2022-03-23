@@ -97,7 +97,7 @@ func (f *Fallback) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := []string{}
 	for _, proxy := range f.proxies(false) {
 		all = append(all, proxy.Name())
 	}
