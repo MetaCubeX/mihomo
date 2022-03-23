@@ -196,7 +196,6 @@ type RawConfig struct {
 	RoutingMark        int          `yaml:"routing-mark"`
 	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
-	AutoIptables       bool         `yaml:"auto-iptables"`
 
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
@@ -230,7 +229,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Mode:           T.Rule,
 		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
-		AutoIptables:   false,
 		UnifiedDelay:   false,
 		Authentication: []string{},
 		LogLevel:       log.INFO,
@@ -464,18 +462,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 
 		proxies[groupName] = adapter.NewProxy(group)
-	}
-
-	// initial compatible provider
-	for _, pd := range providersMap {
-		if pd.VehicleType() != providerTypes.Compatible {
-			continue
-		}
-
-		log.Infoln("Start initial compatible provider %s", pd.Name())
-		if err := pd.Initial(); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	var ps []C.Proxy
