@@ -317,6 +317,7 @@ func updateIPTables(cfg *config.Config) {
 
 	var (
 		inboundInterface = "lo"
+		bypass           = iptables.Bypass
 		tProxyPort       = cfg.General.TProxyPort
 		dnsCfg           = cfg.DNS
 	)
@@ -351,7 +352,7 @@ func updateIPTables(cfg *config.Config) {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
 
-	err = tproxy.SetTProxyIPTables(inboundInterface, uint16(tProxyPort), uint16(dnsPort))
+	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), uint16(dnsPort))
 	if err != nil {
 		return
 	}

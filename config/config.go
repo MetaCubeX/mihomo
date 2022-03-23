@@ -121,8 +121,9 @@ type Script struct {
 
 // IPTables config
 type IPTables struct {
-	Enable           bool   `yaml:"enable" json:"enable"`
-	InboundInterface string `yaml:"inbound-interface" json:"inbound-interface"`
+	Enable           bool     `yaml:"enable" json:"enable"`
+	InboundInterface string   `yaml:"inbound-interface" json:"inbound-interface"`
+	Bypass           []string `yaml:"bypass" json:"bypass"`
 }
 
 // Experimental config
@@ -247,6 +248,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		IPTables: IPTables{
 			Enable:           false,
 			InboundInterface: "lo",
+			Bypass:           []string{},
 		},
 		DNS: RawDNS{
 			Enable:       false,
