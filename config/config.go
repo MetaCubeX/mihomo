@@ -47,7 +47,6 @@ type General struct {
 	RoutingMark   int          `json:"-"`
 	GeodataMode   bool         `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
-	AutoIptables  bool         `json:"auto-iptables"`
 }
 
 // Inbound config
@@ -133,7 +132,7 @@ type Experimental struct{}
 type Config struct {
 	General       *General
 	Tun           *Tun
-	IPTables     *IPTables
+	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
 	Hosts         *trie.DomainTrie
@@ -387,7 +386,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		RoutingMark:   cfg.RoutingMark,
 		GeodataMode:   cfg.GeodataMode,
 		GeodataLoader: cfg.GeodataLoader,
-		AutoIptables:  cfg.AutoIptables,
 	}, nil
 }
 
