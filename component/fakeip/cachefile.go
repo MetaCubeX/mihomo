@@ -53,3 +53,8 @@ func (c *cachefileStore) Exist(ip net.IP) bool {
 // CloneTo implements store.CloneTo
 // already persistence
 func (c *cachefileStore) CloneTo(store store) {}
+
+// FlushFakeIP implements store.FlushFakeIP
+func (c *cachefileStore) FlushFakeIP() error {
+	return c.cache.FlushFakeIP()
+}

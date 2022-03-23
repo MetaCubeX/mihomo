@@ -216,6 +216,15 @@ func (c *LruCache) deleteElement(le *list.Element) {
 	}
 }
 
+func (c *LruCache) Clear() error {
+	c.mu.Lock()
+
+	c.cache = make(map[any]*list.Element)
+
+	c.mu.Unlock()
+	return nil
+}
+
 type entry struct {
 	key     any
 	value   any
