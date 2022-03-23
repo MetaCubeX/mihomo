@@ -67,3 +67,8 @@ func (m *memoryStore) CloneTo(store store) {
 		m.cache.CloneTo(ms.cache)
 	}
 }
+
+// FlushFakeIP implements store.FlushFakeIP
+func (m *memoryStore) FlushFakeIP() error {
+	return m.cache.Clear()
+}
