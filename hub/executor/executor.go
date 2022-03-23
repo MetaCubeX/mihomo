@@ -315,6 +315,11 @@ func updateIPTables(cfg *config.Config) {
 		}
 	}()
 
+	if cfg.Tun.Enable {
+		err = fmt.Errorf("when tun is enabled, iptables cannot be set automatically")
+		return
+	}
+
 	var (
 		inboundInterface = "lo"
 		bypass           = iptables.Bypass
