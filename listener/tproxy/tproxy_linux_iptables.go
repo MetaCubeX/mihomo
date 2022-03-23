@@ -3,6 +3,7 @@ package tproxy
 import (
 	"errors"
 	"fmt"
+	"net"
 	"runtime"
 
 	"github.com/Dreamacro/clash/common/cmd"
@@ -21,9 +22,8 @@ const (
 	PROXY_ROUTE_TABLE = "0x2d0"
 )
 
-func SetTProxyIPTables(ifname string, tport uint16, dport uint16) error {
-	var err error
-	if err = execCmd("iptables -V"); err != nil {
+func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint16) error {
+	if _, err := cmd.ExecCmd("iptables -V"); err != nil {
 		return fmt.Errorf("current operations system [%s] are not support iptables or command iptables does not exist", runtime.GOOS)
 	}
 
@@ -61,7 +61,7 @@ func SetTProxyIPTables(ifname string, tport uint16, dport uint16) error {
 	execCmd("iptables -t mangle -A clash_prerouting -p udp --dport 53 -j ACCEPT")
 	execCmd("iptables -t mangle -A clash_prerouting -p tcp --dport 53 -j ACCEPT")
 	execCmd("iptables -t mangle -A clash_prerouting -m addrtype --dst-type LOCAL -j RETURN")
-	addLocalnetworkToChain("clash_prerouting")
+	addLocalnetworkToChain("clash_prerouting", bypass)
 	execCmd("iptables -t mangle -A clash_prerouting -p tcp -m socket -j clash_divert")
 	execCmd("iptables -t mangle -A clash_prerouting -p udp -m socket -j clash_divert")
 	execCmd(fmt.Sprintf("iptables -t mangle -A clash_prerouting -p tcp -j TPROXY --on-port %d --tproxy-mark %s/%s", tProxyPort, PROXY_FWMARK, PROXY_FWMARK))
@@ -84,7 +84,7 @@ func SetTProxyIPTables(ifname string, tport uint16, dport uint16) error {
 	execCmd("iptables -t mangle -A clash_output -p tcp --dport 53 -j ACCEPT")
 	execCmd("iptables -t mangle -A clash_output -m addrtype --dst-type LOCAL -j RETURN")
 	execCmd("iptables -t mangle -A clash_output -m addrtype --dst-type BROADCAST -j RETURN")
-	addLocalnetworkToChain("clash_output")
+	addLocalnetworkToChain("clash_output", bypass)
 	execCmd(fmt.Sprintf("iptables -t mangle -A clash_output -p tcp -j MARK --set-mark %s", PROXY_FWMARK))
 	execCmd(fmt.Sprintf("iptables -t mangle -A clash_output -p udp -j MARK --set-mark %s", PROXY_FWMARK))
 	execCmd(fmt.Sprintf("iptables -t mangle -I OUTPUT -o %s -j clash_output", interfaceName))
@@ -113,7 +113,7 @@ func CleanupTProxyIPTables() {
 		dialer.DefaultRoutingMark.Store(0)
 	}
 
-	if err := execCmd("iptables -t mangle -L clash_divert"); err != nil {
+	if _, err := cmd.ExecCmd("iptables -t mangle -L clash_divert"); err != nil {
 		return
 	}
 
@@ -159,7 +159,15 @@ func CleanupTProxyIPTables() {
 	dnsPort = 0
 }
 
-func addLocalnetworkToChain(chain string) {
+func addLocalnetworkToChain(chain string, bypass []string) {
+	for _, bp := range bypass {
+		_, _, err := net.ParseCIDR(bp)
+		if err != nil {
+			log.Warnln("[IPTABLES] %s", err)
+			continue
+		}
+		execCmd(fmt.Sprintf("iptables -t mangle -A %s -d %s -j RETURN", chain, bp))
+	}
 	execCmd(fmt.Sprintf("iptables -t mangle -A %s -d 0.0.0.0/8 -j RETURN", chain))
 	execCmd(fmt.Sprintf("iptables -t mangle -A %s -d 10.0.0.0/8 -j RETURN", chain))
 	execCmd(fmt.Sprintf("iptables -t mangle -A %s -d 100.64.0.0/10 -j RETURN", chain))
@@ -177,13 +185,11 @@ func addLocalnetworkToChain(chain string) {
 	execCmd(fmt.Sprintf("iptables -t mangle -A %s -d 255.255.255.255/32 -j RETURN", chain))
 }
 
-func execCmd(cmdStr string) error {
+func execCmd(cmdStr string) {
 	log.Debugln("[IPTABLES] %s", cmdStr)
 
 	_, err := cmd.ExecCmd(cmdStr)
 	if err != nil {
 		log.Warnln("[IPTABLES] exec cmd: %v", err)
 	}
-
-	return err
 }
