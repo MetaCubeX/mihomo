@@ -123,7 +123,7 @@ func (u *URLTest) SupportUDP() bool {
 
 // MarshalJSON implements C.ProxyAdapter
 func (u *URLTest) MarshalJSON() ([]byte, error) {
-	var all []string
+	all := []string{}
 	for _, proxy := range u.proxies(false) {
 		all = append(all, proxy.Name())
 	}
