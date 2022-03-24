@@ -28,15 +28,9 @@ func RelayDnsPacket(payload []byte) ([]byte, error) {
 
 	r, err := resolver.ServeMsg(msg)
 	if err != nil {
-		return nil, err
-	}
-
-	for _, ans := range r.Answer {
-		header := ans.Header()
-
-		if header.Class == D.ClassINET && (header.Rrtype == D.TypeA || header.Rrtype == D.TypeAAAA) {
-			header.Ttl = 1
-		}
+		m := new(D.Msg)
+		m.SetRcode(msg, D.RcodeServerFailure)
+		return m.Pack()
 	}
 
 	r.SetRcode(msg, r.Rcode)

@@ -74,8 +74,8 @@ func (u *UDP) WriteTo(buf []byte, local net.Addr, remote net.Addr) (int, error) 
 	srcIP, _ := netip.AddrFromSlice(srcAddr.IP)
 	dstIp, _ := netip.AddrFromSlice(dstAddr.IP)
 
-	srcAddrPort := netip.AddrPortFrom(srcIP, uint16(srcAddr.Port))
-	dstAddrPort := netip.AddrPortFrom(dstIp, uint16(dstAddr.Port))
+	srcAddrPort := netip.AddrPortFrom(srcIP.Unmap(), uint16(srcAddr.Port))
+	dstAddrPort := netip.AddrPortFrom(dstIp.Unmap(), uint16(dstAddr.Port))
 
 	if !srcAddrPort.Addr().Is4() || !dstAddrPort.Addr().Is4() {
 		return 0, net.InvalidAddrError("invalid ip version")
