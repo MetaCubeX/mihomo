@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/listener/inner"
 	"io"
 	"net"
@@ -85,7 +86,13 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	client := http.Client{Transport: transport}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, address)
+		}
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer resp.Body.Close()
 
