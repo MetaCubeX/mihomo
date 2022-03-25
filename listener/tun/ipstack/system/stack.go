@@ -176,7 +176,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 				local: lAddr,
 				data:  raw,
 				writeBack: func(b []byte, addr net.Addr) (int, error) {
-					return stack.UDP().WriteTo(b, addr, lAddr)
+					return stack.UDP().WriteTo(b, rAddr, lAddr)
 				},
 				drop: func() {
 					pool.Put(buf)
