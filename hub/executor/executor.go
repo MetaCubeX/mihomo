@@ -330,7 +330,9 @@ func updateIPTables(cfg *config.Config) {
 	log.Infoln("[IPTABLES] Setting iptables completed")
 }
 
-func Cleanup() {
+func Shutdown() {
 	P.Cleanup()
 	tproxy.CleanupTProxyIPTables()
+
+	log.Warnln("Clash shutting down")
 }
