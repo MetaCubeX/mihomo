@@ -106,6 +106,9 @@ func (t *TUN) Write(packet []byte) (int, error) {
 }
 
 func (t *TUN) Close() error {
+	if t.Endpoint != nil {
+		t.Endpoint.Close()
+	}
 	return t.nt.Close()
 }
 
