@@ -18,6 +18,7 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system"
 	"github.com/Dreamacro/clash/log"
 )
@@ -67,7 +68,7 @@ func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContex
 				DNSAdds: tunConf.DNSHijack,
 				TCPIn:   tcpIn, UDPIn: udpIn,
 			},
-			gvisor.WithDefault(),
+			option.WithDefault(),
 		)
 
 		if err != nil {
