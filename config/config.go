@@ -63,17 +63,18 @@ type Controller struct {
 
 // DNS config
 type DNS struct {
-	Enable            bool             `yaml:"enable"`
-	IPv6              bool             `yaml:"ipv6"`
-	NameServer        []dns.NameServer `yaml:"nameserver"`
-	Fallback          []dns.NameServer `yaml:"fallback"`
-	FallbackFilter    FallbackFilter   `yaml:"fallback-filter"`
-	Listen            string           `yaml:"listen"`
-	EnhancedMode      C.DNSMode        `yaml:"enhanced-mode"`
-	DefaultNameserver []dns.NameServer `yaml:"default-nameserver"`
-	FakeIPRange       *fakeip.Pool
-	Hosts             *trie.DomainTrie
-	NameServerPolicy  map[string]dns.NameServer
+	Enable                bool             `yaml:"enable"`
+	IPv6                  bool             `yaml:"ipv6"`
+	NameServer            []dns.NameServer `yaml:"nameserver"`
+	Fallback              []dns.NameServer `yaml:"fallback"`
+	FallbackFilter        FallbackFilter   `yaml:"fallback-filter"`
+	Listen                string           `yaml:"listen"`
+	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
+	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
+	FakeIPRange           *fakeip.Pool
+	Hosts                 *trie.DomainTrie
+	NameServerPolicy      map[string]dns.NameServer
+	ProxyServerNameserver []dns.NameServer
 }
 
 // FallbackFilter config
@@ -125,18 +126,19 @@ type Config struct {
 }
 
 type RawDNS struct {
-	Enable            bool              `yaml:"enable"`
-	IPv6              bool              `yaml:"ipv6"`
-	UseHosts          bool              `yaml:"use-hosts"`
-	NameServer        []string          `yaml:"nameserver"`
-	Fallback          []string          `yaml:"fallback"`
-	FallbackFilter    RawFallbackFilter `yaml:"fallback-filter"`
-	Listen            string            `yaml:"listen"`
-	EnhancedMode      C.DNSMode         `yaml:"enhanced-mode"`
-	FakeIPRange       string            `yaml:"fake-ip-range"`
-	FakeIPFilter      []string          `yaml:"fake-ip-filter"`
-	DefaultNameserver []string          `yaml:"default-nameserver"`
-	NameServerPolicy  map[string]string `yaml:"nameserver-policy"`
+	Enable                bool              `yaml:"enable"`
+	IPv6                  bool              `yaml:"ipv6"`
+	UseHosts              bool              `yaml:"use-hosts"`
+	NameServer            []string          `yaml:"nameserver"`
+	Fallback              []string          `yaml:"fallback"`
+	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter"`
+	Listen                string            `yaml:"listen"`
+	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode"`
+	FakeIPRange           string            `yaml:"fake-ip-range"`
+	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
+	DefaultNameserver     []string          `yaml:"default-nameserver"`
+	NameServerPolicy      map[string]string `yaml:"nameserver-policy"`
+	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
@@ -676,6 +678,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 	}
 
 	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy); err != nil {
+		return nil, err
+	}
+
+	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver); err != nil {
 		return nil, err
 	}
 
