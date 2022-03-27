@@ -14,6 +14,7 @@ const (
 	Direct AdapterType = iota
 	Reject
 	Compatible
+	Pass
 
 	Relay
 	Selector
@@ -132,6 +133,8 @@ func (at AdapterType) String() string {
 		return "Reject"
 	case Compatible:
 		return "Compatible"
+	case Pass:
+		return "Pass"
 	case Shadowsocks:
 		return "Shadowsocks"
 	case ShadowsocksR:
