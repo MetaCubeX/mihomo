@@ -27,9 +27,9 @@ require (
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 	golang.zx2c4.com/wireguard v0.0.0-20220318042302-193cf8d6a5d6
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220319025644-e785bfc153f5
+	gvisor.dev/gvisor v0.0.0-20220326024801-5d1f3d24cb84
 )
 
 require (

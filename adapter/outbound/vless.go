@@ -62,6 +62,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	case "ws":
 
 		host, port, _ := net.SplitHostPort(v.addr)
+
 		wsOpts := &vmess.WebsocketConfig{
 			Host:                host,
 			Port:                port,
