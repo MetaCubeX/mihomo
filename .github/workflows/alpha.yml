@@ -49,7 +49,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Alpha
-        uses: svenstaro/action-gh-release@v1
+        uses: softprops/action-gh-release@v1
         if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
         with:
           tag: ${{ github.ref }}
