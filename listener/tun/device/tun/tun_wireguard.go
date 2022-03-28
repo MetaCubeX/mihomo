@@ -8,7 +8,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/device/iobased"
 
@@ -22,6 +21,8 @@ type TUN struct {
 	mtu    uint32
 	name   string
 	offset int
+
+	cache []byte
 }
 
 func Open(name string, mtu uint32) (_ device.Device, err error) {
@@ -70,6 +71,10 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 	}
 	t.mtu = uint32(tunMTU)
 
+	if t.offset > 0 {
+		t.cache = make([]byte, 65535)
+	}
+
 	return t, nil
 }
 
@@ -78,19 +83,9 @@ func (t *TUN) Read(packet []byte) (int, error) {
 		return t.nt.Read(packet, t.offset)
 	}
 
-	buff := pool.Get(t.offset + cap(packet))
-	defer func() {
-		_ = pool.Put(buff)
-	}()
+	n, err := t.nt.Read(t.cache, t.offset)
 
-	n, err := t.nt.Read(buff, t.offset)
-	if err != nil {
-		return 0, err
-	}
-
-	_ = buff[:t.offset]
-
-	copy(packet, buff[t.offset:t.offset+n])
+	copy(packet, t.cache[t.offset:t.offset+n])
 
 	return n, err
 }
@@ -100,7 +95,8 @@ func (t *TUN) Write(packet []byte) (int, error) {
 		return t.nt.Write(packet, t.offset)
 	}
 
-	packet = append(make([]byte, t.offset), packet...)
+	_ = t.cache[:t.offset]
+	packet = append(t.cache[:t.offset], packet...)
 
 	return t.nt.Write(packet, t.offset)
 }
