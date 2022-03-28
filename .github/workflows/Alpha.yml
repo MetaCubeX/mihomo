@@ -33,12 +33,13 @@ jobs:
           NAME: Clash.Meta
           BINDIR: bin
         run: make -j releases
-      - name: Delete old tag and release
-        uses: cb80/delrel@latest
+
+      - name: Delete current release assets
+        uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
-          tag_name: alpha # tag name to delete
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: alpha
+          deleteOnlyFromDrafts: false
 
       - name: Upload Alpha
         uses: svenstaro/upload-release-action@v2
