@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
+
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -37,9 +40,9 @@ const (
 	tcpKeepaliveInterval = 30 * time.Second
 )
 
-func withTCPHandler() Option {
-	return func(s *gvStack) error {
-		tcpForwarder := tcp.NewForwarder(s.Stack, defaultWndSize, maxConnAttempts, func(r *tcp.ForwarderRequest) {
+func withTCPHandler(handle adapter.TCPHandleFunc) option.Option {
+	return func(s *stack.Stack) error {
+		tcpForwarder := tcp.NewForwarder(s, defaultWndSize, maxConnAttempts, func(r *tcp.ForwarderRequest) {
 			var wq waiter.Queue
 			ep, err := r.CreateEndpoint(&wq)
 			if err != nil {
@@ -55,7 +58,7 @@ func withTCPHandler() Option {
 				TCPConn: gonet.NewTCPConn(&wq, ep),
 				id:      r.ID(),
 			}
-			s.handler.HandleTCPConn(conn)
+			handle(conn)
 		})
 		s.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder.HandlePacket)
 		return nil

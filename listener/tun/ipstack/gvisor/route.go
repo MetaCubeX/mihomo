@@ -1,22 +1,23 @@
 package gvisor
 
 import (
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
+
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
-func withICMPHandler() Option {
-	return func(s *gvStack) error {
-		// Add default route table for IPv4 and IPv6.
-		// This will handle all incoming ICMP packets.
+func withRouteTable(nicID tcpip.NICID) option.Option {
+	return func(s *stack.Stack) error {
 		s.SetRouteTable([]tcpip.Route{
 			{
 				Destination: header.IPv4EmptySubnet,
-				NIC:         s.nicID,
+				NIC:         nicID,
 			},
 			{
 				Destination: header.IPv6EmptySubnet,
-				NIC:         s.nicID,
+				NIC:         nicID,
 			},
 		})
 		return nil
