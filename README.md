@@ -140,6 +140,7 @@ proxies:
     network: tcp
     servername: example.com
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
+    # udp: true
     # skip-cert-verify: true
 ```
 
