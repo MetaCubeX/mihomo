@@ -36,8 +36,6 @@ func (s sysStack) Close() error {
 	return nil
 }
 
-var ipv4LoopBack = netip.MustParsePrefix("127.0.0.0/8")
-
 func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 	var (
 		gateway = tunAddress.Masked().Addr().Next()
@@ -70,12 +68,6 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			rAddrIp, _ := netip.AddrFromSlice(rAddr.IP)
 			rAddrPort := netip.AddrPortFrom(rAddrIp, uint16(rAddr.Port))
-
-			if ipv4LoopBack.Contains(rAddrIp) {
-				conn.Close()
-
-				continue
-			}
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
@@ -148,12 +140,6 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			rAddrIp, _ := netip.AddrFromSlice(rAddr.IP)
 			rAddrPort := netip.AddrPortFrom(rAddrIp, uint16(rAddr.Port))
-
-			if ipv4LoopBack.Contains(rAddrIp) {
-				pool.Put(buf)
-
-				continue
-			}
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {

@@ -103,7 +103,7 @@ func (e *Endpoint) dispatchLoop(cancel context.CancelFunc) {
 		case header.IPv6Version:
 			e.InjectInbound(header.IPv6ProtocolNumber, pkt)
 		}
-		pkt.DecRef() /* release */
+		pkt.DecRef()
 	}
 }
 

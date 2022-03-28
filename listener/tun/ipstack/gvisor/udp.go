@@ -5,6 +5,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -12,9 +13,9 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
-func withUDPHandler() Option {
-	return func(s *gvStack) error {
-		udpForwarder := udp.NewForwarder(s.Stack, func(r *udp.ForwarderRequest) {
+func withUDPHandler(handle adapter.UDPHandleFunc) option.Option {
+	return func(s *stack.Stack) error {
+		udpForwarder := udp.NewForwarder(s, func(r *udp.ForwarderRequest) {
 			var wq waiter.Queue
 			ep, err := r.CreateEndpoint(&wq)
 			if err != nil {
@@ -23,10 +24,10 @@ func withUDPHandler() Option {
 			}
 
 			conn := &udpConn{
-				UDPConn: gonet.NewUDPConn(s.Stack, &wq, ep),
+				UDPConn: gonet.NewUDPConn(s, &wq, ep),
 				id:      r.ID(),
 			}
-			s.handler.HandleUDPConn(conn)
+			handle(conn)
 		})
 		s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 		return nil

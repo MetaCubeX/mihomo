@@ -41,6 +41,7 @@ type Resolver struct {
 	group                 singleflight.Group
 	lruCache              *cache.LruCache
 	policy                *trie.DomainTrie
+	proxyServer           []dnsClient
 }
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeA
@@ -300,6 +301,11 @@ func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D
 	return ch
 }
 
+// HasProxyServer has proxy server dns client
+func (r *Resolver) HasProxyServer() bool {
+	return len(r.main) > 0
+}
+
 type NameServer struct {
 	Net          string
 	Addr         string
@@ -318,6 +324,7 @@ type FallbackFilter struct {
 type Config struct {
 	Main, Fallback []NameServer
 	Default        []NameServer
+	ProxyServer    []NameServer
 	IPv6           bool
 	EnhancedMode   C.DNSMode
 	FallbackFilter FallbackFilter
@@ -341,6 +348,10 @@ func NewResolver(config Config) *Resolver {
 
 	if len(config.Fallback) != 0 {
 		r.fallback = transform(config.Fallback, defaultResolver)
+	}
+
+	if len(config.ProxyServer) != 0 {
+		r.proxyServer = transform(config.ProxyServer, defaultResolver)
 	}
 
 	if len(config.Policy) != 0 {
@@ -376,10 +387,10 @@ func NewResolver(config Config) *Resolver {
 	return r
 }
 
-func NewMainResolver(old *Resolver) *Resolver {
+func NewProxyServerHostResolver(old *Resolver) *Resolver {
 	r := &Resolver{
 		ipv6:     old.ipv6,
-		main:     old.main,
+		main:     old.proxyServer,
 		lruCache: old.lruCache,
 		hosts:    old.hosts,
 		policy:   old.policy,

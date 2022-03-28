@@ -29,4 +29,7 @@ type Device interface {
 
 	// UseIOBased work for other ip stack
 	UseIOBased() error
+
+	// Wait waits for the device to close.
+	Wait()
 }
