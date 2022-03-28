@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -128,8 +129,9 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
 		}
 	default:
+		// default tcp network
 		// handle TLS And XTLS
-		c, err = v.streamTLSOrXTLSConn(c, true)
+		c, err = v.streamTLSOrXTLSConn(c, false)
 	}
 
 	if err != nil {
@@ -213,7 +215,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(metadata.Host)
 		if err != nil {
@@ -269,7 +271,7 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 		copy(addr[1:], []byte(metadata.Host))
 	}
 
-	port, _ := strconv.Atoi(metadata.DstPort)
+	port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 	return &vless.DstAddr{
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,
@@ -281,14 +283,21 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 type vlessPacketConn struct {
 	net.Conn
 	rAddr net.Addr
+	cache [2]byte
 }
 
 func (uc *vlessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	binary.BigEndian.PutUint16(uc.cache[:], uint16(len(b)))
+	_, _ = uc.Conn.Write(uc.cache[:])
 	return uc.Conn.Write(b)
 }
 
 func (uc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, err := uc.Conn.Read(b)
+	n, err := uc.Conn.Read(uc.cache[:])
+	if err != nil {
+		return n, uc.rAddr, err
+	}
+	n, err = uc.Conn.Read(b)
 	return n, uc.rAddr, err
 }
 
