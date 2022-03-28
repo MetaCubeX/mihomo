@@ -369,6 +369,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}
 
 			if adapter.Type() == C.Pass || (adapter.Unwrap(metadata) != nil && adapter.Unwrap(metadata).Type() == C.Pass) {
+				log.Debugln("%s match Pass rule", adapter.Name())
 				continue
 			}
 
