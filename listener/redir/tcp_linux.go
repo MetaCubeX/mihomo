@@ -37,7 +37,7 @@ func parserPacket(conn net.Conn) (socks5.Addr, error) {
 // Call getorigdst() from linux/net/ipv4/netfilter/nf_conntrack_l3proto_ipv4.c
 func getorigdst(fd uintptr) (socks5.Addr, error) {
 	raw := syscall.RawSockaddrInet4{}
-	siz := unsafe.Sizeof(raw)
+	siz := uint32(unsafe.Sizeof(raw))
 	if err := socketcall(GETSOCKOPT, fd, syscall.IPPROTO_IP, SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&raw)), uintptr(unsafe.Pointer(&siz)), 0); err != nil {
 		return nil, err
 	}
