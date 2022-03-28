@@ -1,0 +1,18 @@
+name: Delete Release Assets
+
+on: push
+
+jobs:
+  deleteReleaseAssets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v1
+
+      - name: Delete current release assets
+        uses: andreaswilli/delete-release-assets-action@<version>
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+#          tagPrefix: v
+          tag: alpha
