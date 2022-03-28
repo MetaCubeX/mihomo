@@ -16,3 +16,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 #          tagPrefix: v
           tag: alpha
+          deleteOnlyFromDrafts: false
