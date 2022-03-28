@@ -34,13 +34,11 @@ jobs:
           BINDIR: bin
         run: make -j releases
       - name: Delete old tag and release
-        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        uses: cb80/delrel@latest
         with:
-          delete_release: false # default: false
-#          tag_name: alpha # tag name to delete
-          repo: <owner>/<repoName> # target repo (optional). defaults to repo running this action
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: alpha # tag name to delete
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Alpha
         uses: svenstaro/upload-release-action@v2
