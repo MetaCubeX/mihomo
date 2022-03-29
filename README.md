@@ -127,11 +127,14 @@ rules:
 ```
 
 ### Proxies configuration
-Support outbound transport protocol `VLESS`.
+Support outbound protocol `VLESS`.
 
-The XTLS only support TCP transport by the XRAY-CORE.
+Support `Trojan` with XTLS.
+
+Currently XTLS only supports TCP transport.
 ```yaml
 proxies:
+  # VLESS
   - name: "vless-tls"
     type: vless
     server: server
@@ -149,8 +152,21 @@ proxies:
     network: tcp
     servername: example.com
     flow: xtls-rprx-direct # or xtls-rprx-origin
-    # flow-show: true # print the XTLS direct log
+    # flow-show: true # print the XTLS direction log
     # udp: true
+    # skip-cert-verify: true
+
+  # Trojan
+  - name: "trojan-xtls"
+    type: trojan
+    server: server
+    port: 443
+    password: yourpsk
+    network: tcp
+    flow: xtls-rprx-direct # or xtls-rprx-origin
+    # flow-show: true # print the XTLS direction log
+    # udp: true
+    # sni: example.com # aka server name
     # skip-cert-verify: true
 ```
 
