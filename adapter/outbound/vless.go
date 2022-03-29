@@ -6,9 +6,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -18,6 +20,11 @@ import (
 	"github.com/Dreamacro/clash/transport/vmess"
 
 	"golang.org/x/net/http2"
+)
+
+const (
+	// max packet length
+	maxLength = 1024 << 3
 )
 
 type Vless struct {
@@ -39,7 +46,6 @@ type VlessOption struct {
 	UUID           string            `proxy:"uuid"`
 	Flow           string            `proxy:"flow,omitempty"`
 	FlowShow       bool              `proxy:"flow-show,omitempty"`
-	TLS            bool              `proxy:"tls,omitempty"`
 	UDP            bool              `proxy:"udp,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
 	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
@@ -80,19 +86,19 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			wsOpts.Headers = header
 		}
 
-		if v.option.TLS {
-			wsOpts.TLS = true
-			wsOpts.TLSConfig = &tls.Config{
-				ServerName:         host,
-				InsecureSkipVerify: v.option.SkipCertVerify,
-				NextProtos:         []string{"http/1.1"},
-			}
-			if v.option.ServerName != "" {
-				wsOpts.TLSConfig.ServerName = v.option.ServerName
-			} else if host := wsOpts.Headers.Get("Host"); host != "" {
-				wsOpts.TLSConfig.ServerName = host
-			}
+		wsOpts.TLS = true
+		wsOpts.TLSConfig = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			ServerName:         host,
+			InsecureSkipVerify: v.option.SkipCertVerify,
+			NextProtos:         []string{"http/1.1"},
 		}
+		if v.option.ServerName != "" {
+			wsOpts.TLSConfig.ServerName = v.option.ServerName
+		} else if host := wsOpts.Headers.Get("Host"); host != "" {
+			wsOpts.TLSConfig.ServerName = host
+		}
+
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
 		// readability first, so just copy default TLS logic
@@ -160,7 +166,7 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 
 		return vless.StreamXTLSConn(conn, &xtlsOpts)
 
-	} else if v.option.TLS {
+	} else {
 		tlsOpts := vmess.TLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
@@ -176,8 +182,6 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 
 		return vmess.StreamTLSConn(conn, &tlsOpts)
 	}
-
-	return conn, nil
 }
 
 func (v *Vless) isXTLSEnabled() bool {
@@ -282,30 +286,97 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 
 type vlessPacketConn struct {
 	net.Conn
-	rAddr net.Addr
-	cache [2]byte
+	rAddr  net.Addr
+	cache  [2]byte
+	remain int
+	mux    sync.Mutex
 }
 
-func (uc *vlessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	binary.BigEndian.PutUint16(uc.cache[:], uint16(len(b)))
-	_, _ = uc.Conn.Write(uc.cache[:])
-	return uc.Conn.Write(b)
-}
-
-func (uc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, err := uc.Conn.Read(uc.cache[:])
-	if err != nil {
-		return n, uc.rAddr, err
+func (vc *vlessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	total := len(b)
+	if total == 0 {
+		return 0, nil
 	}
-	n, err = uc.Conn.Read(b)
-	return n, uc.rAddr, err
+
+	if total < maxLength {
+		return vc.writePacket(b)
+	}
+
+	offset := 0
+	for {
+		cursor := offset + maxLength
+		if cursor > total {
+			cursor = total
+		}
+
+		n, err := vc.writePacket(b[offset:cursor])
+		if err != nil {
+			return offset + n, err
+		}
+
+		offset = cursor
+		if offset == total {
+			break
+		}
+	}
+
+	return total, nil
+}
+
+func (vc *vlessPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	vc.mux.Lock()
+	defer vc.mux.Unlock()
+
+	if vc.remain != 0 {
+		length := len(b)
+		if length > vc.remain {
+			length = vc.remain
+		}
+
+		n, err := vc.Conn.Read(b[:length])
+		if err != nil {
+			return 0, vc.rAddr, err
+		}
+
+		vc.remain -= n
+
+		return n, vc.rAddr, nil
+	}
+
+	if _, err := vc.Conn.Read(b[:2]); err != nil {
+		return 0, vc.rAddr, err
+	}
+
+	total := int(binary.BigEndian.Uint16(b[:2]))
+	if total == 0 {
+		return 0, vc.rAddr, nil
+	}
+
+	length := len(b)
+	if length > total {
+		length = total
+	}
+
+	if _, err := io.ReadFull(vc.Conn, b[:length]); err != nil {
+		return 0, vc.rAddr, errors.New("read packet error")
+	}
+
+	vc.remain = total - length
+
+	return length, vc.rAddr, nil
+}
+
+func (vc *vlessPacketConn) writePacket(payload []byte) (int, error) {
+	binary.BigEndian.PutUint16(vc.cache[:], uint16(len(payload)))
+
+	if _, err := vc.Conn.Write(vc.cache[:]); err != nil {
+		return 0, err
+	}
+
+	return vc.Conn.Write(payload)
 }
 
 func NewVless(option VlessOption) (*Vless, error) {
-	if !option.TLS {
-		return nil, fmt.Errorf("TLS must be true with vless")
-	}
-
 	var addons *vless.Addons
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
@@ -315,7 +386,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 				Flow: option.Flow,
 			}
 		default:
-			return nil, fmt.Errorf("unsupported vless flow type: %s", option.Flow)
+			return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
 		}
 	}
 

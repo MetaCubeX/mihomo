@@ -35,15 +35,6 @@ type DstAddr struct {
 	Port     uint
 }
 
-// Config of vless
-type Config struct {
-	UUID     string
-	AlterID  uint16
-	Security string
-	Port     string
-	HostName string
-}
-
 // Client is vless connection generator
 type Client struct {
 	uuid     *uuid.UUID
