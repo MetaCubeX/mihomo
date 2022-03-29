@@ -226,7 +226,7 @@ iptables:
 
 
 ### General installation guide for Linux  
-+ Create user given name `Clash-Meta`
++ Create user given name `clash-meta`
 
 + Download and decompress pre-built binaries from [releases](https://github.com/MetaCubeX/Clash.Meta/releases)  
 
@@ -236,22 +236,25 @@ iptables:
 
 
 
-Run Meta Kernel by user `Clash-Meta` as a daemon.
+Run Meta Kernel by user `clash-meta` as a daemon.
 
 Create the systemd configuration file at `/etc/systemd/system/Clash-Meta.service`:
 
 ```
 [Unit]
 Description=Clash-Meta Daemon, Another Clash Kernel.
-After=network.target
+After=network.target NetworkManager.service systemd-networkd.service iwd.service
 
 [Service]
 Type=simple
-User=Clash-Meta
-Group=Clash-Meta
+User=clash-meta
+Group=clash-meta
+LimitNPROC=500
+LimitNOFILE=1000000
 CapabilityBoundingSet=cap_net_admin
 AmbientCapabilities=cap_net_admin
 Restart=always
+ExecStartPre=/usr/bin/sleep 1s
 ExecStart=/usr/local/bin/Clash-Meta -d /etc/Clash-Meta
 
 [Install]
