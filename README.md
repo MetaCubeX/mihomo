@@ -132,14 +132,24 @@ Support outbound transport protocol `VLESS`.
 The XTLS only support TCP transport by the XRAY-CORE.
 ```yaml
 proxies:
-  - name: "vless-tcp"
+  - name: "vless-tls"
     type: vless
     server: server
     port: 443
     uuid: uuid
     network: tcp
     servername: example.com
-    # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
+    udp: true
+    # skip-cert-verify: true
+  - name: "vless-xtls"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    network: tcp
+    servername: example.com
+    flow: xtls-rprx-direct # or xtls-rprx-origin
+    # flow-show: true # print the XTLS direct log
     # udp: true
     # skip-cert-verify: true
 ```

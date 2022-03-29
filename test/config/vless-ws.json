@@ -8,17 +8,15 @@
                 "clients": [
                     {
                         "id": "b831381d-6324-4d53-ad4f-8cda48b30811",
-                        "email": "xtls@example.com",
-                        "flow": "xtls-rprx-direct",
-                        "level": 0
+                        "level": 0,
+                        "email": "ws@example.com"
                     }
-                ],
-                "decryption": "none"
+                ]
             },
             "streamSettings": {
-                "network": "tcp",
-                "security": "xtls",
-                "xtlsSettings": {
+                "network": "ws",
+                "security": "tls",
+                "tlsSettings": {
                     "certificates": [
                         {
                             "certificateFile": "/etc/ssl/v2ray/fullchain.pem",
@@ -33,8 +31,5 @@
         {
             "protocol": "freedom"
         }
-    ],
-    "log": {
-        "loglevel": "debug"
-    }
+    ]
 }

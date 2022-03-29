@@ -95,7 +95,6 @@ func (t *TUN) Write(packet []byte) (int, error) {
 		return t.nt.Write(packet, t.offset)
 	}
 
-	_ = t.cache[:t.offset]
 	packet = append(t.cache[:t.offset], packet...)
 
 	return t.nt.Write(packet, t.offset)
