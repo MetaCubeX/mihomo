@@ -23,13 +23,13 @@ require (
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
 	golang.org/x/net v0.0.0-20220325170049-de3da57026de
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220327210214-530d0810a4d0
+	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 	golang.zx2c4.com/wireguard v0.0.0-20220318042302-193cf8d6a5d6
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220326024801-5d1f3d24cb84
+	gvisor.dev/gvisor v0.0.0-20220330030209-5bb1f5086ed6
 )
 
 require (
