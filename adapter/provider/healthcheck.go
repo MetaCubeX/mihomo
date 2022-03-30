@@ -31,7 +31,13 @@ type HealthCheck struct {
 func (hc *HealthCheck) process() {
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
 
-	go hc.check()
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		<-t.C
+		t.Stop()
+		hc.check()
+	}()
+
 	for {
 		select {
 		case <-ticker.C:

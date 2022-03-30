@@ -24,7 +24,7 @@ type GVHandler struct {
 	UDPIn chan<- *inbound.PacketAdapter
 }
 
-func (gh *GVHandler) HandleTCPConn(tunConn adapter.TCPConn) {
+func (gh *GVHandler) HandleTCP(tunConn adapter.TCPConn) {
 	id := tunConn.ID()
 
 	rAddr := &net.UDPAddr{
@@ -77,7 +77,7 @@ func (gh *GVHandler) HandleTCPConn(tunConn adapter.TCPConn) {
 	gh.TCPIn <- inbound.NewSocket(socks5.ParseAddrToSocksAddr(rAddr), tunConn, C.TUN)
 }
 
-func (gh *GVHandler) HandleUDPConn(tunConn adapter.UDPConn) {
+func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 	id := tunConn.ID()
 
 	rAddr := &net.UDPAddr{

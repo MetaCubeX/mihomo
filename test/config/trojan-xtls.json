@@ -3,17 +3,16 @@
         {
             "port": 10002,
             "listen": "0.0.0.0",
-            "protocol": "vless",
+            "protocol": "trojan",
             "settings": {
                 "clients": [
                     {
-                        "id": "b831381d-6324-4d53-ad4f-8cda48b30811",
+                        "password": "example",
                         "email": "xtls@example.com",
                         "flow": "xtls-rprx-direct",
                         "level": 0
                     }
-                ],
-                "decryption": "none"
+                ]
             },
             "streamSettings": {
                 "network": "tcp",
