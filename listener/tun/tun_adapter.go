@@ -151,6 +151,7 @@ func setAtLatest(stackType C.TUNStack, devName string) {
 	switch runtime.GOOS {
 	case "windows":
 		_, _ = cmd.ExecCmd("ipconfig /renew")
+
 	case "linux":
 		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.ip_forward=1")
 		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.all.forwarding = 1")

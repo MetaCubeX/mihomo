@@ -10,7 +10,6 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -210,7 +209,6 @@ type RawConfig struct {
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
-	Script        Script                    `yaml:"script"`
 }
 
 // Parse config
@@ -280,10 +278,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Profile: Profile{
 			StoreSelected: true,
 		},
-		Script: Script{
-			MainCode:      "",
-			ShortcutsCode: map[string]string{},
-		},
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
@@ -321,11 +315,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Proxies = proxies
 	config.Providers = providers
-
-	err = parseScript(rawCfg)
-	if err != nil {
-		return nil, err
-	}
 
 	rules, ruleProviders, err := parseRules(rawCfg, proxies)
 	if err != nil {
@@ -492,49 +481,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		go ParsingProxiesCallback(GroupsList, ProxiesList)
 	}
 	return proxies, providersMap, nil
-}
-
-func parseScript(cfg *RawConfig) error {
-	mode := cfg.Mode
-	script := cfg.Script
-	mainCode := cleanPyKeywords(script.MainCode)
-	shortcutsCode := script.ShortcutsCode
-
-	if mode != T.Script && len(shortcutsCode) == 0 {
-		return nil
-	} else if mode == T.Script && len(mainCode) == 0 {
-		return fmt.Errorf("initialized script module failure, can't find script code in the config file")
-	}
-
-	content :=
-		`# -*- coding: UTF-8 -*-
-
-from datetime import datetime as whatever
-
-class ClashTime:
-  def now(self):
-    return whatever.now()
-  
-  def unix(self):
-    return int(whatever.now().timestamp())
-
-  def unix_nano(self):
-    return int(round(whatever.now().timestamp() * 1000))
-
-time = ClashTime()
-
-`
-	for k, v := range shortcutsCode {
-		v = cleanPyKeywords(v)
-		v = strings.TrimSpace(v)
-		if len(v) == 0 {
-			return fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code invalid syntax", k)
-		}
-
-		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
-	}
-
-	return nil
 }
 
 func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[string]*providerTypes.RuleProvider, error) {
@@ -887,26 +833,13 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 }
 
 func parseAuthentication(rawRecords []string) []auth.AuthUser {
-	users := []auth.AuthUser{}
+	var users []auth.AuthUser
 	for _, line := range rawRecords {
 		if user, pass, found := strings.Cut(line, ":"); found {
 			users = append(users, auth.AuthUser{User: user, Pass: pass})
 		}
 	}
 	return users
-}
-
-func cleanPyKeywords(code string) string {
-	if len(code) == 0 {
-		return code
-	}
-	keywords := []string{"import", "print"}
-
-	for _, kw := range keywords {
-		reg := regexp.MustCompile("(?m)[\r\n]+^.*" + kw + ".*$")
-		code = reg.ReplaceAllString(code, "")
-	}
-	return code
 }
 
 func parseTun(rawTun RawTun, general *General) (*Tun, error) {

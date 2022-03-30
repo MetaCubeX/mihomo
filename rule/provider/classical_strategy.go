@@ -37,13 +37,14 @@ func (c *classicalStrategy) OnUpdate(rules []string) {
 		r, err := parseRule(ruleType, rule, "", params)
 		if err != nil {
 			log.Warnln("parse rule error:[%s]", err.Error())
-		}
+		} else {
+			if !shouldResolveIP {
+				shouldResolveIP = shouldResolveIP || r.ShouldResolveIP()
+			}
 
-		if !shouldResolveIP {
-			shouldResolveIP = shouldResolveIP || r.ShouldResolveIP()
+			classicalRules = append(classicalRules, r)
+			c.count++
 		}
-
-		classicalRules = append(classicalRules, r)
 	}
 
 	c.rules = classicalRules
