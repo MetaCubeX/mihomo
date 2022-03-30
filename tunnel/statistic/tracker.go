@@ -1,11 +1,15 @@
 package statistic
 
 import (
+	"errors"
 	"net"
 	"time"
 
+	"github.com/Dreamacro/clash/common/snifer/tls"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 
+	"github.com/Dreamacro/clash/log"
 	"github.com/gofrs/uuid"
 	"go.uber.org/atomic"
 )
@@ -48,7 +52,21 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 	n, err := tt.Conn.Write(b)
 	upload := int64(n)
 	tt.manager.PushUploaded(upload)
+	if tt.UploadTotal.Load() < 128 && tt.Metadata.Host == "" && (tt.Metadata.DstPort == "443" || tt.Metadata.DstPort == "8443") {
+		header, err := tls.SniffTLS(b)
+		if err != nil {
+			// log.Errorln("Expect no error but actually %s %s:%s:%s", err.Error(), tt.Metadata.Host, tt.Metadata.DstIP.String(), tt.Metadata.DstPort)
+		} else {
+			tt.Metadata.Host = header.Domain()
+			resolver.InsertHostByIP(tt.Metadata.DstIP, tt.Metadata.Host)
+			log.Errorln("sni %s %s", tt.Metadata.Host, tt.Metadata.DstIP.String())
+			tt.manager.Leave(tt)
+			tt.Conn.Close()
+			return n, errors.New("sni update")
+		}
+	}
 	tt.UploadTotal.Add(upload)
+
 	return n, err
 }
 
