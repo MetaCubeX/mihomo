@@ -14,8 +14,9 @@ func ExecCmd(cmdStr string) (string, error) {
 		cmd = exec.Command(args[0])
 	} else {
 		cmd = exec.Command(args[0], args[1:]...)
-	}
 
+	}
+	prepareBackgroundCommand(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%v, %s", err, string(out))
