@@ -106,13 +106,9 @@ func main() {
 		log.Fatalln("Parse config error: %s", err.Error())
 	}
 
+	defer executor.Shutdown()
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
-
-	// cleanup
-	log.Warnln("Clash cleanup")
-	hub.Cleanup()
-
-	log.Warnln("Clash shutting down")
 }

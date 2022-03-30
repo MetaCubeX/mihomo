@@ -15,8 +15,8 @@ var (
 	// DefaultResolver aim to resolve ip
 	DefaultResolver Resolver
 
-	// MainResolver resolve ip with main domain server
-	MainResolver Resolver
+	// ProxyServerHostResolver resolve ip to proxies server host
+	ProxyServerHostResolver Resolver
 
 	// DisableIPv6 means don't resolve ipv6 host
 	// default value is true
@@ -46,10 +46,6 @@ func ResolveIPv4(host string) (net.IP, error) {
 	return ResolveIPv4WithResolver(host, DefaultResolver)
 }
 
-func ResolveIPv4WithMain(host string) (net.IP, error) {
-	return ResolveIPv4WithResolver(host, MainResolver)
-}
-
 func ResolveIPv4WithResolver(host string, r Resolver) (net.IP, error) {
 	if node := DefaultHosts.Search(host); node != nil {
 		if ip := node.Data.(net.IP).To4(); ip != nil {
@@ -69,25 +65,25 @@ func ResolveIPv4WithResolver(host string, r Resolver) (net.IP, error) {
 		return r.ResolveIPv4(host)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
-	defer cancel()
-	ipAddrs, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
-	if err != nil {
-		return nil, err
-	} else if len(ipAddrs) == 0 {
-		return nil, ErrIPNotFound
+	if DefaultResolver == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
+		defer cancel()
+		ipAddrs, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
+		if err != nil {
+			return nil, err
+		} else if len(ipAddrs) == 0 {
+			return nil, ErrIPNotFound
+		}
+
+		return ipAddrs[rand.Intn(len(ipAddrs))], nil
 	}
 
-	return ipAddrs[rand.Intn(len(ipAddrs))], nil
+	return nil, ErrIPNotFound
 }
 
 // ResolveIPv6 with a host, return ipv6
 func ResolveIPv6(host string) (net.IP, error) {
 	return ResolveIPv6WithResolver(host, DefaultResolver)
-}
-
-func ResolveIPv6WithMain(host string) (net.IP, error) {
-	return ResolveIPv6WithResolver(host, MainResolver)
 }
 
 func ResolveIPv6WithResolver(host string, r Resolver) (net.IP, error) {
@@ -113,16 +109,20 @@ func ResolveIPv6WithResolver(host string, r Resolver) (net.IP, error) {
 		return r.ResolveIPv6(host)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
-	defer cancel()
-	ipAddrs, err := net.DefaultResolver.LookupIP(ctx, "ip6", host)
-	if err != nil {
-		return nil, err
-	} else if len(ipAddrs) == 0 {
-		return nil, ErrIPNotFound
+	if DefaultResolver == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
+		defer cancel()
+		ipAddrs, err := net.DefaultResolver.LookupIP(ctx, "ip6", host)
+		if err != nil {
+			return nil, err
+		} else if len(ipAddrs) == 0 {
+			return nil, ErrIPNotFound
+		}
+
+		return ipAddrs[rand.Intn(len(ipAddrs))], nil
 	}
 
-	return ipAddrs[rand.Intn(len(ipAddrs))], nil
+	return nil, ErrIPNotFound
 }
 
 // ResolveIPWithResolver same as ResolveIP, but with a resolver
@@ -145,12 +145,16 @@ func ResolveIPWithResolver(host string, r Resolver) (net.IP, error) {
 		return ip, nil
 	}
 
-	ipAddr, err := net.ResolveIPAddr("ip", host)
-	if err != nil {
-		return nil, err
+	if DefaultResolver == nil {
+		ipAddr, err := net.ResolveIPAddr("ip", host)
+		if err != nil {
+			return nil, err
+		}
+
+		return ipAddr.IP, nil
 	}
 
-	return ipAddr.IP, nil
+	return nil, ErrIPNotFound
 }
 
 // ResolveIP with a host, return ip
@@ -158,7 +162,26 @@ func ResolveIP(host string) (net.IP, error) {
 	return ResolveIPWithResolver(host, DefaultResolver)
 }
 
-// ResolveIPWithMainResolver with a host, use main resolver, return ip
-func ResolveIPWithMainResolver(host string) (net.IP, error) {
-	return ResolveIPWithResolver(host, MainResolver)
+// ResolveIPv4ProxyServerHost proxies server host only
+func ResolveIPv4ProxyServerHost(host string) (net.IP, error) {
+	if ProxyServerHostResolver != nil {
+		return ResolveIPv4WithResolver(host, ProxyServerHostResolver)
+	}
+	return ResolveIPv4(host)
+}
+
+// ResolveIPv6ProxyServerHost proxies server host only
+func ResolveIPv6ProxyServerHost(host string) (net.IP, error) {
+	if ProxyServerHostResolver != nil {
+		return ResolveIPv6WithResolver(host, ProxyServerHostResolver)
+	}
+	return ResolveIPv6(host)
+}
+
+// ResolveProxyServerHost proxies server host only
+func ResolveProxyServerHost(host string) (net.IP, error) {
+	if ProxyServerHostResolver != nil {
+		return ResolveIPWithResolver(host, ProxyServerHostResolver)
+	}
+	return ResolveIP(host)
 }

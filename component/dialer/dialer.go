@@ -32,14 +32,14 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 		var ip net.IP
 		switch network {
 		case "tcp4", "udp4":
-			if opt.interfaceName != "" {
-				ip, err = resolver.ResolveIPv4WithMain(host)
+			if !opt.direct {
+				ip, err = resolver.ResolveIPv4ProxyServerHost(host)
 			} else {
 				ip, err = resolver.ResolveIPv4(host)
 			}
 		default:
-			if opt.interfaceName != "" {
-				ip, err = resolver.ResolveIPv6WithMain(host)
+			if !opt.direct {
+				ip, err = resolver.ResolveIPv6ProxyServerHost(host)
 			} else {
 				ip, err = resolver.ResolveIPv6(host)
 			}
@@ -121,7 +121,7 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 	results := make(chan dialResult)
 	var primary, fallback dialResult
 
-	startRacer := func(ctx context.Context, network, host string, ipv6 bool) {
+	startRacer := func(ctx context.Context, network, host string, direct bool, ipv6 bool) {
 		result := dialResult{ipv6: ipv6, done: true}
 		defer func() {
 			select {
@@ -135,14 +135,14 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 
 		var ip net.IP
 		if ipv6 {
-			if opt.interfaceName != "" {
-				ip, result.error = resolver.ResolveIPv6WithMain(host)
+			if !direct {
+				ip, result.error = resolver.ResolveIPv6ProxyServerHost(host)
 			} else {
 				ip, result.error = resolver.ResolveIPv6(host)
 			}
 		} else {
-			if opt.interfaceName != "" {
-				ip, result.error = resolver.ResolveIPv4WithMain(host)
+			if !direct {
+				ip, result.error = resolver.ResolveIPv4ProxyServerHost(host)
 			} else {
 				ip, result.error = resolver.ResolveIPv4(host)
 			}
@@ -155,8 +155,8 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 		result.Conn, result.error = dialContext(ctx, network, ip, port, opt)
 	}
 
-	go startRacer(ctx, network+"4", host, false)
-	go startRacer(ctx, network+"6", host, true)
+	go startRacer(ctx, network+"4", host, opt.direct, false)
+	go startRacer(ctx, network+"6", host, opt.direct, true)
 
 	for res := range results {
 		if res.error == nil {

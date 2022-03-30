@@ -1,4 +1,4 @@
-package gvisor
+package option
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 )
 
@@ -56,11 +57,11 @@ const (
 	tcpDefaultBufferSize = 212 << 10 // 212 KiB
 )
 
-type Option func(*gvStack) error
+type Option func(*stack.Stack) error
 
 // WithDefault sets all default values for stack.
 func WithDefault() Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		opts := []Option{
 			WithDefaultTTL(defaultTimeToLive),
 			WithForwarding(ipForwardingEnabled),
@@ -110,7 +111,7 @@ func WithDefault() Option {
 
 // WithDefaultTTL sets the default TTL used by stack.
 func WithDefaultTTL(ttl uint8) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		opt := tcpip.DefaultTTLOption(ttl)
 		if err := s.SetNetworkProtocolOption(ipv4.ProtocolNumber, &opt); err != nil {
 			return fmt.Errorf("set ipv4 default TTL: %s", err)
@@ -124,7 +125,7 @@ func WithDefaultTTL(ttl uint8) Option {
 
 // WithForwarding sets packet forwarding between NICs for IPv4 & IPv6.
 func WithForwarding(v bool) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		if err := s.SetForwardingDefaultAndAllNICs(ipv4.ProtocolNumber, v); err != nil {
 			return fmt.Errorf("set ipv4 forwarding: %s", err)
 		}
@@ -138,7 +139,7 @@ func WithForwarding(v bool) Option {
 // WithICMPBurst sets the number of ICMP messages that can be sent
 // in a single burst.
 func WithICMPBurst(burst int) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		s.SetICMPBurst(burst)
 		return nil
 	}
@@ -147,7 +148,7 @@ func WithICMPBurst(burst int) Option {
 // WithICMPLimit sets the maximum number of ICMP messages permitted
 // by rate limiter.
 func WithICMPLimit(limit rate.Limit) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		s.SetICMPLimit(limit)
 		return nil
 	}
@@ -155,7 +156,7 @@ func WithICMPLimit(limit rate.Limit) Option {
 
 // WithTCPBufferSizeRange sets the receive and send buffer size range for TCP.
 func WithTCPBufferSizeRange(a, b, c int) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		rcvOpt := tcpip.TCPReceiveBufferSizeRangeOption{Min: a, Default: b, Max: c}
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &rcvOpt); err != nil {
 			return fmt.Errorf("set TCP receive buffer size range: %s", err)
@@ -170,7 +171,7 @@ func WithTCPBufferSizeRange(a, b, c int) Option {
 
 // WithTCPCongestionControl sets the current congestion control algorithm.
 func WithTCPCongestionControl(cc string) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		opt := tcpip.CongestionControlOption(cc)
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &opt); err != nil {
 			return fmt.Errorf("set TCP congestion control algorithm: %s", err)
@@ -181,7 +182,7 @@ func WithTCPCongestionControl(cc string) Option {
 
 // WithTCPDelay enables or disables Nagle's algorithm in TCP.
 func WithTCPDelay(v bool) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		opt := tcpip.TCPDelayEnabled(v)
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &opt); err != nil {
 			return fmt.Errorf("set TCP delay: %s", err)
@@ -192,7 +193,7 @@ func WithTCPDelay(v bool) Option {
 
 // WithTCPModerateReceiveBuffer sets receive buffer moderation for TCP.
 func WithTCPModerateReceiveBuffer(v bool) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		opt := tcpip.TCPModerateReceiveBufferOption(v)
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &opt); err != nil {
 			return fmt.Errorf("set TCP moderate receive buffer: %s", err)
@@ -203,7 +204,7 @@ func WithTCPModerateReceiveBuffer(v bool) Option {
 
 // WithTCPSACKEnabled sets the SACK option for TCP.
 func WithTCPSACKEnabled(v bool) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		opt := tcpip.TCPSACKEnabled(v)
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &opt); err != nil {
 			return fmt.Errorf("set TCP SACK: %s", err)
@@ -214,7 +215,7 @@ func WithTCPSACKEnabled(v bool) Option {
 
 // WithTCPRecovery sets the recovery option for TCP.
 func WithTCPRecovery(v tcpip.TCPRecovery) Option {
-	return func(s *gvStack) error {
+	return func(s *stack.Stack) error {
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &v); err != nil {
 			return fmt.Errorf("set TCP Recovery: %s", err)
 		}
