@@ -74,12 +74,6 @@ func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
 	return "", false
 }
 
-func (h *ResolverEnhancer) InsertHostByIP(ip net.IP, host string) {
-	if mapping := h.mapping; mapping != nil {
-		h.mapping.Set(ip.String(), host)
-	}
-}
-
 func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	if h.mapping != nil && o.mapping != nil {
 		o.mapping.CloneTo(h.mapping)
