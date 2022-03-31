@@ -8,8 +8,8 @@ import (
 	"github.com/Dreamacro/clash/common/snifer/tls"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
-
 	"github.com/Dreamacro/clash/log"
+
 	"github.com/gofrs/uuid"
 	"go.uber.org/atomic"
 )
@@ -57,12 +57,11 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 		if err != nil {
 			// log.Errorln("Expect no error but actually %s %s:%s:%s", err.Error(), tt.Metadata.Host, tt.Metadata.DstIP.String(), tt.Metadata.DstPort)
 		} else {
-			tt.Metadata.Host = header.Domain()
-			resolver.InsertHostByIP(tt.Metadata.DstIP, tt.Metadata.Host)
-			log.Errorln("sni %s %s", tt.Metadata.Host, tt.Metadata.DstIP.String())
+			resolver.InsertHostByIP(tt.Metadata.DstIP, header.Domain())
+			log.Warnln("use sni update host: %s ip: %s", header.Domain(), tt.Metadata.DstIP.String())
 			tt.manager.Leave(tt)
 			tt.Conn.Close()
-			return n, errors.New("sni update")
+			return n, errors.New("sni update, break current link to avoid leaks")
 		}
 	}
 	tt.UploadTotal.Add(upload)
