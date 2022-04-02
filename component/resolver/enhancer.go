@@ -14,6 +14,7 @@ type Enhancer interface {
 	IsExistFakeIP(net.IP) bool
 	FindHostByIP(net.IP) (string, bool)
 	FlushFakeIP() error
+	InsertHostByIP(net.IP, string)
 }
 
 func FakeIPEnabled() bool {
@@ -54,6 +55,12 @@ func IsExistFakeIP(ip net.IP) bool {
 	}
 
 	return false
+}
+
+func InsertHostByIP(ip net.IP, host string) {
+	if mapper := DefaultHostMapper; mapper != nil {
+		mapper.InsertHostByIP(ip, host)
+	}
 }
 
 func FindHostByIP(ip net.IP) (string, bool) {
