@@ -44,18 +44,18 @@ jobs:
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: alpha
+          tag_name: v1.10.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Alpha
+      - name: Upload Release
         uses: softprops/action-gh-release@v1
-        if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
+        if: ${{ env.GIT_BRANCH == 'Meta' && success() }}
         with:
           tag: ${{ github.ref }}
-          tag_name: alpha
+          tag_name: v1.10.0
           files: bin/*
-          prerelease: true
+          prerelease: false
 
       - name: send telegram message on push
         uses: appleboy/telegram-action@master

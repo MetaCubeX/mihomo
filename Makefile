@@ -1,7 +1,7 @@
 NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
-VERSION=alpha-$(shell git rev-parse --short HEAD)
+VERSION=$(shell git describe --tags || echo "unknown version")
 BUILDTIME=$(shell date -u)
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
