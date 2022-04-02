@@ -1,4 +1,4 @@
-name: Alpha
+name: Release
 on: [push]
 jobs:
   Feature-build:
