@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/queue"
@@ -39,7 +40,11 @@ func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 // DialContext implements C.ProxyAdapter
 func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.DialContext(ctx, metadata, opts...)
-	p.alive.Store(err == nil)
+	wasCancel := false
+	if err != nil {
+		wasCancel = strings.Contains(err.Error(), "operation was canceled")
+	}
+	p.alive.Store(err == nil || wasCancel)
 	return conn, err
 }
 
