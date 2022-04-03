@@ -27,7 +27,7 @@ type GVHandler struct {
 func (gh *GVHandler) HandleTCP(tunConn adapter.TCPConn) {
 	id := tunConn.ID()
 
-	rAddr := &net.UDPAddr{
+	rAddr := &net.TCPAddr{
 		IP:   net.IP(id.LocalAddress),
 		Port: int(id.LocalPort),
 		Zone: "",

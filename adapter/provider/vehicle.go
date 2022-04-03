@@ -58,7 +58,7 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, uri.String(), nil)
-	req.Header.Set("user-agent", netHttp.UA)
+	req.Header.Set("User-Agent", netHttp.UA)
 
 	if err != nil {
 		return nil, err
