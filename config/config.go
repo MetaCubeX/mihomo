@@ -767,7 +767,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 	for _, ns := range dnsCfg.DefaultNameserver {
 		host, _, err := net.SplitHostPort(ns.Addr)
 		if err != nil || net.ParseIP(host) == nil {
-			return nil, errors.New("default nameserver should be pure IP")
+			u, err := url.Parse(ns.Addr)
+			if err != nil || net.ParseIP(u.Host) == nil {
+				return nil, errors.New("default nameserver should be pure IP")
+			}
 		}
 	}
 
