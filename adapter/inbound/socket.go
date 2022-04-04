@@ -13,9 +13,13 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnCo
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
-	if ip, port, err := parseAddr(conn.RemoteAddr().String()); err == nil {
-		metadata.SrcIP = ip
-		metadata.SrcPort = port
+	remoteAddr := conn.RemoteAddr()
+	// Filter when net.Addr interface is nil
+	if remoteAddr != nil {
+		if ip, port, err := parseAddr(remoteAddr.String()); err == nil {
+			metadata.SrcIP = ip
+			metadata.SrcPort = port
+		}
 	}
 
 	return context.NewConnContext(conn, metadata)
