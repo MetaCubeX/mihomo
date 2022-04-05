@@ -11,7 +11,7 @@ import (
 type ResolverEnhancer struct {
 	mode     C.DNSMode
 	fakePool *fakeip.Pool
-	mapping  *cache.LruCache
+	mapping  *cache.LruCache[string, string]
 }
 
 func (h *ResolverEnhancer) FakeIPEnabled() bool {
@@ -67,7 +67,7 @@ func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
 
 	if mapping := h.mapping; mapping != nil {
 		if host, existed := h.mapping.Get(ip.String()); existed {
-			return host.(string), true
+			return host, true
 		}
 	}
 
@@ -99,11 +99,11 @@ func (h *ResolverEnhancer) FlushFakeIP() error {
 
 func NewEnhancer(cfg Config) *ResolverEnhancer {
 	var fakePool *fakeip.Pool
-	var mapping *cache.LruCache
+	var mapping *cache.LruCache[string, string]
 
 	if cfg.EnhancedMode != C.DNSNormal {
 		fakePool = cfg.Pool
-		mapping = cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true))
+		mapping = cache.NewLRUCache[string, string](cache.WithSize[string, string](4096), cache.WithStale[string, string](true))
 	}
 
 	return &ResolverEnhancer{
