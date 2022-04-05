@@ -39,7 +39,7 @@ type Resolver struct {
 	fallbackDomainFilters []fallbackDomainFilter
 	fallbackIPFilters     []fallbackIPFilter
 	group                 singleflight.Group
-	lruCache              *cache.LruCache
+	lruCache              *cache.LruCache[string, *D.Msg]
 	policy                *trie.DomainTrie
 	proxyServer           []dnsClient
 }
@@ -103,7 +103,7 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	cache, expireTime, hit := r.lruCache.GetWithExpire(q.String())
 	if hit {
 		now := time.Now()
-		msg = cache.(*D.Msg).Copy()
+		msg = cache.Copy()
 		if expireTime.Before(now) {
 			setMsgTTL(msg, uint32(1)) // Continue fetch
 			go r.exchangeWithoutCache(ctx, m)
@@ -336,13 +336,13 @@ type Config struct {
 func NewResolver(config Config) *Resolver {
 	defaultResolver := &Resolver{
 		main:     transform(config.Default, nil),
-		lruCache: cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true)),
+		lruCache: cache.NewLRUCache[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 	}
 
 	r := &Resolver{
 		ipv6:     config.IPv6,
 		main:     transform(config.Main, defaultResolver),
-		lruCache: cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true)),
+		lruCache: cache.NewLRUCache[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 		hosts:    config.Hosts,
 	}
 

@@ -63,7 +63,7 @@ func withHosts(hosts *trie.DomainTrie) middleware {
 	}
 }
 
-func withMapping(mapping *cache.LruCache) middleware {
+func withMapping(mapping *cache.LruCache[string, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
