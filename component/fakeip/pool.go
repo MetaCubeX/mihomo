@@ -5,7 +5,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/trie"
 )
@@ -175,9 +174,7 @@ func New(options Options) (*Pool, error) {
 			cache: cachefile.Cache(),
 		}
 	} else {
-		pool.store = &memoryStore{
-			cache: cache.NewLRUCache(cache.WithSize(options.Size * 2)),
-		}
+		pool.store = newMemoryStore(options.Size)
 	}
 
 	return pool, nil
