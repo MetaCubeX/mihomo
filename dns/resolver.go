@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -33,14 +34,14 @@ type result struct {
 
 type Resolver struct {
 	ipv6                  bool
-	hosts                 *trie.DomainTrie
+	hosts                 *trie.DomainTrie[netip.Addr]
 	main                  []dnsClient
 	fallback              []dnsClient
 	fallbackDomainFilters []fallbackDomainFilter
 	fallbackIPFilters     []fallbackIPFilter
 	group                 singleflight.Group
 	lruCache              *cache.LruCache[string, *D.Msg]
-	policy                *trie.DomainTrie
+	policy                *trie.DomainTrie[*Policy]
 	proxyServer           []dnsClient
 }
 
@@ -194,7 +195,8 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 		return nil
 	}
 
-	return record.Data.([]dnsClient)
+	p := record.Data
+	return p.GetData()
 }
 
 func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
@@ -329,7 +331,7 @@ type Config struct {
 	EnhancedMode   C.DNSMode
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
-	Hosts          *trie.DomainTrie
+	Hosts          *trie.DomainTrie[netip.Addr]
 	Policy         map[string]NameServer
 }
 
@@ -355,9 +357,9 @@ func NewResolver(config Config) *Resolver {
 	}
 
 	if len(config.Policy) != 0 {
-		r.policy = trie.New()
+		r.policy = trie.New[*Policy]()
 		for domain, nameserver := range config.Policy {
-			r.policy.Insert(domain, transform([]NameServer{nameserver}, defaultResolver))
+			r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
 		}
 	}
 

@@ -28,7 +28,7 @@ type Pool struct {
 	broadcast uint32
 	offset    uint32
 	mux       sync.Mutex
-	host      *trie.DomainTrie
+	host      *trie.DomainTrie[bool]
 	ipnet     *net.IPNet
 	store     store
 }
@@ -138,7 +138,7 @@ func uintToIP(v uint32) net.IP {
 
 type Options struct {
 	IPNet *net.IPNet
-	Host  *trie.DomainTrie
+	Host  *trie.DomainTrie[bool]
 
 	// Size sets the maximum number of entries in memory
 	// and does not work if Persistence is true
