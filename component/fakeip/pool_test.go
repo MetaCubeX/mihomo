@@ -100,8 +100,8 @@ func TestPool_CycleUsed(t *testing.T) {
 
 func TestPool_Skip(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
-	tree := trie.New()
-	tree.Insert("example.com", tree)
+	tree := trie.New[bool]()
+	tree.Insert("example.com", true)
 	pools, tempfile, err := createPools(Options{
 		IPNet: ipnet,
 		Size:  10,

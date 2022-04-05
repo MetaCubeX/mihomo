@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts *trie.DomainTrie) middleware {
+func withHosts(hosts *trie.DomainTrie[netip.Addr]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -34,19 +35,19 @@ func withHosts(hosts *trie.DomainTrie) middleware {
 				return next(ctx, r)
 			}
 
-			ip := record.Data.(net.IP)
+			ip := record.Data
 			msg := r.Copy()
 
-			if v4 := ip.To4(); v4 != nil && q.Qtype == D.TypeA {
+			if ip.Is4() && q.Qtype == D.TypeA {
 				rr := &D.A{}
 				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
-				rr.A = v4
+				rr.A = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
-			} else if v6 := ip.To16(); v6 != nil && q.Qtype == D.TypeAAAA {
+			} else if ip.Is6() && q.Qtype == D.TypeAAAA {
 				rr := &D.AAAA{}
 				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
-				rr.AAAA = v6
+				rr.AAAA = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
 			} else {
