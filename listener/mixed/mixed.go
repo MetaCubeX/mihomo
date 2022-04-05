@@ -16,7 +16,7 @@ import (
 type Listener struct {
 	listener net.Listener
 	addr     string
-	cache    *cache.Cache
+	cache    *cache.Cache[string, bool]
 	closed   bool
 }
 
@@ -45,7 +45,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	ml := &Listener{
 		listener: l,
 		addr:     addr,
-		cache:    cache.New(30 * time.Second),
+		cache:    cache.New[string, bool](30 * time.Second),
 	}
 	go func() {
 		for {
@@ -63,7 +63,7 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
+func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
 	conn.(*net.TCPConn).SetKeepAlive(true)
 
 	bufConn := N.NewBufferedConn(conn)
