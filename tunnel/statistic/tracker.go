@@ -52,7 +52,7 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 	n, err := tt.Conn.Write(b)
 	upload := int64(n)
 	tt.manager.PushUploaded(upload)
-	if tt.UploadTotal.Load() < 128 && tt.Metadata.Host == "" && (tt.Metadata.DstPort == "443" || tt.Metadata.DstPort == "8443") {
+	if tt.UploadTotal.Load() < 128 && tt.Metadata.Host == "" && (tt.Metadata.DstPort == "443" || tt.Metadata.DstPort == "8443" || tt.Metadata.DstPort == "993" || tt.Metadata.DstPort == "465" || tt.Metadata.DstPort == "995") {
 		header, err := tls.SniffTLS(b)
 		if err != nil {
 			// log.Errorln("Expect no error but actually %s %s:%s:%s", err.Error(), tt.Metadata.Host, tt.Metadata.DstIP.String(), tt.Metadata.DstPort)
