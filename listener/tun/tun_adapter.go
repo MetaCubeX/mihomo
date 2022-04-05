@@ -112,7 +112,7 @@ func New(tunConf *config.Tun, dnsConf *config.DNS, tcpIn chan<- C.ConnContext, u
 func generateDeviceName() string {
 	switch runtime.GOOS {
 	case "darwin":
-		return tun.Driver + "://Meta"
+		return tun.Driver + "://utun"
 	case "windows":
 		return tun.Driver + "://Meta"
 	default:
