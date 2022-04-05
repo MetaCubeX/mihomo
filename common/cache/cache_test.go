@@ -11,48 +11,50 @@ import (
 func TestCache_Basic(t *testing.T) {
 	interval := 200 * time.Millisecond
 	ttl := 20 * time.Millisecond
-	c := New(interval)
+	c := New[string, int](interval)
 	c.Put("int", 1, ttl)
-	c.Put("string", "a", ttl)
+
+	d := New[string, string](interval)
+	d.Put("string", "a", ttl)
 
 	i := c.Get("int")
-	assert.Equal(t, i.(int), 1, "should recv 1")
+	assert.Equal(t, i, 1, "should recv 1")
 
-	s := c.Get("string")
-	assert.Equal(t, s.(string), "a", "should recv 'a'")
+	s := d.Get("string")
+	assert.Equal(t, s, "a", "should recv 'a'")
 }
 
 func TestCache_TTL(t *testing.T) {
 	interval := 200 * time.Millisecond
 	ttl := 20 * time.Millisecond
 	now := time.Now()
-	c := New(interval)
+	c := New[string, int](interval)
 	c.Put("int", 1, ttl)
 	c.Put("int2", 2, ttl)
 
 	i := c.Get("int")
 	_, expired := c.GetWithExpire("int2")
-	assert.Equal(t, i.(int), 1, "should recv 1")
+	assert.Equal(t, i, 1, "should recv 1")
 	assert.True(t, now.Before(expired))
 
 	time.Sleep(ttl * 2)
 	i = c.Get("int")
 	j, _ := c.GetWithExpire("int2")
-	assert.Nil(t, i, "should recv nil")
-	assert.Nil(t, j, "should recv nil")
+	assert.True(t, i == 0, "should recv 0")
+	assert.True(t, j == 0, "should recv 0")
 }
 
 func TestCache_AutoCleanup(t *testing.T) {
 	interval := 10 * time.Millisecond
 	ttl := 15 * time.Millisecond
-	c := New(interval)
+	c := New[string, int](interval)
 	c.Put("int", 1, ttl)
 
 	time.Sleep(ttl * 2)
 	i := c.Get("int")
 	j, _ := c.GetWithExpire("int")
-	assert.Nil(t, i, "should recv nil")
-	assert.Nil(t, j, "should recv nil")
+	assert.True(t, i == 0, "should recv 0")
+	assert.True(t, j == 0, "should recv 0")
 }
 
 func TestCache_AutoGC(t *testing.T) {
@@ -60,7 +62,7 @@ func TestCache_AutoGC(t *testing.T) {
 	go func() {
 		interval := 10 * time.Millisecond
 		ttl := 15 * time.Millisecond
-		c := New(interval)
+		c := New[string, int](interval)
 		c.Put("int", 1, ttl)
 		sign <- struct{}{}
 	}()
