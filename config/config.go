@@ -170,11 +170,12 @@ type RawFallbackFilter struct {
 }
 
 type RawTun struct {
-	Enable    bool       `yaml:"enable" json:"enable"`
-	Device    string     `yaml:"device" json:"device"`
-	Stack     C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack []string   `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute bool       `yaml:"auto-route" json:"auto-route"`
+	Enable              bool       `yaml:"enable" json:"enable"`
+	Device              string     `yaml:"device" json:"device"`
+	Stack               C.TUNStack `yaml:"stack" json:"stack"`
+	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
 }
 
 type RawConfig struct {
@@ -237,11 +238,12 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
 		Tun: RawTun{
-			Enable:    false,
-			Device:    "",
-			Stack:     C.TunGvisor,
-			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute: true,
+			Enable:              false,
+			Device:              "",
+			AutoDetectInterface: true,
+			Stack:               C.TunGvisor,
+			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
+			AutoRoute:           true,
 		},
 		IPTables: IPTables{
 			Enable:           false,
@@ -846,7 +848,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 }
 
 func parseTun(rawTun RawTun, general *General) (*Tun, error) {
-	if (rawTun.Enable || general.TProxyPort != 0) && general.Interface == "" {
+	if rawTun.Enable && rawTun.AutoDetectInterface {
 		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
 		if err != nil || autoDetectInterfaceName == "" {
 			log.Warnln("Can not find auto detect interface.[%s]", err)
