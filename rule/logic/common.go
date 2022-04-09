@@ -2,19 +2,20 @@ package logic
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/collections"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	RC "github.com/Dreamacro/clash/rule/common"
-	"github.com/Dreamacro/clash/rule/provider"
 	"io"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/Dreamacro/clash/common/collections"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
+	RC "github.com/Dreamacro/clash/rule/common"
+	"github.com/Dreamacro/clash/rule/provider"
 )
 
-func parseRuleByPayload(payload string) ([]C.Rule, error) {
+func parseRuleByPayload(payload string, skip bool) ([]C.Rule, error) {
 	regex, err := regexp.Compile("\\(.*\\)")
 	if err != nil {
 		return nil, err
@@ -27,7 +28,7 @@ func parseRuleByPayload(payload string) ([]C.Rule, error) {
 		}
 		rules := make([]C.Rule, 0, len(subAllRanges))
 
-		subRanges := findSubRuleRange(payload, subAllRanges)
+		subRanges := findSubRuleRange(payload, subAllRanges, skip)
 		for _, subRange := range subRanges {
 			subPayload := payload[subRange.start+1 : subRange.end]
 
@@ -51,6 +52,10 @@ func containRange(r Range, preStart, preEnd int) bool {
 
 func payloadToRule(subPayload string) (C.Rule, error) {
 	splitStr := strings.SplitN(subPayload, ",", 2)
+	if len(splitStr) < 2 {
+		return nil, fmt.Errorf("The logic rule contain a rule of error format")
+	}
+
 	tp := splitStr[0]
 	payload := splitStr[1]
 	if tp == "NOT" || tp == "OR" || tp == "AND" {
@@ -164,11 +169,11 @@ func format(payload string) ([]Range, error) {
 	return sortResult, nil
 }
 
-func findSubRuleRange(payload string, ruleRanges []Range) []Range {
+func findSubRuleRange(payload string, ruleRanges []Range, skip bool) []Range {
 	payloadLen := len(payload)
 	subRuleRange := make([]Range, 0)
 	for _, rr := range ruleRanges {
-		if rr.start == 0 && rr.end == payloadLen-1 {
+		if rr.start == 0 && rr.end == payloadLen-1 && skip {
 			// 最大范围跳过
 			continue
 		}
