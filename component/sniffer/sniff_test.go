@@ -1,4 +1,4 @@
-package tls
+package sniffer
 
 import (
 	"testing"
@@ -142,7 +142,7 @@ func TestTLSHeaders(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		header, err := SniffTLS(test.input)
+		domain, err := SniffTLS(test.input)
 		if test.err {
 			if err == nil {
 				t.Errorf("Exepct error but nil in test %v", test)
@@ -151,8 +151,8 @@ func TestTLSHeaders(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expect no error but actually %s in test %v", err.Error(), test)
 			}
-			if header.Domain() != test.domain {
-				t.Error("expect domain ", test.domain, " but got ", header.Domain())
+			if *domain != test.domain {
+				t.Error("expect domain ", test.domain, " but got ", domain)
 			}
 		}
 	}

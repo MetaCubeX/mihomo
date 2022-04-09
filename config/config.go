@@ -126,6 +126,12 @@ type IPTables struct {
 	Bypass           []string `yaml:"bypass" json:"bypass"`
 }
 
+type Sniffer struct {
+	Enable   bool
+	Force    bool
+	Sniffers []C.SnifferType
+}
+
 // Experimental config
 type Experimental struct{}
 
@@ -143,6 +149,7 @@ type Config struct {
 	Proxies       map[string]C.Proxy
 	Providers     map[string]providerTypes.ProxyProvider
 	RuleProviders map[string]*providerTypes.RuleProvider
+	Sniffer       *Sniffer
 }
 
 type RawDNS struct {
@@ -199,6 +206,7 @@ type RawConfig struct {
 	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 
+	Sniffer       SnifferRaw                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
 	Hosts         map[string]string         `yaml:"hosts"`
@@ -210,6 +218,12 @@ type RawConfig struct {
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
+}
+
+type SnifferRaw struct {
+	Enable   bool     `yaml:"enable" json:"enable"`
+	Force    bool     `yaml:"force" json:"force"`
+	Sniffing []string `yaml:"sniffing" json:"sniffing"`
 }
 
 // Parse config
@@ -277,6 +291,11 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"www.msftconnecttest.com",
 			},
 		},
+		Sniffer: SnifferRaw{
+			Enable:   false,
+			Force:    false,
+			Sniffing: []string{},
+		},
 		Profile: Profile{
 			StoreSelected: true,
 		},
@@ -338,6 +357,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.DNS = dnsCfg
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
+
+	config.Sniffer, err = parseSniffer(rawCfg.Sniffer)
+	if err != nil {
+		return nil, err
+	}
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
@@ -881,4 +905,33 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		DNSHijack: dnsHijack,
 		AutoRoute: rawTun.AutoRoute,
 	}, nil
+}
+
+func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
+	sniffer := &Sniffer{
+		Enable: snifferRaw.Enable,
+		Force:  snifferRaw.Force,
+	}
+
+	loadSniffer := make(map[C.SnifferType]struct{})
+
+	for _, snifferName := range snifferRaw.Sniffing {
+		find := false
+		for _, snifferType := range C.SnifferList {
+			if snifferType.String() == strings.ToUpper(snifferName) {
+				find = true
+				loadSniffer[snifferType] = struct{}{}
+			}
+		}
+
+		if !find {
+			return nil, fmt.Errorf("not find the sniffer[%s]", snifferName)
+		}
+	}
+
+	for st := range loadSniffer {
+		sniffer.Sniffers = append(sniffer.Sniffers, st)
+	}
+
+	return sniffer, nil
 }

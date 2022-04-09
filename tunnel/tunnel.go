@@ -14,6 +14,7 @@ import (
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/Dreamacro/clash/component/sniffer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	icontext "github.com/Dreamacro/clash/context"
@@ -36,6 +37,8 @@ var (
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
+
+	snifferDispatcher *sniffer.SnifferDispatcher
 )
 
 func init() {
@@ -292,6 +295,10 @@ func handleTCPConn(connCtx C.ConnContext) {
 	if err := preHandleMetadata(metadata); err != nil {
 		log.Debugln("[Metadata PreHandle] error: %s", err)
 		return
+	}
+
+	if sniffer.Dispatcher.Enable() {
+		sniffer.Dispatcher.Tcp(connCtx.Conn(), metadata)
 	}
 
 	proxy, rule, err := resolveMetadata(connCtx, metadata)
