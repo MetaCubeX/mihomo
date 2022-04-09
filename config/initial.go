@@ -50,23 +50,6 @@ func initMMDB() error {
 	return nil
 }
 
-//func downloadGeoIP(path string) (err error) {
-//	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat")
-//	if err != nil {
-//		return
-//	}
-//	defer resp.Body.Close()
-//
-//	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
-//	if err != nil {
-//		return err
-//	}
-//	defer f.Close()
-//	_, err = io.Copy(f, resp.Body)
-//
-//	return err
-//}
-
 func downloadGeoSite(path string) (err error) {
 	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat")
 	if err != nil {
@@ -83,19 +66,6 @@ func downloadGeoSite(path string) (err error) {
 
 	return err
 }
-
-//
-//func initGeoIP() error {
-//	if _, err := os.Stat(C.Path.GeoIP()); os.IsNotExist(err) {
-//		log.Infoln("Can't find GeoIP.dat, start download")
-//		if err := downloadGeoIP(C.Path.GeoIP()); err != nil {
-//			return fmt.Errorf("can't download GeoIP.dat: %s", err.Error())
-//		}
-//		log.Infoln("Download GeoIP.dat finish")
-//	}
-//
-//	return nil
-//}
 
 func initGeoSite() error {
 	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
@@ -128,11 +98,6 @@ func Init(dir string) error {
 		f.Write([]byte(`mixed-port: 7890`))
 		f.Close()
 	}
-
-	//// initial GeoIP
-	//if err := initGeoIP(); err != nil {
-	//	return fmt.Errorf("can't initial GeoIP: %w", err)
-	//}
 
 	// initial mmdb
 	if err := initMMDB(); err != nil {

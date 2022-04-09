@@ -3,12 +3,13 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
+	_ "unsafe"
 
 	"github.com/Dreamacro/clash/common/queue"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -16,6 +17,9 @@ import (
 
 	"go.uber.org/atomic"
 )
+
+//go:linkname errCanceled net.errCanceled
+var errCanceled error
 
 type Proxy struct {
 	C.ProxyAdapter
@@ -38,11 +42,7 @@ func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 // DialContext implements C.ProxyAdapter
 func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.DialContext(ctx, metadata, opts...)
-	wasCancel := false
-	if err != nil {
-		wasCancel = strings.Contains(err.Error(), "operation was canceled")
-	}
-	p.alive.Store(err == nil || wasCancel)
+	p.alive.Store(err == nil || errors.Is(err, errCanceled))
 	return conn, err
 }
 
