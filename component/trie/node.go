@@ -7,6 +7,10 @@ type Node struct {
 }
 
 func (n *Node) getChild(s string) *Node {
+	if n.children == nil {
+		return nil
+	}
+
 	return n.children[s]
 }
 
@@ -15,12 +19,16 @@ func (n *Node) hasChild(s string) bool {
 }
 
 func (n *Node) addChild(s string, child *Node) {
+	if n.children == nil {
+		n.children = map[string]*Node{}
+	}
+
 	n.children[s] = child
 }
 
 func newNode(data any) *Node {
 	return &Node{
 		Data:     data,
-		children: map[string]*Node{},
+		children: nil,
 	}
 }
