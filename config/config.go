@@ -25,6 +25,7 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/log"
+	rewrites "github.com/Dreamacro/clash/rewrite"
 	R "github.com/Dreamacro/clash/rule"
 	T "github.com/Dreamacro/clash/tunnel"
 
@@ -49,6 +50,7 @@ type Inbound struct {
 	RedirPort      int      `json:"redir-port"`
 	TProxyPort     int      `json:"tproxy-port"`
 	MixedPort      int      `json:"mixed-port"`
+	MitmPort       int      `json:"mitm-port"`
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
@@ -72,7 +74,7 @@ type DNS struct {
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
-	Hosts                 *trie.DomainTrie
+	Hosts                 *trie.DomainTrie[netip.Addr]
 	NameServerPolicy      map[string]dns.NameServer
 	ProxyServerNameserver []dns.NameServer
 }
@@ -107,6 +109,12 @@ type IPTables struct {
 	InboundInterface string `yaml:"inbound-interface" json:"inbound-interface"`
 }
 
+// Mitm config
+type Mitm struct {
+	Hosts *trie.DomainTrie[bool] `yaml:"hosts" json:"hosts"`
+	Rules C.RewriteRule          `yaml:"rules" json:"rules"`
+}
+
 // Experimental config
 type Experimental struct{}
 
@@ -115,9 +123,10 @@ type Config struct {
 	General      *General
 	Tun          *Tun
 	IPTables     *IPTables
+	Mitm         *Mitm
 	DNS          *DNS
 	Experimental *Experimental
-	Hosts        *trie.DomainTrie
+	Hosts        *trie.DomainTrie[netip.Addr]
 	Profile      *Profile
 	Rules        []C.Rule
 	Users        []auth.AuthUser
@@ -157,12 +166,18 @@ type RawTun struct {
 	AutoRoute bool       `yaml:"auto-route" json:"auto-route"`
 }
 
+type RawMitm struct {
+	Hosts []string `yaml:"hosts" json:"hosts"`
+	Rules []string `yaml:"rules" json:"rules"`
+}
+
 type RawConfig struct {
 	Port               int          `yaml:"port"`
 	SocksPort          int          `yaml:"socks-port"`
 	RedirPort          int          `yaml:"redir-port"`
 	TProxyPort         int          `yaml:"tproxy-port"`
 	MixedPort          int          `yaml:"mixed-port"`
+	MitmPort           int          `yaml:"mitm-port"`
 	Authentication     []string     `yaml:"authentication"`
 	AllowLan           bool         `yaml:"allow-lan"`
 	BindAddress        string       `yaml:"bind-address"`
@@ -180,6 +195,7 @@ type RawConfig struct {
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	IPTables      IPTables                  `yaml:"iptables"`
+	MITM          RawMitm                   `yaml:"mitm"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
 	Proxy         []map[string]any          `yaml:"proxies"`
@@ -240,6 +256,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"tls://223.5.5.5:853",
 			},
 		},
+		MITM: RawMitm{
+			Hosts: []string{},
+			Rules: []string{},
+		},
 		Profile: Profile{
 			StoreSelected: true,
 		},
@@ -298,6 +318,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
+	mitm, err := parseMitm(rawCfg.MITM)
+	if err != nil {
+		return nil, err
+	}
+	config.Mitm = mitm
+
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
 	return config, nil
@@ -322,6 +348,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			RedirPort:   cfg.RedirPort,
 			TProxyPort:  cfg.TProxyPort,
 			MixedPort:   cfg.MixedPort,
+			MitmPort:    cfg.MitmPort,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
 		},
@@ -501,22 +528,27 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, error) {
 	return rules, nil
 }
 
-func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
-	tree := trie.New()
+func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
+	tree := trie.New[netip.Addr]()
 
 	// add default hosts
-	if err := tree.Insert("localhost", net.IP{127, 0, 0, 1}); err != nil {
+	if err := tree.Insert("localhost", netip.AddrFrom4([4]byte{127, 0, 0, 1})); err != nil {
 		log.Errorln("insert localhost to host error: %s", err.Error())
 	}
 
 	if len(cfg.Hosts) != 0 {
 		for domain, ipStr := range cfg.Hosts {
-			ip := net.ParseIP(ipStr)
-			if ip == nil {
+			ip, err := netip.ParseAddr(ipStr)
+			if err != nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
 			_ = tree.Insert(domain, ip)
 		}
+	}
+
+	// add mitm.clash hosts
+	if err := tree.Insert("mitm.clash", netip.AddrFrom4([4]byte{8, 8, 9, 9})); err != nil {
+		log.Errorln("insert mitm.clash to host error: %s", err.Error())
 	}
 
 	return tree, nil
@@ -652,7 +684,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 	return sites, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.Rule) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -705,10 +737,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 			return nil, err
 		}
 
-		var host *trie.DomainTrie
+		var host *trie.DomainTrie[bool]
 		// fake ip skip host filter
 		if len(cfg.FakeIPFilter) != 0 {
-			host = trie.New()
+			host = trie.New[bool]()
 			for _, domain := range cfg.FakeIPFilter {
 				_ = host.Insert(domain, true)
 			}
@@ -716,7 +748,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 
 		if len(dnsCfg.Fallback) != 0 {
 			if host == nil {
-				host = trie.New()
+				host = trie.New[bool]()
 			}
 			for _, fb := range dnsCfg.Fallback {
 				if net.ParseIP(fb.Addr) != nil {
@@ -801,5 +833,40 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		Stack:     rawTun.Stack,
 		DNSHijack: dnsHijack,
 		AutoRoute: rawTun.AutoRoute,
+	}, nil
+}
+
+func parseMitm(rawMitm RawMitm) (*Mitm, error) {
+	var (
+		req []C.Rewrite
+		res []C.Rewrite
+	)
+
+	for _, line := range rawMitm.Rules {
+		rule, err := rewrites.ParseRewrite(line)
+		if err != nil {
+			return nil, fmt.Errorf("parse rewrite rule failure: %w", err)
+		}
+
+		if rule.RuleType() == C.MitmResponseHeader || rule.RuleType() == C.MitmResponseBody {
+			res = append(res, rule)
+		} else {
+			req = append(req, rule)
+		}
+	}
+
+	hosts := trie.New[bool]()
+
+	if len(rawMitm.Hosts) != 0 {
+		for _, domain := range rawMitm.Hosts {
+			_ = hosts.Insert(domain, true)
+		}
+	}
+
+	_ = hosts.Insert("mitm.clash", true)
+
+	return &Mitm{
+		Hosts: hosts,
+		Rules: rewrites.NewRewriteRules(req, res),
 	}, nil
 }

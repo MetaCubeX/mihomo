@@ -36,12 +36,44 @@
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
 ## Advanced usage for this branch
+### MITM configuration
+A root CA certificate is required, the 
+MITM proxy server will generate a CA certificate file and a CA private key file in your Clash home directory, you can use your own certificate replace it. 
+
+Need to install and trust the CA certificate on the client device, open this URL http://mitm.clash/cert.crt by the web browser to install the CA certificate, the host name 'mitm.clash' was always been hijacked.
+
+NOTE: this feature cannot work on tls pinning
+
+WARNING: DO NOT USE THIS FEATURE TO BREAK LOCAL LAWS
+
+```yaml
+# Port of MITM proxy server on the local end
+mitm-port: 7894
+
+# Man-In-The-Middle attack
+mitm:
+  hosts: # use for others proxy type. E.g: TUN, socks
+    - +.example.com
+  rules: # rewrite rules
+    - '^https?://www\.example\.com/1 url reject' # The "reject" returns HTTP status code 404 with no content.
+    - '^https?://www\.example\.com/2 url reject-200' # The "reject-200" returns HTTP status code 200 with no content.
+    - '^https?://www\.example\.com/3 url reject-img' # The "reject-img" returns HTTP status code 200 with content of 1px png.
+    - '^https?://www\.example\.com/4 url reject-dict' # The "reject-dict" returns HTTP status code 200 with content of empty json object.
+    - '^https?://www\.example\.com/5 url reject-array' # The "reject-array" returns HTTP status code 200 with content of empty json array.
+    - '^https?://www\.example\.com/(6) url 302 https://www.example.com/new-$1'
+    - '^https?://www\.(example)\.com/7 url 307 https://www.$1.com/new-7'
+    - '^https?://www\.example\.com/8 url request-header (\r\n)User-Agent:.+(\r\n) request-header $1User-Agent: haha-wriohoh$2' # The "request-header" works for all the http headers not just one single header, so you can match two or more headers including CRLF in one regular expression.
+    - '^https?://www\.example\.com/9 url request-body "pos_2":\[.*\],"pos_3" request-body "pos_2":[{"xx": "xx"}],"pos_3"'
+    - '^https?://www\.example\.com/10 url response-header (\r\n)Tracecode:.+(\r\n) response-header $1Tracecode: 88888888888$2'
+    - '^https?://www\.example\.com/11 url response-body "errmsg":"ok" response-body "errmsg":"not-ok"'
+```
+
 ### DNS configuration
 Support resolve ip with a proxy tunnel.
 
 Support `geosite` with `fallback-filter`.
 
-Use curl -X POST controllerip:port/cache/fakeip/flush to flush persistence fakeip
+Use `curl -X POST controllerip:port/cache/fakeip/flush` to flush persistence fakeip
  ```yaml
  dns:
    enable: true
@@ -85,6 +117,7 @@ tun:
 ```
 ### Rules configuration
 - Support rule `GEOSITE`.
+- Support rule `USER-AGENT`.
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
 - Support `network` condition for all rules.
 - Support `process` condition for all rules.
@@ -104,7 +137,10 @@ rules:
 
   # multiport condition for rules SRC-PORT and DST-PORT
   - DST-PORT,123/136/137-139,DIRECT,udp
-  
+
+  # USER-AGENT payload cannot include the comma character, '*' meaning any character.
+  - USER-AGENT,*example*,PROXY
+
   # rule GEOSITE
   - GEOSITE,category-ads-all,REJECT
   - GEOSITE,icloud@cn,DIRECT

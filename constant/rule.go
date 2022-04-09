@@ -13,6 +13,7 @@ const (
 	DstPort
 	Process
 	ProcessPath
+	UserAgent
 	MATCH
 )
 
@@ -42,6 +43,8 @@ func (rt RuleType) String() string {
 		return "Process"
 	case ProcessPath:
 		return "ProcessPath"
+	case UserAgent:
+		return "UserAgent"
 	case MATCH:
 		return "Match"
 	default:

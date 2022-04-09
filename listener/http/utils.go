@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// removeHopByHopHeaders remove hop-by-hop header
-func removeHopByHopHeaders(header http.Header) {
+// RemoveHopByHopHeaders remove hop-by-hop header
+func RemoveHopByHopHeaders(header http.Header) {
 	// Strip hop-by-hop header based on RFC:
 	// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.5.1
 	// https://www.mnot.net/blog/2011/07/11/what_proxies_must_do
@@ -32,9 +32,9 @@ func removeHopByHopHeaders(header http.Header) {
 	}
 }
 
-// removeExtraHTTPHostPort remove extra host port (example.com:80 --> example.com)
+// RemoveExtraHTTPHostPort remove extra host port (example.com:80 --> example.com)
 // It resolves the behavior of some HTTP servers that do not handle host:80 (e.g. baidu.com)
-func removeExtraHTTPHostPort(req *http.Request) {
+func RemoveExtraHTTPHostPort(req *http.Request) {
 	host := req.Host
 	if host == "" {
 		host = req.URL.Host

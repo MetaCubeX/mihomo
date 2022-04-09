@@ -3,12 +3,14 @@ package executor
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -71,12 +73,17 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 
-	log.SetLevel(log.DEBUG)
+	if cfg.General.LogLevel == log.DEBUG {
+		log.SetLevel(log.DEBUG)
+	} else {
+		log.SetLevel(log.INFO)
+	}
 
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules)
 	updateHosts(cfg.Hosts)
+	updateMitm(cfg.Mitm)
 	updateProfile(cfg)
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateGeneral(cfg.General, force)
@@ -101,6 +108,7 @@ func GetGeneral() *config.General {
 			RedirPort:      ports.RedirPort,
 			TProxyPort:     ports.TProxyPort,
 			MixedPort:      ports.MixedPort,
+			MitmPort:       ports.MitmPort,
 			Authentication: authenticator,
 			AllowLan:       P.AllowLan(),
 			BindAddress:    P.BindAddress(),
@@ -168,7 +176,7 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 	}
 }
 
-func updateHosts(tree *trie.DomainTrie) {
+func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
 	resolver.DefaultHosts = tree
 }
 
@@ -225,6 +233,7 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	P.ReCreateMitm(general.MitmPort, tcpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -328,6 +337,11 @@ func updateIPTables(cfg *config.Config) {
 	}
 
 	log.Infoln("[IPTABLES] Setting iptables completed")
+}
+
+func updateMitm(mitm *config.Mitm) {
+	outbound.MiddlemanRewriteHosts = mitm.Hosts
+	tunnel.UpdateRewrites(mitm.Rules)
 }
 
 func Shutdown() {
