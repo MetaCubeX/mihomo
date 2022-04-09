@@ -97,10 +97,12 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/u-root/uio v0.0.0-20230220225925-ffce2a382923 // indirect
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
+	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	github.com/zhangyunhao116/fastrand v0.3.0 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	go.etcd.io/bbolt v1.3.7 // indirect
+	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/crypto v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb // indirect
 	golang.org/x/mod v0.11.0 // indirect
@@ -109,7 +111,16 @@ require (
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
+	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20220318042302-193cf8d6a5d6 // indirect
+	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469 // indirect
+	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
+	google.golang.org/grpc v1.53.0-dev.0.20230123225046-4075ef07c5d5 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/v3 v3.4.0 // indirect
+	gvisor.dev/gvisor v0.0.0-20220326024801-5d1f3d24cb84 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 )

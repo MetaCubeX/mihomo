@@ -91,10 +91,11 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	}
 
 	updateUsers(cfg.Users)
-	updateProxies(cfg.Proxies, cfg.Providers)
+	updateProxies(cfg.Mitm, cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
+	updateMitm(cfg.Mitm)
 	updateGeneral(cfg.General)
 	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.RuleProviders, cfg.General.IPv6)
@@ -134,6 +135,7 @@ func GetGeneral() *config.General {
 			RedirPort:         ports.RedirPort,
 			TProxyPort:        ports.TProxyPort,
 			MixedPort:         ports.MixedPort,
+			MitmPort:          ports.MitmPort,
 			Tun:               listener.GetTunConf(),
 			TuicServer:        listener.GetTuicConf(),
 			ShadowSocksConfig: ports.ShadowSocksConfig,
@@ -262,7 +264,7 @@ func updateHosts(tree *trie.DomainTrie[resolver.HostValue]) {
 	resolver.DefaultHosts = resolver.NewHosts(tree)
 }
 
-func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.ProxyProvider) {
+func updateProxies(mitm *config.Mitm, proxies map[string]C.Proxy, providers map[string]provider.ProxyProvider) {
 	tunnel.UpdateProxies(proxies, providers)
 }
 
@@ -488,6 +490,11 @@ func updateIPTables(cfg *config.Config) {
 	}
 
 	log.Infoln("[IPTABLES] Setting iptables completed")
+}
+
+func updateMitm(mitm *config.Mitm) {
+	listener.ReCreateMitm(mitm.Port, tunnel.TCPIn())
+	tunnel.UpdateRewrites(mitm.Rules)
 }
 
 func Shutdown() {

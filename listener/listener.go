@@ -1,19 +1,26 @@
 package listener
 
 import (
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"golang.org/x/exp/slices"
 	"net"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/Dreamacro/clash/common/cert"
 	"github.com/Dreamacro/clash/component/ebpf"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/autoredir"
 	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/http"
+	"github.com/Dreamacro/clash/listener/mitm"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
 	embedSS "github.com/Dreamacro/clash/listener/shadowsocks"
@@ -23,9 +30,10 @@ import (
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/listener/tuic"
-	"github.com/Dreamacro/clash/listener/tunnel"
+	LT "github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 
+	rewrites "github.com/Dreamacro/clash/rewrite"
 	"github.com/samber/lo"
 )
 
@@ -42,8 +50,8 @@ var (
 	tproxyUDPListener   *tproxy.UDPListener
 	mixedListener       *mixed.Listener
 	mixedUDPLister      *socks.UDPListener
-	tunnelTCPListeners  = map[string]*tunnel.Listener{}
-	tunnelUDPListeners  = map[string]*tunnel.PacketConn{}
+	tunnelTCPListeners  = map[string]*LT.Listener{}
+	tunnelUDPListeners  = map[string]*LT.PacketConn{}
 	inboundListeners    = map[string]C.InboundListener{}
 	tunLister           *sing_tun.Listener
 	shadowSocksListener C.MultiAddrListener
@@ -52,6 +60,7 @@ var (
 	autoRedirListener   *autoredir.Listener
 	autoRedirProgram    *ebpf.TcEBpfProgram
 	tcProgram           *ebpf.TcEBpfProgram
+	mitmListener        *mitm.Listener
 
 	// lock for recreate function
 	socksMux     sync.Mutex
@@ -67,6 +76,7 @@ var (
 	tuicMux      sync.Mutex
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
+	mitmMux      sync.Mutex
 
 	LastTunConf  LC.Tun
 	LastTuicConf LC.TuicServer
@@ -80,6 +90,7 @@ type Ports struct {
 	MixedPort         int    `json:"mixed-port"`
 	ShadowSocksConfig string `json:"ss-config"`
 	VmessConfig       string `json:"vmess-config"`
+	MitmPort          int    `json:"mitm-port"`
 }
 
 func GetTunConf() LC.Tun {
@@ -699,7 +710,7 @@ func PatchTunnel(tunnels []LC.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- C
 	for _, elm := range needCreate {
 		key := fmt.Sprintf("%s/%s/%s", elm.addr, elm.target, elm.proxy)
 		if elm.network == "tcp" {
-			l, err := tunnel.New(elm.addr, elm.target, elm.proxy, tcpIn)
+			l, err := LT.New(elm.addr, elm.target, elm.proxy, tcpIn)
 			if err != nil {
 				log.Errorln("Start tunnel %s error: %s", elm.target, err.Error())
 				continue
@@ -707,7 +718,7 @@ func PatchTunnel(tunnels []LC.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- C
 			tunnelTCPListeners[key] = l
 			log.Infoln("Tunnel(tcp/%s) proxy %s listening at: %s", elm.target, elm.proxy, tunnelTCPListeners[key].Address())
 		} else {
-			l, err := tunnel.NewUDP(elm.addr, elm.target, elm.proxy, udpIn)
+			l, err := LT.NewUDP(elm.addr, elm.target, elm.proxy, udpIn)
 			if err != nil {
 				log.Errorln("Start tunnel %s error: %s", elm.target, err.Error())
 				continue
@@ -745,6 +756,79 @@ func PatchInboundListeners(newListenerMap map[string]C.InboundListener, tcpIn ch
 			}
 		}
 	}
+}
+
+func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
+	mitmMux.Lock()
+	defer mitmMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start MITM server error: %s", err.Error())
+		}
+	}()
+
+	addr := genAddr(bindAddress, port, allowLan)
+
+	if mitmListener != nil {
+		if mitmListener.RawAddress() == addr {
+			return
+		}
+		_ = mitmListener.Close()
+		mitmListener = nil
+	}
+
+	if portIsZero(addr) {
+		return
+	}
+
+	if err = initCert(); err != nil {
+		return
+	}
+
+	var (
+		rootCACert tls.Certificate
+		x509c      *x509.Certificate
+		certOption *cert.Config
+	)
+
+	rootCACert, err = tls.LoadX509KeyPair(C.Path.RootCA(), C.Path.CAKey())
+	if err != nil {
+		return
+	}
+
+	privateKey := rootCACert.PrivateKey.(*rsa.PrivateKey)
+
+	x509c, err = x509.ParseCertificate(rootCACert.Certificate[0])
+	if err != nil {
+		return
+	}
+
+	certOption, err = cert.NewConfig(
+		x509c,
+		privateKey,
+	)
+	if err != nil {
+		return
+	}
+
+	certOption.SetValidity(time.Hour * 24 * 365 * 2) // 2 years
+	certOption.SetOrganization("Clash ManInTheMiddle Proxy Services")
+
+	opt := &mitm.Option{
+		Addr:       addr,
+		ApiHost:    "mitm.clash",
+		CertConfig: certOption,
+		Handler:    &rewrites.RewriteHandler{},
+	}
+
+	mitmListener, err = mitm.New(opt, tcpIn)
+	if err != nil {
+		return
+	}
+
+	log.Infoln("Mitm proxy listening at: %s", mitmListener.Address())
 }
 
 // GetPorts return the ports of proxy servers
@@ -787,6 +871,12 @@ func GetPorts() *Ports {
 
 	if vmessListener != nil {
 		ports.VmessConfig = vmessListener.Config()
+	}
+
+	if mitmListener != nil {
+		_, portStr, _ := net.SplitHostPort(mitmListener.Address())
+		port, _ := strconv.Atoi(portStr)
+		ports.MitmPort = port
 	}
 
 	return ports
@@ -900,6 +990,19 @@ func closeTunListener() {
 		tunLister.Close()
 		tunLister = nil
 	}
+}
+
+func initCert() error {
+	if _, err := os.Stat(C.Path.RootCA()); os.IsNotExist(err) {
+		log.Infoln("Can't find mitm_ca.crt, start generate")
+		err = cert.GenerateAndSave(C.Path.RootCA(), C.Path.CAKey())
+		if err != nil {
+			return err
+		}
+		log.Infoln("Generated CA private key and CA certificate finish")
+	}
+
+	return nil
 }
 
 func Cleanup() {

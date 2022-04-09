@@ -26,7 +26,7 @@ func ReadFile(path string) ([]byte, error) {
 }
 
 func ReadAsset(file string) ([]byte, error) {
-	return ReadFile(C.Path.GetAssetLocation(file))
+	return ReadFile(C.Path.Resolve(file))
 }
 
 func loadIP(geoipBytes []byte, country string) ([]*router.CIDR, error) {

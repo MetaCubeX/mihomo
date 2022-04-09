@@ -31,6 +31,7 @@ const (
 	TUN
 	TUIC
 	INNER
+	MITM
 )
 
 type NetWork int
@@ -80,6 +81,8 @@ func (t Type) String() string {
 		return "Tuic"
 	case INNER:
 		return "Inner"
+	case MITM:
+		return "Mitm"
 	default:
 		return "Unknown"
 	}
@@ -144,6 +147,8 @@ type Metadata struct {
 	RemoteDst    string     `json:"remoteDestination"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
+	// Only Mitm rule
+	UserAgent string `json:"userAgent"`
 }
 
 func (m *Metadata) RemoteAddress() string {

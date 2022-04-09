@@ -40,6 +40,7 @@ type configSchema struct {
 	RedirPort         *int               `json:"redir-port"`
 	TProxyPort        *int               `json:"tproxy-port"`
 	MixedPort         *int               `json:"mixed-port"`
+	MitmPort          *int               `json:"mitm-port"`
 	Tun               *tunSchema         `json:"tun"`
 	TuicServer        *tuicServerSchema  `json:"tuic-server"`
 	ShadowSocksConfig *string            `json:"ss-config"`
@@ -262,6 +263,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tcpIn, udpIn)
 	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tcpIn, udpIn)
 	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tcpIn, udpIn)
+	P.ReCreateMitm(pointerOrDefault(general.MitmPort, ports.MitmPort), tcpIn)
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)
