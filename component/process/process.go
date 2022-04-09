@@ -3,6 +3,7 @@ package process
 import (
 	"errors"
 	"net"
+	"runtime"
 
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -23,6 +24,9 @@ func FindProcessName(network string, srcIP net.IP, srcPort int) (string, error) 
 }
 
 func ShouldFindProcess(metadata *C.Metadata) bool {
+	if runtime.GOOS == "android" {
+		return false
+	}
 	if metadata.Process != "" {
 		return false
 	}
