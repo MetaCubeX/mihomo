@@ -57,7 +57,7 @@ func (tt *tcpTracker) Close() error {
 	return tt.Conn.Close()
 }
 
-func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) C.Conn {
 	uuid, _ := uuid.NewV4()
 
 	t := &tcpTracker{
@@ -80,7 +80,7 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 	}
 
 	manager.Join(t)
-	return t
+	return NewSniffing(t, metadata)
 }
 
 type udpTracker struct {

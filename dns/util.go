@@ -16,7 +16,7 @@ import (
 	D "github.com/miekg/dns"
 )
 
-func putMsgToCache(c *cache.LruCache, key string, msg *D.Msg) {
+func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
 	var ttl uint32
 	switch {
 	case len(msg.Answer) != 0:

@@ -18,10 +18,11 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.4.0
-	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
+	golang.org/x/crypto v0.0.0-20220408190544-5352b0902921
+	golang.org/x/net v0.0.0-20220407224826-aac1ed45d8e3
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220315194320-039c03cc5b86
+	golang.org/x/sys v0.0.0-20220408201424-a24fb2fb8a0f
+	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 	golang.zx2c4.com/wireguard v0.0.0-20220318042302-193cf8d6a5d6
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
@@ -37,8 +38,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
-	golang.org/x/mod v0.5.1 // indirect
-	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
+	golang.org/x/mod v0.6.0-dev.0.20211013180041-c96bc1413d57 // indirect
 	golang.org/x/tools v0.1.9 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect

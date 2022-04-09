@@ -30,6 +30,7 @@ type configSchema struct {
 	RedirPort   *int               `json:"redir-port"`
 	TProxyPort  *int               `json:"tproxy-port"`
 	MixedPort   *int               `json:"mixed-port"`
+	MitmPort    *int               `json:"mitm-port"`
 	Tun         *config.Tun        `json:"tun"`
 	AllowLan    *bool              `json:"allow-lan"`
 	BindAddress *string            `json:"bind-address"`
@@ -77,6 +78,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	P.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tcpIn, udpIn)
 	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tcpIn, udpIn)
 	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tcpIn, udpIn)
+	P.ReCreateMitm(pointerOrDefault(general.MitmPort, ports.MitmPort), tcpIn)
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)

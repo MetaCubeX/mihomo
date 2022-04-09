@@ -23,6 +23,7 @@ const (
 	REDIR
 	TPROXY
 	TUN
+	MITM
 )
 
 type NetWork int
@@ -58,6 +59,8 @@ func (t Type) String() string {
 		return "TProxy"
 	case TUN:
 		return "Tun"
+	case MITM:
+		return "Mitm"
 	default:
 		return "Unknown"
 	}
@@ -80,10 +83,15 @@ type Metadata struct {
 	DNSMode     DNSMode `json:"dnsMode"`
 	Process     string  `json:"process"`
 	ProcessPath string  `json:"processPath"`
+	UserAgent   string  `json:"userAgent"`
 }
 
 func (m *Metadata) RemoteAddress() string {
-	return net.JoinHostPort(m.String(), m.DstPort)
+	if m.DstIP != nil {
+		return net.JoinHostPort(m.DstIP.String(), m.DstPort)
+	} else {
+		return net.JoinHostPort(m.String(), m.DstPort)
+	}
 }
 
 func (m *Metadata) SourceAddress() string {

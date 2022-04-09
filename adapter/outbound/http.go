@@ -89,6 +89,10 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 		req.Header.Add("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
 	}
 
+	if metadata.Type == C.MITM {
+		req.Header.Add("Origin-Request-Source-Address", metadata.SourceAddress())
+	}
+
 	if err := req.Write(rw); err != nil {
 		return err
 	}

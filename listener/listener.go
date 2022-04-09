@@ -1,6 +1,9 @@
 package proxy
 
 import (
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -8,10 +11,13 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/common/cert"
 	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
+	"github.com/Dreamacro/clash/listener/mitm"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
 	"github.com/Dreamacro/clash/listener/socks"
@@ -19,6 +25,8 @@ import (
 	"github.com/Dreamacro/clash/listener/tun"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/log"
+	rewrites "github.com/Dreamacro/clash/rewrite"
+	"github.com/Dreamacro/clash/tunnel"
 )
 
 var (
@@ -35,6 +43,7 @@ var (
 	mixedListener     *mixed.Listener
 	mixedUDPLister    *socks.UDPListener
 	tunStackListener  ipstack.Stack
+	mitmListener      *mitm.Listener
 
 	// lock for recreate function
 	socksMux  sync.Mutex
@@ -43,6 +52,7 @@ var (
 	tproxyMux sync.Mutex
 	mixedMux  sync.Mutex
 	tunMux    sync.Mutex
+	mitmMux   sync.Mutex
 )
 
 type Ports struct {
@@ -51,6 +61,7 @@ type Ports struct {
 	RedirPort  int `json:"redir-port"`
 	TProxyPort int `json:"tproxy-port"`
 	MixedPort  int `json:"mixed-port"`
+	MitmPort   int `json:"mitm-port"`
 }
 
 func AllowLan() bool {
@@ -333,6 +344,85 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.Co
 	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn)
 }
 
+func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
+	mitmMux.Lock()
+	defer mitmMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start MITM server error: %s", err.Error())
+		}
+	}()
+
+	addr := genAddr(bindAddress, port, allowLan)
+
+	if mitmListener != nil {
+		if mitmListener.RawAddress() == addr {
+			return
+		}
+		outbound.MiddlemanServerAddress.Store("")
+		tunnel.MitmOutbound = nil
+		_ = mitmListener.Close()
+		mitmListener = nil
+	}
+
+	if portIsZero(addr) {
+		return
+	}
+
+	if err = initCert(); err != nil {
+		return
+	}
+
+	var (
+		rootCACert tls.Certificate
+		x509c      *x509.Certificate
+		certOption *cert.Config
+	)
+
+	rootCACert, err = tls.LoadX509KeyPair(C.Path.RootCA(), C.Path.CAKey())
+	if err != nil {
+		return
+	}
+
+	privateKey := rootCACert.PrivateKey.(*rsa.PrivateKey)
+
+	x509c, err = x509.ParseCertificate(rootCACert.Certificate[0])
+	if err != nil {
+		return
+	}
+
+	certOption, err = cert.NewConfig(
+		x509c,
+		privateKey,
+		cert.NewAutoGCCertsStorage(),
+	)
+	if err != nil {
+		return
+	}
+
+	certOption.SetValidity(cert.TTL << 3)
+	certOption.SetOrganization("Clash ManInTheMiddle Proxy Services")
+
+	opt := &mitm.Option{
+		Addr:       addr,
+		ApiHost:    "mitm.clash",
+		CertConfig: certOption,
+		Handler:    &rewrites.RewriteHandler{},
+	}
+
+	mitmListener, err = mitm.New(opt, tcpIn)
+	if err != nil {
+		return
+	}
+
+	outbound.MiddlemanServerAddress.Store(mitmListener.Address())
+	tunnel.MitmOutbound = outbound.NewMitm()
+
+	log.Infoln("Mitm proxy listening at: %s", mitmListener.Address())
+}
+
 // GetPorts return the ports of proxy servers
 func GetPorts() *Ports {
 	ports := &Ports{}
@@ -367,6 +457,12 @@ func GetPorts() *Ports {
 		ports.MixedPort = port
 	}
 
+	if mitmListener != nil {
+		_, portStr, _ := net.SplitHostPort(mitmListener.Address())
+		port, _ := strconv.Atoi(portStr)
+		ports.MitmPort = port
+	}
+
 	return ports
 }
 
@@ -387,6 +483,19 @@ func genAddr(host string, port int, allowLan bool) string {
 	}
 
 	return fmt.Sprintf("127.0.0.1:%d", port)
+}
+
+func initCert() error {
+	if _, err := os.Stat(C.Path.RootCA()); os.IsNotExist(err) {
+		log.Infoln("Can't find mitm_ca.crt, start generate")
+		err = cert.GenerateAndSave(C.Path.RootCA(), C.Path.CAKey())
+		if err != nil {
+			return err
+		}
+		log.Infoln("Generated CA private key and CA certificate finish")
+	}
+
+	return nil
 }
 
 func Cleanup() {

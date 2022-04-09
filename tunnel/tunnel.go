@@ -27,6 +27,7 @@ var (
 	udpQueue  = make(chan *inbound.PacketAdapter, 200)
 	natTable  = nat.New()
 	rules     []C.Rule
+	rewrites  C.RewriteRule
 	proxies   = make(map[string]C.Proxy)
 	providers map[string]provider.ProxyProvider
 	configMux sync.RWMutex
@@ -36,6 +37,9 @@ var (
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
+
+	// MitmOutbound mitm proxy adapter
+	MitmOutbound C.ProxyAdapter
 )
 
 func init() {
@@ -92,6 +96,18 @@ func SetMode(m TunnelMode) {
 	mode = m
 }
 
+// Rewrites return all rewrites
+func Rewrites() C.RewriteRule {
+	return rewrites
+}
+
+// UpdateRewrites handle update rewrites
+func UpdateRewrites(newRewrites C.RewriteRule) {
+	configMux.Lock()
+	rewrites = newRewrites
+	configMux.Unlock()
+}
+
 // processUDP starts a loop to handle udp packet
 func processUDP() {
 	queue := udpQueue
@@ -143,7 +159,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				metadata.DNSMode = C.DNSFakeIP
 			} else if node := resolver.DefaultHosts.Search(host); node != nil {
 				// redir-host should lookup the hosts
-				metadata.DstIP = node.Data.(net.IP)
+				metadata.DstIP = node.Data.AsSlice()
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
@@ -286,14 +302,24 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
+	defer cancel()
+	if MitmOutbound != nil && metadata.Type != C.MITM {
+		if remoteConn, err1 := MitmOutbound.DialContext(ctx, metadata); err1 == nil {
+			remoteConn = statistic.NewSniffing(remoteConn, metadata)
+			defer remoteConn.Close()
+
+			handleSocket(connCtx, remoteConn)
+			return
+		}
+	}
+
 	proxy, rule, err := resolveMetadata(connCtx, metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-	defer cancel()
 	remoteConn, err := proxy.DialContext(ctx, metadata.Pure())
 	if err != nil {
 		if rule == nil {
@@ -333,8 +359,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	var resolved bool
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		ip := node.Data.(net.IP)
-		metadata.DstIP = ip
+		metadata.DstIP = node.Data.AsSlice()
 		resolved = true
 	}
 
@@ -388,8 +413,7 @@ func matchScript(metadata *C.Metadata) (C.Proxy, error) {
 	defer configMux.RUnlock()
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		ip := node.Data.(net.IP)
-		metadata.DstIP = ip
+		metadata.DstIP = node.Data.AsSlice()
 	}
 
 	adapter, err := S.CallPyMainFunction(metadata)

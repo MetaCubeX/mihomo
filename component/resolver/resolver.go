@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -23,7 +24,7 @@ var (
 	DisableIPv6 = true
 
 	// DefaultHosts aim to resolve hosts
-	DefaultHosts = trie.New()
+	DefaultHosts = trie.New[netip.Addr]()
 
 	// DefaultDNSTimeout defined the default dns request timeout
 	DefaultDNSTimeout = time.Second * 5
@@ -48,8 +49,8 @@ func ResolveIPv4(host string) (net.IP, error) {
 
 func ResolveIPv4WithResolver(host string, r Resolver) (net.IP, error) {
 	if node := DefaultHosts.Search(host); node != nil {
-		if ip := node.Data.(net.IP).To4(); ip != nil {
-			return ip, nil
+		if ip := node.Data; ip.Is4() {
+			return ip.AsSlice(), nil
 		}
 	}
 
@@ -92,8 +93,8 @@ func ResolveIPv6WithResolver(host string, r Resolver) (net.IP, error) {
 	}
 
 	if node := DefaultHosts.Search(host); node != nil {
-		if ip := node.Data.(net.IP).To16(); ip != nil {
-			return ip, nil
+		if ip := node.Data; ip.Is6() {
+			return ip.AsSlice(), nil
 		}
 	}
 
@@ -128,7 +129,8 @@ func ResolveIPv6WithResolver(host string, r Resolver) (net.IP, error) {
 // ResolveIPWithResolver same as ResolveIP, but with a resolver
 func ResolveIPWithResolver(host string, r Resolver) (net.IP, error) {
 	if node := DefaultHosts.Search(host); node != nil {
-		return node.Data.(net.IP), nil
+		ip := node.Data
+		return ip.Unmap().AsSlice(), nil
 	}
 
 	if r != nil {

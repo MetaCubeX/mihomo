@@ -3,11 +3,13 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
+	_ "unsafe"
 
 	"github.com/Dreamacro/clash/common/queue"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -16,9 +18,12 @@ import (
 	"go.uber.org/atomic"
 )
 
+//go:linkname errCanceled net.errCanceled
+var errCanceled error
+
 type Proxy struct {
 	C.ProxyAdapter
-	history *queue.Queue
+	history *queue.Queue[C.DelayHistory]
 	alive   *atomic.Bool
 }
 
@@ -37,7 +42,7 @@ func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 // DialContext implements C.ProxyAdapter
 func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.DialContext(ctx, metadata, opts...)
-	p.alive.Store(err == nil)
+	p.alive.Store(err == nil || errors.Is(err, errCanceled))
 	return conn, err
 }
 
@@ -60,7 +65,7 @@ func (p *Proxy) DelayHistory() []C.DelayHistory {
 	queue := p.history.Copy()
 	histories := []C.DelayHistory{}
 	for _, item := range queue {
-		histories = append(histories, item.(C.DelayHistory))
+		histories = append(histories, item)
 	}
 	return histories
 }
@@ -73,11 +78,7 @@ func (p *Proxy) LastDelay() (delay uint16) {
 		return max
 	}
 
-	last := p.history.Last()
-	if last == nil {
-		return max
-	}
-	history := last.(C.DelayHistory)
+	history := p.history.Last()
 	if history.Delay == 0 {
 		return max
 	}
@@ -161,7 +162,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
-	return &Proxy{adapter, queue.New(10), atomic.NewBool(true)}
+	return &Proxy{adapter, queue.New[C.DelayHistory](10), atomic.NewBool(true)}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {

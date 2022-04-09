@@ -17,8 +17,8 @@ var ErrInvalidDomain = errors.New("invalid domain")
 
 // DomainTrie contains the main logic for adding and searching nodes for domain segments.
 // support wildcard domain (e.g *.google.com)
-type DomainTrie struct {
-	root *Node
+type DomainTrie[T comparable] struct {
+	root *Node[T]
 }
 
 func ValidAndSplitDomain(domain string) ([]string, bool) {
@@ -51,7 +51,7 @@ func ValidAndSplitDomain(domain string) ([]string, bool) {
 // 3. subdomain.*.example.com
 // 4. .example.com
 // 5. +.example.com
-func (t *DomainTrie) Insert(domain string, data any) error {
+func (t *DomainTrie[T]) Insert(domain string, data T) error {
 	parts, valid := ValidAndSplitDomain(domain)
 	if !valid {
 		return ErrInvalidDomain
@@ -68,13 +68,13 @@ func (t *DomainTrie) Insert(domain string, data any) error {
 	return nil
 }
 
-func (t *DomainTrie) insert(parts []string, data any) {
+func (t *DomainTrie[T]) insert(parts []string, data T) {
 	node := t.root
 	// reverse storage domain part to save space
 	for i := len(parts) - 1; i >= 0; i-- {
 		part := parts[i]
 		if !node.hasChild(part) {
-			node.addChild(part, newNode(nil))
+			node.addChild(part, newNode(getZero[T]()))
 		}
 
 		node = node.getChild(part)
@@ -88,7 +88,7 @@ func (t *DomainTrie) insert(parts []string, data any) {
 // 1. static part
 // 2. wildcard domain
 // 2. dot wildcard domain
-func (t *DomainTrie) Search(domain string) *Node {
+func (t *DomainTrie[T]) Search(domain string) *Node[T] {
 	parts, valid := ValidAndSplitDomain(domain)
 	if !valid || parts[0] == "" {
 		return nil
@@ -96,26 +96,26 @@ func (t *DomainTrie) Search(domain string) *Node {
 
 	n := t.search(t.root, parts)
 
-	if n == nil || n.Data == nil {
+	if n == nil || n.Data == getZero[T]() {
 		return nil
 	}
 
 	return n
 }
 
-func (t *DomainTrie) search(node *Node, parts []string) *Node {
+func (t *DomainTrie[T]) search(node *Node[T], parts []string) *Node[T] {
 	if len(parts) == 0 {
 		return node
 	}
 
 	if c := node.getChild(parts[len(parts)-1]); c != nil {
-		if n := t.search(c, parts[:len(parts)-1]); n != nil && n.Data != nil {
+		if n := t.search(c, parts[:len(parts)-1]); n != nil && n.Data != getZero[T]() {
 			return n
 		}
 	}
 
 	if c := node.getChild(wildcard); c != nil {
-		if n := t.search(c, parts[:len(parts)-1]); n != nil && n.Data != nil {
+		if n := t.search(c, parts[:len(parts)-1]); n != nil && n.Data != getZero[T]() {
 			return n
 		}
 	}
@@ -124,6 +124,6 @@ func (t *DomainTrie) search(node *Node, parts []string) *Node {
 }
 
 // New returns a new, empty Trie.
-func New() *DomainTrie {
-	return &DomainTrie{root: newNode(nil)}
+func New[T comparable]() *DomainTrie[T] {
+	return &DomainTrie[T]{root: newNode[T](getZero[T]())}
 }

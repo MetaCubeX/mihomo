@@ -1,16 +1,16 @@
 package trie
 
 import (
-	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var localIP = net.IP{127, 0, 0, 1}
+var localIP = netip.AddrFrom4([4]byte{127, 0, 0, 1})
 
 func TestTrie_Basic(t *testing.T) {
-	tree := New()
+	tree := New[netip.Addr]()
 	domains := []string{
 		"example.com",
 		"google.com",
@@ -23,7 +23,7 @@ func TestTrie_Basic(t *testing.T) {
 
 	node := tree.Search("example.com")
 	assert.NotNil(t, node)
-	assert.True(t, node.Data.(net.IP).Equal(localIP))
+	assert.True(t, node.Data == localIP)
 	assert.NotNil(t, tree.Insert("", localIP))
 	assert.Nil(t, tree.Search(""))
 	assert.NotNil(t, tree.Search("localhost"))
@@ -31,7 +31,7 @@ func TestTrie_Basic(t *testing.T) {
 }
 
 func TestTrie_Wildcard(t *testing.T) {
-	tree := New()
+	tree := New[netip.Addr]()
 	domains := []string{
 		"*.example.com",
 		"sub.*.example.com",
@@ -64,7 +64,7 @@ func TestTrie_Wildcard(t *testing.T) {
 }
 
 func TestTrie_Priority(t *testing.T) {
-	tree := New()
+	tree := New[int]()
 	domains := []string{
 		".dev",
 		"example.dev",
@@ -79,18 +79,18 @@ func TestTrie_Priority(t *testing.T) {
 	}
 
 	for idx, domain := range domains {
-		tree.Insert(domain, idx)
+		tree.Insert(domain, idx+1)
 	}
 
-	assertFn("test.dev", 0)
-	assertFn("foo.bar.dev", 0)
-	assertFn("example.dev", 1)
-	assertFn("foo.example.dev", 2)
-	assertFn("test.example.dev", 3)
+	assertFn("test.dev", 1)
+	assertFn("foo.bar.dev", 1)
+	assertFn("example.dev", 2)
+	assertFn("foo.example.dev", 3)
+	assertFn("test.example.dev", 4)
 }
 
 func TestTrie_Boundary(t *testing.T) {
-	tree := New()
+	tree := New[netip.Addr]()
 	tree.Insert("*.dev", localIP)
 
 	assert.NotNil(t, tree.Insert(".", localIP))
@@ -99,7 +99,7 @@ func TestTrie_Boundary(t *testing.T) {
 }
 
 func TestTrie_WildcardBoundary(t *testing.T) {
-	tree := New()
+	tree := New[netip.Addr]()
 	tree.Insert("+.*", localIP)
 	tree.Insert("stun.*.*.*", localIP)
 
