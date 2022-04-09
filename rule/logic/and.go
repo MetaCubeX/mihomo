@@ -1,6 +1,8 @@
 package logic
 
 import (
+	"fmt"
+
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rule/common"
 )
@@ -19,12 +21,16 @@ func (A *AND) ShouldFindProcess() bool {
 
 func NewAND(payload string, adapter string) (*AND, error) {
 	and := &AND{Base: &common.Base{}, payload: payload, adapter: adapter}
-	rules, err := parseRuleByPayload(payload)
+	rules, err := parseRuleByPayload(payload, true)
 	if err != nil {
 		return nil, err
 	}
 
 	and.rules = rules
+	if len(and.rules) == 0 {
+		return nil, fmt.Errorf("And rule is error, may be format error or not contain least one rule")
+	}
+
 	for _, rule := range rules {
 		if rule.ShouldResolveIP() {
 			and.needIP = true
