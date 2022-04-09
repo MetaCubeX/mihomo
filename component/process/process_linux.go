@@ -1,5 +1,3 @@
-//go:build !android
-
 package process
 
 import (
