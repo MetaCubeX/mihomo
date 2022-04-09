@@ -17,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
+	SNI "github.com/Dreamacro/clash/component/sniffer"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -78,6 +79,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateDNS(cfg.DNS, cfg.Tun)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
+	updateSniffer(cfg.Sniffer)
 	updateTun(cfg.Tun, cfg.DNS)
 	updateExperimental(cfg)
 	updateHosts(cfg.Hosts)
@@ -85,6 +87,16 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
+}
+
+func updateSniffer(sniffer *config.Sniffer) {
+	if sniffer.Enable {
+		var err error
+		SNI.Dispatcher, err = SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.Force)
+		if err != nil {
+			log.Errorln("Init Sniffer failed, err:%v", err)
+		}
+	}
 }
 
 func GetGeneral() *config.General {
