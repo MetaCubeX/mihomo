@@ -148,7 +148,7 @@ func (t *Trojan) PresetXTLSConn(conn net.Conn) (net.Conn, error) {
 				xtlsConn.DirectMode = true
 			}
 		} else {
-			return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", t.option.Flow)
+			return conn, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", t.option.Flow)
 		}
 	}
 
