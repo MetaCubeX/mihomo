@@ -21,7 +21,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts *trie.DomainTrie[netip.Addr]) middleware {
+func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[string, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -30,7 +30,9 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr]) middleware {
 				return next(ctx, r)
 			}
 
-			record := hosts.Search(strings.TrimRight(q.Name, "."))
+			host := strings.TrimRight(q.Name, ".")
+
+			record := hosts.Search(host)
 			if record == nil {
 				return next(ctx, r)
 			}
@@ -40,18 +42,22 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr]) middleware {
 
 			if ip.Is4() && q.Qtype == D.TypeA {
 				rr := &D.A{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
 				rr.A = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
 			} else if ip.Is6() && q.Qtype == D.TypeAAAA {
 				rr := &D.AAAA{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
 				rr.AAAA = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
 			} else {
 				return next(ctx, r)
+			}
+
+			if mapping != nil {
+				mapping.SetWithExpire(ip.Unmap().String(), host, time.Now().Add(time.Second*10))
 			}
 
 			ctx.SetType(context.DNSTypeHost)
@@ -177,7 +183,7 @@ func NewHandler(resolver *Resolver, mapper *ResolverEnhancer) handler {
 	middlewares := []middleware{}
 
 	if resolver.hosts != nil {
-		middlewares = append(middlewares, withHosts(resolver.hosts))
+		middlewares = append(middlewares, withHosts(resolver.hosts, mapper.mapping))
 	}
 
 	if mapper.mode == C.DNSFakeIP {

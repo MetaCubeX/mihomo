@@ -40,7 +40,7 @@ func removeExtraHTTPHostPort(req *http.Request) {
 		host = req.URL.Host
 	}
 
-	if pHost, port, err := net.SplitHostPort(host); err == nil && port == "80" {
+	if pHost, port, err := net.SplitHostPort(host); err == nil && (port == "80" || port == "443") {
 		host = pHost
 	}
 
