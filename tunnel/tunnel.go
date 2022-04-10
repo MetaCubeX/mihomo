@@ -181,7 +181,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(_ C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	switch mode {
 	case Direct:
 		proxy = proxies["DIRECT"]
@@ -217,7 +217,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 	handle := func() bool {
 		pc := natTable.Get(key)
 		if pc != nil {
-			handleUDPToRemote(packet, pc, metadata)
+			_ = handleUDPToRemote(packet, pc, metadata)
 			return true
 		}
 		return false
@@ -284,7 +284,9 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
-	defer connCtx.Conn().Close()
+	defer func(conn net.Conn) {
+		_ = conn.Close()
+	}(connCtx.Conn())
 
 	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
@@ -302,7 +304,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 	if MitmOutbound != nil && metadata.Type != C.MITM {
 		if remoteConn, err1 := MitmOutbound.DialContext(ctx, metadata); err1 == nil {
 			remoteConn = statistic.NewSniffing(remoteConn, metadata)
-			defer remoteConn.Close()
+			defer func(remoteConn C.Conn) {
+				_ = remoteConn.Close()
+			}(remoteConn)
 
 			handleSocket(connCtx, remoteConn)
 			return
@@ -325,7 +329,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
-	defer remoteConn.Close()
+	defer func(remoteConn C.Conn) {
+		_ = remoteConn.Close()
+	}(remoteConn)
 
 	switch true {
 	case rule != nil:

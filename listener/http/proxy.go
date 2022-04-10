@@ -70,11 +70,11 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 			RemoveExtraHTTPHostPort(request)
 
 			if request.URL.Scheme == "" || request.URL.Host == "" {
-				resp = ResponseWith(request, http.StatusBadRequest)
+				resp = responseWith(request, http.StatusBadRequest)
 			} else {
 				resp, err = client.Do(request)
 				if err != nil {
-					resp = ResponseWith(request, http.StatusBadGateway)
+					resp = responseWith(request, http.StatusBadGateway)
 				}
 			}
 
@@ -103,7 +103,7 @@ func Authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http
 	if authenticator != nil {
 		credential := parseBasicProxyAuthorization(request)
 		if credential == "" {
-			resp := ResponseWith(request, http.StatusProxyAuthRequired)
+			resp := responseWith(request, http.StatusProxyAuthRequired)
 			resp.Header.Set("Proxy-Authenticate", "Basic")
 			return resp
 		}
@@ -117,14 +117,14 @@ func Authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http
 		if !authed {
 			log.Infoln("Auth failed from %s", request.RemoteAddr)
 
-			return ResponseWith(request, http.StatusForbidden)
+			return responseWith(request, http.StatusForbidden)
 		}
 	}
 
 	return nil
 }
 
-func ResponseWith(request *http.Request, statusCode int) *http.Response {
+func responseWith(request *http.Request, statusCode int) *http.Response {
 	return &http.Response{
 		StatusCode: statusCode,
 		Status:     http.StatusText(statusCode),

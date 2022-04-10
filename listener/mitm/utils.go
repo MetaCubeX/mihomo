@@ -14,12 +14,12 @@ import (
 	"golang.org/x/text/transform"
 )
 
-type MultiReaderConn struct {
+type multiReaderConn struct {
 	net.Conn
 	reader io.Reader
 }
 
-func (c *MultiReaderConn) Read(buf []byte) (int, error) {
+func (c *multiReaderConn) Read(buf []byte) (int, error) {
 	return c.reader.Read(buf)
 }
 
@@ -65,7 +65,6 @@ func NewErrorResponse(req *http.Request, err error) *http.Response {
 
 	w := fmt.Sprintf(`199 "clash" %q %q`, err.Error(), date)
 	res.Header.Add("Warning", w)
-	res.Header.Set("Server", serverName)
 	return res
 }
 

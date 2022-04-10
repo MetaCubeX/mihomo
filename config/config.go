@@ -547,7 +547,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 	}
 
 	// add mitm.clash hosts
-	if err := tree.Insert("mitm.clash", netip.AddrFrom4([4]byte{8, 8, 9, 9})); err != nil {
+	if err := tree.Insert("mitm.clash", netip.AddrFrom4([4]byte{1, 2, 3, 4})); err != nil {
 		log.Errorln("insert mitm.clash to host error: %s", err.Error())
 	}
 
