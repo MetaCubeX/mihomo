@@ -78,7 +78,7 @@ type DNS struct {
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
-	Hosts                 *trie.DomainTrie
+	Hosts                 *trie.DomainTrie[netip.Addr]
 	NameServerPolicy      map[string]dns.NameServer
 	ProxyServerNameserver []dns.NameServer
 }
@@ -113,12 +113,6 @@ type Tun struct {
 	AutoRoute bool             `yaml:"auto-route" json:"auto-route"`
 }
 
-// Script config
-type Script struct {
-	MainCode      string            `yaml:"code" json:"code"`
-	ShortcutsCode map[string]string `yaml:"shortcuts" json:"shortcuts"`
-}
-
 // IPTables config
 type IPTables struct {
 	Enable           bool     `yaml:"enable" json:"enable"`
@@ -142,7 +136,7 @@ type Config struct {
 	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
-	Hosts         *trie.DomainTrie
+	Hosts         *trie.DomainTrie[netip.Addr]
 	Profile       *Profile
 	Rules         []C.Rule
 	Users         []auth.AuthUser
@@ -564,7 +558,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			params = rule[l:]
 		}
 
-		if _, ok := proxies[target]; mode != T.Script && !ok {
+		if _, ok := proxies[target]; !ok {
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
 		}
 
@@ -581,9 +575,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
 
-		if mode != T.Script {
-			rules = append(rules, parsed)
-		}
+		rules = append(rules, parsed)
 	}
 
 	runtime.GC()
@@ -591,18 +583,18 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 	return rules, ruleProviders, nil
 }
 
-func parseHosts(cfg *RawConfig) (*trie.DomainTrie, error) {
-	tree := trie.New()
+func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
+	tree := trie.New[netip.Addr]()
 
 	// add default hosts
-	if err := tree.Insert("localhost", net.IP{127, 0, 0, 1}); err != nil {
+	if err := tree.Insert("localhost", netip.AddrFrom4([4]byte{127, 0, 0, 1})); err != nil {
 		log.Errorln("insert localhost to host error: %s", err.Error())
 	}
 
 	if len(cfg.Hosts) != 0 {
 		for domain, ipStr := range cfg.Hosts {
-			ip := net.ParseIP(ipStr)
-			if ip == nil {
+			ip, err := netip.ParseAddr(ipStr)
+			if err != nil {
 				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
 			}
 			_ = tree.Insert(domain, ip)
@@ -750,7 +742,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 	return sites, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.Rule) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -806,10 +798,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 			return nil, err
 		}
 
-		var host *trie.DomainTrie
+		var host *trie.DomainTrie[bool]
 		// fake ip skip host filter
 		if len(cfg.FakeIPFilter) != 0 {
-			host = trie.New()
+			host = trie.New[bool]()
 			for _, domain := range cfg.FakeIPFilter {
 				_ = host.Insert(domain, true)
 			}
@@ -817,7 +809,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie, rules []C.Rule) (*DNS, 
 
 		if len(dnsCfg.Fallback) != 0 {
 			if host == nil {
-				host = trie.New()
+				host = trie.New[bool]()
 			}
 			for _, fb := range dnsCfg.Fallback {
 				if net.ParseIP(fb.Addr) != nil {

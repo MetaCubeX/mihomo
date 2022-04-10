@@ -152,7 +152,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				metadata.DNSMode = C.DNSFakeIP
 			} else if node := resolver.DefaultHosts.Search(host); node != nil {
 				// redir-host should lookup the hosts
-				metadata.DstIP = node.Data.(net.IP)
+				metadata.DstIP = node.Data.AsSlice()
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
@@ -175,7 +175,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(_ C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	switch mode {
 	case Direct:
 		proxy = proxies["DIRECT"]
@@ -211,7 +211,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 	handle := func() bool {
 		pc := natTable.Get(key)
 		if pc != nil {
-			handleUDPToRemote(packet, pc, metadata)
+			_ = handleUDPToRemote(packet, pc, metadata)
 			return true
 		}
 		return false
@@ -247,7 +247,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
-		rawPc, err := proxy.ListenPacketContext(ctx, metadata)
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -284,7 +284,9 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
-	defer connCtx.Conn().Close()
+	defer func(conn net.Conn) {
+		_ = conn.Close()
+	}(connCtx.Conn())
 
 	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
@@ -307,9 +309,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-	defer cancel()
-	remoteConn, err := proxy.DialContext(ctx, metadata)
+	remoteConn, err := proxy.DialContext(ctx, metadata.Pure())
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -319,7 +319,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
-	defer remoteConn.Close()
+	defer func(remoteConn C.Conn) {
+		_ = remoteConn.Close()
+	}(remoteConn)
 
 	switch true {
 	case rule != nil:
@@ -352,8 +354,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	var resolved bool
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		ip := node.Data.(net.IP)
-		metadata.DstIP = ip
+		metadata.DstIP = node.Data.AsSlice()
 		resolved = true
 	}
 
