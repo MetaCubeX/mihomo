@@ -15,6 +15,9 @@ func LoaderName() string {
 }
 
 func SetLoader(newLoader string) {
+	if newLoader == "memc" {
+		newLoader = "memconservative"
+	}
 	geoLoaderName = newLoader
 }
 

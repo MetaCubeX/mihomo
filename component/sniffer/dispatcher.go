@@ -34,7 +34,6 @@ func (sd *SnifferDispatcher) Tcp(conn net.Conn, metadata *C.Metadata) {
 		if metadata.Host != "" {
 			return
 		}
-
 		sd.cover(bufConn, metadata)
 	}
 }
@@ -54,24 +53,23 @@ func (sd *SnifferDispatcher) cover(conn *CN.BufferedConn, metadata *C.Metadata) 
 			bufferedLen := conn.Buffered()
 			bytes, err := conn.Peek(bufferedLen)
 			if err != nil {
-				log.Warnln("the data lenght not enough")
+				log.Debugln("[Sniffer] the data lenght not enough")
 				continue
 			}
 
 			host, err := sniffer.SniffTCP(bytes)
 			if err != nil {
-				log.Warnln("Sniff data failed on Sniffer[%s]", sniffer.Protocol())
+				log.Debugln("[Sniffer][%s] Sniff data failed", sniffer.Protocol())
 				continue
 			}
-
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
+			log.Debugln("[Sniffer][%s] %s --> %s", sniffer.Protocol(), metadata.DstIP, metadata.Host)
 			if resolver.FakeIPEnabled() {
 				metadata.DNSMode = C.DNSFakeIP
 			} else {
 				metadata.DNSMode = C.DNSMapping
 			}
-
 			resolver.InsertHostByIP(metadata.DstIP, host)
 			metadata.DstIP = nil
 
