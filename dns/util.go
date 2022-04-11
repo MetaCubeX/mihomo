@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -112,6 +113,22 @@ func msgToIP(msg *D.Msg) []net.IP {
 	}
 
 	return ips
+}
+
+func ipToAddr(ip net.IP) netip.Addr {
+	if ip == nil {
+		return netip.Addr{}
+	}
+
+	l := len(ip)
+
+	if l == 4 {
+		return netip.AddrFrom4(*(*[4]byte)(ip))
+	} else if l == 16 {
+		return netip.AddrFrom16(*(*[16]byte)(ip))
+	} else {
+		return netip.Addr{}
+	}
 }
 
 type wrapPacketConn struct {
