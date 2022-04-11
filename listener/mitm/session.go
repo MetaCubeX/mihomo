@@ -1,15 +1,10 @@
 package mitm
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"net/http"
-
-	C "github.com/Dreamacro/clash/constant"
 )
-
-var serverName = fmt.Sprintf("Clash server (%s)", C.Version)
 
 type Session struct {
 	conn     net.Conn
@@ -37,16 +32,14 @@ func (s *Session) SetProperties(key string, val any) {
 }
 
 func (s *Session) NewResponse(code int, body io.Reader) *http.Response {
-	res := NewResponse(code, body, s.request)
-	res.Header.Set("Server", serverName)
-	return res
+	return NewResponse(code, body, s.request)
 }
 
 func (s *Session) NewErrorResponse(err error) *http.Response {
 	return NewErrorResponse(s.request, err)
 }
 
-func NewSession(conn net.Conn, request *http.Request, response *http.Response) *Session {
+func newSession(conn net.Conn, request *http.Request, response *http.Response) *Session {
 	return &Session{
 		conn:     conn,
 		request:  request,

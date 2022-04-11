@@ -17,7 +17,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
-	httpL "github.com/Dreamacro/clash/listener/http"
+	H "github.com/Dreamacro/clash/listener/http"
 )
 
 func HandleConn(c net.Conn, opt *Option, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
@@ -48,9 +48,12 @@ startOver:
 
 readLoop:
 	for {
-		_ = conn.SetDeadline(time.Now().Add(30 * time.Second)) // use SetDeadline instead of Proxy-Connection keep-alive
+		err := conn.SetDeadline(time.Now().Add(30 * time.Second)) // use SetDeadline instead of Proxy-Connection keep-alive
+		if err != nil {
+			break readLoop
+		}
 
-		request, err := httpL.ReadRequest(conn.Reader())
+		request, err := H.ReadRequest(conn.Reader())
 		if err != nil {
 			handleError(opt, nil, err)
 			break readLoop
@@ -58,15 +61,15 @@ readLoop:
 
 		var response *http.Response
 
-		session := NewSession(conn, request, response)
+		session := newSession(conn, request, response)
 
 		source = parseSourceAddress(session.request, c, source)
-		request.RemoteAddr = source.String()
+		session.request.RemoteAddr = source.String()
 
 		if !trusted {
-			response = httpL.Authenticate(request, cache)
+			session.response = H.Authenticate(session.request, cache)
 
-			trusted = response == nil
+			trusted = session.response == nil
 		}
 
 		if trusted {
@@ -84,19 +87,18 @@ readLoop:
 						break readLoop // close connection
 					}
 
-					buf := make([]byte, session.conn.(*N.BufferedConn).Buffered())
-					_, _ = session.conn.Read(buf)
+					buff := make([]byte, session.conn.(*N.BufferedConn).Buffered())
+					_, _ = session.conn.Read(buff)
 
-					mc := &MultiReaderConn{
+					mrc := &multiReaderConn{
 						Conn:   session.conn,
-						reader: io.MultiReader(bytes.NewReader(b), bytes.NewReader(buf), session.conn),
+						reader: io.MultiReader(bytes.NewReader(b), bytes.NewReader(buff), session.conn),
 					}
 
-					// 22 is the TLS handshake.
-					// https://tools.ietf.org/html/rfc5246#section-6.2.1
-					if b[0] == 22 {
+					// TLS handshake.
+					if b[0] == 0x16 {
 						// TODO serve by generic host name maybe better?
-						tlsConn := tls.Server(mc, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Host))
+						tlsConn := tls.Server(mrc, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Host))
 
 						// Handshake with the local client
 						if err = tlsConn.Handshake(); err != nil {
@@ -109,23 +111,23 @@ readLoop:
 					}
 
 					// maybe it's the others encrypted connection
-					in <- inbound.NewHTTPS(request, mc)
+					in <- inbound.NewHTTPS(session.request, mrc)
 				}
 
 				// maybe it's a http connection
 				goto readLoop
 			}
 
+			prepareRequest(c, session.request)
+
 			// hijack api
-			if getHostnameWithoutPort(session.request) == opt.ApiHost {
+			if session.request.URL.Host == opt.ApiHost {
 				if err = handleApiRequest(session, opt); err != nil {
 					handleError(opt, session, err)
 					break readLoop
 				}
 				return
 			}
-
-			prepareRequest(c, session.request)
 
 			// hijack custom request and write back custom response if necessary
 			if opt.Handler != nil {
@@ -144,12 +146,9 @@ readLoop:
 				}
 			}
 
-			httpL.RemoveHopByHopHeaders(session.request.Header)
-			httpL.RemoveExtraHTTPHostPort(request)
-
 			session.request.RequestURI = ""
 
-			if session.request.URL.Scheme == "" || session.request.URL.Host == "" {
+			if session.request.URL.Host == "" {
 				session.response = session.NewErrorResponse(errors.New("invalid URL"))
 			} else {
 				client = newClientBySourceAndUserAgentIfNil(client, session.request, source, in)
@@ -162,6 +161,8 @@ readLoop:
 					session.response = session.NewErrorResponse(err)
 					if errors.Is(err, ErrCertUnsupported) || strings.Contains(err.Error(), "x509: ") {
 						// TODO block unsupported host?
+						_ = writeResponse(session, false)
+						break readLoop
 					}
 				}
 			}
@@ -194,7 +195,7 @@ func writeResponseWithHandler(session *Session, opt *Option) error {
 }
 
 func writeResponse(session *Session, keepAlive bool) error {
-	httpL.RemoveHopByHopHeaders(session.response.Header)
+	H.RemoveHopByHopHeaders(session.response.Header)
 
 	if keepAlive {
 		session.response.Header.Set("Connection", "keep-alive")
@@ -226,17 +227,15 @@ func handleApiRequest(session *Session, opt *Option) error {
 		return session.response.Write(session.conn)
 	}
 
-	b := `<!DOCTYPE HTML PUBLIC "-
-<html>
-	<head>
-		<title>Clash ManInTheMiddle Proxy Services - 404 Not Found</title>
-	</head>
-	<body>
-		<h1>Not Found</h1>
-		<p>The requested URL %s was not found on this server.</p>
-	</body>
-</html>
+	b := `<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html><head>
+<title>Clash MITM Proxy Services - 404 Not Found</title>
+</head><body>
+<h1>Not Found</h1>
+<p>The requested URL %s was not found on this server.</p>
+</body></html>
 `
+
 	if opt.Handler != nil {
 		if opt.Handler.HandleApiRequest(session) {
 			return nil
@@ -261,10 +260,7 @@ func handleApiRequest(session *Session, opt *Option) error {
 func handleError(opt *Option, session *Session, err error) {
 	if opt.Handler != nil {
 		opt.Handler.HandleError(session, err)
-		return
 	}
-
-	// log.Errorln("[MITM] process mitm error: %v", err)
 }
 
 func prepareRequest(conn net.Conn, request *http.Request) {
@@ -277,7 +273,9 @@ func prepareRequest(conn net.Conn, request *http.Request) {
 		request.URL.Host = request.Host
 	}
 
-	request.URL.Scheme = "http"
+	if request.URL.Scheme == "" {
+		request.URL.Scheme = "http"
+	}
 
 	if tlsConn, ok := conn.(*tls.Conn); ok {
 		cs := tlsConn.ConnectionState()
@@ -289,6 +287,9 @@ func prepareRequest(conn net.Conn, request *http.Request) {
 	if request.Header.Get("Accept-Encoding") != "" {
 		request.Header.Set("Accept-Encoding", "gzip")
 	}
+
+	H.RemoveHopByHopHeaders(request.Header)
+	H.RemoveExtraHTTPHostPort(request)
 }
 
 func couldBeWithManInTheMiddleAttack(hostname string, opt *Option) bool {
@@ -301,19 +302,6 @@ func couldBeWithManInTheMiddleAttack(hostname string, opt *Option) bool {
 	}
 
 	return false
-}
-
-func getHostnameWithoutPort(req *http.Request) string {
-	host := req.Host
-	if host == "" {
-		host = req.URL.Host
-	}
-
-	if pHost, _, err := net.SplitHostPort(host); err == nil {
-		host = pHost
-	}
-
-	return host
 }
 
 func parseSourceAddress(req *http.Request, c net.Conn, source net.Addr) net.Addr {

@@ -21,7 +21,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[string, string]) middleware {
+func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -30,33 +30,34 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[strin
 				return next(ctx, r)
 			}
 
-			qName := strings.TrimRight(q.Name, ".")
-			record := hosts.Search(qName)
+			host := strings.TrimRight(q.Name, ".")
+
+			record := hosts.Search(host)
 			if record == nil {
 				return next(ctx, r)
 			}
 
 			ip := record.Data
-			if mapping != nil {
-				mapping.SetWithExpire(ip.Unmap().String(), qName, time.Now().Add(time.Second*5))
-			}
-
 			msg := r.Copy()
 
 			if ip.Is4() && q.Qtype == D.TypeA {
 				rr := &D.A{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 1}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
 				rr.A = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
 			} else if ip.Is6() && q.Qtype == D.TypeAAAA {
 				rr := &D.AAAA{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 1}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
 				rr.AAAA = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
 			} else {
 				return next(ctx, r)
+			}
+
+			if mapping != nil {
+				mapping.SetWithExpire(ip, host, time.Now().Add(time.Second*10))
 			}
 
 			ctx.SetType(context.DNSTypeHost)
@@ -69,7 +70,7 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[strin
 	}
 }
 
-func withMapping(mapping *cache.LruCache[string, string]) middleware {
+func withMapping(mapping *cache.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -100,7 +101,7 @@ func withMapping(mapping *cache.LruCache[string, string]) middleware {
 					continue
 				}
 
-				mapping.SetWithExpire(ip.String(), host, time.Now().Add(time.Second*time.Duration(ttl)))
+				mapping.SetWithExpire(ipToAddr(ip), host, time.Now().Add(time.Second*time.Duration(ttl)))
 			}
 
 			return msg, nil
@@ -130,7 +131,7 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 			rr := &D.A{}
 			rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
 			ip := fakePool.Lookup(host)
-			rr.A = ip
+			rr.A = ip.AsSlice()
 			msg := r.Copy()
 			msg.Answer = []D.RR{rr}
 

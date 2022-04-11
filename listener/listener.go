@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"sync"
@@ -319,7 +320,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
 

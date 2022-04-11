@@ -24,13 +24,13 @@ import (
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 	var (
-		tunAddress, _ = netip.ParsePrefix(tunAddressPrefix)
-		devName       = tunConf.Device
-		stackType     = tunConf.Stack
-		autoRoute     = tunConf.AutoRoute
-		mtu           = 9000
+		tunAddress = netip.Prefix{}
+		devName    = tunConf.Device
+		stackType  = tunConf.Stack
+		autoRoute  = tunConf.AutoRoute
+		mtu        = 9000
 
 		tunDevice device.Device
 		tunStack  ipstack.Stack
@@ -40,6 +40,10 @@ func New(tunConf *config.Tun, tunAddressPrefix string, tcpIn chan<- C.ConnContex
 
 	if devName == "" {
 		devName = generateDeviceName()
+	}
+
+	if tunAddressPrefix != nil {
+		tunAddress = *tunAddressPrefix
 	}
 
 	if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
@@ -144,6 +148,8 @@ func setAtLatest(stackType C.TUNStack, devName string) {
 	}
 
 	switch runtime.GOOS {
+	case "darwin":
+		_, _ = cmd.ExecCmd("sysctl net.inet.ip.forwarding=1")
 	case "windows":
 		_, _ = cmd.ExecCmd("ipconfig /renew")
 	case "linux":

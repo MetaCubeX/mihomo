@@ -592,7 +592,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 	}
 
 	// add mitm.clash hosts
-	if err := tree.Insert("mitm.clash", netip.AddrFrom4([4]byte{8, 8, 9, 9})); err != nil {
+	if err := tree.Insert("mitm.clash", netip.AddrFrom4([4]byte{1, 2, 3, 4})); err != nil {
 		log.Errorln("insert mitm.clash to host error: %s", err.Error())
 	}
 
@@ -777,7 +777,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 	}
 
 	if cfg.EnhancedMode == C.DNSFakeIP {
-		_, ipnet, err := net.ParseCIDR(cfg.FakeIPRange)
+		ipnet, err := netip.ParsePrefix(cfg.FakeIPRange)
 		if err != nil {
 			return nil, err
 		}
@@ -804,7 +804,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		}
 
 		pool, err := fakeip.New(fakeip.Options{
-			IPNet:       ipnet,
+			IPNet:       &ipnet,
 			Size:        1000,
 			Host:        host,
 			Persistence: rawCfg.Profile.StoreFakeIP,
