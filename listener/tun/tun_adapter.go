@@ -53,7 +53,6 @@ func New(tunConf *config.Tun, dnsConf *config.DNS, tcpIn chan<- C.ConnContext, u
 	process.AppendLocalIPs(tunAddress.Masked().Addr().Next().AsSlice())
 
 	// open tun device
-
 	tunDevice, err = parseDevice(devName, uint32(mtu))
 	if err != nil {
 		return nil, fmt.Errorf("can't open tun: %w", err)
@@ -149,9 +148,10 @@ func setAtLatest(stackType C.TUNStack, devName string) {
 	}
 
 	switch runtime.GOOS {
+	case "darwin":
+		_, _ = cmd.ExecCmd("sysctl net.inet.ip.forwarding=1")
 	case "windows":
 		_, _ = cmd.ExecCmd("ipconfig /renew")
-
 	case "linux":
 		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.ip_forward=1")
 		// _, _ = cmd.ExecCmd("sysctl -w net.ipv4.conf.all.forwarding = 1")

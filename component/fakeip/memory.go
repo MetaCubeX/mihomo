@@ -1,35 +1,35 @@
 package fakeip
 
 import (
-	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/common/cache"
 )
 
 type memoryStore struct {
-	cacheIP   *cache.LruCache[string, net.IP]
-	cacheHost *cache.LruCache[uint32, string]
+	cacheIP   *cache.LruCache[string, netip.Addr]
+	cacheHost *cache.LruCache[netip.Addr, string]
 }
 
 // GetByHost implements store.GetByHost
-func (m *memoryStore) GetByHost(host string) (net.IP, bool) {
+func (m *memoryStore) GetByHost(host string) (netip.Addr, bool) {
 	if ip, exist := m.cacheIP.Get(host); exist {
 		// ensure ip --> host on head of linked list
-		m.cacheHost.Get(ipToUint(ip.To4()))
+		m.cacheHost.Get(ip)
 		return ip, true
 	}
 
-	return nil, false
+	return netip.Addr{}, false
 }
 
 // PutByHost implements store.PutByHost
-func (m *memoryStore) PutByHost(host string, ip net.IP) {
+func (m *memoryStore) PutByHost(host string, ip netip.Addr) {
 	m.cacheIP.Set(host, ip)
 }
 
 // GetByIP implements store.GetByIP
-func (m *memoryStore) GetByIP(ip net.IP) (string, bool) {
-	if host, exist := m.cacheHost.Get(ipToUint(ip.To4())); exist {
+func (m *memoryStore) GetByIP(ip netip.Addr) (string, bool) {
+	if host, exist := m.cacheHost.Get(ip); exist {
 		// ensure host --> ip on head of linked list
 		m.cacheIP.Get(host)
 		return host, true
@@ -39,22 +39,21 @@ func (m *memoryStore) GetByIP(ip net.IP) (string, bool) {
 }
 
 // PutByIP implements store.PutByIP
-func (m *memoryStore) PutByIP(ip net.IP, host string) {
-	m.cacheHost.Set(ipToUint(ip.To4()), host)
+func (m *memoryStore) PutByIP(ip netip.Addr, host string) {
+	m.cacheHost.Set(ip, host)
 }
 
 // DelByIP implements store.DelByIP
-func (m *memoryStore) DelByIP(ip net.IP) {
-	ipNum := ipToUint(ip.To4())
-	if host, exist := m.cacheHost.Get(ipNum); exist {
+func (m *memoryStore) DelByIP(ip netip.Addr) {
+	if host, exist := m.cacheHost.Get(ip); exist {
 		m.cacheIP.Delete(host)
 	}
-	m.cacheHost.Delete(ipNum)
+	m.cacheHost.Delete(ip)
 }
 
 // Exist implements store.Exist
-func (m *memoryStore) Exist(ip net.IP) bool {
-	return m.cacheHost.Exist(ipToUint(ip.To4()))
+func (m *memoryStore) Exist(ip netip.Addr) bool {
+	return m.cacheHost.Exist(ip)
 }
 
 // CloneTo implements store.CloneTo
@@ -74,7 +73,7 @@ func (m *memoryStore) FlushFakeIP() error {
 
 func newMemoryStore(size int) *memoryStore {
 	return &memoryStore{
-		cacheIP:   cache.NewLRUCache[string, net.IP](cache.WithSize[string, net.IP](size)),
-		cacheHost: cache.NewLRUCache[uint32, string](cache.WithSize[uint32, string](size)),
+		cacheIP:   cache.NewLRUCache[string, netip.Addr](cache.WithSize[string, netip.Addr](size)),
+		cacheHost: cache.NewLRUCache[netip.Addr, string](cache.WithSize[netip.Addr, string](size)),
 	}
 }
