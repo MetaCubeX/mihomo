@@ -732,7 +732,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 	}
 
 	if cfg.EnhancedMode == C.DNSFakeIP {
-		_, ipnet, err := net.ParseCIDR(cfg.FakeIPRange)
+		ipnet, err := netip.ParsePrefix(cfg.FakeIPRange)
 		if err != nil {
 			return nil, err
 		}
@@ -759,7 +759,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		}
 
 		pool, err := fakeip.New(fakeip.Options{
-			IPNet:       ipnet,
+			IPNet:       &ipnet,
 			Size:        1000,
 			Host:        host,
 			Persistence: rawCfg.Profile.StoreFakeIP,

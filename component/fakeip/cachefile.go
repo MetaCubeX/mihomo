@@ -1,7 +1,7 @@
 package fakeip
 
 import (
-	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 )
@@ -11,22 +11,27 @@ type cachefileStore struct {
 }
 
 // GetByHost implements store.GetByHost
-func (c *cachefileStore) GetByHost(host string) (net.IP, bool) {
+func (c *cachefileStore) GetByHost(host string) (netip.Addr, bool) {
 	elm := c.cache.GetFakeip([]byte(host))
 	if elm == nil {
-		return nil, false
+		return netip.Addr{}, false
 	}
-	return net.IP(elm), true
+
+	if len(elm) == 4 {
+		return netip.AddrFrom4(*(*[4]byte)(elm)), true
+	} else {
+		return netip.AddrFrom16(*(*[16]byte)(elm)), true
+	}
 }
 
 // PutByHost implements store.PutByHost
-func (c *cachefileStore) PutByHost(host string, ip net.IP) {
-	c.cache.PutFakeip([]byte(host), ip)
+func (c *cachefileStore) PutByHost(host string, ip netip.Addr) {
+	c.cache.PutFakeip([]byte(host), ip.AsSlice())
 }
 
 // GetByIP implements store.GetByIP
-func (c *cachefileStore) GetByIP(ip net.IP) (string, bool) {
-	elm := c.cache.GetFakeip(ip.To4())
+func (c *cachefileStore) GetByIP(ip netip.Addr) (string, bool) {
+	elm := c.cache.GetFakeip(ip.AsSlice())
 	if elm == nil {
 		return "", false
 	}
@@ -34,18 +39,18 @@ func (c *cachefileStore) GetByIP(ip net.IP) (string, bool) {
 }
 
 // PutByIP implements store.PutByIP
-func (c *cachefileStore) PutByIP(ip net.IP, host string) {
-	c.cache.PutFakeip(ip.To4(), []byte(host))
+func (c *cachefileStore) PutByIP(ip netip.Addr, host string) {
+	c.cache.PutFakeip(ip.AsSlice(), []byte(host))
 }
 
 // DelByIP implements store.DelByIP
-func (c *cachefileStore) DelByIP(ip net.IP) {
-	ip = ip.To4()
-	c.cache.DelFakeipPair(ip, c.cache.GetFakeip(ip.To4()))
+func (c *cachefileStore) DelByIP(ip netip.Addr) {
+	addr := ip.AsSlice()
+	c.cache.DelFakeipPair(addr, c.cache.GetFakeip(addr))
 }
 
 // Exist implements store.Exist
-func (c *cachefileStore) Exist(ip net.IP) bool {
+func (c *cachefileStore) Exist(ip netip.Addr) bool {
 	_, exist := c.GetByIP(ip)
 	return exist
 }

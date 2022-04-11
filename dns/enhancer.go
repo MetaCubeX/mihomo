@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
@@ -11,7 +12,7 @@ import (
 type ResolverEnhancer struct {
 	mode     C.DNSMode
 	fakePool *fakeip.Pool
-	mapping  *cache.LruCache[string, string]
+	mapping  *cache.LruCache[netip.Addr, string]
 }
 
 func (h *ResolverEnhancer) FakeIPEnabled() bool {
@@ -28,7 +29,7 @@ func (h *ResolverEnhancer) IsExistFakeIP(ip net.IP) bool {
 	}
 
 	if pool := h.fakePool; pool != nil {
-		return pool.Exist(ip)
+		return pool.Exist(ipToAddr(ip))
 	}
 
 	return false
@@ -39,8 +40,10 @@ func (h *ResolverEnhancer) IsFakeIP(ip net.IP) bool {
 		return false
 	}
 
+	addr := ipToAddr(ip)
+
 	if pool := h.fakePool; pool != nil {
-		return pool.IPNet().Contains(ip) && !pool.Gateway().Equal(ip) && !pool.Broadcast().Equal(ip)
+		return pool.IPNet().Contains(addr) && addr != pool.Gateway() && addr != pool.Broadcast()
 	}
 
 	return false
@@ -52,21 +55,22 @@ func (h *ResolverEnhancer) IsFakeBroadcastIP(ip net.IP) bool {
 	}
 
 	if pool := h.fakePool; pool != nil {
-		return pool.Broadcast().Equal(ip)
+		return pool.Broadcast() == ipToAddr(ip)
 	}
 
 	return false
 }
 
 func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
+	addr := ipToAddr(ip)
 	if pool := h.fakePool; pool != nil {
-		if host, existed := pool.LookBack(ip); existed {
+		if host, existed := pool.LookBack(addr); existed {
 			return host, true
 		}
 	}
 
 	if mapping := h.mapping; mapping != nil {
-		if host, existed := h.mapping.Get(ip.String()); existed {
+		if host, existed := h.mapping.Get(addr); existed {
 			return host, true
 		}
 	}
@@ -76,7 +80,7 @@ func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
 
 func (h *ResolverEnhancer) InsertHostByIP(ip net.IP, host string) {
 	if mapping := h.mapping; mapping != nil {
-		h.mapping.Set(ip.String(), host)
+		h.mapping.Set(ipToAddr(ip), host)
 	}
 }
 
@@ -99,11 +103,11 @@ func (h *ResolverEnhancer) FlushFakeIP() error {
 
 func NewEnhancer(cfg Config) *ResolverEnhancer {
 	var fakePool *fakeip.Pool
-	var mapping *cache.LruCache[string, string]
+	var mapping *cache.LruCache[netip.Addr, string]
 
 	if cfg.EnhancedMode != C.DNSNormal {
 		fakePool = cfg.Pool
-		mapping = cache.NewLRUCache[string, string](cache.WithSize[string, string](4096), cache.WithStale[string, string](true))
+		mapping = cache.NewLRUCache[netip.Addr, string](cache.WithSize[netip.Addr, string](4096), cache.WithStale[netip.Addr, string](true))
 	}
 
 	return &ResolverEnhancer{

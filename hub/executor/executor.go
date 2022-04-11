@@ -189,9 +189,9 @@ func updateRules(rules []C.Rule) {
 }
 
 func updateTun(tun *config.Tun, dns *config.DNS) {
-	var tunAddressPrefix string
+	var tunAddressPrefix *netip.Prefix
 	if dns.FakeIPRange != nil {
-		tunAddressPrefix = dns.FakeIPRange.IPNet().String()
+		tunAddressPrefix = dns.FakeIPRange.IPNet()
 	}
 
 	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
