@@ -32,15 +32,6 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 		}
 	}()
 
-	var (
-		offset     = 4 /* 4 bytes TUN_PI */
-		defaultMTU = 1500
-	)
-	if runtime.GOOS == "windows" {
-		offset = 0
-		defaultMTU = 0 /* auto */
-	}
-
 	t := &TUN{
 		name:   name,
 		mtu:    mtu,
@@ -101,9 +92,11 @@ func (t *TUN) Write(packet []byte) (int, error) {
 }
 
 func (t *TUN) Close() error {
-	if t.Endpoint != nil {
-		t.Endpoint.Close()
-	}
+	defer func(ep *iobased.Endpoint) {
+		if ep != nil {
+			ep.Close()
+		}
+	}(t.Endpoint)
 	return t.nt.Close()
 }
 
