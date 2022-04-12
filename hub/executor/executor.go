@@ -395,6 +395,7 @@ func updateIPTables(cfg *config.Config) {
 func Shutdown() {
 	P.Cleanup()
 	tproxy.CleanupTProxyIPTables()
+	resolver.StoreFakePoolSate()
 
 	log.Warnln("Clash shutting down")
 }
