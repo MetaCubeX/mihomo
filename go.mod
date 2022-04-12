@@ -29,7 +29,7 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220412171926-b3dc42bace48
+	gvisor.dev/gvisor v0.0.0-20220412020520-6917e582612b
 )
 
 require (

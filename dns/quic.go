@@ -19,7 +19,7 @@ var bytesPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
 type quicClient struct {
 	addr         string
-	session      quic.Session
+	session      quic.Connection
 	sync.RWMutex // protects session and bytesPool
 }
 
@@ -67,7 +67,7 @@ func (dc *quicClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg
 	return reply, nil
 }
 
-func isActive(s quic.Session) bool {
+func isActive(s quic.Connection) bool {
 	select {
 	case <-s.Context().Done():
 		return false
@@ -76,11 +76,11 @@ func isActive(s quic.Session) bool {
 	}
 }
 
-// getSession - opens or returns an existing quic.Session
+// getSession - opens or returns an existing quic.Connection
 // useCached - if true and cached session exists, return it right away
 // otherwise - forcibly creates a new session
-func (dc *quicClient) getSession() (quic.Session, error) {
-	var session quic.Session
+func (dc *quicClient) getSession() (quic.Connection, error) {
+	var session quic.Connection
 	dc.RLock()
 	session = dc.session
 	if session != nil && isActive(session) {
@@ -113,7 +113,7 @@ func (dc *quicClient) getSession() (quic.Session, error) {
 	return session, nil
 }
 
-func (dc *quicClient) openSession() (quic.Session, error) {
+func (dc *quicClient) openSession() (quic.Connection, error) {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos: []string{
