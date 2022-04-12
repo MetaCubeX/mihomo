@@ -17,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/nat"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
@@ -24,14 +25,20 @@ import (
 type sysStack struct {
 	stack  io.Closer
 	device device.Device
+
+	closed bool
 }
 
-func (s sysStack) Close() error {
+func (s *sysStack) Close() error {
+	defer func() {
+		if s.device != nil {
+			_ = s.device.Close()
+		}
+	}()
+
+	s.closed = true
 	if s.stack != nil {
-		_ = s.stack.Close()
-	}
-	if s.device != nil {
-		_ = s.device.Close()
+		return s.stack.Close()
 	}
 	return nil
 }
@@ -49,17 +56,25 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 		return nil, err
 	}
 
+	ipStack := &sysStack{stack: stack, device: device}
+
 	dnsAddr := dnsHijack
 
 	tcp := func() {
-		defer stack.TCP().Close()
+		defer func(tcp *nat.TCP) {
+			_ = tcp.Close()
+		}(stack.TCP())
+
 		defer log.Debugln("TCP: closed")
 
-		for stack.TCP().SetDeadline(time.Time{}) == nil {
+		for !ipStack.closed {
+			if err = stack.TCP().SetDeadline(time.Time{}); err != nil {
+				break
+			}
+
 			conn, err := stack.TCP().Accept()
 			if err != nil {
 				log.Debugln("Accept connection: %v", err)
-
 				continue
 			}
 
@@ -73,13 +88,19 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 				go func() {
 					log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
 
-					defer conn.Close()
+					defer func(conn net.Conn) {
+						_ = conn.Close()
+					}(conn)
 
 					buf := pool.Get(pool.UDPBufferSize)
-					defer pool.Put(buf)
+					defer func(buf []byte) {
+						_ = pool.Put(buf)
+					}(buf)
 
 					for {
-						conn.SetReadDeadline(time.Now().Add(C.DefaultTCPTimeout))
+						if err = conn.SetReadDeadline(time.Now().Add(C.DefaultTCPTimeout)); err != nil {
+							break
+						}
 
 						length := uint16(0)
 						if err := binary.Read(conn, binary.BigEndian, &length); err != nil {
@@ -123,10 +144,13 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 	}
 
 	udp := func() {
-		defer stack.UDP().Close()
+		defer func(udp *nat.UDP) {
+			_ = udp.Close()
+		}(stack.UDP())
+
 		defer log.Debugln("UDP: closed")
 
-		for {
+		for !ipStack.closed {
 			buf := pool.Get(pool.UDPBufferSize)
 
 			n, lRAddr, rRAddr, err := stack.UDP().ReadFrom(buf)
@@ -143,14 +167,15 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
-					defer pool.Put(buf)
-
 					msg, err := D.RelayDnsPacket(raw)
 					if err != nil {
+						_ = pool.Put(buf)
 						return
 					}
 
 					_, _ = stack.UDP().WriteTo(msg, rAddr, lAddr)
+
+					_ = pool.Put(buf)
 
 					log.Debugln("[TUN] hijack dns udp: %s", rAddrPort.String())
 				}()
@@ -165,7 +190,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 					return stack.UDP().WriteTo(b, rAddr, lAddr)
 				},
 				drop: func() {
-					pool.Put(buf)
+					_ = pool.Put(buf)
 				},
 			}
 
@@ -186,5 +211,5 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 		go udp()
 	}
 
-	return &sysStack{stack: stack, device: device}, nil
+	return ipStack, nil
 }
