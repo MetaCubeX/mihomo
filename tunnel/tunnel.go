@@ -247,7 +247,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
-		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata)
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -309,7 +309,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	remoteConn, err := proxy.DialContext(ctx, metadata.Pure())
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
+	defer cancel()
+	remoteConn, err := proxy.DialContext(ctx, metadata)
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())

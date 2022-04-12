@@ -53,13 +53,13 @@ func (sd *SnifferDispatcher) cover(conn *CN.BufferedConn, metadata *C.Metadata) 
 			bufferedLen := conn.Buffered()
 			bytes, err := conn.Peek(bufferedLen)
 			if err != nil {
-				log.Debugln("[Sniffer] the data lenght not enough")
+				log.Warnln("[Sniffer] the data lenght not enough")
 				continue
 			}
 
 			host, err := sniffer.SniffTCP(bytes)
 			if err != nil {
-				log.Debugln("[Sniffer][%s] Sniff data failed", sniffer.Protocol())
+				log.Warnln("[Sniffer][%s] Sniff data failed", sniffer.Protocol())
 				continue
 			}
 			metadata.Host = host

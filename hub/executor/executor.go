@@ -3,6 +3,7 @@ package executor
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"runtime"
 	"strconv"
@@ -89,16 +90,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	log.SetLevel(cfg.General.LogLevel)
 }
 
-func updateSniffer(sniffer *config.Sniffer) {
-	if sniffer.Enable {
-		var err error
-		SNI.Dispatcher, err = SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.Force)
-		if err != nil {
-			log.Errorln("Init Sniffer failed, err:%v", err)
-		}
-	}
-}
-
 func GetGeneral() *config.General {
 	ports := P.GetPorts()
 	var authenticator []string
@@ -181,7 +172,7 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 	}
 }
 
-func updateHosts(tree *trie.DomainTrie) {
+func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
 	resolver.DefaultHosts = tree
 }
 
@@ -227,6 +218,17 @@ func loadProvider(ruleProviders map[string]*provider.RuleProvider, proxyProvider
 
 func updateTun(tun *config.Tun, dns *config.DNS) {
 	P.ReCreateTun(tun, dns, tunnel.TCPIn(), tunnel.UDPIn())
+}
+
+func updateSniffer(sniffer *config.Sniffer) {
+	if sniffer.Enable {
+		var err error
+		SNI.Dispatcher, err = SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.Force)
+		if err != nil {
+			log.Warnln("initial sniffer failed, err:%v", err)
+		}
+		log.Infoln("Sniffer is loaded and working")
+	}
 }
 
 func updateGeneral(general *config.General, force bool) {

@@ -10,7 +10,7 @@ import (
 type domainStrategy struct {
 	shouldResolveIP bool
 	count           int
-	domainRules     *trie.DomainTrie
+	domainRules     *trie.DomainTrie[bool]
 }
 
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
@@ -26,9 +26,9 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 }
 
 func (d *domainStrategy) OnUpdate(rules []string) {
-	domainTrie := trie.New()
+	domainTrie := trie.New[bool]()
 	for _, rule := range rules {
-		err := domainTrie.Insert(rule, "")
+		err := domainTrie.Insert(rule, true)
 		if err != nil {
 			log.Warnln("invalid domain:[%s]", rule)
 		} else {
