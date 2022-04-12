@@ -1,21 +1,20 @@
 package fakeip
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/bits"
 	"net/netip"
 	"sync"
-	_ "unsafe"
 
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/trie"
 )
 
-//go:linkname beUint64 net/netip.beUint64
-func beUint64(b []byte) uint64
-
-//go:linkname bePutUint64 net/netip.bePutUint64
-func bePutUint64(b []byte, v uint64)
+const (
+	offsetKey = "key-offset-fake-ip"
+	cycleKey  = "key-cycle-fake-ip"
+)
 
 type uint128 struct {
 	hi uint64
@@ -111,7 +110,7 @@ func (p *Pool) get(host string) netip.Addr {
 		p.offset = p.first
 	}
 
-	if p.cycle {
+	if p.cycle || p.store.Exist(p.offset) {
 		p.store.DelByIP(p.offset)
 	}
 
@@ -120,7 +119,39 @@ func (p *Pool) get(host string) netip.Addr {
 }
 
 func (p *Pool) FlushFakeIP() error {
-	return p.store.FlushFakeIP()
+	err := p.store.FlushFakeIP()
+	if err == nil {
+		p.cycle = false
+		p.offset = p.first
+	}
+	return err
+}
+
+func (p *Pool) StoreState() {
+	if s, ok := p.store.(*cachefileStore); ok {
+		s.PutByHost(offsetKey, p.offset)
+		if p.cycle {
+			s.PutByHost(cycleKey, p.offset)
+		}
+	}
+}
+
+func (p *Pool) restoreState() {
+	if s, ok := p.store.(*cachefileStore); ok {
+		if _, exist := s.GetByHost(cycleKey); exist {
+			p.cycle = true
+		}
+
+		if offset, exist := s.GetByHost(offsetKey); exist {
+			if p.ipnet.Contains(offset) {
+				p.offset = offset
+			} else {
+				_ = p.FlushFakeIP()
+			}
+		} else if s.Exist(p.first) {
+			_ = p.FlushFakeIP()
+		}
+	}
 }
 
 type Options struct {
@@ -166,6 +197,8 @@ func New(options Options) (*Pool, error) {
 		pool.store = newMemoryStore(options.Size)
 	}
 
+	pool.restoreState()
+
 	return pool, nil
 }
 
@@ -174,8 +207,8 @@ func add(addr netip.Addr, n uint64) netip.Addr {
 	buf := addr.As16()
 
 	u := uint128{
-		beUint64(buf[:8]),
-		beUint64(buf[8:]),
+		binary.BigEndian.Uint64(buf[:8]),
+		binary.BigEndian.Uint64(buf[8:]),
 	}
 
 	lo, carry := bits.Add64(u.lo, n, 0)
@@ -183,8 +216,8 @@ func add(addr netip.Addr, n uint64) netip.Addr {
 	u.hi = u.hi + carry
 	u.lo = lo
 
-	bePutUint64(buf[:8], u.hi)
-	bePutUint64(buf[8:], u.lo)
+	binary.BigEndian.PutUint64(buf[:8], u.hi)
+	binary.BigEndian.PutUint64(buf[8:], u.lo)
 
 	a := netip.AddrFrom16(buf)
 

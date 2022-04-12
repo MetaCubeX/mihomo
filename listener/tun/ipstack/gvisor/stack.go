@@ -25,7 +25,6 @@ func (s *gvStack) Close() error {
 	var err error
 	if s.device != nil {
 		err = s.device.Close()
-		s.device.Wait()
 	}
 	if s.Stack != nil {
 		s.Stack.Close()

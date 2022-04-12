@@ -1,14 +1,15 @@
 package gvisor
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
+	"github.com/Dreamacro/clash/log"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
+	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/waiter"
@@ -43,8 +44,21 @@ const (
 func withTCPHandler(handle adapter.TCPHandleFunc) option.Option {
 	return func(s *stack.Stack) error {
 		tcpForwarder := tcp.NewForwarder(s, defaultWndSize, maxConnAttempts, func(r *tcp.ForwarderRequest) {
-			var wq waiter.Queue
-			ep, err := r.CreateEndpoint(&wq)
+			var (
+				wq  waiter.Queue
+				ep  tcpip.Endpoint
+				err tcpip.Error
+				id  = r.ID()
+			)
+
+			defer func() {
+				if err != nil {
+					log.Warnln("[STACK] forward tcp request %s:%d->%s:%d: %s", id.RemoteAddress, id.RemotePort, id.LocalAddress, id.LocalPort, err)
+				}
+			}()
+
+			// Perform a TCP three-way handshake.
+			ep, err = r.CreateEndpoint(&wq)
 			if err != nil {
 				// RST: prevent potential half-open TCP connection leak.
 				r.Complete(true)
@@ -52,11 +66,11 @@ func withTCPHandler(handle adapter.TCPHandleFunc) option.Option {
 			}
 			defer r.Complete(false)
 
-			setKeepalive(ep)
+			err = setSocketOptions(s, ep)
 
 			conn := &tcpConn{
 				TCPConn: gonet.NewTCPConn(&wq, ep),
-				id:      r.ID(),
+				id:      id,
 			}
 			handle(conn)
 		})
@@ -65,21 +79,34 @@ func withTCPHandler(handle adapter.TCPHandleFunc) option.Option {
 	}
 }
 
-func setKeepalive(ep tcpip.Endpoint) error {
-	ep.SocketOptions().SetKeepAlive(true)
+func setSocketOptions(s *stack.Stack, ep tcpip.Endpoint) tcpip.Error {
+	{ /* TCP keepalive options */
+		ep.SocketOptions().SetKeepAlive(true)
 
-	idle := tcpip.KeepaliveIdleOption(tcpKeepaliveIdle)
-	if err := ep.SetSockOpt(&idle); err != nil {
-		return fmt.Errorf("set keepalive idle: %s", err)
+		idle := tcpip.KeepaliveIdleOption(tcpKeepaliveIdle)
+		if err := ep.SetSockOpt(&idle); err != nil {
+			return err
+		}
+
+		interval := tcpip.KeepaliveIntervalOption(tcpKeepaliveInterval)
+		if err := ep.SetSockOpt(&interval); err != nil {
+			return err
+		}
+
+		if err := ep.SetSockOptInt(tcpip.KeepaliveCountOption, tcpKeepaliveCount); err != nil {
+			return err
+		}
 	}
+	{ /* TCP recv/send buffer size */
+		var ss tcpip.TCPSendBufferSizeRangeOption
+		if err := s.TransportProtocolOption(header.TCPProtocolNumber, &ss); err == nil {
+			ep.SocketOptions().SetReceiveBufferSize(int64(ss.Default), false)
+		}
 
-	interval := tcpip.KeepaliveIntervalOption(tcpKeepaliveInterval)
-	if err := ep.SetSockOpt(&interval); err != nil {
-		return fmt.Errorf("set keepalive interval: %s", err)
-	}
-
-	if err := ep.SetSockOptInt(tcpip.KeepaliveCountOption, tcpKeepaliveCount); err != nil {
-		return fmt.Errorf("set keepalive count: %s", err)
+		var rs tcpip.TCPReceiveBufferSizeRangeOption
+		if err := s.TransportProtocolOption(header.TCPProtocolNumber, &rs); err == nil {
+			ep.SocketOptions().SetReceiveBufferSize(int64(rs.Default), false)
+		}
 	}
 	return nil
 }

@@ -30,7 +30,7 @@ func (d *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...diale
 		return nil, errIgnored
 	}
 
-	if MiddlemanRewriteHosts.Search(metadata.String()) == nil {
+	if MiddlemanRewriteHosts.Search(metadata.String()) == nil && metadata.DstPort != "80" {
 		return nil, errIgnored
 	}
 

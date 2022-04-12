@@ -354,6 +354,7 @@ func Shutdown() {
 	P.Cleanup()
 	S.Py_Finalize()
 	tproxy.CleanupTProxyIPTables()
+	resolver.StoreFakePoolSate()
 
 	log.Warnln("Clash shutting down")
 }

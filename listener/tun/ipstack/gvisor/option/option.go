@@ -37,7 +37,7 @@ const (
 
 	// tcpModerateReceiveBufferEnabled is the value used by stack to
 	// enable or disable tcp receive buffer auto-tuning option.
-	tcpModerateReceiveBufferEnabled = true
+	tcpModerateReceiveBufferEnabled = false
 
 	// tcpSACKEnabled is the value used by stack to enable or disable
 	// tcp selective ACK.
@@ -47,14 +47,18 @@ const (
 	tcpRecovery = tcpip.TCPRACKLossDetection
 
 	// tcpMinBufferSize is the smallest size of a send/recv buffer.
-	tcpMinBufferSize = tcp.MinBufferSize // 4 KiB
+	tcpMinBufferSize = tcp.MinBufferSize
 
 	// tcpMaxBufferSize is the maximum permitted size of a send/recv buffer.
-	tcpMaxBufferSize = tcp.MaxBufferSize // 4 MiB
+	tcpMaxBufferSize = tcp.MaxBufferSize
 
-	// tcpDefaultBufferSize is the default size of the send/recv buffer for
+	// tcpDefaultBufferSize is the default size of the send buffer for
 	// a transport endpoint.
-	tcpDefaultBufferSize = 212 << 10 // 212 KiB
+	tcpDefaultSendBufferSize = tcp.DefaultSendBufferSize
+
+	// tcpDefaultReceiveBufferSize is the default size of the receive buffer
+	// for a transport endpoint.
+	tcpDefaultReceiveBufferSize = tcp.DefaultReceiveBufferSize
 )
 
 type Option func(*stack.Stack) error
@@ -74,7 +78,8 @@ func WithDefault() Option {
 			// in too large buffers.
 			//
 			// Ref: https://github.com/cloudflare/slirpnetstack/blob/master/stack.go
-			WithTCPBufferSizeRange(tcpMinBufferSize, tcpDefaultBufferSize, tcpMaxBufferSize),
+			WithTCPSendBufferSizeRange(tcpMinBufferSize, tcpDefaultSendBufferSize, tcpMaxBufferSize),
+			WithTCPReceiveBufferSizeRange(tcpMinBufferSize, tcpDefaultReceiveBufferSize, tcpMaxBufferSize),
 
 			WithTCPCongestionControl(tcpCongestionControlAlgorithm),
 			WithTCPDelay(tcpDelayEnabled),
@@ -154,16 +159,45 @@ func WithICMPLimit(limit rate.Limit) Option {
 	}
 }
 
-// WithTCPBufferSizeRange sets the receive and send buffer size range for TCP.
-func WithTCPBufferSizeRange(a, b, c int) Option {
+// WithTCPSendBufferSize sets default the send buffer size for TCP.
+func WithTCPSendBufferSize(size int) Option {
+	return func(s *stack.Stack) error {
+		sndOpt := tcpip.TCPSendBufferSizeRangeOption{Min: tcpMinBufferSize, Default: size, Max: tcpMaxBufferSize}
+		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &sndOpt); err != nil {
+			return fmt.Errorf("set TCP send buffer size range: %s", err)
+		}
+		return nil
+	}
+}
+
+// WithTCPSendBufferSizeRange sets the send buffer size range for TCP.
+func WithTCPSendBufferSizeRange(a, b, c int) Option {
+	return func(s *stack.Stack) error {
+		sndOpt := tcpip.TCPSendBufferSizeRangeOption{Min: a, Default: b, Max: c}
+		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &sndOpt); err != nil {
+			return fmt.Errorf("set TCP send buffer size range: %s", err)
+		}
+		return nil
+	}
+}
+
+// WithTCPReceiveBufferSize sets the default receive buffer size for TCP.
+func WithTCPReceiveBufferSize(size int) Option {
+	return func(s *stack.Stack) error {
+		rcvOpt := tcpip.TCPReceiveBufferSizeRangeOption{Min: tcpMinBufferSize, Default: size, Max: tcpMaxBufferSize}
+		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &rcvOpt); err != nil {
+			return fmt.Errorf("set TCP receive buffer size range: %s", err)
+		}
+		return nil
+	}
+}
+
+// WithTCPReceiveBufferSizeRange sets the receive buffer size range for TCP.
+func WithTCPReceiveBufferSizeRange(a, b, c int) Option {
 	return func(s *stack.Stack) error {
 		rcvOpt := tcpip.TCPReceiveBufferSizeRangeOption{Min: a, Default: b, Max: c}
 		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &rcvOpt); err != nil {
 			return fmt.Errorf("set TCP receive buffer size range: %s", err)
-		}
-		sndOpt := tcpip.TCPSendBufferSizeRangeOption{Min: a, Default: b, Max: c}
-		if err := s.SetTransportProtocolOption(tcp.ProtocolNumber, &sndOpt); err != nil {
-			return fmt.Errorf("set TCP send buffer size range: %s", err)
 		}
 		return nil
 	}
