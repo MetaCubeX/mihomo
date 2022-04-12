@@ -11,6 +11,11 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 )
 
+const (
+	offsetKey = "key-offset-fake-ip"
+	cycleKey  = "key-cycle-fake-ip"
+)
+
 type uint128 struct {
 	hi uint64
 	lo uint64
@@ -98,22 +103,15 @@ func (p *Pool) CloneFrom(o *Pool) {
 }
 
 func (p *Pool) get(host string) netip.Addr {
-	for {
-		p.offset = p.offset.Next()
+	p.offset = p.offset.Next()
 
-		if !p.offset.Less(p.last) {
-			p.cycle = true
-			p.offset = p.first
-		}
+	if !p.offset.Less(p.last) {
+		p.cycle = true
+		p.offset = p.first
+	}
 
-		if p.cycle {
-			p.store.DelByIP(p.offset)
-			break
-		}
-
-		if !p.store.Exist(p.offset) {
-			break
-		}
+	if p.cycle || p.store.Exist(p.offset) {
+		p.store.DelByIP(p.offset)
 	}
 
 	p.store.PutByIP(p.offset, host)
@@ -121,7 +119,39 @@ func (p *Pool) get(host string) netip.Addr {
 }
 
 func (p *Pool) FlushFakeIP() error {
-	return p.store.FlushFakeIP()
+	err := p.store.FlushFakeIP()
+	if err == nil {
+		p.cycle = false
+		p.offset = p.first
+	}
+	return err
+}
+
+func (p *Pool) StoreState() {
+	if s, ok := p.store.(*cachefileStore); ok {
+		s.PutByHost(offsetKey, p.offset)
+		if p.cycle {
+			s.PutByHost(cycleKey, p.offset)
+		}
+	}
+}
+
+func (p *Pool) restoreState() {
+	if s, ok := p.store.(*cachefileStore); ok {
+		if _, exist := s.GetByHost(cycleKey); exist {
+			p.cycle = true
+		}
+
+		if offset, exist := s.GetByHost(offsetKey); exist {
+			if p.ipnet.Contains(offset) {
+				p.offset = offset
+			} else {
+				_ = p.FlushFakeIP()
+			}
+		} else if s.Exist(p.first) {
+			_ = p.FlushFakeIP()
+		}
+	}
 }
 
 type Options struct {
@@ -166,6 +196,8 @@ func New(options Options) (*Pool, error) {
 	} else {
 		pool.store = newMemoryStore(options.Size)
 	}
+
+	pool.restoreState()
 
 	return pool, nil
 }

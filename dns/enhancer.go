@@ -84,6 +84,13 @@ func (h *ResolverEnhancer) InsertHostByIP(ip net.IP, host string) {
 	}
 }
 
+func (h *ResolverEnhancer) FlushFakeIP() error {
+	if h.fakePool != nil {
+		return h.fakePool.FlushFakeIP()
+	}
+	return nil
+}
+
 func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	if h.mapping != nil && o.mapping != nil {
 		o.mapping.CloneTo(h.mapping)
@@ -94,11 +101,10 @@ func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	}
 }
 
-func (h *ResolverEnhancer) FlushFakeIP() error {
+func (h *ResolverEnhancer) StoreFakePoolSate() {
 	if h.fakePool != nil {
-		return h.fakePool.FlushFakeIP()
+		h.fakePool.StoreState()
 	}
-	return nil
 }
 
 func NewEnhancer(cfg Config) *ResolverEnhancer {
