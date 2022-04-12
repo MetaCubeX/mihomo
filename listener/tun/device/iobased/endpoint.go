@@ -36,6 +36,9 @@ type Endpoint struct {
 
 	// once is used to perform the init action once when attaching.
 	once sync.Once
+
+	// wg keeps track of running goroutines.
+	wg sync.WaitGroup
 }
 
 // New returns stack.LinkEndpoint(.*Endpoint) and error.
@@ -60,19 +63,26 @@ func New(rw io.ReadWriter, mtu uint32, offset int) (*Endpoint, error) {
 	}, nil
 }
 
-func (e *Endpoint) Close() {
-	e.Endpoint.Close()
+func (e *Endpoint) Wait() {
+	e.wg.Wait()
 }
 
 // Attach launches the goroutine that reads packets from io.Reader and
 // dispatches them via the provided dispatcher.
 func (e *Endpoint) Attach(dispatcher stack.NetworkDispatcher) {
+	e.Endpoint.Attach(dispatcher)
 	e.once.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
-		go e.dispatchLoop(cancel)
-		go e.outboundLoop(ctx)
+		e.wg.Add(2)
+		go func() {
+			e.outboundLoop(ctx)
+			e.wg.Done()
+		}()
+		go func() {
+			e.dispatchLoop(cancel)
+			e.wg.Done()
+		}()
 	})
-	e.Endpoint.Attach(dispatcher)
 }
 
 // dispatchLoop dispatches packets to upper layer.
@@ -81,12 +91,17 @@ func (e *Endpoint) dispatchLoop(cancel context.CancelFunc) {
 	// gracefully after (*Endpoint).dispatchLoop(context.CancelFunc) returns.
 	defer cancel()
 
+	mtu := int(e.mtu)
 	for {
-		data := make([]byte, int(e.mtu))
+		data := make([]byte, mtu)
 
 		n, err := e.rw.Read(data)
 		if err != nil {
 			break
+		}
+
+		if n == 0 || n > mtu {
+			continue
 		}
 
 		if !e.IsAttached() {
