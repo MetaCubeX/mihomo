@@ -347,7 +347,7 @@ func updateMitm(mitm *config.Mitm) {
 func Shutdown() {
 	P.Cleanup()
 	tproxy.CleanupTProxyIPTables()
-	resolver.StoreFakePoolSate()
+	resolver.StoreFakePoolState()
 
 	log.Warnln("Clash shutting down")
 }

@@ -101,7 +101,7 @@ func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	}
 }
 
-func (h *ResolverEnhancer) StoreFakePoolSate() {
+func (h *ResolverEnhancer) StoreFakePoolState() {
 	if h.fakePool != nil {
 		h.fakePool.StoreState()
 	}
