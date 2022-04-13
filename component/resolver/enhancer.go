@@ -15,7 +15,7 @@ type Enhancer interface {
 	FindHostByIP(net.IP) (string, bool)
 	FlushFakeIP() error
 	InsertHostByIP(net.IP, string)
-	StoreFakePoolSate()
+	StoreFakePoolState()
 }
 
 func FakeIPEnabled() bool {
@@ -79,8 +79,8 @@ func FlushFakeIP() error {
 	return nil
 }
 
-func StoreFakePoolSate() {
+func StoreFakePoolState() {
 	if mapper := DefaultHostMapper; mapper != nil {
-		mapper.StoreFakePoolSate()
+		mapper.StoreFakePoolState()
 	}
 }
