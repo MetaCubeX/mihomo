@@ -59,7 +59,7 @@ func (sd *SnifferDispatcher) cover(conn *CN.BufferedConn, metadata *C.Metadata) 
 
 			host, err := sniffer.SniffTCP(bytes)
 			if err != nil {
-				log.Debugln("[Sniffer][%s] Sniff data failed", sniffer.Protocol())
+				log.Debugln("[Sniffer][%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
 				continue
 			}
 			metadata.Host = host
