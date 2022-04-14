@@ -3,6 +3,7 @@ package mitm
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,6 +13,12 @@ import (
 
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
+)
+
+var (
+	ErrCertUnsupported = errors.New("tls: client cert unsupported")
+	ErrInvalidResponse = errors.New("invalid response")
+	ErrInvalidURL      = errors.New("invalid URL")
 )
 
 type multiReaderConn struct {
