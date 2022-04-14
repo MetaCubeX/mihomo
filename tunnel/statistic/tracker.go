@@ -80,7 +80,7 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 	}
 
 	manager.Join(t)
-	return NewSniffing(t, metadata)
+	return NewSniffing(t, metadata, rule)
 }
 
 type udpTracker struct {

@@ -303,7 +303,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	defer cancel()
 	if MitmOutbound != nil && metadata.Type != C.MITM {
 		if remoteConn, err1 := MitmOutbound.DialContext(ctx, metadata); err1 == nil {
-			remoteConn = statistic.NewSniffing(remoteConn, metadata)
+			remoteConn = statistic.NewSniffing(remoteConn, metadata, nil)
 			defer func(remoteConn C.Conn) {
 				_ = remoteConn.Close()
 			}(remoteConn)
