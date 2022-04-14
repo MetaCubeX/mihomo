@@ -49,6 +49,8 @@ jobs:
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
           push: true
           tags: 'dreamacro/clash:dev,ghcr.io/dreamacro/clash:dev'
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Get all docker tags
         if: startsWith(github.ref, 'refs/tags/')
@@ -74,3 +76,5 @@ jobs:
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64
           push: true
           tags: ${{steps.tags.outputs.result}}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
