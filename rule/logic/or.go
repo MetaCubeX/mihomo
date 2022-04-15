@@ -1,8 +1,6 @@
 package logic
 
 import (
-	"fmt"
-
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rule/common"
 )
@@ -47,16 +45,12 @@ func (or *OR) ShouldResolveIP() bool {
 
 func NewOR(payload string, adapter string) (*OR, error) {
 	or := &OR{Base: &common.Base{}, payload: payload, adapter: adapter}
-	rules, err := parseRuleByPayload(payload, true)
+	rules, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
 	}
 
 	or.rules = rules
-	if len(or.rules) == 0 {
-		return nil, fmt.Errorf("Or rule is error, may be format error or not contain least one rule")
-	}
-
 	for _, rule := range rules {
 		if rule.ShouldResolveIP() {
 			or.needIP = true
