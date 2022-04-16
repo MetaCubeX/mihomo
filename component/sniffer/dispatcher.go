@@ -32,7 +32,7 @@ func (sd *SnifferDispatcher) forceReplace(conn *CN.BufferedConn, metadata *C.Met
 		log.Debugln("[Sniffer]All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
 		return
 	} else {
-		if sd.force && sd.inReverse(host) {
+		if sd.inReverse(host) {
 			log.Debugln("[Sniffer]Skip replace host:%s", host)
 			return
 		}
@@ -42,7 +42,7 @@ func (sd *SnifferDispatcher) forceReplace(conn *CN.BufferedConn, metadata *C.Met
 }
 
 func (sd *SnifferDispatcher) replace(conn *CN.BufferedConn, metadata *C.Metadata) {
-	if metadata.Host != "" && sd.inReverse(metadata.Host) {
+	if metadata.Host != "" && !sd.inReverse(metadata.Host) {
 		log.Debugln("[Sniffer]Skip Sniff domain:%s", metadata.Host)
 		return
 	}
