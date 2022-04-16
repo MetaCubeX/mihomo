@@ -29,11 +29,11 @@ type SnifferDispatcher struct {
 func (sd *SnifferDispatcher) forceReplace(conn *CN.BufferedConn, metadata *C.Metadata) {
 	host, err := sd.sniffDomain(conn, metadata)
 	if err != nil {
-		log.Debugln("[Sniffer]All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
+		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
 		return
 	} else {
 		if sd.inReverse(host) {
-			log.Debugln("[Sniffer]Skip replace host:%s", host)
+			log.Debugln("[Sniffer] Skip replace host:%s", host)
 			return
 		}
 	}
@@ -43,13 +43,13 @@ func (sd *SnifferDispatcher) forceReplace(conn *CN.BufferedConn, metadata *C.Met
 
 func (sd *SnifferDispatcher) replace(conn *CN.BufferedConn, metadata *C.Metadata) {
 	if metadata.Host != "" && !sd.inReverse(metadata.Host) {
-		log.Debugln("[Sniffer]Skip Sniff domain:%s", metadata.Host)
+		log.Debugln("[Sniffer] Skip Sniff domain:%s", metadata.Host)
 		return
 	}
 
 	host, err := sd.sniffDomain(conn, metadata)
 	if err != nil {
-		log.Debugln("[Sniffer]All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
+		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
 		return
 	}
 
@@ -70,7 +70,7 @@ func (sd *SnifferDispatcher) inReverse(host string) bool {
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
-	log.Debugln("[Sniffer]Sniff TCP [%s:%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
+	log.Debugln("[Sniffer] Sniff TCP [%s:%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
 		metadata.SrcIP, metadata.SrcPort,
 		metadata.DstIP, metadata.DstPort,
 		metadata.Host, host)
@@ -108,7 +108,7 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 
 			host, err := sniffer.SniffTCP(bytes)
 			if err != nil {
-				log.Debugln("[Sniffer][%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
+				log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
 				continue
 			}
 
