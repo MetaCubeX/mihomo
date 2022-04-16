@@ -91,6 +91,12 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 	configMux.Unlock()
 }
 
+func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
+	configMux.Lock()
+	sniffer.Dispatcher = *dispatcher
+	configMux.Unlock()
+}
+
 // Mode return current mode
 func Mode() TunnelMode {
 	return mode
@@ -300,7 +306,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	}
 
 	if sniffer.Dispatcher.Enable() {
-		sniffer.Dispatcher.Tcp(connCtx.Conn(), metadata)
+		sniffer.Dispatcher.TCPSniff(connCtx.Conn(), metadata)
 	}
 
 	proxy, rule, err := resolveMetadata(connCtx, metadata)
