@@ -124,7 +124,7 @@ type Sniffer struct {
 	Enable   bool
 	Force    bool
 	Sniffers []C.SnifferType
-	Reverses trie.DomainTrie[struct{}]
+	Reverses *trie.DomainTrie[struct{}]
 }
 
 // Experimental config
@@ -928,6 +928,7 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 		sniffer.Sniffers = append(sniffer.Sniffers, st)
 	}
 
+	sniffer.Reverses = trie.New[struct{}]()
 	for _, domain := range snifferRaw.Reverse {
 		err := sniffer.Reverses.Insert(domain, struct{}{})
 		if err != nil {

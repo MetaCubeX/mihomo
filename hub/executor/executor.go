@@ -222,7 +222,7 @@ func updateTun(tun *config.Tun, dns *config.DNS) {
 
 func updateSniffer(sniffer *config.Sniffer) {
 	if sniffer.Enable {
-		dispatcher, err := SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.Force, &sniffer.Reverses)
+		dispatcher, err := SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.Force, sniffer.Reverses)
 		if err != nil {
 			log.Warnln("initial sniffer failed, err:%v", err)
 		}
