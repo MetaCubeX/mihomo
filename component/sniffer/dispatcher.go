@@ -19,17 +19,17 @@ var (
 var Dispatcher SnifferDispatcher
 
 type SnifferDispatcher struct {
-	enable            bool
-	force             bool
-	sniffers          []C.Sniffer
-	reverseDomainTree *trie.DomainTrie[struct{}]
-	tcpHandler        func(conn *CN.BufferedConn, metadata *C.Metadata)
+	enable     bool
+	force      bool
+	sniffers   []C.Sniffer
+	domains    *trie.DomainTrie[bool]
+	tcpHandler func(conn *CN.BufferedConn, metadata *C.Metadata)
 }
 
 func (sd *SnifferDispatcher) forceReplace(conn *CN.BufferedConn, metadata *C.Metadata) {
 	host, err := sd.sniffDomain(conn, metadata)
 	if err != nil {
-		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
+		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 		return
 	} else {
 		if sd.inReverse(host) {
@@ -49,7 +49,7 @@ func (sd *SnifferDispatcher) replace(conn *CN.BufferedConn, metadata *C.Metadata
 
 	host, err := sd.sniffDomain(conn, metadata)
 	if err != nil {
-		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.DstIP, metadata.DstPort)
+		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 }
 
 func (sd *SnifferDispatcher) inReverse(host string) bool {
-	return sd.reverseDomainTree != nil && sd.reverseDomainTree.Search(host) != nil
+	return sd.domains != nil && sd.domains.Search(host) != nil
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
@@ -122,11 +122,11 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(needSniffer []C.SnifferType, force bool, reverses *trie.DomainTrie[struct{}]) (*SnifferDispatcher, error) {
+func NewSnifferDispatcher(needSniffer []C.SnifferType, force bool, reverses *trie.DomainTrie[bool]) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
-		enable:            true,
-		force:             force,
-		reverseDomainTree: reverses,
+		enable:  true,
+		force:   force,
+		domains: reverses,
 	}
 
 	for _, snifferName := range needSniffer {
