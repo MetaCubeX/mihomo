@@ -124,6 +124,7 @@ type Sniffer struct {
 	Enable   bool
 	Force    bool
 	Sniffers []C.SnifferType
+	Reverses trie.DomainTrie[struct{}]
 }
 
 // Experimental config
@@ -218,6 +219,7 @@ type SnifferRaw struct {
 	Enable   bool     `yaml:"enable" json:"enable"`
 	Force    bool     `yaml:"force" json:"force"`
 	Sniffing []string `yaml:"sniffing" json:"sniffing"`
+	Reverse  []string `yaml:"reverses" json:"reverses"`
 }
 
 // Parse config
@@ -289,6 +291,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:   false,
 			Force:    false,
 			Sniffing: []string{},
+			Reverse:  []string{},
 		},
 		Profile: Profile{
 			StoreSelected: true,
@@ -923,6 +926,13 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 
 	for st := range loadSniffer {
 		sniffer.Sniffers = append(sniffer.Sniffers, st)
+	}
+
+	for _, domain := range snifferRaw.Reverse {
+		err := sniffer.Reverses.Insert(domain, struct{}{})
+		if err != nil {
+			return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
+		}
 	}
 
 	return sniffer, nil
