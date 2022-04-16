@@ -77,12 +77,7 @@ func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
 
 	metadata.AddrType = C.AtypDomainName
 	metadata.Host = host
-	if resolver.FakeIPEnabled() {
-		metadata.DNSMode = C.DNSFakeIP
-	} else {
-		metadata.DNSMode = C.DNSMapping
-	}
-
+	metadata.DNSMode = C.DNSMapping
 	resolver.InsertHostByIP(metadata.DstIP, host)
 	metadata.DstIP = nil
 }
