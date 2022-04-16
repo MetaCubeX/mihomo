@@ -2,20 +2,19 @@ package logic
 
 import (
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"regexp"
-	"strings"
-
 	"github.com/Dreamacro/clash/common/collections"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	RC "github.com/Dreamacro/clash/rule/common"
 	"github.com/Dreamacro/clash/rule/provider"
+	"io"
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
 )
 
-func parseRuleByPayload(payload string, skip bool) ([]C.Rule, error) {
+func parseRuleByPayload(payload string) ([]C.Rule, error) {
 	regex, err := regexp.Compile("\\(.*\\)")
 	if err != nil {
 		return nil, err
@@ -28,7 +27,7 @@ func parseRuleByPayload(payload string, skip bool) ([]C.Rule, error) {
 		}
 		rules := make([]C.Rule, 0, len(subAllRanges))
 
-		subRanges := findSubRuleRange(payload, subAllRanges, skip)
+		subRanges := findSubRuleRange(payload, subAllRanges)
 		for _, subRange := range subRanges {
 			subPayload := payload[subRange.start+1 : subRange.end]
 
@@ -53,7 +52,7 @@ func containRange(r Range, preStart, preEnd int) bool {
 func payloadToRule(subPayload string) (C.Rule, error) {
 	splitStr := strings.SplitN(subPayload, ",", 2)
 	if len(splitStr) < 2 {
-		return nil, fmt.Errorf("The logic rule contain a rule of error format")
+		return nil, fmt.Errorf("[%s] format is error", subPayload)
 	}
 
 	tp := splitStr[0]
@@ -91,9 +90,9 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 		parsed, parseErr = RC.NewGEOIP(payload, "", noResolve)
 	case "IP-CIDR", "IP-CIDR6":
 		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewIPCIDR(payload, "", nil, RC.WithIPCIDRNoResolve(noResolve))
+		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRNoResolve(noResolve))
 	case "SRC-IP-CIDR":
-		parsed, parseErr = RC.NewIPCIDR(payload, "", nil, RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
+		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
 	case "SRC-PORT":
 		parsed, parseErr = RC.NewPort(payload, "", true)
 	case "DST-PORT":
@@ -113,7 +112,7 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 	case "NETWORK":
 		parsed, parseErr = RC.NewNetworkType(payload, "")
 	default:
-		parseErr = fmt.Errorf("unsupported rule type %s", tp)
+		parsed, parseErr = nil, fmt.Errorf("unsupported rule type %s", tp)
 	}
 
 	if parseErr != nil {
@@ -151,6 +150,10 @@ func format(payload string) ([]Range, error) {
 			num++
 			stack.Push(sr)
 		} else if c == ')' {
+			if stack.Len() == 0 {
+				return nil, fmt.Errorf("missing '('")
+			}
+
 			sr := stack.Pop().(Range)
 			sr.end = i
 			subRanges = append(subRanges, sr)
@@ -169,11 +172,11 @@ func format(payload string) ([]Range, error) {
 	return sortResult, nil
 }
 
-func findSubRuleRange(payload string, ruleRanges []Range, skip bool) []Range {
+func findSubRuleRange(payload string, ruleRanges []Range) []Range {
 	payloadLen := len(payload)
 	subRuleRange := make([]Range, 0)
 	for _, rr := range ruleRanges {
-		if rr.start == 0 && rr.end == payloadLen-1 && skip {
+		if rr.start == 0 && rr.end == payloadLen-1 {
 			// 最大范围跳过
 			continue
 		}

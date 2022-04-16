@@ -19,16 +19,19 @@ func (not *NOT) ShouldFindProcess() bool {
 
 func NewNOT(payload string, adapter string) (*NOT, error) {
 	not := &NOT{Base: &common.Base{}, payload: payload, adapter: adapter}
-	rule, err := parseRuleByPayload(payload, false)
+	rule, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(rule) < 1 {
-		return nil, fmt.Errorf("NOT rule have not a rule")
+	if len(rule) > 1 {
+		return nil, fmt.Errorf("not rule can contain at most one rule")
 	}
 
-	not.rule = rule[0]
+	if len(rule) > 0 {
+		not.rule = rule[0]
+	}
+
 	return not, nil
 }
 
@@ -37,7 +40,7 @@ func (not *NOT) RuleType() C.RuleType {
 }
 
 func (not *NOT) Match(metadata *C.Metadata) bool {
-	return !not.rule.Match(metadata)
+	return not.rule == nil || !not.rule.Match(metadata)
 }
 
 func (not *NOT) Adapter() string {
@@ -49,5 +52,5 @@ func (not *NOT) Payload() string {
 }
 
 func (not *NOT) ShouldResolveIP() bool {
-	return not.rule.ShouldResolveIP()
+	return not.rule != nil && not.rule.ShouldResolveIP()
 }
