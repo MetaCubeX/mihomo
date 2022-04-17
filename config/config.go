@@ -943,7 +943,7 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 	}
 
 	sniffer.SkipSNI = trie.New[bool]()
-	for _, domain := range snifferRaw.ForceDomain {
+	for _, domain := range snifferRaw.SkipSNI {
 		err := sniffer.SkipSNI.Insert(domain, true)
 		if err != nil {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
