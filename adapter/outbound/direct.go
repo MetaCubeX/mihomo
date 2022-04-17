@@ -60,7 +60,7 @@ func NewCompatible() *Direct {
 func NewPass() *Direct {
 	return &Direct{
 		Base: &Base{
-			name: "Pass",
+			name: "PASS",
 			tp:   C.Pass,
 			udp:  true,
 		},
