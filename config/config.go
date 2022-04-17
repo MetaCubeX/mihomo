@@ -121,10 +121,12 @@ type IPTables struct {
 }
 
 type Sniffer struct {
-	Enable   bool
-	Force    bool
-	Sniffers []C.SnifferType
-	Reverses *trie.DomainTrie[bool]
+	Enable      bool
+	Force       bool
+	Sniffers    []C.SnifferType
+	Reverses    *trie.DomainTrie[bool]
+	ForceDomain *trie.DomainTrie[bool]
+	SkipSNI     *trie.DomainTrie[bool]
 }
 
 // Experimental config
@@ -216,10 +218,12 @@ type RawConfig struct {
 }
 
 type SnifferRaw struct {
-	Enable   bool     `yaml:"enable" json:"enable"`
-	Force    bool     `yaml:"force" json:"force"`
-	Sniffing []string `yaml:"sniffing" json:"sniffing"`
-	Reverse  []string `yaml:"reverses" json:"reverses"`
+	Enable      bool     `yaml:"enable" json:"enable"`
+	Sniffing    []string `yaml:"sniffing" json:"sniffing"`
+	Force       bool     `yaml:"force" json:"force"`
+	Reverse     []string `yaml:"reverses" json:"reverses"`
+	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
+	SkipSNI     []string `yaml:"skip-sni" json:"skip-sni"`
 }
 
 // Parse config
@@ -288,10 +292,12 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			},
 		},
 		Sniffer: SnifferRaw{
-			Enable:   false,
-			Force:    false,
-			Sniffing: []string{},
-			Reverse:  []string{},
+			Enable:      false,
+			Force:       false,
+			Sniffing:    []string{},
+			Reverse:     []string{},
+			ForceDomain: []string{},
+			SkipSNI:     []string{},
 		},
 		Profile: Profile{
 			StoreSelected: true,
@@ -928,11 +934,41 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 		sniffer.Sniffers = append(sniffer.Sniffers, st)
 	}
 
-	sniffer.Reverses = trie.New[bool]()
-	for _, domain := range snifferRaw.Reverse {
-		err := sniffer.Reverses.Insert(domain, true)
+	sniffer.ForceDomain = trie.New[bool]()
+	for _, domain := range snifferRaw.ForceDomain {
+		err := sniffer.ForceDomain.Insert(domain, true)
 		if err != nil {
-			return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
+			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
+		}
+	}
+
+	sniffer.SkipSNI = trie.New[bool]()
+	for _, domain := range snifferRaw.ForceDomain {
+		err := sniffer.SkipSNI.Insert(domain, true)
+		if err != nil {
+			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
+		}
+	}
+
+	// Compatibility, remove it when release
+	if strings.Contains(C.Version, "alpha") || strings.Contains(C.Version, "develop") || strings.Contains(C.Version, "1.10.0") {
+		log.Warnln("Sniffer param force and reverses deprecated, will be removed in the release version")
+		if snifferRaw.Force {
+			// match all domain
+			sniffer.ForceDomain.Insert("+", true)
+			for _, domain := range snifferRaw.Reverse {
+				err := sniffer.SkipSNI.Insert(domain, true)
+				if err != nil {
+					return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
+				}
+			}
+		} else {
+			for _, domain := range snifferRaw.Reverse {
+				err := sniffer.ForceDomain.Insert(domain, true)
+				if err != nil {
+					return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
+				}
+			}
 		}
 	}
 
