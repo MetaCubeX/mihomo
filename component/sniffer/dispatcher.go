@@ -19,41 +19,12 @@ var (
 var Dispatcher SnifferDispatcher
 
 type SnifferDispatcher struct {
-	enable     bool
-	force      bool
-	sniffers   []C.Sniffer
-	domains    *trie.DomainTrie[bool]
-	tcpHandler func(conn *CN.BufferedConn, metadata *C.Metadata)
-}
+	enable bool
 
-func (sd *SnifferDispatcher) forceReplace(conn *CN.BufferedConn, metadata *C.Metadata) {
-	host, err := sd.sniffDomain(conn, metadata)
-	if err != nil {
-		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
-		return
-	} else {
-		if sd.inReverse(host) {
-			log.Debugln("[Sniffer] Skip replace host:%s", host)
-			return
-		}
-	}
+	sniffers []C.Sniffer
 
-	sd.replaceDomain(metadata, host)
-}
-
-func (sd *SnifferDispatcher) replace(conn *CN.BufferedConn, metadata *C.Metadata) {
-	if metadata.Host != "" && !sd.inReverse(metadata.Host) {
-		log.Debugln("[Sniffer] Skip Sniff domain:%s", metadata.Host)
-		return
-	}
-
-	host, err := sd.sniffDomain(conn, metadata)
-	if err != nil {
-		log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
-		return
-	}
-
-	sd.replaceDomain(metadata, host)
+	foreDomain *trie.DomainTrie[bool]
+	skipSNI    *trie.DomainTrie[bool]
 }
 
 func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
@@ -62,11 +33,19 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		return
 	}
 
-	sd.tcpHandler(bufConn, metadata)
-}
+	if metadata.Host == "" || sd.foreDomain.Search(metadata.Host) != nil {
+		if host, err := sd.sniffDomain(bufConn, metadata); err != nil {
+			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
+			return
+		} else {
+			if sd.skipSNI.Search(host) != nil {
+				log.Debugln("[Sniffer] Skip sni[%s]", host)
+				return
+			}
 
-func (sd *SnifferDispatcher) inReverse(host string) bool {
-	return sd.domains != nil && sd.domains.Search(host) != nil
+			sd.replaceDomain(metadata, host)
+		}
+	}
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
@@ -122,11 +101,11 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(needSniffer []C.SnifferType, force bool, reverses *trie.DomainTrie[bool]) (*SnifferDispatcher, error) {
+func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainTrie[bool], skipSNI *trie.DomainTrie[bool]) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
-		enable:  true,
-		force:   force,
-		domains: reverses,
+		enable:     true,
+		foreDomain: forceDomain,
+		skipSNI:    skipSNI,
 	}
 
 	for _, snifferName := range needSniffer {
@@ -137,12 +116,6 @@ func NewSnifferDispatcher(needSniffer []C.SnifferType, force bool, reverses *tri
 		}
 
 		dispatcher.sniffers = append(dispatcher.sniffers, sniffer)
-	}
-
-	if force {
-		dispatcher.tcpHandler = dispatcher.forceReplace
-	} else {
-		dispatcher.tcpHandler = dispatcher.replace
 	}
 
 	return &dispatcher, nil
