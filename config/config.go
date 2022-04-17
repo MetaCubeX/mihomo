@@ -952,7 +952,7 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 
 	// Compatibility, remove it when release
 	if strings.Contains(C.Version, "alpha") || strings.Contains(C.Version, "develop") || strings.Contains(C.Version, "1.10.0") {
-		log.Warnln("Sniffer param force and reverses deprecated, will be removed in the release version")
+		log.Warnln("Sniffer param force and reverses deprecated, will be removed in the release version, see https://github.com/MetaCubeX/Clash.Meta/commit/48a01adb7a4f38974b9d9639f931d0d245aebf28")
 		if snifferRaw.Force {
 			// match all domain
 			sniffer.ForceDomain.Insert("+", true)
