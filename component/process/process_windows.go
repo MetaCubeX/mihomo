@@ -174,7 +174,7 @@ func newSearcher(isV4, isTCP bool) *searcher {
 func getTransportTable(fn uintptr, family int, class int) ([]byte, error) {
 	for size, buf := uint32(8), make([]byte, 8); ; {
 		ptr := unsafe.Pointer(&buf[0])
-		err, _, _ := syscall.Syscall6(fn, 6, uintptr(ptr), uintptr(unsafe.Pointer(&size)), 0, uintptr(family), uintptr(class), 0)
+		err, _, _ := syscall.SyscallN(fn, uintptr(ptr), uintptr(unsafe.Pointer(&size)), 0, uintptr(family), uintptr(class), 0)
 
 		switch err {
 		case 0:
@@ -209,13 +209,13 @@ func getExecPathFromPID(pid uint32) (string, error) {
 
 	buf := make([]uint16, syscall.MAX_LONG_PATH)
 	size := uint32(len(buf))
-	r1, _, err := syscall.Syscall6(
-		queryProcName, 4,
+	r1, _, err := syscall.SyscallN(
+		queryProcName,
 		uintptr(h),
 		uintptr(1),
 		uintptr(unsafe.Pointer(&buf[0])),
 		uintptr(unsafe.Pointer(&size)),
-		0, 0)
+	)
 	if r1 == 0 {
 		return "", err
 	}
