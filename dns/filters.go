@@ -1,18 +1,19 @@
 package dns
 
 import (
+	"net/netip"
+
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/mmdb"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"net"
 	"strings"
 )
 
 type fallbackIPFilter interface {
-	Match(net.IP) bool
+	Match(netip.Addr) bool
 }
 
 type geoipFilter struct {
@@ -21,9 +22,9 @@ type geoipFilter struct {
 
 var geoIPMatcher *router.GeoIPMatcher
 
-func (gf *geoipFilter) Match(ip net.IP) bool {
+func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	if !C.GeodataMode {
-		record, _ := mmdb.Instance().Country(ip)
+		record, _ := mmdb.Instance().Country(ip.AsSlice())
 		return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
 	}
 
@@ -54,14 +55,14 @@ func (gf *geoipFilter) Match(ip net.IP) bool {
 			return false
 		}
 	}
-	return !geoIPMatcher.Match(ip)
+	return !geoIPMatcher.Match(ip.AsSlice())
 }
 
 type ipnetFilter struct {
-	ipnet *net.IPNet
+	ipnet *netip.Prefix
 }
 
-func (inf *ipnetFilter) Match(ip net.IP) bool {
+func (inf *ipnetFilter) Match(ip netip.Addr) bool {
 	return inf.ipnet.Contains(ip)
 }
 
@@ -76,7 +77,7 @@ type domainFilter struct {
 func NewDomainFilter(domains []string) *domainFilter {
 	df := domainFilter{tree: trie.New[bool]()}
 	for _, domain := range domains {
-		df.tree.Insert(domain, true)
+		_ = df.tree.Insert(domain, true)
 	}
 	return &df
 }

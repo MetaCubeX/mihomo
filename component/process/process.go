@@ -3,8 +3,10 @@ package process
 import (
 	"errors"
 	"net"
+	"net/netip"
 	"runtime"
 
+	"github.com/Dreamacro/clash/common/nnip"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -19,7 +21,7 @@ const (
 	UDP = "udp"
 )
 
-func FindProcessName(network string, srcIP net.IP, srcPort int) (string, error) {
+func FindProcessName(network string, srcIP netip.Addr, srcPort int) (string, error) {
 	return findProcessName(network, srcIP, srcPort)
 }
 
@@ -31,23 +33,23 @@ func ShouldFindProcess(metadata *C.Metadata) bool {
 		return false
 	}
 	for _, ip := range localIPs {
-		if ip.Equal(metadata.SrcIP) {
+		if ip == metadata.SrcIP {
 			return true
 		}
 	}
 	return false
 }
 
-func AppendLocalIPs(ip ...net.IP) {
+func AppendLocalIPs(ip ...netip.Addr) {
 	localIPs = append(ip, localIPs...)
 }
 
-func getLocalIPs() []net.IP {
-	ips := []net.IP{net.IPv4zero, net.IPv6zero}
+func getLocalIPs() []netip.Addr {
+	ips := []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified()}
 
 	netInterfaces, err := net.Interfaces()
 	if err != nil {
-		ips = append(ips, net.IPv4(127, 0, 0, 1), net.IPv6loopback)
+		ips = append(ips, netip.AddrFrom4([4]byte{127, 0, 0, 1}), nnip.IpToAddr(net.IPv6loopback))
 		return ips
 	}
 
@@ -57,7 +59,7 @@ func getLocalIPs() []net.IP {
 
 			for _, address := range adds {
 				if ipNet, ok := address.(*net.IPNet); ok {
-					ips = append(ips, ipNet.IP)
+					ips = append(ips, nnip.IpToAddr(ipNet.IP))
 				}
 			}
 		}
@@ -66,7 +68,7 @@ func getLocalIPs() []net.IP {
 	return ips
 }
 
-var localIPs []net.IP
+var localIPs []netip.Addr
 
 func init() {
 	localIPs = getLocalIPs()

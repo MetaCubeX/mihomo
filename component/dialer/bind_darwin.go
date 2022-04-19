@@ -2,6 +2,7 @@ package dialer
 
 import (
 	"net"
+	"net/netip"
 	"syscall"
 
 	"github.com/Dreamacro/clash/component/iface"
@@ -19,12 +20,9 @@ func bindControl(ifaceIdx int, chain controlFn) controlFn {
 			}
 		}()
 
-		ipStr, _, err := net.SplitHostPort(address)
-		if err == nil {
-			ip := net.ParseIP(ipStr)
-			if ip != nil && !ip.IsGlobalUnicast() {
-				return
-			}
+		addrPort, err := netip.ParseAddrPort(address)
+		if err == nil && !addrPort.Addr().IsGlobalUnicast() {
+			return
 		}
 
 		var innerErr error
@@ -45,7 +43,7 @@ func bindControl(ifaceIdx int, chain controlFn) controlFn {
 	}
 }
 
-func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ net.IP) error {
+func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.Addr) error {
 	ifaceObj, err := iface.ResolveInterface(ifaceName)
 	if err != nil {
 		return err

@@ -259,11 +259,11 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 	case C.AtypIPv4:
 		addrType = byte(vless.AtypIPv4)
 		addr = make([]byte, net.IPv4len)
-		copy(addr[:], metadata.DstIP.To4())
+		copy(addr[:], metadata.DstIP.AsSlice())
 	case C.AtypIPv6:
 		addrType = byte(vless.AtypIPv6)
 		addr = make([]byte, net.IPv6len)
-		copy(addr[:], metadata.DstIP.To16())
+		copy(addr[:], metadata.DstIP.AsSlice())
 	case C.AtypDomainName:
 		addrType = byte(vless.AtypDomainName)
 		addr = make([]byte, len(metadata.Host)+1)

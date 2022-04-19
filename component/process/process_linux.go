@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path"
 	"strings"
@@ -31,7 +32,7 @@ const (
 	pathProc                = "/proc"
 )
 
-func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (string, error) {
 	inode, uid, err := resolveSocketByNetlink(network, ip, srcPort)
 	if err != nil {
 		return "", err
@@ -40,7 +41,7 @@ func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
 	return resolveProcessNameByProcSearch(inode, uid)
 }
 
-func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int32, error) {
+func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
 	var family byte
 	var protocol byte
 
@@ -53,7 +54,7 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 		return 0, 0, ErrInvalidNetwork
 	}
 
-	if ip.To4() != nil {
+	if ip.Is4() {
 		family = syscall.AF_INET
 	} else {
 		family = syscall.AF_INET6
@@ -65,10 +66,12 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 	if err != nil {
 		return 0, 0, fmt.Errorf("dial netlink: %w", err)
 	}
-	defer syscall.Close(socket)
+	defer func() {
+		_ = syscall.Close(socket)
+	}()
 
-	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 100})
-	syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 100})
+	_ = syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 100})
+	_ = syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 100})
 
 	if err := syscall.Connect(socket, &syscall.SockaddrNetlink{
 		Family: syscall.AF_NETLINK,
@@ -84,7 +87,9 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 	}
 
 	rb := pool.Get(pool.RelayBufferSize)
-	defer pool.Put(rb)
+	defer func() {
+		_ = pool.Put(rb)
+	}()
 
 	n, err := syscall.Read(socket, rb)
 	if err != nil {
@@ -111,14 +116,10 @@ func resolveSocketByNetlink(network string, ip net.IP, srcPort int) (int32, int3
 	return inode, uid, nil
 }
 
-func packSocketDiagRequest(family, protocol byte, source net.IP, sourcePort uint16) []byte {
+func packSocketDiagRequest(family, protocol byte, source netip.Addr, sourcePort uint16) []byte {
 	s := make([]byte, 16)
 
-	if v4 := source.To4(); v4 != nil {
-		copy(s, v4)
-	} else {
-		copy(s, source)
-	}
+	copy(s, source.AsSlice())
 
 	buf := make([]byte, sizeOfSocketDiagRequest)
 

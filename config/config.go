@@ -87,7 +87,7 @@ type DNS struct {
 type FallbackFilter struct {
 	GeoIP     bool                    `yaml:"geoip"`
 	GeoIPCode string                  `yaml:"geoip-code"`
-	IPCIDR    []*net.IPNet            `yaml:"ipcidr"`
+	IPCIDR    []*netip.Prefix         `yaml:"ipcidr"`
 	Domain    []string                `yaml:"domain"`
 	GeoSite   []*router.DomainMatcher `yaml:"geosite"`
 }
@@ -702,15 +702,15 @@ func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServe
 	return policy, nil
 }
 
-func parseFallbackIPCIDR(ips []string) ([]*net.IPNet, error) {
-	var ipNets []*net.IPNet
+func parseFallbackIPCIDR(ips []string) ([]*netip.Prefix, error) {
+	var ipNets []*netip.Prefix
 
 	for idx, ip := range ips {
-		_, ipnet, err := net.ParseCIDR(ip)
+		ipnet, err := netip.ParsePrefix(ip)
 		if err != nil {
 			return nil, fmt.Errorf("DNS FallbackIP[%d] format error: %s", idx, err.Error())
 		}
-		ipNets = append(ipNets, ipnet)
+		ipNets = append(ipNets, &ipnet)
 	}
 
 	return ipNets, nil
@@ -763,7 +763,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
-			IPCIDR:  []*net.IPNet{},
+			IPCIDR:  []*netip.Prefix{},
 			GeoSite: []*router.DomainMatcher{},
 		},
 	}

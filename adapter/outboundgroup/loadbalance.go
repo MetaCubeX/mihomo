@@ -51,7 +51,7 @@ func getKey(metadata *C.Metadata) string {
 		}
 	}
 
-	if metadata.DstIP == nil {
+	if !metadata.DstIP.IsValid() {
 		return ""
 	}
 

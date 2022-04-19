@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -28,10 +29,10 @@ func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
 
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {
 	var (
-		ip  net.IP
+		ip  netip.Addr
 		err error
 	)
-	if ip = net.ParseIP(c.host); ip == nil {
+	if ip, err = netip.ParseAddr(c.host); err != nil {
 		if c.r == nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
 		} else {
@@ -62,7 +63,9 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	// miekg/dns ExchangeContext doesn't respond to context cancel.
 	// this is a workaround

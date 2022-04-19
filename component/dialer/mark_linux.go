@@ -4,14 +4,15 @@ package dialer
 
 import (
 	"net"
+	"net/netip"
 	"syscall"
 )
 
-func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ net.IP) {
+func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ netip.Addr) {
 	dialer.Control = bindMarkToControl(mark, dialer.Control)
 }
 
-func bindMarkToListenConfig(mark int, lc *net.ListenConfig, _, address string) {
+func bindMarkToListenConfig(mark int, lc *net.ListenConfig, _, _ string) {
 	lc.Control = bindMarkToControl(mark, lc.Control)
 }
 
@@ -23,20 +24,17 @@ func bindMarkToControl(mark int, chain controlFn) controlFn {
 			}
 		}()
 
-		ipStr, _, err := net.SplitHostPort(address)
-		if err == nil {
-			ip := net.ParseIP(ipStr)
-			if ip != nil && !ip.IsGlobalUnicast() {
-				return
-			}
+		addrPort, err := netip.ParseAddrPort(address)
+		if err == nil && !addrPort.Addr().IsGlobalUnicast() {
+			return
 		}
 
 		return c.Control(func(fd uintptr) {
 			switch network {
 			case "tcp4", "udp4":
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
+				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
 			case "tcp6", "udp6":
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
+				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
 			}
 		})
 	}

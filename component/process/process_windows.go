@@ -2,11 +2,12 @@ package process
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/log"
 
 	"golang.org/x/sys/windows"
@@ -57,7 +58,7 @@ func initWin32API() error {
 	return nil
 }
 
-func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (string, error) {
 	once.Do(func() {
 		err := initWin32API()
 		if err != nil {
@@ -67,7 +68,7 @@ func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
 		}
 	})
 	family := windows.AF_INET
-	if ip.To4() == nil {
+	if ip.Is6() {
 		family = windows.AF_INET6
 	}
 
@@ -107,7 +108,7 @@ type searcher struct {
 	tcpState int
 }
 
-func (s *searcher) Search(b []byte, ip net.IP, port uint16) (uint32, error) {
+func (s *searcher) Search(b []byte, ip netip.Addr, port uint16) (uint32, error) {
 	n := int(readNativeUint32(b[:4]))
 	itemSize := s.itemSize
 	for i := 0; i < n; i++ {
@@ -131,9 +132,9 @@ func (s *searcher) Search(b []byte, ip net.IP, port uint16) (uint32, error) {
 			continue
 		}
 
-		srcIP := net.IP(row[s.ip : s.ip+s.ipSize])
+		srcIP := nnip.IpToAddr(row[s.ip : s.ip+s.ipSize])
 		// windows binds an unbound udp socket to 0.0.0.0/[::] while first sendto
-		if !ip.Equal(srcIP) && (!srcIP.IsUnspecified() || s.tcpState != -1) {
+		if ip != srcIP && (!srcIP.IsUnspecified() || s.tcpState != -1) {
 			continue
 		}
 
