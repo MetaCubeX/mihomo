@@ -1,21 +1,19 @@
 package resolver
 
-import (
-	"net"
-)
+import "net/netip"
 
 var DefaultHostMapper Enhancer
 
 type Enhancer interface {
 	FakeIPEnabled() bool
 	MappingEnabled() bool
-	IsFakeIP(net.IP) bool
-	IsFakeBroadcastIP(net.IP) bool
-	IsExistFakeIP(net.IP) bool
-	FindHostByIP(net.IP) (string, bool)
+	IsFakeIP(netip.Addr) bool
+	IsFakeBroadcastIP(netip.Addr) bool
+	IsExistFakeIP(netip.Addr) bool
+	FindHostByIP(netip.Addr) (string, bool)
 	FlushFakeIP() error
-	InsertHostByIP(net.IP, string)
-	StoreFakePoolSate()
+	InsertHostByIP(netip.Addr, string)
+	StoreFakePoolState()
 }
 
 func FakeIPEnabled() bool {
@@ -34,7 +32,7 @@ func MappingEnabled() bool {
 	return false
 }
 
-func IsFakeIP(ip net.IP) bool {
+func IsFakeIP(ip netip.Addr) bool {
 	if mapper := DefaultHostMapper; mapper != nil {
 		return mapper.IsFakeIP(ip)
 	}
@@ -42,7 +40,7 @@ func IsFakeIP(ip net.IP) bool {
 	return false
 }
 
-func IsFakeBroadcastIP(ip net.IP) bool {
+func IsFakeBroadcastIP(ip netip.Addr) bool {
 	if mapper := DefaultHostMapper; mapper != nil {
 		return mapper.IsFakeBroadcastIP(ip)
 	}
@@ -50,7 +48,7 @@ func IsFakeBroadcastIP(ip net.IP) bool {
 	return false
 }
 
-func IsExistFakeIP(ip net.IP) bool {
+func IsExistFakeIP(ip netip.Addr) bool {
 	if mapper := DefaultHostMapper; mapper != nil {
 		return mapper.IsExistFakeIP(ip)
 	}
@@ -58,13 +56,13 @@ func IsExistFakeIP(ip net.IP) bool {
 	return false
 }
 
-func InsertHostByIP(ip net.IP, host string) {
+func InsertHostByIP(ip netip.Addr, host string) {
 	if mapper := DefaultHostMapper; mapper != nil {
 		mapper.InsertHostByIP(ip, host)
 	}
 }
 
-func FindHostByIP(ip net.IP) (string, bool) {
+func FindHostByIP(ip netip.Addr) (string, bool) {
 	if mapper := DefaultHostMapper; mapper != nil {
 		return mapper.FindHostByIP(ip)
 	}
@@ -79,8 +77,8 @@ func FlushFakeIP() error {
 	return nil
 }
 
-func StoreFakePoolSate() {
+func StoreFakePoolState() {
 	if mapper := DefaultHostMapper; mapper != nil {
-		mapper.StoreFakePoolSate()
+		mapper.StoreFakePoolState()
 	}
 }

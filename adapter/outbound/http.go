@@ -90,7 +90,7 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	}
 
 	if metadata.Type == C.MITM {
-		req.Header.Add("Origin-Request-Source-Address", metadata.SourceAddress())
+		req.Header.Set("Origin-Request-Source-Address", metadata.SourceAddress())
 	}
 
 	if err := req.Write(rw); err != nil {

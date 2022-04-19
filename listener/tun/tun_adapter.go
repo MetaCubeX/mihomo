@@ -50,7 +50,7 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
 	}
 
-	process.AppendLocalIPs(tunAddress.Masked().Addr().Next().AsSlice())
+	process.AppendLocalIPs(tunAddress.Masked().Addr().Next())
 
 	// open tun device
 	tunDevice, err = parseDevice(devName, uint32(mtu))
@@ -149,7 +149,8 @@ func setAtLatest(stackType C.TUNStack, devName string) {
 
 	switch runtime.GOOS {
 	case "darwin":
-		_, _ = cmd.ExecCmd("sysctl net.inet.ip.forwarding=1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.inet.ip.forwarding=1")
+		// _, _ = cmd.ExecCmd("sysctl -w net.inet6.ip6.forwarding=1")
 	case "windows":
 		_, _ = cmd.ExecCmd("ipconfig /renew")
 	case "linux":

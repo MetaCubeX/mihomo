@@ -5,7 +5,7 @@ package script
 */
 import "C"
 import (
-	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -50,9 +50,9 @@ func resolveIPCallbackFn(cHost *C.char) *C.char {
 
 //export geoipCallbackFn
 func geoipCallbackFn(cIP *C.char) *C.char {
-	dstIP := net.ParseIP(C.GoString(cIP))
+	dstIP, err := netip.ParseAddr(C.GoString(cIP))
 
-	if dstIP == nil {
+	if err != nil {
 		emptyC := C.CString("")
 		defer C.free(unsafe.Pointer(emptyC))
 
@@ -72,7 +72,7 @@ func geoipCallbackFn(cIP *C.char) *C.char {
 		return lanC
 	}
 
-	record, _ := mmdb.Instance().Country(dstIP)
+	record, _ := mmdb.Instance().Country(dstIP.AsSlice())
 
 	rc := C.CString(strings.ToUpper(record.Country.IsoCode))
 	defer C.free(unsafe.Pointer(rc))
@@ -91,20 +91,22 @@ func ruleProviderCallbackFn(cProviderName *C.char, cMetadata *C.struct_Metadata)
 	dstIp := C.GoString(cMetadata.dst_ip)
 	dstPort := strconv.Itoa(int(cMetadata.dst_port))
 
-	dst := net.ParseIP(dstIp)
-	addrType := constant.AtypDomainName
+	dst, err := netip.ParseAddr(dstIp)
 
-	if dst != nil {
-		if dst.To4() != nil {
+	addrType := constant.AtypDomainName
+	if err == nil {
+		if dst.Is4() {
 			addrType = constant.AtypIPv4
 		} else {
 			addrType = constant.AtypIPv6
 		}
 	}
 
+	src, _ := netip.ParseAddr(srcIp)
+
 	metadata := &constant.Metadata{
 		Process:  processName,
-		SrcIP:    net.ParseIP(srcIp),
+		SrcIP:    src,
 		DstIP:    dst,
 		SrcPort:  srcPort,
 		DstPort:  dstPort,

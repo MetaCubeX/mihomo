@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
@@ -33,20 +34,22 @@ func (gh *GVHandler) HandleTCP(tunConn adapter.TCPConn) {
 		Zone: "",
 	}
 
-	addrIp, _ := netip.AddrFromSlice(rAddr.IP)
-	addrPort := netip.AddrPortFrom(addrIp, id.LocalPort)
+	addrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
 
 	if D.ShouldHijackDns(gh.DNSAdds, addrPort) {
 		go func() {
 			log.Debugln("[TUN] hijack dns tcp: %s", addrPort.String())
 
-			defer tunConn.Close()
-
 			buf := pool.Get(pool.UDPBufferSize)
-			defer pool.Put(buf)
+			defer func() {
+				_ = pool.Put(buf)
+				_ = tunConn.Close()
+			}()
 
 			for {
-				tunConn.SetReadDeadline(time.Now().Add(D.DefaultDnsReadTimeout))
+				if tunConn.SetReadDeadline(time.Now().Add(D.DefaultDnsReadTimeout)) != nil {
+					break
+				}
 
 				length := uint16(0)
 				if err := binary.Read(tunConn, binary.BigEndian, &length); err != nil {
@@ -86,8 +89,7 @@ func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 		Zone: "",
 	}
 
-	addrIp, _ := netip.AddrFromSlice(rAddr.IP)
-	addrPort := netip.AddrPortFrom(addrIp, id.LocalPort)
+	addrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
 	target := socks5.ParseAddrToSocksAddr(rAddr)
 
 	go func() {
@@ -96,7 +98,7 @@ func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 
 			n, addr, err := tunConn.ReadFrom(buf)
 			if err != nil {
-				pool.Put(buf)
+				_ = pool.Put(buf)
 				break
 			}
 
@@ -104,7 +106,9 @@ func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 
 			if D.ShouldHijackDns(gh.DNSAdds, addrPort) {
 				go func() {
-					defer pool.Put(buf)
+					defer func() {
+						_ = pool.Put(buf)
+					}()
 
 					msg, err1 := D.RelayDnsPacket(payload)
 					if err1 != nil {

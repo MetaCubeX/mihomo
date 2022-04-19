@@ -1,5 +1,4 @@
 //go:build !build_local && cgo
-// +build !build_local,cgo
 
 package script
 

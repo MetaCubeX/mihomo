@@ -1,7 +1,6 @@
 package dns
 
 import (
-	"net"
 	"net/netip"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -23,54 +22,51 @@ func (h *ResolverEnhancer) MappingEnabled() bool {
 	return h.mode == C.DNSFakeIP || h.mode == C.DNSMapping
 }
 
-func (h *ResolverEnhancer) IsExistFakeIP(ip net.IP) bool {
+func (h *ResolverEnhancer) IsExistFakeIP(ip netip.Addr) bool {
 	if !h.FakeIPEnabled() {
 		return false
 	}
 
 	if pool := h.fakePool; pool != nil {
-		return pool.Exist(ipToAddr(ip))
+		return pool.Exist(ip)
 	}
 
 	return false
 }
 
-func (h *ResolverEnhancer) IsFakeIP(ip net.IP) bool {
-	if !h.FakeIPEnabled() {
-		return false
-	}
-
-	addr := ipToAddr(ip)
-
-	if pool := h.fakePool; pool != nil {
-		return pool.IPNet().Contains(addr) && addr != pool.Gateway() && addr != pool.Broadcast()
-	}
-
-	return false
-}
-
-func (h *ResolverEnhancer) IsFakeBroadcastIP(ip net.IP) bool {
+func (h *ResolverEnhancer) IsFakeIP(ip netip.Addr) bool {
 	if !h.FakeIPEnabled() {
 		return false
 	}
 
 	if pool := h.fakePool; pool != nil {
-		return pool.Broadcast() == ipToAddr(ip)
+		return pool.IPNet().Contains(ip) && ip != pool.Gateway() && ip != pool.Broadcast()
 	}
 
 	return false
 }
 
-func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
-	addr := ipToAddr(ip)
+func (h *ResolverEnhancer) IsFakeBroadcastIP(ip netip.Addr) bool {
+	if !h.FakeIPEnabled() {
+		return false
+	}
+
 	if pool := h.fakePool; pool != nil {
-		if host, existed := pool.LookBack(addr); existed {
+		return pool.Broadcast() == ip
+	}
+
+	return false
+}
+
+func (h *ResolverEnhancer) FindHostByIP(ip netip.Addr) (string, bool) {
+	if pool := h.fakePool; pool != nil {
+		if host, existed := pool.LookBack(ip); existed {
 			return host, true
 		}
 	}
 
 	if mapping := h.mapping; mapping != nil {
-		if host, existed := h.mapping.Get(addr); existed {
+		if host, existed := h.mapping.Get(ip); existed {
 			return host, true
 		}
 	}
@@ -78,9 +74,9 @@ func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
 	return "", false
 }
 
-func (h *ResolverEnhancer) InsertHostByIP(ip net.IP, host string) {
+func (h *ResolverEnhancer) InsertHostByIP(ip netip.Addr, host string) {
 	if mapping := h.mapping; mapping != nil {
-		h.mapping.Set(ipToAddr(ip), host)
+		h.mapping.Set(ip, host)
 	}
 }
 
@@ -101,7 +97,7 @@ func (h *ResolverEnhancer) PatchFrom(o *ResolverEnhancer) {
 	}
 }
 
-func (h *ResolverEnhancer) StoreFakePoolSate() {
+func (h *ResolverEnhancer) StoreFakePoolState() {
 	if h.fakePool != nil {
 		h.fakePool.StoreState()
 	}

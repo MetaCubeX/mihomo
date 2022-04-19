@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"sync"
 
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
 )
@@ -71,11 +72,8 @@ func (u *UDP) WriteTo(buf []byte, local net.Addr, remote net.Addr) (int, error) 
 		return 0, net.InvalidAddrError("invalid addr")
 	}
 
-	srcIP, _ := netip.AddrFromSlice(srcAddr.IP)
-	dstIp, _ := netip.AddrFromSlice(dstAddr.IP)
-
-	srcAddrPort := netip.AddrPortFrom(srcIP.Unmap(), uint16(srcAddr.Port))
-	dstAddrPort := netip.AddrPortFrom(dstIp.Unmap(), uint16(dstAddr.Port))
+	srcAddrPort := netip.AddrPortFrom(nnip.IpToAddr(srcAddr.IP), uint16(srcAddr.Port))
+	dstAddrPort := netip.AddrPortFrom(nnip.IpToAddr(dstAddr.IP), uint16(dstAddr.Port))
 
 	if !srcAddrPort.Addr().Is4() || !dstAddrPort.Addr().Is4() {
 		return 0, net.InvalidAddrError("invalid ip version")

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"time"
 	_ "unsafe"
@@ -62,9 +63,9 @@ func (p *Proxy) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // DelayHistory implements C.Proxy
 func (p *Proxy) DelayHistory() []C.DelayHistory {
-	queue := p.history.Copy()
+	queueM := p.history.Copy()
 	histories := []C.DelayHistory{}
-	for _, item := range queue {
+	for _, item := range queueM {
 		histories = append(histories, item)
 	}
 	return histories
@@ -93,7 +94,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	}
 
 	mapping := map[string]any{}
-	json.Unmarshal(inner, &mapping)
+	_ = json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
@@ -125,7 +126,9 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	if err != nil {
 		return
 	}
-	defer instance.Close()
+	defer func() {
+		_ = instance.Close()
+	}()
 
 	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
@@ -134,7 +137,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	req = req.WithContext(ctx)
 
 	transport := &http.Transport{
-		Dial: func(string, string) (net.Conn, error) {
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
 			return instance, nil
 		},
 		// from http.DefaultTransport
@@ -156,7 +159,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	if err != nil {
 		return
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }
@@ -187,7 +190,7 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	addr = C.Metadata{
 		AddrType: C.AtypDomainName,
 		Host:     u.Hostname(),
-		DstIP:    nil,
+		DstIP:    netip.Addr{},
 		DstPort:  port,
 	}
 	return

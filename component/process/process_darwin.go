@@ -2,9 +2,11 @@ package process
 
 import (
 	"encoding/binary"
-	"net"
+	"net/netip"
 	"syscall"
 	"unsafe"
+
+	"github.com/Dreamacro/clash/common/nnip"
 
 	"golang.org/x/sys/unix"
 )
@@ -15,7 +17,7 @@ const (
 	proccallnumpidinfo  = 0x2
 )
 
-func findProcessName(network string, ip net.IP, port int) (string, error) {
+func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 	var spath string
 	switch network {
 	case TCP:
@@ -26,7 +28,7 @@ func findProcessName(network string, ip net.IP, port int) (string, error) {
 		return "", ErrInvalidNetwork
 	}
 
-	isIPv4 := ip.To4() != nil
+	isIPv4 := ip.Is4()
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
@@ -57,19 +59,19 @@ func findProcessName(network string, ip net.IP, port int) (string, error) {
 		// xinpcb_n.inp_vflag
 		flag := buf[inp+44]
 
-		var srcIP net.IP
+		var srcIP netip.Addr
 		switch {
 		case flag&0x1 > 0 && isIPv4:
 			// ipv4
-			srcIP = net.IP(buf[inp+76 : inp+80])
+			srcIP = nnip.IpToAddr(buf[inp+76 : inp+80])
 		case flag&0x2 > 0 && !isIPv4:
 			// ipv6
-			srcIP = net.IP(buf[inp+64 : inp+80])
+			srcIP = nnip.IpToAddr(buf[inp+64 : inp+80])
 		default:
 			continue
 		}
 
-		if !ip.Equal(srcIP) && (network == TCP || !srcIP.IsUnspecified()) {
+		if ip != srcIP && (network == TCP || !srcIP.IsUnspecified()) {
 			continue
 		}
 

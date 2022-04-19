@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/component/resolver"
 )
@@ -29,7 +30,7 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 			return nil, err
 		}
 
-		var ip net.IP
+		var ip netip.Addr
 		switch network {
 		case "tcp4", "udp4":
 			if !opt.direct {
@@ -88,7 +89,7 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 	return lc.ListenPacket(ctx, network, address)
 }
 
-func dialContext(ctx context.Context, network string, destination net.IP, port string, opt *option) (net.Conn, error) {
+func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
 	dialer := &net.Dialer{}
 	if opt.interfaceName != "" {
 		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
@@ -128,12 +129,12 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 			case results <- result:
 			case <-returned:
 				if result.Conn != nil {
-					result.Conn.Close()
+					_ = result.Conn.Close()
 				}
 			}
 		}()
 
-		var ip net.IP
+		var ip netip.Addr
 		if ipv6 {
 			if !direct {
 				ip, result.error = resolver.ResolveIPv6ProxyServerHost(host)

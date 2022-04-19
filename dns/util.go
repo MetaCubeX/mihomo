@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -97,35 +98,19 @@ func handleMsgWithEmptyAnswer(r *D.Msg) *D.Msg {
 	return msg
 }
 
-func msgToIP(msg *D.Msg) []net.IP {
-	ips := []net.IP{}
+func msgToIP(msg *D.Msg) []netip.Addr {
+	ips := []netip.Addr{}
 
 	for _, answer := range msg.Answer {
 		switch ans := answer.(type) {
 		case *D.AAAA:
-			ips = append(ips, ans.AAAA)
+			ips = append(ips, nnip.IpToAddr(ans.AAAA))
 		case *D.A:
-			ips = append(ips, ans.A)
+			ips = append(ips, nnip.IpToAddr(ans.A))
 		}
 	}
 
 	return ips
-}
-
-func ipToAddr(ip net.IP) netip.Addr {
-	if ip == nil {
-		return netip.Addr{}
-	}
-
-	l := len(ip)
-
-	if l == 4 {
-		return netip.AddrFrom4(*(*[4]byte)(ip))
-	} else if l == 16 {
-		return netip.AddrFrom16(*(*[16]byte)(ip))
-	} else {
-		return netip.Addr{}
-	}
 }
 
 type wrapPacketConn struct {
@@ -146,7 +131,7 @@ func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
 	return wpc.rAddr
 }
 
-func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP net.IP, port string, opts ...dialer.Option) (net.Conn, error) {
+func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
 	adapter, ok := tunnel.Proxies()[adapterName]
 	if !ok {
 		return nil, fmt.Errorf("proxy adapter [%s] not found", adapterName)
@@ -161,7 +146,7 @@ func dialContextWithProxyAdapter(ctx context.Context, adapterName string, networ
 	}
 
 	addrType := C.AtypIPv4
-	if dstIP.To4() == nil {
+	if dstIP.Is6() {
 		addrType = C.AtypIPv6
 	}
 

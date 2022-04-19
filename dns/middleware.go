@@ -1,12 +1,12 @@
 package dns
 
 import (
-	"net"
 	"net/netip"
 	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -87,21 +87,21 @@ func withMapping(mapping *cache.LruCache[netip.Addr, string]) middleware {
 			host := strings.TrimRight(q.Name, ".")
 
 			for _, ans := range msg.Answer {
-				var ip net.IP
+				var ip netip.Addr
 				var ttl uint32
 
 				switch a := ans.(type) {
 				case *D.A:
-					ip = a.A
+					ip = nnip.IpToAddr(a.A)
 					ttl = a.Hdr.Ttl
 				case *D.AAAA:
-					ip = a.AAAA
+					ip = nnip.IpToAddr(a.AAAA)
 					ttl = a.Hdr.Ttl
 				default:
 					continue
 				}
 
-				mapping.SetWithExpire(ipToAddr(ip), host, time.Now().Add(time.Second*time.Duration(ttl)))
+				mapping.SetWithExpire(ip, host, time.Now().Add(time.Second*time.Duration(ttl)))
 			}
 
 			return msg, nil

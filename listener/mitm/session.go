@@ -39,6 +39,13 @@ func (s *Session) NewErrorResponse(err error) *http.Response {
 	return NewErrorResponse(s.request, err)
 }
 
+func (s *Session) writeResponse() error {
+	if s.response == nil {
+		return ErrInvalidResponse
+	}
+	return s.response.Write(s.conn)
+}
+
 func newSession(conn net.Conn, request *http.Request, response *http.Response) *Session {
 	return &Session{
 		conn:     conn,

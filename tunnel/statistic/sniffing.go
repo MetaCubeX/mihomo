@@ -16,6 +16,7 @@ type sniffing struct {
 
 	metadata   *C.Metadata
 	totalWrite *atomic.Uint64
+	allowBreak bool
 }
 
 func (r *sniffing) Read(b []byte) (int, error) {
@@ -30,8 +31,12 @@ func (r *sniffing) Write(b []byte) (int, error) {
 		} else {
 			resolver.InsertHostByIP(r.metadata.DstIP, header.Domain())
 			log.Warnln("use sni update host: %s ip: %s", header.Domain(), r.metadata.DstIP.String())
-			r.Conn.Close()
-			return 0, errors.New("sni update, break current link to avoid leaks")
+			if r.allowBreak {
+				_ = r.Conn.Close()
+				return 0, errors.New("sni update, break current link to avoid leaks")
+			} else {
+				r.metadata.Host = header.Domain()
+			}
 		}
 	}
 
@@ -45,10 +50,11 @@ func (r *sniffing) Close() error {
 	return r.Conn.Close()
 }
 
-func NewSniffing(conn C.Conn, metadata *C.Metadata) C.Conn {
+func NewSniffing(conn C.Conn, metadata *C.Metadata, rule C.Rule) C.Conn {
 	return &sniffing{
 		Conn:       conn,
 		metadata:   metadata,
 		totalWrite: atomic.NewUint64(0),
+		allowBreak: rule != nil,
 	}
 }

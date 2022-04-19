@@ -3,10 +3,10 @@ package mitm
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"time"
 
@@ -14,14 +14,11 @@ import (
 	"golang.org/x/text/transform"
 )
 
-type multiReaderConn struct {
-	net.Conn
-	reader io.Reader
-}
-
-func (c *multiReaderConn) Read(buf []byte) (int, error) {
-	return c.reader.Read(buf)
-}
+var (
+	ErrCertUnsupported = errors.New("tls: client cert unsupported")
+	ErrInvalidResponse = errors.New("invalid response")
+	ErrInvalidURL      = errors.New("invalid URL")
+)
 
 func NewResponse(code int, body io.Reader, req *http.Request) *http.Response {
 	if body == nil {

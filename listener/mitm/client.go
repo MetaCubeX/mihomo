@@ -13,8 +13,6 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
-var ErrCertUnsupported = errors.New("tls: client cert unsupported")
-
 func newClient(source net.Addr, userAgent string, in chan<- C.ConnContext) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{

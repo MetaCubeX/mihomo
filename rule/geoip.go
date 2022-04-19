@@ -21,7 +21,7 @@ func (g *GEOIP) RuleType() C.RuleType {
 
 func (g *GEOIP) Match(metadata *C.Metadata) bool {
 	ip := metadata.DstIP
-	if ip == nil {
+	if !ip.IsValid() {
 		return false
 	}
 
@@ -34,7 +34,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 			resolver.IsFakeBroadcastIP(ip)
 	}
 
-	record, _ := mmdb.Instance().Country(ip)
+	record, _ := mmdb.Instance().Country(ip.AsSlice())
 	return strings.EqualFold(record.Country.IsoCode, g.country)
 }
 

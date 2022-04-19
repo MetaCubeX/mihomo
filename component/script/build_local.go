@@ -1,5 +1,4 @@
 //go:build build_local
-// +build build_local
 
 package script
 

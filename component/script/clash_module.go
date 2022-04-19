@@ -195,10 +195,10 @@ func CallPyMainFunction(mtd *constant.Metadata) (string, error) {
 
 	dstIpGo := ""
 	srcIpGo := ""
-	if mtd.SrcIP != nil {
+	if mtd.SrcIP.IsValid() {
 		srcIpGo = mtd.SrcIP.String()
 	}
-	if mtd.DstIP != nil {
+	if mtd.DstIP.IsValid() {
 		dstIpGo = mtd.DstIP.String()
 	}
 	srcIp := C.CString(srcIpGo)
@@ -250,10 +250,10 @@ func CallPyShortcut(fn *PyObject, mtd *constant.Metadata) (bool, error) {
 
 	dstIpGo := ""
 	srcIpGo := ""
-	if mtd.SrcIP != nil {
+	if mtd.SrcIP.IsValid() {
 		srcIpGo = mtd.SrcIP.String()
 	}
-	if mtd.DstIP != nil {
+	if mtd.DstIP.IsValid() {
 		dstIpGo = mtd.DstIP.String()
 	}
 	srcIp := C.CString(srcIpGo)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
@@ -45,11 +46,12 @@ func (s *sysStack) Close() error {
 
 func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 	var (
-		gateway = tunAddress.Masked().Addr().Next()
-		portal  = gateway.Next()
+		gateway   = tunAddress.Masked().Addr().Next()
+		portal    = gateway.Next()
+		broadcast = nnip.UnMasked(tunAddress)
 	)
 
-	stack, err := mars.StartListener(device, gateway, portal)
+	stack, err := mars.StartListener(device, gateway, portal, broadcast)
 	if err != nil {
 		_ = device.Close()
 
@@ -81,24 +83,27 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			lAddr := conn.LocalAddr().(*net.TCPAddr)
 			rAddr := conn.RemoteAddr().(*net.TCPAddr)
 
-			rAddrIp, _ := netip.AddrFromSlice(rAddr.IP)
-			rAddrPort := netip.AddrPortFrom(rAddrIp, uint16(rAddr.Port))
+			lAddrPort := netip.AddrPortFrom(nnip.IpToAddr(lAddr.IP), uint16(lAddr.Port))
+			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
+
+			if rAddrPort.Addr().IsLoopback() {
+				_ = conn.Close()
+
+				continue
+			}
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
 					log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
 
-					defer func(conn net.Conn) {
-						_ = conn.Close()
-					}(conn)
-
 					buf := pool.Get(pool.UDPBufferSize)
-					defer func(buf []byte) {
+					defer func() {
 						_ = pool.Put(buf)
-					}(buf)
+						_ = conn.Close()
+					}()
 
 					for {
-						if err = conn.SetReadDeadline(time.Now().Add(C.DefaultTCPTimeout)); err != nil {
+						if conn.SetReadDeadline(time.Now().Add(C.DefaultTCPTimeout)) != nil {
 							break
 						}
 
@@ -131,8 +136,8 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			metadata := &C.Metadata{
 				NetWork:  C.TCP,
 				Type:     C.TUN,
-				SrcIP:    lAddr.IP,
-				DstIP:    rAddr.IP,
+				SrcIP:    lAddrPort.Addr(),
+				DstIP:    rAddrPort.Addr(),
 				SrcPort:  strconv.Itoa(lAddr.Port),
 				DstPort:  strconv.Itoa(rAddr.Port),
 				AddrType: C.AtypIPv4,
@@ -162,8 +167,13 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			lAddr := lRAddr.(*net.UDPAddr)
 			rAddr := rRAddr.(*net.UDPAddr)
 
-			rAddrIp, _ := netip.AddrFromSlice(rAddr.IP)
-			rAddrPort := netip.AddrPortFrom(rAddrIp, uint16(rAddr.Port))
+			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
+
+			if rAddrPort.Addr().IsLoopback() {
+				_ = pool.Put(buf)
+
+				continue
+			}
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
