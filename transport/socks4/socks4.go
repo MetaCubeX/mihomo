@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/auth"
@@ -40,6 +41,8 @@ var (
 	ErrRequestUnknownCode      = errors.New("request failed with unknown code")
 )
 
+var subnet = netip.PrefixFrom(netip.IPv4Unspecified(), 24)
+
 func ServerHandshake(rw io.ReadWriter, authenticator auth.Authenticator) (addr string, command Command, err error) {
 	var req [8]byte
 	if _, err = io.ReadFull(rw, req[:]); err != nil {
@@ -57,8 +60,8 @@ func ServerHandshake(rw io.ReadWriter, authenticator auth.Authenticator) (addr s
 	}
 
 	var (
-		dstIP   = req[4:8] // [4]byte
-		dstPort = req[2:4] // [2]byte
+		dstIP   = netip.AddrFrom4(*(*[4]byte)(req[4:8])) // [4]byte
+		dstPort = req[2:4]                               // [2]byte
 	)
 
 	var (
@@ -83,7 +86,7 @@ func ServerHandshake(rw io.ReadWriter, authenticator auth.Authenticator) (addr s
 	if host != "" {
 		addr = net.JoinHostPort(host, port)
 	} else {
-		addr = net.JoinHostPort(net.IP(dstIP).String(), port)
+		addr = net.JoinHostPort(dstIP.String(), port)
 	}
 
 	// SOCKS4 only support USERID auth.
@@ -97,7 +100,7 @@ func ServerHandshake(rw io.ReadWriter, authenticator auth.Authenticator) (addr s
 	var reply [8]byte
 	reply[0] = 0x00 // reply code
 	reply[1] = code // result code
-	copy(reply[4:8], dstIP)
+	copy(reply[4:8], dstIP.AsSlice())
 	copy(reply[2:4], dstPort)
 
 	_, wErr := rw.Write(reply[:])
@@ -118,20 +121,18 @@ func ClientHandshake(rw io.ReadWriter, addr string, command Command, userID stri
 		return err
 	}
 
-	ip := net.ParseIP(host)
-	if ip == nil /* HOST */ {
-		ip = net.IPv4(0, 0, 0, 1).To4()
-	} else if ip.To4() == nil /* IPv6 */ {
+	dstIP, err := netip.ParseAddr(host)
+	if err != nil /* HOST */ {
+		dstIP = netip.AddrFrom4([4]byte{0, 0, 0, 1})
+	} else if dstIP.Is6() /* IPv6 */ {
 		return errIPv6NotSupported
 	}
-
-	dstIP := ip.To4()
 
 	req := &bytes.Buffer{}
 	req.WriteByte(Version)
 	req.WriteByte(command)
-	binary.Write(req, binary.BigEndian, uint16(port))
-	req.Write(dstIP)
+	_ = binary.Write(req, binary.BigEndian, uint16(port))
+	req.Write(dstIP.AsSlice())
 	req.WriteString(userID)
 	req.WriteByte(0) /* NULL */
 
@@ -174,12 +175,7 @@ func ClientHandshake(rw io.ReadWriter, addr string, command Command, userID stri
 // Internet Assigned Numbers Authority -- such an address is inadmissible
 // as a destination IP address and thus should never occur if the client
 // can resolve the domain name.)
-func isReservedIP(ip net.IP) bool {
-	subnet := net.IPNet{
-		IP:   net.IPv4zero,
-		Mask: net.IPv4Mask(0xff, 0xff, 0xff, 0x00),
-	}
-
+func isReservedIP(ip netip.Addr) bool {
 	return !ip.IsUnspecified() && subnet.Contains(ip)
 }
 

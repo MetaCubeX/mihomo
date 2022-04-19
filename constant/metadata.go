@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 )
 
@@ -73,22 +74,26 @@ func (t Type) MarshalJSON() ([]byte, error) {
 
 // Metadata is used to store connection address
 type Metadata struct {
-	NetWork     NetWork `json:"network"`
-	Type        Type    `json:"type"`
-	SrcIP       net.IP  `json:"sourceIP"`
-	DstIP       net.IP  `json:"destinationIP"`
-	SrcPort     string  `json:"sourcePort"`
-	DstPort     string  `json:"destinationPort"`
-	AddrType    int     `json:"-"`
-	Host        string  `json:"host"`
-	DNSMode     DNSMode `json:"dnsMode"`
-	Process     string  `json:"process"`
-	ProcessPath string  `json:"processPath"`
+	NetWork     NetWork    `json:"network"`
+	Type        Type       `json:"type"`
+	SrcIP       netip.Addr `json:"sourceIP"`
+	DstIP       netip.Addr `json:"destinationIP"`
+	SrcPort     string     `json:"sourcePort"`
+	DstPort     string     `json:"destinationPort"`
+	AddrType    int        `json:"-"`
+	Host        string     `json:"host"`
+	DNSMode     DNSMode    `json:"dnsMode"`
+	Process     string     `json:"process"`
+	ProcessPath string     `json:"processPath"`
+	UserAgent   string     `json:"userAgent"`
 }
 
 func (m *Metadata) RemoteAddress() string {
-        return net.JoinHostPort(m.String(), m.DstPort)
-	
+	if m.DstIP.IsValid() {
+		return net.JoinHostPort(m.DstIP.String(), m.DstPort)
+	} else {
+		return net.JoinHostPort(m.String(), m.DstPort)
+	}
 }
 
 func (m *Metadata) SourceAddress() string {
@@ -108,33 +113,33 @@ func (m *Metadata) SourceDetail() string {
 }
 
 func (m *Metadata) Resolved() bool {
-	return m.DstIP != nil
+	return m.DstIP.IsValid()
 }
 
 // Pure is used to solve unexpected behavior
 // when dialing proxy connection in DNSMapping mode.
 func (m *Metadata) Pure() *Metadata {
-	if m.DNSMode == DNSMapping && m.DstIP != nil {
-		copy := *m
-		copy.Host = ""
-		if copy.DstIP.To4() != nil {
-			copy.AddrType = AtypIPv4
+	if m.DNSMode == DNSMapping && m.DstIP.IsValid() {
+		copyM := *m
+		copyM.Host = ""
+		if copyM.DstIP.Is4() {
+			copyM.AddrType = AtypIPv4
 		} else {
-			copy.AddrType = AtypIPv6
+			copyM.AddrType = AtypIPv6
 		}
-		return &copy
+		return &copyM
 	}
 
 	return m
 }
 
 func (m *Metadata) UDPAddr() *net.UDPAddr {
-	if m.NetWork != UDP || m.DstIP == nil {
+	if m.NetWork != UDP || !m.DstIP.IsValid() {
 		return nil
 	}
 	port, _ := strconv.ParseUint(m.DstPort, 10, 16)
 	return &net.UDPAddr{
-		IP:   m.DstIP,
+		IP:   m.DstIP.AsSlice(),
 		Port: int(port),
 	}
 }
@@ -142,7 +147,7 @@ func (m *Metadata) UDPAddr() *net.UDPAddr {
 func (m *Metadata) String() string {
 	if m.Host != "" {
 		return m.Host
-	} else if m.DstIP != nil {
+	} else if m.DstIP.IsValid() {
 		return m.DstIP.String()
 	} else {
 		return "<nil>"
@@ -150,5 +155,5 @@ func (m *Metadata) String() string {
 }
 
 func (m *Metadata) Valid() bool {
-	return m.Host != "" || m.DstIP != nil
+	return m.Host != "" || m.DstIP.IsValid()
 }

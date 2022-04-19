@@ -83,6 +83,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			lAddr := conn.LocalAddr().(*net.TCPAddr)
 			rAddr := conn.RemoteAddr().(*net.TCPAddr)
 
+			lAddrPort := netip.AddrPortFrom(nnip.IpToAddr(lAddr.IP), uint16(lAddr.Port))
 			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
 
 			if rAddrPort.Addr().IsLoopback() {
@@ -135,8 +136,8 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			metadata := &C.Metadata{
 				NetWork:  C.TCP,
 				Type:     C.TUN,
-				SrcIP:    lAddr.IP,
-				DstIP:    rAddr.IP,
+				SrcIP:    lAddrPort.Addr(),
+				DstIP:    rAddrPort.Addr(),
 				SrcPort:  strconv.Itoa(lAddr.Port),
 				DstPort:  strconv.Itoa(rAddr.Port),
 				AddrType: C.AtypIPv4,

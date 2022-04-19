@@ -2,7 +2,7 @@ package common
 
 import (
 	"errors"
-	"net"
+	"net/netip"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -54,17 +54,17 @@ func FindNetwork(params []string) C.NetWork {
 	return C.ALLNet
 }
 
-func FindSourceIPs(params []string) []*net.IPNet {
-	var ips []*net.IPNet
+func FindSourceIPs(params []string) []*netip.Prefix {
+	var ips []*netip.Prefix
 	for _, p := range params {
 		if p == noResolve || len(p) < 7 {
 			continue
 		}
-		_, ipnet, err := net.ParseCIDR(p)
+		ipnet, err := netip.ParsePrefix(p)
 		if err != nil {
 			continue
 		}
-		ips = append(ips, ipnet)
+		ips = append(ips, &ipnet)
 	}
 
 	if len(ips) > 0 {

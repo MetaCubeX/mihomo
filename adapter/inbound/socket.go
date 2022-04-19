@@ -37,7 +37,7 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 		metadata.DstPort = port
 		if host == "" {
 			metadata.DstIP = ip
-			if ip.To4() == nil {
+			if ip.Is4() {
 				metadata.AddrType = C.AtypIPv6
 			} else {
 				metadata.AddrType = C.AtypIPv4

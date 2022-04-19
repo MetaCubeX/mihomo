@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/netip"
 	"strings"
 	"time"
@@ -46,8 +45,8 @@ type Resolver struct {
 }
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeA
-func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
-	ch := make(chan net.IP, 1)
+func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
+	ch := make(chan netip.Addr, 1)
 	go func() {
 		defer close(ch)
 		ip, err := r.resolveIP(host, D.TypeAAAA)
@@ -64,23 +63,23 @@ func (r *Resolver) ResolveIP(host string) (ip net.IP, err error) {
 
 	ip, open := <-ch
 	if !open {
-		return nil, resolver.ErrIPNotFound
+		return netip.Addr{}, resolver.ErrIPNotFound
 	}
 
 	return ip, nil
 }
 
 // ResolveIPv4 request with TypeA
-func (r *Resolver) ResolveIPv4(host string) (ip net.IP, err error) {
+func (r *Resolver) ResolveIPv4(host string) (ip netip.Addr, err error) {
 	return r.resolveIP(host, D.TypeA)
 }
 
 // ResolveIPv6 request with TypeAAAA
-func (r *Resolver) ResolveIPv6(host string) (ip net.IP, err error) {
+func (r *Resolver) ResolveIPv6(host string) (ip netip.Addr, err error) {
 	return r.resolveIP(host, D.TypeAAAA)
 }
 
-func (r *Resolver) shouldIPFallback(ip net.IP) bool {
+func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
 	for _, filter := range r.fallbackIPFilters {
 		if filter.Match(ip) {
 			return true
@@ -101,10 +100,10 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	}
 
 	q := m.Question[0]
-	cache, expireTime, hit := r.lruCache.GetWithExpire(q.String())
+	cacheM, expireTime, hit := r.lruCache.GetWithExpire(q.String())
 	if hit {
 		now := time.Now()
-		msg = cache.Copy()
+		msg = cacheM.Copy()
 		if expireTime.Before(now) {
 			setMsgTTL(msg, uint32(1)) // Continue fetch
 			go r.exchangeWithoutCache(ctx, m)
@@ -255,16 +254,16 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	return
 }
 
-func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error) {
-	ip = net.ParseIP(host)
-	if ip != nil {
-		isIPv4 := ip.To4() != nil
+func (r *Resolver) resolveIP(host string, dnsType uint16) (ip netip.Addr, err error) {
+	ip, err = netip.ParseAddr(host)
+	if err == nil {
+		isIPv4 := ip.Is4()
 		if dnsType == D.TypeAAAA && !isIPv4 {
 			return ip, nil
 		} else if dnsType == D.TypeA && isIPv4 {
 			return ip, nil
 		} else {
-			return nil, resolver.ErrIPVersion
+			return netip.Addr{}, resolver.ErrIPVersion
 		}
 	}
 
@@ -273,13 +272,13 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip net.IP, err error)
 
 	msg, err := r.Exchange(query)
 	if err != nil {
-		return nil, err
+		return netip.Addr{}, err
 	}
 
 	ips := msgToIP(msg)
 	ipLength := len(ips)
 	if ipLength == 0 {
-		return nil, resolver.ErrIPNotFound
+		return netip.Addr{}, resolver.ErrIPNotFound
 	}
 
 	ip = ips[rand.Intn(ipLength)]
@@ -318,7 +317,7 @@ type NameServer struct {
 type FallbackFilter struct {
 	GeoIP     bool
 	GeoIPCode string
-	IPCIDR    []*net.IPNet
+	IPCIDR    []*netip.Prefix
 	Domain    []string
 	GeoSite   []*router.DomainMatcher
 }
@@ -359,7 +358,7 @@ func NewResolver(config Config) *Resolver {
 	if len(config.Policy) != 0 {
 		r.policy = trie.New[*Policy]()
 		for domain, nameserver := range config.Policy {
-			r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
+			_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
 		}
 	}
 

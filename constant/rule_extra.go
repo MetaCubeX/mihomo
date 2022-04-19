@@ -1,7 +1,7 @@
 package constant
 
 import (
-	"net"
+	"net/netip"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -9,7 +9,7 @@ import (
 
 type RuleExtra struct {
 	Network      NetWork
-	SourceIPs    []*net.IPNet
+	SourceIPs    []*netip.Prefix
 	ProcessNames []string
 }
 
@@ -17,7 +17,7 @@ func (re *RuleExtra) NotMatchNetwork(network NetWork) bool {
 	return re.Network != ALLNet && re.Network != network
 }
 
-func (re *RuleExtra) NotMatchSourceIP(srcIP net.IP) bool {
+func (re *RuleExtra) NotMatchSourceIP(srcIP netip.Addr) bool {
 	if re.SourceIPs == nil {
 		return false
 	}

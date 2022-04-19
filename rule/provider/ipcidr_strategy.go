@@ -13,7 +13,7 @@ type ipcidrStrategy struct {
 }
 
 func (i *ipcidrStrategy) Match(metadata *C.Metadata) bool {
-	return i.trie != nil && i.trie.IsContain(metadata.DstIP)
+	return i.trie != nil && i.trie.IsContain(metadata.DstIP.AsSlice())
 }
 
 func (i *ipcidrStrategy) Count() int {
