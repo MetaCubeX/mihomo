@@ -13,8 +13,8 @@ import (
 
 func tcpKeepAlive(c net.Conn) {
 	if tcp, ok := c.(*net.TCPConn); ok {
-		tcp.SetKeepAlive(true)
-		tcp.SetKeepAlivePeriod(30 * time.Second)
+		_ = tcp.SetKeepAlive(true)
+		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
 	}
 }
 
@@ -25,14 +25,14 @@ func serializesSocksAddr(metadata *C.Metadata) []byte {
 	port := []byte{uint8(p >> 8), uint8(p & 0xff)}
 	switch metadata.AddrType {
 	case socks5.AtypDomainName:
-		len := uint8(len(metadata.Host))
+		lenM := uint8(len(metadata.Host))
 		host := []byte(metadata.Host)
-		buf = [][]byte{{aType, len}, host, port}
+		buf = [][]byte{{aType, lenM}, host, port}
 	case socks5.AtypIPv4:
-		host := metadata.DstIP.To4()
+		host := metadata.DstIP.AsSlice()
 		buf = [][]byte{{aType}, host, port}
 	case socks5.AtypIPv6:
-		host := metadata.DstIP.To16()
+		host := metadata.DstIP.AsSlice()
 		buf = [][]byte{{aType}, host, port}
 	}
 	return bytes.Join(buf, nil)
@@ -53,6 +53,6 @@ func resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 
 func safeConnClose(c net.Conn, err error) {
 	if err != nil {
-		c.Close()
+		_ = c.Close()
 	}
 }

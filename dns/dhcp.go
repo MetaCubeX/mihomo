@@ -1,9 +1,9 @@
 package dns
 
 import (
-	"bytes"
 	"context"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -27,7 +27,7 @@ type dhcpClient struct {
 	ifaceInvalidate time.Time
 	dnsInvalidate   time.Time
 
-	ifaceAddr *net.IPNet
+	ifaceAddr *netip.Prefix
 	done      chan struct{}
 	resolver  *Resolver
 	err       error
@@ -127,12 +127,12 @@ func (d *dhcpClient) invalidate() (bool, error) {
 		return false, err
 	}
 
-	addr, err := ifaceObj.PickIPv4Addr(nil)
+	addr, err := ifaceObj.PickIPv4Addr(netip.Addr{})
 	if err != nil {
 		return false, err
 	}
 
-	if time.Now().Before(d.dnsInvalidate) && d.ifaceAddr.IP.Equal(addr.IP) && bytes.Equal(d.ifaceAddr.Mask, addr.Mask) {
+	if time.Now().Before(d.dnsInvalidate) && d.ifaceAddr == addr {
 		return false, nil
 	}
 

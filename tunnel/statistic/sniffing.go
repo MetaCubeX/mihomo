@@ -32,7 +32,7 @@ func (r *sniffing) Write(b []byte) (int, error) {
 			resolver.InsertHostByIP(r.metadata.DstIP, header.Domain())
 			log.Warnln("use sni update host: %s ip: %s", header.Domain(), r.metadata.DstIP.String())
 			if r.allowBreak {
-				r.Conn.Close()
+				_ = r.Conn.Close()
 				return 0, errors.New("sni update, break current link to avoid leaks")
 			} else {
 				r.metadata.Host = header.Domain()

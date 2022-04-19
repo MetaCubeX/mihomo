@@ -4,6 +4,7 @@ package dialer
 
 import (
 	"net"
+	"net/netip"
 	"sync"
 
 	"github.com/Dreamacro/clash/log"
@@ -17,10 +18,10 @@ func printMarkWarn() {
 	})
 }
 
-func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ net.IP) {
+func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ netip.Addr) {
 	printMarkWarn()
 }
 
-func bindMarkToListenConfig(mark int, lc *net.ListenConfig, _, address string) {
+func bindMarkToListenConfig(mark int, lc *net.ListenConfig, _, _ string) {
 	printMarkWarn()
 }

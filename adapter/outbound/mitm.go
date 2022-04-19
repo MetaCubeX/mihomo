@@ -33,11 +33,6 @@ func (m *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...diale
 
 	metadata.Type = C.MITM
 
-	if metadata.Host != "" {
-		metadata.AddrType = C.AtypDomainName
-		metadata.DstIP = nil
-	}
-
 	c, err := dialer.DialContext(ctx, "tcp", m.serverAddr, []dialer.Option{dialer.WithInterface(""), dialer.WithRoutingMark(0)}...)
 	if err != nil {
 		return nil, err

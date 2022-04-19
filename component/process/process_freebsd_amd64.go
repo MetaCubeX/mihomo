@@ -3,13 +3,14 @@ package process
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
 
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -20,7 +21,7 @@ var (
 	once sync.Once
 )
 
-func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (string, error) {
 	once.Do(func() {
 		if err := initSearcher(); err != nil {
 			log.Errorln("Initialize PROCESS-NAME failed: %s", err.Error())
@@ -102,7 +103,7 @@ type searcher struct {
 	pid          int
 }
 
-func (s *searcher) Search(buf []byte, ip net.IP, port uint16, isTCP bool) (uint32, error) {
+func (s *searcher) Search(buf []byte, ip netip.Addr, port uint16, isTCP bool) (uint32, error) {
 	var itemSize int
 	var inpOffset int
 
@@ -116,7 +117,7 @@ func (s *searcher) Search(buf []byte, ip net.IP, port uint16, isTCP bool) (uint3
 		inpOffset = s.udpInpOffset
 	}
 
-	isIPv4 := ip.To4() != nil
+	isIPv4 := ip.Is4()
 	// skip the first xinpgen block
 	for i := s.headSize; i+itemSize <= len(buf); i += itemSize {
 		inp := i + inpOffset
@@ -130,19 +131,19 @@ func (s *searcher) Search(buf []byte, ip net.IP, port uint16, isTCP bool) (uint3
 		// xinpcb.inp_vflag
 		flag := buf[inp+s.vflag]
 
-		var srcIP net.IP
+		var srcIP netip.Addr
 		switch {
 		case flag&0x1 > 0 && isIPv4:
 			// ipv4
-			srcIP = net.IP(buf[inp+s.ip : inp+s.ip+4])
+			srcIP = nnip.IpToAddr(buf[inp+s.ip : inp+s.ip+4])
 		case flag&0x2 > 0 && !isIPv4:
 			// ipv6
-			srcIP = net.IP(buf[inp+s.ip-12 : inp+s.ip+4])
+			srcIP = nnip.IpToAddr(buf[inp+s.ip-12 : inp+s.ip+4])
 		default:
 			continue
 		}
 
-		if !ip.Equal(srcIP) {
+		if ip != srcIP {
 			continue
 		}
 

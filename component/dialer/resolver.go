@@ -3,6 +3,7 @@ package dialer
 import (
 	"context"
 	"net"
+	"net/netip"
 )
 
 func init() {
@@ -18,9 +19,9 @@ func resolverDialContext(ctx context.Context, network, address string) (net.Conn
 	interfaceName := DefaultInterface.Load()
 
 	if interfaceName != "" {
-		dstIP := net.ParseIP(address)
-		if dstIP != nil {
-			bindIfaceToDialer(interfaceName, d, network, dstIP)
+		dstIP, err := netip.ParseAddr(address)
+		if err == nil {
+			_ = bindIfaceToDialer(interfaceName, d, network, dstIP)
 		}
 	}
 

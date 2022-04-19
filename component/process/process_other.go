@@ -2,8 +2,8 @@
 
 package process
 
-import "net"
+import "net/netip"
 
-func findProcessName(network string, ip net.IP, srcPort int) (string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (string, error) {
 	return "", ErrPlatformNotSupport
 }

@@ -9,7 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -290,24 +290,15 @@ func parseSourceAddress(req *http.Request, connSource, source net.Addr) net.Addr
 
 	req.Header.Del("Origin-Request-Source-Address")
 
-	host, port, err := net.SplitHostPort(sourceAddress)
+	addrPort, err := netip.ParseAddrPort(sourceAddress)
 	if err != nil {
 		return connSource
 	}
 
-	p, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return connSource
+	return &net.TCPAddr{
+		IP:   addrPort.Addr().AsSlice(),
+		Port: int(addrPort.Port()),
 	}
-
-	if ip := net.ParseIP(host); ip != nil {
-		return &net.TCPAddr{
-			IP:   ip,
-			Port: int(p),
-		}
-	}
-
-	return connSource
 }
 
 func newClientBySourceAndUserAgentIfNil(cli *http.Client, req *http.Request, source net.Addr, in chan<- C.ConnContext) *http.Client {

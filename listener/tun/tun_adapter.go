@@ -50,7 +50,7 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
 	}
 
-	process.AppendLocalIPs(tunAddress.Masked().Addr().Next().AsSlice())
+	process.AppendLocalIPs(tunAddress.Masked().Addr().Next())
 
 	// open tun device
 	tunDevice, err = parseDevice(devName, uint32(mtu))
