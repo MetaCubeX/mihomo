@@ -9,11 +9,7 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
-func Start(
-	device io.ReadWriter,
-	gateway netip.Addr,
-	portal netip.Addr,
-) (*TCP, *UDP, error) {
+func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *UDP, error) {
 	if !portal.Is4() || !gateway.Is4() {
 		return nil, nil, net.InvalidAddrError("only ipv4 supported")
 	}
@@ -37,8 +33,10 @@ func Start(
 	gatewayPort := uint16(listener.Addr().(*net.TCPAddr).Port)
 
 	go func() {
-		defer tcp.Close()
-		defer udp.Close()
+		defer func() {
+			_ = tcp.Close()
+			_ = udp.Close()
+		}()
 
 		buf := make([]byte, pool.RelayBufferSize)
 
@@ -72,7 +70,7 @@ func Start(
 					continue
 				}
 
-				if ipv4.Offset() != 0 {
+				if ipv4.FragmentOffset() != 0 {
 					continue
 				}
 
@@ -92,6 +90,12 @@ func Start(
 				continue
 			}
 
+			destinationIP := ip.DestinationIP()
+
+			if !destinationIP.IsGlobalUnicast() || destinationIP == broadcast {
+				continue
+			}
+
 			switch ip.Protocol() {
 			case tcpip.TCP:
 				t := tcpip.TCPPacket(ip.Payload())
@@ -99,7 +103,7 @@ func Start(
 					continue
 				}
 
-				if ip.DestinationIP() == portal {
+				if destinationIP == portal {
 					if ip.SourceIP() == gateway && t.SourcePort() == gatewayPort {
 						tup := tab.tupleOf(t.DestinationPort())
 						if tup == zeroTuple {
@@ -120,7 +124,7 @@ func Start(
 				} else {
 					tup := tuple{
 						SourceAddr:      netip.AddrPortFrom(ip.SourceIP(), t.SourcePort()),
-						DestinationAddr: netip.AddrPortFrom(ip.DestinationIP(), t.DestinationPort()),
+						DestinationAddr: netip.AddrPortFrom(destinationIP, t.DestinationPort()),
 					}
 
 					port := tab.portOf(tup)
@@ -158,10 +162,8 @@ func Start(
 
 				i.SetType(tcpip.ICMPTypePingResponse)
 
-				source := ip.SourceIP()
-				destination := ip.DestinationIP()
-				ip.SetSourceIP(destination)
-				ip.SetDestinationIP(source)
+				ip.SetDestinationIP(ip.SourceIP())
+				ip.SetSourceIP(destinationIP)
 
 				ip.ResetChecksum()
 				i.ResetChecksum()
@@ -176,10 +178,8 @@ func Start(
 
 				i.SetType(tcpip.ICMPv6EchoReply)
 
-				source := ip.SourceIP()
-				destination := ip.DestinationIP()
-				ip.SetSourceIP(destination)
-				ip.SetDestinationIP(source)
+				ip.SetDestinationIP(ip.SourceIP())
+				ip.SetSourceIP(destinationIP)
 
 				ip.ResetChecksum()
 				i.ResetChecksum(ip.PseudoSum())

@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/device/tun"
 	"github.com/Dreamacro/clash/log"
@@ -226,7 +227,7 @@ func cleanupAddressesOnDisconnectedInterfaces(family winipcfg.AddressFamily, add
 			continue
 		}
 		for address := iface.FirstUnicastAddress; address != nil; address = address.Next {
-			if ip, _ := netip.AddrFromSlice(address.Address.IP()); addrHash[ip] {
+			if ip := nnip.IpToAddr(address.Address.IP()); addrHash[ip] {
 				prefix := netip.PrefixFrom(ip, int(address.OnLinkPrefixLength))
 				log.Infoln("[TUN] cleaning up stale address %s from interface ‘%s’", prefix.String(), iface.FriendlyName())
 				_ = iface.LUID.DeleteIPAddress(prefix)
@@ -260,7 +261,7 @@ func getAutoDetectInterfaceByFamily(family winipcfg.AddressFamily) (string, erro
 		}
 
 		for gatewayAddress := iface.FirstGatewayAddress; gatewayAddress != nil; gatewayAddress = gatewayAddress.Next {
-			nextHop, _ := netip.AddrFromSlice(gatewayAddress.Address.IP())
+			nextHop := nnip.IpToAddr(gatewayAddress.Address.IP())
 
 			if _, err = iface.LUID.Route(destination, nextHop); err == nil {
 				return ifname, nil

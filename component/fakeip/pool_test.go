@@ -240,13 +240,15 @@ func TestPool_FlushFileCache(t *testing.T) {
 		err = pool.FlushFakeIP()
 		assert.Nil(t, err)
 
-		baz := pool.Lookup("foo.com")
 		next := pool.Lookup("baz.com")
+		baz := pool.Lookup("foo.com")
 		nero := pool.Lookup("foo.com")
 
 		assert.True(t, foo == fox)
+		assert.True(t, foo == next)
 		assert.False(t, foo == baz)
 		assert.True(t, bar == bax)
+		assert.True(t, bar == baz)
 		assert.False(t, bar == next)
 		assert.True(t, baz == nero)
 	}
@@ -267,13 +269,15 @@ func TestPool_FlushMemoryCache(t *testing.T) {
 	err := pool.FlushFakeIP()
 	assert.Nil(t, err)
 
-	baz := pool.Lookup("foo.com")
 	next := pool.Lookup("baz.com")
+	baz := pool.Lookup("foo.com")
 	nero := pool.Lookup("foo.com")
 
 	assert.True(t, foo == fox)
+	assert.True(t, foo == next)
 	assert.False(t, foo == baz)
 	assert.True(t, bar == bax)
+	assert.True(t, bar == baz)
 	assert.False(t, bar == next)
 	assert.True(t, baz == nero)
 }
