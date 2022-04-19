@@ -1,12 +1,11 @@
 package fakeip
 
 import (
-	"encoding/binary"
 	"errors"
-	"math/bits"
 	"net/netip"
 	"sync"
 
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/trie"
 )
@@ -15,11 +14,6 @@ const (
 	offsetKey = "key-offset-fake-ip"
 	cycleKey  = "key-cycle-fake-ip"
 )
-
-type uint128 struct {
-	hi uint64
-	lo uint64
-}
 
 type store interface {
 	GetByHost(host string) (netip.Addr, bool)
@@ -122,7 +116,7 @@ func (p *Pool) FlushFakeIP() error {
 	err := p.store.FlushFakeIP()
 	if err == nil {
 		p.cycle = false
-		p.offset = p.first
+		p.offset = p.first.Prev()
 	}
 	return err
 }
@@ -173,10 +167,10 @@ func New(options Options) (*Pool, error) {
 		hostAddr = options.IPNet.Masked().Addr()
 		gateway  = hostAddr.Next()
 		first    = gateway.Next().Next()
-		last     = add(hostAddr, 1<<uint64(hostAddr.BitLen()-options.IPNet.Bits())-1)
+		last     = nnip.UnMasked(*options.IPNet)
 	)
 
-	if !options.IPNet.IsValid() || !first.Less(last) || !options.IPNet.Contains(last) {
+	if !options.IPNet.IsValid() || !first.IsValid() || !first.Less(last) {
 		return nil, errors.New("ipnet don't have valid ip")
 	}
 
@@ -200,30 +194,4 @@ func New(options Options) (*Pool, error) {
 	pool.restoreState()
 
 	return pool, nil
-}
-
-// add returns addr + n.
-func add(addr netip.Addr, n uint64) netip.Addr {
-	buf := addr.As16()
-
-	u := uint128{
-		binary.BigEndian.Uint64(buf[:8]),
-		binary.BigEndian.Uint64(buf[8:]),
-	}
-
-	lo, carry := bits.Add64(u.lo, n, 0)
-
-	u.hi = u.hi + carry
-	u.lo = lo
-
-	binary.BigEndian.PutUint64(buf[:8], u.hi)
-	binary.BigEndian.PutUint64(buf[8:], u.lo)
-
-	a := netip.AddrFrom16(buf)
-
-	if addr.Is4() {
-		return a.Unmap()
-	}
-
-	return a
 }

@@ -13,8 +13,8 @@ type StackListener struct {
 	udp    *nat.UDP
 }
 
-func StartListener(device io.ReadWriteCloser, gateway netip.Addr, portal netip.Addr) (*StackListener, error) {
-	tcp, udp, err := nat.Start(device, gateway, portal)
+func StartListener(device io.ReadWriteCloser, gateway, portal, broadcast netip.Addr) (*StackListener, error) {
+	tcp, udp, err := nat.Start(device, gateway, portal, broadcast)
 	if err != nil {
 		return nil, err
 	}
