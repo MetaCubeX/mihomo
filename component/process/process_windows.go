@@ -214,8 +214,7 @@ func getExecPathFromPID(pid uint32) (string, error) {
 		uintptr(h),
 		uintptr(1),
 		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(unsafe.Pointer(&size)),
-		0, 0)
+		uintptr(unsafe.Pointer(&size)))
 	if r1 == 0 {
 		return "", err
 	}

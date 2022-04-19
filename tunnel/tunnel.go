@@ -3,6 +3,7 @@ package tunnel
 import (
 	"context"
 	"fmt"
+	P "github.com/Dreamacro/clash/component/process"
 	"net"
 	"path/filepath"
 	"runtime"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
-	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/sniffer"
 	C "github.com/Dreamacro/clash/constant"
@@ -177,7 +177,6 @@ func preHandleMetadata(metadata *C.Metadata) error {
 			metadata.ProcessPath = path
 		}
 	}
-
 	return nil
 }
 
@@ -358,7 +357,6 @@ func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
 func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
-
 	var resolved bool
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {

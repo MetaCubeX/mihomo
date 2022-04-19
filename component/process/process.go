@@ -27,7 +27,7 @@ func ShouldFindProcess(metadata *C.Metadata) bool {
 	if runtime.GOOS == "android" {
 		return false
 	}
-	if metadata.Process != "" {
+	if metadata.Process != "" || metadata.ProcessPath != "" {
 		return false
 	}
 	for _, ip := range localIPs {
