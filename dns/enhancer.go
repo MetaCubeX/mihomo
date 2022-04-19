@@ -5,6 +5,7 @@ import (
 	"net/netip"
 
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/fakeip"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -29,7 +30,7 @@ func (h *ResolverEnhancer) IsExistFakeIP(ip net.IP) bool {
 	}
 
 	if pool := h.fakePool; pool != nil {
-		return pool.Exist(ipToAddr(ip))
+		return pool.Exist(nnip.IpToAddr(ip))
 	}
 
 	return false
@@ -40,7 +41,7 @@ func (h *ResolverEnhancer) IsFakeIP(ip net.IP) bool {
 		return false
 	}
 
-	addr := ipToAddr(ip)
+	addr := nnip.IpToAddr(ip)
 
 	if pool := h.fakePool; pool != nil {
 		return pool.IPNet().Contains(addr) && addr != pool.Gateway() && addr != pool.Broadcast()
@@ -55,14 +56,14 @@ func (h *ResolverEnhancer) IsFakeBroadcastIP(ip net.IP) bool {
 	}
 
 	if pool := h.fakePool; pool != nil {
-		return pool.Broadcast() == ipToAddr(ip)
+		return pool.Broadcast() == nnip.IpToAddr(ip)
 	}
 
 	return false
 }
 
 func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
-	addr := ipToAddr(ip)
+	addr := nnip.IpToAddr(ip)
 	if pool := h.fakePool; pool != nil {
 		if host, existed := pool.LookBack(addr); existed {
 			return host, true
@@ -80,7 +81,7 @@ func (h *ResolverEnhancer) FindHostByIP(ip net.IP) (string, bool) {
 
 func (h *ResolverEnhancer) InsertHostByIP(ip net.IP, host string) {
 	if mapping := h.mapping; mapping != nil {
-		h.mapping.Set(ipToAddr(ip), host)
+		h.mapping.Set(nnip.IpToAddr(ip), host)
 	}
 }
 

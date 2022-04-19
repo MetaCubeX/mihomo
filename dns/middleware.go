@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -101,7 +102,7 @@ func withMapping(mapping *cache.LruCache[netip.Addr, string]) middleware {
 					continue
 				}
 
-				mapping.SetWithExpire(ipToAddr(ip), host, time.Now().Add(time.Second*time.Duration(ttl)))
+				mapping.SetWithExpire(nnip.IpToAddr(ip), host, time.Now().Add(time.Second*time.Duration(ttl)))
 			}
 
 			return msg, nil
