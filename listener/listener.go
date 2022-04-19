@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -360,7 +361,6 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		if mitmListener.RawAddress() == addr {
 			return
 		}
-		outbound.MiddlemanServerAddress.Store("")
 		tunnel.MitmOutbound = nil
 		_ = mitmListener.Close()
 		mitmListener = nil
@@ -401,7 +401,7 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	certOption.SetValidity(cert.TTL << 3)
+	certOption.SetValidity(time.Hour * 24 * 90)
 	certOption.SetOrganization("Clash ManInTheMiddle Proxy Services")
 
 	opt := &mitm.Option{
@@ -416,8 +416,7 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	outbound.MiddlemanServerAddress.Store(mitmListener.Address())
-	tunnel.MitmOutbound = outbound.NewMitm()
+	tunnel.MitmOutbound = outbound.NewMitm(mitmListener.Address())
 
 	log.Infoln("Mitm proxy listening at: %s", mitmListener.Address())
 }

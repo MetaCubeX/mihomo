@@ -32,8 +32,8 @@ func HandleConn(c net.Conn, opt *Option, in chan<- C.ConnContext, cache *cache.C
 	}()
 
 startOver:
-	if tc, ok := c.(*net.TCPConn); ok {
-		_ = tc.SetKeepAlive(true)
+	if tcpConn, ok := c.(*net.TCPConn); ok {
+		_ = tcpConn.SetKeepAlive(true)
 	}
 
 	var conn *N.BufferedConn
@@ -47,14 +47,13 @@ startOver:
 
 readLoop:
 	for {
-		err := conn.SetDeadline(time.Now().Add(30 * time.Second)) // use SetDeadline instead of Proxy-Connection keep-alive
-		if err != nil {
+		// use SetDeadline instead of Proxy-Connection keep-alive
+		if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
 			break readLoop
 		}
 
 		request, err := H.ReadRequest(conn.Reader())
 		if err != nil {
-			handleError(opt, nil, err)
 			break readLoop
 		}
 
@@ -83,27 +82,15 @@ readLoop:
 					goto readLoop
 				}
 
-				b := make([]byte, 1)
-				if _, err = session.conn.Read(b); err != nil {
+				b, err := conn.Peek(1)
+				if err != nil {
 					handleError(opt, session, err)
 					break readLoop // close connection
-				}
-
-				buff := make([]byte, session.conn.(*N.BufferedConn).Buffered())
-				if _, err = session.conn.Read(buff); err != nil {
-					handleError(opt, session, err)
-					break readLoop // close connection
-				}
-
-				mrConn := &multiReaderConn{
-					Conn:   session.conn,
-					reader: io.MultiReader(bytes.NewReader(b), bytes.NewReader(buff), session.conn),
 				}
 
 				// TLS handshake.
 				if b[0] == 0x16 {
-					// TODO serve by generic host name maybe better?
-					tlsConn := tls.Server(mrConn, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Host))
+					tlsConn := tls.Server(conn, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Host))
 
 					// Handshake with the local client
 					if err = tlsConn.Handshake(); err != nil {
@@ -114,7 +101,7 @@ readLoop:
 
 					c = tlsConn
 				} else {
-					c = mrConn
+					c = conn
 				}
 
 				goto startOver
@@ -122,8 +109,11 @@ readLoop:
 
 			prepareRequest(c, session.request)
 
+			H.RemoveHopByHopHeaders(session.request.Header)
+			H.RemoveExtraHTTPHostPort(session.request)
+
 			// hijack api
-			if session.request.URL.Host == opt.ApiHost {
+			if session.request.URL.Hostname() == opt.ApiHost {
 				if err = handleApiRequest(session, opt); err != nil {
 					handleError(opt, session, err)
 					break readLoop
@@ -162,7 +152,6 @@ readLoop:
 					handleError(opt, session, err)
 					session.response = session.NewErrorResponse(err)
 					if errors.Is(err, ErrCertUnsupported) || strings.Contains(err.Error(), "x509: ") {
-						// TODO block unsupported host?
 						_ = writeResponse(session, false)
 						break readLoop
 					}
@@ -287,9 +276,6 @@ func prepareRequest(conn net.Conn, request *http.Request) {
 	if request.Header.Get("Accept-Encoding") != "" {
 		request.Header.Set("Accept-Encoding", "gzip")
 	}
-
-	H.RemoveHopByHopHeaders(request.Header)
-	H.RemoveExtraHTTPHostPort(request)
 }
 
 func parseSourceAddress(req *http.Request, connSource, source net.Addr) net.Addr {

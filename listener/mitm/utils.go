@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"time"
 
@@ -20,15 +19,6 @@ var (
 	ErrInvalidResponse = errors.New("invalid response")
 	ErrInvalidURL      = errors.New("invalid URL")
 )
-
-type multiReaderConn struct {
-	net.Conn
-	reader io.Reader
-}
-
-func (c *multiReaderConn) Read(buf []byte) (int, error) {
-	return c.reader.Read(buf)
-}
 
 func NewResponse(code int, body io.Reader, req *http.Request) *http.Response {
 	if body == nil {

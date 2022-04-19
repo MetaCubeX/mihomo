@@ -7,26 +7,23 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
-
-	"go.uber.org/atomic"
 )
 
 var (
 	errIgnored      = errors.New("not match in mitm host lists")
 	httpProxyClient = NewHttp(HttpOption{})
 
-	MiddlemanServerAddress = atomic.NewString("")
-	MiddlemanRewriteHosts  *trie.DomainTrie[bool]
+	MiddlemanRewriteHosts *trie.DomainTrie[bool]
 )
 
 type Mitm struct {
 	*Base
+	serverAddr string
 }
 
 // DialContext implements C.ProxyAdapter
-func (d *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...dialer.Option) (C.Conn, error) {
-	addr := MiddlemanServerAddress.Load()
-	if addr == "" || MiddlemanRewriteHosts == nil {
+func (m *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...dialer.Option) (C.Conn, error) {
+	if MiddlemanRewriteHosts == nil {
 		return nil, errIgnored
 	}
 
@@ -41,7 +38,7 @@ func (d *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...diale
 		metadata.DstIP = nil
 	}
 
-	c, err := dialer.DialContext(ctx, "tcp", addr, []dialer.Option{dialer.WithInterface(""), dialer.WithRoutingMark(0)}...)
+	c, err := dialer.DialContext(ctx, "tcp", m.serverAddr, []dialer.Option{dialer.WithInterface(""), dialer.WithRoutingMark(0)}...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,14 +52,15 @@ func (d *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...diale
 		return nil, err
 	}
 
-	return NewConn(c, d), nil
+	return NewConn(c, m), nil
 }
 
-func NewMitm() *Mitm {
+func NewMitm(serverAddr string) *Mitm {
 	return &Mitm{
 		Base: &Base{
 			name: "Mitm",
 			tp:   C.Mitm,
 		},
+		serverAddr: serverAddr,
 	}
 }
