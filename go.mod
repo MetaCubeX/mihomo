@@ -6,7 +6,7 @@ require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.8
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/go-chi/chi/v5 v5.0.7
-	github.com/go-chi/cors v1.2.0
+	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gorilla/websocket v1.5.0
@@ -21,15 +21,15 @@ require (
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
-	golang.org/x/net v0.0.0-20220412020605-290c469a71a5
+	golang.org/x/net v0.0.0-20220418201149-a630d4f3e7a2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220412071739-889880a91fd5
+	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	golang.zx2c4.com/wireguard v0.0.0-20220407013110-ef5c587f782d
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220412020520-6917e582612b
+	gvisor.dev/gvisor v0.0.0-20220419020849-1f2f4462d45b
 )
 
 require (

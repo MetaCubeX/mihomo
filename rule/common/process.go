@@ -21,7 +21,6 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 	if ps.nameOnly {
 		return strings.EqualFold(metadata.Process, ps.process)
 	}
-
 	return strings.EqualFold(metadata.ProcessPath, ps.process)
 }
 
