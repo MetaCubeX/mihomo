@@ -54,7 +54,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 		}
 	}
 
-	go DefaultInterfaceChangeMonitor(nil)
+	go DefaultInterfaceChangeMonitor()
 
 	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
 }
