@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -395,5 +397,8 @@ func genAddr(host string, port int, allowLan bool) string {
 func Cleanup() {
 	if tunStackListener != nil {
 		_ = tunStackListener.Close()
+		if runtime.GOOS == "android" {
+			_, _ = cmd.ExecCmd("ip rule del pref 5000")
+		}
 	}
 }
