@@ -2,9 +2,12 @@
 package gvisor
 
 import (
+	"net/netip"
+
+	"github.com/Dreamacro/clash/adapter/inbound"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -34,7 +37,7 @@ func (s *gvStack) Close() error {
 }
 
 // New allocates a new *gvStack with given options.
-func New(device device.Device, handler adapter.Handler, opts ...option.Option) (ipstack.Stack, error) {
+func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter, opts ...option.Option) (ipstack.Stack, error) {
 	s := &gvStack{
 		Stack: stack.New(stack.Options{
 			NetworkProtocols: []stack.NetworkProtocolFactory{
@@ -50,6 +53,13 @@ func New(device device.Device, handler adapter.Handler, opts ...option.Option) (
 		}),
 
 		device: device,
+	}
+
+	handler := &gvHandler{
+		gateway:   tunAddress.Masked().Addr().Next(),
+		dnsHijack: dnsHijack,
+		tcpIn:     tcpIn,
+		udpIn:     udpIn,
 	}
 
 	// Generate unique NIC id.

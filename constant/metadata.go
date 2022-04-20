@@ -89,11 +89,7 @@ type Metadata struct {
 }
 
 func (m *Metadata) RemoteAddress() string {
-	if m.DstIP.IsValid() {
-		return net.JoinHostPort(m.DstIP.String(), m.DstPort)
-	} else {
-		return net.JoinHostPort(m.String(), m.DstPort)
-	}
+	return net.JoinHostPort(m.String(), m.DstPort)
 }
 
 func (m *Metadata) SourceAddress() string {

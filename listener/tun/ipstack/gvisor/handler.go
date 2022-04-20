@@ -16,16 +16,17 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
-var _ adapter.Handler = (*GVHandler)(nil)
+var _ adapter.Handler = (*gvHandler)(nil)
 
-type GVHandler struct {
-	DNSAdds []netip.AddrPort
+type gvHandler struct {
+	gateway   netip.Addr
+	dnsHijack []netip.AddrPort
 
-	TCPIn chan<- C.ConnContext
-	UDPIn chan<- *inbound.PacketAdapter
+	tcpIn chan<- C.ConnContext
+	udpIn chan<- *inbound.PacketAdapter
 }
 
-func (gh *GVHandler) HandleTCP(tunConn adapter.TCPConn) {
+func (gh *gvHandler) HandleTCP(tunConn adapter.TCPConn) {
 	id := tunConn.ID()
 
 	rAddr := &net.TCPAddr{
@@ -34,11 +35,11 @@ func (gh *GVHandler) HandleTCP(tunConn adapter.TCPConn) {
 		Zone: "",
 	}
 
-	addrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
+	rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
 
-	if D.ShouldHijackDns(gh.DNSAdds, addrPort) {
+	if D.ShouldHijackDns(gh.dnsHijack, rAddrPort) {
 		go func() {
-			log.Debugln("[TUN] hijack dns tcp: %s", addrPort.String())
+			log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
 
 			buf := pool.Get(pool.UDPBufferSize)
 			defer func() {
@@ -77,10 +78,10 @@ func (gh *GVHandler) HandleTCP(tunConn adapter.TCPConn) {
 		return
 	}
 
-	gh.TCPIn <- inbound.NewSocket(socks5.ParseAddrToSocksAddr(rAddr), tunConn, C.TUN)
+	gh.tcpIn <- inbound.NewSocket(socks5.ParseAddrToSocksAddr(rAddr), tunConn, C.TUN)
 }
 
-func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
+func (gh *gvHandler) HandleUDP(tunConn adapter.UDPConn) {
 	id := tunConn.ID()
 
 	rAddr := &net.UDPAddr{
@@ -89,7 +90,13 @@ func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 		Zone: "",
 	}
 
-	addrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
+	rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
+
+	if rAddrPort.Addr() == gh.gateway {
+		_ = tunConn.Close()
+		return
+	}
+
 	target := socks5.ParseAddrToSocksAddr(rAddr)
 
 	go func() {
@@ -104,7 +111,7 @@ func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 
 			payload := buf[:n]
 
-			if D.ShouldHijackDns(gh.DNSAdds, addrPort) {
+			if D.ShouldHijackDns(gh.dnsHijack, rAddrPort) {
 				go func() {
 					defer func() {
 						_ = pool.Put(buf)
@@ -130,7 +137,7 @@ func (gh *GVHandler) HandleUDP(tunConn adapter.UDPConn) {
 			}
 
 			select {
-			case gh.UDPIn <- inbound.NewPacket(target, gvPacket, C.TUN):
+			case gh.udpIn <- inbound.NewPacket(target, gvPacket, C.TUN):
 			default:
 			}
 		}
