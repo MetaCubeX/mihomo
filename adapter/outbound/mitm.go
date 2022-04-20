@@ -33,7 +33,7 @@ func (m *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...diale
 
 	metadata.Type = C.MITM
 
-	c, err := dialer.DialContext(ctx, "tcp", m.serverAddr, []dialer.Option{dialer.WithInterface(""), dialer.WithRoutingMark(0)}...)
+	c, err := dialer.DialContext(ctx, "tcp", m.serverAddr, []dialer.Option{dialer.WithInterface(""), dialer.WithRoutingMark(0), dialer.WithDirect()}...)
 	if err != nil {
 		return nil, err
 	}

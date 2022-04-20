@@ -67,13 +67,7 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 			return nil, fmt.Errorf("can't attach endpoint to tun: %w", err)
 		}
 
-		tunStack, err = gvisor.New(tunDevice,
-			&gvisor.GVHandler{
-				DNSAdds: tunConf.DNSHijack,
-				TCPIn:   tcpIn, UDPIn: udpIn,
-			},
-			option.WithDefault(),
-		)
+		tunStack, err = gvisor.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn, option.WithDefault())
 
 		if err != nil {
 			_ = tunDevice.Close()
