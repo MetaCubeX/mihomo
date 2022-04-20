@@ -169,7 +169,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
 
-			if rAddrPort.Addr().IsLoopback() {
+			if rAddrPort.Addr().IsLoopback() || rAddrPort.Addr() == gateway {
 				_ = pool.Put(buf)
 
 				continue

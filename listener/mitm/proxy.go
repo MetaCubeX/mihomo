@@ -32,10 +32,6 @@ func HandleConn(c net.Conn, opt *Option, in chan<- C.ConnContext, cache *cache.C
 	}()
 
 startOver:
-	if tcpConn, ok := c.(*net.TCPConn); ok {
-		_ = tcpConn.SetKeepAlive(true)
-	}
-
 	var conn *N.BufferedConn
 	if bufConn, ok := c.(*N.BufferedConn); ok {
 		conn = bufConn
@@ -47,8 +43,8 @@ startOver:
 
 readLoop:
 	for {
-		// use SetDeadline instead of Proxy-Connection keep-alive
-		if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		// use SetReadDeadline instead of Proxy-Connection keep-alive
+		if err := conn.SetReadDeadline(time.Now().Add(95 * time.Second)); err != nil {
 			break readLoop
 		}
 
@@ -190,7 +186,7 @@ func writeResponse(session *Session, keepAlive bool) error {
 
 	if keepAlive {
 		session.response.Header.Set("Connection", "keep-alive")
-		session.response.Header.Set("Keep-Alive", "timeout=25")
+		session.response.Header.Set("Keep-Alive", "timeout=90")
 	}
 
 	return session.writeResponse()

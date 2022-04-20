@@ -48,5 +48,6 @@ func newClient(source net.Addr, userAgent string, in chan<- C.ConnContext) *http
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
+		Timeout: 120 * time.Second,
 	}
 }
