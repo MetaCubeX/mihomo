@@ -4,15 +4,18 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	R "github.com/Dreamacro/clash/rule"
-	RP "github.com/Dreamacro/clash/rule/provider"
 	"net"
 	"net/netip"
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Dreamacro/clash/common/utils"
+	R "github.com/Dreamacro/clash/rule"
+	RP "github.com/Dreamacro/clash/rule/provider"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -127,6 +130,7 @@ type Sniffer struct {
 	Reverses    *trie.DomainTrie[bool]
 	ForceDomain *trie.DomainTrie[bool]
 	SkipSNI     *trie.DomainTrie[bool]
+	Ports       *[]utils.Range[uint16]
 }
 
 // Experimental config
@@ -224,6 +228,7 @@ type SnifferRaw struct {
 	Reverse     []string `yaml:"reverses" json:"reverses"`
 	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
 	SkipSNI     []string `yaml:"skip-sni" json:"skip-sni"`
+	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
 }
 
 // Parse config
@@ -298,6 +303,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Reverse:     []string{},
 			ForceDomain: []string{},
 			SkipSNI:     []string{},
+			Ports:       []string{},
 		},
 		Profile: Profile{
 			StoreSelected: true,
@@ -913,6 +919,33 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 		Enable: snifferRaw.Enable,
 		Force:  snifferRaw.Force,
 	}
+
+	ports := []utils.Range[uint16]{}
+	if len(snifferRaw.Ports) == 0 {
+		ports = append(ports, *utils.NewRange[uint16](0, 65535))
+	} else {
+		for _, portRange := range snifferRaw.Ports {
+			portRaws := strings.Split(portRange, "-")
+			if len(portRaws) > 1 {
+				p, err := strconv.ParseUint(portRaws[0], 10, 16)
+				if err != nil {
+					return nil, fmt.Errorf("%s format error", portRange)
+				}
+
+				start := uint16(p)
+
+				p, err = strconv.ParseUint(portRaws[0], 10, 16)
+				if err != nil {
+					return nil, fmt.Errorf("%s format error", portRange)
+				}
+
+				end := uint16(p)
+				ports = append(ports, *utils.NewRange(start, end))
+			}
+		}
+	}
+
+	sniffer.Ports = &ports
 
 	loadSniffer := make(map[C.SnifferType]struct{})
 
