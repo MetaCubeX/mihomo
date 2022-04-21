@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"time"
 
 	"github.com/Dreamacro/clash/component/trie"
 
@@ -85,8 +86,16 @@ func (sd *SnifferDispatcher) Enable() bool {
 func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Metadata) (string, error) {
 	for _, sniffer := range sd.sniffers {
 		if sniffer.SupportNetwork() == C.TCP {
+			conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 			_, err := conn.Peek(1)
 			if err != nil {
+				_, ok := err.(*net.OpError)
+				if ok {
+					log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
+					conn.Close()
+				}
+
+				log.Errorln("[Sniffer] %v", err)
 				return "", err
 			}
 
