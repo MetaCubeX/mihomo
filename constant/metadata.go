@@ -85,7 +85,6 @@ type Metadata struct {
 	DNSMode     DNSMode    `json:"dnsMode"`
 	Process     string     `json:"process"`
 	ProcessPath string     `json:"processPath"`
-	UserAgent   string     `json:"userAgent"`
 }
 
 func (m *Metadata) RemoteAddress() string {
@@ -101,13 +100,13 @@ func (m *Metadata) SourceAddress() string {
 }
 
 func (m *Metadata) SourceDetail() string {
+	if m.Type == INNER {
+		return fmt.Sprintf("[%s]", ClashName)
+	}
+
 	if m.Process != "" {
 		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
 	} else {
-		if m.Type == INNER {
-			return fmt.Sprintf("[Clash]")
-		}
-
 		return fmt.Sprintf("%s", m.SourceAddress())
 	}
 }
