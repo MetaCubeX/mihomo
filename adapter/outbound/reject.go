@@ -14,6 +14,10 @@ type Reject struct {
 	*Base
 }
 
+func (r *Reject) IsProxyGroup() bool {
+	return false
+}
+
 // DialContext implements C.ProxyAdapter
 func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	return NewConn(&nopConn{}, r), nil

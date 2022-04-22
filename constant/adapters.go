@@ -83,6 +83,7 @@ type ProxyAdapter interface {
 	Addr() string
 	SupportUDP() bool
 	MarshalJSON() ([]byte, error)
+	IsProxyGroup() bool
 
 	// StreamConn wraps a protocol around net.Conn with Metadata.
 	//

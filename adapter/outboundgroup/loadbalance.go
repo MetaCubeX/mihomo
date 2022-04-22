@@ -28,6 +28,10 @@ type LoadBalance struct {
 	strategyFn strategyFn
 }
 
+func (lb *LoadBalance) IsProxyGroup() bool {
+	return true
+}
+
 var errStrategy = errors.New("unsupported strategy")
 
 func parseStrategy(config map[string]any) string {

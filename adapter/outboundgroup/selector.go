@@ -21,6 +21,10 @@ type Selector struct {
 	providers  []provider.ProxyProvider
 }
 
+func (s *Selector) IsProxyGroup() bool {
+	return true
+}
+
 // DialContext implements C.ProxyAdapter
 func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	c, err := s.selectedProxy(true).DialContext(ctx, metadata, s.Base.DialOptions(opts...)...)

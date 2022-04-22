@@ -27,7 +27,6 @@ type Trojan struct {
 	gunConfig    *gun.Config
 	transport    *http2.Transport
 }
-
 type TrojanOption struct {
 	BasicOption
 	Name           string      `proxy:"name"`
@@ -43,6 +42,10 @@ type TrojanOption struct {
 	WSOpts         WSOptions   `proxy:"ws-opts,omitempty"`
 	Flow           string      `proxy:"flow,omitempty"`
 	FlowShow       bool        `proxy:"flow-show,omitempty"`
+}
+
+func (t *Trojan) IsProxyGroup() bool {
+	return false
 }
 
 func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
