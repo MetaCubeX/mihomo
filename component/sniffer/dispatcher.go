@@ -2,11 +2,15 @@ package sniffer
 
 import (
 	"errors"
-	"github.com/Dreamacro/clash/component/trie"
 	"net"
 	"net/netip"
+	"strconv"
+	"time"
+
+	"github.com/Dreamacro/clash/component/trie"
 
 	CN "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -26,6 +30,7 @@ type SnifferDispatcher struct {
 
 	foreDomain *trie.DomainTrie[bool]
 	skipSNI    *trie.DomainTrie[bool]
+	portRanges *[]utils.Range[uint16]
 }
 
 func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
@@ -35,6 +40,18 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 	}
 
 	if metadata.Host == "" || sd.foreDomain.Search(metadata.Host) != nil {
+		port, err := strconv.ParseUint(metadata.DstPort, 10, 16)
+		if err != nil {
+			log.Debugln("[Sniffer] Dst port is error")
+			return
+		}
+
+		for _, portRange := range *sd.portRanges {
+			if !portRange.Contains(uint16(port)) {
+				return
+			}
+		}
+
 		if host, err := sd.sniffDomain(bufConn, metadata); err != nil {
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return
@@ -69,8 +86,16 @@ func (sd *SnifferDispatcher) Enable() bool {
 func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Metadata) (string, error) {
 	for _, sniffer := range sd.sniffers {
 		if sniffer.SupportNetwork() == C.TCP {
+			conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 			_, err := conn.Peek(1)
 			if err != nil {
+				_, ok := err.(*net.OpError)
+				if ok {
+					log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
+					conn.Close()
+				}
+
+				log.Errorln("[Sniffer] %v", err)
 				return "", err
 			}
 
@@ -102,11 +127,13 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainTrie[bool], skipSNI *trie.DomainTrie[bool]) (*SnifferDispatcher, error) {
+func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainTrie[bool],
+	skipSNI *trie.DomainTrie[bool], ports *[]utils.Range[uint16]) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:     true,
 		foreDomain: forceDomain,
 		skipSNI:    skipSNI,
+		portRanges: ports,
 	}
 
 	for _, snifferName := range needSniffer {

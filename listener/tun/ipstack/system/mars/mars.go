@@ -27,10 +27,8 @@ func StartListener(device io.ReadWriteCloser, gateway, portal, broadcast netip.A
 }
 
 func (t *StackListener) Close() error {
-	_ = t.tcp.Close()
 	_ = t.udp.Close()
-
-	return t.device.Close()
+	return t.tcp.Close()
 }
 
 func (t *StackListener) TCP() *nat.TCP {

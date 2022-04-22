@@ -5,20 +5,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 )
-
-type portReal struct {
-	portStart int
-	portEnd   int
-}
 
 type Port struct {
 	*Base
 	adapter  string
 	port     string
 	isSource bool
-	portList []portReal
+	portList []utils.Range[uint16]
 }
 
 func (p *Port) RuleType() C.RuleType {
@@ -45,17 +41,13 @@ func (p *Port) Payload() string {
 
 func (p *Port) matchPortReal(portRef string) bool {
 	port, _ := strconv.Atoi(portRef)
-	var rs bool
+
 	for _, pr := range p.portList {
-		if pr.portEnd == -1 {
-			rs = port == pr.portStart
-		} else {
-			rs = port >= pr.portStart && port <= pr.portEnd
-		}
-		if rs {
+		if pr.Contains(uint16(port)) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -65,7 +57,7 @@ func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 		return nil, fmt.Errorf("%s, too many ports to use, maximum support 28 ports", errPayload.Error())
 	}
 
-	var portList []portReal
+	var portRange []utils.Range[uint16]
 	for _, p := range ports {
 		if p == "" {
 			continue
@@ -84,23 +76,18 @@ func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 
 		switch subPortsLen {
 		case 1:
-			portList = append(portList, portReal{int(portStart), -1})
+			portRange = append(portRange, *utils.NewRange(uint16(portStart), uint16(portStart)))
 		case 2:
 			portEnd, err := strconv.ParseUint(strings.Trim(subPorts[1], "[ ]"), 10, 16)
 			if err != nil {
 				return nil, errPayload
 			}
 
-			shouldReverse := portStart > portEnd
-			if shouldReverse {
-				portList = append(portList, portReal{int(portEnd), int(portStart)})
-			} else {
-				portList = append(portList, portReal{int(portStart), int(portEnd)})
-			}
+			portRange = append(portRange, *utils.NewRange(uint16(portStart), uint16(portEnd)))
 		}
 	}
 
-	if len(portList) == 0 {
+	if len(portRange) == 0 {
 		return nil, errPayload
 	}
 
@@ -109,7 +96,7 @@ func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 		adapter:  adapter,
 		port:     port,
 		isSource: isSource,
-		portList: portList,
+		portList: portRange,
 	}, nil
 }
 
