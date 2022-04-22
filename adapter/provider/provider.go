@@ -94,6 +94,7 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	if pp.healthCheck.auto() {
 		go pp.healthCheck.check()
 	}
+
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
