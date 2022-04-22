@@ -29,6 +29,10 @@ var (
 	once sync.Once
 )
 
+func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
+	return 0, 0, ErrPlatformNotSupport
+}
+
 func initWin32API() error {
 	h, err := windows.LoadLibrary("iphlpapi.dll")
 	if err != nil {
