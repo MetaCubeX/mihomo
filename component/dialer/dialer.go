@@ -3,6 +3,7 @@ package dialer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Dreamacro/clash/log"
 	"net"
 	"net/netip"
@@ -105,6 +106,10 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 	if opt.routingMark != 0 {
 		bindMarkToDialer(opt.routingMark, dialer, network, destination)
+	}
+
+	if DisableIPv6 && destination.Is6() {
+		return nil, fmt.Errorf("IPv6 is diabled, dialer cancel")
 	}
 
 	return dialer.DialContext(ctx, network, net.JoinHostPort(destination.String(), port))
