@@ -3,11 +3,14 @@ package dialer
 import (
 	"context"
 	"errors"
+	"github.com/Dreamacro/clash/log"
 	"net"
 	"net/netip"
 
 	"github.com/Dreamacro/clash/component/resolver"
 )
+
+var DisableIPv6 = false
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
 	opt := &option{
@@ -51,7 +54,11 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 
 		return dialContext(ctx, network, ip, port, opt)
 	case "tcp", "udp":
-		return dualStackDialContext(ctx, network, address, opt)
+		if TCPConcurrent && network == "tcp" {
+			return concurrentDialContext(ctx, network, address, opt)
+		} else {
+			return dualStackDialContext(ctx, network, address, opt)
+		}
 	default:
 		return nil, errors.New("network invalid")
 	}
@@ -182,4 +189,74 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 	}
 
 	return nil, errors.New("never touched")
+}
+
+func concurrentDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	returned := make(chan struct{})
+	defer close(returned)
+
+	type dialResult struct {
+		ip netip.Addr
+		net.Conn
+		error
+		resolved bool
+	}
+
+	results := make(chan dialResult)
+	var ips []netip.Addr
+
+	if opt.direct {
+		ips, err = resolver.ResolveAllIP(host)
+	} else {
+		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+	}
+
+	tcpRacer := func(ctx context.Context, ip netip.Addr) {
+		result := dialResult{ip: ip}
+
+		defer func() {
+			select {
+			case results <- result:
+			case <-returned:
+				if result.Conn != nil {
+					result.Conn.Close()
+				}
+			}
+		}()
+
+		v := "4"
+		if ip.Is6() {
+			v = "6"
+		}
+
+		log.Debugln("[%s] try use [%s] connected", host, ip.String())
+		result.Conn, result.error = dialContext(ctx, network+v, ip, port, opt)
+	}
+
+	for _, ip := range ips {
+		go tcpRacer(ctx, ip)
+	}
+
+	connCount := len(ips)
+	for res := range results {
+		connCount--
+		if res.error == nil {
+			connIp := res.Conn.RemoteAddr()
+			log.Debugln("[%s] used [%s] connected", host, connIp)
+			return res.Conn, nil
+		}
+
+		log.Errorln("connect error:%v", res.error)
+		if connCount == 0 {
+			log.Errorln("connect [%s] all ip failed", host)
+			break
+		}
+	}
+
+	return nil, errors.New("all ip tcp shakeHands failed")
 }

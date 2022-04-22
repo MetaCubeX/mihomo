@@ -6,6 +6,7 @@ var (
 	DefaultOptions     []Option
 	DefaultInterface   = atomic.NewString("")
 	DefaultRoutingMark = atomic.NewInt32(0)
+	TCPConcurrent      = false
 )
 
 type option struct {

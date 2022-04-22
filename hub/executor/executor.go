@@ -139,6 +139,8 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 		ProxyServer: c.ProxyServerNameserver,
 	}
 
+	resolver.DisableIPv6 = cfg.IPv6
+
 	r := dns.NewResolver(cfg)
 	pr := dns.NewProxyServerHostResolver(r)
 	m := dns.NewEnhancer(cfg)
@@ -157,6 +159,7 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 
 	if t.Enable {
 		resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
+		log.Infoln("DNS enable IPv6 resolve")
 	}
 
 	if c.Enable {
@@ -243,10 +246,19 @@ func updateSniffer(sniffer *config.Sniffer) {
 func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
-	resolver.DisableIPv6 = !general.IPv6
+	dialer.DisableIPv6 = general.IPv6
+	if !dialer.DisableIPv6 {
+		resolver.DisableIPv6 = dialer.DisableIPv6
+	} else {
+		log.Infoln("Use IPv6")
+	}
+
+	dialer.TCPConcurrent = general.TCPConcurrent
+	if dialer.TCPConcurrent {
+		log.Infoln("Use tcp concurrent")
+	}
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
-
 	dialer.DefaultInterface.Store(general.Interface)
 
 	if dialer.DefaultInterface.Load() != "" {
