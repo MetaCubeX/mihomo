@@ -88,6 +88,7 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 		if sniffer.SupportNetwork() == C.TCP {
 			conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 			_, err := conn.Peek(1)
+			conn.SetReadDeadline(time.Time{})
 			if err != nil {
 				_, ok := err.(*net.OpError)
 				if ok {
