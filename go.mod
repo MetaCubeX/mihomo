@@ -21,7 +21,8 @@ require (
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
-	golang.org/x/net v0.0.0-20220418201149-a630d4f3e7a2
+	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd
+	golang.org/x/net v0.0.0-20220412020605-290c469a71a5
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306

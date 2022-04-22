@@ -37,9 +37,9 @@ var (
 	mode = Rule
 
 	// default timeout for UDP session
-	udpTimeout = 60 * time.Second
-
-	snifferDispatcher *sniffer.SnifferDispatcher
+	udpTimeout  = 60 * time.Second
+	procesCache string
+	failTotal   int
 )
 
 func init() {
@@ -171,11 +171,17 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	if err == nil && P.ShouldFindProcess(metadata) {
 		path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
 		if err != nil {
-			log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+			if failTotal < 20 {
+				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+				failTotal++
+			}
 		} else {
-			log.Debugln("[Process] %s from process %s", metadata.String(), path)
 			metadata.Process = filepath.Base(path)
 			metadata.ProcessPath = path
+			if procesCache == metadata.Process {
+				log.Debugln("[Process] %s from process %s", metadata.String(), path)
+			}
+			procesCache = metadata.Process
 		}
 	}
 	return nil

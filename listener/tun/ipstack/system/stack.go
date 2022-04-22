@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -28,6 +29,8 @@ type sysStack struct {
 	device device.Device
 
 	closed bool
+	once   sync.Once
+	wg     sync.WaitGroup
 }
 
 func (s *sysStack) Close() error {
@@ -38,10 +41,12 @@ func (s *sysStack) Close() error {
 	}()
 
 	s.closed = true
-	if s.stack != nil {
-		return s.stack.Close()
-	}
-	return nil
+
+	err := s.stack.Close()
+
+	s.wg.Wait()
+
+	return err
 }
 
 func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
@@ -67,16 +72,10 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			_ = tcp.Close()
 		}(stack.TCP())
 
-		defer log.Debugln("TCP: closed")
-
 		for !ipStack.closed {
-			if err = stack.TCP().SetDeadline(time.Time{}); err != nil {
-				break
-			}
-
 			conn, err := stack.TCP().Accept()
 			if err != nil {
-				log.Debugln("Accept connection: %v", err)
+				log.Debugln("[STACK] accept connection error: %v", err)
 				continue
 			}
 
@@ -146,6 +145,8 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			tcpIn <- context.NewConnContext(conn, metadata)
 		}
+
+		ipStack.wg.Done()
 	}
 
 	udp := func() {
@@ -153,14 +154,13 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			_ = udp.Close()
 		}(stack.UDP())
 
-		defer log.Debugln("UDP: closed")
-
 		for !ipStack.closed {
 			buf := pool.Get(pool.UDPBufferSize)
 
 			n, lRAddr, rRAddr, err := stack.UDP().ReadFrom(buf)
 			if err != nil {
-				return
+				_ = pool.Put(buf)
+				break
 			}
 
 			raw := buf[:n]
@@ -169,7 +169,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
 
-			if rAddrPort.Addr().IsLoopback() {
+			if rAddrPort.Addr().IsLoopback() || rAddrPort.Addr() == gateway {
 				_ = pool.Put(buf)
 
 				continue
@@ -209,17 +209,23 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 			default:
 			}
 		}
+
+		ipStack.wg.Done()
 	}
 
-	go tcp()
+	ipStack.once.Do(func() {
+		ipStack.wg.Add(1)
+		go tcp()
 
-	numUDPWorkers := 4
-	if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
-		numUDPWorkers = num
-	}
-	for i := 0; i < numUDPWorkers; i++ {
-		go udp()
-	}
+		numUDPWorkers := 4
+		if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
+			numUDPWorkers = num
+		}
+		for i := 0; i < numUDPWorkers; i++ {
+			ipStack.wg.Add(1)
+			go udp()
+		}
+	})
 
 	return ipStack, nil
 }
