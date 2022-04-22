@@ -59,10 +59,6 @@ type VlessOption struct {
 	ServerName     string            `proxy:"servername,omitempty"`
 }
 
-func (v *Vless) IsProxyGroup() bool {
-	return false
-}
-
 func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	switch v.option.Network {

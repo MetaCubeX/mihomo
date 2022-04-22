@@ -19,10 +19,6 @@ type Relay struct {
 	filter    string
 }
 
-func (r *Relay) IsProxyGroup() bool {
-	return true
-}
-
 // DialContext implements C.ProxyAdapter
 func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	var proxies []C.Proxy

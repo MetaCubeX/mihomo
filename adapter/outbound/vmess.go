@@ -75,10 +75,6 @@ type WSOptions struct {
 	EarlyDataHeaderName string            `proxy:"early-data-header-name,omitempty"`
 }
 
-func (v *Vmess) IsProxyGroup() bool {
-	return false
-}
-
 // StreamConn implements C.ProxyAdapter
 func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
