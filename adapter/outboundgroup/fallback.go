@@ -24,6 +24,10 @@ type Fallback struct {
 	failedTime  *atomic.Int64
 }
 
+func (f *Fallback) IsProxyGroup() bool {
+	return true
+}
+
 func (f *Fallback) Now() string {
 	proxy := f.findAliveProxy(false)
 	return proxy.Name()

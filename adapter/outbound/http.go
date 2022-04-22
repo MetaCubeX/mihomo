@@ -38,6 +38,10 @@ type HttpOption struct {
 	Headers        map[string]string `proxy:"headers,omitempty"`
 }
 
+func (h *Http) IsProxyGroup() bool {
+	return false
+}
+
 // StreamConn implements C.ProxyAdapter
 func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if h.tlsConfig != nil {

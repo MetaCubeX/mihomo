@@ -12,6 +12,10 @@ type Direct struct {
 	*Base
 }
 
+func (d *Direct) IsProxyGroup() bool {
+	return false
+}
+
 // DialContext implements C.ProxyAdapter
 func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	opts = append(opts, dialer.WithDirect())

@@ -37,6 +37,10 @@ type ShadowSocksROption struct {
 	UDP           bool   `proxy:"udp,omitempty"`
 }
 
+func (ssr *ShadowSocksR) IsProxyGroup() bool {
+	return false
+}
+
 // StreamConn implements C.ProxyAdapter
 func (ssr *ShadowSocksR) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	c = ssr.obfs.StreamConn(c)

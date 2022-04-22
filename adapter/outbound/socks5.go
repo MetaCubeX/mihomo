@@ -22,7 +22,6 @@ type Socks5 struct {
 	skipCertVerify bool
 	tlsConfig      *tls.Config
 }
-
 type Socks5Option struct {
 	BasicOption
 	Name           string `proxy:"name"`
@@ -33,6 +32,10 @@ type Socks5Option struct {
 	TLS            bool   `proxy:"tls,omitempty"`
 	UDP            bool   `proxy:"udp,omitempty"`
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
+}
+
+func (ss *Socks5) IsProxyGroup() bool {
+	return false
 }
 
 // StreamConn implements C.ProxyAdapter

@@ -39,6 +39,10 @@ type streamOption struct {
 	obfsOption *simpleObfsOption
 }
 
+func (s *Snell) IsProxyGroup() bool {
+	return false
+}
+
 func streamConn(c net.Conn, option streamOption) *snell.Snell {
 	switch option.obfsOption.Mode {
 	case "tls":
