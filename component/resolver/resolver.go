@@ -40,6 +40,10 @@ type Resolver interface {
 	ResolveIP(host string) (ip netip.Addr, err error)
 	ResolveIPv4(host string) (ip netip.Addr, err error)
 	ResolveIPv6(host string) (ip netip.Addr, err error)
+	ResolveAllIP(host string) (ip []netip.Addr, err error)
+	ResolveAllIPPrimaryIPv4(host string) (ips []netip.Addr, err error)
+	ResolveAllIPv4(host string) (ips []netip.Addr, err error)
+	ResolveAllIPv6(host string) (ips []netip.Addr, err error)
 }
 
 // ResolveIPv4 with a host, return ipv4
@@ -190,4 +194,52 @@ func ResolveProxyServerHost(host string) (netip.Addr, error) {
 		return ResolveIPWithResolver(host, ProxyServerHostResolver)
 	}
 	return ResolveIP(host)
+}
+
+func ResolveAllIPv6WithResolver(host string, r Resolver) ([]netip.Addr, error) {
+	return r.ResolveAllIPv6(host)
+}
+
+func ResolveAllIPv4WithResolver(host string, r Resolver) ([]netip.Addr, error) {
+	return r.ResolveAllIPv4(host)
+}
+
+func ResolveAllIPWithResolver(host string, r Resolver) ([]netip.Addr, error) {
+	return r.ResolveAllIP(host)
+}
+
+func ResolveAllIP(host string) ([]netip.Addr, error) {
+	return ResolveAllIPWithResolver(host, DefaultResolver)
+}
+
+func ResolveAllIPv4(host string) ([]netip.Addr, error) {
+	return ResolveAllIPv4WithResolver(host, DefaultResolver)
+}
+
+func ResolveAllIPv6(host string) ([]netip.Addr, error) {
+	return ResolveAllIPv6WithResolver(host, DefaultResolver)
+}
+
+func ResolveAllIPv6ProxyServerHost(host string) ([]netip.Addr, error) {
+	if ProxyServerHostResolver != nil {
+		return ResolveAllIPv6WithResolver(host, ProxyServerHostResolver)
+	}
+
+	return ResolveAllIPv6(host)
+}
+
+func ResolveAllIPv4ProxyServerHost(host string) ([]netip.Addr, error) {
+	if ProxyServerHostResolver != nil {
+		return ResolveAllIPv4WithResolver(host, ProxyServerHostResolver)
+	}
+
+	return ResolveAllIPv4(host)
+}
+
+func ResolveAllIPProxyServerHost(host string) ([]netip.Addr, error) {
+	if ProxyServerHostResolver != nil {
+		return ResolveAllIPWithResolver(host, ProxyServerHostResolver)
+	}
+
+	return ResolveAllIP(host)
 }

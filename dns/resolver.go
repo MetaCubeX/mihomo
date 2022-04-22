@@ -44,9 +44,8 @@ type Resolver struct {
 	proxyServer           []dnsClient
 }
 
-// ResolveIP request with TypeA and TypeAAAA, priority return TypeA
-func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
-	ch := make(chan netip.Addr, 1)
+func (r *Resolver) ResolveAllIPPrimaryIPv4(host string) (ips []netip.Addr, err error) {
+	ch := make(chan []netip.Addr, 1)
 	go func() {
 		defer close(ch)
 		ip, err := r.resolveIP(host, D.TypeAAAA)
@@ -56,27 +55,75 @@ func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
 		ch <- ip
 	}()
 
-	ip, err = r.resolveIP(host, D.TypeA)
+	ips, err = r.resolveIP(host, D.TypeA)
 	if err == nil {
 		return
 	}
 
 	ip, open := <-ch
 	if !open {
-		return netip.Addr{}, resolver.ErrIPNotFound
+		return nil, resolver.ErrIPNotFound
 	}
 
 	return ip, nil
 }
 
+func (r *Resolver) ResolveAllIP(host string) (ips []netip.Addr, err error) {
+	ch := make(chan []netip.Addr, 1)
+	go func() {
+		defer close(ch)
+		ip, err := r.resolveIP(host, D.TypeAAAA)
+		if err != nil {
+			return
+		}
+
+		ch <- ip
+	}()
+
+	ips, err = r.resolveIP(host, D.TypeA)
+
+	ipv6s, open := <-ch
+	if !open && err != nil {
+		return nil, resolver.ErrIPNotFound
+	}
+
+	ips = append(ips, ipv6s...)
+	return ips, nil
+}
+
+func (r *Resolver) ResolveAllIPv4(host string) (ips []netip.Addr, err error) {
+	return r.resolveIP(host, D.TypeA)
+}
+
+func (r *Resolver) ResolveAllIPv6(host string) (ips []netip.Addr, err error) {
+	return r.resolveIP(host, D.TypeAAAA)
+}
+
+// ResolveIP request with TypeA and TypeAAAA, priority return TypeA
+func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
+	if ips, err := r.ResolveAllIPPrimaryIPv4(host); err == nil {
+		return ips[rand.Intn(len(ips))], nil
+	} else {
+		return netip.Addr{}, err
+	}
+}
+
 // ResolveIPv4 request with TypeA
 func (r *Resolver) ResolveIPv4(host string) (ip netip.Addr, err error) {
-	return r.resolveIP(host, D.TypeA)
+	if ips, err := r.ResolveAllIPv4(host); err == nil {
+		return ips[rand.Intn(len(ips))], nil
+	} else {
+		return netip.Addr{}, err
+	}
 }
 
 // ResolveIPv6 request with TypeAAAA
 func (r *Resolver) ResolveIPv6(host string) (ip netip.Addr, err error) {
-	return r.resolveIP(host, D.TypeAAAA)
+	if ips, err := r.ResolveAllIPv6(host); err == nil {
+		return ips[rand.Intn(len(ips))], nil
+	} else {
+		return netip.Addr{}, err
+	}
 }
 
 func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
@@ -254,16 +301,16 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	return
 }
 
-func (r *Resolver) resolveIP(host string, dnsType uint16) (ip netip.Addr, err error) {
-	ip, err = netip.ParseAddr(host)
+func (r *Resolver) resolveIP(host string, dnsType uint16) (ips []netip.Addr, err error) {
+	ip, err := netip.ParseAddr(host)
 	if err == nil {
 		isIPv4 := ip.Is4()
 		if dnsType == D.TypeAAAA && !isIPv4 {
-			return ip, nil
+			return []netip.Addr{ip}, nil
 		} else if dnsType == D.TypeA && isIPv4 {
-			return ip, nil
+			return []netip.Addr{ip}, nil
 		} else {
-			return netip.Addr{}, resolver.ErrIPVersion
+			return []netip.Addr{}, resolver.ErrIPVersion
 		}
 	}
 
@@ -272,16 +319,15 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip netip.Addr, err er
 
 	msg, err := r.Exchange(query)
 	if err != nil {
-		return netip.Addr{}, err
+		return []netip.Addr{}, err
 	}
 
-	ips := msgToIP(msg)
+	ips = msgToIP(msg)
 	ipLength := len(ips)
 	if ipLength == 0 {
-		return netip.Addr{}, resolver.ErrIPNotFound
+		return []netip.Addr{}, resolver.ErrIPNotFound
 	}
 
-	ip = ips[rand.Intn(ipLength)]
 	return
 }
 
