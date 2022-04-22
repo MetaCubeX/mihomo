@@ -207,7 +207,7 @@ type RawConfig struct {
 	RoutingMark        int          `yaml:"routing-mark"`
 	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
-	TCPConcurrent      bool         `yaml:"tc-pconcurrent" json:"tc-pconcurrent"`
+	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 
 	Sniffer       SnifferRaw                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
