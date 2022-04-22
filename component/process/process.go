@@ -2,12 +2,11 @@ package process
 
 import (
 	"errors"
+	"github.com/Dreamacro/clash/common/nnip"
+	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"net/netip"
 	"runtime"
-
-	"github.com/Dreamacro/clash/common/nnip"
-	C "github.com/Dreamacro/clash/constant"
 )
 
 var (
@@ -23,6 +22,14 @@ const (
 
 func FindProcessName(network string, srcIP netip.Addr, srcPort int) (string, error) {
 	return findProcessName(network, srcIP, srcPort)
+}
+
+func FindUid(network string, srcIP netip.Addr, srcPort int) (int32, error) {
+	_, uid, err := resolveSocketByNetlink(network, srcIP, srcPort)
+	if err != nil {
+		return -1, err
+	}
+	return uid, nil
 }
 
 func ShouldFindProcess(metadata *C.Metadata) bool {

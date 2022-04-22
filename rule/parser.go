@@ -45,6 +45,8 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = RP.NewRuleSet(payload, target)
 	case "NETWORK":
 		parsed, parseErr = RC.NewNetworkType(payload, target)
+	case "UID":
+		parsed, parseErr = RC.NewUid(payload, target)
 	case "AND":
 		parsed, parseErr = logic.NewAND(payload, target)
 	case "OR":
