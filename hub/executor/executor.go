@@ -139,7 +139,7 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 		ProxyServer: c.ProxyServerNameserver,
 	}
 
-	resolver.DisableIPv6 = cfg.IPv6
+	resolver.DisableIPv6 = !cfg.IPv6
 
 	r := dns.NewResolver(cfg)
 	pr := dns.NewProxyServerHostResolver(r)
@@ -246,9 +246,9 @@ func updateSniffer(sniffer *config.Sniffer) {
 func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
-	dialer.DisableIPv6 = general.IPv6
+	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
-		resolver.DisableIPv6 = dialer.DisableIPv6
+		resolver.DisableIPv6 = false
 	} else {
 		log.Infoln("Use IPv6")
 	}
