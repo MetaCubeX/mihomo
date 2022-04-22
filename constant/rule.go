@@ -16,6 +16,7 @@ const (
 	Script
 	RuleSet
 	Network
+	Uid
 	MATCH
 	AND
 	OR
@@ -56,6 +57,8 @@ func (rt RuleType) String() string {
 		return "RuleSet"
 	case Network:
 		return "Network"
+	case Uid:
+		return "Uid"
 	case AND:
 		return "AND"
 	case OR:
