@@ -17,6 +17,10 @@ const (
 	proccallnumpidinfo  = 0x2
 )
 
+func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
+	return 0, 0, ErrPlatformNotSupport
+}
+
 func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 	var spath string
 	switch network {
