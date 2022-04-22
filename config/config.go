@@ -896,7 +896,7 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		if _, after, ok := strings.Cut(d, "://"); ok {
 			d = after
 		}
-
+		d = strings.Replace(d, "any", "0.0.0.0", 1)
 		addrPort, err := netip.ParseAddrPort(d)
 		if err != nil {
 			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
