@@ -29,10 +29,6 @@ func getProvidersProxies(providers []provider.ProxyProvider, touch bool, filter 
 		//filterReg = regexp.MustCompile(filter)
 		filterReg = regexp2.MustCompile(filter, 0)
 		for _, p := range proxies {
-			if p.IsProxyGroup() {
-				matchedProxies = append(matchedProxies, p)
-				continue
-			}
 
 			//if filterReg.MatchString(p.Name()) {
 			if mat, _ := filterReg.FindStringMatch(p.Name()); mat != nil {

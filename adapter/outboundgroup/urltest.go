@@ -35,10 +35,6 @@ type URLTest struct {
 	failedTime  *atomic.Int64
 }
 
-func (u *URLTest) IsProxyGroup() bool {
-	return true
-}
-
 func (u *URLTest) Now() string {
 	return u.fast(false).Name()
 }
