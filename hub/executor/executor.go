@@ -248,9 +248,9 @@ func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
-		resolver.DisableIPv6 = false
-	} else {
 		log.Infoln("Use IPv6")
+	} else {
+		resolver.DisableIPv6 = true
 	}
 
 	dialer.TCPConcurrent = general.TCPConcurrent
