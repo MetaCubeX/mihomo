@@ -49,6 +49,8 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		for _, portRange := range *sd.portRanges {
 			if !portRange.Contains(uint16(port)) {
 				return
+			} else {
+				break
 			}
 		}
 

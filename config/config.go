@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"net/netip"
 	"net/url"
@@ -30,7 +31,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/log"
 	T "github.com/Dreamacro/clash/tunnel"
 
@@ -924,27 +924,28 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 		Force:  snifferRaw.Force,
 	}
 
-	ports := []utils.Range[uint16]{}
+	var ports []utils.Range[uint16]
 	if len(snifferRaw.Ports) == 0 {
 		ports = append(ports, *utils.NewRange[uint16](0, 65535))
 	} else {
 		for _, portRange := range snifferRaw.Ports {
 			portRaws := strings.Split(portRange, "-")
+			p, err := strconv.ParseUint(portRaws[0], 10, 16)
+			if err != nil {
+				return nil, fmt.Errorf("%s format error", portRange)
+			}
+
+			start := uint16(p)
 			if len(portRaws) > 1 {
-				p, err := strconv.ParseUint(portRaws[0], 10, 16)
-				if err != nil {
-					return nil, fmt.Errorf("%s format error", portRange)
-				}
-
-				start := uint16(p)
-
-				p, err = strconv.ParseUint(portRaws[0], 10, 16)
+				p, err = strconv.ParseUint(portRaws[1], 10, 16)
 				if err != nil {
 					return nil, fmt.Errorf("%s format error", portRange)
 				}
 
 				end := uint16(p)
 				ports = append(ports, *utils.NewRange(start, end))
+			} else {
+				ports = append(ports, *utils.NewRange(start, start))
 			}
 		}
 	}
