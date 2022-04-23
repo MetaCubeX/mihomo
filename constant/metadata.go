@@ -83,6 +83,7 @@ type Metadata struct {
 	AddrType    int        `json:"-"`
 	Host        string     `json:"host"`
 	DNSMode     DNSMode    `json:"dnsMode"`
+	Uid         int32      `json:"uid"`
 	Process     string     `json:"process"`
 	ProcessPath string     `json:"processPath"`
 }
@@ -100,7 +101,11 @@ func (m *Metadata) SourceDetail() string {
 		return fmt.Sprintf("[%s]", ClashName)
 	}
 
-	if m.Process != "" {
+	if m.Process != "" && m.Uid != 0 {
+		return fmt.Sprintf("%s(%s:%d)", m.SourceAddress(), m.Process, m.Uid)
+	} else if m.Uid != 0 {
+		return fmt.Sprintf("%s(%d)", m.SourceAddress(), m.Uid)
+	} else if m.Process != "" {
 		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
 	} else {
 		return fmt.Sprintf("%s", m.SourceAddress())
