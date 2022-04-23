@@ -4,6 +4,7 @@ import (
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/process"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 	"strconv"
 	"strings"
 )
@@ -70,11 +71,19 @@ func (u *Uid) Match(metadata *C.Metadata) bool {
 	if err != nil {
 		return false
 	}
-	if uid, err := process.FindUid(metadata.NetWork.String(), metadata.SrcIP, srcPort); err == nil {
-		for _, _uid := range u.uids {
-			if _uid.Contains(uid) {
-				return true
-			}
+	var uid int32
+	if metadata.Uid != 0 {
+		uid = metadata.Uid
+	} else if uid, err := process.FindUid(metadata.NetWork.String(), metadata.SrcIP, srcPort); err == nil {
+		metadata.Uid = uid
+	} else {
+		log.Warnln("[UID] could not get uid from %s", metadata.String())
+		return false
+	}
+
+	for _, _uid := range u.uids {
+		if _uid.Contains(uid) {
+			return true
 		}
 	}
 	return false
