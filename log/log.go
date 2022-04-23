@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	logCh  = make(chan any)
-	source = observable.NewObservable(logCh)
+	logCh  = make(chan *Event)
+	source = observable.NewObservable[*Event](logCh)
 	level  = INFO
 )
 
@@ -57,12 +57,12 @@ func Fatalln(format string, v ...any) {
 	log.Fatalf(format, v...)
 }
 
-func Subscribe() observable.Subscription {
+func Subscribe() observable.Subscription[*Event] {
 	sub, _ := source.Subscribe()
 	return sub
 }
 
-func UnSubscribe(sub observable.Subscription) {
+func UnSubscribe(sub observable.Subscription[*Event]) {
 	source.UnSubscribe(sub)
 }
 

@@ -14,7 +14,7 @@ import (
 
 type Relay struct {
 	*outbound.Base
-	single    *singledo.Single
+	single    *singledo.Single[[]C.Proxy]
 	providers []provider.ProxyProvider
 	filter    string
 }
@@ -80,11 +80,11 @@ func (r *Relay) MarshalJSON() ([]byte, error) {
 }
 
 func (r *Relay) rawProxies(touch bool) []C.Proxy {
-	elm, _, _ := r.single.Do(func() (any, error) {
+	elm, _, _ := r.single.Do(func() ([]C.Proxy, error) {
 		return getProvidersProxies(r.providers, touch, r.filter), nil
 	})
 
-	return elm.([]C.Proxy)
+	return elm
 }
 
 func (r *Relay) proxies(metadata *C.Metadata, touch bool) []C.Proxy {
@@ -109,7 +109,7 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 			Interface:   option.Interface,
 			RoutingMark: option.RoutingMark,
 		}),
-		single:    singledo.NewSingle(defaultGetProxiesDuration),
+		single:    singledo.NewSingle[[]C.Proxy](defaultGetProxiesDuration),
 		providers: providers,
 		filter:    option.Filter,
 	}

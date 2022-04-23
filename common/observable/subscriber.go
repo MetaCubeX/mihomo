@@ -4,30 +4,30 @@ import (
 	"sync"
 )
 
-type Subscription <-chan any
+type Subscription[T any] <-chan T
 
-type Subscriber struct {
-	buffer chan any
+type Subscriber[T any] struct {
+	buffer chan T
 	once   sync.Once
 }
 
-func (s *Subscriber) Emit(item any) {
+func (s *Subscriber[T]) Emit(item T) {
 	s.buffer <- item
 }
 
-func (s *Subscriber) Out() Subscription {
+func (s *Subscriber[T]) Out() Subscription[T] {
 	return s.buffer
 }
 
-func (s *Subscriber) Close() {
+func (s *Subscriber[T]) Close() {
 	s.once.Do(func() {
 		close(s.buffer)
 	})
 }
 
-func newSubscriber() *Subscriber {
-	sub := &Subscriber{
-		buffer: make(chan any, 200),
+func newSubscriber[T any]() *Subscriber[T] {
+	sub := &Subscriber[T]{
+		buffer: make(chan T, 200),
 	}
 	return sub
 }

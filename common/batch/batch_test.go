@@ -11,14 +11,14 @@ import (
 )
 
 func TestBatch(t *testing.T) {
-	b, _ := New(context.Background())
+	b, _ := New[string](context.Background())
 
 	now := time.Now()
-	b.Go("foo", func() (any, error) {
+	b.Go("foo", func() (string, error) {
 		time.Sleep(time.Millisecond * 100)
 		return "foo", nil
 	})
-	b.Go("bar", func() (any, error) {
+	b.Go("bar", func() (string, error) {
 		time.Sleep(time.Millisecond * 150)
 		return "bar", nil
 	})
@@ -32,20 +32,20 @@ func TestBatch(t *testing.T) {
 
 	for k, v := range result {
 		assert.NoError(t, v.Err)
-		assert.Equal(t, k, v.Value.(string))
+		assert.Equal(t, k, v.Value)
 	}
 }
 
 func TestBatchWithConcurrencyNum(t *testing.T) {
-	b, _ := New(
+	b, _ := New[string](
 		context.Background(),
-		WithConcurrencyNum(3),
+		WithConcurrencyNum[string](3),
 	)
 
 	now := time.Now()
 	for i := 0; i < 7; i++ {
 		idx := i
-		b.Go(strconv.Itoa(idx), func() (any, error) {
+		b.Go(strconv.Itoa(idx), func() (string, error) {
 			time.Sleep(time.Millisecond * 100)
 			return strconv.Itoa(idx), nil
 		})
@@ -57,21 +57,21 @@ func TestBatchWithConcurrencyNum(t *testing.T) {
 
 	for k, v := range result {
 		assert.NoError(t, v.Err)
-		assert.Equal(t, k, v.Value.(string))
+		assert.Equal(t, k, v.Value)
 	}
 }
 
 func TestBatchContext(t *testing.T) {
-	b, ctx := New(context.Background())
+	b, ctx := New[string](context.Background())
 
-	b.Go("error", func() (any, error) {
+	b.Go("error", func() (string, error) {
 		time.Sleep(time.Millisecond * 100)
-		return nil, errors.New("test error")
+		return "", errors.New("test error")
 	})
 
-	b.Go("ctx", func() (any, error) {
+	b.Go("ctx", func() (string, error) {
 		<-ctx.Done()
-		return nil, ctx.Err()
+		return "", ctx.Err()
 	})
 
 	result, err := b.WaitAndGetResult()
