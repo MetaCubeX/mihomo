@@ -102,7 +102,7 @@ func (m *Metadata) SourceDetail() string {
 	}
 
 	if m.Process != "" && m.Uid != 0 {
-		return fmt.Sprintf("%s(%s:%d)", m.SourceAddress(), m.Process, m.Uid)
+		return fmt.Sprintf("%s(%s, uid=%d)", m.SourceAddress(), m.Process, m.Uid)
 	} else if m.Uid != 0 {
 		return fmt.Sprintf("%s(%d)", m.SourceAddress(), m.Uid)
 	} else if m.Process != "" {
