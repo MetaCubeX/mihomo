@@ -28,8 +28,8 @@ type URLTest struct {
 	disableUDP  bool
 	fastNode    C.Proxy
 	filter      string
-	single      *singledo.Single
-	fastSingle  *singledo.Single
+	single      *singledo.Single[[]C.Proxy]
+	fastSingle  *singledo.Single[C.Proxy]
 	providers   []provider.ProxyProvider
 	failedTimes *atomic.Int32
 	failedTime  *atomic.Int64
@@ -71,15 +71,15 @@ func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
 }
 
 func (u *URLTest) proxies(touch bool) []C.Proxy {
-	elm, _, _ := u.single.Do(func() (any, error) {
+	elm, _, _ := u.single.Do(func() ([]C.Proxy, error) {
 		return getProvidersProxies(u.providers, touch, u.filter), nil
 	})
 
-	return elm.([]C.Proxy)
+	return elm
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
-	elm, _, _ := u.fastSingle.Do(func() (any, error) {
+	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.proxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
@@ -109,7 +109,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 		return u.fastNode, nil
 	})
 
-	return elm.(C.Proxy)
+	return elm
 }
 
 // SupportUDP implements C.ProxyAdapter
@@ -181,8 +181,8 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 			Interface:   option.Interface,
 			RoutingMark: option.RoutingMark,
 		}),
-		single:      singledo.NewSingle(defaultGetProxiesDuration),
-		fastSingle:  singledo.NewSingle(time.Second * 10),
+		single:      singledo.NewSingle[[]C.Proxy](defaultGetProxiesDuration),
+		fastSingle:  singledo.NewSingle[C.Proxy](time.Second * 10),
 		providers:   providers,
 		disableUDP:  option.DisableUDP,
 		filter:      option.Filter,

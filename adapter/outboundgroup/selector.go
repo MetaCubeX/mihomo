@@ -15,7 +15,7 @@ import (
 type Selector struct {
 	*outbound.Base
 	disableUDP bool
-	single     *singledo.Single
+	single     *singledo.Single[C.Proxy]
 	selected   string
 	filter     string
 	providers  []provider.ProxyProvider
@@ -84,7 +84,7 @@ func (s *Selector) Unwrap(*C.Metadata) C.Proxy {
 }
 
 func (s *Selector) selectedProxy(touch bool) C.Proxy {
-	elm, _, _ := s.single.Do(func() (any, error) {
+	elm, _, _ := s.single.Do(func() (C.Proxy, error) {
 		proxies := getProvidersProxies(s.providers, touch, s.filter)
 		for _, proxy := range proxies {
 			if proxy.Name() == s.selected {
@@ -95,7 +95,7 @@ func (s *Selector) selectedProxy(touch bool) C.Proxy {
 		return proxies[0], nil
 	})
 
-	return elm.(C.Proxy)
+	return elm
 }
 
 func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
@@ -106,7 +106,7 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			Interface:   option.Interface,
 			RoutingMark: option.RoutingMark,
 		}),
-		single:     singledo.NewSingle(defaultGetProxiesDuration),
+		single:     singledo.NewSingle[C.Proxy](defaultGetProxiesDuration),
 		providers:  providers,
 		selected:   "COMPATIBLE",
 		disableUDP: option.DisableUDP,

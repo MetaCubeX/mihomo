@@ -11,7 +11,7 @@ import (
 )
 
 type Pool struct {
-	pool *pool.Pool
+	pool *pool.Pool[*Snell]
 }
 
 func (p *Pool) Get() (net.Conn, error) {
@@ -24,12 +24,12 @@ func (p *Pool) GetContext(ctx context.Context) (net.Conn, error) {
 		return nil, err
 	}
 
-	return &PoolConn{elm.(*Snell), p}, nil
+	return &PoolConn{elm, p}, nil
 }
 
-func (p *Pool) Put(conn net.Conn) {
+func (p *Pool) Put(conn *Snell) {
 	if err := HalfClose(conn); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
@@ -64,22 +64,22 @@ func (pc *PoolConn) Write(b []byte) (int, error) {
 func (pc *PoolConn) Close() error {
 	// clash use SetReadDeadline to break bidirectional copy between client and server.
 	// reset it before reuse connection to avoid io timeout error.
-	pc.Snell.Conn.SetReadDeadline(time.Time{})
+	_ = pc.Snell.Conn.SetReadDeadline(time.Time{})
 	pc.pool.Put(pc.Snell)
 	return nil
 }
 
 func NewPool(factory func(context.Context) (*Snell, error)) *Pool {
-	p := pool.New(
-		func(ctx context.Context) (any, error) {
+	p := pool.New[*Snell](
+		func(ctx context.Context) (*Snell, error) {
 			return factory(ctx)
 		},
-		pool.WithAge(15000),
-		pool.WithSize(10),
-		pool.WithEvict(func(item any) {
-			item.(*Snell).Close()
+		pool.WithAge[*Snell](15000),
+		pool.WithSize[*Snell](10),
+		pool.WithEvict[*Snell](func(item *Snell) {
+			_ = item.Close()
 		}),
 	)
 
-	return &Pool{p}
+	return &Pool{pool: p}
 }

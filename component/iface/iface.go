@@ -21,10 +21,10 @@ var (
 	ErrAddrNotFound  = errors.New("addr not found")
 )
 
-var interfaces = singledo.NewSingle(time.Second * 20)
+var interfaces = singledo.NewSingle[map[string]*Interface](time.Second * 20)
 
 func ResolveInterface(name string) (*Interface, error) {
-	value, err, _ := interfaces.Do(func() (any, error) {
+	value, err, _ := interfaces.Do(func() (map[string]*Interface, error) {
 		ifaces, err := net.Interfaces()
 		if err != nil {
 			return nil, err
@@ -66,7 +66,7 @@ func ResolveInterface(name string) (*Interface, error) {
 		return nil, err
 	}
 
-	ifaces := value.(map[string]*Interface)
+	ifaces := value
 	iface, ok := ifaces[name]
 	if !ok {
 		return nil, ErrIfaceNotFound

@@ -52,18 +52,18 @@ func TestLRUMaxAge(t *testing.T) {
 
 	// Add one expired entry
 	c.Set("foo", "bar")
-	c.lru.Back().Value.(*entry[string, string]).expires = now
+	c.lru.Back().Value.expires = now
 
 	// Reset
 	c.Set("foo", "bar")
-	e := c.lru.Back().Value.(*entry[string, string])
+	e := c.lru.Back().Value
 	assert.True(t, e.expires >= now)
-	c.lru.Back().Value.(*entry[string, string]).expires = now
+	c.lru.Back().Value.expires = now
 
 	// Set a few and verify expiration times
 	for _, s := range entries {
 		c.Set(s.key, s.value)
-		e := c.lru.Back().Value.(*entry[string, string])
+		e := c.lru.Back().Value
 		assert.True(t, e.expires >= expected && e.expires <= expected+10)
 	}
 
@@ -77,7 +77,7 @@ func TestLRUMaxAge(t *testing.T) {
 	for _, s := range entries {
 		le, ok := c.cache[s.key]
 		if assert.True(t, ok) {
-			le.Value.(*entry[string, string]).expires = now
+			le.Value.expires = now
 		}
 	}
 
@@ -95,11 +95,11 @@ func TestLRUpdateOnGet(t *testing.T) {
 
 	// Add one expired entry
 	c.Set("foo", "bar")
-	c.lru.Back().Value.(*entry[string, string]).expires = expires
+	c.lru.Back().Value.expires = expires
 
 	_, ok := c.Get("foo")
 	assert.True(t, ok)
-	assert.True(t, c.lru.Back().Value.(*entry[string, string]).expires > expires)
+	assert.True(t, c.lru.Back().Value.expires > expires)
 }
 
 func TestMaxSize(t *testing.T) {
@@ -126,8 +126,8 @@ func TestExist(t *testing.T) {
 
 func TestEvict(t *testing.T) {
 	temp := 0
-	evict := func(key any, value any) {
-		temp = key.(int) + value.(int)
+	evict := func(key int, value int) {
+		temp = key + value
 	}
 
 	c := NewLRUCache[int, int](WithEvict[int, int](evict), WithSize[int, int](1))
