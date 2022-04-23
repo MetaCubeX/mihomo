@@ -55,7 +55,7 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 
 		return dialContext(ctx, network, ip, port, opt)
 	case "tcp", "udp":
-		if TCPConcurrent && network == "tcp" {
+		if TCPConcurrent {
 			return concurrentDialContext(ctx, network, address, opt)
 		} else {
 			return dualStackDialContext(ctx, network, address, opt)
@@ -251,8 +251,7 @@ func concurrentDialContext(ctx context.Context, network, address string, opt *op
 	for res := range results {
 		connCount--
 		if res.error == nil {
-			connIp := res.Conn.RemoteAddr()
-			log.Debugln("[%s] used [%s] connected", host, connIp)
+			log.Debugln("[%s] used [%s] connected", host, res.ip.String())
 			return res.Conn, nil
 		}
 
