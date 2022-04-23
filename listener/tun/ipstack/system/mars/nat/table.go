@@ -1,13 +1,15 @@
 package nat
 
 import (
-	"container/list"
 	"net/netip"
+	"sync"
+
+	"github.com/Dreamacro/clash/common/generics/list"
 )
 
 const (
 	portBegin  = 30000
-	portLength = 4096
+	portLength = 10240
 )
 
 var zeroTuple = tuple{}
@@ -23,9 +25,10 @@ type binding struct {
 }
 
 type table struct {
-	tuples    map[tuple]*list.Element
-	ports     [portLength]*list.Element
-	available *list.List
+	mu        sync.Mutex
+	tuples    map[tuple]*list.Element[*binding]
+	ports     [portLength]*list.Element[*binding]
+	available *list.List[*binding]
 }
 
 func (t *table) tupleOf(port uint16) tuple {
@@ -36,28 +39,31 @@ func (t *table) tupleOf(port uint16) tuple {
 
 	elm := t.ports[offset]
 
-	t.available.MoveToFront(elm)
-
-	return elm.Value.(*binding).tuple
+	return elm.Value.tuple
 }
 
 func (t *table) portOf(tuple tuple) uint16 {
+	t.mu.Lock()
 	elm := t.tuples[tuple]
+	t.mu.Unlock()
 	if elm == nil {
 		return 0
 	}
 
 	t.available.MoveToFront(elm)
 
-	return portBegin + elm.Value.(*binding).offset
+	return portBegin + elm.Value.offset
 }
 
 func (t *table) newConn(tuple tuple) uint16 {
 	elm := t.available.Back()
-	b := elm.Value.(*binding)
+	b := elm.Value
 
+	t.mu.Lock()
 	delete(t.tuples, b.tuple)
 	t.tuples[tuple] = elm
+	t.mu.Unlock()
+
 	b.tuple = tuple
 
 	t.available.MoveToFront(elm)
@@ -65,11 +71,24 @@ func (t *table) newConn(tuple tuple) uint16 {
 	return portBegin + b.offset
 }
 
+func (t *table) delete(tup tuple) {
+	t.mu.Lock()
+	elm := t.tuples[tup]
+	if elm == nil {
+		t.mu.Unlock()
+		return
+	}
+	delete(t.tuples, tup)
+	t.mu.Unlock()
+
+	t.available.MoveToBack(elm)
+}
+
 func newTable() *table {
 	result := &table{
-		tuples:    make(map[tuple]*list.Element, portLength),
-		ports:     [portLength]*list.Element{},
-		available: list.New(),
+		tuples:    make(map[tuple]*list.Element[*binding], portLength),
+		ports:     [portLength]*list.Element[*binding]{},
+		available: list.New[*binding](),
 	}
 
 	for idx := range result.ports {
