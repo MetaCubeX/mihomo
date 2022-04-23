@@ -46,12 +46,16 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 			return
 		}
 
+		inWhitelist := false
 		for _, portRange := range *sd.portRanges {
-			if !portRange.Contains(uint16(port)) {
-				return
-			} else {
+			if portRange.Contains(uint16(port)) {
+				inWhitelist = true
 				break
 			}
+		}
+
+		if !inWhitelist {
+			return
 		}
 
 		if host, err := sd.sniffDomain(bufConn, metadata); err != nil {
