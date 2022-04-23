@@ -48,22 +48,11 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 				return err
 			}
 		}
-		_, err := cmd.ExecCmd(fmt.Sprintf("ip rule add from 0.0.0.0 iif lo uidrange 0-4294967294 lookup %d pref 9000", tableId))
-		if err != nil {
-			log.Warnln("%s", err)
-		}
-		_, err = cmd.ExecCmd(fmt.Sprintf("ip rule add from %s iif lo uidrange 0-4294967294 lookup %d pref 9001", linkIP, tableId))
-		if err != nil {
-			log.Warnln("%s", err)
-		}
-		_, err = cmd.ExecCmd(fmt.Sprintf("ip rule add from all iif %s lookup main suppress_prefixlength 0 pref 9002", interfaceName))
-		if err != nil {
-			log.Warnln("%s", err)
-		}
-		_, err = cmd.ExecCmd(fmt.Sprintf("ip rule add not from all iif lo lookup %d pref 9003", tableId))
-		if err != nil {
-			log.Warnln("%s", err)
-		}
+		execAddRuleCmd(fmt.Sprintf("from 0.0.0.0 iif lo uidrange 0-4294967294 lookup %d pref 9000", tableId))
+		execAddRuleCmd(fmt.Sprintf("from %s iif lo uidrange 0-4294967294 lookup %d pref 9001", linkIP, tableId))
+		execAddRuleCmd(fmt.Sprintf("from all iif %s lookup main suppress_prefixlength 0 pref 9002", interfaceName))
+		execAddRuleCmd(fmt.Sprintf("not from all iif lo lookup %d pref 9003", tableId))
+
 	} else {
 		for _, route := range defaultRoutes {
 			if err := execRouterCmd("add", route, interfaceName, linkIP.String(), "main"); err != nil {
@@ -75,6 +64,13 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	go DefaultInterfaceChangeMonitor()
 
 	return nil
+}
+
+func execAddRuleCmd(rule string) {
+	_, err := cmd.ExecCmd("ip rule add " + rule)
+	if err != nil {
+		log.Warnln("%s", err)
+	}
 }
 
 func execRouterCmd(action, route, interfaceName, linkIP, table string) error {
