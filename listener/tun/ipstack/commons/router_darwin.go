@@ -12,7 +12,7 @@ func GetAutoDetectInterface() (string, error) {
 	return cmd.ExecCmd("bash -c route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {
 	if !addr.Addr().Is4() {
 		return fmt.Errorf("supported ipv4 only")
 	}
@@ -37,12 +37,12 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	}
 
 	if autoRoute {
-		err = configInterfaceRouting(interfaceName, addr)
+		err = configInterfaceRouting(interfaceName, addr, autoDetectInterface)
 	}
 	return err
 }
 
-func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
+func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectInterface bool) error {
 	var (
 		routes  = append(defaultRoutes, addr.String())
 		gateway = addr.Masked().Addr().Next()
@@ -54,7 +54,9 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 		}
 	}
 
-	go DefaultInterfaceChangeMonitor()
+	if autoDetectInterface {
+		go DefaultInterfaceChangeMonitor()
+	}
 
 	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
 }

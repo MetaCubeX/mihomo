@@ -90,7 +90,7 @@ func New(tunConf *config.Tun, dnsConf *config.DNS, tcpIn chan<- C.ConnContext, u
 	}
 
 	// setting address and routing
-	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute)
+	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute, tunConf.AutoDetectInterface)
 	if err != nil {
 		_ = tunDevice.Close()
 		return nil, fmt.Errorf("setting interface address and routing failed: %w", err)

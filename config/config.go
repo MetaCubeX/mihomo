@@ -110,11 +110,12 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable    bool             `yaml:"enable" json:"enable"`
-	Device    string           `yaml:"device" json:"device"`
-	Stack     C.TUNStack       `yaml:"stack" json:"stack"`
-	DNSHijack []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute bool             `yaml:"auto-route" json:"auto-route"`
+	Enable              bool             `yaml:"enable" json:"enable"`
+	Device              string           `yaml:"device" json:"device"`
+	Stack               C.TUNStack       `yaml:"stack" json:"stack"`
+	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 }
 
 // IPTables config
@@ -910,11 +911,12 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 	}
 
 	return &Tun{
-		Enable:    rawTun.Enable,
-		Device:    rawTun.Device,
-		Stack:     rawTun.Stack,
-		DNSHijack: dnsHijack,
-		AutoRoute: rawTun.AutoRoute,
+		Enable:              rawTun.Enable,
+		Device:              rawTun.Device,
+		Stack:               rawTun.Stack,
+		DNSHijack:           dnsHijack,
+		AutoRoute:           rawTun.AutoRoute,
+		AutoDetectInterface: rawTun.AutoDetectInterface,
 	}, nil
 }
 
