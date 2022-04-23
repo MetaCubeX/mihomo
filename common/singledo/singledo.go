@@ -5,28 +5,28 @@ import (
 	"time"
 )
 
-type call struct {
+type call[T any] struct {
 	wg  sync.WaitGroup
-	val any
+	val T
 	err error
 }
 
-type Single struct {
+type Single[T any] struct {
 	mux    sync.Mutex
 	last   time.Time
 	wait   time.Duration
-	call   *call
-	result *Result
+	call   *call[T]
+	result *Result[T]
 }
 
-type Result struct {
-	Val any
+type Result[T any] struct {
+	Val T
 	Err error
 }
 
 // Do single.Do likes sync.singleFlight
 //lint:ignore ST1008 it likes sync.singleFlight
-func (s *Single) Do(fn func() (any, error)) (v any, err error, shared bool) {
+func (s *Single[T]) Do(fn func() (T, error)) (v T, err error, shared bool) {
 	s.mux.Lock()
 	now := time.Now()
 	if now.Before(s.last.Add(s.wait)) {
@@ -34,31 +34,31 @@ func (s *Single) Do(fn func() (any, error)) (v any, err error, shared bool) {
 		return s.result.Val, s.result.Err, true
 	}
 
-	if call := s.call; call != nil {
+	if callM := s.call; callM != nil {
 		s.mux.Unlock()
-		call.wg.Wait()
-		return call.val, call.err, true
+		callM.wg.Wait()
+		return callM.val, callM.err, true
 	}
 
-	call := &call{}
-	call.wg.Add(1)
-	s.call = call
+	callM := &call[T]{}
+	callM.wg.Add(1)
+	s.call = callM
 	s.mux.Unlock()
-	call.val, call.err = fn()
-	call.wg.Done()
+	callM.val, callM.err = fn()
+	callM.wg.Done()
 
 	s.mux.Lock()
 	s.call = nil
-	s.result = &Result{call.val, call.err}
+	s.result = &Result[T]{callM.val, callM.err}
 	s.last = now
 	s.mux.Unlock()
-	return call.val, call.err, false
+	return callM.val, callM.err, false
 }
 
-func (s *Single) Reset() {
+func (s *Single[T]) Reset() {
 	s.last = time.Time{}
 }
 
-func NewSingle(wait time.Duration) *Single {
-	return &Single{wait: wait}
+func NewSingle[T any](wait time.Duration) *Single[T] {
+	return &Single[T]{wait: wait}
 }

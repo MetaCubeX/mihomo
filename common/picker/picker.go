@@ -9,7 +9,7 @@ import (
 // Picker provides synchronization, and Context cancelation
 // for groups of goroutines working on subtasks of a common task.
 // Inspired by errGroup
-type Picker struct {
+type Picker[T any] struct {
 	ctx    context.Context
 	cancel func()
 
@@ -17,12 +17,12 @@ type Picker struct {
 
 	once    sync.Once
 	errOnce sync.Once
-	result  any
+	result  T
 	err     error
 }
 
-func newPicker(ctx context.Context, cancel func()) *Picker {
-	return &Picker{
+func newPicker[T any](ctx context.Context, cancel func()) *Picker[T] {
+	return &Picker[T]{
 		ctx:    ctx,
 		cancel: cancel,
 	}
@@ -30,20 +30,20 @@ func newPicker(ctx context.Context, cancel func()) *Picker {
 
 // WithContext returns a new Picker and an associated Context derived from ctx.
 // and cancel when first element return.
-func WithContext(ctx context.Context) (*Picker, context.Context) {
+func WithContext[T any](ctx context.Context) (*Picker[T], context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
-	return newPicker(ctx, cancel), ctx
+	return newPicker[T](ctx, cancel), ctx
 }
 
 // WithTimeout returns a new Picker and an associated Context derived from ctx with timeout.
-func WithTimeout(ctx context.Context, timeout time.Duration) (*Picker, context.Context) {
+func WithTimeout[T any](ctx context.Context, timeout time.Duration) (*Picker[T], context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
-	return newPicker(ctx, cancel), ctx
+	return newPicker[T](ctx, cancel), ctx
 }
 
 // Wait blocks until all function calls from the Go method have returned,
 // then returns the first nil error result (if any) from them.
-func (p *Picker) Wait() any {
+func (p *Picker[T]) Wait() T {
 	p.wg.Wait()
 	if p.cancel != nil {
 		p.cancel()
@@ -52,13 +52,13 @@ func (p *Picker) Wait() any {
 }
 
 // Error return the first error (if all success return nil)
-func (p *Picker) Error() error {
+func (p *Picker[T]) Error() error {
 	return p.err
 }
 
 // Go calls the given function in a new goroutine.
 // The first call to return a nil error cancels the group; its result will be returned by Wait.
-func (p *Picker) Go(f func() (any, error)) {
+func (p *Picker[T]) Go(f func() (T, error)) {
 	p.wg.Add(1)
 
 	go func() {
