@@ -18,19 +18,19 @@ func TestCert(t *testing.T) {
 	assert.NotNil(t, ca)
 	assert.NotNil(t, privateKey)
 
-	c, err := NewConfig(ca, privateKey, nil)
+	c, err := NewConfig(ca, privateKey)
 	assert.Nil(t, err)
 
 	c.SetValidity(20 * time.Hour)
 	c.SetOrganization("Test Organization")
 
-	conf := c.NewTLSConfigForHost("example.org")
+	conf := c.NewTLSConfigForHost("abc.example.org")
 	assert.Equal(t, []string{"http/1.1"}, conf.NextProtos)
 	assert.True(t, conf.InsecureSkipVerify)
 
 	// Test generating a certificate
 	clientHello := &tls.ClientHelloInfo{
-		ServerName: "example.org",
+		ServerName: "abc.example.org",
 	}
 	tlsCert, err := conf.GetCertificate(clientHello)
 	assert.Nil(t, err)
@@ -40,13 +40,15 @@ func TestCert(t *testing.T) {
 	x509c := tlsCert.Leaf
 	assert.Equal(t, "example.org", x509c.Subject.CommonName)
 	assert.Nil(t, x509c.VerifyHostname("example.org"))
+	assert.Nil(t, x509c.VerifyHostname("abc.example.org"))
+	assert.Nil(t, x509c.VerifyHostname("efg.abc.example.org"))
 	assert.Equal(t, []string{"Test Organization"}, x509c.Subject.Organization)
 	assert.NotNil(t, x509c.SubjectKeyId)
 	assert.True(t, x509c.BasicConstraintsValid)
 	assert.True(t, x509c.KeyUsage&x509.KeyUsageKeyEncipherment == x509.KeyUsageKeyEncipherment)
 	assert.True(t, x509c.KeyUsage&x509.KeyUsageDigitalSignature == x509.KeyUsageDigitalSignature)
 	assert.Equal(t, []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, x509c.ExtKeyUsage)
-	assert.Equal(t, []string{"example.org"}, x509c.DNSNames)
+	assert.Equal(t, []string{"example.org", "*.example.org", "abc.example.org", "*.abc.example.org"}, x509c.DNSNames)
 	assert.True(t, x509c.NotBefore.Before(time.Now().Add(-2*time.Hour)))
 	assert.True(t, x509c.NotAfter.After(time.Now().Add(2*time.Hour)))
 
@@ -56,11 +58,17 @@ func TestCert(t *testing.T) {
 	assert.True(t, tlsCert == tlsCert2)
 
 	// Check the certificate for an IP
-	tlsCertForIP, err := c.GetOrCreateCert("192.168.0.1:443")
-	assert.Nil(t, err)
+	tlsCertForIP, err := c.GetOrCreateCert("192.168.0.1")
 	x509c = tlsCertForIP.Leaf
+	assert.Nil(t, err)
 	assert.Equal(t, 1, len(x509c.IPAddresses))
 	assert.True(t, net.ParseIP("192.168.0.1").Equal(x509c.IPAddresses[0]))
+
+	tlsCertForIP2, err := c.GetOrCreateCert("192.168.0.1")
+	x509c = tlsCertForIP2.Leaf
+	assert.Nil(t, err)
+	assert.True(t, tlsCertForIP == tlsCertForIP2)
+	assert.Nil(t, x509c.VerifyHostname("192.168.0.1"))
 }
 
 func TestGenerateAndSave(t *testing.T) {

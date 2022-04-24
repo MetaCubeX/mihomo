@@ -44,7 +44,7 @@ startOver:
 readLoop:
 	for {
 		// use SetReadDeadline instead of Proxy-Connection keep-alive
-		if err := conn.SetReadDeadline(time.Now().Add(95 * time.Second)); err != nil {
+		if err := conn.SetReadDeadline(time.Now().Add(65 * time.Second)); err != nil {
 			break readLoop
 		}
 
@@ -86,7 +86,7 @@ readLoop:
 
 				// TLS handshake.
 				if b[0] == 0x16 {
-					tlsConn := tls.Server(conn, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Host))
+					tlsConn := tls.Server(conn, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Hostname()))
 
 					// Handshake with the local client
 					if err = tlsConn.Handshake(); err != nil {
@@ -167,13 +167,7 @@ readLoop:
 func writeResponseWithHandler(session *Session, opt *Option) error {
 	if opt.Handler != nil {
 		res := opt.Handler.HandleResponse(session)
-
 		if res != nil {
-			body := res.Body
-			defer func(body io.ReadCloser) {
-				_ = body.Close()
-			}(body)
-
 			session.response = res
 		}
 	}
@@ -186,7 +180,7 @@ func writeResponse(session *Session, keepAlive bool) error {
 
 	if keepAlive {
 		session.response.Header.Set("Connection", "keep-alive")
-		session.response.Header.Set("Keep-Alive", "timeout=90")
+		session.response.Header.Set("Keep-Alive", "timeout=60")
 	}
 
 	return session.writeResponse()
@@ -200,10 +194,6 @@ func handleApiRequest(session *Session, opt *Option) error {
 		})
 
 		session.response = session.NewResponse(http.StatusOK, bytes.NewReader(b))
-
-		defer func(body io.ReadCloser) {
-			_ = body.Close()
-		}(session.response.Body)
 
 		session.response.Close = true
 		session.response.Header.Set("Content-Type", "application/x-x509-ca-cert")
@@ -230,11 +220,6 @@ func handleApiRequest(session *Session, opt *Option) error {
 	b = fmt.Sprintf(b, session.request.URL.Path)
 
 	session.response = session.NewResponse(http.StatusNotFound, bytes.NewReader([]byte(b)))
-
-	defer func(body io.ReadCloser) {
-		_ = body.Close()
-	}(session.response.Body)
-
 	session.response.Close = true
 	session.response.Header.Set("Content-Type", "text/html;charset=utf-8")
 	session.response.ContentLength = int64(len(b))
@@ -243,6 +228,12 @@ func handleApiRequest(session *Session, opt *Option) error {
 }
 
 func handleError(opt *Option, session *Session, err error) {
+	if session.response != nil {
+		defer func() {
+			_, _ = io.Copy(io.Discard, session.response.Body)
+			_ = session.response.Body.Close()
+		}()
+	}
 	if opt.Handler != nil {
 		opt.Handler.HandleError(session, err)
 	}

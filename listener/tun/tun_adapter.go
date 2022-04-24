@@ -145,6 +145,7 @@ func setAtLatest(stackType C.TUNStack, devName string) {
 	case "darwin":
 		// _, _ = cmd.ExecCmd("sysctl -w net.inet.ip.forwarding=1")
 		// _, _ = cmd.ExecCmd("sysctl -w net.inet6.ip6.forwarding=1")
+		_, _ = cmd.ExecCmd("sudo launchctl limit maxfiles 10240 unlimited")
 	case "windows":
 		_, _ = cmd.ExecCmd("ipconfig /renew")
 	case "linux":

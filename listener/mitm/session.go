@@ -43,6 +43,9 @@ func (s *Session) writeResponse() error {
 	if s.response == nil {
 		return ErrInvalidResponse
 	}
+	defer func(resp *http.Response) {
+		_ = resp.Body.Close()
+	}(s.response)
 	return s.response.Write(s.conn)
 }
 

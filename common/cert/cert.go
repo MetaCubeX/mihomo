@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -36,19 +37,6 @@ type CertsStorage interface {
 	Get(key string) (*tls.Certificate, bool)
 
 	Set(key string, cert *tls.Certificate)
-}
-
-type CertsCache struct {
-	certsCache map[string]*tls.Certificate
-}
-
-func (c *CertsCache) Get(key string) (*tls.Certificate, bool) {
-	v, ok := c.certsCache[key]
-	return v, ok
-}
-
-func (c *CertsCache) Set(key string, cert *tls.Certificate) {
-	c.certsCache[key] = cert
 }
 
 func NewAuthority(name, organization string, validity time.Duration) (*x509.Certificate, *rsa.PrivateKey, error) {
@@ -100,7 +88,7 @@ func NewAuthority(name, organization string, validity time.Duration) (*x509.Cert
 	return x509c, privateKey, nil
 }
 
-func NewConfig(ca *x509.Certificate, caPrivateKey *rsa.PrivateKey, storage CertsStorage) (*Config, error) {
+func NewConfig(ca *x509.Certificate, caPrivateKey *rsa.PrivateKey) (*Config, error) {
 	roots := x509.NewCertPool()
 	roots.AddCert(ca)
 
@@ -121,10 +109,6 @@ func NewConfig(ca *x509.Certificate, caPrivateKey *rsa.PrivateKey, storage Certs
 	}
 	keyID := h.Sum(nil)
 
-	if storage == nil {
-		storage = &CertsCache{certsCache: make(map[string]*tls.Certificate)}
-	}
-
 	return &Config{
 		ca:           ca,
 		caPrivateKey: caPrivateKey,
@@ -132,7 +116,7 @@ func NewConfig(ca *x509.Certificate, caPrivateKey *rsa.PrivateKey, storage Certs
 		keyID:        keyID,
 		validity:     time.Hour,
 		organization: "Clash",
-		certsStorage: storage,
+		certsStorage: NewDomainTrieCertsStorage(),
 		roots:        roots,
 	}, nil
 }
@@ -168,18 +152,38 @@ func (c *Config) NewTLSConfigForHost(hostname string) *tls.Config {
 }
 
 func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certificate, error) {
-	host, _, err := net.SplitHostPort(hostname)
-	if err == nil {
-		hostname = host
-	}
-
 	tlsCertificate, ok := c.certsStorage.Get(hostname)
 	if ok {
-		if _, err = tlsCertificate.Leaf.Verify(x509.VerifyOptions{
+		if _, err := tlsCertificate.Leaf.Verify(x509.VerifyOptions{
 			DNSName: hostname,
 			Roots:   c.roots,
 		}); err == nil {
 			return tlsCertificate, nil
+		}
+	}
+
+	var (
+		key      = hostname
+		topHost  = hostname
+		dnsNames []string
+	)
+
+	if ip := net.ParseIP(hostname); ip != nil {
+		ips = append(ips, ip)
+	} else {
+		parts := strings.Split(topHost, ".")
+		l := len(parts)
+
+		if l >= 2 {
+			for i := l - 2; i >= 0; i-- {
+				topHost = strings.Join(parts[i:], ".")
+				dnsNames = append(dnsNames, topHost, "*."+topHost)
+			}
+
+			topHost = strings.Join(parts[l-2:], ".")
+			key = "+." + topHost
+		} else {
+			dnsNames = append(dnsNames, topHost)
 		}
 	}
 
@@ -188,7 +192,7 @@ func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certifica
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(serial),
 		Subject: pkix.Name{
-			CommonName:   hostname,
+			CommonName:   topHost,
 			Organization: []string{c.organization},
 		},
 		SubjectKeyId:          c.keyID,
@@ -199,12 +203,7 @@ func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certifica
 		NotAfter:              time.Now().Add(c.validity),
 	}
 
-	if ip := net.ParseIP(hostname); ip != nil {
-		ips = append(ips, ip)
-	} else {
-		tmpl.DNSNames = []string{hostname}
-	}
-
+	tmpl.DNSNames = dnsNames
 	tmpl.IPAddresses = ips
 
 	raw, err := x509.CreateCertificate(rand.Reader, tmpl, c.ca, c.privateKey.Public(), c.caPrivateKey)
@@ -223,7 +222,7 @@ func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certifica
 		Leaf:        x509c,
 	}
 
-	c.certsStorage.Set(hostname, tlsCertificate)
+	c.certsStorage.Set(key, tlsCertificate)
 	return tlsCertificate, nil
 }
 
