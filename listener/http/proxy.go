@@ -19,12 +19,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 	client := newClient(c.RemoteAddr(), in)
 	defer client.CloseIdleConnections()
 
-	var conn *N.BufferedConn
-	if bufConn, ok := c.(*N.BufferedConn); ok {
-		conn = bufConn
-	} else {
-		conn = N.NewBufferedConn(c)
-	}
+	conn := N.NewBufferedConn(c)
 
 	keepAlive := true
 	trusted := cache == nil // disable authenticate if cache is nil
@@ -65,6 +60,12 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache) {
 			}
 
 			request.RequestURI = ""
+
+			if isUpgradeRequest(request) {
+				handleUpgrade(conn, request, in)
+
+				return // hijack connection
+			}
 
 			removeHopByHopHeaders(request.Header)
 			removeExtraHTTPHostPort(request)
