@@ -152,9 +152,11 @@ func (c *Config) NewTLSConfigForHost(hostname string) *tls.Config {
 }
 
 func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certificate, error) {
+	var leaf *x509.Certificate
 	tlsCertificate, ok := c.certsStorage.Get(hostname)
 	if ok {
-		if _, err := tlsCertificate.Leaf.Verify(x509.VerifyOptions{
+		leaf = tlsCertificate.Leaf
+		if _, err := leaf.Verify(x509.VerifyOptions{
 			DNSName: hostname,
 			Roots:   c.roots,
 		}); err == nil {
@@ -163,28 +165,40 @@ func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certifica
 	}
 
 	var (
-		key      = hostname
-		topHost  = hostname
-		dnsNames []string
+		key          = hostname
+		topHost      = hostname
+		wildcardHost = "*." + hostname
+		dnsNames     []string
 	)
 
 	if ip := net.ParseIP(hostname); ip != nil {
 		ips = append(ips, ip)
 	} else {
-		parts := strings.Split(topHost, ".")
+		parts := strings.Split(hostname, ".")
 		l := len(parts)
 
-		if l >= 2 {
-			for i := l - 2; i >= 0; i-- {
-				topHost = strings.Join(parts[i:], ".")
-				dnsNames = append(dnsNames, topHost, "*."+topHost)
-			}
-
-			topHost = strings.Join(parts[l-2:], ".")
-			key = "+." + topHost
-		} else {
-			dnsNames = append(dnsNames, topHost)
+		if leaf != nil {
+			dnsNames = append(dnsNames, leaf.DNSNames...)
 		}
+
+		if l > 2 {
+			topIndex := l - 2
+			topHost = strings.Join(parts[topIndex:], ".")
+
+			for i := topIndex; i > 0; i-- {
+				wildcardHost = "*." + strings.Join(parts[i:], ".")
+
+				if i == topIndex && (len(dnsNames) == 0 || dnsNames[0] != topHost) {
+					dnsNames = append(dnsNames, topHost, wildcardHost)
+				} else if !hasDnsNames(dnsNames, wildcardHost) {
+					dnsNames = append(dnsNames, wildcardHost)
+				}
+			}
+		} else {
+			dnsNames = append(dnsNames, topHost, wildcardHost)
+		}
+
+		key = "+." + topHost
 	}
 
 	serial := atomic.AddInt64(&currentSerialNumber, 1)
@@ -278,4 +292,13 @@ func GenerateAndSave(caPath string, caKeyPath string) error {
 	}
 
 	return nil
+}
+
+func hasDnsNames(dnsNames []string, hostname string) bool {
+	for _, name := range dnsNames {
+		if name == hostname {
+			return true
+		}
+	}
+	return false
 }
