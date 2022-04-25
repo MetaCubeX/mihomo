@@ -74,7 +74,7 @@ func SetLevel(newLevel LogLevel) {
 	level = newLevel
 }
 
-func print(data *Event) {
+func print(data Event) {
 	if data.LogLevel < level {
 		return
 	}
@@ -91,8 +91,8 @@ func print(data *Event) {
 	}
 }
 
-func newLog(logLevel LogLevel, format string, v ...any) *Event {
-	return &Event{
+func newLog(logLevel LogLevel, format string, v ...any) Event {
+	return Event{
 		LogLevel: logLevel,
 		Payload:  fmt.Sprintf(format, v...),
 	}

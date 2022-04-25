@@ -208,16 +208,27 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusOK)
 	}
 
+	ch := make(chan log.Event, 1024)
 	sub := log.Subscribe()
 	defer log.UnSubscribe(sub)
 	buf := &bytes.Buffer{}
-	var err error
-	for elm := range sub {
-		buf.Reset()
-		log := elm.(*log.Event)
+
+	go func() {
+		for elm := range sub {
+			log := elm.(log.Event)
+			select {
+			case ch <- log:
+			default:
+			}
+		}
+		close(ch)
+	}()
+
+	for log := range ch {
 		if log.LogLevel < level {
 			continue
 		}
+		buf.Reset()
 
 		if err := json.NewEncoder(buf).Encode(Log{
 			Type:    log.Type(),
@@ -226,6 +237,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
+		var err error
 		if wsConn == nil {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()
