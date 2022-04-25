@@ -67,6 +67,10 @@ func withTCPHandler(handle adapter.TCPHandleFunc) option.Option {
 			defer r.Complete(false)
 
 			err = setSocketOptions(s, ep)
+			if err != nil {
+				r.Complete(true)
+				return
+			}
 
 			conn := &tcpConn{
 				TCPConn: gonet.NewTCPConn(&wq, ep),
