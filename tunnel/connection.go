@@ -2,7 +2,6 @@ package tunnel
 
 import (
 	"errors"
-	"io"
 	"net"
 	"time"
 
@@ -63,26 +62,5 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr n
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
-	relay(ctx.Conn(), outbound)
-}
-
-// relay copies between left and right bidirectionally.
-func relay(leftConn, rightConn net.Conn) {
-	ch := make(chan error)
-
-	go func() {
-		buf := pool.Get(pool.RelayBufferSize)
-		// Wrapping to avoid using *net.TCPConn.(ReadFrom)
-		// See also https://github.com/Dreamacro/clash/pull/1209
-		_, err := io.CopyBuffer(N.WriteOnlyWriter{Writer: leftConn}, N.ReadOnlyReader{Reader: rightConn}, buf)
-		pool.Put(buf)
-		leftConn.SetReadDeadline(time.Now())
-		ch <- err
-	}()
-
-	buf := pool.Get(pool.RelayBufferSize)
-	io.CopyBuffer(N.WriteOnlyWriter{Writer: rightConn}, N.ReadOnlyReader{Reader: leftConn}, buf)
-	pool.Put(buf)
-	rightConn.SetReadDeadline(time.Now())
-	<-ch
+	N.Relay(ctx.Conn(), outbound)
 }
