@@ -18,9 +18,11 @@ func newClient(source net.Addr, userAgent string, in chan<- C.ConnContext) *http
 		Transport: &http.Transport{
 			// excepted HTTP/2
 			TLSNextProto: make(map[string]func(string, *tls.Conn) http.RoundTripper),
-			// from http.DefaultTransport
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
+			// only needed 1 connection
+			MaxIdleConns:          1,
+			MaxIdleConnsPerHost:   1,
+			MaxConnsPerHost:       1,
+			IdleConnTimeout:       60 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			TLSClientConfig: &tls.Config{

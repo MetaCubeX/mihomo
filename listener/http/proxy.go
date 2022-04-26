@@ -19,12 +19,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 	client := newClient(c.RemoteAddr(), in)
 	defer client.CloseIdleConnections()
 
-	var conn *N.BufferedConn
-	if bufConn, ok := c.(*N.BufferedConn); ok {
-		conn = bufConn
-	} else {
-		conn = N.NewBufferedConn(c)
-	}
+	conn := N.NewBufferedConn(c)
 
 	keepAlive := true
 	trusted := cache == nil // disable authenticate if cache is nil
@@ -66,15 +61,23 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 
 			request.RequestURI = ""
 
-			RemoveHopByHopHeaders(request.Header)
-			RemoveExtraHTTPHostPort(request)
+			if isUpgradeRequest(request) {
+				if resp = HandleUpgrade(conn, conn.RemoteAddr(), request, in); resp == nil {
+					return // hijack connection
+				}
+			}
 
-			if request.URL.Scheme == "" || request.URL.Host == "" {
-				resp = responseWith(request, http.StatusBadRequest)
-			} else {
-				resp, err = client.Do(request)
-				if err != nil {
-					resp = responseWith(request, http.StatusBadGateway)
+			if resp == nil {
+				RemoveHopByHopHeaders(request.Header)
+				RemoveExtraHTTPHostPort(request)
+
+				if request.URL.Scheme == "" || request.URL.Host == "" {
+					resp = responseWith(request, http.StatusBadRequest)
+				} else {
+					resp, err = client.Do(request)
+					if err != nil {
+						resp = responseWith(request, http.StatusBadGateway)
+					}
 				}
 			}
 
@@ -95,7 +98,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func Authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http.Response {

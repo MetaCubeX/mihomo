@@ -2,31 +2,31 @@ package cert
 
 import (
 	"crypto/tls"
-	"time"
 
-	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/component/trie"
 )
 
-var TTL = time.Hour * 2
-
-// AutoGCCertsStorage cache with the generated certificates, auto released after TTL
-type AutoGCCertsStorage struct {
-	certsCache *cache.Cache[string, *tls.Certificate]
+// DomainTrieCertsStorage cache wildcard certificates
+type DomainTrieCertsStorage struct {
+	certsCache *trie.DomainTrie[*tls.Certificate]
 }
 
 // Get gets the certificate from the storage
-func (c *AutoGCCertsStorage) Get(key string) (*tls.Certificate, bool) {
-	ca := c.certsCache.Get(key)
-	return ca, ca != nil
+func (c *DomainTrieCertsStorage) Get(key string) (*tls.Certificate, bool) {
+	ca := c.certsCache.Search(key)
+	if ca == nil {
+		return nil, false
+	}
+	return ca.Data, true
 }
 
 // Set saves the certificate to the storage
-func (c *AutoGCCertsStorage) Set(key string, cert *tls.Certificate) {
-	c.certsCache.Put(key, cert, TTL)
+func (c *DomainTrieCertsStorage) Set(key string, cert *tls.Certificate) {
+	_ = c.certsCache.Insert(key, cert)
 }
 
-func NewAutoGCCertsStorage() *AutoGCCertsStorage {
-	return &AutoGCCertsStorage{
-		certsCache: cache.New[string, *tls.Certificate](TTL),
+func NewDomainTrieCertsStorage() *DomainTrieCertsStorage {
+	return &DomainTrieCertsStorage{
+		certsCache: trie.New[*tls.Certificate](),
 	}
 }

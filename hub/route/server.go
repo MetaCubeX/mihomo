@@ -51,14 +51,14 @@ func Start(addr string, secret string) {
 
 	r := chi.NewRouter()
 
-	cors := cors.New(cors.Options{
+	corsM := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
 
-	r.Use(cors.Handler)
+	r.Use(corsM.Handler)
 	r.Group(func(r chi.Router) {
 		r.Use(authentication)
 
@@ -209,24 +209,35 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusOK)
 	}
 
+	ch := make(chan log.Event, 1024)
 	sub := log.Subscribe()
 	defer log.UnSubscribe(sub)
 	buf := &bytes.Buffer{}
-	var err error
-	for elm := range sub {
-		buf.Reset()
-		log := elm.(*log.Event)
-		if log.LogLevel < level {
+
+	go func() {
+		for elm := range sub {
+			select {
+			case ch <- elm:
+			default:
+			}
+		}
+		close(ch)
+	}()
+
+	for logM := range ch {
+		if logM.LogLevel < level {
 			continue
 		}
+		buf.Reset()
 
 		if err := json.NewEncoder(buf).Encode(Log{
-			Type:    log.Type(),
-			Payload: log.Payload,
+			Type:    logM.Type(),
+			Payload: logM.Payload,
 		}); err != nil {
 			break
 		}
 
+		var err error
 		if wsConn == nil {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()

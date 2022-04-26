@@ -397,13 +397,12 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 	certOption, err = cert.NewConfig(
 		x509c,
 		privateKey,
-		cert.NewAutoGCCertsStorage(),
 	)
 	if err != nil {
 		return
 	}
 
-	certOption.SetValidity(time.Hour * 24 * 90)
+	certOption.SetValidity(time.Hour * 24 * 365 * 2) // 2 years
 	certOption.SetOrganization("Clash ManInTheMiddle Proxy Services")
 
 	opt := &mitm.Option{

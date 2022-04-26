@@ -10,13 +10,13 @@ import (
 )
 
 func TestBasic(t *testing.T) {
-	single := NewSingle(time.Millisecond * 30)
+	single := NewSingle[int](time.Millisecond * 30)
 	foo := 0
 	shardCount := atomic.NewInt32(0)
-	call := func() (any, error) {
+	call := func() (int, error) {
 		foo++
 		time.Sleep(time.Millisecond * 5)
-		return nil, nil
+		return 0, nil
 	}
 
 	var wg sync.WaitGroup
@@ -38,32 +38,32 @@ func TestBasic(t *testing.T) {
 }
 
 func TestTimer(t *testing.T) {
-	single := NewSingle(time.Millisecond * 30)
+	single := NewSingle[int](time.Millisecond * 30)
 	foo := 0
-	call := func() (any, error) {
+	callM := func() (int, error) {
 		foo++
-		return nil, nil
+		return 0, nil
 	}
 
-	single.Do(call)
+	_, _, _ = single.Do(callM)
 	time.Sleep(10 * time.Millisecond)
-	_, _, shard := single.Do(call)
+	_, _, shard := single.Do(callM)
 
 	assert.Equal(t, 1, foo)
 	assert.True(t, shard)
 }
 
 func TestReset(t *testing.T) {
-	single := NewSingle(time.Millisecond * 30)
+	single := NewSingle[int](time.Millisecond * 30)
 	foo := 0
-	call := func() (any, error) {
+	callM := func() (int, error) {
 		foo++
-		return nil, nil
+		return 0, nil
 	}
 
-	single.Do(call)
+	_, _, _ = single.Do(callM)
 	single.Reset()
-	single.Do(call)
+	_, _, _ = single.Do(callM)
 
 	assert.Equal(t, 2, foo)
 }

@@ -3,19 +3,20 @@ package cache
 // Modified by https://github.com/die-net/lrucache
 
 import (
-	"container/list"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/common/generics/list"
 )
 
 // Option is part of Functional Options Pattern
 type Option[K comparable, V any] func(*LruCache[K, V])
 
 // EvictCallback is used to get a callback when a cache entry is evicted
-type EvictCallback = func(key any, value any)
+type EvictCallback[K comparable, V any] func(key K, value V)
 
 // WithEvict set the evict callback
-func WithEvict[K comparable, V any](cb EvictCallback) Option[K, V] {
+func WithEvict[K comparable, V any](cb EvictCallback[K, V]) Option[K, V] {
 	return func(l *LruCache[K, V]) {
 		l.onEvict = cb
 	}
@@ -57,18 +58,18 @@ type LruCache[K comparable, V any] struct {
 	maxAge         int64
 	maxSize        int
 	mu             sync.Mutex
-	cache          map[any]*list.Element
-	lru            *list.List // Front is least-recent
+	cache          map[K]*list.Element[*entry[K, V]]
+	lru            *list.List[*entry[K, V]] // Front is least-recent
 	updateAgeOnGet bool
 	staleReturn    bool
-	onEvict        EvictCallback
+	onEvict        EvictCallback[K, V]
 }
 
 // NewLRUCache creates an LruCache
 func NewLRUCache[K comparable, V any](options ...Option[K, V]) *LruCache[K, V] {
 	lc := &LruCache[K, V]{
-		lru:   list.New(),
-		cache: make(map[any]*list.Element),
+		lru:   list.New[*entry[K, V]](),
+		cache: make(map[K]*list.Element[*entry[K, V]]),
 	}
 
 	for _, option := range options {
@@ -129,7 +130,7 @@ func (c *LruCache[K, V]) SetWithExpire(key K, value V, expires time.Time) {
 
 	if le, ok := c.cache[key]; ok {
 		c.lru.MoveToBack(le)
-		e := le.Value.(*entry[K, V])
+		e := le.Value
 		e.value = value
 		e.expires = expires.Unix()
 	} else {
@@ -154,11 +155,11 @@ func (c *LruCache[K, V]) CloneTo(n *LruCache[K, V]) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	n.lru = list.New()
-	n.cache = make(map[any]*list.Element)
+	n.lru = list.New[*entry[K, V]]()
+	n.cache = make(map[K]*list.Element[*entry[K, V]])
 
 	for e := c.lru.Front(); e != nil; e = e.Next() {
-		elm := e.Value.(*entry[K, V])
+		elm := e.Value
 		n.cache[elm.key] = n.lru.PushBack(elm)
 	}
 }
@@ -172,7 +173,7 @@ func (c *LruCache[K, V]) get(key K) *entry[K, V] {
 		return nil
 	}
 
-	if !c.staleReturn && c.maxAge > 0 && le.Value.(*entry[K, V]).expires <= time.Now().Unix() {
+	if !c.staleReturn && c.maxAge > 0 && le.Value.expires <= time.Now().Unix() {
 		c.deleteElement(le)
 		c.maybeDeleteOldest()
 
@@ -180,7 +181,7 @@ func (c *LruCache[K, V]) get(key K) *entry[K, V] {
 	}
 
 	c.lru.MoveToBack(le)
-	el := le.Value.(*entry[K, V])
+	el := le.Value
 	if c.maxAge > 0 && c.updateAgeOnGet {
 		el.expires = time.Now().Unix() + c.maxAge
 	}
@@ -201,15 +202,15 @@ func (c *LruCache[K, V]) Delete(key K) {
 func (c *LruCache[K, V]) maybeDeleteOldest() {
 	if !c.staleReturn && c.maxAge > 0 {
 		now := time.Now().Unix()
-		for le := c.lru.Front(); le != nil && le.Value.(*entry[K, V]).expires <= now; le = c.lru.Front() {
+		for le := c.lru.Front(); le != nil && le.Value.expires <= now; le = c.lru.Front() {
 			c.deleteElement(le)
 		}
 	}
 }
 
-func (c *LruCache[K, V]) deleteElement(le *list.Element) {
+func (c *LruCache[K, V]) deleteElement(le *list.Element[*entry[K, V]]) {
 	c.lru.Remove(le)
-	e := le.Value.(*entry[K, V])
+	e := le.Value
 	delete(c.cache, e.key)
 	if c.onEvict != nil {
 		c.onEvict(e.key, e.value)
@@ -219,7 +220,7 @@ func (c *LruCache[K, V]) deleteElement(le *list.Element) {
 func (c *LruCache[K, V]) Clear() error {
 	c.mu.Lock()
 
-	c.cache = make(map[any]*list.Element)
+	c.cache = make(map[K]*list.Element[*entry[K, V]])
 
 	c.mu.Unlock()
 	return nil

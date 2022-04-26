@@ -2,11 +2,9 @@ package executor
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
 	"os"
 	"runtime"
-	"strconv"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -317,13 +315,7 @@ func updateIPTables(cfg *config.Config) {
 		return
 	}
 
-	_, dnsPortStr, err := net.SplitHostPort(dnsCfg.Listen)
-	if err != nil {
-		err = fmt.Errorf("DNS server must be enable")
-		return
-	}
-
-	dnsPort, err := strconv.ParseUint(dnsPortStr, 10, 16)
+	dnsPort, err := netip.ParseAddrPort(dnsCfg.Listen)
 	if err != nil {
 		err = fmt.Errorf("DNS server must be enable")
 		return
@@ -337,7 +329,7 @@ func updateIPTables(cfg *config.Config) {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
 
-	err = tproxy.SetTProxyIPTables(inboundInterface, uint16(tProxyPort), uint16(dnsPort))
+	err = tproxy.SetTProxyIPTables(inboundInterface, uint16(tProxyPort), dnsPort.Port())
 	if err != nil {
 		return
 	}
