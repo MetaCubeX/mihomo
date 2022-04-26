@@ -55,12 +55,12 @@ linux-arm64:
 	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(STATIC_LDFLAGS) -targets=linux/arm64 $(BUILD_PACKAGE)
 
 windows-386:
-	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-4.0/386 $(BUILD_PACKAGE) && \
-	mv $(BINDIR)/$(NAME)-windows-4.0-386.exe $(BINDIR)/$(NAME)-windows-386.exe
+	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-6.0/386 $(BUILD_PACKAGE) && \
+	mv $(BINDIR)/$(NAME)-windows-6.0-386.exe $(BINDIR)/$(NAME)-windows-386.exe
 
 windows-amd64:
-	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-4.0/amd64 $(BUILD_PACKAGE) && \
-	mv $(BINDIR)/$(NAME)-windows-4.0-amd64.exe $(BINDIR)/$(NAME)-windows-amd64.exe
+	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows-6.0/amd64 $(BUILD_PACKAGE) && \
+	mv $(BINDIR)/$(NAME)-windows-6.0-amd64.exe $(BINDIR)/$(NAME)-windows-amd64.exe
 
 #windows-arm64:
 #	$(XGOCMD) -dest=$(BINDIR) -out=$(NAME) -trimpath=true -ldflags=$(RELEASE_LDFLAGS) -targets=windows/arm64 $(BUILD_PACKAGE)
