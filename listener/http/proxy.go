@@ -62,20 +62,22 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
-				handleUpgrade(conn, request, in)
-
-				return // hijack connection
+				if resp = handleUpgrade(conn, request, in); resp == nil {
+					return // hijack connection
+				}
 			}
 
-			RemoveHopByHopHeaders(request.Header)
-			RemoveExtraHTTPHostPort(request)
+			if resp == nil {
+				RemoveHopByHopHeaders(request.Header)
+				RemoveExtraHTTPHostPort(request)
 
-			if request.URL.Scheme == "" || request.URL.Host == "" {
-				resp = responseWith(request, http.StatusBadRequest)
-			} else {
-				resp, err = client.Do(request)
-				if err != nil {
-					resp = responseWith(request, http.StatusBadGateway)
+				if request.URL.Scheme == "" || request.URL.Host == "" {
+					resp = responseWith(request, http.StatusBadRequest)
+				} else {
+					resp, err = client.Do(request)
+					if err != nil {
+						resp = responseWith(request, http.StatusBadGateway)
+					}
 				}
 			}
 
@@ -96,7 +98,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func Authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http.Response {

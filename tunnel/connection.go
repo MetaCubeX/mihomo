@@ -62,13 +62,5 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr n
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
-	tcpKeepAlive(ctx.Conn())
-	tcpKeepAlive(outbound)
 	N.Relay(ctx.Conn(), outbound)
-}
-
-func tcpKeepAlive(c net.Conn) {
-	if tcp, ok := c.(*net.TCPConn); ok {
-		tcp.SetKeepAlive(true)
-	}
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// removeHopByHopHeaders remove Proxy-* headers
+// removeProxyHeaders remove Proxy-* headers
 func removeProxyHeaders(header http.Header) {
 	header.Del("Proxy-Connection")
 	header.Del("Proxy-Authenticate")

@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	N "github.com/Dreamacro/clash/common/net"
@@ -15,9 +16,7 @@ func isUpgradeRequest(req *http.Request) bool {
 	return strings.EqualFold(req.Header.Get("Connection"), "Upgrade")
 }
 
-func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext) {
-	defer conn.Close()
-
+func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext) (resp *http.Response) {
 	removeProxyHeaders(request.Header)
 	RemoveExtraHTTPHostPort(request)
 
@@ -36,26 +35,36 @@ func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext
 	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), right)
 
 	bufferedLeft := N.NewBufferedConn(left)
-	defer bufferedLeft.Close()
+	defer func() {
+		_ = bufferedLeft.Close()
+	}()
 
 	err := request.Write(bufferedLeft)
 	if err != nil {
 		return
 	}
 
-	resp, err := http.ReadResponse(bufferedLeft.Reader(), request)
-	if err != nil {
-		return
-	}
-
-	removeProxyHeaders(resp.Header)
-
-	err = resp.Write(conn)
+	resp, err = http.ReadResponse(bufferedLeft.Reader(), request)
 	if err != nil {
 		return
 	}
 
 	if resp.StatusCode == http.StatusSwitchingProtocols {
+		removeProxyHeaders(resp.Header)
+
+		err = conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			return
+		}
+
+		err = resp.Write(conn)
+		if err != nil {
+			return
+		}
+
 		N.Relay(bufferedLeft, conn)
+		_ = conn.Close()
+		resp = nil
 	}
+	return
 }
