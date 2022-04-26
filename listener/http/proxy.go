@@ -62,9 +62,9 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
-				handleUpgrade(conn, request, in)
-
-				return // hijack connection
+				if resp = handleUpgrade(conn, conn.RemoteAddr(), request, in); resp == nil {
+					return // hijack connection
+				}
 			}
 
 			removeHopByHopHeaders(request.Header)
@@ -96,7 +96,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 		}
 	}
 
-	conn.Close()
+	_ = conn.Close()
 }
 
 func authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http.Response {
