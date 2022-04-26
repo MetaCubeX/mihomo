@@ -62,7 +62,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
-				if resp = handleUpgrade(conn, request, in); resp == nil {
+				if resp = HandleUpgrade(conn, conn.RemoteAddr(), request, in); resp == nil {
 					return // hijack connection
 				}
 			}

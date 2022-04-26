@@ -45,12 +45,12 @@ readLoop:
 	for {
 		// use SetReadDeadline instead of Proxy-Connection keep-alive
 		if err := conn.SetReadDeadline(time.Now().Add(65 * time.Second)); err != nil {
-			break readLoop
+			break
 		}
 
 		request, err := H.ReadRequest(conn.Reader())
 		if err != nil {
-			break readLoop
+			break
 		}
 
 		var response *http.Response
@@ -71,7 +71,7 @@ readLoop:
 				// Manual writing to support CONNECT for http 1.0 (workaround for uplay client)
 				if _, err = fmt.Fprintf(session.conn, "HTTP/%d.%d %03d %s\r\n\r\n", session.request.ProtoMajor, session.request.ProtoMinor, http.StatusOK, "Connection established"); err != nil {
 					handleError(opt, session, err)
-					break readLoop // close connection
+					break // close connection
 				}
 
 				if strings.HasSuffix(session.request.URL.Host, ":80") {
@@ -81,7 +81,7 @@ readLoop:
 				b, err := conn.Peek(1)
 				if err != nil {
 					handleError(opt, session, err)
-					break readLoop // close connection
+					break // close connection
 				}
 
 				// TLS handshake.
@@ -92,7 +92,7 @@ readLoop:
 					if err = tlsConn.Handshake(); err != nil {
 						session.response = session.NewErrorResponse(fmt.Errorf("handshake failed: %w", err))
 						_ = writeResponse(session, false)
-						break readLoop // close connection
+						break // close connection
 					}
 
 					c = tlsConn
@@ -105,20 +105,27 @@ readLoop:
 
 			prepareRequest(c, session.request)
 
-			H.RemoveHopByHopHeaders(session.request.Header)
-			H.RemoveExtraHTTPHostPort(session.request)
-
 			// hijack api
 			if session.request.URL.Hostname() == opt.ApiHost {
 				if err = handleApiRequest(session, opt); err != nil {
 					handleError(opt, session, err)
-					break readLoop
 				}
-				return
+				break
 			}
 
+			// forward websocket
+			if isWebsocketRequest(request) {
+				session.request.RequestURI = ""
+				if session.response = H.HandleUpgrade(conn, source, request, in); session.response == nil {
+					return // hijack connection
+				}
+			}
+
+			H.RemoveHopByHopHeaders(session.request.Header)
+			H.RemoveExtraHTTPHostPort(session.request)
+
 			// hijack custom request and write back custom response if necessary
-			if opt.Handler != nil {
+			if opt.Handler != nil && session.response == nil {
 				newReq, newRes := opt.Handler.HandleRequest(session)
 				if newReq != nil {
 					session.request = newReq
@@ -128,28 +135,30 @@ readLoop:
 
 					if err = writeResponse(session, false); err != nil {
 						handleError(opt, session, err)
-						break readLoop
+						break
 					}
-					return
+					continue
 				}
 			}
 
-			session.request.RequestURI = ""
+			if session.response == nil {
+				session.request.RequestURI = ""
 
-			if session.request.URL.Host == "" {
-				session.response = session.NewErrorResponse(ErrInvalidURL)
-			} else {
-				client = newClientBySourceAndUserAgentIfNil(client, session.request, source, in)
+				if session.request.URL.Host == "" {
+					session.response = session.NewErrorResponse(ErrInvalidURL)
+				} else {
+					client = newClientBySourceAndUserAgentIfNil(client, session.request, source, in)
 
-				// send the request to remote server
-				session.response, err = client.Do(session.request)
+					// send the request to remote server
+					session.response, err = client.Do(session.request)
 
-				if err != nil {
-					handleError(opt, session, err)
-					session.response = session.NewErrorResponse(err)
-					if errors.Is(err, ErrCertUnsupported) || strings.Contains(err.Error(), "x509: ") {
-						_ = writeResponse(session, false)
-						break readLoop
+					if err != nil {
+						handleError(opt, session, err)
+						session.response = session.NewErrorResponse(fmt.Errorf("request failed: %w", err))
+						if errors.Is(err, ErrCertUnsupported) || strings.Contains(err.Error(), "x509: ") {
+							_ = writeResponse(session, false)
+							break
+						}
 					}
 				}
 			}
@@ -157,7 +166,7 @@ readLoop:
 
 		if err = writeResponseWithHandler(session, opt); err != nil {
 			handleError(opt, session, err)
-			break readLoop // close connection
+			break // close connection
 		}
 	}
 

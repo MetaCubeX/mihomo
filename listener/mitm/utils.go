@@ -20,6 +20,10 @@ var (
 	ErrInvalidURL      = errors.New("invalid URL")
 )
 
+func isWebsocketRequest(req *http.Request) bool {
+	return req.Header.Get("Connection") == "Upgrade" && req.Header.Get("Upgrade") == "websocket"
+}
+
 func NewResponse(code int, body io.Reader, req *http.Request) *http.Response {
 	if body == nil {
 		body = &bytes.Buffer{}

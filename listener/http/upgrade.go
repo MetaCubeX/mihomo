@@ -1,6 +1,8 @@
 package http
 
 import (
+	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"strings"
@@ -16,13 +18,17 @@ func isUpgradeRequest(req *http.Request) bool {
 	return strings.EqualFold(req.Header.Get("Connection"), "Upgrade")
 }
 
-func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext) (resp *http.Response) {
+func HandleUpgrade(localConn net.Conn, source net.Addr, request *http.Request, in chan<- C.ConnContext) (resp *http.Response) {
 	removeProxyHeaders(request.Header)
 	RemoveExtraHTTPHostPort(request)
 
 	address := request.Host
 	if _, _, err := net.SplitHostPort(address); err != nil {
-		address = net.JoinHostPort(address, "80")
+		port := "80"
+		if request.TLS != nil {
+			port = "443"
+		}
+		address = net.JoinHostPort(address, port)
 	}
 
 	dstAddr := socks5.ParseAddr(address)
@@ -32,38 +38,58 @@ func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext
 
 	left, right := net.Pipe()
 
-	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), right)
+	in <- inbound.NewMitm(dstAddr, source, request.Header.Get("User-Agent"), right)
 
-	bufferedLeft := N.NewBufferedConn(left)
+	var remoteServer *N.BufferedConn
+	if request.TLS != nil {
+		tlsConn := tls.Client(left, &tls.Config{
+			ServerName: request.URL.Hostname(),
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		if tlsConn.HandshakeContext(ctx) != nil {
+			_ = localConn.Close()
+			_ = left.Close()
+			return
+		}
+
+		remoteServer = N.NewBufferedConn(tlsConn)
+	} else {
+		remoteServer = N.NewBufferedConn(left)
+	}
+
 	defer func() {
-		_ = bufferedLeft.Close()
+		_ = remoteServer.Close()
 	}()
 
-	err := request.Write(bufferedLeft)
+	err := request.Write(remoteServer)
 	if err != nil {
+		_ = localConn.Close()
 		return
 	}
 
-	resp, err = http.ReadResponse(bufferedLeft.Reader(), request)
+	resp, err = http.ReadResponse(remoteServer.Reader(), request)
 	if err != nil {
+		_ = localConn.Close()
 		return
 	}
 
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		removeProxyHeaders(resp.Header)
 
-		err = conn.SetReadDeadline(time.Time{})
+		err = localConn.SetReadDeadline(time.Time{}) // set to not time out
 		if err != nil {
 			return
 		}
 
-		err = resp.Write(conn)
+		err = resp.Write(localConn)
 		if err != nil {
 			return
 		}
 
-		N.Relay(bufferedLeft, conn)
-		_ = conn.Close()
+		N.Relay(remoteServer, localConn) // blocking here
+		_ = localConn.Close()
 		resp = nil
 	}
 	return

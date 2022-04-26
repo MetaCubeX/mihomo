@@ -215,10 +215,9 @@ func (c *Config) GetOrCreateCert(hostname string, ips ...net.IP) (*tls.Certifica
 		BasicConstraintsValid: true,
 		NotBefore:             time.Now().Add(-c.validity),
 		NotAfter:              time.Now().Add(c.validity),
+		DNSNames:              dnsNames,
+		IPAddresses:           ips,
 	}
-
-	tmpl.DNSNames = dnsNames
-	tmpl.IPAddresses = ips
 
 	raw, err := x509.CreateCertificate(rand.Reader, tmpl, c.ca, c.privateKey.Public(), c.caPrivateKey)
 	if err != nil {
