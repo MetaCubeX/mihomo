@@ -386,7 +386,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 	}
 
-	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
+	client, err := vless.NewClient(uuidMap(option.UUID), addons, option.FlowShow)
 	if err != nil {
 		return nil, err
 	}
