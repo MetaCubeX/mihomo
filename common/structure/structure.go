@@ -31,7 +31,7 @@ func NewDecoder(option Option) *Decoder {
 // Decode transform a map[string]any to a struct
 func (d *Decoder) Decode(src map[string]any, dst any) error {
 	if reflect.TypeOf(dst).Kind() != reflect.Ptr {
-		return fmt.Errorf("Decode must recive a ptr struct")
+		return fmt.Errorf("decode must recive a ptr struct")
 	}
 	t := reflect.TypeOf(dst).Elem()
 	v := reflect.ValueOf(dst).Elem()
@@ -291,7 +291,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		field reflect.StructField
 		val   reflect.Value
 	}
-	fields := []field{}
+	var fields []field
 	for len(structs) > 0 {
 		structVal := structs[0]
 		structs = structs[1:]

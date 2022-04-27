@@ -1,7 +1,7 @@
-name: Alpha
+name: alpha
 on: [push]
 jobs:
-  Feature-build:
+  Build:
     if: ${{ !contains(github.event.head_commit.message, '[Skip CI]') }}
     runs-on: ubuntu-latest
     steps:
