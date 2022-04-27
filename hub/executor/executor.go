@@ -251,8 +251,8 @@ func updateGeneral(general *config.General, force bool) {
 		resolver.DisableIPv6 = true
 	}
 
-	dialer.TCPConcurrent = general.TCPConcurrent
-	if dialer.TCPConcurrent {
+	if general.TCPConcurrent {
+		dialer.SetDial(general.TCPConcurrent)
 		log.Infoln("Use tcp concurrent")
 	}
 

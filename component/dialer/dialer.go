@@ -4,14 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/log"
 	"net"
 	"net/netip"
+	"sync"
 
 	"github.com/Dreamacro/clash/component/resolver"
 )
 
-var DisableIPv6 = false
+var (
+	dialMux                    sync.Mutex
+	actualSingleDialContext    = singleDialContext
+	actualDualStackDialContext = dualStackDialContext
+	DisableIPv6                = false
+)
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
 	opt := &option{
@@ -29,37 +34,9 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 
 	switch network {
 	case "tcp4", "tcp6", "udp4", "udp6":
-		host, port, err := net.SplitHostPort(address)
-		if err != nil {
-			return nil, err
-		}
-
-		var ip netip.Addr
-		switch network {
-		case "tcp4", "udp4":
-			if !opt.direct {
-				ip, err = resolver.ResolveIPv4ProxyServerHost(host)
-			} else {
-				ip, err = resolver.ResolveIPv4(host)
-			}
-		default:
-			if !opt.direct {
-				ip, err = resolver.ResolveIPv6ProxyServerHost(host)
-			} else {
-				ip, err = resolver.ResolveIPv6(host)
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		return dialContext(ctx, network, ip, port, opt)
+		return actualSingleDialContext(ctx, network, address, opt)
 	case "tcp", "udp":
-		if TCPConcurrent {
-			return concurrentDialContext(ctx, network, address, opt)
-		} else {
-			return dualStackDialContext(ctx, network, address, opt)
-		}
+		return actualDualStackDialContext(ctx, network, address, opt)
 	default:
 		return nil, errors.New("network invalid")
 	}
@@ -95,6 +72,19 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 	}
 
 	return lc.ListenPacket(ctx, network, address)
+}
+
+func SetDial(concurrent bool) {
+	dialMux.Lock()
+	if concurrent {
+		actualSingleDialContext = concurrentSingleDialContext
+		actualDualStackDialContext = concurrentDualStackDialContext
+	} else {
+		actualSingleDialContext = singleDialContext
+		actualDualStackDialContext = concurrentDualStackDialContext
+	}
+
+	dialMux.Unlock()
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
@@ -196,12 +186,24 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 	return nil, errors.New("never touched")
 }
 
-func concurrentDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
+func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
+	var ips []netip.Addr
+
+	if opt.direct {
+		ips, err = resolver.ResolveAllIP(host)
+	} else {
+		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+	}
+
+	return concurrentDialContext(ctx, network, ips, port, opt)
+}
+
+func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
 	returned := make(chan struct{})
 	defer close(returned)
 
@@ -213,13 +215,6 @@ func concurrentDialContext(ctx context.Context, network, address string, opt *op
 	}
 
 	results := make(chan dialResult)
-	var ips []netip.Addr
-
-	if opt.direct {
-		ips, err = resolver.ResolveAllIP(host)
-	} else {
-		ips, err = resolver.ResolveAllIPProxyServerHost(host)
-	}
 
 	tcpRacer := func(ctx context.Context, ip netip.Addr) {
 		result := dialResult{ip: ip}
@@ -238,7 +233,7 @@ func concurrentDialContext(ctx context.Context, network, address string, opt *op
 		if ip.Is6() {
 			v = "6"
 		}
-		//log.Debugln("[%s] try use [%s] connected", host, ip.String())
+
 		result.Conn, result.error = dialContext(ctx, network+v, ip, port, opt)
 	}
 
@@ -250,15 +245,70 @@ func concurrentDialContext(ctx context.Context, network, address string, opt *op
 	for res := range results {
 		connCount--
 		if res.error == nil {
-			log.Debugln("[%s] used [%s] connected", host, res.ip.String())
 			return res.Conn, nil
 		}
 
-		//log.Errorln("connect error:%v", res.error)
 		if connCount == 0 {
-			//log.Errorln("connect [%s] all ip failed", host)
 			break
 		}
 	}
-	return nil, errors.New("all ip tcp shakeHands failed")
+
+	return nil, errors.New("all ip tcp shake hands failed")
+}
+
+func singleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var ip netip.Addr
+	switch network {
+	case "tcp4", "udp4":
+		if !opt.direct {
+			ip, err = resolver.ResolveIPv4ProxyServerHost(host)
+		} else {
+			ip, err = resolver.ResolveIPv4(host)
+		}
+	default:
+		if !opt.direct {
+			ip, err = resolver.ResolveIPv6ProxyServerHost(host)
+		} else {
+			ip, err = resolver.ResolveIPv6(host)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return dialContext(ctx, network, ip, port, opt)
+}
+
+func concurrentSingleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var ips []netip.Addr
+	switch network {
+	case "tcp4", "udp4":
+		if !opt.direct {
+			ips, err = resolver.ResolveAllIPv4ProxyServerHost(host)
+		} else {
+			ips, err = resolver.ResolveAllIPv4(host)
+		}
+	default:
+		if !opt.direct {
+			ips, err = resolver.ResolveAllIPv6ProxyServerHost(host)
+		} else {
+			ips, err = resolver.ResolveAllIPv6(host)
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return concurrentDialContext(ctx, network, ips, port, opt)
 }
