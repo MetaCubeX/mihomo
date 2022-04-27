@@ -17,7 +17,7 @@ func getServerConn(serverConn *N.BufferedConn, request *http.Request, srcAddr ne
 		return serverConn, nil
 	}
 
-	address := request.Host
+	address := request.URL.Host
 	if _, _, err := net.SplitHostPort(address); err != nil {
 		port := "80"
 		if request.TLS != nil {
