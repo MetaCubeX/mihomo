@@ -43,7 +43,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 		for {
 			n, err := device.Read(buf)
 			if err != nil {
-				return
+				continue
 			}
 
 			raw := buf[:n]

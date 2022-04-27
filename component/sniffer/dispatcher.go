@@ -23,15 +23,17 @@ var (
 
 var Dispatcher SnifferDispatcher
 
-type SnifferDispatcher struct {
-	enable bool
+type (
+	SnifferDispatcher struct {
+		enable bool
 
-	sniffers []C.Sniffer
+		sniffers []C.Sniffer
 
-	foreDomain *trie.DomainTrie[bool]
-	skipSNI    *trie.DomainTrie[bool]
-	portRanges *[]utils.Range[uint16]
-}
+		foreDomain *trie.DomainTrie[bool]
+		skipSNI    *trie.DomainTrie[bool]
+		portRanges *[]utils.Range[uint16]
+	}
+)
 
 func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 	bufConn, ok := conn.(*CN.BufferedConn)
@@ -98,18 +100,17 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 			if err != nil {
 				_, ok := err.(*net.OpError)
 				if ok {
-					log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
+					//log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
 					conn.Close()
 				}
-
-				log.Errorln("[Sniffer] %v", err)
+				//log.Errorln("[Sniffer] %v", err)
 				return "", err
 			}
 
 			bufferedLen := conn.Buffered()
 			bytes, err := conn.Peek(bufferedLen)
 			if err != nil {
-				log.Debugln("[Sniffer] the data length not enough")
+				//log.Debugln("[Sniffer] the data length not enough")
 				continue
 			}
 
@@ -146,7 +147,7 @@ func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainT
 	for _, snifferName := range needSniffer {
 		sniffer, err := NewSniffer(snifferName)
 		if err != nil {
-			log.Errorln("Sniffer name[%s] is error", snifferName)
+			//log.Errorln("Sniffer name[%s] is error", snifferName)
 			return &SnifferDispatcher{enable: false}, err
 		}
 

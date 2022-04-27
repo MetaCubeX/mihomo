@@ -238,8 +238,7 @@ func concurrentDialContext(ctx context.Context, network, address string, opt *op
 		if ip.Is6() {
 			v = "6"
 		}
-
-		log.Debugln("[%s] try use [%s] connected", host, ip.String())
+		//log.Debugln("[%s] try use [%s] connected", host, ip.String())
 		result.Conn, result.error = dialContext(ctx, network+v, ip, port, opt)
 	}
 
@@ -255,12 +254,11 @@ func concurrentDialContext(ctx context.Context, network, address string, opt *op
 			return res.Conn, nil
 		}
 
-		log.Errorln("connect error:%v", res.error)
+		//log.Errorln("connect error:%v", res.error)
 		if connCount == 0 {
-			log.Errorln("connect [%s] all ip failed", host)
+			//log.Errorln("connect [%s] all ip failed", host)
 			break
 		}
 	}
-
 	return nil, errors.New("all ip tcp shakeHands failed")
 }
