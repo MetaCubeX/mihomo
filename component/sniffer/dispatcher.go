@@ -100,17 +100,17 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 			if err != nil {
 				_, ok := err.(*net.OpError)
 				if ok {
-					//log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
+					log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
 					conn.Close()
 				}
-				//log.Errorln("[Sniffer] %v", err)
+				log.Errorln("[Sniffer] %v", err)
 				return "", err
 			}
 
 			bufferedLen := conn.Buffered()
 			bytes, err := conn.Peek(bufferedLen)
 			if err != nil {
-				//log.Debugln("[Sniffer] the data length not enough")
+				log.Debugln("[Sniffer] the data length not enough")
 				continue
 			}
 
@@ -147,7 +147,7 @@ func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainT
 	for _, snifferName := range needSniffer {
 		sniffer, err := NewSniffer(snifferName)
 		if err != nil {
-			//log.Errorln("Sniffer name[%s] is error", snifferName)
+			log.Errorln("Sniffer name[%s] is error", snifferName)
 			return &SnifferDispatcher{enable: false}, err
 		}
 
