@@ -1,6 +1,7 @@
 package nat
 
 import (
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"net/netip"
@@ -43,6 +44,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 		for {
 			n, err := device.Read(buf)
 			if err != nil {
+				log.Warnln("system error:%s", err.Error())
 				continue
 			}
 
