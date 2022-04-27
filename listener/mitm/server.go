@@ -54,7 +54,7 @@ func (l *Listener) Close() error {
 
 // New the MITM proxy actually is a type of HTTP proxy
 func New(option *Option, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithAuthenticate(option, in, false)
+	return NewWithAuthenticate(option, in, true)
 }
 
 func NewWithAuthenticate(option *Option, in chan<- C.ConnContext, authenticate bool) (*Listener, error) {
@@ -65,7 +65,7 @@ func NewWithAuthenticate(option *Option, in chan<- C.ConnContext, authenticate b
 
 	var c *cache.Cache[string, bool]
 	if authenticate {
-		c = cache.New[string, bool](time.Second * 30)
+		c = cache.New[string, bool](time.Second * 90)
 	}
 
 	hl := &Listener{

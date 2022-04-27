@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -19,27 +18,31 @@ import (
 	H "github.com/Dreamacro/clash/listener/http"
 )
 
-func HandleConn(c net.Conn, opt *Option, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
+func HandleConn(clientConn net.Conn, opt *Option, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
 	var (
-		source net.Addr
-		client *http.Client
+		clientIP   = netip.MustParseAddrPort(clientConn.RemoteAddr().String()).Addr()
+		sourceAddr net.Addr
+		serverConn *N.BufferedConn
 	)
 
 	defer func() {
-		if client != nil {
-			client.CloseIdleConnections()
+		if serverConn != nil {
+			_ = serverConn.Close()
 		}
 	}()
 
 startOver:
 	var conn *N.BufferedConn
-	if bufConn, ok := c.(*N.BufferedConn); ok {
+	if bufConn, ok := clientConn.(*N.BufferedConn); ok {
 		conn = bufConn
 	} else {
-		conn = N.NewBufferedConn(c)
+		conn = N.NewBufferedConn(clientConn)
 	}
 
 	trusted := cache == nil // disable authenticate if cache is nil
+	if !trusted {
+		trusted = clientIP.IsLoopback()
+	}
 
 readLoop:
 	for {
@@ -57,8 +60,8 @@ readLoop:
 
 		session := newSession(conn, request, response)
 
-		source = parseSourceAddress(session.request, c.RemoteAddr(), source)
-		session.request.RemoteAddr = source.String()
+		sourceAddr = parseSourceAddress(session.request, clientConn.RemoteAddr(), sourceAddr)
+		session.request.RemoteAddr = sourceAddr.String()
 
 		if !trusted {
 			session.response = H.Authenticate(session.request, cache)
@@ -95,15 +98,15 @@ readLoop:
 						break // close connection
 					}
 
-					c = tlsConn
+					clientConn = tlsConn
 				} else {
-					c = conn
+					clientConn = conn
 				}
 
 				goto startOver
 			}
 
-			prepareRequest(c, session.request)
+			prepareRequest(clientConn, session.request)
 
 			// hijack api
 			if session.request.URL.Hostname() == opt.ApiHost {
@@ -115,17 +118,22 @@ readLoop:
 
 			// forward websocket
 			if isWebsocketRequest(request) {
+				serverConn, err = getServerConn(serverConn, session.request, sourceAddr, in)
+				if err != nil {
+					break
+				}
+
 				session.request.RequestURI = ""
-				if session.response = H.HandleUpgrade(conn, source, request, in); session.response == nil {
+				if session.response = H.HandleUpgrade(conn, serverConn, request, in); session.response == nil {
 					return // hijack connection
 				}
 			}
 
-			H.RemoveHopByHopHeaders(session.request.Header)
-			H.RemoveExtraHTTPHostPort(session.request)
+			if session.response == nil {
+				H.RemoveHopByHopHeaders(session.request.Header)
+				H.RemoveExtraHTTPHostPort(session.request)
 
-			// hijack custom request and write back custom response if necessary
-			if opt.Handler != nil && session.response == nil {
+				// hijack custom request and write back custom response if necessary
 				newReq, newRes := opt.Handler.HandleRequest(session)
 				if newReq != nil {
 					session.request = newReq
@@ -139,26 +147,26 @@ readLoop:
 					}
 					continue
 				}
-			}
 
-			if session.response == nil {
 				session.request.RequestURI = ""
 
 				if session.request.URL.Host == "" {
 					session.response = session.NewErrorResponse(ErrInvalidURL)
 				} else {
-					client = newClientBySourceAndUserAgentIfNil(client, session.request, source, in)
+					serverConn, err = getServerConn(serverConn, session.request, sourceAddr, in)
+					if err != nil {
+						break
+					}
 
 					// send the request to remote server
-					session.response, err = client.Do(session.request)
-
+					err = session.request.Write(serverConn)
 					if err != nil {
-						handleError(opt, session, err)
-						session.response = session.NewErrorResponse(fmt.Errorf("request failed: %w", err))
-						if errors.Is(err, ErrCertUnsupported) || strings.Contains(err.Error(), "x509: ") {
-							_ = writeResponse(session, false)
-							break
-						}
+						break
+					}
+
+					session.response, err = http.ReadResponse(serverConn.Reader(), request)
+					if err != nil {
+						break
 					}
 				}
 			}
@@ -174,11 +182,9 @@ readLoop:
 }
 
 func writeResponseWithHandler(session *Session, opt *Option) error {
-	if opt.Handler != nil {
-		res := opt.Handler.HandleResponse(session)
-		if res != nil {
-			session.response = res
-		}
+	res := opt.Handler.HandleResponse(session)
+	if res != nil {
+		session.response = res
 	}
 
 	return writeResponse(session, true)
@@ -220,10 +226,8 @@ func handleApiRequest(session *Session, opt *Option) error {
 </body></html>
 `
 
-	if opt.Handler != nil {
-		if opt.Handler.HandleApiRequest(session) {
-			return nil
-		}
+	if opt.Handler.HandleApiRequest(session) {
+		return nil
 	}
 
 	b = fmt.Sprintf(b, session.request.URL.Path)
@@ -243,9 +247,7 @@ func handleError(opt *Option, session *Session, err error) {
 			_ = session.response.Body.Close()
 		}()
 	}
-	if opt.Handler != nil {
-		opt.Handler.HandleError(session, err)
-	}
+	opt.Handler.HandleError(session, err)
 }
 
 func prepareRequest(conn net.Conn, request *http.Request) {
@@ -297,10 +299,6 @@ func parseSourceAddress(req *http.Request, connSource, source net.Addr) net.Addr
 	}
 }
 
-func newClientBySourceAndUserAgentIfNil(cli *http.Client, req *http.Request, source net.Addr, in chan<- C.ConnContext) *http.Client {
-	if cli != nil {
-		return cli
-	}
-
-	return newClient(source, req.Header.Get("User-Agent"), in)
+func isWebsocketRequest(req *http.Request) bool {
+	return req.Header.Get("Connection") == "Upgrade" && req.Header.Get("Upgrade") == "websocket"
 }
