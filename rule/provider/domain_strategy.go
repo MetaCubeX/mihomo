@@ -27,16 +27,18 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 
 func (d *domainStrategy) OnUpdate(rules []string) {
 	domainTrie := trie.New[bool]()
+	count := 0
 	for _, rule := range rules {
 		err := domainTrie.Insert(rule, true)
 		if err != nil {
 			log.Warnln("invalid domain:[%s]", rule)
 		} else {
-			d.count++
+			count++
 		}
 	}
 
 	d.domainRules = domainTrie
+	d.count = count
 }
 
 func ruleParse(ruleRaw string) (string, string, []string) {
