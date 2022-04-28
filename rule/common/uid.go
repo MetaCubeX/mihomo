@@ -72,10 +72,10 @@ func (u *Uid) Match(metadata *C.Metadata) bool {
 		return false
 	}
 	var uid int32
-	if metadata.Uid != 0 {
-		uid = metadata.Uid
+	if metadata.Uid != nil {
+		uid = *metadata.Uid
 	} else if uid, err = process.FindUid(metadata.NetWork.String(), metadata.SrcIP, srcPort); err == nil {
-		metadata.Uid = uid
+		metadata.Uid = &uid
 	} else {
 		log.Warnln("[UID] could not get uid from %s", metadata.String())
 		return false
