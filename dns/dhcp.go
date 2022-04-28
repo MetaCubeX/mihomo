@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"go.uber.org/atomic"
 	"net"
 	"net/netip"
 	"sync"
@@ -71,7 +72,7 @@ func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
 				for _, item := range dns {
 					nameserver = append(nameserver, NameServer{
 						Addr:      net.JoinHostPort(item.String(), "53"),
-						Interface: d.ifaceName,
+						Interface: atomic.NewString(d.ifaceName),
 					})
 				}
 
