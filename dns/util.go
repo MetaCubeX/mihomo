@@ -64,7 +64,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		case "quic":
-			ret = append(ret, &quicClient{addr: s.Addr})
+			ret = append(ret, newDOQ(resolver, s.Addr, s.ProxyAdapter))
 			continue
 		}
 
