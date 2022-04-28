@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dlclark/regexp2"
+	"math"
 	"runtime"
 	"time"
 
@@ -32,6 +33,11 @@ type proxySetProvider struct {
 	*fetcher
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
+	flag        uint
+}
+
+func (pp *proxySetProvider) Flag() uint {
+	return pp.flag
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -117,6 +123,11 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 	onUpdate := func(elm any) {
 		ret := elm.([]C.Proxy)
 		pd.setProxies(ret)
+		if pd.flag == math.MaxUint {
+			pd.flag = 0
+		} else {
+			pd.flag++
+		}
 	}
 
 	proxiesParseAndFilter := func(buf []byte) (any, error) {
@@ -171,6 +182,11 @@ type compatibleProvider struct {
 	name        string
 	healthCheck *HealthCheck
 	proxies     []C.Proxy
+	flag        uint
+}
+
+func (cp *compatibleProvider) Flag() uint {
+	return cp.flag
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {

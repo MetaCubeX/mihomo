@@ -6,17 +6,13 @@ import (
 	"fmt"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 )
 
 type Relay struct {
-	*outbound.Base
-	single    *singledo.Single[[]C.Proxy]
-	providers []provider.ProxyProvider
-	filter    string
+	*GroupBase
 }
 
 // DialContext implements C.ProxyAdapter
@@ -70,7 +66,7 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 // MarshalJSON implements C.ProxyAdapter
 func (r *Relay) MarshalJSON() ([]byte, error) {
 	all := []string{}
-	for _, proxy := range r.rawProxies(false) {
+	for _, proxy := range r.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
@@ -79,16 +75,8 @@ func (r *Relay) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (r *Relay) rawProxies(touch bool) []C.Proxy {
-	elm, _, _ := r.single.Do(func() ([]C.Proxy, error) {
-		return getProvidersProxies(r.providers, touch, r.filter), nil
-	})
-
-	return elm
-}
-
 func (r *Relay) proxies(metadata *C.Metadata, touch bool) []C.Proxy {
-	proxies := r.rawProxies(touch)
+	proxies := r.GetProxies(touch)
 
 	for n, proxy := range proxies {
 		subproxy := proxy.Unwrap(metadata)
@@ -103,14 +91,15 @@ func (r *Relay) proxies(metadata *C.Metadata, touch bool) []C.Proxy {
 
 func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
 	return &Relay{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.Relay,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.Relay,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			"",
+			providers,
 		}),
-		single:    singledo.NewSingle[[]C.Proxy](defaultGetProxiesDuration),
-		providers: providers,
-		filter:    option.Filter,
 	}
 }

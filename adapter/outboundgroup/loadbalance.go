@@ -9,7 +9,6 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/murmur3"
-	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -20,11 +19,8 @@ import (
 type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy
 
 type LoadBalance struct {
-	*outbound.Base
+	*GroupBase
 	disableUDP bool
-	filter     string
-	single     *singledo.Single[[]C.Proxy]
-	providers  []provider.ProxyProvider
 	strategyFn strategyFn
 }
 
@@ -136,22 +132,14 @@ func strategyConsistentHashing() strategyFn {
 
 // Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata) C.Proxy {
-	proxies := lb.proxies(true)
+	proxies := lb.GetProxies(true)
 	return lb.strategyFn(proxies, metadata)
-}
-
-func (lb *LoadBalance) proxies(touch bool) []C.Proxy {
-	elm, _, _ := lb.single.Do(func() ([]C.Proxy, error) {
-		return getProvidersProxies(lb.providers, touch, lb.filter), nil
-	})
-
-	return elm
 }
 
 // MarshalJSON implements C.ProxyAdapter
 func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 	all := []string{}
-	for _, proxy := range lb.proxies(false) {
+	for _, proxy := range lb.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
@@ -171,16 +159,17 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 		return nil, fmt.Errorf("%w: %s", errStrategy, strategy)
 	}
 	return &LoadBalance{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.LoadBalance,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.LoadBalance,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			option.Filter,
+			providers,
 		}),
-		single:     singledo.NewSingle[[]C.Proxy](defaultGetProxiesDuration),
-		providers:  providers,
 		strategyFn: strategyFn,
 		disableUDP: option.DisableUDP,
-		filter:     option.Filter,
 	}, nil
 }

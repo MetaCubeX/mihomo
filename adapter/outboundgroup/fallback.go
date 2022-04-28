@@ -8,18 +8,14 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 )
 
 type Fallback struct {
-	*outbound.Base
+	*GroupBase
 	disableUDP  bool
-	filter      string
-	single      *singledo.Single[[]C.Proxy]
-	providers   []provider.ProxyProvider
 	failedTimes *atomic.Int32
 	failedTime  *atomic.Int64
 }
@@ -98,7 +94,7 @@ func (f *Fallback) SupportUDP() bool {
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
 	all := []string{}
-	for _, proxy := range f.proxies(false) {
+	for _, proxy := range f.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
@@ -114,16 +110,8 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 	return proxy
 }
 
-func (f *Fallback) proxies(touch bool) []C.Proxy {
-	elm, _, _ := f.single.Do(func() ([]C.Proxy, error) {
-		return getProvidersProxies(f.providers, touch, f.filter), nil
-	})
-
-	return elm
-}
-
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
-	proxies := f.proxies(touch)
+	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if proxy.Alive() {
 			return proxy
@@ -135,16 +123,17 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.Fallback,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.Fallback,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			option.Filter,
+			providers,
 		}),
-		single:      singledo.NewSingle[[]C.Proxy](defaultGetProxiesDuration),
-		providers:   providers,
 		disableUDP:  option.DisableUDP,
-		filter:      option.Filter,
 		failedTimes: atomic.NewInt32(-1),
 		failedTime:  atomic.NewInt64(-1),
 	}
