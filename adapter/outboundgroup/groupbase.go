@@ -7,14 +7,15 @@ import (
 	types "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/dlclark/regexp2"
+	"sync"
 )
 
 type GroupBase struct {
 	*outbound.Base
 	filter    *regexp2.Regexp
 	providers []provider.ProxyProvider
-	versions  map[string]uint
-	proxies   map[string][]C.Proxy
+	versions  sync.Map // map[string]uint
+	proxies   sync.Map // map[string][]C.Proxy
 }
 
 type GroupBaseOption struct {
@@ -32,8 +33,6 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		Base:      outbound.NewBase(opt.BaseOption),
 		filter:    filter,
 		providers: opt.providers,
-		versions:  map[string]uint{},
-		proxies:   map[string][]C.Proxy{},
 	}
 }
 
@@ -56,16 +55,16 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	for _, pd := range gb.providers {
 		if pd.VehicleType() == types.Compatible {
 			if touch {
-				gb.proxies[pd.Name()] = pd.ProxiesWithTouch()
+				gb.proxies.Store(pd.Name(), pd.ProxiesWithTouch())
 			} else {
-				gb.proxies[pd.Name()] = pd.Proxies()
+				gb.proxies.Store(pd.Name(), pd.Proxies())
 			}
 
-			gb.versions[pd.Name()] = pd.Version()
+			gb.versions.Store(pd.Name(), pd.Version())
 			continue
 		}
 
-		if version, ok := gb.versions[pd.Name()]; !ok || version != pd.Version() {
+		if version, ok := gb.versions.Load(pd.Name()); !ok || version != pd.Version() {
 			var (
 				proxies    []C.Proxy
 				newProxies []C.Proxy
@@ -83,14 +82,15 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				}
 			}
 
-			gb.proxies[pd.Name()] = newProxies
-			gb.versions[pd.Name()] = pd.Version()
+			gb.proxies.Store(pd.Name(), newProxies)
+			gb.versions.Store(pd.Name(), pd.Version())
 		}
 	}
 	var proxies []C.Proxy
-	for _, v := range gb.proxies {
-		proxies = append(proxies, v...)
-	}
+	gb.proxies.Range(func(key, value any) bool {
+		proxies = append(proxies, value.([]C.Proxy)...)
+		return true
+	})
 	if len(proxies) == 0 {
 		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
 	}
