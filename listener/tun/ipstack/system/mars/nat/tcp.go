@@ -16,8 +16,6 @@ type conn struct {
 	net.Conn
 
 	tuple tuple
-
-	close func(tuple tuple)
 }
 
 func (t *TCP) Accept() (net.Conn, error) {
@@ -39,9 +37,6 @@ func (t *TCP) Accept() (net.Conn, error) {
 	return &conn{
 		Conn:  c,
 		tuple: tup,
-		close: func(tuple tuple) {
-			t.table.delete(tuple)
-		},
 	}, nil
 }
 
@@ -55,11 +50,6 @@ func (t *TCP) Addr() net.Addr {
 
 func (t *TCP) SetDeadline(time time.Time) error {
 	return t.listener.SetDeadline(time)
-}
-
-func (c *conn) Close() error {
-	c.close(c.tuple)
-	return c.Conn.Close()
 }
 
 func (c *conn) LocalAddr() net.Addr {

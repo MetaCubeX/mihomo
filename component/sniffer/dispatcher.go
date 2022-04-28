@@ -23,15 +23,17 @@ var (
 
 var Dispatcher SnifferDispatcher
 
-type SnifferDispatcher struct {
-	enable bool
+type (
+	SnifferDispatcher struct {
+		enable bool
 
-	sniffers []C.Sniffer
+		sniffers []C.Sniffer
 
-	foreDomain *trie.DomainTrie[bool]
-	skipSNI    *trie.DomainTrie[bool]
-	portRanges *[]utils.Range[uint16]
-}
+		foreDomain *trie.DomainTrie[bool]
+		skipSNI    *trie.DomainTrie[bool]
+		portRanges *[]utils.Range[uint16]
+	}
+)
 
 func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 	bufConn, ok := conn.(*CN.BufferedConn)
@@ -101,7 +103,6 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 					log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
 					conn.Close()
 				}
-
 				log.Errorln("[Sniffer] %v", err)
 				return "", err
 			}
