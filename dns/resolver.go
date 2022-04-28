@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/atomic"
 	"math/rand"
 	"net/netip"
 	"strings"
@@ -356,7 +357,7 @@ func (r *Resolver) HasProxyServer() bool {
 type NameServer struct {
 	Net          string
 	Addr         string
-	Interface    string
+	Interface    *atomic.String
 	ProxyAdapter string
 }
 
