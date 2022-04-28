@@ -1,9 +1,6 @@
 name: Docker
 
-on:
-  push:
-    tags: [ 'alpha' ]
-  workflow_dispatch:
+on: [push]
 
 env:
   REGISTRY: docker.io
