@@ -26,16 +26,18 @@ func (i *ipcidrStrategy) ShouldResolveIP() bool {
 
 func (i *ipcidrStrategy) OnUpdate(rules []string) {
 	ipCidrTrie := trie.NewIpCidrTrie()
+	count := 0
 	for _, rule := range rules {
 		err := ipCidrTrie.AddIpCidrForString(rule)
 		if err != nil {
 			log.Warnln("invalid Ipcidr:[%s]", rule)
 		} else {
-			i.count++
+			count++
 		}
 	}
 
 	i.trie = ipCidrTrie
+	i.count = count
 	i.shouldResolveIP = i.count > 0
 }
 
