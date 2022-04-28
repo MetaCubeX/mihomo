@@ -70,6 +70,7 @@ type ProxyProvider interface {
 	// Commonly used in DialContext and DialPacketConn
 	ProxiesWithTouch() []constant.Proxy
 	HealthCheck()
+	Flag() uint
 }
 
 // Rule Type

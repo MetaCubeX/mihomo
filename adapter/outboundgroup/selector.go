@@ -6,19 +6,15 @@ import (
 	"errors"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 )
 
 type Selector struct {
-	*outbound.Base
+	*GroupBase
 	disableUDP bool
-	single     *singledo.Single[C.Proxy]
 	selected   string
-	filter     string
-	providers  []provider.ProxyProvider
 }
 
 // DialContext implements C.ProxyAdapter
@@ -51,7 +47,7 @@ func (s *Selector) SupportUDP() bool {
 // MarshalJSON implements C.ProxyAdapter
 func (s *Selector) MarshalJSON() ([]byte, error) {
 	all := []string{}
-	for _, proxy := range getProvidersProxies(s.providers, false, s.filter) {
+	for _, proxy := range s.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 
@@ -67,10 +63,9 @@ func (s *Selector) Now() string {
 }
 
 func (s *Selector) Set(name string) error {
-	for _, proxy := range getProvidersProxies(s.providers, false, s.filter) {
+	for _, proxy := range s.GetProxies(false) {
 		if proxy.Name() == name {
 			s.selected = name
-			s.single.Reset()
 			return nil
 		}
 	}
@@ -84,32 +79,29 @@ func (s *Selector) Unwrap(*C.Metadata) C.Proxy {
 }
 
 func (s *Selector) selectedProxy(touch bool) C.Proxy {
-	elm, _, _ := s.single.Do(func() (C.Proxy, error) {
-		proxies := getProvidersProxies(s.providers, touch, s.filter)
-		for _, proxy := range proxies {
-			if proxy.Name() == s.selected {
-				return proxy, nil
-			}
+	proxies := s.GetProxies(touch)
+	for _, proxy := range proxies {
+		if proxy.Name() == s.selected {
+			return proxy
 		}
+	}
 
-		return proxies[0], nil
-	})
-
-	return elm
+	return proxies[0]
 }
 
 func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
 	return &Selector{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.Selector,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.Selector,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			option.Filter,
+			providers,
 		}),
-		single:     singledo.NewSingle[C.Proxy](defaultGetProxiesDuration),
-		providers:  providers,
 		selected:   "COMPATIBLE",
 		disableUDP: option.DisableUDP,
-		filter:     option.Filter,
 	}
 }

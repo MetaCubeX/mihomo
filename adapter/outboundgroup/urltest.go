@@ -23,14 +23,11 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 }
 
 type URLTest struct {
-	*outbound.Base
+	*GroupBase
 	tolerance   uint16
 	disableUDP  bool
 	fastNode    C.Proxy
-	filter      string
-	single      *singledo.Single[[]C.Proxy]
 	fastSingle  *singledo.Single[C.Proxy]
-	providers   []provider.ProxyProvider
 	failedTimes *atomic.Int32
 	failedTime  *atomic.Int64
 }
@@ -70,17 +67,9 @@ func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
 	return u.fast(true)
 }
 
-func (u *URLTest) proxies(touch bool) []C.Proxy {
-	elm, _, _ := u.single.Do(func() ([]C.Proxy, error) {
-		return getProvidersProxies(u.providers, touch, u.filter), nil
-	})
-
-	return elm
-}
-
 func (u *URLTest) fast(touch bool) C.Proxy {
 	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
-		proxies := u.proxies(touch)
+		proxies := u.GetProxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
 		fastNotExist := true
@@ -124,7 +113,7 @@ func (u *URLTest) SupportUDP() bool {
 // MarshalJSON implements C.ProxyAdapter
 func (u *URLTest) MarshalJSON() ([]byte, error) {
 	all := []string{}
-	for _, proxy := range u.proxies(false) {
+	for _, proxy := range u.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
@@ -175,17 +164,18 @@ func parseURLTestOption(config map[string]any) []urlTestOption {
 
 func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, options ...urlTestOption) *URLTest {
 	urlTest := &URLTest{
-		Base: outbound.NewBase(outbound.BaseOption{
-			Name:        option.Name,
-			Type:        C.URLTest,
-			Interface:   option.Interface,
-			RoutingMark: option.RoutingMark,
+		GroupBase: NewGroupBase(GroupBaseOption{
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.URLTest,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			option.Filter,
+			providers,
 		}),
-		single:      singledo.NewSingle[[]C.Proxy](defaultGetProxiesDuration),
 		fastSingle:  singledo.NewSingle[C.Proxy](time.Second * 10),
-		providers:   providers,
 		disableUDP:  option.DisableUDP,
-		filter:      option.Filter,
 		failedTimes: atomic.NewInt32(-1),
 		failedTime:  atomic.NewInt64(-1),
 	}
