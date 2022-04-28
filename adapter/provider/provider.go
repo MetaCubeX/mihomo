@@ -33,11 +33,11 @@ type proxySetProvider struct {
 	*fetcher
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
-	flag        uint
+	version     uint
 }
 
-func (pp *proxySetProvider) Flag() uint {
-	return pp.flag
+func (pp *proxySetProvider) Version() uint {
+	return pp.version
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -123,10 +123,10 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 	onUpdate := func(elm any) {
 		ret := elm.([]C.Proxy)
 		pd.setProxies(ret)
-		if pd.flag == math.MaxUint {
-			pd.flag = 0
+		if pd.version == math.MaxUint {
+			pd.version = 0
 		} else {
-			pd.flag++
+			pd.version++
 		}
 	}
 
@@ -182,11 +182,11 @@ type compatibleProvider struct {
 	name        string
 	healthCheck *HealthCheck
 	proxies     []C.Proxy
-	flag        uint
+	version     uint
 }
 
-func (cp *compatibleProvider) Flag() uint {
-	return cp.flag
+func (cp *compatibleProvider) Version() uint {
+	return cp.version
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
