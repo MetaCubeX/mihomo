@@ -33,15 +33,10 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 	metadata.Host = host
 	metadata.AddrType = C.AtypDomainName
 	metadata.Process = C.ClashName
-	if ip, port, err := parseAddr(dst); err == nil {
+	if h, port, err := net.SplitHostPort(dst); err == nil {
 		metadata.DstPort = port
 		if host == "" {
-			metadata.DstIP = ip
-			if ip.Is4() {
-				metadata.AddrType = C.AtypIPv6
-			} else {
-				metadata.AddrType = C.AtypIPv4
-			}
+			metadata.Host = h
 		}
 	}
 
