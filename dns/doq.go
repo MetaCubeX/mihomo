@@ -5,6 +5,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -19,8 +23,18 @@ var bytesPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
 type quicClient struct {
 	addr         string
+	r            *Resolver
 	session      quic.Connection
+	proxyAdapter string
 	sync.RWMutex // protects session and bytesPool
+}
+
+func newDOQ(r *Resolver, addr, proxyAdapter string) *quicClient {
+	return &quicClient{
+		addr:         addr,
+		r:            r,
+		proxyAdapter: proxyAdapter,
+	}
 }
 
 func (dc *quicClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
@@ -127,7 +141,44 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 	}
 
 	log.Debugln("opening session to %s", dc.addr)
-	session, err := quic.DialAddrContext(context.Background(), dc.addr, tlsConfig, quicConfig)
+	var (
+		udp net.PacketConn
+		err error
+	)
+
+	host, port, err := net.SplitHostPort(dc.addr)
+	if err != nil {
+		return nil, err
+	}
+
+	ip, err := resolver.ResolveIPv4WithResolver(host, dc.r)
+	if err != nil {
+		return nil, err
+	}
+
+	p, err := strconv.Atoi(port)
+	udpAddr := net.UDPAddr{IP: ip.AsSlice(), Port: p}
+
+	if dc.proxyAdapter == "" {
+		udp, err = dialer.ListenPacket(context.Background(), "udp", "")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		conn, err := dialContextWithProxyAdapter(context.Background(), dc.proxyAdapter, "udp", ip, port)
+		if err != nil {
+			return nil, err
+		}
+
+		wrapConn, ok := conn.(*wrapPacketConn)
+		if !ok {
+			return nil, fmt.Errorf("quio create packet failed")
+		}
+
+		udp = wrapConn.PacketConn
+	}
+
+	session, err := quic.Dial(udp, &udpAddr, host, tlsConfig, quicConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open QUIC session: %w", err)
 	}
