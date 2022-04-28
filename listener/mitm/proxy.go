@@ -3,14 +3,15 @@ package mitm
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strings"
 	"time"
 
@@ -68,6 +69,11 @@ readLoop:
 
 		if trusted {
 			if session.request.Method == http.MethodConnect {
+				if session.request.ProtoMajor > 1 {
+					session.request.ProtoMajor = 1
+					session.request.ProtoMinor = 1
+				}
+
 				// Manual writing to support CONNECT for http 1.0 (workaround for uplay client)
 				if _, err = fmt.Fprintf(session.conn, "HTTP/%d.%d %03d %s\r\n\r\n", session.request.ProtoMajor, session.request.ProtoMinor, http.StatusOK, "Connection established"); err != nil {
 					handleError(opt, session, err)
@@ -88,12 +94,15 @@ readLoop:
 				if b[0] == 0x16 {
 					tlsConn := tls.Server(conn, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Hostname()))
 
-					// Handshake with the local client
-					if err = tlsConn.Handshake(); err != nil {
+					ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+					// handshake with the local client
+					if err = tlsConn.HandshakeContext(ctx); err != nil {
+						cancel()
 						session.response = session.NewErrorResponse(fmt.Errorf("handshake failed: %w", err))
 						_ = writeResponse(session, false)
 						break // close connection
 					}
+					cancel()
 
 					cs := tlsConn.ConnectionState()
 					connState = &cs
@@ -105,20 +114,20 @@ readLoop:
 					goto readLoop
 				}
 
-				var noErr bool
+				if conn.SetReadDeadline(time.Now().Add(time.Second)) != nil {
+					break
+				}
 
 				buf, err2 := conn.Peek(7)
 				if err2 != nil {
-					if err2 == bufio.ErrBufferFull || errors.Is(err2, io.EOF) {
-						noErr = true
-					} else {
+					if err2 != bufio.ErrBufferFull && !os.IsTimeout(err2) {
 						handleError(opt, session, err2)
 						break // close connection
 					}
 				}
 
 				// others protocol over tcp
-				if noErr || !isHTTPTraffic(buf) {
+				if !isHTTPTraffic(buf) {
 					if connState != nil {
 						session.request.TLS = connState
 					}
@@ -128,7 +137,9 @@ readLoop:
 						break
 					}
 
-					_ = conn.SetReadDeadline(time.Time{})
+					if conn.SetReadDeadline(time.Time{}) != nil {
+						break
+					}
 
 					N.Relay(serverConn, conn)
 					return // hijack connection
