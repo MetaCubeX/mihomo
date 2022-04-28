@@ -13,7 +13,7 @@ type GroupBase struct {
 	*outbound.Base
 	filter    *regexp2.Regexp
 	providers []provider.ProxyProvider
-	flags     map[string]uint
+	versions  map[string]uint
 	proxies   map[string][]C.Proxy
 }
 
@@ -32,7 +32,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		Base:      outbound.NewBase(opt.BaseOption),
 		filter:    filter,
 		providers: opt.providers,
-		flags:     map[string]uint{},
+		versions:  map[string]uint{},
 		proxies:   map[string][]C.Proxy{},
 	}
 }
@@ -52,21 +52,20 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		}
 		return proxies
 	}
-	//TODO("Touch Flag 没变的")
+	//TODO("Touch Version 没变的")
 	for _, pd := range gb.providers {
-		vt := pd.VehicleType()
-		if vt == types.Compatible {
+		if pd.VehicleType() == types.Compatible {
 			if touch {
 				gb.proxies[pd.Name()] = pd.ProxiesWithTouch()
 			} else {
 				gb.proxies[pd.Name()] = pd.Proxies()
 			}
 
-			gb.flags[pd.Name()] = pd.Flag()
+			gb.versions[pd.Name()] = pd.Version()
 			continue
 		}
 
-		if flag, ok := gb.flags[pd.Name()]; !ok || flag != pd.Flag() {
+		if version, ok := gb.versions[pd.Name()]; !ok || version != pd.Version() {
 			var (
 				proxies    []C.Proxy
 				newProxies []C.Proxy
@@ -85,7 +84,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 			}
 
 			gb.proxies[pd.Name()] = newProxies
-			gb.flags[pd.Name()] = pd.Flag()
+			gb.versions[pd.Name()] = pd.Version()
 		}
 	}
 	var proxies []C.Proxy
