@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.uber.org/atomic"
 	"net"
 	"net/netip"
 	"strings"
@@ -19,7 +20,7 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        string
+	iface        *atomic.String
 	proxyAdapter string
 }
 
@@ -49,8 +50,8 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	}
 
 	options := []dialer.Option{}
-	if c.iface != "" {
-		options = append(options, dialer.WithInterface(c.iface))
+	if c.iface != nil && c.iface.Load() != "" {
+		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
 
 	var conn net.Conn

@@ -689,7 +689,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 				Net:          dnsNetType,
 				Addr:         addr,
 				ProxyAdapter: u.Fragment,
-				Interface:    dialer.DefaultInterface.Load(),
+				Interface:    dialer.DefaultInterface,
 			},
 		)
 	}
