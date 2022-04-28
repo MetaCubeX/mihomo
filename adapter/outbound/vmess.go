@@ -266,7 +266,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 func NewVmess(option VmessOption) (*Vmess, error) {
 	security := strings.ToLower(option.Cipher)
 	client, err := vmess.NewClient(vmess.Config{
-		UUID:     option.UUID,
+		UUID:     uuidMap(option.UUID),
 		AlterID:  uint16(option.AlterID),
 		Security: security,
 		HostName: option.Server,
