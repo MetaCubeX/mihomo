@@ -1,15 +1,17 @@
 package mitm
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strings"
 	"time"
 
@@ -21,25 +23,24 @@ import (
 
 func HandleConn(c net.Conn, opt *Option, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
 	var (
-		source net.Addr
-		client *http.Client
+		clientIP   = netip.MustParseAddrPort(c.RemoteAddr().String()).Addr()
+		sourceAddr net.Addr
+		serverConn *N.BufferedConn
+		connState  *tls.ConnectionState
 	)
 
 	defer func() {
-		if client != nil {
-			client.CloseIdleConnections()
+		if serverConn != nil {
+			_ = serverConn.Close()
 		}
 	}()
 
-startOver:
-	var conn *N.BufferedConn
-	if bufConn, ok := c.(*N.BufferedConn); ok {
-		conn = bufConn
-	} else {
-		conn = N.NewBufferedConn(c)
-	}
+	conn := N.NewBufferedConn(c)
 
 	trusted := cache == nil // disable authenticate if cache is nil
+	if !trusted {
+		trusted = clientIP.IsLoopback() || clientIP.IsUnspecified()
+	}
 
 readLoop:
 	for {
@@ -57,8 +58,8 @@ readLoop:
 
 		session := newSession(conn, request, response)
 
-		source = parseSourceAddress(session.request, c.RemoteAddr(), source)
-		session.request.RemoteAddr = source.String()
+		sourceAddr = parseSourceAddress(session.request, conn.RemoteAddr(), sourceAddr)
+		session.request.RemoteAddr = sourceAddr.String()
 
 		if !trusted {
 			session.response = H.Authenticate(session.request, cache)
@@ -68,6 +69,11 @@ readLoop:
 
 		if trusted {
 			if session.request.Method == http.MethodConnect {
+				if session.request.ProtoMajor > 1 {
+					session.request.ProtoMajor = 1
+					session.request.ProtoMinor = 1
+				}
+
 				// Manual writing to support CONNECT for http 1.0 (workaround for uplay client)
 				if _, err = fmt.Fprintf(session.conn, "HTTP/%d.%d %03d %s\r\n\r\n", session.request.ProtoMajor, session.request.ProtoMinor, http.StatusOK, "Connection established"); err != nil {
 					handleError(opt, session, err)
@@ -78,9 +84,9 @@ readLoop:
 					goto readLoop
 				}
 
-				b, err := conn.Peek(1)
-				if err != nil {
-					handleError(opt, session, err)
+				b, err1 := conn.Peek(1)
+				if err1 != nil {
+					handleError(opt, session, err1)
 					break // close connection
 				}
 
@@ -88,22 +94,61 @@ readLoop:
 				if b[0] == 0x16 {
 					tlsConn := tls.Server(conn, opt.CertConfig.NewTLSConfigForHost(session.request.URL.Hostname()))
 
-					// Handshake with the local client
-					if err = tlsConn.Handshake(); err != nil {
+					ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+					// handshake with the local client
+					if err = tlsConn.HandshakeContext(ctx); err != nil {
+						cancel()
 						session.response = session.NewErrorResponse(fmt.Errorf("handshake failed: %w", err))
 						_ = writeResponse(session, false)
 						break // close connection
 					}
+					cancel()
 
-					c = tlsConn
-				} else {
-					c = conn
+					cs := tlsConn.ConnectionState()
+					connState = &cs
+
+					conn = N.NewBufferedConn(tlsConn)
 				}
 
-				goto startOver
+				if strings.HasSuffix(session.request.URL.Host, ":443") {
+					goto readLoop
+				}
+
+				if conn.SetReadDeadline(time.Now().Add(time.Second)) != nil {
+					break
+				}
+
+				buf, err2 := conn.Peek(7)
+				if err2 != nil {
+					if err2 != bufio.ErrBufferFull && !os.IsTimeout(err2) {
+						handleError(opt, session, err2)
+						break // close connection
+					}
+				}
+
+				// others protocol over tcp
+				if !isHTTPTraffic(buf) {
+					if connState != nil {
+						session.request.TLS = connState
+					}
+
+					serverConn, err = getServerConn(serverConn, session.request, sourceAddr, in)
+					if err != nil {
+						break
+					}
+
+					if conn.SetReadDeadline(time.Time{}) != nil {
+						break
+					}
+
+					N.Relay(serverConn, conn)
+					return // hijack connection
+				}
+
+				goto readLoop
 			}
 
-			prepareRequest(c, session.request)
+			prepareRequest(connState, session.request)
 
 			// hijack api
 			if session.request.URL.Hostname() == opt.ApiHost {
@@ -115,17 +160,22 @@ readLoop:
 
 			// forward websocket
 			if isWebsocketRequest(request) {
+				serverConn, err = getServerConn(serverConn, session.request, sourceAddr, in)
+				if err != nil {
+					break
+				}
+
 				session.request.RequestURI = ""
-				if session.response = H.HandleUpgrade(conn, source, request, in); session.response == nil {
+				if session.response = H.HandleUpgrade(conn, serverConn, request, in); session.response == nil {
 					return // hijack connection
 				}
 			}
 
-			H.RemoveHopByHopHeaders(session.request.Header)
-			H.RemoveExtraHTTPHostPort(session.request)
+			if session.response == nil {
+				H.RemoveHopByHopHeaders(session.request.Header)
+				H.RemoveExtraHTTPHostPort(session.request)
 
-			// hijack custom request and write back custom response if necessary
-			if opt.Handler != nil && session.response == nil {
+				// hijack custom request and write back custom response if necessary
 				newReq, newRes := opt.Handler.HandleRequest(session)
 				if newReq != nil {
 					session.request = newReq
@@ -139,26 +189,26 @@ readLoop:
 					}
 					continue
 				}
-			}
 
-			if session.response == nil {
 				session.request.RequestURI = ""
 
 				if session.request.URL.Host == "" {
 					session.response = session.NewErrorResponse(ErrInvalidURL)
 				} else {
-					client = newClientBySourceAndUserAgentIfNil(client, session.request, source, in)
+					serverConn, err = getServerConn(serverConn, session.request, sourceAddr, in)
+					if err != nil {
+						break
+					}
 
 					// send the request to remote server
-					session.response, err = client.Do(session.request)
-
+					err = session.request.Write(serverConn)
 					if err != nil {
-						handleError(opt, session, err)
-						session.response = session.NewErrorResponse(fmt.Errorf("request failed: %w", err))
-						if errors.Is(err, ErrCertUnsupported) || strings.Contains(err.Error(), "x509: ") {
-							_ = writeResponse(session, false)
-							break
-						}
+						break
+					}
+
+					session.response, err = http.ReadResponse(serverConn.Reader(), request)
+					if err != nil {
+						break
 					}
 				}
 			}
@@ -174,11 +224,9 @@ readLoop:
 }
 
 func writeResponseWithHandler(session *Session, opt *Option) error {
-	if opt.Handler != nil {
-		res := opt.Handler.HandleResponse(session)
-		if res != nil {
-			session.response = res
-		}
+	res := opt.Handler.HandleResponse(session)
+	if res != nil {
+		session.response = res
 	}
 
 	return writeResponse(session, true)
@@ -220,10 +268,8 @@ func handleApiRequest(session *Session, opt *Option) error {
 </body></html>
 `
 
-	if opt.Handler != nil {
-		if opt.Handler.HandleApiRequest(session) {
-			return nil
-		}
+	if opt.Handler.HandleApiRequest(session) {
+		return nil
 	}
 
 	b = fmt.Sprintf(b, session.request.URL.Path)
@@ -243,12 +289,10 @@ func handleError(opt *Option, session *Session, err error) {
 			_ = session.response.Body.Close()
 		}()
 	}
-	if opt.Handler != nil {
-		opt.Handler.HandleError(session, err)
-	}
+	opt.Handler.HandleError(session, err)
 }
 
-func prepareRequest(conn net.Conn, request *http.Request) {
+func prepareRequest(connState *tls.ConnectionState, request *http.Request) {
 	host := request.Header.Get("Host")
 	if host != "" {
 		request.Host = host
@@ -262,10 +306,8 @@ func prepareRequest(conn net.Conn, request *http.Request) {
 		request.URL.Scheme = "http"
 	}
 
-	if tlsConn, ok := conn.(*tls.Conn); ok {
-		cs := tlsConn.ConnectionState()
-		request.TLS = &cs
-
+	if connState != nil {
+		request.TLS = connState
 		request.URL.Scheme = "https"
 	}
 
@@ -297,10 +339,11 @@ func parseSourceAddress(req *http.Request, connSource, source net.Addr) net.Addr
 	}
 }
 
-func newClientBySourceAndUserAgentIfNil(cli *http.Client, req *http.Request, source net.Addr, in chan<- C.ConnContext) *http.Client {
-	if cli != nil {
-		return cli
-	}
+func isWebsocketRequest(req *http.Request) bool {
+	return strings.EqualFold(req.Header.Get("Connection"), "Upgrade") && strings.EqualFold(req.Header.Get("Upgrade"), "websocket")
+}
 
-	return newClient(source, req.Header.Get("User-Agent"), in)
+func isHTTPTraffic(buf []byte) bool {
+	method, _, _ := strings.Cut(string(buf), " ")
+	return validMethod(method)
 }
