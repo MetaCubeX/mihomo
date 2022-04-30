@@ -398,7 +398,7 @@ func Cleanup() {
 	if tunStackListener != nil {
 		_ = tunStackListener.Close()
 		if runtime.GOOS == "android" {
-			prefs := []int{9000, 9001, 9002, 9003}
+			prefs := []int{9000, 9001, 9002, 9003, 9004}
 			for _, pref := range prefs {
 				_, _ = cmd.ExecCmd(fmt.Sprintf("ip rule del pref %d", pref))
 			}
