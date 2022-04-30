@@ -95,6 +95,12 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	tcpKeepAlive(c)
 	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 
+	return s.ListenPacketOnStreamConn(c, metadata)
+}
+
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (s *Snell) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+
 	err = snell.WriteUDPHeader(c, s.version)
 	if err != nil {
 		return nil, err
@@ -102,6 +108,11 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 	pc := snell.PacketConn(c)
 	return newPacketConn(pc, s), nil
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (s *Snell) SupportUOT() bool {
+	return true
 }
 
 func NewSnell(option SnellOption) (*Snell, error) {

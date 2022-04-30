@@ -42,6 +42,16 @@ func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, op
 	return nil, errors.New("no support")
 }
 
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (b *Base) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	return nil, errors.New("no support")
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (b *Base) SupportUOT() bool {
+	return false
+}
+
 // SupportUDP implements C.ProxyAdapter
 func (b *Base) SupportUDP() bool {
 	return b.udp

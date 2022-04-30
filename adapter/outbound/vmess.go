@@ -260,7 +260,17 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
 
+	return v.ListenPacketOnStreamConn(c, metadata)
+}
+
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (v *Vmess) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return newPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (v *Vmess) SupportUOT() bool {
+	return true
 }
 
 func NewVmess(option VmessOption) (*Vmess, error) {

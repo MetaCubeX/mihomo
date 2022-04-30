@@ -249,7 +249,17 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
+	return v.ListenPacketOnStreamConn(c, metadata)
+}
+
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (v *Vless) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (v *Vless) SupportUOT() bool {
+	return true
 }
 
 func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {

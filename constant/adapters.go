@@ -99,6 +99,10 @@ type ProxyAdapter interface {
 	DialContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (Conn, error)
 	ListenPacketContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (PacketConn, error)
 
+	// SupportUOT return UDP over TCP support
+	SupportUOT() bool
+	ListenPacketOnStreamConn(c net.Conn, metadata *Metadata) (PacketConn, error)
+
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata) Proxy
 }
