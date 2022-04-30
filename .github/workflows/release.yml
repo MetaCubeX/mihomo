@@ -1,5 +1,8 @@
 name: Release
-on: [push]
+on:
+  push:
+    branches:
+      - rm
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -58,12 +61,6 @@ jobs:
           # init xgo
           docker pull techknowlogick/xgo:latest
           go install src.techknowlogick.com/xgo@latest
-
-      - name: SSH connection to Actions
-        uses: P3TERX/ssh2actions@v1.0.0
-        if: github.actor == github.repository_owner && contains(github.event.head_commit.message, '[ssh]')
-        env:
-          SSH_PASSWORD: ${{ secrets.ADAWADLHIOH }}
 
       - name: Build
         #if: startsWith(github.ref, 'refs/tags/')
