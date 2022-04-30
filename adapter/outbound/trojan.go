@@ -90,6 +90,10 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 		return nil, err
 	}
 
+	if metadata.NetWork == C.UDP {
+		err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
+		return c, err
+	}
 	err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata))
 	return c, err
 }
@@ -162,11 +166,6 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (t *Trojan) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
-	if err != nil {
-		return nil, err
-	}
-
 	pc := t.instance.PacketConn(c)
 	return newPacketConn(pc, t), err
 }

@@ -53,6 +53,10 @@ func streamConn(c net.Conn, option streamOption) *snell.Snell {
 // StreamConn implements C.ProxyAdapter
 func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
+	if metadata.NetWork == C.UDP {
+		err := snell.WriteUDPHeader(c, s.version)
+		return c, err
+	}
 	port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 	err := snell.WriteHeader(c, metadata.String(), uint(port), s.version)
 	return c, err
@@ -100,12 +104,6 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (s *Snell) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
-
-	err = snell.WriteUDPHeader(c, s.version)
-	if err != nil {
-		return nil, err
-	}
-
 	pc := snell.PacketConn(c)
 	return newPacketConn(pc, s), nil
 }
