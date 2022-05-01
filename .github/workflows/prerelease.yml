@@ -1,8 +1,15 @@
-name: alpha
-on: [push]
+name: prerelease
+on:
+  push:
+    branches:
+      - Alpha
+      - Beta
+  pull_request:
+    branches:
+      - Alpha
+      - Beta
 jobs:
   Build:
-    if: ${{ !contains(github.event.head_commit.message, '[Skip CI]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Get latest go version
@@ -24,9 +31,10 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      #      - name: Get dependencies, run test
-      #        run: |
-      #          go test ./...
+      - name: Test
+        if: ${{env.GITHUB_REF_NAME=='Beta'}}
+        run: |
+          go test ./...
       - name: Build
         if: success()
         env:
@@ -38,34 +46,22 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: alpha
+          tag: ${{ env.GITHUB_REF_NAME }}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: alpha
+          tag_name: ${{env.GITHUB_REF_NAME}}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Alpha
         uses: softprops/action-gh-release@v1
-        if: ${{ env.GIT_BRANCH != 'Meta' && success() }}
+        if: ${{  success() }}
         with:
-          tag: ${{ github.ref }}
-          tag_name: alpha
+          tag: ${{env.GITHUB_REF_NAME}}
+          tag_name: ${{env.GITHUB_REF_NAME}}
           files: bin/*
           prerelease: true
-
-#      - name: send telegram message on push
-#        uses: appleboy/telegram-action@master
-#        with:
-#          to: ${{ secrets.TTELEGRAM_CHAT_ID }}
-#          token: ${{ secrets.TELEGRAM_TOKEN }}
-#          message: |
-#            ${{ github.actor }} created commit:
-#            Commit message: ${{ github.event.commits[0].message }}
-#
-#            Repository: ${{ github.repository }}
-#
-#            See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
+          generate_release_notes: true

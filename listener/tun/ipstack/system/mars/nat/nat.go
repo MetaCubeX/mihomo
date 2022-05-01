@@ -44,7 +44,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 		for {
 			n, err := device.Read(buf)
 			if err != nil {
-				log.Warnln("system error:%s", err.Error())
+				log.Errorf("system error:%s", err.Error())
 				return
 			}
 
