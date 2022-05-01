@@ -43,6 +43,7 @@ type General struct {
 	IPv6        bool         `json:"ipv6"`
 	Interface   string       `json:"-"`
 	RoutingMark int          `json:"-"`
+	Tun         Tun          `json:"tun"`
 }
 
 // Inbound config

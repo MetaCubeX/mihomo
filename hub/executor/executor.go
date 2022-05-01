@@ -116,6 +116,7 @@ func GetGeneral() *config.General {
 		Mode:     tunnel.Mode(),
 		LogLevel: log.Level(),
 		IPv6:     !resolver.DisableIPv6,
+		Tun:      P.GetTunConf(),
 	}
 
 	return general
