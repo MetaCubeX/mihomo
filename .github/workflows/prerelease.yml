@@ -1,11 +1,13 @@
-name: Alpha
+name: Prerelease
 on:
   push:
     branches:
       - Alpha
+      - Beta
   pull_request:
     branches:
       - Alpha
+      - Beta
 jobs:
   Build:
     runs-on: ubuntu-latest
@@ -30,6 +32,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+
+      - name: Test
+        if: ${{env.GITHUB_REF_NAME=='Beta'}}
+        run: |
+          go test ./...
+
       - name: Build
         if: success()
         env:
@@ -41,13 +49,13 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: alpha
+          tag: Prerelease-${{env.GITHUB_REF_NAME}}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: alpha
+          tag_name: Prerelease-${{env.GITHUB_REF_NAME}}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -56,7 +64,7 @@ jobs:
         if: ${{  success() }}
         with:
           tag: ${{env.GITHUB_REF_NAME}}
-          tag_name: alpha
+          tag_name: Prerelease-${{env.GITHUB_REF_NAME}}
           files: bin/*
           prerelease: true
           generate_release_notes: true
