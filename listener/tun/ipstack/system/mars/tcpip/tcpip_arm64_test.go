@@ -22,7 +22,7 @@ func Test_SumNeon(t *testing.T) {
 			}
 
 			compat := SumCompat(bytes[:size])
-			neon := sumNeon(bytes[:size])
+			neon := SumNeon(bytes[:size])
 
 			if compat != neon {
 				t.Errorf("Sum of length=%d mismatched", size)
@@ -46,6 +46,6 @@ func Benchmark_SumNeon(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		sumNeon(bytes)
+		SumNeon(bytes)
 	}
 }
