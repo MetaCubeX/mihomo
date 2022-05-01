@@ -1,7 +1,16 @@
 NAME=Clash.Meta
 BINDIR=bin
-BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
+BRANCH=$(shell git branch --show-current)
+ifeq ($(BRANCH),Alpha)
 VERSION=alpha-$(shell git rev-parse --short HEAD)
+else ifeq ($(BRANCH),Beta)
+VERSION=beta-$(shell git rev-parse --short HEAD)
+else ifeq ($(BRANCH),HEAD)
+VERSION=$(shell git describe --tags)
+else
+VERSION=unknown
+endif
+
 BUILDTIME=$(shell date -u)
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
@@ -43,7 +52,7 @@ all:linux-amd64 linux-arm64\
  	windows-amd64 windows-arm64\
 
 docker:
-	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 darwin-amd64v3:
 	GOARCH=amd64 GOOS=darwin GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@

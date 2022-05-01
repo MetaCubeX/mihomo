@@ -1,11 +1,11 @@
-name: Alpha
+name: Beta
 on:
   push:
     branches:
-      - Alpha
+      - Beta
   pull_request:
     branches:
-      - Alpha
+      - Beta
 jobs:
   Build:
     runs-on: ubuntu-latest
@@ -29,7 +29,9 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-
+      - name: Test
+        run: |
+          go test ./...
       - name: Build
         if: success()
         env:
@@ -41,13 +43,13 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: alpha
+          tag: beta
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: alpha
+          tag_name: beta
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -56,7 +58,7 @@ jobs:
         if: ${{  success() }}
         with:
           tag: ${{env.GITHUB_REF_NAME}}
-          tag_name: alpha
+          tag_name: beta
           files: bin/*
           prerelease: true
           generate_release_notes: true
