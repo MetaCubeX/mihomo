@@ -2,6 +2,7 @@ package route
 
 import (
 	"net/http"
+	"net/netip"
 	"path/filepath"
 
 	"github.com/Dreamacro/clash/component/resolver"
@@ -31,12 +32,20 @@ type configSchema struct {
 	TProxyPort  *int               `json:"tproxy-port"`
 	MixedPort   *int               `json:"mixed-port"`
 	MitmPort    *int               `json:"mitm-port"`
-	Tun         *config.Tun        `json:"tun"`
 	AllowLan    *bool              `json:"allow-lan"`
 	BindAddress *string            `json:"bind-address"`
 	Mode        *tunnel.TunnelMode `json:"mode"`
 	LogLevel    *log.LogLevel      `json:"log-level"`
 	IPv6        *bool              `json:"ipv6"`
+	Tun         *tunConfigSchema   `json:"tun"`
+}
+
+type tunConfigSchema struct {
+	Enable    *bool              `json:"enable"`
+	Device    *string            `json:"device"`
+	Stack     *constant.TUNStack `json:"stack"`
+	DNSHijack *[]netip.AddrPort  `json:"dns-hijack"`
+	AutoRoute *bool              `json:"auto-route"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +99,29 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.IPv6 != nil {
 		resolver.DisableIPv6 = !*general.IPv6
+	}
+
+	if general.Tun != nil {
+		tunSchema := general.Tun
+		tunConf := P.GetTunConf()
+
+		if tunSchema.Enable != nil {
+			tunConf.Enable = *tunSchema.Enable
+		}
+		if tunSchema.Device != nil {
+			tunConf.Device = *tunSchema.Device
+		}
+		if tunSchema.Stack != nil {
+			tunConf.Stack = *tunSchema.Stack
+		}
+		if tunSchema.DNSHijack != nil {
+			tunConf.DNSHijack = *tunSchema.DNSHijack
+		}
+		if tunSchema.AutoRoute != nil {
+			tunConf.AutoRoute = *tunSchema.AutoRoute
+		}
+
+		P.ReCreateTun(&tunConf, nil, tcpIn, udpIn)
 	}
 
 	render.NoContent(w, r)
