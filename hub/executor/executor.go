@@ -76,7 +76,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
-	updateDNS(cfg.DNS, cfg.Tun)
+	updateDNS(cfg.DNS)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
 	updateTun(cfg.Tun, cfg.DNS)
@@ -118,7 +118,14 @@ func GetGeneral() *config.General {
 
 func updateExperimental(c *config.Config) {}
 
-func updateDNS(c *config.DNS, t *config.Tun) {
+func updateDNS(c *config.DNS) {
+	if !c.Enable {
+		resolver.DefaultResolver = nil
+		resolver.DefaultHostMapper = nil
+		dns.ReCreateServer("", nil, nil)
+		return
+	}
+
 	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
@@ -156,22 +163,7 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 		resolver.ProxyServerHostResolver = pr
 	}
 
-	if t.Enable {
-		resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
-		log.Infoln("DNS enable IPv6 resolve")
-	}
-
-	if c.Enable {
-		dns.ReCreateServer(c.Listen, r, m)
-	} else {
-		if !t.Enable {
-			resolver.DefaultResolver = nil
-			resolver.DefaultHostMapper = nil
-			resolver.DefaultLocalServer = nil
-			resolver.ProxyServerHostResolver = nil
-		}
-		dns.ReCreateServer("", nil, nil)
-	}
+	dns.ReCreateServer(c.Listen, r, m)
 }
 
 func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
