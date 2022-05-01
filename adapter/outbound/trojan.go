@@ -161,7 +161,13 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		}
 	}
 
-	return t.ListenPacketOnStreamConn(c, metadata)
+	err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
+	if err != nil {
+		return nil, err
+	}
+
+	pc := t.instance.PacketConn(c)
+	return newPacketConn(pc, t), err
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
