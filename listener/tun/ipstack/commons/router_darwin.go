@@ -9,7 +9,7 @@ import (
 )
 
 func GetAutoDetectInterface() (string, error) {
-	return cmd.ExecCmd("bash -c route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
+	return cmd.ExecCmd("/bin/bash -c /sbin/route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
@@ -24,14 +24,14 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		netmask       = ipv4MaskString(addr.Bits())
 	)
 
-	cmdStr := fmt.Sprintf("ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, gw)
+	cmdStr := fmt.Sprintf("/sbin/ifconfig %s inet %s netmask %s %s", interfaceName, ip, netmask, gw)
 
 	_, err := cmd.ExecCmd(cmdStr)
 	if err != nil {
 		return err
 	}
 
-	_, err = cmd.ExecCmd(fmt.Sprintf("ipconfig set %s automatic-v6", interfaceName))
+	_, err = cmd.ExecCmd(fmt.Sprintf("/usr/sbin/ipconfig set %s automatic-v6", interfaceName))
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	)
 
 	for _, destination := range routes {
-		if _, err := cmd.ExecCmd(fmt.Sprintf("route add -net %s %s", destination, gateway)); err != nil {
+		if _, err := cmd.ExecCmd(fmt.Sprintf("/sbin/route add -net %s %s", destination, gateway)); err != nil {
 			return err
 		}
 	}
@@ -60,6 +60,6 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 }
 
 func execRouterCmd(action, inet, route string, interfaceName string) error {
-	_, err := cmd.ExecCmd(fmt.Sprintf("route %s %s %s -interface %s", action, inet, route, interfaceName))
+	_, err := cmd.ExecCmd(fmt.Sprintf("/sbin/route %s %s %s -interface %s", action, inet, route, interfaceName))
 	return err
 }
