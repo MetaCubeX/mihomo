@@ -1,4 +1,4 @@
-name: prerelease
+name: Prerelease
 on:
   push:
     branches:
@@ -31,10 +31,13 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+
+
       - name: Test
         if: ${{env.GITHUB_REF_NAME=='Beta'}}
         run: |
           go test ./...
+
       - name: Build
         if: success()
         env:
@@ -46,13 +49,13 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ env.GITHUB_REF_NAME }}
+          tag: Prerelease-${{env.GITHUB_REF_NAME}}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: ${{env.GITHUB_REF_NAME}}
+          tag_name: Prerelease-${{env.GITHUB_REF_NAME}}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -61,7 +64,7 @@ jobs:
         if: ${{  success() }}
         with:
           tag: ${{env.GITHUB_REF_NAME}}
-          tag_name: ${{env.GITHUB_REF_NAME}}
+          tag_name: Prerelease-${{env.GITHUB_REF_NAME}}
           files: bin/*
           prerelease: true
           generate_release_notes: true
