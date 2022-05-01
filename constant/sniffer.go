@@ -8,6 +8,7 @@ type Sniffer interface {
 
 const (
 	TLS SnifferType = iota
+        HTTP SnifferType
 )
 
 var (
