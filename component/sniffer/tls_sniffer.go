@@ -11,7 +11,6 @@ import (
 var (
 	errNotTLS         = errors.New("not TLS header")
 	errNotClientHello = errors.New("not client hello")
-	ErrNoClue         = errors.New("not enough information for making a decision")
 )
 
 type TLSSniffer struct {
