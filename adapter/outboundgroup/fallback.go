@@ -3,10 +3,6 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-	"github.com/Dreamacro/clash/log"
-	"go.uber.org/atomic"
-	"time"
-
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -15,9 +11,7 @@ import (
 
 type Fallback struct {
 	*GroupBase
-	disableUDP  bool
-	failedTimes *atomic.Int32
-	failedTime  *atomic.Int64
+	disableUDP bool
 }
 
 func (f *Fallback) Now() string {
@@ -31,8 +25,7 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
-		f.failedTimes.Store(-1)
-		f.failedTime.Store(-1)
+		f.onDialSuccess()
 	} else {
 		f.onDialFailed()
 	}
@@ -46,39 +39,12 @@ func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	pc, err := proxy.ListenPacketContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(f)
-		f.failedTimes.Store(-1)
-		f.failedTime.Store(-1)
+		f.onDialSuccess()
 	} else {
 		f.onDialFailed()
 	}
 
 	return pc, err
-}
-
-func (f *Fallback) onDialFailed() {
-	if f.failedTime.Load() == -1 {
-		log.Warnln("%s first failed", f.Name())
-		now := time.Now().UnixMilli()
-		f.failedTime.Store(now)
-		f.failedTimes.Store(1)
-	} else {
-		if f.failedTime.Load()-time.Now().UnixMilli() > 5*time.Second.Milliseconds() {
-			f.failedTimes.Store(-1)
-			f.failedTime.Store(-1)
-		} else {
-			failedCount := f.failedTimes.Inc()
-			log.Warnln("%s failed count: %d", f.Name(), failedCount)
-			if failedCount >= 5 {
-				log.Warnln("because %s failed multiple times, active health check", f.Name())
-				for _, proxyProvider := range f.providers {
-					go proxyProvider.HealthCheck()
-				}
-
-				f.failedTimes.Store(-1)
-				f.failedTime.Store(-1)
-			}
-		}
-	}
 }
 
 // SupportUDP implements C.ProxyAdapter
@@ -133,8 +99,6 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.Filter,
 			providers,
 		}),
-		disableUDP:  option.DisableUDP,
-		failedTimes: atomic.NewInt32(-1),
-		failedTime:  atomic.NewInt64(-1),
+		disableUDP: option.DisableUDP,
 	}
 }

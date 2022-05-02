@@ -3,8 +3,6 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-	"github.com/Dreamacro/clash/log"
-	"go.uber.org/atomic"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -24,12 +22,10 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 
 type URLTest struct {
 	*GroupBase
-	tolerance   uint16
-	disableUDP  bool
-	fastNode    C.Proxy
-	fastSingle  *singledo.Single[C.Proxy]
-	failedTimes *atomic.Int32
-	failedTime  *atomic.Int64
+	tolerance  uint16
+	disableUDP bool
+	fastNode   C.Proxy
+	fastSingle *singledo.Single[C.Proxy]
 }
 
 func (u *URLTest) Now() string {
@@ -54,11 +50,11 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	pc, err := u.fast(true).ListenPacketContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(u)
-		u.failedTimes.Store(-1)
-		u.failedTime.Store(-1)
+		u.onDialSuccess()
 	} else {
 		u.onDialFailed()
 	}
+
 	return pc, err
 }
 
@@ -123,32 +119,6 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (u *URLTest) onDialFailed() {
-	if u.failedTime.Load() == -1 {
-		log.Warnln("%s first failed", u.Name())
-		now := time.Now().UnixMilli()
-		u.failedTime.Store(now)
-		u.failedTimes.Store(1)
-	} else {
-		if u.failedTime.Load()-time.Now().UnixMilli() > 5*1000 {
-			u.failedTimes.Store(-1)
-			u.failedTime.Store(-1)
-		} else {
-			failedCount := u.failedTimes.Inc()
-			log.Warnln("%s failed count: %d", u.Name(), failedCount)
-			if failedCount >= 5 {
-				log.Warnln("because %s failed multiple times, active health check", u.Name())
-				for _, proxyProvider := range u.providers {
-					go proxyProvider.HealthCheck()
-				}
-
-				u.failedTimes.Store(-1)
-				u.failedTime.Store(-1)
-			}
-		}
-	}
-}
-
 func parseURLTestOption(config map[string]any) []urlTestOption {
 	opts := []urlTestOption{}
 
@@ -171,13 +141,12 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 				Interface:   option.Interface,
 				RoutingMark: option.RoutingMark,
 			},
+
 			option.Filter,
 			providers,
 		}),
-		fastSingle:  singledo.NewSingle[C.Proxy](time.Second * 10),
-		disableUDP:  option.DisableUDP,
-		failedTimes: atomic.NewInt32(-1),
-		failedTime:  atomic.NewInt64(-1),
+		fastSingle: singledo.NewSingle[C.Proxy](time.Second * 10),
+		disableUDP: option.DisableUDP,
 	}
 
 	for _, option := range options {
