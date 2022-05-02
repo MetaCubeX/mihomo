@@ -19,6 +19,7 @@ import (
 var (
 	ErrorUnsupportedSniffer = errors.New("unsupported sniffer")
 	ErrorSniffFailed        = errors.New("all sniffer failed")
+	ErrNoClue               = errors.New("not enough information for making a decision")
 )
 
 var Dispatcher SnifferDispatcher
