@@ -34,6 +34,16 @@ func NewReject() *Reject {
 	}
 }
 
+func NewPass() *Reject {
+	return &Reject{
+		Base: &Base{
+			name: "PASS",
+			tp:   C.Pass,
+			udp:  true,
+		},
+	}
+}
+
 type nopConn struct{}
 
 func (rw *nopConn) Read(b []byte) (int, error) {

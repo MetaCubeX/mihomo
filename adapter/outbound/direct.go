@@ -56,13 +56,3 @@ func NewCompatible() *Direct {
 		},
 	}
 }
-
-func NewPass() *Direct {
-	return &Direct{
-		Base: &Base{
-			name: "PASS",
-			tp:   C.Pass,
-			udp:  true,
-		},
-	}
-}
