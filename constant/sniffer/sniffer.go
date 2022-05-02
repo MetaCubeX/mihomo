@@ -1,23 +1,25 @@
-package constant
+package sniffer
+
+import "github.com/Dreamacro/clash/constant"
 
 type Sniffer interface {
-	SupportNetwork() NetWork
+	SupportNetwork() constant.NetWork
 	SniffTCP(bytes []byte) (string, error)
 	Protocol() string
 }
 
 const (
-	TLS SnifferType = iota
-        HTTP SnifferType
+	TLS Type = iota
+	HTTP
 )
 
 var (
-	SnifferList = []SnifferType{TLS, HTTP}
+	List = []Type{TLS, HTTP}
 )
 
-type SnifferType int
+type Type int
 
-func (rt SnifferType) String() string {
+func (rt Type) String() string {
 	switch rt {
 	case TLS:
 		return "TLS"

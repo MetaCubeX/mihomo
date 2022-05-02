@@ -2,6 +2,7 @@ package sniffer
 
 import (
 	"errors"
+	"github.com/Dreamacro/clash/constant/sniffer"
 	"net"
 	"net/netip"
 	"strconv"
@@ -28,7 +29,7 @@ type (
 	SnifferDispatcher struct {
 		enable bool
 
-		sniffers []C.Sniffer
+		sniffers []sniffer.Sniffer
 
 		foreDomain *trie.DomainTrie[bool]
 		skipSNI    *trie.DomainTrie[bool]
@@ -136,7 +137,7 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainTrie[bool],
+func NewSnifferDispatcher(needSniffer []sniffer.Type, forceDomain *trie.DomainTrie[bool],
 	skipSNI *trie.DomainTrie[bool], ports *[]utils.Range[uint16]) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:     true,
@@ -158,10 +159,12 @@ func NewSnifferDispatcher(needSniffer []C.SnifferType, forceDomain *trie.DomainT
 	return &dispatcher, nil
 }
 
-func NewSniffer(name C.SnifferType) (C.Sniffer, error) {
+func NewSniffer(name sniffer.Type) (sniffer.Sniffer, error) {
 	switch name {
-	case C.TLS:
+	case sniffer.TLS:
 		return &TLSSniffer{}, nil
+	case sniffer.HTTP:
+		return &HTTPSniffer{}, nil
 	default:
 		return nil, ErrorUnsupportedSniffer
 	}
