@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/Dreamacro/clash/constant/sniffer"
 	"net"
-	"net/netip"
 	"strconv"
 	"time"
 
@@ -86,7 +85,6 @@ func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
 	metadata.Host = host
 	metadata.DNSMode = C.DNSMapping
 	resolver.InsertHostByIP(metadata.DstIP, host)
-	metadata.DstIP = netip.Addr{}
 }
 
 func (sd *SnifferDispatcher) Enable() bool {
