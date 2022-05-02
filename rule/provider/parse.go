@@ -64,6 +64,9 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed = RC.NewDomainSuffix(payload, target)
 	case "DOMAIN-KEYWORD":
 		parsed = RC.NewDomainKeyword(payload, target)
+	case "GEOIP":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RC.NewGEOIP(payload, target, noResolve)
 	case "GEOSITE":
 		parsed, parseErr = RC.NewGEOSITE(payload, target)
 	case "IP-CIDR", "IP-CIDR6":
@@ -79,9 +82,6 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = RC.NewProcess(payload, target, true)
 	case "PROCESS-PATH":
 		parsed, parseErr = RC.NewProcess(payload, target, false)
-	case "GEOIP":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewGEOIP(payload, target, noResolve)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}

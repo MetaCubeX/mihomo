@@ -28,7 +28,8 @@ type RulePayload struct {
 	key: Domain or IP Cidr
 	value: Rule type or is empty
 	*/
-	Rules []string `yaml:"payload"`
+	Rules  []string `yaml:"payload"`
+	Rules2 []string `yaml:"rules"`
 }
 
 type ruleStrategy interface {
@@ -144,5 +145,5 @@ func rulesParse(buf []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	return rulePayload.Rules, nil
+	return append(rulePayload.Rules, rulePayload.Rules2...), nil
 }
