@@ -73,7 +73,7 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	transport := &http.Transport{
 		// from http.DefaultTransport
 		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {

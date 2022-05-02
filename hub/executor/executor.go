@@ -203,15 +203,31 @@ func loadProvider(pv provider.Provider) {
 }
 
 func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
+	wg := sync.WaitGroup{}
 	for _, ruleProvider := range ruleProviders {
-		loadProvider(ruleProvider)
+		ruleProvider := ruleProvider
+		wg.Add(1)
+		go func() {
+			defer func() { wg.Done() }()
+			loadProvider(ruleProvider)
+		}()
 	}
+
+	wg.Wait()
 }
 
-func loadProxyProvider(ruleProviders map[string]provider.ProxyProvider) {
-	for _, ruleProvider := range ruleProviders {
-		loadProvider(ruleProvider)
+func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
+	wg := sync.WaitGroup{}
+	for _, proxyProvider := range proxyProviders {
+		proxyProvider := proxyProvider
+		wg.Add(1)
+		go func() {
+			defer func() { wg.Done() }()
+			loadProvider(proxyProvider)
+		}()
 	}
+
+	wg.Wait()
 }
 
 func updateTun(tun *config.Tun, dns *config.DNS) {
