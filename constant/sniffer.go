@@ -8,10 +8,11 @@ type Sniffer interface {
 
 const (
 	TLS SnifferType = iota
+        HTTP SnifferType
 )
 
 var (
-	SnifferList = []SnifferType{TLS}
+	SnifferList = []SnifferType{TLS, HTTP}
 )
 
 type SnifferType int
@@ -20,6 +21,8 @@ func (rt SnifferType) String() string {
 	switch rt {
 	case TLS:
 		return "TLS"
+	case HTTP:
+		return "HTTP"
 	default:
 		return "Unknown"
 	}
