@@ -122,6 +122,7 @@ func updateDNS(c *config.DNS) {
 	if !c.Enable {
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
+		resolver.DefaultLocalServer = nil
 		dns.ReCreateServer("", nil, nil)
 		return
 	}
@@ -158,6 +159,7 @@ func updateDNS(c *config.DNS) {
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
+	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
 
 	if pr.HasProxyServer() {
 		resolver.ProxyServerHostResolver = pr
