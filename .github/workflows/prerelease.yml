@@ -34,7 +34,7 @@ jobs:
 
 
       - name: Test
-        if: ${{env.GITHUB_REF_NAME=='Beta'}}
+        if: ${{github.ref_name=='Beta'}}
         run: |
           go test ./...
 
@@ -49,13 +49,13 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{env.GITHUB_REF_NAME}}
+          tag: Prerelease-${{ github.ref_name }}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: Prerelease-${{env.GITHUB_REF_NAME}}
+          tag_name: Prerelease-${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -63,8 +63,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
-          tag: ${{env.GITHUB_REF_NAME}}
-          tag_name: Prerelease-${{env.GITHUB_REF_NAME}}
+          tag: ${{ github.ref_name }}
+          tag_name: Prerelease-${{ github.ref_name }}
           files: bin/*
           prerelease: true
           generate_release_notes: true
