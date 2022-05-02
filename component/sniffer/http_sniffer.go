@@ -5,7 +5,6 @@ import (
 	"errors"
 	C "github.com/Dreamacro/clash/constant"
 	"net"
-	"strconv"
 	"strings"
 )
 
@@ -85,23 +84,15 @@ func SniffHTTP(b []byte) (*string, error) {
 		}
 		key := strings.ToLower(string(parts[0]))
 		if key == "host" {
-			port := 80
 			rawHost := strings.ToLower(string(bytes.TrimSpace(parts[1])))
-			host, rawPort, err := net.SplitHostPort(rawHost)
+			host, _, err := net.SplitHostPort(rawHost)
 			if err != nil {
 				if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
 					host = rawHost
 				} else {
 					return nil, err
 				}
-			} else if len(rawPort) > 0 {
-				intPort, err := strconv.ParseUint(rawPort, 0, 16)
-				if err != nil {
-					return nil, err
-				}
-				port = int(intPort)
 			}
-			host = net.JoinHostPort(host, strconv.Itoa(port))
 			return &host, nil
 		}
 	}
