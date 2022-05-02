@@ -39,10 +39,6 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = RC.NewProcess(payload, target, true)
 	case "PROCESS-PATH":
 		parsed, parseErr = RC.NewProcess(payload, target, false)
-	case "MATCH":
-		parsed = RC.NewMatch(target)
-	case "RULE-SET":
-		parsed, parseErr = RP.NewRuleSet(payload, target)
 	case "NETWORK":
 		parsed, parseErr = RC.NewNetworkType(payload, target)
 	case "UID":
@@ -53,6 +49,10 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = logic.NewOR(payload, target)
 	case "NOT":
 		parsed, parseErr = logic.NewNOT(payload, target)
+	case "RULE-SET":
+		parsed, parseErr = RP.NewRuleSet(payload, target)
+	case "MATCH":
+		parsed = RC.NewMatch(target)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}

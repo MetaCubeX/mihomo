@@ -82,6 +82,8 @@ func parseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		parsed, parseErr = RC.NewProcess(payload, target, true)
 	case "PROCESS-PATH":
 		parsed, parseErr = RC.NewProcess(payload, target, false)
+	case "NETWORK":
+		parsed, parseErr = RC.NewNetworkType(payload, target)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
