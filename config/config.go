@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/constant/sniffer"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"net/netip"
@@ -30,6 +31,7 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
+	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	T "github.com/Dreamacro/clash/tunnel"
@@ -128,7 +130,7 @@ type IPTables struct {
 type Sniffer struct {
 	Enable      bool
 	Force       bool
-	Sniffers    []C.SnifferType
+	Sniffers    []sniffer.Type
 	Reverses    *trie.DomainTrie[bool]
 	ForceDomain *trie.DomainTrie[bool]
 	SkipSNI     *trie.DomainTrie[bool]
@@ -954,11 +956,11 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 
 	sniffer.Ports = &ports
 
-	loadSniffer := make(map[C.SnifferType]struct{})
+	loadSniffer := make(map[snifferTypes.Type]struct{})
 
 	for _, snifferName := range snifferRaw.Sniffing {
 		find := false
-		for _, snifferType := range C.SnifferList {
+		for _, snifferType := range snifferTypes.List {
 			if snifferType.String() == strings.ToUpper(snifferName) {
 				find = true
 				loadSniffer[snifferType] = struct{}{}
