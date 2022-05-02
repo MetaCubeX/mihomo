@@ -5,17 +5,22 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/dlclark/regexp2"
+	"go.uber.org/atomic"
 	"sync"
+	"time"
 )
 
 type GroupBase struct {
 	*outbound.Base
-	filter    *regexp2.Regexp
-	providers []provider.ProxyProvider
-	versions  sync.Map // map[string]uint
-	proxies   sync.Map // map[string][]C.Proxy
+	filter      *regexp2.Regexp
+	providers   []provider.ProxyProvider
+	versions    sync.Map // map[string]uint
+	proxies     sync.Map // map[string][]C.Proxy
+	failedTimes *atomic.Int32
+	failedTime  *atomic.Int64
 }
 
 type GroupBaseOption struct {
@@ -30,9 +35,11 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		filter = regexp2.MustCompile(opt.filter, 0)
 	}
 	return &GroupBase{
-		Base:      outbound.NewBase(opt.BaseOption),
-		filter:    filter,
-		providers: opt.providers,
+		Base:        outbound.NewBase(opt.BaseOption),
+		filter:      filter,
+		providers:   opt.providers,
+		failedTimes: atomic.NewInt32(-1),
+		failedTime:  atomic.NewInt64(-1),
 	}
 }
 
@@ -95,4 +102,43 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
 	}
 	return proxies
+}
+
+func (gb *GroupBase) onDialFailed() {
+	if gb.failedTime.Load() == -1 {
+		log.Warnln("%s first failed", gb.Name())
+		now := time.Now().UnixMilli()
+		gb.failedTime.Store(now)
+		gb.failedTimes.Store(1)
+	} else {
+		if gb.failedTime.Load()-time.Now().UnixMilli() > gb.failedIntervalTime() {
+			gb.failedTimes.Store(-1)
+			gb.failedTime.Store(-1)
+		} else {
+			failedCount := gb.failedTimes.Inc()
+			log.Warnln("%s failed count: %d", gb.Name(), failedCount)
+			if failedCount >= gb.maxFailedTimes() {
+				log.Warnln("because %s failed multiple times, active health check", gb.Name())
+				for _, proxyProvider := range gb.providers {
+					go proxyProvider.HealthCheck()
+				}
+
+				gb.failedTimes.Store(-1)
+				gb.failedTime.Store(-1)
+			}
+		}
+	}
+}
+
+func (gb *GroupBase) failedIntervalTime() int64 {
+	return 5 * time.Second.Milliseconds()
+}
+
+func (gb *GroupBase) onDialSuccess() {
+	gb.failedTimes.Store(-1)
+	gb.failedTime.Store(-1)
+}
+
+func (gb *GroupBase) maxFailedTimes() int32 {
+	return 5
 }

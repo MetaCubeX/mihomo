@@ -71,6 +71,9 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, op
 	defer func() {
 		if err == nil {
 			c.AppendToChains(lb)
+			lb.onDialSuccess()
+		} else {
+			lb.onDialFailed()
 		}
 	}()
 
