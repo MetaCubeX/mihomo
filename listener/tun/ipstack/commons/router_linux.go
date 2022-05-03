@@ -17,23 +17,24 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
-		err           error
 	)
 
-	if _, err = cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", ip.String(), interfaceName)); err != nil {
+	if _, err := cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", ip.String(), interfaceName)); err != nil {
 		return err
 	}
 
-	if _, err = cmd.ExecCmd(fmt.Sprintf("ip link set %s up", interfaceName)); err != nil {
+	if _, err := cmd.ExecCmd(fmt.Sprintf("ip link set %s up", interfaceName)); err != nil {
 		return err
 	}
 
-	execRouterCmd("add", addr.Masked().String(), interfaceName, ip.String(), "main")
+	if err := execRouterCmd("add", addr.Masked().String(), interfaceName, ip.String(), "main"); err != nil {
+		return err
+	}
 
 	if autoRoute {
-		err = configInterfaceRouting(interfaceName, addr, autoDetectInterface)
+		_ = configInterfaceRouting(interfaceName, addr, autoDetectInterface)
 	}
-	return err
+	return nil
 }
 
 func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectInterface bool) error {
