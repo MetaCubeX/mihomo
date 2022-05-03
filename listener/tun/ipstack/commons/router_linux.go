@@ -28,7 +28,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	execRouterCmd("add", addr.String(), interfaceName, ip.String(), "main")
+	execRouterCmd("add", addr.Masked().String(), interfaceName, ip.String(), "main")
 
 	if autoRoute {
 		err = configInterfaceRouting(interfaceName, addr, autoDetectInterface)
