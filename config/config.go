@@ -134,7 +134,7 @@ type Sniffer struct {
 	Sniffers    []sniffer.Type
 	Reverses    *trie.DomainTrie[bool]
 	ForceDomain *trie.DomainTrie[bool]
-	SkipSNI     *trie.DomainTrie[bool]
+	SkipDomain  *trie.DomainTrie[bool]
 	Ports       *[]utils.Range[uint16]
 }
 
@@ -233,6 +233,7 @@ type SnifferRaw struct {
 	Force       bool     `yaml:"force" json:"force"`
 	Reverse     []string `yaml:"reverses" json:"reverses"`
 	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
+	SkipDomain  []string `yaml:"skip-domain" json:"skip-domain"`
 	SkipSNI     []string `yaml:"skip-sni" json:"skip-sni"`
 	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
 }
@@ -309,7 +310,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Sniffing:    []string{},
 			Reverse:     []string{},
 			ForceDomain: []string{},
-			SkipSNI:     []string{},
+			SkipDomain:  []string{},
 			Ports:       []string{},
 		},
 		Profile: Profile{
@@ -976,7 +977,6 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 	for st := range loadSniffer {
 		sniffer.Sniffers = append(sniffer.Sniffers, st)
 	}
-
 	sniffer.ForceDomain = trie.New[bool]()
 	for _, domain := range snifferRaw.ForceDomain {
 		err := sniffer.ForceDomain.Insert(domain, true)
@@ -984,10 +984,13 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
-
-	sniffer.SkipSNI = trie.New[bool]()
-	for _, domain := range snifferRaw.SkipSNI {
-		err := sniffer.SkipSNI.Insert(domain, true)
+	if snifferRaw.SkipSNI != nil {
+		log.Warnln("Sniffer param skip-sni renamed to ship-domain, old param will be removed in the release version")
+		snifferRaw.SkipDomain = snifferRaw.SkipSNI
+	}
+	sniffer.SkipDomain = trie.New[bool]()
+	for _, domain := range snifferRaw.SkipDomain {
+		err := sniffer.SkipDomain.Insert(domain, true)
 		if err != nil {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
@@ -1000,7 +1003,7 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 			// match all domain
 			sniffer.ForceDomain.Insert("+", true)
 			for _, domain := range snifferRaw.Reverse {
-				err := sniffer.SkipSNI.Insert(domain, true)
+				err := sniffer.SkipDomain.Insert(domain, true)
 				if err != nil {
 					return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
 				}
