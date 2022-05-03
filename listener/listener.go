@@ -5,8 +5,9 @@ import (
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net"
-	"os"
+	"net/netip"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -24,8 +25,10 @@ import (
 )
 
 var (
-	allowLan    = false
-	bindAddress = "*"
+	allowLan             = false
+	bindAddress          = "*"
+	lastTunConf          *config.Tun
+	lastTunAddressPrefix *netip.Prefix
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -53,6 +56,15 @@ type Ports struct {
 	RedirPort  int `json:"redir-port"`
 	TProxyPort int `json:"tproxy-port"`
 	MixedPort  int `json:"mixed-port"`
+}
+
+func GetTunConf() config.Tun {
+	if lastTunConf == nil {
+		return config.Tun{
+			Enable: false,
+		}
+	}
+	return *lastTunConf
 }
 
 func AllowLan() bool {
@@ -312,7 +324,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf *config.Tun, dnsCfg *config.DNS, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
 
@@ -320,22 +332,35 @@ func ReCreateTun(tunConf *config.Tun, dnsCfg *config.DNS, tcpIn chan<- C.ConnCon
 	defer func() {
 		if err != nil {
 			log.Errorln("Start TUN listening error: %s", err.Error())
-			os.Exit(2)
 		}
 	}()
 
+	if tunAddressPrefix == nil {
+		tunAddressPrefix = lastTunAddressPrefix
+	}
+
+	if !hasTunConfigChange(tunConf, tunAddressPrefix) {
+		return
+	}
+
 	if tunStackListener != nil {
-		tunStackListener.Close()
+		_ = tunStackListener.Close()
 		tunStackListener = nil
+		lastTunConf = nil
+		lastTunAddressPrefix = nil
 	}
 
 	if !tunConf.Enable {
 		return
 	}
-	tunStackListener, err = tun.New(tunConf, dnsCfg, tcpIn, udpIn)
+
+	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn)
 	if err != nil {
-		log.Warnln("Failed to start TUN interface: %s", err.Error())
+		log.Warnln("Failed to start TUN interface: %s", err)
 	}
+
+	lastTunConf = tunConf
+	lastTunAddressPrefix = tunAddressPrefix
 }
 
 // GetPorts return the ports of proxy servers
@@ -392,6 +417,47 @@ func genAddr(host string, port int, allowLan bool) string {
 	}
 
 	return fmt.Sprintf("127.0.0.1:%d", port)
+}
+
+func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) bool {
+	if lastTunConf == nil {
+		return true
+	}
+
+	if len(lastTunConf.DNSHijack) != len(tunConf.DNSHijack) {
+		return true
+	}
+
+	sort.Slice(lastTunConf.DNSHijack, func(i, j int) bool {
+		return lastTunConf.DNSHijack[i].Addr().Less(lastTunConf.DNSHijack[j].Addr())
+	})
+
+	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
+		return tunConf.DNSHijack[i].Addr().Less(tunConf.DNSHijack[j].Addr())
+	})
+
+	for i, dns := range tunConf.DNSHijack {
+		if dns != lastTunConf.DNSHijack[i] {
+			return true
+		}
+	}
+
+	if lastTunConf.Enable != tunConf.Enable ||
+		lastTunConf.Device != tunConf.Device ||
+		lastTunConf.Stack != tunConf.Stack ||
+		lastTunConf.AutoRoute != tunConf.AutoRoute {
+		return true
+	}
+
+	if (tunAddressPrefix != nil && lastTunAddressPrefix == nil) || (tunAddressPrefix == nil && lastTunAddressPrefix != nil) {
+		return true
+	}
+
+	if tunAddressPrefix != nil && lastTunAddressPrefix != nil && *tunAddressPrefix != *lastTunAddressPrefix {
+		return true
+	}
+
+	return false
 }
 
 func Cleanup() {

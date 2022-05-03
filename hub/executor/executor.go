@@ -111,6 +111,7 @@ func GetGeneral() *config.General {
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
+		Tun:           P.GetTunConf(),
 	}
 
 	return general
@@ -231,7 +232,11 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 }
 
 func updateTun(tun *config.Tun, dns *config.DNS) {
-	P.ReCreateTun(tun, dns, tunnel.TCPIn(), tunnel.UDPIn())
+	var tunAddressPrefix *netip.Prefix
+	if dns.FakeIPRange != nil {
+		tunAddressPrefix = dns.FakeIPRange.IPNet()
+	}
+	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateSniffer(sniffer *config.Sniffer) {

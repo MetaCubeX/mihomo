@@ -52,6 +52,7 @@ type General struct {
 	GeodataMode   bool         `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
 	TCPConcurrent bool         `json:"tcp-concurrent"`
+	Tun           Tun          `json:"tun"`
 }
 
 // Inbound config
