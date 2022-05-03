@@ -19,13 +19,15 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		ip            = addr.Masked().Addr().Next()
 	)
 
-	_, err := cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", ip.String(), interfaceName))
-	if err != nil {
+	if _, err := cmd.ExecCmd(fmt.Sprintf("ip addr add %s dev %s", ip.String(), interfaceName)); err != nil {
 		return err
 	}
 
-	_, err = cmd.ExecCmd(fmt.Sprintf("ip link set %s up", interfaceName))
-	if err != nil {
+	if _, err = cmd.ExecCmd(fmt.Sprintf("ip link set %s up", interfaceName)); err != nil {
+		return err
+	}
+
+	if err = execRouterCmd("add", addr, interfaceName, "198.18.0.1", "main"); err != nil {
 		return err
 	}
 

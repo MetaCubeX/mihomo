@@ -267,10 +267,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
-			AutoDetectInterface: true,
 			Stack:               C.TunGvisor,
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute:           true,
+			AutoRoute:           false,
+			AutoDetectInterface: false,
 		},
 		IPTables: IPTables{
 			Enable:           false,
