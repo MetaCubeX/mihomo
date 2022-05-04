@@ -6,9 +6,17 @@ import (
 	"net"
 	"time"
 
+	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 )
+
+const (
+	rejectCountLimit = 50
+	rejectDelay      = time.Second * 35
+)
+
+var rejectCounter = cache.NewLRUCache[string, int](cache.WithAge[string, int](15), cache.WithStale[string, int](false), cache.WithSize[string, int](512))
 
 type Reject struct {
 	*Base
@@ -16,6 +24,25 @@ type Reject struct {
 
 // DialContext implements C.ProxyAdapter
 func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
+	key := metadata.RemoteAddress()
+
+	count, existed := rejectCounter.Get(key)
+	if !existed {
+		count = 0
+	}
+
+	count = count + 1
+
+	rejectCounter.Set(key, count)
+
+	if count > rejectCountLimit {
+		c, _ := net.Pipe()
+
+		_ = c.SetDeadline(time.Now().Add(rejectDelay))
+
+		return NewConn(c, r), nil
+	}
+
 	return NewConn(&nopConn{}, r), nil
 }
 

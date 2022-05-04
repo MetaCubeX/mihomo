@@ -1,12 +1,6 @@
 package rewrites
 
 import (
-	"bytes"
-	"fmt"
-	"image"
-	"image/color"
-	"image/draw"
-	"image/png"
 	"regexp"
 	"testing"
 
@@ -40,17 +34,4 @@ func TestParseRewrite(t *testing.T) {
 	assert.Equal(t, c2.RuleType(), constant.MitmRequestHeader)
 	assert.Equal(t, c2.RuleRegx(), regexp.MustCompile(`(\r\n)User-Agent:.+(\r\n)`))
 	assert.Equal(t, c2.RulePayload(), "$1User-Agent: Fuck-Who$2")
-}
-
-func Test1PxPNG(t *testing.T) {
-	m := image.NewRGBA(image.Rect(0, 0, 1, 1))
-
-	draw.Draw(m, m.Bounds(), &image.Uniform{C: color.Transparent}, image.Point{}, draw.Src)
-
-	buf := &bytes.Buffer{}
-
-	assert.Nil(t, png.Encode(buf, m))
-
-	fmt.Printf("len: %d\n", buf.Len())
-	fmt.Printf("% #x\n", buf.Bytes())
 }

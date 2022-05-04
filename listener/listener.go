@@ -347,11 +347,11 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 		tunAddressPrefix = lastTunAddressPrefix
 	}
 
-	if !hasTunConfigChange(tunConf, tunAddressPrefix) {
-		return
-	}
-
 	if tunStackListener != nil {
+		if !hasTunConfigChange(tunConf, tunAddressPrefix) {
+			return
+		}
+
 		_ = tunStackListener.Close()
 		tunStackListener = nil
 		lastTunConf = nil
@@ -388,9 +388,9 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		if mitmListener.RawAddress() == addr {
 			return
 		}
-		tunnel.MitmOutbound = nil
 		_ = mitmListener.Close()
 		mitmListener = nil
+		tunnel.SetMitmOutbound(nil)
 	}
 
 	if portIsZero(addr) {
@@ -442,7 +442,7 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	tunnel.MitmOutbound = outbound.NewMitm(mitmListener.Address())
+	tunnel.SetMitmOutbound(outbound.NewMitm(mitmListener.Address()))
 
 	log.Infoln("Mitm proxy listening at: %s", mitmListener.Address())
 }

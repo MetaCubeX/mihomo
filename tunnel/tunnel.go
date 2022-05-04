@@ -38,8 +38,8 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	// MitmOutbound mitm proxy adapter
-	MitmOutbound C.ProxyAdapter
+	// mitmOutbound mitm proxy adapter
+	mitmOutbound C.ProxyAdapter
 )
 
 func init() {
@@ -94,6 +94,11 @@ func Mode() TunnelMode {
 // SetMode change the mode of tunnel
 func SetMode(m TunnelMode) {
 	mode = m
+}
+
+// SetMitmOutbound set the MITM outbound
+func SetMitmOutbound(outbound C.ProxyAdapter) {
+	mitmOutbound = outbound
 }
 
 // Rewrites return all rewrites
@@ -302,9 +307,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
-	if MitmOutbound != nil && metadata.Type != C.MITM {
-		if remoteConn, err1 := MitmOutbound.DialContext(ctx, metadata); err1 == nil {
+
+	if mitmOutbound != nil && metadata.Type != C.MITM {
+		if remoteConn, err1 := mitmOutbound.DialContext(ctx, metadata); err1 == nil {
 			remoteConn = statistic.NewSniffing(remoteConn, metadata, nil)
+
 			defer func(remoteConn C.Conn) {
 				_ = remoteConn.Close()
 			}(remoteConn)
@@ -329,7 +336,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}
 		return
 	}
-	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
+
+	if remoteConn.Chains().Last() != "REJECT" {
+		remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
+	}
+
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()
 	}(remoteConn)
