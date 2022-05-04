@@ -18,8 +18,6 @@ import (
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
-
-	"golang.org/x/net/http2"
 )
 
 const (
@@ -35,7 +33,7 @@ type Vless struct {
 	// for gun mux
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
-	transport    *http2.Transport
+	transport    *gun.TransportWrap
 }
 
 type VlessOption struct {

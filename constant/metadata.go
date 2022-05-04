@@ -86,7 +86,11 @@ type Metadata struct {
 	Uid         *int32     `json:"uid"`
 	Process     string     `json:"process"`
 	ProcessPath string     `json:"processPath"`
+	RemoteDst   string     `json:"remoteDestination"`
 }
+
+// avoid stack overflow
+type jsonMetadata Metadata
 
 func (m *Metadata) RemoteAddress() string {
 	return net.JoinHostPort(m.String(), m.DstPort)
