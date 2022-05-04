@@ -13,8 +13,6 @@ import (
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/trojan"
 	"github.com/Dreamacro/clash/transport/vless"
-
-	"golang.org/x/net/http2"
 )
 
 type Trojan struct {
@@ -25,7 +23,7 @@ type Trojan struct {
 	// for gun mux
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
-	transport    *http2.Transport
+	transport    *gun.TransportWrap
 }
 
 type TrojanOption struct {

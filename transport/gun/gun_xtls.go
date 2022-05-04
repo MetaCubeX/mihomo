@@ -12,13 +12,15 @@ import (
 	"golang.org/x/net/http2"
 )
 
-func NewHTTP2XTLSClient(dialFn DialFn, tlsConfig *tls.Config) *http2.Transport {
+func NewHTTP2XTLSClient(dialFn DialFn, tlsConfig *tls.Config) *TransportWrap {
+	wrap := TransportWrap{}
 	dialFunc := func(network, addr string, cfg *tls.Config) (net.Conn, error) {
 		pconn, err := dialFn(network, addr)
 		if err != nil {
 			return nil, err
 		}
 
+		wrap.remoteAddr = pconn.RemoteAddr()
 		xtlsConfig := &xtls.Config{
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			ServerName:         cfg.ServerName,
@@ -37,13 +39,15 @@ func NewHTTP2XTLSClient(dialFn DialFn, tlsConfig *tls.Config) *http2.Transport {
 		return cn, nil
 	}
 
-	return &http2.Transport{
+	wrap.Transport = &http2.Transport{
 		DialTLS:            dialFunc,
 		TLSClientConfig:    tlsConfig,
 		AllowHTTP:          false,
 		DisableCompression: true,
 		PingTimeout:        0,
 	}
+
+	return &wrap
 }
 
 func StreamGunWithXTLSConn(conn net.Conn, tlsConfig *tls.Config, cfg *Config) (net.Conn, error) {

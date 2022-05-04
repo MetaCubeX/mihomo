@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -269,6 +270,18 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 			return
 		}
 		pCtx.InjectPacketConn(rawPc)
+
+		actualProxy := proxy.Unwrap(nil)
+		if actualProxy != nil {
+			if dst, _, err := net.SplitHostPort(actualProxy.Addr()); err == nil {
+				metadata.RemoteDst = dst
+			} else {
+				if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
+					metadata.RemoteDst = actualProxy.Addr()
+				}
+			}
+		}
+
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
 
 		switch true {
@@ -332,6 +345,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}
 		return
 	}
+
+	if tcpAddr, ok := remoteConn.RemoteAddr().(*net.TCPAddr); ok {
+		metadata.RemoteDst = tcpAddr.IP.String()
+	}
+
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()

@@ -170,6 +170,11 @@ func (r *Relay) proxies(metadata *C.Metadata, touch bool) ([]C.Proxy, []C.Proxy)
 	return targetProxies, chainProxies
 }
 
+func (r *Relay) Addr() string {
+	proxies, _ := r.proxies(nil, true)
+	return proxies[len(proxies)-1].Addr()
+}
+
 func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
 	return &Relay{
 		GroupBase: NewGroupBase(GroupBaseOption{
