@@ -271,7 +271,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		}
 		pCtx.InjectPacketConn(rawPc)
 
-		actualProxy := proxy.Unwrap(nil)
+		actualProxy := proxy.Unwrap(metadata)
 		if actualProxy != nil {
 			if dst, _, err := net.SplitHostPort(actualProxy.Addr()); err == nil {
 				metadata.RemoteDst = dst
