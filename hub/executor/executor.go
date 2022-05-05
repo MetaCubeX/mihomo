@@ -76,15 +76,15 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
+	updateHosts(cfg.Hosts)
 	updateDNS(cfg.DNS)
+	loadProxyProvider(cfg.Providers)
+	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
 	updateTun(cfg.Tun, cfg.DNS)
 	updateExperimental(cfg)
-	updateHosts(cfg.Hosts)
-	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
-	loadRuleProvider(cfg.RuleProviders)
 
 	log.SetLevel(cfg.General.LogLevel)
 }
