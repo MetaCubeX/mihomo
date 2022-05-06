@@ -1,6 +1,7 @@
 package vless
 
 import (
+	"github.com/Dreamacro/clash/common/utils"
 	"net"
 
 	"github.com/gofrs/uuid"
@@ -49,7 +50,7 @@ func (c *Client) StreamConn(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 
 // NewClient return Client instance
 func NewClient(uuidStr string, addons *Addons, xtlsShow bool) (*Client, error) {
-	uid, err := uuid.FromString(uuidStr)
+	uid, err := utils.UUIDMap(uuidStr)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package vmess
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/common/utils"
 	"math/rand"
 	"net"
 	"runtime"
@@ -82,7 +83,7 @@ func (c *Client) StreamConn(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 
 // NewClient return Client instance
 func NewClient(config Config) (*Client, error) {
-	uid, err := uuid.FromString(config.UUID)
+	uid, err := utils.UUIDMap(config.UUID)
 	if err != nil {
 		return nil, err
 	}
