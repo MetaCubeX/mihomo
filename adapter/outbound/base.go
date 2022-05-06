@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"regexp"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+
+	"github.com/gofrs/uuid"
 )
 
 type Base struct {
@@ -151,8 +152,8 @@ func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
 }
 
 func uuidMap(str string) string {
-	match, _ := regexp.MatchString(`[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$`, str)
-	if !match {
+	_, err := uuid.FromString(str)
+	if err != nil {
 		var Nil [16]byte
 		h := sha1.New()
 		h.Write(Nil[:])
