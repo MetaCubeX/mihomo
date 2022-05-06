@@ -71,7 +71,10 @@ type Ports struct {
 func GetTunConf() config.Tun {
 	if lastTunConf == nil {
 		return config.Tun{
-			Enable: false,
+			Enable:    false,
+			Stack:     C.TunGvisor,
+			DNSHijack: []netip.AddrPort{netip.MustParseAddrPort("0.0.0.0:53")},
+			AutoRoute: true,
 		}
 	}
 	return *lastTunConf
@@ -347,16 +350,17 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 		tunAddressPrefix = lastTunAddressPrefix
 	}
 
-	if !hasTunConfigChange(tunConf, tunAddressPrefix) {
-		return
-	}
-
 	if tunStackListener != nil {
+		if !hasTunConfigChange(tunConf, tunAddressPrefix) {
+			return
+		}
+
 		_ = tunStackListener.Close()
 		tunStackListener = nil
-		lastTunConf = nil
-		lastTunAddressPrefix = nil
 	}
+
+	lastTunConf = tunConf
+	lastTunAddressPrefix = tunAddressPrefix
 
 	if !tunConf.Enable {
 		return
@@ -366,9 +370,6 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 	if err != nil {
 		return
 	}
-
-	lastTunConf = tunConf
-	lastTunAddressPrefix = tunAddressPrefix
 }
 
 func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
@@ -388,9 +389,9 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		if mitmListener.RawAddress() == addr {
 			return
 		}
-		tunnel.MitmOutbound = nil
 		_ = mitmListener.Close()
 		mitmListener = nil
+		tunnel.SetMitmOutbound(nil)
 	}
 
 	if portIsZero(addr) {
@@ -442,7 +443,7 @@ func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	tunnel.MitmOutbound = outbound.NewMitm(mitmListener.Address())
+	tunnel.SetMitmOutbound(outbound.NewMitm(mitmListener.Address()))
 
 	log.Infoln("Mitm proxy listening at: %s", mitmListener.Address())
 }

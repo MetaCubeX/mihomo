@@ -339,7 +339,7 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func updateMitm(mitm *config.Mitm) {
-	outbound.MiddlemanRewriteHosts = mitm.Hosts
+	outbound.UpdateRewriteHosts(mitm.Hosts)
 	tunnel.UpdateRewrites(mitm.Rules)
 }
 

@@ -3,6 +3,8 @@ package outbound
 import (
 	"context"
 	"errors"
+	"net"
+	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/trie"
@@ -12,50 +14,50 @@ import (
 var (
 	errIgnored      = errors.New("not match in mitm host lists")
 	httpProxyClient = NewHttp(HttpOption{})
-
-	MiddlemanRewriteHosts *trie.DomainTrie[bool]
+	rewriteHosts    *trie.DomainTrie[bool]
 )
 
 type Mitm struct {
 	*Base
-	serverAddr string
+	serverAddr *net.TCPAddr
 }
 
 // DialContext implements C.ProxyAdapter
-func (m *Mitm) DialContext(ctx context.Context, metadata *C.Metadata, _ ...dialer.Option) (C.Conn, error) {
-	if MiddlemanRewriteHosts == nil {
+func (m *Mitm) DialContext(_ context.Context, metadata *C.Metadata, _ ...dialer.Option) (C.Conn, error) {
+	if (rewriteHosts == nil || rewriteHosts.Search(metadata.String()) == nil) && metadata.DstPort != "80" {
 		return nil, errIgnored
 	}
 
-	if MiddlemanRewriteHosts.Search(metadata.String()) == nil && metadata.DstPort != "80" {
-		return nil, errIgnored
+	c, err := net.DialTCP("tcp", nil, m.serverAddr)
+	if err != nil {
+		return nil, err
 	}
+
+	_ = c.SetKeepAlive(true)
+	_ = c.SetKeepAlivePeriod(60 * time.Second)
 
 	metadata.Type = C.MITM
 
-	c, err := dialer.DialContext(ctx, "tcp", m.serverAddr, []dialer.Option{dialer.WithInterface(""), dialer.WithRoutingMark(0), dialer.WithDirect()}...)
+	hc, err := httpProxyClient.StreamConn(c, metadata)
 	if err != nil {
+		_ = c.Close()
 		return nil, err
 	}
 
-	tcpKeepAlive(c)
-
-	defer safeConnClose(c, err)
-
-	c, err = httpProxyClient.StreamConn(c, metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewConn(c, m), nil
+	return NewConn(hc, m), nil
 }
 
 func NewMitm(serverAddr string) *Mitm {
+	tcpAddr, _ := net.ResolveTCPAddr("tcp", serverAddr)
 	return &Mitm{
 		Base: &Base{
 			name: "Mitm",
 			tp:   C.Mitm,
 		},
-		serverAddr: serverAddr,
+		serverAddr: tcpAddr,
 	}
+}
+
+func UpdateRewriteHosts(hosts *trie.DomainTrie[bool]) {
+	rewriteHosts = hosts
 }
