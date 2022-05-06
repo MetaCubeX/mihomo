@@ -71,7 +71,10 @@ type Ports struct {
 func GetTunConf() config.Tun {
 	if lastTunConf == nil {
 		return config.Tun{
-			Enable: false,
+			Enable:    false,
+			Stack:     C.TunGvisor,
+			DNSHijack: []netip.AddrPort{netip.MustParseAddrPort("0.0.0.0:53")},
+			AutoRoute: true,
 		}
 	}
 	return *lastTunConf
@@ -354,9 +357,10 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 
 		_ = tunStackListener.Close()
 		tunStackListener = nil
-		lastTunConf = nil
-		lastTunAddressPrefix = nil
 	}
+
+	lastTunConf = tunConf
+	lastTunAddressPrefix = tunAddressPrefix
 
 	if !tunConf.Enable {
 		return
@@ -366,9 +370,6 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 	if err != nil {
 		return
 	}
-
-	lastTunConf = tunConf
-	lastTunAddressPrefix = tunAddressPrefix
 }
 
 func ReCreateMitm(port int, tcpIn chan<- C.ConnContext) {
