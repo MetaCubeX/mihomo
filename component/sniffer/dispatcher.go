@@ -2,7 +2,9 @@ package sniffer
 
 import (
 	"errors"
+	"fmt"
 	"github.com/Dreamacro/clash/constant/sniffer"
+	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -100,12 +102,12 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 			_ = conn.SetReadDeadline(time.Time{})
 			if err != nil {
 				_, ok := err.(*net.OpError)
-				if ok {
-					log.Errorln("[Sniffer] [%s] Maybe read timeout, Consider adding skip", metadata.DstIP.String())
+				if io.EOF == err || ok {
+					log.Errorln("[Sniffer] [%s] may not have any sent data, Consider adding skip", metadata.DstIP.String())
 					_ = conn.Close()
 				}
-				log.Errorln("[Sniffer] %v", err)
-				return "", err
+
+				return "", fmt.Errorf("[Sniffer] sniff occur error: %v", err)
 			}
 
 			bufferedLen := conn.Buffered()
