@@ -10,7 +10,7 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gorilla/websocket v1.5.0
-	github.com/insomniacslk/dhcp v0.0.0-20220405050111-12fbdcb11b41
+	github.com/insomniacslk/dhcp v0.0.0-20220504074936-1ca156eafb9f
 	github.com/lucas-clemente/quic-go v0.27.0
 	github.com/miekg/dns v1.1.48
 	github.com/oschwald/geoip2-golang v1.7.0
@@ -20,23 +20,23 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
-	golang.org/x/exp v0.0.0-20220414153411-bcd21879b8fd
-	golang.org/x/net v0.0.0-20220421235706-1d1ef9303861
+	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
+	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
+	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150
+	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	golang.zx2c4.com/wireguard v0.0.0-20220407013110-ef5c587f782d
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469
 	google.golang.org/protobuf v1.28.0
-	gopkg.in/yaml.v2 v2.4.0
-	gvisor.dev/gvisor v0.0.0-20220422224113-2cca6b79d9f4
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+	gvisor.dev/gvisor v0.0.0-20220506231117-8ef340c14150
 )
 
 require (
 	github.com/cheekybits/genny v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fsnotify/fsnotify v1.5.1 // indirect
+	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
@@ -54,7 +54,6 @@ require (
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
 replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e
