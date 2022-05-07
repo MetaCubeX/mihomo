@@ -44,6 +44,12 @@ func (f *fetcher) Initial() (interface{}, error) {
 		err      error
 	)
 
+	defer func() {
+		if f.ticker != nil {
+			go f.pullLoop()
+		}
+	}()
+
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
 		buf, err = ioutil.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
@@ -83,9 +89,6 @@ func (f *fetcher) Initial() (interface{}, error) {
 	}
 
 	f.hash = md5.Sum(buf)
-	if f.ticker != nil {
-		go f.pullLoop()
-	}
 
 	return rules, nil
 }
