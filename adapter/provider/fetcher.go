@@ -43,6 +43,14 @@ func (f *fetcher) Initial() (any, error) {
 		err     error
 		isLocal bool
 	)
+
+	defer func() {
+		// pull proxies automatically
+		if f.ticker != nil {
+			go f.pullLoop()
+		}
+	}()
+
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
 		buf, err = os.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
@@ -83,11 +91,6 @@ func (f *fetcher) Initial() (any, error) {
 	}
 
 	f.hash = md5.Sum(buf)
-
-	// pull proxies automatically
-	if f.ticker != nil {
-		go f.pullLoop()
-	}
 
 	return proxies, nil
 }

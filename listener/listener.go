@@ -83,6 +83,10 @@ func SetBindAddress(host string) {
 	bindAddress = host
 }
 
+func NewInner(tcpIn chan<- C.ConnContext) {
+	inner.New(tcpIn)
+}
+
 func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 	httpMux.Lock()
 	defer httpMux.Unlock()
@@ -127,7 +131,6 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 			log.Errorln("Start SOCKS server error: %s", err.Error())
 		}
 	}()
-	inner.New(tcpIn)
 
 	addr := genAddr(bindAddress, port, allowLan)
 

@@ -118,7 +118,8 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 		rp,
 	}
 
-	runtime.SetFinalizer(wrapper, rp.fetcher.Destroy())
+	final := func(provider *RuleSetProvider) { rp.fetcher.Destroy() }
+	runtime.SetFinalizer(wrapper, final)
 	return wrapper
 }
 

@@ -78,8 +78,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateDNS(cfg.DNS)
-	loadProxyProvider(cfg.Providers)
-	loadRuleProvider(cfg.RuleProviders)
+
+	loadProviders(cfg)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
 	updateTun(cfg.Tun, cfg.DNS)
@@ -87,6 +87,12 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
+}
+
+func loadProviders(cfg *config.Config) {
+	P.NewInner(tunnel.TCPIn())
+	loadProxyProvider(cfg.Providers)
+	loadRuleProvider(cfg.RuleProviders)
 }
 
 func GetGeneral() *config.General {
@@ -188,7 +194,7 @@ func loadProvider(pv provider.Provider) {
 		log.Infoln("Start initial provider %s", (pv).Name())
 	}
 
-	if err := (pv).Initial(); err != nil {
+	if err := pv.Initial(); err != nil {
 		switch pv.Type() {
 		case provider.Proxy:
 			{
