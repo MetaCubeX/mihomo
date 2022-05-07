@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"runtime"
 	"time"
 )
