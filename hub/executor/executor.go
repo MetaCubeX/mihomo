@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
 	"runtime"
@@ -78,21 +79,20 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateDNS(cfg.DNS)
-
-	loadProviders(cfg)
+	initInnerTcp()
+	loadProxyProvider(cfg.Providers)
+	updateProfile(cfg)
+	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
 	updateTun(cfg.Tun, cfg.DNS)
 	updateExperimental(cfg)
-	updateProfile(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
 }
 
-func loadProviders(cfg *config.Config) {
-	P.NewInner(tunnel.TCPIn())
-	loadProxyProvider(cfg.Providers)
-	loadRuleProvider(cfg.RuleProviders)
+func initInnerTcp() {
+	inner.New(tunnel.TCPIn())
 }
 
 func GetGeneral() *config.General {
