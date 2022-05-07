@@ -311,8 +311,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.Proxies = proxies
 	config.Providers = providers
 
-	err = parseScript(rawCfg)
-	if err != nil {
+	if err = parseScript(rawCfg.Script); err != nil {
 		return nil, err
 	}
 
@@ -497,7 +496,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		ruleProviders = map[string]C.Rule{}
 		rulesConfig   = cfg.Rule
 		mode          = cfg.Mode
-		isPyInit      = S.Py_IsInitialized()
 	)
 
 	// parse rules
@@ -509,10 +507,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			params   []string
 			ruleName = strings.ToUpper(rule[0])
 		)
-
-		if mode == T.Script && ruleName != "GEOSITE" {
-			continue
-		}
 
 		l := len(rule)
 
@@ -536,7 +530,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		target = rule[l-1]
 		params = rule[l:]
 
-		if _, ok := proxies[target]; mode != T.Script && !ok {
+		if _, ok := proxies[target]; !ok && (mode != T.Script || ruleName != "GEOSITE") {
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
 		}
 
@@ -547,29 +541,22 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
 
-		if isPyInit {
-			if ruleName == "GEOSITE" {
-				pvName := "geosite:" + strings.ToLower(payload)
-				providerNames = append(providerNames, pvName)
-				ruleProviders[pvName] = parsed
-			}
+		if ruleName == "GEOSITE" {
+			pvName := "geosite:" + strings.ToLower(payload)
+			providerNames = append(providerNames, pvName)
+			ruleProviders[pvName] = parsed
 		}
 
-		if mode != T.Script {
-			rules = append(rules, parsed)
-		}
+		rules = append(rules, parsed)
+	}
+
+	if err := S.NewClashPyContext(providerNames); err != nil {
+		return nil, nil, err
+	} else {
+		log.Infoln("Start initial script context successful, provider records: %v", len(providerNames))
 	}
 
 	runtime.GC()
-
-	if isPyInit {
-		err := S.NewClashPyContext(providerNames)
-		if err != nil {
-			return nil, nil, err
-		} else {
-			log.Infoln("Start initial script context successful, provider records: %v", len(providerNames))
-		}
-	}
 
 	return rules, ruleProviders, nil
 }
@@ -882,16 +869,17 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 	}, nil
 }
 
-func parseScript(cfg *RawConfig) error {
-	mode := cfg.Mode
-	script := cfg.Script
-	mainCode := cleanPyKeywords(script.MainCode)
+func parseScript(script Script) error {
+	mainCode := script.MainCode
 	shortcutsCode := script.ShortcutsCode
 
-	if mode != T.Script && len(shortcutsCode) == 0 {
-		return nil
-	} else if mode == T.Script && len(mainCode) == 0 {
-		return fmt.Errorf("initialized script module failure, can't find script code in the config file")
+	if strings.TrimSpace(mainCode) == "" {
+		mainCode = `
+def main(ctx, metadata):
+  return "DIRECT"
+`
+	} else {
+		mainCode = cleanPyKeywords(mainCode)
 	}
 
 	content := `# -*- coding: UTF-8 -*-
@@ -912,25 +900,16 @@ time = ClashTime()
 
 `
 
-	var shouldInitPy bool
-	if mode == T.Script {
-		content += mainCode + "\n\n"
-		shouldInitPy = true
-	}
+	content += mainCode + "\n\n"
 
 	for k, v := range shortcutsCode {
 		v = cleanPyKeywords(v)
 		v = strings.TrimSpace(v)
-		if len(v) == 0 {
+		if v == "" {
 			return fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code invalid syntax", k)
 		}
 
 		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
-		shouldInitPy = true
-	}
-
-	if !shouldInitPy {
-		return nil
 	}
 
 	err := os.WriteFile(C.Path.Script(), []byte(content), 0o644)
@@ -940,10 +919,10 @@ time = ClashTime()
 
 	if err = S.Py_Initialize(C.Path.GetExecutableFullPath(), C.Path.ScriptDir()); err != nil {
 		return fmt.Errorf("initialized script module failure, %s", err.Error())
-	} else if mode == T.Script {
-		if err = S.LoadMainFunction(); err != nil {
-			return fmt.Errorf("initialized script module failure, %s", err.Error())
-		}
+	}
+
+	if err = S.LoadMainFunction(); err != nil {
+		return fmt.Errorf("initialized script module failure, %s", err.Error())
 	}
 
 	log.Infoln("Start initial script module successful, version: %s", S.Py_GetVersion())
@@ -952,9 +931,6 @@ time = ClashTime()
 }
 
 func cleanPyKeywords(code string) string {
-	if len(code) == 0 {
-		return code
-	}
 	keywords := []string{"import", "print"}
 
 	for _, kw := range keywords {
