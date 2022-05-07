@@ -25,7 +25,7 @@ type Event struct {
 	Payload  string
 }
 
-func (e Event) Type() string {
+func (e *Event) Type() string {
 	return e.LogLevel.String()
 }
 

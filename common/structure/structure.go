@@ -159,9 +159,19 @@ func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
 		for valSlice.Len() <= i {
 			valSlice = reflect.Append(valSlice, reflect.Zero(valElemType))
 		}
-		currentField := valSlice.Index(i)
-
 		fieldName := fmt.Sprintf("%s[%d]", name, i)
+		if currentData == nil {
+			// in weakly type mode, null will convert to zero value
+			if d.option.WeaklyTypedInput {
+				continue
+			}
+			// in non-weakly type mode, null will convert to nil if element's zero value is nil, otherwise return an error
+			if elemKind := valElemType.Kind(); elemKind == reflect.Map || elemKind == reflect.Slice {
+				continue
+			}
+			return fmt.Errorf("'%s' can not be null", fieldName)
+		}
+		currentField := valSlice.Index(i)
 		if err := d.decode(fieldName, currentData, currentField); err != nil {
 			return err
 		}
