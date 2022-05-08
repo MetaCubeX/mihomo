@@ -85,17 +85,16 @@ func ruleProviderCallbackFn(cProviderName *C.char, cMetadata *C.struct_Metadata)
 	//_type := C.GoString(cMetadata._type)
 	//network := C.GoString(cMetadata.network)
 	processName := C.GoString(cMetadata.process_name)
+	processPath := C.GoString(cMetadata.process_path)
 	host := C.GoString(cMetadata.host)
 	srcIp := C.GoString(cMetadata.src_ip)
 	srcPort := strconv.Itoa(int(cMetadata.src_port))
 	dstIp := C.GoString(cMetadata.dst_ip)
 	dstPort := strconv.Itoa(int(cMetadata.dst_port))
 
-	dst, err := netip.ParseAddr(dstIp)
-
 	addrType := constant.AtypDomainName
-	if err == nil {
-		if dst.Is4() {
+	if h, err := netip.ParseAddr(host); err == nil {
+		if h.Is4() {
 			addrType = constant.AtypIPv4
 		} else {
 			addrType = constant.AtypIPv6
@@ -103,15 +102,17 @@ func ruleProviderCallbackFn(cProviderName *C.char, cMetadata *C.struct_Metadata)
 	}
 
 	src, _ := netip.ParseAddr(srcIp)
+	dst, _ := netip.ParseAddr(dstIp)
 
 	metadata := &constant.Metadata{
-		Process:  processName,
-		SrcIP:    src,
-		DstIP:    dst,
-		SrcPort:  srcPort,
-		DstPort:  dstPort,
-		AddrType: addrType,
-		Host:     host,
+		AddrType:    addrType,
+		SrcIP:       src,
+		DstIP:       dst,
+		SrcPort:     srcPort,
+		DstPort:     dstPort,
+		Host:        host,
+		Process:     processName,
+		ProcessPath: processPath,
 	}
 
 	providerName := C.GoString(cProviderName)

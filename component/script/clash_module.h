@@ -9,6 +9,7 @@ struct Metadata {
     const char *type; /* type socks5/http */
     const char *network;  /* network tcp/udp */
     const char *process_name;
+    const char *process_path;
     const char *host;
     const char *src_ip;
     unsigned short src_port;
@@ -43,6 +44,7 @@ const char *call_main(
                 const char *type,
                 const char *network,
                 const char *process_name,
+                const char *process_path,
                 const char *host,
                 const char *src_ip,
                 unsigned short src_port,
@@ -53,6 +55,7 @@ int call_shortcut(PyObject *shortcut_fn,
                 const char *type,
                 const char *network,
                 const char *process_name,
+                const char *process_path,
                 const char *host,
                 const char *src_ip,
                 unsigned short src_port,

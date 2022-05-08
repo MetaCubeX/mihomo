@@ -186,6 +186,7 @@ func CallPyMainFunction(mtd *constant.Metadata) (string, error) {
 	_type := C.CString(mtd.Type.String())
 	network := C.CString(mtd.NetWork.String())
 	processName := C.CString(mtd.Process)
+	processPath := C.CString(mtd.ProcessPath)
 	host := C.CString(mtd.Host)
 
 	srcPortGo, _ := strconv.ParseUint(mtd.SrcPort, 10, 16)
@@ -208,6 +209,7 @@ func CallPyMainFunction(mtd *constant.Metadata) (string, error) {
 		C.free(unsafe.Pointer(_type))
 		C.free(unsafe.Pointer(network))
 		C.free(unsafe.Pointer(processName))
+		C.free(unsafe.Pointer(processPath))
 		C.free(unsafe.Pointer(host))
 		C.free(unsafe.Pointer(srcIp))
 		C.free(unsafe.Pointer(dstIp))
@@ -217,7 +219,7 @@ func CallPyMainFunction(mtd *constant.Metadata) (string, error) {
 	gilState := PyGILState_Ensure()
 	defer PyGILState_Release(gilState)
 
-	cRs := C.call_main(_type, network, processName, host, srcIp, srcPort, dstIp, dstPort)
+	cRs := C.call_main(_type, network, processName, processPath, host, srcIp, srcPort, dstIp, dstPort)
 
 	rs := C.GoString(cRs)
 	if rs == "-1" {
@@ -241,6 +243,7 @@ func CallPyShortcut(fn *PyObject, mtd *constant.Metadata) (bool, error) {
 	_type := C.CString(mtd.Type.String())
 	network := C.CString(mtd.NetWork.String())
 	processName := C.CString(mtd.Process)
+	processPath := C.CString(mtd.ProcessPath)
 	host := C.CString(mtd.Host)
 
 	srcPortGo, _ := strconv.ParseUint(mtd.SrcPort, 10, 16)
@@ -263,6 +266,7 @@ func CallPyShortcut(fn *PyObject, mtd *constant.Metadata) (bool, error) {
 		C.free(unsafe.Pointer(_type))
 		C.free(unsafe.Pointer(network))
 		C.free(unsafe.Pointer(processName))
+		C.free(unsafe.Pointer(processPath))
 		C.free(unsafe.Pointer(host))
 		C.free(unsafe.Pointer(srcIp))
 		C.free(unsafe.Pointer(dstIp))
@@ -272,7 +276,7 @@ func CallPyShortcut(fn *PyObject, mtd *constant.Metadata) (bool, error) {
 	gilState := PyGILState_Ensure()
 	defer PyGILState_Release(gilState)
 
-	cRs := C.call_shortcut(toc(fn), _type, network, processName, host, srcIp, srcPort, dstIp, dstPort)
+	cRs := C.call_shortcut(toc(fn), _type, network, processName, processPath, host, srcIp, srcPort, dstIp, dstPort)
 
 	rs := int(cRs)
 	if rs == -1 {

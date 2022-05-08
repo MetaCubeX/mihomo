@@ -909,20 +909,20 @@ time = ClashTime()
 			return fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code invalid syntax", k)
 		}
 
-		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
+		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, process_path, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
 	}
 
 	err := os.WriteFile(C.Path.Script(), []byte(content), 0o644)
 	if err != nil {
-		return fmt.Errorf("initialized script module failure, %s", err.Error())
+		return fmt.Errorf("initialized script module failure, %w", err)
 	}
 
 	if err = S.Py_Initialize(C.Path.GetExecutableFullPath(), C.Path.ScriptDir()); err != nil {
-		return fmt.Errorf("initialized script module failure, %s", err.Error())
+		return fmt.Errorf("initialized script module failure, %w", err)
 	}
 
 	if err = S.LoadMainFunction(); err != nil {
-		return fmt.Errorf("initialized script module failure, %s", err.Error())
+		return fmt.Errorf("initialized script module failure, %w", err)
 	}
 
 	log.Infoln("Start initial script module successful, version: %s", S.Py_GetVersion())

@@ -256,6 +256,7 @@ interface Metadata {
   network: string // tcp
   host: string
   process_name: string
+  process_path: string
   src_ip: string
   src_port: int
   dst_ip: string

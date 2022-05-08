@@ -267,6 +267,7 @@ RuleProvider_match(RuleProviderObject *self, PyObject *args)
         .type = PyUnicode_AsUTF8(PyDict_GetItemString(tmp, "type")), // PyDict_GetItemString() Return value: Borrowed reference.
         .network = PyUnicode_AsUTF8(PyDict_GetItemString(tmp, "network")),
         .process_name = PyUnicode_AsUTF8(PyDict_GetItemString(tmp, "process_name")),
+        .process_path = PyUnicode_AsUTF8(PyDict_GetItemString(tmp, "process_path")),
         .host = PyUnicode_AsUTF8(PyDict_GetItemString(tmp, "host")),
         .src_ip = PyUnicode_AsUTF8(PyDict_GetItemString(tmp, "src_ip")),
         .src_port = (unsigned short)PyLong_AsUnsignedLong(PyDict_GetItemString(tmp, "src_port")),
@@ -584,6 +585,7 @@ const char *call_main(
                 const char *type,
                 const char *network,
                 const char *process_name,
+                const char *process_path,
                 const char *host,
                 const char *src_ip,
                 unsigned short src_port,
@@ -605,6 +607,7 @@ const char *call_main(
     PyObject *p_type = PyUnicode_FromString(type); //Return value: New reference.
     PyObject *p_network = PyUnicode_FromString(network); //Return value: New reference.
     PyObject *p_process_name = PyUnicode_FromString(process_name); //Return value: New reference.
+    PyObject *p_process_path = PyUnicode_FromString(process_path); //Return value: New reference.
     PyObject *p_host = PyUnicode_FromString(host); //Return value: New reference.
     PyObject *p_src_ip = PyUnicode_FromString(src_ip); //Return value: New reference.
     PyObject *p_src_port = PyLong_FromUnsignedLong((unsigned long)src_port); //Return value: New reference.
@@ -614,6 +617,7 @@ const char *call_main(
     PyDict_SetItemString(metadataDict, "type", p_type); //Parameter value: New reference.
     PyDict_SetItemString(metadataDict, "network", p_network); //Parameter value: New reference.
     PyDict_SetItemString(metadataDict, "process_name", p_process_name); //Parameter value: New reference.
+    PyDict_SetItemString(metadataDict, "process_path", p_process_path); //Parameter value: New reference.
     PyDict_SetItemString(metadataDict, "host", p_host); //Parameter value: New reference.
     PyDict_SetItemString(metadataDict, "src_ip", p_src_ip); //Parameter value: New reference.
     PyDict_SetItemString(metadataDict, "src_port", p_src_port); //Parameter value: New reference.
@@ -623,6 +627,7 @@ const char *call_main(
     Py_DECREF(p_type);
     Py_DECREF(p_network);
     Py_DECREF(p_process_name);
+    Py_DECREF(p_process_path);
     Py_DECREF(p_host);
     Py_DECREF(p_src_ip);
     Py_DECREF(p_src_port);
@@ -668,6 +673,7 @@ int call_shortcut(PyObject *shortcut_fn,
                 const char *type,
                 const char *network,
                 const char *process_name,
+                const char *process_path,
                 const char *host,
                 const char *src_ip,
                 unsigned short src_port,
@@ -677,10 +683,11 @@ int call_shortcut(PyObject *shortcut_fn,
     PyObject *args;
     PyObject *result;
 
-    args = Py_BuildValue("{s:O, s:s, s:s, s:s, s:s, s:H, s:s, s:H}",
+    args = Py_BuildValue("{s:O, s:s, s:s, s:s, s:s, s:s, s:H, s:s, s:H}",
                         "ctx", clash_context,
                         "network", network,
                         "process_name", process_name,
+                        "process_path", process_path,
                         "host", host,
                         "src_ip", src_ip,
                         "src_port", src_port,
@@ -727,9 +734,9 @@ void finalize_Python() {
     Py_CLEAR(clash_module);
     Py_FinalizeEx();
 
-//    clash_module = NULL;
-//    main_fn = NULL;
-//    clash_context = NULL;
+    clash_module = NULL;
+    main_fn = NULL;
+    clash_context = NULL;
 }
 
 /* --------------------------------------------------------------------- */
