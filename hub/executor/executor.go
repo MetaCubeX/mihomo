@@ -78,8 +78,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
-	updateDNS(cfg.DNS)
 	initInnerTcp()
+	updateDNS(cfg.DNS)
 	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
@@ -211,12 +211,15 @@ func loadProvider(pv provider.Provider) {
 
 func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
 	wg := sync.WaitGroup{}
+	ch := make(chan struct{}, concurrentCount)
 	for _, ruleProvider := range ruleProviders {
 		ruleProvider := ruleProvider
 		wg.Add(1)
+		ch <- struct{}{}
 		go func() {
-			defer func() { wg.Done() }()
+			defer func() { <-ch; wg.Done() }()
 			loadProvider(ruleProvider)
+
 		}()
 	}
 
@@ -224,12 +227,15 @@ func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
 }
 
 func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
+	// limit concurrent size
 	wg := sync.WaitGroup{}
+	ch := make(chan struct{}, concurrentCount)
 	for _, proxyProvider := range proxyProviders {
 		proxyProvider := proxyProvider
 		wg.Add(1)
+		ch <- struct{}{}
 		go func() {
-			defer func() { wg.Done() }()
+			defer func() { <-ch; wg.Done() }()
 			loadProvider(proxyProvider)
 		}()
 	}
