@@ -40,7 +40,7 @@ Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash
 A root CA certificate is required, the 
 MITM proxy server will generate a CA certificate file and a CA private key file in your Clash home directory, you can use your own certificate replace it. 
 
-Need to install and trust the CA certificate on the client device, open this URL http://mitm.clash/cert.crt by the web browser to install the CA certificate, the host name 'mitm.clash' was always been hijacked.
+Need to install and trust the CA certificate on the client device, open this URL [http://mitm.clash/cert.crt](http://mitm.clash/cert.crt) by the web browser to install the CA certificate, the host name 'mitm.clash' was always been hijacked.
 
 NOTE: this feature cannot work on tls pinning
 
@@ -244,9 +244,21 @@ $ systemctl start clash
 ```
 
 ### Display Process name
-Add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
+To display process name online by click [https://yaling888.github.io/yacd/](https://yaling888.github.io/yacd/).
 
-To display process name in GUI please use https://yaling888.github.io/yacd/.
+You can download the [Dashboard](https://github.com/yaling888/yacd/archive/gh-pages.zip) into Clash home directory:
+```shell
+cd ~/.config/clash
+curl -LJ https://github.com/yaling888/yacd/archive/gh-pages.zip -o dashboard.zip
+unzip dashboard.zip
+```
+
+Add to config file:
+```yaml
+external-controller: 127.0.0.1:9090
+external-ui: dashboard
+```
+Open [http://127.0.0.1:9090/ui/](http://127.0.0.1:9090/ui/) by web browser.
 
 ## Development
 If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)

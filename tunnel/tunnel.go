@@ -11,10 +11,12 @@ import (
 	"sync"
 	"time"
 
+	A "github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	icontext "github.com/Dreamacro/clash/context"
@@ -23,14 +25,15 @@ import (
 )
 
 var (
-	tcpQueue  = make(chan C.ConnContext, 200)
-	udpQueue  = make(chan *inbound.PacketAdapter, 200)
-	natTable  = nat.New()
-	rules     []C.Rule
-	rewrites  C.RewriteRule
-	proxies   = make(map[string]C.Proxy)
-	providers map[string]provider.ProxyProvider
-	configMux sync.RWMutex
+	tcpQueue     = make(chan C.ConnContext, 200)
+	udpQueue     = make(chan *inbound.PacketAdapter, 200)
+	natTable     = nat.New()
+	rules        []C.Rule
+	proxies      = make(map[string]C.Proxy)
+	providers    map[string]provider.ProxyProvider
+	rewrites     C.RewriteRule
+	rewriteHosts *trie.DomainTrie[bool]
+	configMux    sync.RWMutex
 
 	// Outbound Rule
 	mode = Rule
@@ -38,8 +41,8 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	// mitmOutbound mitm proxy adapter
-	mitmOutbound C.ProxyAdapter
+	// mitmProxy mitm proxy
+	mitmProxy C.Proxy
 )
 
 func init() {
@@ -98,7 +101,7 @@ func SetMode(m TunnelMode) {
 
 // SetMitmOutbound set the MITM outbound
 func SetMitmOutbound(outbound C.ProxyAdapter) {
-	mitmOutbound = outbound
+	mitmProxy = A.NewProxy(outbound)
 }
 
 // Rewrites return all rewrites
@@ -107,9 +110,10 @@ func Rewrites() C.RewriteRule {
 }
 
 // UpdateRewrites handle update rewrites
-func UpdateRewrites(newRewrites C.RewriteRule) {
+func UpdateRewrites(hosts *trie.DomainTrie[bool], rules C.RewriteRule) {
 	configMux.Lock()
-	rewrites = newRewrites
+	rewriteHosts = hosts
+	rewrites = rules
 	configMux.Unlock()
 }
 
@@ -178,7 +182,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		if err != nil {
 			log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 		} else {
-			log.Debugln("[Process] %s from process %s", metadata.String(), path)
+			// log.Debugln("[Process] %s from process %s", metadata.String(), path)
 			metadata.Process = filepath.Base(path)
 			metadata.ProcessPath = path
 		}
@@ -188,6 +192,12 @@ func preHandleMetadata(metadata *C.Metadata) error {
 }
 
 func resolveMetadata(_ C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+	if metadata.NetWork == C.TCP && mitmProxy != nil && metadata.Type != C.MITM &&
+		((rewriteHosts != nil && rewriteHosts.Search(metadata.String()) != nil) || metadata.DstPort == "80") {
+		proxy = mitmProxy
+		return
+	}
+
 	switch mode {
 	case Direct:
 		proxy = proxies["DIRECT"]
@@ -305,29 +315,20 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-	defer cancel()
-
-	if mitmOutbound != nil && metadata.Type != C.MITM {
-		if remoteConn, err1 := mitmOutbound.DialContext(ctx, metadata); err1 == nil {
-			remoteConn = statistic.NewSniffing(remoteConn, metadata, nil)
-
-			defer func(remoteConn C.Conn) {
-				_ = remoteConn.Close()
-			}(remoteConn)
-
-			handleSocket(connCtx, remoteConn)
-			return
-		}
-	}
-
 	proxy, rule, err := resolveMetadata(connCtx, metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
 	}
 
-	remoteConn, err := proxy.DialContext(ctx, metadata.Pure())
+	mtd := metadata
+	if proxy != mitmProxy {
+		mtd = metadata.Pure()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
+	defer cancel()
+	remoteConn, err := proxy.DialContext(ctx, mtd)
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -337,7 +338,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	if remoteConn.Chains().Last() != "REJECT" {
+	if remoteConn.Chains().Last() != "REJECT" && proxy != mitmProxy {
 		remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
 	}
 
@@ -346,6 +347,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 	}(remoteConn)
 
 	switch true {
+	case proxy == mitmProxy:
+		break
 	case rule != nil:
 		log.Infoln("[TCP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
 	case mode == Global:
