@@ -36,6 +36,29 @@
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
 ## Advanced usage for this branch
+### Build
+This branch requires cgo and Python3.9, so make sure you set up Python3.9 before building.
+
+For example, build on macOS:
+```shell
+brew update
+brew install python@3.9
+
+export PKG_CONFIG_PATH=$(find /usr/local/Cellar -name 'pkgconfig' -type d | grep lib/pkgconfig | tr '\n' ':' | sed s/.$//)
+
+git clone -b plus-pro https://github.com/yaling888/clash.git
+cd clash
+
+# build
+make cleancache && make local 
+# or make local-v3
+
+ls bin/
+
+# run
+sudo bin/clash-local
+```
+
 ### MITM configuration
 A root CA certificate is required, the 
 MITM proxy server will generate a CA certificate file and a CA private key file in your Clash home directory, you can use your own certificate replace it. 
@@ -344,6 +367,9 @@ external-controller: 127.0.0.1:9090
 external-ui: dashboard
 ```
 Open [http://127.0.0.1:9090/ui/](http://127.0.0.1:9090/ui/) by web browser.
+
+## Plus Pro Release
+[Release](https://github.com/yaling888/clash/releases/tag/plus)
 
 ## Development
 If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
