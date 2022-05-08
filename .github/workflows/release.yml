@@ -20,10 +20,18 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
+      - name: Go cache paths
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+
       - name: Cache go module
         uses: actions/cache@v2
         with:
-          path: ~/go/pkg/mod
+          path: |
+            ${{ steps.go-cache-paths.outputs.go-mod }}
+            ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
@@ -92,6 +100,8 @@ jobs:
         with:
           files: bin/*
           draft: true
+          prerelease: true
+          generate_release_notes: true
 
       - name: Delete workflow runs
         uses: GitRML/delete-workflow-runs@main

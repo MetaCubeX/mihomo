@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -339,8 +338,7 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func updateMitm(mitm *config.Mitm) {
-	outbound.UpdateRewriteHosts(mitm.Hosts)
-	tunnel.UpdateRewrites(mitm.Rules)
+	tunnel.UpdateRewrites(mitm.Hosts, mitm.Rules)
 }
 
 func Shutdown() {
