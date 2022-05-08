@@ -2,9 +2,7 @@ package sniffer
 
 import (
 	"errors"
-	"fmt"
 	"github.com/Dreamacro/clash/constant/sniffer"
-	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -102,12 +100,12 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 			_ = conn.SetReadDeadline(time.Time{})
 			if err != nil {
 				_, ok := err.(*net.OpError)
-				if io.EOF == err || ok {
+				if ok {
 					log.Errorln("[Sniffer] [%s] may not have any sent data, Consider adding skip", metadata.DstIP.String())
 					_ = conn.Close()
 				}
 
-				return "", fmt.Errorf("[Sniffer] sniff occur error: %v", err)
+				return "", err
 			}
 
 			bufferedLen := conn.Buffered()
