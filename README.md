@@ -220,7 +220,7 @@ iptables:
 Run Clash as a daemon.
 
 Create the systemd configuration file at /etc/systemd/system/clash.service:
-```shell
+```sh
 [Unit]
 Description=Clash daemon, A rule-based proxy in Go.
 After=network.target
@@ -235,11 +235,11 @@ ExecStart=/usr/local/bin/clash -d /etc/clash
 WantedBy=multi-user.target
 ```
 Launch clashd on system startup with:
-```shell
+```sh
 $ systemctl enable clash
 ```
 Launch clashd immediately with:
-```shell
+```sh
 $ systemctl start clash
 ```
 
@@ -247,10 +247,11 @@ $ systemctl start clash
 To display process name online by click [https://yaling888.github.io/yacd/](https://yaling888.github.io/yacd/).
 
 You can download the [Dashboard](https://github.com/yaling888/yacd/archive/gh-pages.zip) into Clash home directory:
-```shell
+```sh
 cd ~/.config/clash
-curl -LJ https://github.com/yaling888/yacd/archive/gh-pages.zip -o dashboard.zip
-unzip dashboard.zip
+curl -LJ https://github.com/yaling888/yacd/archive/gh-pages.zip -o yacd-gh-pages.zip
+unzip yacd-gh-pages.zip
+mv yacd-gh-pages dashboard
 ```
 
 Add to config file:

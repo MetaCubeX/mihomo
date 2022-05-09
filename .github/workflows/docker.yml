@@ -3,8 +3,7 @@ on:
   push:
     branches:
       - rm
-    tags:
-      - '*'
+
 jobs:
 
   build:
