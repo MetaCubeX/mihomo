@@ -55,14 +55,13 @@ jobs:
           $env:GOAMD64="v3"; $env:CGO_ENABLED=1; go build -tags build_actions -trimpath -ldflags '-w -s -buildid=' -o bin/clash-windows-amd64-v3.exe
           
           cd bin/
-          Compress-Archive -Path clash-windows-amd64.exe -DestinationPath clash-plus-windows-amd64-$(git describe --tags --always)-$(Get-Date -Format 'yyyy.MM.dd').zip
-          Compress-Archive -Path clash-windows-amd64-v3.exe -DestinationPath clash-plus-windows-amd64-v3-$(git describe --tags --always)-$(Get-Date -Format 'yyyy.MM.dd').zip
+          Compress-Archive -Path clash-windows-amd64.exe -DestinationPath clash-plus-windows-amd64-$(Get-Date -Format 'yyyy.MM.dd').zip
+          Compress-Archive -Path clash-windows-amd64-v3.exe -DestinationPath clash-plus-windows-amd64-v3-$(Get-Date -Format 'yyyy.MM.dd').zip
           Remove-Item -Force clash-windows-amd64.exe
           Remove-Item -Force clash-windows-amd64-v3.exe
 
       - name: Upload files to Artifacts
         uses: actions/upload-artifact@v2
-        if: startsWith(github.ref, 'refs/tags/') == false
         with:
           name: clash-windows-amd64-${{ steps.test.outputs.file_sha }}-${{ steps.test.outputs.file_date }}
           path: |

@@ -40,7 +40,7 @@ Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash
 This branch requires cgo and Python3.9, so make sure you set up Python3.9 before building.
 
 For example, build on macOS:
-```shell
+```sh
 brew update
 brew install python@3.9
 
@@ -50,7 +50,7 @@ git clone -b plus-pro https://github.com/yaling888/clash.git
 cd clash
 
 # build
-make cleancache && make local 
+make local
 # or make local-v3
 
 ls bin/
