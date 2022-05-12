@@ -179,7 +179,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		} else {
 			metadata.Process = filepath.Base(path)
 			metadata.ProcessPath = path
-			if procesCache == metadata.Process {
+			if procesCache != metadata.Process {
 				log.Debugln("[Process] %s from process %s", metadata.String(), path)
 			}
 			procesCache = metadata.Process

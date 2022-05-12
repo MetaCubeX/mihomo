@@ -58,7 +58,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		}
 		return proxies
 	}
-	//TODO("Touch Version 没变的")
+
 	for _, pd := range gb.providers {
 		if pd.VehicleType() == types.Compatible {
 			if touch {
