@@ -253,7 +253,7 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 		}
 	}
 
-	return nil, errors.New("all ip tcp shake hands failed")
+	return nil, fmt.Errorf("all ips %v tcp shake hands failed", ips)
 }
 
 func singleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
