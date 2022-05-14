@@ -543,7 +543,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 
 	var rules []C.Rule
 	rulesConfig := cfg.Rule
-	mode := cfg.Mode
 
 	// parse rules
 	for idx, line := range rulesConfig {
@@ -554,10 +553,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			params   []string
 			ruleName = strings.ToUpper(rule[0])
 		)
-
-		if mode == T.Script && ruleName != "GEOSITE" {
-			continue
-		}
 
 		l := len(rule)
 
