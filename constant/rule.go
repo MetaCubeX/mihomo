@@ -13,7 +13,6 @@ const (
 	DstPort
 	Process
 	ProcessPath
-	Script
 	RuleSet
 	Network
 	Uid
@@ -49,8 +48,6 @@ func (rt RuleType) String() string {
 		return "Process"
 	case ProcessPath:
 		return "ProcessPath"
-	case Script:
-		return "Script"
 	case MATCH:
 		return "Match"
 	case RuleSet:

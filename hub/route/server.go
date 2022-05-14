@@ -72,7 +72,6 @@ func Start(addr string, secret string) {
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
 		r.Mount("/providers/rules", ruleProviderRouter())
-		r.Mount("/script", scriptRouter())
 		r.Mount("/cache", cacheRouter())
 	})
 
