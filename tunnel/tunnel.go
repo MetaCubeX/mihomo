@@ -101,7 +101,11 @@ func SetMode(m TunnelMode) {
 
 // SetMitmOutbound set the MITM outbound
 func SetMitmOutbound(outbound C.ProxyAdapter) {
-	mitmProxy = A.NewProxy(outbound)
+	if outbound != nil {
+		mitmProxy = A.NewProxy(outbound)
+	} else {
+		mitmProxy = nil
+	}
 }
 
 // Rewrites return all rewrites
