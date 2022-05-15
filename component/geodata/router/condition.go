@@ -33,9 +33,10 @@ func domainToMatcher(domain *Domain) (strmatcher.Matcher, error) {
 
 type DomainMatcher struct {
 	matchers strmatcher.IndexMatcher
+	not      bool
 }
 
-func NewMphMatcherGroup(domains []*Domain) (*DomainMatcher, error) {
+func NewMphMatcherGroup(domains []*Domain, not bool) (*DomainMatcher, error) {
 	g := strmatcher.NewMphMatcherGroup()
 	for _, d := range domains {
 		matcherType, f := matcherTypeMap[d.Type]
@@ -50,11 +51,12 @@ func NewMphMatcherGroup(domains []*Domain) (*DomainMatcher, error) {
 	g.Build()
 	return &DomainMatcher{
 		matchers: g,
+		not:      not,
 	}, nil
 }
 
 // NewDomainMatcher new domain matcher.
-func NewDomainMatcher(domains []*Domain) (*DomainMatcher, error) {
+func NewDomainMatcher(domains []*Domain, not bool) (*DomainMatcher, error) {
 	g := new(strmatcher.MatcherGroup)
 	for _, d := range domains {
 		m, err := domainToMatcher(d)
@@ -66,11 +68,16 @@ func NewDomainMatcher(domains []*Domain) (*DomainMatcher, error) {
 
 	return &DomainMatcher{
 		matchers: g,
+		not:      not,
 	}, nil
 }
 
 func (m *DomainMatcher) ApplyDomain(domain string) bool {
-	return len(m.matchers.Match(strings.ToLower(domain))) > 0
+	isMatched := len(m.matchers.Match(strings.ToLower(domain))) > 0
+	if m.not {
+		isMatched = !isMatched
+	}
+	return isMatched
 }
 
 // CIDRList is an alias of []*CIDR to provide sort.Interface.

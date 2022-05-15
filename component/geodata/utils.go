@@ -1,6 +1,7 @@
 package geodata
 
 import (
+	"fmt"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
 	"strings"
@@ -35,6 +36,16 @@ func Verify(name string) bool {
 }
 
 func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) {
+	if len(countryCode) == 0 {
+		return nil, 0, fmt.Errorf("country code could not be empty")
+	}
+
+	not := false
+	if countryCode[0] == '!' {
+		not = true
+		countryCode = countryCode[1:]
+	}
+
 	geoLoader, err := GetGeoDataLoader(geoLoaderName)
 	if err != nil {
 		return nil, 0, err
@@ -50,7 +61,7 @@ func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) 
 	matcher, err := router.NewDomainMatcher(domains)
 	mph：minimal perfect hash algorithm
 	*/
-	matcher, err := router.NewMphMatcherGroup(domains)
+	matcher, err := router.NewMphMatcherGroup(domains, not)
 	if err != nil {
 		return nil, 0, err
 	}

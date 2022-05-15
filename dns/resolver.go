@@ -7,7 +7,6 @@ import (
 	"go.uber.org/atomic"
 	"math/rand"
 	"net/netip"
-	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -232,7 +231,7 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 		return nil
 	}
 
-	domain := r.msgToDomain(m)
+	domain := msgToDomain(m)
 	if domain == "" {
 		return nil
 	}
@@ -251,7 +250,7 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 		return false
 	}
 
-	domain := r.msgToDomain(m)
+	domain := msgToDomain(m)
 
 	if domain == "" {
 		return false
@@ -330,14 +329,6 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ips []netip.Addr, err
 	}
 
 	return
-}
-
-func (r *Resolver) msgToDomain(msg *D.Msg) string {
-	if len(msg.Question) > 0 {
-		return strings.TrimRight(msg.Question[0].Name, ".")
-	}
-
-	return ""
 }
 
 func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D.Msg) <-chan *result {
