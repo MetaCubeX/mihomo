@@ -9,7 +9,7 @@ import (
 	"net/netip"
 )
 
-func GetAutoDetectInterface() (string, error) {
+func GetAutoDetectInterface(string) (string, error) {
 	return cmd.ExecCmd("bash -c ip route show | grep 'default via' | awk -F ' ' 'NR==1{print $5}' | xargs echo -n")
 }
 
@@ -47,7 +47,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectI
 	}
 
 	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor()
+		go DefaultInterfaceChangeMonitor(interfaceName)
 	}
 
 	return nil

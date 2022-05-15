@@ -8,7 +8,7 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/device"
 )
 
-func GetAutoDetectInterface() (string, error) {
+func GetAutoDetectInterface(string) (string, error) {
 	return cmd.ExecCmd("bash -c route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
 }
 
@@ -55,7 +55,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectI
 	}
 
 	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor()
+		go DefaultInterfaceChangeMonitor(interfaceName)
 	}
 
 	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)

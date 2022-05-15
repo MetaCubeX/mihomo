@@ -10,18 +10,30 @@ import (
 	"strings"
 )
 
-func GetAutoDetectInterface() (string, error) {
-	res, err := cmd.ExecCmd("sh -c ip route | awk '{print $3}' | xargs echo -n")
+func GetAutoDetectInterface(tunName string) (ifn string, err error) {
+	cmdRes, err := cmd.ExecCmd("ip route show")
 	if err != nil {
-		return "", err
+		return
 	}
-	ifaces := strings.Split(res, " ")
-	for _, iface := range ifaces {
-		if iface == "wlan0" {
-			return "wlan0", nil
+
+	for _, route := range strings.Split(cmdRes, "\n") {
+		rs := strings.Split(route, " ")
+		if len(rs) > 2 {
+			if rs[2] == tunName {
+				continue
+			}
+			ifn = rs[2]
+			if ifn == "wlan0" {
+				return
+			}
 		}
 	}
-	return ifaces[0], nil
+
+	if ifn == "" {
+		return "", fmt.Errorf("interface not found")
+	}
+	return
+	//err = fmt.Errorf("interface not found")
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {
@@ -37,6 +49,10 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 
 	_, err = cmd.ExecCmd(fmt.Sprintf("ip link set %s up", interfaceName))
 	if err != nil {
+		return err
+	}
+
+	if err = execRouterCmd("add", addr.Masked().String(), interfaceName, ip.String(), "main"); err != nil {
 		return err
 	}
 
@@ -62,7 +78,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectI
 	execAddRuleCmd(fmt.Sprintf("not from all iif lo lookup %d pref 9004", tableId))
 
 	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor()
+		go DefaultInterfaceChangeMonitor(interfaceName)
 	}
 
 	return nil

@@ -884,7 +884,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 
 func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 	if rawTun.Enable && rawTun.AutoDetectInterface {
-		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
+		autoDetectInterfaceName, err := commons.GetAutoDetectInterface(rawTun.Device)
 		if err != nil {
 			log.Warnln("Can not find auto detect interface.[%s]", err)
 		} else {
