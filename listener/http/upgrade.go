@@ -13,7 +13,15 @@ import (
 )
 
 func isUpgradeRequest(req *http.Request) bool {
-	return strings.EqualFold(req.Header.Get("Connection"), "Upgrade")
+	for _, header := range req.Header["Connection"] {
+		for _, elm := range strings.Split(header, ",") {
+			if strings.EqualFold(strings.TrimSpace(elm), "Upgrade") {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func HandleUpgrade(localConn net.Conn, serverConn *N.BufferedConn, request *http.Request, in chan<- C.ConnContext) (resp *http.Response) {

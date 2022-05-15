@@ -125,19 +125,60 @@ Use `curl -X POST controllerip:port/cache/fakeip/flush` to flush persistence fak
  ```
 
 ### TUN configuration
-Supports macOS, Linux and Windows.
+Simply add the following to the main configuration:
 
-On Windows, you should download the [Wintun](https://www.wintun.net) driver and copy `wintun.dll` into the system32 directory.
+#### NOTE:
+> auto-route and auto-detect-interface only available on macOS, Windows and Linux, receive IPv4 traffic
+
 ```yaml
-# Enable the TUN listener
 tun:
   enable: true
-  stack: gvisor # System or gVisor
+  stack: system # or gvisor
   # device: tun://utun8 # or fd://xxx, it's optional
-  dns-hijack: 
-    - 0.0.0.0:53 # hijack all public
+  # dns-hijack:
+  #   - 8.8.8.8:53
+  #   - tcp://8.8.8.8:53
+  #   - any:53
+  #   - tcp://any:53
+  auto-route: true # auto set global route
+  auto-detect-interface: true # conflict with interface-name
+```
+or
+```yaml
+interface-name: en0
+
+tun:
+  enable: true
+  stack: system # or gvisor
+  # dns-hijack:
+  #   - 8.8.8.8:53
+  #   - tcp://8.8.8.8:53
   auto-route: true # auto set global route
 ```
+It's recommended to use fake-ip mode for the DNS server.
+
+Clash needs elevated permission to create TUN device:
+```sh
+$ sudo ./clash
+```
+Then manually create the default route and DNS server. If your device already has some TUN device, Clash TUN might not work. In this case, fake-ip-filter may helpful.
+
+Enjoy! :)
+
+#### For Windows:
+go to [https://www.wintun.net](https://www.wintun.net) and download the latest release, copy the right `wintun.dll` into the system32 directory.
+```yaml
+tun:
+  enable: true
+  stack: gvisor # or system
+  dns-hijack:
+    - 198.18.0.2:53 # when `fake-ip-range` is 198.18.0.1/16, should hijack 198.18.0.2:53
+  auto-route: true # auto set global route for Windows
+  # It is recommended to use `interface-name`
+  auto-detect-interface: true # auto detect interface, conflict with `interface-name`
+```
+Finally, open the Clash
+
 ### Rules configuration
 - Support rule `GEOSITE`.
 - Support rule `USER-AGENT`.
@@ -315,6 +356,12 @@ proxies:
     # skip-cert-verify: true
 ```
 
+### Sniffing configuration
+Sniff TLS SNI.
+```yaml
+sniffing: true
+```
+
 ### IPTABLES configuration
 Work on Linux OS who's supported `iptables`
 
@@ -353,14 +400,14 @@ $ systemctl start clash
 ```
 
 ### Display Process name
-To display process name online by click [https://yaling888.github.io/yacd/](https://yaling888.github.io/yacd/).
+To display process name online by click [http://yacd.clash-plus.cf](http://yacd.clash-plus.cf) or [https://yacd.clash-plus.cf](https://yacd.clash-plus.cf) for local.
 
 You can download the [Dashboard](https://github.com/yaling888/yacd/archive/gh-pages.zip) into Clash home directory:
 ```sh
-cd ~/.config/clash
-curl -LJ https://github.com/yaling888/yacd/archive/gh-pages.zip -o yacd-gh-pages.zip
-unzip yacd-gh-pages.zip
-mv yacd-gh-pages dashboard
+$ cd ~/.config/clash
+$ curl -LJ https://github.com/yaling888/yacd/archive/gh-pages.zip -o yacd-gh-pages.zip
+$ unzip yacd-gh-pages.zip
+$ mv yacd-gh-pages dashboard
 ```
 
 Add to config file:

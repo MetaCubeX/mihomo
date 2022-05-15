@@ -8,6 +8,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -25,6 +26,8 @@ type gvStack struct {
 }
 
 func (s *gvStack) Close() error {
+	commons.StopDefaultInterfaceChangeMonitor()
+
 	var err error
 	if s.device != nil {
 		err = s.device.Close()
@@ -37,7 +40,7 @@ func (s *gvStack) Close() error {
 }
 
 // New allocates a new *gvStack with given options.
-func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter, opts ...option.Option) (ipstack.Stack, error) {
+func New(device device.Device, dnsHijack []C.DNSUrl, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter, opts ...option.Option) (ipstack.Stack, error) {
 	s := &gvStack{
 		Stack: stack.New(stack.Options{
 			NetworkProtocols: []stack.NetworkProtocolFactory{

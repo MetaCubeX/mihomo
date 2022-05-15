@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -36,6 +35,7 @@ var (
 	bindAddress          = "*"
 	lastTunConf          *config.Tun
 	lastTunAddressPrefix *netip.Prefix
+	tunAddressPrefix     *netip.Prefix
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -70,11 +70,24 @@ type Ports struct {
 
 func GetTunConf() config.Tun {
 	if lastTunConf == nil {
+		addrPort := C.DNSAddrPort{
+			AddrPort: netip.MustParseAddrPort("0.0.0.0:53"),
+		}
 		return config.Tun{
-			Enable:    false,
-			Stack:     C.TunGvisor,
-			DNSHijack: []netip.AddrPort{netip.MustParseAddrPort("0.0.0.0:53")},
-			AutoRoute: true,
+			Enable: false,
+			Stack:  C.TunGvisor,
+			DNSHijack: []C.DNSUrl{ // default hijack all dns query
+				{
+					Network:  "udp",
+					AddrPort: addrPort,
+				},
+				{
+					Network:  "tcp",
+					AddrPort: addrPort,
+				},
+			},
+			AutoRoute:           true,
+			AutoDetectInterface: false,
 		}
 	}
 	return *lastTunConf
@@ -94,6 +107,10 @@ func SetAllowLan(al bool) {
 
 func SetBindAddress(host string) {
 	bindAddress = host
+}
+
+func SetTunAddressPrefix(tunAddress *netip.Prefix) {
+	tunAddressPrefix = tunAddress
 }
 
 func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
@@ -335,7 +352,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
 
@@ -349,6 +366,8 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 	if tunAddressPrefix == nil {
 		tunAddressPrefix = lastTunAddressPrefix
 	}
+
+	tunConf.DNSHijack = C.RemoveDuplicateDNSUrl(tunConf.DNSHijack)
 
 	if tunStackListener != nil {
 		if !hasTunConfigChange(tunConf, tunAddressPrefix) {
@@ -519,14 +538,6 @@ func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) boo
 		return true
 	}
 
-	sort.Slice(lastTunConf.DNSHijack, func(i, j int) bool {
-		return lastTunConf.DNSHijack[i].Addr().Less(lastTunConf.DNSHijack[j].Addr())
-	})
-
-	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
-		return tunConf.DNSHijack[i].Addr().Less(tunConf.DNSHijack[j].Addr())
-	})
-
 	for i, dns := range tunConf.DNSHijack {
 		if dns != lastTunConf.DNSHijack[i] {
 			return true
@@ -536,7 +547,8 @@ func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) boo
 	if lastTunConf.Enable != tunConf.Enable ||
 		lastTunConf.Device != tunConf.Device ||
 		lastTunConf.Stack != tunConf.Stack ||
-		lastTunConf.AutoRoute != tunConf.AutoRoute {
+		lastTunConf.AutoRoute != tunConf.AutoRoute ||
+		lastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface {
 		return true
 	}
 

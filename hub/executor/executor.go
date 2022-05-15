@@ -84,10 +84,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateHosts(cfg.Hosts)
 	updateMitm(cfg.Mitm)
 	updateProfile(cfg)
-	updateDNS(cfg.DNS, cfg.Tun)
+	updateDNS(cfg.DNS, cfg.General.Tun)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
-	updateTun(cfg.Tun, cfg.DNS)
 	updateExperimental(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -96,8 +95,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 func GetGeneral() *config.General {
 	ports := P.GetPorts()
 	authenticator := []string{}
-	if auth := authStore.Authenticator(); auth != nil {
-		authenticator = auth.Users()
+	if authM := authStore.Authenticator(); authM != nil {
+		authenticator = authM.Users()
 	}
 
 	general := &config.General{
@@ -115,15 +114,16 @@ func GetGeneral() *config.General {
 		Mode:     tunnel.Mode(),
 		LogLevel: log.Level(),
 		IPv6:     !resolver.DisableIPv6,
+		Sniffing: tunnel.Sniffing(),
 		Tun:      P.GetTunConf(),
 	}
 
 	return general
 }
 
-func updateExperimental(c *config.Config) {}
+func updateExperimental(_ *config.Config) {}
 
-func updateDNS(c *config.DNS, t *config.Tun) {
+func updateDNS(c *config.DNS, t config.Tun) {
 	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
@@ -174,6 +174,10 @@ func updateDNS(c *config.DNS, t *config.Tun) {
 		}
 		dns.ReCreateServer("", nil, nil)
 	}
+
+	if cfg.Pool != nil {
+		P.SetTunAddressPrefix(cfg.Pool.IPNet())
+	}
 }
 
 func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
@@ -190,15 +194,6 @@ func updateRules(rules []C.Rule) {
 
 func updateRuleProviders(providers map[string]C.Rule) {
 	S.UpdateRuleProviders(providers)
-}
-
-func updateTun(tun *config.Tun, dns *config.DNS) {
-	var tunAddressPrefix *netip.Prefix
-	if dns.FakeIPRange != nil {
-		tunAddressPrefix = dns.FakeIPRange.IPNet()
-	}
-
-	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateGeneral(general *config.General, force bool) {
@@ -229,6 +224,11 @@ func updateGeneral(general *config.General, force bool) {
 	bindAddress := general.BindAddress
 	P.SetBindAddress(bindAddress)
 
+	sniffing := general.Sniffing
+	tunnel.SetSniffing(sniffing)
+
+	log.Infoln("Use TLS SNI sniffer: %v", sniffing)
+
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
@@ -238,6 +238,7 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 	P.ReCreateMitm(general.MitmPort, tcpIn)
+	P.ReCreateTun(&general.Tun, tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -279,7 +280,7 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 			continue
 		}
 
-		selector.Set(selected)
+		_ = selector.Set(selected)
 	}
 }
 

@@ -20,7 +20,7 @@ var _ adapter.Handler = (*gvHandler)(nil)
 
 type gvHandler struct {
 	gateway   netip.Addr
-	dnsHijack []netip.AddrPort
+	dnsHijack []C.DNSUrl
 
 	tcpIn chan<- C.ConnContext
 	udpIn chan<- *inbound.PacketAdapter
@@ -37,7 +37,7 @@ func (gh *gvHandler) HandleTCP(tunConn adapter.TCPConn) {
 
 	rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), id.LocalPort)
 
-	if D.ShouldHijackDns(gh.dnsHijack, rAddrPort) {
+	if D.ShouldHijackDns(gh.dnsHijack, rAddrPort, "tcp") {
 		go func() {
 			log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
 
@@ -111,7 +111,7 @@ func (gh *gvHandler) HandleUDP(tunConn adapter.UDPConn) {
 
 			payload := buf[:n]
 
-			if D.ShouldHijackDns(gh.dnsHijack, rAddrPort) {
+			if D.ShouldHijackDns(gh.dnsHijack, rAddrPort, "udp") {
 				go func() {
 					defer func() {
 						_ = pool.Put(buf)

@@ -42,7 +42,7 @@ jobs:
           echo "::set-output name=file_sha::$(git describe --tags --always)"
           echo "::set-output name=file_date::$(Get-Date -Format 'yyyyMMdd')"
           
-          ((Get-Content -path constant/version.go -Raw) -replace 'unknown version',$(git describe --tags --always)) | Set-Content -Path constant/version.go
+          ((Get-Content -path constant/version.go -Raw) -replace 'unknown version',$(Get-Date -Format 'yyyy.MM.dd')) | Set-Content -Path constant/version.go
           ((Get-Content -path constant/version.go -Raw) -replace 'unknown time',$(Get-Date)) | Set-Content -Path constant/version.go
           
           # go test

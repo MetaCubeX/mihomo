@@ -58,13 +58,13 @@ func (tt *tcpTracker) Close() error {
 }
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) C.Conn {
-	uuid, _ := uuid.NewV4()
+	uuidM, _ := uuid.NewV4()
 
 	t := &tcpTracker{
 		Conn:    conn,
 		manager: manager,
 		trackerInfo: &trackerInfo{
-			UUID:          uuid,
+			UUID:          uuidM,
 			Start:         time.Now(),
 			Metadata:      metadata,
 			Chain:         conn.Chains(),
@@ -80,7 +80,7 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 	}
 
 	manager.Join(t)
-	return NewSniffing(t, metadata, rule)
+	return t
 }
 
 type udpTracker struct {
@@ -115,13 +115,13 @@ func (ut *udpTracker) Close() error {
 }
 
 func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
-	uuid, _ := uuid.NewV4()
+	uuidM, _ := uuid.NewV4()
 
 	ut := &udpTracker{
 		PacketConn: conn,
 		manager:    manager,
 		trackerInfo: &trackerInfo{
-			UUID:          uuid,
+			UUID:          uuidM,
 			Start:         time.Now(),
 			Metadata:      metadata,
 			Chain:         conn.Chains(),

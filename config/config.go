@@ -41,6 +41,7 @@ type General struct {
 	Mode        T.TunnelMode `json:"mode"`
 	LogLevel    log.LogLevel `json:"log-level"`
 	IPv6        bool         `json:"ipv6"`
+	Sniffing    bool         `json:"sniffing"`
 	Interface   string       `json:"-"`
 	RoutingMark int          `json:"-"`
 	Tun         Tun          `json:"tun"`
@@ -99,11 +100,12 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable    bool             `yaml:"enable" json:"enable"`
-	Device    string           `yaml:"device" json:"device"`
-	Stack     C.TUNStack       `yaml:"stack" json:"stack"`
-	DNSHijack []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute bool             `yaml:"auto-route" json:"auto-route"`
+	Enable              bool       `yaml:"enable" json:"enable"`
+	Device              string     `yaml:"device" json:"device"`
+	Stack               C.TUNStack `yaml:"stack" json:"stack"`
+	DNSHijack           []C.DNSUrl `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 }
 
 // Script config
@@ -130,7 +132,6 @@ type Experimental struct{}
 // Config is clash config manager
 type Config struct {
 	General       *General
-	Tun           *Tun
 	IPTables      *IPTables
 	Mitm          *Mitm
 	DNS           *DNS
@@ -168,14 +169,6 @@ type RawFallbackFilter struct {
 	GeoSite   []string `yaml:"geosite"`
 }
 
-type RawTun struct {
-	Enable    bool       `yaml:"enable" json:"enable"`
-	Device    string     `yaml:"device" json:"device"`
-	Stack     C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack []string   `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute bool       `yaml:"auto-route" json:"auto-route"`
-}
-
 type RawMitm struct {
 	Hosts []string `yaml:"hosts" json:"hosts"`
 	Rules []string `yaml:"rules" json:"rules"`
@@ -199,11 +192,12 @@ type RawConfig struct {
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
 	RoutingMark        int          `yaml:"routing-mark"`
+	Sniffing           bool         `yaml:"sniffing"`
 
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
-	Tun           RawTun                    `yaml:"tun"`
+	Tun           Tun                       `yaml:"tun"`
 	IPTables      IPTables                  `yaml:"iptables"`
 	MITM          RawMitm                   `yaml:"mitm"`
 	Experimental  Experimental              `yaml:"experimental"`
@@ -228,6 +222,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with default value
 	rawCfg := &RawConfig{
 		AllowLan:       false,
+		Sniffing:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
 		Authentication: []string{},
@@ -236,12 +231,26 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Rule:           []string{},
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
-		Tun: RawTun{
-			Enable:    false,
-			Device:    "",
-			Stack:     C.TunGvisor,
-			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute: true,
+		Tun: Tun{
+			Enable: false,
+			Device: "",
+			Stack:  C.TunGvisor,
+			DNSHijack: []C.DNSUrl{ // default hijack all dns lookup
+				{
+					Network: "udp",
+					AddrPort: C.DNSAddrPort{
+						AddrPort: netip.MustParseAddrPort("0.0.0.0:53"),
+					},
+				},
+				{
+					Network: "tcp",
+					AddrPort: C.DNSAddrPort{
+						AddrPort: netip.MustParseAddrPort("0.0.0.0:53"),
+					},
+				},
+			},
+			AutoRoute:           false,
+			AutoDetectInterface: false,
 		},
 		IPTables: IPTables{
 			Enable:           false,
@@ -263,7 +272,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"223.5.5.5",
 			},
 			NameServer: []string{ // default if user not set
-				"https://doh.pub/dns-query",
+				"https://120.53.53.53/dns-query",
 				"tls://223.5.5.5:853",
 			},
 		},
@@ -295,14 +304,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
-
-	tunCfg, err := parseTun(rawCfg.Tun, config.General)
-	if err != nil {
-		return nil, err
-	}
-	config.Tun = tunCfg
-
-	dialer.DefaultInterface.Store(config.General.Interface)
 
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
@@ -357,6 +358,19 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		}
 	}
 
+	if cfg.Tun.Enable && cfg.Tun.AutoDetectInterface {
+		outboundInterface, err := commons.GetAutoDetectInterface()
+		if err != nil && cfg.Interface == "" {
+			return nil, fmt.Errorf("get auto detect interface fail: %w", err)
+		}
+
+		if outboundInterface != "" {
+			cfg.Interface = outboundInterface
+		}
+	}
+
+	dialer.DefaultInterface.Store(cfg.Interface)
+
 	return &General{
 		Inbound: Inbound{
 			Port:        cfg.Port,
@@ -378,6 +392,8 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		IPv6:        cfg.IPv6,
 		Interface:   cfg.Interface,
 		RoutingMark: cfg.RoutingMark,
+		Sniffing:    cfg.Sniffing,
+		Tun:         cfg.Tun,
 	}, nil
 }
 
@@ -826,47 +842,13 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 }
 
 func parseAuthentication(rawRecords []string) []auth.AuthUser {
-	users := []auth.AuthUser{}
+	var users []auth.AuthUser
 	for _, line := range rawRecords {
 		if user, pass, found := strings.Cut(line, ":"); found {
 			users = append(users, auth.AuthUser{User: user, Pass: pass})
 		}
 	}
 	return users
-}
-
-func parseTun(rawTun RawTun, general *General) (*Tun, error) {
-	if (rawTun.Enable || general.TProxyPort != 0) && general.Interface == "" {
-		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
-		if err != nil || autoDetectInterfaceName == "" {
-			return nil, fmt.Errorf("can not find auto detect interface: %w. you must be detect `interface-name` if tun set to enable or `tproxy-port` isn't zore", err)
-		}
-
-		general.Interface = autoDetectInterfaceName
-	}
-
-	var dnsHijack []netip.AddrPort
-
-	for _, d := range rawTun.DNSHijack {
-		if _, after, ok := strings.Cut(d, "://"); ok {
-			d = after
-		}
-
-		addrPort, err := netip.ParseAddrPort(d)
-		if err != nil {
-			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
-		}
-
-		dnsHijack = append(dnsHijack, addrPort)
-	}
-
-	return &Tun{
-		Enable:    rawTun.Enable,
-		Device:    rawTun.Device,
-		Stack:     rawTun.Stack,
-		DNSHijack: dnsHijack,
-		AutoRoute: rawTun.AutoRoute,
-	}, nil
 }
 
 func parseScript(script Script) error {

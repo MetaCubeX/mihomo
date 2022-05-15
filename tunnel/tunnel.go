@@ -39,6 +39,9 @@ var (
 	// Outbound Rule
 	mode = Rule
 
+	// sniffing switch
+	sniffing = false
+
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
@@ -100,9 +103,21 @@ func SetMode(m TunnelMode) {
 	mode = m
 }
 
+func Sniffing() bool {
+	return sniffing
+}
+
+func SetSniffing(s bool) {
+	sniffing = s
+}
+
 // SetMitmOutbound set the MITM outbound
 func SetMitmOutbound(outbound C.ProxyAdapter) {
-	mitmProxy = A.NewProxy(outbound)
+	if outbound != nil {
+		mitmProxy = A.NewProxy(outbound)
+	} else {
+		mitmProxy = nil
+	}
 }
 
 // Rewrites return all rewrites
@@ -272,7 +287,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
-		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure(false))
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -326,14 +341,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	mtd := metadata
-	if proxy != mitmProxy {
-		mtd = metadata.Pure()
-	}
+	isMitmOutbound := proxy == mitmProxy
 
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
-	remoteConn, err := proxy.DialContext(ctx, mtd)
+	remoteConn, err := proxy.DialContext(ctx, metadata.Pure(isMitmOutbound))
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -343,8 +355,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	if remoteConn.Chains().Last() != "REJECT" && proxy != mitmProxy {
+	if remoteConn.Chains().Last() != "REJECT" && !isMitmOutbound {
 		remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
+		if sniffing {
+			remoteConn = statistic.NewSniffing(remoteConn, metadata, rule)
+		}
 	}
 
 	defer func(remoteConn C.Conn) {
@@ -352,7 +367,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	}(remoteConn)
 
 	switch true {
-	case proxy == mitmProxy:
+	case isMitmOutbound:
 		break
 	case rule != nil:
 		log.Infoln("[TCP] %s(%s) --> %s match %s(%s) using %s", metadata.SourceAddress(), metadata.Process, metadata.RemoteAddress(), rule.RuleType().String(), rule.Payload(), remoteConn.Chains().String())
