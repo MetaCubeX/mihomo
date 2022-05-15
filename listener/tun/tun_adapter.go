@@ -38,6 +38,12 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 		err error
 	)
 
+	defer func() {
+		if err != nil && tunDevice != nil {
+			_ = tunDevice.Close()
+		}
+	}()
+
 	if devName == "" {
 		devName = generateDeviceName()
 	}
@@ -63,26 +69,22 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 	case C.TunGvisor:
 		err = tunDevice.UseEndpoint()
 		if err != nil {
-			_ = tunDevice.Close()
 			return nil, fmt.Errorf("can't attach endpoint to tun: %w", err)
 		}
 
 		tunStack, err = gvisor.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn, option.WithDefault())
 
 		if err != nil {
-			_ = tunDevice.Close()
 			return nil, fmt.Errorf("can't New gvisor stack: %w", err)
 		}
 	case C.TunSystem:
 		err = tunDevice.UseIOBased()
 		if err != nil {
-			_ = tunDevice.Close()
 			return nil, fmt.Errorf("can't New system stack: %w", err)
 		}
 
 		tunStack, err = system.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn)
 		if err != nil {
-			_ = tunDevice.Close()
 			return nil, fmt.Errorf("can't New system stack: %w", err)
 		}
 	default:
@@ -92,8 +94,11 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 	// setting address and routing
 	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute)
 	if err != nil {
-		_ = tunDevice.Close()
 		return nil, fmt.Errorf("setting interface address and routing failed: %w", err)
+	}
+
+	if tunConf.AutoDetectInterface {
+		go commons.StartDefaultInterfaceChangeMonitor()
 	}
 
 	setAtLatest(stackType, devName)

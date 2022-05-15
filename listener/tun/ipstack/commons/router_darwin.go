@@ -3,13 +3,23 @@ package commons
 import (
 	"fmt"
 	"net/netip"
+	"strings"
 
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/tun/device"
 )
 
 func GetAutoDetectInterface() (string, error) {
-	return cmd.ExecCmd("/bin/bash -c /sbin/route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
+	rs, err := cmd.ExecCmd("/bin/bash -c /sbin/route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
+	if err != nil {
+		return "", err
+	}
+
+	if rs == "" || strings.HasSuffix(rs, "\n") {
+		return "", fmt.Errorf("invalid interface name: %s", rs)
+	}
+
+	return rs, nil
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
@@ -53,8 +63,6 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 			return err
 		}
 	}
-
-	go defaultInterfaceChangeMonitor()
 
 	return execRouterCmd("add", "-inet6", "2000::/3", interfaceName)
 }

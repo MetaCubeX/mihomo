@@ -34,6 +34,8 @@ type sysStack struct {
 }
 
 func (s *sysStack) Close() error {
+	D.StopDefaultInterfaceChangeMonitor()
+
 	defer func() {
 		if s.device != nil {
 			_ = s.device.Close()
@@ -49,7 +51,7 @@ func (s *sysStack) Close() error {
 	return err
 }
 
-func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(device device.Device, dnsHijack []C.DNSUrl, tunAddress netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 	var (
 		gateway   = tunAddress.Masked().Addr().Next()
 		portal    = gateway.Next()
@@ -91,7 +93,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
+			if D.ShouldHijackDns(dnsAddr, rAddrPort, "tcp") {
 				go func() {
 					log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
 
@@ -175,7 +177,7 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
+			if D.ShouldHijackDns(dnsAddr, rAddrPort, "udp") {
 				go func() {
 					msg, err := D.RelayDnsPacket(raw)
 					if err != nil {

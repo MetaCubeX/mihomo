@@ -1,15 +1,17 @@
 package route
 
 import (
+	"encoding/json"
 	"net/http"
-	"net/netip"
 	"path/filepath"
 
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/hub/executor"
 	P "github.com/Dreamacro/clash/listener"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 
@@ -41,11 +43,12 @@ type configSchema struct {
 }
 
 type tunConfigSchema struct {
-	Enable    *bool              `json:"enable"`
-	Device    *string            `json:"device"`
-	Stack     *constant.TUNStack `json:"stack"`
-	DNSHijack *[]netip.AddrPort  `json:"dns-hijack"`
-	AutoRoute *bool              `json:"auto-route"`
+	Enable              *bool              `json:"enable,omitempty"`
+	Device              *string            `json:"device,omitempty"`
+	Stack               *constant.TUNStack `json:"stack,omitempty"`
+	DNSHijack           *[]constant.DNSUrl `json:"dns-hijack,omitempty"`
+	AutoRoute           *bool              `json:"auto-route,omitempty"`
+	AutoDetectInterface *bool              `json:"auto-detect-interface,omitempty"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -120,9 +123,25 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		if tunSchema.AutoRoute != nil {
 			tunConf.AutoRoute = *tunSchema.AutoRoute
 		}
+		if tunSchema.AutoDetectInterface != nil {
+			tunConf.AutoDetectInterface = *tunSchema.AutoDetectInterface
+		}
 
-		P.ReCreateTun(&tunConf, nil, tcpIn, udpIn)
+		if dialer.DefaultInterface.Load() == "" && tunConf.Enable {
+			outboundInterface, err := commons.GetAutoDetectInterface()
+			if err != nil {
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, newError("Get auto detect interface fail: "+err.Error()))
+				return
+			}
+			dialer.DefaultInterface.Store(outboundInterface)
+		}
+
+		P.ReCreateTun(&tunConf, tcpIn, udpIn)
 	}
+
+	msg, _ := json.Marshal(general)
+	log.Warnln("[REST-API] patch config by: %s", string(msg))
 
 	render.NoContent(w, r)
 }
@@ -151,6 +170,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 			render.JSON(w, r, newError(err.Error()))
 			return
 		}
+		log.Warnln("[REST-API] update config by payload")
 	} else {
 		if req.Path == "" {
 			req.Path = constant.Path.Config()
@@ -167,6 +187,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 			render.JSON(w, r, newError(err.Error()))
 			return
 		}
+		log.Warnln("[REST-API] reload config from path: %s", req.Path)
 	}
 
 	executor.ApplyConfig(cfg, force)

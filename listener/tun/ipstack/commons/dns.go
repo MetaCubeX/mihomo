@@ -5,15 +5,16 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/component/resolver"
+	C "github.com/Dreamacro/clash/constant"
 
 	D "github.com/miekg/dns"
 )
 
 const DefaultDnsReadTimeout = time.Second * 10
 
-func ShouldHijackDns(dnsAdds []netip.AddrPort, targetAddr netip.AddrPort) bool {
-	for _, addrPort := range dnsAdds {
-		if addrPort == targetAddr || (addrPort.Addr().IsUnspecified() && targetAddr.Port() == 53) {
+func ShouldHijackDns(dnsHijack []C.DNSUrl, targetAddr netip.AddrPort, network string) bool {
+	for _, dns := range dnsHijack {
+		if dns.Network == network && (dns.AddrPort.AddrPort == targetAddr || (dns.AddrPort.Addr().IsUnspecified() && dns.AddrPort.Port() == targetAddr.Port())) {
 			return true
 		}
 	}
