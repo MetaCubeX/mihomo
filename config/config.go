@@ -39,6 +39,7 @@ type General struct {
 	Mode        T.TunnelMode `json:"mode"`
 	LogLevel    log.LogLevel `json:"log-level"`
 	IPv6        bool         `json:"ipv6"`
+	Sniffing    bool         `json:"sniffing"`
 	Interface   string       `json:"-"`
 	RoutingMark int          `json:"-"`
 	Tun         Tun          `json:"tun"`
@@ -182,6 +183,7 @@ type RawConfig struct {
 	Secret             string       `yaml:"secret"`
 	Interface          string       `yaml:"interface-name"`
 	RoutingMark        int          `yaml:"routing-mark"`
+	Sniffing           bool         `yaml:"sniffing"`
 
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	Hosts         map[string]string         `yaml:"hosts"`
@@ -210,6 +212,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with default value
 	rawCfg := &RawConfig{
 		AllowLan:       false,
+		Sniffing:       false,
 		BindAddress:    "*",
 		Mode:           T.Rule,
 		Authentication: []string{},
@@ -374,6 +377,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		IPv6:        cfg.IPv6,
 		Interface:   cfg.Interface,
 		RoutingMark: cfg.RoutingMark,
+		Sniffing:    cfg.Sniffing,
 		Tun:         cfg.Tun,
 	}, nil
 }

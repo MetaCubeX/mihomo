@@ -28,18 +28,19 @@ func configRouter() http.Handler {
 }
 
 type configSchema struct {
-	Port        *int               `json:"port"`
-	SocksPort   *int               `json:"socks-port"`
-	RedirPort   *int               `json:"redir-port"`
-	TProxyPort  *int               `json:"tproxy-port"`
-	MixedPort   *int               `json:"mixed-port"`
-	MitmPort    *int               `json:"mitm-port"`
-	AllowLan    *bool              `json:"allow-lan"`
-	BindAddress *string            `json:"bind-address"`
-	Mode        *tunnel.TunnelMode `json:"mode"`
-	LogLevel    *log.LogLevel      `json:"log-level"`
-	IPv6        *bool              `json:"ipv6"`
-	Tun         *tunConfigSchema   `json:"tun"`
+	Port        *int               `json:"port,omitempty"`
+	SocksPort   *int               `json:"socks-port,omitempty"`
+	RedirPort   *int               `json:"redir-port,omitempty"`
+	TProxyPort  *int               `json:"tproxy-port,omitempty"`
+	MixedPort   *int               `json:"mixed-port,omitempty"`
+	MitmPort    *int               `json:"mitm-port,omitempty"`
+	AllowLan    *bool              `json:"allow-lan,omitempty"`
+	BindAddress *string            `json:"bind-address,omitempty"`
+	Mode        *tunnel.TunnelMode `json:"mode,omitempty"`
+	LogLevel    *log.LogLevel      `json:"log-level,omitempty"`
+	IPv6        *bool              `json:"ipv6,omitempty"`
+	Sniffing    *bool              `json:"sniffing,omitempty"`
+	Tun         *tunConfigSchema   `json:"tun,omitempty"`
 }
 
 type tunConfigSchema struct {
@@ -102,6 +103,10 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.IPv6 != nil {
 		resolver.DisableIPv6 = !*general.IPv6
+	}
+
+	if general.Sniffing != nil {
+		tunnel.SetSniffing(*general.Sniffing)
 	}
 
 	if general.Tun != nil {

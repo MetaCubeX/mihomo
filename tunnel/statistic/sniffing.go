@@ -26,11 +26,9 @@ func (r *sniffing) Read(b []byte) (int, error) {
 func (r *sniffing) Write(b []byte) (int, error) {
 	if r.totalWrite.Load() < 128 && r.metadata.Host == "" && (r.metadata.DstPort == "443" || r.metadata.DstPort == "8443" || r.metadata.DstPort == "993" || r.metadata.DstPort == "465" || r.metadata.DstPort == "995") {
 		header, err := tls.SniffTLS(b)
-		if err != nil {
-			// log.Errorln("Expect no error but actually %s %s:%s:%s", err.Error(), tt.Metadata.Host, tt.Metadata.DstIP.String(), tt.Metadata.DstPort)
-		} else {
+		if err == nil {
 			resolver.InsertHostByIP(r.metadata.DstIP, header.Domain())
-			log.Warnln("use sni update host: %s ip: %s", header.Domain(), r.metadata.DstIP.String())
+			log.Debugln("[SNIFFER] use sni update host: %s ip: %s", header.Domain(), r.metadata.DstIP.String())
 			if r.allowBreak {
 				_ = r.Conn.Close()
 				return 0, errors.New("sni update, break current link to avoid leaks")

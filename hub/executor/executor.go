@@ -112,6 +112,7 @@ func GetGeneral() *config.General {
 		Mode:     tunnel.Mode(),
 		LogLevel: log.Level(),
 		IPv6:     !resolver.DisableIPv6,
+		Sniffing: tunnel.Sniffing(),
 		Tun:      P.GetTunConf(),
 	}
 
@@ -216,6 +217,11 @@ func updateGeneral(general *config.General, force bool) {
 
 	bindAddress := general.BindAddress
 	P.SetBindAddress(bindAddress)
+
+	sniffing := general.Sniffing
+	tunnel.SetSniffing(sniffing)
+
+	log.Infoln("Use TLS SNI sniffer: %v", sniffing)
 
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()

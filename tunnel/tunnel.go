@@ -38,6 +38,9 @@ var (
 	// Outbound Rule
 	mode = Rule
 
+	// sniffing switch
+	sniffing = false
+
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
@@ -97,6 +100,14 @@ func Mode() TunnelMode {
 // SetMode change the mode of tunnel
 func SetMode(m TunnelMode) {
 	mode = m
+}
+
+func Sniffing() bool {
+	return sniffing
+}
+
+func SetSniffing(s bool) {
+	sniffing = s
 }
 
 // SetMitmOutbound set the MITM outbound
@@ -341,6 +352,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	if remoteConn.Chains().Last() != "REJECT" && !isMitmOutbound {
 		remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
+		if sniffing {
+			remoteConn = statistic.NewSniffing(remoteConn, metadata, rule)
+		}
 	}
 
 	defer func(remoteConn C.Conn) {
