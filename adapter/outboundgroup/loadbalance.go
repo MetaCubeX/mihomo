@@ -147,7 +147,7 @@ func strategyStickySessions() strategyFn {
 	}
 	Sessions := make(map[string]map[string]Session)
 	go func() {
-		for true {
+		for {
 			time.Sleep(time.Second * 60)
 			now := time.Now().Unix()
 			for _, subMap := range Sessions {
@@ -174,7 +174,7 @@ func strategyStickySessions() strategyFn {
 		session.time = now
 
 		var i int
-		var res C.Proxy
+		var res = proxies[0]
 		for i := 0; i < length; i++ {
 			idx := (session.idx + i) % length
 			proxy := proxies[idx]
