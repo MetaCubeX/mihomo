@@ -10,7 +10,7 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/device"
 )
 
-func GetAutoDetectInterface() (string, error) {
+func GetAutoDetectInterface(string) (string, error) {
 	return "", fmt.Errorf("can not auto detect interface-name on this OS: %s, you must be detecting interface-name by manual", runtime.GOOS)
 }
 
