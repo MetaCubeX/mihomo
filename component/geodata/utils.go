@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
-	"strings"
 )
 
 var geoLoaderName = "memconservative"
@@ -70,12 +69,21 @@ func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) 
 }
 
 func LoadGeoIPMatcher(country string) (*router.GeoIPMatcher, int, error) {
+	if len(country) == 0 {
+		return nil, 0, fmt.Errorf("country code could not be empty")
+	}
 	geoLoader, err := GetGeoDataLoader(geoLoaderName)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	records, err := geoLoader.LoadGeoIP(strings.ReplaceAll(country, "!", ""))
+	not := false
+	if country[0] == '!' {
+		not = true
+		country = country[1:]
+	}
+
+	records, err := geoLoader.LoadGeoIP(country)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -83,7 +91,7 @@ func LoadGeoIPMatcher(country string) (*router.GeoIPMatcher, int, error) {
 	geoIP := &router.GeoIP{
 		CountryCode:  country,
 		Cidr:         records,
-		ReverseMatch: strings.Contains(country, "!"),
+		ReverseMatch: not,
 	}
 
 	matcher, err := router.NewGeoIPMatcher(geoIP)
