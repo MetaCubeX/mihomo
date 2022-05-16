@@ -33,7 +33,6 @@ func GetAutoDetectInterface(tunName string) (ifn string, err error) {
 		return "", fmt.Errorf("interface not found")
 	}
 	return
-	//err = fmt.Errorf("interface not found")
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {

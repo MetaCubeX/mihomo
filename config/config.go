@@ -99,12 +99,6 @@ type FallbackFilter struct {
 	GeoSite   []*router.DomainMatcher `yaml:"geosite"`
 }
 
-var (
-	GroupsList             = list.New()
-	ProxiesList            = list.New()
-	ParsingProxiesCallback func(groupsList *list.List, proxiesList *list.List)
-)
-
 // Profile config
 type Profile struct {
 	StoreSelected bool `yaml:"store-selected"`
@@ -130,7 +124,6 @@ type IPTables struct {
 
 type Sniffer struct {
 	Enable      bool
-	Force       bool
 	Sniffers    []sniffer.Type
 	Reverses    *trie.DomainTrie[bool]
 	ForceDomain *trie.DomainTrie[bool]
@@ -213,7 +206,7 @@ type RawConfig struct {
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 
-	Sniffer       SnifferRaw                `yaml:"sniffer"`
+	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
 	Hosts         map[string]string         `yaml:"hosts"`
@@ -227,14 +220,11 @@ type RawConfig struct {
 	Rule          []string                  `yaml:"rules"`
 }
 
-type SnifferRaw struct {
+type RawSniffer struct {
 	Enable      bool     `yaml:"enable" json:"enable"`
 	Sniffing    []string `yaml:"sniffing" json:"sniffing"`
-	Force       bool     `yaml:"force" json:"force"`
-	Reverse     []string `yaml:"reverses" json:"reverses"`
 	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
 	SkipDomain  []string `yaml:"skip-domain" json:"skip-domain"`
-	SkipSNI     []string `yaml:"skip-sni" json:"skip-sni"`
 	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
 }
 
@@ -304,11 +294,9 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"www.msftconnecttest.com",
 			},
 		},
-		Sniffer: SnifferRaw{
+		Sniffer: RawSniffer{
 			Enable:      false,
-			Force:       false,
 			Sniffing:    []string{},
-			Reverse:     []string{},
 			ForceDomain: []string{},
 			SkipDomain:  []string{},
 			Ports:       []string{},
@@ -432,8 +420,8 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	providersConfig := cfg.ProxyProvider
 
 	var proxyList []string
-	_proxiesList := list.New()
-	_groupsList := list.New()
+	proxiesList := list.New()
+	groupsList := list.New()
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
@@ -453,7 +441,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 		proxies[proxy.Name()] = proxy
 		proxyList = append(proxyList, proxy.Name())
-		_proxiesList.PushBack(mapping)
+		proxiesList.PushBack(mapping)
 	}
 
 	// keep the original order of ProxyGroups in config file
@@ -463,7 +451,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			return nil, nil, fmt.Errorf("proxy group %d: missing name", idx)
 		}
 		proxyList = append(proxyList, groupName)
-		_groupsList.PushBack(mapping)
+		groupsList.PushBack(mapping)
 	}
 
 	// check if any loop exists and sort the ProxyGroups
@@ -518,12 +506,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		[]providerTypes.ProxyProvider{pd},
 	)
 	proxies["GLOBAL"] = adapter.NewProxy(global)
-	ProxiesList = _proxiesList
-	GroupsList = _groupsList
-	if ParsingProxiesCallback != nil {
-		// refresh tray menu
-		go ParsingProxiesCallback(GroupsList, ProxiesList)
-	}
+
 	return proxies, providersMap, nil
 }
 
@@ -919,10 +902,9 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 	}, nil
 }
 
-func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
+func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer := &Sniffer{
 		Enable: snifferRaw.Enable,
-		Force:  snifferRaw.Force,
 	}
 
 	var ports []utils.Range[uint16]
@@ -979,37 +961,12 @@ func parseSniffer(snifferRaw SnifferRaw) (*Sniffer, error) {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
-	if snifferRaw.SkipSNI != nil {
-		log.Warnln("Sniffer param skip-sni renamed to ship-domain, old param will be removed in the release version")
-		snifferRaw.SkipDomain = snifferRaw.SkipSNI
-	}
+
 	sniffer.SkipDomain = trie.New[bool]()
 	for _, domain := range snifferRaw.SkipDomain {
 		err := sniffer.SkipDomain.Insert(domain, true)
 		if err != nil {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
-		}
-	}
-
-	// Compatibility, remove it when release
-	if strings.Contains(C.Version, "alpha") || strings.Contains(C.Version, "develop") || strings.Contains(C.Version, "1.10.0") {
-		log.Warnln("Sniffer param force and reverses deprecated, will be removed in the release version, see https://github.com/MetaCubeX/Clash.Meta/commit/48a01adb7a4f38974b9d9639f931d0d245aebf28")
-		if snifferRaw.Force {
-			// match all domain
-			sniffer.ForceDomain.Insert("+", true)
-			for _, domain := range snifferRaw.Reverse {
-				err := sniffer.SkipDomain.Insert(domain, true)
-				if err != nil {
-					return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
-				}
-			}
-		} else {
-			for _, domain := range snifferRaw.Reverse {
-				err := sniffer.ForceDomain.Insert(domain, true)
-				if err != nil {
-					return nil, fmt.Errorf("error domian[%s], error:%v", domain, err)
-				}
-			}
 		}
 	}
 
