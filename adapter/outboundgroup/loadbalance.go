@@ -173,7 +173,7 @@ func strategyStickySessions() strategyFn {
 		}
 		session.time = now
 
-		var i int
+		session.idx = 0
 		var res = proxies[0]
 		for i := 0; i < length; i++ {
 			idx := (session.idx + i) % length
@@ -184,10 +184,7 @@ func strategyStickySessions() strategyFn {
 				break
 			}
 		}
-		if i == length {
-			session.idx = 0
-			res = proxies[0]
-		}
+
 		Sessions[src][dest] = session
 		return res
 	}
