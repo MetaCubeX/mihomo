@@ -15,12 +15,14 @@ import (
 
 type GroupBase struct {
 	*outbound.Base
-	filter      *regexp2.Regexp
-	providers   []provider.ProxyProvider
-	versions    sync.Map // map[string]uint
-	proxies     sync.Map // map[string][]C.Proxy
-	failedTimes *atomic.Int32
-	failedTime  *atomic.Int64
+	filter        *regexp2.Regexp
+	providers     []provider.ProxyProvider
+	versions      sync.Map // map[string]uint
+	proxies       sync.Map // map[string][]C.Proxy
+	failedTestMux sync.Mutex
+	failedTimes   int
+	failedTime    time.Time
+	failedTesting *atomic.Bool
 }
 
 type GroupBaseOption struct {
@@ -35,11 +37,10 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		filter = regexp2.MustCompile(opt.filter, 0)
 	}
 	return &GroupBase{
-		Base:        outbound.NewBase(opt.BaseOption),
-		filter:      filter,
-		providers:   opt.providers,
-		failedTimes: atomic.NewInt32(-1),
-		failedTime:  atomic.NewInt64(-1),
+		Base:          outbound.NewBase(opt.BaseOption),
+		filter:        filter,
+		providers:     opt.providers,
+		failedTesting: atomic.NewBool(false),
 	}
 }
 
@@ -105,29 +106,45 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 }
 
 func (gb *GroupBase) onDialFailed() {
-	if gb.failedTime.Load() == -1 {
-		log.Warnln("%s first failed", gb.Name())
-		now := time.Now().UnixMilli()
-		gb.failedTime.Store(now)
-		gb.failedTimes.Store(1)
-	} else {
-		if gb.failedTime.Load()-time.Now().UnixMilli() > gb.failedIntervalTime() {
-			gb.failedTimes.Store(-1)
-			gb.failedTime.Store(-1)
+	if gb.failedTesting.Load() {
+		return
+	}
+
+	go func() {
+		gb.failedTestMux.Lock()
+		defer func() {
+			gb.failedTestMux.Unlock()
+		}()
+
+		gb.failedTimes++
+		if gb.failedTimes == 1 {
+			log.Warnln("%s first failed", gb.Name())
+			gb.failedTime = time.Now()
 		} else {
-			failedCount := gb.failedTimes.Inc()
-			log.Warnln("%s failed count: %d", gb.Name(), failedCount)
-			if failedCount >= gb.maxFailedTimes() {
+			if time.Since(gb.failedTime) > gb.failedTimeoutInterval() {
+				return
+			}
+
+			log.Warnln("%s failed count: %d", gb.Name(), gb.failedTimes)
+			if gb.failedTimes >= gb.maxFailedTimes() {
+				gb.failedTesting.Store(true)
 				log.Warnln("because %s failed multiple times, active health check", gb.Name())
+				wg := sync.WaitGroup{}
 				for _, proxyProvider := range gb.providers {
-					go proxyProvider.HealthCheck()
+					wg.Add(1)
+					proxyProvider := proxyProvider
+					go func() {
+						defer wg.Done()
+						proxyProvider.HealthCheck()
+					}()
 				}
 
-				gb.failedTimes.Store(-1)
-				gb.failedTime.Store(-1)
+				wg.Wait()
+				gb.failedTesting.Store(false)
+				gb.failedTimes = 0
 			}
 		}
-	}
+	}()
 }
 
 func (gb *GroupBase) failedIntervalTime() int64 {
@@ -135,10 +152,15 @@ func (gb *GroupBase) failedIntervalTime() int64 {
 }
 
 func (gb *GroupBase) onDialSuccess() {
-	gb.failedTimes.Store(-1)
-	gb.failedTime.Store(-1)
+	if !gb.failedTesting.Load() {
+		gb.failedTimes = 0
+	}
 }
 
-func (gb *GroupBase) maxFailedTimes() int32 {
+func (gb *GroupBase) maxFailedTimes() int {
 	return 5
+}
+
+func (gb *GroupBase) failedTimeoutInterval() time.Duration {
+	return 5 * time.Second
 }
