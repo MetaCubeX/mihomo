@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -60,6 +61,8 @@ func StartDefaultInterfaceChangeMonitor() {
 			}
 
 			dialer.DefaultInterface.Store(interfaceName)
+
+			iface.FlushCache()
 
 			log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, interfaceName)
 		case <-monitorStop:
