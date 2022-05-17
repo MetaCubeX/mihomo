@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"github.com/Dreamacro/clash/common/cache"
 	"net"
 	"time"
 
@@ -58,6 +58,16 @@ func getKey(metadata *C.Metadata) string {
 	}
 
 	return metadata.DstIP.String()
+}
+
+func getKeyWithSrcAndDst(metadata *C.Metadata) string {
+	dst := getKey(metadata)
+	src := ""
+	if metadata != nil {
+		src = metadata.SrcIP.String()
+	}
+
+	return fmt.Sprintf("%s%s", src, dst)
 }
 
 func jumpHash(key uint64, buckets int32) int32 {
@@ -140,53 +150,31 @@ func strategyConsistentHashing() strategyFn {
 }
 
 func strategyStickySessions() strategyFn {
-	timeout := int64(600)
-	type Session struct {
-		idx  int
-		time time.Time
-	}
-	Sessions := make(map[string]map[string]Session)
-	go func() {
-		for {
-			time.Sleep(time.Second * 60)
-			now := time.Now().Unix()
-			for _, subMap := range Sessions {
-				for dest, session := range subMap {
-					if now-session.time.Unix() > timeout {
-						delete(subMap, dest)
-					}
-				}
-			}
-		}
-	}()
+	ttl := time.Minute * 10
+
+	c := cache.New[uint64, int](1 * time.Second)
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
-		src := metadata.SrcIP.String()
-		dest := getKey(metadata)
-		now := time.Now()
+		key := uint64(murmur3.Sum32([]byte(getKeyWithSrcAndDst(metadata))))
 		length := len(proxies)
-		if Sessions[src] == nil {
-			Sessions[src] = make(map[string]Session)
+		idx, expireTime := c.GetWithExpire(key)
+		if expireTime.IsZero() {
+			idx = int(jumpHash(key+uint64(time.Now().UnixMilli()), int32(length)))
 		}
-		session, ok := Sessions[src][dest]
-		if !ok || now.Unix()-session.time.Unix() > timeout {
-			session.idx = rand.Intn(length)
-		}
-		session.time = now
 
-		session.idx = 0
-		var res = proxies[0]
 		for i := 0; i < length; i++ {
-			idx := (session.idx + i) % length
-			proxy := proxies[idx]
+			nowIdx := (idx + 1) % length
+			proxy := proxies[nowIdx]
 			if proxy.Alive() {
-				session.idx = idx
-				res = proxy
-				break
+				if nowIdx != idx {
+					c.Put(key, idx, -1)
+					c.Put(key, nowIdx, ttl)
+				}
+
+				return proxy
 			}
 		}
 
-		Sessions[src][dest] = session
-		return res
+		return proxies[0]
 	}
 }
 
