@@ -164,6 +164,7 @@ func withResolver(resolver *Resolver) handler {
 		msg.SetRcode(r, msg.Rcode)
 		msg.Authoritative = true
 
+		log.Debugln("[DNS] %s --> %s", msgToDomain(r), msgToIP(msg))
 		return msg, nil
 	}
 }
