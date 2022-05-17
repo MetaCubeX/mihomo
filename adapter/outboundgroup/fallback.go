@@ -39,9 +39,6 @@ func (f *Fallback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	pc, err := proxy.ListenPacketContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(f)
-		f.onDialSuccess()
-	} else {
-		f.onDialFailed()
 	}
 
 	return pc, err
