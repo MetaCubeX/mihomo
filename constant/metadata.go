@@ -89,9 +89,6 @@ type Metadata struct {
 	RemoteDst   string     `json:"remoteDestination"`
 }
 
-// avoid stack overflow
-type jsonMetadata Metadata
-
 func (m *Metadata) RemoteAddress() string {
 	return net.JoinHostPort(m.String(), m.DstPort)
 }
