@@ -37,8 +37,7 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
-		u.failedTimes.Store(-1)
-		u.failedTime.Store(-1)
+		u.onDialSuccess()
 	} else {
 		u.onDialFailed()
 	}
