@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/gofrs/uuid"
 	"net"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -17,11 +18,26 @@ type Base struct {
 	tp    C.AdapterType
 	udp   bool
 	rmark int
+	id    string
 }
 
 // Name implements C.ProxyAdapter
 func (b *Base) Name() string {
 	return b.name
+}
+
+// Id implements C.ProxyAdapter
+func (b *Base) Id() string {
+	if b.id == "" {
+		id, err := uuid.NewV6()
+		if err != nil {
+			b.id = b.name
+		} else {
+			b.id = id.String()
+		}
+	}
+
+	return b.id
 }
 
 // Type implements C.ProxyAdapter
@@ -58,6 +74,7 @@ func (b *Base) SupportUDP() bool {
 func (b *Base) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{
 		"type": b.Type().String(),
+		"id":   b.Id(),
 	})
 }
 
