@@ -49,9 +49,6 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	pc, err := u.fast(true).ListenPacketContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(u)
-		u.onDialSuccess()
-	} else {
-		u.onDialFailed()
 	}
 
 	return pc, err
