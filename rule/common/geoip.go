@@ -18,6 +18,7 @@ type GEOIP struct {
 	adapter      string
 	noResolveIP  bool
 	geoIPMatcher *router.GeoIPMatcher
+	recodeSize   int
 }
 
 func (g *GEOIP) RuleType() C.RuleType {
@@ -65,6 +66,10 @@ func (g *GEOIP) GetIPMatcher() *router.GeoIPMatcher {
 	return g.geoIPMatcher
 }
 
+func (g *GEOIP) GetRecodeSize() int {
+	return g.recodeSize
+}
+
 func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) {
 	if !C.GeodataMode {
 		geoip := &GEOIP{
@@ -76,18 +81,19 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) 
 		return geoip, nil
 	}
 
-	geoIPMatcher, recordsCount, err := geodata.LoadGeoIPMatcher(country)
+	geoIPMatcher, size, err := geodata.LoadGeoIPMatcher(country)
 	if err != nil {
 		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
 	}
 
-	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, recordsCount)
+	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, size)
 	geoip := &GEOIP{
 		Base:         &Base{},
 		country:      country,
 		adapter:      adapter,
 		noResolveIP:  noResolveIP,
 		geoIPMatcher: geoIPMatcher,
+		recodeSize:   size,
 	}
 	return geoip, nil
 }
