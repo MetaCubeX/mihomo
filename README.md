@@ -36,6 +36,13 @@
 Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 
 ## Advanced usage for this branch
+### General configuration
+```yaml
+sniffing: true # Sniff TLS SNI
+
+force-cert-verify: true # force verify TLS Certificate, prevent machine-in-the-middle attacks
+```
+
 ### MITM configuration
 A root CA certificate is required, the 
 MITM proxy server will generate a CA certificate file and a CA private key file in your Clash home directory, you can use your own certificate replace it. 
@@ -245,12 +252,6 @@ proxies:
     # udp: true
     # sni: example.com # aka server name
     # skip-cert-verify: true
-```
-
-### Sniffing configuration
-Sniff TLS SNI.
-```yaml
-sniffing: true
 ```
 
 ### IPTABLES configuration

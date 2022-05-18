@@ -96,7 +96,7 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	_ = pd.fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck, forceCertVerify bool) (*ProxySetProvider, error) {
 	filterReg, err := regexp.Compile(filter)
 	if err != nil {
 		return nil, fmt.Errorf("invalid filter regex: %w", err)
@@ -111,7 +111,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
+	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg, forceCertVerify), proxiesOnUpdate(pd))
 	pd.fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
@@ -202,7 +202,7 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	}
 }
 
-func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp) parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVerify bool) parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
@@ -219,7 +219,7 @@ func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp) parser[[]C.P
 			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
 				continue
 			}
-			proxy, err := adapter.ParseProxy(mapping)
+			proxy, err := adapter.ParseProxy(mapping, forceCertVerify)
 			if err != nil {
 				return nil, fmt.Errorf("proxy %d error: %w", idx, err)
 			}

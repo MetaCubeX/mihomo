@@ -184,6 +184,7 @@ type RawConfig struct {
 	Interface          string       `yaml:"interface-name"`
 	RoutingMark        int          `yaml:"routing-mark"`
 	Sniffing           bool         `yaml:"sniffing"`
+	ForceCertVerify    bool         `yaml:"force-cert-verify"`
 
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	Hosts         map[string]string         `yaml:"hosts"`
@@ -211,16 +212,17 @@ func Parse(buf []byte) (*Config, error) {
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with default value
 	rawCfg := &RawConfig{
-		AllowLan:       false,
-		Sniffing:       false,
-		BindAddress:    "*",
-		Mode:           T.Rule,
-		Authentication: []string{},
-		LogLevel:       log.INFO,
-		Hosts:          map[string]string{},
-		Rule:           []string{},
-		Proxy:          []map[string]any{},
-		ProxyGroup:     []map[string]any{},
+		AllowLan:        false,
+		Sniffing:        false,
+		ForceCertVerify: false,
+		BindAddress:     "*",
+		Mode:            T.Rule,
+		Authentication:  []string{},
+		LogLevel:        log.INFO,
+		Hosts:           map[string]string{},
+		Rule:            []string{},
+		Proxy:           []map[string]any{},
+		ProxyGroup:      []map[string]any{},
 		Tun: Tun{
 			Enable: false,
 			Device: "",
@@ -388,6 +390,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	proxiesConfig := cfg.Proxy
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
+	forceCertVerify := cfg.ForceCertVerify
 
 	var proxyList []string
 
@@ -397,7 +400,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	// parse proxy
 	for idx, mapping := range proxiesConfig {
-		proxy, err := adapter.ParseProxy(mapping)
+		proxy, err := adapter.ParseProxy(mapping, forceCertVerify)
 		if err != nil {
 			return nil, nil, fmt.Errorf("proxy %d: %w", idx, err)
 		}
@@ -429,7 +432,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			return nil, nil, fmt.Errorf("can not defined a provider called `%s`", provider.ReservedName)
 		}
 
-		pd, err := provider.ParseProxyProvider(name, mapping)
+		pd, err := provider.ParseProxyProvider(name, mapping, forceCertVerify)
 		if err != nil {
 			return nil, nil, fmt.Errorf("parse proxy provider %s error: %w", name, err)
 		}
