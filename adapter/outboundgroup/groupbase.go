@@ -112,20 +112,18 @@ func (gb *GroupBase) onDialFailed() {
 
 	go func() {
 		gb.failedTestMux.Lock()
-		defer func() {
-			gb.failedTestMux.Unlock()
-		}()
+		defer gb.failedTestMux.Unlock()
 
 		gb.failedTimes++
 		if gb.failedTimes == 1 {
-			log.Warnln("%s first failed", gb.Name())
+			log.Warnln("ProxyGroup: %s first failed", gb.Name())
 			gb.failedTime = time.Now()
 		} else {
 			if time.Since(gb.failedTime) > gb.failedTimeoutInterval() {
 				return
 			}
 
-			log.Warnln("%s failed count: %d", gb.Name(), gb.failedTimes)
+			log.Warnln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes() {
 				gb.failedTesting.Store(true)
 				log.Warnln("because %s failed multiple times, active health check", gb.Name())

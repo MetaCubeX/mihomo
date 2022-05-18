@@ -18,7 +18,7 @@ import (
 
 var wintunInterfaceName string
 
-func GetAutoDetectInterface(string) (string, error) {
+func GetAutoDetectInterface() (string, error) {
 	ifname, err := getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET))
 	if err == nil {
 		return ifname, err
@@ -206,7 +206,7 @@ startOver:
 	wintunInterfaceName = dev.Name()
 
 	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor(dev.Name())
+		go DefaultInterfaceChangeMonitor()
 	}
 
 	return nil
