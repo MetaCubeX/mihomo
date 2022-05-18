@@ -8,9 +8,8 @@ import (
 )
 
 type domainStrategy struct {
-	shouldResolveIP bool
-	count           int
-	domainRules     *trie.DomainTrie[bool]
+	count       int
+	domainRules *trie.DomainTrie[bool]
 }
 
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
@@ -22,7 +21,7 @@ func (d *domainStrategy) Count() int {
 }
 
 func (d *domainStrategy) ShouldResolveIP() bool {
-	return d.shouldResolveIP
+	return false
 }
 
 func (d *domainStrategy) OnUpdate(rules []string) {
@@ -55,5 +54,5 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 }
 
 func NewDomainStrategy() *domainStrategy {
-	return &domainStrategy{shouldResolveIP: false}
+	return &domainStrategy{}
 }
