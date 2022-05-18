@@ -152,12 +152,14 @@ func strategyConsistentHashing() strategyFn {
 func strategyStickySessions() strategyFn {
 	ttl := time.Minute * 10
 
-	c := cache.New[uint64, int](1 * time.Second)
+	lruCache := cache.NewLRUCache[uint64, int](
+		cache.WithAge[uint64, int](int64(ttl.Seconds())),
+		cache.WithSize[uint64, int](1000))
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
 		key := uint64(murmur3.Sum32([]byte(getKeyWithSrcAndDst(metadata))))
 		length := len(proxies)
-		idx, expireTime := c.GetWithExpire(key)
-		if expireTime.IsZero() {
+		idx, has := lruCache.Get(key)
+		if !has {
 			idx = int(jumpHash(key+uint64(time.Now().UnixMilli()), int32(length)))
 		}
 
@@ -166,8 +168,8 @@ func strategyStickySessions() strategyFn {
 			proxy := proxies[nowIdx]
 			if proxy.Alive() {
 				if nowIdx != idx {
-					c.Put(key, idx, -1)
-					c.Put(key, nowIdx, ttl)
+					lruCache.Delete(key)
+					lruCache.Set(key, nowIdx)
 				}
 
 				return proxy
