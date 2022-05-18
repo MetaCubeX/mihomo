@@ -23,13 +23,13 @@ type ProxySchema struct {
 	Proxies []map[string]any `yaml:"proxies"`
 }
 
-// for auto gc
+// ProxySetProvider for auto gc
 type ProxySetProvider struct {
 	*proxySetProvider
 }
 
 type proxySetProvider struct {
-	*fetcher
+	*fetcher[[]C.Proxy]
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
 }
@@ -93,7 +93,7 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 
 func stopProxyProvider(pd *ProxySetProvider) {
 	pd.healthCheck.close()
-	pd.fetcher.Destroy()
+	_ = pd.fetcher.Destroy()
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
@@ -111,45 +111,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	onUpdate := func(elm any) {
-		ret := elm.([]C.Proxy)
-		pd.setProxies(ret)
-	}
-
-	proxiesParseAndFilter := func(buf []byte) (any, error) {
-		schema := &ProxySchema{}
-
-		if err := yaml.Unmarshal(buf, schema); err != nil {
-			return nil, err
-		}
-
-		if schema.Proxies == nil {
-			return nil, errors.New("file must have a `proxies` field")
-		}
-
-		proxies := []C.Proxy{}
-		for idx, mapping := range schema.Proxies {
-			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
-				continue
-			}
-			proxy, err := adapter.ParseProxy(mapping)
-			if err != nil {
-				return nil, fmt.Errorf("proxy %d error: %w", idx, err)
-			}
-			proxies = append(proxies, proxy)
-		}
-
-		if len(proxies) == 0 {
-			if len(filter) > 0 {
-				return nil, errors.New("doesn't match any proxy, please check your filter")
-			}
-			return nil, errors.New("file doesn't have any proxy")
-		}
-
-		return proxies, nil
-	}
-
-	fetcher := newFetcher(name, interval, vehicle, proxiesParseAndFilter, onUpdate)
+	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
 	pd.fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
@@ -157,7 +119,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 	return wrapper, nil
 }
 
-// for auto gc
+// CompatibleProvider for auto gc
 type CompatibleProvider struct {
 	*compatibleProvider
 }
@@ -232,4 +194,45 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 	wrapper := &CompatibleProvider{pd}
 	runtime.SetFinalizer(wrapper, stopCompatibleProvider)
 	return wrapper, nil
+}
+
+func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
+	return func(elm []C.Proxy) {
+		pd.setProxies(elm)
+	}
+}
+
+func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp) parser[[]C.Proxy] {
+	return func(buf []byte) ([]C.Proxy, error) {
+		schema := &ProxySchema{}
+
+		if err := yaml.Unmarshal(buf, schema); err != nil {
+			return nil, err
+		}
+
+		if schema.Proxies == nil {
+			return nil, errors.New("file must have a `proxies` field")
+		}
+
+		proxies := []C.Proxy{}
+		for idx, mapping := range schema.Proxies {
+			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
+				continue
+			}
+			proxy, err := adapter.ParseProxy(mapping)
+			if err != nil {
+				return nil, fmt.Errorf("proxy %d error: %w", idx, err)
+			}
+			proxies = append(proxies, proxy)
+		}
+
+		if len(proxies) == 0 {
+			if len(filter) > 0 {
+				return nil, errors.New("doesn't match any proxy, please check your filter")
+			}
+			return nil, errors.New("file doesn't have any proxy")
+		}
+
+		return proxies, nil
+	}
 }

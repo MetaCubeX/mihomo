@@ -16,28 +16,28 @@ var (
 	dirMode  os.FileMode = 0o755
 )
 
-type parser = func([]byte) (any, error)
+type parser[V any] func([]byte) (V, error)
 
-type fetcher struct {
+type fetcher[V any] struct {
 	name      string
 	vehicle   types.Vehicle
 	updatedAt *time.Time
 	ticker    *time.Ticker
 	done      chan struct{}
 	hash      [16]byte
-	parser    parser
-	onUpdate  func(any)
+	parser    parser[V]
+	onUpdate  func(V)
 }
 
-func (f *fetcher) Name() string {
+func (f *fetcher[V]) Name() string {
 	return f.name
 }
 
-func (f *fetcher) VehicleType() types.VehicleType {
+func (f *fetcher[V]) VehicleType() types.VehicleType {
 	return f.vehicle.Type()
 }
 
-func (f *fetcher) Initial() (any, error) {
+func (f *fetcher[V]) Initial() (V, error) {
 	var (
 		buf     []byte
 		err     error
@@ -53,24 +53,24 @@ func (f *fetcher) Initial() (any, error) {
 	}
 
 	if err != nil {
-		return nil, err
+		return getZero[V](), err
 	}
 
 	proxies, err := f.parser(buf)
 	if err != nil {
 		if !isLocal {
-			return nil, err
+			return getZero[V](), err
 		}
 
 		// parse local file error, fallback to remote
 		buf, err = f.vehicle.Read()
 		if err != nil {
-			return nil, err
+			return getZero[V](), err
 		}
 
 		proxies, err = f.parser(buf)
 		if err != nil {
-			return nil, err
+			return getZero[V](), err
 		}
 
 		isLocal = false
@@ -78,7 +78,7 @@ func (f *fetcher) Initial() (any, error) {
 
 	if f.vehicle.Type() != types.File && !isLocal {
 		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
-			return nil, err
+			return getZero[V](), err
 		}
 	}
 
@@ -92,28 +92,28 @@ func (f *fetcher) Initial() (any, error) {
 	return proxies, nil
 }
 
-func (f *fetcher) Update() (any, bool, error) {
+func (f *fetcher[V]) Update() (V, bool, error) {
 	buf, err := f.vehicle.Read()
 	if err != nil {
-		return nil, false, err
+		return getZero[V](), false, err
 	}
 
 	now := time.Now()
 	hash := md5.Sum(buf)
 	if bytes.Equal(f.hash[:], hash[:]) {
 		f.updatedAt = &now
-		os.Chtimes(f.vehicle.Path(), now, now)
-		return nil, true, nil
+		_ = os.Chtimes(f.vehicle.Path(), now, now)
+		return getZero[V](), true, nil
 	}
 
 	proxies, err := f.parser(buf)
 	if err != nil {
-		return nil, false, err
+		return getZero[V](), false, err
 	}
 
 	if f.vehicle.Type() != types.File {
 		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
-			return nil, false, err
+			return getZero[V](), false, err
 		}
 	}
 
@@ -123,14 +123,14 @@ func (f *fetcher) Update() (any, bool, error) {
 	return proxies, false, nil
 }
 
-func (f *fetcher) Destroy() error {
+func (f *fetcher[V]) Destroy() error {
 	if f.ticker != nil {
 		f.done <- struct{}{}
 	}
 	return nil
 }
 
-func (f *fetcher) pullLoop() {
+func (f *fetcher[V]) pullLoop() {
 	for {
 		select {
 		case <-f.ticker.C:
@@ -168,13 +168,13 @@ func safeWrite(path string, buf []byte) error {
 	return os.WriteFile(path, buf, fileMode)
 }
 
-func newFetcher(name string, interval time.Duration, vehicle types.Vehicle, parser parser, onUpdate func(any)) *fetcher {
+func newFetcher[V any](name string, interval time.Duration, vehicle types.Vehicle, parser parser[V], onUpdate func(V)) *fetcher[V] {
 	var ticker *time.Ticker
 	if interval != 0 {
 		ticker = time.NewTicker(interval)
 	}
 
-	return &fetcher{
+	return &fetcher[V]{
 		name:     name,
 		ticker:   ticker,
 		vehicle:  vehicle,
@@ -182,4 +182,9 @@ func newFetcher(name string, interval time.Duration, vehicle types.Vehicle, pars
 		done:     make(chan struct{}, 1),
 		onUpdate: onUpdate,
 	}
+}
+
+func getZero[V any]() V {
+	var result V
+	return result
 }
