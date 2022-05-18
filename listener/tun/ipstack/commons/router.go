@@ -23,14 +23,14 @@ func ipv4MaskString(bits int) string {
 	return fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
 }
 
-func DefaultInterfaceChangeMonitor(tunName string) {
+func DefaultInterfaceChangeMonitor() {
 	t := time.NewTicker(defaultInterfaceMonitorDuration)
 	defer t.Stop()
 
 	for {
 		<-t.C
 
-		interfaceName, err := GetAutoDetectInterface(tunName)
+		interfaceName, err := GetAutoDetectInterface()
 		if err != nil {
 			log.Warnln("[TUN] default interface monitor exited, cause: %v", err)
 			continue

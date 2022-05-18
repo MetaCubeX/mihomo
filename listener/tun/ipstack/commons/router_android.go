@@ -10,27 +10,16 @@ import (
 	"strings"
 )
 
-func GetAutoDetectInterface(tunName string) (ifn string, err error) {
-	cmdRes, err := cmd.ExecCmd("ip route show")
-	if err != nil {
-		return
-	}
+func GetAutoDetectInterface() (ifn string, err error) {
+	cmdRes, err := cmd.ExecCmd("ip route get 1.1.1.1 uid 4294967295")
 
-	for _, route := range strings.Split(cmdRes, "\n") {
-		rs := strings.Split(route, " ")
-		if len(rs) > 2 {
-			if rs[2] == tunName {
-				continue
-			}
-			ifn = rs[2]
-			if ifn == "wlan0" {
-				return
-			}
-		}
+	sps := strings.Split(cmdRes, " ")
+	if len(sps) > 4 {
+		ifn = sps[4]
 	}
 
 	if ifn == "" {
-		return "", fmt.Errorf("interface not found")
+		err = fmt.Errorf("interface not found")
 	}
 	return
 }
@@ -77,7 +66,7 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectI
 	execAddRuleCmd(fmt.Sprintf("not from all iif lo lookup %d pref 9004", tableId))
 
 	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor(interfaceName)
+		go DefaultInterfaceChangeMonitor()
 	}
 
 	return nil
