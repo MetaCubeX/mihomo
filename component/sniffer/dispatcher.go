@@ -117,13 +117,13 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 
 			host, err := sniffer.SniffTCP(bytes)
 			if err != nil {
-				log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
+				//log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
 				continue
 			}
 
 			_, err = netip.ParseAddr(host)
 			if err == nil {
-				log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
+				//log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
 				continue
 			}
 

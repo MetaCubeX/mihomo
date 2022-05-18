@@ -102,7 +102,8 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 	case "PROCESS-PATH":
 		parsed, parseErr = RC.NewProcess(payload, "", false)
 	case "RULE-SET":
-		parsed, parseErr = provider.NewRuleSet(payload, "")
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = provider.NewRuleSet(payload, "", noResolve)
 	case "NOT":
 		parsed, parseErr = NewNOT(payload, "")
 	case "AND":
