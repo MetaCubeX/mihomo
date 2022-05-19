@@ -3,9 +3,11 @@ package rules
 import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 	RC "github.com/Dreamacro/clash/rule/common"
 	"github.com/Dreamacro/clash/rule/logic"
 	RP "github.com/Dreamacro/clash/rule/provider"
+	"runtime"
 )
 
 func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
@@ -42,7 +44,11 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	case "NETWORK":
 		parsed, parseErr = RC.NewNetworkType(payload, target)
 	case "UID":
-		parsed, parseErr = RC.NewUid(payload, target)
+		if runtime.GOOS == "linux" || runtime.GOOS == "android" {
+			parsed, parseErr = RC.NewUid(payload, target)
+		} else {
+			log.Warnln("uid rule not support this platform")
+		}
 	case "AND":
 		parsed, parseErr = logic.NewAND(payload, target)
 	case "OR":

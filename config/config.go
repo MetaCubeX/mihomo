@@ -52,6 +52,7 @@ type General struct {
 	GeodataMode   bool         `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
 	TCPConcurrent bool         `json:"tcp-concurrent"`
+	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
 }
 
@@ -206,6 +207,7 @@ type RawConfig struct {
 	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	EnableProcess      bool         `yaml:"enable-process" json:"enable-process"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -255,6 +257,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
 		TCPConcurrent:  false,
+		EnableProcess:  true,
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -410,6 +413,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataMode:   cfg.GeodataMode,
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
+		EnableProcess: cfg.EnableProcess,
 	}, nil
 }
 

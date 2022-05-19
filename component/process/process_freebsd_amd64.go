@@ -25,7 +25,7 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 	return 0, 0, ErrPlatformNotSupport
 }
 
-func findProcessName(network string, ip netip.Addr, srcPort int) (string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (int32, string, error) {
 	once.Do(func() {
 		if err := initSearcher(); err != nil {
 			log.Errorln("Initialize PROCESS-NAME failed: %s", err.Error())
@@ -35,7 +35,7 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (string, error)
 	})
 
 	if defaultSearcher == nil {
-		return "", ErrPlatformNotSupport
+		return -1, "", ErrPlatformNotSupport
 	}
 
 	var spath string
@@ -46,21 +46,22 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (string, error)
 	case UDP:
 		spath = "net.inet.udp.pcblist"
 	default:
-		return "", ErrInvalidNetwork
+		return -1, "", ErrInvalidNetwork
 	}
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	buf := []byte(value)
 	pid, err := defaultSearcher.Search(buf, ip, uint16(srcPort), isTCP)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
-	return getExecPathFromPID(pid)
+	pp, err := getExecPathFromPID(pid)
+	return -1, pp, err
 }
 
 func getExecPathFromPID(pid uint32) (string, error) {
