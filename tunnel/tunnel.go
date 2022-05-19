@@ -170,7 +170,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	// pre resolve process name
 	srcPort, err := strconv.Atoi(metadata.SrcPort)
 	if err == nil && P.ShouldFindProcess(metadata) {
-		path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
+		uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
 		if err != nil {
 			if failTotal < 20 {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
@@ -179,6 +179,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		} else {
 			metadata.Process = filepath.Base(path)
 			metadata.ProcessPath = path
+			if uid != -1 {
+				metadata.Uid = &uid
+			}
 			if procesCache != metadata.Process {
 				log.Debugln("[Process] %s from process %s", metadata.String(), path)
 			}

@@ -1,5 +1,3 @@
-//go:build !android
-
 package process
 
 import (
@@ -10,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unicode"
@@ -39,6 +38,7 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (int32, string,
 	if err != nil {
 		return -1, "", err
 	}
+
 	pp, err := resolveProcessNameByProcSearch(inode, uid)
 	return uid, pp, err
 }
@@ -68,9 +68,7 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 	if err != nil {
 		return 0, 0, fmt.Errorf("dial netlink: %w", err)
 	}
-	defer func() {
-		_ = syscall.Close(socket)
-	}()
+	defer syscall.Close(socket)
 
 	_ = syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_SNDTIMEO, &syscall.Timeval{Usec: 100})
 	_ = syscall.SetsockoptTimeval(socket, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &syscall.Timeval{Usec: 100})
@@ -89,9 +87,7 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 	}
 
 	rb := pool.Get(pool.RelayBufferSize)
-	defer func() {
-		_ = pool.Put(rb)
-	}()
+	defer pool.Put(rb)
 
 	n, err := syscall.Read(socket, rb)
 	if err != nil {
@@ -110,12 +106,12 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 		return 0, 0, fmt.Errorf("netlink message: NLMSG_ERROR")
 	}
 
-	inode, uid := unpackSocketDiagResponse(&message)
-	if inode < 0 || uid < 0 {
-		return 0, 0, fmt.Errorf("invalid inode(%d) or uid(%d)", inode, uid)
+	uid, inode := unpackSocketDiagResponse(&messages[0])
+	if uid < 0 || inode < 0 {
+		return 0, 0, fmt.Errorf("invalid uid(%d) or inode(%d)", uid, inode)
 	}
 
-	return inode, uid, nil
+	return uid, inode, nil
 }
 
 func packSocketDiagRequest(family, protocol byte, source netip.Addr, sourcePort uint16) []byte {
@@ -199,12 +195,30 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 			}
 
 			if bytes.Equal(buffer[:n], socket) {
-				return os.Readlink(path.Join(processPath, "exe"))
+				cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
+				if err != nil {
+					return "", err
+				}
+
+				return splitCmdline(cmdline), nil
 			}
 		}
 	}
 
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
+}
+
+func splitCmdline(cmdline []byte) string {
+	cmdline = bytes.Trim(cmdline, " ")
+
+	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	})
+
+	if idx == -1 {
+		return filepath.Base(string(cmdline))
+	}
+	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {
