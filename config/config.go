@@ -113,6 +113,7 @@ type Tun struct {
 	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	TunAddressPrefix    *netip.Prefix    `yaml:"-" json:"-"`
 }
 
 // IPTables config
@@ -327,12 +328,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	tunCfg, err := parseTun(rawCfg.Tun, config.General)
-	if err != nil {
-		return nil, err
-	}
-	config.Tun = tunCfg
-
 	dialer.DefaultInterface.Store(config.General.Interface)
 
 	proxies, providers, err := parseProxies(rawCfg)
@@ -360,6 +355,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.DNS = dnsCfg
+
+	tunCfg, err := parseTun(rawCfg.Tun, config.General, dnsCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.Tun = tunCfg
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
@@ -865,7 +866,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 	return users
 }
 
-func parseTun(rawTun RawTun, general *General) (*Tun, error) {
+func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 	if rawTun.Enable && rawTun.AutoDetectInterface {
 		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
 		if err != nil {
@@ -892,6 +893,11 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		dnsHijack = append(dnsHijack, addrPort)
 	}
 
+	var tunAddressPrefix *netip.Prefix
+	if dnsCfg.FakeIPRange != nil {
+		tunAddressPrefix = dnsCfg.FakeIPRange.IPNet()
+	}
+
 	return &Tun{
 		Enable:              rawTun.Enable,
 		Device:              rawTun.Device,
@@ -899,6 +905,7 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		DNSHijack:           dnsHijack,
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
+		TunAddressPrefix:    tunAddressPrefix,
 	}, nil
 }
 

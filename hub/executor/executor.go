@@ -85,7 +85,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
-	updateTun(cfg.Tun, cfg.DNS)
+	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -244,12 +244,8 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 	wg.Wait()
 }
 
-func updateTun(tun *config.Tun, dns *config.DNS) {
-	var tunAddressPrefix *netip.Prefix
-	if dns.FakeIPRange != nil {
-		tunAddressPrefix = dns.FakeIPRange.IPNet()
-	}
-	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
+func updateTun(tun *config.Tun) {
+	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -428,7 +424,7 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func Shutdown() {
-	P.Cleanup()
+	P.Cleanup(false)
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 

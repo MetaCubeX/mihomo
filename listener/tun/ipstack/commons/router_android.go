@@ -24,7 +24,7 @@ func GetAutoDetectInterface() (ifn string, err error) {
 	return
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
@@ -45,12 +45,12 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	}
 
 	if autoRoute {
-		err = configInterfaceRouting(interfaceName, addr, autoDetectInterface)
+		err = configInterfaceRouting(interfaceName, addr)
 	}
 	return err
 }
 
-func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectInterface bool) error {
+func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	linkIP := addr.Masked().Addr().Next()
 	const tableId = 1981801
 
@@ -64,10 +64,6 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectI
 	execAddRuleCmd(fmt.Sprintf("from %s iif lo uidrange 0-4294967294 lookup %d pref 9002", linkIP, tableId))
 	execAddRuleCmd(fmt.Sprintf("from all iif %s lookup main suppress_prefixlength 0 pref 9003", interfaceName))
 	execAddRuleCmd(fmt.Sprintf("not from all iif lo lookup %d pref 9004", tableId))
-
-	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor()
-	}
 
 	return nil
 }
