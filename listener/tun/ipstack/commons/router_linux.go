@@ -13,7 +13,7 @@ func GetAutoDetectInterface() (string, error) {
 	return cmd.ExecCmd("bash -c ip route show | grep 'default via' | awk -F ' ' 'NR==1{print $5}' | xargs echo -n")
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
@@ -32,22 +32,18 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 	}
 
 	if autoRoute {
-		_ = configInterfaceRouting(interfaceName, addr, autoDetectInterface)
+		_ = configInterfaceRouting(interfaceName, addr)
 	}
 	return nil
 }
 
-func configInterfaceRouting(interfaceName string, addr netip.Prefix, autoDetectInterface bool) error {
+func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 	linkIP := addr.Masked().Addr().Next()
 
 	for _, route := range defaultRoutes {
 		if err := execRouterCmd("add", route, interfaceName, linkIP.String(), "main"); err != nil {
 			return err
 		}
-	}
-
-	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor()
 	}
 
 	return nil

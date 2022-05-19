@@ -23,7 +23,7 @@ import (
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 
 	var (
 		tunAddress = netip.Prefix{}
@@ -38,8 +38,8 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 		err error
 	)
 
-	if tunAddressPrefix != nil {
-		tunAddress = *tunAddressPrefix
+	if tunConf.TunAddressPrefix != nil {
+		tunAddress = *tunConf.TunAddressPrefix
 	}
 
 	if devName == "" {
@@ -90,10 +90,14 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 	}
 
 	// setting address and routing
-	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute, tunConf.AutoDetectInterface)
+	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute)
 	if err != nil {
 		_ = tunDevice.Close()
 		return nil, fmt.Errorf("setting interface address and routing failed: %w", err)
+	}
+
+	if tunConf.AutoDetectInterface {
+		commons.StartDefaultInterfaceChangeMonitor()
 	}
 
 	setAtLatest(stackType, devName)
