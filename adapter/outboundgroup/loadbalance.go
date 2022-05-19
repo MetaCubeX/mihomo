@@ -151,7 +151,7 @@ func strategyConsistentHashing() strategyFn {
 
 func strategyStickySessions() strategyFn {
 	ttl := time.Minute * 10
-
+	maxRetry := 5
 	lruCache := cache.NewLRUCache[uint64, int](
 		cache.WithAge[uint64, int](int64(ttl.Seconds())),
 		cache.WithSize[uint64, int](1000))
@@ -160,11 +160,11 @@ func strategyStickySessions() strategyFn {
 		length := len(proxies)
 		idx, has := lruCache.Get(key)
 		if !has {
-			idx = int(jumpHash(key+uint64(time.Now().UnixMilli()), int32(length)))
+			idx = int(jumpHash(key+uint64(time.Now().UnixNano()), int32(length)))
 		}
 
-		for i := 0; i < length; i++ {
-			nowIdx := (idx + 1) % length
+		nowIdx := idx
+		for i := 1; i < maxRetry; i++ {
 			proxy := proxies[nowIdx]
 			if proxy.Alive() {
 				if nowIdx != idx {
@@ -173,9 +173,13 @@ func strategyStickySessions() strategyFn {
 				}
 
 				return proxy
+			} else {
+				nowIdx = int(jumpHash(key+uint64(time.Now().UnixNano()), int32(length)))
 			}
 		}
 
+		lruCache.Delete(key)
+		lruCache.Set(key, 0)
 		return proxies[0]
 	}
 }
