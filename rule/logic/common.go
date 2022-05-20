@@ -104,6 +104,8 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 	case "RULE-SET":
 		noResolve := RC.HasNoResolve(params)
 		parsed, parseErr = provider.NewRuleSet(payload, "", noResolve)
+	case "IN-TYPE":
+		parsed, parseErr = RC.NewInType(payload, "")
 	case "NOT":
 		parsed, parseErr = NewNOT(payload, "")
 	case "AND":
