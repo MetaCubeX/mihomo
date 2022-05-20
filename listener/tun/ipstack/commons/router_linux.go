@@ -10,7 +10,11 @@ import (
 )
 
 func GetAutoDetectInterface() (string, error) {
-	return cmd.ExecCmd("bash -c ip route show | grep 'default via' | awk -F ' ' 'NR==1{print $5}' | xargs echo -n")
+	execCmd, err := cmd.ExecCmd("bash -c ip route show | grep 'default via' | awk -F ' ' 'NR==1{print $5}' | xargs echo -n")
+	if execCmd == "" {
+		return "", fmt.Errorf("interface not found")
+	}
+	return execCmd, err
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {

@@ -16,6 +16,7 @@ require (
 	github.com/oschwald/geoip2-golang v1.7.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
+	github.com/vishvananda/netlink v1.0.1-0.20190930145447-2ec5bdc52b86
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
@@ -48,6 +49,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.9.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20220204230159-dac05f7d2cb4 // indirect
+	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
 	golang.org/x/tools v0.1.10 // indirect
