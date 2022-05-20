@@ -82,12 +82,16 @@ func (r *Resolver) ResolveAllIP(host string) (ips []netip.Addr, err error) {
 
 	ips, err = r.resolveIP(host, D.TypeA)
 
-	ipv6s, open := <-ch
-	if !open && err != nil {
-		return nil, resolver.ErrIPNotFound
+	select {
+	case ipv6s, open := <-ch:
+		if !open && err != nil {
+			return nil, resolver.ErrIPNotFound
+		}
+		ips = append(ips, ipv6s...)
+	case <-time.After(3 * time.Millisecond):
+		// wait ipv6 3ms
 	}
 
-	ips = append(ips, ipv6s...)
 	return ips, nil
 }
 
