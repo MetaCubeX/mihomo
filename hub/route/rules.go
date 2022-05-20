@@ -20,7 +20,7 @@ type Rule struct {
 	Type    string `json:"type"`
 	Payload string `json:"payload"`
 	Proxy   string `json:"proxy"`
-	Size    int    `json:"Size"`
+	Size    int    `json:"size"`
 }
 
 func getRules(w http.ResponseWriter, r *http.Request) {

@@ -3,7 +3,6 @@ package rules
 import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	RC "github.com/Dreamacro/clash/rule/common"
 	"github.com/Dreamacro/clash/rule/logic"
 	RP "github.com/Dreamacro/clash/rule/provider"
@@ -47,8 +46,10 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 		if runtime.GOOS == "linux" || runtime.GOOS == "android" {
 			parsed, parseErr = RC.NewUid(payload, target)
 		} else {
-			log.Warnln("uid rule not support this platform")
+			parseErr = fmt.Errorf("uid rule not support this platform")
 		}
+	case "IN-TYPE":
+		parsed, parseErr = RC.NewInType(payload, target)
 	case "AND":
 		parsed, parseErr = logic.NewAND(payload, target)
 	case "OR":

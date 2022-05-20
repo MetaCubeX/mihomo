@@ -16,6 +16,7 @@ const (
 	RuleSet
 	Network
 	Uid
+	INTYPE
 	MATCH
 	AND
 	OR
@@ -56,6 +57,8 @@ func (rt RuleType) String() string {
 		return "Network"
 	case Uid:
 		return "Uid"
+	case INTYPE:
+		return "InType"
 	case AND:
 		return "AND"
 	case OR:
