@@ -58,6 +58,7 @@ type VlessOption struct {
 	ServerName     string            `proxy:"servername,omitempty"`
 }
 
+// StreamConn implements C.ProxyAdapter
 func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	switch v.option.Network {
@@ -147,6 +148,26 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return v.client.StreamConn(c, parseVlessAddr(metadata))
 }
 
+// StreamPacketConn implements C.ProxyAdapter
+func (v *Vless) StreamPacketConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+
+	var err error
+	c, err = v.StreamConn(c, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("new vmess client error: %v", err)
+	}
+
+	return WrapConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}), nil
+}
+
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
 	host, _, _ := net.SplitHostPort(v.addr)
 
@@ -219,18 +240,18 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(metadata.Host)
-		if err != nil {
-			return nil, errors.New("can't resolve ip")
-		}
-		metadata.DstIP = ip
-	}
-
 	var c net.Conn
 	// gun transport
 	if v.transport != nil && len(opts) == 0 {
+		// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+		if !metadata.Resolved() {
+			ip, err := resolver.ResolveIP(metadata.Host)
+			if err != nil {
+				return nil, errors.New("can't resolve ip")
+			}
+			metadata.DstIP = ip
+		}
+
 		c, err = gun.StreamGunWithTransport(v.transport, v.gunConfig)
 		if err != nil {
 			return nil, err
@@ -238,22 +259,27 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		defer safeConnClose(c, err)
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
-	} else {
-		c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+			return nil, fmt.Errorf("new vless client error: %v", err)
 		}
-		tcpKeepAlive(c)
-		defer safeConnClose(c, err)
 
-		c, err = v.StreamConn(c, metadata)
+		return NewPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 	}
 
+	c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
+
+	tcpKeepAlive(c)
+	defer safeConnClose(c, err)
+
+	c, err = v.StreamPacketConn(c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
-	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+	return NewPacketConn(c.(net.PacketConn), v), nil
 }
 
 func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
@@ -292,7 +318,7 @@ type vlessPacketConn struct {
 	mux    sync.Mutex
 }
 
-func (vc *vlessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+func (vc *vlessPacketConn) WriteTo(b []byte, _ net.Addr) (int, error) {
 	total := len(b)
 	if total == 0 {
 		return 0, nil

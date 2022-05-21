@@ -133,7 +133,7 @@ func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) 
 	})
 }
 
-func (t *Trojan) PresetXTLSConn(conn net.Conn) (net.Conn, error) {
+func (t *Trojan) PrepareXTLSConn(conn net.Conn) (net.Conn, error) {
 	switch t.option.Flow {
 	case vless.XRO, vless.XRD, vless.XRS:
 		if xtlsConn, ok := conn.(*xtls.Conn); ok {
@@ -189,7 +189,7 @@ func writePacket(w io.Writer, socks5Addr, payload []byte) (int, error) {
 	defer pool.PutBuffer(buf)
 
 	buf.Write(socks5Addr)
-	binary.Write(buf, binary.BigEndian, uint16(len(payload)))
+	_ = binary.Write(buf, binary.BigEndian, uint16(len(payload)))
 	buf.Write(crlf)
 	buf.Write(payload)
 

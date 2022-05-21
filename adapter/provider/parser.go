@@ -20,15 +20,16 @@ type healthCheckSchema struct {
 }
 
 type proxyProviderSchema struct {
-	Type        string            `provider:"type"`
-	Path        string            `provider:"path"`
-	URL         string            `provider:"url,omitempty"`
-	Interval    int               `provider:"interval,omitempty"`
-	Filter      string            `provider:"filter,omitempty"`
-	HealthCheck healthCheckSchema `provider:"health-check,omitempty"`
+	Type            string            `provider:"type"`
+	Path            string            `provider:"path"`
+	URL             string            `provider:"url,omitempty"`
+	Interval        int               `provider:"interval,omitempty"`
+	Filter          string            `provider:"filter,omitempty"`
+	HealthCheck     healthCheckSchema `provider:"health-check,omitempty"`
+	ForceCertVerify bool              `provider:"force-cert-verify,omitempty"`
 }
 
-func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvider, error) {
+func ParseProxyProvider(name string, mapping map[string]any, forceCertVerify bool) (types.ProxyProvider, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 
 	schema := &proxyProviderSchema{
@@ -36,6 +37,11 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 			Lazy: true,
 		},
 	}
+
+	if forceCertVerify {
+		schema.ForceCertVerify = true
+	}
+
 	if err := decoder.Decode(mapping, schema); err != nil {
 		return nil, err
 	}
@@ -60,5 +66,5 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
-	return NewProxySetProvider(name, interval, filter, vehicle, hc)
+	return NewProxySetProvider(name, interval, filter, vehicle, hc, schema.ForceCertVerify)
 }

@@ -59,6 +59,13 @@ ls bin/
 sudo bin/clash-local
 ```
 
+### General configuration
+```yaml
+sniffing: true # Sniff TLS SNI
+
+force-cert-verify: true # force verify TLS Certificate, prevent machine-in-the-middle attacks
+```
+
 ### MITM configuration
 A root CA certificate is required, the 
 MITM proxy server will generate a CA certificate file and a CA private key file in your Clash home directory, you can use your own certificate replace it. 
@@ -317,6 +324,8 @@ Support outbound protocol `VLESS`.
 
 Support `Trojan` with XTLS.
 
+Support relay `UDP` traffic.
+
 Currently XTLS only supports TCP transport.
 ```yaml
 proxies:
@@ -354,12 +363,25 @@ proxies:
     # udp: true
     # sni: example.com # aka server name
     # skip-cert-verify: true
-```
 
-### Sniffing configuration
-Sniff TLS SNI.
-```yaml
-sniffing: true
+proxy-groups:
+  # Relay chains the proxies. proxies shall not contain a relay.
+  # Support relay UDP traffic.
+  # Traffic: clash <-> ss1 <-> trojan <-> vmess <-> ss2 <-> Internet
+  - name: "relay-udp-over-tcp"
+    type: relay
+    proxies:
+      - ss1
+      - trojan
+      - vmess
+      - ss2
+
+  - name: "relay-raw-udp"
+    type: relay
+    proxies:
+      - ss1
+      - ss2
+      - ss3
 ```
 
 ### IPTABLES configuration
@@ -400,7 +422,7 @@ $ systemctl start clash
 ```
 
 ### Display Process name
-To display process name online by click [http://yacd.clash-plus.cf](http://yacd.clash-plus.cf) or [https://yacd.clash-plus.cf](https://yacd.clash-plus.cf) for local.
+To display process name online by click [http://yacd.clash-plus.cf](http://yacd.clash-plus.cf) for local API by Safari or [https://yacd.clash-plus.cf](https://yacd.clash-plus.cf) for local API by Chrome.
 
 You can download the [Dashboard](https://github.com/yaling888/yacd/archive/gh-pages.zip) into Clash home directory:
 ```sh

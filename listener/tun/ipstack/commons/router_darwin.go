@@ -2,24 +2,23 @@ package commons
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"strings"
+	"syscall"
 
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/tun/device"
+
+	"golang.org/x/net/route"
 )
 
 func GetAutoDetectInterface() (string, error) {
-	rs, err := cmd.ExecCmd("/bin/bash -c /sbin/route -n get default | grep 'interface:' | awk -F ' ' 'NR==1{print $2}' | xargs echo -n")
+	iface, err := defaultRouteInterface()
 	if err != nil {
 		return "", err
 	}
-
-	if rs == "" || strings.HasSuffix(rs, "\n") {
-		return "", fmt.Errorf("invalid interface name: %s", rs)
-	}
-
-	return rs, nil
+	return iface.Name, nil
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
@@ -70,4 +69,44 @@ func configInterfaceRouting(interfaceName string, addr netip.Prefix) error {
 func execRouterCmd(action, inet, route string, interfaceName string) error {
 	_, err := cmd.ExecCmd(fmt.Sprintf("/sbin/route %s %s %s -interface %s", action, inet, route, interfaceName))
 	return err
+}
+
+func defaultRouteInterface() (*net.Interface, error) {
+	rib, err := route.FetchRIB(syscall.AF_UNSPEC, syscall.NET_RT_DUMP2, 0)
+	if err != nil {
+		return nil, fmt.Errorf("route.FetchRIB: %w", err)
+	}
+
+	msgs, err := route.ParseRIB(syscall.NET_RT_IFLIST2, rib)
+	if err != nil {
+		return nil, fmt.Errorf("route.ParseRIB: %w", err)
+	}
+
+	for _, message := range msgs {
+		routeMessage := message.(*route.RouteMessage)
+		if routeMessage.Flags&(syscall.RTF_UP|syscall.RTF_GATEWAY|syscall.RTF_STATIC) == 0 {
+			continue
+		}
+
+		addresses := routeMessage.Addrs
+
+		if (addresses[0].Family() == syscall.AF_INET && addresses[0].(*route.Inet4Addr).IP != *(*[4]byte)(net.IPv4zero)) ||
+			(addresses[0].Family() == syscall.AF_INET6 && addresses[0].(*route.Inet6Addr).IP != *(*[16]byte)(net.IPv6zero)) {
+
+			continue
+		}
+
+		iface, err1 := net.InterfaceByIndex(routeMessage.Index)
+		if err1 != nil {
+			continue
+		}
+
+		if strings.HasPrefix(iface.Name, "utun") {
+			continue
+		}
+
+		return iface, nil
+	}
+
+	return nil, fmt.Errorf("ambiguous gateway interfaces found")
 }

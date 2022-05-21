@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -132,16 +133,13 @@ func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
 }
 
 func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
-	adapter, ok := tunnel.Proxies()[adapterName]
+	proxy, ok := tunnel.Proxies()[adapterName]
 	if !ok {
 		return nil, fmt.Errorf("proxy adapter [%s] not found", adapterName)
 	}
 
 	networkType := C.TCP
 	if network == "udp" {
-		if !adapter.SupportUDP() {
-			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
-		}
 		networkType = C.UDP
 	}
 
@@ -158,8 +156,14 @@ func dialContextWithProxyAdapter(ctx context.Context, adapterName string, networ
 		DstPort:  port,
 	}
 
+	rawAdapter := fetchRawProxyAdapter(proxy.(*adapter.Proxy).ProxyAdapter, metadata)
+
 	if networkType == C.UDP {
-		packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
+		if !rawAdapter.SupportUDP() {
+			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", rawAdapter.Name())
+		}
+
+		packetConn, err := rawAdapter.ListenPacketContext(ctx, metadata, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -170,5 +174,13 @@ func dialContextWithProxyAdapter(ctx context.Context, adapterName string, networ
 		}, nil
 	}
 
-	return adapter.DialContext(ctx, metadata, opts...)
+	return rawAdapter.DialContext(ctx, metadata, opts...)
+}
+
+func fetchRawProxyAdapter(proxyAdapter C.ProxyAdapter, metadata *C.Metadata) C.ProxyAdapter {
+	if p := proxyAdapter.Unwrap(metadata); p != nil {
+		return fetchRawProxyAdapter(p.(*adapter.Proxy).ProxyAdapter, metadata)
+	}
+
+	return proxyAdapter
 }

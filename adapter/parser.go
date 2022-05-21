@@ -8,7 +8,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-func ParseProxy(mapping map[string]any) (C.Proxy, error) {
+func ParseProxy(mapping map[string]any, forceCertVerify bool) (C.Proxy, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
@@ -40,12 +40,18 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		if err != nil {
 			break
 		}
+		if forceCertVerify {
+			socksOption.SkipCertVerify = false
+		}
 		proxy = outbound.NewSocks5(*socksOption)
 	case "http":
 		httpOption := &outbound.HttpOption{}
 		err = decoder.Decode(mapping, httpOption)
 		if err != nil {
 			break
+		}
+		if forceCertVerify {
+			httpOption.SkipCertVerify = false
 		}
 		proxy = outbound.NewHttp(*httpOption)
 	case "vmess":
@@ -59,12 +65,18 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		if err != nil {
 			break
 		}
+		if forceCertVerify {
+			vmessOption.SkipCertVerify = false
+		}
 		proxy, err = outbound.NewVmess(*vmessOption)
 	case "vless":
 		vlessOption := &outbound.VlessOption{}
 		err = decoder.Decode(mapping, vlessOption)
 		if err != nil {
 			break
+		}
+		if forceCertVerify {
+			vlessOption.SkipCertVerify = false
 		}
 		proxy, err = outbound.NewVless(*vlessOption)
 	case "snell":
@@ -79,6 +91,9 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		err = decoder.Decode(mapping, trojanOption)
 		if err != nil {
 			break
+		}
+		if forceCertVerify {
+			trojanOption.SkipCertVerify = false
 		}
 		proxy, err = outbound.NewTrojan(*trojanOption)
 	default:

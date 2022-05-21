@@ -74,6 +74,21 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 	return c, err
 }
 
+// StreamPacketConn implements C.ProxyAdapter
+func (ss *ShadowSocks) StreamPacketConn(c net.Conn, _ *C.Metadata) (net.Conn, error) {
+	if !IsPacketConn(c) {
+		return c, fmt.Errorf("%s connect error: can not convert net.Conn to net.PacketConn", ss.addr)
+	}
+
+	addr, err := resolveUDPAddr("udp", ss.addr)
+	if err != nil {
+		return c, err
+	}
+
+	pc := ss.cipher.PacketConn(c.(net.PacketConn))
+	return WrapConn(&ssPacketConn{PacketConn: pc, rAddr: addr}), nil
+}
+
 // DialContext implements C.ProxyAdapter
 func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr, ss.Base.DialOptions(opts...)...)
@@ -95,14 +110,13 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		return nil, err
 	}
 
-	addr, err := resolveUDPAddr("udp", ss.addr)
+	c, err := ss.StreamPacketConn(WrapConn(pc), metadata)
 	if err != nil {
-		pc.Close()
+		_ = pc.Close()
 		return nil, err
 	}
 
-	pc = ss.cipher.PacketConn(pc)
-	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ss), nil
+	return NewPacketConn(c.(net.PacketConn), ss), nil
 }
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {

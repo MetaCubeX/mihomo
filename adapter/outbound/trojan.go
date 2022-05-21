@@ -72,8 +72,7 @@ func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
 	return t.instance.StreamConn(c)
 }
 
-// StreamConn implements C.ProxyAdapter
-func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+func (t *Trojan) trojanStream(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 	if t.transport != nil {
 		c, err = gun.StreamGunWithConn(c, t.gunTLSConfig, t.gunConfig)
@@ -85,39 +84,63 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 
-	c, err = t.instance.PresetXTLSConn(c)
+	c, err = t.instance.PrepareXTLSConn(c)
 	if err != nil {
-		return nil, err
+		return c, err
+	}
+
+	if metadata.NetWork == C.UDP {
+		err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
+		return c, err
 	}
 
 	err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata))
 	return c, err
 }
 
+// StreamConn implements C.ProxyAdapter
+func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	return t.trojanStream(c, metadata)
+}
+
+// StreamPacketConn implements C.ProxyAdapter
+func (t *Trojan) StreamPacketConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	var err error
+	c, err = t.trojanStream(c, metadata)
+	if err != nil {
+		return c, err
+	}
+
+	pc := t.instance.PacketConn(c)
+	return WrapConn(pc), nil
+}
+
 // DialContext implements C.ProxyAdapter
 func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
+	var c net.Conn
+
 	// gun transport
 	if t.transport != nil && len(opts) == 0 {
-		c, err := gun.StreamGunWithTransport(t.transport, t.gunConfig)
+		c, err = gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		c, err = t.instance.PresetXTLSConn(c)
+		defer safeConnClose(c, err)
+
+		c, err = t.instance.PrepareXTLSConn(c)
 		if err != nil {
-			c.Close()
 			return nil, err
 		}
 
 		if err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata)); err != nil {
-			c.Close()
 			return nil, err
 		}
 
 		return NewConn(c, t), nil
 	}
 
-	c, err := dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
+	c, err = dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
@@ -137,33 +160,44 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	var c net.Conn
 
-	// grpc transport
+	// gun transport
 	if t.transport != nil && len(opts) == 0 {
 		c, err = gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
+			return nil, err
 		}
+
 		defer safeConnClose(c, err)
-	} else {
-		c, err = dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
+
+		c, err = t.instance.PrepareXTLSConn(c)
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
+			return nil, err
 		}
-		defer safeConnClose(c, err)
-		tcpKeepAlive(c)
-		c, err = t.plainStream(c)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
+
+		if err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata)); err != nil {
+			return nil, err
 		}
+
+		pc := t.instance.PacketConn(c)
+
+		return NewPacketConn(pc, t), nil
 	}
 
-	err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
+	c, err = dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
+	}
+
+	tcpKeepAlive(c)
+
+	defer safeConnClose(c, err)
+
+	c, err = t.StreamPacketConn(c, metadata)
 	if err != nil {
 		return nil, err
 	}
 
-	pc := t.instance.PacketConn(c)
-	return newPacketConn(pc, t), err
+	return NewPacketConn(c.(net.PacketConn), t), nil
 }
 
 func NewTrojan(option TrojanOption) (*Trojan, error) {

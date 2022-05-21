@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -30,12 +31,17 @@ func (b *Base) Type() C.AdapterType {
 }
 
 // StreamConn implements C.ProxyAdapter
-func (b *Base) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+func (b *Base) StreamConn(c net.Conn, _ *C.Metadata) (net.Conn, error) {
+	return c, errors.New("no support")
+}
+
+// StreamPacketConn implements C.ProxyAdapter
+func (b *Base) StreamPacketConn(c net.Conn, _ *C.Metadata) (net.Conn, error) {
 	return c, errors.New("no support")
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+func (b *Base) ListenPacketContext(_ context.Context, _ *C.Metadata, _ ...dialer.Option) (C.PacketConn, error) {
 	return nil, errors.New("no support")
 }
 
@@ -57,7 +63,7 @@ func (b *Base) Addr() string {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (b *Base) Unwrap(metadata *C.Metadata) C.Proxy {
+func (b *Base) Unwrap(_ *C.Metadata) C.Proxy {
 	return nil
 }
 
@@ -133,6 +139,40 @@ func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
-func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
+func NewPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
 	return &packetConn{pc, []string{a.Name()}}
+}
+
+type wrapConn struct {
+	net.PacketConn
+}
+
+func (*wrapConn) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (*wrapConn) Write([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (*wrapConn) RemoteAddr() net.Addr {
+	return nil
+}
+
+func WrapConn(packetConn net.PacketConn) net.Conn {
+	return &wrapConn{
+		PacketConn: packetConn,
+	}
+}
+
+func IsPacketConn(c net.Conn) bool {
+	if _, ok := c.(net.PacketConn); !ok {
+		return false
+	}
+
+	if ua, ok := c.LocalAddr().(*net.UnixAddr); ok {
+		return ua.Net == "unixgram"
+	}
+
+	return true
 }

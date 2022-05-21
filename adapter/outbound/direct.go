@@ -39,7 +39,7 @@ func (d *Direct) ListenPacketContext(ctx context.Context, _ *C.Metadata, opts ..
 	if err != nil {
 		return nil, err
 	}
-	return newPacketConn(&directPacketConn{pc}, d), nil
+	return NewPacketConn(&directPacketConn{pc}, d), nil
 }
 
 type directPacketConn struct {
