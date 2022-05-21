@@ -58,6 +58,18 @@ func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, err
 }
 
+// StreamPacketConn implements C.ProxyAdapter
+func (s *Snell) StreamPacketConn(c net.Conn, _ *C.Metadata) (net.Conn, error) {
+	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
+
+	err := snell.WriteUDPHeader(c, s.version)
+	if err != nil {
+		return c, err
+	}
+
+	return WrapConn(snell.PacketConn(c)), nil
+}
+
 // DialContext implements C.ProxyAdapter
 func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	if s.version == snell.Version2 && len(opts) == 0 {
@@ -68,7 +80,7 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 		port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 		if err = snell.WriteHeader(c, metadata.String(), uint(port), s.version); err != nil {
-			c.Close()
+			_ = c.Close()
 			return nil, err
 		}
 		return NewConn(c, s), err
@@ -93,15 +105,14 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		return nil, err
 	}
 	tcpKeepAlive(c)
-	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 
-	err = snell.WriteUDPHeader(c, s.version)
+	pc, err := s.StreamPacketConn(c, metadata)
 	if err != nil {
+		_ = c.Close()
 		return nil, err
 	}
 
-	pc := snell.PacketConn(c)
-	return newPacketConn(pc, s), nil
+	return NewPacketConn(pc.(net.PacketConn), s), nil
 }
 
 func NewSnell(option SnellOption) (*Snell, error) {

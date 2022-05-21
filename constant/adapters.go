@@ -93,9 +93,14 @@ type ProxyAdapter interface {
 	// a new session (if any)
 	StreamConn(c net.Conn, metadata *Metadata) (net.Conn, error)
 
+	// StreamPacketConn wraps a UDP protocol around net.Conn with Metadata.
+	StreamPacketConn(c net.Conn, metadata *Metadata) (net.Conn, error)
+
 	// DialContext return a C.Conn with protocol which
 	// contains multiplexing-related reuse logic (if any)
 	DialContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (Conn, error)
+
+	// ListenPacketContext listen for a PacketConn
 	ListenPacketContext(ctx context.Context, metadata *Metadata, opts ...dialer.Option) (PacketConn, error)
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.

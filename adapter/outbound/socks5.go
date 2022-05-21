@@ -114,11 +114,11 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	}
 
 	go func() {
-		io.Copy(io.Discard, c)
-		c.Close()
+		_, _ = io.Copy(io.Discard, c)
+		_ = c.Close()
 		// A UDP association terminates when the TCP connection that the UDP
 		// ASSOCIATE request arrived on terminates. RFC1928
-		pc.Close()
+		_ = pc.Close()
 	}()
 
 	// Support unspecified UDP bind address.
@@ -135,7 +135,7 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		bindUDPAddr.IP = serverAddr.IP
 	}
 
-	return newPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
+	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
 }
 
 func NewSocks5(option Socks5Option) *Socks5 {
@@ -199,6 +199,6 @@ func (uc *socksPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 }
 
 func (uc *socksPacketConn) Close() error {
-	uc.tcpConn.Close()
+	_ = uc.tcpConn.Close()
 	return uc.PacketConn.Close()
 }

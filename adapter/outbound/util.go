@@ -52,7 +52,7 @@ func resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 }
 
 func safeConnClose(c net.Conn, err error) {
-	if err != nil {
+	if err != nil && c != nil {
 		_ = c.Close()
 	}
 }

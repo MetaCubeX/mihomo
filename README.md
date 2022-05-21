@@ -215,6 +215,8 @@ Support outbound protocol `VLESS`.
 
 Support `Trojan` with XTLS.
 
+Support relay `UDP` traffic.
+
 Currently XTLS only supports TCP transport.
 ```yaml
 proxies:
@@ -252,6 +254,25 @@ proxies:
     # udp: true
     # sni: example.com # aka server name
     # skip-cert-verify: true
+
+proxy-groups:
+  # Relay chains the proxies. proxies shall not contain a relay.
+  # Support relay UDP traffic.
+  # Traffic: clash <-> ss1 <-> trojan <-> vmess <-> ss2 <-> Internet
+  - name: "relay-udp-over-tcp"
+    type: relay
+    proxies:
+      - ss1
+      - trojan
+      - vmess
+      - ss2
+
+  - name: "relay-raw-udp"
+    type: relay
+    proxies:
+      - ss1
+      - ss2
+      - ss3
 ```
 
 ### IPTABLES configuration
@@ -292,7 +313,7 @@ $ systemctl start clash
 ```
 
 ### Display Process name
-To display process name online by click [https://yacd.clash-plus.cf](https://yacd.clash-plus.cf).
+To display process name online by click [http://yacd.clash-plus.cf](http://yacd.clash-plus.cf) for local API by Safari or [https://yacd.clash-plus.cf](https://yacd.clash-plus.cf) for local API by Chrome.
 
 You can download the [Dashboard](https://github.com/yaling888/yacd/archive/gh-pages.zip) into Clash home directory:
 ```sh
@@ -308,6 +329,9 @@ external-controller: 127.0.0.1:9090
 external-ui: dashboard
 ```
 Open [http://127.0.0.1:9090/ui/](http://127.0.0.1:9090/ui/) by web browser.
+
+## Plus Pro Release
+[Release](https://github.com/yaling888/clash/releases/tag/plus)
 
 ## Development
 If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
