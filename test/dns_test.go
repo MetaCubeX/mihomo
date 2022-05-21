@@ -6,6 +6,7 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func exchange(address, domain string, tp uint16) ([]dns.RR, error) {
@@ -30,18 +31,15 @@ dns:
     - 119.29.29.29
 `
 
-	if err := parseAndApply(basic); err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	err := parseAndApply(basic)
+	require.NoError(t, err)
 	defer cleanup()
 
 	time.Sleep(waitTime)
 
 	rr, err := exchange("127.0.0.1:8553", "1.1.1.1.nip.io", dns.TypeA)
 	assert.NoError(t, err)
-	if !assert.NotEmpty(t, rr) {
-		assert.FailNow(t, "record empty")
-	}
+	assert.NotEmptyf(t, rr, "record empty")
 
 	record := rr[0].(*dns.A)
 	assert.Equal(t, record.A.String(), "1.1.1.1")
@@ -68,9 +66,8 @@ dns:
     - 119.29.29.29
 `
 
-	if err := parseAndApply(basic); err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	err := parseAndApply(basic)
+	require.NoError(t, err)
 	defer cleanup()
 
 	time.Sleep(waitTime)
