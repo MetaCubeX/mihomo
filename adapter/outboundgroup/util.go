@@ -51,3 +51,7 @@ func tcpKeepAlive(c net.Conn) {
 		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
 	}
 }
+
+type SelectAble interface {
+	Set(string) error
+}

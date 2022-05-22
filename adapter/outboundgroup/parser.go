@@ -76,7 +76,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			providersMap[groupName] = pd
 		} else {
 			if groupOption.URL == "" || groupOption.Interval == 0 {
-				return nil, errMissHealthCheck
+				//return nil, errMissHealthCheck
+				groupOption.URL = "http://www.gstatic.com/generate_204"
+				groupOption.Interval = 300
 			}
 
 			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy)
