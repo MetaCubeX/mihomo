@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -104,6 +105,12 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 	case "RULE-SET":
 		noResolve := RC.HasNoResolve(params)
 		parsed, parseErr = provider.NewRuleSet(payload, "", noResolve)
+	case "UID":
+		if runtime.GOOS == "linux" || runtime.GOOS == "android" {
+			parsed, parseErr = RC.NewUid(payload, "")
+		} else {
+			parseErr = fmt.Errorf("uid rule not support this platform")
+		}
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, "")
 	case "NOT":
