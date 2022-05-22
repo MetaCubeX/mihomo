@@ -3,6 +3,7 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -12,6 +13,7 @@ import (
 type Fallback struct {
 	*GroupBase
 	disableUDP bool
+	selected   string
 }
 
 func (f *Fallback) Now() string {
@@ -75,13 +77,28 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
-	for _, proxy := range proxies {
-		if proxy.Alive() {
+	al := proxies[0]
+	for i := len(proxies) - 1; i > -1; i-- {
+		proxy := proxies[i]
+		if proxy.Name() == f.selected && proxy.Alive() {
 			return proxy
+		}
+		if proxy.Alive() {
+			al = proxy
+		}
+	}
+	return al
+}
+
+func (f *Fallback) Set(name string) error {
+	for _, proxy := range f.GetProxies(false) {
+		if proxy.Name() == name {
+			f.selected = name
+			return nil
 		}
 	}
 
-	return proxies[0]
+	return errors.New("proxy not exist")
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
