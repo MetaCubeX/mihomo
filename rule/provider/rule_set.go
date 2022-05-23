@@ -12,6 +12,7 @@ type RuleSet struct {
 	ruleProviderName string
 	adapter          string
 	ruleProvider     P.RuleProvider
+	noResolveIP      bool
 }
 
 func (rs *RuleSet) ShouldFindProcess() bool {
@@ -35,7 +36,7 @@ func (rs *RuleSet) Payload() string {
 }
 
 func (rs *RuleSet) ShouldResolveIP() bool {
-	return rs.getProviders().ShouldResolveIP()
+	return !rs.noResolveIP && rs.getProviders().ShouldResolveIP()
 }
 func (rs *RuleSet) getProviders() P.RuleProvider {
 	if rs.ruleProvider == nil {
@@ -46,7 +47,7 @@ func (rs *RuleSet) getProviders() P.RuleProvider {
 	return rs.ruleProvider
 }
 
-func NewRuleSet(ruleProviderName string, adapter string) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool) (*RuleSet, error) {
 	rp, ok := RuleProviders()[ruleProviderName]
 	if !ok {
 		return nil, fmt.Errorf("rule set %s not found", ruleProviderName)
@@ -56,5 +57,6 @@ func NewRuleSet(ruleProviderName string, adapter string) (*RuleSet, error) {
 		ruleProviderName: ruleProviderName,
 		adapter:          adapter,
 		ruleProvider:     rp,
+		noResolveIP:      noResolveIP,
 	}, nil
 }

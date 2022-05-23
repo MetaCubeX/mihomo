@@ -10,18 +10,18 @@ import (
 	"strings"
 )
 
-func GetAutoDetectInterface() (string, error) {
-	res, err := cmd.ExecCmd("sh -c ip route | awk '{print $3}' | xargs echo -n")
-	if err != nil {
-		return "", err
+func GetAutoDetectInterface() (ifn string, err error) {
+	cmdRes, err := cmd.ExecCmd("ip route get 1.1.1.1 uid 4294967295")
+
+	sps := strings.Split(cmdRes, " ")
+	if len(sps) > 4 {
+		ifn = sps[4]
 	}
-	ifaces := strings.Split(res, " ")
-	for _, iface := range ifaces {
-		if iface == "wlan0" {
-			return "wlan0", nil
-		}
+
+	if ifn == "" {
+		err = fmt.Errorf("interface not found")
 	}
-	return ifaces[0], nil
+	return
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {
@@ -37,6 +37,10 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 
 	_, err = cmd.ExecCmd(fmt.Sprintf("ip link set %s up", interfaceName))
 	if err != nil {
+		return err
+	}
+
+	if err = execRouterCmd("add", addr.Masked().String(), interfaceName, ip.String(), "main"); err != nil {
 		return err
 	}
 

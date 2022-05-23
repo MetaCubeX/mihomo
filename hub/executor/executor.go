@@ -79,7 +79,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	initInnerTcp()
-	updateDNS(cfg.DNS)
+	updateDNS(cfg.DNS, cfg.General.IPv6)
 	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
@@ -125,13 +125,16 @@ func GetGeneral() *config.General {
 
 func updateExperimental(c *config.Config) {}
 
-func updateDNS(c *config.DNS) {
+func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
+		resolver.DisableIPv6 = !generalIPv6
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
 		resolver.DefaultLocalServer = nil
 		dns.ReCreateServer("", nil, nil)
 		return
+	} else {
+		resolver.DisableIPv6 = !c.IPv6
 	}
 
 	cfg := dns.Config{
@@ -152,8 +155,6 @@ func updateDNS(c *config.DNS) {
 		Policy:      c.NameServerPolicy,
 		ProxyServer: c.ProxyServerNameserver,
 	}
-
-	resolver.DisableIPv6 = !cfg.IPv6
 
 	r := dns.NewResolver(cfg)
 	pr := dns.NewProxyServerHostResolver(r)

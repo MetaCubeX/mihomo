@@ -93,8 +93,6 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
-					log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
-
 					buf := pool.Get(pool.UDPBufferSize)
 					defer func() {
 						_ = pool.Put(buf)
@@ -186,8 +184,6 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 					_, _ = stack.UDP().WriteTo(msg, rAddr, lAddr)
 
 					_ = pool.Put(buf)
-
-					log.Debugln("[TUN] hijack dns udp: %s", rAddrPort.String())
 				}()
 
 				continue

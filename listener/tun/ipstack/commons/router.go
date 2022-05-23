@@ -33,7 +33,7 @@ func DefaultInterfaceChangeMonitor() {
 		interfaceName, err := GetAutoDetectInterface()
 		if err != nil {
 			log.Warnln("[TUN] default interface monitor exited, cause: %v", err)
-			break
+			continue
 		}
 
 		old := dialer.DefaultInterface.Load()

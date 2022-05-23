@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -114,6 +115,14 @@ func msgToIP(msg *D.Msg) []netip.Addr {
 	}
 
 	return ips
+}
+
+func msgToDomain(msg *D.Msg) string {
+	if len(msg.Question) > 0 {
+		return strings.TrimRight(msg.Question[0].Name, ".")
+	}
+
+	return ""
 }
 
 type wrapPacketConn struct {

@@ -177,7 +177,7 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 			return nil, fmt.Errorf("quio create packet failed")
 		}
 
-		udp = wrapConn.PacketConn
+		udp = wrapConn
 	}
 
 	session, err := quic.Dial(udp, &udpAddr, host, tlsConfig, quicConfig)

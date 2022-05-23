@@ -12,7 +12,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
@@ -39,8 +38,6 @@ func (gh *gvHandler) HandleTCP(tunConn adapter.TCPConn) {
 
 	if D.ShouldHijackDns(gh.dnsHijack, rAddrPort) {
 		go func() {
-			log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
-
 			buf := pool.Get(pool.UDPBufferSize)
 			defer func() {
 				_ = pool.Put(buf)
@@ -123,8 +120,6 @@ func (gh *gvHandler) HandleUDP(tunConn adapter.UDPConn) {
 					}
 
 					_, _ = tunConn.WriteTo(msg, addr)
-
-					log.Debugln("[TUN] hijack dns udp: %s", rAddr.String())
 				}()
 
 				continue

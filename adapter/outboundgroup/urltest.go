@@ -37,8 +37,7 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
-		u.failedTimes.Store(-1)
-		u.failedTime.Store(-1)
+		u.onDialSuccess()
 	} else {
 		u.onDialFailed()
 	}
@@ -50,9 +49,6 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	pc, err := u.fast(true).ListenPacketContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(u)
-		u.onDialSuccess()
-	} else {
-		u.onDialFailed()
 	}
 
 	return pc, err
