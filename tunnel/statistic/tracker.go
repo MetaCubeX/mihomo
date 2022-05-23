@@ -38,8 +38,11 @@ func (tt *tcpTracker) ID() string {
 
 func (tt *tcpTracker) Read(b []byte) (int, error) {
 	n, err := tt.Conn.Read(b)
-	download := int64(n)
+	download := int64(n)	
 	tt.manager.PushDownloaded(download)
+	if tt.trackerInfo.Rule != "Match" {
+		tt.manager.PushProxyDownloaded(download)
+	}
 	tt.DownloadTotal.Add(download)
 	return n, err
 }

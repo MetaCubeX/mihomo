@@ -17,6 +17,7 @@ func init() {
 		downloadBlip:  atomic.NewInt64(0),
 		uploadTotal:   atomic.NewInt64(0),
 		downloadTotal: atomic.NewInt64(0),
+		proxydownloadTotal: atomic.NewInt64(0),
 	}
 
 	go DefaultManager.handle()
@@ -30,6 +31,7 @@ type Manager struct {
 	downloadBlip  *atomic.Int64
 	uploadTotal   *atomic.Int64
 	downloadTotal *atomic.Int64
+	proxydownloadTotal *atomic.Int64
 }
 
 func (m *Manager) Join(c tracker) {
@@ -50,6 +52,10 @@ func (m *Manager) PushDownloaded(size int64) {
 	m.downloadTotal.Add(size)
 }
 
+func (m *Manager) PushProxyDownloaded(size int64) {
+	m.proxydownloadTotal.Add(size)
+}
+
 func (m *Manager) Now() (up int64, down int64) {
 	return m.uploadBlip.Load(), m.downloadBlip.Load()
 }
@@ -64,6 +70,7 @@ func (m *Manager) Snapshot() *Snapshot {
 	return &Snapshot{
 		UploadTotal:   m.uploadTotal.Load(),
 		DownloadTotal: m.downloadTotal.Load(),
+		ProxyDownloadTotal: m.proxydownloadTotal.Load(),
 		Connections:   connections,
 	}
 }
@@ -75,6 +82,7 @@ func (m *Manager) ResetStatistic() {
 	m.downloadTemp.Store(0)
 	m.downloadBlip.Store(0)
 	m.downloadTotal.Store(0)
+	m.proxydownloadTotal.Store(0)
 }
 
 func (m *Manager) handle() {
@@ -90,6 +98,7 @@ func (m *Manager) handle() {
 
 type Snapshot struct {
 	DownloadTotal int64     `json:"downloadTotal"`
+	ProxyDownloadTotal int64     `json:"proxydownloadTotal"`
 	UploadTotal   int64     `json:"uploadTotal"`
 	Connections   []tracker `json:"connections"`
 }
