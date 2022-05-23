@@ -645,7 +645,7 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 		b.SetBytes(chunkSize)
 		buf := make([]byte, chunkSize)
 		for i := 0; i < b.N; i++ {
-			conn.Read(buf)
+			io.ReadFull(conn, buf)
 		}
 	})
 }
