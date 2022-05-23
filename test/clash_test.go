@@ -615,6 +615,10 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 	require.NoError(b, err)
 	defer l.Close()
 
+	chunkSize := int64(16 * 1024)
+	chunk := make([]byte, chunkSize)
+	rand.Read(chunk)
+
 	go func() {
 		c, err := l.Accept()
 		if err != nil {
@@ -622,12 +626,17 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 		}
 		defer c.Close()
 
+		go func() {
+			for {
+				_, err := c.Write(chunk)
+				if err != nil {
+					return
+				}
+			}
+		}()
 		io.Copy(io.Discard, c)
 	}()
 
-	chunkSize := int64(16 * 1024)
-	chunk := make([]byte, chunkSize)
-	rand.Read(chunk)
 	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 		Host:     localIP.String(),
 		DstPort:  "10001",
@@ -638,11 +647,20 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 	_, err = conn.Write([]byte("skip protocol handshake"))
 	require.NoError(b, err)
 
-	b.SetBytes(chunkSize)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		conn.Write(chunk)
-	}
+	b.Run("Write", func(b *testing.B) {
+		b.SetBytes(chunkSize)
+		for i := 0; i < b.N; i++ {
+			conn.Write(chunk)
+		}
+	})
+
+	b.Run("Read", func(b *testing.B) {
+		b.SetBytes(chunkSize)
+		buf := make([]byte, chunkSize)
+		for i := 0; i < b.N; i++ {
+			conn.Read(buf)
+		}
+	})
 }
 
 func TestClash_Basic(t *testing.T) {
