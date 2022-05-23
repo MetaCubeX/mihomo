@@ -150,7 +150,7 @@ func Benchmark_Snell(b *testing.B) {
 		Binds:        []string{fmt.Sprintf("%s:/config.conf", C.Path.Resolve("snell-http.conf"))},
 	}
 
-	id, err := startContainer(cfg, hostCfg, "snell-http")
+	id, err := startContainer(cfg, hostCfg, "snell-bench")
 	require.NoError(b, err)
 
 	b.Cleanup(func() {

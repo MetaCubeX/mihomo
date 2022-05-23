@@ -371,7 +371,7 @@ func Benchmark_Vmess(b *testing.B) {
 		Binds:        []string{fmt.Sprintf("%s:/etc/v2ray/config.json", configPath)},
 	}
 
-	id, err := startContainer(cfg, hostCfg, "vmess-aead")
+	id, err := startContainer(cfg, hostCfg, "vmess-bench")
 	require.NoError(b, err)
 
 	b.Cleanup(func() {

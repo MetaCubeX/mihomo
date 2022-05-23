@@ -167,7 +167,7 @@ func Benchmark_Shadowsocks(b *testing.B) {
 		PortBindings: defaultPortBindings,
 	}
 
-	id, err := startContainer(cfg, hostCfg, "ss")
+	id, err := startContainer(cfg, hostCfg, "ss-bench")
 	require.NoError(b, err)
 
 	b.Cleanup(func() {
