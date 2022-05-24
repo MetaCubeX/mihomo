@@ -219,9 +219,16 @@ type RawConfig struct {
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
+	GeoXUrl       RawGeoXUrl                `yaml:"geox-url"`
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
+}
+
+type RawGeoXUrl struct {
+	GeoIp   string `yaml:"geoip" json:"geoip"`
+	Mmdb    string `yaml:"mmdb" json:"mmdb"`
+	GeoSite string `yaml:"geosite" json:"geosite"`
 }
 
 type RawSniffer struct {
@@ -308,6 +315,11 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 		Profile: Profile{
 			StoreSelected: true,
+		},
+		GeoXUrl: RawGeoXUrl{
+			GeoIp:   "https://raw.githubusercontents.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat",
+			Mmdb:    "https://raw.githubusercontents.com/Loyalsoldier/geoip/release/Country.mmdb",
+			GeoSite: "https://raw.githubusercontents.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat",
 		},
 	}
 
