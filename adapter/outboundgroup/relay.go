@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -37,30 +38,12 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		return proxies[0].DialContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	}
 
-	first := proxies[0]
-	last := proxies[len(proxies)-1]
-
-	c, err := dialer.DialContext(ctx, "tcp", first.Addr(), r.Base.DialOptions(opts...)...)
+	c, err := r.streamContext(ctx, proxies, r.Base.DialOptions(opts...)...)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-	}
-	tcpKeepAlive(c)
-
-	var currentMeta *C.Metadata
-	for _, proxy := range proxies[1:] {
-		currentMeta, err = addrToMetadata(proxy.Addr())
-		if err != nil {
-			return nil, err
-		}
-
-		c, err = first.StreamConn(c, currentMeta)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-
-		first = proxy
+		return nil, err
 	}
 
+	last := proxies[len(proxies)-1]
 	c, err = last.StreamConn(c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", last.Addr(), err)
@@ -78,7 +61,9 @@ func (r *Relay) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}
 	}
 
-	switch len(proxies) {
+	length := len(proxies)
+
+	switch length {
 	case 0:
 		return outbound.NewDirect().ListenPacketContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	case 1:
@@ -90,12 +75,16 @@ func (r *Relay) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	}
 
 	var (
-		first              = proxies[0]
-		last               = proxies[len(proxies)-1]
-		rawUDPRelay        bool
-		udpOverTCPEndIndex = -1
+		firstIndex          = 0
+		nextIndex           = 1
+		lastUDPOverTCPIndex = -1
+		rawUDPRelay         = false
+
+		first = proxies[firstIndex]
+		last  = proxies[length-1]
 
 		c           net.Conn
+		cc          net.Conn
 		err         error
 		currentMeta *C.Metadata
 	)
@@ -104,38 +93,47 @@ func (r *Relay) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		return nil, fmt.Errorf("%s connect error: proxy [%s] UDP is not supported in relay chains", last.Addr(), last.Name())
 	}
 
-	rawUDPRelay, udpOverTCPEndIndex = isRawUDPRelay(proxies)
+	rawUDPRelay, lastUDPOverTCPIndex = isRawUDPRelay(proxies)
 
-	if rawUDPRelay {
+	if first.Type() == C.Socks5 {
+		cc1, err1 := dialer.DialContext(ctx, "tcp", first.Addr(), r.Base.DialOptions(opts...)...)
+		if err1 != nil {
+			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
+		}
+		cc = cc1
+		tcpKeepAlive(cc)
+
+		var pc net.PacketConn
+		pc, err = dialer.ListenPacket(ctx, "udp", "", r.Base.DialOptions(opts...)...)
+		c = outbound.WrapConn(pc)
+	} else if rawUDPRelay {
 		var pc net.PacketConn
 		pc, err = dialer.ListenPacket(ctx, "udp", "", r.Base.DialOptions(opts...)...)
 		c = outbound.WrapConn(pc)
 	} else {
-		c, err = dialer.DialContext(ctx, "tcp", first.Addr(), r.Base.DialOptions(opts...)...)
+		firstIndex = lastUDPOverTCPIndex
+		nextIndex = firstIndex + 1
+		first = proxies[firstIndex]
+		c, err = r.streamContext(ctx, proxies[:nextIndex], r.Base.DialOptions(opts...)...)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
 	}
 
-	defer func() {
-		if err != nil && c != nil {
-			_ = c.Close()
-		}
-	}()
+	if nextIndex < length {
+		for i, proxy := range proxies[nextIndex:] { // raw udp in loop
+			currentMeta, err = addrToMetadata(proxy.Addr())
+			if err != nil {
+				return nil, err
+			}
+			currentMeta.NetWork = C.UDP
 
-	for i, proxy := range proxies[1:] {
-		currentMeta, err = addrToMetadata(proxy.Addr())
-		if err != nil {
-			return nil, err
-		}
-
-		if outbound.IsPacketConn(c) || udpOverTCPEndIndex == i {
 			if !isRawUDP(first) && !first.SupportUDP() {
 				return nil, fmt.Errorf("%s connect error: proxy [%s] UDP is not supported in relay chains", first.Addr(), first.Name())
 			}
 
-			if !currentMeta.Resolved() && needResolveIP(first) {
+			if needResolveIP(first, currentMeta) {
 				var ip netip.Addr
 				ip, err = resolver.ResolveProxyServerHost(currentMeta.Host)
 				if err != nil {
@@ -144,26 +142,55 @@ func (r *Relay) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 				currentMeta.DstIP = ip
 			}
 
-			currentMeta.NetWork = C.UDP
-			c, err = first.StreamPacketConn(c, currentMeta)
-		} else {
-			c, err = first.StreamConn(c, currentMeta)
-		}
+			if cc != nil { // socks5
+				c, err = streamSocks5PacketConn(first, cc, c, currentMeta)
+				cc = nil
+			} else {
+				c, err = first.StreamPacketConn(c, currentMeta)
+			}
 
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
+			if err != nil {
+				return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
+			}
 
-		first = proxy
+			if proxy.Type() == C.Socks5 {
+				endIndex := nextIndex + i + 1
+				cc, err = r.streamContext(ctx, proxies[:endIndex], r.Base.DialOptions(opts...)...)
+				if err != nil {
+					return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
+				}
+			}
+
+			first = proxy
+		}
 	}
 
-	c, err = last.StreamPacketConn(c, metadata)
+	if cc != nil {
+		c, err = streamSocks5PacketConn(last, cc, c, metadata)
+	} else {
+		c, err = last.StreamPacketConn(c, metadata)
+	}
 
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
+		return nil, fmt.Errorf("%s connect error: %w", last.Addr(), err)
 	}
 
 	return outbound.NewPacketConn(c.(net.PacketConn), r), nil
+}
+
+// SupportUDP implements C.ProxyAdapter
+func (r *Relay) SupportUDP() bool {
+	proxies := r.rawProxies(true)
+
+	l := len(proxies)
+
+	if l == 0 {
+		return true
+	}
+
+	last := proxies[l-1]
+
+	return isRawUDP(last) || last.SupportUDP()
 }
 
 // MarshalJSON implements C.ProxyAdapter
@@ -200,12 +227,47 @@ func (r *Relay) proxies(metadata *C.Metadata, touch bool) []C.Proxy {
 	return proxies
 }
 
+func (r *Relay) streamContext(ctx context.Context, proxies []C.Proxy, opts ...dialer.Option) (net.Conn, error) {
+	first := proxies[0]
+
+	c, err := dialer.DialContext(ctx, "tcp", first.Addr(), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
+	}
+	tcpKeepAlive(c)
+
+	if len(proxies) > 1 {
+		var currentMeta *C.Metadata
+		for _, proxy := range proxies[1:] {
+			currentMeta, err = addrToMetadata(proxy.Addr())
+			if err != nil {
+				return nil, err
+			}
+
+			c, err = first.StreamConn(c, currentMeta)
+			if err != nil {
+				return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
+			}
+
+			first = proxy
+		}
+	}
+
+	return c, nil
+}
+
+func streamSocks5PacketConn(proxy C.Proxy, cc, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	pc, err := proxy.(*adapter.Proxy).ProxyAdapter.(*outbound.Socks5).StreamSocks5PacketConn(cc, c.(net.PacketConn), metadata)
+	return outbound.WrapConn(pc), err
+}
+
 func isRawUDPRelay(proxies []C.Proxy) (bool, int) {
 	var (
-		lastIndex          = len(proxies) - 1
-		isLastRawUDP       = isRawUDP(proxies[lastIndex])
-		isUDPOverTCP       = false
-		udpOverTCPEndIndex = -1
+		lastIndex           = len(proxies) - 1
+		last                = proxies[lastIndex]
+		isLastRawUDP        = isRawUDP(last)
+		isUDPOverTCP        = false
+		lastUDPOverTCPIndex = -1
 	)
 
 	for i := lastIndex; i >= 0; i-- {
@@ -213,26 +275,33 @@ func isRawUDPRelay(proxies []C.Proxy) (bool, int) {
 
 		isUDPOverTCP = isUDPOverTCP || !isRawUDP(p)
 
-		if isLastRawUDP && isUDPOverTCP && udpOverTCPEndIndex == -1 {
-			udpOverTCPEndIndex = i
+		if isLastRawUDP && isUDPOverTCP && lastUDPOverTCPIndex == -1 {
+			lastUDPOverTCPIndex = i
 		}
 	}
 
-	return !isUDPOverTCP, udpOverTCPEndIndex
+	if !isLastRawUDP {
+		lastUDPOverTCPIndex = lastIndex
+	}
+
+	return !isUDPOverTCP, lastUDPOverTCPIndex
 }
 
 func isRawUDP(proxy C.ProxyAdapter) bool {
-	if proxy.Type() == C.Shadowsocks || proxy.Type() == C.ShadowsocksR {
+	if proxy.Type() == C.Shadowsocks || proxy.Type() == C.ShadowsocksR || proxy.Type() == C.Socks5 {
 		return true
 	}
 	return false
 }
 
-func needResolveIP(proxy C.ProxyAdapter) bool {
-	if proxy.Type() == C.Vmess || proxy.Type() == C.Vless {
-		return true
+func needResolveIP(proxy C.ProxyAdapter, metadata *C.Metadata) bool {
+	if metadata.Resolved() {
+		return false
 	}
-	return false
+	if proxy.Type() != C.Vmess && proxy.Type() != C.Vless {
+		return false
+	}
+	return true
 }
 
 func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
@@ -240,7 +309,6 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 		Base: outbound.NewBase(outbound.BaseOption{
 			Name:        option.Name,
 			Type:        C.Relay,
-			UDP:         true,
 			Interface:   option.Interface,
 			RoutingMark: option.RoutingMark,
 		}),

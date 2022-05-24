@@ -37,12 +37,59 @@ type Socks5Option struct {
 
 // StreamConn implements C.ProxyAdapter
 func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	var err error
+	c, _, err = ss.streamConn(c, metadata)
+
+	return c, err
+}
+
+func (ss *Socks5) StreamSocks5PacketConn(c net.Conn, pc net.PacketConn, metadata *C.Metadata) (net.PacketConn, error) {
+	if c == nil {
+		return pc, fmt.Errorf("%s connect error: parameter net.Conn is nil", ss.addr)
+	}
+
+	if pc == nil {
+		return pc, fmt.Errorf("%s connect error: parameter net.PacketConn is nil", ss.addr)
+	}
+
+	cc, bindAddr, err := ss.streamConn(c, metadata)
+	if err != nil {
+		return pc, err
+	}
+
+	c = cc
+
+	go func() {
+		_, _ = io.Copy(io.Discard, c)
+		_ = c.Close()
+		// A UDP association terminates when the TCP connection that the UDP
+		// ASSOCIATE request arrived on terminates. RFC1928
+		_ = pc.Close()
+	}()
+
+	// Support unspecified UDP bind address.
+	bindUDPAddr := bindAddr.UDPAddr()
+	if bindUDPAddr == nil {
+		return pc, errors.New("invalid UDP bind address")
+	} else if bindUDPAddr.IP.IsUnspecified() {
+		serverAddr, err := resolveUDPAddr("udp", ss.Addr())
+		if err != nil {
+			return pc, err
+		}
+
+		bindUDPAddr.IP = serverAddr.IP
+	}
+
+	return &socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, nil
+}
+
+func (ss *Socks5) streamConn(c net.Conn, metadata *C.Metadata) (_ net.Conn, bindAddr socks5.Addr, err error) {
 	if ss.tls {
 		cc := tls.Client(c, ss.tlsConfig)
 		err := cc.Handshake()
 		c = cc
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
+			return c, nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
 	}
 
@@ -53,10 +100,14 @@ func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error)
 			Password: ss.pass,
 		}
 	}
-	if _, err := socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdConnect, user); err != nil {
-		return nil, err
+
+	if metadata.NetWork == C.UDP {
+		bindAddr, err = socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdUDPAssociate, user)
+	} else {
+		bindAddr, err = socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdConnect, user)
 	}
-	return c, nil
+
+	return c, bindAddr, err
 }
 
 // DialContext implements C.ProxyAdapter
@@ -81,61 +132,24 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr, ss.Base.DialOptions(opts...)...)
 	if err != nil {
-		err = fmt.Errorf("%s connect error: %w", ss.addr, err)
-		return
-	}
-
-	if ss.tls {
-		cc := tls.Client(c, ss.tlsConfig)
-		err = cc.Handshake()
-		c = cc
+		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
 
 	defer safeConnClose(c, err)
-
-	tcpKeepAlive(c)
-	var user *socks5.User
-	if ss.user != "" {
-		user = &socks5.User{
-			Username: ss.user,
-			Password: ss.pass,
-		}
-	}
-
-	bindAddr, err := socks5.ClientHandshake(c, serializesSocksAddr(metadata), socks5.CmdUDPAssociate, user)
-	if err != nil {
-		err = fmt.Errorf("client hanshake error: %w", err)
-		return
-	}
 
 	pc, err := dialer.ListenPacket(ctx, "udp", "", ss.Base.DialOptions(opts...)...)
 	if err != nil {
 		return
 	}
 
-	go func() {
-		_, _ = io.Copy(io.Discard, c)
-		_ = c.Close()
-		// A UDP association terminates when the TCP connection that the UDP
-		// ASSOCIATE request arrived on terminates. RFC1928
-		_ = pc.Close()
-	}()
+	tcpKeepAlive(c)
 
-	// Support unspecified UDP bind address.
-	bindUDPAddr := bindAddr.UDPAddr()
-	if bindUDPAddr == nil {
-		err = errors.New("invalid UDP bind address")
+	pc, err = ss.StreamSocks5PacketConn(c, pc, metadata)
+	if err != nil {
 		return
-	} else if bindUDPAddr.IP.IsUnspecified() {
-		serverAddr, err := resolveUDPAddr("udp", ss.Addr())
-		if err != nil {
-			return nil, err
-		}
-
-		bindUDPAddr.IP = serverAddr.IP
 	}
 
-	return NewPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
+	return NewPacketConn(pc, ss), nil
 }
 
 func NewSocks5(option Socks5Option) *Socks5 {
