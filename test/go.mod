@@ -14,7 +14,6 @@ require (
 replace github.com/Dreamacro/clash => ../
 
 require (
-	github.com/Dreamacro/go-shadowsocks2 v0.1.8 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect

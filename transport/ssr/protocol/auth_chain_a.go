@@ -13,9 +13,8 @@ import (
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/transport/shadowsocks/core"
 	"github.com/Dreamacro/clash/transport/ssr/tools"
-
-	"github.com/Dreamacro/go-shadowsocks2/core"
 )
 
 func init() {

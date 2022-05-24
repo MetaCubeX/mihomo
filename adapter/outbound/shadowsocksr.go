@@ -8,12 +8,11 @@ import (
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/shadowsocks/core"
+	"github.com/Dreamacro/clash/transport/shadowsocks/shadowaead"
+	"github.com/Dreamacro/clash/transport/shadowsocks/shadowstream"
 	"github.com/Dreamacro/clash/transport/ssr/obfs"
 	"github.com/Dreamacro/clash/transport/ssr/protocol"
-
-	"github.com/Dreamacro/go-shadowsocks2/core"
-	"github.com/Dreamacro/go-shadowsocks2/shadowaead"
-	"github.com/Dreamacro/go-shadowsocks2/shadowstream"
 )
 
 type ShadowSocksR struct {
