@@ -6,7 +6,6 @@ import (
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
-	"net/netip"
 	"runtime"
 	"sort"
 	"strconv"
@@ -26,10 +25,9 @@ import (
 )
 
 var (
-	allowLan             = false
-	bindAddress          = "*"
-	lastTunConf          *config.Tun
-	lastTunAddressPrefix *netip.Prefix
+	allowLan    = false
+	bindAddress = "*"
+	lastTunConf *config.Tun
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -467,5 +465,4 @@ func Cleanup(wait bool) {
 	}
 	tunStackListener = nil
 	lastTunConf = nil
-	lastTunAddressPrefix = nil
 }

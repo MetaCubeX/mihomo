@@ -47,13 +47,14 @@ type General struct {
 	UnifiedDelay  bool
 	LogLevel      log.LogLevel `json:"log-level"`
 	IPv6          bool         `json:"ipv6"`
-	Interface     string       `json:"-"`
+	Interface     string       `json:"interface-name"`
 	RoutingMark   int          `json:"-"`
 	GeodataMode   bool         `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
 	TCPConcurrent bool         `json:"tcp-concurrent"`
 	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
+	Sniffing      bool         `json:"sniffing"`
 }
 
 // Inbound config
