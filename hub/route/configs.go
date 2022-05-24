@@ -36,6 +36,7 @@ type configSchema struct {
 	Mode        *tunnel.TunnelMode `json:"mode"`
 	LogLevel    *log.LogLevel      `json:"log-level"`
 	IPv6        *bool              `json:"ipv6"`
+	Sniffing    *bool              `json:"sniffing"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +66,10 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.BindAddress != nil {
 		P.SetBindAddress(*general.BindAddress)
+	}
+
+	if general.Sniffing != nil {
+		tunnel.SetSniffing(*general.Sniffing)
 	}
 
 	ports := P.GetPorts()

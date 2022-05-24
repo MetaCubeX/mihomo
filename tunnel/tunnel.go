@@ -25,14 +25,15 @@ import (
 )
 
 var (
-	tcpQueue      = make(chan C.ConnContext, 200)
-	udpQueue      = make(chan *inbound.PacketAdapter, 200)
-	natTable      = nat.New()
-	rules         []C.Rule
-	proxies       = make(map[string]C.Proxy)
-	providers     map[string]provider.ProxyProvider
-	ruleProviders map[string]provider.RuleProvider
-	configMux     sync.RWMutex
+	tcpQueue       = make(chan C.ConnContext, 200)
+	udpQueue       = make(chan *inbound.PacketAdapter, 200)
+	natTable       = nat.New()
+	rules          []C.Rule
+	proxies        = make(map[string]C.Proxy)
+	providers      map[string]provider.ProxyProvider
+	ruleProviders  map[string]provider.RuleProvider
+	sniffingEnable bool
+	configMux      sync.RWMutex
 
 	// Outbound Rule
 	mode = Rule
@@ -42,6 +43,18 @@ var (
 	procesCache string
 	failTotal   int
 )
+
+func SetSniffing(b bool) {
+	if sniffer.Dispatcher.Enable() {
+		configMux.Lock()
+		sniffingEnable = b
+		configMux.Unlock()
+	}
+}
+
+func IsSniffing() bool {
+	return sniffingEnable
+}
 
 func init() {
 	go process()
@@ -96,6 +109,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
 	configMux.Lock()
 	sniffer.Dispatcher = *dispatcher
+	sniffingEnable = true
 	configMux.Unlock()
 }
 
@@ -325,7 +339,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	if sniffer.Dispatcher.Enable() {
+	if sniffer.Dispatcher.Enable() && sniffingEnable {
 		sniffer.Dispatcher.TCPSniff(connCtx.Conn(), metadata)
 	}
 

@@ -119,6 +119,8 @@ func GetGeneral() *config.General {
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
 		Tun:           P.GetTunConf(),
+		Interface:     dialer.DefaultInterface.Load(),
+		Sniffing:      tunnel.IsSniffing(),
 	}
 
 	return general
