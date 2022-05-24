@@ -8,8 +8,6 @@ import (
 	"github.com/docker/docker/client"
 )
 
-var isDarwin = false
-
 func startContainer(cfg *container.Config, hostCfg *container.HostConfig, name string) (string, error) {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
