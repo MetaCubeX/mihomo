@@ -15,7 +15,7 @@ import (
 var initMode = true
 
 func downloadMMDB(path string) (err error) {
-	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/geoip/release/Country.mmdb")
+	resp, err := http.Get(C.MmdbUrl)
 	if err != nil {
 		return
 	}
@@ -32,7 +32,7 @@ func downloadMMDB(path string) (err error) {
 }
 
 func downloadGeoIP(path string) (err error) {
-	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat")
+	resp, err := http.Get(C.GeoIpUrl)
 	if err != nil {
 		return
 	}
@@ -49,7 +49,7 @@ func downloadGeoIP(path string) (err error) {
 }
 
 func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get("https://raw.githubusercontents.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat")
+	resp, err := http.Get(C.GeoSiteUrl)
 	if err != nil {
 		return
 	}
@@ -74,8 +74,8 @@ func initGeoSite() error {
 		log.Infoln("Download GeoSite.dat finish")
 	}
 	if initMode {
-		if !geodata.Verify(C.GeositeName) {
-			log.Warnln("GeoSite.dat invalid, remove and download")
+		if err := geodata.Verify(C.GeositeName); err != nil {
+			log.Warnln("GeoSite.dat invalid, remove and download: %s", err)
 			if err := os.Remove(C.Path.GeoSite()); err != nil {
 				return fmt.Errorf("can't remove invalid GeoSite.dat: %s", err.Error())
 			}
@@ -97,8 +97,8 @@ func initGeoIP() error {
 			log.Infoln("Download GeoIP.dat finish")
 		}
 
-		if !geodata.Verify(C.GeoipName) {
-			log.Warnln("GeoIP.dat invalid, remove and download")
+		if err := geodata.Verify(C.GeoipName); err != nil {
+			log.Warnln("GeoIP.dat invalid, remove and download: %s", err)
 			if err := os.Remove(C.Path.GeoIP()); err != nil {
 				return fmt.Errorf("can't remove invalid GeoIP.dat: %s", err.Error())
 			}
@@ -158,6 +158,9 @@ func Init(dir string) error {
 	}
 	if !C.GeodataMode {
 		C.GeodataMode = rawCfg.GeodataMode
+		C.GeoIpUrl = rawCfg.GeoXUrl.GeoIp
+		C.GeoSiteUrl = rawCfg.GeoXUrl.GeoSite
+		C.MmdbUrl = rawCfg.GeoXUrl.Mmdb
 	}
 	// initial GeoIP
 	if err := initGeoIP(); err != nil {
