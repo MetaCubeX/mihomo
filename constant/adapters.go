@@ -41,6 +41,7 @@ const (
 type Connection interface {
 	Chains() Chain
 	AppendToChains(adapter ProxyAdapter)
+	RemoteDestination() string
 }
 
 type Chain []string

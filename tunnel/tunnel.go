@@ -288,14 +288,12 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		}
 		pCtx.InjectPacketConn(rawPc)
 
-		actualProxy := proxy.Unwrap(metadata)
-		if actualProxy != nil {
-			if dst, _, err := net.SplitHostPort(actualProxy.Addr()); err == nil {
-				metadata.RemoteDst = dst
-			} else {
-				if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
-					metadata.RemoteDst = actualProxy.Addr()
-				}
+		addr := rawPc.RemoteDestination()
+		if dst, _, err := net.SplitHostPort(addr); err == nil {
+			metadata.RemoteDst = dst
+		} else {
+			if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
+				metadata.RemoteDst = addr
 			}
 		}
 
