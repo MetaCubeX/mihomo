@@ -59,7 +59,7 @@ func (f *fetcher) Initial() (any, error) {
 		isLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
 			defer func() {
-				log.Infoln("[Provider] %s's proxies not updated for a long time")
+				log.Infoln("[Provider] %s's proxies not updated for a long time, force refresh", f.Name())
 				go f.update()
 			}()
 		}
@@ -160,11 +160,14 @@ func (f *fetcher) update() (same bool, err error) {
 	elm, same, err := f.Update()
 	if err != nil {
 		log.Warnln("[Provider] %s pull error: %s", f.Name(), err.Error())
+		return
 	}
 
 	if same {
 		log.Debugln("[Provider] %s's proxies doesn't change", f.Name())
+		return
 	}
+
 	if f.onUpdate != nil {
 		f.onUpdate(elm)
 	}
