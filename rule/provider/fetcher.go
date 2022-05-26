@@ -58,7 +58,7 @@ func (f *fetcher) Initial() (interface{}, error) {
 		hasLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
 			defer func() {
-				log.Infoln("[Provider] %s's rules not updated for a long time", f.Name())
+				log.Infoln("[Provider] %s's rules not updated for a long time, force refresh", f.Name())
 				go f.update()
 			}()
 		}
@@ -186,10 +186,12 @@ func (f *fetcher) update() (same bool, err error) {
 	elm, same, err := f.Update()
 	if err != nil {
 		log.Warnln("[Provider] %s pull error: %s", f.Name(), err.Error())
+		return
 	}
 
 	if same {
 		log.Debugln("[Provider] %s's rules doesn't change", f.Name())
+		return
 	}
 
 	log.Infoln("[Provider] %s's rules update", f.Name())
