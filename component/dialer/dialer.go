@@ -15,6 +15,7 @@ var (
 	dialMux                    sync.Mutex
 	actualSingleDialContext    = singleDialContext
 	actualDualStackDialContext = dualStackDialContext
+	tcpConcurrent              = false
 	DisableIPv6                = false
 )
 
@@ -76,6 +77,7 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 
 func SetDial(concurrent bool) {
 	dialMux.Lock()
+	tcpConcurrent = concurrent
 	if concurrent {
 		actualSingleDialContext = concurrentSingleDialContext
 		actualDualStackDialContext = concurrentDualStackDialContext
@@ -85,6 +87,10 @@ func SetDial(concurrent bool) {
 	}
 
 	dialMux.Unlock()
+}
+
+func GetDial() bool {
+	return tcpConcurrent
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {

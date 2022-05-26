@@ -1,6 +1,7 @@
 package route
 
 import (
+	"github.com/Dreamacro/clash/component/dialer"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -32,18 +33,19 @@ func configRouter() http.Handler {
 }
 
 type configSchema struct {
-	Port        *int               `json:"port"`
-	SocksPort   *int               `json:"socks-port"`
-	RedirPort   *int               `json:"redir-port"`
-	TProxyPort  *int               `json:"tproxy-port"`
-	MixedPort   *int               `json:"mixed-port"`
-	Tun         *config.Tun        `json:"tun"`
-	AllowLan    *bool              `json:"allow-lan"`
-	BindAddress *string            `json:"bind-address"`
-	Mode        *tunnel.TunnelMode `json:"mode"`
-	LogLevel    *log.LogLevel      `json:"log-level"`
-	IPv6        *bool              `json:"ipv6"`
-	Sniffing    *bool              `json:"sniffing"`
+	Port          *int               `json:"port"`
+	SocksPort     *int               `json:"socks-port"`
+	RedirPort     *int               `json:"redir-port"`
+	TProxyPort    *int               `json:"tproxy-port"`
+	MixedPort     *int               `json:"mixed-port"`
+	Tun           *config.Tun        `json:"tun"`
+	AllowLan      *bool              `json:"allow-lan"`
+	BindAddress   *string            `json:"bind-address"`
+	Mode          *tunnel.TunnelMode `json:"mode"`
+	LogLevel      *log.LogLevel      `json:"log-level"`
+	IPv6          *bool              `json:"ipv6"`
+	Sniffing      *bool              `json:"sniffing"`
+	TcpConcurrent *bool              `json:"tcp-concurrent"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +79,10 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.Sniffing != nil {
 		tunnel.SetSniffing(*general.Sniffing)
+	}
+
+	if general.TcpConcurrent != nil {
+		dialer.SetDial(*general.TcpConcurrent)
 	}
 
 	ports := P.GetPorts()
