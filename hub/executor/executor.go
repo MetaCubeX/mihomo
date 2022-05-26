@@ -121,6 +121,7 @@ func GetGeneral() *config.General {
 		Tun:           P.GetTunConf(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
+		TCPConcurrent: dialer.GetDial(),
 	}
 
 	return general
