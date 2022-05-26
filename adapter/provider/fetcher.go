@@ -26,6 +26,7 @@ type fetcher struct {
 	done      chan struct{}
 	hash      [16]byte
 	parser    parser
+	interval  time.Duration
 	onUpdate  func(any)
 }
 
@@ -56,6 +57,12 @@ func (f *fetcher) Initial() (any, error) {
 		modTime := stat.ModTime()
 		f.updatedAt = &modTime
 		isLocal = true
+		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
+			defer func() {
+				log.Infoln("[Provider] %s's proxies not updated for a long time")
+				go f.update()
+			}()
+		}
 	} else {
 		buf, err = f.vehicle.Read()
 	}
@@ -137,26 +144,33 @@ func (f *fetcher) pullLoop() {
 	for {
 		select {
 		case <-f.ticker.C:
-			elm, same, err := f.Update()
-			if err != nil {
-				log.Warnln("[Provider] %s pull error: %s", f.Name(), err.Error())
+			same, err := f.update()
+			if same || err != nil {
 				continue
 			}
 
-			if same {
-				log.Debugln("[Provider] %s's proxies doesn't change", f.Name())
-				continue
-			}
-
-			log.Infoln("[Provider] %s's proxies update", f.Name())
-			if f.onUpdate != nil {
-				f.onUpdate(elm)
-			}
 		case <-f.done:
 			f.ticker.Stop()
 			return
 		}
 	}
+}
+
+func (f *fetcher) update() (same bool, err error) {
+	elm, same, err := f.Update()
+	if err != nil {
+		log.Warnln("[Provider] %s pull error: %s", f.Name(), err.Error())
+	}
+
+	if same {
+		log.Debugln("[Provider] %s's proxies doesn't change", f.Name())
+	}
+	if f.onUpdate != nil {
+		f.onUpdate(elm)
+	}
+
+	log.Infoln("[Provider] %s's proxies update", f.Name())
+	return
 }
 
 func safeWrite(path string, buf []byte) error {
@@ -184,5 +198,6 @@ func newFetcher(name string, interval time.Duration, vehicle types.Vehicle, pars
 		parser:   parser,
 		done:     make(chan struct{}, 1),
 		onUpdate: onUpdate,
+		interval: interval,
 	}
 }
