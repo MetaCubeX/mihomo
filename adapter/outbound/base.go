@@ -149,10 +149,12 @@ func (c *conn) AppendToChains(a C.ProxyAdapter) {
 
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 	var remoteDestination string
-	if tcpAddr, ok := c.RemoteAddr().(*net.TCPAddr); ok {
-		remoteDestination = tcpAddr.IP.String()
-	} else {
-		remoteDestination = parseRemoteDestination(a.Addr())
+	if c != nil {
+		if tcpAddr, ok := c.RemoteAddr().(*net.TCPAddr); ok {
+			remoteDestination = tcpAddr.IP.String()
+		} else {
+			remoteDestination = parseRemoteDestination(a.Addr())
+		}
 	}
 
 	return &conn{c, []string{a.Name()}, remoteDestination}
