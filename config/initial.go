@@ -158,10 +158,10 @@ func Init(dir string) error {
 	}
 	if !C.GeodataMode {
 		C.GeodataMode = rawCfg.GeodataMode
-		C.GeoIpUrl = rawCfg.GeoXUrl.GeoIp
-		C.GeoSiteUrl = rawCfg.GeoXUrl.GeoSite
-		C.MmdbUrl = rawCfg.GeoXUrl.Mmdb
 	}
+	C.GeoIpUrl = rawCfg.GeoXUrl.GeoIp
+	C.GeoSiteUrl = rawCfg.GeoXUrl.GeoSite
+	C.MmdbUrl = rawCfg.GeoXUrl.Mmdb
 	// initial GeoIP
 	if err := initGeoIP(); err != nil {
 		return fmt.Errorf("can't initial GeoIP: %w", err)

@@ -19,7 +19,7 @@ func UpdateGeoDatabases() error {
 
 	if C.GeodataMode {
 		if err := downloadGeoIP(tmpGepIP); err != nil {
-			return fmt.Errorf("can't download MMDB database file: %w", err)
+			return fmt.Errorf("can't download GeoIP database file: %w", err)
 		}
 
 		if err := verifyGeoSite("temp_geoip.dat"); err != nil {
