@@ -150,7 +150,6 @@ Then manually create the default route and DNS server. If your device already ha
 Enjoy! :)
 
 #### For Windows:
-go to [https://www.wintun.net](https://www.wintun.net) and download the latest release, copy the right `wintun.dll` into the system32 directory.
 ```yaml
 tun:
   enable: true
