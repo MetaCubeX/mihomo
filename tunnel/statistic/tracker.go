@@ -59,6 +59,7 @@ func (tt *tcpTracker) Close() error {
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
 	uuid, _ := uuid.NewV4()
+	metadata.RemoteDst = conn.RemoteDestination()
 
 	t := &tcpTracker{
 		Conn:    conn,
@@ -116,6 +117,7 @@ func (ut *udpTracker) Close() error {
 
 func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
 	uuid, _ := uuid.NewV4()
+	metadata.RemoteDst = conn.RemoteDestination()
 
 	ut := &udpTracker{
 		PacketConn: conn,
