@@ -83,7 +83,7 @@ func SetDial(concurrent bool) {
 		actualDualStackDialContext = concurrentDualStackDialContext
 	} else {
 		actualSingleDialContext = singleDialContext
-		actualDualStackDialContext = concurrentDualStackDialContext
+		actualDualStackDialContext = dualStackDialContext
 	}
 
 	dialMux.Unlock()
