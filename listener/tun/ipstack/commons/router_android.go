@@ -49,16 +49,6 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	if err = netlink.RouteAdd(&netlink.Route{
-		LinkIndex: metaLink.Attrs().Index,
-		Scope:     netlink.SCOPE_LINK,
-		Protocol:  2,
-		Src:       ip.AsSlice(),
-		Table:     254,
-	}); err != nil {
-		return err
-	}
-
 	if autoRoute {
 		err = configInterfaceRouting(metaLink.Attrs().Index, interfaceName, ip)
 	}
@@ -80,7 +70,7 @@ func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) erro
 			Protocol:  2,
 			Src:       ip.AsSlice(),
 			Dst:       ipn,
-			Table:     254,
+			Table:     tableId,
 		}); err != nil {
 			return err
 		}
