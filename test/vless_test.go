@@ -9,7 +9,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestClash_VlessTLS(t *testing.T) {
@@ -27,10 +27,10 @@ func TestClash_VlessTLS(t *testing.T) {
 	}
 
 	id, err := startContainer(cfg, hostCfg, "vless-tls")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-	defer cleanContainer(id)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
 
 	proxy, err := outbound.NewVless(outbound.VlessOption{
 		Name:           "vless",
@@ -41,9 +41,7 @@ func TestClash_VlessTLS(t *testing.T) {
 		ServerName:     "example.org",
 		UDP:            true,
 	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
@@ -64,10 +62,10 @@ func TestClash_VlessXTLS(t *testing.T) {
 	}
 
 	id, err := startContainer(cfg, hostCfg, "vless-xtls")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-	defer cleanContainer(id)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
 
 	proxy, err := outbound.NewVless(outbound.VlessOption{
 		Name:           "vless",
@@ -80,9 +78,7 @@ func TestClash_VlessXTLS(t *testing.T) {
 		Flow:           "xtls-rprx-direct",
 		FlowShow:       true,
 	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
@@ -103,10 +99,10 @@ func TestClash_VlessWS(t *testing.T) {
 	}
 
 	id, err := startContainer(cfg, hostCfg, "vless-ws")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-	defer cleanContainer(id)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
 
 	proxy, err := outbound.NewVless(outbound.VlessOption{
 		Name:           "vless",
@@ -118,9 +114,7 @@ func TestClash_VlessWS(t *testing.T) {
 		Network:        "ws",
 		UDP:            true,
 	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	time.Sleep(waitTime)
 	testSuit(t, proxy)

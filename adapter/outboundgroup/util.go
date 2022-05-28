@@ -24,8 +24,7 @@ func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
 			DstIP:    netip.Addr{},
 			DstPort:  port,
 		}
-		err = nil
-		return
+		return addr, nil
 	} else if ip.Is4() {
 		addr = &C.Metadata{
 			AddrType: C.AtypIPv4,

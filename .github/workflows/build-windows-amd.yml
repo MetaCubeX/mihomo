@@ -59,6 +59,7 @@ jobs:
           Compress-Archive -Path clash-windows-amd64-v3.exe -DestinationPath clash-plus-windows-amd64-v3-$(Get-Date -Format 'yyyy.MM.dd').zip
           Remove-Item -Force clash-windows-amd64.exe
           Remove-Item -Force clash-windows-amd64-v3.exe
+          "$(Get-Date -Format 'yyyy.MM.dd')" | Out-File version.txt -NoNewLine
 
       - name: Upload files to Artifacts
         uses: actions/upload-artifact@v2

@@ -385,7 +385,13 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 		return
 	}
 
-	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn)
+	callback := &tunChangeCallback{
+		tunConf: *tunConf,
+		tcpIn:   tcpIn,
+		udpIn:   udpIn,
+	}
+
+	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn, callback)
 	if err != nil {
 		return
 	}
@@ -561,6 +567,24 @@ func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) boo
 	}
 
 	return false
+}
+
+type tunChangeCallback struct {
+	tunConf config.Tun
+	tcpIn   chan<- C.ConnContext
+	udpIn   chan<- *inbound.PacketAdapter
+}
+
+func (t *tunChangeCallback) Pause() {
+	conf := t.tunConf
+	conf.Enable = false
+	ReCreateTun(&conf, t.tcpIn, t.udpIn)
+}
+
+func (t *tunChangeCallback) Resume() {
+	conf := t.tunConf
+	conf.Enable = true
+	ReCreateTun(&conf, t.tcpIn, t.udpIn)
 }
 
 func initCert() error {

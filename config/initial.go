@@ -12,7 +12,7 @@ import (
 )
 
 func downloadMMDB(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb")
+	resp, err := http.Get("https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb")
 	if err != nil {
 		return
 	}
@@ -32,18 +32,18 @@ func initMMDB() error {
 	if _, err := os.Stat(C.Path.MMDB()); os.IsNotExist(err) {
 		log.Infoln("Can't find MMDB, start download")
 		if err := downloadMMDB(C.Path.MMDB()); err != nil {
-			return fmt.Errorf("can't download MMDB: %s", err.Error())
+			return fmt.Errorf("can't download MMDB: %w", err)
 		}
 	}
 
 	if !mmdb.Verify() {
 		log.Warnln("MMDB invalid, remove and download")
 		if err := os.Remove(C.Path.MMDB()); err != nil {
-			return fmt.Errorf("can't remove invalid MMDB: %s", err.Error())
+			return fmt.Errorf("can't remove invalid MMDB: %w", err)
 		}
 
 		if err := downloadMMDB(C.Path.MMDB()); err != nil {
-			return fmt.Errorf("can't download MMDB: %s", err.Error())
+			return fmt.Errorf("can't download MMDB: %w", err)
 		}
 	}
 
@@ -51,7 +51,7 @@ func initMMDB() error {
 }
 
 func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat")
+	resp, err := http.Get("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat")
 	if err != nil {
 		return
 	}
@@ -71,7 +71,7 @@ func initGeoSite() error {
 	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
 		log.Infoln("Can't find GeoSite.dat, start download")
 		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
-			return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
+			return fmt.Errorf("can't download GeoSite.dat: %w", err)
 		}
 		log.Infoln("Download GeoSite.dat finish")
 	}
@@ -84,7 +84,7 @@ func Init(dir string) error {
 	// initial homedir
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0o777); err != nil {
-			return fmt.Errorf("can't create config directory %s: %s", dir, err.Error())
+			return fmt.Errorf("can't create config directory %s: %w", dir, err)
 		}
 	}
 
@@ -93,10 +93,10 @@ func Init(dir string) error {
 		log.Infoln("Can't find config, create a initial config file")
 		f, err := os.OpenFile(C.Path.Config(), os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
-			return fmt.Errorf("can't create file %s: %s", C.Path.Config(), err.Error())
+			return fmt.Errorf("can't create file %s: %w", C.Path.Config(), err)
 		}
-		f.Write([]byte(`mixed-port: 7890`))
-		f.Close()
+		_, _ = f.Write([]byte(`mixed-port: 7890`))
+		_ = f.Close()
 	}
 
 	// initial mmdb

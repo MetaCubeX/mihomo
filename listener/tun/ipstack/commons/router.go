@@ -1,14 +1,13 @@
 package commons
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/iface"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (
@@ -18,6 +17,10 @@ var (
 	monitorStarted  = false
 	monitorStop     = make(chan struct{}, 2)
 	monitorMux      sync.Mutex
+
+	tunStatus            = C.TunDisabled
+	tunChangeCallback    C.TUNChangeCallback
+	errInterfaceNotFound = errors.New("default interface not found")
 )
 
 func ipv4MaskString(bits int) string {
@@ -29,54 +32,6 @@ func ipv4MaskString(bits int) string {
 	return fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
 }
 
-func StartDefaultInterfaceChangeMonitor() {
-	monitorMux.Lock()
-	if monitorStarted {
-		monitorMux.Unlock()
-		return
-	}
-	monitorStarted = true
-	monitorMux.Unlock()
-
-	select {
-	case <-monitorStop:
-	default:
-	}
-
-	t := time.NewTicker(monitorDuration)
-	defer t.Stop()
-
-	for {
-		select {
-		case <-t.C:
-			interfaceName, err := GetAutoDetectInterface()
-			if err != nil {
-				log.Warnln("[TUN] default interface monitor err: %v", err)
-				continue
-			}
-
-			old := dialer.DefaultInterface.Load()
-			if interfaceName == old {
-				continue
-			}
-
-			dialer.DefaultInterface.Store(interfaceName)
-
-			iface.FlushCache()
-
-			log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, interfaceName)
-		case <-monitorStop:
-			break
-		}
-	}
-}
-
-func StopDefaultInterfaceChangeMonitor() {
-	monitorMux.Lock()
-	defer monitorMux.Unlock()
-
-	if monitorStarted {
-		monitorStop <- struct{}{}
-		monitorStarted = false
-	}
+func SetTunChangeCallback(callback C.TUNChangeCallback) {
+	tunChangeCallback = callback
 }

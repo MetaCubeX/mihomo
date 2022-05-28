@@ -61,7 +61,7 @@ func (c *cache[K, V]) GetWithExpire(key K) (payload V, expired time.Time) {
 
 func (c *cache[K, V]) cleanup() {
 	c.mapping.Range(func(k, v any) bool {
-		key := k.(string)
+		key := k
 		elm := v.(*element[V])
 		if time.Since(elm.Expired) > 0 {
 			c.mapping.Delete(key)

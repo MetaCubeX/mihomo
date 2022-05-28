@@ -6,22 +6,26 @@ import (
 	"net/netip"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Dreamacro/clash/common/cmd"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/log"
 
 	"golang.org/x/net/route"
 )
 
 func GetAutoDetectInterface() (string, error) {
-	iface, err := defaultRouteInterface()
+	ifaceM, err := defaultRouteInterface()
 	if err != nil {
 		return "", err
 	}
-	return iface.Name, nil
+	return ifaceM.Name, nil
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, _ int, autoRoute bool) error {
 	if !addr.Addr().Is4() {
 		return fmt.Errorf("supported ipv4 only")
 	}
@@ -96,17 +100,69 @@ func defaultRouteInterface() (*net.Interface, error) {
 			continue
 		}
 
-		iface, err1 := net.InterfaceByIndex(routeMessage.Index)
+		ifaceM, err1 := net.InterfaceByIndex(routeMessage.Index)
 		if err1 != nil {
 			continue
 		}
 
-		if strings.HasPrefix(iface.Name, "utun") {
+		if strings.HasPrefix(ifaceM.Name, "utun") {
 			continue
 		}
 
-		return iface, nil
+		return ifaceM, nil
 	}
 
 	return nil, fmt.Errorf("ambiguous gateway interfaces found")
+}
+
+func StartDefaultInterfaceChangeMonitor() {
+	monitorMux.Lock()
+	if monitorStarted {
+		monitorMux.Unlock()
+		return
+	}
+	monitorStarted = true
+	monitorMux.Unlock()
+
+	select {
+	case <-monitorStop:
+	default:
+	}
+
+	t := time.NewTicker(monitorDuration)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-t.C:
+			interfaceName, err := GetAutoDetectInterface()
+			if err != nil {
+				log.Warnln("[TUN] default interface monitor err: %v", err)
+				continue
+			}
+
+			old := dialer.DefaultInterface.Load()
+			if interfaceName == old {
+				continue
+			}
+
+			dialer.DefaultInterface.Store(interfaceName)
+
+			iface.FlushCache()
+
+			log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, interfaceName)
+		case <-monitorStop:
+			break
+		}
+	}
+}
+
+func StopDefaultInterfaceChangeMonitor() {
+	monitorMux.Lock()
+	defer monitorMux.Unlock()
+
+	if monitorStarted {
+		monitorStop <- struct{}{}
+		monitorStarted = false
+	}
 }
