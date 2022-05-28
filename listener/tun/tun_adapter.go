@@ -26,7 +26,7 @@ import (
 func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 
 	var (
-		tunAddress = netip.Prefix{}
+		tunAddress = tunConf.TunAddressPrefix
 		devName    = tunConf.Device
 		stackType  = tunConf.Stack
 		autoRoute  = tunConf.AutoRoute
@@ -37,10 +37,6 @@ func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 
 		err error
 	)
-
-	if tunConf.TunAddressPrefix != nil {
-		tunAddress = *tunConf.TunAddressPrefix
-	}
 
 	if devName == "" {
 		devName = generateDeviceName()

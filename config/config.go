@@ -115,7 +115,7 @@ type Tun struct {
 	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
-	TunAddressPrefix    *netip.Prefix    `yaml:"-" json:"-"`
+	TunAddressPrefix    netip.Prefix     `yaml:"-" json:"-"`
 }
 
 // IPTables config
@@ -910,9 +910,11 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		dnsHijack = append(dnsHijack, addrPort)
 	}
 
-	var tunAddressPrefix *netip.Prefix
+	var tunAddressPrefix netip.Prefix
 	if dnsCfg.FakeIPRange != nil {
-		tunAddressPrefix = dnsCfg.FakeIPRange.IPNet()
+		tunAddressPrefix = *dnsCfg.FakeIPRange.IPNet()
+	} else {
+		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
 	}
 
 	return &Tun{
