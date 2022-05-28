@@ -18,9 +18,20 @@ var StackTypeMapping = map[string]TUNStack{
 const (
 	TunGvisor TUNStack = iota
 	TunSystem
+
+	TunDisabled TUNState = iota
+	TunEnabled
+	TunPaused
 )
 
 type TUNStack int
+
+type TUNState int
+
+type TUNChangeCallback interface {
+	Pause()
+	Resume()
+}
 
 // UnmarshalYAML unserialize TUNStack with yaml
 func (e *TUNStack) UnmarshalYAML(unmarshal func(any) error) error {

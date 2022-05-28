@@ -24,7 +24,7 @@ import (
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter, tunChangeCallback C.TUNChangeCallback) (ipstack.Stack, error) {
 	var (
 		tunAddress = netip.Prefix{}
 		devName    = tunConf.Device
@@ -98,6 +98,7 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 	}
 
 	if tunConf.AutoDetectInterface {
+		commons.SetTunChangeCallback(tunChangeCallback)
 		go commons.StartDefaultInterfaceChangeMonitor()
 	}
 

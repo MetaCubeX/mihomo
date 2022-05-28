@@ -3,16 +3,20 @@ package commons
 import (
 	"fmt"
 	"net/netip"
+	"time"
 
 	"github.com/Dreamacro/clash/common/cmd"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/log"
 )
 
 func GetAutoDetectInterface() (string, error) {
 	return cmd.ExecCmd("bash -c ip route show | grep 'default via' | awk -F ' ' 'NR==1{print $5}' | xargs echo -n")
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, _ int, autoRoute bool) error {
 	var (
 		interfaceName = dev.Name()
 		ip            = addr.Masked().Addr().Next()
@@ -50,4 +54,56 @@ func execRouterCmd(action, route string, interfaceName string, linkIP string) er
 
 	_, err := cmd.ExecCmd(cmdStr)
 	return err
+}
+
+func StartDefaultInterfaceChangeMonitor() {
+	monitorMux.Lock()
+	if monitorStarted {
+		monitorMux.Unlock()
+		return
+	}
+	monitorStarted = true
+	monitorMux.Unlock()
+
+	select {
+	case <-monitorStop:
+	default:
+	}
+
+	t := time.NewTicker(monitorDuration)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-t.C:
+			interfaceName, err := GetAutoDetectInterface()
+			if err != nil {
+				log.Warnln("[TUN] default interface monitor err: %v", err)
+				continue
+			}
+
+			old := dialer.DefaultInterface.Load()
+			if interfaceName == old {
+				continue
+			}
+
+			dialer.DefaultInterface.Store(interfaceName)
+
+			iface.FlushCache()
+
+			log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, interfaceName)
+		case <-monitorStop:
+			break
+		}
+	}
+}
+
+func StopDefaultInterfaceChangeMonitor() {
+	monitorMux.Lock()
+	defer monitorMux.Unlock()
+
+	if monitorStarted {
+		monitorStop <- struct{}{}
+		monitorStarted = false
+	}
 }
