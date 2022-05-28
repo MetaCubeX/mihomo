@@ -59,7 +59,13 @@ func (tt *tcpTracker) Close() error {
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
 	uuid, _ := uuid.NewV4()
-	metadata.RemoteDst = conn.RemoteDestination()
+	if conn != nil {
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			metadata.RemoteDst = tcpAddr.IP.String()
+		} else {
+			metadata.RemoteDst = conn.RemoteDestination()
+		}
+	}
 
 	t := &tcpTracker{
 		Conn:    conn,
