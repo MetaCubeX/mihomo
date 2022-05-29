@@ -61,3 +61,5 @@ func execRouterCmd(action, inet, route string, interfaceName string) error {
 	_, err := cmd.ExecCmd(fmt.Sprintf("route %s %s %s -interface %s", action, inet, route, interfaceName))
 	return err
 }
+
+func CleanupRule() {}

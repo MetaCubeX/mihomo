@@ -127,3 +127,14 @@ func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) erro
 
 	return nil
 }
+
+func CleanupRule() {
+	r := netlink.NewRule()
+	for i := 0; i < 5; i++ {
+		r.Priority = 9000 + i*10
+		err := netlink.RuleDel(r)
+		if err != nil {
+			log.Warnln("[TOUTE] cleanup route rule: %s", err)
+		}
+	}
+}
