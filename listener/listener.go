@@ -2,9 +2,9 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/vishvananda/netlink"
 	"net"
 	"runtime"
 	"sort"
@@ -457,9 +457,13 @@ func Cleanup(wait bool) {
 		}
 
 		if runtime.GOOS == "android" {
-			prefs := []int{9000, 9001, 9002, 9003, 9004}
-			for _, pref := range prefs {
-				_, _ = cmd.ExecCmd(fmt.Sprintf("ip rule del pref %d", pref))
+			r := netlink.NewRule()
+			for i := 0; i < 5; i++ {
+				r.Priority = 9000 + i*10
+				err := netlink.RuleDel(r)
+				if err != nil {
+					log.Warnln("[TOUTE] cleanup route rule: %s", err)
+				}
 			}
 		}
 	}

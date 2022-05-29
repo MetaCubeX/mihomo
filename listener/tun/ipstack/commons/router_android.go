@@ -57,6 +57,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 
 func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) error {
 	const tableId = 1981801
+	var pref = 9000
 
 	for _, route := range defaultRoutes {
 		_, ipn, err := net.ParseCIDR(route)
@@ -75,25 +76,51 @@ func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) erro
 			return err
 		}
 	}
-	execAddRuleCmd(fmt.Sprintf("lookup main pref 9000"))
-	execAddRuleCmd(fmt.Sprintf("from 0.0.0.0 iif lo uidrange 0-4294967294 lookup %d pref 9001", tableId))
-	execAddRuleCmd(fmt.Sprintf("from %s iif lo uidrange 0-4294967294 lookup %d pref 9002", ip, tableId))
-	execAddRuleCmd(fmt.Sprintf("from all iif %s lookup main suppress_prefixlength 0 pref 9003", interfaceName))
-	execAddRuleCmd(fmt.Sprintf("not from all iif lo lookup %d pref 9004", tableId))
+
+	logIfErr := func(e error) {
+		if e != nil {
+			log.Warnln("[TOUTE] config route rule: %s", e)
+		}
+	}
+
+	var r *netlink.Rule
+	r = netlink.NewRule()
+	r.Table = 254
+	r.Priority = pref
+	logIfErr(netlink.RuleAdd(r))
+	pref += 10
+
+	r = netlink.NewRule()
+	_, nl, _ := net.ParseCIDR("0.0.0.0/32")
+	r.Table = tableId
+	r.Priority = pref
+	r.Src = nl
+	r.IifName = "lo"
+	r.UID = netlink.NewRuleUIDRange(0, 4294967294)
+	logIfErr(netlink.RuleAdd(r))
+	pref += 10
+
+	_, nl, _ = net.ParseCIDR(ip.String())
+	r.Priority = pref
+	r.Src = nl
+	logIfErr(netlink.RuleAdd(r))
+	pref += 10
+
+	r = netlink.NewRule()
+	r.Table = 254
+	r.Priority = pref
+	r.IifName = interfaceName
+	r.SuppressPrefixlen = 0
+	logIfErr(netlink.RuleAdd(r))
+	pref += 10
+
+	r = netlink.NewRule()
+	r.Table = tableId
+	r.Priority = pref
+	r.IifName = "lo"
+	r.SuppressPrefixlen = 0
+	r.Invert = true
+	logIfErr(netlink.RuleAdd(r))
 
 	return nil
-}
-
-func execAddRuleCmd(rule string) {
-	_, err := cmd.ExecCmd("ip rule add " + rule)
-	if err != nil {
-		log.Warnln("%s", err)
-	}
-}
-
-func execRouterCmd(action, route, interfaceName, linkIP, table string) error {
-	cmdStr := fmt.Sprintf("ip route %s %s dev %s proto kernel scope link src %s table %s", action, route, interfaceName, linkIP, table)
-
-	_, err := cmd.ExecCmd(cmdStr)
-	return err
 }
