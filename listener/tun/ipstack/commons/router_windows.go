@@ -269,3 +269,5 @@ func getAutoDetectInterfaceByFamily(family winipcfg.AddressFamily) (string, erro
 
 	return "", errors.New("ethernet interface not found")
 }
+
+func CleanupRule() {}
