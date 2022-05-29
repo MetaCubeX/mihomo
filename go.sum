@@ -10,8 +10,8 @@ git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGy
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Dreamacro/go-shadowsocks2 v0.1.8 h1:Ixejp5JscEc866gAvm/l6TFd7BOBvDviKgwb1quWw3g=
 github.com/Dreamacro/go-shadowsocks2 v0.1.8/go.mod h1:51y4Q6tJoCE7e8TmYXcQRqfoxPfE9Cvn79V6pB6Df7Y=
-github.com/MetaCubeX/netlink v1.2.0-beta.0.20220428021510-cbf1fc89c622 h1:Rs71V26e5N/5EEK2p2o2iG763sAjD4lit4ob061Tf9E=
-github.com/MetaCubeX/netlink v1.2.0-beta.0.20220428021510-cbf1fc89c622/go.mod h1:twkDnbuQxJYemMlGd4JFIcuhgX83tXhKS2B/PRMpOho=
+github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820 h1:fGKWZ25VApYnuPZoNeqdH/nZtHa2XMajwH6Yj/OgoVc=
+github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820/go.mod h1:twkDnbuQxJYemMlGd4JFIcuhgX83tXhKS2B/PRMpOho=
 github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e h1:GRfT5Lf8HP7RNczKIwTYLoCh1PPuIs/sY9hj+W+3deg=
 github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e/go.mod h1:ARUuShAtcziEJ/vnZ2hgoP+zc0J7Ukcca2S/NPDoQCc=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=

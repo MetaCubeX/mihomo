@@ -2,27 +2,30 @@ package commons
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/log"
 	"github.com/vishvananda/netlink"
 	"net"
 	"net/netip"
-	"strings"
 )
 
 func GetAutoDetectInterface() (ifn string, err error) {
-	cmdRes, err := cmd.ExecCmd("ip route get 1.1.1.1 uid 4294967295")
-
-	sps := strings.Split(cmdRes, " ")
-	if len(sps) > 4 {
-		ifn = sps[4]
+	routes, err := netlink.RouteGetWithOptions(
+		net.ParseIP("1.1.1.1"),
+		&netlink.RouteGetOptions{
+			Uid: &netlink.UID{Uid: 4294967295},
+		})
+	if err != nil {
+		return "", err
 	}
 
-	if ifn == "" {
-		err = fmt.Errorf("interface not found")
+	for _, route := range routes {
+		if lk, err := netlink.LinkByIndex(route.LinkIndex); err == nil {
+			return lk.Attrs().Name, nil
+		}
 	}
-	return
+
+	return "", fmt.Errorf("interface not found")
 }
 
 func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
