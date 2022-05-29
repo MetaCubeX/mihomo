@@ -18,19 +18,18 @@ func (not *NOT) ShouldFindProcess() bool {
 }
 
 func NewNOT(payload string, adapter string) (*NOT, error) {
-	not := &NOT{Base: &common.Base{}, payload: payload, adapter: adapter}
+	not := &NOT{Base: &common.Base{}, adapter: adapter}
 	rule, err := parseRuleByPayload(payload)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(rule) > 1 {
-		return nil, fmt.Errorf("not rule can contain at most one rule")
+	if len(rule) != 1 {
+		return nil, fmt.Errorf("not rule must contain one rule")
 	}
 
-	if len(rule) > 0 {
-		not.rule = rule[0]
-	}
+	not.rule = rule[0]
+	not.payload = fmt.Sprintf("!(%s)", rule[0].Payload())
 
 	return not, nil
 }

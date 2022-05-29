@@ -1,8 +1,10 @@
 package logic
 
 import (
+	"fmt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rule/common"
+	"strings"
 )
 
 type OR struct {
@@ -51,12 +53,15 @@ func NewOR(payload string, adapter string) (*OR, error) {
 	}
 
 	or.rules = rules
+	payloads := make([]string, 0, len(rules))
 	for _, rule := range rules {
+		payloads = append(payloads, fmt.Sprintf("(%s)", rule.Payload()))
 		if rule.ShouldResolveIP() {
 			or.needIP = true
 			break
 		}
 	}
 
+	or.payload = strings.Join(payloads, " || ")
 	return or, nil
 }
