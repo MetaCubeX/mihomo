@@ -1,8 +1,10 @@
 package logic
 
 import (
+	"fmt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rule/common"
+	"strings"
 )
 
 type AND struct {
@@ -25,12 +27,16 @@ func NewAND(payload string, adapter string) (*AND, error) {
 	}
 
 	and.rules = rules
+	payloads := make([]string, 0, len(rules))
 	for _, rule := range rules {
+		payloads = append(payloads, fmt.Sprintf("(%s)", rule.Payload()))
 		if rule.ShouldResolveIP() {
 			and.needIP = true
 			break
 		}
 	}
+
+	and.payload = strings.Join(payloads, " && ")
 
 	return and, nil
 }
