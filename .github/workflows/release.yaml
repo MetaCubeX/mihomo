@@ -33,7 +33,7 @@ jobs:
         env:
           NAME: Clash.Meta
           BINDIR: bin
-        run: make -j releases
+        run: make -j$(($(nproc) + 1)) releases
 
       - name: Upload Release
         uses: softprops/action-gh-release@v1
