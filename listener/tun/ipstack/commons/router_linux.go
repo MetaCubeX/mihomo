@@ -103,3 +103,5 @@ func execRouterCmd(action, route, interfaceName, linkIP, table string) error {
 	_, err := cmd.ExecCmd(cmdStr)
 	return err
 }
+
+func CleanupRule() {}

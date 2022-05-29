@@ -47,9 +47,9 @@ WINDOWS_ARCH_LIST = \
 	windows-arm64 \
     windows-arm32v7
 
-all:linux-amd64 linux-arm64\
-	darwin-amd64 darwin-arm64\
- 	windows-amd64 windows-arm64\
+all:linux-amd64v3 linux-arm64\
+	darwin-amd64v3 darwin-arm64\
+ 	windows-amd64v3 windows-arm64\
 
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
