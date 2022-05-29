@@ -6,7 +6,6 @@ import (
 	RC "github.com/Dreamacro/clash/rule/common"
 	"github.com/Dreamacro/clash/rule/logic"
 	RP "github.com/Dreamacro/clash/rule/provider"
-	"runtime"
 )
 
 func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
@@ -43,11 +42,7 @@ func ParseRule(tp, payload, target string, params []string) (C.Rule, error) {
 	case "NETWORK":
 		parsed, parseErr = RC.NewNetworkType(payload, target)
 	case "UID":
-		if runtime.GOOS == "linux" || runtime.GOOS == "android" {
-			parsed, parseErr = RC.NewUid(payload, target)
-		} else {
-			parseErr = fmt.Errorf("uid rule not support this platform")
-		}
+		parsed, parseErr = RC.NewUid(payload, target)
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
 	case "AND":

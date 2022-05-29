@@ -1,10 +1,12 @@
 package common
 
 import (
+	"fmt"
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/process"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -20,6 +22,9 @@ func NewUid(oUid, adapter string) (*Uid, error) {
 	//if len(_uids) > 28 {
 	//	return nil, fmt.Errorf("%s, too many uid to use, maximum support 28 uid", errPayload.Error())
 	//}
+	if !(runtime.GOOS == "linux" || runtime.GOOS == "android") {
+		return nil, fmt.Errorf("uid rule not support this platform")
+	}
 
 	var uidRange []utils.Range[int32]
 	for _, u := range strings.Split(oUid, "/") {
