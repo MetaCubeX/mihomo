@@ -2,11 +2,9 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -456,12 +454,7 @@ func Cleanup(wait bool) {
 			commons.WaitForTunClose(lastTunConf.Device)
 		}
 
-		if runtime.GOOS == "android" {
-			prefs := []int{9000, 9001, 9002, 9003, 9004}
-			for _, pref := range prefs {
-				_, _ = cmd.ExecCmd(fmt.Sprintf("ip rule del pref %d", pref))
-			}
-		}
+		commons.CleanupRule()
 	}
 	tunStackListener = nil
 	lastTunConf = nil

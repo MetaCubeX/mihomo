@@ -1,5 +1,3 @@
-//go:build !android
-
 package process
 
 import (
@@ -10,6 +8,8 @@ import (
 	"net/netip"
 	"os"
 	"path"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"unicode"
@@ -198,13 +198,37 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 				continue
 			}
 
-			if bytes.Equal(buffer[:n], socket) {
-				return os.Readlink(path.Join(processPath, "exe"))
+			if runtime.GOOS == "android" {
+				if bytes.Equal(buffer[:n], socket) {
+					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
+					if err != nil {
+						return "", err
+					}
+
+					return splitCmdline(cmdline), nil
+				}
+			} else {
+				if bytes.Equal(buffer[:n], socket) {
+					return os.Readlink(path.Join(processPath, "exe"))
+				}
 			}
 		}
 	}
 
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
+}
+
+func splitCmdline(cmdline []byte) string {
+	cmdline = bytes.Trim(cmdline, " ")
+
+	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	})
+
+	if idx == -1 {
+		return filepath.Base(string(cmdline))
+	}
+	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {

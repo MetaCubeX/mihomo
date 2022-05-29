@@ -16,7 +16,7 @@ require (
 	github.com/oschwald/geoip2-golang v1.7.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
-	github.com/vishvananda/netlink v1.0.1-0.20190930145447-2ec5bdc52b86
+	github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
@@ -60,3 +60,5 @@ require (
 )
 
 replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e
+
+replace github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938 => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
