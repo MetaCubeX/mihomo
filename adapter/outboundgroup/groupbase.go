@@ -1,6 +1,8 @@
 package outboundgroup
 
 import (
+	"context"
+	"fmt"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -103,6 +105,34 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
 	}
 	return proxies
+}
+
+func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16, error) {
+	var wg sync.WaitGroup
+	var lock sync.Mutex
+	mp := map[string]uint16{}
+	proxies := gb.GetProxies(false)
+	for _, proxy := range proxies {
+		proxy := proxy
+		wg.Add(1)
+		go func() {
+			delay, err := proxy.URLTest(ctx, url)
+			lock.Lock()
+			if err == nil {
+				mp[proxy.Name()] = delay
+			}
+			lock.Unlock()
+
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	if len(mp) == 0 {
+		return mp, fmt.Errorf("get delay: all proxies timeout")
+	} else {
+		return mp, nil
+	}
 }
 
 func (gb *GroupBase) onDialFailed() {

@@ -108,6 +108,11 @@ type ProxyAdapter interface {
 	Unwrap(metadata *Metadata) Proxy
 }
 
+type Group interface {
+	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
+	GetProxies(touch bool) []Proxy
+}
+
 type DelayHistory struct {
 	Time  time.Time `json:"time"`
 	Delay uint16    `json:"delay"`
