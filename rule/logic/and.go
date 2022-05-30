@@ -29,15 +29,14 @@ func NewAND(payload string, adapter string) (*AND, error) {
 	and.rules = rules
 	payloads := make([]string, 0, len(rules))
 	for _, rule := range rules {
-		payloads = append(payloads, fmt.Sprintf("(%s)", rule.Payload()))
+		payloads = append(payloads, fmt.Sprintf("(%s,%s)", rule.RuleType().String(), rule.Payload()))
 		if rule.ShouldResolveIP() {
 			and.needIP = true
 			break
 		}
 	}
 
-	and.payload = strings.Join(payloads, " && ")
-
+	and.payload = fmt.Sprintf("(%s)", strings.Join(payloads, " && "))
 	return and, nil
 }
 
