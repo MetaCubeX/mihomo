@@ -55,13 +55,13 @@ func NewOR(payload string, adapter string) (*OR, error) {
 	or.rules = rules
 	payloads := make([]string, 0, len(rules))
 	for _, rule := range rules {
-		payloads = append(payloads, fmt.Sprintf("(%s)", rule.Payload()))
+		payloads = append(payloads, fmt.Sprintf("(%s,%s)", rule.RuleType(), rule.Payload()))
 		if rule.ShouldResolveIP() {
 			or.needIP = true
 			break
 		}
 	}
 
-	or.payload = strings.Join(payloads, " || ")
+	or.payload = fmt.Sprintf("(%s)", strings.Join(payloads, " || "))
 	return or, nil
 }
