@@ -10,8 +10,8 @@ import (
 
 var (
 	errPayload = errors.New("payload error")
-
-	noResolve = "no-resolve"
+	initFlag   bool
+	noResolve  = "no-resolve"
 )
 
 type Base struct {

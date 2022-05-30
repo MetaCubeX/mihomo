@@ -4,12 +4,8 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/common/collections"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	RC "github.com/Dreamacro/clash/rule/common"
 	"github.com/Dreamacro/clash/rule/provider"
-	"io"
-	"net/http"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -60,12 +56,6 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	if tp == "NOT" || tp == "OR" || tp == "AND" {
 		return parseRule(tp, payload, nil)
 	}
-	if tp == "GEOSITE" {
-		if err := initGeoSite(); err != nil {
-			log.Errorln("can't initial GeoSite: %s", err)
-		}
-	}
-
 	param := strings.Split(payload, ",")
 	return parseRule(tp, param[0], param[1:])
 }
@@ -201,33 +191,4 @@ func findSubRuleRange(payload string, ruleRanges []Range) []Range {
 	}
 
 	return subRuleRange
-}
-
-func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat")
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-
-	return err
-}
-
-func initGeoSite() error {
-	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
-		log.Infoln("Need GeoSite but can't find GeoSite.dat, start download")
-		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
-			return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
-		}
-		log.Infoln("Download GeoSite.dat finish")
-	}
-
-	return nil
 }
