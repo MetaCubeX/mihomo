@@ -4,7 +4,6 @@ package commons
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/vishvananda/netlink"
 	"net"
@@ -46,12 +45,12 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	naddr, err := netlink.ParseAddr(addr.String())
+	nlAddr, err := netlink.ParseAddr(addr.String())
 	if err != nil {
 		return err
 	}
 
-	if err = netlink.AddrAdd(metaLink, naddr); err != nil && err.Error() != "file exists" {
+	if err = netlink.AddrAdd(metaLink, nlAddr); err != nil && err.Error() != "file exists" {
 		return err
 	}
 
@@ -59,23 +58,13 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	if err = netlink.RouteAdd(&netlink.Route{
-		LinkIndex: metaLink.Attrs().Index,
-		Scope:     netlink.SCOPE_LINK,
-		Protocol:  2,
-		Src:       ip.AsSlice(),
-		Table:     254,
-	}); err != nil && err.Error() != "file exists" {
-		return err
-	}
-
 	if autoRoute {
-		_ = configInterfaceRouting(metaLink.Attrs().Index, interfaceName, ip)
+		_ = configInterfaceRouting(metaLink.Attrs().Index, ip)
 	}
 	return nil
 }
 
-func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) error {
+func configInterfaceRouting(index int, ip netip.Addr) error {
 	for _, route := range defaultRoutes {
 		_, ipn, err := net.ParseCIDR(route)
 		if err != nil {
@@ -95,13 +84,6 @@ func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) erro
 	}
 
 	return nil
-}
-
-func execRouterCmd(action, route, interfaceName, linkIP, table string) error {
-	cmdStr := fmt.Sprintf("ip route %s %s dev %s proto kernel scope link src %s table %s", action, route, interfaceName, linkIP, table)
-
-	_, err := cmd.ExecCmd(cmdStr)
-	return err
 }
 
 func CleanupRule() {}
