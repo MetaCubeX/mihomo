@@ -12,8 +12,6 @@ github.com/Dreamacro/go-shadowsocks2 v0.1.8 h1:Ixejp5JscEc866gAvm/l6TFd7BOBvDviK
 github.com/Dreamacro/go-shadowsocks2 v0.1.8/go.mod h1:51y4Q6tJoCE7e8TmYXcQRqfoxPfE9Cvn79V6pB6Df7Y=
 github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820 h1:fGKWZ25VApYnuPZoNeqdH/nZtHa2XMajwH6Yj/OgoVc=
 github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820/go.mod h1:twkDnbuQxJYemMlGd4JFIcuhgX83tXhKS2B/PRMpOho=
-github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e h1:GRfT5Lf8HP7RNczKIwTYLoCh1PPuIs/sY9hj+W+3deg=
-github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e/go.mod h1:ARUuShAtcziEJ/vnZ2hgoP+zc0J7Ukcca2S/NPDoQCc=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/bradfitz/go-smtpd v0.0.0-20170404230938-deb6d6237625/go.mod h1:HYsPBTaaSFSlLx/70C2HPIMNZpVV8+vt/A+FMnYP11g=
@@ -345,6 +343,8 @@ golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f h1:GGU+dLjvlC3qDwqYgL6UgRmHXhOOgns0bZu2Ty5mm6U=
 golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 h1:Ug9qvr1myri/zFN6xL17LSCBGFDnphBBhzmILHsM5TY=
+golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224/go.mod h1:deeaetjYA+DHMHg+sMSMI58GrEteJUUzzw7en6TJQcI=
 golang.zx2c4.com/wireguard v0.0.0-20220407013110-ef5c587f782d h1:q4JksJ2n0fmbXC0Aj0eOs6E0AcPqnKglxWXWFqGD6x0=
 golang.zx2c4.com/wireguard v0.0.0-20220407013110-ef5c587f782d/go.mod h1:bVQfyl2sCM/QIIGHpWbFGfHPuDvqnCNkT6MQLTCjO/U=
 golang.zx2c4.com/wireguard/windows v0.5.4-0.20220317000008-6432784c2469 h1:SEYkJAIuYAsSAPkCffOiYLtq5brBDSI+L0mRjSsvSTY=
