@@ -3,7 +3,6 @@
 package tun
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -43,11 +42,11 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 		forcedMTU = int(t.mtu)
 	}
 
-	nt, err := tun.CreateTUN(t.name, forcedMTU) // forcedMTU do not work on wintun, need to be setting by other way
+	nt, err := newDevice(t.name, forcedMTU) // forcedMTU do not work on wintun, need to be setting by other way
 
-	// retry if abnormal exit on Windows at last time
-	if err != nil && runtime.GOOS == "windows" && errors.Is(err, os.ErrExist) {
-		nt, err = tun.CreateTUN(t.name, forcedMTU)
+	// retry if abnormal exit at last time on Windows
+	if err != nil && runtime.GOOS == "windows" && os.IsExist(err) {
+		nt, err = newDevice(t.name, forcedMTU)
 	}
 
 	if err != nil {

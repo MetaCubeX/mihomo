@@ -59,6 +59,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
-replace golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 => github.com/MetaCubeX/wintun-go v0.0.0-20220319102620-bbc5e6b2015e
-
 replace github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938 => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
