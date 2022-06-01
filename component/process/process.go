@@ -38,7 +38,9 @@ func FindUid(network string, srcIP netip.Addr, srcPort int) (int32, error) {
 }
 
 func ShouldFindProcess(metadata *C.Metadata) bool {
-	if !enableFindProcess || metadata.Process != "" || metadata.ProcessPath != "" {
+	if !enableFindProcess ||
+		metadata.Process != "" ||
+		metadata.ProcessPath != "" {
 		return false
 	}
 	for _, ip := range localIPs {
