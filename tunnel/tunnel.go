@@ -181,9 +181,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	}
 
 	// pre resolve process name
-	srcPort, err := strconv.Atoi(metadata.SrcPort)
+	srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
 	if err == nil && P.ShouldFindProcess(metadata) {
-		uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
+		uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
 		if err != nil {
 			if failTotal < 20 {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
