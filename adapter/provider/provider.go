@@ -31,8 +31,9 @@ type ProxySetProvider struct {
 
 type proxySetProvider struct {
 	*fetcher[[]C.Proxy]
-	proxies     []C.Proxy
-	healthCheck *HealthCheck
+	proxies        []C.Proxy
+	healthCheck    *HealthCheck
+	providersInUse []types.ProxyProvider
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -87,9 +88,14 @@ func (pp *proxySetProvider) ProxiesWithTouch() []C.Proxy {
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
-	if pp.healthCheck.auto() {
-		go pp.healthCheck.check()
+
+	for _, use := range pp.providersInUse {
+		_ = use.Update()
 	}
+}
+
+func (pp *proxySetProvider) RegisterProvidersInUse(providers ...types.ProxyProvider) {
+	pp.providersInUse = append(pp.providersInUse, providers...)
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
@@ -195,6 +201,98 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 	wrapper := &CompatibleProvider{pd}
 	runtime.SetFinalizer(wrapper, stopCompatibleProvider)
 	return wrapper, nil
+}
+
+// ProxyFilterProvider for filter provider
+type ProxyFilterProvider struct {
+	*proxyFilterProvider
+}
+
+type proxyFilterProvider struct {
+	name        string
+	psd         *ProxySetProvider
+	proxies     []C.Proxy
+	filter      *regexp.Regexp
+	healthCheck *HealthCheck
+}
+
+func (pf *proxyFilterProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"name":        pf.Name(),
+		"type":        pf.Type().String(),
+		"vehicleType": pf.VehicleType().String(),
+		"proxies":     pf.Proxies(),
+	})
+}
+
+func (pf *proxyFilterProvider) Name() string {
+	return pf.name
+}
+
+func (pf *proxyFilterProvider) HealthCheck() {
+	pf.healthCheck.check()
+}
+
+func (pf *proxyFilterProvider) Update() error {
+	var proxies []C.Proxy
+	if pf.filter != nil {
+		for _, proxy := range pf.psd.Proxies() {
+			if !pf.filter.MatchString(proxy.Name()) {
+				continue
+			}
+			proxies = append(proxies, proxy)
+		}
+	} else {
+		proxies = pf.psd.Proxies()
+	}
+
+	pf.proxies = proxies
+	pf.healthCheck.setProxy(proxies)
+	return nil
+}
+
+func (pf *proxyFilterProvider) Initial() error {
+	return nil
+}
+
+func (pf *proxyFilterProvider) VehicleType() types.VehicleType {
+	return pf.psd.VehicleType()
+}
+
+func (pf *proxyFilterProvider) Type() types.ProviderType {
+	return types.Proxy
+}
+
+func (pf *proxyFilterProvider) Proxies() []C.Proxy {
+	return pf.proxies
+}
+
+func (pf *proxyFilterProvider) ProxiesWithTouch() []C.Proxy {
+	pf.healthCheck.touch()
+	return pf.Proxies()
+}
+
+func stopProxyFilterProvider(pf *ProxyFilterProvider) {
+	pf.healthCheck.close()
+}
+
+func NewProxyFilterProvider(name string, psd *ProxySetProvider, hc *HealthCheck, filterRegx *regexp.Regexp) *ProxyFilterProvider {
+	pd := &proxyFilterProvider{
+		psd:         psd,
+		name:        name,
+		healthCheck: hc,
+		filter:      filterRegx,
+	}
+
+	_ = pd.Update()
+
+	if hc.auto() {
+		go hc.process()
+	}
+
+	wrapper := &ProxyFilterProvider{pd}
+	runtime.SetFinalizer(wrapper, stopProxyFilterProvider)
+	return wrapper
 }
 
 func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {

@@ -11,6 +11,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/tunnel"
 
 	"github.com/go-chi/chi/v5"
@@ -43,6 +44,10 @@ func findProxyByName(next http.Handler) http.Handler {
 		name := r.Context().Value(CtxKeyProxyName).(string)
 		proxies := tunnel.Proxies()
 		proxy, exist := proxies[name]
+		if !exist {
+			proxy, exist = findProxyInNonCompatibleProviderByName(name)
+		}
+
 		if !exist {
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, ErrNotFound)
@@ -127,4 +132,21 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{
 		"delay": delay,
 	})
+}
+
+func findProxyInNonCompatibleProviderByName(name string) (proxy C.Proxy, found bool) {
+	providers := tunnel.Providers()
+	for _, pd := range providers {
+		if pd.VehicleType() == provider.Compatible {
+			continue
+		}
+		for _, pp := range pd.Proxies() {
+			found = pp.Name() == name
+			if found {
+				proxy = pp
+				return
+			}
+		}
+	}
+	return
 }

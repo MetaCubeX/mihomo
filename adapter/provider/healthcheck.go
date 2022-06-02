@@ -65,8 +65,13 @@ func (hc *HealthCheck) touch() {
 }
 
 func (hc *HealthCheck) check() {
+	proxies := hc.proxies
+	if len(proxies) == 0 {
+		return
+	}
+
 	b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
-	for _, proxy := range hc.proxies {
+	for _, proxy := range proxies {
 		p := proxy
 		b.Go(p.Name(), func() (bool, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
