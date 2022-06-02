@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/convert"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
 
@@ -207,7 +208,11 @@ func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVer
 		schema := &ProxySchema{}
 
 		if err := yaml.Unmarshal(buf, schema); err != nil {
-			return nil, err
+			proxies, err1 := convert.ConvertsV2Ray(buf)
+			if err1 != nil {
+				return nil, fmt.Errorf("%s, %w", err.Error(), err1)
+			}
+			schema.Proxies = proxies
 		}
 
 		if schema.Proxies == nil {
