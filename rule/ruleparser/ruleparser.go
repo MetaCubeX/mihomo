@@ -44,24 +44,7 @@ func ParseSameRule(tp, payload, target string, params []string) (parsed C.Rule, 
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
 	default:
-		parseErr = NewUnsupportedError(tp)
+		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
 	return
-}
-
-type UnsupportedError struct {
-	err string
-}
-
-func (ue UnsupportedError) Error() string {
-	return ue.err
-}
-
-func NewUnsupportedError(tp any) *UnsupportedError {
-	return &UnsupportedError{err: fmt.Sprintf("unsupported rule type %s", tp)}
-}
-
-func IsUnsupported(err error) bool {
-	_, ok := err.(*UnsupportedError)
-	return ok
 }

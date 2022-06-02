@@ -62,21 +62,18 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 }
 
 func parseRule(tp, payload string, params []string) (parsed C.Rule, parseErr error) {
-	parsed, parseErr = ruleparser.ParseSameRule(tp, payload, "", params)
-	if ruleparser.IsUnsupported(parseErr) {
-		switch tp {
-		case "AND":
-			parsed, parseErr = NewAND(payload, "")
-		case "OR":
-			parsed, parseErr = NewOR(payload, "")
-		case "NOT":
-			parsed, parseErr = NewNOT(payload, "")
-		case "RULE-SET":
-			noResolve := RC.HasNoResolve(params)
-			parsed, parseErr = RP.NewRuleSet(payload, "", noResolve)
-		default:
-			parseErr = ruleparser.NewUnsupportedError(tp)
-		}
+	switch tp {
+	case "AND":
+		parsed, parseErr = NewAND(payload, "")
+	case "OR":
+		parsed, parseErr = NewOR(payload, "")
+	case "NOT":
+		parsed, parseErr = NewNOT(payload, "")
+	case "RULE-SET":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RP.NewRuleSet(payload, "", noResolve)
+	default:
+		parsed, parseErr = ruleparser.ParseSameRule(tp, payload, "", params)
 	}
 
 	if parseErr != nil {
