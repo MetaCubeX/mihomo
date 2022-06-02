@@ -83,6 +83,11 @@ func parseRule(tp, payload string, params []string) (C.Rule, error) {
 		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRNoResolve(noResolve))
 	case "SRC-IP-CIDR":
 		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
+	case "IP-SUFFIX":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RC.NewIPSuffix(payload, "", false, noResolve)
+	case "SRC-IP-SUFFIX":
+		parsed, parseErr = RC.NewIPSuffix(payload, "", true, true)
 	case "SRC-PORT":
 		parsed, parseErr = RC.NewPort(payload, "", true)
 	case "DST-PORT":
