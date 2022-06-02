@@ -5,6 +5,7 @@ import (
 	"github.com/Dreamacro/clash/common/collections"
 	C "github.com/Dreamacro/clash/constant"
 	RC "github.com/Dreamacro/clash/rule/common"
+	RP "github.com/Dreamacro/clash/rule/provider"
 	"github.com/Dreamacro/clash/rule/ruleparser"
 	"regexp"
 	"strings"
@@ -70,6 +71,9 @@ func parseRule(tp, payload string, params []string) (parsed C.Rule, parseErr err
 			parsed, parseErr = NewOR(payload, "")
 		case "NOT":
 			parsed, parseErr = NewNOT(payload, "")
+		case "RULE-SET":
+			noResolve := RC.HasNoResolve(params)
+			parsed, parseErr = RP.NewRuleSet(payload, "", noResolve)
 		default:
 			parseErr = ruleparser.NewUnsupportedError(tp)
 		}
