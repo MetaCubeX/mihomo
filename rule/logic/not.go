@@ -29,7 +29,7 @@ func NewNOT(payload string, adapter string) (*NOT, error) {
 	}
 
 	not.rule = rule[0]
-	not.payload = fmt.Sprintf("!(%s)", rule[0].Payload())
+	not.payload = fmt.Sprintf("(!(%s,%s))", rule[0].RuleType(), rule[0].Payload())
 
 	return not, nil
 }

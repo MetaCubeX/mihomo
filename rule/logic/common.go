@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/common/collections"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	RC "github.com/Dreamacro/clash/rule/common"
-	"github.com/Dreamacro/clash/rule/provider"
-	"io"
-	"net/http"
-	"os"
+	RP "github.com/Dreamacro/clash/rule/provider"
+	"github.com/Dreamacro/clash/rule/ruleparser"
 	"regexp"
 	"strings"
 )
@@ -60,64 +57,23 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	if tp == "NOT" || tp == "OR" || tp == "AND" {
 		return parseRule(tp, payload, nil)
 	}
-	if tp == "GEOSITE" {
-		if err := initGeoSite(); err != nil {
-			log.Errorln("can't initial GeoSite: %s", err)
-		}
-	}
-
 	param := strings.Split(payload, ",")
 	return parseRule(tp, param[0], param[1:])
 }
 
-func parseRule(tp, payload string, params []string) (C.Rule, error) {
-	var (
-		parseErr error
-		parsed   C.Rule
-	)
-
+func parseRule(tp, payload string, params []string) (parsed C.Rule, parseErr error) {
 	switch tp {
-	case "DOMAIN":
-		parsed = RC.NewDomain(payload, "")
-	case "DOMAIN-SUFFIX":
-		parsed = RC.NewDomainSuffix(payload, "")
-	case "DOMAIN-KEYWORD":
-		parsed = RC.NewDomainKeyword(payload, "")
-	case "GEOSITE":
-		parsed, parseErr = RC.NewGEOSITE(payload, "")
-	case "GEOIP":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewGEOIP(payload, "", noResolve)
-	case "IP-CIDR", "IP-CIDR6":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRNoResolve(noResolve))
-	case "SRC-IP-CIDR":
-		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
-	case "SRC-PORT":
-		parsed, parseErr = RC.NewPort(payload, "", true)
-	case "DST-PORT":
-		parsed, parseErr = RC.NewPort(payload, "", false)
-	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, "", true)
-	case "PROCESS-PATH":
-		parsed, parseErr = RC.NewProcess(payload, "", false)
-	case "RULE-SET":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = provider.NewRuleSet(payload, "", noResolve)
-	case "UID":
-		parsed, parseErr = RC.NewUid(payload, "")
-	case "IN-TYPE":
-		parsed, parseErr = RC.NewInType(payload, "")
-	case "NOT":
-		parsed, parseErr = NewNOT(payload, "")
 	case "AND":
 		parsed, parseErr = NewAND(payload, "")
 	case "OR":
 		parsed, parseErr = NewOR(payload, "")
-	case "NETWORK":
-		parsed, parseErr = RC.NewNetworkType(payload, "")
+	case "NOT":
+		parsed, parseErr = NewNOT(payload, "")
+	case "RULE-SET":
+		noResolve := RC.HasNoResolve(params)
+		parsed, parseErr = RP.NewRuleSet(payload, "", noResolve)
 	default:
-		parsed, parseErr = nil, fmt.Errorf("unsupported rule type %s", tp)
+		parsed, parseErr = ruleparser.ParseSameRule(tp, payload, "", params)
 	}
 
 	if parseErr != nil {
@@ -201,33 +157,4 @@ func findSubRuleRange(payload string, ruleRanges []Range) []Range {
 	}
 
 	return subRuleRange
-}
-
-func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get("https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat")
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-
-	return err
-}
-
-func initGeoSite() error {
-	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
-		log.Infoln("Need GeoSite but can't find GeoSite.dat, start download")
-		if err := downloadGeoSite(C.Path.GeoSite()); err != nil {
-			return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
-		}
-		log.Infoln("Download GeoSite.dat finish")
-	}
-
-	return nil
 }

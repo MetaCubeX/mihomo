@@ -44,7 +44,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 		return err
 	}
 
-	if err = netlink.AddrAdd(metaLink, naddr); err != nil {
+	if err = netlink.AddrAdd(metaLink, naddr); err != nil && err.Error() != "file exists" {
 		return err
 	}
 

@@ -9,6 +9,8 @@ const (
 	GEOIP
 	IPCIDR
 	SrcIPCIDR
+	IPSuffix
+	SrcIPSuffix
 	SrcPort
 	DstPort
 	Process
@@ -41,6 +43,10 @@ func (rt RuleType) String() string {
 		return "IPCIDR"
 	case SrcIPCIDR:
 		return "SrcIPCIDR"
+	case IPSuffix:
+		return "IPSuffix"
+	case SrcIPSuffix:
+		return "SrcIPSuffix"
 	case SrcPort:
 		return "SrcPort"
 	case DstPort:
