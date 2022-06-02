@@ -5,7 +5,7 @@ import (
 	"github.com/Dreamacro/clash/common/collections"
 	C "github.com/Dreamacro/clash/constant"
 	RC "github.com/Dreamacro/clash/rule/common"
-	"github.com/Dreamacro/clash/rule/provider"
+	"github.com/Dreamacro/clash/rule/ruleparser"
 	"regexp"
 	"strings"
 )
@@ -60,59 +60,19 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	return parseRule(tp, param[0], param[1:])
 }
 
-func parseRule(tp, payload string, params []string) (C.Rule, error) {
-	var (
-		parseErr error
-		parsed   C.Rule
-	)
-
-	switch tp {
-	case "DOMAIN":
-		parsed = RC.NewDomain(payload, "")
-	case "DOMAIN-SUFFIX":
-		parsed = RC.NewDomainSuffix(payload, "")
-	case "DOMAIN-KEYWORD":
-		parsed = RC.NewDomainKeyword(payload, "")
-	case "GEOSITE":
-		parsed, parseErr = RC.NewGEOSITE(payload, "")
-	case "GEOIP":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewGEOIP(payload, "", noResolve)
-	case "IP-CIDR", "IP-CIDR6":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRNoResolve(noResolve))
-	case "SRC-IP-CIDR":
-		parsed, parseErr = RC.NewIPCIDR(payload, "", RC.WithIPCIDRSourceIP(true), RC.WithIPCIDRNoResolve(true))
-	case "IP-SUFFIX":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RC.NewIPSuffix(payload, "", false, noResolve)
-	case "SRC-IP-SUFFIX":
-		parsed, parseErr = RC.NewIPSuffix(payload, "", true, true)
-	case "SRC-PORT":
-		parsed, parseErr = RC.NewPort(payload, "", true)
-	case "DST-PORT":
-		parsed, parseErr = RC.NewPort(payload, "", false)
-	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, "", true)
-	case "PROCESS-PATH":
-		parsed, parseErr = RC.NewProcess(payload, "", false)
-	case "RULE-SET":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = provider.NewRuleSet(payload, "", noResolve)
-	case "UID":
-		parsed, parseErr = RC.NewUid(payload, "")
-	case "IN-TYPE":
-		parsed, parseErr = RC.NewInType(payload, "")
-	case "NOT":
-		parsed, parseErr = NewNOT(payload, "")
-	case "AND":
-		parsed, parseErr = NewAND(payload, "")
-	case "OR":
-		parsed, parseErr = NewOR(payload, "")
-	case "NETWORK":
-		parsed, parseErr = RC.NewNetworkType(payload, "")
-	default:
-		parsed, parseErr = nil, fmt.Errorf("unsupported rule type %s", tp)
+func parseRule(tp, payload string, params []string) (parsed C.Rule, parseErr error) {
+	parsed, parseErr = ruleparser.ParseSameRule(tp, payload, "", params)
+	if ruleparser.IsUnsupported(parseErr) {
+		switch tp {
+		case "AND":
+			parsed, parseErr = NewAND(payload, "")
+		case "OR":
+			parsed, parseErr = NewOR(payload, "")
+		case "NOT":
+			parsed, parseErr = NewNOT(payload, "")
+		default:
+			parseErr = ruleparser.NewUnsupportedError(tp)
+		}
 	}
 
 	if parseErr != nil {
