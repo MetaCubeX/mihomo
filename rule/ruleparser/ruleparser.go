@@ -62,6 +62,6 @@ func NewUnsupportedError(tp any) *UnsupportedError {
 }
 
 func IsUnsupported(err error) bool {
-	_, ok := err.(UnsupportedError)
+	_, ok := err.(*UnsupportedError)
 	return ok
 }
