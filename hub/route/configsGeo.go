@@ -49,13 +49,13 @@ func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		log.Warnln("[REST-API] update GEO databases successful, apply config...")
+
 		cfg, err := executor.ParseWithPath(constant.Path.Config())
 		if err != nil {
 			log.Errorln("[REST-API] update GEO databases failed: %v", err)
 			return
 		}
-
-		log.Warnln("[REST-API] update GEO databases successful, apply config...")
 
 		executor.ApplyConfig(cfg, false)
 	}()
