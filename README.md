@@ -99,7 +99,7 @@ mitm:
 ```
 
 ### DNS configuration
-Support resolve ip with a proxy tunnel.
+Support resolve ip with a proxy tunnel or interface.
 
 Support `geosite` with `fallback-filter`.
 
@@ -119,8 +119,8 @@ Use `curl -X POST controllerip:port/cache/fakeip/flush` to flush persistence fak
      - https://doh.pub/dns-query
      - tls://223.5.5.5:853
    fallback:
+     - 'tls://8.8.4.4:853#proxy or interface'
      - 'https://1.0.0.1/dns-query#Proxy'  # append the proxy adapter name to the end of DNS URL with '#' prefix.
-     - 'tls://8.8.4.4:853#Proxy'
    fallback-filter:
      geoip: false
      geosite:
@@ -325,7 +325,9 @@ Support `Trojan` with XTLS.
 
 Support relay `UDP` traffic.
 
-Currently XTLS only supports TCP transport.
+Support filtering proxy providers in proxy groups.
+
+Support custom http request header, prefix name and V2Ray subscription URL in proxy providers.
 ```yaml
 proxies:
   # VLESS
@@ -381,6 +383,37 @@ proxy-groups:
       - ss1
       - ss2
       - ss3
+        
+  - name: "filtering-proxy-providers"
+    type: url-test
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 200
+    # lazy: true
+    filter: "XXX" # a regular expression
+    use:
+      - provider1
+
+proxy-providers:
+  provider1:
+    type: http
+    url: "url" # support V2Ray subscription URL
+    interval: 3600
+    path: ./providers/provider1.yaml
+    # filter: "xxx"
+    # prefix-name: "XXX-"
+    header:  # custom http request header
+      User-Agent:
+        - "Clash/v1.10.6"
+    #   Accept:
+    #     - 'application/vnd.github.v3.raw'
+    #   Authorization:
+    #     - ' token xxxxxxxxxxx'
+    health-check:
+      enable: false
+      interval: 1200
+      # lazy: false # default value is true
+      url: http://www.gstatic.com/generate_204
 ```
 
 ### IPTABLES configuration

@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -18,6 +19,8 @@ import (
 
 	D "github.com/miekg/dns"
 )
+
+var errProxyNotFound = errors.New("proxy adapter not found")
 
 func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
 	var ttl uint32
@@ -135,7 +138,7 @@ func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
 func dialContextWithProxyAdapter(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
 	proxy, ok := tunnel.Proxies()[adapterName]
 	if !ok {
-		return nil, fmt.Errorf("proxy adapter [%s] not found", adapterName)
+		return nil, errProxyNotFound
 	}
 
 	networkType := C.TCP

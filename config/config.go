@@ -456,7 +456,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	}
 
 	for _, proxyProvider := range providersMap {
-		log.Infoln("Start initial provider %s", proxyProvider.Name())
+		log.Infoln("Start initial proxy provider %s", proxyProvider.Name())
 		if err := proxyProvider.Initial(); err != nil {
 			return nil, nil, fmt.Errorf("initial proxy provider %s error: %w", proxyProvider.Name(), err)
 		}

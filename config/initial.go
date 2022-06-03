@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/mmdb"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
 
 func downloadMMDB(path string) (err error) {
-	resp, err := http.Get("https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb")
+	resp, err := doGet("https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb")
 	if err != nil {
 		return
 	}
@@ -51,7 +52,7 @@ func initMMDB() error {
 }
 
 func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat")
+	resp, err := doGet("https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat")
 	if err != nil {
 		return
 	}
@@ -109,4 +110,17 @@ func Init(dir string) error {
 		return fmt.Errorf("can't initial GeoSite: %w", err)
 	}
 	return nil
+}
+
+func doGet(url string) (resp *http.Response, err error) {
+	var req *http.Request
+	req, err = http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	convert.SetUserAgent(req)
+
+	resp, err = http.DefaultClient.Do(req)
+	return
 }

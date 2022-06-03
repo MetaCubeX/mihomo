@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/convert"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
 
@@ -30,8 +31,9 @@ type ProxySetProvider struct {
 
 type proxySetProvider struct {
 	*fetcher[[]C.Proxy]
-	proxies     []C.Proxy
-	healthCheck *HealthCheck
+	proxies        []C.Proxy
+	healthCheck    *HealthCheck
+	providersInUse []types.ProxyProvider
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -86,9 +88,14 @@ func (pp *proxySetProvider) ProxiesWithTouch() []C.Proxy {
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
-	if pp.healthCheck.auto() {
-		go pp.healthCheck.check()
+
+	for _, use := range pp.providersInUse {
+		_ = use.Update()
 	}
+}
+
+func (pp *proxySetProvider) RegisterProvidersInUse(providers ...types.ProxyProvider) {
+	pp.providersInUse = append(pp.providersInUse, providers...)
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
@@ -96,7 +103,7 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	_ = pd.fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck, forceCertVerify bool) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck, forceCertVerify bool, prefixName string) (*ProxySetProvider, error) {
 	filterReg, err := regexp.Compile(filter)
 	if err != nil {
 		return nil, fmt.Errorf("invalid filter regex: %w", err)
@@ -111,7 +118,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg, forceCertVerify), proxiesOnUpdate(pd))
+	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg, forceCertVerify, prefixName), proxiesOnUpdate(pd))
 	pd.fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
@@ -196,18 +203,114 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 	return wrapper, nil
 }
 
+// ProxyFilterProvider for filter provider
+type ProxyFilterProvider struct {
+	*proxyFilterProvider
+}
+
+type proxyFilterProvider struct {
+	name        string
+	psd         *ProxySetProvider
+	proxies     []C.Proxy
+	filter      *regexp.Regexp
+	healthCheck *HealthCheck
+}
+
+func (pf *proxyFilterProvider) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"name":        pf.Name(),
+		"type":        pf.Type().String(),
+		"vehicleType": pf.VehicleType().String(),
+		"proxies":     pf.Proxies(),
+	})
+}
+
+func (pf *proxyFilterProvider) Name() string {
+	return pf.name
+}
+
+func (pf *proxyFilterProvider) HealthCheck() {
+	pf.healthCheck.check()
+}
+
+func (pf *proxyFilterProvider) Update() error {
+	var proxies []C.Proxy
+	if pf.filter != nil {
+		for _, proxy := range pf.psd.Proxies() {
+			if !pf.filter.MatchString(proxy.Name()) {
+				continue
+			}
+			proxies = append(proxies, proxy)
+		}
+	} else {
+		proxies = pf.psd.Proxies()
+	}
+
+	pf.proxies = proxies
+	pf.healthCheck.setProxy(proxies)
+	return nil
+}
+
+func (pf *proxyFilterProvider) Initial() error {
+	return nil
+}
+
+func (pf *proxyFilterProvider) VehicleType() types.VehicleType {
+	return pf.psd.VehicleType()
+}
+
+func (pf *proxyFilterProvider) Type() types.ProviderType {
+	return types.Proxy
+}
+
+func (pf *proxyFilterProvider) Proxies() []C.Proxy {
+	return pf.proxies
+}
+
+func (pf *proxyFilterProvider) ProxiesWithTouch() []C.Proxy {
+	pf.healthCheck.touch()
+	return pf.Proxies()
+}
+
+func stopProxyFilterProvider(pf *ProxyFilterProvider) {
+	pf.healthCheck.close()
+}
+
+func NewProxyFilterProvider(name string, psd *ProxySetProvider, hc *HealthCheck, filterRegx *regexp.Regexp) *ProxyFilterProvider {
+	pd := &proxyFilterProvider{
+		psd:         psd,
+		name:        name,
+		healthCheck: hc,
+		filter:      filterRegx,
+	}
+
+	_ = pd.Update()
+
+	if hc.auto() {
+		go hc.process()
+	}
+
+	wrapper := &ProxyFilterProvider{pd}
+	runtime.SetFinalizer(wrapper, stopProxyFilterProvider)
+	return wrapper
+}
+
 func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
 	}
 }
 
-func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVerify bool) parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVerify bool, prefixName string) parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
 		if err := yaml.Unmarshal(buf, schema); err != nil {
-			return nil, err
+			proxies, err1 := convert.ConvertsV2Ray(buf)
+			if err1 != nil {
+				return nil, fmt.Errorf("%s, %w", err.Error(), err1)
+			}
+			schema.Proxies = proxies
 		}
 
 		if schema.Proxies == nil {
@@ -219,6 +322,11 @@ func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVer
 			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
 				continue
 			}
+
+			if prefixName != "" {
+				mapping["name"] = prefixName + mapping["name"].(string)
+			}
+
 			proxy, err := adapter.ParseProxy(mapping, forceCertVerify)
 			if err != nil {
 				return nil, fmt.Errorf("proxy %d error: %w", idx, err)

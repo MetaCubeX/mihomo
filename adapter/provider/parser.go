@@ -20,13 +20,15 @@ type healthCheckSchema struct {
 }
 
 type proxyProviderSchema struct {
-	Type            string            `provider:"type"`
-	Path            string            `provider:"path"`
-	URL             string            `provider:"url,omitempty"`
-	Interval        int               `provider:"interval,omitempty"`
-	Filter          string            `provider:"filter,omitempty"`
-	HealthCheck     healthCheckSchema `provider:"health-check,omitempty"`
-	ForceCertVerify bool              `provider:"force-cert-verify,omitempty"`
+	Type            string              `provider:"type"`
+	Path            string              `provider:"path"`
+	URL             string              `provider:"url,omitempty"`
+	Interval        int                 `provider:"interval,omitempty"`
+	Filter          string              `provider:"filter,omitempty"`
+	HealthCheck     healthCheckSchema   `provider:"health-check,omitempty"`
+	ForceCertVerify bool                `provider:"force-cert-verify,omitempty"`
+	PrefixName      string              `provider:"prefix-name,omitempty"`
+	Header          map[string][]string `provider:"header,omitempty"`
 }
 
 func ParseProxyProvider(name string, mapping map[string]any, forceCertVerify bool) (types.ProxyProvider, error) {
@@ -59,12 +61,12 @@ func ParseProxyProvider(name string, mapping map[string]any, forceCertVerify boo
 	case "file":
 		vehicle = NewFileVehicle(path)
 	case "http":
-		vehicle = NewHTTPVehicle(schema.URL, path)
+		vehicle = NewHTTPVehicle(schema.URL, path, schema.Header)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
-	return NewProxySetProvider(name, interval, filter, vehicle, hc, schema.ForceCertVerify)
+	return NewProxySetProvider(name, interval, filter, vehicle, hc, schema.ForceCertVerify, schema.PrefixName)
 }
