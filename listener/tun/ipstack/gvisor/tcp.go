@@ -1,3 +1,5 @@
+//go:build !no_gvisor
+
 package gvisor
 
 import (
