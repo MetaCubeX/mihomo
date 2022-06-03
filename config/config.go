@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/utils"
-	R "github.com/Dreamacro/clash/rule"
-	RP "github.com/Dreamacro/clash/rule/provider"
+	R "github.com/Dreamacro/clash/rules"
+	RP "github.com/Dreamacro/clash/rules/provider"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"

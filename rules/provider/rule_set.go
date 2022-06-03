@@ -4,7 +4,7 @@ import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/rule/common"
+	"github.com/Dreamacro/clash/rules/common"
 )
 
 type RuleSet struct {

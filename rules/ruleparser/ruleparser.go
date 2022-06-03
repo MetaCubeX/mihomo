@@ -3,7 +3,7 @@ package ruleparser
 import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
-	RC "github.com/Dreamacro/clash/rule/common"
+	RC "github.com/Dreamacro/clash/rules/common"
 )
 
 func ParseSameRule(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {

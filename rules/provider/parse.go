@@ -6,8 +6,8 @@ import (
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
-	RC "github.com/Dreamacro/clash/rule/common"
-	"github.com/Dreamacro/clash/rule/ruleparser"
+	RC "github.com/Dreamacro/clash/rules/common"
+	"github.com/Dreamacro/clash/rules/ruleparser"
 	"time"
 )
 
