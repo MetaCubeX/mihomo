@@ -30,7 +30,7 @@ func (l *loader) LoadGeoSiteWithAttr(file string, siteWithAttr string) ([]*route
 		return nil, fmt.Errorf("empty listname in rule: %s", siteWithAttr)
 	}
 
-	domains, err := l.LoadSite(file, list)
+	domains, err := l.LoadSiteByPath(file, list)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (l *loader) LoadGeoSiteWithAttr(file string, siteWithAttr string) ([]*route
 }
 
 func (l *loader) LoadGeoIP(country string) ([]*router.CIDR, error) {
-	return l.LoadIP(C.GeoipName, country)
+	return l.LoadIPByPath(C.GeoipName, country)
 }
 
 var loaders map[string]func() LoaderImplementation

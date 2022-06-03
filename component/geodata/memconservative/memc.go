@@ -1,6 +1,7 @@
 package memconservative
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -13,7 +14,7 @@ type memConservativeLoader struct {
 	geositecache GeoSiteCache
 }
 
-func (m *memConservativeLoader) LoadIP(filename, country string) ([]*router.CIDR, error) {
+func (m *memConservativeLoader) LoadIPByPath(filename, country string) ([]*router.CIDR, error) {
 	defer runtime.GC()
 	geoip, err := m.geoipcache.Unmarshal(filename, country)
 	if err != nil {
@@ -22,13 +23,21 @@ func (m *memConservativeLoader) LoadIP(filename, country string) ([]*router.CIDR
 	return geoip.Cidr, nil
 }
 
-func (m *memConservativeLoader) LoadSite(filename, list string) ([]*router.Domain, error) {
+func (m *memConservativeLoader) LoadIPByBytes(geoipBytes []byte, country string) ([]*router.CIDR, error) {
+	return nil, errors.New("memConservative do not support LoadIPByBytes")
+}
+
+func (m *memConservativeLoader) LoadSiteByPath(filename, list string) ([]*router.Domain, error) {
 	defer runtime.GC()
 	geosite, err := m.geositecache.Unmarshal(filename, list)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode geodata file: %s, base error: %s", filename, err.Error())
 	}
 	return geosite.Domain, nil
+}
+
+func (m *memConservativeLoader) LoadSiteByBytes(geositeBytes []byte, list string) ([]*router.Domain, error) {
+	return nil, errors.New("memConservative do not support LoadSiteByBytes")
 }
 
 func newMemConservativeLoader() geodata.LoaderImplementation {

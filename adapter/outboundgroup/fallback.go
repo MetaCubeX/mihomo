@@ -92,7 +92,7 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	return al
 }
 
-func (f *Fallback) Set(name string) (err error) {
+func (f *Fallback) Set(name string) error {
 	var p C.Proxy
 	for _, proxy := range f.GetProxies(false) {
 		if proxy.Name() == name {

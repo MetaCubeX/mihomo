@@ -29,11 +29,7 @@ func ReadAsset(file string) ([]byte, error) {
 	return ReadFile(C.Path.GetAssetLocation(file))
 }
 
-func loadIP(filename, country string) ([]*router.CIDR, error) {
-	geoipBytes, err := ReadAsset(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())
-	}
+func loadIP(geoipBytes []byte, country string) ([]*router.CIDR, error) {
 	var geoipList router.GeoIPList
 	if err := proto.Unmarshal(geoipBytes, &geoipList); err != nil {
 		return nil, err
@@ -45,14 +41,10 @@ func loadIP(filename, country string) ([]*router.CIDR, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("country not found in %s%s%s", filename, ": ", country)
+	return nil, fmt.Errorf("country %s not found", country)
 }
 
-func loadSite(filename, list string) ([]*router.Domain, error) {
-	geositeBytes, err := ReadAsset(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())
-	}
+func loadSite(geositeBytes []byte, list string) ([]*router.Domain, error) {
 	var geositeList router.GeoSiteList
 	if err := proto.Unmarshal(geositeBytes, &geositeList); err != nil {
 		return nil, err
@@ -64,17 +56,33 @@ func loadSite(filename, list string) ([]*router.Domain, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("list not found in %s%s%s", filename, ": ", list)
+	return nil, fmt.Errorf("list %s not found", list)
 }
 
 type standardLoader struct{}
 
-func (d standardLoader) LoadSite(filename, list string) ([]*router.Domain, error) {
-	return loadSite(filename, list)
+func (d standardLoader) LoadSiteByPath(filename, list string) ([]*router.Domain, error) {
+	geositeBytes, err := ReadAsset(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())
+	}
+	return loadSite(geositeBytes, list)
 }
 
-func (d standardLoader) LoadIP(filename, country string) ([]*router.CIDR, error) {
-	return loadIP(filename, country)
+func (d standardLoader) LoadSiteByBytes(geositeBytes []byte, list string) ([]*router.Domain, error) {
+	return loadSite(geositeBytes, list)
+}
+
+func (d standardLoader) LoadIPByPath(filename, country string) ([]*router.CIDR, error) {
+	geoipBytes, err := ReadAsset(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %s, base error: %s", filename, err.Error())
+	}
+	return loadIP(geoipBytes, country)
+}
+
+func (d standardLoader) LoadIPByBytes(geoipBytes []byte, country string) ([]*router.CIDR, error) {
+	return loadIP(geoipBytes, country)
 }
 
 func init() {
