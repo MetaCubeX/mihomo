@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/common/collections"
 	C "github.com/Dreamacro/clash/constant"
-	RC "github.com/Dreamacro/clash/rule/common"
-	RP "github.com/Dreamacro/clash/rule/provider"
-	"github.com/Dreamacro/clash/rule/ruleparser"
 	"regexp"
 	"strings"
+	_ "unsafe"
 )
+
+//go:linkname parseRule github.com/Dreamacro/clash/rules.ParseRule
+func parseRule(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
 
 func parseRuleByPayload(payload string) ([]C.Rule, error) {
 	regex, err := regexp.Compile("\\(.*\\)")
@@ -55,40 +56,10 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	tp := splitStr[0]
 	payload := splitStr[1]
 	if tp == "NOT" || tp == "OR" || tp == "AND" {
-		return parseRule(tp, payload, nil)
+		return parseRule(tp, payload, "", nil)
 	}
 	param := strings.Split(payload, ",")
-	return parseRule(tp, param[0], param[1:])
-}
-
-func parseRule(tp, payload string, params []string) (parsed C.Rule, parseErr error) {
-	switch tp {
-	case "AND":
-		parsed, parseErr = NewAND(payload, "")
-	case "OR":
-		parsed, parseErr = NewOR(payload, "")
-	case "NOT":
-		parsed, parseErr = NewNOT(payload, "")
-	case "RULE-SET":
-		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RP.NewRuleSet(payload, "", noResolve)
-	default:
-		parsed, parseErr = ruleparser.ParseSameRule(tp, payload, "", params)
-	}
-
-	if parseErr != nil {
-		return nil, parseErr
-	}
-
-	ruleExtra := &C.RuleExtra{
-		Network:      RC.FindNetwork(params),
-		SourceIPs:    RC.FindSourceIPs(params),
-		ProcessNames: RC.FindProcessName(params),
-	}
-
-	parsed.SetRuleExtra(ruleExtra)
-
-	return parsed, nil
+	return parseRule(tp, param[0], "", param[1:])
 }
 
 type Range struct {
