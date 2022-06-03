@@ -1,3 +1,5 @@
+//go:build !no_gvisor
+
 // Package gvisor provides a thin wrapper around a gVisor's stack.
 package gvisor
 
@@ -64,8 +66,9 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 	// Generate unique NIC id.
 	nicID := tcpip.NICID(s.Stack.UniqueID())
-
-	opts = append(opts,
+	defaultOpts := []option.Option{option.WithDefault()}
+	defaultOpts = append(defaultOpts, opts...)
+	opts = append(defaultOpts,
 		// Create stack NIC and then bind link endpoint to it.
 		withCreatingNIC(nicID, device),
 

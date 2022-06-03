@@ -1,3 +1,5 @@
+//go:build !no_gvisor
+
 package adapter
 
 // Handler is a TCP/UDP connection handler that implements
