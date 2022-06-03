@@ -146,14 +146,14 @@ func (gb *GroupBase) onDialFailed() {
 
 		gb.failedTimes++
 		if gb.failedTimes == 1 {
-			log.Warnln("ProxyGroup: %s first failed", gb.Name())
+			log.Debugln("ProxyGroup: %s first failed", gb.Name())
 			gb.failedTime = time.Now()
 		} else {
 			if time.Since(gb.failedTime) > gb.failedTimeoutInterval() {
 				return
 			}
 
-			log.Warnln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
+			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes() {
 				gb.failedTesting.Store(true)
 				log.Warnln("because %s failed multiple times, active health check", gb.Name())

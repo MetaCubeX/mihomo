@@ -8,11 +8,13 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
+	"time"
 )
 
 type Fallback struct {
 	*GroupBase
 	disableUDP bool
+	testUrl    string
 	selected   string
 }
 
@@ -90,15 +92,27 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	return al
 }
 
-func (f *Fallback) Set(name string) error {
+func (f *Fallback) Set(name string) (err error) {
+	var p C.Proxy
 	for _, proxy := range f.GetProxies(false) {
 		if proxy.Name() == name {
-			f.selected = name
-			return nil
+			p = proxy
+			break
 		}
 	}
 
-	return errors.New("proxy not exist")
+	if p == nil {
+		return errors.New("proxy not exist")
+	}
+
+	f.selected = name
+	if !p.Alive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
+		defer cancel()
+		_, _ = p.URLTest(ctx, f.testUrl)
+	}
+
+	return nil
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
@@ -114,5 +128,6 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			providers,
 		}),
 		disableUDP: option.DisableUDP,
+		testUrl:    option.URL,
 	}
 }
