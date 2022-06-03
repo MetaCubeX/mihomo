@@ -12,7 +12,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 )
 
-var initMode = true
+var initFlag bool
 
 func downloadMMDB(path string) (err error) {
 	resp, err := http.Get(C.MmdbUrl)
@@ -73,7 +73,7 @@ func initGeoSite() error {
 		}
 		log.Infoln("Download GeoSite.dat finish")
 	}
-	if initMode {
+	if !initFlag {
 		if err := geodata.Verify(C.GeositeName); err != nil {
 			log.Warnln("GeoSite.dat invalid, remove and download: %s", err)
 			if err := os.Remove(C.Path.GeoSite()); err != nil {
@@ -83,6 +83,7 @@ func initGeoSite() error {
 				return fmt.Errorf("can't download GeoSite.dat: %s", err.Error())
 			}
 		}
+		initFlag = true
 	}
 	return nil
 }
