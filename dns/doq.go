@@ -1,3 +1,5 @@
+//go:build !no_doq
+
 package dns
 
 import (
