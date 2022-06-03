@@ -76,7 +76,7 @@ mitm:
 ```
 
 ### DNS configuration
-Support resolve ip with a proxy tunnel.
+Support resolve ip with a proxy tunnel or interface.
 
 Support `geosite` with `fallback-filter`.
 
@@ -96,8 +96,8 @@ Use `curl -X POST controllerip:port/cache/fakeip/flush` to flush persistence fak
      - https://doh.pub/dns-query
      - tls://223.5.5.5:853
    fallback:
+     - 'tls://8.8.4.4:853#proxy or interface'
      - 'https://1.0.0.1/dns-query#Proxy'  # append the proxy adapter name to the end of DNS URL with '#' prefix.
-     - 'tls://8.8.4.4:853#Proxy'
    fallback-filter:
      geoip: false
      geosite:

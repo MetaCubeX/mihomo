@@ -69,7 +69,9 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -97,11 +99,17 @@ func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
 					return nil, err
 				}
 
-				if proxyAdapter == "" {
-					return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
-				} else {
-					return dialContextWithProxyAdapter(ctx, proxyAdapter, "tcp", ip, port)
+				if proxyAdapter != "" {
+					var conn net.Conn
+					conn, err = dialContextWithProxyAdapter(ctx, proxyAdapter, "tcp", ip, port)
+					if err == errProxyNotFound {
+						options := []dialer.Option{dialer.WithInterface(proxyAdapter), dialer.WithRoutingMark(0)}
+						conn, err = dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port), options...)
+					}
+					return conn, err
 				}
+
+				return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
 			},
 		},
 	}
