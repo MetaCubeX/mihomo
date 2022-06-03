@@ -54,7 +54,10 @@ func main() {
 	if version {
 		fmt.Printf("Clash Meta %s %s %s with %s %s\n",
 			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
-		fmt.Printf("Use tags: %s\n", strings.Join(features.TAGS, ", "))
+		if len(features.TAGS) != 0 {
+			fmt.Printf("Use tags: %s\n", strings.Join(features.TAGS, ", "))
+		}
+
 		return
 	}
 
