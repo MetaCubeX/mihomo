@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -18,6 +19,8 @@ import (
 
 	D "github.com/miekg/dns"
 )
+
+var errProxyNotFound = errors.New("proxy adapter not found")
 
 func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
 	var ttl uint32
