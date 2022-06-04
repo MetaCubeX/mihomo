@@ -1,3 +1,5 @@
+//go:build !no_script
+
 package js
 
 import (
