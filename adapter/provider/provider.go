@@ -75,7 +75,7 @@ func (pp *proxySetProvider) Initial() error {
 
 	pp.onUpdate(elm)
 	if pp.healthCheck.auto() {
-		go pp.healthCheck.process()
+		defer func() { go pp.healthCheck.process() }()
 	}
 
 	return nil
