@@ -30,20 +30,24 @@ func (c *classicalStrategy) ShouldResolveIP() bool {
 }
 
 func (c *classicalStrategy) OnUpdate(rules []string) {
+	var classicalRules []C.Rule
+	shouldResolveIP := false
 	for _, rawRule := range rules {
 		ruleType, rule, params := ruleParse(rawRule)
 		r, err := parseRule(ruleType, rule, "", params)
 		if err != nil {
 			log.Warnln("parse rule error:[%s]", err.Error())
 		} else {
-			if !c.shouldResolveIP {
-				c.shouldResolveIP = r.ShouldResolveIP()
+			if !shouldResolveIP {
+				shouldResolveIP = r.ShouldResolveIP()
 			}
 
-			c.rules = append(c.rules, r)
-			c.count++
+			classicalRules = append(classicalRules, r)
 		}
 	}
+
+	c.rules = classicalRules
+	c.count = len(classicalRules)
 }
 
 func NewClassicalStrategy() *classicalStrategy {
