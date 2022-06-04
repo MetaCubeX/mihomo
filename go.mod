@@ -4,7 +4,9 @@ go 1.18
 
 require (
 	github.com/Dreamacro/go-shadowsocks2 v0.1.8
-	github.com/dlclark/regexp2 v1.4.0
+	github.com/dlclark/regexp2 v1.4.1-0.20201116162257-a2a8dda75c91
+	github.com/dop251/goja v0.0.0-20220516123900-4418d4575a41
+	github.com/dop251/goja_nodejs v0.0.0-20211022123610-8dd9abb0616d
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.1
@@ -38,9 +40,9 @@ require (
 	github.com/cheekybits/genny v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/google/btree v1.0.1 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.1 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.1 // indirect
