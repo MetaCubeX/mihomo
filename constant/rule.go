@@ -14,6 +14,7 @@ const (
 	SrcPort
 	DstPort
 	Process
+	Script
 	ProcessPath
 	RuleSet
 	Network
@@ -61,6 +62,8 @@ func (rt RuleType) String() string {
 		return "RuleSet"
 	case Network:
 		return "Network"
+	case Script:
+		return "Script"
 	case Uid:
 		return "Uid"
 	case INTYPE:
