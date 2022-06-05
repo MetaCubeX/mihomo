@@ -19,7 +19,17 @@ func (s *Script) RuleType() C.RuleType {
 func (s *Script) Match(metadata *C.Metadata) bool {
 	res := false
 	js.Run(s.name, map[string]any{
-		"metadata": metadata,
+		"metadata": C.JSMetadata{
+			Host:        metadata.Host,
+			Network:     metadata.NetWork.String(),
+			Type:        metadata.Type.String(),
+			SrcIP:       metadata.SrcIP.String(),
+			SrcPort:     metadata.SrcPort,
+			DstPort:     metadata.DstPort,
+			Uid:         metadata.Uid,
+			Process:     metadata.Process,
+			ProcessPath: metadata.ProcessPath,
+		},
 	}, func(a any, err error) {
 		if err != nil {
 			res = false
@@ -29,7 +39,6 @@ func (s *Script) Match(metadata *C.Metadata) bool {
 		if !ok {
 			res = false
 		}
-
 		res = r
 	})
 
