@@ -112,6 +112,7 @@ type Tun struct {
 // Script config
 type Script struct {
 	MainCode      string            `yaml:"code" json:"code"`
+	MainPath      string            `yaml:"path" json:"path"`
 	ShortcutsCode map[string]string `yaml:"shortcuts" json:"shortcuts"`
 }
 
@@ -853,8 +854,26 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 }
 
 func parseScript(script Script, rawRules []string) ([]string, error) {
-	mainCode := script.MainCode
-	shortcutsCode := script.ShortcutsCode
+	var (
+		path          = script.MainPath
+		mainCode      = script.MainCode
+		shortcutsCode = script.ShortcutsCode
+	)
+
+	if path != "" {
+		if !strings.HasSuffix(path, ".star") {
+			return nil, fmt.Errorf("initialized script file failure, script path [%s] invalid", path)
+		}
+		path = C.Path.Resolve(path)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return nil, fmt.Errorf("initialized script file failure, script path invalid: %w", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("initialized script file failure, read file error: %w", err)
+		}
+		mainCode = string(data)
+	}
 
 	if strings.TrimSpace(mainCode) == "" {
 		mainCode = `
@@ -863,6 +882,10 @@ def main(ctx, metadata):
 `
 	} else {
 		mainCode = cleanPyKeywords(mainCode)
+	}
+
+	if !strings.Contains(mainCode, "def main(ctx, metadata):") {
+		return nil, fmt.Errorf(`initialized script code failure, the function 'def main(ctx, metadata):' is required`)
 	}
 
 	content := `# -*- coding: UTF-8 -*-

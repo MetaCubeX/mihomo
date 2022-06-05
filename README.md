@@ -252,6 +252,7 @@ Script enables users to programmatically select a policy for the packets with mo
 mode: script
 
 script:
+  # path: ./script.star
   code: |
     def main(ctx, metadata):
       if metadata["process_name"] == 'apsd':
