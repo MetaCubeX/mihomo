@@ -13,6 +13,8 @@ import (
 func init() {
 	logPrinter := console.RequireWithPrinter(&JsLog{})
 	require.RegisterNativeModule("console", logPrinter)
+	contextFuncLoader := newContext()
+	require.RegisterNativeModule("context", contextFuncLoader)
 }
 
 func preSetting(rt *goja.Runtime) {
@@ -20,6 +22,7 @@ func preSetting(rt *goja.Runtime) {
 	registry.Enable(rt)
 
 	console.Enable(rt)
+	enable(rt)
 	eventloop.EnableConsole(true)
 }
 

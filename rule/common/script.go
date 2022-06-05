@@ -19,7 +19,7 @@ func (s *Script) RuleType() C.RuleType {
 func (s *Script) Match(metadata *C.Metadata) bool {
 	res := false
 	js.Run(s.name, map[string]any{
-		"metadata": C.JSMetadata{
+		"metadata": C.JSRuleMetadata{
 			Host:        metadata.Host,
 			Network:     metadata.NetWork.String(),
 			Type:        metadata.Type.String(),
@@ -54,7 +54,7 @@ func (s *Script) Payload() string {
 }
 
 func (s *Script) ShouldResolveIP() bool {
-	return true
+	return false
 }
 
 func NewScript(script string, adapter string) (*Script, error) {
