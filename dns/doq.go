@@ -167,20 +167,16 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 			return nil, err
 		}
 	} else {
-		conn, err := dialContextWithProxyAdapter(context.Background(), dc.proxyAdapter, "udp", ip, port)
-		if err == errProxyNotFound {
-			options := []dialer.Option{dialer.WithInterface(dc.proxyAdapter), dialer.WithRoutingMark(0)}
-			conn, err = dialContextWithProxyAdapter(context.Background(), dc.proxyAdapter, "udp", ip, port, options...)
-			if err != nil {
-				return nil, err
-			}
-		} else {
+		conn, err := dialContextExtra(context.Background(), dc.proxyAdapter, "udp", ip, port)
+		if err != nil {
 			return nil, err
 		}
+
 		wrapConn, ok := conn.(*wrapPacketConn)
 		if !ok {
 			return nil, fmt.Errorf("quio create packet failed")
 		}
+
 		udp = wrapConn
 	}
 
