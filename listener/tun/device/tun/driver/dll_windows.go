@@ -48,20 +48,20 @@ import (
 //go:linkname procWintunStartSession golang.zx2c4.com/wintun.procWintunStartSession
 
 var (
-	modwintun                         *lazyDLL
-	procWintunCreateAdapter           *lazyProc
-	procWintunOpenAdapter             *lazyProc
-	procWintunCloseAdapter            *lazyProc
-	procWintunDeleteDriver            *lazyProc
-	procWintunGetAdapterLUID          *lazyProc
-	procWintunGetRunningDriverVersion *lazyProc
-	procWintunAllocateSendPacket      *lazyProc
-	procWintunEndSession              *lazyProc
-	procWintunGetReadWaitEvent        *lazyProc
-	procWintunReceivePacket           *lazyProc
-	procWintunReleaseReceivePacket    *lazyProc
-	procWintunSendPacket              *lazyProc
-	procWintunStartSession            *lazyProc
+	modwintun                         = newLazyDLL("wintun.dll", setupLogger)
+	procWintunCreateAdapter           = modwintun.NewProc("WintunCreateAdapter")
+	procWintunOpenAdapter             = modwintun.NewProc("WintunOpenAdapter")
+	procWintunCloseAdapter            = modwintun.NewProc("WintunCloseAdapter")
+	procWintunDeleteDriver            = modwintun.NewProc("WintunDeleteDriver")
+	procWintunGetAdapterLUID          = modwintun.NewProc("WintunGetAdapterLUID")
+	procWintunGetRunningDriverVersion = modwintun.NewProc("WintunGetRunningDriverVersion")
+	procWintunAllocateSendPacket      = modwintun.NewProc("WintunAllocateSendPacket")
+	procWintunEndSession              = modwintun.NewProc("WintunEndSession")
+	procWintunGetReadWaitEvent        = modwintun.NewProc("WintunGetReadWaitEvent")
+	procWintunReceivePacket           = modwintun.NewProc("WintunReceivePacket")
+	procWintunReleaseReceivePacket    = modwintun.NewProc("WintunReleaseReceivePacket")
+	procWintunSendPacket              = modwintun.NewProc("WintunSendPacket")
+	procWintunStartSession            = modwintun.NewProc("WintunStartSession")
 )
 
 type loggerLevel int
@@ -71,23 +71,6 @@ const (
 	logWarn
 	logErr
 )
-
-func init() {
-	modwintun = newLazyDLL("wintun.dll", setupLogger)
-	procWintunCreateAdapter = modwintun.NewProc("WintunCreateAdapter")
-	procWintunOpenAdapter = modwintun.NewProc("WintunOpenAdapter")
-	procWintunCloseAdapter = modwintun.NewProc("WintunCloseAdapter")
-	procWintunDeleteDriver = modwintun.NewProc("WintunDeleteDriver")
-	procWintunGetAdapterLUID = modwintun.NewProc("WintunGetAdapterLUID")
-	procWintunGetRunningDriverVersion = modwintun.NewProc("WintunGetRunningDriverVersion")
-	procWintunAllocateSendPacket = modwintun.NewProc("WintunAllocateSendPacket")
-	procWintunEndSession = modwintun.NewProc("WintunEndSession")
-	procWintunGetReadWaitEvent = modwintun.NewProc("WintunGetReadWaitEvent")
-	procWintunReceivePacket = modwintun.NewProc("WintunReceivePacket")
-	procWintunReleaseReceivePacket = modwintun.NewProc("WintunReleaseReceivePacket")
-	procWintunSendPacket = modwintun.NewProc("WintunSendPacket")
-	procWintunStartSession = modwintun.NewProc("WintunStartSession")
-}
 
 func InitWintun() (err error) {
 	defer func() {

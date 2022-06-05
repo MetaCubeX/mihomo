@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -115,6 +116,9 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			} else if host := wsOpts.Headers.Get("Host"); host != "" {
 				wsOpts.TLSConfig.ServerName = host
 			}
+		} else {
+			wsOpts.Headers.Set("Host", convert.RandHost())
+			convert.SetUserAgent(wsOpts.Headers)
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
@@ -134,6 +138,9 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			http.Header(v.option.HTTPOpts.Headers).Set("Host", convert.RandHost())
+			convert.SetUserAgent(v.option.HTTPOpts.Headers)
 		}
 
 		host, _, _ := net.SplitHostPort(v.addr)

@@ -308,7 +308,7 @@ func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVer
 		if err := yaml.Unmarshal(buf, schema); err != nil {
 			proxies, err1 := convert.ConvertsV2Ray(buf)
 			if err1 != nil {
-				return nil, fmt.Errorf("%s, %w", err.Error(), err1)
+				return nil, fmt.Errorf("%w, %s", err, err1.Error())
 			}
 			schema.Proxies = proxies
 		}

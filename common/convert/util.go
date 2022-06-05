@@ -29,7 +29,6 @@ var hostsSuffix = []string{
 	".alidns.com",
 	".cdngslb.com",
 	".mxhichina.com",
-	".alibabadns.com",
 }
 
 var userAgents = []string{
@@ -307,7 +306,10 @@ func RandUserAgent() string {
 	return userAgents[rand.Intn(uaLen)]
 }
 
-func SetUserAgent(req *http.Request) {
+func SetUserAgent(header http.Header) {
+	if header.Get("User-Agent") != "" {
+		return
+	}
 	userAgent := RandUserAgent()
-	req.Header.Set("User-Agent", userAgent)
+	header.Set("User-Agent", userAgent)
 }

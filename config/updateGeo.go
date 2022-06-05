@@ -6,7 +6,6 @@ import (
 	"runtime"
 
 	"github.com/Dreamacro/clash/component/geodata"
-	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/oschwald/geoip2-golang"

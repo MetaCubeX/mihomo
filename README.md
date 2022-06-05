@@ -363,7 +363,7 @@ external-ui: dashboard
 Open [http://127.0.0.1:9090/ui/](http://127.0.0.1:9090/ui/) by web browser.
 
 ## Plus Pro Release
-[Release](https://github.com/yaling888/clash/releases/tag/plus)
+[Release](https://github.com/yaling888/clash/releases/tag/plus_pro)
 
 ## Development
 If you want to build an application that uses clash as a library, check out the the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)

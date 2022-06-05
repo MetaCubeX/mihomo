@@ -119,7 +119,7 @@ func doGet(url string) (resp *http.Response, err error) {
 		return
 	}
 
-	convert.SetUserAgent(req)
+	convert.SetUserAgent(req.Header)
 
 	resp, err = http.DefaultClient.Do(req)
 	return
