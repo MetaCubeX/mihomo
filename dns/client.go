@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/Dreamacro/clash/tunnel"
 	"go.uber.org/atomic"
 	"net"
 	"net/netip"
@@ -55,14 +56,16 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	}
 
 	var conn net.Conn
-	if c.proxyAdapter != "" {
-		conn, err = dialContextWithProxyAdapter(ctx, c.proxyAdapter, network, ip, c.port, options...)
-		if err == errProxyNotFound {
-			options = append(options[:0], dialer.WithInterface(c.proxyAdapter), dialer.WithRoutingMark(0))
+	if c.proxyAdapter == "" {
+		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
+	} else {
+		_, ok := tunnel.Proxies()[c.proxyAdapter]
+		if ok {
+			conn, err = dialContextWithProxyAdapter(ctx, c.proxyAdapter, network, ip, c.port, options...)
+		} else {
+			options = append(options, dialer.WithInterface(c.proxyAdapter))
 			conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
 		}
-	} else {
-		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
 	}
 
 	if err != nil {
