@@ -47,5 +47,8 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 		}
 	}
 
+	metadata.RawSrcAddr = conn.RemoteAddr()
+	metadata.RawDstAddr = conn.LocalAddr()
+
 	return context.NewConnContext(conn, metadata)
 }
