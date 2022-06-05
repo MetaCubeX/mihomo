@@ -315,9 +315,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.Proxies = proxies
 	config.Providers = providers
 
-	if err = parseScript(rawCfg.Script); err != nil {
+	rawRules, err := parseScript(rawCfg.Script, rawCfg.Rule)
+	if err != nil {
 		return nil, err
 	}
+	rawCfg.Rule = rawRules
 
 	rules, ruleProviders, err := parseRules(rawCfg, proxies)
 	if err != nil {
@@ -512,10 +514,10 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 	var (
 		rules         []C.Rule
 		providerNames []string
+		foundRP       bool
 
 		ruleProviders = map[string]C.Rule{}
 		rulesConfig   = cfg.Rule
-		mode          = cfg.Mode
 	)
 
 	// parse rules
@@ -550,8 +552,14 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		target = rule[l-1]
 		params = rule[l:]
 
-		if _, ok := proxies[target]; !ok && (mode != T.Script || ruleName != "GEOSITE") {
+		if _, ok := proxies[target]; !ok && ruleName != "GEOSITE" && target != C.ScriptRuleGeoSiteTarget {
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
+		}
+
+		pvName := "geosite:" + strings.ToLower(payload)
+		_, foundRP = ruleProviders[pvName]
+		if ruleName == "GEOSITE" && target == C.ScriptRuleGeoSiteTarget && foundRP {
+			continue
 		}
 
 		params = trimArr(params)
@@ -561,8 +569,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
 		}
 
-		if ruleName == "GEOSITE" {
-			pvName := "geosite:" + strings.ToLower(payload)
+		if ruleName == "GEOSITE" && !foundRP {
 			providerNames = append(providerNames, pvName)
 			ruleProviders[pvName] = parsed
 		}
@@ -845,7 +852,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 	return users
 }
 
-func parseScript(script Script) error {
+func parseScript(script Script, rawRules []string) ([]string, error) {
 	mainCode := script.MainCode
 	shortcutsCode := script.ShortcutsCode
 
@@ -890,20 +897,30 @@ time = ClashTime()
 
 	err := os.WriteFile(C.Path.Script(), []byte(content), 0o644)
 	if err != nil {
-		return fmt.Errorf("initialized script module failure, %w", err)
+		return nil, fmt.Errorf("initialized script module failure, %w", err)
 	}
 
 	if err = S.Py_Initialize(C.Path.GetExecutableFullPath(), C.Path.ScriptDir()); err != nil {
-		return fmt.Errorf("initialized script module failure, %w", err)
+		return nil, fmt.Errorf("initialized script module failure, %w", err)
 	}
 
 	if err = S.LoadMainFunction(); err != nil {
-		return fmt.Errorf("initialized script module failure, %w", err)
+		return nil, fmt.Errorf("initialized script module failure, %w", err)
+	}
+
+	rpdArr := findRuleProvidersName(content)
+	for _, v := range rpdArr {
+		if !strings.HasPrefix(v, "geosite:") {
+			return nil, fmt.Errorf("initialized script module failure, rule provider name must be start with \"geosite:\"")
+		}
+		v = strings.ToLower(v)
+		rule := fmt.Sprintf("GEOSITE,%s,%s", strings.TrimPrefix(v, "geosite:"), C.ScriptRuleGeoSiteTarget)
+		rawRules = append(rawRules, rule)
 	}
 
 	log.Infoln("Start initial script module successful, version: %s", S.Py_GetVersion())
 
-	return nil
+	return rawRules, nil
 }
 
 func cleanPyKeywords(code string) string {
@@ -914,6 +931,23 @@ func cleanPyKeywords(code string) string {
 		code = reg.ReplaceAllString(code, "")
 	}
 	return code
+}
+
+func findRuleProvidersName(s string) []string {
+	ruleProviderRegx := regexp.MustCompile("ctx.rule_providers\\[[\"'](\\S+)[\"']\\]\\.match|match_provider\\([\"'](\\S+)[\"']\\)")
+	arr := ruleProviderRegx.FindAllStringSubmatch(s, -1)
+
+	var rpd []string
+	for _, rpdArr := range arr {
+		for i, v := range rpdArr {
+			if i == 0 || v == "" {
+				continue
+			}
+			rpd = append(rpd, v)
+		}
+	}
+
+	return rpd
 }
 
 func parseMitm(rawMitm RawMitm) (*Mitm, error) {

@@ -249,12 +249,6 @@ Script enables users to programmatically select a policy for the packets with mo
 ```yaml
 mode: script
 
-rules:
-  # the rule GEOSITE just as a rule provider in mode script
-  - GEOSITE,category-ads-all,Whatever
-  - GEOSITE,youtube,Whatever
-  - GEOSITE,geolocation-cn,Whatever
-  
 script:
   code: |
     def main(ctx, metadata):

@@ -55,6 +55,9 @@ func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 	if recordsCount == 0 {
 		cont = "from cache"
 	}
+	if adapter == C.ScriptRuleGeoSiteTarget {
+		adapter = "Script"
+	}
 	log.Infoln("Start initial GeoSite rule %s => %s, records: %s", country, adapter, cont)
 
 	geoSite := &GEOSITE{
