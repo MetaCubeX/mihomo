@@ -62,7 +62,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 
-			q := urlTrojan.Query()
+			query := urlTrojan.Query()
 
 			name := uniqueName(names, urlTrojan.Fragment)
 			trojan := make(map[string]any, 20)
@@ -75,12 +75,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["udp"] = true
 			trojan["skip-cert-verify"] = false
 
-			sni := q.Get("sni")
+			sni := query.Get("sni")
 			if sni != "" {
 				trojan["sni"] = sni
 			}
 
-			network := strings.ToLower(q.Get("type"))
+			network := strings.ToLower(query.Get("type"))
 			if network != "" {
 				trojan["network"] = network
 			}
@@ -92,7 +92,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 
-				wsOpts["path"] = q.Get("path")
+				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
 
 				trojan["ws-opts"] = wsOpts
@@ -267,7 +267,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 
-			q := urlVless.Query()
+			query := urlVless.Query()
 
 			name := uniqueName(names, urlVless.Fragment)
 			vless := make(map[string]any, 20)
@@ -280,17 +280,17 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless["udp"] = true
 			vless["skip-cert-verify"] = false
 
-			sni := q.Get("sni")
+			sni := query.Get("sni")
 			if sni != "" {
 				vless["servername"] = sni
 			}
 
-			flow := strings.ToLower(q.Get("flow"))
+			flow := strings.ToLower(query.Get("flow"))
 			if flow != "" {
 				vless["flow"] = flow
 			}
 
-			network := strings.ToLower(q.Get("type"))
+			network := strings.ToLower(query.Get("type"))
 			if network != "" {
 				vless["network"] = network
 			}
@@ -302,7 +302,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 
-				wsOpts["path"] = q.Get("path")
+				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
 
 				vless["ws-opts"] = wsOpts
@@ -335,7 +335,7 @@ func uniqueName(names map[string]int, name string) string {
 	if index, ok := names[name]; ok {
 		index++
 		names[name] = index
-		name = name + "-" + fmt.Sprintf("%02d", index)
+		name = fmt.Sprintf("%s-%02d", name, index)
 	} else {
 		index = 0
 		names[name] = index

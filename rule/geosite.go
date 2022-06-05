@@ -5,7 +5,6 @@ import (
 
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
-	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -47,12 +46,16 @@ func (gs *GEOSITE) GetDomainMatcher() *router.DomainMatcher {
 }
 
 func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
-	matcher, recordsCount, err := geodata.LoadGeoSiteMatcher(country)
+	matcher, recordsCount, err := geodata.LoadProviderByCode(country)
 	if err != nil {
 		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
 	}
 
-	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, recordsCount)
+	cont := fmt.Sprintf("%d", recordsCount)
+	if recordsCount == 0 {
+		cont = "from cache"
+	}
+	log.Infoln("Start initial GeoSite rule %s => %s, records: %s", country, adapter, cont)
 
 	geoSite := &GEOSITE{
 		Base:    &Base{},

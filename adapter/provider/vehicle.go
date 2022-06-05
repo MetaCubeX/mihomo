@@ -72,9 +72,7 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 		req.SetBasicAuth(user.Username(), password)
 	}
 
-	if req.UserAgent() == "" {
-		convert.SetUserAgent(req)
-	}
+	convert.SetUserAgent(req.Header)
 
 	req = req.WithContext(ctx)
 

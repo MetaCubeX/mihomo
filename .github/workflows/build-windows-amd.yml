@@ -50,51 +50,74 @@ jobs:
 
       - name: Build
         #if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $env:CGO_ENABLED=1; go build -tags build_actions -trimpath -ldflags '-w -s -buildid=' -o bin/clash-plus-windows-amd64.exe
-          $env:GOAMD64="v3"; $env:CGO_ENABLED=1; go build -tags build_actions -trimpath -ldflags '-w -s -buildid=' -o bin/clash-plus-windows-amd64-v3.exe
+          $env:CGO_ENABLED=1; go build -tags build_actions -trimpath -ldflags '-w -s -buildid=' -o bin/clash-plus-pro-windows-amd64.exe
+          $env:GOAMD64="v3"; $env:CGO_ENABLED=1; go build -tags build_actions -trimpath -ldflags '-w -s -buildid=' -o bin/clash-plus-pro-windows-amd64-v3.exe
           
           $version = Get-Date -Format 'yyyy.MM.dd'
           
           cd bin/
-          Compress-Archive -Path clash-plus-windows-amd64.exe -DestinationPath clash-plus-windows-amd64-$version.zip
-          Compress-Archive -Path clash-plus-windows-amd64-v3.exe -DestinationPath clash-plus-windows-amd64-v3-$version.zip
-          Remove-Item -Force clash-plus-windows-amd64.exe
-          Remove-Item -Force clash-plus-windows-amd64-v3.exe
+          Compress-Archive -Path clash-plus-pro-windows-amd64.exe -DestinationPath clash-plus-pro-windows-amd64-$version.zip
+          Compress-Archive -Path clash-plus-pro-windows-amd64-v3.exe -DestinationPath clash-plus-pro-windows-amd64-v3-$version.zip
+          Remove-Item -Force clash-plus-pro-windows-amd64.exe
+          Remove-Item -Force clash-plus-pro-windows-amd64-v3.exe
           "$version" | Out-File version.txt -NoNewLine
 
+      - name: Upload files to tag
+        if: startsWith(github.ref, 'refs/tags/') == false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = Get-Date -Format 'yyyy.MM.dd'
+          
+          $plus_pro = curl `
+            -H "Accept: application/vnd.github.v3+json" `
+            -H "Authorization: token $env:GITHUB_TOKEN" `
+            https://api.github.com/repos/yaling888/clash/releases/tags/plus_pro | ConvertFrom-Json
+          
+          $plus_pro_url = $plus_pro.url
+          $upload_url = $plus_pro.upload_url
+          $plus_pro_upload_url = $upload_url.Substring(0,$upload_url.Length-13)
+          
           curl `
             -X PATCH `
             -H "Accept: application/vnd.github.v3+json" `
             -H "Authorization: token $env:GITHUB_TOKEN" `
-            https://api.github.com/repos/yaling888/clash/releases/66325518 `
-            -d '{"name":"Plus Pro $version","draft":true}' | Out-Null
+            "$plus_pro_url" `
+            -d "{`"name`":`"Plus Pro $version`",`"draft`":true}" | Out-Null
+          
+          foreach ($asset in $plus_pro.assets)
+          {
+            curl `
+              -X DELETE `
+              -H "Accept: application/vnd.github.v3+json" `
+              -H "Authorization: token $env:GITHUB_TOKEN" `
+              "$($asset.url)" | Out-Null
+          }
 
           curl `
             -X POST `
             -H "Content-Type: application/zip" `
-            -T "clash-plus-windows-amd64-$version.zip" `
+            -T "bin/clash-plus-pro-windows-amd64-$version.zip" `
             -H "Accept: application/vnd.github.v3+json" `
             -H "Authorization: token $env:GITHUB_TOKEN" `
-            "https://uploads.github.com/repos/yaling888/clash/releases/66325518/assets?name=clash-plus-windows-amd64-$version.zip" | Out-Null
+            "$plus_pro_upload_url?name=clash-plus-pro-windows-amd64-$version.zip" | Out-Null
 
           curl `
             -X POST `
             -H "Content-Type: application/zip" `
-            -T "clash-plus-windows-amd64-v3-$version.zip" `
+            -T "bin/clash-plus-pro-windows-amd64-v3-$version.zip" `
             -H "Accept: application/vnd.github.v3+json" `
             -H "Authorization: token $env:GITHUB_TOKEN" `
-            "https://uploads.github.com/repos/yaling888/clash/releases/66325518/assets?name=clash-plus-windows-amd64-v3-$version.zip" | Out-Null
+            "$plus_pro_upload_url?name=clash-plus-pro-windows-amd64-v3-$version.zip" | Out-Null
 
           curl `
             -X POST `
             -H "Content-Type: text/plain" `
-            -T "version.txt" `
+            -T "bin/version.txt" `
             -H "Accept: application/vnd.github.v3+json" `
             -H "Authorization: token $env:GITHUB_TOKEN" `
-            https://uploads.github.com/repos/yaling888/clash/releases/66325518/assets?name=version-1.txt | Out-Null
+            "$plus_pro_upload_url?name=version.txt" | Out-Null
 
       #- name: Upload files to Artifacts
       #  uses: actions/upload-artifact@v2
@@ -102,6 +125,15 @@ jobs:
       #    name: clash-windows-amd64-${{ steps.test.outputs.file_sha }}-${{ steps.test.outputs.file_date }}
       #    path: |
       #      bin/*
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: bin/*
+          draft: true
+          prerelease: false
+          generate_release_notes: false
 
       #- name: Delete workflow runs
       #  uses: GitRML/delete-workflow-runs@main

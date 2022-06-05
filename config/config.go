@@ -20,6 +20,7 @@ import (
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
+	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	S "github.com/Dreamacro/clash/component/script"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
@@ -331,7 +332,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
-	dnsCfg, err := parseDNS(rawCfg, hosts, rules)
+	dnsCfg, err := parseDNS(rawCfg, hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -706,37 +707,27 @@ func parseFallbackIPCIDR(ips []string) ([]*netip.Prefix, error) {
 	return ipNets, nil
 }
 
-func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
+func parseFallbackGeoSite(countries []string) ([]*router.DomainMatcher, error) {
 	var sites []*router.DomainMatcher
-
 	for _, country := range countries {
-		found := false
-		for _, rule := range rules {
-			if rule.RuleType() == C.GEOSITE {
-				if strings.EqualFold(country, rule.Payload()) {
-					found = true
-					sites = append(sites, rule.(C.RuleGeoSite).GetDomainMatcher())
-					log.Infoln("Start initial GeoSite dns fallback filter from rule `%s`", country)
-				}
-			}
+		matcher, recordsCount, err := geodata.LoadProviderByCode(country)
+		if err != nil {
+			return nil, err
 		}
 
-		if !found {
-			matcher, recordsCount, err := geodata.LoadGeoSiteMatcher(country)
-			if err != nil {
-				return nil, err
-			}
+		sites = append(sites, matcher)
 
-			sites = append(sites, matcher)
-
-			log.Infoln("Start initial GeoSite dns fallback filter `%s`, records: %d", country, recordsCount)
+		cont := fmt.Sprintf("%d", recordsCount)
+		if recordsCount == 0 {
+			cont = "from cache"
 		}
+		log.Infoln("Start initial GeoSite dns fallback filter `%s`, records: %s", country, cont)
 	}
 	runtime.GC()
 	return sites, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.Rule) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr]) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -830,7 +821,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 			dnsCfg.FallbackFilter.IPCIDR = fallbackip
 		}
 		dnsCfg.FallbackFilter.Domain = cfg.FallbackFilter.Domain
-		fallbackGeoSite, err := parseFallbackGeoSite(cfg.FallbackFilter.GeoSite, rules)
+		fallbackGeoSite, err := parseFallbackGeoSite(cfg.FallbackFilter.GeoSite)
 		if err != nil {
 			return nil, fmt.Errorf("load GeoSite dns fallback filter error, %w", err)
 		}
