@@ -3,17 +3,22 @@
 package js
 
 import (
+	"github.com/Dreamacro/clash/log"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/eventloop"
 	"github.com/dop251/goja_nodejs/require"
 )
 
+func init() {
+	logPrinter := console.RequireWithPrinter(&JsLog{})
+	require.RegisterNativeModule("console", logPrinter)
+}
+
 func preSetting(rt *goja.Runtime) {
 	registry := new(require.Registry)
 	registry.Enable(rt)
-	logPrinter := console.RequireWithPrinter(&JsLog{})
-	require.RegisterNativeModule("console", logPrinter)
+
 	console.Enable(rt)
 	eventloop.EnableConsole(true)
 }
@@ -33,12 +38,20 @@ func compiler(name, code string) (*goja.Program, error) {
 }
 
 func run(loop *eventloop.EventLoop, program *goja.Program, args map[string]any, callback func(any, error)) {
-	loop.RunOnLoop(func(runtime *goja.Runtime) {
+	loop.Run(func(runtime *goja.Runtime) {
 		for k, v := range args {
-			runtime.Set(k, v)
+			runtime.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+			err := runtime.Set(k, v)
+			if err != nil {
+				log.Errorln("Args to script failed, %s", err.Error())
+			}
 		}
 
 		v, err := runtime.RunProgram(program)
-		callback(v, err)
+		if v == nil {
+			callback(nil, err)
+		} else {
+			callback(v.Export(), err)
+		}
 	})
 }

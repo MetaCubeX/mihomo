@@ -43,6 +43,8 @@ func ParseSameRule(tp, payload, target string, params []string) (parsed C.Rule, 
 		parsed, parseErr = RC.NewUid(payload, target)
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
+	case "SCRIPT":
+		parsed, parseErr = RC.NewScript(payload, target)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}
