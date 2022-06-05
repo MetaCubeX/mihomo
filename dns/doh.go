@@ -97,17 +97,11 @@ func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
 					return nil, err
 				}
 
-				if proxyAdapter != "" {
-					var conn net.Conn
-					conn, err = dialContextWithProxyAdapter(ctx, proxyAdapter, "tcp", ip, port)
-					if err == errProxyNotFound {
-						options := []dialer.Option{dialer.WithInterface(proxyAdapter), dialer.WithRoutingMark(0)}
-						conn, err = dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port), options...)
-					}
-					return conn, err
+				if proxyAdapter == "" {
+					return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
+				} else {
+					return dialContextExtra(ctx, proxyAdapter, "tcp", ip, port)
 				}
-
-				return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
 			},
 		},
 	}
