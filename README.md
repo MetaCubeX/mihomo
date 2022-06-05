@@ -203,11 +203,13 @@ script:
   shortcuts:
     quic: 'network == "udp" and dst_port == 443'
     privacy: '"analytics" in host or "adservice" in host or "firebase" in host or "safebrowsing" in host or "doubleclick" in host'
-
+    BilibiliUdp: |
+      network == "udp" and match_provider("geosite:bilibili")
 rules:
-  # rule SCRIPT
+  # rule SCRIPT shortcuts
   - SCRIPT,quic,REJECT # Disable QUIC, same as rule "DST-PORT,443,REJECT,udp"
   - SCRIPT,privacy,REJECT
+  - SCRIPT,BilibiliUdp,REJECT # same as rule "GEOSITE,bilibili,REJECT,udp"
     
   # network condition for all rules
   - DOMAIN-SUFFIX,example.com,DIRECT,tcp

@@ -881,6 +881,18 @@ class ClashTime:
 
 time = ClashTime()
 
+class ClashRuleProvider:
+  def __init__(self, c, m):
+    self.__ctx = c
+    self.__metadata = m
+
+  def match_provider(self, providerName):
+    try:
+      return self.__ctx.rule_providers[providerName].match(self.__metadata)
+    except Exception as err:
+      self.__ctx.log("[SCRIPT] shortcuts error: rule provider {0} not found".format(err))
+      return False
+
 `
 
 	content += mainCode + "\n\n"
@@ -889,10 +901,29 @@ time = ClashTime()
 		v = cleanPyKeywords(v)
 		v = strings.TrimSpace(v)
 		if v == "" {
-			return fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code invalid syntax", k)
+			return nil, fmt.Errorf("initialized rule SCRIPT failure, shortcut [%s] code syntax invalid", k)
 		}
 
-		content += "def " + strings.ToLower(k) + "(ctx, network, process_name, process_path, host, src_ip, src_port, dst_ip, dst_port):\n  return " + v + "\n\n"
+		content += "def " + strings.ToLower(k) + "(ctx, type, network, process_name, process_path, host, src_ip, src_port, dst_ip, dst_port):"
+		if strings.Contains(v, "match_provider") {
+			content += `
+  metadata = {
+    "type": type,
+    "network": network,
+    "process_name": process_name,
+    "process_path": process_path,
+    "host": host,
+    "src_ip": src_ip,
+    "src_port": src_port,
+    "dst_ip": dst_ip,
+    "dst_port": dst_port
+  }
+  crp = ClashRuleProvider(ctx, metadata)
+  match_provider = crp.match_provider`
+		}
+		content += `
+  now = time.now()
+  return ` + v + "\n\n"
 	}
 
 	err := os.WriteFile(C.Path.Script(), []byte(content), 0o644)

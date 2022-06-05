@@ -683,8 +683,9 @@ int call_shortcut(PyObject *shortcut_fn,
     PyObject *args;
     PyObject *result;
 
-    args = Py_BuildValue("{s:O, s:s, s:s, s:s, s:s, s:s, s:H, s:s, s:H}",
+    args = Py_BuildValue("{s:O, s:s, s:s, s:s, s:s, s:s, s:s, s:H, s:s, s:H}",
                         "ctx", clash_context,
+                        "type", type,
                         "network", network,
                         "process_name", process_name,
                         "process_path", process_path,
