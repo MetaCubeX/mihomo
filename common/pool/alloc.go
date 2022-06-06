@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-var defaultAllocator = NewAllocator()
+var DefaultAllocator = NewAllocator()
 
 // Allocator for incoming frames, optimized to prevent overwriting after zeroing
 type Allocator struct {
