@@ -291,7 +291,7 @@ var (
 )
 
 func RandHost() string {
-	id, _ := uuid.NewV4()
+	id, _ := uuid.NewV6()
 	base := strings.ToLower(base64.RawURLEncoding.EncodeToString(id.Bytes()))
 	base = strings.ReplaceAll(base, "-", "")
 	base = strings.ReplaceAll(base, "_", "")
