@@ -13,6 +13,8 @@ require (
 	github.com/lucas-clemente/quic-go v0.27.0
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
+	github.com/sagernet/sing v0.0.0-20220606113732-5efacc1c7db5
+	github.com/sagernet/sing-shadowsocks v0.0.0-20220606072955-efe895ec59b5
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
 	github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938
@@ -30,6 +32,7 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	gvisor.dev/gvisor v0.0.0-20220527053002-8ab279227ac8
 )
 
@@ -39,6 +42,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/google/btree v1.0.1 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.1 // indirect
@@ -55,7 +59,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	lukechampine.com/blake3 v1.1.7 // indirect
 )
 
 replace github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938 => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
