@@ -85,20 +85,107 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				trojan["network"] = network
 			}
 
-			if network == "ws" {
+			switch network {
+			case "ws":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
-				headers["Host"] = RandHost()
+				//headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 
 				wsOpts["path"] = q.Get("path")
 				wsOpts["headers"] = headers
 
 				trojan["ws-opts"] = wsOpts
+
+			case "grpc":
+				grpcOpts := make(map[string]any)
+				grpcOpts["grpc-service-name"] = q.Get("serviceName")
+				trojan["grpc-opts"] = grpcOpts
 			}
 
 			proxies = append(proxies, trojan)
+
+		case "vless":
+			urlVless, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+
+			q := urlVless.Query()
+
+			name := uniqueName(names, urlVless.Fragment)
+			vless := make(map[string]any, 20)
+
+			vless["name"] = name
+			vless["type"] = scheme
+			vless["server"] = urlVless.Hostname()
+			vless["port"] = urlVless.Port()
+			vless["uuid"] = urlVless.User.Username()
+			vless["udp"] = true
+			vless["skip-cert-verify"] = false
+
+			sni := q.Get("sni")
+			if sni != "" {
+				vless["servername"] = sni
+			}
+
+			flow := strings.ToLower(q.Get("flow"))
+			if flow != "" {
+				vless["flow"] = flow
+			}
+
+			network := strings.ToLower(q.Get("type"))
+			if network != "" {
+				if network == "tcp" {
+					network = "http"
+				}
+				vless["network"] = network
+			}
+
+			switch network {
+			case "http":
+				headers := make(map[string]any)
+				httpOpts := make(map[string]any)
+
+				//headers["Host"] = RandHost()
+				headers["User-Agent"] = RandUserAgent()
+				httpOpts["method"] = q.Get("method")
+				httpOpts["path"] = q.Get("path")
+				httpOpts["headers"] = headers
+
+				vless["http-opts"] = httpOpts
+
+			case "h2":
+				headers := make(map[string]any)
+				h2Opts := make(map[string]any)
+
+				//headers["Host"] = RandHost()
+				headers["User-Agent"] = RandUserAgent()
+				h2Opts["path"] = q.Get("path")
+				h2Opts["headers"] = headers
+
+				vless["h2-opts"] = h2Opts
+
+			case "ws":
+				headers := make(map[string]any)
+				wsOpts := make(map[string]any)
+
+				//headers["Host"] = RandHost()
+				headers["User-Agent"] = RandUserAgent()
+				wsOpts["path"] = q.Get("path")
+				wsOpts["headers"] = headers
+
+				vless["ws-opts"] = wsOpts
+
+			case "grpc":
+				grpcOpts := make(map[string]any)
+				grpcOpts["grpc-service-name"] = q.Get("serviceName")
+				vless["grpc-opts"] = grpcOpts
+			}
+
+			proxies = append(proxies, vless)
+
 		case "vmess":
 			dcBuf, err := enc.DecodeString(body)
 			if err != nil {
@@ -125,6 +212,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["udp"] = true
 			vmess["skip-cert-verify"] = false
 
+			sni := values["sni"]
+			if sni != "" {
+				vmess["sni"] = sni
+			}
+
 			host := values["host"]
 			network := strings.ToLower(values["net"].(string))
 
@@ -138,7 +230,31 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["tls"] = true
 			}
 
-			if network == "ws" {
+			switch network {
+			case "http":
+				headers := make(map[string]any)
+				httpOpts := make(map[string]any)
+
+				//headers["Host"] = RandHost()
+				headers["User-Agent"] = RandUserAgent()
+				httpOpts["method"] = values["method"]
+				httpOpts["path"] = values["path"]
+				httpOpts["headers"] = headers
+
+				vmess["http-opts"] = httpOpts
+
+			case "h2":
+				headers := make(map[string]any)
+				h2Opts := make(map[string]any)
+
+				//headers["Host"] = RandHost()
+				headers["User-Agent"] = RandUserAgent()
+				h2Opts["path"] = values["path"]
+				h2Opts["headers"] = headers
+
+				vmess["h2-opts"] = h2Opts
+
+			case "ws":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
@@ -151,9 +267,15 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				wsOpts["headers"] = headers
 
 				vmess["ws-opts"] = wsOpts
+
+			case "grpc":
+				grpcOpts := make(map[string]any)
+				grpcOpts["grpc-service-name"] = values["path"]
+				vmess["grpc-opts"] = grpcOpts
 			}
 
 			proxies = append(proxies, vmess)
+
 		case "ss":
 			urlSS, err := url.Parse(line)
 			if err != nil {
@@ -261,54 +383,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			proxies = append(proxies, ssr)
-		case "vless":
-			urlVless, err := url.Parse(line)
-			if err != nil {
-				continue
-			}
-
-			q := urlVless.Query()
-
-			name := uniqueName(names, urlVless.Fragment)
-			vless := make(map[string]any, 20)
-
-			vless["name"] = name
-			vless["type"] = scheme
-			vless["server"] = urlVless.Hostname()
-			vless["port"] = urlVless.Port()
-			vless["uuid"] = urlVless.User.Username()
-			vless["udp"] = true
-			vless["skip-cert-verify"] = false
-
-			sni := q.Get("sni")
-			if sni != "" {
-				vless["servername"] = sni
-			}
-
-			flow := strings.ToLower(q.Get("flow"))
-			if flow != "" {
-				vless["flow"] = flow
-			}
-
-			network := strings.ToLower(q.Get("type"))
-			if network != "" {
-				vless["network"] = network
-			}
-
-			if network == "ws" {
-				headers := make(map[string]any)
-				wsOpts := make(map[string]any)
-
-				headers["Host"] = RandHost()
-				headers["User-Agent"] = RandUserAgent()
-
-				wsOpts["path"] = q.Get("path")
-				wsOpts["headers"] = headers
-
-				vless["ws-opts"] = wsOpts
-			}
-
-			proxies = append(proxies, vless)
 		}
 	}
 
