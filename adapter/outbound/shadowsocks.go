@@ -7,18 +7,27 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/shadowsocks/core"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	"github.com/Dreamacro/clash/transport/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
+	"github.com/sagernet/sing-shadowsocks"
+	"github.com/sagernet/sing-shadowsocks/shadowimpl"
+	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio"
+	M "github.com/sagernet/sing/common/metadata"
 )
+
+func init() {
+	buf.DefaultAllocator = pool.DefaultAllocator
+}
 
 type ShadowSocks struct {
 	*Base
-	cipher core.Cipher
+	method shadowsocks.Method
 
 	// obfs
 	obfsMode    string
@@ -68,9 +77,7 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
 	}
-	c = ss.cipher.StreamConn(c)
-	_, err := c.Write(serializesSocksAddr(metadata))
-	return c, err
+	return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 }
 
 // DialContext implements C.ProxyAdapter
@@ -99,16 +106,13 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		pc.Close()
 		return nil, err
 	}
-
-	pc = ss.cipher.PacketConn(pc)
-	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ss), nil
+	pc = ss.method.DialPacketConn(&bufio.BindPacketConn{PacketConn: pc, Addr: addr})
+	return newPacketConn(pc, ss), nil
 }
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	cipher := option.Cipher
-	password := option.Password
-	ciph, err := core.PickCipher(cipher, nil, password)
+	method, err := shadowimpl.FetchMethod(option.Cipher, option.Password)
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %w", addr, err)
 	}
@@ -161,7 +165,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			iface: option.Interface,
 			rmark: option.RoutingMark,
 		},
-		cipher: ciph,
+		method: method,
 
 		obfsMode:    obfsMode,
 		v2rayOption: v2rayOption,
