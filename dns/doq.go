@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/lucas-clemente/quic-go"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/log"
-	"github.com/lucas-clemente/quic-go"
 	D "github.com/miekg/dns"
 )
 
@@ -174,7 +174,7 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 
 		wrapConn, ok := conn.(*wrapPacketConn)
 		if !ok {
-			return nil, fmt.Errorf("quio create packet failed")
+			return nil, fmt.Errorf("quic create packet failed")
 		}
 
 		udp = wrapConn

@@ -143,6 +143,14 @@ func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
 	return wpc.rAddr
 }
 
+func (wpc *wrapPacketConn) LocalAddr() net.Addr {
+	if wpc.PacketConn.LocalAddr() == nil {
+		return &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	} else {
+		return wpc.PacketConn.LocalAddr()
+	}
+}
+
 func dialContextExtra(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
 	adapter, ok := tunnel.Proxies()[adapterName]
 	if !ok {
