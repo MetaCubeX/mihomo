@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -56,13 +57,46 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 		scheme = strings.ToLower(scheme)
 		switch scheme {
+		case "hysteria":
+			urlHysteria, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+
+			query := urlHysteria.Query()
+			name := uniqueName(names, urlHysteria.Fragment)
+			hysteria := make(map[string]any, 20)
+
+			hysteria["name"] = name
+			hysteria["type"] = scheme
+			hysteria["server"] = urlHysteria.Hostname()
+			hysteria["port"] = urlHysteria.Port()
+			hysteria["sni"] = query.Get("server_name")
+			hysteria["obfs"] = query.Get("obfs")
+			hysteria["alpn"] = query.Get("alpn")
+			hysteria["auth"] = query.Get("auth")
+			hysteria["auth_str"] = query.Get("auth_str")
+			hysteria["protocol"] = query.Get("protocol")
+			hysteria["down"] = query.Get("down_mbps")
+			hysteria["up"] = query.Get("up")
+			hysteria["down_mbps"], _ = strconv.Atoi(query.Get("down_mbps"))
+			hysteria["up_mbps"], _ = strconv.Atoi(query.Get("up_mbps"))
+			hysteria["ca"] = query.Get("ca")
+			hysteria["ca_str"] = query.Get("ca_str")
+			hysteria["recv_window_conn"], _ = strconv.Atoi(query.Get("recv_window_conn"))
+			hysteria["recv_window"], _ = strconv.Atoi(query.Get("recv_window"))
+			hysteria["disable_mtu_discovery"], _ = strconv.ParseBool(query.Get("disable_mtu_discovery"))
+			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
+
+			proxies = append(proxies, hysteria)
+
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
 			if err != nil {
 				continue
 			}
 
-			q := urlTrojan.Query()
+			query := urlTrojan.Query()
 
 			name := uniqueName(names, urlTrojan.Fragment)
 			trojan := make(map[string]any, 20)
@@ -75,12 +109,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["udp"] = true
 			trojan["skip-cert-verify"] = false
 
-			sni := q.Get("sni")
+			sni := query.Get("sni")
 			if sni != "" {
 				trojan["sni"] = sni
 			}
 
-			network := strings.ToLower(q.Get("type"))
+			network := strings.ToLower(query.Get("type"))
 			if network != "" {
 				trojan["network"] = network
 			}
@@ -93,14 +127,14 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				//headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 
-				wsOpts["path"] = q.Get("path")
+				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
 
 				trojan["ws-opts"] = wsOpts
 
 			case "grpc":
 				grpcOpts := make(map[string]any)
-				grpcOpts["grpc-service-name"] = q.Get("serviceName")
+				grpcOpts["grpc-service-name"] = query.Get("serviceName")
 				trojan["grpc-opts"] = grpcOpts
 			}
 
@@ -112,7 +146,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 
-			q := urlVless.Query()
+			query := urlVless.Query()
 
 			name := uniqueName(names, urlVless.Fragment)
 			vless := make(map[string]any, 20)
@@ -125,20 +159,24 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless["udp"] = true
 			vless["skip-cert-verify"] = false
 
-			sni := q.Get("sni")
+			sni := query.Get("sni")
 			if sni != "" {
 				vless["servername"] = sni
 			}
 
-			flow := strings.ToLower(q.Get("flow"))
+			flow := strings.ToLower(query.Get("flow"))
 			if flow != "" {
 				vless["flow"] = flow
 			}
 
-			network := strings.ToLower(q.Get("type"))
+			network := strings.ToLower(query.Get("type"))
 			if network != "" {
-				if network == "tcp" {
+				fakeType := strings.ToLower(query.Get("headerType"))
+				if network == "tcp" && fakeType == "http" {
 					network = "http"
+				}
+				if network == "http" {
+					network = "h2"
 				}
 				vless["network"] = network
 			}
@@ -148,10 +186,13 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				httpOpts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
+				if query.Get("method") != "" {
+					httpOpts["method"] = query.Get("method")
+				}
+				if query.Get("path") != "" {
+					httpOpts["path"] = query.Get("path")
+				}
 				headers["User-Agent"] = RandUserAgent()
-				httpOpts["method"] = q.Get("method")
-				httpOpts["path"] = q.Get("path")
 				httpOpts["headers"] = headers
 
 				vless["http-opts"] = httpOpts
@@ -160,9 +201,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
-				h2Opts["path"] = q.Get("path")
+				h2Opts["path"] = query.Get("path")
 				h2Opts["headers"] = headers
 
 				vless["h2-opts"] = h2Opts
@@ -173,14 +213,14 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 				//headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
-				wsOpts["path"] = q.Get("path")
+				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
 
 				vless["ws-opts"] = wsOpts
 
 			case "grpc":
 				grpcOpts := make(map[string]any)
-				grpcOpts["grpc-service-name"] = q.Get("serviceName")
+				grpcOpts["grpc-service-name"] = query.Get("serviceName")
 				vless["grpc-opts"] = grpcOpts
 			}
 
@@ -409,7 +449,7 @@ func uniqueName(names map[string]int, name string) string {
 	if index, ok := names[name]; ok {
 		index++
 		names[name] = index
-		name = name + "-" + fmt.Sprintf("%02d", index)
+		name = fmt.Sprintf("%s-%02d", name, index)
 	} else {
 		index = 0
 		names[name] = index
