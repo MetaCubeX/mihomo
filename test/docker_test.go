@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -29,6 +31,19 @@ func startContainer(cfg *container.Config, hostCfg *container.HostConfig, name s
 	if err = c.ContainerStart(context.Background(), container.ID, types.ContainerStartOptions{}); err != nil {
 		return "", err
 	}
+
+	response, err := c.ContainerAttach(context.Background(), container.ID, types.ContainerAttachOptions{
+		Stdout: true,
+		Stderr: true,
+		Logs:   true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	go func() {
+		response.Reader.WriteTo(os.Stderr)
+	}()
 
 	return container.ID, nil
 }
