@@ -66,7 +66,7 @@ type HysteriaOption struct {
 	Name                string   `proxy:"name"`
 	Server              string   `proxy:"server"`
 	Port                int      `proxy:"port"`
-	Protocol            string   `json:"protocol,omitempty"`
+	Protocol            string   `proxy:"protocol,omitempty"`
 	Up                  string   `proxy:"up,omitempty"`
 	UpMbps              int      `proxy:"up_mbps,omitempty"`
 	Down                string   `proxy:"down,omitempty"`
