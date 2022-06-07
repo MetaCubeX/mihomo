@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -71,7 +72,7 @@ type HysteriaOption struct {
 	UpMbps              int      `proxy:"up_mbps,omitempty"`
 	Down                string   `proxy:"down,omitempty"`
 	DownMbps            int      `proxy:"down_mbps,omitempty"`
-	Auth                []byte   `proxy:"auth,omitempty"`
+	Auth                string   `proxy:"auth,omitempty"`
 	AuthString          string   `proxy:"auth_str,omitempty"`
 	Obfs                string   `proxy:"obfs,omitempty"`
 	SNI                 string   `proxy:"sni,omitempty"`
@@ -163,8 +164,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		log.Infoln("hysteria: Path MTU Discovery is not yet supported on this platform")
 	}
 	var auth []byte
-	if len(option.Auth) > 0 {
-		auth = option.Auth
+	if option.Auth != "" {
+		authBytes, err := base64.StdEncoding.DecodeString(option.Auth)
+		if err != nil {
+			return nil, fmt.Errorf("hysteria %s parse auth error: %w", addr, err)
+		}
+		auth = authBytes
 	} else {
 		auth = []byte(option.AuthString)
 	}
