@@ -34,7 +34,8 @@ const (
 	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
 	DefaultMaxIncomingStreams      = 1024
 
-	DefaultALPN = "hysteria"
+	DefaultALPN     = "hysteria"
+	DefaultProtocol = "udp"
 )
 
 var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
@@ -84,10 +85,9 @@ type HysteriaOption struct {
 	ALPN                string `proxy:"alpn,omitempty"`
 	CustomCA            string `proxy:"ca,omitempty"`
 	CustomCAString      string `proxy:"ca_str,omitempty"`
-	ReceiveWindowConn   uint64 `proxy:"recv_window_conn,omitempty"`
-	ReceiveWindow       uint64 `proxy:"recv_window,omitempty"`
+	ReceiveWindowConn   int    `proxy:"recv_window_conn,omitempty"`
+	ReceiveWindow       int    `proxy:"recv_window,omitempty"`
 	DisableMTUDiscovery bool   `proxy:"disable_mtu_discovery,omitempty"`
-	UDP                 bool   `proxy:"udp,omitempty"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
@@ -119,9 +119,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	}
 
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-
+	serverName := option.Server
+	if option.SNI != "" {
+		serverName = option.Server
+	}
 	tlsConfig := &tls.Config{
-		ServerName:         option.SNI,
+		ServerName:         serverName,
 		InsecureSkipVerify: option.SkipCertVerify,
 		MinVersion:         tls.VersionTLS13,
 	}
@@ -148,13 +151,16 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		tlsConfig.RootCAs = cp
 	}
 	quicConfig := &quic.Config{
-		InitialStreamReceiveWindow:     option.ReceiveWindowConn,
-		MaxStreamReceiveWindow:         option.ReceiveWindowConn,
-		InitialConnectionReceiveWindow: option.ReceiveWindow,
-		MaxConnectionReceiveWindow:     option.ReceiveWindow,
+		InitialStreamReceiveWindow:     uint64(option.ReceiveWindowConn),
+		MaxStreamReceiveWindow:         uint64(option.ReceiveWindowConn),
+		InitialConnectionReceiveWindow: uint64(option.ReceiveWindow),
+		MaxConnectionReceiveWindow:     uint64(option.ReceiveWindow),
 		KeepAlive:                      true,
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
+	}
+	if option.Protocol == "" {
+		option.Protocol = DefaultProtocol
 	}
 	if option.ReceiveWindowConn == 0 {
 		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow
@@ -195,7 +201,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			name:  option.Name,
 			addr:  addr,
 			tp:    C.Hysteria,
-			udp:   option.UDP,
+			udp:   true,
 			iface: option.Interface,
 			rmark: option.RoutingMark,
 		},

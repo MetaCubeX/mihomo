@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/common/convert"
 	"io"
 	"net"
 	"net/http"
@@ -90,6 +91,9 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			wsOpts.TLSConfig.ServerName = v.option.ServerName
 		} else if host := wsOpts.Headers.Get("Host"); host != "" {
 			wsOpts.TLSConfig.ServerName = host
+		} else {
+			wsOpts.Headers.Set("Host", convert.RandHost())
+			convert.SetUserAgent(wsOpts.Headers)
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":

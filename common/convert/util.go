@@ -291,7 +291,7 @@ var (
 )
 
 func RandHost() string {
-	id, _ := uuid.NewV6()
+	id, _ := uuid.NewV4()
 	base := strings.ToLower(base64.RawURLEncoding.EncodeToString(id.Bytes()))
 	base = strings.ReplaceAll(base, "-", "")
 	base = strings.ReplaceAll(base, "_", "")
@@ -307,7 +307,10 @@ func RandUserAgent() string {
 	return userAgents[rand.Intn(uaLen)]
 }
 
-func SetUserAgent(req *http.Request) {
+func SetUserAgent(header http.Header) {
+	if header.Get("User-Agent") != "" {
+		return
+	}
 	userAgent := RandUserAgent()
-	req.Header.Set("User-Agent", userAgent)
+	header.Set("User-Agent", userAgent)
 }
