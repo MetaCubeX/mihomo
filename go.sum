@@ -40,8 +40,8 @@ dmitri.shuralyov.com/state v0.0.0-20180228185332-28bcc343414c/go.mod h1:0PRwlb0D
 git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/MetaCubeX/hysteria v1.0.5-0.20220607054137-3c4d6a5cb41c h1:lY+JVXfSLwe4RjjC0Vwi6xEVZtivWK/CD5wdUVHagVc=
-github.com/MetaCubeX/hysteria v1.0.5-0.20220607054137-3c4d6a5cb41c/go.mod h1:bXVjOca4Xf3JRenwuPKu02XaOiZwejrMSlgsu/U88J4=
+github.com/MetaCubeX/hysteria v1.0.5-0.20220607074613-210c46c75b15 h1:SraqLzYEGfrV8ETkVYc5evvCrn95hMFdCtcXXP8bA9Y=
+github.com/MetaCubeX/hysteria v1.0.5-0.20220607074613-210c46c75b15/go.mod h1:bXVjOca4Xf3JRenwuPKu02XaOiZwejrMSlgsu/U88J4=
 github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820 h1:fGKWZ25VApYnuPZoNeqdH/nZtHa2XMajwH6Yj/OgoVc=
 github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820/go.mod h1:twkDnbuQxJYemMlGd4JFIcuhgX83tXhKS2B/PRMpOho=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

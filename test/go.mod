@@ -15,7 +15,7 @@ replace github.com/Dreamacro/clash => ../
 
 replace github.com/vishvananda/netlink => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
 
-replace github.com/tobyxdd/hysteria => github.com/MetaCubeX/hysteria v1.0.5-0.20220607054137-3c4d6a5cb41c
+replace github.com/tobyxdd/hysteria => github.com/MetaCubeX/hysteria v1.0.5-0.20220607074613-210c46c75b15
 
 replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.27.1-0.20220512040129-ed2a645d9218
 
