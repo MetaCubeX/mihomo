@@ -47,7 +47,9 @@ type Hysteria struct {
 }
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress())
+	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), hyDialer(func() (net.PacketConn, error) {
+		return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,9 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	udpConn, err := h.client.DialUDP()
+	udpConn, err := h.client.DialUDP(hyDialer(func() (net.PacketConn, error) {
+		return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -251,4 +255,10 @@ func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	}
 	n = len(p)
 	return
+}
+
+type hyDialer func() (net.PacketConn, error)
+
+func (h hyDialer) ListenPacket() (net.PacketConn, error) {
+	return h()
 }
