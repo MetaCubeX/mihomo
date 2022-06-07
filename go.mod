@@ -14,7 +14,7 @@ require (
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
 	github.com/sagernet/sing v0.0.0-20220606113732-5efacc1c7db5
-	github.com/sagernet/sing-shadowsocks v0.0.0-20220606072955-efe895ec59b5
+	github.com/sagernet/sing-shadowsocks v0.0.0-20220607021139-f9c820eb0fc8
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
 	github.com/vishvananda/netlink v1.2.0-beta.0.20220404152918-5e915e014938
