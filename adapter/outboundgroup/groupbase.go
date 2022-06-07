@@ -51,10 +51,9 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		var proxies []C.Proxy
 		for _, pd := range gb.providers {
 			if touch {
-				proxies = append(proxies, pd.ProxiesWithTouch()...)
-			} else {
-				proxies = append(proxies, pd.Proxies()...)
+				pd.Touch()
 			}
+			proxies = append(proxies, pd.Proxies()...)
 		}
 		if len(proxies) == 0 {
 			return append(proxies, tunnel.Proxies()["COMPATIBLE"])
@@ -63,13 +62,12 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	}
 
 	for _, pd := range gb.providers {
-		if pd.VehicleType() == types.Compatible {
-			if touch {
-				gb.proxies.Store(pd.Name(), pd.ProxiesWithTouch())
-			} else {
-				gb.proxies.Store(pd.Name(), pd.Proxies())
-			}
+		if touch {
+			pd.Touch()
+		}
 
+		if pd.VehicleType() == types.Compatible {
+			gb.proxies.Store(pd.Name(), pd.Proxies())
 			gb.versions.Store(pd.Name(), pd.Version())
 			continue
 		}
@@ -80,11 +78,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				newProxies []C.Proxy
 			)
 
-			if touch {
-				proxies = pd.ProxiesWithTouch()
-			} else {
-				proxies = pd.Proxies()
-			}
+			proxies = pd.Proxies()
 
 			for _, p := range proxies {
 				if mat, _ := gb.filter.FindStringMatch(p.Name()); mat != nil {

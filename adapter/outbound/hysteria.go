@@ -68,26 +68,26 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 
 type HysteriaOption struct {
 	BasicOption
-	Name                string   `proxy:"name"`
-	Server              string   `proxy:"server"`
-	Port                int      `proxy:"port"`
-	Protocol            string   `proxy:"protocol,omitempty"`
-	Up                  string   `proxy:"up,omitempty"`
-	UpMbps              int      `proxy:"up_mbps,omitempty"`
-	Down                string   `proxy:"down,omitempty"`
-	DownMbps            int      `proxy:"down_mbps,omitempty"`
-	Auth                string   `proxy:"auth,omitempty"`
-	AuthString          string   `proxy:"auth_str,omitempty"`
-	Obfs                string   `proxy:"obfs,omitempty"`
-	SNI                 string   `proxy:"sni,omitempty"`
-	SkipCertVerify      bool     `proxy:"skip-cert-verify,omitempty"`
-	ALPN                []string `proxy:"alpn,omitempty"`
-	CustomCA            string   `proxy:"ca,omitempty"`
-	CustomCAString      string   `proxy:"ca_str,omitempty"`
-	ReceiveWindowConn   uint64   `proxy:"recv_window_conn,omitempty"`
-	ReceiveWindow       uint64   `proxy:"recv_window,omitempty"`
-	DisableMTUDiscovery bool     `proxy:"disable_mtu_discovery,omitempty"`
-	UDP                 bool     `proxy:"udp,omitempty"`
+	Name                string `proxy:"name"`
+	Server              string `proxy:"server"`
+	Port                int    `proxy:"port"`
+	Protocol            string `proxy:"protocol,omitempty"`
+	Up                  string `proxy:"up,omitempty"`
+	UpMbps              int    `proxy:"up_mbps,omitempty"`
+	Down                string `proxy:"down,omitempty"`
+	DownMbps            int    `proxy:"down_mbps,omitempty"`
+	Auth                string `proxy:"auth,omitempty"`
+	AuthString          string `proxy:"auth_str,omitempty"`
+	Obfs                string `proxy:"obfs,omitempty"`
+	SNI                 string `proxy:"sni,omitempty"`
+	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
+	ALPN                string `proxy:"alpn,omitempty"`
+	CustomCA            string `proxy:"ca,omitempty"`
+	CustomCAString      string `proxy:"ca_str,omitempty"`
+	ReceiveWindowConn   uint64 `proxy:"recv_window_conn,omitempty"`
+	ReceiveWindow       uint64 `proxy:"recv_window,omitempty"`
+	DisableMTUDiscovery bool   `proxy:"disable_mtu_discovery,omitempty"`
+	UDP                 bool   `proxy:"udp,omitempty"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
@@ -126,7 +126,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		MinVersion:         tls.VersionTLS13,
 	}
 	if len(option.ALPN) > 0 {
-		tlsConfig.NextProtos = option.ALPN
+		tlsConfig.NextProtos = []string{option.ALPN}
 	} else {
 		tlsConfig.NextProtos = []string{DefaultALPN}
 	}
