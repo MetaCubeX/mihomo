@@ -42,7 +42,6 @@ func TestClash_Hysteria(t *testing.T) {
 		Obfs:           "fuck me till the daylight",
 		UpMbps:         100,
 		DownMbps:       100,
-		UDP:            true,
 		SkipCertVerify: true,
 	})
 	if err != nil {
