@@ -51,11 +51,11 @@ func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
 	}
 
-	cont := fmt.Sprintf("%d", recordsCount)
+	count := fmt.Sprintf("%d", recordsCount)
 	if recordsCount == 0 {
-		cont = "from cache"
+		count = "from cache"
 	}
-	log.Infoln("Start initial GeoSite rule %s => %s, records: %s", country, adapter, cont)
+	log.Infoln("Start initial GeoSite rule %s => %s, records: %s", country, adapter, count)
 
 	geoSite := &GEOSITE{
 		Base:    &Base{},

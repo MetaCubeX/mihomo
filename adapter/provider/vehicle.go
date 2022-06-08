@@ -11,7 +11,6 @@ import (
 
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
 )
 
@@ -82,13 +81,11 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		DialContext: func(ctx context.Context, network, address string) (conn net.Conn, err error) {
-			conn, err = dialer.DialContext(ctx, network, address) // with direct
-			if err != nil {
-				// fallback to tun if tun enabled
-				conn, err = (&net.Dialer{Timeout: C.DefaultTCPTimeout}).Dial(network, address)
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if req.URL.Scheme == "https" {
+				return (&net.Dialer{}).DialContext(ctx, network, address) // forward to tun if tun enabled
 			}
-			return
+			return dialer.DialContext(ctx, network, address, dialer.WithDirect()) // with direct
 		},
 	}
 

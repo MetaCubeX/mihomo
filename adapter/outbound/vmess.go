@@ -91,17 +91,16 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		wsOpts := &vmess.WebsocketConfig{
 			Host:                host,
 			Port:                port,
+			Headers:             http.Header{},
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {
-			header := http.Header{}
 			for key, value := range v.option.WSOpts.Headers {
-				header.Add(key, value)
+				wsOpts.Headers.Add(key, value)
 			}
-			wsOpts.Headers = header
 		}
 
 		if v.option.TLS {
@@ -138,9 +137,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			http.Header(v.option.HTTPOpts.Headers).Set("Host", convert.RandHost())
-			convert.SetUserAgent(v.option.HTTPOpts.Headers)
 		}
 
 		host, _, _ := net.SplitHostPort(v.addr)

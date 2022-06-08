@@ -13,11 +13,11 @@
     <img src="https://goreportcard.com/badge/github.com/Dreamacro/clash?style=flat-square">
   </a>
   <img src="https://img.shields.io/github/go-mod/go-version/Dreamacro/clash?style=flat-square">
-  <a href="https://github.com/Dreamacro/clash/releases">
-    <img src="https://img.shields.io/github/release/Dreamacro/clash/all.svg?style=flat-square">
+  <a href="https://github.com/yaling888/clash/releases">
+    <img src="https://img.shields.io/github/release/yaling888/clash/all.svg?style=flat-square">
   </a>
-  <a href="https://github.com/Dreamacro/clash/releases/tag/premium">
-    <img src="https://img.shields.io/badge/release-Premium-00b4f0?style=flat-square">
+  <a href="https://github.com/yaling888/clash/releases/tag/plus_pro">
+    <img src="https://img.shields.io/badge/release-Plus Pro-00b4f0?style=flat-square">
   </a>
 </p>
 

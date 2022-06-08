@@ -57,8 +57,9 @@ func ParseProxy(mapping map[string]any, forceCertVerify bool) (C.Proxy, error) {
 	case "vmess":
 		vmessOption := &outbound.VmessOption{
 			HTTPOpts: outbound.HTTPOptions{
-				Method: "GET",
-				Path:   []string{"/"},
+				Method:  "GET",
+				Path:    []string{"/"},
+				Headers: make(map[string][]string),
 			},
 		}
 		err = decoder.Decode(mapping, vmessOption)

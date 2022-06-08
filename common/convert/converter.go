@@ -21,21 +21,24 @@ func DecodeBase64(buf []byte) ([]byte, error) {
 	return dBuf[:n], nil
 }
 
-// DecodeBase64StringToString decode base64 string to string
-func DecodeBase64StringToString(s string) (string, error) {
-	dBuf, err := enc.DecodeString(s)
+func DecodeRawBase64(buf []byte) ([]byte, error) {
+	dBuf := make([]byte, base64.RawStdEncoding.DecodedLen(len(buf)))
+	n, err := base64.RawStdEncoding.Decode(dBuf, buf)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(dBuf), nil
+	return dBuf[:n], nil
 }
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	data, err := DecodeBase64(buf)
 	if err != nil {
-		data = buf
+		data, err = DecodeRawBase64(buf)
+		if err != nil {
+			data = buf
+		}
 	}
 
 	arr := strings.Split(string(data), "\n")
