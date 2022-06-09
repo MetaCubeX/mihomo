@@ -244,9 +244,13 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["udp"] = true
 			vmess["skip-cert-verify"] = false
 
+			if values["cipher"] != nil && values["cipher"] != "" {
+				vmess["cipher"] = values["cipher"]
+			}
+
 			sni := values["sni"]
 			if sni != "" {
-				vmess["sni"] = sni
+				vmess["servername"] = sni
 			}
 
 			host := values["host"]
@@ -256,7 +260,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			tls := strings.ToLower(values["tls"].(string))
 			if tls != "" && tls != "0" && tls != "null" {
-				if host != nil {
+				if host != "" || host != nil {
 					vmess["servername"] = host
 				}
 				vmess["tls"] = true
@@ -267,7 +271,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				httpOpts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
+				headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 				httpOpts["method"] = values["method"]
 				httpOpts["path"] = values["path"]
@@ -289,11 +293,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "ws":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
-
-				headers["Host"] = RandHost()
+				if host != "" && host != nil {
+					headers["Host"] = host
+				}
 				headers["User-Agent"] = RandUserAgent()
 
-				if values["path"] != nil {
+				if values["path"] != nil || values["path"] != "" {
 					wsOpts["path"] = values["path"]
 				}
 				wsOpts["headers"] = headers
