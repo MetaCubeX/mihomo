@@ -433,5 +433,5 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		}
 	}
 
-	return proxies["REJECT"], nil, nil
+	return proxies["DIRECT"], nil, nil
 }
