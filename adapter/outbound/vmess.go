@@ -109,8 +109,10 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				wsOpts.TLSConfig.ServerName = host
 			}
 		} else {
-			wsOpts.Headers.Set("Host", convert.RandHost())
-			convert.SetUserAgent(wsOpts.Headers)
+			if host := wsOpts.Headers.Get("Host"); host == "" {
+				wsOpts.Headers.Set("Host", convert.RandHost())
+				convert.SetUserAgent(wsOpts.Headers)
+			}
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
@@ -130,9 +132,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			http.Header(v.option.HTTPOpts.Headers).Set("Host", convert.RandHost())
-			convert.SetUserAgent(v.option.HTTPOpts.Headers)
 		}
 
 		host, _, _ := net.SplitHostPort(v.addr)
