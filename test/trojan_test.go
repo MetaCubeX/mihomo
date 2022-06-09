@@ -139,7 +139,7 @@ func TestClash_TrojanXTLS(t *testing.T) {
 
 	id, err := startContainer(cfg, hostCfg, "trojan-xtls")
 	if err != nil {
-		assert.FailNow(t, err.Error())
+		require.NoError(t, err)
 	}
 	defer cleanContainer(id)
 
@@ -156,7 +156,7 @@ func TestClash_TrojanXTLS(t *testing.T) {
 		FlowShow:       true,
 	})
 	if err != nil {
-		assert.FailNow(t, err.Error())
+		require.NoError(t, err)
 	}
 
 	time.Sleep(waitTime)
