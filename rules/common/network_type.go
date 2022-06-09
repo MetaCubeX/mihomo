@@ -2,8 +2,9 @@ package common
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
 	"strings"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 type NetworkType struct {

@@ -9,7 +9,6 @@ import (
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
-
 	D "github.com/miekg/dns"
 )
 

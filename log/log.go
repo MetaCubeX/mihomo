@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/Dreamacro/clash/common/observable"
-
 	log "github.com/sirupsen/logrus"
 )
 

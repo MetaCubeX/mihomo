@@ -1,9 +1,10 @@
 package logic
 
 import (
+	"testing"
+
 	"github.com/Dreamacro/clash/constant"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestAND(t *testing.T) {

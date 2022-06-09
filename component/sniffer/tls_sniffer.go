@@ -13,8 +13,7 @@ var (
 	errNotClientHello = errors.New("not client hello")
 )
 
-type TLSSniffer struct {
-}
+type TLSSniffer struct{}
 
 func (tls *TLSSniffer) Protocol() string {
 	return "tls"

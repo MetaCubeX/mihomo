@@ -2,6 +2,7 @@ package geodata
 
 import (
 	"fmt"
+
 	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
 )

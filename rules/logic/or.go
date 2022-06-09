@@ -2,9 +2,10 @@ package logic
 
 import (
 	"fmt"
+	"strings"
+
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rules/common"
-	"strings"
 )
 
 type OR struct {

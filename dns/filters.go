@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net/netip"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -9,7 +10,6 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"strings"
 )
 
 type fallbackIPFilter interface {

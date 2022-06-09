@@ -329,7 +329,6 @@ func NewGeoIPMatcher(geoip *GeoIP) (*GeoIPMatcher, error) {
 }
 
 func (m *MultiGeoIPMatcher) ApplyIp(ip net.IP) bool {
-
 	for _, matcher := range m.matchers {
 		if matcher.Match(ip) {
 			return true

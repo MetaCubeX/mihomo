@@ -2,7 +2,6 @@ package dns
 
 import (
 	"context"
-	"go.uber.org/atomic"
 	"net"
 	"net/netip"
 	"sync"
@@ -11,8 +10,8 @@ import (
 	"github.com/Dreamacro/clash/component/dhcp"
 	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/resolver"
-
 	D "github.com/miekg/dns"
+	"go.uber.org/atomic"
 )
 
 const (

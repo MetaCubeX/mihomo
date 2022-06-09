@@ -2,13 +2,14 @@ package provider
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
 	RC "github.com/Dreamacro/clash/rules/common"
 	"github.com/Dreamacro/clash/rules/ruleparser"
-	"time"
 )
 
 type ruleProviderSchema struct {

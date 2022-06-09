@@ -4,12 +4,13 @@ package gvisor
 
 import (
 	"fmt"
+	"net/netip"
+
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/log"
-	"net/netip"
 )
 
 // New allocates a new *gvStack with given options.

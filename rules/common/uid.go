@@ -2,13 +2,14 @@ package common
 
 import (
 	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
+
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/process"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"runtime"
-	"strconv"
-	"strings"
 )
 
 type Uid struct {

@@ -1,11 +1,11 @@
 package mmdb
 
 import (
-	"github.com/oschwald/geoip2-golang"
 	"sync"
 
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	"github.com/oschwald/geoip2-golang"
 )
 
 var (

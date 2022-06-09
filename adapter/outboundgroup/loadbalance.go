@@ -5,16 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/cache"
 	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/murmur3"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
-
 	"golang.org/x/net/publicsuffix"
 )
 

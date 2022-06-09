@@ -2,11 +2,12 @@ package logic
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/collections"
-	C "github.com/Dreamacro/clash/constant"
 	"regexp"
 	"strings"
 	_ "unsafe"
+
+	"github.com/Dreamacro/clash/common/collections"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 //go:linkname parseRule github.com/Dreamacro/clash/rules.ParseRule

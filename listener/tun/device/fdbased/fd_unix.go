@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/listener/tun/device"
-
 	"golang.org/x/sys/unix"
 )
 

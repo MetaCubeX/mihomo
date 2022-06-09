@@ -13,9 +13,7 @@ const (
 	HTTP
 )
 
-var (
-	List = []Type{TLS, HTTP}
-)
+var List = []Type{TLS, HTTP}
 
 type Type int
 

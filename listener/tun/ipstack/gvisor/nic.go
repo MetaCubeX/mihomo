@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
-
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )

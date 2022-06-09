@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/Dreamacro/clash/listener/tun/device"
-
 	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/tcpip/link/fdbased"
 	"gvisor.dev/gvisor/pkg/tcpip/link/rawfile"

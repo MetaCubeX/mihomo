@@ -2,8 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"sort"
 	"strconv"
@@ -13,12 +11,14 @@ import (
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
+	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/listener/tun"
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/log"
 )
 

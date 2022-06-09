@@ -2,8 +2,6 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/process"
-	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
 	"runtime"
@@ -15,6 +13,7 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	G "github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/iface"
+	"github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/profile"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -26,6 +25,7 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -224,7 +224,6 @@ func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
 		go func() {
 			defer func() { <-ch; wg.Done() }()
 			loadProvider(ruleProvider)
-
 		}()
 	}
 

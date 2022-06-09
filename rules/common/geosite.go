@@ -2,13 +2,14 @@ package common
 
 import (
 	"fmt"
+	_ "unsafe"
+
 	"github.com/Dreamacro/clash/component/geodata"
 	_ "github.com/Dreamacro/clash/component/geodata/memconservative"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	_ "unsafe"
 )
 
 //go:linkname initGeoSite github.com/Dreamacro/clash/config.initGeoSite

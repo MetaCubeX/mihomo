@@ -2,12 +2,12 @@ package config
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/mmdb"
 	"io"
 	"net/http"
 	"os"
 
+	"github.com/Dreamacro/clash/component/geodata"
+	"github.com/Dreamacro/clash/component/mmdb"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )

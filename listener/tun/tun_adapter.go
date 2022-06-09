@@ -2,6 +2,11 @@ package tun
 
 import (
 	"fmt"
+	"net/netip"
+	"net/url"
+	"runtime"
+	"strings"
+
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/component/process"
@@ -15,15 +20,10 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system"
 	"github.com/Dreamacro/clash/log"
-	"net/netip"
-	"net/url"
-	"runtime"
-	"strings"
 )
 
 // New TunAdapter
 func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
-
 	var (
 		tunAddress = tunConf.TunAddressPrefix
 		devName    = tunConf.Device

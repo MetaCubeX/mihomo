@@ -4,8 +4,6 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"net/netip"
 	"net/url"
@@ -15,14 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/utils"
-	R "github.com/Dreamacro/clash/rules"
-	RP "github.com/Dreamacro/clash/rules/provider"
-
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/adapter/provider"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/fakeip"
@@ -31,11 +26,14 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/constant/sniffer"
 	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
 	"github.com/Dreamacro/clash/dns"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/log"
+	R "github.com/Dreamacro/clash/rules"
+	RP "github.com/Dreamacro/clash/rules/provider"
 	T "github.com/Dreamacro/clash/tunnel"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -332,7 +330,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
-	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
+	log.Infoln("Start initial configuration in progress") // Segment finished in xxm
 	startTime := time.Now()
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
@@ -386,7 +384,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
-	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
+	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) // Segment finished in xxm
 	return config, nil
 }
 

@@ -7,5 +7,4 @@ import (
 )
 
 func prepareBackgroundCommand(cmd *exec.Cmd) {
-
 }

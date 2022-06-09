@@ -2,11 +2,12 @@ package commons
 
 import (
 	"fmt"
+	"net"
+	"net/netip"
+
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/log"
 	"github.com/vishvananda/netlink"
-	"net"
-	"net/netip"
 )
 
 func GetAutoDetectInterface() (ifn string, err error) {
@@ -60,7 +61,7 @@ func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, 
 
 func configInterfaceRouting(index int, interfaceName string, ip netip.Addr) error {
 	const tableId = 1981801
-	var pref = 9000
+	pref := 9000
 
 	for _, route := range defaultRoutes {
 		_, ipn, err := net.ParseCIDR(route)

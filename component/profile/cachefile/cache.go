@@ -8,7 +8,6 @@ import (
 	"github.com/Dreamacro/clash/component/profile"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-
 	"go.etcd.io/bbolt"
 )
 

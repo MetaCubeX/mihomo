@@ -1,8 +1,9 @@
 package trie
 
 import (
-	"github.com/Dreamacro/clash/log"
 	"net"
+
+	"github.com/Dreamacro/clash/log"
 )
 
 type IPV6 bool

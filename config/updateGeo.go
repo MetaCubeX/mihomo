@@ -2,13 +2,14 @@ package config
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"runtime"
+
 	"github.com/Dreamacro/clash/component/geodata"
 	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/oschwald/geoip2-golang"
-	"io/ioutil"
-	"net/http"
-	"runtime"
 )
 
 func UpdateGeoDatabases() error {

@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/Dreamacro/clash/component/resolver"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )

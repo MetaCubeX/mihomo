@@ -1,11 +1,11 @@
 package route
 
 import (
-	"github.com/Dreamacro/clash/component/dialer"
 	"net/http"
 	"path/filepath"
 	"sync"
 
+	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/constant"
@@ -13,7 +13,6 @@ import (
 	P "github.com/Dreamacro/clash/listener"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )

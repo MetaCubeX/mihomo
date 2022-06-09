@@ -1,9 +1,10 @@
 package inner
 
 import (
+	"net"
+
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
-	"net"
 )
 
 var tcpIn chan<- C.ConnContext

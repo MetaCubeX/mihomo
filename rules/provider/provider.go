@@ -2,16 +2,15 @@ package provider
 
 import (
 	"encoding/json"
+	"runtime"
+	"time"
+
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
 	"gopkg.in/yaml.v3"
-	"runtime"
-	"time"
 )
 
-var (
-	ruleProviders = map[string]P.RuleProvider{}
-)
+var ruleProviders = map[string]P.RuleProvider{}
 
 type ruleSetProvider struct {
 	*fetcher

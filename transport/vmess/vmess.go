@@ -2,11 +2,11 @@ package vmess
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/utils"
 	"math/rand"
 	"net"
 	"runtime"
 
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/gofrs/uuid"
 )
 

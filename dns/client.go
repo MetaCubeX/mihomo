@@ -4,15 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"go.uber.org/atomic"
 	"net"
 	"net/netip"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
-
 	D "github.com/miekg/dns"
+	"go.uber.org/atomic"
 )
 
 type client struct {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/tunnel"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )

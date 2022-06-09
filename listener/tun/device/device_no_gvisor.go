@@ -5,7 +5,6 @@ package device
 // Device is the interface that implemented by network layer devices (e.g. tun),
 // and easy to use as stack.LinkEndpoint.
 type Device interface {
-
 	// Name returns the current name of the device.
 	Name() string
 

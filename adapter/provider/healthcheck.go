@@ -6,7 +6,6 @@ import (
 
 	"github.com/Dreamacro/clash/common/batch"
 	C "github.com/Dreamacro/clash/constant"
-
 	"go.uber.org/atomic"
 )
 

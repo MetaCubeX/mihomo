@@ -116,7 +116,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
+				// headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 
 				wsOpts["path"] = query.Get("path")
@@ -203,7 +203,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
+				// headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
@@ -267,7 +267,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				httpOpts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
+				// headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 				httpOpts["method"] = values["method"]
 				httpOpts["path"] = values["path"]
@@ -279,7 +279,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
+				// headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 				h2Opts["path"] = values["path"]
 				h2Opts["headers"] = headers

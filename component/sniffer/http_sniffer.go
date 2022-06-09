@@ -3,9 +3,10 @@ package sniffer
 import (
 	"bytes"
 	"errors"
-	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"strings"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (

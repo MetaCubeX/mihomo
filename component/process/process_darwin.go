@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/Dreamacro/clash/common/nnip"
-
 	"golang.org/x/sys/unix"
 )
 

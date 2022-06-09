@@ -9,7 +9,6 @@ import (
 
 	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/log"
-
 	"golang.org/x/sys/windows"
 )
 

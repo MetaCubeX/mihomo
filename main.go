@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/Dreamacro/clash/constant/features"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -13,10 +12,10 @@ import (
 
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/features"
 	"github.com/Dreamacro/clash/hub"
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/log"
-
 	"go.uber.org/automaxprocs/maxprocs"
 )
 

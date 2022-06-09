@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/rules/common"
@@ -38,6 +39,7 @@ func (rs *RuleSet) Payload() string {
 func (rs *RuleSet) ShouldResolveIP() bool {
 	return !rs.noResolveIP && rs.getProviders().ShouldResolveIP()
 }
+
 func (rs *RuleSet) getProviders() P.RuleProvider {
 	if rs.ruleProvider == nil {
 		rp := RuleProviders()[rs.ruleProviderName]

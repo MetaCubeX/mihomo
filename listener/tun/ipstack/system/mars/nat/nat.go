@@ -1,13 +1,13 @@
 package nat
 
 import (
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"net/netip"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
+	log "github.com/sirupsen/logrus"
 )
 
 func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *UDP, error) {

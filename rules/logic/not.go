@@ -2,6 +2,7 @@ package logic
 
 import (
 	"fmt"
+
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rules/common"
 )

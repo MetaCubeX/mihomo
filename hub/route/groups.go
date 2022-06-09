@@ -2,14 +2,15 @@ package route
 
 import (
 	"context"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/Dreamacro/clash/adapter"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 func GroupRouter() http.Handler {
@@ -68,7 +69,6 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	dm, err := group.URLTest(ctx, url)
-
 	if err != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, newError(err.Error()))

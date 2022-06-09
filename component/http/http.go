@@ -2,14 +2,15 @@ package http
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/log"
 	"io"
 	"net"
 	"net/http"
 	URL "net/url"
 	"strings"
 	"time"
+
+	"github.com/Dreamacro/clash/listener/inner"
+	"github.com/Dreamacro/clash/log"
 )
 
 const (
@@ -60,5 +61,4 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 
 	client := http.Client{Transport: transport}
 	return client.Do(req)
-
 }

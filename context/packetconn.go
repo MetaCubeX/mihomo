@@ -4,7 +4,6 @@ import (
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
-
 	"github.com/gofrs/uuid"
 )
 

@@ -1,9 +1,10 @@
 package utils
 
 import (
-	"github.com/gofrs/uuid"
 	"reflect"
 	"testing"
+
+	"github.com/gofrs/uuid"
 )
 
 func TestUUIDMap(t *testing.T) {

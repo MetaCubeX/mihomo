@@ -3,16 +3,17 @@ package outboundgroup
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
 	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/dlclark/regexp2"
 	"go.uber.org/atomic"
-	"sync"
-	"time"
 )
 
 type GroupBase struct {

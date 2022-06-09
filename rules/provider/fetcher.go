@@ -3,17 +3,18 @@ package provider
 import (
 	"bytes"
 	"crypto/md5"
-	P "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/log"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	P "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/log"
 )
 
 var (
-	fileMode os.FileMode = 0666
-	dirMode  os.FileMode = 0755
+	fileMode os.FileMode = 0o666
+	dirMode  os.FileMode = 0o755
 )
 
 type parser = func([]byte) (interface{}, error)

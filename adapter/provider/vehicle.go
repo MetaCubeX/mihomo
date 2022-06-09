@@ -2,12 +2,13 @@ package provider
 
 import (
 	"context"
-	netHttp "github.com/Dreamacro/clash/component/http"
-	types "github.com/Dreamacro/clash/constant/provider"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	netHttp "github.com/Dreamacro/clash/component/http"
+	types "github.com/Dreamacro/clash/constant/provider"
 )
 
 type FileVehicle struct {

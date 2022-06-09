@@ -2,18 +2,17 @@ package sniffer
 
 import (
 	"errors"
-	"github.com/Dreamacro/clash/constant/sniffer"
 	"net"
 	"net/netip"
 	"strconv"
 	"time"
 
-	"github.com/Dreamacro/clash/component/trie"
-
 	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/sniffer"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -117,13 +116,13 @@ func (sd *SnifferDispatcher) sniffDomain(conn *CN.BufferedConn, metadata *C.Meta
 
 			host, err := sniffer.SniffTCP(bytes)
 			if err != nil {
-				//log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
+				// log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
 				continue
 			}
 
 			_, err = netip.ParseAddr(host)
 			if err == nil {
-				//log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
+				// log.Debugln("[Sniffer] [%s] Sniff data failed %s", sniffer.Protocol(), metadata.DstIP)
 				continue
 			}
 
@@ -143,7 +142,8 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 }
 
 func NewSnifferDispatcher(needSniffer []sniffer.Type, forceDomain *trie.DomainTrie[bool],
-	skipSNI *trie.DomainTrie[bool], ports *[]utils.Range[uint16]) (*SnifferDispatcher, error) {
+	skipSNI *trie.DomainTrie[bool], ports *[]utils.Range[uint16],
+) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:     true,
 		foreDomain: forceDomain,

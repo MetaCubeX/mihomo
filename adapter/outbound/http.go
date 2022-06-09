@@ -86,7 +86,7 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 		},
 	}
 
-	//增加headers
+	// 增加headers
 	if len(h.option.Headers) != 0 {
 		for key, value := range h.option.Headers {
 			req.Header.Add(key, value)

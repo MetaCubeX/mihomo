@@ -15,7 +15,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
-
 	D "github.com/miekg/dns"
 )
 

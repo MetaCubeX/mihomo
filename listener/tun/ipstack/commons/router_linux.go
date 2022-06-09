@@ -4,10 +4,11 @@ package commons
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/tun/device"
-	"github.com/vishvananda/netlink"
 	"net"
 	"net/netip"
+
+	"github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/vishvananda/netlink"
 )
 
 func GetAutoDetectInterface() (string, error) {

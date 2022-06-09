@@ -10,7 +10,6 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/device"
 	"github.com/Dreamacro/clash/listener/tun/device/tun"
 	"github.com/Dreamacro/clash/log"
-
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/windows/services"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"

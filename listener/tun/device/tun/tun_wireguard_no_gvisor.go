@@ -16,7 +16,6 @@ type TUN struct {
 }
 
 func closeIO(t *TUN) {
-
 }
 
 func newEq(t *TUN) error {

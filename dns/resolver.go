@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/atomic"
 	"math/rand"
 	"net/netip"
 	"time"
@@ -16,8 +15,8 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
-
 	D "github.com/miekg/dns"
+	"go.uber.org/atomic"
 	"golang.org/x/sync/singleflight"
 )
 

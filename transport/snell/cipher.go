@@ -5,7 +5,6 @@ import (
 	"crypto/cipher"
 
 	"github.com/Dreamacro/clash/transport/shadowsocks/shadowaead"
-
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
 )

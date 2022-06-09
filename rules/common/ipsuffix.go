@@ -1,8 +1,9 @@
 package common
 
 import (
-	C "github.com/Dreamacro/clash/constant"
 	"net/netip"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 type IPSuffix struct {

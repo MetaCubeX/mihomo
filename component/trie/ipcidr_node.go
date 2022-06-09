@@ -2,9 +2,7 @@ package trie
 
 import "errors"
 
-var (
-	ErrorOverMaxValue = errors.New("the value don't over max value")
-)
+var ErrorOverMaxValue = errors.New("the value don't over max value")
 
 type IpCidrNode struct {
 	Mark     bool

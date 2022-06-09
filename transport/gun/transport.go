@@ -1,8 +1,9 @@
 package gun
 
 import (
-	"golang.org/x/net/http2"
 	"net"
+
+	"golang.org/x/net/http2"
 )
 
 type TransportWrap struct {

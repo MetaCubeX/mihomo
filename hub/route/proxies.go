@@ -12,14 +12,11 @@ import (
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
 
-var (
-	SwitchProxiesCallback func(sGroup string, sProxy string)
-)
+var SwitchProxiesCallback func(sGroup string, sProxy string)
 
 func proxyRouter() http.Handler {
 	r := chi.NewRouter()

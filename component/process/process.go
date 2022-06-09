@@ -2,10 +2,11 @@ package process
 
 import (
 	"errors"
-	"github.com/Dreamacro/clash/common/nnip"
-	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"net/netip"
+
+	"github.com/Dreamacro/clash/common/nnip"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (

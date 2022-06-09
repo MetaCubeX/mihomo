@@ -3,8 +3,9 @@
 package fdbased
 
 import (
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"os"
+
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
 type FD struct {

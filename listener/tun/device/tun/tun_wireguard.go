@@ -8,7 +8,6 @@ import (
 	"runtime"
 
 	"github.com/Dreamacro/clash/listener/tun/device"
-
 	"golang.zx2c4.com/wireguard/tun"
 )
 

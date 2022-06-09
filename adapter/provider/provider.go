@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/convert"
-	"github.com/dlclark/regexp2"
 	"math"
 	"runtime"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/convert"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
-
+	"github.com/dlclark/regexp2"
 	"gopkg.in/yaml.v3"
 )
 

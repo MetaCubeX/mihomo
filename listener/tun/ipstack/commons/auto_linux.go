@@ -1,12 +1,13 @@
 package commons
 
 import (
+	"time"
+
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/log"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/atomic"
-	"time"
 )
 
 var (
