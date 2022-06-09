@@ -87,14 +87,13 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			Headers:             make(http.Header),
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {
-			header := http.Header{}
 			for key, value := range v.option.WSOpts.Headers {
-				header.Add(key, value)
+				wsOpts.Headers.Add(key, value)
 			}
-			wsOpts.Headers = header
 		}
 
 		if v.option.TLS {
