@@ -4,11 +4,11 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/sagernet/sing/common/buf"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 type UDPListener struct {
@@ -49,34 +49,35 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 	}
 	go func() {
 		for {
-			buf := pool.Get(pool.UDPBufferSize)
-			n, remoteAddr, err := l.ReadFrom(buf)
+			buffer := buf.NewPacket()
+			n, remoteAddr, err := l.ReadFrom(buffer.FreeBytes())
 			if err != nil {
-				pool.Put(buf)
+				buffer.Release()
 				if sl.closed {
 					break
 				}
 				continue
 			}
-			handleSocksUDP(l, in, buf[:n], remoteAddr)
+			buffer.Extend(n)
+			handleSocksUDP(l, in, buffer, remoteAddr)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, addr net.Addr) {
-	target, payload, err := socks5.DecodeUDPPacket(buf)
+func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buffer *buf.Buffer, addr net.Addr) {
+	buffer.Advance(3)
+	target, err := M.SocksaddrSerializer.ReadAddrPort(buffer)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
-		pool.Put(buf)
+		buffer.Release()
 		return
 	}
 	packet := &packet{
 		pc:      pc,
 		rAddr:   addr,
-		payload: payload,
-		bufRef:  buf,
+		payload: buffer,
 	}
 	select {
 	case in <- inbound.NewPacket(target, packet, C.SOCKS5):

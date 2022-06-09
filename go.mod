@@ -13,7 +13,7 @@ require (
 	github.com/lucas-clemente/quic-go v0.27.2
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
-	github.com/sagernet/sing v0.0.0-20220609091055-86d0144940e7
+	github.com/sagernet/sing v0.0.0-20220609123159-a93588755159
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220609092835-699292971c13
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2

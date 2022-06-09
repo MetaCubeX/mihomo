@@ -21,7 +21,8 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/nat"
 	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/sagernet/sing/common/buf"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 type sysStack struct {
@@ -153,37 +154,37 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 		}(stack.UDP())
 
 		for !ipStack.closed {
-			buf := pool.Get(pool.UDPBufferSize)
+			buffer := buf.NewPacket()
 
-			n, lRAddr, rRAddr, err := stack.UDP().ReadFrom(buf)
+			n, lRAddr, rRAddr, err := stack.UDP().ReadFrom(buffer.FreeBytes())
 			if err != nil {
-				_ = pool.Put(buf)
+				buffer.Release()
 				break
 			}
+			buffer.Truncate(n)
 
-			raw := buf[:n]
 			lAddr := lRAddr.(*net.UDPAddr)
 			rAddr := rRAddr.(*net.UDPAddr)
 
 			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
 
 			if rAddrPort.Addr().IsLoopback() || rAddrPort.Addr() == gateway {
-				_ = pool.Put(buf)
+				buffer.Release()
 
 				continue
 			}
 
 			if D.ShouldHijackDns(dnsAddr, rAddrPort) {
 				go func() {
-					msg, err := D.RelayDnsPacket(raw)
+					msg, err := D.RelayDnsPacket(buffer.Bytes())
 					if err != nil {
-						_ = pool.Put(buf)
+						buffer.Release()
 						return
 					}
 
 					_, _ = stack.UDP().WriteTo(msg, rAddr, lAddr)
 
-					_ = pool.Put(buf)
+					buffer.Release()
 				}()
 
 				continue
@@ -191,17 +192,14 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 
 			pkt := &packet{
 				local: lAddr,
-				data:  raw,
+				data:  buffer,
 				writeBack: func(b []byte, addr net.Addr) (int, error) {
 					return stack.UDP().WriteTo(b, rAddr, lAddr)
-				},
-				drop: func() {
-					_ = pool.Put(buf)
 				},
 			}
 
 			select {
-			case udpIn <- inbound.NewPacket(socks5.ParseAddrToSocksAddr(rAddr), pkt, C.TUN):
+			case udpIn <- inbound.NewPacket(M.SocksaddrFromNet(rAddr), pkt, C.TUN):
 			default:
 			}
 		}

@@ -6,9 +6,15 @@ import (
 	"errors"
 	"math/bits"
 	"sync"
+
+	"github.com/sagernet/sing/common/buf"
 )
 
-var DefaultAllocator = NewAllocator()
+var defaultAllocator = NewAllocator()
+
+func init() {
+	buf.DefaultAllocator = defaultAllocator
+}
 
 // Allocator for incoming frames, optimized to prevent overwriting after zeroing
 type Allocator struct {

@@ -5,10 +5,12 @@ package gvisor
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 	"github.com/Dreamacro/clash/log"
+	"github.com/sagernet/sing/common"
+	"github.com/sagernet/sing/common/buf"
+	M "github.com/sagernet/sing/common/metadata"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
@@ -51,10 +53,10 @@ func (c *udpConn) ID() *stack.TransportEndpointID {
 type packet struct {
 	pc      adapter.UDPConn
 	rAddr   net.Addr
-	payload []byte
+	payload *buf.Buffer
 }
 
-func (c *packet) Data() []byte {
+func (c *packet) Data() *buf.Buffer {
 	return c.payload
 }
 
@@ -63,11 +65,11 @@ func (c *packet) WriteBack(b []byte, _ net.Addr) (n int, err error) {
 	return c.pc.WriteTo(b, c.rAddr)
 }
 
+func (c *packet) WritePacket(buffer *buf.Buffer, addr M.Socksaddr) error {
+	return common.Error(c.pc.WriteTo(buffer.Bytes(), c.rAddr))
+}
+
 // LocalAddr returns the source IP/Port of UDP Packet
 func (c *packet) LocalAddr() net.Addr {
 	return c.rAddr
-}
-
-func (c *packet) Drop() {
-	_ = pool.Put(c.payload)
 }

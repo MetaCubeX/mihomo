@@ -3,15 +3,16 @@ package tproxy
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/common/pool"
+	"github.com/sagernet/sing/common/buf"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 type packet struct {
 	lAddr *net.UDPAddr
-	buf   []byte
+	buf   *buf.Buffer
 }
 
-func (c *packet) Data() []byte {
+func (c *packet) Data() *buf.Buffer {
 	return c.buf
 }
 
@@ -27,11 +28,18 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 	return
 }
 
+func (c *packet) WritePacket(buffer *buf.Buffer, addr M.Socksaddr) error {
+	defer buffer.Release()
+	tc, err := dialUDP("udp", addr.UDPAddr(), c.lAddr)
+	defer tc.Close()
+	if err != nil {
+		return err
+	}
+	_, err = tc.Write(buffer.Bytes())
+	return nil
+}
+
 // LocalAddr returns the source IP/Port of UDP Packet
 func (c *packet) LocalAddr() net.Addr {
 	return c.lAddr
-}
-
-func (c *packet) Drop() {
-	pool.Put(c.buf)
 }

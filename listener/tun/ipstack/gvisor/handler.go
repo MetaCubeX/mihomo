@@ -15,6 +15,8 @@ import (
 	D "github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/adapter"
 	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/sagernet/sing/common/buf"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 var _ adapter.Handler = (*gvHandler)(nil)
@@ -96,27 +98,24 @@ func (gh *gvHandler) HandleUDP(tunConn adapter.UDPConn) {
 		return
 	}
 
-	target := socks5.ParseAddrToSocksAddr(rAddr)
+	target := M.SocksaddrFromNet(rAddr)
 
 	go func() {
 		for {
-			buf := pool.Get(pool.UDPBufferSize)
+			buffer := buf.NewPacket()
 
-			n, addr, err := tunConn.ReadFrom(buf)
+			n, addr, err := tunConn.ReadFrom(buffer.FreeBytes())
 			if err != nil {
-				_ = pool.Put(buf)
+				buffer.Release()
 				break
 			}
-
-			payload := buf[:n]
+			buffer.Truncate(n)
 
 			if D.ShouldHijackDns(gh.dnsHijack, rAddrPort) {
 				go func() {
-					defer func() {
-						_ = pool.Put(buf)
-					}()
+					defer buffer.Release()
 
-					msg, err1 := D.RelayDnsPacket(payload)
+					msg, err1 := D.RelayDnsPacket(buffer.Bytes())
 					if err1 != nil {
 						return
 					}
@@ -130,7 +129,7 @@ func (gh *gvHandler) HandleUDP(tunConn adapter.UDPConn) {
 			gvPacket := &packet{
 				pc:      tunConn,
 				rAddr:   addr,
-				payload: payload,
+				payload: buffer,
 			}
 
 			select {

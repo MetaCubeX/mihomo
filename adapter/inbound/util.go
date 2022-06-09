@@ -10,7 +10,25 @@ import (
 	"github.com/Dreamacro/clash/common/nnip"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
+	M "github.com/sagernet/sing/common/metadata"
 )
+
+func socksAddrToMetadata(addr M.Socksaddr) *C.Metadata {
+	metadata := &C.Metadata{}
+	switch addr.Family() {
+	case M.AddressFamilyIPv4:
+		metadata.AddrType = C.AtypIPv4
+		metadata.DstIP = addr.Addr
+	case M.AddressFamilyIPv6:
+		metadata.AddrType = C.AtypIPv6
+		metadata.DstIP = addr.Addr
+	case M.AddressFamilyFqdn:
+		metadata.AddrType = C.AtypDomainName
+		metadata.Host = addr.Fqdn
+	}
+	metadata.DstPort = strconv.Itoa(int(addr.Port))
+	return metadata
+}
 
 func parseSocksAddr(target socks5.Addr) *C.Metadata {
 	metadata := &C.Metadata{

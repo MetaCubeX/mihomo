@@ -6,6 +6,8 @@ import (
 
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/gofrs/uuid"
+	"github.com/sagernet/sing/common/buf"
+	M "github.com/sagernet/sing/common/metadata"
 	"go.uber.org/atomic"
 )
 
@@ -113,6 +115,25 @@ func (ut *udpTracker) WriteTo(b []byte, addr net.Addr) (int, error) {
 	ut.manager.PushUploaded(upload)
 	ut.UploadTotal.Add(upload)
 	return n, err
+}
+
+func (ut *udpTracker) ReadPacket(buffer *buf.Buffer) (addr M.Socksaddr, err error) {
+	addr, err = ut.PacketConn.ReadPacket(buffer)
+	download := int64(buffer.Len())
+	ut.manager.PushDownloaded(download)
+	ut.DownloadTotal.Add(download)
+	return
+}
+
+func (ut *udpTracker) WritePacket(buffer *buf.Buffer, addr M.Socksaddr) error {
+	dataLen := buffer.Len()
+	err := ut.PacketConn.WritePacket(buffer, addr)
+	if err == nil {
+		upload := int64(dataLen)
+		ut.manager.PushUploaded(upload)
+		ut.UploadTotal.Add(upload)
+	}
+	return err
 }
 
 func (ut *udpTracker) Close() error {

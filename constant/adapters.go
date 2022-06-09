@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/sagernet/sing/common/buf"
+	N "github.com/sagernet/sing/common/network"
 )
 
 // Adapter Type
@@ -75,6 +77,7 @@ type Conn interface {
 type PacketConn interface {
 	net.PacketConn
 	Connection
+	N.PacketConn
 	// Deprecate WriteWithMetadata because of remote resolve DNS cause TURN failed
 	// WriteWithMetadata(p []byte, metadata *Metadata) (n int, err error)
 }
@@ -184,7 +187,7 @@ func (at AdapterType) String() string {
 // UDPPacket contains the data of UDP packet, and offers control/info of UDP packet's source
 type UDPPacket interface {
 	// Data get the payload of UDP Packet
-	Data() []byte
+	Data() *buf.Buffer
 
 	// WriteBack writes the payload with source IP/Port equals addr
 	// - variable source IP/Port is important to STUN
@@ -192,8 +195,7 @@ type UDPPacket interface {
 	//   this is important when using Fake-IP.
 	WriteBack(b []byte, addr net.Addr) (n int, err error)
 
-	// Drop call after packet is used, could recycle buffer in this function.
-	Drop()
+	N.PacketWriter
 
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr

@@ -2,7 +2,7 @@ package inbound
 
 import (
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 // PacketAdapter is a UDP Packet adapter for socks/redir/tun
@@ -17,8 +17,8 @@ func (s *PacketAdapter) Metadata() *C.Metadata {
 }
 
 // NewPacket is PacketAdapter generator
-func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type) *PacketAdapter {
-	metadata := parseSocksAddr(target)
+func NewPacket(target M.Socksaddr, packet C.UDPPacket, source C.Type) *PacketAdapter {
+	metadata := socksAddrToMetadata(target)
 	metadata.NetWork = C.UDP
 	metadata.Type = source
 	if ip, port, err := parseAddr(packet.LocalAddr().String()); err == nil {

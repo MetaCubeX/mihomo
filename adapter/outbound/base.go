@@ -10,6 +10,10 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/gofrs/uuid"
+	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 )
 
 type Base struct {
@@ -157,6 +161,7 @@ func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 
 type packetConn struct {
 	net.PacketConn
+	nc                      N.PacketConn
 	chain                   C.Chain
 	actualRemoteDestination string
 }
@@ -175,8 +180,22 @@ func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
+func (c *packetConn) ReadPacket(buffer *buf.Buffer) (addr M.Socksaddr, err error) {
+	return c.nc.ReadPacket(buffer)
+}
+
+func (c *packetConn) WritePacket(buffer *buf.Buffer, addr M.Socksaddr) error {
+	return c.nc.WritePacket(buffer, addr)
+}
+
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
-	return &packetConn{pc, []string{a.Name()}, parseRemoteDestination(a.Addr())}
+	var nc N.PacketConn
+	if n, isNc := pc.(N.PacketConn); isNc {
+		nc = n
+	} else {
+		nc = &bufio.PacketConnWrapper{PacketConn: pc}
+	}
+	return &packetConn{pc, nc, []string{a.Name()}, parseRemoteDestination(a.Addr())}
 }
 
 func parseRemoteDestination(addr string) string {
