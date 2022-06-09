@@ -676,8 +676,7 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 	}
 }
 
-// TODO: fix test
-func _TestClash_Basic(t *testing.T) {
+func TestClash_Basic(t *testing.T) {
 	basic := `
 mixed-port: 10000
 log-level: silent
