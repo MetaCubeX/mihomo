@@ -11,9 +11,6 @@ import (
 	_ "unsafe"
 )
 
-//go:linkname initGeoSite github.com/Dreamacro/clash/config.initGeoSite
-func initGeoSite() error
-
 type GEOSITE struct {
 	*Base
 	country    string
@@ -53,7 +50,7 @@ func (gs *GEOSITE) GetRecodeSize() int {
 
 func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 	if !initFlag {
-		if err := initGeoSite(); err != nil {
+		if err := geodata.InitGeoSite(); err != nil {
 			log.Errorln("can't initial GeoSite: %s", err)
 			return nil, err
 		}

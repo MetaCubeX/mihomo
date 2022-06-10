@@ -9,10 +9,7 @@ import (
 	_ "unsafe"
 )
 
-//go:linkname parseRule github.com/Dreamacro/clash/rules.ParseRule
-func parseRule(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
-
-func parseRuleByPayload(payload string) ([]C.Rule, error) {
+func parseRuleByPayload(payload string, parseRule func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) ([]C.Rule, error) {
 	regex, err := regexp.Compile("\\(.*\\)")
 	if err != nil {
 		return nil, err
@@ -29,7 +26,7 @@ func parseRuleByPayload(payload string) ([]C.Rule, error) {
 		for _, subRange := range subRanges {
 			subPayload := payload[subRange.start+1 : subRange.end]
 
-			rule, err := payloadToRule(subPayload)
+			rule, err := payloadToRule(subPayload, parseLogicSubRule(parseRule))
 			if err != nil {
 				return nil, err
 			}
@@ -47,7 +44,7 @@ func containRange(r Range, preStart, preEnd int) bool {
 	return preStart < r.start && preEnd > r.end
 }
 
-func payloadToRule(subPayload string) (C.Rule, error) {
+func payloadToRule(subPayload string, parseRule func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (C.Rule, error) {
 	splitStr := strings.SplitN(subPayload, ",", 2)
 	if len(splitStr) < 2 {
 		return nil, fmt.Errorf("[%s] format is error", subPayload)
@@ -60,6 +57,17 @@ func payloadToRule(subPayload string) (C.Rule, error) {
 	}
 	param := strings.Split(payload, ",")
 	return parseRule(tp, param[0], "", param[1:])
+}
+
+func parseLogicSubRule(parseRule func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
+	return func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
+		switch tp {
+		case "MATCH":
+			return nil, fmt.Errorf("unsupported rule type on logic rule")
+		default:
+			return parseRule(tp, payload, target, params)
+		}
+	}
 }
 
 type Range struct {
