@@ -47,7 +47,7 @@ func (rs *RuleSet) getProviders() P.RuleProvider {
 	return rs.ruleProvider
 }
 
-func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool, parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (*RuleSet, error) {
 	rp, ok := RuleProviders()[ruleProviderName]
 	if !ok {
 		return nil, fmt.Errorf("rule set %s not found", ruleProviderName)

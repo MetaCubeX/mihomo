@@ -19,9 +19,10 @@ func (A *AND) ShouldFindProcess() bool {
 	return false
 }
 
-func NewAND(payload string, adapter string) (*AND, error) {
+func NewAND(payload string, adapter string,
+	parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (*AND, error) {
 	and := &AND{Base: &common.Base{}, payload: payload, adapter: adapter}
-	rules, err := parseRuleByPayload(payload)
+	rules, err := parseRuleByPayload(payload, parse)
 	if err != nil {
 		return nil, err
 	}

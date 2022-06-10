@@ -533,7 +533,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
-		rp, err := RP.ParseRuleProvider(name, mapping)
+		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -723,7 +723,7 @@ func parseFallbackIPCIDR(ips []string) ([]*netip.Prefix, error) {
 func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
 	var sites []*router.DomainMatcher
 	if len(countries) > 0 {
-		if err := initGeoSite(); err != nil {
+		if err := geodata.InitGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %s", err)
 		}
 	}

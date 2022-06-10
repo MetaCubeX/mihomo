@@ -6,8 +6,6 @@ import (
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
-	RC "github.com/Dreamacro/clash/rules/common"
-	"github.com/Dreamacro/clash/rules/ruleparser"
 	"time"
 )
 
@@ -19,7 +17,7 @@ type ruleProviderSchema struct {
 	Interval int    `provider:"interval,omitempty"`
 }
 
-func ParseRuleProvider(name string, mapping map[string]interface{}) (P.RuleProvider, error) {
+func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (P.RuleProvider, error) {
 	schema := &ruleProviderSchema{}
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 	if err := decoder.Decode(mapping, schema); err != nil {
@@ -49,19 +47,5 @@ func ParseRuleProvider(name string, mapping map[string]interface{}) (P.RuleProvi
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
 
-	return NewRuleSetProvider(name, behavior, time.Duration(uint(schema.Interval))*time.Second, vehicle), nil
-}
-
-func parseRule(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
-	parsed, parseErr = ruleparser.ParseSameRule(tp, payload, target, params)
-
-	if parseErr != nil {
-		return nil, parseErr
-	}
-	ruleExtra := &C.RuleExtra{
-		Network:   RC.FindNetwork(params),
-		SourceIPs: RC.FindSourceIPs(params),
-	}
-	parsed.SetRuleExtra(ruleExtra)
-	return parsed, parseErr
+	return NewRuleSetProvider(name, behavior, time.Duration(uint(schema.Interval))*time.Second, vehicle, parse), nil
 }
