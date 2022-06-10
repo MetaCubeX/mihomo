@@ -46,11 +46,11 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip
 				rr.A = ip.AsSlice()
 
 				msg.Answer = []D.RR{rr}
-			} else if ip.Is6() && q.Qtype == D.TypeAAAA {
+			} else if q.Qtype == D.TypeAAAA {
 				rr := &D.AAAA{}
 				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
-				rr.AAAA = ip.AsSlice()
-
+				ip := ip.As16()
+				rr.AAAA = ip[:]
 				msg.Answer = []D.RR{rr}
 			} else {
 				return next(ctx, r)
