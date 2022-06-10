@@ -17,9 +17,9 @@ func (not *NOT) ShouldFindProcess() bool {
 	return false
 }
 
-func NewNOT(payload string, adapter string) (*NOT, error) {
+func NewNOT(payload string, adapter string, parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (*NOT, error) {
 	not := &NOT{Base: &common.Base{}, adapter: adapter}
-	rule, err := parseRuleByPayload(payload)
+	rule, err := parseRuleByPayload(payload, parse)
 	if err != nil {
 		return nil, err
 	}
