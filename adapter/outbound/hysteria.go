@@ -121,7 +121,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	serverName := option.Server
 	if option.SNI != "" {
-		serverName = option.Server
+		serverName = option.SNI
 	}
 	tlsConfig := &tls.Config{
 		ServerName:         serverName,
