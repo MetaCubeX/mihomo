@@ -131,7 +131,7 @@ func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos: []string{
-			"http/1.1", "h2", NextProtoDQ,
+			NextProtoDQ,
 		},
 		SessionTicketsDisabled: false,
 	}
