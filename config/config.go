@@ -666,7 +666,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			addr = u.Host
 			dnsNetType = "dhcp" // UDP from DHCP
 		case "quic":
-			addr, err = hostWithDefaultPort(u.Host, "784")
+			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "quic" // DNS over QUIC
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
