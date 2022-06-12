@@ -17,7 +17,7 @@ import (
 	D "github.com/miekg/dns"
 )
 
-const NextProtoDQ = "doq-i00"
+const NextProtoDQ = "doq"
 
 var bytesPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
@@ -149,6 +149,7 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 	)
 
 	host, port, err := net.SplitHostPort(dc.addr)
+
 	if err != nil {
 		return nil, err
 	}
