@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -73,11 +71,8 @@ type HysteriaOption struct {
 	Server              string `proxy:"server"`
 	Port                int    `proxy:"port"`
 	Protocol            string `proxy:"protocol,omitempty"`
-	Up                  string `proxy:"up,omitempty"`
-	UpMbps              int    `proxy:"up_mbps,omitempty"`
-	Down                string `proxy:"down,omitempty"`
-	DownMbps            int    `proxy:"down_mbps,omitempty"`
-	Auth                string `proxy:"auth,omitempty"`
+	Up                  string `proxy:"up"`
+	Down                string `proxy:"down"`
 	AuthString          string `proxy:"auth_str,omitempty"`
 	Obfs                string `proxy:"obfs,omitempty"`
 	SNI                 string `proxy:"sni,omitempty"`
@@ -92,22 +87,8 @@ type HysteriaOption struct {
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 	var up, down uint64
-	if len(c.Up) > 0 {
-		up = stringToBps(c.Up)
-		if up == 0 {
-			return 0, 0, errors.New("invalid speed format")
-		}
-	} else {
-		up = uint64(c.UpMbps) * mbpsToBps
-	}
-	if len(c.Down) > 0 {
-		down = stringToBps(c.Down)
-		if down == 0 {
-			return 0, 0, errors.New("invalid speed format")
-		}
-	} else {
-		down = uint64(c.DownMbps) * mbpsToBps
-	}
+	up = stringToBps(c.Up)
+	down = stringToBps(c.Down)
 	return up, down, nil
 }
 
@@ -173,16 +154,8 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if !quicConfig.DisablePathMTUDiscovery && pmtud_fix.DisablePathMTUDiscovery {
 		log.Infoln("hysteria: Path MTU Discovery is not yet supported on this platform")
 	}
-	var auth []byte
-	if option.Auth != "" {
-		authBytes, err := base64.StdEncoding.DecodeString(option.Auth)
-		if err != nil {
-			return nil, fmt.Errorf("hysteria %s parse auth error: %w", addr, err)
-		}
-		auth = authBytes
-	} else {
-		auth = []byte(option.AuthString)
-	}
+
+	var auth = []byte(option.AuthString)
 	var obfuscator obfs.Obfuscator
 	if len(option.Obfs) > 0 {
 		obfuscator = obfs.NewXPlusObfuscator([]byte(option.Obfs))
@@ -214,6 +187,12 @@ func stringToBps(s string) uint64 {
 	if s == "" {
 		return 0
 	}
+
+	// when have not unit, use Mbps
+	if v, err := strconv.Atoi(s); err == nil {
+		return stringToBps(fmt.Sprintf("%d Mbps", v))
+	}
+
 	m := rateStringRegexp.FindStringSubmatch(s)
 	if m == nil {
 		return 0
