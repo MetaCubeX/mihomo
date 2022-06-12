@@ -274,7 +274,7 @@ $ systemctl start Clash-Meta
 
 Clash add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
 
-To display process name in GUI please use [Dashboard For Meta]([https://github.com/Clash-Mini/Dashboard](https://github.com/MetaCubeX/Clash.Mini)).
+To display process name in GUI please use [Dashboard For Meta](https://github.com/MetaCubeX/yacd).
 
 ## Development
 
