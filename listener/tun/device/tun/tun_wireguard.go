@@ -87,7 +87,11 @@ func (t *TUN) Write(packet []byte) (int, error) {
 
 	packet = append(t.cache[:t.offset], packet...)
 
-	return t.nt.Write(packet, t.offset)
+	n, err := t.nt.Write(packet, t.offset)
+	if n < t.offset {
+		return 0, err
+	}
+	return n - t.offset, err
 }
 
 func (t *TUN) Close() error {

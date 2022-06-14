@@ -8,8 +8,10 @@ import (
 	"io"
 	"sync"
 
+	"github.com/Dreamacro/clash/common/pool"
+
+	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -93,23 +95,29 @@ func (e *Endpoint) dispatchLoop(cancel context.CancelFunc) {
 
 	mtu := int(e.mtu)
 	for {
-		data := make([]byte, mtu)
+		data := pool.Get(mtu)
 
 		n, err := e.rw.Read(data)
 		if err != nil {
+			_ = pool.Put(data)
 			break
 		}
 
 		if n == 0 || n > mtu {
+			_ = pool.Put(data)
 			continue
 		}
 
 		if !e.IsAttached() {
+			_ = pool.Put(data)
 			continue /* unattached, drop packet */
 		}
 
 		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Data: buffer.View(data[:n]).ToVectorisedView(),
+			Payload: buffer.NewWithData(data[:n]),
+			OnRelease: func() {
+				_ = pool.Put(data)
+			},
 		})
 
 		switch header.IPVersion(data) {
@@ -117,6 +125,8 @@ func (e *Endpoint) dispatchLoop(cancel context.CancelFunc) {
 			e.InjectInbound(header.IPv4ProtocolNumber, pkt)
 		case header.IPv6Version:
 			e.InjectInbound(header.IPv6ProtocolNumber, pkt)
+		default:
+			_ = pool.Put(data)
 		}
 		pkt.DecRef()
 	}
@@ -138,11 +148,8 @@ func (e *Endpoint) outboundLoop(ctx context.Context) {
 func (e *Endpoint) writePacket(pkt *stack.PacketBuffer) tcpip.Error {
 	defer pkt.DecRef()
 
-	size := pkt.Size()
-	views := pkt.Views()
-
-	vView := buffer.NewVectorisedView(size, views)
-	if _, err := e.rw.Write(vView.ToView()); err != nil {
+	buf := pkt.Buffer()
+	if _, err := e.rw.Write(buf.Flatten()); err != nil {
 		return &tcpip.ErrInvalidEndpointState{}
 	}
 	return nil
