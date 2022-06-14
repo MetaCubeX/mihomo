@@ -141,6 +141,11 @@ func updateDNS(c *config.DNS, t config.Tun) {
 		ProxyServer: c.ProxyServerNameserver,
 	}
 
+	// deprecated warnning
+	if cfg.EnhancedMode == C.DNSMapping {
+		log.Warnln("[DNS] %s is deprecated, please use %s instead", cfg.EnhancedMode.String(), C.DNSFakeIP.String())
+	}
+
 	r := dns.NewResolver(cfg)
 	pr := dns.NewProxyServerHostResolver(r)
 	m := dns.NewEnhancer(cfg)
