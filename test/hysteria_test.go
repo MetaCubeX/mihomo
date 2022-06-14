@@ -40,8 +40,8 @@ func TestClash_Hysteria(t *testing.T) {
 		Server:         localIP.String(),
 		Port:           10002,
 		Obfs:           "fuck me till the daylight",
-		UpMbps:         100,
-		DownMbps:       100,
+		Up:             "100",
+		Down:           "100",
 		SkipCertVerify: true,
 	})
 	if err != nil {
