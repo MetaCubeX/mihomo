@@ -386,18 +386,16 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if !foundProcess && alwaysFindProcess && rule.ShouldFindProcess() {
+		if !foundProcess && (alwaysFindProcess || rule.ShouldFindProcess()) {
 			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
-			if err == nil && P.ShouldFindProcess(metadata) {
-				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
-				if err != nil {
-					log.Debugln("[Process] find process %s: %v", metadata.String(), err)
-				} else {
-					process = filepath.Base(path)
-					processPath = path
-					processUid = uid
-					foundProcess = true
-				}
+			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
+			if err != nil {
+				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+			} else {
+				process = filepath.Base(path)
+				processPath = path
+				processUid = uid
+				foundProcess = true
 			}
 		}
 
