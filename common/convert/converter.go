@@ -10,34 +10,24 @@ import (
 	"strings"
 )
 
+var encRaw = base64.RawStdEncoding
 var enc = base64.StdEncoding
 
-func DecodeBase64(buf []byte) ([]byte, error) {
-	dBuf := make([]byte, enc.DecodedLen(len(buf)))
-	n, err := enc.Decode(dBuf, buf)
+func DecodeBase64(buf []byte) []byte {
+	dBuf := make([]byte, encRaw.DecodedLen(len(buf)))
+	n, err := encRaw.Decode(dBuf, buf)
 	if err != nil {
-		return nil, err
+		n, err = enc.Decode(dBuf, buf)
+		if err != nil {
+			return buf
+		}
 	}
-
-	return dBuf[:n], nil
-}
-
-// DecodeBase64StringToString decode base64 string to string
-func DecodeBase64StringToString(s string) (string, error) {
-	dBuf, err := enc.DecodeString(s)
-	if err != nil {
-		return "", err
-	}
-
-	return string(dBuf), nil
+	return dBuf[:n]
 }
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
-	data, err := DecodeBase64(buf)
-	if err != nil {
-		data = buf
-	}
+	data := DecodeBase64(buf)
 
 	arr := strings.Split(string(data), "\n")
 
@@ -219,7 +209,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			proxies = append(proxies, vless)
 
 		case "vmess":
-			dcBuf, err := enc.DecodeString(body)
+			dcBuf, err := encRaw.DecodeString(body)
 			if err != nil {
 				continue
 			}
@@ -323,7 +313,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			port := urlSS.Port()
 
 			if port == "" {
-				dcBuf, err := enc.DecodeString(urlSS.Host)
+				dcBuf, err := encRaw.DecodeString(urlSS.Host)
 				if err != nil {
 					continue
 				}
@@ -340,11 +330,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			)
 
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, err := enc.DecodeString(cipher)
+				dcBuf, err := encRaw.DecodeString(cipher)
 				if err != nil {
 					continue
 				}
-
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
@@ -363,7 +352,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			proxies = append(proxies, ss)
 		case "ssr":
-			dcBuf, err := enc.DecodeString(body)
+			dcBuf, err := encRaw.DecodeString(body)
 			if err != nil {
 				continue
 			}
@@ -435,7 +424,7 @@ func urlSafe(data string) string {
 }
 
 func decodeUrlSafe(data string) string {
-	dcBuf, err := base64.URLEncoding.DecodeString(data)
+	dcBuf, err := base64.RawURLEncoding.DecodeString(data)
 	if err != nil {
 		return ""
 	}
