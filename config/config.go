@@ -266,7 +266,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
 		TCPConcurrent:  false,
-		EnableProcess:  true,
+		EnableProcess:  false,
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
