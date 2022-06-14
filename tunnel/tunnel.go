@@ -38,9 +38,9 @@ var (
 	mode = Rule
 
 	// default timeout for UDP session
-	udpTimeout  = 60 * time.Second
-	procesCache string
-	failTotal   int
+	udpTimeout = 60 * time.Second
+
+	alwaysFindProcess = false
 )
 
 func SetSniffing(b bool) {
@@ -120,6 +120,11 @@ func Mode() TunnelMode {
 // SetMode change the mode of tunnel
 func SetMode(m TunnelMode) {
 	mode = m
+}
+
+// SetAlwaysFindProcess set always find process info, may be increase many memory
+func SetAlwaysFindProcess(findProcess bool) {
+	alwaysFindProcess = findProcess
 }
 
 // processUDP starts a loop to handle udp packet
@@ -381,7 +386,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if !foundProcess && rule.ShouldFindProcess() {
+		if !foundProcess && alwaysFindProcess && rule.ShouldFindProcess() {
 			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
 			if err == nil && P.ShouldFindProcess(metadata) {
 				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
