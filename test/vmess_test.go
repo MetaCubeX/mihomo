@@ -44,6 +44,74 @@ func TestClash_Vmess(t *testing.T) {
 	testSuit(t, proxy)
 }
 
+func TestClash_VmessAuthenticatedLength(t *testing.T) {
+	configPath := C.Path.Resolve("vmess.json")
+
+	cfg := &container.Config{
+		Image:        ImageVmess,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds:        []string{fmt.Sprintf("%s:/etc/v2ray/config.json", configPath)},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "vmess")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewVmess(outbound.VmessOption{
+		Name:                "vmess",
+		Server:              localIP.String(),
+		Port:                10002,
+		UUID:                "b831381d-6324-4d53-ad4f-8cda48b30811",
+		Cipher:              "auto",
+		UDP:                 true,
+		AuthenticatedLength: true,
+	})
+	require.NoError(t, err)
+
+	time.Sleep(waitTime)
+	testSuit(t, proxy)
+}
+
+func TestClash_VmessPacketAddr(t *testing.T) {
+	configPath := C.Path.Resolve("vmess.json")
+
+	cfg := &container.Config{
+		Image:        ImageVmessLatest,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds:        []string{fmt.Sprintf("%s:/etc/v2ray/config.json", configPath)},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "vmess")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewVmess(outbound.VmessOption{
+		Name:       "vmess",
+		Server:     localIP.String(),
+		Port:       10002,
+		UUID:       "b831381d-6324-4d53-ad4f-8cda48b30811",
+		Cipher:     "auto",
+		UDP:        true,
+		PacketAddr: true,
+	})
+	require.NoError(t, err)
+
+	time.Sleep(waitTime)
+	testSuit(t, proxy)
+}
+
 func TestClash_VmessTLS(t *testing.T) {
 	cfg := &container.Config{
 		Image:        ImageVmess,

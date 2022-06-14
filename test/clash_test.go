@@ -31,6 +31,7 @@ const (
 	ImageShadowsocks     = "mritd/shadowsocks:latest"
 	ImageShadowsocksRust = "ghcr.io/shadowsocks/ssserver-rust:latest"
 	ImageVmess           = "v2fly/v2fly-core:latest"
+	ImageVmessLatest     = "sagernet/v2fly-core:latest"
 	ImageVless           = "teddysun/xray:latest"
 	ImageTrojan          = "trojangfw/trojan:latest"
 	ImageTrojanGo        = "p4gefau1t/trojan-go:latest"
@@ -450,26 +451,26 @@ func testLargeDataWithPacketConn(t *testing.T, pc net.PacketConn) error {
 	writeRandData := func(pc net.PacketConn, addr net.Addr) (map[int][]byte, error) {
 		hashMap := map[int][]byte{}
 		mux := sync.Mutex{}
-		for i := 0; i < times; i++ {
-			go func(idx int) {
+		go func() {
+			for i := 0; i < times; i++ {
 				buf := make([]byte, chunkSize)
 				if _, err := rand.Read(buf[1:]); err != nil {
 					t.Log(err.Error())
 					return
 				}
-				buf[0] = byte(idx)
+				buf[0] = byte(i)
 
 				hash := md5.Sum(buf)
 				mux.Lock()
-				hashMap[idx] = hash[:]
+				hashMap[i] = hash[:]
 				mux.Unlock()
 
 				if _, err := pc.WriteTo(buf, addr); err != nil {
 					t.Log(err.Error())
 					return
 				}
-			}(i)
-		}
+			}
+		}()
 
 		return hashMap, nil
 	}
