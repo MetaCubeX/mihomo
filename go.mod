@@ -13,8 +13,9 @@ require (
 	github.com/lucas-clemente/quic-go v0.27.2
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
-	github.com/sagernet/sing v0.0.0-20220610074707-a30d5506be41
+	github.com/sagernet/sing v0.0.0-20220614034114-7caa1d0c0851
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220610074818-432dcbdb1d7c
+	github.com/sagernet/sing-vmess v0.0.0-20220614042419-6f7c1431421a
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2
 	github.com/tobyxdd/hysteria v1.0.4

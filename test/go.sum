@@ -323,10 +323,12 @@ github.com/prometheus/procfs v0.7.3 h1:4jVXhlkAyzOScmCkXBTOLRLTz8EeU+eyjrwB/EPq0
 github.com/prometheus/procfs v0.7.3/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1xBZuNvfVA=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
-github.com/sagernet/sing v0.0.0-20220609091055-86d0144940e7 h1:Q+uNKLNSKqpx+p96qcBTVFh8RUKiQFr4IrNVi5Q5yl0=
-github.com/sagernet/sing v0.0.0-20220609091055-86d0144940e7/go.mod h1:w2HnJzXKHpD6F5Z/9XlSD4qbcpHY2RSZuQnFzqgELMg=
-github.com/sagernet/sing-shadowsocks v0.0.0-20220609092835-699292971c13 h1:bQN0hjTHdB7SyaD9yjEYAl+bDl/kXW9zC0xNa+LMTrA=
-github.com/sagernet/sing-shadowsocks v0.0.0-20220609092835-699292971c13/go.mod h1:Fp/9+odJhtgDmiHbZClMLnxaVvmDRJxwA7u/+uXWDiQ=
+github.com/sagernet/sing v0.0.0-20220614034114-7caa1d0c0851 h1:Pp+9IPHtlwxrkiKMSrTOPS/eg+qJLdfZoeM89QX40BI=
+github.com/sagernet/sing v0.0.0-20220614034114-7caa1d0c0851/go.mod h1:ZEo7wZBfJmzm8uwnbCtWEHw9GsIfSThSylZYcR+H/Zw=
+github.com/sagernet/sing-shadowsocks v0.0.0-20220610074818-432dcbdb1d7c h1:dapkcUcFbOwqnBwut6Dct7L695PVS6GoEqJeSRMWe0k=
+github.com/sagernet/sing-shadowsocks v0.0.0-20220610074818-432dcbdb1d7c/go.mod h1:ty1OoG/SgB6IccsWUS5DZBkEGKUKM8nRSWxLlqYUPx0=
+github.com/sagernet/sing-vmess v0.0.0-20220614042419-6f7c1431421a h1:vEJtwy2Ysw9ftf+5TALig2ZiRFf1pDnWGxhwRqDs+Cs=
+github.com/sagernet/sing-vmess v0.0.0-20220614042419-6f7c1431421a/go.mod h1:KZxqBTXh1v6q7TnVm36y+oCzPQLQKgv0z/TeBuozb2s=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
 github.com/shurcooL/component v0.0.0-20170202220835-f88ec8f54cc4/go.mod h1:XhFIlyj5a1fBNx5aJTbKoIq0mNaPvOagO+HjB3EtxrY=
 github.com/shurcooL/events v0.0.0-20181021180414-410e4ca65f48/go.mod h1:5u70Mqkb5O5cxEA8nxTsgrgLehJeAw6Oc4Ab1c/P1HM=
