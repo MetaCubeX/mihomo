@@ -254,6 +254,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	rawCfg := &RawConfig{
 		AllowLan:       false,
 		BindAddress:    "*",
+		IPv6:           true,
 		Mode:           T.Rule,
 		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
@@ -281,6 +282,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 		DNS: RawDNS{
 			Enable:       false,
+			IPv6:         false,
 			UseHosts:     true,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "198.18.0.1/16",
