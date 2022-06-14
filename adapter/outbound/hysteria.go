@@ -88,7 +88,15 @@ type HysteriaOption struct {
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 	var up, down uint64
 	up = stringToBps(c.Up)
+	if up == 0 {
+		return 0, 0, fmt.Errorf("invaild upload speed: %s", c.Up)
+	}
+
 	down = stringToBps(c.Down)
+	if up == 0 {
+		return 0, 0, fmt.Errorf("invaild download speed: %s", c.Down)
+	}
+
 	return up, down, nil
 }
 
@@ -160,7 +168,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if len(option.Obfs) > 0 {
 		obfuscator = obfs.NewXPlusObfuscator([]byte(option.Obfs))
 	}
-	up, down, _ := option.Speed()
+
+	up, down, err := option.Speed()
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := core.NewClient(
 		addr, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
 			return hyCongestion.NewBrutalSender(congestion.ByteCount(refBPS))
