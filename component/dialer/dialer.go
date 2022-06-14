@@ -57,6 +57,10 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 		o(cfg)
 	}
 
+	if DisableIPv6 {
+		network = "udp4"
+	}
+
 	lc := &net.ListenConfig{}
 	if cfg.interfaceName != "" {
 		addr, err := bindIfaceToListenConfig(cfg.interfaceName, lc, network, address)
