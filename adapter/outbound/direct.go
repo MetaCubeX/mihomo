@@ -23,7 +23,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 
 	tcpKeepAlive(c)
 
-	if !metadata.DstIP.IsValid() && c.RemoteAddr() != nil {
+	if !metadata.Resolved() && c.RemoteAddr() != nil {
 		if h, _, err := net.SplitHostPort(c.RemoteAddr().String()); err == nil {
 			metadata.DstIP = netip.MustParseAddr(h)
 		}

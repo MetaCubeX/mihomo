@@ -116,7 +116,9 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				wsOpts.TLSConfig.ServerName = host
 			}
 		} else {
-			wsOpts.Headers.Set("Host", convert.RandHost())
+			if wsOpts.Headers.Get("Host") == "" {
+				wsOpts.Headers.Set("Host", convert.RandHost())
+			}
 			convert.SetUserAgent(wsOpts.Headers)
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)

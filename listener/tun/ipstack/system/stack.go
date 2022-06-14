@@ -81,26 +81,23 @@ func New(device device.Device, dnsHijack []C.DNSUrl, tunAddress netip.Prefix, tc
 				continue
 			}
 
-			lAddr := conn.LocalAddr().(*net.TCPAddr)
-			rAddr := conn.RemoteAddr().(*net.TCPAddr)
+			lAddr := conn.LocalAddr().(*net.TCPAddr).AddrPort()
+			rAddr := conn.RemoteAddr().(*net.TCPAddr).AddrPort()
 
-			lAddrPort := netip.AddrPortFrom(nnip.IpToAddr(lAddr.IP), uint16(lAddr.Port))
-			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
-
-			if rAddrPort.Addr().IsLoopback() {
+			if rAddr.Addr().IsLoopback() {
 				_ = conn.Close()
 
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, rAddrPort, "tcp") {
+			if D.ShouldHijackDns(dnsAddr, rAddr, "tcp") {
 				go func() {
-					log.Debugln("[TUN] hijack dns tcp: %s", rAddrPort.String())
+					log.Debugln("[TUN] hijack dns tcp: %s", rAddr.String())
 
 					buf := pool.Get(pool.UDPBufferSize)
 					defer func() {
-						_ = pool.Put(buf)
 						_ = conn.Close()
+						_ = pool.Put(buf)
 					}()
 
 					for {
@@ -137,10 +134,10 @@ func New(device device.Device, dnsHijack []C.DNSUrl, tunAddress netip.Prefix, tc
 			metadata := &C.Metadata{
 				NetWork:  C.TCP,
 				Type:     C.TUN,
-				SrcIP:    lAddrPort.Addr(),
-				DstIP:    rAddrPort.Addr(),
-				SrcPort:  strconv.Itoa(lAddr.Port),
-				DstPort:  strconv.Itoa(rAddr.Port),
+				SrcIP:    lAddr.Addr(),
+				DstIP:    rAddr.Addr(),
+				SrcPort:  strconv.FormatUint(uint64(lAddr.Port()), 10),
+				DstPort:  strconv.FormatUint(uint64(rAddr.Port()), 10),
 				AddrType: C.AtypIPv4,
 				Host:     "",
 			}
@@ -159,56 +156,50 @@ func New(device device.Device, dnsHijack []C.DNSUrl, tunAddress netip.Prefix, tc
 		for !ipStack.closed {
 			buf := pool.Get(pool.UDPBufferSize)
 
-			n, lRAddr, rRAddr, err := stack.UDP().ReadFrom(buf)
+			n, lAddr, rAddr, err := stack.UDP().ReadFrom(buf)
 			if err != nil {
 				_ = pool.Put(buf)
 				break
 			}
 
-			raw := buf[:n]
-			lAddr := lRAddr.(*net.UDPAddr)
-			rAddr := rRAddr.(*net.UDPAddr)
-
-			rAddrPort := netip.AddrPortFrom(nnip.IpToAddr(rAddr.IP), uint16(rAddr.Port))
-
-			if rAddrPort.Addr().IsLoopback() || rAddrPort.Addr() == gateway {
+			if rAddr.Addr().IsLoopback() || rAddr.Addr() == gateway {
 				_ = pool.Put(buf)
 
 				continue
 			}
 
-			if D.ShouldHijackDns(dnsAddr, rAddrPort, "udp") {
+			if D.ShouldHijackDns(dnsAddr, rAddr, "udp") {
 				go func() {
-					msg, err := D.RelayDnsPacket(raw)
-					if err != nil {
+					defer func() {
 						_ = pool.Put(buf)
+					}()
+
+					msg, err := D.RelayDnsPacket(buf[:n])
+					if err != nil {
 						return
 					}
 
 					_, _ = stack.UDP().WriteTo(msg, rAddr, lAddr)
 
-					_ = pool.Put(buf)
-
-					log.Debugln("[TUN] hijack dns udp: %s", rAddrPort.String())
+					log.Debugln("[TUN] hijack dns udp: %s", rAddr.String())
 				}()
 
 				continue
 			}
 
 			pkt := &packet{
-				local: lAddr,
-				data:  raw,
+				local:  lAddr,
+				data:   buf,
+				offset: n,
 				writeBack: func(b []byte, addr net.Addr) (int, error) {
 					return stack.UDP().WriteTo(b, rAddr, lAddr)
-				},
-				drop: func() {
-					_ = pool.Put(buf)
 				},
 			}
 
 			select {
-			case udpIn <- inbound.NewPacket(socks5.ParseAddrToSocksAddr(rAddr), pkt, C.TUN):
+			case udpIn <- inbound.NewPacket(socks5.AddrFromStdAddrPort(rAddr), pkt, C.TUN):
 			default:
+				pkt.Drop()
 			}
 		}
 

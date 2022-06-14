@@ -70,7 +70,6 @@ func withTCPHandler(handle adapter.TCPHandleFunc) option.Option {
 
 			conn := &tcpConn{
 				TCPConn: gonet.NewTCPConn(&wq, ep),
-				id:      id,
 			}
 			handle(conn)
 		})
@@ -113,9 +112,4 @@ func setSocketOptions(s *stack.Stack, ep tcpip.Endpoint) tcpip.Error {
 
 type tcpConn struct {
 	*gonet.TCPConn
-	id stack.TransportEndpointID
-}
-
-func (c *tcpConn) ID() *stack.TransportEndpointID {
-	return &c.id
 }

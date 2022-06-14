@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
@@ -22,7 +21,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 	tab := newTable()
 	udp := &UDP{
 		device: device,
-		buf:    [pool.UDPBufferSize]byte{},
+		buf:    [0xffff]byte{},
 	}
 	tcp := &TCP{
 		listener: listener,
@@ -38,7 +37,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 			_ = udp.Close()
 		}()
 
-		buf := make([]byte, pool.RelayBufferSize)
+		buf := make([]byte, 0xffff)
 
 		for {
 			n, err := device.Read(buf)
@@ -152,7 +151,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 					continue
 				}
 
-				udp.handleUDPPacket(ip, u)
+				go udp.handleUDPPacket(ip, u)
 			case tcpip.ICMP:
 				i := tcpip.ICMPPacket(ip.Payload())
 

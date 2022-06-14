@@ -2,8 +2,11 @@ package nat
 
 import (
 	"net/netip"
+	"sync"
 
 	"github.com/Dreamacro/clash/common/generics/list"
+
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -27,6 +30,7 @@ type table struct {
 	tuples    map[tuple]*list.Element[*binding]
 	ports     [portLength]*list.Element[*binding]
 	available *list.List[*binding]
+	mux       sync.Mutex
 }
 
 func (t *table) tupleOf(port uint16) tuple {
@@ -43,10 +47,13 @@ func (t *table) tupleOf(port uint16) tuple {
 }
 
 func (t *table) portOf(tuple tuple) uint16 {
+	t.mux.Lock()
 	elm := t.tuples[tuple]
 	if elm == nil {
+		t.mux.Unlock()
 		return 0
 	}
+	t.mux.Unlock()
 
 	t.available.MoveToFront(elm)
 
@@ -54,16 +61,38 @@ func (t *table) portOf(tuple tuple) uint16 {
 }
 
 func (t *table) newConn(tuple tuple) uint16 {
-	elm := t.available.Back()
+	t.mux.Lock()
+	elm := t.availableConn()
 	b := elm.Value
-
-	delete(t.tuples, b.tuple)
 	t.tuples[tuple] = elm
 	b.tuple = tuple
+	t.mux.Unlock()
 
 	t.available.MoveToFront(elm)
 
 	return portBegin + b.offset
+}
+
+func (t *table) availableConn() *list.Element[*binding] {
+	elm := t.available.Back()
+	offset := elm.Value.offset
+	_, ok := t.tuples[t.ports[offset].Value.tuple]
+	if !ok {
+		if offset != 0 && offset%portLength == 0 { // resize
+			tuples := make(map[tuple]*list.Element[*binding], portLength)
+			maps.Copy(tuples, t.tuples)
+			t.tuples = tuples
+		}
+		return elm
+	}
+	t.available.MoveToFront(elm)
+	return t.availableConn()
+}
+
+func (t *table) closeConn(tuple tuple) {
+	t.mux.Lock()
+	delete(t.tuples, tuple)
+	t.mux.Unlock()
 }
 
 func newTable() *table {

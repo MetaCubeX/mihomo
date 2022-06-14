@@ -7,8 +7,6 @@ import (
 	"net/netip"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
 )
 
@@ -16,8 +14,8 @@ type call struct {
 	cond        *sync.Cond
 	buf         []byte
 	n           int
-	source      net.Addr
-	destination net.Addr
+	source      netip.AddrPort
+	destination netip.AddrPort
 }
 
 type UDP struct {
@@ -26,10 +24,10 @@ type UDP struct {
 	queueLock sync.Mutex
 	queue     []*call
 	bufLock   sync.Mutex
-	buf       [pool.UDPBufferSize]byte
+	buf       [0xffff]byte
 }
 
-func (u *UDP) ReadFrom(buf []byte) (int, net.Addr, net.Addr, error) {
+func (u *UDP) ReadFrom(buf []byte) (int, netip.AddrPort, netip.AddrPort, error) {
 	u.queueLock.Lock()
 	defer u.queueLock.Unlock()
 
@@ -38,8 +36,8 @@ func (u *UDP) ReadFrom(buf []byte) (int, net.Addr, net.Addr, error) {
 			cond:        sync.NewCond(&u.queueLock),
 			buf:         buf,
 			n:           -1,
-			source:      nil,
-			destination: nil,
+			source:      netip.AddrPort{},
+			destination: netip.AddrPort{},
 		}
 
 		u.queue = append(u.queue, c)
@@ -51,10 +49,10 @@ func (u *UDP) ReadFrom(buf []byte) (int, net.Addr, net.Addr, error) {
 		}
 	}
 
-	return -1, nil, nil, net.ErrClosed
+	return -1, netip.AddrPort{}, netip.AddrPort{}, net.ErrClosed
 }
 
-func (u *UDP) WriteTo(buf []byte, local net.Addr, remote net.Addr) (int, error) {
+func (u *UDP) WriteTo(buf []byte, local netip.AddrPort, remote netip.AddrPort) (int, error) {
 	if u.closed {
 		return 0, net.ErrClosed
 	}
@@ -66,16 +64,7 @@ func (u *UDP) WriteTo(buf []byte, local net.Addr, remote net.Addr) (int, error) 
 		return 0, net.InvalidAddrError("invalid ip version")
 	}
 
-	srcAddr, srcOk := local.(*net.UDPAddr)
-	dstAddr, dstOk := remote.(*net.UDPAddr)
-	if !srcOk || !dstOk {
-		return 0, net.InvalidAddrError("invalid addr")
-	}
-
-	srcAddrPort := netip.AddrPortFrom(nnip.IpToAddr(srcAddr.IP), uint16(srcAddr.Port))
-	dstAddrPort := netip.AddrPortFrom(nnip.IpToAddr(dstAddr.IP), uint16(dstAddr.Port))
-
-	if !srcAddrPort.Addr().Is4() || !dstAddrPort.Addr().Is4() {
+	if !local.Addr().Is4() || !remote.Addr().Is4() {
 		return 0, net.InvalidAddrError("invalid ip version")
 	}
 
@@ -89,13 +78,13 @@ func (u *UDP) WriteTo(buf []byte, local net.Addr, remote net.Addr) (int, error) 
 	ip.SetFragmentOffset(0)
 	ip.SetTimeToLive(64)
 	ip.SetProtocol(tcpip.UDP)
-	ip.SetSourceIP(srcAddrPort.Addr())
-	ip.SetDestinationIP(dstAddrPort.Addr())
+	ip.SetSourceIP(local.Addr())
+	ip.SetDestinationIP(remote.Addr())
 
 	udp := tcpip.UDPPacket(ip.Payload())
 	udp.SetLength(tcpip.UDPHeaderSize + uint16(len(buf)))
-	udp.SetSourcePort(srcAddrPort.Port())
-	udp.SetDestinationPort(dstAddrPort.Port())
+	udp.SetSourcePort(local.Port())
+	udp.SetDestinationPort(remote.Port())
 	copy(udp.Payload(), buf)
 
 	ip.ResetChecksum()
@@ -131,14 +120,8 @@ func (u *UDP) handleUDPPacket(ip tcpip.IP, pkt tcpip.UDPPacket) {
 	u.queueLock.Unlock()
 
 	if c != nil {
-		c.source = &net.UDPAddr{
-			IP:   ip.SourceIP().AsSlice(),
-			Port: int(pkt.SourcePort()),
-		}
-		c.destination = &net.UDPAddr{
-			IP:   ip.DestinationIP().AsSlice(),
-			Port: int(pkt.DestinationPort()),
-		}
+		c.source = netip.AddrPortFrom(ip.SourceIP(), pkt.SourcePort())
+		c.destination = netip.AddrPortFrom(ip.DestinationIP(), pkt.DestinationPort())
 		c.n = copy(c.buf, pkt.Payload())
 		c.cond.Signal()
 	}

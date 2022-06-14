@@ -24,6 +24,7 @@ func (m *Mitm) DialContext(_ context.Context, metadata *C.Metadata, _ ...dialer.
 
 	_ = c.SetKeepAlive(true)
 	_ = c.SetKeepAlivePeriod(60 * time.Second)
+	_ = c.SetLinger(0)
 
 	metadata.Type = C.MITM
 

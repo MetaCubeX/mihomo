@@ -29,7 +29,6 @@ func withUDPHandler(handle adapter.UDPHandleFunc) option.Option {
 
 			conn := &udpConn{
 				UDPConn: gonet.NewUDPConn(s, &wq, ep),
-				id:      id,
 			}
 			handle(conn)
 		})
@@ -40,21 +39,17 @@ func withUDPHandler(handle adapter.UDPHandleFunc) option.Option {
 
 type udpConn struct {
 	*gonet.UDPConn
-	id stack.TransportEndpointID
-}
-
-func (c *udpConn) ID() *stack.TransportEndpointID {
-	return &c.id
 }
 
 type packet struct {
 	pc      adapter.UDPConn
 	rAddr   net.Addr
 	payload []byte
+	offset  int
 }
 
 func (c *packet) Data() []byte {
-	return c.payload
+	return c.payload[:c.offset]
 }
 
 // WriteBack write UDP packet with source(ip, port) = `addr`

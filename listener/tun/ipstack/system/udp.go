@@ -1,16 +1,21 @@
 package system
 
-import "net"
+import (
+	"net"
+	"net/netip"
+
+	"github.com/Dreamacro/clash/common/pool"
+)
 
 type packet struct {
-	local     *net.UDPAddr
+	local     netip.AddrPort
 	data      []byte
+	offset    int
 	writeBack func(b []byte, addr net.Addr) (int, error)
-	drop      func()
 }
 
 func (pkt *packet) Data() []byte {
-	return pkt.data
+	return pkt.data[:pkt.offset]
 }
 
 func (pkt *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
@@ -18,9 +23,9 @@ func (pkt *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 }
 
 func (pkt *packet) Drop() {
-	pkt.drop()
+	_ = pool.Put(pkt.data)
 }
 
 func (pkt *packet) LocalAddr() net.Addr {
-	return pkt.local
+	return net.UDPAddrFromAddrPort(pkt.local)
 }

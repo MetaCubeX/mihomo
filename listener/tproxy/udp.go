@@ -61,7 +61,7 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 			buf := pool.Get(pool.UDPBufferSize)
 			n, oobn, _, lAddr, err := c.ReadMsgUDPAddrPort(buf, oob)
 			if err != nil {
-				pool.Put(buf)
+				_ = pool.Put(buf)
 				if rl.closed {
 					break
 				}

@@ -16,6 +16,8 @@ type conn struct {
 	net.Conn
 
 	tuple tuple
+
+	close func()
 }
 
 func (t *TCP) Accept() (net.Conn, error) {
@@ -24,9 +26,9 @@ func (t *TCP) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
-	addr := c.RemoteAddr().(*net.TCPAddr)
-	tup := t.table.tupleOf(uint16(addr.Port))
-	if !addr.IP.Equal(t.portal.AsSlice()) || tup == zeroTuple {
+	addr := c.RemoteAddr().(*net.TCPAddr).AddrPort()
+	tup := t.table.tupleOf(addr.Port())
+	if addr.Addr() != t.portal || tup == zeroTuple {
 		_ = c.Close()
 
 		return nil, net.InvalidAddrError("unknown remote addr")
@@ -34,9 +36,14 @@ func (t *TCP) Accept() (net.Conn, error) {
 
 	addition(c)
 
+	_ = c.SetLinger(0)
+
 	return &conn{
 		Conn:  c,
 		tuple: tup,
+		close: func() {
+			t.table.closeConn(tup)
+		},
 	}, nil
 }
 
@@ -52,16 +59,15 @@ func (t *TCP) SetDeadline(time time.Time) error {
 	return t.listener.SetDeadline(time)
 }
 
+func (c *conn) Close() error {
+	c.close()
+	return c.Conn.Close()
+}
+
 func (c *conn) LocalAddr() net.Addr {
-	return &net.TCPAddr{
-		IP:   c.tuple.SourceAddr.Addr().AsSlice(),
-		Port: int(c.tuple.SourceAddr.Port()),
-	}
+	return net.TCPAddrFromAddrPort(c.tuple.SourceAddr)
 }
 
 func (c *conn) RemoteAddr() net.Addr {
-	return &net.TCPAddr{
-		IP:   c.tuple.DestinationAddr.Addr().AsSlice(),
-		Port: int(c.tuple.DestinationAddr.Port()),
-	}
+	return net.TCPAddrFromAddrPort(c.tuple.DestinationAddr)
 }

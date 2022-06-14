@@ -32,7 +32,7 @@ func (l *Listener) Close() error {
 
 func (l *Listener) handleTProxy(conn net.Conn, in chan<- C.ConnContext) {
 	target := socks5.ParseAddrToSocksAddr(conn.LocalAddr())
-	conn.(*net.TCPConn).SetKeepAlive(true)
+	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	in <- inbound.NewSocket(target, conn, C.TPROXY)
 }
 
