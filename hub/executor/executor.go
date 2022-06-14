@@ -2,7 +2,6 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
@@ -127,7 +126,9 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateExperimental(c *config.Config) {}
+func updateExperimental(c *config.Config) {
+	runtime.GC()
+}
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
@@ -274,7 +275,6 @@ func updateSniffer(sniffer *config.Sniffer) {
 
 func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
-	process.EnableFindProcess(general.EnableProcess)
 	tunnel.SetMode(general.Mode)
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {

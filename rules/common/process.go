@@ -21,6 +21,7 @@ func (ps *Process) Match(metadata *C.Metadata) bool {
 	if ps.nameOnly {
 		return strings.EqualFold(metadata.Process, ps.process)
 	}
+
 	return strings.EqualFold(metadata.ProcessPath, ps.process)
 }
 
@@ -30,6 +31,10 @@ func (ps *Process) Adapter() string {
 
 func (ps *Process) Payload() string {
 	return ps.process
+}
+
+func (ps *Process) ShouldFindProcess() bool {
+	return true
 }
 
 func NewProcess(process string, adapter string, nameOnly bool) (*Process, error) {

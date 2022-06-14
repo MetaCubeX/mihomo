@@ -180,27 +180,6 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		}
 	}
 
-	// pre resolve process name
-	srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
-	if err == nil && P.ShouldFindProcess(metadata) {
-		uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
-		if err != nil {
-			if failTotal < 20 {
-				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
-				failTotal++
-			}
-		} else {
-			metadata.Process = filepath.Base(path)
-			metadata.ProcessPath = path
-			if uid != -1 {
-				metadata.Uid = &uid
-			}
-			if procesCache != metadata.Process {
-				log.Debugln("[Process] %s from process %s", metadata.String(), path)
-			}
-			procesCache = metadata.Process
-		}
-	}
 	return nil
 }
 
@@ -386,6 +365,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		resolved = true
 	}
 
+	var processUid int32
+	process := ""
+	processPath := ""
+	foundProcess := false
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			ip, err := resolver.ResolveIP(metadata.Host)
@@ -396,6 +379,27 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				metadata.DstIP = ip
 			}
 			resolved = true
+		}
+
+		if !foundProcess && rule.ShouldFindProcess() {
+			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
+			if err == nil && P.ShouldFindProcess(metadata) {
+				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
+				if err != nil {
+					log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+				} else {
+					process = filepath.Base(path)
+					processPath = path
+					processUid = uid
+					foundProcess = true
+				}
+			}
+		}
+
+		if foundProcess {
+			metadata.Uid = &processUid
+			metadata.Process = process
+			metadata.ProcessPath = processPath
 		}
 
 		if rule.Match(metadata) {
