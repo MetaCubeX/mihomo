@@ -66,8 +66,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["alpn"] = query.Get("alpn")
 			hysteria["auth_str"] = query.Get("auth")
 			hysteria["protocol"] = query.Get("protocol")
-			hysteria["down_mbps"], _ = strconv.Atoi(query.Get("downmbps"))
-			hysteria["up_mbps"], _ = strconv.Atoi(query.Get("upmbps"))
+			up := query.Get("up")
+			down := query.Get("down")
+			if up == "" {
+				up = query.Get("upmbps")
+			}
+			if down == "" {
+				down = query.Get("downmbps")
+			}
+			hysteria["down"] = down
+			hysteria["up"] = up
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
 			proxies = append(proxies, hysteria)
