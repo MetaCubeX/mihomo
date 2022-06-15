@@ -70,30 +70,32 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			Headers:             http.Header{},
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {
-			header := http.Header{}
 			for key, value := range v.option.WSOpts.Headers {
-				header.Add(key, value)
+				wsOpts.Headers.Add(key, value)
 			}
-			wsOpts.Headers = header
 		}
-
-		wsOpts.TLS = true
-		wsOpts.TLSConfig = &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			ServerName:         host,
-			InsecureSkipVerify: v.option.SkipCertVerify,
-			NextProtos:         []string{"http/1.1"},
-		}
-		if v.option.ServerName != "" {
-			wsOpts.TLSConfig.ServerName = v.option.ServerName
-		} else if host := wsOpts.Headers.Get("Host"); host != "" {
-			wsOpts.TLSConfig.ServerName = host
+		if v.option.TLS {
+			wsOpts.TLS = true
+			wsOpts.TLSConfig = &tls.Config{
+				MinVersion:         tls.VersionTLS12,
+				ServerName:         host,
+				InsecureSkipVerify: v.option.SkipCertVerify,
+				NextProtos:         []string{"http/1.1"},
+			}
+			if v.option.ServerName != "" {
+				wsOpts.TLSConfig.ServerName = v.option.ServerName
+			} else if host := wsOpts.Headers.Get("Host"); host != "" {
+				wsOpts.TLSConfig.ServerName = host
+			}
 		} else {
-			wsOpts.Headers.Set("Host", convert.RandHost())
-			convert.SetUserAgent(wsOpts.Headers)
+			if host := wsOpts.Headers.Get("Host"); host == "" {
+				wsOpts.Headers.Set("Host", convert.RandHost())
+				convert.SetUserAgent(wsOpts.Headers)
+			}
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
