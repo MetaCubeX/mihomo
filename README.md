@@ -251,8 +251,8 @@ User=clash-meta
 Group=clash-meta
 LimitNPROC=500
 LimitNOFILE=1000000
-CapabilityBoundingSet=cap_net_admin
-AmbientCapabilities=cap_net_admin
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
 Restart=always
 ExecStartPre=/usr/bin/sleep 1s
 ExecStart=/usr/local/bin/Clash-Meta -d /etc/Clash-Meta
@@ -274,7 +274,7 @@ $ systemctl start Clash-Meta
 
 Clash add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
 
-To display process name in GUI please use [Dashboard For Meta](https://github.com/Clash-Mini/Dashboard).
+To display process name in GUI please use [Dashboard For Meta](https://github.com/MetaCubeX/clash-dashboard).
 
 ![img.png](https://github.com/Clash-Mini/Dashboard/raw/master/View/Dashboard-Process.png)
 
