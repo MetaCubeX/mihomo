@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
+	"github.com/Dreamacro/clash/log"
 )
 
 func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *UDP, error) {
@@ -132,7 +133,11 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 							continue
 						}
 
-						port = tab.newConn(tup)
+						port, err = tab.newConn(tup)
+						if err != nil {
+							log.Warnln("[STACK] drop tcp packet by system stack: %v", err)
+							continue
+						}
 					}
 
 					ip.SetSourceIP(portal)

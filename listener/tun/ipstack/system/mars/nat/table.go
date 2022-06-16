@@ -1,6 +1,7 @@
 package nat
 
 import (
+	"fmt"
 	"net/netip"
 	"sync"
 
@@ -31,6 +32,7 @@ type table struct {
 	ports     [portLength]*list.Element[*binding]
 	available *list.List[*binding]
 	mux       sync.Mutex
+	count     uint16
 }
 
 func (t *table) tupleOf(port uint16) tuple {
@@ -60,38 +62,50 @@ func (t *table) portOf(tuple tuple) uint16 {
 	return portBegin + elm.Value.offset
 }
 
-func (t *table) newConn(tuple tuple) uint16 {
+func (t *table) newConn(tuple tuple) (uint16, error) {
 	t.mux.Lock()
-	elm := t.availableConn()
-	b := elm.Value
+	elm, err := t.availableConn()
+	if err != nil {
+		t.mux.Unlock()
+		return 0, err
+	}
+
+	elm.Value.tuple = tuple
 	t.tuples[tuple] = elm
-	b.tuple = tuple
 	t.mux.Unlock()
 
-	t.available.MoveToFront(elm)
-
-	return portBegin + b.offset
+	return portBegin + elm.Value.offset, nil
 }
 
-func (t *table) availableConn() *list.Element[*binding] {
-	elm := t.available.Back()
-	offset := elm.Value.offset
-	_, ok := t.tuples[t.ports[offset].Value.tuple]
-	if !ok {
-		if offset != 0 && offset%portLength == 0 { // resize
+func (t *table) availableConn() (*list.Element[*binding], error) {
+	var elm *list.Element[*binding]
+
+	for i := 0; i < portLength; i++ {
+		elm = t.available.Back()
+		t.available.MoveToFront(elm)
+
+		offset := elm.Value.offset
+		tup := t.ports[offset].Value.tuple
+		if t.tuples[tup] != nil && tup.SourceAddr.IsValid() {
+			continue
+		}
+
+		if t.count == portLength { // resize
 			tuples := make(map[tuple]*list.Element[*binding], portLength)
 			maps.Copy(tuples, t.tuples)
 			t.tuples = tuples
+			t.count = 1
 		}
-		return elm
+		return elm, nil
 	}
-	t.available.MoveToFront(elm)
-	return t.availableConn()
+
+	return nil, fmt.Errorf("too many open files, limits [%d, %d]", portLength, len(t.tuples))
 }
 
 func (t *table) closeConn(tuple tuple) {
 	t.mux.Lock()
 	delete(t.tuples, tuple)
+	t.count++
 	t.mux.Unlock()
 }
 
@@ -100,6 +114,7 @@ func newTable() *table {
 		tuples:    make(map[tuple]*list.Element[*binding], portLength),
 		ports:     [portLength]*list.Element[*binding]{},
 		available: list.New[*binding](),
+		count:     1,
 	}
 
 	for idx := range result.ports {
