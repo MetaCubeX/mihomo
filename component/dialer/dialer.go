@@ -43,6 +43,10 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
+	if DefaultSocketHook != nil {
+		return listenPacketHooked(ctx, network, address)
+	}
+
 	cfg := &option{
 		interfaceName: DefaultInterface.Load(),
 		routingMark:   int(DefaultRoutingMark.Load()),
@@ -97,6 +101,9 @@ func GetDial() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
+	if DefaultSocketHook != nil {
+		return dialContextHooked(ctx, network, destination, port)
+	}
 	dialer := &net.Dialer{}
 	if opt.interfaceName != "" {
 		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {

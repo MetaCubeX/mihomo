@@ -6,8 +6,8 @@ import (
 	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
-	"runtime"
 	"sync"
+	"runtime"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
@@ -26,7 +26,6 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
-	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -85,8 +84,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
-	updateIPTables(cfg)
-	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 
 	// DON'T Delete
@@ -122,7 +119,6 @@ func GetGeneral() *config.General {
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
-		Tun:           P.GetTunConf(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
 		TCPConcurrent: dialer.GetDial(),
@@ -148,7 +144,6 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		resolver.DisableIPv6 = !generalIPv6
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
-		resolver.DefaultLocalServer = nil
 		dns.ReCreateServer("", nil, nil)
 		return
 	} else {
@@ -186,7 +181,6 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
-	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
 
 	if pr.HasProxyServer() {
 		resolver.ProxyServerHostResolver = pr
@@ -246,11 +240,11 @@ func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
 	wg.Wait()
 }
 
-func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
+func loadProxyProvider(Providers map[string]provider.ProxyProvider) {
 	// limit concurrent size
 	wg := sync.WaitGroup{}
 	ch := make(chan struct{}, concurrentCount)
-	for _, proxyProvider := range proxyProviders {
+	for _, proxyProvider := range Providers {
 		proxyProvider := proxyProvider
 		wg.Add(1)
 		ch <- struct{}{}
@@ -261,10 +255,6 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 	}
 
 	wg.Wait()
-}
-
-func updateTun(tun *config.Tun) {
-	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -335,8 +325,6 @@ func updateGeneral(general *config.General, force bool) {
 
 	P.ReCreateHTTP(general.Port, tcpIn)
 	P.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
-	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 }
 
@@ -383,69 +371,7 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 }
 
-func updateIPTables(cfg *config.Config) {
-	tproxy.CleanupTProxyIPTables()
-
-	iptables := cfg.IPTables
-	if runtime.GOOS != "linux" || !iptables.Enable {
-		return
-	}
-
-	var err error
-	defer func() {
-		if err != nil {
-			log.Errorln("[IPTABLES] setting iptables failed: %s", err.Error())
-			os.Exit(2)
-		}
-	}()
-
-	if cfg.Tun.Enable {
-		err = fmt.Errorf("when tun is enabled, iptables cannot be set automatically")
-		return
-	}
-
-	var (
-		inboundInterface = "lo"
-		bypass           = iptables.Bypass
-		tProxyPort       = cfg.General.TProxyPort
-		dnsCfg           = cfg.DNS
-	)
-
-	if tProxyPort == 0 {
-		err = fmt.Errorf("tproxy-port must be greater than zero")
-		return
-	}
-
-	if !dnsCfg.Enable {
-		err = fmt.Errorf("DNS server must be enable")
-		return
-	}
-
-	dnsPort, err := netip.ParseAddrPort(dnsCfg.Listen)
-	if err != nil {
-		err = fmt.Errorf("DNS server must be correct")
-		return
-	}
-
-	if iptables.InboundInterface != "" {
-		inboundInterface = iptables.InboundInterface
-	}
-
-	if dialer.DefaultRoutingMark.Load() == 0 {
-		dialer.DefaultRoutingMark.Store(2158)
-	}
-
-	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), dnsPort.Port())
-	if err != nil {
-		return
-	}
-
-	log.Infoln("[IPTABLES] Setting iptables completed")
-}
-
 func Shutdown() {
-	P.Cleanup(false)
-	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 
 	log.Warnln("Clash shutting down")

@@ -46,6 +46,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
-
-	return NewRuleSetProvider(name, behavior, time.Duration(uint(schema.Interval))*time.Second, vehicle, parse), nil
+	
+	interval := time.Duration(uint(schema.Interval)) * time.Second
+	return NewRuleSetProvider(name, behavior, interval, vehicle, parse), nil
 }

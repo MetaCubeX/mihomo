@@ -61,6 +61,10 @@ func (is *IPSuffix) ShouldResolveIP() bool {
 	return !is.noResolveIP
 }
 
+func (is *IPSuffix) ShouldFindProcess() bool {
+	return false
+}
+
 func NewIPSuffix(payload, adapter string, isSrc, noResolveIP bool) (*IPSuffix, error) {
 	ipnet, err := netip.ParsePrefix(payload)
 	if err != nil {

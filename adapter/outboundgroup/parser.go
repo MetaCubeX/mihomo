@@ -3,7 +3,7 @@ package outboundgroup
 import (
 	"errors"
 	"fmt"
-
+	"github.com/dlclark/regexp2"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/structure"
@@ -38,8 +38,21 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	groupOption := &GroupCommonOption{
 		Lazy: true,
 	}
+	
+	var (
+		filterRegx *regexp2.Regexp
+		err        error
+	)
+
 	if err := decoder.Decode(config, groupOption); err != nil {
 		return nil, errFormat
+	}
+	
+	if groupOption.Filter != "" {
+		filterRegx, err = regexp2.Compile(groupOption.Filter, 0)
+		if err != nil {
+			return nil, fmt.Errorf("invalid filter regex: %w", err)
+		}
 	}
 
 	if groupOption.Type == "" || groupOption.Name == "" {
@@ -95,7 +108,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 
 	if len(groupOption.Use) != 0 {
-		list, err := getProviders(providersMap, groupOption.Use)
+		list, err := getProviders(providersMap, groupOption, filterRegx)
 		if err != nil {
 			return nil, err
 		}
@@ -137,8 +150,13 @@ func getProxies(mapping map[string]C.Proxy, list []string) ([]C.Proxy, error) {
 	return ps, nil
 }
 
-func getProviders(mapping map[string]types.ProxyProvider, list []string) ([]types.ProxyProvider, error) {
-	var ps []types.ProxyProvider
+func getProviders(mapping map[string]types.ProxyProvider, groupOption *GroupCommonOption, filterRegx *regexp2.Regexp) ([]types.ProxyProvider, error) {
+	var (
+		ps        []types.ProxyProvider
+		list      = groupOption.Use
+		groupName = groupOption.Name
+	)
+	
 	for _, name := range list {
 		p, ok := mapping[name]
 		if !ok {
@@ -148,6 +166,27 @@ func getProviders(mapping map[string]types.ProxyProvider, list []string) ([]type
 		if p.VehicleType() == types.Compatible {
 			return nil, fmt.Errorf("proxy group %s can't contains in `use`", name)
 		}
+		
+		if filterRegx != nil {
+			var hc *provider.HealthCheck
+			if groupOption.Type == "select" || groupOption.Type == "relay" {
+				hc = provider.NewHealthCheck([]C.Proxy{}, "", 0, true)
+			} else {
+				if groupOption.URL == "" || groupOption.Interval == 0 {
+					return nil, errMissHealthCheck
+				}
+				hc = provider.NewHealthCheck([]C.Proxy{}, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy)
+			}
+
+			if _, ok = mapping[groupName]; ok {
+				groupName += "->" + p.Name()
+			}
+
+			pd := p.(*provider.ProxySetProvider)
+			p = provider.NewProxyFilterProvider(groupName, pd, hc, filterRegx)
+			pd.RegisterProvidersInUse(p)
+		}
+
 		ps = append(ps, p)
 	}
 	return ps, nil

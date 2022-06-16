@@ -48,6 +48,10 @@ func (gs *GEOSITE) GetRecodeSize() int {
 	return gs.recodeSize
 }
 
+func (gs *GEOSITE) ShouldFindProcess() bool {
+	return false
+}
+
 func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 	if !initFlag {
 		if err := geodata.InitGeoSite(); err != nil {

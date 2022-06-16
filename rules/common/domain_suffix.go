@@ -34,6 +34,10 @@ func (ds *DomainSuffix) Payload() string {
 	return ds.rawSuffix
 }
 
+func (ds *DomainSuffix) ShouldFindProcess() bool {
+	return false
+}
+
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
 	actualDomainKeyword, _ := idna.ToASCII(suffix)
 	return &DomainSuffix{

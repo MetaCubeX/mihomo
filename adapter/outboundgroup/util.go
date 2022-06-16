@@ -2,11 +2,9 @@ package outboundgroup
 
 import (
 	"fmt"
+	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"net/netip"
-	"time"
-
-	C "github.com/Dreamacro/clash/constant"
 )
 
 func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
@@ -46,10 +44,10 @@ func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
 }
 
 func tcpKeepAlive(c net.Conn) {
-	if tcp, ok := c.(*net.TCPConn); ok {
-		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
-	}
+	//if tcp, ok := c.(*net.TCPConn); ok {
+	//	_ = tcp.SetKeepAlive(true)
+	//	_ = tcp.SetKeepAlivePeriod(30 * time.Second)
+	//}
 }
 
 type SelectAble interface {

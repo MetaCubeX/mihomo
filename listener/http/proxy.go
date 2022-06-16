@@ -16,7 +16,7 @@ import (
 )
 
 func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
-	client := newClient(c.RemoteAddr(), in)
+	client := newClient(c.RemoteAddr(), c.LocalAddr(), in)
 	defer client.CloseIdleConnections()
 
 	conn := N.NewBufferedConn(c)
@@ -62,7 +62,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
-				if resp = handleUpgrade(conn, conn.RemoteAddr(), request, in); resp == nil {
+				if resp = handleUpgrade(conn, conn.RemoteAddr(), conn.LocalAddr(), request, in); resp == nil {
 					return // hijack connection
 				}
 			}

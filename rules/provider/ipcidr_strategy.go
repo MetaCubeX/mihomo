@@ -24,6 +24,10 @@ func (i *ipcidrStrategy) ShouldResolveIP() bool {
 	return i.shouldResolveIP
 }
 
+func (i *ipcidrStrategy) ShouldFindProcess() bool {
+	return false
+}
+
 func (i *ipcidrStrategy) OnUpdate(rules []string) {
 	ipCidrTrie := trie.NewIpCidrTrie()
 	count := 0

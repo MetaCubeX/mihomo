@@ -11,7 +11,9 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
+func handleUDPToRemote(packet C.UDPPacket, pc net.PacketConn, metadata *C.Metadata) error {
+	pc = unwrapPacket(pc)
+
 	defer packet.Drop()
 
 	// local resolve UDP dns
@@ -38,6 +40,8 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 }
 
 func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr net.Addr) {
+	pc = unwrapPacket(pc)
+
 	buf := pool.Get(pool.UDPBufferSize)
 	defer pool.Put(buf)
 	defer natTable.Delete(key)
@@ -62,5 +66,12 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, fAddr n
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
-	N.Relay(ctx.Conn(), outbound)
+	left := unwrap(ctx.Conn())
+	right := unwrap(outbound)
+
+	if relayHijack(left, right) {
+		return
+	}
+
+	N.Relay(left, right)
 }

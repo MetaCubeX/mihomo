@@ -51,6 +51,10 @@ func (p *Port) matchPortReal(portRef string) bool {
 	return false
 }
 
+func (p *Port) ShouldFindProcess() bool {
+	return false
+}
+
 func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 	ports := strings.Split(port, "/")
 	if len(ports) > 28 {

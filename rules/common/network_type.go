@@ -47,3 +47,7 @@ func (n *NetworkType) Adapter() string {
 func (n *NetworkType) Payload() string {
 	return n.network.String()
 }
+
+func (n *NetworkType) ShouldFindProcess() bool {
+	return false
+}

@@ -24,6 +24,10 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 	return false
 }
 
+func (d *domainStrategy) ShouldFindProcess() bool {
+	return false
+}
+
 func (d *domainStrategy) OnUpdate(rules []string) {
 	domainTrie := trie.New[bool]()
 	count := 0

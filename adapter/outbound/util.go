@@ -3,15 +3,13 @@ package outbound
 import (
 	"bytes"
 	"crypto/tls"
+	"github.com/Dreamacro/clash/component/resolver"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/socks5"
 	xtls "github.com/xtls/go"
 	"net"
 	"strconv"
 	"sync"
-	"time"
-
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 var (
@@ -21,10 +19,10 @@ var (
 )
 
 func tcpKeepAlive(c net.Conn) {
-	if tcp, ok := c.(*net.TCPConn); ok {
-		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
-	}
+	//if tcp, ok := c.(*net.TCPConn); ok {
+	//	_ = tcp.SetKeepAlive(true)
+	//	_ = tcp.SetKeepAlivePeriod(30 * time.Second)
+	//}
 }
 
 func getClientSessionCache() tls.ClientSessionCache {

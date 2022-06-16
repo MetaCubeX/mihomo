@@ -70,6 +70,10 @@ func (g *GEOIP) GetRecodeSize() int {
 	return g.recodeSize
 }
 
+func (g *GEOIP) ShouldFindProcess() bool {
+	return false
+}
+
 func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) {
 	if !C.GeodataMode {
 		geoip := &GEOIP{

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"github.com/Dreamacro/clash/common/convert"
 )
 
 var initFlag bool
@@ -35,7 +36,7 @@ func InitGeoSite() error {
 }
 
 func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get(C.GeoSiteUrl)
+	resp, err := getUrl("https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat")
 	if err != nil {
 		return
 	}
@@ -49,4 +50,15 @@ func downloadGeoSite(path string) (err error) {
 	_, err = io.Copy(f, resp.Body)
 
 	return err
+}
+
+func getUrl(url string) (resp *http.Response, err error) {
+	var req *http.Request
+	req, err = http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+	convert.SetUserAgent(req.Header)
+	resp, err = http.DefaultClient.Do(req)
+	return
 }

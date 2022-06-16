@@ -76,3 +76,7 @@ func NewClassicalStrategy(parse func(tp, payload, target string, params []string
 		}
 	}}
 }
+
+func (c *classicalStrategy) ShouldFindProcess() bool {
+	return false
+}
