@@ -7,6 +7,7 @@ import (
 	"crypto/rc4"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -107,6 +108,11 @@ func (a *authChainA) Decode(dst, src *bytes.Buffer) error {
 		randDataLength := a.randDataLength(dataLength, a.lastServerHash, &a.randomServer)
 		length := dataLength + randDataLength
 
+		// Temporary workaround for https://github.com/Dreamacro/clash/issues/1352
+		if dataLength < 0 || randDataLength < 0 || length < 0 {
+			return errors.New("ssr crashing blocked")
+		}
+
 		if length >= 4096 {
 			a.rawTrans = true
 			src.Reset()
@@ -129,6 +135,12 @@ func (a *authChainA) Decode(dst, src *bytes.Buffer) error {
 		if dataLength > 0 && randDataLength > 0 {
 			pos += getRandStartPos(randDataLength, &a.randomServer)
 		}
+
+		// Temporary workaround for https://github.com/Dreamacro/clash/issues/1352
+		if pos < 0 || pos+dataLength < 0 || dataLength < 0 {
+			return errors.New("ssr crashing blocked")
+		}
+
 		wantedData := src.Bytes()[pos : pos+dataLength]
 		a.decrypter.XORKeyStream(wantedData, wantedData)
 		if a.recvID == 1 {

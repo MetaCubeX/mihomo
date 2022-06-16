@@ -1,8 +1,6 @@
 package socks
 
 import (
-	"context"
-	"github.com/database64128/tfo-go"
 	"io"
 	"net"
 
@@ -36,11 +34,8 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, error) {
-	lc := tfo.ListenConfig{
-		DisableTFO: !inboundTfo,
-	}
-	l, err := lc.Listen(context.Background(), "tcp", addr)
+func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}

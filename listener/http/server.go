@@ -1,8 +1,6 @@
 package http
 
 import (
-	"context"
-	"github.com/database64128/tfo-go"
 	"net"
 	"time"
 
@@ -32,15 +30,12 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithAuthenticate(addr, in, true, inboundTfo)
+func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
+	return NewWithAuthenticate(addr, in, true)
 }
 
-func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool, inboundTfo bool) (*Listener, error) {
-	lc := tfo.ListenConfig{
-		DisableTFO: !inboundTfo,
-	}
-	l, err := lc.Listen(context.Background(), "tcp", addr)
+func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool) (*Listener, error) {
+	l, err := net.Listen("tcp", addr)
 
 	if err != nil {
 		return nil, err
@@ -63,6 +58,9 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 					break
 				}
 				continue
+			}
+			if t, ok := conn.(*net.TCPConn); ok {
+				t.SetKeepAlive(false)
 			}
 			go HandleConn(conn, in, c)
 		}

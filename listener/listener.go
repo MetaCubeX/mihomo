@@ -2,58 +2,36 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/ebpf"
-	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
-	"golang.org/x/exp/slices"
 	"net"
-	"sort"
 	"strconv"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
 	"github.com/Dreamacro/clash/listener/mixed"
-	"github.com/Dreamacro/clash/listener/redir"
 	"github.com/Dreamacro/clash/listener/socks"
-	"github.com/Dreamacro/clash/listener/tproxy"
-	"github.com/Dreamacro/clash/listener/tun"
-	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/log"
 )
 
 var (
 	allowLan    = false
 	bindAddress = "*"
-	lastTunConf *config.Tun
-	inboundTfo  = false
 
-	socksListener     *socks.Listener
-	socksUDPListener  *socks.UDPListener
-	httpListener      *http.Listener
-	redirListener     *redir.Listener
-	redirUDPListener  *tproxy.UDPListener
-	tproxyListener    *tproxy.Listener
-	tproxyUDPListener *tproxy.UDPListener
-	mixedListener     *mixed.Listener
-	mixedUDPLister    *socks.UDPListener
-	tunStackListener  ipstack.Stack
-	autoRedirListener *autoredir.Listener
-	autoRedirProgram  *ebpf.TcEBpfProgram
-	tcProgram         *ebpf.TcEBpfProgram
+	socksListener    *socks.Listener
+	socksUDPListener *socks.UDPListener
+	httpListener     *http.Listener
+	mixedListener    *mixed.Listener
+	mixedUDPLister   *socks.UDPListener
 
 	// lock for recreate function
-	socksMux     sync.Mutex
-	httpMux      sync.Mutex
-	redirMux     sync.Mutex
-	tproxyMux    sync.Mutex
-	mixedMux     sync.Mutex
-	tunMux       sync.Mutex
-	autoRedirMux sync.Mutex
-	tcMux        sync.Mutex
+	socksMux  sync.Mutex
+	httpMux   sync.Mutex
+	redirMux  sync.Mutex
+	tproxyMux sync.Mutex
+	mixedMux  sync.Mutex
+	tunMux    sync.Mutex
 )
 
 type Ports struct {
@@ -62,15 +40,6 @@ type Ports struct {
 	RedirPort  int `json:"redir-port"`
 	TProxyPort int `json:"tproxy-port"`
 	MixedPort  int `json:"mixed-port"`
-}
-
-func GetTunConf() config.Tun {
-	if lastTunConf == nil {
-		return config.Tun{
-			Enable: false,
-		}
-	}
-	return *lastTunConf
 }
 
 func AllowLan() bool {
@@ -87,10 +56,6 @@ func SetAllowLan(al bool) {
 
 func SetBindAddress(host string) {
 	bindAddress = host
-}
-
-func SetInboundTfo(itfo bool) {
-	inboundTfo = itfo
 }
 
 func NewInner(tcpIn chan<- C.ConnContext) {
@@ -122,7 +87,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	httpListener, err = http.New(addr, inboundTfo, tcpIn)
+	httpListener, err = http.New(addr, tcpIn)
 	if err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
 		return
@@ -173,7 +138,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	tcpListener, err := socks.New(addr, inboundTfo, tcpIn)
+	tcpListener, err := socks.New(addr, tcpIn)
 	if err != nil {
 		return
 	}
@@ -188,98 +153,6 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	socksUDPListener = udpListener
 
 	log.Infoln("SOCKS proxy listening at: %s", socksListener.Address())
-}
-
-func ReCreateRedir(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
-	redirMux.Lock()
-	defer redirMux.Unlock()
-
-	var err error
-	defer func() {
-		if err != nil {
-			log.Errorln("Start Redir server error: %s", err.Error())
-		}
-	}()
-
-	addr := genAddr(bindAddress, port, allowLan)
-
-	if redirListener != nil {
-		if redirListener.RawAddress() == addr {
-			return
-		}
-		redirListener.Close()
-		redirListener = nil
-	}
-
-	if redirUDPListener != nil {
-		if redirUDPListener.RawAddress() == addr {
-			return
-		}
-		redirUDPListener.Close()
-		redirUDPListener = nil
-	}
-
-	if portIsZero(addr) {
-		return
-	}
-
-	redirListener, err = redir.New(addr, tcpIn)
-	if err != nil {
-		return
-	}
-
-	redirUDPListener, err = tproxy.NewUDP(addr, udpIn)
-	if err != nil {
-		log.Warnln("Failed to start Redir UDP Listener: %s", err)
-	}
-
-	log.Infoln("Redirect proxy listening at: %s", redirListener.Address())
-}
-
-func ReCreateTProxy(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
-	tproxyMux.Lock()
-	defer tproxyMux.Unlock()
-
-	var err error
-	defer func() {
-		if err != nil {
-			log.Errorln("Start TProxy server error: %s", err.Error())
-		}
-	}()
-
-	addr := genAddr(bindAddress, port, allowLan)
-
-	if tproxyListener != nil {
-		if tproxyListener.RawAddress() == addr {
-			return
-		}
-		tproxyListener.Close()
-		tproxyListener = nil
-	}
-
-	if tproxyUDPListener != nil {
-		if tproxyUDPListener.RawAddress() == addr {
-			return
-		}
-		tproxyUDPListener.Close()
-		tproxyUDPListener = nil
-	}
-
-	if portIsZero(addr) {
-		return
-	}
-
-	tproxyListener, err = tproxy.New(addr, tcpIn)
-	if err != nil {
-		return
-	}
-
-	tproxyUDPListener, err = tproxy.NewUDP(addr, udpIn)
-	if err != nil {
-		log.Warnln("Failed to start TProxy UDP Listener: %s", err)
-	}
-
-	log.Infoln("TProxy server listening at: %s", tproxyListener.Address())
 }
 
 func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
@@ -323,7 +196,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	mixedListener, err = mixed.New(addr, inboundTfo, tcpIn)
+	mixedListener, err = mixed.New(addr, tcpIn)
 	if err != nil {
 		return
 	}
@@ -335,120 +208,6 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	}
 
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
-}
-
-func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
-	tunMux.Lock()
-	defer tunMux.Unlock()
-
-	var err error
-	defer func() {
-		if err != nil {
-			log.Errorln("Start TUN listening error: %s", err.Error())
-			Cleanup(false)
-		}
-	}()
-
-	if !hasTunConfigChange(tunConf) {
-		return
-	}
-
-	Cleanup(true)
-
-	if !tunConf.Enable {
-		return
-	}
-
-	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
-
-	lastTunConf = tunConf
-}
-
-func ReCreateRedirToTun(ifaceNames []string) {
-	tcMux.Lock()
-	defer tcMux.Unlock()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if tcProgram != nil {
-		tcProgram.Close()
-		tcProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	if lastTunConf == nil || !lastTunConf.Enable {
-		return
-	}
-
-	program, err := ebpf.NewTcEBpfProgram(nicArr, lastTunConf.Device)
-	if err != nil {
-		log.Errorln("Attached tc ebpf program error: %v", err)
-		return
-	}
-	tcProgram = program
-
-	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
-}
-
-func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<- *inbound.PacketAdapter) {
-	autoRedirMux.Lock()
-	defer autoRedirMux.Unlock()
-
-	var err error
-	defer func() {
-		if err != nil {
-			if autoRedirListener != nil {
-				_ = autoRedirListener.Close()
-				autoRedirListener = nil
-			}
-			if autoRedirProgram != nil {
-				autoRedirProgram.Close()
-				autoRedirProgram = nil
-			}
-			log.Errorln("Start auto redirect server error: %s", err.Error())
-		}
-	}()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if autoRedirListener != nil && autoRedirProgram != nil {
-		_ = autoRedirListener.Close()
-		autoRedirProgram.Close()
-		autoRedirListener = nil
-		autoRedirProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	defaultRouteInterfaceName, err := commons.GetAutoDetectInterface()
-	if err != nil {
-		return
-	}
-
-	addr := genAddr("*", C.TcpAutoRedirPort, true)
-
-	autoRedirListener, err = autoredir.New(addr, tcpIn)
-	if err != nil {
-		return
-	}
-
-	autoRedirProgram, err = ebpf.NewRedirEBpfProgram(nicArr, autoRedirListener.TCPAddr().Port(), defaultRouteInterfaceName)
-	if err != nil {
-		return
-	}
-
-	autoRedirListener.SetLookupFunc(autoRedirProgram.Lookup)
-
-	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
 // GetPorts return the ports of proxy servers
@@ -465,18 +224,6 @@ func GetPorts() *Ports {
 		_, portStr, _ := net.SplitHostPort(socksListener.Address())
 		port, _ := strconv.Atoi(portStr)
 		ports.SocksPort = port
-	}
-
-	if redirListener != nil {
-		_, portStr, _ := net.SplitHostPort(redirListener.Address())
-		port, _ := strconv.Atoi(portStr)
-		ports.RedirPort = port
-	}
-
-	if tproxyListener != nil {
-		_, portStr, _ := net.SplitHostPort(tproxyListener.Address())
-		port, _ := strconv.Atoi(portStr)
-		ports.TProxyPort = port
 	}
 
 	if mixedListener != nil {
@@ -505,57 +252,4 @@ func genAddr(host string, port int, allowLan bool) string {
 	}
 
 	return fmt.Sprintf("127.0.0.1:%d", port)
-}
-
-func hasTunConfigChange(tunConf *config.Tun) bool {
-	if lastTunConf == nil {
-		return true
-	}
-
-	if len(lastTunConf.DNSHijack) != len(tunConf.DNSHijack) {
-		return true
-	}
-
-	sort.Slice(lastTunConf.DNSHijack, func(i, j int) bool {
-		return lastTunConf.DNSHijack[i].Addr().Less(lastTunConf.DNSHijack[j].Addr())
-	})
-
-	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
-		return tunConf.DNSHijack[i].Addr().Less(tunConf.DNSHijack[j].Addr())
-	})
-
-	for i, dns := range tunConf.DNSHijack {
-		if dns != lastTunConf.DNSHijack[i] {
-			return true
-		}
-	}
-
-	if lastTunConf.Enable != tunConf.Enable ||
-		lastTunConf.Device != tunConf.Device ||
-		lastTunConf.Stack != tunConf.Stack ||
-		lastTunConf.AutoRoute != tunConf.AutoRoute ||
-		lastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface {
-		return true
-	}
-
-	if tunConf.TunAddressPrefix.String() != lastTunConf.TunAddressPrefix.String() {
-		return true
-	}
-
-	return false
-}
-
-func Cleanup(wait bool) {
-	if tunStackListener != nil {
-		_ = tunStackListener.Close()
-		commons.StopDefaultInterfaceChangeMonitor()
-
-		if wait {
-			commons.WaitForTunClose(lastTunConf.Device)
-		}
-
-		commons.CleanupRule()
-	}
-	tunStackListener = nil
-	lastTunConf = nil
 }

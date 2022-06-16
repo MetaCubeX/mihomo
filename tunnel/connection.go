@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"errors"
+	"github.com/Dreamacro/clash/component/resolver"
 	"net"
 	"net/netip"
 	"time"
@@ -11,8 +12,19 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
+func handleUDPToRemote(packet C.UDPPacket, pc net.PacketConn, metadata *C.Metadata) error {
+	pc = unwrapPacket(pc)
+
 	defer packet.Drop()
+
+	// local resolve UDP dns
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(metadata.Host)
+		if err != nil {
+			return err
+		}
+		metadata.DstIP = ip
+	}
 
 	addr := metadata.UDPAddr()
 	if addr == nil {
@@ -23,18 +35,18 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 		return err
 	}
 	// reset timeout
-	_ = pc.SetReadDeadline(time.Now().Add(udpTimeout))
+	pc.SetReadDeadline(time.Now().Add(udpTimeout))
 
 	return nil
 }
 
 func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, fAddr netip.Addr) {
+	pc = unwrapPacket(pc)
+
 	buf := pool.Get(pool.UDPBufferSize)
-	defer func() {
-		_ = pc.Close()
-		natTable.Delete(key)
-		_ = pool.Put(buf)
-	}()
+	defer pool.Put(buf)
+	defer natTable.Delete(key)
+	defer pc.Close()
 
 	for {
 		_ = pc.SetReadDeadline(time.Now().Add(udpTimeout))
@@ -60,5 +72,12 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
-	N.Relay(ctx.Conn(), outbound)
+	left := unwrap(ctx.Conn())
+	right := unwrap(outbound)
+
+	if relayHijack(left, right) {
+		return
+	}
+
+	N.Relay(left, right)
 }

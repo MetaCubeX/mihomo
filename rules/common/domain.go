@@ -37,6 +37,10 @@ func (d *Domain) Payload() string {
 	return domain
 }
 
+func (d *Domain) ShouldFindProcess() bool {
+	return false
+}
+
 func NewDomain(domain string, adapter string) *Domain {
 	actualDomain, _ := idna.ToASCII(domain)
 	return &Domain{

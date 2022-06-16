@@ -1,6 +1,9 @@
 package inbound
 
 import (
+	"net"
+	"strconv"
+
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
@@ -24,6 +27,11 @@ func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type) *PacketAda
 	if ip, port, err := parseAddr(packet.LocalAddr().String()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
+	}
+
+	if port, err := strconv.Atoi(metadata.DstPort); err == nil {
+		metadata.RawSrcAddr = packet.LocalAddr()
+		metadata.RawDstAddr = &net.UDPAddr{IP: metadata.DstIP.AsSlice(), Port: port}
 	}
 
 	return &PacketAdapter{

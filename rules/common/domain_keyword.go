@@ -38,6 +38,10 @@ func (dk *DomainKeyword) Payload() string {
 	return keyword
 }
 
+func (dk *DomainKeyword) ShouldFindProcess() bool {
+	return false
+}
+
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
 	actualDomainKeyword, _ := idna.ToASCII(keyword)
 	return &DomainKeyword{

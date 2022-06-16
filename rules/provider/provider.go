@@ -117,9 +117,7 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 	rp.Fetcher = fetcher
 	rp.strategy = newStrategy(behavior, parse)
 
-	wrapper := &RuleSetProvider{
-		rp,
-	}
+	wrapper := &RuleSetProvider{rp}
 
 	final := func(provider *RuleSetProvider) { _ = rp.Fetcher.Destroy() }
 	runtime.SetFinalizer(wrapper, final)

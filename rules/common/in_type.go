@@ -34,6 +34,10 @@ func (u *InType) Payload() string {
 	return u.payload
 }
 
+func (u *InType) ShouldFindProcess() bool {
+	return false
+}
+
 func NewInType(iTypes, adapter string) (*InType, error) {
 	types := strings.Split(iTypes, "/")
 	if len(types) == 0 {

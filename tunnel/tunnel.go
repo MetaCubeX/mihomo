@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -38,8 +37,8 @@ var (
 	mode = Rule
 
 	// default timeout for UDP session
-	udpTimeout = 60 * time.Second
-
+	udpTimeout        = 60 * time.Second
+	procesCache       string
 	alwaysFindProcess = false
 )
 
@@ -296,7 +295,6 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		default:
 			log.Infoln("[UDP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		}
-
 		oAddr := metadata.DstIP
 		go handleUDPToLocal(packet.UDPPacket, pc, key, oAddr, fAddr)
 
@@ -395,18 +393,19 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if !processFound && (alwaysFindProcess || rule.ShouldFindProcess()) {
-			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
-			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
+		if !processFound && alwaysFindProcess && rule.ShouldFindProcess() {
+			processFound = true
+
+			path, err := P.FindPackageName(metadata)
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 			} else {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
-				if uid != -1 {
-					metadata.Uid = &uid
+				if procesCache != metadata.Process {
+					log.Debugln("[Process] %s from process %s", metadata.String(), path)
 				}
-				processFound = true
+				procesCache = metadata.Process
 			}
 		}
 

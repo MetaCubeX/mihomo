@@ -16,5 +16,9 @@ func NewHTTPS(request *http.Request, conn net.Conn) *context.ConnContext {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}
+
+	metadata.RawSrcAddr = conn.RemoteAddr()
+	metadata.RawDstAddr = conn.LocalAddr()
+
 	return context.NewConnContext(conn, metadata)
 }
