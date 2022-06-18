@@ -19,6 +19,7 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/uot"
 )
 
 func init() {
@@ -29,6 +30,7 @@ type ShadowSocks struct {
 	*Base
 	method shadowsocks.Method
 
+	option *ShadowSocksOption
 	// obfs
 	obfsMode    string
 	obfsOption  *simpleObfsOption
@@ -45,6 +47,7 @@ type ShadowSocksOption struct {
 	UDP        bool           `proxy:"udp,omitempty"`
 	Plugin     string         `proxy:"plugin,omitempty"`
 	PluginOpts map[string]any `proxy:"plugin-opts,omitempty"`
+	UDPOverTCP bool           `proxy:"udp-over-tcp,omitempty"`
 }
 
 type simpleObfsOption struct {
@@ -96,6 +99,15 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, op
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	if ss.option.UDPOverTCP {
+		metadata.Host = uot.UOTMagicAddress
+		metadata.DstPort = "443"
+		tcpConn, err := ss.DialContext(ctx, metadata, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return newPacketConn(uot.NewClientConn(tcpConn), ss), nil
+	}
 	pc, err := dialer.ListenPacket(ctx, "udp", "", ss.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err
@@ -167,6 +179,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		},
 		method: method,
 
+		option:      &option,
 		obfsMode:    obfsMode,
 		v2rayOption: v2rayOption,
 		obfsOption:  obfsOption,
