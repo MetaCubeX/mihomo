@@ -4,6 +4,7 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	"golang.org/x/net/idna"
 )
 
 type domainStrategy struct {
@@ -27,7 +28,8 @@ func (d *domainStrategy) OnUpdate(rules []string) {
 	domainTrie := trie.New[bool]()
 	count := 0
 	for _, rule := range rules {
-		err := domainTrie.Insert(rule, true)
+		actualDomain, _ := idna.ToASCII(rule)
+		err := domainTrie.Insert(actualDomain, true)
 		if err != nil {
 			log.Warnln("invalid domain:[%s]", rule)
 		} else {
