@@ -4,6 +4,7 @@ import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	"strings"
 )
 
 type classicalStrategy struct {
@@ -50,6 +51,19 @@ func (c *classicalStrategy) OnUpdate(rules []string) {
 
 	c.rules = classicalRules
 	c.count = len(classicalRules)
+}
+
+func ruleParse(ruleRaw string) (string, string, []string) {
+	item := strings.Split(ruleRaw, ",")
+	if len(item) == 1 {
+		return "", item[0], nil
+	} else if len(item) == 2 {
+		return item[0], item[1], nil
+	} else if len(item) > 2 {
+		return item[0], item[1], item[2:]
+	}
+
+	return "", "", nil
 }
 
 func NewClassicalStrategy(parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) *classicalStrategy {
