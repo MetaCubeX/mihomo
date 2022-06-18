@@ -80,6 +80,10 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
 	}
+	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
+		metadata.Host = uot.UOTMagicAddress
+		metadata.DstPort = "443"
+	}
 	return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 }
 
@@ -100,8 +104,6 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, op
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	if ss.option.UDPOverTCP {
-		metadata.Host = uot.UOTMagicAddress
-		metadata.DstPort = "443"
 		tcpConn, err := ss.DialContext(ctx, metadata, opts...)
 		if err != nil {
 			return nil, err
@@ -120,6 +122,19 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 	}
 	pc = ss.method.DialPacketConn(&bufio.BindPacketConn{PacketConn: pc, Addr: addr})
 	return newPacketConn(pc, ss), nil
+}
+
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (ss *ShadowSocks) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if ss.option.UDPOverTCP {
+		return newPacketConn(uot.NewClientConn(c), ss), nil
+	}
+	return nil, errors.New("no support")
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (ss *ShadowSocks) SupportUOT() bool {
+	return ss.option.UDPOverTCP
 }
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
