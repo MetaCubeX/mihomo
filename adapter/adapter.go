@@ -156,20 +156,27 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 			return http.ErrUseLastResponse
 		},
 	}
+
 	defer client.CloseIdleConnections()
+
 	resp, err := client.Do(req)
+
 	if err != nil {
 		return
 	}
 
+	_ = resp.Body.Close()
+
 	if unifiedDelay {
 		start = time.Now()
-		resp, err = client.Do(req)
+		respRepeat, err := client.Do(req)
 		if err != nil {
-			return
+			return 0, err
 		}
+
+		_ = respRepeat.Body.Close()
 	}
-	_ = resp.Body.Close()
+
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }
