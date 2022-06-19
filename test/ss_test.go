@@ -3,11 +3,13 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/require"
 )
@@ -276,4 +278,38 @@ func Benchmark_Shadowsocks(b *testing.B) {
 
 	require.True(b, TCPing(net.JoinHostPort(localIP.String(), "10002")))
 	benchmarkProxy(b, proxy)
+}
+
+func TestClash_ShadowsocksUoT(t *testing.T) {
+	configPath := C.Path.Resolve("xray-shadowsocks.json")
+
+	cfg := &container.Config{
+		Image:        ImageVless,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds:        []string{fmt.Sprintf("%s:/etc/xray/config.json", configPath)},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "xray-ss")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
+
+	proxy, err := outbound.NewShadowSocks(outbound.ShadowSocksOption{
+		Name:       "ss",
+		Server:     localIP.String(),
+		Port:       10002,
+		Password:   "FzcLbKs2dY9mhL",
+		Cipher:     "aes-128-gcm",
+		UDP:        true,
+		UDPOverTCP: true,
+	})
+	require.NoError(t, err)
+
+	time.Sleep(waitTime)
+	testSuit(t, proxy)
 }

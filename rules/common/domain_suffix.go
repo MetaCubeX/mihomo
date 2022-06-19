@@ -1,6 +1,7 @@
 package common
 
 import (
+	"golang.org/x/net/idna"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -8,8 +9,9 @@ import (
 
 type DomainSuffix struct {
 	*Base
-	suffix  string
-	adapter string
+	suffix    string
+	adapter   string
+	rawSuffix string
 }
 
 func (ds *DomainSuffix) RuleType() C.RuleType {
@@ -29,14 +31,16 @@ func (ds *DomainSuffix) Adapter() string {
 }
 
 func (ds *DomainSuffix) Payload() string {
-	return ds.suffix
+	return ds.rawSuffix
 }
 
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
+	actualDomainKeyword, _ := idna.ToASCII(suffix)
 	return &DomainSuffix{
-		Base:    &Base{},
-		suffix:  strings.ToLower(suffix),
-		adapter: adapter,
+		Base:      &Base{},
+		suffix:    strings.ToLower(actualDomainKeyword),
+		adapter:   adapter,
+		rawSuffix: suffix,
 	}
 }
 
