@@ -61,8 +61,8 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/sagernet/sing v0.0.0-20220618024624-ab2a9e30e56b // indirect
-	github.com/sagernet/sing-shadowsocks v0.0.0-20220618022156-a4a11dea4c45 // indirect
+	github.com/sagernet/sing v0.0.0-20220619130320-8793fe5e067d // indirect
+	github.com/sagernet/sing-shadowsocks v0.0.0-20220619134218-830a2f478eb1 // indirect
 	github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/tobyxdd/hysteria v1.0.4 // indirect
