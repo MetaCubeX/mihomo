@@ -40,9 +40,10 @@ func (f *fetcher[V]) VehicleType() types.VehicleType {
 
 func (f *fetcher[V]) Initial() (V, error) {
 	var (
-		buf     []byte
-		err     error
-		isLocal bool
+		buf         []byte
+		err         error
+		isLocal     bool
+		forceUpdate bool
 	)
 
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
@@ -51,10 +52,8 @@ func (f *fetcher[V]) Initial() (V, error) {
 		f.updatedAt = &modTime
 		isLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
-			defer func() {
-				log.Infoln("[Provider] %s's proxies not updated for a long time, force refresh", f.Name())
-				go f.Update()
-			}()
+			log.Infoln("[Provider] %s not updated for a long time, force refresh", f.Name())
+			forceUpdate = true
 		}
 	} else {
 		buf, err = f.vehicle.Read()
@@ -64,7 +63,21 @@ func (f *fetcher[V]) Initial() (V, error) {
 		return getZero[V](), err
 	}
 
-	proxies, err := f.parser(buf)
+	var proxies V
+	if forceUpdate {
+		var forceBuf []byte
+		if forceBuf, err = f.vehicle.Read(); err == nil {
+			if proxies, err = f.parser(forceBuf); err == nil {
+				isLocal = false
+				buf = forceBuf
+			}
+		}
+	}
+
+	if err != nil || !forceUpdate {
+		proxies, err = f.parser(buf)
+	}
+
 	if err != nil {
 		if !isLocal {
 			return getZero[V](), err

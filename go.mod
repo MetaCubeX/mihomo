@@ -13,9 +13,9 @@ require (
 	github.com/lucas-clemente/quic-go v0.27.2
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
-	github.com/sagernet/sing v0.0.0-20220615170357-aa30c4140ca9
-	github.com/sagernet/sing-shadowsocks v0.0.0-20220615081955-91a0901d1c89
-	github.com/sagernet/sing-vmess v0.0.0-20220614092239-0052a5a383f5
+	github.com/sagernet/sing v0.0.0-20220619130320-8793fe5e067d
+	github.com/sagernet/sing-shadowsocks v0.0.0-20220619134218-830a2f478eb1
+	github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2
 	github.com/tobyxdd/hysteria v1.0.4
@@ -28,7 +28,7 @@ require (
 	golang.org/x/exp v0.0.0-20220608143224-64259d1afd70
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220610221304-9f5ed59c137d
+	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	golang.zx2c4.com/wireguard v0.0.0-20220601130007-6a08d81f6bc4
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
