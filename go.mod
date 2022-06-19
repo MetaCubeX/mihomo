@@ -12,23 +12,23 @@ require (
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
-	golang.org/x/net v0.0.0-20220614195744-fb05da6f9022
+	golang.org/x/net v0.0.0-20220617184016-355a448f1bc9
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220614162138-6c1b26c55098
+	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
 	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
 	golang.zx2c4.com/wireguard v0.0.0-20220601130007-6a08d81f6bc4
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
-	gvisor.dev/gvisor v0.0.0-20220614011939-d89c08b0f364
+	gvisor.dev/gvisor v0.0.0-20220616232550-d004a30ec069
 )
 
 require (
