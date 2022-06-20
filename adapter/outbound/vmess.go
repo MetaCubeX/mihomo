@@ -51,10 +51,6 @@ type VmessOption struct {
 	WSOpts              WSOptions    `proxy:"ws-opts,omitempty"`
 	PacketAddr          bool         `proxy:"packet-addr,omitempty"`
 	AuthenticatedLength bool         `proxy:"authenticated-length,omitempty"`
-
-	// TODO: compatible with VMESS WS older version configurations
-	WSHeaders map[string]string `proxy:"ws-headers,omitempty"`
-	WSPath    string            `proxy:"ws-path,omitempty"`
 }
 
 type HTTPOptions struct {
