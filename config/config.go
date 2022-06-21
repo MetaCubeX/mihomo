@@ -415,11 +415,11 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	// keep the original order of ProxyGroups in config file
 	for idx, mapping := range groupsConfig {
-		groupName, existName := mapping["name"].(string)
+		groupName, existName := mapping["name"]
 		if !existName {
 			return nil, nil, fmt.Errorf("proxy group %d: missing name", idx)
 		}
-		proxyList = append(proxyList, groupName)
+		proxyList = append(proxyList, groupName.(string))
 	}
 
 	// check if any loop exists and sort the ProxyGroups

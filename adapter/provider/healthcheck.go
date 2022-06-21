@@ -25,10 +25,16 @@ type HealthCheck struct {
 	interval  uint
 	lazy      bool
 	lastTouch *atomic.Int64
+	running   *atomic.Bool
 	done      chan struct{}
 }
 
 func (hc *HealthCheck) process() {
+	if hc.running.Load() {
+		return
+	}
+	hc.running.Store(true)
+
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
 
 	go func() {
@@ -84,6 +90,10 @@ func (hc *HealthCheck) check() {
 }
 
 func (hc *HealthCheck) close() {
+	if !hc.running.Load() {
+		return
+	}
+	hc.running.Store(false)
 	hc.done <- struct{}{}
 }
 
@@ -94,6 +104,7 @@ func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool) *He
 		interval:  interval,
 		lazy:      lazy,
 		lastTouch: atomic.NewInt64(0),
+		running:   atomic.NewBool(false),
 		done:      make(chan struct{}, 1),
 	}
 }

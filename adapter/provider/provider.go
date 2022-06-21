@@ -234,7 +234,9 @@ func (pf *proxyFilterProvider) HealthCheck() {
 }
 
 func (pf *proxyFilterProvider) Update() error {
-	var proxies []C.Proxy
+	pf.healthCheck.close()
+
+	proxies := []C.Proxy{}
 	if pf.filter != nil {
 		for _, proxy := range pf.psd.Proxies() {
 			if !pf.filter.MatchString(proxy.Name()) {
@@ -248,6 +250,10 @@ func (pf *proxyFilterProvider) Update() error {
 
 	pf.proxies = proxies
 	pf.healthCheck.setProxy(proxies)
+
+	if len(proxies) != 0 && pf.healthCheck.auto() {
+		go pf.healthCheck.process()
+	}
 	return nil
 }
 
@@ -285,10 +291,6 @@ func NewProxyFilterProvider(name string, psd *ProxySetProvider, hc *HealthCheck,
 	}
 
 	_ = pd.Update()
-
-	if hc.auto() {
-		go hc.process()
-	}
 
 	wrapper := &ProxyFilterProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyFilterProvider)
