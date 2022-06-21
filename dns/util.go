@@ -152,17 +152,9 @@ func (wpc *wrapPacketConn) LocalAddr() net.Addr {
 }
 
 func dialContextExtra(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
-	adapter, ok := tunnel.Proxies()[adapterName]
-	if !ok {
-		opts = append(opts, dialer.WithInterface(adapterName))
-		adapter, _ = tunnel.Proxies()[tunnel.Direct.String()]
-	}
-
 	networkType := C.TCP
 	if network == "udp" {
-		if !adapter.SupportUDP() {
-			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
-		}
+
 		networkType = C.UDP
 	}
 
@@ -177,6 +169,29 @@ func dialContextExtra(ctx context.Context, adapterName string, network string, d
 		Host:     "",
 		DstIP:    dstIP,
 		DstPort:  port,
+	}
+
+	adapter, ok := tunnel.Proxies()[adapterName]
+	if !ok {
+		opts = append(opts, dialer.WithInterface(adapterName))
+		if C.TCP == networkType {
+			return dialer.DialContext(ctx, network, dstIP.String()+":"+port, opts...)
+		} else {
+			packetConn, err := dialer.ListenPacket(ctx, network, dstIP.String()+":"+port, opts...)
+			if err != nil {
+				return nil, err
+			}
+
+			return &wrapPacketConn{
+				PacketConn: packetConn,
+				rAddr:      metadata.UDPAddr(),
+			}, nil
+
+		}
+	}
+
+	if networkType == C.UDP && !adapter.SupportUDP() {
+		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
 	}
 
 	if networkType == C.UDP {
