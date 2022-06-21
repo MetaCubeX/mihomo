@@ -38,7 +38,7 @@ func (tt *tcpTracker) ID() string {
 
 func (tt *tcpTracker) Read(b []byte) (int, error) {
 	n, err := tt.Conn.Read(b)
-	download := int64(n)	
+	download := int64(n)
 	tt.manager.PushDownloaded(download)
 	if tt.trackerInfo.Rule != "Match" {
 		tt.manager.PushProxyDownloaded(download)
@@ -62,6 +62,13 @@ func (tt *tcpTracker) Close() error {
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
 	uuid, _ := uuid.NewV4()
+	if conn != nil {
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			metadata.RemoteDst = tcpAddr.IP.String()
+		} else {
+			metadata.RemoteDst = conn.RemoteDestination()
+		}
+	}
 
 	t := &tcpTracker{
 		Conn:    conn,
@@ -119,6 +126,7 @@ func (ut *udpTracker) Close() error {
 
 func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
 	uuid, _ := uuid.NewV4()
+	metadata.RemoteDst = conn.RemoteDestination()
 
 	ut := &udpTracker{
 		PacketConn: conn,

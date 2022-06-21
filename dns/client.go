@@ -55,10 +55,10 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	}
 
 	var conn net.Conn
-	if c.proxyAdapter == "" {
-		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
+	if c.proxyAdapter != "" {
+		conn, err = dialContextExtra(ctx, c.proxyAdapter, network, ip, c.port, options...)
 	} else {
-		conn, err = dialContextWithProxyAdapter(ctx, c.proxyAdapter, network, ip, c.port, options...)
+		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
 	}
 
 	if err != nil {

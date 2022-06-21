@@ -6,13 +6,14 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"net/netip"
-	"runtime"
 )
 
 var (
 	ErrInvalidNetwork     = errors.New("invalid network")
 	ErrPlatformNotSupport = errors.New("not support on this platform")
 	ErrNotFound           = errors.New("process not found")
+
+	enableFindProcess = true
 )
 
 const (
@@ -20,7 +21,11 @@ const (
 	UDP = "udp"
 )
 
-func FindProcessName(network string, srcIP netip.Addr, srcPort int) (string, error) {
+func EnableFindProcess(e bool) {
+	enableFindProcess = e
+}
+
+func FindProcessName(network string, srcIP netip.Addr, srcPort int) (int32, string, error) {
 	return findProcessName(network, srcIP, srcPort)
 }
 
@@ -33,10 +38,9 @@ func FindUid(network string, srcIP netip.Addr, srcPort int) (int32, error) {
 }
 
 func ShouldFindProcess(metadata *C.Metadata) bool {
-	if runtime.GOOS == "android" {
-		return false
-	}
-	if metadata.Process != "" || metadata.ProcessPath != "" {
+	if !enableFindProcess ||
+		metadata.Process != "" ||
+		metadata.ProcessPath != "" {
 		return false
 	}
 	for _, ip := range localIPs {

@@ -43,7 +43,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		return
 	}
 
-	if metadata.Host == "" || sd.foreDomain.Search(metadata.Host) != nil {
+	if metadata.Host == "" {
 		port, err := strconv.ParseUint(metadata.DstPort, 10, 16)
 		if err != nil {
 			log.Debugln("[Sniffer] Dst port is error")
@@ -71,7 +71,9 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 				return
 			}
 
-			sd.replaceDomain(metadata, host)
+			if sd.foreDomain.Search(host) != nil {
+				sd.replaceDomain(metadata, host)
+			}
 		}
 	}
 }

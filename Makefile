@@ -8,7 +8,7 @@ VERSION=beta-$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),)
 VERSION=$(shell git describe --tags)
 else
-VERSION=unknown
+VERSION=$(shell git rev-parse --short HEAD)
 endif
 
 BUILDTIME=$(shell date -u)
@@ -17,13 +17,10 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clas
 		-w -s -buildid='
 
 PLATFORM_LIST = \
-	darwin-amd64v1 \
-	darwin-amd64v2 \
-	darwin-amd64v3 \
+	darwin-amd64 \
 	darwin-arm64 \
-	linux-amd64v1 \
-	linux-amd64v2 \
-	linux-amd64v3 \
+	linux-amd64-compatible \
+	linux-amd64 \
 	linux-armv5 \
 	linux-armv6 \
 	linux-armv7 \
@@ -41,9 +38,8 @@ PLATFORM_LIST = \
 
 WINDOWS_ARCH_LIST = \
 	windows-386 \
-	windows-amd64v1 \
-	windows-amd64v2 \
-	windows-amd64v3 \
+	windows-amd64-compatible \
+	windows-amd64 \
 	windows-arm64 \
     windows-arm32v7
 
@@ -54,14 +50,11 @@ all:linux-amd64 linux-arm64\
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-darwin-amd64v3:
+darwin-amd64:
 	GOARCH=amd64 GOOS=darwin GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-darwin-amd64v2:
+darwin-amd64-compatible:
 	GOARCH=amd64 GOOS=darwin GOAMD64=v2 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-darwin-amd64v1:
-	GOARCH=amd64 GOOS=darwin GOAMD64=v1 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 darwin-arm64:
 	GOARCH=arm64 GOOS=darwin $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -69,14 +62,11 @@ darwin-arm64:
 linux-386:
 	GOARCH=386 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-amd64v3:
+linux-amd64:
 	GOARCH=amd64 GOOS=linux GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-amd64v2:
+linux-amd64-compatible:
 	GOARCH=amd64 GOOS=linux GOAMD64=v2 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
-linux-amd64v1:
-	GOARCH=amd64 GOOS=linux GOAMD64=v1 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -123,14 +113,11 @@ freebsd-arm64:
 windows-386:
 	GOARCH=386 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
-windows-amd64v3:
+windows-amd64:
 	GOARCH=amd64 GOOS=windows GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
-windows-amd64v2:
+windows-amd64-compatible:
 	GOARCH=amd64 GOOS=windows GOAMD64=v2 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
-
-windows-amd64v1:
-	GOARCH=amd64 GOOS=windows GOAMD64=v1 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
 windows-arm64:
 	GOARCH=arm64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe

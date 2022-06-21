@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/gofrs/uuid"
 	"net"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -48,6 +49,10 @@ func (b *Base) Type() C.AdapterType {
 // StreamConn implements C.ProxyAdapter
 func (b *Base) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, errors.New("no support")
+}
+
+func (b *Base) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
+	return nil, errors.New("no support")
 }
 
 // ListenPacketContext implements C.ProxyAdapter
@@ -128,7 +133,12 @@ func NewBase(opt BaseOption) *Base {
 
 type conn struct {
 	net.Conn
-	chain C.Chain
+	chain                   C.Chain
+	actualRemoteDestination string
+}
+
+func (c *conn) RemoteDestination() string {
+	return c.actualRemoteDestination
 }
 
 // Chains implements C.Connection
@@ -142,12 +152,17 @@ func (c *conn) AppendToChains(a C.ProxyAdapter) {
 }
 
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
-	return &conn{c, []string{a.Name()}}
+	return &conn{c, []string{a.Name()}, parseRemoteDestination(a.Addr())}
 }
 
 type packetConn struct {
 	net.PacketConn
-	chain C.Chain
+	chain                   C.Chain
+	actualRemoteDestination string
+}
+
+func (c *packetConn) RemoteDestination() string {
+	return c.actualRemoteDestination
 }
 
 // Chains implements C.Connection
@@ -161,5 +176,17 @@ func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
 }
 
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
-	return &packetConn{pc, []string{a.Name()}}
+	return &packetConn{pc, []string{a.Name()}, parseRemoteDestination(a.Addr())}
+}
+
+func parseRemoteDestination(addr string) string {
+	if dst, _, err := net.SplitHostPort(addr); err == nil {
+		return dst
+	} else {
+		if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
+			return dst
+		} else {
+			return ""
+		}
+	}
 }

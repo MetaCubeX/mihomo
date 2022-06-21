@@ -1,3 +1,8 @@
 package constant
 
-var GeodataMode bool
+var (
+	GeodataMode bool
+	GeoIpUrl    string
+	MmdbUrl     string
+	GeoSiteUrl  string
+)

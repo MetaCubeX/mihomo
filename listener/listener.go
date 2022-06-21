@@ -2,11 +2,9 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/listener/inner"
+	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
-	"net/netip"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -25,10 +23,9 @@ import (
 )
 
 var (
-	allowLan             = false
-	bindAddress          = "*"
-	lastTunConf          *config.Tun
-	lastTunAddressPrefix *netip.Prefix
+	allowLan    = false
+	bindAddress = "*"
+	lastTunConf *config.Tun
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -327,7 +324,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer tunMux.Unlock()
 
@@ -335,35 +332,23 @@ func ReCreateTun(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan
 	defer func() {
 		if err != nil {
 			log.Errorln("Start TUN listening error: %s", err.Error())
+			Cleanup(false)
 		}
 	}()
 
-	if tunAddressPrefix == nil {
-		tunAddressPrefix = lastTunAddressPrefix
-	}
-
-	if !hasTunConfigChange(tunConf, tunAddressPrefix) {
+	if !hasTunConfigChange(tunConf) {
 		return
 	}
 
-	if tunStackListener != nil {
-		_ = tunStackListener.Close()
-		tunStackListener = nil
-		lastTunConf = nil
-		lastTunAddressPrefix = nil
-	}
+	Cleanup(true)
 
 	if !tunConf.Enable {
 		return
 	}
 
-	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn)
-	if err != nil {
-		log.Warnln("Failed to start TUN interface: %s", err)
-	}
+	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
 
 	lastTunConf = tunConf
-	lastTunAddressPrefix = tunAddressPrefix
 }
 
 // GetPorts return the ports of proxy servers
@@ -422,7 +407,7 @@ func genAddr(host string, port int, allowLan bool) string {
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) bool {
+func hasTunConfigChange(tunConf *config.Tun) bool {
 	if lastTunConf == nil {
 		return true
 	}
@@ -448,29 +433,29 @@ func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) boo
 	if lastTunConf.Enable != tunConf.Enable ||
 		lastTunConf.Device != tunConf.Device ||
 		lastTunConf.Stack != tunConf.Stack ||
-		lastTunConf.AutoRoute != tunConf.AutoRoute {
+		lastTunConf.AutoRoute != tunConf.AutoRoute ||
+		lastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface {
 		return true
 	}
 
-	if (tunAddressPrefix != nil && lastTunAddressPrefix == nil) || (tunAddressPrefix == nil && lastTunAddressPrefix != nil) {
-		return true
-	}
-
-	if tunAddressPrefix != nil && lastTunAddressPrefix != nil && *tunAddressPrefix != *lastTunAddressPrefix {
+	if tunConf.TunAddressPrefix.String() != lastTunConf.TunAddressPrefix.String() {
 		return true
 	}
 
 	return false
 }
 
-func Cleanup() {
+func Cleanup(wait bool) {
 	if tunStackListener != nil {
 		_ = tunStackListener.Close()
-		if runtime.GOOS == "android" {
-			prefs := []int{9000, 9001, 9002, 9003, 9004}
-			for _, pref := range prefs {
-				_, _ = cmd.ExecCmd(fmt.Sprintf("ip rule del pref %d", pref))
-			}
+		commons.StopDefaultInterfaceChangeMonitor()
+
+		if wait {
+			commons.WaitForTunClose(lastTunConf.Device)
 		}
+
+		commons.CleanupRule()
 	}
+	tunStackListener = nil
+	lastTunConf = nil
 }

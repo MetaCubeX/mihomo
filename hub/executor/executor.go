@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
@@ -85,7 +86,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
 	updateIPTables(cfg)
-	updateTun(cfg.Tun, cfg.DNS)
+	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -118,6 +119,9 @@ func GetGeneral() *config.General {
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
 		Tun:           P.GetTunConf(),
+		Interface:     dialer.DefaultInterface.Load(),
+		Sniffing:      tunnel.IsSniffing(),
+		TCPConcurrent: dialer.GetDial(),
 	}
 
 	return general
@@ -244,12 +248,8 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 	wg.Wait()
 }
 
-func updateTun(tun *config.Tun, dns *config.DNS) {
-	var tunAddressPrefix *netip.Prefix
-	if dns.FakeIPRange != nil {
-		tunAddressPrefix = dns.FakeIPRange.IPNet()
-	}
-	P.ReCreateTun(tun, tunAddressPrefix, tunnel.TCPIn(), tunnel.UDPIn())
+func updateTun(tun *config.Tun) {
+	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -274,6 +274,7 @@ func updateSniffer(sniffer *config.Sniffer) {
 
 func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
+	process.EnableFindProcess(general.EnableProcess)
 	tunnel.SetMode(general.Mode)
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
@@ -353,7 +354,7 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 			continue
 		}
 
-		selector, ok := outbound.ProxyAdapter.(*outboundgroup.Selector)
+		selector, ok := outbound.ProxyAdapter.(outboundgroup.SelectAble)
 		if !ok {
 			continue
 		}
@@ -428,7 +429,7 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func Shutdown() {
-	P.Cleanup()
+	P.Cleanup(false)
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 

@@ -1,6 +1,8 @@
 package outboundgroup
 
 import (
+	"context"
+	"fmt"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -49,10 +51,9 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		var proxies []C.Proxy
 		for _, pd := range gb.providers {
 			if touch {
-				proxies = append(proxies, pd.ProxiesWithTouch()...)
-			} else {
-				proxies = append(proxies, pd.Proxies()...)
+				pd.Touch()
 			}
+			proxies = append(proxies, pd.Proxies()...)
 		}
 		if len(proxies) == 0 {
 			return append(proxies, tunnel.Proxies()["COMPATIBLE"])
@@ -61,13 +62,12 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	}
 
 	for _, pd := range gb.providers {
-		if pd.VehicleType() == types.Compatible {
-			if touch {
-				gb.proxies.Store(pd.Name(), pd.ProxiesWithTouch())
-			} else {
-				gb.proxies.Store(pd.Name(), pd.Proxies())
-			}
+		if touch {
+			pd.Touch()
+		}
 
+		if pd.VehicleType() == types.Compatible {
+			gb.proxies.Store(pd.Name(), pd.Proxies())
 			gb.versions.Store(pd.Name(), pd.Version())
 			continue
 		}
@@ -78,11 +78,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				newProxies []C.Proxy
 			)
 
-			if touch {
-				proxies = pd.ProxiesWithTouch()
-			} else {
-				proxies = pd.Proxies()
-			}
+			proxies = pd.Proxies()
 
 			for _, p := range proxies {
 				if mat, _ := gb.filter.FindStringMatch(p.Name()); mat != nil {
@@ -105,6 +101,34 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	return proxies
 }
 
+func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16, error) {
+	var wg sync.WaitGroup
+	var lock sync.Mutex
+	mp := map[string]uint16{}
+	proxies := gb.GetProxies(false)
+	for _, proxy := range proxies {
+		proxy := proxy
+		wg.Add(1)
+		go func() {
+			delay, err := proxy.URLTest(ctx, url)
+			lock.Lock()
+			if err == nil {
+				mp[proxy.Name()] = delay
+			}
+			lock.Unlock()
+
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	if len(mp) == 0 {
+		return mp, fmt.Errorf("get delay: all proxies timeout")
+	} else {
+		return mp, nil
+	}
+}
+
 func (gb *GroupBase) onDialFailed() {
 	if gb.failedTesting.Load() {
 		return
@@ -116,14 +140,14 @@ func (gb *GroupBase) onDialFailed() {
 
 		gb.failedTimes++
 		if gb.failedTimes == 1 {
-			log.Warnln("ProxyGroup: %s first failed", gb.Name())
+			log.Debugln("ProxyGroup: %s first failed", gb.Name())
 			gb.failedTime = time.Now()
 		} else {
 			if time.Since(gb.failedTime) > gb.failedTimeoutInterval() {
 				return
 			}
 
-			log.Warnln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
+			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes() {
 				gb.failedTesting.Store(true)
 				log.Warnln("because %s failed multiple times, active health check", gb.Name())

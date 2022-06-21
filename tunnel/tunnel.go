@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,14 +24,15 @@ import (
 )
 
 var (
-	tcpQueue      = make(chan C.ConnContext, 200)
-	udpQueue      = make(chan *inbound.PacketAdapter, 200)
-	natTable      = nat.New()
-	rules         []C.Rule
-	proxies       = make(map[string]C.Proxy)
-	providers     map[string]provider.ProxyProvider
-	ruleProviders map[string]provider.RuleProvider
-	configMux     sync.RWMutex
+	tcpQueue       = make(chan C.ConnContext, 200)
+	udpQueue       = make(chan *inbound.PacketAdapter, 200)
+	natTable       = nat.New()
+	rules          []C.Rule
+	proxies        = make(map[string]C.Proxy)
+	providers      map[string]provider.ProxyProvider
+	ruleProviders  map[string]provider.RuleProvider
+	sniffingEnable bool
+	configMux      sync.RWMutex
 
 	// Outbound Rule
 	mode = Rule
@@ -42,6 +42,18 @@ var (
 	procesCache string
 	failTotal   int
 )
+
+func SetSniffing(b bool) {
+	if sniffer.Dispatcher.Enable() {
+		configMux.Lock()
+		sniffingEnable = b
+		configMux.Unlock()
+	}
+}
+
+func IsSniffing() bool {
+	return sniffingEnable
+}
 
 func init() {
 	go process()
@@ -96,6 +108,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
 	configMux.Lock()
 	sniffer.Dispatcher = *dispatcher
+	sniffingEnable = true
 	configMux.Unlock()
 }
 
@@ -170,7 +183,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	// pre resolve process name
 	srcPort, err := strconv.Atoi(metadata.SrcPort)
 	if err == nil && P.ShouldFindProcess(metadata) {
-		path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
+		uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
 		if err != nil {
 			if failTotal < 20 {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
@@ -179,6 +192,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		} else {
 			metadata.Process = filepath.Base(path)
 			metadata.ProcessPath = path
+			if uid != -1 {
+				metadata.Uid = &uid
+			}
 			if procesCache != metadata.Process {
 				log.Debugln("[Process] %s from process %s", metadata.String(), path)
 			}
@@ -271,17 +287,6 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		}
 		pCtx.InjectPacketConn(rawPc)
 
-		actualProxy := proxy.Unwrap(metadata)
-		if actualProxy != nil {
-			if dst, _, err := net.SplitHostPort(actualProxy.Addr()); err == nil {
-				metadata.RemoteDst = dst
-			} else {
-				if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
-					metadata.RemoteDst = actualProxy.Addr()
-				}
-			}
-		}
-
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
 
 		switch true {
@@ -322,7 +327,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	if sniffer.Dispatcher.Enable() {
+	if sniffer.Dispatcher.Enable() && sniffingEnable {
 		sniffer.Dispatcher.TCPSniff(connCtx.Conn(), metadata)
 	}
 
@@ -342,10 +347,6 @@ func handleTCPConn(connCtx C.ConnContext) {
 			log.Warnln("[TCP] dial %s (match %s(%s)) to %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.RemoteAddress(), err.Error())
 		}
 		return
-	}
-
-	if tcpAddr, ok := remoteConn.RemoteAddr().(*net.TCPAddr); ok {
-		metadata.RemoteDst = tcpAddr.IP.String()
 	}
 
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
@@ -432,5 +433,5 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		}
 	}
 
-	return proxies["REJECT"], nil, nil
+	return proxies["DIRECT"], nil, nil
 }

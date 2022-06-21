@@ -43,7 +43,7 @@ jobs:
         env:
           NAME: Clash.Meta
           BINDIR: bin
-        run: make -j releases
+        run: make -j$(($(nproc) + 1)) releases
 
       - name: Delete current release assets
         uses: andreaswilli/delete-release-assets-action@v2.0.0

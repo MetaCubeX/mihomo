@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/Dreamacro/clash/constant/features"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/Dreamacro/clash/config"
@@ -50,7 +52,12 @@ func init() {
 func main() {
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 	if version {
-		fmt.Printf("Clash Meta %s %s %s with %s %s\n", C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
+		fmt.Printf("Clash Meta %s %s %s with %s %s\n",
+			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
+		if len(features.TAGS) != 0 {
+			fmt.Printf("Use tags: %s\n", strings.Join(features.TAGS, ", "))
+		}
+
 		return
 	}
 

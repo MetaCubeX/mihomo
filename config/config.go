@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/utils"
-	R "github.com/Dreamacro/clash/rule"
-	RP "github.com/Dreamacro/clash/rule/provider"
+	R "github.com/Dreamacro/clash/rules"
+	RP "github.com/Dreamacro/clash/rules/provider"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -47,12 +47,14 @@ type General struct {
 	UnifiedDelay  bool
 	LogLevel      log.LogLevel `json:"log-level"`
 	IPv6          bool         `json:"ipv6"`
-	Interface     string       `json:"-"`
+	Interface     string       `json:"interface-name"`
 	RoutingMark   int          `json:"-"`
 	GeodataMode   bool         `json:"geodata-mode"`
 	GeodataLoader string       `json:"geodata-loader"`
 	TCPConcurrent bool         `json:"tcp-concurrent"`
+	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
+	Sniffing      bool         `json:"sniffing"`
 }
 
 // Inbound config
@@ -113,6 +115,7 @@ type Tun struct {
 	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	TunAddressPrefix    netip.Prefix     `yaml:"-" json:"-"`
 }
 
 // IPTables config
@@ -205,6 +208,7 @@ type RawConfig struct {
 	GeodataMode        bool         `yaml:"geodata-mode"`
 	GeodataLoader      string       `yaml:"geodata-loader"`
 	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	EnableProcess      bool         `yaml:"enable-process" json:"enable-process"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -215,9 +219,16 @@ type RawConfig struct {
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
+	GeoXUrl       RawGeoXUrl                `yaml:"geox-url"`
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
+}
+
+type RawGeoXUrl struct {
+	GeoIp   string `yaml:"geoip" json:"geoip"`
+	Mmdb    string `yaml:"mmdb" json:"mmdb"`
+	GeoSite string `yaml:"geosite" json:"geosite"`
 }
 
 type RawSniffer struct {
@@ -254,6 +265,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
 		TCPConcurrent:  false,
+		EnableProcess:  true,
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -304,6 +316,11 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Profile: Profile{
 			StoreSelected: true,
 		},
+		GeoXUrl: RawGeoXUrl{
+			GeoIp:   "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat",
+			Mmdb:    "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb",
+			GeoSite: "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat",
+		},
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
@@ -326,12 +343,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
-
-	tunCfg, err := parseTun(rawCfg.Tun, config.General)
-	if err != nil {
-		return nil, err
-	}
-	config.Tun = tunCfg
 
 	dialer.DefaultInterface.Store(config.General.Interface)
 
@@ -360,6 +371,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.DNS = dnsCfg
+
+	tunCfg, err := parseTun(rawCfg.Tun, config.General, dnsCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.Tun = tunCfg
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
@@ -409,6 +426,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataMode:   cfg.GeodataMode,
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
+		EnableProcess: cfg.EnableProcess,
 	}, nil
 }
 
@@ -515,7 +533,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
-		rp, err := RP.ParseRuleProvider(name, mapping)
+		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -565,13 +583,6 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy) ([]C.Rule, map[strin
 		}
 
 		params = trimArr(params)
-
-		if ruleName == "GEOSITE" {
-			if err := initGeoSite(); err != nil {
-				return nil, nil, fmt.Errorf("can't initial GeoSite: %s", err)
-			}
-			initMode = false
-		}
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params)
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
@@ -712,7 +723,7 @@ func parseFallbackIPCIDR(ips []string) ([]*netip.Prefix, error) {
 func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
 	var sites []*router.DomainMatcher
 	if len(countries) > 0 {
-		if err := initGeoSite(); err != nil {
+		if err := geodata.InitGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %s", err)
 		}
 	}
@@ -865,7 +876,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 	return users
 }
 
-func parseTun(rawTun RawTun, general *General) (*Tun, error) {
+func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 	if rawTun.Enable && rawTun.AutoDetectInterface {
 		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
 		if err != nil {
@@ -892,6 +903,13 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		dnsHijack = append(dnsHijack, addrPort)
 	}
 
+	var tunAddressPrefix netip.Prefix
+	if dnsCfg.FakeIPRange != nil {
+		tunAddressPrefix = *dnsCfg.FakeIPRange.IPNet()
+	} else {
+		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
+	}
+
 	return &Tun{
 		Enable:              rawTun.Enable,
 		Device:              rawTun.Device,
@@ -899,6 +917,7 @@ func parseTun(rawTun RawTun, general *General) (*Tun, error) {
 		DNSHijack:           dnsHijack,
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
+		TunAddressPrefix:    tunAddressPrefix,
 	}, nil
 }
 
