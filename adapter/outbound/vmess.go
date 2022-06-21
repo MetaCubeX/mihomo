@@ -203,7 +203,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 func (v *Vmess) StreamPacketConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(metadata.Host)
+		ip, err := resolver.ResolveFirstIP(metadata.Host)
 		if err != nil {
 			return c, fmt.Errorf("can't resolve ip: %w", err)
 		}
@@ -255,7 +255,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	if v.transport != nil && len(opts) == 0 {
 		// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
 		if !metadata.Resolved() {
-			ip, err := resolver.ResolveIP(metadata.Host)
+			ip, err := resolver.ResolveFirstIP(metadata.Host)
 			if err != nil {
 				return nil, fmt.Errorf("can't resolve ip: %w", err)
 			}

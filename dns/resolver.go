@@ -21,6 +21,8 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+var _ resolver.Resolver = (*Resolver)(nil)
+
 type dnsClient interface {
 	Exchange(m *D.Msg) (msg *D.Msg, err error)
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
@@ -45,18 +47,18 @@ type Resolver struct {
 }
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeA
-func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
+func (r *Resolver) ResolveIP(host string, random bool) (ip netip.Addr, err error) {
 	ch := make(chan netip.Addr, 1)
 	go func() {
 		defer close(ch)
-		ip, err := r.resolveIP(host, D.TypeAAAA)
+		ip, err := r.resolveIP(host, D.TypeAAAA, random)
 		if err != nil {
 			return
 		}
 		ch <- ip
 	}()
 
-	ip, err = r.resolveIP(host, D.TypeA)
+	ip, err = r.resolveIP(host, D.TypeA, random)
 	if err == nil {
 		return
 	}
@@ -70,13 +72,13 @@ func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
 }
 
 // ResolveIPv4 request with TypeA
-func (r *Resolver) ResolveIPv4(host string) (ip netip.Addr, err error) {
-	return r.resolveIP(host, D.TypeA)
+func (r *Resolver) ResolveIPv4(host string, random bool) (ip netip.Addr, err error) {
+	return r.resolveIP(host, D.TypeA, random)
 }
 
 // ResolveIPv6 request with TypeAAAA
-func (r *Resolver) ResolveIPv6(host string) (ip netip.Addr, err error) {
-	return r.resolveIP(host, D.TypeAAAA)
+func (r *Resolver) ResolveIPv6(host string, random bool) (ip netip.Addr, err error) {
+	return r.resolveIP(host, D.TypeAAAA, random)
 }
 
 func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
@@ -255,9 +257,10 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	return
 }
 
-func (r *Resolver) resolveIP(host string, dnsType uint16) (ip netip.Addr, err error) {
+func (r *Resolver) resolveIP(host string, dnsType uint16, random bool) (ip netip.Addr, err error) {
 	ip, err = netip.ParseAddr(host)
 	if err == nil {
+		ip = ip.Unmap()
 		isIPv4 := ip.Is4()
 		if dnsType == D.TypeAAAA && !isIPv4 {
 			return ip, nil
@@ -282,7 +285,12 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ip netip.Addr, err er
 		return netip.Addr{}, resolver.ErrIPNotFound
 	}
 
-	ip = ips[rand.Intn(ipLength)]
+	index := 0
+	if random {
+		index = rand.Intn(ipLength)
+	}
+
+	ip = ips[index]
 	return
 }
 
