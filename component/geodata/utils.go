@@ -21,16 +21,16 @@ func SetLoader(newLoader string) {
 	geoLoaderName = newLoader
 }
 
-func Verify(name string) bool {
+func Verify(name string) error {
 	switch name {
 	case C.GeositeName:
 		_, _, err := LoadGeoSiteMatcher("CN")
-		return err == nil
+		return err
 	case C.GeoipName:
 		_, _, err := LoadGeoIPMatcher("CN")
-		return err == nil
+		return err
 	default:
-		return false
+		return fmt.Errorf("not support name")
 	}
 }
 

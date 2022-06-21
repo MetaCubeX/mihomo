@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/Dreamacro/clash/listener/tun/device"
-	"github.com/Dreamacro/clash/listener/tun/device/iobased"
 )
 
 func open(fd int, mtu uint32) (device.Device, error) {
@@ -17,12 +16,7 @@ func open(fd int, mtu uint32) (device.Device, error) {
 }
 
 func (f *FD) useEndpoint() error {
-	ep, err := iobased.New(os.NewFile(uintptr(f.fd), f.Name()), f.mtu, 0)
-	if err != nil {
-		return fmt.Errorf("create endpoint: %w", err)
-	}
-	f.LinkEndpoint = ep
-	return nil
+	return newEp(f)
 }
 
 func (f *FD) useIOBased() error {

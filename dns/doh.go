@@ -100,7 +100,7 @@ func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
 				if proxyAdapter == "" {
 					return dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
 				} else {
-					return dialContextWithProxyAdapter(ctx, proxyAdapter, "tcp", ip, port)
+					return dialContextExtra(ctx, proxyAdapter, "tcp", ip, port)
 				}
 			},
 		},

@@ -89,24 +89,39 @@ func ResolveIP(host string) (netip.Addr, error) {
 // ResolveIPv4ProxyServerHost proxies server host only
 func ResolveIPv4ProxyServerHost(host string) (netip.Addr, error) {
 	if ProxyServerHostResolver != nil {
-		return ResolveIPv4WithResolver(host, ProxyServerHostResolver)
+		if ip, err := ResolveIPv4WithResolver(host, ProxyServerHostResolver); err != nil {
+			return ResolveIPv4(host)
+		} else {
+			return ip, nil
+		}
 	}
+
 	return ResolveIPv4(host)
 }
 
 // ResolveIPv6ProxyServerHost proxies server host only
 func ResolveIPv6ProxyServerHost(host string) (netip.Addr, error) {
 	if ProxyServerHostResolver != nil {
-		return ResolveIPv6WithResolver(host, ProxyServerHostResolver)
+		if ip, err := ResolveIPv6WithResolver(host, ProxyServerHostResolver); err != nil {
+			return ResolveIPv6(host)
+		} else {
+			return ip, nil
+		}
 	}
+
 	return ResolveIPv6(host)
 }
 
 // ResolveProxyServerHost proxies server host only
 func ResolveProxyServerHost(host string) (netip.Addr, error) {
 	if ProxyServerHostResolver != nil {
-		return ResolveIPWithResolver(host, ProxyServerHostResolver)
+		if ip, err := ResolveIPWithResolver(host, ProxyServerHostResolver); err != nil {
+			return ResolveIP(host)
+		} else {
+			return ip, err
+		}
 	}
+
 	return ResolveIP(host)
 }
 

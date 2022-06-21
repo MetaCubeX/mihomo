@@ -27,7 +27,7 @@ func GetAutoDetectInterface() (string, error) {
 	return getAutoDetectInterfaceByFamily(winipcfg.AddressFamily(windows.AF_INET6))
 }
 
-func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute, autoDetectInterface bool) error {
+func ConfigInterfaceAddress(dev device.Device, addr netip.Prefix, forceMTU int, autoRoute bool) error {
 	retryOnFailure := services.StartedAtBoot()
 	tryTimes := 0
 	var err error
@@ -205,10 +205,6 @@ startOver:
 
 	wintunInterfaceName = dev.Name()
 
-	if autoDetectInterface {
-		go DefaultInterfaceChangeMonitor()
-	}
-
 	return nil
 }
 
@@ -273,3 +269,5 @@ func getAutoDetectInterfaceByFamily(family winipcfg.AddressFamily) (string, erro
 
 	return "", errors.New("ethernet interface not found")
 }
+
+func CleanupRule() {}

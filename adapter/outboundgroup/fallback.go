@@ -3,15 +3,19 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
+	"time"
 )
 
 type Fallback struct {
 	*GroupBase
 	disableUDP bool
+	testUrl    string
+	selected   string
 }
 
 func (f *Fallback) Now() string {
@@ -75,13 +79,40 @@ func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
 
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
-	for _, proxy := range proxies {
-		if proxy.Alive() {
+	al := proxies[0]
+	for i := len(proxies) - 1; i > -1; i-- {
+		proxy := proxies[i]
+		if proxy.Name() == f.selected && proxy.Alive() {
 			return proxy
+		}
+		if proxy.Alive() {
+			al = proxy
+		}
+	}
+	return al
+}
+
+func (f *Fallback) Set(name string) error {
+	var p C.Proxy
+	for _, proxy := range f.GetProxies(false) {
+		if proxy.Name() == name {
+			p = proxy
+			break
 		}
 	}
 
-	return proxies[0]
+	if p == nil {
+		return errors.New("proxy not exist")
+	}
+
+	f.selected = name
+	if !p.Alive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
+		defer cancel()
+		_, _ = p.URLTest(ctx, f.testUrl)
+	}
+
+	return nil
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
@@ -97,5 +128,6 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			providers,
 		}),
 		disableUDP: option.DisableUDP,
+		testUrl:    option.URL,
 	}
 }

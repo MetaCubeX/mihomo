@@ -13,7 +13,6 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/gvisor/option"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system"
 	"github.com/Dreamacro/clash/log"
 	"net/netip"
@@ -23,10 +22,10 @@ import (
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (ipstack.Stack, error) {
 
 	var (
-		tunAddress = netip.Prefix{}
+		tunAddress = tunConf.TunAddressPrefix
 		devName    = tunConf.Device
 		stackType  = tunConf.Stack
 		autoRoute  = tunConf.AutoRoute
@@ -37,10 +36,6 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 
 		err error
 	)
-
-	if tunAddressPrefix != nil {
-		tunAddress = *tunAddressPrefix
-	}
 
 	if devName == "" {
 		devName = generateDeviceName()
@@ -67,7 +62,7 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 			return nil, fmt.Errorf("can't attach endpoint to tun: %w", err)
 		}
 
-		tunStack, err = gvisor.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn, option.WithDefault())
+		tunStack, err = gvisor.New(tunDevice, tunConf.DNSHijack, tunAddress, tcpIn, udpIn)
 
 		if err != nil {
 			_ = tunDevice.Close()
@@ -90,10 +85,14 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 	}
 
 	// setting address and routing
-	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute, tunConf.AutoDetectInterface)
+	err = commons.ConfigInterfaceAddress(tunDevice, tunAddress, mtu, autoRoute)
 	if err != nil {
 		_ = tunDevice.Close()
 		return nil, fmt.Errorf("setting interface address and routing failed: %w", err)
+	}
+
+	if tunConf.AutoDetectInterface {
+		commons.StartDefaultInterfaceChangeMonitor()
 	}
 
 	setAtLatest(stackType, devName)

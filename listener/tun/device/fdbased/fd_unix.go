@@ -4,23 +4,12 @@ package fdbased
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/Dreamacro/clash/listener/tun/device"
 
 	"golang.org/x/sys/unix"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
-
-type FD struct {
-	stack.LinkEndpoint
-
-	fd  int
-	mtu uint32
-
-	file *os.File
-}
 
 func Open(name string, mtu uint32) (device.Device, error) {
 	fd, err := strconv.Atoi(name)

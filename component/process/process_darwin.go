@@ -21,7 +21,7 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 	return 0, 0, ErrPlatformNotSupport
 }
 
-func findProcessName(network string, ip netip.Addr, port int) (string, error) {
+func findProcessName(network string, ip netip.Addr, port int) (int32, string, error) {
 	var spath string
 	switch network {
 	case TCP:
@@ -29,14 +29,14 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 	case UDP:
 		spath = "net.inet.udp.pcblist_n"
 	default:
-		return "", ErrInvalidNetwork
+		return -1, "", ErrInvalidNetwork
 	}
 
 	isIPv4 := ip.Is4()
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	buf := []byte(value)
@@ -81,10 +81,11 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 
 		// xsocket_n.so_last_pid
 		pid := readNativeUint32(buf[so+68 : so+72])
-		return getExecPathFromPID(pid)
+		pp, err := getExecPathFromPID(pid)
+		return -1, pp, err
 	}
 
-	return "", ErrNotFound
+	return -1, "", ErrNotFound
 }
 
 func getExecPathFromPID(pid uint32) (string, error) {

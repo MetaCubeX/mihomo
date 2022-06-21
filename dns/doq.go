@@ -167,7 +167,7 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 			return nil, err
 		}
 	} else {
-		conn, err := dialContextWithProxyAdapter(context.Background(), dc.proxyAdapter, "udp", ip, port)
+		conn, err := dialContextExtra(context.Background(), dc.proxyAdapter, "udp", ip, port)
 		if err != nil {
 			return nil, err
 		}

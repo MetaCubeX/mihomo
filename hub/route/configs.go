@@ -1,8 +1,10 @@
 package route
 
 import (
+	"github.com/Dreamacro/clash/component/dialer"
 	"net/http"
 	"path/filepath"
+	"sync"
 
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/config"
@@ -16,26 +18,34 @@ import (
 	"github.com/go-chi/render"
 )
 
+var (
+	updateGeoMux sync.Mutex
+	updatingGeo  = false
+)
+
 func configRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getConfigs)
 	r.Put("/", updateConfigs)
+	r.Post("/geo", updateGeoDatabases)
 	r.Patch("/", patchConfigs)
 	return r
 }
 
 type configSchema struct {
-	Port        *int               `json:"port"`
-	SocksPort   *int               `json:"socks-port"`
-	RedirPort   *int               `json:"redir-port"`
-	TProxyPort  *int               `json:"tproxy-port"`
-	MixedPort   *int               `json:"mixed-port"`
-	Tun         *config.Tun        `json:"tun"`
-	AllowLan    *bool              `json:"allow-lan"`
-	BindAddress *string            `json:"bind-address"`
-	Mode        *tunnel.TunnelMode `json:"mode"`
-	LogLevel    *log.LogLevel      `json:"log-level"`
-	IPv6        *bool              `json:"ipv6"`
+	Port          *int               `json:"port"`
+	SocksPort     *int               `json:"socks-port"`
+	RedirPort     *int               `json:"redir-port"`
+	TProxyPort    *int               `json:"tproxy-port"`
+	MixedPort     *int               `json:"mixed-port"`
+	Tun           *config.Tun        `json:"tun"`
+	AllowLan      *bool              `json:"allow-lan"`
+	BindAddress   *string            `json:"bind-address"`
+	Mode          *tunnel.TunnelMode `json:"mode"`
+	LogLevel      *log.LogLevel      `json:"log-level"`
+	IPv6          *bool              `json:"ipv6"`
+	Sniffing      *bool              `json:"sniffing"`
+	TcpConcurrent *bool              `json:"tcp-concurrent"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +75,14 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.BindAddress != nil {
 		P.SetBindAddress(*general.BindAddress)
+	}
+
+	if general.Sniffing != nil {
+		tunnel.SetSniffing(*general.Sniffing)
+	}
+
+	if general.TcpConcurrent != nil {
+		dialer.SetDial(*general.TcpConcurrent)
 	}
 
 	ports := P.GetPorts()
@@ -136,5 +154,44 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	executor.ApplyConfig(cfg, force)
+	render.NoContent(w, r)
+}
+
+func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
+	updateGeoMux.Lock()
+
+	if updatingGeo {
+		updateGeoMux.Unlock()
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("updating..."))
+		return
+	}
+
+	updatingGeo = true
+	updateGeoMux.Unlock()
+
+	go func() {
+		defer func() {
+			updatingGeo = false
+		}()
+
+		log.Warnln("[REST-API] updating GEO databases...")
+
+		if err := config.UpdateGeoDatabases(); err != nil {
+			log.Errorln("[REST-API] update GEO databases failed: %v", err)
+			return
+		}
+
+		cfg, err := executor.ParseWithPath(constant.Path.Config())
+		if err != nil {
+			log.Errorln("[REST-API] update GEO databases failed: %v", err)
+			return
+		}
+
+		log.Warnln("[REST-API] update GEO databases successful, apply config...")
+
+		executor.ApplyConfig(cfg, false)
+	}()
+
 	render.NoContent(w, r)
 }

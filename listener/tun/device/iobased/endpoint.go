@@ -1,3 +1,5 @@
+//go:build !no_gvisor
+
 // Package iobased provides the implementation of io.ReadWriter
 // based data-link layer endpoints.
 package iobased
