@@ -347,7 +347,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			)
 
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := encRaw.DecodeString(cipher)
+				dcBuf, _ := enc.DecodeString(cipher)
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
