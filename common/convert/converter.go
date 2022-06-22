@@ -114,7 +114,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
-				//headers["Host"] = RandHost()
 				headers["User-Agent"] = RandUserAgent()
 
 				wsOpts["path"] = query.Get("path")
@@ -209,9 +208,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "ws":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
-
-				headers["Host"] = []string{query.Get("host")}
-				wsOpts["path"] = []string{query.Get("path")}
+				headers["User-Agent"] = RandUserAgent()
+				headers["Host"] = query.Get("host")
+				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
 
 				vless["ws-opts"] = wsOpts
@@ -305,10 +304,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				wsOpts := make(map[string]any)
 				wsOpts["path"] = []string{"/"}
 				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = []string{values["host"].(string)}
+					headers["Host"] = values["host"].(string)
 				}
 				if values["path"] != "" && values["path"] != nil {
-					wsOpts["path"] = []string{values["path"].(string)}
+					wsOpts["path"] = values["path"].(string)
 				}
 				wsOpts["headers"] = headers
 				vmess["ws-opts"] = wsOpts
@@ -348,10 +347,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			)
 
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, err := encRaw.DecodeString(cipher)
-				if err != nil {
-					continue
-				}
+				dcBuf, _ := encRaw.DecodeString(cipher)
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
