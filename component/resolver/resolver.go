@@ -44,7 +44,7 @@ type Resolver interface {
 
 // ResolveIPv4 with a host, return ipv4
 func ResolveIPv4(host string) (netip.Addr, error) {
-	return ResolveIPv4WithResolver(host, DefaultResolver, true)
+	return resolveIPv4(host, true)
 }
 
 func ResolveIPv4WithResolver(host string, r Resolver, random bool) (netip.Addr, error) {
@@ -152,7 +152,7 @@ func ResolveIPWithResolver(host string, r Resolver, random bool) (netip.Addr, er
 		}
 		return r.ResolveIP(host, random)
 	} else if DisableIPv6 {
-		return resolveIP(host, random)
+		return resolveIPv4(host, random)
 	}
 
 	ip, err := netip.ParseAddr(host)
@@ -208,4 +208,8 @@ func ResolveProxyServerHost(host string) (netip.Addr, error) {
 
 func resolveIP(host string, random bool) (netip.Addr, error) {
 	return ResolveIPWithResolver(host, DefaultResolver, random)
+}
+
+func resolveIPv4(host string, random bool) (netip.Addr, error) {
+	return ResolveIPv4WithResolver(host, DefaultResolver, random)
 }
