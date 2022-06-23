@@ -28,6 +28,9 @@ func ShouldFindProcess(metadata *C.Metadata) bool {
 	if metadata.Process != "" {
 		return false
 	}
+	if metadata.SrcIP.IsUnspecified() {
+		return true
+	}
 	for _, ip := range localIPs {
 		if ip == metadata.SrcIP {
 			return true
@@ -41,7 +44,7 @@ func AppendLocalIPs(ip ...netip.Addr) {
 }
 
 func getLocalIPs() []netip.Addr {
-	ips := []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified()}
+	var ips []netip.Addr
 
 	netInterfaces, err := net.Interfaces()
 	if err != nil {
