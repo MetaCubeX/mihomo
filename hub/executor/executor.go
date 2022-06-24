@@ -88,6 +88,10 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateTun(cfg.Tun)
 	updateExperimental(cfg)
 
+	// DON'T Delete
+	// ClashX will use this line to determine if the 'Meta' has finished booting
+	log.Infoln("Apply all configs finished.")
+
 	log.SetLevel(cfg.General.LogLevel)
 }
 
