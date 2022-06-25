@@ -151,6 +151,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	}
 
 	client := http.Client{
+		Timeout:   30 * time.Second,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -168,13 +169,12 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	_ = resp.Body.Close()
 
 	if unifiedDelay {
-		start = time.Now()
-		respRepeat, err := client.Do(req)
-		if err != nil {
-			return 0, err
+		second := time.Now()
+		resp, err = client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			start = second
 		}
-
-		_ = respRepeat.Body.Close()
 	}
 
 	t = uint16(time.Since(start) / time.Millisecond)
