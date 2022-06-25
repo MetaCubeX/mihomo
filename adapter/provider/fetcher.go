@@ -202,6 +202,7 @@ func newFetcher[V any](name string, interval time.Duration, vehicle types.Vehicl
 		parser:   parser,
 		done:     make(chan struct{}, 1),
 		onUpdate: onUpdate,
+		interval: interval,
 	}
 }
 
