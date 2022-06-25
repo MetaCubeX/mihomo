@@ -93,7 +93,7 @@ func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 	}
 
 	down = stringToBps(c.Down)
-	if up == 0 {
+	if down == 0 {
 		return 0, 0, fmt.Errorf("invaild download speed: %s", c.Down)
 	}
 
