@@ -129,7 +129,7 @@ func (dc *quicClient) getSession(ctx context.Context) (quic.Connection, error) {
 
 func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) {
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: false,
 		NextProtos: []string{
 			NextProtoDQ,
 		},
