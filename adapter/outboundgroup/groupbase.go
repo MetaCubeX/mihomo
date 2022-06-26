@@ -111,11 +111,11 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16
 		wg.Add(1)
 		go func() {
 			delay, err := proxy.URLTest(ctx, url)
-			lock.Lock()
 			if err == nil {
+				lock.Lock()
 				mp[proxy.Name()] = delay
+				lock.Unlock()
 			}
-			lock.Unlock()
 
 			wg.Done()
 		}()

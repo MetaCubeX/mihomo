@@ -41,24 +41,32 @@ var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
 type Hysteria struct {
 	*Base
 
-	client          *core.Client
-	clientTransport *transport.ClientTransport
+	client *core.Client
 }
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), hyDialer(func() (net.PacketConn, error) {
-		return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
-	}))
+	hdc := hyDialerWithContext{
+		ctx: ctx,
+		hyDialer: func() (net.PacketConn, error) {
+			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+		},
+	}
+	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
 	if err != nil {
 		return nil, err
 	}
+
 	return NewConn(tcpConn, h), nil
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	udpConn, err := h.client.DialUDP(hyDialer(func() (net.PacketConn, error) {
-		return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
-	}))
+	hdc := hyDialerWithContext{
+		ctx: ctx,
+		hyDialer: func() (net.PacketConn, error) {
+			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+		},
+	}
+	udpConn, err := h.client.DialUDP(&hdc)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +101,7 @@ func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 	}
 
 	down = stringToBps(c.Down)
-	if up == 0 {
+	if down == 0 {
 		return 0, 0, fmt.Errorf("invaild download speed: %s", c.Down)
 	}
 
@@ -191,8 +199,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			iface: option.Interface,
 			rmark: option.RoutingMark,
 		},
-		client:          client,
-		clientTransport: clientTransport,
+		client: client,
 	}, nil
 }
 
@@ -255,8 +262,15 @@ func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	return
 }
 
-type hyDialer func() (net.PacketConn, error)
+type hyDialerWithContext struct {
+	hyDialer func() (net.PacketConn, error)
+	ctx      context.Context
+}
 
-func (h hyDialer) ListenPacket() (net.PacketConn, error) {
-	return h()
+func (h *hyDialerWithContext) ListenPacket() (net.PacketConn, error) {
+	return h.hyDialer()
+}
+
+func (h *hyDialerWithContext) Context() context.Context {
+	return h.ctx
 }

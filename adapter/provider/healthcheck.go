@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"github.com/Dreamacro/clash/common/singledo"
 	"time"
 
 	"github.com/Dreamacro/clash/common/batch"
@@ -26,6 +27,7 @@ type HealthCheck struct {
 	lazy      bool
 	lastTouch *atomic.Int64
 	done      chan struct{}
+	singleDo  *singledo.Single[struct{}]
 }
 
 func (hc *HealthCheck) process() {
@@ -63,17 +65,21 @@ func (hc *HealthCheck) touch() {
 }
 
 func (hc *HealthCheck) check() {
-	b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
-	for _, proxy := range hc.proxies {
-		p := proxy
-		b.Go(p.Name(), func() (bool, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
-			defer cancel()
-			_, _ = p.URLTest(ctx, hc.url)
-			return false, nil
-		})
-	}
-	b.Wait()
+	_, _, _ = hc.singleDo.Do(func() (struct{}, error) {
+		b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
+		for _, proxy := range hc.proxies {
+			p := proxy
+			b.Go(p.Name(), func() (bool, error) {
+				ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
+				defer cancel()
+				_, _ = p.URLTest(ctx, hc.url)
+				return false, nil
+			})
+		}
+
+		b.Wait()
+		return struct{}{}, nil
+	})
 }
 
 func (hc *HealthCheck) close() {
@@ -88,5 +94,6 @@ func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool) *He
 		lazy:      lazy,
 		lastTouch: atomic.NewInt64(0),
 		done:      make(chan struct{}, 1),
+		singleDo:  singledo.NewSingle[struct{}](time.Second),
 	}
 }
