@@ -15,7 +15,7 @@ replace github.com/Dreamacro/clash => ../
 
 replace github.com/vishvananda/netlink => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
 
-replace github.com/tobyxdd/hysteria => github.com/MetaCubeX/hysteria v1.0.5-0.20220607074613-210c46c75b15
+replace github.com/tobyxdd/hysteria => github.com/MetaCubeX/hysteria v1.0.5-0.20220626134949-6fa84cd3e256
 
 replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.27.1-0.20220512040129-ed2a645d9218
 
@@ -61,8 +61,8 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/sagernet/sing v0.0.0-20220619130320-8793fe5e067d // indirect
-	github.com/sagernet/sing-shadowsocks v0.0.0-20220619134218-830a2f478eb1 // indirect
+	github.com/sagernet/sing v0.0.0-20220627234642-a817f7084d9c // indirect
+	github.com/sagernet/sing-shadowsocks v0.0.0-20220627234717-689e0165ef2c // indirect
 	github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/tobyxdd/hysteria v1.0.4 // indirect
