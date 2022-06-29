@@ -72,6 +72,11 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 			if err != nil {
 				continue
 			}
+
+			if rAddr.Addr().Is4() {
+				// try to unmap 4in6 address
+				lAddr = netip.AddrPortFrom(lAddr.Addr().Unmap(), lAddr.Port())
+			}
 			handlePacketConn(in, buf[:n], lAddr, rAddr)
 		}
 	}()
