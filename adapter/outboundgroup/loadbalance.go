@@ -30,10 +30,8 @@ type LoadBalance struct {
 var errStrategy = errors.New("unsupported strategy")
 
 func parseStrategy(config map[string]any) string {
-	if elm, ok := config["strategy"]; ok {
-		if strategy, ok := elm.(string); ok {
-			return strategy
-		}
+	if strategy, ok := config["strategy"].(string); ok {
+		return strategy
 	}
 	return "consistent-hashing"
 }
