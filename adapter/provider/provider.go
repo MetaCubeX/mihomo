@@ -129,7 +129,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 
 		proxies := []C.Proxy{}
 		for idx, mapping := range schema.Proxies {
-			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
+			if name, ok := mapping["name"].(string); ok && len(filter) > 0 && !filterReg.MatchString(name) {
 				continue
 			}
 			proxy, err := adapter.ParseProxy(mapping)
