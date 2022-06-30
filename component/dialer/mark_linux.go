@@ -31,13 +31,13 @@ func bindMarkToControl(mark int, chain controlFn) controlFn {
 			}
 		}
 
-		return c.Control(func(fd uintptr) {
-			switch network {
-			case "tcp4", "udp4":
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
-			case "tcp6", "udp6":
-				syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
-			}
+		var innerErr error
+		err = c.Control(func(fd uintptr) {
+			innerErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
 		})
+		if innerErr != nil {
+			err = innerErr
+		}
+		return
 	}
 }
