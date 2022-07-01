@@ -41,6 +41,10 @@ func (f *FD) Name() string {
 	return strconv.Itoa(f.fd)
 }
 
+func (f *FD) MTU() uint32 {
+	return f.mtu
+}
+
 func (f *FD) Close() error {
 	err := unix.Close(f.fd)
 	if f.file != nil {

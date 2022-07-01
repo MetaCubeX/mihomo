@@ -321,12 +321,13 @@ func proxiesParseAndFilter(filter string, filterReg *regexp.Regexp, forceCertVer
 
 		proxies := []C.Proxy{}
 		for idx, mapping := range schema.Proxies {
-			if name, ok := mapping["name"]; ok && len(filter) > 0 && !filterReg.MatchString(name.(string)) {
+			name, ok := mapping["name"].(string)
+			if ok && len(filter) > 0 && !filterReg.MatchString(name) {
 				continue
 			}
 
 			if prefixName != "" {
-				mapping["name"] = prefixName + mapping["name"].(string)
+				mapping["name"] = prefixName + name
 			}
 
 			proxy, err := adapter.ParseProxy(mapping, forceCertVerify)

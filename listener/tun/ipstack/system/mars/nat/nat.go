@@ -5,8 +5,10 @@ import (
 	"net"
 	"net/netip"
 
+	dev "github.com/Dreamacro/clash/listener/tun/device"
+	"github.com/Dreamacro/clash/listener/tun/device/fdbased"
+	"github.com/Dreamacro/clash/listener/tun/device/tun"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/system/mars/tcpip"
-	"github.com/Dreamacro/clash/log"
 )
 
 func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *UDP, error) {
@@ -19,10 +21,27 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 		return nil, nil, err
 	}
 
+	var (
+		t   dev.Device
+		mtu uint32
+		ok  bool
+	)
+	if t, ok = device.(*tun.TUN); ok {
+		mtu = t.MTU()
+	} else if t, ok = device.(*fdbased.FD); ok {
+		mtu = t.MTU()
+	}
+
+	bufferSize := int(mtu)
+
+	if bufferSize == 0 {
+		bufferSize = 64 * 1024
+	}
+
 	tab := newTable()
 	udp := &UDP{
 		device: device,
-		buf:    [0xffff]byte{},
+		buf:    make([]byte, bufferSize),
 	}
 	tcp := &TCP{
 		listener: listener,
@@ -38,7 +57,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 			_ = udp.Close()
 		}()
 
-		buf := make([]byte, 0xffff)
+		buf := make([]byte, bufferSize)
 
 		for {
 			n, err := device.Read(buf)
@@ -133,11 +152,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 							continue
 						}
 
-						port, err = tab.newConn(tup)
-						if err != nil {
-							log.Warnln("[STACK] drop tcp packet by system stack: %v", err)
-							continue
-						}
+						port = tab.newConn(tup)
 					}
 
 					ip.SetSourceIP(portal)
@@ -156,7 +171,7 @@ func Start(device io.ReadWriter, gateway, portal, broadcast netip.Addr) (*TCP, *
 					continue
 				}
 
-				go udp.handleUDPPacket(ip, u)
+				udp.handleUDPPacket(ip, u)
 			case tcpip.ICMP:
 				i := tcpip.ICMPPacket(ip.Payload())
 

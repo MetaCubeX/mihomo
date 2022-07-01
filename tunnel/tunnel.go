@@ -394,7 +394,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if !processFound && rule.ShouldFindProcess() && P.ShouldFindProcess(metadata) {
+		if !processFound && rule.ShouldFindProcess() {
 			processFound = true
 
 			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)

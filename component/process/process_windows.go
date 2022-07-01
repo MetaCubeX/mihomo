@@ -7,7 +7,6 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/log"
 
 	"golang.org/x/sys/windows"
@@ -132,7 +131,7 @@ func (s *searcher) Search(b []byte, ip netip.Addr, port uint16) (uint32, error) 
 			continue
 		}
 
-		srcIP := nnip.IpToAddr(row[s.ip : s.ip+s.ipSize])
+		srcIP, _ := netip.AddrFromSlice(row[s.ip : s.ip+s.ipSize])
 		// windows binds an unbound udp socket to 0.0.0.0/[::] while first sendto
 		if ip != srcIP && (!srcIP.IsUnspecified() || s.tcpState != -1) {
 			continue

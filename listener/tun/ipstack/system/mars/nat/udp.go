@@ -24,7 +24,7 @@ type UDP struct {
 	queueLock sync.Mutex
 	queue     []*call
 	bufLock   sync.Mutex
-	buf       [0xffff]byte
+	buf       []byte
 }
 
 func (u *UDP) ReadFrom(buf []byte) (int, netip.AddrPort, netip.AddrPort, error) {

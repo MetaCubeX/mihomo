@@ -99,12 +99,13 @@ type Profile struct {
 
 // Tun config
 type Tun struct {
-	Enable              bool       `yaml:"enable" json:"enable"`
-	Device              string     `yaml:"device" json:"device"`
-	Stack               C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack           []C.DNSUrl `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	Enable              bool          `yaml:"enable" json:"enable"`
+	Device              string        `yaml:"device" json:"device"`
+	Stack               C.TUNStack    `yaml:"stack" json:"stack"`
+	DNSHijack           []C.DNSUrl    `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool          `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool          `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	TunAddressPrefix    *netip.Prefix `yaml:"_" json:"_"`
 }
 
 // IPTables config
@@ -415,11 +416,11 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	// keep the original order of ProxyGroups in config file
 	for idx, mapping := range groupsConfig {
-		groupName, existName := mapping["name"]
+		groupName, existName := mapping["name"].(string)
 		if !existName {
 			return nil, nil, fmt.Errorf("proxy group %d: missing name", idx)
 		}
-		proxyList = append(proxyList, groupName.(string))
+		proxyList = append(proxyList, groupName)
 	}
 
 	// check if any loop exists and sort the ProxyGroups

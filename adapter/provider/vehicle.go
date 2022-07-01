@@ -103,7 +103,7 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 		return nil, err
 	}
 
-	return buf, nil
+	return removeComment(buf), nil
 }
 
 func NewHTTPVehicle(url string, path string, header http.Header) *HTTPVehicle {

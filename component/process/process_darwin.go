@@ -6,8 +6,6 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/Dreamacro/clash/common/nnip"
-
 	"golang.org/x/sys/unix"
 )
 
@@ -63,10 +61,10 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 		switch {
 		case flag&0x1 > 0 && isIPv4:
 			// ipv4
-			srcIP = nnip.IpToAddr(buf[inp+76 : inp+80])
+			srcIP, _ = netip.AddrFromSlice(buf[inp+76 : inp+80])
 		case flag&0x2 > 0 && !isIPv4:
 			// ipv6
-			srcIP = nnip.IpToAddr(buf[inp+64 : inp+80])
+			srcIP, _ = netip.AddrFromSlice(buf[inp+64 : inp+80])
 		default:
 			continue
 		}

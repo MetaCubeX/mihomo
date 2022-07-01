@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -135,10 +134,10 @@ func (s *searcher) Search(buf []byte, ip netip.Addr, port uint16, isTCP bool) (u
 		switch {
 		case flag&0x1 > 0 && isIPv4:
 			// ipv4
-			srcIP = nnip.IpToAddr(buf[inp+s.ip : inp+s.ip+4])
+			srcIP, _ = netip.AddrFromSlice(buf[inp+s.ip : inp+s.ip+4])
 		case flag&0x2 > 0 && !isIPv4:
 			// ipv6
-			srcIP = nnip.IpToAddr(buf[inp+s.ip-12 : inp+s.ip+4])
+			srcIP, _ = netip.AddrFromSlice(buf[inp+s.ip-12 : inp+s.ip+4])
 		default:
 			continue
 		}

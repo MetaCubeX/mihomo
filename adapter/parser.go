@@ -10,7 +10,7 @@ import (
 
 func ParseProxy(mapping map[string]any, forceCertVerify bool) (C.Proxy, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
-	proxyType, existType := mapping["type"]
+	proxyType, existType := mapping["type"].(string)
 	if !existType {
 		return nil, fmt.Errorf("missing type")
 	}
@@ -19,7 +19,7 @@ func ParseProxy(mapping map[string]any, forceCertVerify bool) (C.Proxy, error) {
 		proxy C.ProxyAdapter
 		err   error
 	)
-	switch proxyType.(string) {
+	switch proxyType {
 	case "ss":
 		ssOption := &outbound.ShadowSocksOption{}
 		err = decoder.Decode(mapping, ssOption)

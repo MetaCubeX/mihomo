@@ -9,7 +9,6 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cmd"
-	"github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/tun/device"
@@ -24,7 +23,7 @@ import (
 )
 
 // New TunAdapter
-func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter, tunChangeCallback C.TUNChangeCallback) (ipstack.Stack, error) {
+func New(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter, tunChangeCallback C.TUNChangeCallback) (ipstack.Stack, error) {
 	var (
 		tunAddress = netip.Prefix{}
 		devName    = tunConf.Device
@@ -48,15 +47,13 @@ func New(tunConf *config.Tun, tunAddressPrefix *netip.Prefix, tcpIn chan<- C.Con
 		devName = generateDeviceName()
 	}
 
-	if tunAddressPrefix != nil {
-		tunAddress = *tunAddressPrefix
+	if tunConf.TunAddressPrefix != nil {
+		tunAddress = *tunConf.TunAddressPrefix
 	}
 
 	if !tunAddress.IsValid() || !tunAddress.Addr().Is4() {
 		tunAddress = netip.MustParsePrefix("198.18.0.1/16")
 	}
-
-	process.AppendLocalIPs(tunAddress.Masked().Addr().Next())
 
 	// open tun device
 	tunDevice, err = parseDevice(devName, uint32(mtu))

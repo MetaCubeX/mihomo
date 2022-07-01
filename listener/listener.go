@@ -31,11 +31,9 @@ import (
 )
 
 var (
-	allowLan             = false
-	bindAddress          = "*"
-	lastTunConf          *config.Tun
-	lastTunAddressPrefix *netip.Prefix
-	tunAddressPrefix     *netip.Prefix
+	allowLan    = false
+	bindAddress = "*"
+	lastTunConf *config.Tun
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -107,10 +105,6 @@ func SetAllowLan(al bool) {
 
 func SetBindAddress(host string) {
 	bindAddress = host
-}
-
-func SetTunAddressPrefix(tunAddress *netip.Prefix) {
-	tunAddressPrefix = tunAddress
 }
 
 func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
@@ -363,14 +357,10 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 		}
 	}()
 
-	if tunAddressPrefix == nil {
-		tunAddressPrefix = lastTunAddressPrefix
-	}
-
 	tunConf.DNSHijack = C.RemoveDuplicateDNSUrl(tunConf.DNSHijack)
 
 	if tunStackListener != nil {
-		if !hasTunConfigChange(tunConf, tunAddressPrefix) {
+		if !hasTunConfigChange(tunConf) {
 			return
 		}
 
@@ -379,7 +369,6 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	}
 
 	lastTunConf = tunConf
-	lastTunAddressPrefix = tunAddressPrefix
 
 	if !tunConf.Enable {
 		return
@@ -391,7 +380,7 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 		udpIn:   udpIn,
 	}
 
-	tunStackListener, err = tun.New(tunConf, tunAddressPrefix, tcpIn, udpIn, callback)
+	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn, callback)
 	if err != nil {
 		return
 	}
@@ -535,7 +524,7 @@ func genAddr(host string, port int, allowLan bool) string {
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) bool {
+func hasTunConfigChange(tunConf *config.Tun) bool {
 	if lastTunConf == nil {
 		return true
 	}
@@ -558,11 +547,11 @@ func hasTunConfigChange(tunConf *config.Tun, tunAddressPrefix *netip.Prefix) boo
 		return true
 	}
 
-	if (tunAddressPrefix != nil && lastTunAddressPrefix == nil) || (tunAddressPrefix == nil && lastTunAddressPrefix != nil) {
+	if (lastTunConf.TunAddressPrefix != nil && tunConf.TunAddressPrefix == nil) || (lastTunConf.TunAddressPrefix == nil && tunConf.TunAddressPrefix != nil) {
 		return true
 	}
 
-	if tunAddressPrefix != nil && lastTunAddressPrefix != nil && *tunAddressPrefix != *lastTunAddressPrefix {
+	if lastTunConf.TunAddressPrefix != nil && tunConf.TunAddressPrefix != nil && *lastTunConf.TunAddressPrefix != *tunConf.TunAddressPrefix {
 		return true
 	}
 

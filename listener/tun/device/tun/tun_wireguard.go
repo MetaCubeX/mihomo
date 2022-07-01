@@ -59,10 +59,13 @@ func Open(name string, mtu uint32) (_ device.Device, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("get mtu: %w", err)
 	}
-	t.mtu = uint32(tunMTU)
+
+	if t.mtu == 0 {
+		t.mtu = uint32(tunMTU)
+	}
 
 	if t.offset > 0 {
-		t.cache = make([]byte, 65535)
+		t.cache = make([]byte, int(t.mtu)+t.offset)
 	}
 
 	return t, nil
@@ -106,6 +109,10 @@ func (t *TUN) Close() error {
 func (t *TUN) Name() string {
 	name, _ := t.nt.Name()
 	return name
+}
+
+func (t *TUN) MTU() uint32 {
+	return t.mtu
 }
 
 func (t *TUN) UseEndpoint() error {
