@@ -72,14 +72,14 @@ func (u *Uid) RuleType() C.RuleType {
 }
 
 func (u *Uid) Match(metadata *C.Metadata) bool {
-	srcPort, err := strconv.Atoi(metadata.SrcPort)
+	srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
 	if err != nil {
 		return false
 	}
 	var uid int32
 	if metadata.Uid != nil {
 		uid = *metadata.Uid
-	} else if uid, err = process.FindUid(metadata.NetWork.String(), metadata.SrcIP, srcPort); err == nil {
+	} else if uid, err = process.FindUid(metadata.NetWork.String(), metadata.SrcIP, int(srcPort)); err == nil {
 		metadata.Uid = &uid
 	} else {
 		log.Warnln("[UID] could not get uid from %s", metadata.String())

@@ -1,6 +1,7 @@
 package common
 
 import (
+	"golang.org/x/net/idna"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -8,8 +9,9 @@ import (
 
 type DomainKeyword struct {
 	*Base
-	keyword string
-	adapter string
+	keyword    string
+	adapter    string
+	rawKeyword string
 }
 
 func (dk *DomainKeyword) RuleType() C.RuleType {
@@ -29,14 +31,16 @@ func (dk *DomainKeyword) Adapter() string {
 }
 
 func (dk *DomainKeyword) Payload() string {
-	return dk.keyword
+	return dk.rawKeyword
 }
 
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
+	actualDomainKeyword, _ := idna.ToASCII(keyword)
 	return &DomainKeyword{
-		Base:    &Base{},
-		keyword: strings.ToLower(keyword),
-		adapter: adapter,
+		Base:       &Base{},
+		keyword:    strings.ToLower(actualDomainKeyword),
+		adapter:    adapter,
+		rawKeyword: keyword,
 	}
 }
 

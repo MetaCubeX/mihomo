@@ -173,7 +173,7 @@ func ResolveAllIPv4WithResolver(host string, r Resolver) ([]netip.Addr, error) {
 
 	ip, err := netip.ParseAddr(host)
 	if err == nil {
-		if ip.Is4() {
+		if ip.Is4() || ip.Is4In6() {
 			return []netip.Addr{ip}, nil
 		}
 		return []netip.Addr{}, ErrIPVersion

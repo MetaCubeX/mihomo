@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dreamacro/Clash.Meta/adapter/outbound"
-	C "github.com/Dreamacro/Clash.Meta/constant"
-
+	"github.com/Dreamacro/clash/adapter/outbound"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
 )
 
+// TODO: fix udp test
 func TestClash_VlessTLS(t *testing.T) {
 	cfg := &container.Config{
 		Image:        ImageVmess,
@@ -37,6 +37,7 @@ func TestClash_VlessTLS(t *testing.T) {
 		Server:         localIP.String(),
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
+		TLS:            true,
 		SkipCertVerify: true,
 		ServerName:     "example.org",
 		UDP:            true,
@@ -49,6 +50,7 @@ func TestClash_VlessTLS(t *testing.T) {
 	testSuit(t, proxy)
 }
 
+// TODO: fix udp test
 func TestClash_VlessXTLS(t *testing.T) {
 	cfg := &container.Config{
 		Image:        ImageXray,
@@ -74,6 +76,7 @@ func TestClash_VlessXTLS(t *testing.T) {
 		Server:         localIP.String(),
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
+		TLS:            true,
 		SkipCertVerify: true,
 		ServerName:     "example.org",
 		UDP:            true,
@@ -88,6 +91,7 @@ func TestClash_VlessXTLS(t *testing.T) {
 	testSuit(t, proxy)
 }
 
+// TODO: fix udp test
 func TestClash_VlessWS(t *testing.T) {
 	cfg := &container.Config{
 		Image:        ImageVmess,
@@ -113,6 +117,7 @@ func TestClash_VlessWS(t *testing.T) {
 		Server:         localIP.String(),
 		Port:           10002,
 		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
+		TLS:            true,
 		SkipCertVerify: true,
 		ServerName:     "example.org",
 		Network:        "ws",

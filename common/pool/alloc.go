@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-var defaultAllocator = NewAllocator()
+var DefaultAllocator = NewAllocator()
 
 // Allocator for incoming frames, optimized to prevent overwriting after zeroing
 type Allocator struct {
@@ -52,8 +52,8 @@ func (alloc *Allocator) Put(buf []byte) error {
 		return errors.New("allocator Put() incorrect buffer size")
 	}
 
-	//lint:ignore SA6002 ignore temporarily
 	//nolint
+	//lint:ignore SA6002 ignore temporarily
 	alloc.buffers[bits].Put(buf)
 	return nil
 }

@@ -64,7 +64,7 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+	ctx, cancel := context.WithTimeout(r.Context(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
 	dm, err := group.URLTest(ctx, url)

@@ -7,17 +7,17 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/lucas-clemente/quic-go"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/log"
-	"github.com/lucas-clemente/quic-go"
 	D "github.com/miekg/dns"
 )
 
-const NextProtoDQ = "doq-i00"
+const NextProtoDQ = "doq"
 
 var bytesPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
@@ -93,7 +93,7 @@ func isActive(s quic.Connection) bool {
 // getSession - opens or returns an existing quic.Connection
 // useCached - if true and cached session exists, return it right away
 // otherwise - forcibly creates a new session
-func (dc *quicClient) getSession() (quic.Connection, error) {
+func (dc *quicClient) getSession(ctx context.Context) (quic.Connection, error) {
 	var session quic.Connection
 	dc.RLock()
 	session = dc.session
@@ -111,14 +111,14 @@ func (dc *quicClient) getSession() (quic.Connection, error) {
 	defer dc.Unlock()
 
 	var err error
-	session, err = dc.openSession()
+	session, err = dc.openSession(ctx)
 	if err != nil {
 		// This does not look too nice, but QUIC (or maybe quic-go)
 		// doesn't seem stable enough.
 		// Maybe retransmissions aren't fully implemented in quic-go?
 		// Anyways, the simple solution is to make a second try when
 		// it fails to open the QUIC session.
-		session, err = dc.openSession()
+		session, err = dc.openSession(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -127,11 +127,11 @@ func (dc *quicClient) getSession() (quic.Connection, error) {
 	return session, nil
 }
 
-func (dc *quicClient) openSession() (quic.Connection, error) {
+func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) {
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: false,
 		NextProtos: []string{
-			"http/1.1", "h2", NextProtoDQ,
+			NextProtoDQ,
 		},
 		SessionTicketsDisabled: false,
 	}
@@ -149,6 +149,7 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 	)
 
 	host, port, err := net.SplitHostPort(dc.addr)
+
 	if err != nil {
 		return nil, err
 	}
@@ -162,25 +163,25 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 	udpAddr := net.UDPAddr{IP: ip.AsSlice(), Port: p}
 
 	if dc.proxyAdapter == "" {
-		udp, err = dialer.ListenPacket(context.Background(), "udp", "")
+		udp, err = dialer.ListenPacket(ctx, "udp", "")
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		conn, err := dialContextExtra(context.Background(), dc.proxyAdapter, "udp", ip, port)
+		conn, err := dialContextExtra(ctx, dc.proxyAdapter, "udp", ip, port)
 		if err != nil {
 			return nil, err
 		}
 
 		wrapConn, ok := conn.(*wrapPacketConn)
 		if !ok {
-			return nil, fmt.Errorf("quio create packet failed")
+			return nil, fmt.Errorf("quic create packet failed")
 		}
 
 		udp = wrapConn
 	}
 
-	session, err := quic.Dial(udp, &udpAddr, host, tlsConfig, quicConfig)
+	session, err := quic.DialContext(ctx, udp, &udpAddr, host, tlsConfig, quicConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open QUIC session: %w", err)
 	}
@@ -189,7 +190,7 @@ func (dc *quicClient) openSession() (quic.Connection, error) {
 }
 
 func (dc *quicClient) openStream(ctx context.Context) (quic.Stream, error) {
-	session, err := dc.getSession()
+	session, err := dc.getSession(ctx)
 	if err != nil {
 		return nil, err
 	}

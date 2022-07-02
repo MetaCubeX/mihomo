@@ -36,7 +36,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 	T "github.com/Dreamacro/clash/tunnel"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // General config
@@ -254,6 +254,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	rawCfg := &RawConfig{
 		AllowLan:       false,
 		BindAddress:    "*",
+		IPv6:           true,
 		Mode:           T.Rule,
 		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
@@ -265,7 +266,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:          []map[string]any{},
 		ProxyGroup:     []map[string]any{},
 		TCPConcurrent:  false,
-		EnableProcess:  true,
+		EnableProcess:  false,
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -281,6 +282,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 		DNS: RawDNS{
 			Enable:       false,
+			IPv6:         false,
 			UseHosts:     true,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "198.18.0.1/16",
@@ -666,7 +668,7 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			addr = u.Host
 			dnsNetType = "dhcp" // UDP from DHCP
 		case "quic":
-			addr, err = hostWithDefaultPort(u.Host, "784")
+			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "quic" // DNS over QUIC
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)

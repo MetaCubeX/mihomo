@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/Dreamacro/Clash.Meta/adapter/outbound"
-	C "github.com/Dreamacro/Clash.Meta/constant"
-
+	"github.com/Dreamacro/clash/adapter/outbound"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/docker/docker/api/types/container"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestClash_Trojan(t *testing.T) {
@@ -27,9 +27,7 @@ func TestClash_Trojan(t *testing.T) {
 	}
 
 	id, err := startContainer(cfg, hostCfg, "trojan")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		cleanContainer(id)
@@ -44,9 +42,7 @@ func TestClash_Trojan(t *testing.T) {
 		SkipCertVerify: true,
 		UDP:            true,
 	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
@@ -67,10 +63,10 @@ func TestClash_TrojanGrpc(t *testing.T) {
 	}
 
 	id, err := startContainer(cfg, hostCfg, "trojan-grpc")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-	defer cleanContainer(id)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
 
 	proxy, err := outbound.NewTrojan(outbound.TrojanOption{
 		Name:           "trojan",
@@ -85,9 +81,7 @@ func TestClash_TrojanGrpc(t *testing.T) {
 			GrpcServiceName: "example",
 		},
 	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
@@ -108,10 +102,10 @@ func TestClash_TrojanWebsocket(t *testing.T) {
 	}
 
 	id, err := startContainer(cfg, hostCfg, "trojan-ws")
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
-	defer cleanContainer(id)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cleanContainer(id)
+	})
 
 	proxy, err := outbound.NewTrojan(outbound.TrojanOption{
 		Name:           "trojan",
@@ -123,9 +117,7 @@ func TestClash_TrojanWebsocket(t *testing.T) {
 		UDP:            true,
 		Network:        "ws",
 	})
-	if err != nil {
-		assert.FailNow(t, err.Error())
-	}
+	require.NoError(t, err)
 
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
@@ -147,7 +139,7 @@ func TestClash_TrojanXTLS(t *testing.T) {
 
 	id, err := startContainer(cfg, hostCfg, "trojan-xtls")
 	if err != nil {
-		assert.FailNow(t, err.Error())
+		require.NoError(t, err)
 	}
 	defer cleanContainer(id)
 
@@ -164,7 +156,7 @@ func TestClash_TrojanXTLS(t *testing.T) {
 		FlowShow:       true,
 	})
 	if err != nil {
-		assert.FailNow(t, err.Error())
+		require.NoError(t, err)
 	}
 
 	time.Sleep(waitTime)
@@ -185,10 +177,8 @@ func Benchmark_Trojan(b *testing.B) {
 		},
 	}
 
-	id, err := startContainer(cfg, hostCfg, "trojan")
-	if err != nil {
-		assert.FailNow(b, err.Error())
-	}
+	id, err := startContainer(cfg, hostCfg, "trojan-bench")
+	require.NoError(b, err)
 
 	b.Cleanup(func() {
 		cleanContainer(id)
@@ -203,10 +193,8 @@ func Benchmark_Trojan(b *testing.B) {
 		SkipCertVerify: true,
 		UDP:            true,
 	})
-	if err != nil {
-		assert.FailNow(b, err.Error())
-	}
+	require.NoError(b, err)
 
-	time.Sleep(waitTime)
+	require.True(b, TCPing(net.JoinHostPort(localIP.String(), "10002")))
 	benchmarkProxy(b, proxy)
 }

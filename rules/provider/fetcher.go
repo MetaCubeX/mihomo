@@ -40,9 +40,10 @@ func (f *fetcher) VehicleType() P.VehicleType {
 
 func (f *fetcher) Initial() (interface{}, error) {
 	var (
-		buf      []byte
-		hasLocal bool
-		err      error
+		buf         []byte
+		hasLocal    bool
+		err         error
+		forceUpdate bool
 	)
 
 	defer func() {
@@ -57,10 +58,8 @@ func (f *fetcher) Initial() (interface{}, error) {
 		f.updatedAt = &modTime
 		hasLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
-			defer func() {
-				log.Infoln("[Provider] %s's rules not updated for a long time, force refresh", f.Name())
-				go f.update()
-			}()
+			forceUpdate = true
+			log.Infoln("[Provider] %s not updated for a long time, force refresh", f.Name())
 		}
 	} else {
 		buf, err = f.vehicle.Read()
@@ -70,7 +69,21 @@ func (f *fetcher) Initial() (interface{}, error) {
 		return nil, err
 	}
 
-	rules, err := f.parser(buf)
+	var rules interface{}
+	if forceUpdate {
+		var forceBuf []byte
+		if forceBuf, err = f.vehicle.Read(); err == nil {
+			if rules, err = f.parser(forceBuf); err == nil {
+				hasLocal = false
+				buf = forceBuf
+			}
+		}
+	}
+
+	if err != nil || !forceUpdate {
+		rules, err = f.parser(buf)
+	}
+
 	if err != nil {
 		if !hasLocal {
 			return nil, err
