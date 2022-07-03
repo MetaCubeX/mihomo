@@ -68,7 +68,7 @@ profile:
 dns:
   enable: false # 关闭将使用系统DNS
   listen: 0.0.0.0:53 # 开启DNS服务器监听
-
+  prefer-h3: false # 启动DOH优先使用http/3
   # ipv6: false # false将返回AAAA的空结果
 
   # 用于解析nameserver,fallbacky以及其他DNS服务器配置的,DNS服务域名

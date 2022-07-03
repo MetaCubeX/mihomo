@@ -3,14 +3,17 @@ package dns
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/http3"
+	D "github.com/miekg/dns"
+	"go.uber.org/atomic"
 	"io"
 	"net"
 	"net/http"
-
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-
-	D "github.com/miekg/dns"
+	"strconv"
 )
 
 const (
@@ -22,6 +25,9 @@ type dohClient struct {
 	url          string
 	proxyAdapter string
 	transport    *http.Transport
+	h3Transport  *http3.RoundTripper
+	supportH3    *atomic.Bool
+	firstTest    *atomic.Bool
 }
 
 func (dc *dohClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
@@ -63,12 +69,32 @@ func (dc *dohClient) newRequest(m *D.Msg) (*http.Request, error) {
 	return req, nil
 }
 
-func (dc *dohClient) doRequest(req *http.Request) (*D.Msg, error) {
-	client := &http.Client{Transport: dc.transport}
+func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
+	if dc.supportH3.Load() {
+		msg, err = dc.doRequestWithTransport(req, dc.h3Transport)
+		if err != nil {
+			if dc.firstTest.CAS(true, false) {
+				dc.supportH3.Store(false)
+				_ = dc.h3Transport.Close()
+				dc.h3Transport = nil
+			}
+		}
+	} else {
+		msg, err = dc.doRequestWithTransport(req, dc.transport)
+	}
+
+	return
+}
+
+func (dc *dohClient) doRequestWithTransport(req *http.Request, transport http.RoundTripper) (*D.Msg, error) {
+	client := &http.Client{Transport: transport}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	defer resp.Body.Close()
 
 	buf, err := io.ReadAll(resp.Body)
@@ -80,7 +106,7 @@ func (dc *dohClient) doRequest(req *http.Request) (*D.Msg, error) {
 	return msg, err
 }
 
-func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
+func newDoHClient(url string, r *Resolver, preferH3 bool, proxyAdapter string) *dohClient {
 	return &dohClient{
 		url:          url,
 		proxyAdapter: proxyAdapter,
@@ -104,5 +130,40 @@ func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
 				}
 			},
 		},
+
+		h3Transport: &http3.RoundTripper{
+			Dial: func(ctx context.Context, network, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+
+				ip, err := resolver.ResolveIPWithResolver(host, r)
+				if err != nil {
+					return nil, err
+				}
+				if proxyAdapter == "" {
+					return quic.DialAddrEarlyContext(ctx, net.JoinHostPort(ip.String(), port), tlsCfg, cfg)
+				} else {
+					if conn, err := dialContextExtra(ctx, proxyAdapter, "udp", ip, port); err == nil {
+						portInt, err := strconv.Atoi(port)
+						if err != nil {
+							return nil, err
+						}
+
+						udpAddr := net.UDPAddr{
+							IP:   net.ParseIP(ip.String()),
+							Port: portInt,
+						}
+
+						return quic.DialEarlyContext(ctx, conn.(net.PacketConn), &udpAddr, host, tlsCfg, cfg)
+					} else {
+						return nil, err
+					}
+				}
+			},
+		},
+		supportH3: atomic.NewBool(preferH3),
+		firstTest: atomic.NewBool(true),
 	}
 }
