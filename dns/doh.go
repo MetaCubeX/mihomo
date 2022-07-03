@@ -78,6 +78,12 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 				_ = dc.h3Transport.Close()
 				dc.h3Transport = nil
 			}
+		} else {
+			if dc.firstTest.CAS(true, false) {
+				dc.supportH3.Store(true)
+				_ = dc.transport.CloseIdleConnections
+				dc.transport = nil
+			}
 		}
 	} else {
 		msg, err = dc.doRequestWithTransport(req, dc.transport)
