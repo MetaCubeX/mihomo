@@ -5,6 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"github.com/Dreamacro/clash/transport/hysteria/core"
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
+	"github.com/Dreamacro/clash/transport/hysteria/transport"
 	"io/ioutil"
 	"net"
 	"regexp"
@@ -14,14 +18,10 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	hyCongestion "github.com/Dreamacro/clash/transport/hysteria/congestion"
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/congestion"
 	M "github.com/sagernet/sing/common/metadata"
-	hyCongestion "github.com/tobyxdd/hysteria/pkg/congestion"
-	"github.com/tobyxdd/hysteria/pkg/core"
-	"github.com/tobyxdd/hysteria/pkg/obfs"
-	"github.com/tobyxdd/hysteria/pkg/pmtud_fix"
-	"github.com/tobyxdd/hysteria/pkg/transport"
 )
 
 const (
@@ -46,11 +46,12 @@ type Hysteria struct {
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	hdc := hyDialerWithContext{
-		ctx: ctx,
+		ctx: context.Background(),
 		hyDialer: func() (net.PacketConn, error) {
 			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
 		},
 	}
+
 	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	hdc := hyDialerWithContext{
-		ctx: ctx,
+		ctx: context.Background(),
 		hyDialer: func() (net.PacketConn, error) {
 			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
 		},
