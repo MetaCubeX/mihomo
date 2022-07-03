@@ -79,6 +79,7 @@ type Controller struct {
 // DNS config
 type DNS struct {
 	Enable                bool             `yaml:"enable"`
+	PreferH3              bool             `yaml:"prefer-h3"`
 	IPv6                  bool             `yaml:"ipv6"`
 	NameServer            []dns.NameServer `yaml:"nameserver"`
 	Fallback              []dns.NameServer `yaml:"fallback"`

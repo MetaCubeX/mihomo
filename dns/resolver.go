@@ -365,6 +365,7 @@ type FallbackFilter struct {
 }
 
 type Config struct {
+	PreferH3       bool
 	Main, Fallback []NameServer
 	Default        []NameServer
 	ProxyServer    []NameServer
@@ -378,29 +379,29 @@ type Config struct {
 
 func NewResolver(config Config) *Resolver {
 	defaultResolver := &Resolver{
-		main:     transform(config.Default, nil),
+		main:     transform(config.Default, nil, config.PreferH3),
 		lruCache: cache.NewLRUCache[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 	}
 
 	r := &Resolver{
 		ipv6:     config.IPv6,
-		main:     transform(config.Main, defaultResolver),
+		main:     transform(config.Main, defaultResolver, config.PreferH3),
 		lruCache: cache.NewLRUCache[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 		hosts:    config.Hosts,
 	}
 
 	if len(config.Fallback) != 0 {
-		r.fallback = transform(config.Fallback, defaultResolver)
+		r.fallback = transform(config.Fallback, defaultResolver, config.PreferH3)
 	}
 
 	if len(config.ProxyServer) != 0 {
-		r.proxyServer = transform(config.ProxyServer, defaultResolver)
+		r.proxyServer = transform(config.ProxyServer, defaultResolver, config.PreferH3)
 	}
 
 	if len(config.Policy) != 0 {
 		r.policy = trie.New[*Policy]()
 		for domain, nameserver := range config.Policy {
-			_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
+			_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver, config.PreferH3)))
 		}
 	}
 
