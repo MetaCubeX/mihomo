@@ -29,10 +29,8 @@ type LoadBalance struct {
 var errStrategy = errors.New("unsupported strategy")
 
 func parseStrategy(config map[string]any) string {
-	if elm, ok := config["strategy"]; ok {
-		if strategy, ok := elm.(string); ok {
-			return strategy
-		}
+	if strategy, ok := config["strategy"].(string); ok {
+		return strategy
 	}
 	return "consistent-hashing"
 }
@@ -140,6 +138,13 @@ func strategyConsistentHashing() strategyFn {
 		for i := 0; i < maxRetry; i, key = i+1, key+1 {
 			idx := jumpHash(key, buckets)
 			proxy := proxies[idx]
+			if proxy.Alive() {
+				return proxy
+			}
+		}
+
+		// when availability is poor, traverse the entire list to get the available nodes
+		for _, proxy := range proxies {
 			if proxy.Alive() {
 				return proxy
 			}
