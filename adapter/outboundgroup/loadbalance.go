@@ -127,6 +127,13 @@ func strategyConsistentHashing() strategyFn {
 			}
 		}
 
+		// when availability is poor, traverse the entire list to get the available nodes
+		for _, proxy := range proxies {
+			if proxy.Alive() {
+				return proxy
+			}
+		}
+
 		return proxies[0]
 	}
 }
