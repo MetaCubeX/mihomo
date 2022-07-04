@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/coreos/go-iptables v0.6.0
+	github.com/database64128/tfo-go v1.1.0
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
