@@ -81,7 +81,7 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 		} else {
 			if dc.firstTest.CAS(true, false) {
 				dc.supportH3.Store(true)
-				_ = dc.transport.CloseIdleConnections
+				dc.transport.CloseIdleConnections()
 				dc.transport = nil
 			}
 		}
