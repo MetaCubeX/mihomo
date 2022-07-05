@@ -11,9 +11,7 @@ import (
 )
 
 func parseSocksAddr(target socks5.Addr) *C.Metadata {
-	metadata := &C.Metadata{
-		AddrType: int(target[0]),
-	}
+	metadata := &C.Metadata{}
 
 	switch target[0] {
 	case socks5.AtypDomainName:
@@ -44,21 +42,13 @@ func parseHTTPAddr(request *http.Request) *C.Metadata {
 	host = strings.TrimRight(host, ".")
 
 	metadata := &C.Metadata{
-		NetWork:  C.TCP,
-		AddrType: C.AtypDomainName,
-		Host:     host,
-		DstIP:    nil,
-		DstPort:  port,
+		NetWork: C.TCP,
+		Host:    host,
+		DstIP:   nil,
+		DstPort: port,
 	}
 
-	ip := net.ParseIP(host)
-	if ip != nil {
-		switch {
-		case ip.To4() == nil:
-			metadata.AddrType = C.AtypIPv6
-		default:
-			metadata.AddrType = C.AtypIPv4
-		}
+	if ip := net.ParseIP(host); ip != nil {
 		metadata.DstIP = ip
 	}
 

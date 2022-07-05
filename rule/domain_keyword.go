@@ -16,11 +16,7 @@ func (dk *DomainKeyword) RuleType() C.RuleType {
 }
 
 func (dk *DomainKeyword) Match(metadata *C.Metadata) bool {
-	if metadata.AddrType != C.AtypDomainName {
-		return false
-	}
-	domain := metadata.Host
-	return strings.Contains(domain, dk.keyword)
+	return strings.Contains(metadata.Host, dk.keyword)
 }
 
 func (dk *DomainKeyword) Adapter() string {
