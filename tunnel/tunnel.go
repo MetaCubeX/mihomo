@@ -122,11 +122,6 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	if ip := net.ParseIP(metadata.Host); ip != nil {
 		metadata.DstIP = ip
 		metadata.Host = ""
-		if ip.To4() != nil {
-			metadata.AddrType = C.AtypIPv4
-		} else {
-			metadata.AddrType = C.AtypIPv6
-		}
 	}
 
 	// preprocess enhanced-mode metadata
@@ -134,7 +129,6 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		host, exist := resolver.FindHostByIP(metadata.DstIP)
 		if exist {
 			metadata.Host = host
-			metadata.AddrType = C.AtypDomainName
 			metadata.DNSMode = C.DNSMapping
 			if resolver.FakeIPEnabled() {
 				metadata.DstIP = nil

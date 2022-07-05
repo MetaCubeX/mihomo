@@ -16,9 +16,6 @@ func (ds *DomainSuffix) RuleType() C.RuleType {
 }
 
 func (ds *DomainSuffix) Match(metadata *C.Metadata) bool {
-	if metadata.AddrType != C.AtypDomainName {
-		return false
-	}
 	domain := metadata.Host
 	return strings.HasSuffix(domain, "."+ds.suffix) || domain == ds.suffix
 }
