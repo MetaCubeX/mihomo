@@ -157,6 +157,7 @@ type Config struct {
 
 type RawDNS struct {
 	Enable                bool              `yaml:"enable"`
+	PreferH3              bool              `yaml:"prefer-h3"`
 	IPv6                  bool              `yaml:"ipv6"`
 	UseHosts              bool              `yaml:"use-hosts"`
 	NameServer            []string          `yaml:"nameserver"`
@@ -239,6 +240,12 @@ type RawSniffer struct {
 	SkipDomain  []string `yaml:"skip-domain" json:"skip-domain"`
 	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
 }
+
+var (
+	GroupsList             = list.New()
+	ProxiesList            = list.New()
+	ParsingProxiesCallback func(groupsList *list.List, proxiesList *list.List)
+)
 
 // Parse config
 func Parse(buf []byte) (*Config, error) {
@@ -527,7 +534,12 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		[]providerTypes.ProxyProvider{pd},
 	)
 	proxies["GLOBAL"] = adapter.NewProxy(global)
-
+	ProxiesList = proxiesList
+	GroupsList = groupsList
+	if ParsingProxiesCallback != nil {
+		// refresh tray menu
+		go ParsingProxiesCallback(GroupsList, ProxiesList)
+	}
 	return proxies, providersMap, nil
 }
 
@@ -767,6 +779,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 	dnsCfg := &DNS{
 		Enable:       cfg.Enable,
 		Listen:       cfg.Listen,
+		PreferH3:     cfg.PreferH3,
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
