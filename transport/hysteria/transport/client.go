@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/faketcp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/udp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/wechat"
@@ -83,7 +82,6 @@ func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.
 		Port: int(port),
 	}
 
-	log.Infoln("use udp addr %s", serverUDPAddr.String())
 	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr.String(), obfs, dialer)
 	if err != nil {
 		return nil, err

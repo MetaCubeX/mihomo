@@ -126,7 +126,7 @@ func newDohTransport(r *Resolver, preferH3 bool, proxyAdapter string) *dohTransp
 	dohT.canUseH3.Store(preferH3)
 	if preferH3 {
 		dohT.h3 = &http3.RoundTripper{
-			Dial: func(ctx context.Context, network, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+			Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 				host, port, err := net.SplitHostPort(addr)
 				if err != nil {
 					return nil, err
