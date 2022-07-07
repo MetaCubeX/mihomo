@@ -9,17 +9,17 @@ require (
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gorilla/websocket v1.5.0
 	github.com/insomniacslk/dhcp v0.0.0-20220504074936-1ca156eafb9f
-	github.com/miekg/dns v1.1.49
+	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.7.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
-	golang.org/x/net v0.0.0-20220617184016-355a448f1bc9
+	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d
+	golang.org/x/net v0.0.0-20220706163947-c90051bbdb60
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
+	golang.org/x/sys v0.0.0-20220704084225-05e143d24a9e
 	gopkg.in/yaml.v3 v3.0.1
 )
 
