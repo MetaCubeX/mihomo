@@ -153,7 +153,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		MaxStreamReceiveWindow:         uint64(option.ReceiveWindowConn),
 		InitialConnectionReceiveWindow: uint64(option.ReceiveWindow),
 		MaxConnectionReceiveWindow:     uint64(option.ReceiveWindow),
-		KeepAlive:                      true,
+		KeepAlivePeriod:                10 * time.Second,
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
 	}
