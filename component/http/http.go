@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"github.com/Dreamacro/clash/common/tls"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/log"
 	"io"
@@ -56,6 +57,7 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 			conn := inner.HandleTcp(address, urlRes.Hostname())
 			return conn, nil
 		},
+		TLSClientConfig: tls.GetDefaultTLSConfig(),
 	}
 
 	client := http.Client{Transport: transport}

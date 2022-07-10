@@ -5,13 +5,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -100,20 +100,15 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		if v.option.TLS {
 			wsOpts.TLS = true
-			wsOpts.TLSConfig = &tls.Config{
+			wsOpts.TLSConfig = tlsC.MixinTLSConfig(&tls.Config{
 				ServerName:         host,
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				NextProtos:         []string{"http/1.1"},
-			}
+			})
 			if v.option.ServerName != "" {
 				wsOpts.TLSConfig.ServerName = v.option.ServerName
 			} else if host := wsOpts.Headers.Get("Host"); host != "" {
 				wsOpts.TLSConfig.ServerName = host
-			}
-		} else {
-			if host := wsOpts.Headers.Get("Host"); host == "" {
-				wsOpts.Headers.Set("Host", convert.RandHost())
-				convert.SetUserAgent(wsOpts.Headers)
 			}
 		}
 		c, err = clashVMess.StreamWebsocketConn(c, wsOpts)

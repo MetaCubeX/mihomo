@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"io"
 	"net"
 	"strconv"
@@ -160,7 +161,7 @@ func NewSocks5(option Socks5Option) *Socks5 {
 		pass:           option.Password,
 		tls:            option.TLS,
 		skipCertVerify: option.SkipCertVerify,
-		tlsConfig:      tlsConfig,
+		tlsConfig:      tlsC.MixinTLSConfig(tlsConfig),
 	}
 }
 

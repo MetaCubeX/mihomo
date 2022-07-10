@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/common/tls"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
@@ -72,7 +73,7 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
-
+	preUpdateExperimental(cfg)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
@@ -132,6 +133,14 @@ func GetGeneral() *config.General {
 
 func updateExperimental(c *config.Config) {
 	runtime.GC()
+}
+
+func preUpdateExperimental(c *config.Config) {
+	for _, fingerprint := range c.Experimental.Fingerprints {
+		if err := tls.AddCertFingerprint(fingerprint); err != nil {
+			log.Warnln("fingerprint[%s] is err, %s", fingerprint, err.Error())
+		}
+	}
 }
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {

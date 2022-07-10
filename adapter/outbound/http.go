@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"io"
 	"net"
 	"net/http"
@@ -149,7 +150,7 @@ func NewHttp(option HttpOption) *Http {
 		},
 		user:      option.UserName,
 		pass:      option.Password,
-		tlsConfig: tlsConfig,
+		tlsConfig: tlsC.MixinTLSConfig(tlsConfig),
 		option:    &option,
 	}
 }
