@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"github.com/Dreamacro/clash/transport/hysteria/core"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
@@ -121,11 +122,11 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if option.SNI != "" {
 		serverName = option.SNI
 	}
-	tlsConfig := &tls.Config{
+	tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
 		ServerName:         serverName,
 		InsecureSkipVerify: option.SkipCertVerify,
 		MinVersion:         tls.VersionTLS13,
-	}
+	})
 	if len(option.ALPN) > 0 {
 		tlsConfig.NextProtos = []string{option.ALPN}
 	} else {

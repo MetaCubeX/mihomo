@@ -3,6 +3,7 @@ package vmess
 import (
 	"context"
 	"crypto/tls"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -15,11 +16,11 @@ type TLSConfig struct {
 }
 
 func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
-	tlsConfig := &tls.Config{
+	tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
 		ServerName:         cfg.Host,
 		InsecureSkipVerify: cfg.SkipCertVerify,
 		NextProtos:         cfg.NextProtos,
-	}
+	})
 
 	tlsConn := tls.Client(conn, tlsConfig)
 
