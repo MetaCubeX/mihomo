@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Dreamacro/clash/common/convert"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"io"
 	"net"
 	"net/http"
@@ -80,12 +81,12 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		}
 		if v.option.TLS {
 			wsOpts.TLS = true
-			wsOpts.TLSConfig = &tls.Config{
+			wsOpts.TLSConfig = tlsC.MixinTLSConfig(&tls.Config{
 				MinVersion:         tls.VersionTLS12,
 				ServerName:         host,
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				NextProtos:         []string{"http/1.1"},
-			}
+			})
 			if v.option.ServerName != "" {
 				wsOpts.TLSConfig.ServerName = v.option.ServerName
 			} else if host := wsOpts.Headers.Get("Host"); host != "" {
@@ -436,10 +437,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 			ServiceName: v.option.GrpcOpts.GrpcServiceName,
 			Host:        v.option.ServerName,
 		}
-		tlsConfig := &tls.Config{
+		tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
 			InsecureSkipVerify: v.option.SkipCertVerify,
 			ServerName:         v.option.ServerName,
-		}
+		})
 
 		if v.option.ServerName == "" {
 			host, _, _ := net.SplitHostPort(v.addr)

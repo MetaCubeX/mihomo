@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/common/tls"
 	"net"
 	"net/http"
 	"strconv"
@@ -227,12 +228,12 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			return c, nil
 		}
 
-		tlsConfig := &tls.Config{
+		tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
 			NextProtos:         option.ALPN,
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: tOption.SkipCertVerify,
 			ServerName:         tOption.ServerName,
-		}
+		})
 
 		if t.option.Flow != "" {
 			t.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)

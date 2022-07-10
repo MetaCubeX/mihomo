@@ -136,7 +136,9 @@ type Sniffer struct {
 }
 
 // Experimental config
-type Experimental struct{}
+type Experimental struct {
+	Fingerprints []string `yaml:"fingerprints"`
+}
 
 // Config is clash config manager
 type Config struct {
