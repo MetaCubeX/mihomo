@@ -15,8 +15,11 @@ import (
 var globalFingerprints [][32]byte
 var mutex sync.Mutex
 
-func verifyPeerCertificateAndFingerprints(fingerprints [][32]byte) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+func verifyPeerCertificateAndFingerprints(fingerprints [][32]byte, insecureSkipVerify bool) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if insecureSkipVerify {
+			return nil
+		}
 
 		var preErr error
 		for i := range rawCerts {
@@ -72,10 +75,7 @@ func convertFingerprint(fingerprint string) (*[32]byte, error) {
 }
 
 func GetDefaultTLSConfig() *tls.Config {
-	return &tls.Config{
-		InsecureSkipVerify:    true,
-		VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(globalFingerprints),
-	}
+	return MixinTLSConfig(nil)
 }
 
 // GetTLSConfigWithSpecifiedFingerprint specified fingerprint
@@ -86,11 +86,11 @@ func GetTLSConfigWithSpecifiedFingerprint(tlsConfig *tls.Config, fingerprint str
 		if tlsConfig == nil {
 			return &tls.Config{
 				InsecureSkipVerify:    true,
-				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}),
+				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, false),
 			}, nil
 		} else {
+			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, tlsConfig.InsecureSkipVerify)
 			tlsConfig.InsecureSkipVerify = true
-			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes})
 			return tlsConfig, nil
 		}
 	}
@@ -98,10 +98,13 @@ func GetTLSConfigWithSpecifiedFingerprint(tlsConfig *tls.Config, fingerprint str
 
 func MixinTLSConfig(tlsConfig *tls.Config) *tls.Config {
 	if tlsConfig == nil {
-		return GetDefaultTLSConfig()
+		return &tls.Config{
+			InsecureSkipVerify:    true,
+			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(globalFingerprints, false),
+		}
 	}
 
+	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(globalFingerprints, tlsConfig.InsecureSkipVerify)
 	tlsConfig.InsecureSkipVerify = true
-	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(globalFingerprints)
 	return tlsConfig
 }

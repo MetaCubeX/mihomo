@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Dreamacro/clash/common/convert"
-	tlsC "github.com/Dreamacro/clash/common/tls"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"

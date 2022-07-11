@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/common/tls"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"net"
 	"net/http"
 	"strconv"

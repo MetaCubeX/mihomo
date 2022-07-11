@@ -2,7 +2,7 @@ package http
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/common/tls"
+	"github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/log"
 	"io"
