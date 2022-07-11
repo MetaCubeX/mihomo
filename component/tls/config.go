@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	xtls "github.com/xtls/go"
-	"strings"
 	"sync"
 	"time"
 )
@@ -63,8 +62,7 @@ func AddCertFingerprint(fingerprint string) error {
 }
 
 func convertFingerprint(fingerprint string) (*[32]byte, error) {
-	fp := strings.Replace(fingerprint, ":", "", -1)
-	fpByte, err := hex.DecodeString(fp)
+	fpByte, err := hex.DecodeString(fingerprint)
 	if err != nil {
 		return nil, err
 	}
