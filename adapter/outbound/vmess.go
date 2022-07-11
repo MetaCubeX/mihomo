@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	tlsC "github.com/Dreamacro/clash/component/tls"
+	vmess "github.com/sagernet/sing-vmess"
 	"net"
 	"net/http"
 	"strconv"
@@ -17,7 +18,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	clashVMess "github.com/Dreamacro/clash/transport/vmess"
-	"github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 )
@@ -45,6 +45,7 @@ type VmessOption struct {
 	Network             string       `proxy:"network,omitempty"`
 	TLS                 bool         `proxy:"tls,omitempty"`
 	SkipCertVerify      bool         `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string       `proxy:"fingerprint,omitempty"`
 	ServerName          string       `proxy:"servername,omitempty"`
 	HTTPOpts            HTTPOptions  `proxy:"http-opts,omitempty"`
 	HTTP2Opts           HTTP2Options `proxy:"h2-opts,omitempty"`
@@ -100,11 +101,21 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		if v.option.TLS {
 			wsOpts.TLS = true
-			wsOpts.TLSConfig = tlsC.MixinTLSConfig(&tls.Config{
+			tlsConfig := &tls.Config{
 				ServerName:         host,
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				NextProtos:         []string{"http/1.1"},
-			})
+			}
+
+			if len(v.option.Fingerprint) == 0 {
+				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+			} else {
+				var err error
+				if wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint); err != nil {
+					return nil, err
+				}
+			}
+
 			if v.option.ServerName != "" {
 				wsOpts.TLSConfig.ServerName = v.option.ServerName
 			} else if host := wsOpts.Headers.Get("Host"); host != "" {

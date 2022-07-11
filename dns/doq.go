@@ -129,7 +129,7 @@ func (dc *quicClient) getSession(ctx context.Context) (quic.Connection, error) {
 }
 
 func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) {
-	tlsConfig := tlsC.MixinTLSConfig(
+	tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(
 		&tls.Config{
 			InsecureSkipVerify: false,
 			NextProtos: []string{

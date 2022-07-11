@@ -12,15 +12,25 @@ import (
 type TLSConfig struct {
 	Host           string
 	SkipCertVerify bool
+	FingerPrint    string
 	NextProtos     []string
 }
 
 func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
-	tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
+	tlsConfig := &tls.Config{
 		ServerName:         cfg.Host,
 		InsecureSkipVerify: cfg.SkipCertVerify,
 		NextProtos:         cfg.NextProtos,
-	})
+	}
+
+	if len(cfg.FingerPrint) == 0 {
+		tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+	} else {
+		var err error
+		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, cfg.FingerPrint); err != nil {
+			return nil, err
+		}
+	}
 
 	tlsConn := tls.Client(conn, tlsConfig)
 
