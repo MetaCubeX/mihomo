@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/common/tls"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"

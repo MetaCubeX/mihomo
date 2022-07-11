@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/common/tls"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/transport/hysteria/core"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
