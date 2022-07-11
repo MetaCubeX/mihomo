@@ -30,7 +30,7 @@ experimental:
   # 证书指纹,SHA256格式,补充校验TLS证书
   # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
   fingerprints:
-    - "8F:11:1F:A9:AD:3C:D8:E9:17:A1:18:52:2C:AC:39:EA:33:74:1B:3B:BE:73:F9:1C:EC:E5:48:D5:CC:B0:E5:E8"
+    - "8F111FA9AD3CD8E917A118522CAC39EA33741B3BBE73F91CECE548D5CCB0E5E8" # 忽略大小写
 # 类似于/etc/hosts, 仅支持配置单个IP
 hosts:
 # '*.clash.dev': 127.0.0.1
