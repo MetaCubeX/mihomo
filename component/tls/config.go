@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	xtls "github.com/xtls/go"
 	"strings"
 	"sync"
 	"time"
@@ -75,11 +76,11 @@ func convertFingerprint(fingerprint string) (*[32]byte, error) {
 }
 
 func GetDefaultTLSConfig() *tls.Config {
-	return MixinTLSConfig(nil)
+	return GetGlobalFingerprintTLCConfig(nil)
 }
 
-// GetTLSConfigWithSpecifiedFingerprint specified fingerprint
-func GetTLSConfigWithSpecifiedFingerprint(tlsConfig *tls.Config, fingerprint string) (*tls.Config, error) {
+// GetSpecifiedFingerprintTLSConfig specified fingerprint
+func GetSpecifiedFingerprintTLSConfig(tlsConfig *tls.Config, fingerprint string) (*tls.Config, error) {
 	if fingerprintBytes, err := convertFingerprint(fingerprint); err != nil {
 		return nil, err
 	} else {
@@ -96,9 +97,40 @@ func GetTLSConfigWithSpecifiedFingerprint(tlsConfig *tls.Config, fingerprint str
 	}
 }
 
-func MixinTLSConfig(tlsConfig *tls.Config) *tls.Config {
+func GetGlobalFingerprintTLCConfig(tlsConfig *tls.Config) *tls.Config {
 	if tlsConfig == nil {
 		return &tls.Config{
+			InsecureSkipVerify:    true,
+			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(globalFingerprints, false),
+		}
+	}
+
+	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(globalFingerprints, tlsConfig.InsecureSkipVerify)
+	tlsConfig.InsecureSkipVerify = true
+	return tlsConfig
+}
+
+// GetSpecifiedFingerprintXTLSConfig specified fingerprint
+func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint string) (*xtls.Config, error) {
+	if fingerprintBytes, err := convertFingerprint(fingerprint); err != nil {
+		return nil, err
+	} else {
+		if tlsConfig == nil {
+			return &xtls.Config{
+				InsecureSkipVerify:    true,
+				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, false),
+			}, nil
+		} else {
+			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, tlsConfig.InsecureSkipVerify)
+			tlsConfig.InsecureSkipVerify = true
+			return tlsConfig, nil
+		}
+	}
+}
+
+func GetGlobalFingerprintXTLCConfig(tlsConfig *xtls.Config) *xtls.Config {
+	if tlsConfig == nil {
+		return &xtls.Config{
 			InsecureSkipVerify:    true,
 			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(globalFingerprints, false),
 		}

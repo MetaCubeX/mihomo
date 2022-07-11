@@ -36,6 +36,7 @@ type TrojanOption struct {
 	ALPN           []string    `proxy:"alpn,omitempty"`
 	SNI            string      `proxy:"sni,omitempty"`
 	SkipCertVerify bool        `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string      `proxy:"fingerprint,omitempty"`
 	UDP            bool        `proxy:"udp,omitempty"`
 	Network        string      `proxy:"network,omitempty"`
 	GrpcOpts       GrpcOptions `proxy:"grpc-opts,omitempty"`
@@ -189,6 +190,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		ServerName:     option.Server,
 		SkipCertVerify: option.SkipCertVerify,
 		FlowShow:       option.FlowShow,
+		Fingerprint:    option.Fingerprint,
 	}
 
 	if option.Network != "ws" && len(option.Flow) >= 16 {
@@ -228,12 +230,21 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			return c, nil
 		}
 
-		tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
+		tlsConfig := &tls.Config{
 			NextProtos:         option.ALPN,
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: tOption.SkipCertVerify,
 			ServerName:         tOption.ServerName,
-		})
+		}
+
+		if len(option.Fingerprint) == 0 {
+			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		} else {
+			var err error
+			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
+				return nil, err
+			}
+		}
 
 		if t.option.Flow != "" {
 			t.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)

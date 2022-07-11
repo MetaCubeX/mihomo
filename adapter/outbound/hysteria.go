@@ -87,6 +87,7 @@ type HysteriaOption struct {
 	Obfs                string `proxy:"obfs,omitempty"`
 	SNI                 string `proxy:"sni,omitempty"`
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string `proxy:"fingerprint,omitempty"`
 	ALPN                string `proxy:"alpn,omitempty"`
 	CustomCA            string `proxy:"ca,omitempty"`
 	CustomCAString      string `proxy:"ca_str,omitempty"`
@@ -122,11 +123,22 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if option.SNI != "" {
 		serverName = option.SNI
 	}
-	tlsConfig := tlsC.MixinTLSConfig(&tls.Config{
+
+	tlsConfig := &tls.Config{
 		ServerName:         serverName,
 		InsecureSkipVerify: option.SkipCertVerify,
 		MinVersion:         tls.VersionTLS13,
-	})
+	}
+	if len(option.Fingerprint) != 0 {
+		var err error
+		tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+	}
+
 	if len(option.ALPN) > 0 {
 		tlsConfig.NextProtos = []string{option.ALPN}
 	} else {
