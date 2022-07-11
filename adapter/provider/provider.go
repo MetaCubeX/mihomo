@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Dreamacro/clash/common/convert"
+	"github.com/Dreamacro/clash/component/resource"
 	"github.com/dlclark/regexp2"
 	"math"
 	"runtime"
@@ -31,7 +32,7 @@ type ProxySetProvider struct {
 }
 
 type proxySetProvider struct {
-	*fetcher[[]C.Proxy]
+	*resource.Fetcher[[]C.Proxy]
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
 	version     uint
@@ -43,7 +44,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		"type":        pp.Type().String(),
 		"vehicleType": pp.VehicleType().String(),
 		"proxies":     pp.Proxies(),
-		"updatedAt":   pp.updatedAt,
+		"updatedAt":   pp.UpdatedAt,
 	})
 }
 
@@ -52,7 +53,7 @@ func (pp *proxySetProvider) Version() uint {
 }
 
 func (pp *proxySetProvider) Name() string {
-	return pp.name
+	return pp.Fetcher.Name()
 }
 
 func (pp *proxySetProvider) HealthCheck() {
@@ -60,19 +61,19 @@ func (pp *proxySetProvider) HealthCheck() {
 }
 
 func (pp *proxySetProvider) Update() error {
-	elm, same, err := pp.fetcher.Update()
+	elm, same, err := pp.Fetcher.Update()
 	if err == nil && !same {
-		pp.onUpdate(elm)
+		pp.OnUpdate(elm)
 	}
 	return err
 }
 
 func (pp *proxySetProvider) Initial() error {
-	elm, err := pp.fetcher.Initial()
+	elm, err := pp.Fetcher.Initial()
 	if err != nil {
 		return err
 	}
-	pp.onUpdate(elm)
+	pp.OnUpdate(elm)
 	return nil
 }
 
@@ -98,7 +99,7 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 
 func stopProxyProvider(pd *ProxySetProvider) {
 	pd.healthCheck.close()
-	_ = pd.fetcher.Destroy()
+	_ = pd.Fetcher.Destroy()
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
@@ -116,8 +117,8 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
-	pd.fetcher = fetcher
+	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
+	pd.Fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
@@ -216,7 +217,7 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	}
 }
 
-func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp) parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
