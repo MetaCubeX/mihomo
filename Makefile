@@ -2,7 +2,6 @@ NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
-VERSION_FILE=alpha
 VERSION=alpha@$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),Beta)
 VERSION=beta-$(shell git rev-parse --short HEAD)
@@ -116,7 +115,7 @@ zip_releases=$(addsuffix .zip, $(WINDOWS_ARCH_LIST))
 
 $(gz_releases): %.gz : %
 	chmod +x $(BINDIR)/$(NAME)-$(basename $@)
-	gzip -f -S -$(VERSION_FILE).gz $(BINDIR)/$(NAME)-$(basename $@)
+	gzip -f -S -$(VERSION).gz $(BINDIR)/$(NAME)-$(basename $@)
 
 $(zip_releases): %.zip : %
 	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
