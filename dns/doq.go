@@ -5,9 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/common/tls"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/lucas-clemente/quic-go"
 	"net"
 	"strconv"
@@ -129,7 +129,7 @@ func (dc *quicClient) getSession(ctx context.Context) (quic.Connection, error) {
 }
 
 func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) {
-	tlsConfig := tlsC.MixinTLSConfig(
+	tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(
 		&tls.Config{
 			InsecureSkipVerify: false,
 			NextProtos: []string{
