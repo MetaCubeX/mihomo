@@ -49,7 +49,7 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{ github.ref_name }}
+          tag: ${{ github.ref_name }}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
