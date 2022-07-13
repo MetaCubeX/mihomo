@@ -370,9 +370,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		resolved = true
 	}
 
-	var processUid int32
-	process := ""
-	processPath := ""
 	foundProcess := false
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
@@ -392,17 +389,11 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 			} else {
-				process = filepath.Base(path)
-				processPath = path
-				processUid = uid
+				metadata.Process = filepath.Base(path)
+				metadata.ProcessPath = path
+				metadata.Uid = &uid
 				foundProcess = true
 			}
-		}
-
-		if foundProcess {
-			metadata.Uid = &processUid
-			metadata.Process = process
-			metadata.ProcessPath = processPath
 		}
 
 		if rule.Match(metadata) {
@@ -419,21 +410,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
 				log.Debugln("%s UDP is not supported", adapter.Name())
 				continue
-			}
-
-			extra := rule.RuleExtra()
-			if extra != nil {
-				if extra.NotMatchNetwork(metadata.NetWork) {
-					continue
-				}
-
-				if extra.NotMatchSourceIP(metadata.SrcIP) {
-					continue
-				}
-
-				if extra.NotMatchProcessName(metadata.Process) {
-					continue
-				}
 			}
 
 			return adapter, rule, nil
