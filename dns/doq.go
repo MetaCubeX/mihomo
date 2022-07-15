@@ -142,7 +142,8 @@ func (dc *quicClient) openConnection(ctx context.Context) (quic.Connection, erro
 		ConnectionIDLength:   12,
 		HandshakeIdleTimeout: time.Second * 8,
 		MaxIncomingStreams:   4,
-		MaxIdleTimeout:       time.Second * 30,
+		KeepAlivePeriod:      10 * time.Second,
+		MaxIdleTimeout:       time.Second * 120,
 	}
 
 	log.Debugln("opening new connection to %s", dc.addr)
