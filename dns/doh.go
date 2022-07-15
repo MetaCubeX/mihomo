@@ -172,7 +172,7 @@ func (doh *dohTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var h3Err bool
 	var fallbackErr bool
 	defer func() {
-		if doh.preferH3 && h3Err {
+		if doh.preferH3 && (h3Err || fallbackErr) {
 			doh.canUseH3.Store(doh.preferH3 && fallbackErr)
 		}
 	}()
