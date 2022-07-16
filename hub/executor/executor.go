@@ -288,7 +288,6 @@ func updateSniffer(sniffer *config.Sniffer) {
 }
 
 func updateGeneral(general *config.General, force bool) {
-	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
 	tunnel.SetAlwaysFindProcess(general.EnableProcess)
 	dialer.DisableIPv6 = !general.IPv6
