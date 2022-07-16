@@ -16,7 +16,7 @@ func open(fd int, mtu uint32) (device.Device, error) {
 }
 
 func (f *FD) useEndpoint() error {
-	return newEp(f)
+	return f.newEpOther()
 }
 
 func (f *FD) useIOBased() error {

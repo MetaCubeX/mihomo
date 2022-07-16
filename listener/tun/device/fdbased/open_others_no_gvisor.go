@@ -6,6 +6,6 @@ import (
 	"fmt"
 )
 
-func newEp(f *FD) error {
+func (f *FD) newEpOther() error {
 	return fmt.Errorf("unsupported gvisor on the build")
 }
