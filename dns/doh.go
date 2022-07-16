@@ -7,6 +7,7 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tls2 "github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/log"
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/http3"
 	D "github.com/miekg/dns"
@@ -71,6 +72,7 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	client := &http.Client{Transport: dc.transport}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Errorln("doh %v", err)
 		return nil, err
 	}
 
@@ -138,6 +140,7 @@ func newDohTransport(r *Resolver, preferH3 bool, proxyAdapter string) *dohTransp
 				if err != nil {
 					return nil, err
 				}
+
 				if proxyAdapter == "" {
 					return quic.DialAddrEarlyContext(ctx, net.JoinHostPort(ip.String(), port), tlsCfg, cfg)
 				} else {
@@ -173,7 +176,7 @@ func (doh *dohTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var fallbackErr bool
 	defer func() {
 		if doh.preferH3 && (h3Err || fallbackErr) {
-			doh.canUseH3.Store(doh.preferH3 && fallbackErr)
+			doh.canUseH3.Store(doh.preferH3 && (!h3Err || fallbackErr))
 		}
 	}()
 
@@ -182,7 +185,7 @@ func (doh *dohTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	req.Body = ioutil.NopCloser(bytes.NewReader(bodyBytes))
-	if doh.preferH3 && doh.canUseH3.Load() {
+	if doh.canUseH3.Load() {
 		resp, err = doh.h3.RoundTrip(req)
 		h3Err = err != nil
 		if !h3Err {
