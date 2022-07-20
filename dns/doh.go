@@ -7,7 +7,6 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tls2 "github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/log"
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/http3"
 	D "github.com/miekg/dns"
@@ -72,7 +71,6 @@ func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	client := &http.Client{Transport: dc.transport}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Errorln("doh %v", err)
 		return nil, err
 	}
 
