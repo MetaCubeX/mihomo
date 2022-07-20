@@ -2,7 +2,7 @@ name: Prerelease
 on:
   push:
     branches:
-      - Alpha
+      - alpha
       - Beta
   pull_request:
     branches:
