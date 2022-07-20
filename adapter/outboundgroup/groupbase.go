@@ -19,12 +19,12 @@ type GroupBase struct {
 	*outbound.Base
 	filter        *regexp2.Regexp
 	providers     []provider.ProxyProvider
-	versions      sync.Map // map[string]uint
-	proxies       sync.Map // map[string][]C.Proxy
 	failedTestMux sync.Mutex
 	failedTimes   int
 	failedTime    time.Time
 	failedTesting *atomic.Bool
+	proxies       [][]C.Proxy
+	versions      []atomic.Uint32
 }
 
 type GroupBaseOption struct {
@@ -38,12 +38,18 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	if opt.filter != "" {
 		filter = regexp2.MustCompile(opt.filter, 0)
 	}
-	return &GroupBase{
+
+	gb := &GroupBase{
 		Base:          outbound.NewBase(opt.BaseOption),
 		filter:        filter,
 		providers:     opt.providers,
 		failedTesting: atomic.NewBool(false),
 	}
+
+	gb.proxies = make([][]C.Proxy, len(opt.providers))
+	gb.versions = make([]atomic.Uint32, len(opt.providers))
+
+	return gb
 }
 
 func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
@@ -61,43 +67,44 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		return proxies
 	}
 
-	for _, pd := range gb.providers {
+	for i, pd := range gb.providers {
 		if touch {
 			pd.Touch()
 		}
 
 		if pd.VehicleType() == types.Compatible {
-			gb.proxies.Store(pd.Name(), pd.Proxies())
-			gb.versions.Store(pd.Name(), pd.Version())
+			gb.versions[i].Store(pd.Version())
+			gb.proxies[i] = pd.Proxies()
 			continue
 		}
 
-		if version, ok := gb.versions.Load(pd.Name()); !ok || version != pd.Version() {
+		version := gb.versions[i].Load()
+		if version != pd.Version() && gb.versions[i].CAS(version, pd.Version()) {
 			var (
 				proxies    []C.Proxy
 				newProxies []C.Proxy
 			)
 
 			proxies = pd.Proxies()
-
 			for _, p := range proxies {
 				if mat, _ := gb.filter.FindStringMatch(p.Name()); mat != nil {
 					newProxies = append(newProxies, p)
 				}
 			}
 
-			gb.proxies.Store(pd.Name(), newProxies)
-			gb.versions.Store(pd.Name(), pd.Version())
+			gb.proxies[i] = newProxies
 		}
 	}
+
 	var proxies []C.Proxy
-	gb.proxies.Range(func(key, value any) bool {
-		proxies = append(proxies, value.([]C.Proxy)...)
-		return true
-	})
+	for _, p := range gb.proxies {
+		proxies = append(proxies, p...)
+	}
+
 	if len(proxies) == 0 {
 		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
 	}
+
 	return proxies
 }
 

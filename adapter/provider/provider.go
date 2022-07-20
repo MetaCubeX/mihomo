@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
+	"time"
+
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/resource"
 	"github.com/dlclark/regexp2"
-	"math"
-	"runtime"
-	"time"
 
 	"github.com/Dreamacro/clash/adapter"
 	C "github.com/Dreamacro/clash/constant"
@@ -33,10 +33,10 @@ type ProxySetProvider struct {
 
 type proxySetProvider struct {
 	*resource.Fetcher[[]C.Proxy]
-	proxies     []C.Proxy
-	healthCheck *HealthCheck
+	proxies        []C.Proxy
+	healthCheck    *HealthCheck
 	providersInUse []types.ProxyProvider
-	version     uint
+	version        uint32
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -49,7 +49,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (pp *proxySetProvider) Version() uint {
+func (pp *proxySetProvider) Version() uint32 {
 	return pp.version
 }
 
@@ -86,7 +86,7 @@ func (pp *proxySetProvider) Proxies() []C.Proxy {
 	return pp.proxies
 }
 
-func (pp *proxySetProvider) Touch(){
+func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
 }
 
@@ -144,7 +144,7 @@ type compatibleProvider struct {
 	name        string
 	healthCheck *HealthCheck
 	proxies     []C.Proxy
-	version     uint
+	version     uint32
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
@@ -156,7 +156,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (cp *compatibleProvider) Version() uint {
+func (cp *compatibleProvider) Version() uint32 {
 	return cp.version
 }
 
@@ -188,7 +188,7 @@ func (cp *compatibleProvider) Proxies() []C.Proxy {
 	return cp.proxies
 }
 
-func (cp *compatibleProvider) Touch(){
+func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
 }
 
@@ -225,7 +225,7 @@ type proxyFilterProvider struct {
 	psd         *ProxySetProvider
 	proxies     []C.Proxy
 	filter      *regexp2.Regexp
-	version     uint
+	version     uint32
 	healthCheck *HealthCheck
 }
 
@@ -238,7 +238,7 @@ func (pf *proxyFilterProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (pf *proxyFilterProvider) Version() uint {
+func (pf *proxyFilterProvider) Version() uint32 {
 	return pf.version
 }
 
@@ -285,7 +285,7 @@ func (pf *proxyFilterProvider) Proxies() []C.Proxy {
 	return pf.proxies
 }
 
-func (pf *proxyFilterProvider) Touch(){
+func (pf *proxyFilterProvider) Touch() {
 	pf.healthCheck.touch()
 }
 
@@ -315,11 +315,7 @@ func NewProxyFilterProvider(name string, psd *ProxySetProvider, hc *HealthCheck,
 func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
-		if pd.version == math.MaxUint {
-			pd.version = 0
-		} else {
-			pd.version++
-		}
+		pd.version += 1
 	}
 }
 
@@ -341,7 +337,7 @@ func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp, prefixName 
 
 		proxies := []C.Proxy{}
 		for idx, mapping := range schema.Proxies {
-		    name, ok := mapping["name"]
+			name, ok := mapping["name"]
 			mat, _ := filterReg.FindStringMatch(name.(string))
 			if ok && len(filter) > 0 && mat == nil {
 				continue
