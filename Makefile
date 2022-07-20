@@ -1,7 +1,7 @@
 NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
-ifeq ($(BRANCH),Alpha)
+ifeq ($(BRANCH),alpha)
 VERSION=alpha@$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),Beta)
 VERSION=beta-$(shell git rev-parse --short HEAD)
