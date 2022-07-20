@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.18
+go 1.19
 
 require (
 	github.com/coreos/go-iptables v0.6.0
@@ -35,7 +35,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.1-0.20220706211558-7780039ad599
+replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.2-0.20220806194731-5be744e08984
 
 require (
 	github.com/cheekybits/genny v1.0.0 // indirect
