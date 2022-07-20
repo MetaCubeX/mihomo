@@ -7,7 +7,6 @@ import (
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/resource"
 	"github.com/dlclark/regexp2"
-	"math"
 	"runtime"
 	"time"
 
@@ -35,7 +34,7 @@ type proxySetProvider struct {
 	*resource.Fetcher[[]C.Proxy]
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
-	version     uint
+	version     uint32
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -48,7 +47,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (pp *proxySetProvider) Version() uint {
+func (pp *proxySetProvider) Version() uint32 {
 	return pp.version
 }
 
@@ -134,7 +133,7 @@ type compatibleProvider struct {
 	name        string
 	healthCheck *HealthCheck
 	proxies     []C.Proxy
-	version     uint
+	version     uint32
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
@@ -146,7 +145,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (cp *compatibleProvider) Version() uint {
+func (cp *compatibleProvider) Version() uint32 {
 	return cp.version
 }
 
@@ -209,11 +208,7 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
-		if pd.version == math.MaxUint {
-			pd.version = 0
-		} else {
-			pd.version++
-		}
+		pd.version += 1
 	}
 }
 
