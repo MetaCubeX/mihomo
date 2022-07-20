@@ -209,6 +209,11 @@ func ResolveAllIPWithResolver(host string, r Resolver) ([]netip.Addr, error) {
 		return []netip.Addr{node.Data}, nil
 	}
 
+	ip, err := netip.ParseAddr(host)
+	if err == nil {
+		return []netip.Addr{ip}, nil
+	}
+
 	if r != nil {
 		if DisableIPv6 {
 			return r.ResolveAllIPv4(host)
@@ -217,11 +222,6 @@ func ResolveAllIPWithResolver(host string, r Resolver) ([]netip.Addr, error) {
 		return r.ResolveAllIP(host)
 	} else if DisableIPv6 {
 		return ResolveAllIPv4(host)
-	}
-
-	ip, err := netip.ParseAddr(host)
-	if err == nil {
-		return []netip.Addr{ip}, nil
 	}
 
 	if DefaultResolver == nil {
@@ -241,6 +241,11 @@ func ResolveAllIPPrimaryIPv4WithResolver(host string, r Resolver) ([]netip.Addr,
 		return []netip.Addr{node.Data}, nil
 	}
 
+	ip, err := netip.ParseAddr(host)
+	if err == nil {
+		return []netip.Addr{ip}, nil
+	}
+
 	if r != nil {
 		if DisableIPv6 {
 			return r.ResolveAllIPv4(host)
@@ -249,11 +254,6 @@ func ResolveAllIPPrimaryIPv4WithResolver(host string, r Resolver) ([]netip.Addr,
 		return r.ResolveAllIPPrimaryIPv4(host)
 	} else if DisableIPv6 {
 		return ResolveAllIPv4(host)
-	}
-
-	ip, err := netip.ParseAddr(host)
-	if err == nil {
-		return []netip.Addr{ip}, nil
 	}
 
 	if DefaultResolver == nil {
