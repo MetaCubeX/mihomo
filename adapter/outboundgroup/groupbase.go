@@ -78,6 +78,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 			continue
 		}
 
+		// use CAS reduce many times filter
 		version := gb.versions[i].Load()
 		if version != pd.Version() && gb.versions[i].CAS(version, pd.Version()) {
 			var (
