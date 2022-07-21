@@ -55,7 +55,7 @@ func ResolveIPv4WithResolver(host string, r Resolver) (netip.Addr, error) {
 	if ips, err := ResolveAllIPv4WithResolver(host, r); err == nil {
 		return ips[rand.Intn(len(ips))], nil
 	} else {
-		return netip.Addr{}, nil
+		return netip.Addr{}, err
 	}
 }
 
