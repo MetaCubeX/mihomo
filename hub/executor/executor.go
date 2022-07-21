@@ -172,7 +172,6 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		Default:     c.DefaultNameserver,
 		Policy:      c.NameServerPolicy,
 		ProxyServer: c.ProxyServerNameserver,
-		PreferH3:    c.PreferH3,
 	}
 
 	r := dns.NewResolver(cfg)
