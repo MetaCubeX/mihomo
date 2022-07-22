@@ -26,6 +26,7 @@ var (
 	allowLan    = false
 	bindAddress = "*"
 	lastTunConf *config.Tun
+	inboundTfo  = false
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -80,6 +81,10 @@ func SetBindAddress(host string) {
 	bindAddress = host
 }
 
+func SetInboundTfo(itfo bool) {
+	inboundTfo = itfo
+}
+
 func NewInner(tcpIn chan<- C.ConnContext) {
 	inner.New(tcpIn)
 }
@@ -109,7 +114,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	httpListener, err = http.New(addr, tcpIn)
+	httpListener, err = http.New(addr, inboundTfo, tcpIn)
 	if err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
 		return
@@ -160,7 +165,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	tcpListener, err := socks.New(addr, tcpIn)
+	tcpListener, err := socks.New(addr, inboundTfo, tcpIn)
 	if err != nil {
 		return
 	}
@@ -310,7 +315,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	mixedListener, err = mixed.New(addr, tcpIn)
+	mixedListener, err = mixed.New(addr, inboundTfo, tcpIn)
 	if err != nil {
 		return
 	}
