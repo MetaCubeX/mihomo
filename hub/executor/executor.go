@@ -329,6 +329,8 @@ func updateGeneral(general *config.General, force bool) {
 	bindAddress := general.BindAddress
 	P.SetBindAddress(bindAddress)
 
+	P.SetInboundTfo(general.InboundTfo)
+
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
