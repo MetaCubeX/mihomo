@@ -67,6 +67,7 @@ type Inbound struct {
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
+	InboundTfo     bool     `json:"inbound-tfo"`
 }
 
 // Controller config
@@ -197,6 +198,7 @@ type RawConfig struct {
 	RedirPort          int          `yaml:"redir-port"`
 	TProxyPort         int          `yaml:"tproxy-port"`
 	MixedPort          int          `yaml:"mixed-port"`
+	InboundTfo         bool         `yaml:"inbound-tfo"`
 	Authentication     []string     `yaml:"authentication"`
 	AllowLan           bool         `yaml:"allow-lan"`
 	BindAddress        string       `yaml:"bind-address"`
@@ -423,6 +425,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			MixedPort:   cfg.MixedPort,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
+			InboundTfo:  cfg.InboundTfo,
 		},
 		Controller: Controller{
 			ExternalController: cfg.ExternalController,
