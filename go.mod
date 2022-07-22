@@ -31,11 +31,9 @@ require (
 	golang.org/x/exp v0.0.0-20220706164943-b4a6d9510983
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-
 	golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	golang.zx2c4.com/wireguard v0.0.0-20220601130007-6a08d81f6bc4
-
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1

@@ -2,12 +2,10 @@ name: Prerelease
 on:
   push:
     branches:
-      - alpha
-      - Beta
+      - Alpha
   pull_request:
     branches:
       - Alpha
-      - Beta
 jobs:
   Build:
     runs-on: ubuntu-latest
