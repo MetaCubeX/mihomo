@@ -1,8 +1,8 @@
 NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
-ifeq ($(BRANCH),Alpha)
-VERSION=alpha-$(shell git rev-parse --short HEAD)
+ifeq ($(BRANCH),alpha)
+VERSION=alpha@$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),Beta)
 VERSION=beta-$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),)
@@ -17,24 +17,9 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clas
 		-w -s -buildid='
 
 PLATFORM_LIST = \
-	darwin-amd64 \
-	darwin-arm64 \
-	linux-amd64-compatible \
-	linux-amd64 \
-	linux-armv5 \
-	linux-armv6 \
-	linux-armv7 \
 	linux-arm64 \
-	linux-mips64 \
-	linux-mips64le \
-	linux-mips-softfloat \
-	linux-mips-hardfloat \
-	linux-mipsle-softfloat \
-	linux-mipsle-hardfloat \
-	android-arm64 \
-	freebsd-386 \
-	freebsd-amd64 \
-	freebsd-arm64
+	linux-armv7 \
+	android-arm64
 
 WINDOWS_ARCH_LIST = \
 	windows-386 \
@@ -135,9 +120,9 @@ $(gz_releases): %.gz : %
 $(zip_releases): %.zip : %
 	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
 
-all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
+all-arch: $(PLATFORM_LIST)
 
-releases: $(gz_releases) $(zip_releases)
+releases: $(gz_releases)
 
 vet:
 	go test ./...
