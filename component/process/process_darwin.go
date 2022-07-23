@@ -82,7 +82,8 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 		if ip == srcIP {
 			// xsocket_n.so_last_pid
 			pid := readNativeUint32(buf[so+68 : so+72])
-			return getExecPathFromPID(pid)
+			pp, err := getExecPathFromPID(pid)
+			return -1, pp, err
 		}
 
 		// udp packet connection may be not equal with srcIP
@@ -92,10 +93,10 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 	}
 
 	if network == UDP && fallbackUDPProcess != "" {
-		return fallbackUDPProcess, nil
+		return -1, fallbackUDPProcess, nil
 	}
 
-	return "", ErrNotFound
+	return -1, "", ErrNotFound
 }
 
 func getExecPathFromPID(pid uint32) (string, error) {
