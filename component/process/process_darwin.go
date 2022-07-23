@@ -15,7 +15,7 @@ const (
 	proccallnumpidinfo  = 0x2
 )
 
-func findProcessName(network string, ip netip.Addr, port int) (string, error) {
+func findProcessName(network string, ip netip.Addr, port int) (int32, string, error) {
 	var spath string
 	switch network {
 	case TCP:
@@ -23,14 +23,14 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 	case UDP:
 		spath = "net.inet.udp.pcblist_n"
 	default:
-		return "", ErrInvalidNetwork
+		return -1, "", ErrInvalidNetwork
 	}
 
 	isIPv4 := ip.Is4()
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	buf := []byte(value)
