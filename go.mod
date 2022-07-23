@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/coreos/go-iptables v0.6.0
+	github.com/database64128/tfo-go v1.1.0
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
@@ -46,7 +47,6 @@ replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.1-
 
 require (
 	github.com/cheekybits/genny v1.0.0 // indirect
-	github.com/database64128/tfo-go v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect

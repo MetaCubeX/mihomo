@@ -8,8 +8,6 @@ import (
 	"net/netip"
 	"os"
 	"path"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"unicode"
@@ -39,6 +37,7 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (int32, string,
 	if err != nil {
 		return -1, "", err
 	}
+
 	pp, err := resolveProcessNameByProcSearch(inode, uid)
 	return uid, pp, err
 }
@@ -110,7 +109,7 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, 
 		return 0, 0, fmt.Errorf("netlink message: NLMSG_ERROR")
 	}
 
-	inode, uid := unpackSocketDiagResponse(&message)
+	inode, uid := unpackSocketDiagResponse(&messages[0])
 	if inode < 0 || uid < 0 {
 		return 0, 0, fmt.Errorf("invalid inode(%d) or uid(%d)", inode, uid)
 	}
@@ -198,37 +197,13 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 				continue
 			}
 
-			if runtime.GOOS == "android" {
-				if bytes.Equal(buffer[:n], socket) {
-					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
-					if err != nil {
-						return "", err
-					}
-
-					return splitCmdline(cmdline), nil
-				}
-			} else {
-				if bytes.Equal(buffer[:n], socket) {
-					return os.Readlink(path.Join(processPath, "exe"))
-				}
+			if bytes.Equal(buffer[:n], socket) {
+				return os.Readlink(path.Join(processPath, "exe"))
 			}
 		}
 	}
 
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
-}
-
-func splitCmdline(cmdline []byte) string {
-	cmdline = bytes.Trim(cmdline, " ")
-
-	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r)
-	})
-
-	if idx == -1 {
-		return filepath.Base(string(cmdline))
-	}
-	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {
