@@ -170,6 +170,9 @@ func ReadPacket(r io.Reader, payload []byte) (net.Addr, int, int, error) {
 		return nil, 0, 0, errors.New("read addr error")
 	}
 	uAddr := addr.UDPAddr()
+	if uAddr == nil {
+		return nil, 0, 0, errors.New("parse addr error")
+	}
 
 	if _, err = io.ReadFull(r, payload[:2]); err != nil {
 		return nil, 0, 0, errors.New("read length error")
