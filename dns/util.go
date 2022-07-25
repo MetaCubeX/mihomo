@@ -63,8 +63,6 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			Client: &D.Client{
 				Net: s.Net,
 				TLSConfig: &tls.Config{
-					// alpn identifier, see https://tools.ietf.org/html/draft-hoffman-dprive-dns-tls-alpn-00#page-6
-					NextProtos: []string{"dns"},
 					ServerName: host,
 				},
 				UDPSize: 4096,
