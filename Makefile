@@ -2,9 +2,9 @@ NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
-VERSION=alpha@$(shell git rev-parse --short HEAD)
-else ifeq ($(BRANCH),Beta)
-VERSION=beta-$(shell git rev-parse --short HEAD)
+VERSION=alpha-$(shell git rev-parse --short HEAD)
+else ifeq ($(BRANCH),Canary)
+VERSION=Canary-$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),)
 VERSION=$(shell git describe --tags)
 else
