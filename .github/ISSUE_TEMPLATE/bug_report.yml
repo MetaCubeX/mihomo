@@ -56,8 +56,8 @@ This is an issue of the Clash core *per se*, not to the derivatives of Clash, li
       render: yaml
       label: "Clash config"
       description: "
-在下方附上 Clash core 脱敏后配置文件的内容
-Paste the Clash core configuration below.
+在下方附上 Clash core 配置文件，请确保配置文件中没有敏感信息（比如：服务器地址，密码，端口等）
+Paste the Clash core configuration file below, please make sure that there is no sensitive information in the configuration file (e.g., server address/url, password, port)
 "
     validations:
       required: true
