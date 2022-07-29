@@ -55,6 +55,7 @@ type General struct {
 	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
 	Sniffing      bool         `json:"sniffing"`
+	EBpf          EBpf         `json:"-"`
 }
 
 // Inbound config
@@ -190,6 +191,7 @@ type RawTun struct {
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
+	RedirectToTun       []string   `yaml:"-" json:"-"`
 }
 
 type RawConfig struct {
@@ -222,6 +224,7 @@ type RawConfig struct {
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
+	EBpf          EBpf                      `yaml:"ebpf"`
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
@@ -243,6 +246,12 @@ type RawSniffer struct {
 	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
 	SkipDomain  []string `yaml:"skip-domain" json:"skip-domain"`
 	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
+}
+
+// EBpf config
+type EBpf struct {
+	RedirectToTun []string `yaml:"redirect-to-tun" json:"redirect-to-tun"`
+	AutoRedir     []string `yaml:"auto-redir" json:"auto-redir"`
 }
 
 var (
@@ -415,7 +424,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
 		}
 	}
-
+	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
 		Inbound: Inbound{
 			Port:        cfg.Port,
@@ -442,6 +451,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
 		EnableProcess: cfg.EnableProcess,
+		EBpf:          cfg.EBpf,
 	}, nil
 }
 
