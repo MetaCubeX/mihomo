@@ -3,11 +3,10 @@ on:
   push:
     branches:
       - Alpha
-      - Beta
+      - Canary
   pull_request:
     branches:
       - Alpha
-      - Beta
 jobs:
   Build:
     runs-on: ubuntu-latest
