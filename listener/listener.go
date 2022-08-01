@@ -2,8 +2,11 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/component/ebpf"
+	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"golang.org/x/exp/slices"
 	"net"
 	"sort"
 	"strconv"
@@ -38,14 +41,19 @@ var (
 	mixedListener     *mixed.Listener
 	mixedUDPLister    *socks.UDPListener
 	tunStackListener  ipstack.Stack
+	tcProgram         *ebpf.TcEBpfProgram
+	autoRedirListener *autoredir.Listener
+	autoRedirProgram  *ebpf.TcEBpfProgram
 
 	// lock for recreate function
-	socksMux  sync.Mutex
-	httpMux   sync.Mutex
-	redirMux  sync.Mutex
-	tproxyMux sync.Mutex
-	mixedMux  sync.Mutex
-	tunMux    sync.Mutex
+	socksMux     sync.Mutex
+	httpMux      sync.Mutex
+	redirMux     sync.Mutex
+	tproxyMux    sync.Mutex
+	mixedMux     sync.Mutex
+	tunMux       sync.Mutex
+	autoRedirMux sync.Mutex
+	tcMux        sync.Mutex
 )
 
 type Ports struct {
@@ -354,6 +362,93 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
 
 	lastTunConf = tunConf
+}
+
+func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<- *inbound.PacketAdapter) {
+	autoRedirMux.Lock()
+	defer autoRedirMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			if redirListener != nil {
+				_ = redirListener.Close()
+				redirListener = nil
+			}
+			if autoRedirProgram != nil {
+				autoRedirProgram.Close()
+				autoRedirProgram = nil
+			}
+			log.Errorln("Start auto redirect server error: %s", err.Error())
+		}
+	}()
+
+	nicArr := ifaceNames
+	slices.Sort(nicArr)
+	nicArr = slices.Compact(nicArr)
+
+	if redirListener != nil && autoRedirProgram != nil {
+		_ = redirListener.Close()
+		autoRedirProgram.Close()
+		redirListener = nil
+		autoRedirProgram = nil
+	}
+
+	if len(nicArr) == 0 {
+		return
+	}
+
+	defaultRouteInterfaceName, err := commons.GetAutoDetectInterface()
+	if err != nil {
+		return
+	}
+
+	addr := genAddr("*", C.TcpAutoRedirPort, true)
+
+	autoRedirListener, err = autoredir.New(addr, tcpIn)
+	if err != nil {
+		return
+	}
+
+	autoRedirProgram, err = ebpf.NewRedirEBpfProgram(nicArr, autoRedirListener.TCPAddr().Port(), defaultRouteInterfaceName)
+	if err != nil {
+		return
+	}
+
+	autoRedirListener.SetLookupFunc(autoRedirProgram.Lookup)
+
+	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
+}
+
+func ReCreateRedirToTun(ifaceNames []string) {
+	tcMux.Lock()
+	defer tcMux.Unlock()
+
+	nicArr := ifaceNames
+	slices.Sort(nicArr)
+	nicArr = slices.Compact(nicArr)
+
+	if tcProgram != nil {
+		tcProgram.Close()
+		tcProgram = nil
+	}
+
+	if len(nicArr) == 0 {
+		return
+	}
+
+	if lastTunConf == nil || !lastTunConf.Enable {
+		return
+	}
+
+	program, err := ebpf.NewTcEBpfProgram(nicArr, lastTunConf.Device)
+	if err != nil {
+		log.Errorln("Attached tc ebpf program error: %v", err)
+		return
+	}
+	tcProgram = program
+
+	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
 }
 
 // GetPorts return the ports of proxy servers

@@ -3,6 +3,7 @@ module github.com/Dreamacro/clash
 go 1.18
 
 require (
+	github.com/cilium/ebpf v0.9.1
 	github.com/coreos/go-iptables v0.6.0
 	github.com/database64128/tfo-go v1.1.0
 	github.com/dlclark/regexp2 v1.4.0
@@ -50,9 +51,8 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
-	github.com/google/btree v1.1.2 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.14 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
+	github.com/google/btree v1.0.1 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/marten-seemann/qpack v0.2.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.2 // indirect
@@ -67,7 +67,6 @@ require (
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
 	golang.org/x/tools v0.1.11 // indirect
-	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
