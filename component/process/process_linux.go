@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 	"net"
 	"net/netip"
 	"os"
