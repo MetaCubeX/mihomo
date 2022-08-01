@@ -46,6 +46,13 @@ tun:
   # auto-detect-interface: true # 自动识别interface
   # auto-route: true # 配置
 
+#ebpf配置
+ebpf:
+  auto-redir: #redirect模式，仅支持TCP
+    - eth0
+  redirect-to-tun: #UDP+TCP,使用该功能请勿启用auto-route
+    - eth0
+
 # 嗅探域名 可选配置
 sniffer:
   enable: false

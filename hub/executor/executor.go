@@ -334,6 +334,8 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	P.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
+	P.ReCreateRedirToTun(general.EBpf.RedirectToTun)
 }
 
 func updateUsers(users []auth.AuthUser) {
