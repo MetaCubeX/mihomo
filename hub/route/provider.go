@@ -98,8 +98,8 @@ func updateRuleProvider(w http.ResponseWriter, r *http.Request) {
 	if err := provider.Update(); err != nil {
 		render.Status(r, http.StatusServiceUnavailable)
 		render.JSON(w, r, newError(err.Error()))
+		return
 	}
-
 	render.NoContent(w, r)
 }
 
