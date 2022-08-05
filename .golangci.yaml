@@ -8,6 +8,7 @@ linters:
 
 linters-settings:
   gci:
+    custom-order: true
     sections:
       - standard
       - prefix(github.com/Dreamacro/clash)
