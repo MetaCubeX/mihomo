@@ -11,7 +11,6 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/google/gopacket v1.1.19
-	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/insomniacslk/dhcp v0.0.0-20220504074936-1ca156eafb9f
 	github.com/lucas-clemente/quic-go v0.27.2
@@ -23,6 +22,7 @@ require (
 	github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2
+	github.com/taamarin/websocket v0.0.2
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
 	go.etcd.io/bbolt v1.3.6

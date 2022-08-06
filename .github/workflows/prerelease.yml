@@ -3,11 +3,11 @@ on:
   push:
     branches:
       - Alpha
-      - Beta
+      - WSS
   pull_request:
     branches:
       - Alpha
-      - Beta
+      - WSS
 jobs:
   Build:
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
 
 
       - name: Test
-        if: ${{github.ref_name=='Beta'}}
+        if: ${{github.ref_name=='master'}}
         run: |
           go test ./...
 
@@ -59,7 +59,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Alpha
+      - name: Upload Core
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
