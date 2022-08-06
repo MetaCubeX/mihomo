@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - Beta
-    tags:
-      - "v*"
+#    tags:
+#      - "v*"
 env:
   REGISTRY: docker.io
 jobs:
