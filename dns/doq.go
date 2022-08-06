@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/lucas-clemente/quic-go"
 	"net"
 	"strconv"
@@ -24,9 +25,10 @@ var bytesPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 type quicClient struct {
 	addr         string
 	r            *Resolver
-	session      quic.Connection
+	connection   quic.Connection
 	proxyAdapter string
-	sync.RWMutex // protects session and bytesPool
+	udp          net.PacketConn
+	sync.RWMutex // protects connection and bytesPool
 }
 
 func newDOQ(r *Resolver, addr, proxyAdapter string) *quicClient {
@@ -90,59 +92,61 @@ func isActive(s quic.Connection) bool {
 	}
 }
 
-// getSession - opens or returns an existing quic.Connection
-// useCached - if true and cached session exists, return it right away
-// otherwise - forcibly creates a new session
-func (dc *quicClient) getSession(ctx context.Context) (quic.Connection, error) {
-	var session quic.Connection
+// getConnection - opens or returns an existing quic.Connection
+// useCached - if true and cached connection exists, return it right away
+// otherwise - forcibly creates a new connection
+func (dc *quicClient) getConnection(ctx context.Context) (quic.Connection, error) {
+	var connection quic.Connection
 	dc.RLock()
-	session = dc.session
-	if session != nil && isActive(session) {
+	connection = dc.connection
+
+	if connection != nil && isActive(connection) {
 		dc.RUnlock()
-		return session, nil
+		return connection, nil
 	}
-	if session != nil {
-		// we're recreating the session, let's create a new one
-		_ = session.CloseWithError(0, "")
-	}
+
 	dc.RUnlock()
 
 	dc.Lock()
 	defer dc.Unlock()
-
-	var err error
-	session, err = dc.openSession(ctx)
-	if err != nil {
-		// This does not look too nice, but QUIC (or maybe quic-go)
-		// doesn't seem stable enough.
-		// Maybe retransmissions aren't fully implemented in quic-go?
-		// Anyways, the simple solution is to make a second try when
-		// it fails to open the QUIC session.
-		session, err = dc.openSession(ctx)
-		if err != nil {
-			return nil, err
+	connection = dc.connection
+	if connection != nil {
+		if isActive(connection) {
+			return connection, nil
+		} else {
+			_ = connection.CloseWithError(quic.ApplicationErrorCode(0), "")
 		}
 	}
-	dc.session = session
-	return session, nil
+
+	var err error
+	connection, err = dc.openConnection(ctx)
+	dc.connection = connection
+	return connection, err
 }
 
-func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: false,
-		NextProtos: []string{
-			NextProtoDQ,
-		},
-		SessionTicketsDisabled: false,
+func (dc *quicClient) openConnection(ctx context.Context) (quic.Connection, error) {
+	if dc.udp != nil {
+		_ = dc.udp.Close()
 	}
+
+	tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(
+		&tls.Config{
+			InsecureSkipVerify: false,
+			NextProtos: []string{
+				NextProtoDQ,
+			},
+			SessionTicketsDisabled: false,
+		})
+
 	quicConfig := &quic.Config{
 		ConnectionIDLength:   12,
 		HandshakeIdleTimeout: time.Second * 8,
 		MaxIncomingStreams:   4,
-		MaxIdleTimeout:       time.Second * 45,
+		KeepAlivePeriod:      10 * time.Second,
+		MaxIdleTimeout:       time.Second * 120,
 	}
 
-	log.Debugln("opening session to %s", dc.addr)
+	log.Debugln("opening new connection to %s", dc.addr)
 	var (
 		udp net.PacketConn
 		err error
@@ -183,14 +187,15 @@ func (dc *quicClient) openSession(ctx context.Context) (quic.Connection, error) 
 
 	session, err := quic.DialContext(ctx, udp, &udpAddr, host, tlsConfig, quicConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open QUIC session: %w", err)
+		return nil, fmt.Errorf("failed to open QUIC connection: %w", err)
 	}
 
+	dc.udp = udp
 	return session, nil
 }
 
 func (dc *quicClient) openStream(ctx context.Context) (quic.Stream, error) {
-	session, err := dc.getSession(ctx)
+	session, err := dc.getConnection(ctx)
 	if err != nil {
 		return nil, err
 	}

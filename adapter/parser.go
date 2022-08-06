@@ -40,14 +40,14 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		if err != nil {
 			break
 		}
-		proxy = outbound.NewSocks5(*socksOption)
+		proxy, err = outbound.NewSocks5(*socksOption)
 	case "http":
 		httpOption := &outbound.HttpOption{}
 		err = decoder.Decode(mapping, httpOption)
 		if err != nil {
 			break
 		}
-		proxy = outbound.NewHttp(*httpOption)
+		proxy, err = outbound.NewHttp(*httpOption)
 	case "vmess":
 		vmessOption := &outbound.VmessOption{
 			HTTPOpts: outbound.HTTPOptions{

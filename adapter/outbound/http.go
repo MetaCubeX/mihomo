@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"
@@ -35,6 +36,7 @@ type HttpOption struct {
 	TLS            bool              `proxy:"tls,omitempty"`
 	SNI            string            `proxy:"sni,omitempty"`
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string            `proxy:"fingerprint,omitempty"`
 	Headers        map[string]string `proxy:"headers,omitempty"`
 }
 
@@ -126,16 +128,26 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	return fmt.Errorf("can not connect remote err code: %d", resp.StatusCode)
 }
 
-func NewHttp(option HttpOption) *Http {
+func NewHttp(option HttpOption) (*Http, error) {
 	var tlsConfig *tls.Config
 	if option.TLS {
 		sni := option.Server
 		if option.SNI != "" {
 			sni = option.SNI
 		}
-		tlsConfig = &tls.Config{
-			InsecureSkipVerify: option.SkipCertVerify,
-			ServerName:         sni,
+		if len(option.Fingerprint) == 0 {
+			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(&tls.Config{
+				InsecureSkipVerify: option.SkipCertVerify,
+				ServerName:         sni,
+			})
+		} else {
+			var err error
+			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(&tls.Config{
+				InsecureSkipVerify: option.SkipCertVerify,
+				ServerName:         sni,
+			}, option.Fingerprint); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -151,5 +163,5 @@ func NewHttp(option HttpOption) *Http {
 		pass:      option.Password,
 		tlsConfig: tlsConfig,
 		option:    &option,
-	}
+	}, nil
 }

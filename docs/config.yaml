@@ -25,7 +25,12 @@ external-ui: /path/to/ui/folder # 配置WEB UI目录，使用http://{{external-c
 # interface-name: en0 # 设置出口网卡
 
 # routing-mark: 6666 # 配置fwmark 仅用于Linux
-
+experimental:
+  # 具体配置待定
+  # 证书指纹,SHA256格式,补充校验TLS证书
+  # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
+  fingerprints:
+    - "8F111FA9AD3CD8E917A118522CAC39EA33741B3BBE73F91CECE548D5CCB0E5E8" # 忽略大小写
 # 类似于/etc/hosts, 仅支持配置单个IP
 hosts:
 # '*.clash.dev': 127.0.0.1
@@ -40,6 +45,13 @@ tun:
     - 198.18.0.2:53 # 需要劫持的DNS
   # auto-detect-interface: true # 自动识别interface
   # auto-route: true # 配置
+
+#ebpf配置
+ebpf:
+  auto-redir: #redirect模式，仅支持TCP
+    - eth0
+  redirect-to-tun: #UDP+TCP,使用该功能请勿启用auto-route
+    - eth0
 
 # 嗅探域名 可选配置
 sniffer:
@@ -68,7 +80,6 @@ profile:
 dns:
   enable: false # 关闭将使用系统DNS
   listen: 0.0.0.0:53 # 开启DNS服务器监听
-  prefer-h3: false # 启动DOH优先使用http/3
   # ipv6: false # false将返回AAAA的空结果
 
   # 用于解析nameserver,fallbacky以及其他DNS服务器配置的,DNS服务域名
@@ -90,13 +101,15 @@ dns:
   #   - localhost.ptlogin2.qq.com
 
   # DNS主要域名配置
-  # 支持 UDP,TCP,DOT,DOH,DOQ
+  # 支持 UDP,TCP,DoT,DoH,DoQ
   # 这部分为主要DNS配置,影响所有直连,确保使用对大陆解析精准的DNS
   nameserver:
     - 114.114.114.114 # default value
     - 8.8.8.8 # default value
     - tls://223.5.5.5:853 # DNS over TLS
-    - https://1.1.1.1/dns-query # DNS over HTTPS
+    - https://doh.pub/dns-query # DNS over HTTPS
+    - https://dns.alidns.com/dns-query#h3=true # 强制HTTP/3
+    - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - '8.8.8.8#en0' # 兼容指定DNS出口网卡
@@ -173,6 +186,7 @@ proxies:
     plugin-opts:
       mode: websocket # no QUIC now
       # tls: true # wss
+      # fingerprint: xxxx
       # skip-cert-verify: true
       # host: bing.com
       # path: "/"
@@ -191,6 +205,7 @@ proxies:
     cipher: auto
     # udp: true
     # tls: true
+    # fingerprint: xxxx
     # skip-cert-verify: true
     # servername: example.com # priority over wss host
     # network: ws
@@ -210,6 +225,7 @@ proxies:
     cipher: auto
     network: h2
     tls: true
+    # fingerprint: xxxx
     h2-opts:
       host:
         - http.example.com
@@ -243,6 +259,7 @@ proxies:
     cipher: auto
     network: grpc
     tls: true
+    # fingerprint: xxxx
     servername: example.com
     # skip-cert-verify: true
     grpc-opts:
@@ -256,6 +273,7 @@ proxies:
     # username: username
     # password: password
     # tls: true
+    # fingerprint: xxxx
     # skip-cert-verify: true
     # udp: true
 
@@ -269,6 +287,7 @@ proxies:
     # tls: true # https
     # skip-cert-verify: true
     # sni: custom.com
+    # fingerprint: xxxx # 同 experimental.fingerprints 使用 sha256 指纹，配置协议独立的指纹，将忽略 experimental.fingerprints
 
   # Snell
   # Beware that there's currently no UDP support yet
@@ -288,6 +307,7 @@ proxies:
     server: server
     port: 443
     password: yourpsk
+    # fingerprint: xxxx
     # udp: true
     # sni: example.com # aka server name
     # alpn:
@@ -303,6 +323,7 @@ proxies:
     network: grpc
     sni: example.com
     # skip-cert-verify: true
+    # fingerprint: xxxx
     udp: true
     grpc-opts:
       grpc-service-name: "example"
@@ -315,6 +336,7 @@ proxies:
     network: ws
     sni: example.com
     # skip-cert-verify: true
+    # fingerprint: xxxx
     udp: true
     # ws-opts:
     # path: /path
@@ -331,6 +353,7 @@ proxies:
     # udp: true
     # sni: example.com # aka server name
     # skip-cert-verify: true
+    # fingerprint: xxxx
 
   # vless
   - name: "vless-tcp"
@@ -342,6 +365,7 @@ proxies:
     servername: example.com # AKA SNI
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
+    # fingerprint: xxxx
 
   - name: "vless-ws"
     type: vless
@@ -353,6 +377,7 @@ proxies:
     network: ws
     servername: example.com # priority over wss host
     # skip-cert-verify: true
+    # fingerprint: xxxx
     ws-opts:
       path: "/"
       headers:
@@ -374,6 +399,7 @@ proxies:
     #ca: "./my.ca"
     #ca_str: "xyz"
     #disable_mtu_discovery: false
+    # fingerprint: xxxx
 
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss

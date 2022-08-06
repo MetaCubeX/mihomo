@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"go.uber.org/atomic"
 	"net"
 	"net/netip"
@@ -77,7 +78,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	ch := make(chan result, 1)
 	go func() {
 		if strings.HasSuffix(c.Client.Net, "tls") {
-			conn = tls.Client(conn, c.Client.TLSConfig)
+			conn = tls.Client(conn, tlsC.GetGlobalFingerprintTLCConfig(c.Client.TLSConfig))
 		}
 
 		msg, _, err := c.Client.ExchangeWithConn(m, &D.Conn{

@@ -198,7 +198,7 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 		}
 	}
 
-	return nil, errors.New("never touched")
+	return nil, errors.New("dual stack tcp shake hands failed")
 }
 
 func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
