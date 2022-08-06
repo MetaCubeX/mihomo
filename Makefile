@@ -148,7 +148,7 @@ lint:
 clean:
 	rm $(BINDIR)/*
 
-CLANG ?= clang-14
+CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 ebpf: export BPF_CLANG := $(CLANG)
