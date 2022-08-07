@@ -10,8 +10,10 @@ import (
 	"strings"
 )
 
-var encRaw = base64.RawStdEncoding
-var enc = base64.StdEncoding
+var (
+	encRaw = base64.RawStdEncoding
+	enc    = base64.StdEncoding
+)
 
 func DecodeBase64(buf []byte) []byte {
 	dBuf := make([]byte, encRaw.DecodedLen(len(buf)))
@@ -149,7 +151,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless["skip-cert-verify"] = false
 			vless["tls"] = false
 			tls := strings.ToLower(query.Get("security"))
-			if strings.Contains(tls, "tls") {
+			if strings.HasSuffix(tls, "tls") {
 				vless["tls"] = true
 			}
 			sni := query.Get("sni")
@@ -244,7 +246,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["server"] = values["add"]
 			vmess["port"] = values["port"]
 			vmess["uuid"] = values["id"]
-			vmess["alterId"] = values["aid"]
+			if alterId, ok := values["aid"]; ok {
+				vmess["alterId"] = alterId
+			} else {
+				vmess["alterId"] = 0
+			}
 			vmess["cipher"] = "auto"
 			vmess["udp"] = true
 			vmess["tls"] = false
