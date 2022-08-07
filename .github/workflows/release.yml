@@ -8,7 +8,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           check-latest: true
-          go-version: '1.18'
+          go-version: '1.19'
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
