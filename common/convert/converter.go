@@ -2,7 +2,9 @@ package convert
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -10,8 +12,11 @@ import (
 	"strings"
 )
 
-var encRaw = base64.RawStdEncoding
-var enc = base64.StdEncoding
+var (
+	encRaw  = base64.RawStdEncoding
+	enc     = base64.StdEncoding
+	nilUUID [16]byte
+)
 
 func DecodeBase64(buf []byte) []byte {
 	dBuf := make([]byte, encRaw.DecodedLen(len(buf)))
@@ -144,12 +149,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless["type"] = scheme
 			vless["server"] = urlVless.Hostname()
 			vless["port"] = urlVless.Port()
-			vless["uuid"] = urlVless.User.Username()
+			vless["uuid"] = uuid(urlVless.User.Username())
 			vless["udp"] = true
 			vless["skip-cert-verify"] = false
 			vless["tls"] = false
 			tls := strings.ToLower(query.Get("security"))
-			if strings.Contains(tls, "tls") {
+			if strings.HasSuffix(tls, "tls") {
 				vless["tls"] = true
 			}
 			sni := query.Get("sni")
@@ -243,8 +248,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["type"] = scheme
 			vmess["server"] = values["add"]
 			vmess["port"] = values["port"]
-			vmess["uuid"] = values["id"]
-			vmess["alterId"] = values["aid"]
+			vmess["uuid"] = uuid(values["id"].(string))
+			if alterId, ok := values["aid"]; ok {
+				vmess["alterId"] = alterId
+			} else {
+				vmess["alterId"] = 0
+			}
 			vmess["cipher"] = "auto"
 			vmess["udp"] = true
 			vmess["tls"] = false
@@ -466,4 +475,39 @@ func uniqueName(names map[string]int, name string) string {
 		names[name] = index
 	}
 	return name
+}
+
+func uuid(user string) string {
+	if l := len(user); l > 0 {
+		if l < 37 {
+			if l > 31 {
+				return user
+			} else {
+				// https://github.com/XTLS/Xray-core/discussions/715
+				h := sha1.New()
+				h.Write(nilUUID[:])
+				h.Write([]byte(user))
+
+				u := h.Sum(nil)[:16]
+				u[6] = (u[6] & 0x0f) | (5 << 4)
+				u[8] = (u[8]&(0xff>>2) | (0x02 << 6))
+
+				buf := make([]byte, 36)
+				hex.Encode(buf[0:8], u[0:4])
+				buf[8] = '-'
+				hex.Encode(buf[9:13], u[4:6])
+				buf[13] = '-'
+				hex.Encode(buf[14:18], u[6:8])
+				buf[18] = '-'
+				hex.Encode(buf[19:23], u[8:10])
+				buf[23] = '-'
+				hex.Encode(buf[24:], u[10:])
+				return string(buf)
+			}
+		} else {
+			return ""
+		}
+	} else {
+		return ""
+	}
 }
