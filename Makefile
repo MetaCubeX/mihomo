@@ -3,8 +3,13 @@ BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
 VERSION=alpha-$(shell git rev-parse --short HEAD)
+<<<<<<< HEAD
 else ifeq ($(BRANCH),Canary)
 VERSION=Canary-$(shell git rev-parse --short HEAD)
+=======
+else ifeq ($(BRANCH),WSS)
+VERSION=WSS@$(shell git rev-parse --short HEAD)
+>>>>>>> Alpha
 else ifeq ($(BRANCH),)
 VERSION=$(shell git describe --tags)
 else
@@ -17,8 +22,13 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clas
 		-w -s -buildid='
 
 PLATFORM_LIST = \
+<<<<<<< HEAD
 	linux-arm64 \
 	linux-armv7 \
+=======
+	linux-armv7 \
+	linux-arm64 \
+>>>>>>> Alpha
 	android-arm64
 
 WINDOWS_ARCH_LIST = \
@@ -133,7 +143,7 @@ lint:
 clean:
 	rm $(BINDIR)/*
 
-CLANG ?= clang-14
+CLANG ?= clang
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
 ebpf: export BPF_CLANG := $(CLANG)

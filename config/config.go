@@ -273,15 +273,15 @@ func Parse(buf []byte) (*Config, error) {
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with default value
 	rawCfg := &RawConfig{
-		AllowLan:       false,
+		AllowLan:       true,
 		BindAddress:    "*",
 		IPv6:           true,
 		Mode:           T.Rule,
 		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
-		UnifiedDelay:   false,
+		UnifiedDelay:   true,
 		Authentication: []string{},
-		LogLevel:       log.INFO,
+		LogLevel:       log.SILENT,
 		Hosts:          map[string]string{},
 		Rule:           []string{},
 		Proxy:          []map[string]any{},
@@ -292,7 +292,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:              false,
 			Device:              "",
 			Stack:               C.TunGvisor,
-			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
+			DNSHijack:           []string{"any:53"},
 			AutoRoute:           false,
 			AutoDetectInterface: false,
 		},
@@ -302,16 +302,26 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Bypass:           []string{},
 		},
 		DNS: RawDNS{
-			Enable:       false,
+			Enable:       true,
 			IPv6:         false,
 			UseHosts:     true,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
-				GeoIP:     true,
-				GeoIPCode: "ID",
+				GeoIP:     false,
+				GeoIPCode: "",
 				IPCIDR:    []string{},
 				GeoSite:   []string{},
+			},
+			DefaultNameserver: []string{
+				"8.8.8.8",
+				"1.0.0.1",
+			},
+			NameServer: []string{
+				"8.8.8.8",
+			},
+			FakeIPFilter: []string{
+				"networktest.twilio.com",
 			},
 		},
 		Sniffer: RawSniffer{
