@@ -10,7 +10,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           check-latest: true
-          go-version: '1.18'
+          go-version: '1.19'
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
