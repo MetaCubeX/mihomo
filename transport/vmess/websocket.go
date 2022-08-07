@@ -264,7 +264,7 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 	uri := url.URL{
 		Scheme:   scheme,
 		Host:     net.JoinHostPort(c.Host, c.Port),
-		Path:     u.Path,
+		Path:     c.Path,
 		RawQuery: u.RawQuery,
 	}
 
