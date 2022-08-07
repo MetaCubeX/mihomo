@@ -18,19 +18,10 @@
   </a>
 </p>
 
-## Features
+## Development
+If you want to build an application that uses clash as a library, check out the
+the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
-- Local HTTP/HTTPS/SOCKS server with authentication support
-- VMess, Shadowsocks, Trojan, Snell protocol support for remote connections
-- Built-in DNS server that aims to minimize DNS pollution attack impact, supports DoH/DoT upstream and fake IP.
-- Rules based off domains, GEOIP, IPCIDR or Process to forward packets to different nodes
-- Remote groups allow users to implement powerful rules. Supports automatic fallback, load balancing or auto select node based off latency
-- Remote providers, allowing users to get node lists remotely instead of hardcoding in config
-- Netfilter TCP redirecting. Deploy Clash on your Internet gateway with `iptables`.
-- Comprehensive HTTP RESTful API controller
-
-## Getting Started
-Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
 ## Credits
 * [Dreamacro/clash](https://github.com/Dreamacro/clash)
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
