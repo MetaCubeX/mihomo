@@ -149,7 +149,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless["type"] = scheme
 			vless["server"] = urlVless.Hostname()
 			vless["port"] = urlVless.Port()
-			vless["uuid"] = uuid(urlVless.User.Username())
+			vless["uuid"] = getUUID(urlVless.User.Username())
 			vless["udp"] = true
 			vless["skip-cert-verify"] = false
 			vless["tls"] = false
@@ -248,7 +248,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["type"] = scheme
 			vmess["server"] = values["add"]
 			vmess["port"] = values["port"]
-			vmess["uuid"] = uuid(values["id"].(string))
+			vmess["uuid"] = getUUID(values["id"].(string))
 			if alterId, ok := values["aid"]; ok {
 				vmess["alterId"] = alterId
 			} else {
@@ -477,7 +477,7 @@ func uniqueName(names map[string]int, name string) string {
 	return name
 }
 
-func uuid(user string) string {
+func getUUID(user string) string {
 	if l := len(user); l > 0 {
 		if l < 37 {
 			if l > 31 {
