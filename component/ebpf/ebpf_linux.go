@@ -1,3 +1,5 @@
+//go:build !android && linux
+
 package ebpf
 
 import (
