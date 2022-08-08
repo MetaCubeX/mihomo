@@ -1,11 +1,7 @@
 name: Docker
-
 on:
-  push:
-    branches:
-      - Beta
-#    tags:
-#      - "v*"
+  workflow_dispatch:
+
 env:
   REGISTRY: docker.io
 jobs:
