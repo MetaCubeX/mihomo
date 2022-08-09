@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -91,7 +92,11 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	//增加headers
 	if len(h.option.Headers) != 0 {
 		for key, value := range h.option.Headers {
-			req.Header.Add(key, value)
+			if strings.ToLower(key) == "host" {
+				req.Host = value
+			} else {
+				req.Header.Add(key, value)
+			}
 		}
 	}
 
