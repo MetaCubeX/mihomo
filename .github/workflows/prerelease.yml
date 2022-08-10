@@ -1,13 +1,12 @@
 name: Prerelease Build
 on:
-  push:
-    branches:
-      - Alpha
-      - rm-iptables
+  workflow_dispatch:
+
   pull_request:
     branches:
-      - Alpha
+      - alpha
       - rm-iptables
+      - plus-pro
 jobs:
   Build:
     runs-on: ubuntu-latest
@@ -43,13 +42,13 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{ github.ref_name }}
+          tag: ${{ github.ref_name }}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: Prerelease-${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -58,7 +57,7 @@ jobs:
         if: ${{  success() }}
         with:
           tag: ${{ github.ref_name }}
-          tag_name: Prerelease-${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           files: bin/*
           prerelease: true
           generate_release_notes: true

@@ -1,10 +1,10 @@
 NAME=Clash.Meta
 BINDIR=bin
 BRANCH=$(shell git branch --show-current)
-ifeq ($(BRANCH),Alpha)
-VERSION=alpha-$(shell git rev-parse --short HEAD)
-else ifeq ($(BRANCH),WSS)
-VERSION=WSS@$(shell git rev-parse --short HEAD)
+ifeq ($(BRANCH),alpha)
+VERSION=alpha@$(shell git rev-parse --short HEAD)
+else ifeq ($(BRANCH),rm-iptables)
+VERSION=rm-iptables@$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),)
 VERSION=$(shell git describe --tags)
 else
@@ -122,7 +122,7 @@ $(zip_releases): %.zip : %
 
 all-arch: $(PLATFORM_LIST)
 
-releases: $(gz_releases)
+releases: $(gz_releases) $(zip_releases)
 
 vet:
 	go test ./...

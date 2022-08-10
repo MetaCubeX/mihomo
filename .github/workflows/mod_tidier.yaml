@@ -1,9 +1,12 @@
 name: Mod Tidier
 on:
+  workflow_dispatch:
+
   pull_request:
     branches:
-      - Alpha
+      - alpha
       - rm-iptables
+      - plus-pro
 
 jobs:
   mod_tidier:
