@@ -41,7 +41,6 @@ var (
 	mixedListener     *mixed.Listener
 	mixedUDPLister    *socks.UDPListener
 	tunStackListener  ipstack.Stack
-	tcProgram         *ebpf.TcEBpfProgram
 	autoRedirListener *autoredir.Listener
 	autoRedirProgram  *ebpf.TcEBpfProgram
 
@@ -371,9 +370,9 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 	var err error
 	defer func() {
 		if err != nil {
-			if redirListener != nil {
-				_ = redirListener.Close()
-				redirListener = nil
+			if autoRedirListener != nil {
+				_ = autoRedirListener.Close()
+				autoRedirListener = nil
 			}
 			if autoRedirProgram != nil {
 				autoRedirProgram.Close()
@@ -387,10 +386,10 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 	slices.Sort(nicArr)
 	nicArr = slices.Compact(nicArr)
 
-	if redirListener != nil && autoRedirProgram != nil {
-		_ = redirListener.Close()
+	if autoRedirListener != nil && autoRedirProgram != nil {
+		_ = autoRedirListener.Close()
 		autoRedirProgram.Close()
-		redirListener = nil
+		autoRedirListener = nil
 		autoRedirProgram = nil
 	}
 
@@ -418,37 +417,6 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 	autoRedirListener.SetLookupFunc(autoRedirProgram.Lookup)
 
 	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
-}
-
-func ReCreateRedirToTun(ifaceNames []string) {
-	tcMux.Lock()
-	defer tcMux.Unlock()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if tcProgram != nil {
-		tcProgram.Close()
-		tcProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	if lastTunConf == nil || !lastTunConf.Enable {
-		return
-	}
-
-	program, err := ebpf.NewTcEBpfProgram(nicArr, lastTunConf.Device)
-	if err != nil {
-		log.Errorln("Attached tc ebpf program error: %v", err)
-		return
-	}
-	tcProgram = program
-
-	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
 }
 
 // GetPorts return the ports of proxy servers
