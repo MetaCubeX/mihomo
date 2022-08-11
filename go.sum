@@ -177,8 +177,6 @@ github.com/sagernet/sing v0.0.0-20220627234642-a817f7084d9c h1:98QC0wtaD648MFPw8
 github.com/sagernet/sing v0.0.0-20220627234642-a817f7084d9c/go.mod h1:I67R/q5f67xDExL2kL3RLIP7kGJBOPkYXkpRAykgC+E=
 github.com/sagernet/sing-shadowsocks v0.0.0-20220627234717-689e0165ef2c h1:Jhgjyb2jXL4GtwJec6/kgeTqaQXsvMiNX2wAkGOSD3I=
 github.com/sagernet/sing-shadowsocks v0.0.0-20220627234717-689e0165ef2c/go.mod h1:ng5pxdNnKZWlxzZTXRqWeY0ftzhScPZmjgJGJeRuPYY=
-github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec h1:jUSfKmyL6K9O2TvIvcVacZ4eNXHYbNSfdph+DRPyVlU=
-github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec/go.mod h1:jDZ8fJgOea7Y7MMHWgfqwLBVLnhtW2zuxS5wjtDaB84=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
 github.com/shurcooL/component v0.0.0-20170202220835-f88ec8f54cc4/go.mod h1:XhFIlyj5a1fBNx5aJTbKoIq0mNaPvOagO+HjB3EtxrY=
 github.com/shurcooL/events v0.0.0-20181021180414-410e4ca65f48/go.mod h1:5u70Mqkb5O5cxEA8nxTsgrgLehJeAw6Oc4Ab1c/P1HM=
