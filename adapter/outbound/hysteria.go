@@ -13,8 +13,8 @@ import (
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
 	"github.com/Dreamacro/clash/transport/hysteria/transport"
 	"github.com/lucas-clemente/quic-go"
-	"io/ioutil"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -135,7 +135,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	var bs []byte
 	var err error
 	if len(option.CustomCA) > 0 {
-		bs, err = ioutil.ReadFile(option.CustomCA)
+		bs, err = os.ReadFile(option.CustomCA)
 		if err != nil {
 			return nil, fmt.Errorf("hysteria %s load ca error: %w", addr, err)
 		}
