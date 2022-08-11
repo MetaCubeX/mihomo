@@ -127,9 +127,9 @@ func (m *Metadata) SourceDetail() string {
 		return fmt.Sprintf("[%s]", ClashName)
 	}
 
-	if m.Process != "" && m.Uid != nil {
+	if m.Process != "" && *m.Uid != -1 {
 		return fmt.Sprintf("%s(%s, uid=%d)", m.SourceAddress(), m.Process, *m.Uid)
-	} else if m.Uid != nil {
+	} else if *m.Uid != -1 {
 		return fmt.Sprintf("%s(uid=%d)", m.SourceAddress(), *m.Uid)
 	} else if m.Process != "" {
 		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
