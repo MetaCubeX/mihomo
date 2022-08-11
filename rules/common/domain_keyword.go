@@ -9,9 +9,9 @@ import (
 
 type DomainKeyword struct {
 	*Base
-	keyword    string
-	adapter    string
-	rawKeyword string
+	keyword string
+	adapter string
+	isIDNA  bool
 }
 
 func (dk *DomainKeyword) RuleType() C.RuleType {
@@ -31,7 +31,11 @@ func (dk *DomainKeyword) Adapter() string {
 }
 
 func (dk *DomainKeyword) Payload() string {
-	return dk.rawKeyword
+	keyword := dk.keyword
+	if dk.isIDNA {
+		keyword, _ = idna.ToUnicode(keyword)
+	}
+	return keyword
 }
 
 func (dk *DomainKeyword) ShouldFindProcess() bool {
@@ -41,10 +45,10 @@ func (dk *DomainKeyword) ShouldFindProcess() bool {
 func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
 	actualDomainKeyword, _ := idna.ToASCII(keyword)
 	return &DomainKeyword{
-		Base:       &Base{},
-		keyword:    strings.ToLower(actualDomainKeyword),
-		adapter:    adapter,
-		rawKeyword: keyword,
+		Base:    &Base{},
+		keyword: strings.ToLower(actualDomainKeyword),
+		adapter: adapter,
+		isIDNA:  keyword != actualDomainKeyword,
 	}
 }
 
