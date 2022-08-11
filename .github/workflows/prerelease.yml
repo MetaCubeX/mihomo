@@ -1,10 +1,11 @@
 name: Prerelease Build
 on:
-  workflow_dispatch:
-
+  push:
+    branches:
+      - Alpha
   pull_request:
     branches:
-      - alpha
+      - Alpha
       - rm-iptables
       - plus-pro
 jobs:
