@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.18
+go 1.19
 
 require (
 	github.com/cilium/ebpf v0.9.1
@@ -39,7 +39,7 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
-	gvisor.dev/gvisor v0.0.0-20220527053002-8ab279227ac8
+	gvisor.dev/gvisor v0.0.0-20220810234332-45096a971e66
 )
 
 replace github.com/vishvananda/netlink => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
