@@ -1,8 +1,9 @@
 module github.com/Dreamacro/clash
 
-go 1.18
+go 1.19
 
 require (
+	github.com/cilium/ebpf v0.9.1
 	github.com/coreos/go-iptables v0.6.0
 	github.com/database64128/tfo-go v1.1.0
 	github.com/dlclark/regexp2 v1.4.0
@@ -38,7 +39,7 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
-	gvisor.dev/gvisor v0.0.0-20220527053002-8ab279227ac8
+	gvisor.dev/gvisor v0.0.0-20220810234332-45096a971e66
 )
 
 replace github.com/vishvananda/netlink => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
@@ -47,13 +48,11 @@ replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.1-
 
 require (
 	github.com/cheekybits/genny v1.0.0 // indirect
-	github.com/cilium/ebpf v0.9.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
-	github.com/kr/pretty v0.3.0 // indirect
 	github.com/marten-seemann/qpack v0.2.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
 	github.com/marten-seemann/qtls-go1-17 v0.1.2 // indirect
