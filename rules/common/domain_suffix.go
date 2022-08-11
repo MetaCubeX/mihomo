@@ -9,9 +9,9 @@ import (
 
 type DomainSuffix struct {
 	*Base
-	suffix    string
-	adapter   string
-	rawSuffix string
+	suffix  string
+	adapter string
+	isIDNA  bool
 }
 
 func (ds *DomainSuffix) RuleType() C.RuleType {
@@ -31,16 +31,20 @@ func (ds *DomainSuffix) Adapter() string {
 }
 
 func (ds *DomainSuffix) Payload() string {
-	return ds.rawSuffix
+	suffix := ds.suffix
+	if ds.isIDNA {
+		suffix, _ = idna.ToUnicode(suffix)
+	}
+	return suffix
 }
 
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
-	actualDomainKeyword, _ := idna.ToASCII(suffix)
+	actualDomainSuffix, _ := idna.ToASCII(suffix)
 	return &DomainSuffix{
-		Base:      &Base{},
-		suffix:    strings.ToLower(actualDomainKeyword),
-		adapter:   adapter,
-		rawSuffix: suffix,
+		Base:    &Base{},
+		suffix:  strings.ToLower(actualDomainSuffix),
+		adapter: adapter,
+		isIDNA:  suffix != actualDomainSuffix,
 	}
 }
 
