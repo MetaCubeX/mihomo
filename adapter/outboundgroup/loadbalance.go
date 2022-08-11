@@ -133,7 +133,7 @@ func strategyRoundRobin() strategyFn {
 }
 
 func strategyConsistentHashing() strategyFn {
-	maxRetry := 5
+	maxRetry := 1
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
 		key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
 		buckets := int32(len(proxies))
@@ -151,7 +151,7 @@ func strategyConsistentHashing() strategyFn {
 
 func strategyStickySessions() strategyFn {
 	ttl := time.Minute * 10
-	maxRetry := 5
+	maxRetry := 1
 	lruCache := cache.NewLRUCache[uint64, int](
 		cache.WithAge[uint64, int](int64(ttl.Seconds())),
 		cache.WithSize[uint64, int](1000))
