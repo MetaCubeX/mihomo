@@ -5,8 +5,6 @@ on:
   pull_request:
     branches:
       - Alpha
-      - rm-iptables
-      - plus-pro
 
 jobs:
   mod_tidier:
@@ -28,4 +26,4 @@ jobs:
         gomodsum_only: true
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
-        commit_message: auto-fix go.sum discrepancies
+        commit_message: "[auto]fix `go.sum` discrepancies"

@@ -99,7 +99,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["port"] = urlTrojan.Port()
 			trojan["password"] = urlTrojan.User.Username()
 			trojan["udp"] = true
-			trojan["skip-cert-verify"] = false
+			trojan["skip-cert-verify"] = true
 
 			sni := query.Get("sni")
 			if sni != "" {
@@ -116,6 +116,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
+				headers["Host"] = query.Get("host")
 				headers["User-Agent"] = RandUserAgent()
 
 				wsOpts["path"] = query.Get("path")
