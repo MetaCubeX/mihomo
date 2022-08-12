@@ -403,7 +403,9 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			} else {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
-				metadata.Uid = &uid
+				if uid != -1 {
+					metadata.Uid = &uid
+				}
 				processFound = true
 			}
 		}
