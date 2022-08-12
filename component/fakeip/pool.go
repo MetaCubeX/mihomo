@@ -3,6 +3,7 @@ package fakeip
 import (
 	"errors"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -36,6 +37,9 @@ type Pool struct {
 func (p *Pool) Lookup(host string) net.IP {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+
+	// RFC4343: DNS Case Insensitive, we SHOULD return result with all cases.
+	host = strings.ToLower(host)
 	if ip, exist := p.store.GetByHost(host); exist {
 		return ip
 	}

@@ -75,6 +75,27 @@ func TestPool_Basic(t *testing.T) {
 	}
 }
 
+func TestPool_Case_Insensitive(t *testing.T) {
+	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
+	pools, tempfile, err := createPools(Options{
+		IPNet: ipnet,
+		Size:  10,
+	})
+	assert.Nil(t, err)
+	defer os.Remove(tempfile)
+
+	for _, pool := range pools {
+		first := pool.Lookup("foo.com")
+		last := pool.Lookup("Foo.Com")
+		foo, exist := pool.LookBack(last)
+
+		assert.True(t, first.Equal(pool.Lookup("Foo.Com")))
+		assert.Equal(t, pool.Lookup("fOo.cOM"), first)
+		assert.True(t, exist)
+		assert.Equal(t, foo, "foo.com")
+	}
+}
+
 func TestPool_CycleUsed(t *testing.T) {
 	_, ipnet, _ := net.ParseCIDR("192.168.0.1/29")
 	pools, tempfile, err := createPools(Options{
