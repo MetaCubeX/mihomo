@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/pool"
-	C "github.com/Dreamacro/clash/constant"
 
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
@@ -168,17 +167,13 @@ func (g *Conn) SetDeadline(t time.Time) error {
 }
 
 func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config) *http2.Transport {
-	dialFunc := func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+	dialFunc := func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
 		pconn, err := dialFn(network, addr)
 		if err != nil {
 			return nil, err
 		}
 
 		cn := tls.Client(pconn, cfg)
-
-		// fix tls handshake not timeout
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-		defer cancel()
 		if err := cn.HandshakeContext(ctx); err != nil {
 			pconn.Close()
 			return nil, err
@@ -192,7 +187,7 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config) *http2.Transport {
 	}
 
 	return &http2.Transport{
-		DialTLS:            dialFunc,
+		DialTLSContext:     dialFunc,
 		TLSClientConfig:    tlsConfig,
 		AllowHTTP:          false,
 		DisableCompression: true,

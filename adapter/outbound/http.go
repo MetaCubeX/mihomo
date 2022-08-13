@@ -40,7 +40,9 @@ type HttpOption struct {
 func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if h.tlsConfig != nil {
 		cc := tls.Client(c, h.tlsConfig)
-		err := cc.Handshake()
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		err := cc.HandshakeContext(ctx)
 		c = cc
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
