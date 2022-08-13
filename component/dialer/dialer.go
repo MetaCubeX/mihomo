@@ -215,6 +215,10 @@ func concurrentDualStackDialContext(ctx context.Context, network, address string
 		ips, err = resolver.ResolveAllIPProxyServerHost(host)
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
 	return concurrentDialContext(ctx, network, ips, port, opt)
 }
 
