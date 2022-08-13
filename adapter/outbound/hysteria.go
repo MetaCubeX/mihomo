@@ -7,17 +7,18 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"regexp"
+	"strconv"
+	"time"
+
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/transport/hysteria/core"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
 	"github.com/Dreamacro/clash/transport/hysteria/transport"
 	"github.com/lucas-clemente/quic-go"
-	"io/ioutil"
-	"net"
-	"regexp"
-	"strconv"
-	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -48,14 +49,14 @@ type Hysteria struct {
 }
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	hdc := hyDialerWithContext{
-		ctx: context.Background(),
-		hyDialer: func() (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
-		},
-	}
+	// hdc := hyDialerWithContext{
+	// 	ctx: context.Background(),
+	// 	hyDialer: func() (net.PacketConn, error) {
+	// 		return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+	// 	},
+	// }
 
-	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
+	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress())
 	if err != nil {
 		return nil, err
 	}
@@ -64,13 +65,13 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	hdc := hyDialerWithContext{
-		ctx: context.Background(),
-		hyDialer: func() (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
-		},
-	}
-	udpConn, err := h.client.DialUDP(&hdc)
+	// hdc := hyDialerWithContext{
+	// 	ctx: context.Background(),
+	// 	hyDialer: func() (net.PacketConn, error) {
+	// 		return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
+	// 	},
+	// }
+	udpConn, err := h.client.DialUDP()
 	if err != nil {
 		return nil, err
 	}

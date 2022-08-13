@@ -1,26 +1,28 @@
 package udp
 
 import (
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"net"
+	"os"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 )
 
 const udpBufferSize = 65535
 
 type ObfsUDPConn struct {
-	orig       net.PacketConn
-	obfs       obfs.Obfuscator
+	orig *net.UDPConn
+	obfs obfs.Obfuscator
+
 	readBuf    []byte
 	readMutex  sync.Mutex
 	writeBuf   []byte
 	writeMutex sync.Mutex
-	closed     bool
 }
 
-func NewObfsUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsUDPConn {
+func NewObfsUDPConn(orig *net.UDPConn, obfs obfs.Obfuscator) *ObfsUDPConn {
 	return &ObfsUDPConn{
 		orig:     orig,
 		obfs:     obfs,
@@ -32,13 +34,7 @@ func NewObfsUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsUDPConn {
 func (c *ObfsUDPConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	for {
 		c.readMutex.Lock()
-		if c.closed {
-			log.Infoln("read udp obfs before")
-		}
 		n, addr, err := c.orig.ReadFrom(c.readBuf)
-		if c.closed {
-			log.Infoln("read udp obfs after")
-		}
 		if n <= 0 {
 			c.readMutex.Unlock()
 			return 0, addr, err
@@ -68,7 +64,6 @@ func (c *ObfsUDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 func (c *ObfsUDPConn) Close() error {
-	c.closed = true
 	return c.orig.Close()
 }
 
@@ -86,4 +81,20 @@ func (c *ObfsUDPConn) SetReadDeadline(t time.Time) error {
 
 func (c *ObfsUDPConn) SetWriteDeadline(t time.Time) error {
 	return c.orig.SetWriteDeadline(t)
+}
+
+func (c *ObfsUDPConn) SetReadBuffer(bytes int) error {
+	return c.orig.SetReadBuffer(bytes)
+}
+
+func (c *ObfsUDPConn) SetWriteBuffer(bytes int) error {
+	return c.orig.SetWriteBuffer(bytes)
+}
+
+func (c *ObfsUDPConn) SyscallConn() (syscall.RawConn, error) {
+	return c.orig.SyscallConn()
+}
+
+func (c *ObfsUDPConn) File() (f *os.File, err error) {
+	return c.orig.File()
 }

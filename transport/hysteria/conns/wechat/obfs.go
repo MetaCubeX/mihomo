@@ -2,20 +2,22 @@ package wechat
 
 import (
 	"encoding/binary"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"math/rand"
 	"net"
+	"os"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 )
 
 const udpBufferSize = 65535
 
 type ObfsWeChatUDPConn struct {
-	orig       net.PacketConn
-	obfs       obfs.Obfuscator
-	closed     bool
+	orig *net.UDPConn
+	obfs obfs.Obfuscator
+
 	readBuf    []byte
 	readMutex  sync.Mutex
 	writeBuf   []byte
@@ -23,8 +25,7 @@ type ObfsWeChatUDPConn struct {
 	sn         uint32
 }
 
-func NewObfsWeChatUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsWeChatUDPConn {
-	log.Infoln("new wechat")
+func NewObfsWeChatUDPConn(orig *net.UDPConn, obfs obfs.Obfuscator) *ObfsWeChatUDPConn {
 	return &ObfsWeChatUDPConn{
 		orig:     orig,
 		obfs:     obfs,
@@ -37,13 +38,7 @@ func NewObfsWeChatUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsWeChat
 func (c *ObfsWeChatUDPConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	for {
 		c.readMutex.Lock()
-		if c.closed {
-			log.Infoln("read wechat obfs before")
-		}
 		n, addr, err := c.orig.ReadFrom(c.readBuf)
-		if c.closed {
-			log.Infoln("read wechat obfs after")
-		}
 		if n <= 13 {
 			c.readMutex.Unlock()
 			return 0, addr, err
@@ -84,7 +79,6 @@ func (c *ObfsWeChatUDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) 
 }
 
 func (c *ObfsWeChatUDPConn) Close() error {
-	c.closed = true
 	return c.orig.Close()
 }
 
@@ -102,4 +96,20 @@ func (c *ObfsWeChatUDPConn) SetReadDeadline(t time.Time) error {
 
 func (c *ObfsWeChatUDPConn) SetWriteDeadline(t time.Time) error {
 	return c.orig.SetWriteDeadline(t)
+}
+
+func (c *ObfsWeChatUDPConn) SetReadBuffer(bytes int) error {
+	return c.orig.SetReadBuffer(bytes)
+}
+
+func (c *ObfsWeChatUDPConn) SetWriteBuffer(bytes int) error {
+	return c.orig.SetWriteBuffer(bytes)
+}
+
+func (c *ObfsWeChatUDPConn) SyscallConn() (syscall.RawConn, error) {
+	return c.orig.SyscallConn()
+}
+
+func (c *ObfsWeChatUDPConn) File() (f *os.File, err error) {
+	return c.orig.File()
 }
