@@ -152,6 +152,7 @@ func (gb *GroupBase) onDialFailed() {
 			gb.failedTime = time.Now()
 		} else {
 			if time.Since(gb.failedTime) > gb.failedTimeoutInterval() {
+				gb.failedTimes = 0
 				return
 			}
 
