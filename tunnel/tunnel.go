@@ -180,11 +180,13 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 	// local resolve UDP dns
 	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(metadata.Host)
+		ips, err := resolver.LookupIP(context.Background(), metadata.Host)
 		if err != nil {
 			return
+		} else if len(ips) == 0 {
+			return
 		}
-		metadata.DstIP = ip
+		metadata.DstIP = ips[0]
 	}
 
 	key := packet.LocalAddr().String()

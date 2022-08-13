@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 
@@ -36,9 +37,13 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
 		}
 	} else {
-		if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
+		ips, err := resolver.LookupIPWithResolver(ctx, c.host, c.r)
+		if err != nil {
 			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+		} else if len(ips) == 0 {
+			return nil, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, c.host)
 		}
+		ip = ips[rand.Intn(len(ips))]
 	}
 
 	network := "udp"
