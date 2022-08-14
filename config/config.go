@@ -55,6 +55,7 @@ type General struct {
 	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
 	Sniffing      bool         `json:"sniffing"`
+	EBpf          EBpf         `json:"-"`
 }
 
 // Inbound config
@@ -67,6 +68,7 @@ type Inbound struct {
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
+	InboundTfo     bool     `json:"inbound-tfo"`
 }
 
 // Controller config
@@ -79,6 +81,7 @@ type Controller struct {
 // DNS config
 type DNS struct {
 	Enable                bool             `yaml:"enable"`
+	PreferH3              bool             `yaml:"prefer-h3"`
 	IPv6                  bool             `yaml:"ipv6"`
 	NameServer            []dns.NameServer `yaml:"nameserver"`
 	Fallback              []dns.NameServer `yaml:"fallback"`
@@ -135,7 +138,9 @@ type Sniffer struct {
 }
 
 // Experimental config
-type Experimental struct{}
+type Experimental struct {
+	Fingerprints []string `yaml:"fingerprints"`
+}
 
 // Config is clash config manager
 type Config struct {
@@ -156,6 +161,7 @@ type Config struct {
 
 type RawDNS struct {
 	Enable                bool              `yaml:"enable"`
+	PreferH3              bool              `yaml:"prefer-h3"`
 	IPv6                  bool              `yaml:"ipv6"`
 	UseHosts              bool              `yaml:"use-hosts"`
 	NameServer            []string          `yaml:"nameserver"`
@@ -185,6 +191,7 @@ type RawTun struct {
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
+	RedirectToTun       []string   `yaml:"-" json:"-"`
 }
 
 type RawConfig struct {
@@ -193,6 +200,7 @@ type RawConfig struct {
 	RedirPort          int          `yaml:"redir-port"`
 	TProxyPort         int          `yaml:"tproxy-port"`
 	MixedPort          int          `yaml:"mixed-port"`
+	InboundTfo         bool         `yaml:"inbound-tfo"`
 	Authentication     []string     `yaml:"authentication"`
 	AllowLan           bool         `yaml:"allow-lan"`
 	BindAddress        string       `yaml:"bind-address"`
@@ -216,6 +224,7 @@ type RawConfig struct {
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
+	EBpf          EBpf                      `yaml:"ebpf"`
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
@@ -239,6 +248,18 @@ type RawSniffer struct {
 	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
 }
 
+// EBpf config
+type EBpf struct {
+	RedirectToTun []string `yaml:"redirect-to-tun" json:"redirect-to-tun"`
+	AutoRedir     []string `yaml:"auto-redir" json:"auto-redir"`
+}
+
+var (
+	GroupsList             = list.New()
+	ProxiesList            = list.New()
+	ParsingProxiesCallback func(groupsList *list.List, proxiesList *list.List)
+)
+
 // Parse config
 func Parse(buf []byte) (*Config, error) {
 	rawCfg, err := UnmarshalRawConfig(buf)
@@ -252,15 +273,15 @@ func Parse(buf []byte) (*Config, error) {
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	// config with default value
 	rawCfg := &RawConfig{
-		AllowLan:       false,
+		AllowLan:       true,
 		BindAddress:    "*",
 		IPv6:           true,
 		Mode:           T.Rule,
 		GeodataMode:    C.GeodataMode,
 		GeodataLoader:  "memconservative",
-		UnifiedDelay:   false,
+		UnifiedDelay:   true,
 		Authentication: []string{},
-		LogLevel:       log.INFO,
+		LogLevel:       log.SILENT,
 		Hosts:          map[string]string{},
 		Rule:           []string{},
 		Proxy:          []map[string]any{},
@@ -271,7 +292,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:              false,
 			Device:              "",
 			Stack:               C.TunGvisor,
-			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
+			DNSHijack:           []string{"any:53"},
 			AutoRoute:           false,
 			AutoDetectInterface: false,
 		},
@@ -281,31 +302,26 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Bypass:           []string{},
 		},
 		DNS: RawDNS{
-			Enable:       false,
+			Enable:       true,
 			IPv6:         false,
 			UseHosts:     true,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
-				GeoIP:     true,
-				GeoIPCode: "CN",
+				GeoIP:     false,
+				GeoIPCode: "",
 				IPCIDR:    []string{},
 				GeoSite:   []string{},
 			},
 			DefaultNameserver: []string{
-				"114.114.114.114",
-				"223.5.5.5",
 				"8.8.8.8",
 				"1.0.0.1",
 			},
 			NameServer: []string{
-				"https://doh.pub/dns-query",
-				"tls://223.5.5.5:853",
+				"8.8.8.8",
 			},
 			FakeIPFilter: []string{
-				"dns.msftnsci.com",
-				"www.msftnsci.com",
-				"www.msftconnecttest.com",
+				"networktest.twilio.com",
 			},
 		},
 		Sniffer: RawSniffer{
@@ -403,7 +419,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
 		}
 	}
-
+	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
 		Inbound: Inbound{
 			Port:        cfg.Port,
@@ -413,6 +429,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			MixedPort:   cfg.MixedPort,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
+			InboundTfo:  cfg.InboundTfo,
 		},
 		Controller: Controller{
 			ExternalController: cfg.ExternalController,
@@ -429,6 +446,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader: cfg.GeodataLoader,
 		TCPConcurrent: cfg.TCPConcurrent,
 		EnableProcess: cfg.EnableProcess,
+		EBpf:          cfg.EBpf,
 	}, nil
 }
 
@@ -526,7 +544,12 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		[]providerTypes.ProxyProvider{pd},
 	)
 	proxies["GLOBAL"] = adapter.NewProxy(global)
-
+	ProxiesList = proxiesList
+	GroupsList = groupsList
+	if ParsingProxiesCallback != nil {
+		// refresh tray menu
+		go ParsingProxiesCallback(GroupsList, ProxiesList)
+	}
 	return proxies, providersMap, nil
 }
 
@@ -649,7 +672,8 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		var addr, dnsNetType string
+		var addr, dnsNetType, proxyAdapter string
+		params := map[string]string{}
 		switch u.Scheme {
 		case "udp":
 			addr, err = hostWithDefaultPort(u.Host, "53")
@@ -664,6 +688,20 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
+			if len(u.Fragment) != 0 {
+				for _, s := range strings.Split(u.Fragment, "&") {
+					arr := strings.Split(s, "=")
+					if len(arr) == 0 {
+						continue
+					} else if len(arr) == 1 {
+						proxyAdapter = arr[0]
+					} else if len(arr) == 2 {
+						params[arr[0]] = arr[1]
+					} else {
+						params[arr[0]] = strings.Join(arr[1:], "=")
+					}
+				}
+			}
 		case "dhcp":
 			addr = u.Host
 			dnsNetType = "dhcp" // UDP from DHCP
@@ -683,8 +721,9 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			dns.NameServer{
 				Net:          dnsNetType,
 				Addr:         addr,
-				ProxyAdapter: u.Fragment,
+				ProxyAdapter: proxyAdapter,
 				Interface:    dialer.DefaultInterface,
+				Params:       params,
 			},
 		)
 	}
@@ -766,6 +805,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 	dnsCfg := &DNS{
 		Enable:       cfg.Enable,
 		Listen:       cfg.Listen,
+		PreferH3:     cfg.PreferH3,
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
@@ -801,8 +841,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		host, _, err := net.SplitHostPort(ns.Addr)
 		if err != nil || net.ParseIP(host) == nil {
 			u, err := url.Parse(ns.Addr)
-			if err != nil || net.ParseIP(u.Host) == nil {
-				return nil, errors.New("default nameserver should be pure IP")
+			if err == nil && net.ParseIP(u.Host) == nil {
+				if ip, _, err := net.SplitHostPort(u.Host); err != nil || net.ParseIP(ip) == nil {
+					return nil, errors.New("default nameserver should be pure IP")
+				}
 			}
 		}
 	}

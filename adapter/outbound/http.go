@@ -7,11 +7,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -35,6 +37,7 @@ type HttpOption struct {
 	TLS            bool              `proxy:"tls,omitempty"`
 	SNI            string            `proxy:"sni,omitempty"`
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string            `proxy:"fingerprint,omitempty"`
 	Headers        map[string]string `proxy:"headers,omitempty"`
 }
 
@@ -89,7 +92,11 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	//增加headers
 	if len(h.option.Headers) != 0 {
 		for key, value := range h.option.Headers {
-			req.Header.Add(key, value)
+			if strings.ToLower(key) == "host" {
+				req.Host = value
+			} else {
+				req.Header.Add(key, value)
+			}
 		}
 	}
 
@@ -126,16 +133,26 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	return fmt.Errorf("can not connect remote err code: %d", resp.StatusCode)
 }
 
-func NewHttp(option HttpOption) *Http {
+func NewHttp(option HttpOption) (*Http, error) {
 	var tlsConfig *tls.Config
 	if option.TLS {
 		sni := option.Server
 		if option.SNI != "" {
 			sni = option.SNI
 		}
-		tlsConfig = &tls.Config{
-			InsecureSkipVerify: option.SkipCertVerify,
-			ServerName:         sni,
+		if len(option.Fingerprint) == 0 {
+			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(&tls.Config{
+				InsecureSkipVerify: option.SkipCertVerify,
+				ServerName:         sni,
+			})
+		} else {
+			var err error
+			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(&tls.Config{
+				InsecureSkipVerify: option.SkipCertVerify,
+				ServerName:         sni,
+			}, option.Fingerprint); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -151,5 +168,5 @@ func NewHttp(option HttpOption) *Http {
 		pass:      option.Password,
 		tlsConfig: tlsConfig,
 		option:    &option,
-	}
+	}, nil
 }

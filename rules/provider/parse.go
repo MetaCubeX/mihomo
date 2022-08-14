@@ -2,8 +2,8 @@ package provider
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
 	"time"
@@ -40,9 +40,9 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	var vehicle P.Vehicle
 	switch schema.Type {
 	case "file":
-		vehicle = provider.NewFileVehicle(path)
+		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		vehicle = provider.NewHTTPVehicle(schema.URL, path)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path)
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}

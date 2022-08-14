@@ -9,7 +9,7 @@ import (
 	"github.com/Dreamacro/clash/listener/tun/device/iobased"
 )
 
-func newEp(f *FD) error {
+func (f *FD) newEpOther() error {
 	ep, err := iobased.New(os.NewFile(uintptr(f.fd), f.Name()), f.mtu, 0)
 	if err != nil {
 		return fmt.Errorf("create endpoint: %w", err)

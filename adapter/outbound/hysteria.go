@@ -2,11 +2,19 @@ package outbound
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/transport/hysteria/core"
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
+	"github.com/Dreamacro/clash/transport/hysteria/transport"
+	"github.com/lucas-clemente/quic-go"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -14,14 +22,9 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"github.com/lucas-clemente/quic-go"
+	hyCongestion "github.com/Dreamacro/clash/transport/hysteria/congestion"
 	"github.com/lucas-clemente/quic-go/congestion"
 	M "github.com/sagernet/sing/common/metadata"
-	hyCongestion "github.com/tobyxdd/hysteria/pkg/congestion"
-	"github.com/tobyxdd/hysteria/pkg/core"
-	"github.com/tobyxdd/hysteria/pkg/obfs"
-	"github.com/tobyxdd/hysteria/pkg/pmtud_fix"
-	"github.com/tobyxdd/hysteria/pkg/transport"
 )
 
 const (
@@ -46,11 +49,12 @@ type Hysteria struct {
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	hdc := hyDialerWithContext{
-		ctx: ctx,
+		ctx: context.Background(),
 		hyDialer: func() (net.PacketConn, error) {
 			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
 		},
 	}
+
 	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
 	if err != nil {
 		return nil, err
@@ -61,7 +65,7 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	hdc := hyDialerWithContext{
-		ctx: ctx,
+		ctx: context.Background(),
 		hyDialer: func() (net.PacketConn, error) {
 			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
 		},
@@ -85,6 +89,7 @@ type HysteriaOption struct {
 	Obfs                string `proxy:"obfs,omitempty"`
 	SNI                 string `proxy:"sni,omitempty"`
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string `proxy:"fingerprint,omitempty"`
 	ALPN                string `proxy:"alpn,omitempty"`
 	CustomCA            string `proxy:"ca,omitempty"`
 	CustomCAString      string `proxy:"ca_str,omitempty"`
@@ -120,39 +125,58 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if option.SNI != "" {
 		serverName = option.SNI
 	}
+
 	tlsConfig := &tls.Config{
 		ServerName:         serverName,
 		InsecureSkipVerify: option.SkipCertVerify,
 		MinVersion:         tls.VersionTLS13,
 	}
+
+	var bs []byte
+	var err error
+	if len(option.CustomCA) > 0 {
+		bs, err = os.ReadFile(option.CustomCA)
+		if err != nil {
+			return nil, fmt.Errorf("hysteria %s load ca error: %w", addr, err)
+		}
+	} else if option.CustomCAString != "" {
+		bs = []byte(option.CustomCAString)
+	}
+
+	if len(bs) > 0 {
+		block, _ := pem.Decode(bs)
+		if block == nil {
+			return nil, fmt.Errorf("CA cert is not PEM")
+		}
+
+		fpBytes := sha256.Sum256(block.Bytes)
+		if len(option.Fingerprint) == 0 {
+			option.Fingerprint = hex.EncodeToString(fpBytes[:])
+		}
+	}
+
+	if len(option.Fingerprint) != 0 {
+		var err error
+		tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+	}
+
 	if len(option.ALPN) > 0 {
 		tlsConfig.NextProtos = []string{option.ALPN}
 	} else {
 		tlsConfig.NextProtos = []string{DefaultALPN}
 	}
-	if len(option.CustomCA) > 0 {
-		bs, err := ioutil.ReadFile(option.CustomCA)
-		if err != nil {
-			return nil, fmt.Errorf("hysteria %s load ca error: %w", addr, err)
-		}
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(bs) {
-			return nil, fmt.Errorf("hysteria %s failed to parse ca_str", addr)
-		}
-		tlsConfig.RootCAs = cp
-	} else if option.CustomCAString != "" {
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM([]byte(option.CustomCAString)) {
-			return nil, fmt.Errorf("hysteria %s failed to parse ca_str", addr)
-		}
-		tlsConfig.RootCAs = cp
-	}
+
 	quicConfig := &quic.Config{
 		InitialStreamReceiveWindow:     uint64(option.ReceiveWindowConn),
 		MaxStreamReceiveWindow:         uint64(option.ReceiveWindowConn),
 		InitialConnectionReceiveWindow: uint64(option.ReceiveWindow),
 		MaxConnectionReceiveWindow:     uint64(option.ReceiveWindow),
-		KeepAlive:                      true,
+		KeepAlivePeriod:                10 * time.Second,
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
 	}

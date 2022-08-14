@@ -354,6 +354,7 @@ type NameServer struct {
 	Addr         string
 	Interface    *atomic.String
 	ProxyAdapter string
+	Params       map[string]string
 }
 
 type FallbackFilter struct {

@@ -60,9 +60,11 @@ type v2rayObfsOption struct {
 	Host           string            `obfs:"host,omitempty"`
 	Path           string            `obfs:"path,omitempty"`
 	TLS            bool              `obfs:"tls,omitempty"`
+	Fingerprint    string            `obfs:"fingerprint,omitempty"`
 	Headers        map[string]string `obfs:"headers,omitempty"`
 	SkipCertVerify bool              `obfs:"skip-cert-verify,omitempty"`
 	Mux            bool              `obfs:"mux,omitempty"`
+	SNI             string            `obfs:"sni,omitempty"`
 }
 
 // StreamConn implements C.ProxyAdapter
@@ -179,6 +181,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 
 		if opts.TLS {
 			v2rayOption.TLS = true
+			v2rayOption.SNI = opts.SNI
 			v2rayOption.SkipCertVerify = opts.SkipCertVerify
 		}
 	}

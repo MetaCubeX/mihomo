@@ -1,0 +1,531 @@
+# port: 7890 # HTTP(S) 代理服务器端口
+# socks-port: 7891 # SOCKS5 代理端口
+mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
+# redir-port: 7892 # 透明代理端口 用于Linux和
+
+# Transparent proxy server port for Linux (TProxy TCP and TProxy UDP)
+# tproxy-port: 7893
+
+allow-lan: true # 允许局域网连接
+bind-address: "*" # 绑定IP地址，仅作用于 allow-lan 为true, '*'表示所有地址
+
+mode: rule
+
+log-level: debug #日志等级 silent/error/warning/info/debug
+
+ipv6: true #开启IPv6总开关 关闭阻断所有IPv6和屏蔽DNS请求AAAA记录
+
+external-controller: 0.0.0.0:9093 # RESTful API 监听地址
+
+# secret: "123456" # `Authorization: Bearer ${secret}`
+
+# tcp-concurrent: true # TCP并发连接所有IP, 将使用最快握手的TCP
+external-ui: /path/to/ui/folder # 配置WEB UI目录，使用http://{{external-controller}}/ui 访问
+
+# interface-name: en0 # 设置出口网卡
+
+# routing-mark: 6666 # 配置fwmark 仅用于Linux
+experimental:
+  # 具体配置待定
+  # 证书指纹,SHA256格式,补充校验TLS证书
+  # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
+  fingerprints:
+    - "8F111FA9AD3CD8E917A118522CAC39EA33741B3BBE73F91CECE548D5CCB0E5E8" # 忽略大小写
+# 类似于/etc/hosts, 仅支持配置单个IP
+hosts:
+# '*.clash.dev': 127.0.0.1
+# '.dev': 127.0.0.1
+# 'alpha.clash.dev': '::1'
+
+# Tun配置
+tun:
+  enable: false
+  stack: system # gvisor
+  dns-hijack:
+    - 198.18.0.2:53 # 需要劫持的DNS
+  # auto-detect-interface: true # 自动识别interface
+  # auto-route: true # 配置
+
+#ebpf配置
+ebpf:
+  auto-redir: #redirect模式，仅支持TCP
+    - eth0
+  redirect-to-tun: #UDP+TCP,使用该功能请勿启用auto-route
+    - eth0
+
+# 嗅探域名 可选配置
+sniffer:
+  enable: false
+  # 需要嗅探协议
+  sniffing:
+    - tls
+    - http
+  # 强制对此域名进行嗅探
+  force-domain:
+    - +.v2ex.com
+  # 仅对白名单中的端口进行嗅探，默认为0-65535，推荐只对需要嗅探写的的常见端口嗅探
+  port-whitelist:
+    - "80"
+    - "443"
+    # - 8000-9999
+
+profile:
+  # 存储select选择记录
+  store-selected: false
+
+  # 持久化fake-ip
+  store-fake-ip: true
+
+# DNS配置
+dns:
+  enable: false # 关闭将使用系统DNS
+  listen: 0.0.0.0:53 # 开启DNS服务器监听
+  # ipv6: false # false将返回AAAA的空结果
+
+  # 用于解析nameserver,fallbacky以及其他DNS服务器配置的,DNS服务域名
+  # 只能使用纯IP地址，可使用加密DNS
+  default-nameserver:
+    - 114.114.114.114
+    - 8.8.8.8
+    - tls://1.12.12.12:853
+    - tls://223.5.5.5:853
+  enhanced-mode: fake-ip # or redir-host
+
+  fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
+
+  # use-hosts: true # 查询hosts
+
+  # 配置不使用fake-ip的域名
+  # fake-ip-filter:
+  #   - '*.lan'
+  #   - localhost.ptlogin2.qq.com
+
+  # DNS主要域名配置
+  # 支持 UDP,TCP,DoT,DoH,DoQ
+  # 这部分为主要DNS配置,影响所有直连,确保使用对大陆解析精准的DNS
+  nameserver:
+    - 114.114.114.114 # default value
+    - 8.8.8.8 # default value
+    - tls://223.5.5.5:853 # DNS over TLS
+    - https://doh.pub/dns-query # DNS over HTTPS
+    - https://dns.alidns.com/dns-query#h3=true # 强制HTTP/3
+    - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用HTTP/3
+    - dhcp://en0 # dns from dhcp
+    - quic://dns.adguard.com:784 # DNS over QUIC
+    # - '8.8.8.8#en0' # 兼容指定DNS出口网卡
+
+  # 当配置fallback时，会查询nameserver中返回的IP是否为CN，非必要配置
+  # 当不是CN，则使用fallback中的DNS查询结果
+  # 确保配置fallback时能够正常查询
+  # fallback:
+  #   - tcp://1.1.1.1
+  #   - 'tcp://1.1.1.1#ProxyGroupName' # 指定DNS过代理查询，ProxyGroupName为策略组名或节点名，过代理配置优先于配置出口网卡，当找不到策略组或节点名则设置为出口网卡
+
+  # 专用于节点域名解析的DNS服务器，非必要配置项
+  # 配置服务器若查询失败将使用nameserver，非并发查询
+  # proxy-server-nameserver:
+  # - https://dns.google/dns-query
+  # - tls://one.one.one.one
+
+  # 配置fallback使用条件
+  # fallback-filter:
+  #   geoip: true # 配置是否使用geoip
+  #   geoip-code: CN # 当nameserver域名的IP查询geoip库为CN时，不使用fallback
+  #   配置强制fallback，优先于IP判断，具体分类自行查看geosite库
+  #   geosite:
+  #     - gfw
+  #   配置不需要使用fallback的IP CIDR
+  #   ipcidr:
+  #     - 240.0.0.0/4
+  #   domain:
+  #     - '+.google.com'
+  #     - '+.facebook.com'
+  #     - '+.youtube.com'
+
+  # 配置查询域名使用的DNS服务器
+  # nameserver-policy:
+  #   'www.baidu.com': '114.114.114.114'
+  #   '+.internal.crop.com': '10.0.0.1'
+
+proxies:
+  # Shadowsocks
+  # cipher支持:
+  #   aes-128-gcm aes-192-gcm aes-256-gcm
+  #   aes-128-cfb aes-192-cfb aes-256-cfb
+  #   aes-128-ctr aes-192-ctr aes-256-ctr
+  #   rc4-md5 chacha20-ietf xchacha20
+  #   chacha20-ietf-poly1305 xchacha20-ietf-poly1305
+  #   2022-blake3-aes-128-gcm 2022-blake3-aes-256-gcm 2022-blake3-chacha20-poly1305
+  - name: "ss1"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    # udp: true
+    # udp-over-tcp: false
+
+  - name: "ss2"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    plugin: obfs
+    plugin-opts:
+      mode: tls # or http
+      # host: bing.com
+
+  - name: "ss3"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    plugin: v2ray-plugin
+    plugin-opts:
+      mode: websocket # no QUIC now
+      # tls: true # wss
+      # fingerprint: xxxx
+      # skip-cert-verify: true
+      # host: bing.com
+      # path: "/"
+      # mux: true
+      # headers:
+      #   custom: value
+
+  # vmess
+  # cipher支持 auto/aes-128-gcm/chacha20-poly1305/none
+  - name: "vmess"
+    type: vmess
+    server: server
+    port: 443
+    uuid: uuid
+    alterId: 32
+    cipher: auto
+    # udp: true
+    # tls: true
+    # fingerprint: xxxx
+    # skip-cert-verify: true
+    # servername: example.com # priority over wss host
+    # network: ws
+    # ws-opts:
+    #   path: /path
+    #   headers:
+    #     Host: v2ray.com
+    #   max-early-data: 2048
+    #   early-data-header-name: Sec-WebSocket-Protocol
+
+  - name: "vmess-h2"
+    type: vmess
+    server: server
+    port: 443
+    uuid: uuid
+    alterId: 32
+    cipher: auto
+    network: h2
+    tls: true
+    # fingerprint: xxxx
+    h2-opts:
+      host:
+        - http.example.com
+        - http-alt.example.com
+      path: /
+
+  - name: "vmess-http"
+    type: vmess
+    server: server
+    port: 443
+    uuid: uuid
+    alterId: 32
+    cipher: auto
+    # udp: true
+    # network: http
+    # http-opts:
+    #   # method: "GET"
+    #   # path:
+    #   #   - '/'
+    #   #   - '/video'
+    #   # headers:
+    #   #   Connection:
+    #   #     - keep-alive
+
+  - name: vmess-grpc
+    server: server
+    port: 443
+    type: vmess
+    uuid: uuid
+    alterId: 32
+    cipher: auto
+    network: grpc
+    tls: true
+    # fingerprint: xxxx
+    servername: example.com
+    # skip-cert-verify: true
+    grpc-opts:
+      grpc-service-name: "example"
+
+  # socks5
+  - name: "socks"
+    type: socks5
+    server: server
+    port: 443
+    # username: username
+    # password: password
+    # tls: true
+    # fingerprint: xxxx
+    # skip-cert-verify: true
+    # udp: true
+
+  # http
+  - name: "http"
+    type: http
+    server: server
+    port: 443
+    # username: username
+    # password: password
+    # tls: true # https
+    # skip-cert-verify: true
+    # sni: custom.com
+    # fingerprint: xxxx # 同 experimental.fingerprints 使用 sha256 指纹，配置协议独立的指纹，将忽略 experimental.fingerprints
+
+  # Snell
+  # Beware that there's currently no UDP support yet
+  - name: "snell"
+    type: snell
+    server: server
+    port: 44046
+    psk: yourpsk
+    # version: 2
+    # obfs-opts:
+    # mode: http # or tls
+    # host: bing.com
+
+  # Trojan
+  - name: "trojan"
+    type: trojan
+    server: server
+    port: 443
+    password: yourpsk
+    # fingerprint: xxxx
+    # udp: true
+    # sni: example.com # aka server name
+    # alpn:
+    #   - h2
+    #   - http/1.1
+    # skip-cert-verify: true
+
+  - name: trojan-grpc
+    server: server
+    port: 443
+    type: trojan
+    password: "example"
+    network: grpc
+    sni: example.com
+    # skip-cert-verify: true
+    # fingerprint: xxxx
+    udp: true
+    grpc-opts:
+      grpc-service-name: "example"
+
+  - name: trojan-ws
+    server: server
+    port: 443
+    type: trojan
+    password: "example"
+    network: ws
+    sni: example.com
+    # skip-cert-verify: true
+    # fingerprint: xxxx
+    udp: true
+    # ws-opts:
+    # path: /path
+    # headers:
+    #   Host: example.com
+
+  - name: "trojan-xtls"
+    type: trojan
+    server: server
+    port: 443
+    password: yourpsk
+    flow: "xtls-rprx-direct" # xtls-rprx-origin xtls-rprx-direct
+    flow-show: true
+    # udp: true
+    # sni: example.com # aka server name
+    # skip-cert-verify: true
+    # fingerprint: xxxx
+
+  # vless
+  - name: "vless-tcp"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    network: tcp
+    servername: example.com # AKA SNI
+    # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
+    # skip-cert-verify: true
+    # fingerprint: xxxx
+
+  - name: "vless-ws"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    udp: true
+    tls: true
+    network: ws
+    servername: example.com # priority over wss host
+    # skip-cert-verify: true
+    # fingerprint: xxxx
+    ws-opts:
+      path: "/"
+      headers:
+        Host: example.com
+  - name: "hysteria"
+    type: hysteria
+    server: server.com
+    port: 443
+    auth_str: yourpassword
+    # obfs: obfs_str
+    # alpn: h3
+    protocol: udp #支持udp/wechat-video/faketcp
+    up: "30 Mbps" #若不写单位，默认为Mbps
+    down: "200 Mbps" #若不写单位，默认为Mbps
+    #sni: server.com
+    #skip-cert-verify: false
+    #recv_window_conn: 12582912
+    #recv_window: 52428800
+    #ca: "./my.ca"
+    #ca_str: "xyz"
+    #disable_mtu_discovery: false
+    # fingerprint: xxxx
+
+  # ShadowsocksR
+  # The supported ciphers (encryption methods): all stream ciphers in ss
+  # The supported obfses:
+  #   plain http_simple http_post
+  #   random_head tls1.2_ticket_auth tls1.2_ticket_fastauth
+  # The supported supported protocols:
+  #   origin auth_sha1_v4 auth_aes128_md5
+  #   auth_aes128_sha1 auth_chain_a auth_chain_b
+  - name: "ssr"
+    type: ssr
+    server: server
+    port: 443
+    cipher: chacha20-ietf
+    password: "password"
+    obfs: tls1.2_ticket_auth
+    protocol: auth_sha1_v4
+    # obfs-param: domain.tld
+    # protocol-param: "#"
+    # udp: true
+
+proxy-groups:
+  # 代理链，若落地协议支持UDP over TCP则可支持UDP
+  # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
+  - name: "relay"
+    type: relay
+    proxies:
+      - http
+      - vmess
+      - ss1
+      - ss2
+
+  # url-test 将按照url测试结果使用延迟最低节点
+  - name: "auto"
+    type: url-test
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+    # tolerance: 150
+    # lazy: true
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+
+  # fallback 将按照url测试结果按照节点顺序选择
+  - name: "fallback-auto"
+    type: fallback
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+
+  # load-balance 将按照算法随机选择节点
+  - name: "load-balance"
+    type: load-balance
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+    # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
+
+  # select 用户自行选择节点
+  - name: Proxy
+    type: select
+    # disable-udp: true
+    proxies:
+      - ss1
+      - ss2
+      - vmess1
+      - auto
+
+  # 配置指定interface-name和fwmark的DIRECT
+  - name: en1
+    type: select
+    interface-name: en1
+    routing-mark: 6667
+    proxies:
+      - DIRECT
+
+  - name: UseProvider
+    type: select
+    filter: "HK|TW" # 正则表达式，过滤provider1中节点名包含HK或TW
+    use:
+      - provider1
+    proxies:
+      - Proxy
+      - DIRECT
+
+# Clash格式的节点或支持*ray的分享格式
+proxy-providers:
+  provider1:
+    type: http
+    url: "url"
+    interval: 3600
+    path: ./provider1.yaml
+    health-check:
+      enable: true
+      interval: 600
+      # lazy: true
+      url: http://www.gstatic.com/generate_204
+  test:
+    type: file
+    path: /test.yaml
+    health-check:
+      enable: true
+      interval: 36000
+      url: http://www.gstatic.com/generate_204
+rule-providers:
+  rule1:
+    behavior: classical # domain ipcidr
+    interval: 259200
+    path: /path/to/save/file.yaml
+    type: http
+    url: "url"
+  rule2:
+    behavior: classical
+    interval: 259200
+    path: /path/to/save/file.yaml
+    type: file
+rules:
+  - RULE-SET,rule1,REJECT
+  - DOMAIN-SUFFIX,baidu.com,DIRECT
+  - DOMAIN-KEYWORD,google,ss1
+  - IP-CIDR,1.1.1.1/32,ss1
+  - IP-CIDR6,2409::/64,DIRECT

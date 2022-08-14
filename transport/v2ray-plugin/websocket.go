@@ -2,6 +2,7 @@ package obfs
 
 import (
 	"crypto/tls"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"net"
 	"net/http"
 
@@ -16,6 +17,8 @@ type Option struct {
 	Headers        map[string]string
 	TLS            bool
 	SkipCertVerify bool
+	Fingerprint    string
+	SNI            string
 	Mux            bool
 }
 
@@ -35,13 +38,22 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 
 	if option.TLS {
 		config.TLS = true
-		config.TLSConfig = &tls.Config{
-			ServerName:         option.Host,
+		tlsConfig := &tls.Config{
+			ServerName:         option.SNI,
 			InsecureSkipVerify: option.SkipCertVerify,
 			NextProtos:         []string{"http/1.1"},
 		}
-		if host := config.Headers.Get("Host"); host != "" {
-			config.TLSConfig.ServerName = host
+		if len(option.Fingerprint) == 0 {
+			config.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		} else {
+			var err error
+			if config.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
+				return nil, err
+			}
+		}
+
+		if sni := config.Headers.Get("SNI"); sni != "" {
+			config.TLSConfig.ServerName = sni
 		}
 	}
 

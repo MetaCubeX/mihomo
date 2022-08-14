@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/taamarin/websocket"
 )
 
 type websocketConn struct {
@@ -256,10 +256,16 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 		dialer.TLSClientConfig = c.TLSConfig
 	}
 
+	u, err := url.Parse(c.Path)
+	if err != nil {
+		return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
+	}
+
 	uri := url.URL{
-		Scheme: scheme,
-		Host:   net.JoinHostPort(c.Host, c.Port),
-		Path:   c.Path,
+		Scheme:   scheme,
+		Host:     net.JoinHostPort(c.Host, c.Port),
+		Path:     c.Path,
+		RawQuery: u.RawQuery,
 	}
 
 	headers := http.Header{}

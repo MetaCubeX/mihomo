@@ -2,8 +2,11 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/component/ebpf"
+	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"golang.org/x/exp/slices"
 	"net"
 	"sort"
 	"strconv"
@@ -26,6 +29,7 @@ var (
 	allowLan    = false
 	bindAddress = "*"
 	lastTunConf *config.Tun
+	inboundTfo  = false
 
 	socksListener     *socks.Listener
 	socksUDPListener  *socks.UDPListener
@@ -37,14 +41,18 @@ var (
 	mixedListener     *mixed.Listener
 	mixedUDPLister    *socks.UDPListener
 	tunStackListener  ipstack.Stack
+	autoRedirListener *autoredir.Listener
+	autoRedirProgram  *ebpf.TcEBpfProgram
 
 	// lock for recreate function
-	socksMux  sync.Mutex
-	httpMux   sync.Mutex
-	redirMux  sync.Mutex
-	tproxyMux sync.Mutex
-	mixedMux  sync.Mutex
-	tunMux    sync.Mutex
+	socksMux     sync.Mutex
+	httpMux      sync.Mutex
+	redirMux     sync.Mutex
+	tproxyMux    sync.Mutex
+	mixedMux     sync.Mutex
+	tunMux       sync.Mutex
+	autoRedirMux sync.Mutex
+	tcMux        sync.Mutex
 )
 
 type Ports struct {
@@ -80,6 +88,10 @@ func SetBindAddress(host string) {
 	bindAddress = host
 }
 
+func SetInboundTfo(itfo bool) {
+	inboundTfo = itfo
+}
+
 func NewInner(tcpIn chan<- C.ConnContext) {
 	inner.New(tcpIn)
 }
@@ -109,7 +121,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	httpListener, err = http.New(addr, tcpIn)
+	httpListener, err = http.New(addr, inboundTfo, tcpIn)
 	if err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
 		return
@@ -160,7 +172,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	tcpListener, err := socks.New(addr, tcpIn)
+	tcpListener, err := socks.New(addr, inboundTfo, tcpIn)
 	if err != nil {
 		return
 	}
@@ -310,7 +322,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	mixedListener, err = mixed.New(addr, tcpIn)
+	mixedListener, err = mixed.New(addr, inboundTfo, tcpIn)
 	if err != nil {
 		return
 	}
@@ -349,6 +361,62 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
 
 	lastTunConf = tunConf
+}
+
+func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<- *inbound.PacketAdapter) {
+	autoRedirMux.Lock()
+	defer autoRedirMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			if autoRedirListener != nil {
+				_ = autoRedirListener.Close()
+				autoRedirListener = nil
+			}
+			if autoRedirProgram != nil {
+				autoRedirProgram.Close()
+				autoRedirProgram = nil
+			}
+			log.Errorln("Start auto redirect server error: %s", err.Error())
+		}
+	}()
+
+	nicArr := ifaceNames
+	slices.Sort(nicArr)
+	nicArr = slices.Compact(nicArr)
+
+	if autoRedirListener != nil && autoRedirProgram != nil {
+		_ = autoRedirListener.Close()
+		autoRedirProgram.Close()
+		autoRedirListener = nil
+		autoRedirProgram = nil
+	}
+
+	if len(nicArr) == 0 {
+		return
+	}
+
+	defaultRouteInterfaceName, err := commons.GetAutoDetectInterface()
+	if err != nil {
+		return
+	}
+
+	addr := genAddr("*", C.TcpAutoRedirPort, true)
+
+	autoRedirListener, err = autoredir.New(addr, tcpIn)
+	if err != nil {
+		return
+	}
+
+	autoRedirProgram, err = ebpf.NewRedirEBpfProgram(nicArr, autoRedirListener.TCPAddr().Port(), defaultRouteInterfaceName)
+	if err != nil {
+		return
+	}
+
+	autoRedirListener.SetLookupFunc(autoRedirProgram.Lookup)
+
+	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
 // GetPorts return the ports of proxy servers

@@ -198,7 +198,7 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 		}
 	}
 
-	return nil, errors.New("never touched")
+	return nil, errors.New("dual stack tcp shake hands failed")
 }
 
 func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
@@ -213,6 +213,10 @@ func concurrentDualStackDialContext(ctx context.Context, network, address string
 		ips, err = resolver.ResolveAllIP(host)
 	} else {
 		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	return concurrentDialContext(ctx, network, ips, port, opt)
