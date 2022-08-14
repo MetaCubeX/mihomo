@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/coreos/go-iptables v0.6.0
-	github.com/database64128/tfo-go v1.1.0
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
@@ -31,7 +30,7 @@ require (
 	golang.org/x/exp v0.0.0-20220608143224-64259d1afd70
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
+	golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
 )
