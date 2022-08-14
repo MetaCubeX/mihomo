@@ -1,13 +1,13 @@
-name: Prerelease
+name: prerelease build
 on:
   push:
     branches:
       - Alpha
-      - Beta
+      - Sync
   pull_request:
     branches:
       - Alpha
-      - Beta
+      - Sync
 jobs:
   Build:
     runs-on: ubuntu-latest
@@ -17,7 +17,7 @@ jobs:
         run: |
           echo ::set-output name=go_version::$(curl -s https://raw.githubusercontent.com/actions/go-versions/main/versions-manifest.json | grep -oE '"version": "[0-9]{1}.[0-9]{1,}(.[0-9]{1,})?"' | head -1 | cut -d':' -f2 | sed 's/ //g; s/"//g')
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ steps.version.outputs.go_version }}
 
@@ -32,12 +32,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-
-      - name: Test
-        if: ${{github.ref_name=='Beta'}}
-        run: |
-          go test ./...
-
       - name: Build
         if: success()
         env:
@@ -49,22 +43,22 @@ jobs:
         uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{ github.ref_name }}
+          tag: ${{ github.ref_name }}
           deleteOnlyFromDrafts: false
 
       - name: Tag Repo
         uses: richardsimko/update-tag@v1
         with:
-          tag_name: Prerelease-${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Alpha
+      - name: Upload Core
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
           tag: ${{ github.ref_name }}
-          tag_name: Prerelease-${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           files: bin/*
           prerelease: true
           generate_release_notes: true

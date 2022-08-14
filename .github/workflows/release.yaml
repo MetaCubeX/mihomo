@@ -1,4 +1,4 @@
-name: Release
+name: release build
 on:
   push:
     tags:
@@ -25,9 +25,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Test
-        run: |
-          go test ./...
       - name: Build
         if: success()
         env:
