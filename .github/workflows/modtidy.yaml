@@ -1,10 +1,10 @@
-name: Mod Tidier
+name: update mod tidy
 on:
   workflow_dispatch:
-
   pull_request:
     branches:
       - Alpha
+      - Sync
 
 jobs:
   mod_tidier:
@@ -26,4 +26,4 @@ jobs:
         gomodsum_only: true
     - uses: stefanzweifel/git-auto-commit-action@v4
       with:
-        commit_message: "[auto]fix `go.sum` discrepancies"
+        commit_message: "[auto]update ``go.sum`` discrepancies"

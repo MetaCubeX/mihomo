@@ -1,4 +1,4 @@
-name: Build All-arch
+name: build all-arch
 on:
   workflow_dispatch:
 

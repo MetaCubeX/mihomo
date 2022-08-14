@@ -1,13 +1,13 @@
-name: Prerelease Build
+name: prerelease build
 on:
-  workflow_dispatch:
-
   push:
     branches:
       - Alpha
+      - Sync
   pull_request:
     branches:
       - Alpha
+      - Sync
 jobs:
   Build:
     runs-on: ubuntu-latest
