@@ -15,10 +15,7 @@ import (
 )
 
 type ClientTransport struct {
-	Dialer        *net.Dialer
-	PrefEnabled   bool
-	PrefIPv6      bool
-	PrefExclusive bool
+	Dialer *net.Dialer
 }
 
 func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs.Obfuscator, dialer PacketDialer) (net.PacketConn, error) {
