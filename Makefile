@@ -3,23 +3,37 @@ BINDIR=bin
 BRANCH=$(shell git branch --show-current)
 ifeq ($(BRANCH),Alpha)
 VERSION=Alpha@$(shell git rev-parse --short HEAD)
-else ifeq ($(BRANCH),rm-iptables)
-VERSION=rm-iptables@$(shell git rev-parse --short HEAD)
 else ifeq ($(BRANCH),)
 VERSION=$(shell git describe --tags)
 else
 VERSION=$(shell git rev-parse --short HEAD)
 endif
 
-BUILDTIME=$(shell date -u)
+BUILDTIME=$(shell TZ=Asia/Jakarta date)
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
 PLATFORM_LIST = \
+	android-arm64 \
+	darwin-amd64 \
+	darwin-arm64 \
+	linux-amd64-compatible \
+	linux-amd64 \
+	linux-armv5 \
+	linux-armv6 \
 	linux-armv7 \
 	linux-arm64 \
-	android-arm64
+	linux-mips64 \
+	linux-mips64le \
+	linux-mips-softfloat \
+	linux-mips-hardfloat \
+	linux-mipsle-softfloat \
+	linux-mipsle-hardfloat \
+	android-arm64 \
+	freebsd-386 \
+	freebsd-amd64 \
+	freebsd-arm64
 
 WINDOWS_ARCH_LIST = \
 	windows-386 \
@@ -34,6 +48,9 @@ all:linux-amd64 linux-arm64\
 
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
+android-arm64:
+	GOARCH=arm64 GOOS=android $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 darwin-amd64:
 	GOARCH=amd64 GOOS=darwin GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -83,9 +100,6 @@ linux-mips64:
 linux-mips64le:
 	GOARCH=mips64le GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-android-arm64:
-	GOARCH=arm64 GOOS=android $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
 freebsd-386:
 	GOARCH=386 GOOS=freebsd $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
@@ -120,9 +134,9 @@ $(gz_releases): %.gz : %
 $(zip_releases): %.zip : %
 	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
 
-all-arch: $(PLATFORM_LIST)
+all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 
-releases: $(gz_releases)
+releases: $(gz_releases) $(zip_releases)
 
 vet:
 	go test ./...

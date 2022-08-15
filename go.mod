@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.18
+go 1.19
 
 require (
 	github.com/cilium/ebpf v0.9.1
