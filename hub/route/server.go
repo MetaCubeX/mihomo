@@ -15,7 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
-	"github.com/taamarin/websocket"
+	"github.com/jeelsboobz/websocket"
 )
 
 var (

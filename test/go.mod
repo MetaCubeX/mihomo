@@ -54,7 +54,7 @@ require (
 	github.com/sagernet/sing v0.0.0-20220801112236-1bb95f9661fc // indirect
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220801112336-a91eacdd01e1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
-	github.com/taamarin/websocket v0.1.9 // indirect
+	github.com/jeelsboobz/websocket v0.2.0 // indirect
 	github.com/u-root/uio v0.0.0-20220204230159-dac05f7d2cb4 // indirect
 	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect

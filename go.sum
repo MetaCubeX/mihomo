@@ -218,8 +218,8 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.0 h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PKk=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
-github.com/taamarin/websocket v0.1.9 h1:HL8x2MGN0s+rjvU3xa22zZJdZSK5d3cPMZ9whVxtpQU=
-github.com/taamarin/websocket v0.1.9/go.mod h1:d1Pc1SUQ9C7Bd2GxdIJF7S+Qj7P9TEu2WsBnIb2zeSs=
+github.com/jeelsboobz/websocket v0.2.0 h1:Y0lonB+aWLLSIOIJjtp5+U//me2KKDdFlB1BKMGxOqI=
+github.com/jeelsboobz/websocket v0.2.0/go.mod h1:HgjvoFOFTm8pRS5wzw6+JDFBQjvtD9aIHlNJxLYJ5uU=
 github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
 github.com/tobyxdd/quic-go v0.28.1-0.20220706211558-7780039ad599 h1:We+z04jRpTGxFggeGWf+GbinhlIk1I1kMMEgujhUfiA=
 github.com/tobyxdd/quic-go v0.28.1-0.20220706211558-7780039ad599/go.mod h1:oGz5DKK41cJt5+773+BSO9BXDsREY4HLf7+0odGAPO0=

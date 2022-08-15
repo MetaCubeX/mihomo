@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.19
+go 1.18
 
 require (
 	github.com/cilium/ebpf v0.9.1
@@ -14,6 +14,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/insomniacslk/dhcp v0.0.0-20220812085412-509691fd59ec
+	github.com/jeelsboobz/websocket v0.2.0
 	github.com/lucas-clemente/quic-go v0.28.1
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/miekg/dns v1.1.50
@@ -22,7 +23,6 @@ require (
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220801112336-a91eacdd01e1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
-	github.com/taamarin/websocket v0.1.9
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/xtls/go v0.0.0-20210920065950-d4af136d3672
 	go.etcd.io/bbolt v1.3.6
