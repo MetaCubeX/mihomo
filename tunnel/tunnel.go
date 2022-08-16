@@ -3,13 +3,14 @@ package tunnel
 import (
 	"context"
 	"fmt"
-	P "github.com/Dreamacro/clash/component/process"
 	"net"
 	"net/netip"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
+
+	P "github.com/Dreamacro/clash/component/process"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
@@ -37,8 +38,8 @@ var (
 	mode = Rule
 
 	// default timeout for UDP session
-	udpTimeout = 60 * time.Second
-	procesCache string
+	udpTimeout        = 60 * time.Second
+	procesCache       string
 	alwaysFindProcess = false
 )
 
@@ -392,10 +393,9 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		
 		if !processFound && alwaysFindProcess && rule.ShouldFindProcess() {
 			processFound = true
-			
+
 			path, err := P.FindPackageName(metadata)
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
@@ -423,21 +423,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
 				log.Debugln("%s UDP is not supported", adapter.Name())
 				continue
-			}
-
-			extra := rule.RuleExtra()
-			if extra != nil {
-				if extra.NotMatchNetwork(metadata.NetWork) {
-					continue
-				}
-
-				if extra.NotMatchSourceIP(metadata.SrcIP) {
-					continue
-				}
-
-				if extra.NotMatchProcessName(metadata.Process) {
-					continue
-				}
 			}
 
 			return adapter, rule, nil
