@@ -1,7 +1,6 @@
 package faketcp
 
 import (
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"net"
 	"sync"
@@ -14,7 +13,6 @@ const udpBufferSize = 65535
 type ObfsFakeTCPConn struct {
 	orig       *TCPConn
 	obfs       obfs.Obfuscator
-	closed     bool
 	readBuf    []byte
 	readMutex  sync.Mutex
 	writeBuf   []byte
@@ -33,13 +31,7 @@ func NewObfsFakeTCPConn(orig *TCPConn, obfs obfs.Obfuscator) *ObfsFakeTCPConn {
 func (c *ObfsFakeTCPConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	for {
 		c.readMutex.Lock()
-		if c.closed {
-			log.Infoln("read faketcp obfs before")
-		}
 		n, addr, err := c.orig.ReadFrom(c.readBuf)
-		if c.closed {
-			log.Infoln("read faketcp obfs after")
-		}
 		if n <= 0 {
 			c.readMutex.Unlock()
 			return 0, addr, err
@@ -69,7 +61,6 @@ func (c *ObfsFakeTCPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 func (c *ObfsFakeTCPConn) Close() error {
-	c.closed = true
 	return c.orig.Close()
 }
 
