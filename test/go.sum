@@ -104,6 +104,8 @@ github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpO
 github.com/hugelgupf/socketpair v0.0.0-20190730060125-05d35a94e714/go.mod h1:2Goc3h8EklBH5mspfHFxBnEoURQCGzQQH1ga9Myjvis=
 github.com/insomniacslk/dhcp v0.0.0-20220812085412-509691fd59ec h1:iv0ol649NwB2+aiDFfbRt9W7ZF0LvjofcO6mqsoFEaY=
 github.com/insomniacslk/dhcp v0.0.0-20220812085412-509691fd59ec/go.mod h1:h+MxyHxRg9NH3terB1nfRIUaQEcI0XOVkdR9LNBlp8E=
+github.com/jeelsboobz/websocket v0.2.0 h1:Y0lonB+aWLLSIOIJjtp5+U//me2KKDdFlB1BKMGxOqI=
+github.com/jeelsboobz/websocket v0.2.0/go.mod h1:HgjvoFOFTm8pRS5wzw6+JDFBQjvtD9aIHlNJxLYJ5uU=
 github.com/jellevandenhooff/dkim v0.0.0-20150330215556-f50fe3d243e1/go.mod h1:E0B/fFc00Y+Rasa88328GlI/XbtyysCtTHZS8h7IrBU=
 github.com/jsimonetti/rtnetlink v0.0.0-20190606172950-9527aa82566a/go.mod h1:Oz+70psSo5OFh8DBl0Zv2ACw7Esh6pPUphlvZG9x7uw=
 github.com/jsimonetti/rtnetlink v0.0.0-20200117123717-f846d4f6c1f4/go.mod h1:WGuG/smIU4J/54PblvSbh+xvCZmpJnFgr3ds6Z55XMQ=
@@ -235,8 +237,7 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.0 h1:pSgiaMZlXftHpm5L7V1+rVB+AZJydKsMxsQBIJw4PKk=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
-github.com/jeelsboobz/websocket v0.2.0 h1:Y0lonB+aWLLSIOIJjtp5+U//me2KKDdFlB1BKMGxOqI=
-github.com/jeelsboobz/websocket v0.2.0/go.mod h1:HgjvoFOFTm8pRS5wzw6+JDFBQjvtD9aIHlNJxLYJ5uU=
+github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
 github.com/tobyxdd/quic-go v0.27.1-0.20220512040129-ed2a645d9218 h1:0DEghzcIfYe+7HTuI+zEd/5M+5c/gcepjJWGdcPPIrc=
 github.com/tobyxdd/quic-go v0.27.1-0.20220512040129-ed2a645d9218/go.mod h1:AzgQoPda7N+3IqMMMkywBKggIFo2KT6pfnlrQ2QieeI=
 github.com/u-root/uio v0.0.0-20210528114334-82958018845c/go.mod h1:LpEX5FO/cB+WF4TYGY1V5qktpaZLkKkSegbr0V4eYXA=
