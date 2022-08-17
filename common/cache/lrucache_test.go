@@ -19,7 +19,7 @@ var entries = []struct {
 }
 
 func TestLRUCache(t *testing.T) {
-	c := NewLRUCache()
+	c := New()
 
 	for _, e := range entries {
 		c.Set(e.key, e.value)
@@ -45,7 +45,7 @@ func TestLRUCache(t *testing.T) {
 }
 
 func TestLRUMaxAge(t *testing.T) {
-	c := NewLRUCache(WithAge(86400))
+	c := New(WithAge(86400))
 
 	now := time.Now().Unix()
 	expected := now + 86400
@@ -88,7 +88,7 @@ func TestLRUMaxAge(t *testing.T) {
 }
 
 func TestLRUpdateOnGet(t *testing.T) {
-	c := NewLRUCache(WithAge(86400), WithUpdateAgeOnGet())
+	c := New(WithAge(86400), WithUpdateAgeOnGet())
 
 	now := time.Now().Unix()
 	expires := now + 86400/2
@@ -103,7 +103,7 @@ func TestLRUpdateOnGet(t *testing.T) {
 }
 
 func TestMaxSize(t *testing.T) {
-	c := NewLRUCache(WithSize(2))
+	c := New(WithSize(2))
 	// Add one expired entry
 	c.Set("foo", "bar")
 	_, ok := c.Get("foo")
@@ -117,7 +117,7 @@ func TestMaxSize(t *testing.T) {
 }
 
 func TestExist(t *testing.T) {
-	c := NewLRUCache(WithSize(1))
+	c := New(WithSize(1))
 	c.Set(1, 2)
 	assert.True(t, c.Exist(1))
 	c.Set(2, 3)
@@ -130,7 +130,7 @@ func TestEvict(t *testing.T) {
 		temp = key.(int) + value.(int)
 	}
 
-	c := NewLRUCache(WithEvict(evict), WithSize(1))
+	c := New(WithEvict(evict), WithSize(1))
 	c.Set(1, 2)
 	c.Set(2, 3)
 
@@ -138,7 +138,7 @@ func TestEvict(t *testing.T) {
 }
 
 func TestSetWithExpire(t *testing.T) {
-	c := NewLRUCache(WithAge(1))
+	c := New(WithAge(1))
 	now := time.Now().Unix()
 
 	tenSecBefore := time.Unix(now-10, 0)
@@ -152,7 +152,7 @@ func TestSetWithExpire(t *testing.T) {
 }
 
 func TestStale(t *testing.T) {
-	c := NewLRUCache(WithAge(1), WithStale(true))
+	c := New(WithAge(1), WithStale(true))
 	now := time.Now().Unix()
 
 	tenSecBefore := time.Unix(now-10, 0)
@@ -165,11 +165,11 @@ func TestStale(t *testing.T) {
 }
 
 func TestCloneTo(t *testing.T) {
-	o := NewLRUCache(WithSize(10))
+	o := New(WithSize(10))
 	o.Set("1", 1)
 	o.Set("2", 2)
 
-	n := NewLRUCache(WithSize(2))
+	n := New(WithSize(2))
 	n.Set("3", 3)
 	n.Set("4", 4)
 
