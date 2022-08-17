@@ -168,7 +168,7 @@ func New(options Options) (*Pool, error) {
 		}
 	} else {
 		pool.store = &memoryStore{
-			cache: cache.NewLRUCache(cache.WithSize(options.Size * 2)),
+			cache: cache.New(cache.WithSize(options.Size * 2)),
 		}
 	}
 
