@@ -2,30 +2,12 @@ package convert
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 )
-
-var (
-	encRaw = base64.RawStdEncoding
-	enc    = base64.StdEncoding
-)
-
-func DecodeBase64(buf []byte) []byte {
-	dBuf := make([]byte, encRaw.DecodedLen(len(buf)))
-	n, err := encRaw.Decode(dBuf, buf)
-	if err != nil {
-		n, err = enc.Decode(dBuf, buf)
-		if err != nil {
-			return buf
-		}
-	}
-	return dBuf[:n]
-}
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
@@ -448,18 +430,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	}
 
 	return proxies, nil
-}
-
-func urlSafe(data string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(data, "+", "-"), "/", "_")
-}
-
-func decodeUrlSafe(data string) string {
-	dcBuf, err := base64.RawURLEncoding.DecodeString(data)
-	if err != nil {
-		return ""
-	}
-	return string(dcBuf)
 }
 
 func uniqueName(names map[string]int, name string) string {
