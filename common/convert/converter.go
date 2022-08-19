@@ -114,95 +114,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			proxies = append(proxies, trojan)
 
 		case "vless":
-			urlVless, err := url.Parse(line)
+			urlVLess, err := url.Parse(line)
 			if err != nil {
 				continue
 			}
-
-			query := urlVless.Query()
-
-			name := uniqueName(names, urlVless.Fragment)
+			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-
-			vless["name"] = name
-			vless["type"] = scheme
-			vless["server"] = urlVless.Hostname()
-			vless["port"] = urlVless.Port()
-			vless["uuid"] = urlVless.User.Username()
-			vless["udp"] = true
-			vless["skip-cert-verify"] = false
-			vless["tls"] = false
-			tls := strings.ToLower(query.Get("security"))
-			if strings.HasSuffix(tls, "tls") {
-				vless["tls"] = true
+			handleVShareLink(names, urlVLess, scheme, vless)
+			if flow := query.Get("flow"); flow != "" {
+				vless["flow"] = strings.ToLower(flow)
 			}
-			if sni := query.Get("sni"); sni != "" {
-				vless["servername"] = sni
-			}
-
-			if flow := strings.ToLower(query.Get("flow")); flow != "" {
-				vless["flow"] = flow
-			}
-
-			network := strings.ToLower(query.Get("type"))
-			fakeType := strings.ToLower(query.Get("headerType"))
-			if fakeType == "http" {
-				network = "http"
-			} else if network == "http" {
-				network = "h2"
-			}
-			vless["network"] = network
-			switch network {
-			case "tcp":
-				if fakeType != "none" {
-					headers := make(map[string]any)
-					httpOpts := make(map[string]any)
-					httpOpts["path"] = []string{"/"}
-
-					if host := query.Get("host"); host != "" {
-						headers["Host"] = []string{host}
-					}
-
-					if method := query.Get("method"); method != "" {
-						httpOpts["method"] = method
-					}
-
-					if path := query.Get("path"); path != "" {
-						httpOpts["path"] = []string{path}
-					}
-					httpOpts["headers"] = headers
-					vless["http-opts"] = httpOpts
-				}
-
-			case "http":
-				headers := make(map[string]any)
-				h2Opts := make(map[string]any)
-				h2Opts["path"] = []string{"/"}
-				if path := query.Get("path"); path != "" {
-					h2Opts["path"] = []string{path}
-				}
-				if host := query.Get("host"); host != "" {
-					h2Opts["host"] = []string{host}
-				}
-				h2Opts["headers"] = headers
-				vless["h2-opts"] = h2Opts
-
-			case "ws":
-				headers := make(map[string]any)
-				wsOpts := make(map[string]any)
-				headers["User-Agent"] = RandUserAgent()
-				headers["Host"] = query.Get("host")
-				wsOpts["path"] = query.Get("path")
-				wsOpts["headers"] = headers
-
-				vless["ws-opts"] = wsOpts
-
-			case "grpc":
-				grpcOpts := make(map[string]any)
-				grpcOpts["grpc-service-name"] = query.Get("serviceName")
-				vless["grpc-opts"] = grpcOpts
-			}
-
 			proxies = append(proxies, vless)
 
 		case "vmess":
@@ -210,8 +131,20 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			// https://github.com/2dust/v2rayN/wiki/%E5%88%86%E4%BA%AB%E9%93%BE%E6%8E%A5%E6%A0%BC%E5%BC%8F%E8%AF%B4%E6%98%8E(ver-2)
 			dcBuf, err := tryDecodeBase64([]byte(body))
 			if err != nil {
-				// TODO: Xray VMessAEAD / VLESS share link standard
-				// https://github.com/XTLS/Xray-core/discussions/716
+				// Xray VMessAEAD share link
+				urlVMess, err := url.Parse(line)
+				if err != nil {
+					continue
+				}
+				query := urlVMess.Query()
+				vmess := make(map[string]any, 20)
+				handleVShareLink(names, urlVMess, scheme, vmess)
+				vmess["alterId"] = 0
+				vmess["cipher"] = "auto"
+				if encryption := query.Get("encryption"); encryption != "" {
+					vmess["cipher"] = encryption
+				}
+				proxies = append(proxies, vmess)
 				continue
 			}
 
