@@ -136,13 +136,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if strings.HasSuffix(tls, "tls") {
 				vless["tls"] = true
 			}
-			sni := query.Get("sni")
-			if sni != "" {
+			if sni := query.Get("sni"); sni != "" {
 				vless["servername"] = sni
 			}
 
-			flow := strings.ToLower(query.Get("flow"))
-			if flow != "" {
+			if flow := strings.ToLower(query.Get("flow")); flow != "" {
 				vless["flow"] = flow
 			}
 
@@ -161,16 +159,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 					httpOpts := make(map[string]any)
 					httpOpts["path"] = []string{"/"}
 
-					if query.Get("host") != "" {
-						headers["Host"] = []string{query.Get("host")}
+					if host := query.Get("host"); host != "" {
+						headers["Host"] = []string{host}
 					}
 
-					if query.Get("method") != "" {
-						httpOpts["method"] = query.Get("method")
+					if method := query.Get("method"); method != "" {
+						httpOpts["method"] = method
 					}
 
-					if query.Get("path") != "" {
-						httpOpts["path"] = []string{query.Get("path")}
+					if path := query.Get("path"); path != "" {
+						httpOpts["path"] = []string{path}
 					}
 					httpOpts["headers"] = headers
 					vless["http-opts"] = httpOpts
@@ -180,11 +178,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
 				h2Opts["path"] = []string{"/"}
-				if query.Get("path") != "" {
-					h2Opts["path"] = []string{query.Get("path")}
+				if path := query.Get("path"); path != "" {
+					h2Opts["path"] = []string{path}
 				}
-				if query.Get("host") != "" {
-					h2Opts["host"] = []string{query.Get("host")}
+				if host := query.Get("host"); host != "" {
+					h2Opts["host"] = []string{host}
 				}
 				h2Opts["headers"] = headers
 				vless["h2-opts"] = h2Opts
@@ -208,8 +206,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			proxies = append(proxies, vless)
 
 		case "vmess":
-			dcBuf, err := encRaw.DecodeString(body)
+			// V2RayN-styled share link
+			// https://github.com/2dust/v2rayN/wiki/%E5%88%86%E4%BA%AB%E9%93%BE%E6%8E%A5%E6%A0%BC%E5%BC%8F%E8%AF%B4%E6%98%8E(ver-2)
+			dcBuf, err := tryDecodeBase64([]byte(body))
 			if err != nil {
+				// TODO: Xray VMessAEAD / VLESS share link standard
+				// https://github.com/XTLS/Xray-core/discussions/716
 				continue
 			}
 
@@ -233,17 +235,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			} else {
 				vmess["alterId"] = 0
 			}
-			vmess["cipher"] = "auto"
 			vmess["udp"] = true
 			vmess["tls"] = false
 			vmess["skip-cert-verify"] = false
 
-			if values["cipher"] != nil && values["cipher"] != "" {
-				vmess["cipher"] = values["cipher"]
+			vmess["cipher"] = "auto"
+			if cipher, ok := values["scy"]; ok && cipher != "" {
+				vmess["cipher"] = cipher
 			}
 
-			sni := values["sni"]
-			if sni != "" {
+			if sni, ok := values["sni"]; ok && sni != "" {
 				vmess["servername"] = sni
 			}
 
@@ -256,7 +257,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["network"] = network
 
 			tls := strings.ToLower(values["tls"].(string))
-			if strings.Contains(tls, "tls") {
+			if strings.HasSuffix(tls, "tls") {
 				vmess["tls"] = true
 			}
 
@@ -264,12 +265,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "http":
 				headers := make(map[string]any)
 				httpOpts := make(map[string]any)
-				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = []string{values["host"].(string)}
+				if host, ok := values["host"]; ok && host != "" {
+					headers["Host"] = []string{host.(string)}
 				}
 				httpOpts["path"] = []string{"/"}
-				if values["path"] != "" && values["path"] != nil {
-					httpOpts["path"] = []string{values["path"].(string)}
+				if path, ok := values["path"]; ok && path != "" {
+					httpOpts["path"] = []string{path.(string)}
 				}
 				httpOpts["headers"] = headers
 
@@ -278,8 +279,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "h2":
 				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
-				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = []string{values["host"].(string)}
+				if host, ok := values["host"]; ok && host != "" {
+					headers["Host"] = []string{host.(string)}
 				}
 
 				h2Opts["path"] = values["path"]
@@ -291,11 +292,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 				wsOpts["path"] = []string{"/"}
-				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = values["host"].(string)
+				if host, ok := values["host"]; ok && host != "" {
+					headers["Host"] = host.(string)
 				}
-				if values["path"] != "" && values["path"] != nil {
-					wsOpts["path"] = values["path"].(string)
+				if path, ok := values["path"]; ok && path != "" {
+					wsOpts["path"] = path.(string)
 				}
 				wsOpts["headers"] = headers
 				vmess["ws-opts"] = wsOpts
