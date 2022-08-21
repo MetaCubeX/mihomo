@@ -977,7 +977,8 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 
 	var ports []utils.Range[uint16]
 	if len(snifferRaw.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](0, 65535))
+		ports = append(ports, *utils.NewRange[uint16](80, 80))
+		ports = append(ports, *utils.NewRange[uint16](443, 443))
 	} else {
 		for _, portRange := range snifferRaw.Ports {
 			portRaws := strings.Split(portRange, "-")
