@@ -43,6 +43,7 @@ var (
 	tunStackListener  ipstack.Stack
 	autoRedirListener *autoredir.Listener
 	autoRedirProgram  *ebpf.TcEBpfProgram
+	tcProgram         *ebpf.TcEBpfProgram
 
 	// lock for recreate function
 	socksMux     sync.Mutex
@@ -361,6 +362,37 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
 
 	lastTunConf = tunConf
+}
+
+func ReCreateRedirToTun(ifaceNames []string) {
+	tcMux.Lock()
+	defer tcMux.Unlock()
+
+	nicArr := ifaceNames
+	slices.Sort(nicArr)
+	nicArr = slices.Compact(nicArr)
+
+	if tcProgram != nil {
+		tcProgram.Close()
+		tcProgram = nil
+	}
+
+	if len(nicArr) == 0 {
+		return
+	}
+
+	if lastTunConf == nil || !lastTunConf.Enable {
+		return
+	}
+
+	program, err := ebpf.NewTcEBpfProgram(nicArr, lastTunConf.Device)
+	if err != nil {
+		log.Errorln("Attached tc ebpf program error: %v", err)
+		return
+	}
+	tcProgram = program
+
+	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
 }
 
 func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<- *inbound.PacketAdapter) {
