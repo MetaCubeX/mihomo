@@ -2,30 +2,12 @@ package convert
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 )
-
-var (
-	encRaw = base64.RawStdEncoding
-	enc    = base64.StdEncoding
-)
-
-func DecodeBase64(buf []byte) []byte {
-	dBuf := make([]byte, encRaw.DecodedLen(len(buf)))
-	n, err := encRaw.Decode(dBuf, buf)
-	if err != nil {
-		n, err = enc.Decode(dBuf, buf)
-		if err != nil {
-			return buf
-		}
-	}
-	return dBuf[:n]
-}
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
@@ -132,102 +114,37 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			proxies = append(proxies, trojan)
 
 		case "vless":
-			urlVless, err := url.Parse(line)
+			urlVLess, err := url.Parse(line)
 			if err != nil {
 				continue
 			}
-
-			query := urlVless.Query()
-
-			name := uniqueName(names, urlVless.Fragment)
+			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-
-			vless["name"] = name
-			vless["type"] = scheme
-			vless["server"] = urlVless.Hostname()
-			vless["port"] = urlVless.Port()
-			vless["uuid"] = urlVless.User.Username()
-			vless["udp"] = true
-			vless["skip-cert-verify"] = false
-			vless["tls"] = false
-			tls := strings.ToLower(query.Get("security"))
-			if strings.HasSuffix(tls, "tls") {
-				vless["tls"] = true
+			handleVShareLink(names, urlVLess, scheme, vless)
+			if flow := query.Get("flow"); flow != "" {
+				vless["flow"] = strings.ToLower(flow)
 			}
-			sni := query.Get("sni")
-			if sni != "" {
-				vless["servername"] = sni
-			}
-
-			flow := strings.ToLower(query.Get("flow"))
-			if flow != "" {
-				vless["flow"] = flow
-			}
-
-			network := strings.ToLower(query.Get("type"))
-			fakeType := strings.ToLower(query.Get("headerType"))
-			if fakeType == "http" {
-				network = "http"
-			} else if network == "http" {
-				network = "h2"
-			}
-			vless["network"] = network
-			switch network {
-			case "tcp":
-				if fakeType != "none" {
-					headers := make(map[string]any)
-					httpOpts := make(map[string]any)
-					httpOpts["path"] = []string{"/"}
-
-					if query.Get("host") != "" {
-						headers["Host"] = []string{query.Get("host")}
-					}
-
-					if query.Get("method") != "" {
-						httpOpts["method"] = query.Get("method")
-					}
-
-					if query.Get("path") != "" {
-						httpOpts["path"] = []string{query.Get("path")}
-					}
-					httpOpts["headers"] = headers
-					vless["http-opts"] = httpOpts
-				}
-
-			case "http":
-				headers := make(map[string]any)
-				h2Opts := make(map[string]any)
-				h2Opts["path"] = []string{"/"}
-				if query.Get("path") != "" {
-					h2Opts["path"] = []string{query.Get("path")}
-				}
-				if query.Get("host") != "" {
-					h2Opts["host"] = []string{query.Get("host")}
-				}
-				h2Opts["headers"] = headers
-				vless["h2-opts"] = h2Opts
-
-			case "ws":
-				headers := make(map[string]any)
-				wsOpts := make(map[string]any)
-				headers["User-Agent"] = RandUserAgent()
-				headers["Host"] = query.Get("host")
-				wsOpts["path"] = query.Get("path")
-				wsOpts["headers"] = headers
-
-				vless["ws-opts"] = wsOpts
-
-			case "grpc":
-				grpcOpts := make(map[string]any)
-				grpcOpts["grpc-service-name"] = query.Get("serviceName")
-				vless["grpc-opts"] = grpcOpts
-			}
-
 			proxies = append(proxies, vless)
 
 		case "vmess":
-			dcBuf, err := encRaw.DecodeString(body)
+			// V2RayN-styled share link
+			// https://github.com/2dust/v2rayN/wiki/%E5%88%86%E4%BA%AB%E9%93%BE%E6%8E%A5%E6%A0%BC%E5%BC%8F%E8%AF%B4%E6%98%8E(ver-2)
+			dcBuf, err := tryDecodeBase64([]byte(body))
 			if err != nil {
+				// Xray VMessAEAD share link
+				urlVMess, err := url.Parse(line)
+				if err != nil {
+					continue
+				}
+				query := urlVMess.Query()
+				vmess := make(map[string]any, 20)
+				handleVShareLink(names, urlVMess, scheme, vmess)
+				vmess["alterId"] = 0
+				vmess["cipher"] = "auto"
+				if encryption := query.Get("encryption"); encryption != "" {
+					vmess["cipher"] = encryption
+				}
+				proxies = append(proxies, vmess)
 				continue
 			}
 
@@ -251,17 +168,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			} else {
 				vmess["alterId"] = 0
 			}
-			vmess["cipher"] = "auto"
 			vmess["udp"] = true
 			vmess["tls"] = false
 			vmess["skip-cert-verify"] = false
 
-			if values["cipher"] != nil && values["cipher"] != "" {
-				vmess["cipher"] = values["cipher"]
+			vmess["cipher"] = "auto"
+			if cipher, ok := values["scy"]; ok && cipher != "" {
+				vmess["cipher"] = cipher
 			}
 
-			sni := values["sni"]
-			if sni != "" {
+			if sni, ok := values["sni"]; ok && sni != "" {
 				vmess["servername"] = sni
 			}
 
@@ -274,7 +190,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["network"] = network
 
 			tls := strings.ToLower(values["tls"].(string))
-			if strings.Contains(tls, "tls") {
+			if strings.HasSuffix(tls, "tls") {
 				vmess["tls"] = true
 			}
 
@@ -282,12 +198,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "http":
 				headers := make(map[string]any)
 				httpOpts := make(map[string]any)
-				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = []string{values["host"].(string)}
+				if host, ok := values["host"]; ok && host != "" {
+					headers["Host"] = []string{host.(string)}
 				}
 				httpOpts["path"] = []string{"/"}
-				if values["path"] != "" && values["path"] != nil {
-					httpOpts["path"] = []string{values["path"].(string)}
+				if path, ok := values["path"]; ok && path != "" {
+					httpOpts["path"] = []string{path.(string)}
 				}
 				httpOpts["headers"] = headers
 
@@ -296,8 +212,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "h2":
 				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
-				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = []string{values["host"].(string)}
+				if host, ok := values["host"]; ok && host != "" {
+					headers["Host"] = []string{host.(string)}
 				}
 
 				h2Opts["path"] = values["path"]
@@ -309,11 +225,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 				wsOpts["path"] = []string{"/"}
-				if values["host"] != "" && values["host"] != nil {
-					headers["Host"] = values["host"].(string)
+				if host, ok := values["host"]; ok && host != "" {
+					headers["Host"] = host.(string)
 				}
-				if values["path"] != "" && values["path"] != nil {
-					wsOpts["path"] = values["path"].(string)
+				if path, ok := values["path"]; ok && path != "" {
+					wsOpts["path"] = path.(string)
 				}
 				wsOpts["headers"] = headers
 				vmess["ws-opts"] = wsOpts
@@ -448,18 +364,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	}
 
 	return proxies, nil
-}
-
-func urlSafe(data string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(data, "+", "-"), "/", "_")
-}
-
-func decodeUrlSafe(data string) string {
-	dcBuf, err := base64.RawURLEncoding.DecodeString(data)
-	if err != nil {
-		return ""
-	}
-	return string(dcBuf)
 }
 
 func uniqueName(names map[string]int, name string) string {
