@@ -1,4 +1,4 @@
-//go:build !android && linux
+//go:build !android
 
 package ebpf
 
