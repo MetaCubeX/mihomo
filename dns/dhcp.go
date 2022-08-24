@@ -29,7 +29,7 @@ type dhcpClient struct {
 
 	ifaceAddr *net.IPNet
 	done      chan struct{}
-	resolver  *Resolver
+	clients   []dnsClient
 	err       error
 }
 
@@ -41,15 +41,15 @@ func (d *dhcpClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 }
 
 func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	res, err := d.resolve(ctx)
+	clients, err := d.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return res.ExchangeContext(ctx, m)
+	return batchExchange(ctx, clients, m)
 }
 
-func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
+func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {
 	d.lock.Lock()
 
 	invalidated, err := d.invalidate()
@@ -64,8 +64,9 @@ func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), DHCPTimeout)
 			defer cancel()
 
-			var res *Resolver
+			var res []dnsClient
 			dns, err := dhcp.ResolveDNSFromDHCP(ctx, d.ifaceName)
+			// dns never empty if err is nil
 			if err == nil {
 				nameserver := make([]NameServer, 0, len(dns))
 				for _, item := range dns {
@@ -75,9 +76,7 @@ func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
 					})
 				}
 
-				res = NewResolver(Config{
-					Main: nameserver,
-				})
+				res = transform(nameserver, nil)
 			}
 
 			d.lock.Lock()
@@ -86,7 +85,7 @@ func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
 			close(done)
 
 			d.done = nil
-			d.resolver = res
+			d.clients = res
 			d.err = err
 		}()
 	}
@@ -96,7 +95,7 @@ func (d *dhcpClient) resolve(ctx context.Context) (*Resolver, error) {
 	for {
 		d.lock.Lock()
 
-		res, err, done := d.resolver, d.err, d.done
+		res, err, done := d.clients, d.err, d.done
 
 		d.lock.Unlock()
 

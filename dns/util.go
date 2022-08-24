@@ -1,11 +1,15 @@
 package dns
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/picker"
 	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
@@ -101,4 +105,32 @@ func msgToIP(msg *D.Msg) []net.IP {
 	}
 
 	return ips
+}
+
+func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
+	fast, ctx := picker.WithContext(ctx)
+	for _, client := range clients {
+		r := client
+		fast.Go(func() (any, error) {
+			m, err := r.ExchangeContext(ctx, m)
+			if err != nil {
+				return nil, err
+			} else if m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused {
+				return nil, errors.New("server failure")
+			}
+			return m, nil
+		})
+	}
+
+	elm := fast.Wait()
+	if elm == nil {
+		err := errors.New("all DNS requests failed")
+		if fErr := fast.Error(); fErr != nil {
+			err = fmt.Errorf("%w, first error: %s", err, fErr.Error())
+		}
+		return nil, err
+	}
+
+	msg = elm.(*D.Msg)
+	return
 }
