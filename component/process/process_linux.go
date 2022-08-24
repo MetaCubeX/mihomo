@@ -166,7 +166,7 @@ func resolveProcessNameByProcSearch(inode, uid int32) (string, error) {
 	}
 
 	buffer := make([]byte, syscall.PathMax)
-	socket := []byte(fmt.Sprintf("socket:[%d]", inode))
+	socket := fmt.Appendf(nil, "socket:[%d]", inode)
 
 	for _, f := range files {
 		if !f.IsDir() || !isPid(f.Name()) {
