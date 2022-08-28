@@ -27,9 +27,10 @@ func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 func NewReject() *Reject {
 	return &Reject{
 		Base: &Base{
-			name: "REJECT",
-			tp:   C.Reject,
-			udp:  true,
+			name:   "REJECT",
+			tp:     C.Reject,
+			udp:    true,
+			prefer: C.DualStack,
 		},
 	}
 }
@@ -37,9 +38,10 @@ func NewReject() *Reject {
 func NewPass() *Reject {
 	return &Reject{
 		Base: &Base{
-			name: "PASS",
-			tp:   C.Pass,
-			udp:  true,
+			name:   "PASS",
+			tp:     C.Pass,
+			udp:    true,
+			prefer: C.DualStack,
 		},
 	}
 }

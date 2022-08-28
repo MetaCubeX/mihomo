@@ -153,11 +153,12 @@ func NewHttp(option HttpOption) (*Http, error) {
 
 	return &Http{
 		Base: &Base{
-			name:  option.Name,
-			addr:  net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:    C.Http,
-			iface: option.Interface,
-			rmark: option.RoutingMark,
+			name:   option.Name,
+			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			tp:     C.Http,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		user:      option.UserName,
 		pass:      option.Password,

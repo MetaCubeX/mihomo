@@ -53,6 +53,9 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 		hyDialer: func() (net.PacketConn, error) {
 			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
 		},
+		remoteAddr: func(addr string) (net.Addr, error) {
+			return resolveUDPAddrWithPrefer("udp", addr, h.prefer)
+		},
 	}
 
 	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
@@ -184,11 +187,11 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		option.Protocol = DefaultProtocol
 	}
 	if option.ReceiveWindowConn == 0 {
-		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow
+		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow / 10
 		quicConfig.MaxStreamReceiveWindow = DefaultStreamReceiveWindow
 	}
 	if option.ReceiveWindow == 0 {
-		quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow
+		quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow / 10
 		quicConfig.MaxConnectionReceiveWindow = DefaultConnectionReceiveWindow
 	}
 	if !quicConfig.DisablePathMTUDiscovery && pmtud_fix.DisablePathMTUDiscovery {
@@ -216,12 +219,13 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	}
 	return &Hysteria{
 		Base: &Base{
-			name:  option.Name,
-			addr:  addr,
-			tp:    C.Hysteria,
-			udp:   true,
-			iface: option.Interface,
-			rmark: option.RoutingMark,
+			name:   option.Name,
+			addr:   addr,
+			tp:     C.Hysteria,
+			udp:    true,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 	}, nil
@@ -287,8 +291,9 @@ func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 type hyDialerWithContext struct {
-	hyDialer func() (net.PacketConn, error)
-	ctx      context.Context
+	hyDialer   func() (net.PacketConn, error)
+	ctx        context.Context
+	remoteAddr func(host string) (net.Addr, error)
 }
 
 func (h *hyDialerWithContext) ListenPacket() (net.PacketConn, error) {
@@ -297,4 +302,8 @@ func (h *hyDialerWithContext) ListenPacket() (net.PacketConn, error) {
 
 func (h *hyDialerWithContext) Context() context.Context {
 	return h.ctx
+}
+
+func (h *hyDialerWithContext) RemoteAddr(host string) (net.Addr, error) {
+	return h.remoteAddr(host)
 }
