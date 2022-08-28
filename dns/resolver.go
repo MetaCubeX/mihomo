@@ -88,7 +88,7 @@ func (r *Resolver) ResolveAllIP(host string) (ips []netip.Addr, err error) {
 			return nil, resolver.ErrIPNotFound
 		}
 		ips = append(ips, ipv6s...)
-	case <-time.After(1 * time.Millisecond):
+	case <-time.After(30 * time.Millisecond):
 		// wait ipv6 result
 	}
 
