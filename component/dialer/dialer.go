@@ -218,7 +218,6 @@ func concurrentDualStackDialContext(ctx context.Context, network, address string
 	}
 
 	var ips []netip.Addr
-
 	if opt.direct {
 		ips, err = resolver.ResolveAllIP(host)
 	} else {
@@ -298,22 +297,28 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 				if res.isPrimary {
 					return res.Conn, nil
 				} else {
-					fallback = res
+					if !fallback.done || fallback.error != nil {
+						fallback = res
+					}
 				}
 			} else {
 				if res.isPrimary {
 					preferCount.Add(-1)
-					if preferCount.Load() == 0 && fallback.done {
+					if preferCount.Load() == 0 && fallback.done && fallback.error == nil {
 						return fallback.Conn, nil
 					}
 				}
 			}
 		case <-ctx.Done():
-			if fallback.done {
+			if fallback.done && fallback.error == nil {
 				return fallback.Conn, nil
 			}
 			break
 		}
+	}
+
+	if fallback.done && fallback.error == nil {
+		return fallback.Conn, nil
 	}
 
 	return nil, fmt.Errorf("all ips %v tcp shake hands failed", ips)
