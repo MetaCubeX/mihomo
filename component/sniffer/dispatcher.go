@@ -12,7 +12,6 @@ import (
 
 	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -84,8 +83,7 @@ func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
 
 	metadata.AddrType = C.AtypDomainName
 	metadata.Host = host
-	metadata.DNSMode = C.DNSMapping
-	resolver.InsertHostByIP(metadata.DstIP, host)
+	metadata.DNSMode = C.DNSNormal
 }
 
 func (sd *SnifferDispatcher) Enable() bool {

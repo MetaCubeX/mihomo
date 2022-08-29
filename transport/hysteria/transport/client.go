@@ -4,21 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/faketcp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/udp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/wechat"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"github.com/Dreamacro/clash/transport/hysteria/utils"
 	"github.com/lucas-clemente/quic-go"
 	"net"
 )
 
 type ClientTransport struct {
-	Dialer        *net.Dialer
-	PrefEnabled   bool
-	PrefIPv6      bool
-	PrefExclusive bool
+	Dialer *net.Dialer
 }
 
 func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs.Obfuscator, dialer PacketDialer) (net.PacketConn, error) {
@@ -64,29 +59,21 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 type PacketDialer interface {
 	ListenPacket() (net.PacketConn, error)
 	Context() context.Context
+	RemoteAddr(host string) (net.Addr, error)
 }
 
 func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfs.Obfuscator, dialer PacketDialer) (quic.Connection, error) {
-	ipStr, port, err := utils.SplitHostPort(server)
+	serverUDPAddr, err := dialer.RemoteAddr(server)
 	if err != nil {
 		return nil, err
-	}
-
-	ip, err := resolver.ResolveProxyServerHost(ipStr)
-	if err != nil {
-		return nil, err
-	}
-
-	serverUDPAddr := net.UDPAddr{
-		IP:   net.ParseIP(ip.String()),
-		Port: int(port),
 	}
 
 	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr.String(), obfs, dialer)
 	if err != nil {
 		return nil, err
 	}
-	qs, err := quic.DialContext(dialer.Context(), pktConn, &serverUDPAddr, server, tlsConfig, quicConfig)
+
+	qs, err := quic.DialContext(dialer.Context(), pktConn, serverUDPAddr, server, tlsConfig, quicConfig)
 	if err != nil {
 		_ = pktConn.Close()
 		return nil, err

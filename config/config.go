@@ -119,6 +119,7 @@ type Tun struct {
 	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	TunAddressPrefix    netip.Prefix     `yaml:"-" json:"-"`
+	RedirectToTun       []string         `yaml:"-" json:"-"`
 }
 
 // IPTables config
@@ -295,6 +296,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute:           false,
 			AutoDetectInterface: false,
+		},
+		EBpf: EBpf{
+			RedirectToTun: []string{},
+			AutoRedir:     []string{},
 		},
 		IPTables: IPTables{
 			Enable:           false,
@@ -967,6 +972,7 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
 		TunAddressPrefix:    tunAddressPrefix,
+		RedirectToTun:       rawTun.RedirectToTun,
 	}, nil
 }
 
@@ -977,7 +983,8 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 
 	var ports []utils.Range[uint16]
 	if len(snifferRaw.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](0, 65535))
+		ports = append(ports, *utils.NewRange[uint16](80, 80))
+		ports = append(ports, *utils.NewRange[uint16](443, 443))
 	} else {
 		for _, portRange := range snifferRaw.Ports {
 			portRaws := strings.Split(portRange, "-")

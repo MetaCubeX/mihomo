@@ -49,6 +49,20 @@ func (c *udpConn) ID() *stack.TransportEndpointID {
 	return &c.id
 }
 
+func (c *udpConn) LocalAddr() net.Addr {
+	return &net.UDPAddr{
+		IP:   net.IP(c.id.LocalAddress),
+		Port: int(c.id.LocalPort),
+	}
+}
+
+func (c *udpConn) RemoteAddr() net.Addr {
+	return &net.UDPAddr{
+		IP:   net.IP(c.id.RemoteAddress),
+		Port: int(c.id.RemotePort),
+	}
+}
+
 type packet struct {
 	pc      adapter.UDPConn
 	rAddr   net.Addr

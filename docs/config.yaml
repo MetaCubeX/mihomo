@@ -1,19 +1,19 @@
 # port: 7890 # HTTP(S) 代理服务器端口
 # socks-port: 7891 # SOCKS5 代理端口
 mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
-# redir-port: 7892 # 透明代理端口 用于Linux和
+# redir-port: 7892 # 透明代理端口，用于 Linux 和 MacOS
 
 # Transparent proxy server port for Linux (TProxy TCP and TProxy UDP)
 # tproxy-port: 7893
 
 allow-lan: true # 允许局域网连接
-bind-address: "*" # 绑定IP地址，仅作用于 allow-lan 为true, '*'表示所有地址
+bind-address: "*" # 绑定IP地址，仅作用于 allow-lan 为 true，'*'表示所有地址
 
 mode: rule
 
-log-level: debug #日志等级 silent/error/warning/info/debug
+log-level: debug # 日志等级 silent/error/warning/info/debug
 
-ipv6: true #开启IPv6总开关 关闭阻断所有IPv6和屏蔽DNS请求AAAA记录
+ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
 
 external-controller: 0.0.0.0:9093 # RESTful API 监听地址
 
@@ -24,33 +24,33 @@ external-ui: /path/to/ui/folder # 配置WEB UI目录，使用http://{{external-c
 
 # interface-name: en0 # 设置出口网卡
 
-# routing-mark: 6666 # 配置fwmark 仅用于Linux
+# routing-mark: 6666 # 配置 fwmark 仅用于Linux
 experimental:
   # 具体配置待定
   # 证书指纹,SHA256格式,补充校验TLS证书
   # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
   fingerprints:
     - "8F111FA9AD3CD8E917A118522CAC39EA33741B3BBE73F91CECE548D5CCB0E5E8" # 忽略大小写
-# 类似于/etc/hosts, 仅支持配置单个IP
+# 类似于 /etc/hosts, 仅支持配置单个 IP
 hosts:
 # '*.clash.dev': 127.0.0.1
 # '.dev': 127.0.0.1
 # 'alpha.clash.dev': '::1'
 
-# Tun配置
+# Tun 配置
 tun:
   enable: false
   stack: system # gvisor
   dns-hijack:
-    - 198.18.0.2:53 # 需要劫持的DNS
-  # auto-detect-interface: true # 自动识别interface
-  # auto-route: true # 配置
+    - 198.18.0.2:53 # 需要劫持的 DNS
+  # auto-detect-interface: true # 自动识别出口网卡
+  # auto-route: true # 配置路由表
 
 #ebpf配置
 ebpf:
-  auto-redir: #redirect模式，仅支持TCP
+  auto-redir: # redirect 模式，仅支持 TCP
     - eth0
-  redirect-to-tun: #UDP+TCP,使用该功能请勿启用auto-route
+  redirect-to-tun: # UDP+TCP 使用该功能请勿启用 auto-route
     - eth0
 
 # 嗅探域名 可选配置
@@ -63,7 +63,7 @@ sniffer:
   # 强制对此域名进行嗅探
   force-domain:
     - +.v2ex.com
-  # 仅对白名单中的端口进行嗅探，默认为0-65535，推荐只对需要嗅探写的的常见端口嗅探
+  # 仅对白名单中的端口进行嗅探，默认为 443，80
   port-whitelist:
     - "80"
     - "443"
@@ -78,12 +78,12 @@ profile:
 
 # DNS配置
 dns:
-  enable: false # 关闭将使用系统DNS
-  listen: 0.0.0.0:53 # 开启DNS服务器监听
-  # ipv6: false # false将返回AAAA的空结果
+  enable: false # 关闭将使用系统 DNS
+  listen: 0.0.0.0:53 # 开启 DNS 服务器监听
+  # ipv6: false # false 将返回 AAAA 的空结果
 
-  # 用于解析nameserver,fallbacky以及其他DNS服务器配置的,DNS服务域名
-  # 只能使用纯IP地址，可使用加密DNS
+  # 用于解析 nameserver，fallback 以及其他DNS服务器配置的，DNS 服务域名
+  # 只能使用纯 IP 地址，可使用加密 DNS
   default-nameserver:
     - 114.114.114.114
     - 8.8.8.8
@@ -93,7 +93,7 @@ dns:
 
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
 
-  # use-hosts: true # 查询hosts
+  # use-hosts: true # 查询 hosts
 
   # 配置不使用fake-ip的域名
   # fake-ip-filter:
@@ -101,40 +101,40 @@ dns:
   #   - localhost.ptlogin2.qq.com
 
   # DNS主要域名配置
-  # 支持 UDP,TCP,DoT,DoH,DoQ
-  # 这部分为主要DNS配置,影响所有直连,确保使用对大陆解析精准的DNS
+  # 支持 UDP，TCP，DoT，DoH，DoQ
+  # 这部分为主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS
   nameserver:
     - 114.114.114.114 # default value
     - 8.8.8.8 # default value
     - tls://223.5.5.5:853 # DNS over TLS
     - https://doh.pub/dns-query # DNS over HTTPS
     - https://dns.alidns.com/dns-query#h3=true # 强制HTTP/3
-    - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用HTTP/3
+    - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - '8.8.8.8#en0' # 兼容指定DNS出口网卡
 
-  # 当配置fallback时，会查询nameserver中返回的IP是否为CN，非必要配置
-  # 当不是CN，则使用fallback中的DNS查询结果
-  # 确保配置fallback时能够正常查询
+  # 当配置 fallback 时，会查询 nameserver 中返回的 IP 是否为 CN，非必要配置
+  # 当不是 CN，则使用 fallback 中的 DNS 查询结果
+  # 确保配置 fallback 时能够正常查询
   # fallback:
   #   - tcp://1.1.1.1
-  #   - 'tcp://1.1.1.1#ProxyGroupName' # 指定DNS过代理查询，ProxyGroupName为策略组名或节点名，过代理配置优先于配置出口网卡，当找不到策略组或节点名则设置为出口网卡
+  #   - 'tcp://1.1.1.1#ProxyGroupName' # 指定 DNS 过代理查询，ProxyGroupName 为策略组名或节点名，过代理配置优先于配置出口网卡，当找不到策略组或节点名则设置为出口网卡
 
-  # 专用于节点域名解析的DNS服务器，非必要配置项
-  # 配置服务器若查询失败将使用nameserver，非并发查询
+  # 专用于节点域名解析的 DNS 服务器，非必要配置项
+  # 配置服务器若查询失败将使用 nameserver，非并发查询
   # proxy-server-nameserver:
   # - https://dns.google/dns-query
   # - tls://one.one.one.one
 
-  # 配置fallback使用条件
+  # 配置 fallback 使用条件
   # fallback-filter:
-  #   geoip: true # 配置是否使用geoip
-  #   geoip-code: CN # 当nameserver域名的IP查询geoip库为CN时，不使用fallback
-  #   配置强制fallback，优先于IP判断，具体分类自行查看geosite库
+  #   geoip: true # 配置是否使用 geoip
+  #   geoip-code: CN # 当 nameserver 域名的 IP 查询 geoip 库为 CN 时，不使用 fallback 中的 DNS 查询结果
+  #   配置强制 fallback，优先于 IP 判断，具体分类自行查看 geosite 库
   #   geosite:
   #     - gfw
-  #   配置不需要使用fallback的IP CIDR
+  #   配置不需要使用 fallback 的 IP CIDR
   #   ipcidr:
   #     - 240.0.0.0/4
   #   domain:
@@ -142,7 +142,7 @@ dns:
   #     - '+.facebook.com'
   #     - '+.youtube.com'
 
-  # 配置查询域名使用的DNS服务器
+  # 配置查询域名使用的 DNS 服务器
   # nameserver-policy:
   #   'www.baidu.com': '114.114.114.114'
   #   '+.internal.crop.com': '10.0.0.1'
@@ -164,7 +164,12 @@ proxies:
     password: "password"
     # udp: true
     # udp-over-tcp: false
-
+    # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
+                       # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
+                       # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
+                       # UDP 则为双栈解析，获取结果中的第一个 IPv4
+                       # ipv6-prefer 同 ipv4-prefer
+                       # 现有协议都支持此参数
   - name: "ss2"
     type: ss
     server: server
@@ -249,6 +254,7 @@ proxies:
     #   # headers:
     #   #   Connection:
     #   #     - keep-alive
+    # ip-version: ipv4 # 设置使用 IP 类型偏好，可选：ipv4，ipv6，dual，默认值：dual
 
   - name: vmess-grpc
     server: server
@@ -264,6 +270,7 @@ proxies:
     # skip-cert-verify: true
     grpc-opts:
       grpc-service-name: "example"
+    # ip-version: ipv4
 
   # socks5
   - name: "socks"
@@ -276,6 +283,7 @@ proxies:
     # fingerprint: xxxx
     # skip-cert-verify: true
     # udp: true
+    # ip-version: ipv6
 
   # http
   - name: "http"
@@ -288,6 +296,7 @@ proxies:
     # skip-cert-verify: true
     # sni: custom.com
     # fingerprint: xxxx # 同 experimental.fingerprints 使用 sha256 指纹，配置协议独立的指纹，将忽略 experimental.fingerprints
+    # ip-version: dual
 
   # Snell
   # Beware that there's currently no UDP support yet
@@ -389,9 +398,9 @@ proxies:
     auth_str: yourpassword
     # obfs: obfs_str
     # alpn: h3
-    protocol: udp #支持udp/wechat-video/faketcp
-    up: "30 Mbps" #若不写单位，默认为Mbps
-    down: "200 Mbps" #若不写单位，默认为Mbps
+    protocol: udp # 支持 udp/wechat-video/faketcp
+    up: "30 Mbps" # 若不写单位，默认为 Mbps
+    down: "200 Mbps" # 若不写单位，默认为 Mbps
     #sni: server.com
     #skip-cert-verify: false
     #recv_window_conn: 12582912
@@ -422,7 +431,7 @@ proxies:
     # udp: true
 
 proxy-groups:
-  # 代理链，若落地协议支持UDP over TCP则可支持UDP
+  # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
   # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
   - name: "relay"
     type: relay
@@ -432,7 +441,7 @@ proxy-groups:
       - ss1
       - ss2
 
-  # url-test 将按照url测试结果使用延迟最低节点
+  # url-test 将按照 url 测试结果使用延迟最低节点
   - name: "auto"
     type: url-test
     proxies:
@@ -444,7 +453,7 @@ proxy-groups:
     url: "http://www.gstatic.com/generate_204"
     interval: 300
 
-  # fallback 将按照url测试结果按照节点顺序选择
+  # fallback 将按照 url 测试结果按照节点顺序选择
   - name: "fallback-auto"
     type: fallback
     proxies:
@@ -475,7 +484,7 @@ proxy-groups:
       - vmess1
       - auto
 
-  # 配置指定interface-name和fwmark的DIRECT
+  # 配置指定 interface-name 和 fwmark 的 DIRECT
   - name: en1
     type: select
     interface-name: en1
@@ -485,14 +494,14 @@ proxy-groups:
 
   - name: UseProvider
     type: select
-    filter: "HK|TW" # 正则表达式，过滤provider1中节点名包含HK或TW
+    filter: "HK|TW" # 正则表达式，过滤 provider1 中节点名包含 HK 或 TW
     use:
       - provider1
     proxies:
       - Proxy
       - DIRECT
 
-# Clash格式的节点或支持*ray的分享格式
+# Clash 格式的节点或支持 *ray 的分享格式
 proxy-providers:
   provider1:
     type: http

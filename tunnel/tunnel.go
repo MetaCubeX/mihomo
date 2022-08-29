@@ -373,14 +373,16 @@ func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
 func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
-	var resolved bool
+	var (
+		resolved     bool
+		processFound bool
+	)
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
 		metadata.DstIP = node.Data
 		resolved = true
 	}
 
-	foundProcess := false
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			ip, err := resolver.ResolveIP(metadata.Host)
@@ -393,7 +395,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if !foundProcess && (alwaysFindProcess || rule.ShouldFindProcess()) {
+		if !processFound && (alwaysFindProcess || rule.ShouldFindProcess()) {
 			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
 			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
 			if err != nil {
@@ -401,8 +403,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			} else {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
-				metadata.Uid = &uid
-				foundProcess = true
+				if uid != -1 {
+					metadata.Uid = &uid
+				}
+				processFound = true
 			}
 		}
 

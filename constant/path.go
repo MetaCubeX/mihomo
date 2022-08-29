@@ -1,7 +1,6 @@
 package constant
 
 import (
-	"io/ioutil"
 	"os"
 	P "path"
 	"path/filepath"
@@ -58,7 +57,7 @@ func (p *path) Resolve(path string) string {
 }
 
 func (p *path) MMDB() string {
-	files, err := ioutil.ReadDir(p.homeDir)
+	files, err := os.ReadDir(p.homeDir)
 	if err != nil {
 		return ""
 	}
@@ -85,7 +84,7 @@ func (p *path) Cache() string {
 }
 
 func (p *path) GeoIP() string {
-	files, err := ioutil.ReadDir(p.homeDir)
+	files, err := os.ReadDir(p.homeDir)
 	if err != nil {
 		return ""
 	}
@@ -104,7 +103,7 @@ func (p *path) GeoIP() string {
 }
 
 func (p *path) GeoSite() string {
-	files, err := ioutil.ReadDir(p.homeDir)
+	files, err := os.ReadDir(p.homeDir)
 	if err != nil {
 		return ""
 	}

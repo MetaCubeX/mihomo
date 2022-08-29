@@ -15,7 +15,6 @@ const udpBufferSize = 65535
 type ObfsWeChatUDPConn struct {
 	orig       net.PacketConn
 	obfs       obfs.Obfuscator
-	closed     bool
 	readBuf    []byte
 	readMutex  sync.Mutex
 	writeBuf   []byte
@@ -37,13 +36,7 @@ func NewObfsWeChatUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsWeChat
 func (c *ObfsWeChatUDPConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	for {
 		c.readMutex.Lock()
-		if c.closed {
-			log.Infoln("read wechat obfs before")
-		}
 		n, addr, err := c.orig.ReadFrom(c.readBuf)
-		if c.closed {
-			log.Infoln("read wechat obfs after")
-		}
 		if n <= 13 {
 			c.readMutex.Unlock()
 			return 0, addr, err
@@ -84,7 +77,6 @@ func (c *ObfsWeChatUDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) 
 }
 
 func (c *ObfsWeChatUDPConn) Close() error {
-	c.closed = true
 	return c.orig.Close()
 }
 

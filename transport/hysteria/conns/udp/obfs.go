@@ -1,7 +1,6 @@
 package udp
 
 import (
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"net"
 	"sync"
@@ -17,7 +16,6 @@ type ObfsUDPConn struct {
 	readMutex  sync.Mutex
 	writeBuf   []byte
 	writeMutex sync.Mutex
-	closed     bool
 }
 
 func NewObfsUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsUDPConn {
@@ -32,13 +30,7 @@ func NewObfsUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsUDPConn {
 func (c *ObfsUDPConn) ReadFrom(p []byte) (int, net.Addr, error) {
 	for {
 		c.readMutex.Lock()
-		if c.closed {
-			log.Infoln("read udp obfs before")
-		}
 		n, addr, err := c.orig.ReadFrom(c.readBuf)
-		if c.closed {
-			log.Infoln("read udp obfs after")
-		}
 		if n <= 0 {
 			c.readMutex.Unlock()
 			return 0, addr, err
@@ -68,7 +60,6 @@ func (c *ObfsUDPConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 func (c *ObfsUDPConn) Close() error {
-	c.closed = true
 	return c.orig.Close()
 }
 
