@@ -169,7 +169,7 @@ proxies:
                        # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
                        # UDP 则为双栈解析，获取结果中的第一个 IPv4
                        # ipv6-prefer 同 ipv4-prefer
-                       # 现有协议都支持此参数
+                       # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
   - name: "ss2"
     type: ss
     server: server
