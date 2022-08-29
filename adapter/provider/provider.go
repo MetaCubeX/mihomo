@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Dreamacro/clash/common/convert"
+	"github.com/Dreamacro/clash/component/resource"
 	"github.com/dlclark/regexp2"
-	"math"
 	"runtime"
 	"time"
 
@@ -31,10 +31,10 @@ type ProxySetProvider struct {
 }
 
 type proxySetProvider struct {
-	*fetcher[[]C.Proxy]
+	*resource.Fetcher[[]C.Proxy]
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
-	version     uint
+	version     uint32
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
@@ -43,16 +43,16 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		"type":        pp.Type().String(),
 		"vehicleType": pp.VehicleType().String(),
 		"proxies":     pp.Proxies(),
-		"updatedAt":   pp.updatedAt,
+		"updatedAt":   pp.UpdatedAt,
 	})
 }
 
-func (pp *proxySetProvider) Version() uint {
+func (pp *proxySetProvider) Version() uint32 {
 	return pp.version
 }
 
 func (pp *proxySetProvider) Name() string {
-	return pp.name
+	return pp.Fetcher.Name()
 }
 
 func (pp *proxySetProvider) HealthCheck() {
@@ -60,19 +60,19 @@ func (pp *proxySetProvider) HealthCheck() {
 }
 
 func (pp *proxySetProvider) Update() error {
-	elm, same, err := pp.fetcher.Update()
+	elm, same, err := pp.Fetcher.Update()
 	if err == nil && !same {
-		pp.onUpdate(elm)
+		pp.OnUpdate(elm)
 	}
 	return err
 }
 
 func (pp *proxySetProvider) Initial() error {
-	elm, err := pp.fetcher.Initial()
+	elm, err := pp.Fetcher.Initial()
 	if err != nil {
 		return err
 	}
-	pp.onUpdate(elm)
+	pp.OnUpdate(elm)
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 
 func stopProxyProvider(pd *ProxySetProvider) {
 	pd.healthCheck.close()
-	_ = pd.fetcher.Destroy()
+	_ = pd.Fetcher.Destroy()
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
@@ -116,8 +116,8 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	fetcher := newFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
-	pd.fetcher = fetcher
+	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
+	pd.Fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
@@ -133,7 +133,7 @@ type compatibleProvider struct {
 	name        string
 	healthCheck *HealthCheck
 	proxies     []C.Proxy
-	version     uint
+	version     uint32
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
@@ -145,7 +145,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (cp *compatibleProvider) Version() uint {
+func (cp *compatibleProvider) Version() uint32 {
 	return cp.version
 }
 
@@ -208,15 +208,11 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
-		if pd.version == math.MaxUint {
-			pd.version = 0
-		} else {
-			pd.version++
-		}
+		pd.version += 1
 	}
 }
 
-func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp) parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 

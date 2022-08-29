@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	xtls "github.com/xtls/go"
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 	"time"
@@ -68,6 +69,60 @@ func resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
 	}
 
 	ip, err := resolver.ResolveProxyServerHost(host)
+	if err != nil {
+		return nil, err
+	}
+	return net.ResolveUDPAddr(network, net.JoinHostPort(ip.String(), port))
+}
+
+func resolveUDPAddrWithPrefer(network, address string, prefer C.DNSPrefer) (*net.UDPAddr, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	var ip netip.Addr
+	switch prefer {
+	case C.IPv4Only:
+		ip, err = resolver.ResolveIPv4ProxyServerHost(host)
+	case C.IPv6Only:
+		ip, err = resolver.ResolveIPv6ProxyServerHost(host)
+	case C.IPv6Prefer:
+		var ips []netip.Addr
+		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+		var fallback netip.Addr
+		if err == nil {
+			for _, addr := range ips {
+				if addr.Is6() {
+					ip = addr
+					break
+				} else {
+					if !fallback.IsValid() {
+						fallback = addr
+					}
+				}
+			}
+			ip = fallback
+		}
+	default:
+		// C.IPv4Prefer, C.DualStack and other 
+		var ips []netip.Addr
+		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+		var fallback netip.Addr
+		if err == nil {
+			for _, addr := range ips {
+				if addr.Is4() {
+					ip = addr
+					break
+				} else {
+					if !fallback.IsValid() {
+						fallback = addr
+					}
+				}
+			}
+			ip = fallback
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
 	"gopkg.in/yaml.v3"
@@ -14,7 +15,7 @@ var (
 )
 
 type ruleSetProvider struct {
-	*fetcher
+	*resource.Fetcher[any]
 	behavior P.RuleType
 	strategy ruleStrategy
 }
@@ -54,18 +55,20 @@ func (rp *ruleSetProvider) Type() P.ProviderType {
 }
 
 func (rp *ruleSetProvider) Initial() error {
-	elm, err := rp.fetcher.Initial()
+	elm, err := rp.Fetcher.Initial()
 	if err != nil {
 		return err
 	}
 
-	return rp.fetcher.onUpdate(elm)
+	rp.OnUpdate(elm)
+	return nil
 }
 
 func (rp *ruleSetProvider) Update() error {
-	elm, same, err := rp.fetcher.Update()
+	elm, same, err := rp.Fetcher.Update()
 	if err == nil && !same {
-		return rp.fetcher.onUpdate(elm)
+		rp.OnUpdate(elm)
+		return nil
 	}
 
 	return err
@@ -94,7 +97,7 @@ func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
 			"name":        rp.Name(),
 			"ruleCount":   rp.strategy.Count(),
 			"type":        rp.Type().String(),
-			"updatedAt":   rp.updatedAt,
+			"updatedAt":   rp.UpdatedAt,
 			"vehicleType": rp.VehicleType().String(),
 		})
 }
@@ -105,21 +108,20 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 		behavior: behavior,
 	}
 
-	onUpdate := func(elm interface{}) error {
+	onUpdate := func(elm interface{}) {
 		rulesRaw := elm.([]string)
 		rp.strategy.OnUpdate(rulesRaw)
-		return nil
 	}
 
-	fetcher := newFetcher(name, interval, vehicle, rulesParse, onUpdate)
-	rp.fetcher = fetcher
+	fetcher := resource.NewFetcher(name, interval, vehicle, rulesParse, onUpdate)
+	rp.Fetcher = fetcher
 	rp.strategy = newStrategy(behavior, parse)
 
 	wrapper := &RuleSetProvider{
 		rp,
 	}
 
-	final := func(provider *RuleSetProvider) { rp.fetcher.Destroy() }
+	final := func(provider *RuleSetProvider) { _ = rp.Fetcher.Destroy() }
 	runtime.SetFinalizer(wrapper, final)
 	return wrapper
 }
@@ -140,7 +142,7 @@ func newStrategy(behavior P.RuleType, parse func(tp, payload, target string, par
 	}
 }
 
-func rulesParse(buf []byte) (interface{}, error) {
+func rulesParse(buf []byte) (any, error) {
 	rulePayload := RulePayload{}
 	err := yaml.Unmarshal(buf, &rulePayload)
 	if err != nil {

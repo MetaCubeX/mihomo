@@ -59,7 +59,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver, s.ProxyAdapter))
+			ret = append(ret, newDoHClient(s.Addr, resolver, s.Params, s.ProxyAdapter))
 			continue
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
@@ -74,8 +74,6 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			Client: &D.Client{
 				Net: s.Net,
 				TLSConfig: &tls.Config{
-					// alpn identifier, see https://tools.ietf.org/html/draft-hoffman-dprive-dns-tls-alpn-00#page-6
-					NextProtos: []string{"dns"},
 					ServerName: host,
 				},
 				UDPSize: 4096,

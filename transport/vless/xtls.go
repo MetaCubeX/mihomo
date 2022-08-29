@@ -2,6 +2,7 @@ package vless
 
 import (
 	"context"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"net"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -11,6 +12,7 @@ import (
 type XTLSConfig struct {
 	Host           string
 	SkipCertVerify bool
+	FingerPrint    string
 	NextProtos     []string
 }
 
@@ -19,6 +21,14 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 		ServerName:         cfg.Host,
 		InsecureSkipVerify: cfg.SkipCertVerify,
 		NextProtos:         cfg.NextProtos,
+	}
+	if len(cfg.FingerPrint) == 0 {
+		xtlsConfig = tlsC.GetGlobalFingerprintXTLCConfig(xtlsConfig)
+	} else {
+		var err error
+		if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, cfg.FingerPrint); err != nil {
+			return nil, err
+		}
 	}
 
 	xtlsConn := xtls.Client(conn, xtlsConfig)
