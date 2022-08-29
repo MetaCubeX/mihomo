@@ -72,6 +72,9 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 		hyDialer: func() (net.PacketConn, error) {
 			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
 		},
+		remoteAddr: func(addr string) (net.Addr, error) {
+			return resolveUDPAddrWithPrefer("udp", addr, h.prefer)
+		},
 	}
 	udpConn, err := h.client.DialUDP(&hdc)
 	if err != nil {
