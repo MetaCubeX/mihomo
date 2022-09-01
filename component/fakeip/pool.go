@@ -21,7 +21,7 @@ type store interface {
 	CloneTo(store)
 }
 
-// Pool is a implementation about fake ip generator without storage
+// Pool is an implementation about fake ip generator without storage
 type Pool struct {
 	max     uint32
 	min     uint32
@@ -99,21 +99,21 @@ func (p *Pool) CloneFrom(o *Pool) {
 func (p *Pool) get(host string) net.IP {
 	current := p.offset
 	for {
+		ip := uintToIP(p.min + p.offset)
+		if !p.store.Exist(ip) {
+			break
+		}
+
 		p.offset = (p.offset + 1) % (p.max - p.min)
 		// Avoid infinite loops
 		if p.offset == current {
 			p.offset = (p.offset + 1) % (p.max - p.min)
-			ip := uintToIP(p.min + p.offset - 1)
+			ip := uintToIP(p.min + p.offset)
 			p.store.DelByIP(ip)
 			break
 		}
-
-		ip := uintToIP(p.min + p.offset - 1)
-		if !p.store.Exist(ip) {
-			break
-		}
 	}
-	ip := uintToIP(p.min + p.offset - 1)
+	ip := uintToIP(p.min + p.offset)
 	p.store.PutByIP(ip, host)
 	return ip
 }
