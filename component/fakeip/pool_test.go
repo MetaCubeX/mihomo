@@ -1,7 +1,6 @@
 package fakeip
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -106,15 +105,13 @@ func TestPool_CycleUsed(t *testing.T) {
 	defer os.Remove(tempfile)
 
 	for _, pool := range pools {
-		foo := pool.Lookup("foo.com")
-		bar := pool.Lookup("bar.com")
-		for i := 0; i < 3; i++ {
-			pool.Lookup(fmt.Sprintf("%d.com", i))
-		}
-		baz := pool.Lookup("baz.com")
-		next := pool.Lookup("foo.com")
-		assert.True(t, foo.Equal(baz))
-		assert.True(t, next.Equal(bar))
+		assert.Equal(t, net.IP{192, 168, 0, 2}, pool.Lookup("2.com"))
+		assert.Equal(t, net.IP{192, 168, 0, 3}, pool.Lookup("3.com"))
+		assert.Equal(t, net.IP{192, 168, 0, 4}, pool.Lookup("4.com"))
+		assert.Equal(t, net.IP{192, 168, 0, 5}, pool.Lookup("5.com"))
+		assert.Equal(t, net.IP{192, 168, 0, 6}, pool.Lookup("6.com"))
+		assert.Equal(t, net.IP{192, 168, 0, 2}, pool.Lookup("12.com"))
+		assert.Equal(t, net.IP{192, 168, 0, 3}, pool.Lookup("3.com"))
 	}
 }
 
