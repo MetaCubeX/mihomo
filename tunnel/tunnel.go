@@ -294,7 +294,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		case mode == Direct:
 			log.Infoln("[UDP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		default:
-			log.Infoln("[UDP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
+			log.Infoln("[UDP] %s --> %s doesn't match any rule using REJECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		}
 
 		oAddr := metadata.DstIP
@@ -360,7 +360,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	case mode == Direct:
 		log.Infoln("[TCP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 	default:
-		log.Infoln("[TCP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.RemoteAddress())
+		log.Infoln("[TCP] %s --> %s doesn't match any rule using REJECT", metadata.SourceAddress(), metadata.RemoteAddress())
 	}
 
 	handleSocket(connCtx, remoteConn)
@@ -430,5 +430,5 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		}
 	}
 
-	return proxies["DIRECT"], nil, nil
+	return proxies["REJECT"], nil, nil
 }
