@@ -23,14 +23,14 @@ func (or *OR) RuleType() C.RuleType {
 	return C.OR
 }
 
-func (or *OR) Match(metadata *C.Metadata) bool {
+func (or *OR) Match(metadata *C.Metadata) (bool, string) {
 	for _, rule := range or.rules {
-		if rule.Match(metadata) {
-			return true
+		if m, _ := rule.Match(metadata); m {
+			return true, or.adapter
 		}
 	}
 
-	return false
+	return false, ""
 }
 
 func (or *OR) Adapter() string {
@@ -45,9 +45,9 @@ func (or *OR) ShouldResolveIP() bool {
 	return or.needIP
 }
 
-func NewOR(payload string, adapter string, parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (*OR, error) {
+func NewOR(payload string, adapter string, parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*OR, error) {
 	or := &OR{Base: &common.Base{}, payload: payload, adapter: adapter}
-	rules, err := parseRuleByPayload(payload, parse)
+	rules, err := ParseRuleByPayload(payload, parse)
 	if err != nil {
 		return nil, err
 	}

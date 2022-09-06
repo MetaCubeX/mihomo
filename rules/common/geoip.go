@@ -25,10 +25,10 @@ func (g *GEOIP) RuleType() C.RuleType {
 	return C.GEOIP
 }
 
-func (g *GEOIP) Match(metadata *C.Metadata) bool {
+func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 	ip := metadata.DstIP
 	if !ip.IsValid() {
-		return false
+		return false, ""
 	}
 
 	if strings.EqualFold(g.country, "LAN") {
@@ -37,13 +37,13 @@ func (g *GEOIP) Match(metadata *C.Metadata) bool {
 			ip.IsLoopback() ||
 			ip.IsMulticast() ||
 			ip.IsLinkLocalUnicast() ||
-			resolver.IsFakeBroadcastIP(ip)
+			resolver.IsFakeBroadcastIP(ip), g.adapter
 	}
 	if !C.GeodataMode {
 		record, _ := mmdb.Instance().Country(ip.AsSlice())
-		return strings.EqualFold(record.Country.IsoCode, g.country)
+		return strings.EqualFold(record.Country.IsoCode, g.country), g.adapter
 	}
-	return g.geoIPMatcher.Match(ip.AsSlice())
+	return g.geoIPMatcher.Match(ip.AsSlice()), g.adapter
 }
 
 func (g *GEOIP) Adapter() string {
@@ -98,4 +98,4 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) 
 	return geoip, nil
 }
 
-var _ C.Rule = (*GEOIP)(nil)
+//var _ C.Rule = (*GEOIP)(nil)

@@ -3,13 +3,15 @@ package logic
 import (
 	"fmt"
 	"github.com/Dreamacro/clash/constant"
+	C "github.com/Dreamacro/clash/constant"
 	RC "github.com/Dreamacro/clash/rules/common"
 	RP "github.com/Dreamacro/clash/rules/provider"
+	"github.com/Dreamacro/clash/rules/sub_rule"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func ParseRule(tp, payload, target string, params []string) (parsed constant.Rule, parseErr error) {
+func ParseRule(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed constant.Rule, parseErr error) {
 	switch tp {
 	case "DOMAIN":
 		parsed = RC.NewDomain(payload, target)
@@ -46,6 +48,8 @@ func ParseRule(tp, payload, target string, params []string) (parsed constant.Rul
 		parsed, parseErr = RC.NewUid(payload, target)
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
+	case "SUB-RULE":
+		parsed, parseErr = sub_rule.NewSubRule(payload, target, subRules, ParseRule)
 	case "AND":
 		parsed, parseErr = NewAND(payload, target, ParseRule)
 	case "OR":
@@ -54,7 +58,7 @@ func ParseRule(tp, payload, target string, params []string) (parsed constant.Rul
 		parsed, parseErr = NewNOT(payload, target, ParseRule)
 	case "RULE-SET":
 		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RP.NewRuleSet(payload, target, noResolve, ParseRule)
+		parsed, parseErr = RP.NewRuleSet(payload, target, noResolve)
 	case "MATCH":
 		parsed = RC.NewMatch(target)
 		parseErr = nil
@@ -70,12 +74,13 @@ func TestAND(t *testing.T) {
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DIRECT", and.adapter)
 	assert.Equal(t, false, and.ShouldResolveIP())
-	assert.Equal(t, true, and.Match(&constant.Metadata{
+	m, _ := and.Match(&constant.Metadata{
 		Host:     "baidu.com",
 		AddrType: constant.AtypDomainName,
 		NetWork:  constant.TCP,
 		DstPort:  "20000",
-	}))
+	})
+	assert.Equal(t, true, m)
 
 	and, err = NewAND("(DOMAIN,baidu.com),(NETWORK,TCP),(DST-PORT,10001-65535))", "DIRECT", ParseRule)
 	assert.NotEqual(t, nil, err)
@@ -87,9 +92,10 @@ func TestAND(t *testing.T) {
 func TestNOT(t *testing.T) {
 	not, err := NewNOT("((DST-PORT,6000-6500))", "REJECT", ParseRule)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, false, not.Match(&constant.Metadata{
+	m, _ := not.Match(&constant.Metadata{
 		DstPort: "6100",
-	}))
+	})
+	assert.Equal(t, false, m)
 
 	_, err = NewNOT("((DST-PORT,5600-6666),(DOMAIN,baidu.com))", "DIRECT", ParseRule)
 	assert.NotEqual(t, nil, err)
@@ -101,8 +107,9 @@ func TestNOT(t *testing.T) {
 func TestOR(t *testing.T) {
 	or, err := NewOR("((DOMAIN,baidu.com),(NETWORK,TCP),(DST-PORT,10001-65535))", "DIRECT", ParseRule)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, true, or.Match(&constant.Metadata{
+	m, _ := or.Match(&constant.Metadata{
 		NetWork: constant.TCP,
-	}))
+	})
+	assert.Equal(t, true, m)
 	assert.Equal(t, false, or.ShouldResolveIP())
 }
