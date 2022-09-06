@@ -22,7 +22,7 @@ func (is *IPSuffix) RuleType() C.RuleType {
 	return C.IPSuffix
 }
 
-func (is *IPSuffix) Match(metadata *C.Metadata) bool {
+func (is *IPSuffix) Match(metadata *C.Metadata) (bool, string) {
 	ip := metadata.DstIP
 	if is.isSourceIP {
 		ip = metadata.SrcIP
@@ -30,7 +30,7 @@ func (is *IPSuffix) Match(metadata *C.Metadata) bool {
 
 	mIPBytes := ip.AsSlice()
 	if len(is.ipBytes) != len(mIPBytes) {
-		return false
+		return false, ""
 	}
 
 	size := len(mIPBytes)
@@ -38,15 +38,15 @@ func (is *IPSuffix) Match(metadata *C.Metadata) bool {
 
 	for i := bits / 8; i > 0; i-- {
 		if is.ipBytes[size-i] != mIPBytes[size-i] {
-			return false
+			return false, ""
 		}
 	}
 
 	if (is.ipBytes[size-bits/8-1] << (8 - bits%8)) != (mIPBytes[size-bits/8-1] << (8 - bits%8)) {
-		return false
+		return false, ""
 	}
 
-	return true
+	return true, is.adapter
 }
 
 func (is *IPSuffix) Adapter() string {

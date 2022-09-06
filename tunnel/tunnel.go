@@ -410,8 +410,8 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}
 		}
 
-		if rule.Match(metadata) {
-			adapter, ok := proxies[rule.Adapter()]
+		if matched, ada := rule.Match(metadata); matched {
+			adapter, ok := proxies[ada]
 			if !ok {
 				continue
 			}
