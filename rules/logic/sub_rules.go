@@ -1,10 +1,10 @@
-package sub_rule
+package logic
 
 import (
 	"fmt"
+
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/rules/common"
-	"github.com/Dreamacro/clash/rules/logic"
 )
 
 type SubRule struct {
@@ -19,7 +19,7 @@ type SubRule struct {
 
 func NewSubRule(payload, subName string, sub *map[string][]C.Rule,
 	parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*SubRule, error) {
-	payloadRule, err := logic.ParseRuleByPayload(fmt.Sprintf("(%s)", payload), parse)
+	payloadRule, err := ParseRuleByPayload(fmt.Sprintf("(%s)", payload), parse)
 	if err != nil {
 		return nil, err
 	}
