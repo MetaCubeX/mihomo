@@ -43,7 +43,7 @@ func (not *NOT) Match(metadata *C.Metadata) (bool, string) {
 		return true, not.adapter
 	}
 
-	if m, _ := not.rule.Match(metadata); m {
+	if m, _ := not.rule.Match(metadata); !m {
 		return true, not.adapter
 	}
 

@@ -6,7 +6,6 @@ import (
 	RC "github.com/Dreamacro/clash/rules/common"
 	"github.com/Dreamacro/clash/rules/logic"
 	RP "github.com/Dreamacro/clash/rules/provider"
-	"github.com/Dreamacro/clash/rules/sub_rule"
 )
 
 func ParseRule(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error) {
@@ -47,7 +46,7 @@ func ParseRule(tp, payload, target string, params []string, subRules *map[string
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
 	case "SUB-RULE":
-		parsed, parseErr = sub_rule.NewSubRule(payload, target, subRules, ParseRule)
+		parsed, parseErr = logic.NewSubRule(payload, target, subRules, ParseRule)
 	case "AND":
 		parsed, parseErr = logic.NewAND(payload, target, ParseRule)
 	case "OR":
