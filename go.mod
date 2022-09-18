@@ -9,6 +9,7 @@ require (
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/gorilla/websocket v1.5.0
 	github.com/insomniacslk/dhcp v0.0.0-20220822114210-de18a9d48e84
+	github.com/mdlayher/netlink v1.6.0
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sirupsen/logrus v1.9.0
@@ -26,7 +27,10 @@ require (
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/google/go-cmp v0.5.7 // indirect
+	github.com/josharian/native v1.0.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/mdlayher/socket v0.1.1 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
