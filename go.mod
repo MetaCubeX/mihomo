@@ -19,9 +19,9 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/miekg/dns v1.1.49
 	github.com/oschwald/geoip2-golang v1.7.0
-	github.com/sagernet/sing v0.0.0-20220627234642-a817f7084d9c
-	github.com/sagernet/sing-shadowsocks v0.0.0-20220627234717-689e0165ef2c
-	github.com/sagernet/sing-vmess v0.0.0-20220616051646-3d3fc5d01eec
+	github.com/sagernet/sing v0.0.0-20220916071326-834794b006ea
+	github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6
+	github.com/sagernet/sing-vmess v0.0.0-20220917033734-9b634758039d
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.2
 	github.com/vishvananda/netlink v1.2.1-beta.2
@@ -29,11 +29,11 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.9.0
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
 	golang.org/x/exp v0.0.0-20220608143224-64259d1afd70
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e
+	golang.org/x/sys v0.0.0-20220913120320-3275c407cedc
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	golang.zx2c4.com/wireguard v0.0.0-20220601130007-6a08d81f6bc4
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
