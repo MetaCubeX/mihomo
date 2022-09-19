@@ -82,8 +82,7 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		}
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
-		metadata.Host = uot.UOTMagicAddress
-		metadata.DstPort = "443"
+		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
 	}
 	return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 }
