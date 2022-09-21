@@ -4,27 +4,29 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/transport/hysteria/core"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
-	"github.com/Dreamacro/clash/transport/hysteria/transport"
-	"github.com/lucas-clemente/quic-go"
 	"net"
 	"os"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/congestion"
+	M "github.com/sagernet/sing/common/metadata"
+
 	"github.com/Dreamacro/clash/component/dialer"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	hyCongestion "github.com/Dreamacro/clash/transport/hysteria/congestion"
-	"github.com/lucas-clemente/quic-go/congestion"
-	M "github.com/sagernet/sing/common/metadata"
+	"github.com/Dreamacro/clash/transport/hysteria/core"
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
+	"github.com/Dreamacro/clash/transport/hysteria/transport"
 )
 
 const (
@@ -85,23 +87,27 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 
 type HysteriaOption struct {
 	BasicOption
-	Name                string `proxy:"name"`
-	Server              string `proxy:"server"`
-	Port                int    `proxy:"port"`
-	Protocol            string `proxy:"protocol,omitempty"`
-	Up                  string `proxy:"up"`
-	Down                string `proxy:"down"`
-	AuthString          string `proxy:"auth_str,omitempty"`
-	Obfs                string `proxy:"obfs,omitempty"`
-	SNI                 string `proxy:"sni,omitempty"`
-	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string `proxy:"fingerprint,omitempty"`
-	ALPN                string `proxy:"alpn,omitempty"`
-	CustomCA            string `proxy:"ca,omitempty"`
-	CustomCAString      string `proxy:"ca_str,omitempty"`
-	ReceiveWindowConn   int    `proxy:"recv_window_conn,omitempty"`
-	ReceiveWindow       int    `proxy:"recv_window,omitempty"`
-	DisableMTUDiscovery bool   `proxy:"disable_mtu_discovery,omitempty"`
+	Name                string   `proxy:"name"`
+	Server              string   `proxy:"server"`
+	Port                int      `proxy:"port"`
+	Protocol            string   `proxy:"protocol,omitempty"`
+	ObfsProtocol        string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
+	Up                  string   `proxy:"up"`
+	UpSpeed             int      `proxy:"up-speed,omitempty"` // compatible with Stash
+	Down                string   `proxy:"down"`
+	DownSpeed           int      `proxy:"down-speed,omitempty"` // compatible with Stash
+	Auth                string   `proxy:"auth,omitempty"`
+	AuthString          string   `proxy:"auth_str,omitempty"`
+	Obfs                string   `proxy:"obfs,omitempty"`
+	SNI                 string   `proxy:"sni,omitempty"`
+	SkipCertVerify      bool     `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string   `proxy:"fingerprint,omitempty"`
+	ALPN                []string `proxy:"alpn,omitempty"`
+	CustomCA            string   `proxy:"ca,omitempty"`
+	CustomCAString      string   `proxy:"ca_str,omitempty"`
+	ReceiveWindowConn   int      `proxy:"recv_window_conn,omitempty"`
+	ReceiveWindow       int      `proxy:"recv_window,omitempty"`
+	DisableMTUDiscovery bool     `proxy:"disable_mtu_discovery,omitempty"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
@@ -172,7 +178,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	}
 
 	if len(option.ALPN) > 0 {
-		tlsConfig.NextProtos = []string{option.ALPN}
+		tlsConfig.NextProtos = option.ALPN
 	} else {
 		tlsConfig.NextProtos = []string{DefaultALPN}
 	}
@@ -185,6 +191,9 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		KeepAlivePeriod:                10 * time.Second,
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
+	}
+	if option.ObfsProtocol != "" {
+		option.Protocol = option.ObfsProtocol
 	}
 	if option.Protocol == "" {
 		option.Protocol = DefaultProtocol
@@ -202,6 +211,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	}
 
 	var auth = []byte(option.AuthString)
+	if option.Auth != "" {
+		auth, err = base64.StdEncoding.DecodeString(option.Auth)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var obfuscator obfs.Obfuscator
 	if len(option.Obfs) > 0 {
 		obfuscator = obfs.NewXPlusObfuscator([]byte(option.Obfs))
@@ -211,7 +226,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	if option.UpSpeed != 0 {
+		up = uint64(option.UpSpeed * mbpsToBps)
+	}
+	if option.DownSpeed != 0 {
+		down = uint64(option.DownSpeed * mbpsToBps)
+	}
 	client, err := core.NewClient(
 		addr, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
 			return hyCongestion.NewBrutalSender(congestion.ByteCount(refBPS))
