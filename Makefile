@@ -37,9 +37,6 @@ WINDOWS_ARCH_LIST = \
 
 all: linux-amd64 darwin-amd64 windows-amd64 # Most used
 
-docker:
-	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
-
 darwin-amd64:
 	GOARCH=amd64 GOOS=darwin $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
