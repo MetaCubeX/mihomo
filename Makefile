@@ -16,7 +16,7 @@ PLATFORM_LIST = \
 	linux-armv5 \
 	linux-armv6 \
 	linux-armv7 \
-	linux-armv8 \
+	linux-arm64 \
 	linux-mips-softfloat \
 	linux-mips-hardfloat \
 	linux-mipsle-softfloat \
@@ -33,7 +33,7 @@ WINDOWS_ARCH_LIST = \
 	windows-amd64 \
 	windows-amd64-v3 \
 	windows-arm64 \
-	windows-arm32v7
+	windows-armv7
 
 all: linux-amd64 darwin-amd64 windows-amd64 # Most used
 
@@ -64,7 +64,7 @@ linux-armv6:
 linux-armv7:
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv8:
+linux-arm64:
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat:
@@ -109,7 +109,7 @@ windows-amd64-v3:
 windows-arm64:
 	GOARCH=arm64 GOOS=windows $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
-windows-arm32v7:
+windows-armv7:
 	GOARCH=arm GOOS=windows GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe
 
 gz_releases=$(addsuffix .gz, $(PLATFORM_LIST))
