@@ -36,9 +36,9 @@
 
 Premium core is proprietary. You can find their release notes and pre-built binaries [here](https://github.com/Dreamacro/clash/releases/tag/premium).
 
-- gvisor/system stack TUN device on macOS, Linux and Windows ([ref](https://github.com/Dreamacro/clash/wiki/premium-core-features#tun-device))
-- Policy routing with [Scripts](https://github.com/Dreamacro/clash/wiki/premium-core-features#script)
-- Load your rules with [Rule Providers](https://github.com/Dreamacro/clash/wiki/premium-core-features#rule-providers)
+- gvisor/system stack TUN device on macOS, Linux and Windows ([ref](https://github.com/Dreamacro/clash/wiki/Clash-Premium-Features#tun-device))
+- Policy routing with [Scripts](https://github.com/Dreamacro/clash/wiki/Clash-Premium-Features#script)
+- Load your rules with [Rule Providers](https://github.com/Dreamacro/clash/wiki/Clash-Premium-Features#rule-providers)
 - Monitor Clash usage with a built-in profiling engine. ([Dreamacro/clash-tracing](https://github.com/Dreamacro/clash-tracing))
 
 ## Getting Started
