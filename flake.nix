@@ -6,14 +6,22 @@
   inputs.utils.url = "github:numtide/flake-utils";
 
   outputs = { self, nixpkgs, utils }:
-    (utils.lib.eachDefaultSystem
+    utils.lib.eachDefaultSystem
       (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
         in
-
         {
-          defaultPackages = pkgs.callPackage ./. { };
-        })
-    );
+          packages = rec{
+            clash-meta = pkgs.callPackage ./. { };
+            default = clash-meta;
+          };
+
+          apps = rec {
+            clash-meta = utils.lib.mkApp { drv = self.packages.${system}.clash-meta; };
+            default = clash-meta;
+          };
+        }
+      );
 }
+
