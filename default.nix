@@ -4,15 +4,8 @@
 }:
 buildGoModule rec {
   pname = "clash-meta";
-  version = "1.13.1";
-
-  src = fetchFromGitHub {
-    owner = "MetaCubeX";
-    repo = "Clash.Meta";
-    rev = "1684756b79a232ee8f875bcfd87371f5c0ef066b";
-    sha256 = "sha256-7g/Wcll0w4EhPI+KodtLHINqaR2larQNnP9YAsgNiN4=";
-  };
-
+  version = "dev";
+  src = ./.;
   vendorSha256 = "sha256-7HjYcoqWA5gvPUc5psCgy0UTc17CBzBJ/OiGvII/iBA=";
 
   # Do not build testing suit
