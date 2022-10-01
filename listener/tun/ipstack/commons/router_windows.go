@@ -88,7 +88,7 @@ startOver:
 			allowedIPs []netip.Prefix
 
 			// add default
-			routeArr = []string{"0.0.0.0/0"}
+			routeArr = []string{"0.0.0.0/1"}
 		)
 
 		for _, route := range routeArr {
