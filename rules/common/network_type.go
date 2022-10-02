@@ -36,8 +36,8 @@ func (n *NetworkType) RuleType() C.RuleType {
 	return C.Network
 }
 
-func (n *NetworkType) Match(metadata *C.Metadata) bool {
-	return n.network == metadata.NetWork
+func (n *NetworkType) Match(metadata *C.Metadata) (bool, string) {
+	return n.network == metadata.NetWork, n.adapter
 }
 
 func (n *NetworkType) Adapter() string {

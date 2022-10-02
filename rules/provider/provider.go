@@ -103,7 +103,7 @@ func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
 }
 
 func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration, vehicle P.Vehicle,
-	parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) P.RuleProvider {
+	parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) P.RuleProvider {
 	rp := &ruleSetProvider{
 		behavior: behavior,
 	}
@@ -126,7 +126,7 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 	return wrapper
 }
 
-func newStrategy(behavior P.RuleType, parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) ruleStrategy {
+func newStrategy(behavior P.RuleType, parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) ruleStrategy {
 	switch behavior {
 	case P.Domain:
 		strategy := NewDomainStrategy()

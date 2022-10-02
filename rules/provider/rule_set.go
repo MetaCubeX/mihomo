@@ -23,8 +23,8 @@ func (rs *RuleSet) RuleType() C.RuleType {
 	return C.RuleSet
 }
 
-func (rs *RuleSet) Match(metadata *C.Metadata) bool {
-	return rs.getProviders().Match(metadata)
+func (rs *RuleSet) Match(metadata *C.Metadata) (bool, string) {
+	return rs.getProviders().Match(metadata), rs.adapter
 }
 
 func (rs *RuleSet) Adapter() string {
@@ -47,7 +47,7 @@ func (rs *RuleSet) getProviders() P.RuleProvider {
 	return rs.ruleProvider
 }
 
-func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool, parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool) (*RuleSet, error) {
 	rp, ok := RuleProviders()[ruleProviderName]
 	if !ok {
 		return nil, fmt.Errorf("rule set %s not found", ruleProviderName)

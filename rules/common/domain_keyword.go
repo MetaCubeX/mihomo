@@ -18,12 +18,12 @@ func (dk *DomainKeyword) RuleType() C.RuleType {
 	return C.DomainKeyword
 }
 
-func (dk *DomainKeyword) Match(metadata *C.Metadata) bool {
+func (dk *DomainKeyword) Match(metadata *C.Metadata) (bool, string) {
 	if metadata.AddrType != C.AtypDomainName {
-		return false
+		return false, ""
 	}
 	domain := metadata.Host
-	return strings.Contains(domain, dk.keyword)
+	return strings.Contains(domain, dk.keyword), dk.adapter
 }
 
 func (dk *DomainKeyword) Adapter() string {
@@ -48,4 +48,4 @@ func NewDomainKeyword(keyword string, adapter string) *DomainKeyword {
 	}
 }
 
-var _ C.Rule = (*DomainKeyword)(nil)
+//var _ C.Rule = (*DomainKeyword)(nil)

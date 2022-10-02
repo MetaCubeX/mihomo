@@ -418,11 +418,12 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 	v := &Vless{
 		Base: &Base{
-			name:  option.Name,
-			addr:  net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:    C.Vless,
-			udp:   option.UDP,
-			iface: option.Interface,
+			name:   option.Name,
+			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			tp:     C.Vless,
+			udp:    option.UDP,
+			iface:  option.Interface,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 		option: &option,
