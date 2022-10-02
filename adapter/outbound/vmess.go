@@ -53,7 +53,7 @@ type VmessOption struct {
 	WSOpts              WSOptions    `proxy:"ws-opts,omitempty"`
 	PacketAddr          bool         `proxy:"packet-addr,omitempty"`
 	XUDP                bool         `proxy:"xudp,omitempty"`
-	PacketEncoding      string       `proxy:"packet_encoding,omitempty"`
+	PacketEncoding      string       `proxy:"packet-encoding,omitempty"`
 	AuthenticatedLength bool         `proxy:"authenticated-length,omitempty"`
 }
 
@@ -320,7 +320,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	}
 
 	switch option.PacketEncoding {
-	case "packetaddr":
+	case "packetaddr", "packet":
 		option.PacketAddr = true
 	case "xudp":
 		option.XUDP = true
