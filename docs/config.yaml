@@ -538,7 +538,7 @@ rules:
   - DOMAIN-KEYWORD,google,ss1
   - IP-CIDR,1.1.1.1/32,ss1
   - IP-CIDR6,2409::/64,DIRECT
-  - SUB-RULE,((OR,((NETWORK,TCP),(NETWORK,UDP)))),sub-rule-name1 # 当满足条件是 TCP 流量时，使用名为 sub-rule-name1 当规则集
+  - SUB-RULE,((OR,((NETWORK,TCP),(NETWORK,UDP)))),sub-rule-name1 # 当满足条件是 TCP 或 UDP 流量时，使用名为 sub-rule-name1 当规则集
   - SUB-RULE,((AND,((NETWORK,UDP)))),sub-rule-name2
 # 定义多个子规则集，规则将以分叉匹配，使用 SUB-RULE 使用
 #                                               google.com(not match)--> baidu.com(match)
