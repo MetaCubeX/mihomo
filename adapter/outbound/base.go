@@ -13,13 +13,14 @@ import (
 )
 
 type Base struct {
-	name  string
-	addr  string
-	iface string
-	tp    C.AdapterType
-	udp   bool
-	rmark int
-	id    string
+	name   string
+	addr   string
+	iface  string
+	tp     C.AdapterType
+	udp    bool
+	rmark  int
+	id     string
+	prefer C.DNSPrefer
 }
 
 // Name implements C.ProxyAdapter
@@ -103,12 +104,25 @@ func (b *Base) DialOptions(opts ...dialer.Option) []dialer.Option {
 		opts = append(opts, dialer.WithRoutingMark(b.rmark))
 	}
 
+	switch b.prefer {
+	case C.IPv4Only:
+		opts = append(opts, dialer.WithOnlySingleStack(true))
+	case C.IPv6Only:
+		opts = append(opts, dialer.WithOnlySingleStack(false))
+	case C.IPv4Prefer:
+		opts = append(opts, dialer.WithPreferIPv4())
+	case C.IPv6Prefer:
+		opts = append(opts, dialer.WithPreferIPv6())
+	default:
+	}
+
 	return opts
 }
 
 type BasicOption struct {
 	Interface   string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
 	RoutingMark int    `proxy:"routing-mark,omitempty" group:"routing-mark,omitempty"`
+	IPVersion   string `proxy:"ip-version,omitempty" group:"ip-version,omitempty"`
 }
 
 type BaseOption struct {
@@ -118,16 +132,18 @@ type BaseOption struct {
 	UDP         bool
 	Interface   string
 	RoutingMark int
+	Prefer      C.DNSPrefer
 }
 
 func NewBase(opt BaseOption) *Base {
 	return &Base{
-		name:  opt.Name,
-		addr:  opt.Addr,
-		tp:    opt.Type,
-		udp:   opt.UDP,
-		iface: opt.Interface,
-		rmark: opt.RoutingMark,
+		name:   opt.Name,
+		addr:   opt.Addr,
+		tp:     opt.Type,
+		udp:    opt.UDP,
+		iface:  opt.Interface,
+		rmark:  opt.RoutingMark,
+		prefer: opt.Prefer,
 	}
 }
 

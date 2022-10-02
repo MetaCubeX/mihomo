@@ -79,7 +79,7 @@ func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Me
 		return nil, err
 	}
 
-	addr, err := resolveUDPAddr("udp", ssr.addr)
+	addr, err := resolveUDPAddrWithPrefer("udp", ssr.addr, ssr.prefer)
 	if err != nil {
 		pc.Close()
 		return nil, err
@@ -143,12 +143,13 @@ func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 
 	return &ShadowSocksR{
 		Base: &Base{
-			name:  option.Name,
-			addr:  addr,
-			tp:    C.ShadowsocksR,
-			udp:   option.UDP,
-			iface: option.Interface,
-			rmark: option.RoutingMark,
+			name:   option.Name,
+			addr:   addr,
+			tp:     C.ShadowsocksR,
+			udp:    option.UDP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		cipher:   coreCiph,
 		obfs:     obfs,

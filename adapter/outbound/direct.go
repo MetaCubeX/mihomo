@@ -40,9 +40,10 @@ type directPacketConn struct {
 func NewDirect() *Direct {
 	return &Direct{
 		Base: &Base{
-			name: "DIRECT",
-			tp:   C.Direct,
-			udp:  true,
+			name:   "DIRECT",
+			tp:     C.Direct,
+			udp:    true,
+			prefer: C.DualStack,
 		},
 	}
 }
@@ -50,9 +51,10 @@ func NewDirect() *Direct {
 func NewCompatible() *Direct {
 	return &Direct{
 		Base: &Base{
-			name: "COMPATIBLE",
-			tp:   C.Compatible,
-			udp:  true,
+			name:   "COMPATIBLE",
+			tp:     C.Compatible,
+			udp:    true,
+			prefer: C.DualStack,
 		},
 	}
 }

@@ -19,6 +19,7 @@ const (
 	Network
 	Uid
 	INTYPE
+	SubRules
 	MATCH
 	AND
 	OR
@@ -65,6 +66,8 @@ func (rt RuleType) String() string {
 		return "Uid"
 	case INTYPE:
 		return "InType"
+	case SubRules:
+		return "SubRules"
 	case AND:
 		return "AND"
 	case OR:
@@ -78,7 +81,7 @@ func (rt RuleType) String() string {
 
 type Rule interface {
 	RuleType() RuleType
-	Match(metadata *Metadata) bool
+	Match(metadata *Metadata) (bool, string)
 	Adapter() string
 	Payload() string
 	ShouldResolveIP() bool

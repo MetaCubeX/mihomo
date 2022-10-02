@@ -152,12 +152,13 @@ func NewSnell(option SnellOption) (*Snell, error) {
 
 	s := &Snell{
 		Base: &Base{
-			name:  option.Name,
-			addr:  addr,
-			tp:    C.Snell,
-			udp:   option.UDP,
-			iface: option.Interface,
-			rmark: option.RoutingMark,
+			name:   option.Name,
+			addr:   addr,
+			tp:     C.Snell,
+			udp:    option.UDP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		psk:        psk,
 		obfsOption: obfsOption,
