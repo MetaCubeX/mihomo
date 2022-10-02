@@ -76,9 +76,13 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
+	dstIP := ""
+	if metadata.DstIP.IsValid() {
+		dstIP = metadata.DstIP.String()
+	}
 	log.Debugln("[Sniffer] Sniff TCP [%s:%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
 		metadata.SrcIP, metadata.SrcPort,
-		metadata.DstIP, metadata.DstPort,
+		dstIP, metadata.DstPort,
 		metadata.Host, host)
 
 	metadata.AddrType = C.AtypDomainName
