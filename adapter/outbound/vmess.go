@@ -54,6 +54,7 @@ type VmessOption struct {
 	PacketAddr          bool         `proxy:"packet-addr,omitempty"`
 	XUDP                bool         `proxy:"xudp,omitempty"`
 	PacketEncoding      string       `proxy:"packet-encoding,omitempty"`
+	GlobalPadding       bool         `proxy:"global-padding,omitempty"`
 	AuthenticatedLength bool         `proxy:"authenticated-length,omitempty"`
 }
 
@@ -311,6 +312,9 @@ func (v *Vmess) SupportUOT() bool {
 func NewVmess(option VmessOption) (*Vmess, error) {
 	security := strings.ToLower(option.Cipher)
 	var options []vmess.ClientOption
+	if option.GlobalPadding {
+		options = append(options, vmess.ClientWithGlobalPadding())
+	}
 	if option.AuthenticatedLength {
 		options = append(options, vmess.ClientWithAuthenticatedLength())
 	}
