@@ -9,19 +9,49 @@
     utils.lib.eachDefaultSystem
       (system:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ self.overlay ];
+          };
         in
-        {
-          packages = rec{
-            clash-meta = pkgs.callPackage ./. { };
-            default = clash-meta;
-          };
-
-          apps = rec {
-            clash-meta = utils.lib.mkApp { drv = self.packages.${system}.clash-meta; };
-            default = clash-meta;
-          };
+        rec {
+          packages.default = pkgs.clash-meta;
         }
-      );
+      ) //
+    (
+      let version = nixpkgs.lib.substring 0 8 self.lastModifiedDate or self.lastModified or "19700101"; in
+      {
+        overlay = final: prev: {
+
+          clash-meta = final.buildGoModule {
+            pname = "clash-meta";
+            inherit version;
+            src = ./.;
+
+            vendorSha256 = "sha256-Af1RgeB6APxKW9m+rm2mkpYSXwAgFTzRyW0GJe9ML+A=";
+
+            # Do not build testing suit
+            excludedPackages = [ "./test" ];
+
+            CGO_ENABLED = 0;
+
+            ldflags = [
+              "-s"
+              "-w"
+              "-X github.com/Dreamacro/clash/constant.Version=dev-${version}"
+              "-X github.com/Dreamacro/clash/constant.BuildTime=${version}"
+            ];
+
+            # Network required 
+            doCheck = false;
+
+            postInstall = ''
+              mv $out/bin/clash $out/bin/clash-meta
+            '';
+
+          };
+        };
+      }
+    );
 }
 
