@@ -4,6 +4,7 @@ package gvisor
 
 import (
 	"encoding/binary"
+	"io"
 	"net"
 	"net/netip"
 	"time"
@@ -60,12 +61,17 @@ func (gh *gvHandler) HandleTCP(tunConn adapter.TCPConn) {
 					break
 				}
 
-				n, err := tunConn.Read(buf[:length])
+				n, err := io.ReadFull(tunConn, buf[:length])
 				if err != nil {
 					break
 				}
 
 				msg, err := D.RelayDnsPacket(buf[:n])
+				if err != nil {
+					break
+				}
+
+				err = binary.Write(tunConn, binary.BigEndian, uint16(len(msg)))
 				if err != nil {
 					break
 				}

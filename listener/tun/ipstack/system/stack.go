@@ -113,12 +113,17 @@ func New(device device.Device, dnsHijack []netip.AddrPort, tunAddress netip.Pref
 							break
 						}
 
-						n, err := conn.Read(buf[:length])
+						n, err := io.ReadFull(conn, buf[:length])
 						if err != nil {
 							break
 						}
 
 						msg, err := D.RelayDnsPacket(buf[:n])
+						if err != nil {
+							break
+						}
+
+						err = binary.Write(conn, binary.BigEndian, uint16(len(msg)))
 						if err != nil {
 							break
 						}
