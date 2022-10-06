@@ -3,6 +3,7 @@ package sing_tun
 import (
 	"context"
 	"net/netip"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -25,19 +26,31 @@ var InterfaceName = "Meta"
 type Listener struct {
 	closed  bool
 	options config.Tun
-	handler tun.Handler
+	handler *ListenerHandler
 
 	tunIf    tun.Tun
 	tunStack tun.Stack
 
 	networkUpdateMonitor    tun.NetworkUpdateMonitor
 	defaultInterfaceMonitor tun.DefaultInterfaceMonitor
+	packageManager          tun.PackageManager
+}
+
+func CalculateInterfaceName(name string) (tunName string) {
+	if runtime.GOOS == "darwin" {
+		tunName = "utun"
+	} else if name != "" {
+		tunName = name
+	} else {
+		tunName = "tun"
+	}
+	return
 }
 
 func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (l *Listener, err error) {
 	tunName := options.Device
 	if tunName == "" {
-		tunName = tun.CalculateInterfaceName(InterfaceName)
+		tunName = CalculateInterfaceName(InterfaceName)
 	}
 	tunMTU := options.MTU
 	if tunMTU == 0 {
@@ -157,9 +170,11 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		TableIndex:         2022,
 	}
 
-	//if C.IsAndroid {
-	//	t.tunOptions.BuildAndroidRules(t.router.PackageManager(), t)
-	//}
+	err = l.buildAndroidRules(&tunOptions)
+	if err != nil {
+		err = E.Cause(err, "build android rules")
+		return
+	}
 	tunIf, err := tun.Open(tunOptions)
 	if err != nil {
 		err = E.Cause(err, "configure tun interface")
@@ -229,6 +244,7 @@ func (l *Listener) Close() {
 		l.tunIf,
 		l.defaultInterfaceMonitor,
 		l.networkUpdateMonitor,
+		l.packageManager,
 	)
 }
 
