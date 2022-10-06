@@ -2,6 +2,7 @@ package sing_tun
 
 import (
 	"context"
+	"net"
 	"net/netip"
 	"runtime"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/ranges"
 )
 
@@ -41,9 +43,24 @@ func CalculateInterfaceName(name string) (tunName string) {
 		tunName = "utun"
 	} else if name != "" {
 		tunName = name
+		return
 	} else {
 		tunName = "tun"
 	}
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+	var tunIndex int
+	for _, netInterface := range interfaces {
+		if strings.HasPrefix(netInterface.Name, tunName) {
+			index, parseErr := strconv.ParseInt(netInterface.Name[len(tunName):], 10, 16)
+			if parseErr == nil {
+				tunIndex = int(index) + 1
+			}
+		}
+	}
+	tunName = F.ToString(tunName, tunIndex)
 	return
 }
 
