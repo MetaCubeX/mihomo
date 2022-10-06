@@ -19,8 +19,9 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0
-	github.com/sagernet/sing v0.0.0-20220921101604-86d7d510231f
+	github.com/sagernet/sing v0.0.0-20220929000216-9a83e35b7186
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6
+	github.com/sagernet/sing-tun v0.0.0-20221005115555-9a556307f6a3
 	github.com/sagernet/sing-vmess v0.0.0-20220921140858-b6a1bdee672f
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
@@ -34,12 +35,8 @@ require (
 	golang.org/x/net v0.0.0-20220930213112-107f3e3c3b0b
 	golang.org/x/sync v0.0.0-20220929204114-8fcdb60fdcc0
 	golang.org/x/sys v0.0.0-20220928140112-f11e5e49a4ec
-	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af
-	golang.zx2c4.com/wireguard v0.0.0-20220920152132-bb719d3a6e2c
-	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
-	gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c
 
 )
 
@@ -64,13 +61,17 @@ require (
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/sagernet/abx-go v0.0.0-20220819185957-dba1257d738e // indirect
+	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
+	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
 	github.com/u-root/uio v0.0.0-20220204230159-dac05f7d2cb4 // indirect
 	github.com/vishvananda/netns v0.0.0-20220913150850-18c4f4234207 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/text v0.3.8-0.20220124021120-d1c84af989ab // indirect
+	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	golang.org/x/tools v0.1.12 // indirect
-	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
+	gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )

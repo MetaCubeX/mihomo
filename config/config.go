@@ -2,10 +2,9 @@ package config
 
 import (
 	"container/list"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
 	"net"
 	"net/netip"
 	"net/url"
@@ -31,6 +30,7 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
+	"github.com/Dreamacro/clash/constant/sniffer"
 	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
@@ -114,12 +114,75 @@ type Profile struct {
 type Tun struct {
 	Enable              bool             `yaml:"enable" json:"enable"`
 	Device              string           `yaml:"device" json:"device"`
-	Stack               C.TUNStack       `yaml:"stack" json:"stack"`
+	Stack               string           `yaml:"stack" json:"stack"`
 	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
-	TunAddressPrefix    netip.Prefix     `yaml:"-" json:"-"`
 	RedirectToTun       []string         `yaml:"-" json:"-"`
+
+	MTU                    uint32         `yaml:"mtu" json:"mtu,omitempty"`
+	Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
+	Inet6Address           []ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
+	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
+	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
+	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
+	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
+	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
+	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
+	IncludePackage         []string       `yaml:"include-package" json:"include_package,omitempty"`
+	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
+	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
+	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+}
+
+type ListenPrefix netip.Prefix
+
+func (p ListenPrefix) MarshalJSON() ([]byte, error) {
+	prefix := netip.Prefix(p)
+	if !prefix.IsValid() {
+		return json.Marshal(nil)
+	}
+	return json.Marshal(prefix.String())
+}
+
+func (p ListenPrefix) MarshalYAML() (interface{}, error) {
+	prefix := netip.Prefix(p)
+	if !prefix.IsValid() {
+		return nil, nil
+	}
+	return prefix.String(), nil
+}
+
+func (p *ListenPrefix) UnmarshalJSON(bytes []byte) error {
+	var value string
+	err := json.Unmarshal(bytes, &value)
+	if err != nil {
+		return err
+	}
+	prefix, err := netip.ParsePrefix(value)
+	if err != nil {
+		return err
+	}
+	*p = ListenPrefix(prefix)
+	return nil
+}
+
+func (p *ListenPrefix) UnmarshalYAML(node *yaml.Node) error {
+	var value string
+	err := node.Decode(&value)
+	if err != nil {
+		return err
+	}
+	prefix, err := netip.ParsePrefix(value)
+	if err != nil {
+		return err
+	}
+	*p = ListenPrefix(prefix)
+	return nil
+}
+
+func (p ListenPrefix) Build() netip.Prefix {
+	return netip.Prefix(p)
 }
 
 // IPTables config
@@ -187,13 +250,13 @@ type RawFallbackFilter struct {
 }
 
 type RawTun struct {
-	Enable              bool       `yaml:"enable" json:"enable"`
-	Device              string     `yaml:"device" json:"device"`
-	Stack               C.TUNStack `yaml:"stack" json:"stack"`
-	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
-	RedirectToTun       []string   `yaml:"-" json:"-"`
+	Enable              bool     `yaml:"enable" json:"enable"`
+	Device              string   `yaml:"device" json:"device"`
+	Stack               string   `yaml:"stack" json:"stack"`
+	DNSHijack           []string `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool     `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool     `yaml:"auto-detect-interface"`
+	RedirectToTun       []string `yaml:"-" json:"-"`
 }
 
 type RawConfig struct {
@@ -294,7 +357,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
-			Stack:               C.TunGvisor,
+			Stack:               "gvisor",
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute:           false,
 			AutoDetectInterface: false,
@@ -1039,17 +1102,6 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 }
 
 func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
-	if rawTun.Enable && rawTun.AutoDetectInterface {
-		autoDetectInterfaceName, err := commons.GetAutoDetectInterface()
-		if err != nil {
-			log.Warnln("Can not find auto detect interface.[%s]", err)
-		} else {
-			log.Warnln("Auto detect interface: %s", autoDetectInterfaceName)
-		}
-
-		general.Interface = autoDetectInterfaceName
-	}
-
 	var dnsHijack []netip.AddrPort
 
 	for _, d := range rawTun.DNSHijack {
@@ -1079,8 +1131,9 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		DNSHijack:           dnsHijack,
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
-		TunAddressPrefix:    tunAddressPrefix,
 		RedirectToTun:       rawTun.RedirectToTun,
+		Inet4Address:        []ListenPrefix{ListenPrefix(tunAddressPrefix)},
+		Inet6Address:        []ListenPrefix{ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
 	}, nil
 }
 
