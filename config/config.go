@@ -257,6 +257,20 @@ type RawTun struct {
 	AutoRoute           bool     `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool     `yaml:"auto-detect-interface"`
 	RedirectToTun       []string `yaml:"-" json:"-"`
+
+	MTU uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	//Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
+	Inet6Address           []ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
+	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
+	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
+	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
+	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
+	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
+	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
+	IncludePackage         []string       `yaml:"include-package" json:"include_package,omitempty"`
+	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
+	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
+	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
 }
 
 type RawConfig struct {
@@ -361,6 +375,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute:           false,
 			AutoDetectInterface: false,
+			Inet6Address:        []ListenPrefix{ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
 		},
 		EBpf: EBpf{
 			RedirectToTun: []string{},
@@ -1132,8 +1147,20 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
 		RedirectToTun:       rawTun.RedirectToTun,
-		Inet4Address:        []ListenPrefix{ListenPrefix(tunAddressPrefix)},
-		Inet6Address:        []ListenPrefix{ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
+
+		MTU:                    rawTun.MTU,
+		Inet4Address:           []ListenPrefix{ListenPrefix(tunAddressPrefix)},
+		Inet6Address:           rawTun.Inet6Address,
+		StrictRoute:            rawTun.StrictRoute,
+		IncludeUID:             rawTun.IncludeUID,
+		IncludeUIDRange:        rawTun.IncludeUIDRange,
+		ExcludeUID:             rawTun.ExcludeUID,
+		ExcludeUIDRange:        rawTun.ExcludeUIDRange,
+		IncludeAndroidUser:     rawTun.IncludeAndroidUser,
+		IncludePackage:         rawTun.IncludePackage,
+		ExcludePackage:         rawTun.ExcludePackage,
+		EndpointIndependentNat: rawTun.EndpointIndependentNat,
+		UDPTimeout:             rawTun.UDPTimeout,
 	}, nil
 }
 
