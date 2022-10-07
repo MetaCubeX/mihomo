@@ -373,8 +373,8 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Device:              "",
 			Stack:               "gvisor",
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
-			AutoRoute:           false,
-			AutoDetectInterface: false,
+			AutoRoute:           true,
+			AutoDetectInterface: true,
 			Inet6Address:        []ListenPrefix{ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
 		},
 		EBpf: EBpf{

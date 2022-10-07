@@ -142,28 +142,35 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	}
 	l.networkUpdateMonitor = networkUpdateMonitor
 
-	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, tun.DefaultInterfaceMonitorOptions{})
+	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
 	if err != nil {
 		err = E.Cause(err, "create DefaultInterfaceMonitor")
 		return
 	}
-	defaultInterfaceMonitor.RegisterCallback(func(event int) error {
-		targetInterface := dialer.DefaultInterface.Load()
-		autoDetectInterfaceName := defaultInterfaceMonitor.DefaultInterfaceName(netip.IPv4Unspecified())
-		if autoDetectInterfaceName != "" && autoDetectInterfaceName != "<nil>" {
-			targetInterface = autoDetectInterfaceName
-		} else {
-			log.Warnln("Auto detect interface name is empty.")
-		}
-		if old := dialer.DefaultInterface.Load(); old != targetInterface {
-			log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, targetInterface)
+	if options.AutoDetectInterface {
+		defaultInterfaceMonitor.RegisterCallback(func(event int) error {
+			targetInterface := dialer.DefaultInterface.Load()
+			for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
+				autoDetectInterfaceName := defaultInterfaceMonitor.DefaultInterfaceName(destination)
+				if autoDetectInterfaceName == tunName {
+					log.Warnln("Auto detect interface by %s get same name with tun", destination.String())
+				} else if autoDetectInterfaceName == "" || autoDetectInterfaceName == "<nil>" {
+					log.Warnln("Auto detect interface by %s get empty name.", destination.String())
+				} else {
+					targetInterface = autoDetectInterfaceName
+					if old := dialer.DefaultInterface.Load(); old != targetInterface {
+						log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, targetInterface)
 
-			dialer.DefaultInterface.Store(targetInterface)
+						dialer.DefaultInterface.Store(targetInterface)
 
-			iface.FlushCache()
-		}
-		return nil
-	})
+						iface.FlushCache()
+					}
+					return nil
+				}
+			}
+			return nil
+		})
+	}
 	err = defaultInterfaceMonitor.Start()
 	if err != nil {
 		err = E.Cause(err, "start DefaultInterfaceMonitor")
