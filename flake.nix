@@ -41,6 +41,10 @@
               "-X github.com/Dreamacro/clash/constant.Version=dev-${version}"
               "-X github.com/Dreamacro/clash/constant.BuildTime=${version}"
             ];
+            
+            tags = [
+              "with_gvisor"
+            ];
 
             # Network required 
             doCheck = false;
