@@ -29,6 +29,7 @@ type waitCloseConn struct {
 	net.Conn
 	wg    *sync.WaitGroup
 	close sync.Once
+	rAddr net.Addr
 }
 
 func (c *waitCloseConn) Close() error { // call from handleTCPConn(connCtx C.ConnContext)
@@ -36,6 +37,10 @@ func (c *waitCloseConn) Close() error { // call from handleTCPConn(connCtx C.Con
 		c.wg.Done()
 	})
 	return c.Conn.Close()
+}
+
+func (c *waitCloseConn) RemoteAddr() net.Addr {
+	return c.rAddr
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
@@ -50,7 +55,7 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	wg := &sync.WaitGroup{}
 	defer wg.Wait() // this goroutine must exit after conn.Close()
 	wg.Add(1)
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{Conn: conn, wg: wg}, h.Type)
+	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{Conn: conn, wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type)
 	return nil
 }
 
