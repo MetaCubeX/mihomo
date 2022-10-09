@@ -1138,6 +1138,7 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 	} else {
 		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
 	}
+	tunAddressPrefix = netip.PrefixFrom(tunAddressPrefix.Addr(), 30)
 
 	return &Tun{
 		Enable:              rawTun.Enable,
