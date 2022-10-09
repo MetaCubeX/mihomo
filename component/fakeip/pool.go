@@ -166,7 +166,7 @@ func New(options Options) (*Pool, error) {
 	var (
 		hostAddr = options.IPNet.Masked().Addr()
 		gateway  = hostAddr.Next()
-		first    = gateway.Next().Next()
+		first    = gateway.Next().Next().Next() // default start with 198.18.0.4
 		last     = nnip.UnMasked(*options.IPNet)
 	)
 
