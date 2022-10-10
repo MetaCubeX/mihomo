@@ -186,7 +186,7 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 	l.tunIf = tunIf
-	l.tunStack, err = tun.NewStack(options.Stack, tun.StackOptions{
+	l.tunStack, err = tun.NewStack(strings.ToLower(options.Stack.String()), tun.StackOptions{
 		Context:                context.TODO(),
 		Tun:                    tunIf,
 		MTU:                    tunOptions.MTU,
