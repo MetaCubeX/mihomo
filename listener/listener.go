@@ -348,6 +348,9 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	}()
 
 	if !hasTunConfigChange(tunConf) {
+		if tunLister != nil {
+			tunLister.FlushDefaultInterface()
+		}
 		return
 	}
 

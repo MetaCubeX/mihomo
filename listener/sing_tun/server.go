@@ -29,6 +29,7 @@ type Listener struct {
 	closed  bool
 	options config.Tun
 	handler *ListenerHandler
+	tunName string
 
 	tunIf    tun.Tun
 	tunStack tun.Stack
@@ -135,48 +136,28 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		err = E.Cause(err, "create NetworkUpdateMonitor")
 		return
 	}
+	l.networkUpdateMonitor = networkUpdateMonitor
 	err = networkUpdateMonitor.Start()
 	if err != nil {
 		err = E.Cause(err, "start NetworkUpdateMonitor")
 		return
 	}
-	l.networkUpdateMonitor = networkUpdateMonitor
 
 	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
 	if err != nil {
 		err = E.Cause(err, "create DefaultInterfaceMonitor")
 		return
 	}
-	if options.AutoDetectInterface {
-		defaultInterfaceMonitor.RegisterCallback(func(event int) error {
-			targetInterface := dialer.DefaultInterface.Load()
-			for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
-				autoDetectInterfaceName := defaultInterfaceMonitor.DefaultInterfaceName(destination)
-				if autoDetectInterfaceName == tunName {
-					log.Warnln("Auto detect interface by %s get same name with tun", destination.String())
-				} else if autoDetectInterfaceName == "" || autoDetectInterfaceName == "<nil>" {
-					log.Warnln("Auto detect interface by %s get empty name.", destination.String())
-				} else {
-					targetInterface = autoDetectInterfaceName
-					if old := dialer.DefaultInterface.Load(); old != targetInterface {
-						log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, targetInterface)
-
-						dialer.DefaultInterface.Store(targetInterface)
-
-						iface.FlushCache()
-					}
-					return nil
-				}
-			}
-			return nil
-		})
-	}
+	l.defaultInterfaceMonitor = defaultInterfaceMonitor
+	defaultInterfaceMonitor.RegisterCallback(func(event int) error {
+		l.FlushDefaultInterface()
+		return nil
+	})
 	err = defaultInterfaceMonitor.Start()
 	if err != nil {
 		err = E.Cause(err, "start DefaultInterfaceMonitor")
 		return
 	}
-	l.defaultInterfaceMonitor = defaultInterfaceMonitor
 
 	tunOptions := tun.Options{
 		Name:               tunName,
@@ -227,6 +208,30 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Tun adapter listening at: %s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.Stack)
 	return
+}
+
+func (l *Listener) FlushDefaultInterface() {
+	if l.options.AutoDetectInterface {
+		targetInterface := dialer.DefaultInterface.Load()
+		for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
+			autoDetectInterfaceName := l.defaultInterfaceMonitor.DefaultInterfaceName(destination)
+			if autoDetectInterfaceName == l.tunName {
+				log.Warnln("Auto detect interface by %s get same name with tun", destination.String())
+			} else if autoDetectInterfaceName == "" || autoDetectInterfaceName == "<nil>" {
+				log.Warnln("Auto detect interface by %s get empty name.", destination.String())
+			} else {
+				targetInterface = autoDetectInterfaceName
+				if old := dialer.DefaultInterface.Load(); old != targetInterface {
+					log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, targetInterface)
+
+					dialer.DefaultInterface.Store(targetInterface)
+
+					iface.FlushCache()
+				}
+				return
+			}
+		}
+	}
 }
 
 func uidToRange(uidList []uint32) []ranges.Range[uint32] {
