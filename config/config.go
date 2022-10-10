@@ -114,7 +114,7 @@ type Profile struct {
 type Tun struct {
 	Enable              bool             `yaml:"enable" json:"enable"`
 	Device              string           `yaml:"device" json:"device"`
-	Stack               string           `yaml:"stack" json:"stack"`
+	Stack               C.TUNStack       `yaml:"stack" json:"stack"`
 	DNSHijack           []netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool             `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
@@ -250,13 +250,13 @@ type RawFallbackFilter struct {
 }
 
 type RawTun struct {
-	Enable              bool     `yaml:"enable" json:"enable"`
-	Device              string   `yaml:"device" json:"device"`
-	Stack               string   `yaml:"stack" json:"stack"`
-	DNSHijack           []string `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           bool     `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface bool     `yaml:"auto-detect-interface"`
-	RedirectToTun       []string `yaml:"-" json:"-"`
+	Enable              bool       `yaml:"enable" json:"enable"`
+	Device              string     `yaml:"device" json:"device"`
+	Stack               C.TUNStack `yaml:"stack" json:"stack"`
+	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
+	RedirectToTun       []string   `yaml:"-" json:"-"`
 
 	MTU uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	//Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
@@ -371,7 +371,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
-			Stack:               "gvisor",
+			Stack:               C.TunGvisor,
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute:           true,
 			AutoDetectInterface: true,
