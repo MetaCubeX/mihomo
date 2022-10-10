@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
@@ -18,6 +19,8 @@ import (
 	"github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/uot"
 )
+
+const UDPTimeout = 5 * time.Minute
 
 type ListenerHandler struct {
 	TcpIn chan<- C.ConnContext
