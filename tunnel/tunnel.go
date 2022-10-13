@@ -107,7 +107,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
 	configMux.Lock()
-	sniffer.Dispatcher = *dispatcher
+	sniffer.Dispatcher = dispatcher
 	sniffingEnable = true
 	configMux.Unlock()
 }
