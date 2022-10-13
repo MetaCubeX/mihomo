@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"strings"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (

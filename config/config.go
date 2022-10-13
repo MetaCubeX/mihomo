@@ -195,12 +195,13 @@ type IPTables struct {
 }
 
 type Sniffer struct {
-	Enable      bool
-	Sniffers    []sniffer.Type
-	Reverses    *trie.DomainTrie[bool]
-	ForceDomain *trie.DomainTrie[bool]
-	SkipDomain  *trie.DomainTrie[bool]
-	Ports       *[]utils.Range[uint16]
+	Enable          bool
+	Sniffers        []sniffer.Type
+	Reverses        *trie.DomainTrie[bool]
+	ForceDomain     *trie.DomainTrie[bool]
+	SkipDomain      *trie.DomainTrie[bool]
+	Ports           *[]utils.Range[uint16]
+	ForceDnsMapping bool
 }
 
 // Experimental config
@@ -325,11 +326,12 @@ type RawGeoXUrl struct {
 }
 
 type RawSniffer struct {
-	Enable      bool     `yaml:"enable" json:"enable"`
-	Sniffing    []string `yaml:"sniffing" json:"sniffing"`
-	ForceDomain []string `yaml:"force-domain" json:"force-domain"`
-	SkipDomain  []string `yaml:"skip-domain" json:"skip-domain"`
-	Ports       []string `yaml:"port-whitelist" json:"port-whitelist"`
+	Enable          bool     `yaml:"enable" json:"enable"`
+	Sniffing        []string `yaml:"sniffing" json:"sniffing"`
+	ForceDomain     []string `yaml:"force-domain" json:"force-domain"`
+	SkipDomain      []string `yaml:"skip-domain" json:"skip-domain"`
+	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
+	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
 }
 
 // EBpf config
@@ -419,11 +421,12 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			},
 		},
 		Sniffer: RawSniffer{
-			Enable:      false,
-			Sniffing:    []string{},
-			ForceDomain: []string{},
-			SkipDomain:  []string{},
-			Ports:       []string{},
+			Enable:          false,
+			Sniffing:        []string{},
+			ForceDomain:     []string{},
+			SkipDomain:      []string{},
+			Ports:           []string{},
+			ForceDnsMapping: true,
 		},
 		Profile: Profile{
 			StoreSelected: true,
@@ -1173,7 +1176,8 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 
 func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer := &Sniffer{
-		Enable: snifferRaw.Enable,
+		Enable:          snifferRaw.Enable,
+		ForceDnsMapping: snifferRaw.ForceDnsMapping,
 	}
 
 	var ports []utils.Range[uint16]
