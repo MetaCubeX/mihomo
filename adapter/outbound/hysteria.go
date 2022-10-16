@@ -7,17 +7,19 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"net"
+	"os"
+	"regexp"
+	"strconv"
+	"time"
+
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/transport/hysteria/core"
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
 	"github.com/Dreamacro/clash/transport/hysteria/transport"
 	"github.com/lucas-clemente/quic-go"
-	"net"
-	"os"
-	"regexp"
-	"strconv"
-	"time"
+	"github.com/sirupsen/logrus"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -37,6 +39,8 @@ const (
 
 	DefaultALPN     = "hysteria"
 	DefaultProtocol = "udp"
+
+	DefaultKeepAlivePeriod = 10 * time.Second
 )
 
 var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
@@ -48,17 +52,7 @@ type Hysteria struct {
 }
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	hdc := hyDialerWithContext{
-		ctx: context.Background(),
-		hyDialer: func() (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
-		},
-		remoteAddr: func(addr string) (net.Addr, error) {
-			return resolveUDPAddrWithPrefer("udp", addr, h.prefer)
-		},
-	}
-
-	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
+	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress())
 	if err != nil {
 		return nil, err
 	}
@@ -67,16 +61,7 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	hdc := hyDialerWithContext{
-		ctx: context.Background(),
-		hyDialer: func() (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, "udp", "", h.Base.DialOptions(opts...)...)
-		},
-		remoteAddr: func(addr string) (net.Addr, error) {
-			return resolveUDPAddrWithPrefer("udp", addr, h.prefer)
-		},
-	}
-	udpConn, err := h.client.DialUDP(&hdc)
+	udpConn, err := h.client.DialUDP()
 	if err != nil {
 		return nil, err
 	}
@@ -85,23 +70,26 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 
 type HysteriaOption struct {
 	BasicOption
-	Name                string `proxy:"name"`
-	Server              string `proxy:"server"`
-	Port                int    `proxy:"port"`
-	Protocol            string `proxy:"protocol,omitempty"`
-	Up                  string `proxy:"up"`
-	Down                string `proxy:"down"`
-	AuthString          string `proxy:"auth_str,omitempty"`
-	Obfs                string `proxy:"obfs,omitempty"`
-	SNI                 string `proxy:"sni,omitempty"`
-	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string `proxy:"fingerprint,omitempty"`
-	ALPN                string `proxy:"alpn,omitempty"`
-	CustomCA            string `proxy:"ca,omitempty"`
-	CustomCAString      string `proxy:"ca_str,omitempty"`
-	ReceiveWindowConn   int    `proxy:"recv_window_conn,omitempty"`
-	ReceiveWindow       int    `proxy:"recv_window,omitempty"`
-	DisableMTUDiscovery bool   `proxy:"disable_mtu_discovery,omitempty"`
+	Name                             string `proxy:"name"`
+	Server                           string `proxy:"server"`
+	Port                             int    `proxy:"port"`
+	Protocol                         string `proxy:"protocol,omitempty"`
+	Up                               string `proxy:"up"`
+	Down                             string `proxy:"down"`
+	AuthString                       string `proxy:"auth_str,omitempty"`
+	Obfs                             string `proxy:"obfs,omitempty"`
+	SNI                              string `proxy:"sni,omitempty"`
+	SkipCertVerify                   bool   `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint                      string `proxy:"fingerprint,omitempty"`
+	ALPN                             string `proxy:"alpn,omitempty"`
+	CustomCA                         string `proxy:"ca,omitempty"`
+	CustomCAString                   string `proxy:"ca_str,omitempty"`
+	ReceiveWindowConn                int    `proxy:"recv_window_conn,omitempty"`
+	ReceiveWindow                    int    `proxy:"recv_window,omitempty"`
+	DisableMTUDiscovery              bool   `proxy:"disable_mtu_discovery,omitempty"`
+	ConnectivityDisableAutoReconnect bool   `proxy:"connectivity_disable_auto_reconnect,omitempty"`
+	ConnectivityHandshakeIdleTimeout int    `proxy:"connectivity_handshake_idle_timeout,omitempty"`
+	ConnectivityMaxIdleTimeout       int    `proxy:"connectivity_max_idle_timeout,omitempty"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
@@ -186,15 +174,16 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
 	}
-	if option.Protocol == "" {
-		option.Protocol = DefaultProtocol
+	quicConfig.KeepAlivePeriod = quicConfig.MaxIdleTimeout / 2
+	if quicConfig.KeepAlivePeriod == 0 {
+		quicConfig.KeepAlivePeriod = DefaultKeepAlivePeriod
 	}
 	if option.ReceiveWindowConn == 0 {
-		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow / 10
+		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow
 		quicConfig.MaxStreamReceiveWindow = DefaultStreamReceiveWindow
 	}
 	if option.ReceiveWindow == 0 {
-		quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow / 10
+		quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow
 		quicConfig.MaxConnectionReceiveWindow = DefaultConnectionReceiveWindow
 	}
 	if !quicConfig.DisablePathMTUDiscovery && pmtud_fix.DisablePathMTUDiscovery {
@@ -215,7 +204,19 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	client, err := core.NewClient(
 		addr, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
 			return hyCongestion.NewBrutalSender(congestion.ByteCount(refBPS))
-		}, obfuscator,
+		}, obfuscator, func(err error) {
+				if option.ConnectivityDisableAutoReconnect {
+					logrus.WithFields(logrus.Fields{
+						"addr":  option.Server,
+						"error": err,
+					}).Fatal("Connection to server lost, exiting...")
+				} else {
+					logrus.WithFields(logrus.Fields{
+						"addr":  option.Server,
+						"error": err,
+					}).Info("Connection to server lost, reconnecting...")
+				}
+			},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("hysteria %s create error: %w", addr, err)

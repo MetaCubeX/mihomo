@@ -37,14 +37,14 @@ require (
 	golang.org/x/time v0.0.0-20220411224347-583f2d630306
 	golang.zx2c4.com/wireguard v0.0.0-20220601130007-6a08d81f6bc4
 	golang.zx2c4.com/wireguard/windows v0.5.4-0.20220328111914-004c22c5647e
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
 	gvisor.dev/gvisor v0.0.0-20220810234332-45096a971e66
 )
 
 replace github.com/vishvananda/netlink => github.com/MetaCubeX/netlink v1.2.0-beta.0.20220529072258-d6853f887820
 
-replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.1-0.20220706211558-7780039ad599
+replace github.com/lucas-clemente/quic-go => github.com/HyNetwork/quic-go v0.28.2-0.20220806194731-5be744e08984
 
 require (
 	github.com/cheekybits/genny v1.0.0 // indirect
@@ -52,6 +52,7 @@ require (
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/google/btree v1.0.1 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/marten-seemann/qpack v0.2.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect

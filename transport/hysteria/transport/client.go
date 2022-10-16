@@ -1,24 +1,33 @@
 package transport
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/Dreamacro/clash/transport/hysteria/conns/faketcp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/udp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/wechat"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+	obfsPkg "github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/lucas-clemente/quic-go"
-	"net"
 )
 
 type ClientTransport struct {
-	Dialer *net.Dialer
+	Dialer            *net.Dialer
+	ResolvePreference ResolvePreference
 }
 
-func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs.Obfuscator, dialer PacketDialer) (net.PacketConn, error) {
+var DefaultClientTransport = &ClientTransport{
+	Dialer: &net.Dialer{
+		Timeout: 8 * time.Second,
+	},
+	ResolvePreference: ResolvePreferenceDefault,
+}
+
+func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfsPkg.Obfuscator) (net.PacketConn, error) {
 	if len(proto) == 0 || proto == "udp" {
-		conn, err := dialer.ListenPacket()
+		conn, err := net.ListenUDP("udp", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -29,16 +38,14 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 			return conn, nil
 		}
 	} else if proto == "wechat-video" {
-		conn, err := dialer.ListenPacket()
+		conn, err := net.ListenUDP("udp", nil)
 		if err != nil {
 			return nil, err
 		}
-		if obfs != nil {
-			oc := wechat.NewObfsWeChatUDPConn(conn, obfs)
-			return oc, nil
-		} else {
-			return conn, nil
+		if obfs == nil {
+			obfs = obfsPkg.NewDummyObfuscator()
 		}
+		return wechat.NewObfsWeChatUDPConn(conn, obfs), nil
 	} else if proto == "faketcp" {
 		var conn *faketcp.TCPConn
 		conn, err := faketcp.Dial("tcp", server)
@@ -56,29 +63,25 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 	}
 }
 
-type PacketDialer interface {
-	ListenPacket() (net.PacketConn, error)
-	Context() context.Context
-	RemoteAddr(host string) (net.Addr, error)
-}
-
-func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfs.Obfuscator, dialer PacketDialer) (quic.Connection, error) {
-	serverUDPAddr, err := dialer.RemoteAddr(server)
+func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfsPkg.Obfuscator) (quic.Connection, error) {
+	serverUDPAddr, err := net.ResolveUDPAddr("udp", server)
 	if err != nil {
 		return nil, err
 	}
-
-	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr.String(), obfs, dialer)
+	pktConn, err := ct.quicPacketConn(proto, server, obfs)
 	if err != nil {
 		return nil, err
 	}
-
-	qs, err := quic.DialContext(dialer.Context(), pktConn, serverUDPAddr, server, tlsConfig, quicConfig)
+	qs, err := quic.Dial(pktConn, serverUDPAddr, server, tlsConfig, quicConfig)
 	if err != nil {
 		_ = pktConn.Close()
 		return nil, err
 	}
 	return qs, nil
+}
+
+func (ct *ClientTransport) ResolveIPAddr(address string) (*net.IPAddr, error) {
+	return resolveIPAddrWithPreference(address, ct.ResolvePreference)
 }
 
 func (ct *ClientTransport) DialTCP(raddr *net.TCPAddr) (*net.TCPConn, error) {

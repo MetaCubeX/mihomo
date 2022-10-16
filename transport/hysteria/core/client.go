@@ -6,6 +6,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"math/rand"
+	"net"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
 	"github.com/Dreamacro/clash/transport/hysteria/transport"
@@ -13,16 +19,9 @@ import (
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/congestion"
 	"github.com/lunixbochs/struc"
-	"math/rand"
-	"net"
-	"strconv"
-	"sync"
-	"time"
 )
 
-var (
-	ErrClosed = errors.New("closed")
-)
+var ErrClosed = errors.New("closed")
 
 type CongestionFactory func(refBPS uint64) congestion.CongestionControl
 
@@ -45,11 +44,14 @@ type Client struct {
 	udpSessionMutex sync.RWMutex
 	udpSessionMap   map[uint32]chan *udpMessage
 	udpDefragger    defragger
+
+	quicReconnectFunc func(err error)
 }
 
 func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
 	transport *transport.ClientTransport, sendBPS uint64, recvBPS uint64, congestionFactory CongestionFactory,
-	obfuscator obfs.Obfuscator) (*Client, error) {
+	obfuscator obfs.Obfuscator, quicReconnectFunc func(err error),
+) (*Client, error) {
 	quicConfig.DisablePathMTUDiscovery = quicConfig.DisablePathMTUDiscovery || pmtud_fix.DisablePathMTUDiscovery
 	c := &Client{
 		transport:         transport,
@@ -62,12 +64,13 @@ func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.C
 		obfuscator:        obfuscator,
 		tlsConfig:         tlsConfig,
 		quicConfig:        quicConfig,
+		quicReconnectFunc: quicReconnectFunc,
 	}
 	return c, nil
 }
 
-func (c *Client) connectToServer(dialer transport.PacketDialer) error {
-	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.tlsConfig, c.quicConfig, c.obfuscator, dialer)
+func (c *Client) connectToServer() error {
+	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.tlsConfig, c.quicConfig, c.obfuscator)
 	if err != nil {
 		return err
 	}
@@ -154,14 +157,14 @@ func (c *Client) handleMessage(qs quic.Connection) {
 	}
 }
 
-func (c *Client) openStreamWithReconnect(dialer transport.PacketDialer) (quic.Connection, quic.Stream, error) {
+func (c *Client) openStreamWithReconnect() (quic.Connection, quic.Stream, error) {
 	c.reconnectMutex.Lock()
 	defer c.reconnectMutex.Unlock()
 	if c.closed {
 		return nil, nil, ErrClosed
 	}
 	if c.quicSession == nil {
-		if err := c.connectToServer(dialer); err != nil {
+		if err := c.connectToServer(); err != nil {
 			// Still error, oops
 			return nil, nil, err
 		}
@@ -176,8 +179,9 @@ func (c *Client) openStreamWithReconnect(dialer transport.PacketDialer) (quic.Co
 		// Temporary error, just return
 		return nil, nil, err
 	}
+	c.quicReconnectFunc(err)
 	// Permanent error, need to reconnect
-	if err := c.connectToServer(dialer); err != nil {
+	if err := c.connectToServer(); err != nil {
 		// Still error, oops
 		return nil, nil, err
 	}
@@ -186,12 +190,12 @@ func (c *Client) openStreamWithReconnect(dialer transport.PacketDialer) (quic.Co
 	return c.quicSession, &wrappedQUICStream{stream}, err
 }
 
-func (c *Client) DialTCP(addr string, dialer transport.PacketDialer) (net.Conn, error) {
+func (c *Client) DialTCP(addr string) (net.Conn, error) {
 	host, port, err := utils.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
-	session, stream, err := c.openStreamWithReconnect(dialer)
+	session, stream, err := c.openStreamWithReconnect()
 	if err != nil {
 		return nil, err
 	}
@@ -223,8 +227,8 @@ func (c *Client) DialTCP(addr string, dialer transport.PacketDialer) (net.Conn, 
 	}, nil
 }
 
-func (c *Client) DialUDP(dialer transport.PacketDialer) (UDPConn, error) {
-	session, stream, err := c.openStreamWithReconnect(dialer)
+func (c *Client) DialUDP() (UDPConn, error) {
+	session, stream, err := c.openStreamWithReconnect()
 	if err != nil {
 		return nil, err
 	}

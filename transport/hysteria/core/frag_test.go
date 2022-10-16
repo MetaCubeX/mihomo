@@ -32,7 +32,7 @@ func Test_fragUDPMessage(t *testing.T) {
 				100,
 			},
 			[]udpMessage{
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",
@@ -62,7 +62,7 @@ func Test_fragUDPMessage(t *testing.T) {
 				22,
 			},
 			[]udpMessage{
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",
@@ -73,7 +73,7 @@ func Test_fragUDPMessage(t *testing.T) {
 					DataLen:   4,
 					Data:      []byte("hell"),
 				},
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",
@@ -103,7 +103,7 @@ func Test_fragUDPMessage(t *testing.T) {
 				23,
 			},
 			[]udpMessage{
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",
@@ -114,7 +114,7 @@ func Test_fragUDPMessage(t *testing.T) {
 					DataLen:   5,
 					Data:      []byte("wow w"),
 				},
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",
@@ -125,7 +125,7 @@ func Test_fragUDPMessage(t *testing.T) {
 					DataLen:   5,
 					Data:      []byte("ow wo"),
 				},
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",
@@ -136,7 +136,7 @@ func Test_fragUDPMessage(t *testing.T) {
 					DataLen:   5,
 					Data:      []byte("w lol"),
 				},
-				udpMessage{
+				{
 					SessionID: 123,
 					HostLen:   4,
 					Host:      "test",

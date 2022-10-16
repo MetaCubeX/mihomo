@@ -1,9 +1,10 @@
 package congestion
 
 import (
-	"github.com/lucas-clemente/quic-go/congestion"
 	"math"
 	"time"
+
+	"github.com/lucas-clemente/quic-go/congestion"
 )
 
 const (

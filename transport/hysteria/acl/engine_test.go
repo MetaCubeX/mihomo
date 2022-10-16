@@ -2,10 +2,11 @@ package acl
 
 import (
 	"errors"
-	lru "github.com/hashicorp/golang-lru"
 	"net"
 	"strings"
 	"testing"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 func TestEngine_ResolveAndMatch(t *testing.T) {

@@ -1,24 +1,26 @@
 package udp
 
 import (
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 )
 
 const udpBufferSize = 65535
 
 type ObfsUDPConn struct {
-	orig       net.PacketConn
-	obfs       obfs.Obfuscator
+	orig *net.UDPConn
+	obfs obfs.Obfuscator
+
 	readBuf    []byte
 	readMutex  sync.Mutex
 	writeBuf   []byte
 	writeMutex sync.Mutex
 }
 
-func NewObfsUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsUDPConn {
+func NewObfsUDPConn(orig *net.UDPConn, obfs obfs.Obfuscator) *ObfsUDPConn {
 	return &ObfsUDPConn{
 		orig:     orig,
 		obfs:     obfs,

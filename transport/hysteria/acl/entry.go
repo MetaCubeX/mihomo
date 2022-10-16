@@ -3,14 +3,17 @@ package acl
 import (
 	"errors"
 	"fmt"
-	"github.com/oschwald/geoip2-golang"
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/oschwald/geoip2-golang"
 )
 
-type Action byte
-type Protocol byte
+type (
+	Action   byte
+	Protocol byte
+)
 
 const (
 	ActionDirect = Action(iota)

@@ -1,10 +1,14 @@
 package acl
 
 import (
+	"bufio"
+	"net"
+	"os"
+	"strings"
+
 	"github.com/Dreamacro/clash/transport/hysteria/utils"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/oschwald/geoip2-golang"
-	"net"
 )
 
 const entryCacheSize = 1024
@@ -26,6 +30,46 @@ type cacheKey struct {
 type cacheValue struct {
 	Action Action
 	Arg    string
+}
+
+func LoadFromFile(filename string, resolveIPAddr func(string) (*net.IPAddr, error), geoIPLoadFunc func() (*geoip2.Reader, error)) (*Engine, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	entries := make([]Entry, 0, 1024)
+	var geoIPReader *geoip2.Reader
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if len(line) == 0 || strings.HasPrefix(line, "#") {
+			// Ignore empty lines & comments
+			continue
+		}
+		entry, err := ParseEntry(line)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := entry.Matcher.(*countryMatcher); ok && geoIPReader == nil {
+			geoIPReader, err = geoIPLoadFunc() // lazy load GeoIP reader only when needed
+			if err != nil {
+				return nil, err
+			}
+		}
+		entries = append(entries, entry)
+	}
+	cache, err := lru.NewARC(entryCacheSize)
+	if err != nil {
+		return nil, err
+	}
+	return &Engine{
+		DefaultAction: ActionProxy,
+		Entries:       entries,
+		Cache:         cache,
+		ResolveIPAddr: resolveIPAddr,
+		GeoIPReader:   geoIPReader,
+	}, nil
 }
 
 // action, arg, isDomain, resolvedIP, error

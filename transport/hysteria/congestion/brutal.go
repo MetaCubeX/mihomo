@@ -1,8 +1,9 @@
 package congestion
 
 import (
-	"github.com/lucas-clemente/quic-go/congestion"
 	"time"
+
+	"github.com/lucas-clemente/quic-go/congestion"
 )
 
 const (
@@ -66,12 +67,14 @@ func (b *BrutalSender) GetCongestionWindow() congestion.ByteCount {
 }
 
 func (b *BrutalSender) OnPacketSent(sentTime time.Time, bytesInFlight congestion.ByteCount,
-	packetNumber congestion.PacketNumber, bytes congestion.ByteCount, isRetransmittable bool) {
+	packetNumber congestion.PacketNumber, bytes congestion.ByteCount, isRetransmittable bool,
+) {
 	b.pacer.SentPacket(sentTime, bytes)
 }
 
 func (b *BrutalSender) OnPacketAcked(number congestion.PacketNumber, ackedBytes congestion.ByteCount,
-	priorInFlight congestion.ByteCount, eventTime time.Time) {
+	priorInFlight congestion.ByteCount, eventTime time.Time,
+) {
 	currentTimestamp := eventTime.Unix()
 	slot := currentTimestamp % pktInfoSlotCount
 	if b.pktInfoSlots[slot].Timestamp == currentTimestamp {
@@ -86,7 +89,8 @@ func (b *BrutalSender) OnPacketAcked(number congestion.PacketNumber, ackedBytes 
 }
 
 func (b *BrutalSender) OnPacketLost(number congestion.PacketNumber, lostBytes congestion.ByteCount,
-	priorInFlight congestion.ByteCount) {
+	priorInFlight congestion.ByteCount,
+) {
 	currentTimestamp := time.Now().Unix()
 	slot := currentTimestamp % pktInfoSlotCount
 	if b.pktInfoSlots[slot].Timestamp == currentTimestamp {

@@ -1,18 +1,20 @@
 package faketcp
 
 import (
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"net"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 )
 
 const udpBufferSize = 65535
 
 type ObfsFakeTCPConn struct {
-	orig       *TCPConn
-	obfs       obfs.Obfuscator
+	orig *TCPConn
+	obfs obfs.Obfuscator
+
 	readBuf    []byte
 	readMutex  sync.Mutex
 	writeBuf   []byte

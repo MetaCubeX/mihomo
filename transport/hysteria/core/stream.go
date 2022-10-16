@@ -2,8 +2,9 @@ package core
 
 import (
 	"context"
-	"github.com/lucas-clemente/quic-go"
 	"time"
+
+	"github.com/lucas-clemente/quic-go"
 )
 
 // Handle stream close properly
