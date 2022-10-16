@@ -82,16 +82,16 @@ func jumpHash(key uint64, buckets int32) int32 {
 
 // DialContext implements C.ProxyAdapter
 func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
+	proxy := lb.Unwrap(metadata)
+
 	defer func() {
 		if err == nil {
 			c.AppendToChains(lb)
 			lb.onDialSuccess()
 		} else {
-			lb.onDialFailed()
+			lb.onDialFailed(proxy.Type(), err)
 		}
 	}()
-
-	proxy := lb.Unwrap(metadata)
 
 	c, err = proxy.DialContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
 	return

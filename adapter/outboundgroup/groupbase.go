@@ -11,6 +11,7 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/dlclark/regexp2"
 	"go.uber.org/atomic"
+	"strings"
 	"sync"
 	"time"
 )
@@ -136,8 +137,13 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16
 	}
 }
 
-func (gb *GroupBase) onDialFailed() {
-	if gb.failedTesting.Load() {
+func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error) {
+	if adapterType == C.Direct || adapterType == C.Compatible || adapterType == C.Reject || adapterType == C.Pass {
+		return
+	}
+
+	if strings.Contains(err.Error(), "connection refused") {
+		go gb.healthCheck()
 		return
 	}
 
@@ -157,24 +163,32 @@ func (gb *GroupBase) onDialFailed() {
 
 			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes() {
-				gb.failedTesting.Store(true)
 				log.Warnln("because %s failed multiple times, active health check", gb.Name())
-				wg := sync.WaitGroup{}
-				for _, proxyProvider := range gb.providers {
-					wg.Add(1)
-					proxyProvider := proxyProvider
-					go func() {
-						defer wg.Done()
-						proxyProvider.HealthCheck()
-					}()
-				}
-
-				wg.Wait()
-				gb.failedTesting.Store(false)
-				gb.failedTimes = 0
+				gb.healthCheck()
 			}
 		}
 	}()
+}
+
+func (gb *GroupBase) healthCheck() {
+	if gb.failedTesting.Load() {
+		return
+	}
+
+	gb.failedTesting.Store(true)
+	wg := sync.WaitGroup{}
+	for _, proxyProvider := range gb.providers {
+		wg.Add(1)
+		proxyProvider := proxyProvider
+		go func() {
+			defer wg.Done()
+			proxyProvider.HealthCheck()
+		}()
+	}
+
+	wg.Wait()
+	gb.failedTesting.Store(false)
+	gb.failedTimes = 0
 }
 
 func (gb *GroupBase) failedIntervalTime() int64 {
