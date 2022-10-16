@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
@@ -138,6 +139,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	}
 
 	if len(bs) > 0 {
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM(bs) {
+			log.Errorln("Failed to parse CA. File: %s", option.CustomCA)
+		}
+		tlsConfig.RootCAs = cp
+	
 		block, _ := pem.Decode(bs)
 		if block == nil {
 			return nil, fmt.Errorf("CA cert is not PEM")
@@ -147,9 +154,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		if len(option.Fingerprint) == 0 {
 			option.Fingerprint = hex.EncodeToString(fpBytes[:])
 		}
-	}
-
-	if len(option.Fingerprint) != 0 {
+	} else if len(option.Fingerprint) != 0 {
 		var err error
 		tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
 		if err != nil {
