@@ -31,7 +31,7 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 		c.AppendToChains(f)
 		f.onDialSuccess()
 	} else {
-		f.onDialFailed()
+		f.onDialFailed(proxy.Type(), err)
 	}
 
 	return c, err

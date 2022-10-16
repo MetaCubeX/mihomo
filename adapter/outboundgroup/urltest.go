@@ -34,12 +34,13 @@ func (u *URLTest) Now() string {
 
 // DialContext implements C.ProxyAdapter
 func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
-	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
+	proxy := u.fast(true)
+	c, err = proxy.DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
 		u.onDialSuccess()
 	} else {
-		u.onDialFailed()
+		u.onDialFailed(proxy.Type(), err)
 	}
 	return c, err
 }
