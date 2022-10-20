@@ -391,13 +391,16 @@ proxies:
       path: "/"
       headers:
         Host: example.com
+  
+  #hysteria
   - name: "hysteria"
     type: hysteria
     server: server.com
     port: 443
     auth_str: yourpassword
     # obfs: obfs_str
-    # alpn: h3
+    # alpn:
+    #   - h3
     protocol: udp # 支持 udp/wechat-video/faketcp
     up: "30 Mbps" # 若不写单位，默认为 Mbps
     down: "200 Mbps" # 若不写单位，默认为 Mbps
