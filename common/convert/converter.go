@@ -47,7 +47,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["port"] = urlHysteria.Port()
 			hysteria["sni"] = query.Get("peer")
 			hysteria["obfs"] = query.Get("obfs")
-			hysteria["alpn"] = query.Get("alpn")
+			hysteria["alpn"] = []string{query.Get("alpn")}
 			hysteria["auth_str"] = query.Get("auth")
 			hysteria["protocol"] = query.Get("protocol")
 			up := query.Get("up")
