@@ -18,11 +18,11 @@ const (
 )
 
 var structSize = func() int {
-	value, _ := syscall.Sysctl("kern.osproductversion")
+	value, _ := syscall.Sysctl("kern.osrelease")
 	major, _, _ := strings.Cut(value, ".")
 	n, _ := strconv.ParseInt(major, 10, 64)
 	switch true {
-	case n >= 13:
+	case n >= 22:
 		return 408
 	default:
 		// from darwin-xnu/bsd/netinet/in_pcblist.c:get_pcblist_n
