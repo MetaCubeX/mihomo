@@ -145,7 +145,7 @@ func (m *Metadata) Resolved() bool {
 // Pure is used to solve unexpected behavior
 // when dialing proxy connection in DNSMapping mode.
 func (m *Metadata) Pure() *Metadata {
-	if m.DNSMode == DNSMapping && m.DstIP.IsValid() {
+	if (m.DNSMode == DNSMapping || m.DNSMode == DNSHosts) && m.DstIP.IsValid() {
 		copyM := *m
 		copyM.Host = ""
 		if copyM.DstIP.Is4() {
