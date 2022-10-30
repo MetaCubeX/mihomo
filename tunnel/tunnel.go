@@ -425,8 +425,15 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				continue
 			}
 
-			// only unwrap one group, multi-layer nesting will be invalid
-			if adapter.Type() == C.Pass || (adapter.Unwrap(metadata) != nil && adapter.Unwrap(metadata).Type() == C.Pass) {
+			// parse multi-layer nesting
+			passed := false
+			for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
+				if adapter.Type() == C.Pass {
+					passed = true
+					break
+				}
+			}
+			if passed {
 				log.Debugln("%s match Pass rule", adapter.Name())
 				continue
 			}

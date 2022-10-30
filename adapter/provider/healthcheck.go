@@ -35,20 +35,27 @@ func (hc *HealthCheck) process() {
 
 	go func() {
 		time.Sleep(30 * time.Second)
-		hc.check()
+		hc.lazyCheck()
 	}()
 
 	for {
 		select {
 		case <-ticker.C:
-			now := time.Now().Unix()
-			if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
-				hc.check()
-			}
+			hc.lazyCheck()
 		case <-hc.done:
 			ticker.Stop()
 			return
 		}
+	}
+}
+
+func (hc *HealthCheck) lazyCheck() bool {
+	now := time.Now().Unix()
+	if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
+		hc.check()
+		return true
+	} else {
+		return false
 	}
 }
 
