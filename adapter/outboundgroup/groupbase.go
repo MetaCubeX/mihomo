@@ -18,7 +18,7 @@ import (
 
 type GroupBase struct {
 	*outbound.Base
-	filter        *regexp2.Regexp
+	filterRegs    []*regexp2.Regexp
 	providers     []provider.ProxyProvider
 	failedTestMux sync.Mutex
 	failedTimes   int
@@ -35,14 +35,17 @@ type GroupBaseOption struct {
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
-	var filter *regexp2.Regexp = nil
+	var filterRegs []*regexp2.Regexp
 	if opt.filter != "" {
-		filter = regexp2.MustCompile(opt.filter, 0)
+		for _, filter := range strings.Split(opt.filter, "`") {
+			filterReg := regexp2.MustCompile(filter, 0)
+			filterRegs = append(filterRegs, filterReg)
+		}
 	}
 
 	gb := &GroupBase{
 		Base:          outbound.NewBase(opt.BaseOption),
-		filter:        filter,
+		filterRegs:    filterRegs,
 		providers:     opt.providers,
 		failedTesting: atomic.NewBool(false),
 	}
@@ -54,7 +57,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 }
 
 func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
-	if gb.filter == nil {
+	if len(gb.filterRegs) == 0 {
 		var proxies []C.Proxy
 		for _, pd := range gb.providers {
 			if touch {
@@ -80,16 +83,23 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		}
 
 		version := gb.versions[i].Load()
-		if version != pd.Version() && gb.versions[i].CAS(version, pd.Version()) {
+		if version != pd.Version() && gb.versions[i].CompareAndSwap(version, pd.Version()) {
 			var (
 				proxies    []C.Proxy
 				newProxies []C.Proxy
 			)
 
 			proxies = pd.Proxies()
-			for _, p := range proxies {
-				if mat, _ := gb.filter.FindStringMatch(p.Name()); mat != nil {
-					newProxies = append(newProxies, p)
+			proxiesSet := map[string]struct{}{}
+			for _, filterReg := range gb.filterRegs {
+				for _, p := range proxies {
+					name := p.Name()
+					if mat, _ := filterReg.FindStringMatch(name); mat != nil {
+						if _, ok := proxiesSet[name]; !ok {
+							proxiesSet[name] = struct{}{}
+							newProxies = append(newProxies, p)
+						}
+					}
 				}
 			}
 
@@ -104,6 +114,23 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 
 	if len(proxies) == 0 {
 		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
+	}
+
+	if len(gb.providers) > 1 && len(gb.filterRegs) > 1 {
+		var newProxies []C.Proxy
+		proxiesSet := map[string]struct{}{}
+		for _, filterReg := range gb.filterRegs {
+			for _, p := range proxies {
+				name := p.Name()
+				if mat, _ := filterReg.FindStringMatch(name); mat != nil {
+					if _, ok := proxiesSet[name]; !ok {
+						proxiesSet[name] = struct{}{}
+						newProxies = append(newProxies, p)
+					}
+				}
+			}
+		}
+		proxies = newProxies
 	}
 
 	return proxies
