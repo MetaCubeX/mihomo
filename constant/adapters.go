@@ -112,6 +112,7 @@ type ProxyAdapter interface {
 type Group interface {
 	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
 	GetProxies(touch bool) []Proxy
+	Touch()
 }
 
 type DelayHistory struct {

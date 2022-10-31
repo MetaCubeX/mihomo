@@ -56,6 +56,12 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	return gb
 }
 
+func (gb *GroupBase) Touch() {
+	for _, pd := range gb.providers {
+		pd.Touch()
+	}
+}
+
 func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	if len(gb.filterRegs) == 0 {
 		var proxies []C.Proxy
