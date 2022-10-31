@@ -61,10 +61,7 @@ func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
-	if touch {
-		u.Touch()
-	}
-	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
+	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
@@ -93,6 +90,9 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		return u.fastNode, nil
 	})
+	if shared && touch { // a shared fastSingle.Do() may cause providers untouched, so we touch them again
+		u.Touch()
+	}
 
 	return elm
 }
