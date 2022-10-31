@@ -61,6 +61,9 @@ func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
+	if touch {
+		u.Touch()
+	}
 	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 		fast := proxies[0]
