@@ -136,6 +136,13 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				}
 			}
 		}
+		for _, p := range proxies { // add not matched proxies at the end
+			name := p.Name()
+			if _, ok := proxiesSet[name]; !ok {
+				proxiesSet[name] = struct{}{}
+				newProxies = append(newProxies, p)
+			}
+		}
 		proxies = newProxies
 	}
 
