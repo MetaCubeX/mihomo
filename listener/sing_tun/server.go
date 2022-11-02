@@ -204,10 +204,11 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 	err = l.tunStack.Start()
+
 	if err != nil {
 		return
 	}
-	log.Infoln("Tun adapter listening at: %s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
+	log.Infoln("[TUN] Tun adapter listening at: %s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.Stack)
 	return
 }
@@ -218,9 +219,9 @@ func (l *Listener) FlushDefaultInterface() {
 		for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
 			autoDetectInterfaceName := l.defaultInterfaceMonitor.DefaultInterfaceName(destination)
 			if autoDetectInterfaceName == l.tunName {
-				log.Warnln("Auto detect interface by %s get same name with tun", destination.String())
+				log.Warnln("[TUN] Auto detect interface by %s get same name with tun", destination.String())
 			} else if autoDetectInterfaceName == "" || autoDetectInterfaceName == "<nil>" {
-				log.Warnln("Auto detect interface by %s get empty name.", destination.String())
+				log.Warnln("[TUN] Auto detect interface by %s get empty name.", destination.String())
 			} else {
 				targetInterface = autoDetectInterfaceName
 				if old := dialer.DefaultInterface.Load(); old != targetInterface {
