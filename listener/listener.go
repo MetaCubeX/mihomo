@@ -337,7 +337,10 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 
 func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
-	defer tunMux.Unlock()
+	defer func() {
+		lastTunConf = tunConf
+		tunMux.Unlock()
+	}()
 
 	var err error
 	defer func() {
@@ -361,8 +364,6 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	}
 
 	tunLister, err = sing_tun.New(*tunConf, tcpIn, udpIn)
-
-	lastTunConf = tunConf
 }
 
 func ReCreateRedirToTun(ifaceNames []string) {

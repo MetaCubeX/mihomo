@@ -13,7 +13,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/vishvananda/netlink"
+	"github.com/sagernet/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/Dreamacro/clash/component/ebpf/byteorder"

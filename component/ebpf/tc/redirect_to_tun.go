@@ -11,7 +11,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/vishvananda/netlink"
+	"github.com/sagernet/netlink"
 	"golang.org/x/sys/unix"
 
 	C "github.com/Dreamacro/clash/constant"
