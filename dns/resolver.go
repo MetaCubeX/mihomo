@@ -245,7 +245,7 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 		return nil
 	}
 
-	p := record.Data
+	p := record.Data()
 	return p.GetData()
 }
 

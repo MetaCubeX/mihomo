@@ -1,9 +1,10 @@
 package trie
 
 // Node is the trie's node
-type Node[T comparable] struct {
+type Node[T any] struct {
 	children map[string]*Node[T]
-	Data     T
+	inited   bool
+	data     T
 }
 
 func (n *Node[T]) getChild(s string) *Node[T] {
@@ -18,14 +19,31 @@ func (n *Node[T]) addChild(s string, child *Node[T]) {
 	n.children[s] = child
 }
 
-func newNode[T comparable](data T) *Node[T] {
+func (n *Node[T]) isEmpty() bool {
+	if n == nil || n.inited == false {
+		return true
+	}
+	return false
+}
+
+func (n *Node[T]) setData(data T) {
+	n.data = data
+	n.inited = true
+}
+
+func (n *Node[T]) Data() T {
+	return n.data
+}
+
+func newNode[T any]() *Node[T] {
 	return &Node[T]{
-		Data:     data,
 		children: map[string]*Node[T]{},
+		inited:   false,
+		data:     getZero[T](),
 	}
 }
 
-func getZero[T comparable]() T {
+func getZero[T any]() T {
 	var result T
 	return result
 }

@@ -31,8 +31,8 @@ type SnifferDispatcher struct {
 
 	sniffers []sniffer.Sniffer
 
-	forceDomain *trie.DomainTrie[bool]
-	skipSNI     *trie.DomainTrie[bool]
+	forceDomain *trie.DomainTrie[struct{}]
+	skipSNI     *trie.DomainTrie[struct{}]
 	portRanges  *[]utils.Range[uint16]
 	skipList    *cache.LruCache[string, uint8]
 	rwMux       sync.RWMutex
@@ -183,8 +183,8 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(needSniffer []sniffer.Type, forceDomain *trie.DomainTrie[bool],
-	skipSNI *trie.DomainTrie[bool], ports *[]utils.Range[uint16],
+func NewSnifferDispatcher(needSniffer []sniffer.Type, forceDomain *trie.DomainTrie[struct{}],
+	skipSNI *trie.DomainTrie[struct{}], ports *[]utils.Range[uint16],
 	forceDnsMapping bool, parsePureIp bool) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:          true,

@@ -34,7 +34,7 @@ type Pool struct {
 	offset  netip.Addr
 	cycle   bool
 	mux     sync.Mutex
-	host    *trie.DomainTrie[bool]
+	host    *trie.DomainTrie[struct{}]
 	ipnet   *netip.Prefix
 	store   store
 }
@@ -150,7 +150,7 @@ func (p *Pool) restoreState() {
 
 type Options struct {
 	IPNet *netip.Prefix
-	Host  *trie.DomainTrie[bool]
+	Host  *trie.DomainTrie[struct{}]
 
 	// Size sets the maximum number of entries in memory
 	// and does not work if Persistence is true

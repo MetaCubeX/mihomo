@@ -23,7 +23,7 @@ func TestTrie_Basic(t *testing.T) {
 
 	node := tree.Search("example.com")
 	assert.NotNil(t, node)
-	assert.True(t, node.Data == localIP)
+	assert.True(t, node.Data() == localIP)
 	assert.NotNil(t, tree.Insert("", localIP))
 	assert.Nil(t, tree.Search(""))
 	assert.NotNil(t, tree.Search("localhost"))
@@ -75,7 +75,7 @@ func TestTrie_Priority(t *testing.T) {
 	assertFn := func(domain string, data int) {
 		node := tree.Search(domain)
 		assert.NotNil(t, node)
-		assert.Equal(t, data, node.Data)
+		assert.Equal(t, data, node.Data())
 	}
 
 	for idx, domain := range domains {
