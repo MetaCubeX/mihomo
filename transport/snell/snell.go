@@ -241,6 +241,9 @@ func ReadPacket(r io.Reader, payload []byte) (net.Addr, int, error) {
 		return nil, 0, errors.New("remote address invalid")
 	}
 	uAddr := addr.UDPAddr()
+	if uAddr == nil {
+		return nil, 0, errors.New("parse addr error")
+	}
 
 	length := len(payload)
 	if n-headLen < length {

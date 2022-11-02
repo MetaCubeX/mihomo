@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-var globalFingerprints [][32]byte
+var globalFingerprints = make([][32]byte, 0, 0)
 var mutex sync.Mutex
 
-func verifyPeerCertificateAndFingerprints(fingerprints [][32]byte, insecureSkipVerify bool) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+func verifyPeerCertificateAndFingerprints(fingerprints *[][32]byte, insecureSkipVerify bool) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		if insecureSkipVerify {
 			return nil
@@ -34,7 +34,7 @@ func verifyPeerCertificateAndFingerprints(fingerprints [][32]byte, insecureSkipV
 					return nil
 				} else {
 					fingerprint := sha256.Sum256(cert.Raw)
-					for _, fp := range fingerprints {
+					for _, fp := range *fingerprints {
 						if bytes.Equal(fingerprint[:], fp[:]) {
 							return nil
 						}
@@ -85,10 +85,10 @@ func GetSpecifiedFingerprintTLSConfig(tlsConfig *tls.Config, fingerprint string)
 		if tlsConfig == nil {
 			return &tls.Config{
 				InsecureSkipVerify:    true,
-				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, false),
+				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(&[][32]byte{*fingerprintBytes}, false),
 			}, nil
 		} else {
-			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, tlsConfig.InsecureSkipVerify)
+			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(&[][32]byte{*fingerprintBytes}, tlsConfig.InsecureSkipVerify)
 			tlsConfig.InsecureSkipVerify = true
 			return tlsConfig, nil
 		}
@@ -99,11 +99,11 @@ func GetGlobalFingerprintTLCConfig(tlsConfig *tls.Config) *tls.Config {
 	if tlsConfig == nil {
 		return &tls.Config{
 			InsecureSkipVerify:    true,
-			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(globalFingerprints, false),
+			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(&globalFingerprints, false),
 		}
 	}
 
-	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(globalFingerprints, tlsConfig.InsecureSkipVerify)
+	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(&globalFingerprints, tlsConfig.InsecureSkipVerify)
 	tlsConfig.InsecureSkipVerify = true
 	return tlsConfig
 }
@@ -116,10 +116,10 @@ func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint strin
 		if tlsConfig == nil {
 			return &xtls.Config{
 				InsecureSkipVerify:    true,
-				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, false),
+				VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(&[][32]byte{*fingerprintBytes}, false),
 			}, nil
 		} else {
-			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints([][32]byte{*fingerprintBytes}, tlsConfig.InsecureSkipVerify)
+			tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(&[][32]byte{*fingerprintBytes}, tlsConfig.InsecureSkipVerify)
 			tlsConfig.InsecureSkipVerify = true
 			return tlsConfig, nil
 		}
@@ -130,11 +130,11 @@ func GetGlobalFingerprintXTLCConfig(tlsConfig *xtls.Config) *xtls.Config {
 	if tlsConfig == nil {
 		return &xtls.Config{
 			InsecureSkipVerify:    true,
-			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(globalFingerprints, false),
+			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(&globalFingerprints, false),
 		}
 	}
 
-	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(globalFingerprints, tlsConfig.InsecureSkipVerify)
+	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(&globalFingerprints, tlsConfig.InsecureSkipVerify)
 	tlsConfig.InsecureSkipVerify = true
 	return tlsConfig
 }

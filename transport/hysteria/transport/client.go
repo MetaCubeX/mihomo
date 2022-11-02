@@ -7,7 +7,7 @@ import (
 	"github.com/Dreamacro/clash/transport/hysteria/conns/faketcp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/udp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/wechat"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+	obfsPkg "github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/lucas-clemente/quic-go"
 	"net"
 )
@@ -16,7 +16,7 @@ type ClientTransport struct {
 	Dialer *net.Dialer
 }
 
-func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs.Obfuscator, dialer PacketDialer) (net.PacketConn, error) {
+func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfsPkg.Obfuscator, dialer PacketDialer) (net.PacketConn, error) {
 	if len(proto) == 0 || proto == "udp" {
 		conn, err := dialer.ListenPacket()
 		if err != nil {
@@ -33,12 +33,10 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 		if err != nil {
 			return nil, err
 		}
-		if obfs != nil {
-			oc := wechat.NewObfsWeChatUDPConn(conn, obfs)
-			return oc, nil
-		} else {
-			return conn, nil
+		if obfs == nil {
+			obfs = obfsPkg.NewDummyObfuscator()
 		}
+		return wechat.NewObfsWeChatUDPConn(conn, obfs), nil
 	} else if proto == "faketcp" {
 		var conn *faketcp.TCPConn
 		conn, err := faketcp.Dial("tcp", server)
@@ -62,7 +60,7 @@ type PacketDialer interface {
 	RemoteAddr(host string) (net.Addr, error)
 }
 
-func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfs.Obfuscator, dialer PacketDialer) (quic.Connection, error) {
+func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfsPkg.Obfuscator, dialer PacketDialer) (quic.Connection, error) {
 	serverUDPAddr, err := dialer.RemoteAddr(server)
 	if err != nil {
 		return nil, err

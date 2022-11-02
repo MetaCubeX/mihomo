@@ -15,3 +15,7 @@ func NewTcEBpfProgram(_ []string, _ string) (*TcEBpfProgram, error) {
 func NewRedirEBpfProgram(_ []string, _ uint16, _ string) (*TcEBpfProgram, error) {
 	return nil, fmt.Errorf("system not supported")
 }
+
+func GetAutoDetectInterface() (string, error) {
+	return "", fmt.Errorf("system not supported")
+}

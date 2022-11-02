@@ -13,9 +13,9 @@ const (
 )
 
 func Get(size int) []byte {
-	return DefaultAllocator.Get(size)
+	return defaultAllocator.Get(size)
 }
 
 func Put(buf []byte) error {
-	return DefaultAllocator.Put(buf)
+	return defaultAllocator.Put(buf)
 }

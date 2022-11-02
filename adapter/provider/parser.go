@@ -21,12 +21,13 @@ type healthCheckSchema struct {
 }
 
 type proxyProviderSchema struct {
-	Type        string            `provider:"type"`
-	Path        string            `provider:"path"`
-	URL         string            `provider:"url,omitempty"`
-	Interval    int               `provider:"interval,omitempty"`
-	Filter      string            `provider:"filter,omitempty"`
-	HealthCheck healthCheckSchema `provider:"health-check,omitempty"`
+	Type          string            `provider:"type"`
+	Path          string            `provider:"path"`
+	URL           string            `provider:"url,omitempty"`
+	Interval      int               `provider:"interval,omitempty"`
+	Filter        string            `provider:"filter,omitempty"`
+	ExcludeFilter string            `provider:"exclude-filter,omitempty"`
+	HealthCheck   healthCheckSchema `provider:"health-check,omitempty"`
 }
 
 func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvider, error) {
@@ -61,5 +62,6 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
-	return NewProxySetProvider(name, interval, filter, vehicle, hc)
+	excludeFilter := schema.ExcludeFilter
+	return NewProxySetProvider(name, interval, filter, excludeFilter, vehicle, hc)
 }

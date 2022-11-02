@@ -2,10 +2,7 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/ebpf"
-	"github.com/Dreamacro/clash/listener/autoredir"
-	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/listener/tun/ipstack/commons"
+	"github.com/Dreamacro/clash/listener/sing_tun"
 	"golang.org/x/exp/slices"
 	"net"
 	"sort"
@@ -13,15 +10,16 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/component/ebpf"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/http"
+	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/listener/tproxy"
-	"github.com/Dreamacro/clash/listener/tun"
-	"github.com/Dreamacro/clash/listener/tun/ipstack"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -40,7 +38,7 @@ var (
 	tproxyUDPListener *tproxy.UDPListener
 	mixedListener     *mixed.Listener
 	mixedUDPLister    *socks.UDPListener
-	tunStackListener  ipstack.Stack
+	tunLister         *sing_tun.Listener
 	autoRedirListener *autoredir.Listener
 	autoRedirProgram  *ebpf.TcEBpfProgram
 	tcProgram         *ebpf.TcEBpfProgram
@@ -350,6 +348,9 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 	}()
 
 	if !hasTunConfigChange(tunConf) {
+		if tunLister != nil {
+			tunLister.FlushDefaultInterface()
+		}
 		return
 	}
 
@@ -359,7 +360,7 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 		return
 	}
 
-	tunStackListener, err = tun.New(tunConf, tcpIn, udpIn)
+	tunLister, err = sing_tun.New(*tunConf, tcpIn, udpIn)
 
 	lastTunConf = tunConf
 }
@@ -429,7 +430,7 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 		return
 	}
 
-	defaultRouteInterfaceName, err := commons.GetAutoDetectInterface()
+	defaultRouteInterfaceName, err := ebpf.GetAutoDetectInterface()
 	if err != nil {
 		return
 	}
@@ -538,7 +539,7 @@ func hasTunConfigChange(tunConf *config.Tun) bool {
 		return true
 	}
 
-	if tunConf.TunAddressPrefix.String() != lastTunConf.TunAddressPrefix.String() {
+	if slices.Equal(tunConf.Inet4Address, lastTunConf.Inet4Address) && slices.Equal(tunConf.Inet6Address, lastTunConf.Inet6Address) {
 		return true
 	}
 
@@ -546,16 +547,9 @@ func hasTunConfigChange(tunConf *config.Tun) bool {
 }
 
 func Cleanup(wait bool) {
-	if tunStackListener != nil {
-		_ = tunStackListener.Close()
-		commons.StopDefaultInterfaceChangeMonitor()
-
-		if wait {
-			commons.WaitForTunClose(lastTunConf.Device)
-		}
-
-		commons.CleanupRule()
+	if tunLister != nil {
+		tunLister.Close()
+		tunLister = nil
 	}
-	tunStackListener = nil
 	lastTunConf = nil
 }

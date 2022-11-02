@@ -290,6 +290,7 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 
 	connCount := len(ips)
 	var fallback dialResult
+	var primaryError error
 	for i := 0; i < connCount; i++ {
 		select {
 		case res := <-results:
@@ -303,6 +304,7 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 				}
 			} else {
 				if res.isPrimary {
+					primaryError = res.error
 					preferCount.Add(-1)
 					if preferCount.Load() == 0 && fallback.done && fallback.error == nil {
 						return fallback.Conn, nil
@@ -319,6 +321,14 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 
 	if fallback.done && fallback.error == nil {
 		return fallback.Conn, nil
+	}
+
+	if primaryError != nil {
+		return nil, primaryError
+	}
+
+	if fallback.error != nil {
+		return nil, fallback.error
 	}
 
 	return nil, fmt.Errorf("all ips %v tcp shake hands failed", ips)

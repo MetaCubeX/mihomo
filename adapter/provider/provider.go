@@ -8,6 +8,7 @@ import (
 	"github.com/Dreamacro/clash/component/resource"
 	"github.com/dlclark/regexp2"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
@@ -92,7 +93,7 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
 	if pp.healthCheck.auto() {
-		defer func() { go pp.healthCheck.check() }()
+		defer func() { go pp.healthCheck.lazyCheck() }()
 	}
 }
 
@@ -101,10 +102,18 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	_ = pd.Fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
-	filterReg, err := regexp2.Compile(filter, 0)
+func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+	excludeFilterReg, err := regexp2.Compile(excludeFilter, 0)
 	if err != nil {
-		return nil, fmt.Errorf("invalid filter regex: %w", err)
+		return nil, fmt.Errorf("invalid excludeFilter regex: %w", err)
+	}
+	var filterRegs []*regexp2.Regexp
+	for _, filter := range strings.Split(filter, "`") {
+		filterReg, err := regexp2.Compile(filter, 0)
+		if err != nil {
+			return nil, fmt.Errorf("invalid filter regex: %w", err)
+		}
+		filterRegs = append(filterRegs, filterReg)
 	}
 
 	if hc.auto() {
@@ -116,7 +125,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, veh
 		healthCheck: hc,
 	}
 
-	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, filterReg), proxiesOnUpdate(pd))
+	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, filterRegs, excludeFilterReg), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
 
 	wrapper := &ProxySetProvider{pd}
@@ -212,7 +221,7 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	}
 }
 
-func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp) resource.Parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, excludeFilter string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
@@ -229,17 +238,37 @@ func proxiesParseAndFilter(filter string, filterReg *regexp2.Regexp) resource.Pa
 		}
 
 		proxies := []C.Proxy{}
-		for idx, mapping := range schema.Proxies {
-			name, ok := mapping["name"]
-			mat, _ := filterReg.FindStringMatch(name.(string))
-			if ok && len(filter) > 0 && mat == nil {
-				continue
+		proxiesSet := map[string]struct{}{}
+		for _, filterReg := range filterRegs {
+			for idx, mapping := range schema.Proxies {
+				mName, ok := mapping["name"]
+				if !ok {
+					continue
+				}
+				name, ok := mName.(string)
+				if !ok {
+					continue
+				}
+				if len(excludeFilter) > 0 {
+					if mat, _ := excludeFilterReg.FindStringMatch(name); mat != nil {
+						continue
+					}
+				}
+				if len(filter) > 0 {
+					if mat, _ := filterReg.FindStringMatch(name); mat == nil {
+						continue
+					}
+				}
+				if _, ok := proxiesSet[name]; ok {
+					continue
+				}
+				proxy, err := adapter.ParseProxy(mapping)
+				if err != nil {
+					return nil, fmt.Errorf("proxy %d error: %w", idx, err)
+				}
+				proxiesSet[name] = struct{}{}
+				proxies = append(proxies, proxy)
 			}
-			proxy, err := adapter.ParseProxy(mapping)
-			if err != nil {
-				return nil, fmt.Errorf("proxy %d error: %w", idx, err)
-			}
-			proxies = append(proxies, proxy)
 		}
 
 		if len(proxies) == 0 {

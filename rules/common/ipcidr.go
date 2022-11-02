@@ -35,12 +35,12 @@ func (i *IPCIDR) RuleType() C.RuleType {
 	return C.IPCIDR
 }
 
-func (i *IPCIDR) Match(metadata *C.Metadata) bool {
+func (i *IPCIDR) Match(metadata *C.Metadata) (bool, string) {
 	ip := metadata.DstIP
 	if i.isSourceIP {
 		ip = metadata.SrcIP
 	}
-	return ip.IsValid() && i.ipnet.Contains(ip)
+	return ip.IsValid() && i.ipnet.Contains(ip), i.adapter
 }
 
 func (i *IPCIDR) Adapter() string {
@@ -74,4 +74,4 @@ func NewIPCIDR(s string, adapter string, opts ...IPCIDROption) (*IPCIDR, error) 
 	return ipcidr, nil
 }
 
-var _ C.Rule = (*IPCIDR)(nil)
+//var _ C.Rule = (*IPCIDR)(nil)
