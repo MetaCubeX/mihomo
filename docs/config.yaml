@@ -134,7 +134,7 @@ dns:
   #   配置强制 fallback，优先于 IP 判断，具体分类自行查看 geosite 库
   #   geosite:
   #     - gfw
-  #   配置不需要使用 fallback 的 IP CIDR
+  #   如果不匹配 ipcidr 则使用 nameservers 中的结果
   #   ipcidr:
   #     - 240.0.0.0/4
   #   domain:
@@ -162,14 +162,14 @@ proxies:
     port: 443
     cipher: chacha20-ietf-poly1305
     password: "password"
-    # udp: true
-    # udp-over-tcp: false
-    # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
-                       # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
-                       # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
-                       # UDP 则为双栈解析，获取结果中的第一个 IPv4
-                       # ipv6-prefer 同 ipv4-prefer
-                       # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
+      # udp: true
+      # udp-over-tcp: false
+      # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
+      # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
+      # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
+      # UDP 则为双栈解析，获取结果中的第一个 IPv4
+      # ipv6-prefer 同 ipv4-prefer
+    # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
   - name: "ss2"
     type: ss
     server: server
@@ -391,13 +391,16 @@ proxies:
       path: "/"
       headers:
         Host: example.com
+  
+  #hysteria
   - name: "hysteria"
     type: hysteria
     server: server.com
     port: 443
     auth_str: yourpassword
     # obfs: obfs_str
-    # alpn: h3
+    # alpn:
+    #   - h3
     protocol: udp # 支持 udp/wechat-video/faketcp
     up: "30 Mbps" # 若不写单位，默认为 Mbps
     down: "200 Mbps" # 若不写单位，默认为 Mbps
@@ -538,3 +541,29 @@ rules:
   - DOMAIN-KEYWORD,google,ss1
   - IP-CIDR,1.1.1.1/32,ss1
   - IP-CIDR6,2409::/64,DIRECT
+  - SUB-RULE,(OR,((NETWORK,TCP),(NETWORK,UDP))),sub-rule-name1 # 当满足条件是 TCP 或 UDP 流量时，使用名为 sub-rule-name1 当规则集
+  - SUB-RULE,(AND,((NETWORK,UDP))),sub-rule-name2
+# 定义多个子规则集，规则将以分叉匹配，使用 SUB-RULE 使用
+#                                               google.com(not match)--> baidu.com(match)
+#                                                /                                ｜
+#                                               /                                 ｜
+#  https://baidu.com  --> rule1 --> rule2 --> sub-rule-name1(match tcp)          使用 DIRECT
+#
+#
+#                                              google.com(not match)--> baidu.com(not match)
+#                                                /                            ｜
+#                                               /                             ｜
+#  dns 1.1.1.1  --> rule1 --> rule2 --> sub-rule-name1(match udp)         sub-rule-name2(match udp)
+#                                                                             ｜
+#                                                                             ｜
+#                                                                 使用 REJECT <-- 1.1.1.1/32(match)
+#
+
+sub-rules:
+  sub-rule-name1:
+    - DOMAIN,google.com,ss1
+    - DOMAIN,baidu.com,DIRECT
+  sub-rule-name2:
+    - IP-CIDR,1.1.1.1/32,REJECT
+    - IP-CIDR,8.8.8.8/32,ss1
+    - DOMAIN,dns.alidns.com,REJECT

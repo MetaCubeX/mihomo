@@ -62,16 +62,16 @@ func TestPool_Basic(t *testing.T) {
 		last := pool.Lookup("bar.com")
 		bar, exist := pool.LookBack(last)
 
-		assert.True(t, first == netip.AddrFrom4([4]byte{192, 168, 0, 3}))
-		assert.True(t, pool.Lookup("foo.com") == netip.AddrFrom4([4]byte{192, 168, 0, 3}))
-		assert.True(t, last == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+		assert.True(t, first == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+		assert.True(t, pool.Lookup("foo.com") == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+		assert.True(t, last == netip.AddrFrom4([4]byte{192, 168, 0, 5}))
 		assert.True(t, exist)
 		assert.Equal(t, bar, "bar.com")
 		assert.True(t, pool.Gateway() == netip.AddrFrom4([4]byte{192, 168, 0, 1}))
 		assert.True(t, pool.Broadcast() == netip.AddrFrom4([4]byte{192, 168, 0, 15}))
 		assert.Equal(t, pool.IPNet().String(), ipnet.String())
-		assert.True(t, pool.Exist(netip.AddrFrom4([4]byte{192, 168, 0, 4})))
-		assert.False(t, pool.Exist(netip.AddrFrom4([4]byte{192, 168, 0, 5})))
+		assert.True(t, pool.Exist(netip.AddrFrom4([4]byte{192, 168, 0, 5})))
+		assert.False(t, pool.Exist(netip.AddrFrom4([4]byte{192, 168, 0, 6})))
 		assert.False(t, pool.Exist(netip.MustParseAddr("::1")))
 	}
 }
@@ -90,16 +90,16 @@ func TestPool_BasicV6(t *testing.T) {
 		last := pool.Lookup("bar.com")
 		bar, exist := pool.LookBack(last)
 
-		assert.True(t, first == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8803"))
-		assert.True(t, pool.Lookup("foo.com") == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8803"))
-		assert.True(t, last == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
+		assert.True(t, first == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
+		assert.True(t, pool.Lookup("foo.com") == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
+		assert.True(t, last == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8805"))
 		assert.True(t, exist)
 		assert.Equal(t, bar, "bar.com")
 		assert.True(t, pool.Gateway() == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8801"))
 		assert.True(t, pool.Broadcast() == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8bff"))
 		assert.Equal(t, pool.IPNet().String(), ipnet.String())
-		assert.True(t, pool.Exist(netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804")))
-		assert.False(t, pool.Exist(netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8805")))
+		assert.True(t, pool.Exist(netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8805")))
+		assert.False(t, pool.Exist(netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8806")))
 		assert.False(t, pool.Exist(netip.MustParseAddr("127.0.0.1")))
 	}
 }
@@ -116,7 +116,7 @@ func TestPool_CycleUsed(t *testing.T) {
 	for _, pool := range pools {
 		foo := pool.Lookup("foo.com")
 		bar := pool.Lookup("bar.com")
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 9; i++ {
 			pool.Lookup(fmt.Sprintf("%d.com", i))
 		}
 		baz := pool.Lookup("baz.com")
@@ -198,8 +198,8 @@ func TestPool_Clone(t *testing.T) {
 
 	first := pool.Lookup("foo.com")
 	last := pool.Lookup("bar.com")
-	assert.True(t, first == netip.AddrFrom4([4]byte{192, 168, 0, 3}))
-	assert.True(t, last == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+	assert.True(t, first == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+	assert.True(t, last == netip.AddrFrom4([4]byte{192, 168, 0, 5}))
 
 	newPool, _ := New(Options{
 		IPNet: &ipnet,

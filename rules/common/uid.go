@@ -71,10 +71,10 @@ func (u *Uid) RuleType() C.RuleType {
 	return C.Uid
 }
 
-func (u *Uid) Match(metadata *C.Metadata) bool {
+func (u *Uid) Match(metadata *C.Metadata) (bool, string) {
 	srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
 	if err != nil {
-		return false
+		return false, ""
 	}
 	var uid int32
 	if metadata.Uid != nil {
@@ -83,15 +83,15 @@ func (u *Uid) Match(metadata *C.Metadata) bool {
 		metadata.Uid = &uid
 	} else {
 		log.Warnln("[UID] could not get uid from %s", metadata.String())
-		return false
+		return false, ""
 	}
 
 	for _, _uid := range u.uids {
 		if _uid.Contains(uid) {
-			return true
+			return true, u.adapter
 		}
 	}
-	return false
+	return false, ""
 }
 
 func (u *Uid) Adapter() string {

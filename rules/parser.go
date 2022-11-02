@@ -8,7 +8,7 @@ import (
 	RP "github.com/Dreamacro/clash/rules/provider"
 )
 
-func ParseRule(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
+func ParseRule(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error) {
 	switch tp {
 	case "DOMAIN":
 		parsed = RC.NewDomain(payload, target)
@@ -45,6 +45,8 @@ func ParseRule(tp, payload, target string, params []string) (parsed C.Rule, pars
 		parsed, parseErr = RC.NewUid(payload, target)
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
+	case "SUB-RULE":
+		parsed, parseErr = logic.NewSubRule(payload, target, subRules, ParseRule)
 	case "AND":
 		parsed, parseErr = logic.NewAND(payload, target, ParseRule)
 	case "OR":
@@ -53,7 +55,7 @@ func ParseRule(tp, payload, target string, params []string) (parsed C.Rule, pars
 		parsed, parseErr = logic.NewNOT(payload, target, ParseRule)
 	case "RULE-SET":
 		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RP.NewRuleSet(payload, target, noResolve, ParseRule)
+		parsed, parseErr = RP.NewRuleSet(payload, target, noResolve)
 	case "MATCH":
 		parsed = RC.NewMatch(target)
 		parseErr = nil

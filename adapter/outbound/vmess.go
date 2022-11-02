@@ -52,6 +52,9 @@ type VmessOption struct {
 	GrpcOpts            GrpcOptions  `proxy:"grpc-opts,omitempty"`
 	WSOpts              WSOptions    `proxy:"ws-opts,omitempty"`
 	PacketAddr          bool         `proxy:"packet-addr,omitempty"`
+	XUDP                bool         `proxy:"xudp,omitempty"`
+	PacketEncoding      string       `proxy:"packet-encoding,omitempty"`
+	GlobalPadding       bool         `proxy:"global-padding,omitempty"`
 	AuthenticatedLength bool         `proxy:"authenticated-length,omitempty"`
 }
 
@@ -197,7 +200,11 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		return nil, err
 	}
 	if metadata.NetWork == C.UDP {
-		return v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		if v.option.XUDP {
+			return v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		} else {
+			return v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		}
 	} else {
 		return v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 	}
@@ -244,6 +251,8 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	}
 
 	if v.option.PacketAddr {
+		_metadata := *metadata // make a copy
+		metadata = &_metadata
 		metadata.Host = packetaddr.SeqPacketMagicAddress
 		metadata.DstPort = "443"
 	}
@@ -257,7 +266,11 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}
 		defer safeConnClose(c, err)
 
-		c, err = v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		if v.option.XUDP {
+			c, err = v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		} else {
+			c, err = v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		}
 	} else {
 		c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
 		if err != nil {
@@ -274,7 +287,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	}
 
 	if v.option.PacketAddr {
-		return newPacketConn(&threadSafePacketConn{PacketConn: packetaddr.NewBindClient(c)}, v), nil
+		return newPacketConn(&threadSafePacketConn{PacketConn: packetaddr.NewBindConn(c)}, v), nil
 	} else if pc, ok := c.(net.PacketConn); ok {
 		return newPacketConn(&threadSafePacketConn{PacketConn: pc}, v), nil
 	}
@@ -284,7 +297,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (v *Vmess) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if v.option.PacketAddr {
-		return newPacketConn(&threadSafePacketConn{PacketConn: packetaddr.NewBindClient(c)}, v), nil
+		return newPacketConn(&threadSafePacketConn{PacketConn: packetaddr.NewBindConn(c)}, v), nil
 	} else if pc, ok := c.(net.PacketConn); ok {
 		return newPacketConn(&threadSafePacketConn{PacketConn: pc}, v), nil
 	}
@@ -299,12 +312,25 @@ func (v *Vmess) SupportUOT() bool {
 func NewVmess(option VmessOption) (*Vmess, error) {
 	security := strings.ToLower(option.Cipher)
 	var options []vmess.ClientOption
+	if option.GlobalPadding {
+		options = append(options, vmess.ClientWithGlobalPadding())
+	}
 	if option.AuthenticatedLength {
 		options = append(options, vmess.ClientWithAuthenticatedLength())
 	}
 	client, err := vmess.NewClient(option.UUID, security, option.AlterID, options...)
 	if err != nil {
 		return nil, err
+	}
+
+	switch option.PacketEncoding {
+	case "packetaddr", "packet":
+		option.PacketAddr = true
+	case "xudp":
+		option.XUDP = true
+	}
+	if option.XUDP {
+		option.PacketAddr = false
 	}
 
 	switch option.Network {

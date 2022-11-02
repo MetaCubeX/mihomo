@@ -34,12 +34,13 @@ func (u *URLTest) Now() string {
 
 // DialContext implements C.ProxyAdapter
 func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
-	c, err = u.fast(true).DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
+	proxy := u.fast(true)
+	c, err = proxy.DialContext(ctx, metadata, u.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(u)
 		u.onDialSuccess()
 	} else {
-		u.onDialFailed()
+		u.onDialFailed(proxy.Type(), err)
 	}
 	return c, err
 }
@@ -55,12 +56,12 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 }
 
 // Unwrap implements C.ProxyAdapter
-func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
-	return u.fast(true)
+func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
+	return u.fast(touch)
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
-	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
+	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
@@ -89,6 +90,9 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		return u.fastNode, nil
 	})
+	if shared && touch { // a shared fastSingle.Do() may cause providers untouched, so we touch them again
+		u.Touch()
+	}
 
 	return elm
 }

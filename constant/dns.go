@@ -16,6 +16,7 @@ const (
 	DNSNormal DNSMode = iota
 	DNSFakeIP
 	DNSMapping
+	DNSHosts
 )
 
 type DNSMode int
@@ -64,6 +65,8 @@ func (e DNSMode) String() string {
 		return "fake-ip"
 	case DNSMapping:
 		return "redir-host"
+	case DNSHosts:
+		return "hosts"
 	default:
 		return "unknown"
 	}

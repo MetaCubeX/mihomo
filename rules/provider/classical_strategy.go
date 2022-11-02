@@ -16,7 +16,7 @@ type classicalStrategy struct {
 
 func (c *classicalStrategy) Match(metadata *C.Metadata) bool {
 	for _, rule := range c.rules {
-		if rule.Match(metadata) {
+		if m, _ := rule.Match(metadata); m {
 			return true
 		}
 	}
@@ -66,13 +66,13 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 	return "", "", nil
 }
 
-func NewClassicalStrategy(parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) *classicalStrategy {
+func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
-		case "MATCH":
+		case "MATCH", "SUB-RULE":
 			return nil, fmt.Errorf("unsupported rule type on rule-set")
 		default:
-			return parse(tp, payload, target, params)
+			return parse(tp, payload, target, params, nil)
 		}
 	}}
 }
