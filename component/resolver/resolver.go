@@ -127,7 +127,7 @@ func ResolveAllIPv6WithResolver(host string, r Resolver) ([]netip.Addr, error) {
 	}
 
 	if node := DefaultHosts.Search(host); node != nil {
-		if ip := node.Data; ip.Is6() {
+		if ip := node.Data(); ip.Is6() {
 			return []netip.Addr{ip}, nil
 		}
 	}
@@ -161,8 +161,8 @@ func ResolveAllIPv6WithResolver(host string, r Resolver) ([]netip.Addr, error) {
 
 func ResolveAllIPv4WithResolver(host string, r Resolver) ([]netip.Addr, error) {
 	if node := DefaultHosts.Search(host); node != nil {
-		if ip := node.Data; ip.Is4() {
-			return []netip.Addr{node.Data}, nil
+		if ip := node.Data(); ip.Is4() {
+			return []netip.Addr{node.Data()}, nil
 		}
 	}
 
@@ -200,7 +200,7 @@ func ResolveAllIPv4WithResolver(host string, r Resolver) ([]netip.Addr, error) {
 
 func ResolveAllIPWithResolver(host string, r Resolver) ([]netip.Addr, error) {
 	if node := DefaultHosts.Search(host); node != nil {
-		return []netip.Addr{node.Data}, nil
+		return []netip.Addr{node.Data()}, nil
 	}
 
 	ip, err := netip.ParseAddr(host)
