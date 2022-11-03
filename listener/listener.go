@@ -363,7 +363,7 @@ func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *
 		return
 	}
 
-	tunLister, err = sing_tun.New(*tunConf, tcpIn, udpIn)
+	tunLister, err = sing_tun.New(tunConf, tcpIn, udpIn)
 }
 
 func ReCreateRedirToTun(ifaceNames []string) {
