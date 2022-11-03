@@ -203,11 +203,14 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	if err != nil {
 		return
 	}
-	err = l.tunStack.Start()
 
+	err = l.tunStack.Start()
 	if err != nil {
 		return
 	}
+
+	l.openAndroidHotspot(tunOptions)
+
 	log.Infoln("[TUN] Tun adapter listening at: %s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.Stack)
 	return
