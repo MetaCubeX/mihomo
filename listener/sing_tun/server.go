@@ -65,7 +65,7 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
-func New(options *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (l *Listener, err error) {
+func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (l *Listener, err error) {
 	tunName := options.Device
 	if tunName == "" {
 		tunName = CalculateInterfaceName(InterfaceName)
@@ -122,7 +122,7 @@ func New(options *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 	}
 	l = &Listener{
 		closed:  false,
-		options: *options,
+		options: options,
 		handler: handler,
 	}
 	defer func() {

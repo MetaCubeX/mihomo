@@ -259,7 +259,10 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 }
 
 func updateTun(tun *config.Tun) {
-	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
+	if tun == nil {
+		return
+	}
+	P.ReCreateTun(*tun, tunnel.TCPIn(), tunnel.UDPIn())
 	P.ReCreateRedirToTun(tun.RedirectToTun)
 }
 
