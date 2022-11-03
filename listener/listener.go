@@ -26,7 +26,6 @@ import (
 var (
 	allowLan    = false
 	bindAddress = "*"
-	lastTunConf *config.Tun
 	inboundTfo  = false
 
 	socksListener     *socks.Listener
@@ -52,6 +51,8 @@ var (
 	tunMux       sync.Mutex
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
+
+	lastTunConf config.Tun
 )
 
 type Ports struct {
@@ -63,12 +64,12 @@ type Ports struct {
 }
 
 func GetTunConf() config.Tun {
-	if lastTunConf == nil {
+	if tunLister == nil {
 		return config.Tun{
 			Enable: false,
 		}
 	}
-	return *lastTunConf
+	return tunLister.Config()
 }
 
 func AllowLan() bool {
@@ -335,7 +336,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf *config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer func() {
 		lastTunConf = tunConf
@@ -383,11 +384,13 @@ func ReCreateRedirToTun(ifaceNames []string) {
 		return
 	}
 
-	if lastTunConf == nil || !lastTunConf.Enable {
+	tunConf := GetTunConf()
+
+	if !tunConf.Enable {
 		return
 	}
 
-	program, err := ebpf.NewTcEBpfProgram(nicArr, lastTunConf.Device)
+	program, err := ebpf.NewTcEBpfProgram(nicArr, tunConf.Device)
 	if err != nil {
 		log.Errorln("Attached tc ebpf program error: %v", err)
 		return
@@ -509,8 +512,12 @@ func genAddr(host string, port int, allowLan bool) string {
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-func hasTunConfigChange(tunConf *config.Tun) bool {
-	if lastTunConf == nil {
+func hasTunConfigChange(tunConf config.Tun) bool {
+	if lastTunConf.Enable != tunConf.Enable ||
+		lastTunConf.Device != tunConf.Device ||
+		lastTunConf.Stack != tunConf.Stack ||
+		lastTunConf.AutoRoute != tunConf.AutoRoute ||
+		lastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface {
 		return true
 	}
 
@@ -532,14 +539,6 @@ func hasTunConfigChange(tunConf *config.Tun) bool {
 		}
 	}
 
-	if lastTunConf.Enable != tunConf.Enable ||
-		lastTunConf.Device != tunConf.Device ||
-		lastTunConf.Stack != tunConf.Stack ||
-		lastTunConf.AutoRoute != tunConf.AutoRoute ||
-		lastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface {
-		return true
-	}
-
 	if slices.Equal(tunConf.Inet4Address, lastTunConf.Inet4Address) && slices.Equal(tunConf.Inet6Address, lastTunConf.Inet6Address) {
 		return true
 	}
@@ -552,5 +551,5 @@ func Cleanup(wait bool) {
 		tunLister.Close()
 		tunLister = nil
 	}
-	lastTunConf = nil
+	lastTunConf = config.Tun{}
 }
