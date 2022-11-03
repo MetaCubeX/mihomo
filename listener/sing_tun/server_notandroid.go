@@ -9,3 +9,4 @@ import (
 func (l *Listener) buildAndroidRules(tunOptions *tun.Options) error {
 	return nil
 }
+func (l *Listener) openAndroidHotspot(tunOptions tun.Options) {}
