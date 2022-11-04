@@ -35,6 +35,10 @@ type HTTPVehicle struct {
 	path string
 }
 
+func (h *HTTPVehicle) Url() string {
+	return h.url
+}
+
 func (h *HTTPVehicle) Type() types.VehicleType {
 	return types.HTTP
 }
