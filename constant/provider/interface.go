@@ -66,9 +66,9 @@ type Provider interface {
 type ProxyProvider interface {
 	Provider
 	Proxies() []constant.Proxy
-	// ProxiesWithTouch is used to inform the provider that the proxy is actually being used while getting the list of proxies.
+	// Touch is used to inform the provider that the proxy is actually being used while getting the list of proxies.
 	// Commonly used in DialContext and DialPacketConn
-	ProxiesWithTouch() []constant.Proxy
+	Touch()
 	HealthCheck()
 }
 

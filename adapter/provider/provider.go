@@ -78,9 +78,8 @@ func (pp *proxySetProvider) Proxies() []C.Proxy {
 	return pp.proxies
 }
 
-func (pp *proxySetProvider) ProxiesWithTouch() []C.Proxy {
+func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
-	return pp.Proxies()
 }
 
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
@@ -205,9 +204,8 @@ func (cp *compatibleProvider) Proxies() []C.Proxy {
 	return cp.proxies
 }
 
-func (cp *compatibleProvider) ProxiesWithTouch() []C.Proxy {
+func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
-	return cp.Proxies()
 }
 
 func stopCompatibleProvider(pd *CompatibleProvider) {
