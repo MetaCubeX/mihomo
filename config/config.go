@@ -213,7 +213,6 @@ type Experimental struct {
 // Config is clash config manager
 type Config struct {
 	General       *General
-	Tun           *Tun
 	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
@@ -496,11 +495,10 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
-	tunCfg, err := parseTun(rawCfg.Tun, config.General, dnsCfg)
+	err = parseTun(rawCfg.Tun, config.General, dnsCfg)
 	if err != nil {
 		return nil, err
 	}
-	config.Tun = tunCfg
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
@@ -1126,7 +1124,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 	return users
 }
 
-func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
+func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) error {
 	var dnsHijack []netip.AddrPort
 
 	for _, d := range rawTun.DNSHijack {
@@ -1136,7 +1134,7 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		d = strings.Replace(d, "any", "0.0.0.0", 1)
 		addrPort, err := netip.ParseAddrPort(d)
 		if err != nil {
-			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
+			return fmt.Errorf("parse dns-hijack url error: %w", err)
 		}
 
 		dnsHijack = append(dnsHijack, addrPort)
@@ -1150,7 +1148,7 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 	}
 	tunAddressPrefix = netip.PrefixFrom(tunAddressPrefix.Addr(), 30)
 
-	return &Tun{
+	general.Tun = Tun{
 		Enable:              rawTun.Enable,
 		Device:              rawTun.Device,
 		Stack:               rawTun.Stack,
@@ -1174,7 +1172,9 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) (*Tun, error) {
 		ExcludePackage:         rawTun.ExcludePackage,
 		EndpointIndependentNat: rawTun.EndpointIndependentNat,
 		UDPTimeout:             rawTun.UDPTimeout,
-	}, nil
+	}
+
+	return nil
 }
 
 func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {

@@ -52,7 +52,7 @@ var (
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
 
-	lastTunConf config.Tun
+	LastTunConf config.Tun
 )
 
 type Ports struct {
@@ -339,7 +339,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 func ReCreateTun(tunConf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tunMux.Lock()
 	defer func() {
-		lastTunConf = tunConf
+		LastTunConf = tunConf
 		tunMux.Unlock()
 	}()
 
@@ -351,7 +351,7 @@ func ReCreateTun(tunConf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *i
 		}
 	}()
 
-	if !hasTunConfigChange(tunConf) {
+	if !hasTunConfigChange(&tunConf) {
 		if tunLister != nil {
 			tunLister.FlushDefaultInterface()
 		}
@@ -512,34 +512,83 @@ func genAddr(host string, port int, allowLan bool) string {
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-func hasTunConfigChange(tunConf config.Tun) bool {
-	if lastTunConf.Enable != tunConf.Enable ||
-		lastTunConf.Device != tunConf.Device ||
-		lastTunConf.Stack != tunConf.Stack ||
-		lastTunConf.AutoRoute != tunConf.AutoRoute ||
-		lastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface {
+func hasTunConfigChange(tunConf *config.Tun) bool {
+	if LastTunConf.Enable != tunConf.Enable ||
+		LastTunConf.Device != tunConf.Device ||
+		LastTunConf.Stack != tunConf.Stack ||
+		LastTunConf.AutoRoute != tunConf.AutoRoute ||
+		LastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface ||
+		LastTunConf.MTU != tunConf.MTU ||
+		LastTunConf.StrictRoute != tunConf.StrictRoute ||
+		LastTunConf.EndpointIndependentNat != tunConf.EndpointIndependentNat ||
+		LastTunConf.UDPTimeout != tunConf.UDPTimeout {
 		return true
 	}
 
-	if len(lastTunConf.DNSHijack) != len(tunConf.DNSHijack) {
+	if len(LastTunConf.DNSHijack) != len(tunConf.DNSHijack) {
 		return true
 	}
-
-	sort.Slice(lastTunConf.DNSHijack, func(i, j int) bool {
-		return lastTunConf.DNSHijack[i].Addr().Less(lastTunConf.DNSHijack[j].Addr())
-	})
 
 	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
 		return tunConf.DNSHijack[i].Addr().Less(tunConf.DNSHijack[j].Addr())
 	})
 
-	for i, dns := range tunConf.DNSHijack {
-		if dns != lastTunConf.DNSHijack[i] {
-			return true
-		}
-	}
+	sort.Slice(tunConf.Inet4Address, func(i, j int) bool {
+		return tunConf.Inet4Address[i].Build().String() < tunConf.Inet4Address[j].Build().String()
+	})
 
-	if slices.Equal(tunConf.Inet4Address, lastTunConf.Inet4Address) && slices.Equal(tunConf.Inet6Address, lastTunConf.Inet6Address) {
+	sort.Slice(tunConf.Inet6Address, func(i, j int) bool {
+		return tunConf.Inet6Address[i].Build().String() < tunConf.Inet6Address[j].Build().String()
+	})
+
+	sort.Slice(tunConf.Inet4RouteAddress, func(i, j int) bool {
+		return tunConf.Inet4RouteAddress[i].Build().String() < tunConf.Inet4RouteAddress[j].Build().String()
+	})
+
+	sort.Slice(tunConf.Inet6RouteAddress, func(i, j int) bool {
+		return tunConf.Inet6RouteAddress[i].Build().String() < tunConf.Inet6RouteAddress[j].Build().String()
+	})
+
+	sort.Slice(tunConf.IncludeUID, func(i, j int) bool {
+		return tunConf.IncludeUID[i] < tunConf.IncludeUID[j]
+	})
+
+	sort.Slice(tunConf.IncludeUIDRange, func(i, j int) bool {
+		return tunConf.IncludeUIDRange[i] < tunConf.IncludeUIDRange[j]
+	})
+
+	sort.Slice(tunConf.ExcludeUID, func(i, j int) bool {
+		return tunConf.ExcludeUID[i] < tunConf.ExcludeUID[j]
+	})
+
+	sort.Slice(tunConf.ExcludeUIDRange, func(i, j int) bool {
+		return tunConf.ExcludeUIDRange[i] < tunConf.ExcludeUIDRange[j]
+	})
+
+	sort.Slice(tunConf.IncludeAndroidUser, func(i, j int) bool {
+		return tunConf.IncludeAndroidUser[i] < tunConf.IncludeAndroidUser[j]
+	})
+
+	sort.Slice(tunConf.IncludePackage, func(i, j int) bool {
+		return tunConf.IncludePackage[i] < tunConf.IncludePackage[j]
+	})
+
+	sort.Slice(tunConf.ExcludePackage, func(i, j int) bool {
+		return tunConf.ExcludePackage[i] < tunConf.ExcludePackage[j]
+	})
+
+	if !slices.Equal(tunConf.DNSHijack, LastTunConf.DNSHijack) ||
+		!slices.Equal(tunConf.Inet4Address, LastTunConf.Inet4Address) ||
+		!slices.Equal(tunConf.Inet6Address, LastTunConf.Inet6Address) ||
+		!slices.Equal(tunConf.Inet4RouteAddress, LastTunConf.Inet4RouteAddress) ||
+		!slices.Equal(tunConf.Inet6RouteAddress, LastTunConf.Inet6RouteAddress) ||
+		!slices.Equal(tunConf.IncludeUID, LastTunConf.IncludeUID) ||
+		!slices.Equal(tunConf.IncludeUIDRange, LastTunConf.IncludeUIDRange) ||
+		!slices.Equal(tunConf.ExcludeUID, LastTunConf.ExcludeUID) ||
+		!slices.Equal(tunConf.ExcludeUIDRange, LastTunConf.ExcludeUIDRange) ||
+		!slices.Equal(tunConf.IncludeAndroidUser, LastTunConf.IncludeAndroidUser) ||
+		!slices.Equal(tunConf.IncludePackage, LastTunConf.IncludePackage) ||
+		!slices.Equal(tunConf.ExcludePackage, LastTunConf.ExcludePackage) {
 		return true
 	}
 
@@ -551,5 +600,5 @@ func Cleanup(wait bool) {
 		tunLister.Close()
 		tunLister = nil
 	}
-	lastTunConf = config.Tun{}
+	LastTunConf = config.Tun{}
 }
