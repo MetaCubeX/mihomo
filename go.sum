@@ -8,6 +8,8 @@ dmitri.shuralyov.com/service/change v0.0.0-20181023043359-a85b471d5412/go.mod h1
 dmitri.shuralyov.com/state v0.0.0-20180228185332-28bcc343414c/go.mod h1:0PRwlb0D6DFvNNtx+9ybjezNCa8XF0xaYcETyp6rHWU=
 git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc h1:B1vmR4cwDjJQ6YM8NkuXmt9vIYOdV/+qA+F3UAFE3YY=
+github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc/go.mod h1:1u3pjXA9HmH7kRiBJqM3C/zPxrxnCLd3svmqtub/RFU=
 github.com/ajg/form v1.5.1 h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=
 github.com/ajg/form v1.5.1/go.mod h1:uL1WgH+h2mgNtvBq0339dVnzXdBETtL2LeUXaIv25UY=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=
@@ -187,8 +189,6 @@ github.com/sagernet/sing v0.0.0-20220929000216-9a83e35b7186 h1:ZDlgH6dTozS3ODaYq
 github.com/sagernet/sing v0.0.0-20220929000216-9a83e35b7186/go.mod h1:zvgDYKI+vCAW9RyfyrKTgleI+DOa8lzHMPC7VZo3OL4=
 github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6 h1:JJfDeYYhWunvtxsU/mOVNTmFQmnzGx9dY034qG6G3g4=
 github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6/go.mod h1:EX3RbZvrwAkPI2nuGa78T2iQXmrkT+/VQtskjou42xM=
-github.com/sagernet/sing-tun v0.0.0-20221012082254-488c3b75f6fd h1:TtoZDwg09Cpqi+gCmCtL6w4oEUZ5lHz+vHIjdr1UBNY=
-github.com/sagernet/sing-tun v0.0.0-20221012082254-488c3b75f6fd/go.mod h1:1u3pjXA9HmH7kRiBJqM3C/zPxrxnCLd3svmqtub/RFU=
 github.com/sagernet/sing-vmess v0.0.0-20220921140858-b6a1bdee672f h1:xyJ3Wbibcug4DxLi/FCHX2Td667SfieyZv645b8+eEE=
 github.com/sagernet/sing-vmess v0.0.0-20220921140858-b6a1bdee672f/go.mod h1:bwhAdSNET1X+j9DOXGj9NIQR39xgcWIk1rOQ9lLD+gM=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
