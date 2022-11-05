@@ -42,6 +42,8 @@ require (
 
 replace github.com/lucas-clemente/quic-go => github.com/tobyxdd/quic-go v0.28.1-0.20220706211558-7780039ad599
 
+replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc
+
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/cheekybits/genny v1.0.0 // indirect
