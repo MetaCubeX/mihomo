@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"github.com/Dreamacro/clash/component/resource"
 	"github.com/Dreamacro/clash/log"
 	"github.com/dlclark/regexp2"
-	"golang.org/x/net/context"
 	"net/http"
 	"runtime"
 	"strings"
