@@ -7,10 +7,10 @@ import (
 )
 
 type SubscriptionInfo struct {
-	Upload   *int
-	Download *int
-	Total    *int
-	Expire   *int
+	Upload   uint64
+	Download uint64
+	Total    uint64
+	Expire   uint64
 }
 
 func NewSubscriptionInfo(str string) (si *SubscriptionInfo, err error) {
@@ -24,31 +24,34 @@ func NewSubscriptionInfo(str string) (si *SubscriptionInfo, err error) {
 		return nil, err
 	}
 	group := match.Groups()
-	tmp, err := strconv.Atoi(group[1].String())
+	si.Upload, err = str2uint64(group[1].String())
 	if err != nil {
 		return nil, err
 	}
-	si.Upload = &tmp
-	tmp, err = strconv.Atoi(group[2].String())
+
+	si.Download, err = str2uint64(group[2].String())
 	if err != nil {
 		return nil, err
 	}
-	si.Download = &tmp
-	tmp, err = strconv.Atoi(group[3].String())
+
+	si.Total, err = str2uint64(group[3].String())
 	if err != nil {
 		return nil, err
 	}
-	si.Total = &tmp
 
 	match, _ = reExpire.FindStringMatch(str)
 	if match != nil {
 		group = match.Groups()
-		tmp, err = strconv.Atoi(group[1].String())
+		si.Expire, err = str2uint64(group[1].String())
 		if err != nil {
 			return nil, err
 		}
-		si.Expire = &tmp
 	}
 
 	return
+}
+
+func str2uint64(str string) (uint64, error) {
+	i, err := strconv.ParseInt(str, 10, 64)
+	return uint64(i), err
 }
