@@ -7,10 +7,10 @@ import (
 )
 
 type SubscriptionInfo struct {
-	Upload   uint64
-	Download uint64
-	Total    uint64
-	Expire   uint64
+	Upload   int64
+	Download int64
+	Total    int64
+	Expire   int64
 }
 
 func NewSubscriptionInfo(str string) (si *SubscriptionInfo, err error) {
@@ -51,7 +51,7 @@ func NewSubscriptionInfo(str string) (si *SubscriptionInfo, err error) {
 	return
 }
 
-func str2uint64(str string) (uint64, error) {
+func str2uint64(str string) (int64, error) {
 	i, err := strconv.ParseInt(str, 10, 64)
-	return uint64(i), err
+	return i, err
 }
