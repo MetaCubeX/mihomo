@@ -42,7 +42,7 @@ tun:
   enable: false
   stack: system # gvisor / lwip
   dns-hijack:
-    - 198.18.0.2:53 # 需要劫持的 DNS
+    - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
   # auto-route: true # 配置路由表
   # mtu: 9000 # 最大传输单元
@@ -440,6 +440,16 @@ proxies:
     #ca_str: "xyz"
     #disable_mtu_discovery: false
     # fingerprint: xxxx
+
+  - name: "wg"
+    type: wireguard
+    server: 162.159.192.1
+    port: 2480
+    ip: 172.16.0.2
+    ipv6: fd01:5ca1:ab1e:80fa:ab85:6eea:213f:f4a5
+    private-key: eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=
+    public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
+    udp: true
 
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
