@@ -19,7 +19,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/sing"
 
-	wireguard "github.com/MetaCubeX/sing-wireguard"
+	wireguard "github.com/metacubex/sing-wireguard"
 
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/debug"

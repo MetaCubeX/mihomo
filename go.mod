@@ -3,7 +3,6 @@ module github.com/Dreamacro/clash
 go 1.19
 
 require (
-	github.com/MetaCubeX/sing-wireguard v0.0.0-20221109081324-ec09c458d37a
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
 	github.com/database64128/tfo-go v1.1.2
@@ -18,6 +17,7 @@ require (
 	github.com/insomniacslk/dhcp v0.0.0-20221001123530-5308ebe5334c
 	github.com/lucas-clemente/quic-go v0.29.1
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
+	github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
