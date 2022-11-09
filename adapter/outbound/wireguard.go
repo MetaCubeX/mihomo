@@ -43,7 +43,7 @@ type WireGuardOption struct {
 	Name         string `proxy:"name"`
 	Server       string `proxy:"server"`
 	Port         int    `proxy:"port"`
-	Ip           string `proxy:"ip"`
+	Ip           string `proxy:"ip,omitempty"`
 	Ipv6         string `proxy:"ipv6,omitempty"`
 	PrivateKey   string `proxy:"private-key"`
 	PublicKey    string `proxy:"public-key"`
@@ -94,16 +94,15 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	peerAddr.Port = uint16(option.Port)
 	outbound.bind = wireguard.NewClientBind(context.Background(), outbound.dialer, peerAddr, reserved)
 	localPrefixes := make([]netip.Prefix, 0, 2)
-	if len(option.Ip) == 0 {
-		return nil, E.New("missing local address")
-	}
-	if !strings.Contains(option.Ip, "/") {
-		option.Ip = option.Ip + "/32"
-	}
-	if prefix, err := netip.ParsePrefix(option.Ip); err == nil {
-		localPrefixes = append(localPrefixes, prefix)
-	} else {
-		return nil, E.Cause(err, "ip address parse error")
+	if len(option.Ip) > 0 {
+		if !strings.Contains(option.Ip, "/") {
+			option.Ip = option.Ip + "/32"
+		}
+		if prefix, err := netip.ParsePrefix(option.Ip); err == nil {
+			localPrefixes = append(localPrefixes, prefix)
+		} else {
+			return nil, E.Cause(err, "ip address parse error")
+		}
 	}
 	if len(option.Ipv6) > 0 {
 		if !strings.Contains(option.Ipv6, "/") {
@@ -114,6 +113,9 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		} else {
 			return nil, E.Cause(err, "ipv6 address parse error")
 		}
+	}
+	if len(localPrefixes) == 0 {
+		return nil, E.New("missing local address")
 	}
 	var privateKey, peerPublicKey, preSharedKey string
 	{
@@ -202,7 +204,8 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 		return nil, err
 	}
 	if !metadata.Resolved() {
-		addrs, err := resolver.ResolveAllIP(metadata.Host)
+		var addrs []netip.Addr
+		addrs, err = resolver.ResolveAllIP(metadata.Host)
 		if err != nil {
 			return nil, err
 		}
