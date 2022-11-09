@@ -18,23 +18,30 @@ import (
 
 type GroupBase struct {
 	*outbound.Base
-	filterRegs    []*regexp2.Regexp
-	providers     []provider.ProxyProvider
-	failedTestMux sync.Mutex
-	failedTimes   int
-	failedTime    time.Time
-	failedTesting *atomic.Bool
-	proxies       [][]C.Proxy
-	versions      []atomic.Uint32
+	filterRegs       []*regexp2.Regexp
+	excludeFilterReg *regexp2.Regexp
+	providers        []provider.ProxyProvider
+	failedTestMux    sync.Mutex
+	failedTimes      int
+	failedTime       time.Time
+	failedTesting    *atomic.Bool
+	proxies          [][]C.Proxy
+	versions         []atomic.Uint32
 }
 
 type GroupBaseOption struct {
 	outbound.BaseOption
-	filter    string
-	providers []provider.ProxyProvider
+	filter        string
+	excludeFilter string
+	providers     []provider.ProxyProvider
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
+	var excludeFilterReg *regexp2.Regexp
+	if opt.excludeFilter != "" {
+		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, 0)
+	}
+
 	var filterRegs []*regexp2.Regexp
 	if opt.filter != "" {
 		for _, filter := range strings.Split(opt.filter, "`") {
@@ -44,10 +51,11 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	}
 
 	gb := &GroupBase{
-		Base:          outbound.NewBase(opt.BaseOption),
-		filterRegs:    filterRegs,
-		providers:     opt.providers,
-		failedTesting: atomic.NewBool(false),
+		Base:             outbound.NewBase(opt.BaseOption),
+		filterRegs:       filterRegs,
+		excludeFilterReg: excludeFilterReg,
+		providers:        opt.providers,
+		failedTesting:    atomic.NewBool(false),
 	}
 
 	gb.proxies = make([][]C.Proxy, len(opt.providers))
@@ -142,6 +150,18 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				proxiesSet[name] = struct{}{}
 				newProxies = append(newProxies, p)
 			}
+		}
+		proxies = newProxies
+	}
+
+	if gb.excludeFilterReg != nil {
+		var newProxies []C.Proxy
+		for _, p := range proxies {
+			name := p.Name()
+			if mat, _ := gb.excludeFilterReg.FindStringMatch(name); mat != nil {
+				continue
+			}
+			newProxies = append(newProxies, p)
 		}
 		proxies = newProxies
 	}

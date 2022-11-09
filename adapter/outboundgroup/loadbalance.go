@@ -228,6 +228,7 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 				RoutingMark: option.RoutingMark,
 			},
 			option.Filter,
+			option.ExcludeFilter,
 			providers,
 		}),
 		strategyFn: strategyFn,

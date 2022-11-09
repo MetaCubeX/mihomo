@@ -21,15 +21,16 @@ var (
 
 type GroupCommonOption struct {
 	outbound.BasicOption
-	Name       string   `group:"name"`
-	Type       string   `group:"type"`
-	Proxies    []string `group:"proxies,omitempty"`
-	Use        []string `group:"use,omitempty"`
-	URL        string   `group:"url,omitempty"`
-	Interval   int      `group:"interval,omitempty"`
-	Lazy       bool     `group:"lazy,omitempty"`
-	DisableUDP bool     `group:"disable-udp,omitempty"`
-	Filter     string   `group:"filter,omitempty"`
+	Name          string   `group:"name"`
+	Type          string   `group:"type"`
+	Proxies       []string `group:"proxies,omitempty"`
+	Use           []string `group:"use,omitempty"`
+	URL           string   `group:"url,omitempty"`
+	Interval      int      `group:"interval,omitempty"`
+	Lazy          bool     `group:"lazy,omitempty"`
+	DisableUDP    bool     `group:"disable-udp,omitempty"`
+	Filter        string   `group:"filter,omitempty"`
+	ExcludeFilter string   `group:"exclude-filter,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {

@@ -185,6 +185,7 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 				RoutingMark: option.RoutingMark,
 			},
 			"",
+			"",
 			providers,
 		}),
 	}
