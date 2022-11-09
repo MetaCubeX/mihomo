@@ -143,6 +143,7 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 			},
 
 			option.Filter,
+			option.ExcludeFilter,
 			providers,
 		}),
 		fastSingle: singledo.NewSingle[C.Proxy](time.Second * 10),

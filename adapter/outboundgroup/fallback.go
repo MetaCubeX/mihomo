@@ -131,6 +131,7 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 				RoutingMark: option.RoutingMark,
 			},
 			option.Filter,
+			option.ExcludeFilter,
 			providers,
 		}),
 		disableUDP: option.DisableUDP,

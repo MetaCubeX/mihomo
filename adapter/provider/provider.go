@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Dreamacro/clash/common/convert"
-	netHttp "github.com/Dreamacro/clash/component/http"
+	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/component/resource"
 	"github.com/Dreamacro/clash/log"
 	"github.com/dlclark/regexp2"
@@ -110,7 +110,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 		defer cancel()
-		resp, err := netHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+		resp, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
 			http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 		if err != nil {
 			return
@@ -119,7 +119,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 
 		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
 		if userInfoStr == "" {
-			resp2, err := netHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			resp2, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
 				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil)
 			if err != nil {
 				return
