@@ -88,6 +88,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewHysteria(*hyOption)
+	case "wireguard":
+		hyOption := &outbound.WireGuardOption{}
+		err = decoder.Decode(mapping, hyOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewWireGuard(*hyOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
