@@ -109,8 +109,8 @@ github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4 h1:LO7xMvMGhYmjQg2vj
 github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4/go.mod h1:zvgDYKI+vCAW9RyfyrKTgleI+DOa8lzHMPC7VZo3OL4=
 github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6 h1:JJfDeYYhWunvtxsU/mOVNTmFQmnzGx9dY034qG6G3g4=
 github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6/go.mod h1:EX3RbZvrwAkPI2nuGa78T2iQXmrkT+/VQtskjou42xM=
-github.com/sagernet/sing-vmess v0.0.0-20220921140858-b6a1bdee672f h1:xyJ3Wbibcug4DxLi/FCHX2Td667SfieyZv645b8+eEE=
-github.com/sagernet/sing-vmess v0.0.0-20220921140858-b6a1bdee672f/go.mod h1:bwhAdSNET1X+j9DOXGj9NIQR39xgcWIk1rOQ9lLD+gM=
+github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0 h1:z3kuD3hPNdEq7/wVy5lwE21f+8ZTazBtR81qswxJoCc=
+github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0/go.mod h1:bwhAdSNET1X+j9DOXGj9NIQR39xgcWIk1rOQ9lLD+gM=
 github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c h1:qP3ZOHnjZalvqbjundbXiv/YrNlo3HOgrKc+S1QGs0U=
 github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c/go.mod h1:euOmN6O5kk9dQmgSS8Df4psAl3TCjxOz0NW60EWkSaI=
 github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0=
