@@ -24,7 +24,7 @@ require (
 	github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6
 	github.com/sagernet/sing-tun v0.0.0-20221012082254-488c3b75f6fd
-	github.com/sagernet/sing-vmess v0.0.0-20220921140858-b6a1bdee672f
+	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0
 	github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.0
