@@ -301,6 +301,7 @@ the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library
 ## Credits
 
 * [Dreamacro/clash](https://github.com/Dreamacro/clash)
+* [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 * [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
