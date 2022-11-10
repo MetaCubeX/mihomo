@@ -495,7 +495,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
-	err = parseTun(rawCfg.Tun, config.General, dnsCfg)
+	err = parseTun(rawCfg.Tun, config.General)
 	if err != nil {
 		return nil, err
 	}
@@ -1053,8 +1053,9 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		}
 	}
 
+	fakeIPRange, err := netip.ParsePrefix(cfg.FakeIPRange)
+	T.SetFakeIPRange(fakeIPRange)
 	if cfg.EnhancedMode == C.DNSFakeIP {
-		ipnet, err := netip.ParsePrefix(cfg.FakeIPRange)
 		if err != nil {
 			return nil, err
 		}
@@ -1081,7 +1082,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		}
 
 		pool, err := fakeip.New(fakeip.Options{
-			IPNet:       &ipnet,
+			IPNet:       &fakeIPRange,
 			Size:        1000,
 			Host:        host,
 			Persistence: rawCfg.Profile.StoreFakeIP,
@@ -1124,7 +1125,7 @@ func parseAuthentication(rawRecords []string) []auth.AuthUser {
 	return users
 }
 
-func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) error {
+func parseTun(rawTun RawTun, general *General) error {
 	var dnsHijack []netip.AddrPort
 
 	for _, d := range rawTun.DNSHijack {
@@ -1140,10 +1141,8 @@ func parseTun(rawTun RawTun, general *General, dnsCfg *DNS) error {
 		dnsHijack = append(dnsHijack, addrPort)
 	}
 
-	var tunAddressPrefix netip.Prefix
-	if dnsCfg.FakeIPRange != nil {
-		tunAddressPrefix = *dnsCfg.FakeIPRange.IPNet()
-	} else {
+	tunAddressPrefix := T.FakeIPRange()
+	if !tunAddressPrefix.IsValid() {
 		tunAddressPrefix = netip.MustParsePrefix("198.18.0.1/16")
 	}
 	tunAddressPrefix = netip.PrefixFrom(tunAddressPrefix.Addr(), 30)
