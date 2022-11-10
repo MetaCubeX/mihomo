@@ -41,7 +41,17 @@ var (
 	udpTimeout = 60 * time.Second
 
 	alwaysFindProcess = false
+
+	fakeIPRange netip.Prefix
 )
+
+func SetFakeIPRange(p netip.Prefix) {
+	fakeIPRange = p
+}
+
+func FakeIPRange() netip.Prefix {
+	return fakeIPRange
+}
 
 func SetSniffing(b bool) {
 	if sniffer.Dispatcher.Enable() {
@@ -334,9 +344,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 	dialMetadata := metadata
 	if len(metadata.Host) > 0 {
 		if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-			dialMetadata.DstIP = node.Data()
-			dialMetadata.DNSMode = C.DNSHosts
-			dialMetadata = dialMetadata.Pure()
+			if dstIp := node.Data(); !FakeIPRange().Contains(dstIp) {
+				dialMetadata.DstIP = dstIp
+				dialMetadata.DNSMode = C.DNSHosts
+				dialMetadata = dialMetadata.Pure()
+			}
 		}
 	}
 
