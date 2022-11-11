@@ -198,10 +198,9 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	}
 
 	addr = C.Metadata{
-		AddrType: C.AtypDomainName,
-		Host:     u.Hostname(),
-		DstIP:    netip.Addr{},
-		DstPort:  port,
+		Host:    u.Hostname(),
+		DstIP:   netip.Addr{},
+		DstPort: port,
 	}
 	return
 }

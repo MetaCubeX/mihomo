@@ -73,10 +73,9 @@ func TestAND(t *testing.T) {
 	assert.Equal(t, "DIRECT", and.adapter)
 	assert.Equal(t, false, and.ShouldResolveIP())
 	m, _ := and.Match(&C.Metadata{
-		Host:     "baidu.com",
-		AddrType: C.AtypDomainName,
-		NetWork:  C.TCP,
-		DstPort:  "20000",
+		Host:    "baidu.com",
+		NetWork: C.TCP,
+		DstPort: "20000",
 	})
 	assert.Equal(t, true, m)
 

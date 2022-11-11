@@ -112,7 +112,6 @@ func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
 			metadata.Host, host)
 	}
 
-	metadata.AddrType = C.AtypDomainName
 	metadata.Host = host
 	metadata.DNSMode = C.DNSNormal
 }

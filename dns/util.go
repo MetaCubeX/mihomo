@@ -156,17 +156,11 @@ func dialContextExtra(ctx context.Context, adapterName string, network string, d
 		networkType = C.UDP
 	}
 
-	addrType := C.AtypIPv4
-	if dstIP.Is6() {
-		addrType = C.AtypIPv6
-	}
-
 	metadata := &C.Metadata{
-		NetWork:  networkType,
-		AddrType: addrType,
-		Host:     "",
-		DstIP:    dstIP,
-		DstPort:  port,
+		NetWork: networkType,
+		Host:    "",
+		DstIP:   dstIP,
+		DstPort: port,
 	}
 
 	adapter, ok := tunnel.Proxies()[adapterName]
