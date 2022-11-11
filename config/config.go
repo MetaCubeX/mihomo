@@ -60,15 +60,19 @@ type General struct {
 
 // Inbound config
 type Inbound struct {
-	Port           int      `json:"port"`
-	SocksPort      int      `json:"socks-port"`
-	RedirPort      int      `json:"redir-port"`
-	TProxyPort     int      `json:"tproxy-port"`
-	MixedPort      int      `json:"mixed-port"`
-	Authentication []string `json:"authentication"`
-	AllowLan       bool     `json:"allow-lan"`
-	BindAddress    string   `json:"bind-address"`
-	InboundTfo     bool     `json:"inbound-tfo"`
+	Port              int      `json:"port"`
+	SocksPort         int      `json:"socks-port"`
+	RedirPort         int      `json:"redir-port"`
+	TProxyPort        int      `json:"tproxy-port"`
+	MixedPort         int      `json:"mixed-port"`
+	ShadowSocksConfig string   `json:"ss-config"`
+	VmessConfig       string   `json:"vmess-config"`
+	TcpTunConfig      string   `json:"tcptun-config"`
+	UdpTunConfig      string   `json:"udptun-config"`
+	Authentication    []string `json:"authentication"`
+	AllowLan          bool     `json:"allow-lan"`
+	BindAddress       string   `json:"bind-address"`
+	InboundTfo        bool     `json:"inbound-tfo"`
 }
 
 // Controller config
@@ -284,6 +288,10 @@ type RawConfig struct {
 	RedirPort          int          `yaml:"redir-port"`
 	TProxyPort         int          `yaml:"tproxy-port"`
 	MixedPort          int          `yaml:"mixed-port"`
+	ShadowSocksConfig  string       `yaml:"ss-config"`
+	VmessConfig        string       `yaml:"vmess-config"`
+	TcpTunConfig       string       `yaml:"tcptun-config"`
+	UdpTunConfig       string       `yaml:"udptun-config"`
 	InboundTfo         bool         `yaml:"inbound-tfo"`
 	Authentication     []string     `yaml:"authentication"`
 	AllowLan           bool         `yaml:"allow-lan"`
@@ -526,14 +534,18 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
 		Inbound: Inbound{
-			Port:        cfg.Port,
-			SocksPort:   cfg.SocksPort,
-			RedirPort:   cfg.RedirPort,
-			TProxyPort:  cfg.TProxyPort,
-			MixedPort:   cfg.MixedPort,
-			AllowLan:    cfg.AllowLan,
-			BindAddress: cfg.BindAddress,
-			InboundTfo:  cfg.InboundTfo,
+			Port:              cfg.Port,
+			SocksPort:         cfg.SocksPort,
+			RedirPort:         cfg.RedirPort,
+			TProxyPort:        cfg.TProxyPort,
+			MixedPort:         cfg.MixedPort,
+			ShadowSocksConfig: cfg.ShadowSocksConfig,
+			VmessConfig:       cfg.VmessConfig,
+			TcpTunConfig:      cfg.TcpTunConfig,
+			UdpTunConfig:      cfg.UdpTunConfig,
+			AllowLan:          cfg.AllowLan,
+			BindAddress:       cfg.BindAddress,
+			InboundTfo:        cfg.InboundTfo,
 		},
 		Controller: Controller{
 			ExternalController: cfg.ExternalController,

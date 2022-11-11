@@ -20,8 +20,12 @@ const (
 	HTTPS
 	SOCKS4
 	SOCKS5
+	SHADOWSOCKS
+	VMESS
 	REDIR
 	TPROXY
+	TCPTUN
+	UDPTUN
 	TUN
 	INNER
 )
@@ -53,10 +57,18 @@ func (t Type) String() string {
 		return "Socks4"
 	case SOCKS5:
 		return "Socks5"
+	case SHADOWSOCKS:
+		return "ShadowSocks"
+	case VMESS:
+		return "Vmess"
 	case REDIR:
 		return "Redir"
 	case TPROXY:
 		return "TProxy"
+	case TCPTUN:
+		return "TcpTun"
+	case UDPTUN:
+		return "UdpTun"
 	case TUN:
 		return "Tun"
 	case INNER:

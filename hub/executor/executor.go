@@ -105,14 +105,18 @@ func GetGeneral() *config.General {
 
 	general := &config.General{
 		Inbound: config.Inbound{
-			Port:           ports.Port,
-			SocksPort:      ports.SocksPort,
-			RedirPort:      ports.RedirPort,
-			TProxyPort:     ports.TProxyPort,
-			MixedPort:      ports.MixedPort,
-			Authentication: authenticator,
-			AllowLan:       P.AllowLan(),
-			BindAddress:    P.BindAddress(),
+			Port:              ports.Port,
+			SocksPort:         ports.SocksPort,
+			RedirPort:         ports.RedirPort,
+			TProxyPort:        ports.TProxyPort,
+			MixedPort:         ports.MixedPort,
+			ShadowSocksConfig: ports.ShadowSocksConfig,
+			VmessConfig:       ports.VmessConfig,
+			TcpTunConfig:      ports.TcpTunConfig,
+			UdpTunConfig:      ports.UdpTunConfig,
+			Authentication:    authenticator,
+			AllowLan:          P.AllowLan(),
+			BindAddress:       P.BindAddress(),
 		},
 		Mode:          tunnel.Mode(),
 		LogLevel:      log.Level(),
@@ -342,6 +346,10 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	P.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
+	P.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
+	P.ReCreateTcpTun(general.TcpTunConfig, tcpIn, udpIn)
+	P.ReCreateUdpTun(general.UdpTunConfig, tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/listener/sing_tun"
 	"golang.org/x/exp/slices"
 	"net"
 	"sort"
@@ -18,8 +17,12 @@ import (
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
+	"github.com/Dreamacro/clash/listener/sing_shadowsocks"
+	"github.com/Dreamacro/clash/listener/sing_tun"
+	"github.com/Dreamacro/clash/listener/sing_vmess"
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/listener/tproxy"
+	"github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -28,19 +31,23 @@ var (
 	bindAddress = "*"
 	inboundTfo  = false
 
-	socksListener     *socks.Listener
-	socksUDPListener  *socks.UDPListener
-	httpListener      *http.Listener
-	redirListener     *redir.Listener
-	redirUDPListener  *tproxy.UDPListener
-	tproxyListener    *tproxy.Listener
-	tproxyUDPListener *tproxy.UDPListener
-	mixedListener     *mixed.Listener
-	mixedUDPLister    *socks.UDPListener
-	tunLister         *sing_tun.Listener
-	autoRedirListener *autoredir.Listener
-	autoRedirProgram  *ebpf.TcEBpfProgram
-	tcProgram         *ebpf.TcEBpfProgram
+	socksListener       *socks.Listener
+	socksUDPListener    *socks.UDPListener
+	httpListener        *http.Listener
+	redirListener       *redir.Listener
+	redirUDPListener    *tproxy.UDPListener
+	tproxyListener      *tproxy.Listener
+	tproxyUDPListener   *tproxy.UDPListener
+	mixedListener       *mixed.Listener
+	mixedUDPLister      *socks.UDPListener
+	tunLister           *sing_tun.Listener
+	shadowSocksListener *sing_shadowsocks.Listener
+	vmessListener       *sing_vmess.Listener
+	tcpTunListener      *tunnel.Listener
+	udpTunListener      *tunnel.UdpListener
+	autoRedirListener   *autoredir.Listener
+	autoRedirProgram    *ebpf.TcEBpfProgram
+	tcProgram           *ebpf.TcEBpfProgram
 
 	// lock for recreate function
 	socksMux     sync.Mutex
@@ -49,6 +56,10 @@ var (
 	tproxyMux    sync.Mutex
 	mixedMux     sync.Mutex
 	tunMux       sync.Mutex
+	ssMux        sync.Mutex
+	vmessMux     sync.Mutex
+	tcpTunMux    sync.Mutex
+	udpTunMux    sync.Mutex
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
 
@@ -56,11 +67,15 @@ var (
 )
 
 type Ports struct {
-	Port       int `json:"port"`
-	SocksPort  int `json:"socks-port"`
-	RedirPort  int `json:"redir-port"`
-	TProxyPort int `json:"tproxy-port"`
-	MixedPort  int `json:"mixed-port"`
+	Port              int    `json:"port"`
+	SocksPort         int    `json:"socks-port"`
+	RedirPort         int    `json:"redir-port"`
+	TProxyPort        int    `json:"tproxy-port"`
+	MixedPort         int    `json:"mixed-port"`
+	ShadowSocksConfig string `json:"ss-config"`
+	VmessConfig       string `json:"vmess-config"`
+	TcpTunConfig      string `json:"tcptun-config"`
+	UdpTunConfig      string `json:"udptun-config"`
 }
 
 func GetTunConf() config.Tun {
@@ -233,6 +248,156 @@ func ReCreateRedir(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	}
 
 	log.Infoln("Redirect proxy listening at: %s", redirListener.Address())
+}
+
+func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+	ssMux.Lock()
+	defer ssMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start ShadowSocks server error: %s", err.Error())
+		}
+	}()
+
+	shouldIgnore := false
+
+	if shadowSocksListener != nil {
+		if shadowSocksListener.Config() != shadowSocksConfig {
+			shadowSocksListener.Close()
+			shadowSocksListener = nil
+		} else {
+			shouldIgnore = true
+		}
+	}
+
+	if shouldIgnore {
+		return
+	}
+
+	if len(shadowSocksConfig) == 0 {
+		return
+	}
+
+	listener, err := sing_shadowsocks.New(shadowSocksConfig, tcpIn, udpIn)
+	if err != nil {
+		return
+	}
+
+	shadowSocksListener = listener
+
+	return
+}
+
+func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+	vmessMux.Lock()
+	defer vmessMux.Unlock()
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start Vmess server error: %s", err.Error())
+		}
+	}()
+
+	shouldIgnore := false
+
+	if vmessListener != nil {
+		if vmessListener.Config() != vmessConfig {
+			vmessListener.Close()
+			vmessListener = nil
+		} else {
+			shouldIgnore = true
+		}
+	}
+
+	if shouldIgnore {
+		return
+	}
+
+	if len(vmessConfig) == 0 {
+		return
+	}
+
+	listener, err := sing_vmess.New(vmessConfig, tcpIn, udpIn)
+	if err != nil {
+		return
+	}
+
+	vmessListener = listener
+
+	return
+}
+
+func ReCreateTcpTun(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+	tcpTunMux.Lock()
+	defer tcpTunMux.Unlock()
+	shouldIgnore := false
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start TcpTun server error: %s", err.Error())
+		}
+	}()
+
+	if tcpTunListener != nil {
+		if tcpTunListener.Config() != config {
+			tcpTunListener.Close()
+			tcpTunListener = nil
+		} else {
+			shouldIgnore = true
+		}
+	}
+
+	if shouldIgnore {
+		return
+	}
+
+	tcpListener, err := tunnel.New(config, tcpIn)
+	if err != nil {
+		return
+	}
+
+	tcpTunListener = tcpListener
+
+	return
+}
+
+func ReCreateUdpTun(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+	udpTunMux.Lock()
+	defer udpTunMux.Unlock()
+	shouldIgnore := false
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start UdpTun server error: %s", err.Error())
+		}
+	}()
+
+	if udpTunListener != nil {
+		if udpTunListener.Config() != config {
+			udpTunListener.Close()
+			udpTunListener = nil
+		} else {
+			shouldIgnore = true
+		}
+	}
+
+	if shouldIgnore {
+		return
+	}
+
+	udpListener, err := tunnel.NewUdp(config, udpIn)
+	if err != nil {
+		return
+	}
+
+	udpTunListener = udpListener
+
+	return
 }
 
 func ReCreateTProxy(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
@@ -488,6 +653,22 @@ func GetPorts() *Ports {
 		_, portStr, _ := net.SplitHostPort(mixedListener.Address())
 		port, _ := strconv.Atoi(portStr)
 		ports.MixedPort = port
+	}
+
+	if shadowSocksListener != nil {
+		ports.ShadowSocksConfig = shadowSocksListener.Config()
+	}
+
+	if vmessListener != nil {
+		ports.VmessConfig = vmessListener.Config()
+	}
+
+	if tcpTunListener != nil {
+		ports.TcpTunConfig = tcpTunListener.Config()
+	}
+
+	if udpTunListener != nil {
+		ports.UdpTunConfig = udpTunListener.Config()
 	}
 
 	return ports
