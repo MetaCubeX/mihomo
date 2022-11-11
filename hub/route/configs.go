@@ -35,20 +35,24 @@ func configRouter() http.Handler {
 }
 
 type configSchema struct {
-	Port          *int               `json:"port"`
-	SocksPort     *int               `json:"socks-port"`
-	RedirPort     *int               `json:"redir-port"`
-	TProxyPort    *int               `json:"tproxy-port"`
-	MixedPort     *int               `json:"mixed-port"`
-	Tun           *tunSchema         `json:"tun"`
-	AllowLan      *bool              `json:"allow-lan"`
-	BindAddress   *string            `json:"bind-address"`
-	Mode          *tunnel.TunnelMode `json:"mode"`
-	LogLevel      *log.LogLevel      `json:"log-level"`
-	IPv6          *bool              `json:"ipv6"`
-	Sniffing      *bool              `json:"sniffing"`
-	TcpConcurrent *bool              `json:"tcp-concurrent"`
-	InterfaceName *string            `json:"interface-name"`
+	Port              *int               `json:"port"`
+	SocksPort         *int               `json:"socks-port"`
+	RedirPort         *int               `json:"redir-port"`
+	TProxyPort        *int               `json:"tproxy-port"`
+	MixedPort         *int               `json:"mixed-port"`
+	Tun               *tunSchema         `json:"tun"`
+	ShadowSocksConfig *string            `json:"ss-config"`
+	VmessConfig       *string            `json:"vmess-config"`
+	TcptunConfig      *string            `json:"tcptun-config"`
+	UdptunConfig      *string            `json:"udptun-config"`
+	AllowLan          *bool              `json:"allow-lan"`
+	BindAddress       *string            `json:"bind-address"`
+	Mode              *tunnel.TunnelMode `json:"mode"`
+	LogLevel          *log.LogLevel      `json:"log-level"`
+	IPv6              *bool              `json:"ipv6"`
+	Sniffing          *bool              `json:"sniffing"`
+	TcpConcurrent     *bool              `json:"tcp-concurrent"`
+	InterfaceName     *string            `json:"interface-name"`
 }
 
 type tunSchema struct {
@@ -83,6 +87,14 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 func pointerOrDefault(p *int, def int) int {
+	if p != nil {
+		return *p
+	}
+
+	return def
+}
+
+func pointerOrDefaultString(p *string, def string) string {
 	if p != nil {
 		return *p
 	}
@@ -187,6 +199,10 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tcpIn, udpIn)
 	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tcpIn, udpIn)
 	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tcpIn, udpIn)
+	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tcpIn, udpIn)
+	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tcpIn, udpIn)
+	P.ReCreateTcpTun(pointerOrDefaultString(general.TcptunConfig, ports.TcpTunConfig), tcpIn, udpIn)
+	P.ReCreateUdpTun(pointerOrDefaultString(general.UdptunConfig, ports.UdpTunConfig), tcpIn, udpIn)
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)
