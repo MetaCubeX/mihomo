@@ -7,6 +7,7 @@ import (
 )
 
 type packet struct {
+	pc    net.PacketConn
 	lAddr *net.UDPAddr
 	buf   []byte
 }
@@ -34,4 +35,8 @@ func (c *packet) LocalAddr() net.Addr {
 
 func (c *packet) Drop() {
 	pool.Put(c.buf)
+}
+
+func (c *packet) InAddr() net.Addr {
+	return c.pc.LocalAddr()
 }

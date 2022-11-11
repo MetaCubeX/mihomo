@@ -25,6 +25,12 @@ func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type) *PacketAda
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}
+	if p, ok := packet.(C.UDPPacketInAddr); ok {
+		if ip, port, err := parseAddr(p.InAddr().String()); err == nil {
+			metadata.InIP = ip
+			metadata.InPort = port
+		}
+	}
 
 	return &PacketAdapter{
 		UDPPacket: packet,

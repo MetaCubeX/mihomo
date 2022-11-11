@@ -202,3 +202,7 @@ type UDPPacket interface {
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr
 }
+
+type UDPPacketInAddr interface {
+	InAddr() net.Addr
+}
