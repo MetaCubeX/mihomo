@@ -10,6 +10,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
+	embedSS "github.com/Dreamacro/clash/listener/shadowsocks"
 	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/log"
 
@@ -32,7 +33,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (*Listener, error) {
+func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (C.AdvanceListener, error) {
 	addr, cipher, password, err := parseSSURL(config)
 	if err != nil {
 		return nil, err
@@ -56,6 +57,7 @@ func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Packet
 		sl.service, err = shadowaead_2022.NewServiceWithPassword(cipher, password, udpTimeout, h)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", cipher)
+		return embedSS.New(config, tcpIn, udpIn)
 	}
 	if err != nil {
 		return nil, err
@@ -117,7 +119,7 @@ func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Packet
 				}
 				_ = c.(*net.TCPConn).SetKeepAlive(true)
 
-				go sl.HandleConn(c)
+				go sl.HandleConn(c, tcpIn)
 			}
 		}()
 	}
@@ -139,7 +141,7 @@ func (l *Listener) Config() string {
 	return l.config
 }
 
-func (l *Listener) HandleConn(conn net.Conn) {
+func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext) {
 	err := l.service.NewConnection(context.TODO(), conn, metadata.Metadata{
 		Protocol: "shadowsocks",
 		Source:   metadata.ParseSocksaddr(conn.RemoteAddr().String()),
@@ -150,12 +152,12 @@ func (l *Listener) HandleConn(conn net.Conn) {
 	}
 }
 
-func HandleShadowSocks(conn net.Conn) bool {
+func HandleShadowSocks(conn net.Conn, in chan<- C.ConnContext) bool {
 	if _listener != nil && _listener.service != nil {
-		go _listener.HandleConn(conn)
+		go _listener.HandleConn(conn, in)
 		return true
 	}
-	return false
+	return embedSS.HandleShadowSocks(conn, in)
 }
 
 func parseSSURL(s string) (addr, cipher, password string, err error) {
