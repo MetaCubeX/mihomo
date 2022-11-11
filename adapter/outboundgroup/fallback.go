@@ -72,8 +72,8 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
-	proxy := f.findAliveProxy(true)
+func (f *Fallback) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
+	proxy := f.findAliveProxy(touch)
 	return proxy
 }
 

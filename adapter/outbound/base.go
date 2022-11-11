@@ -90,7 +90,7 @@ func (b *Base) Addr() string {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (b *Base) Unwrap(metadata *C.Metadata) C.Proxy {
+func (b *Base) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return nil
 }
 

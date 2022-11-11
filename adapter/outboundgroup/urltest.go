@@ -56,12 +56,12 @@ func (u *URLTest) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 }
 
 // Unwrap implements C.ProxyAdapter
-func (u *URLTest) Unwrap(*C.Metadata) C.Proxy {
-	return u.fast(true)
+func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
+	return u.fast(touch)
 }
 
 func (u *URLTest) fast(touch bool) C.Proxy {
-	elm, _, _ := u.fastSingle.Do(func() (C.Proxy, error) {
+	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		proxies := u.GetProxies(touch)
 		fast := proxies[0]
 		min := fast.LastDelay()
@@ -90,6 +90,9 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		return u.fastNode, nil
 	})
+	if shared && touch { // a shared fastSingle.Do() may cause providers untouched, so we touch them again
+		u.Touch()
+	}
 
 	return elm
 }

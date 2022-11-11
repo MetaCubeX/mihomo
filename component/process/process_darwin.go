@@ -3,6 +3,8 @@ package process
 import (
 	"encoding/binary"
 	"net/netip"
+	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -14,6 +16,22 @@ const (
 	procpidpathinfosize = 1024
 	proccallnumpidinfo  = 0x2
 )
+
+var structSize = func() int {
+	value, _ := syscall.Sysctl("kern.osrelease")
+	major, _, _ := strings.Cut(value, ".")
+	n, _ := strconv.ParseInt(major, 10, 64)
+	switch true {
+	case n >= 22:
+		return 408
+	default:
+		// from darwin-xnu/bsd/netinet/in_pcblist.c:get_pcblist_n
+		// size/offset are round up (aligned) to 8 bytes in darwin
+		// rup8(sizeof(xinpcb_n)) + rup8(sizeof(xsocket_n)) +
+		// 2 * rup8(sizeof(xsockbuf_n)) + rup8(sizeof(xsockstat_n))
+		return 384
+	}
+}()
 
 func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
 	return 0, 0, ErrPlatformNotSupport
@@ -38,12 +56,7 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 	}
 
 	buf := []byte(value)
-
-	// from darwin-xnu/bsd/netinet/in_pcblist.c:get_pcblist_n
-	// size/offset are round up (aligned) to 8 bytes in darwin
-	// rup8(sizeof(xinpcb_n)) + rup8(sizeof(xsocket_n)) +
-	// 2 * rup8(sizeof(xsockbuf_n)) + rup8(sizeof(xsockstat_n))
-	itemSize := 384
+	itemSize := structSize
 	if network == TCP {
 		// rup8(sizeof(xtcpcb_n))
 		itemSize += 208
