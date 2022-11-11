@@ -81,6 +81,7 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {
 	target := socks5.ParseAddrToSocksAddr(rAddr)
 	pkt := &packet{
+		pc:    pc,
 		lAddr: lAddr,
 		buf:   buf,
 	}

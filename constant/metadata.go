@@ -115,6 +115,8 @@ type Metadata struct {
 	DstIP       netip.Addr `json:"destinationIP"`
 	SrcPort     string     `json:"sourcePort"`
 	DstPort     string     `json:"destinationPort"`
+	InIP        netip.Addr `json:"inboundIP"`
+	InPort      string     `json:"inboundPort"`
 	Host        string     `json:"host"`
 	DNSMode     DNSMode    `json:"dnsMode"`
 	Uid         *int32     `json:"uid"`

@@ -13,22 +13,23 @@ type Port struct {
 	*Base
 	adapter  string
 	port     string
-	isSource bool
+	ruleType C.RuleType
 	portList []utils.Range[uint16]
 }
 
 func (p *Port) RuleType() C.RuleType {
-	if p.isSource {
-		return C.SrcPort
-	}
-	return C.DstPort
+	return p.ruleType
 }
 
 func (p *Port) Match(metadata *C.Metadata) (bool, string) {
-	if p.isSource {
-		return p.matchPortReal(metadata.SrcPort), p.adapter
+	targetPort := metadata.DstPort
+	switch p.ruleType {
+	case C.InPort:
+		targetPort = metadata.InPort
+	case C.SrcPort:
+		targetPort = metadata.SrcPort
 	}
-	return p.matchPortReal(metadata.DstPort), p.adapter
+	return p.matchPortReal(targetPort), p.adapter
 }
 
 func (p *Port) Adapter() string {
@@ -51,7 +52,7 @@ func (p *Port) matchPortReal(portRef string) bool {
 	return false
 }
 
-func NewPort(port string, adapter string, isSource bool) (*Port, error) {
+func NewPort(port string, adapter string, ruleType C.RuleType) (*Port, error) {
 	ports := strings.Split(port, "/")
 	if len(ports) > 28 {
 		return nil, fmt.Errorf("%s, too many ports to use, maximum support 28 ports", errPayload.Error())
@@ -95,7 +96,7 @@ func NewPort(port string, adapter string, isSource bool) (*Port, error) {
 		Base:     &Base{},
 		adapter:  adapter,
 		port:     port,
-		isSource: isSource,
+		ruleType: ruleType,
 		portList: portRange,
 	}, nil
 }

@@ -32,9 +32,11 @@ func ParseRule(tp, payload, target string, params []string, subRules *map[string
 	case "SRC-IP-SUFFIX":
 		parsed, parseErr = RC.NewIPSuffix(payload, target, true, true)
 	case "SRC-PORT":
-		parsed, parseErr = RC.NewPort(payload, target, true)
+		parsed, parseErr = RC.NewPort(payload, target, C.SrcPort)
 	case "DST-PORT":
-		parsed, parseErr = RC.NewPort(payload, target, false)
+		parsed, parseErr = RC.NewPort(payload, target, C.DstPort)
+	case "IN-PORT":
+		parsed, parseErr = RC.NewPort(payload, target, C.InPort)
 	case "PROCESS-NAME":
 		parsed, parseErr = RC.NewProcess(payload, target, true)
 	case "PROCESS-PATH":
