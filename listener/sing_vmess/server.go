@@ -72,7 +72,7 @@ func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Packet
 				}
 				_ = c.(*net.TCPConn).SetKeepAlive(true)
 
-				go sl.HandleConn(c)
+				go sl.HandleConn(c, tcpIn)
 			}
 		}()
 	}
@@ -92,7 +92,7 @@ func (l *Listener) Config() string {
 	return l.config
 }
 
-func (l *Listener) HandleConn(conn net.Conn) {
+func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext) {
 	err := l.service.NewConnection(context.TODO(), conn, metadata.Metadata{
 		Protocol: "vmess",
 		Source:   metadata.ParseSocksaddr(conn.RemoteAddr().String()),
@@ -103,9 +103,9 @@ func (l *Listener) HandleConn(conn net.Conn) {
 	}
 }
 
-func HandleVmess(conn net.Conn) bool {
+func HandleVmess(conn net.Conn, in chan<- C.ConnContext) bool {
 	if _listener != nil && _listener.service != nil {
-		go _listener.HandleConn(conn)
+		go _listener.HandleConn(conn, in)
 		return true
 	}
 	return false

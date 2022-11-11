@@ -41,7 +41,7 @@ var (
 	mixedListener       *mixed.Listener
 	mixedUDPLister      *socks.UDPListener
 	tunLister           *sing_tun.Listener
-	shadowSocksListener *sing_shadowsocks.Listener
+	shadowSocksListener C.AdvanceListener
 	vmessListener       *sing_vmess.Listener
 	tcpTunListener      *tunnel.Listener
 	udpTunListener      *tunnel.UdpListener
