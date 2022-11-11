@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/url"
 	"strings"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -34,7 +33,7 @@ type Listener struct {
 var _listener *Listener
 
 func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (C.AdvanceListener, error) {
-	addr, cipher, password, err := parseSSURL(config)
+	addr, cipher, password, err := embedSS.ParseSSURL(config)
 	if err != nil {
 		return nil, err
 	}
@@ -158,18 +157,4 @@ func HandleShadowSocks(conn net.Conn, in chan<- C.ConnContext) bool {
 		return true
 	}
 	return embedSS.HandleShadowSocks(conn, in)
-}
-
-func parseSSURL(s string) (addr, cipher, password string, err error) {
-	u, err := url.Parse(s)
-	if err != nil {
-		return
-	}
-
-	addr = u.Host
-	if u.User != nil {
-		cipher = u.User.Username()
-		password, _ = u.User.Password()
-	}
-	return
 }
