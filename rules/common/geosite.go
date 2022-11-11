@@ -24,10 +24,6 @@ func (gs *GEOSITE) RuleType() C.RuleType {
 }
 
 func (gs *GEOSITE) Match(metadata *C.Metadata) (bool, string) {
-	if metadata.AddrType != C.AtypDomainName {
-		return false, ""
-	}
-
 	domain := metadata.Host
 	return gs.matcher.ApplyDomain(domain), gs.adapter
 }
