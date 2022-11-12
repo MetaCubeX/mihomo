@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go.uber.org/atomic"
 	"math/rand"
 	"net/netip"
@@ -93,39 +94,47 @@ func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr,
 	return ips, nil
 }
 
-func (r *Resolver) LookupIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
-	return r.lookupIP(ctx, host, D.TypeA)
-}
-
-func (r *Resolver) LookupIPv6(ctx context.Context, host string) (ips []netip.Addr, err error) {
-	return r.lookupIP(ctx, host, D.TypeAAAA)
-}
-
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeA
 func (r *Resolver) ResolveIP(ctx context.Context, host string) (ip netip.Addr, err error) {
-	if ips, err := r.LookupIPPrimaryIPv4(ctx, host); err == nil {
-		return ips[rand.Intn(len(ips))], nil
-	} else {
+	ips, err := r.LookupIPPrimaryIPv4(ctx, host)
+	if err != nil {
 		return netip.Addr{}, err
+	} else if len(ips) == 0 {
+		return netip.Addr{}, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, host)
 	}
+	return ips[rand.Intn(len(ips))], nil
+}
+
+// LookupIPv4 request with TypeA
+func (r *Resolver) LookupIPv4(ctx context.Context, host string) ([]netip.Addr, error) {
+	return r.lookupIP(ctx, host, D.TypeA)
 }
 
 // ResolveIPv4 request with TypeA
 func (r *Resolver) ResolveIPv4(ctx context.Context, host string) (ip netip.Addr, err error) {
-	if ips, err := r.LookupIPv4(ctx, host); err == nil {
-		return ips[rand.Intn(len(ips))], nil
-	} else {
+	ips, err := r.lookupIP(ctx, host, D.TypeA)
+	if err != nil {
 		return netip.Addr{}, err
+	} else if len(ips) == 0 {
+		return netip.Addr{}, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, host)
 	}
+	return ips[rand.Intn(len(ips))], nil
+}
+
+// LookupIPv6 request with TypeAAAA
+func (r *Resolver) LookupIPv6(ctx context.Context, host string) ([]netip.Addr, error) {
+	return r.lookupIP(ctx, host, D.TypeAAAA)
 }
 
 // ResolveIPv6 request with TypeAAAA
 func (r *Resolver) ResolveIPv6(ctx context.Context, host string) (ip netip.Addr, err error) {
-	if ips, err := r.LookupIPv6(ctx, host); err == nil {
-		return ips[rand.Intn(len(ips))], nil
-	} else {
+	ips, err := r.lookupIP(ctx, host, D.TypeAAAA)
+	if err != nil {
 		return netip.Addr{}, err
+	} else if len(ips) == 0 {
+		return netip.Addr{}, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, host)
 	}
+	return ips[rand.Intn(len(ips))], nil
 }
 
 func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
