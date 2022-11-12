@@ -21,7 +21,6 @@ import (
 	"github.com/Dreamacro/clash/log"
 	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/http3"
-	"github.com/miekg/dns"
 	D "github.com/miekg/dns"
 	"golang.org/x/net/http2"
 )
@@ -151,7 +150,7 @@ func (p *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Ms
 }
 
 // Exchange implements the Upstream interface for *dnsOverHTTPS.
-func (p *dnsOverHTTPS) Exchange(m *dns.Msg) (*dns.Msg, error) {
+func (p *dnsOverHTTPS) Exchange(m *D.Msg) (*D.Msg, error) {
 	return p.ExchangeContext(context.Background(), m)
 }
 
@@ -181,7 +180,7 @@ func (p *dnsOverHTTPS) closeClient(client *http.Client) (err error) {
 }
 
 // exchangeHTTPS logs the request and its result and calls exchangeHTTPSClient.
-func (p *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, req *dns.Msg) (resp *dns.Msg, err error) {
+func (p *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, req *D.Msg) (resp *D.Msg, err error) {
 	resp, err = p.exchangeHTTPSClient(ctx, client, req)
 
 	return resp, err
@@ -192,8 +191,8 @@ func (p *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, r
 func (p *dnsOverHTTPS) exchangeHTTPSClient(
 	ctx context.Context,
 	client *http.Client,
-	req *dns.Msg,
-) (resp *dns.Msg, err error) {
+	req *D.Msg,
+) (resp *D.Msg, err error) {
 	buf, err := req.Pack()
 	if err != nil {
 		return nil, fmt.Errorf("packing message: %w", err)
@@ -237,7 +236,7 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 			)
 	}
 
-	resp = &dns.Msg{}
+	resp = &D.Msg{}
 	err = resp.Unpack(body)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -249,7 +248,7 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 	}
 
 	if resp.Id != req.Id {
-		err = dns.ErrId
+		err = D.ErrId
 	}
 
 	return resp, err
