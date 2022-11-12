@@ -44,18 +44,18 @@ type Resolver struct {
 	proxyServer           []dnsClient
 }
 
-func (r *Resolver) ResolveAllIPPrimaryIPv4(host string) (ips []netip.Addr, err error) {
+func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
 	ch := make(chan []netip.Addr, 1)
 	go func() {
 		defer close(ch)
-		ip, err := r.resolveIP(host, D.TypeAAAA)
+		ip, err := r.resolveIP(ctx, host, D.TypeAAAA)
 		if err != nil {
 			return
 		}
 		ch <- ip
 	}()
 
-	ips, err = r.resolveIP(host, D.TypeA)
+	ips, err = r.resolveIP(ctx, host, D.TypeA)
 	if err == nil {
 		return
 	}
@@ -68,11 +68,11 @@ func (r *Resolver) ResolveAllIPPrimaryIPv4(host string) (ips []netip.Addr, err e
 	return ip, nil
 }
 
-func (r *Resolver) ResolveAllIP(host string) (ips []netip.Addr, err error) {
+func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr, err error) {
 	ch := make(chan []netip.Addr, 1)
 	go func() {
 		defer close(ch)
-		ip, err := r.resolveIP(host, D.TypeAAAA)
+		ip, err := r.resolveIP(ctx, host, D.TypeAAAA)
 		if err != nil {
 			return
 		}
@@ -80,7 +80,7 @@ func (r *Resolver) ResolveAllIP(host string) (ips []netip.Addr, err error) {
 		ch <- ip
 	}()
 
-	ips, err = r.resolveIP(host, D.TypeA)
+	ips, err = r.resolveIP(ctx, host, D.TypeA)
 
 	select {
 	case ipv6s, open := <-ch:
@@ -95,17 +95,17 @@ func (r *Resolver) ResolveAllIP(host string) (ips []netip.Addr, err error) {
 	return ips, nil
 }
 
-func (r *Resolver) ResolveAllIPv4(host string) (ips []netip.Addr, err error) {
-	return r.resolveIP(host, D.TypeA)
+func (r *Resolver) LookupIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
+	return r.resolveIP(ctx, host, D.TypeA)
 }
 
-func (r *Resolver) ResolveAllIPv6(host string) (ips []netip.Addr, err error) {
-	return r.resolveIP(host, D.TypeAAAA)
+func (r *Resolver) LookupIPv6(ctx context.Context, host string) (ips []netip.Addr, err error) {
+	return r.resolveIP(ctx, host, D.TypeAAAA)
 }
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeA
-func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
-	if ips, err := r.ResolveAllIPPrimaryIPv4(host); err == nil {
+func (r *Resolver) ResolveIP(ctx context.Context, host string) (ip netip.Addr, err error) {
+	if ips, err := r.LookupIPPrimaryIPv4(ctx, host); err == nil {
 		return ips[rand.Intn(len(ips))], nil
 	} else {
 		return netip.Addr{}, err
@@ -113,8 +113,8 @@ func (r *Resolver) ResolveIP(host string) (ip netip.Addr, err error) {
 }
 
 // ResolveIPv4 request with TypeA
-func (r *Resolver) ResolveIPv4(host string) (ip netip.Addr, err error) {
-	if ips, err := r.ResolveAllIPv4(host); err == nil {
+func (r *Resolver) ResolveIPv4(ctx context.Context, host string) (ip netip.Addr, err error) {
+	if ips, err := r.LookupIPv4(ctx, host); err == nil {
 		return ips[rand.Intn(len(ips))], nil
 	} else {
 		return netip.Addr{}, err
@@ -122,8 +122,8 @@ func (r *Resolver) ResolveIPv4(host string) (ip netip.Addr, err error) {
 }
 
 // ResolveIPv6 request with TypeAAAA
-func (r *Resolver) ResolveIPv6(host string) (ip netip.Addr, err error) {
-	if ips, err := r.ResolveAllIPv6(host); err == nil {
+func (r *Resolver) ResolveIPv6(ctx context.Context, host string) (ip netip.Addr, err error) {
+	if ips, err := r.LookupIPv6(ctx, host); err == nil {
 		return ips[rand.Intn(len(ips))], nil
 	} else {
 		return netip.Addr{}, err
@@ -305,7 +305,7 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	return
 }
 
-func (r *Resolver) resolveIP(host string, dnsType uint16) (ips []netip.Addr, err error) {
+func (r *Resolver) resolveIP(ctx context.Context, host string, dnsType uint16) (ips []netip.Addr, err error) {
 	ip, err := netip.ParseAddr(host)
 	if err == nil {
 		isIPv4 := ip.Is4()
@@ -321,7 +321,7 @@ func (r *Resolver) resolveIP(host string, dnsType uint16) (ips []netip.Addr, err
 	query := &D.Msg{}
 	query.SetQuestion(D.Fqdn(host), dnsType)
 
-	msg, err := r.Exchange(query)
+	msg, err := r.ExchangeContext(ctx, query)
 	if err != nil {
 		return []netip.Addr{}, err
 	}

@@ -205,7 +205,7 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 	}
 	if !metadata.Resolved() {
 		var addrs []netip.Addr
-		addrs, err = resolver.ResolveAllIP(metadata.Host)
+		addrs, err = resolver.LookupIP(ctx, metadata.Host)
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +229,7 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		return nil, err
 	}
 	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(metadata.Host)
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
 			return nil, errors.New("can't resolve ip")
 		}

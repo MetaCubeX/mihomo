@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	xtls "github.com/xtls/go"
 	"net"
@@ -63,20 +64,20 @@ func serializesSocksAddr(metadata *C.Metadata) []byte {
 	return bytes.Join(buf, nil)
 }
 
-func resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
+func resolveUDPAddr(ctx context.Context, network, address string) (*net.UDPAddr, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
-	ip, err := resolver.ResolveProxyServerHost(host)
+	ip, err := resolver.ResolveProxyServerHost(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 	return net.ResolveUDPAddr(network, net.JoinHostPort(ip.String(), port))
 }
 
-func resolveUDPAddrWithPrefer(network, address string, prefer C.DNSPrefer) (*net.UDPAddr, error) {
+func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, prefer C.DNSPrefer) (*net.UDPAddr, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
@@ -84,12 +85,12 @@ func resolveUDPAddrWithPrefer(network, address string, prefer C.DNSPrefer) (*net
 	var ip netip.Addr
 	switch prefer {
 	case C.IPv4Only:
-		ip, err = resolver.ResolveIPv4ProxyServerHost(host)
+		ip, err = resolver.ResolveIPv4ProxyServerHost(ctx, host)
 	case C.IPv6Only:
-		ip, err = resolver.ResolveIPv6ProxyServerHost(host)
+		ip, err = resolver.ResolveIPv6ProxyServerHost(ctx, host)
 	case C.IPv6Prefer:
 		var ips []netip.Addr
-		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
 		var fallback netip.Addr
 		if err == nil {
 			for _, addr := range ips {
@@ -107,7 +108,7 @@ func resolveUDPAddrWithPrefer(network, address string, prefer C.DNSPrefer) (*net
 	default:
 		// C.IPv4Prefer, C.DualStack and other
 		var ips []netip.Addr
-		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
 		var fallback netip.Addr
 		if err == nil {
 			for _, addr := range ips {

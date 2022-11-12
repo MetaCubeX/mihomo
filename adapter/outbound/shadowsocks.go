@@ -109,7 +109,7 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		return nil, err
 	}
 
-	addr, err := resolveUDPAddrWithPrefer("udp", ss.addr, ss.prefer)
+	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ss.addr, ss.prefer)
 	if err != nil {
 		pc.Close()
 		return nil, err

@@ -225,7 +225,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 	// local resolve UDP dns
 	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(metadata.Host)
+		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
 		if err != nil {
 			return
 		}
@@ -400,14 +400,18 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 	for _, rule := range rules {
 		if !resolved && shouldResolveIP(rule, metadata) {
-			ip, err := resolver.ResolveIP(metadata.Host)
-			if err != nil {
-				log.Debugln("[DNS] resolve %s error: %s", metadata.Host, err.Error())
-			} else {
-				log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
-				metadata.DstIP = ip
-			}
-			resolved = true
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+				defer cancel()
+				ip, err := resolver.ResolveIP(ctx, metadata.Host)
+				if err != nil {
+					log.Debugln("[DNS] resolve %s error: %s", metadata.Host, err.Error())
+				} else {
+					log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())
+					metadata.DstIP = ip
+				}
+				resolved = true
+			}()
 		}
 
 		if !processFound && (alwaysFindProcess || rule.ShouldFindProcess()) {
