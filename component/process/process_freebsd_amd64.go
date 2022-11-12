@@ -51,17 +51,17 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (*uint32, strin
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
-		return -1, "", err
+		return nil, "", err
 	}
 
 	buf := []byte(value)
 	pid, err := defaultSearcher.Search(buf, ip, uint16(srcPort), isTCP)
 	if err != nil {
-		return -1, "", err
+		return nil, "", err
 	}
 
 	pp, err := getExecPathFromPID(pid)
-	return -1, pp, err
+	return nil, pp, err
 }
 
 func getExecPathFromPID(pid uint32) (string, error) {

@@ -5,7 +5,7 @@ package process
 import "net/netip"
 
 func findProcessName(network string, ip netip.Addr, srcPort int) (*uint32, string, error) {
-	return -1, "", ErrPlatformNotSupport
+	return nil, "", ErrPlatformNotSupport
 }
 
 func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32, uint32, error) {
