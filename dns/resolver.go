@@ -355,6 +355,7 @@ type NameServer struct {
 	Interface    *atomic.String
 	ProxyAdapter string
 	Params       map[string]string
+	PreferH3     bool
 }
 
 type FallbackFilter struct {

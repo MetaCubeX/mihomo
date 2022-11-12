@@ -863,7 +863,7 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 	return net.JoinHostPort(hostname, port), nil
 }
 
-func parseNameServer(servers []string) ([]dns.NameServer, error) {
+func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) {
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
@@ -889,7 +889,15 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
-			clearURL := url.URL{Scheme: "https", Host: u.Host, Path: u.Path}
+			host := u.Host
+			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
+				host = net.JoinHostPort(host, "443")
+			} else {
+				if err!=nil{
+					return nil,err
+				}
+			}
+			clearURL := url.URL{Scheme: "https", Host: host, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
 			if len(u.Fragment) != 0 {
@@ -928,17 +936,18 @@ func parseNameServer(servers []string) ([]dns.NameServer, error) {
 				ProxyAdapter: proxyAdapter,
 				Interface:    dialer.DefaultInterface,
 				Params:       params,
+				PreferH3:     preferH3,
 			},
 		)
 	}
 	return nameservers, nil
 }
 
-func parseNameServerPolicy(nsPolicy map[string]string) (map[string]dns.NameServer, error) {
+func parseNameServerPolicy(nsPolicy map[string]string, preferH3 bool) (map[string]dns.NameServer, error) {
 	policy := map[string]dns.NameServer{}
 
 	for domain, server := range nsPolicy {
-		nameservers, err := parseNameServer([]string{server})
+		nameservers, err := parseNameServer([]string{server}, preferH3)
 		if err != nil {
 			return nil, err
 		}
@@ -1018,26 +1027,26 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		},
 	}
 	var err error
-	if dnsCfg.NameServer, err = parseNameServer(cfg.NameServer); err != nil {
+	if dnsCfg.NameServer, err = parseNameServer(cfg.NameServer, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
-	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback); err != nil {
+	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
-	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy); err != nil {
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
-	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver); err != nil {
+	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
 	if len(cfg.DefaultNameserver) == 0 {
 		return nil, errors.New("default nameserver should have at least one nameserver")
 	}
-	if dnsCfg.DefaultNameserver, err = parseNameServer(cfg.DefaultNameserver); err != nil {
+	if dnsCfg.DefaultNameserver, err = parseNameServer(cfg.DefaultNameserver, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 	// check default nameserver is pure ip addr
