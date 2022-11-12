@@ -19,6 +19,10 @@ import (
 	D "github.com/miekg/dns"
 )
 
+const (
+	MaxMsgSize = 65535
+)
+
 func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
 	var ttl uint32
 	switch {
@@ -59,13 +63,17 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver, s.Params, s.ProxyAdapter))
+			ret = append(ret, newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter))
 			continue
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		case "quic":
-			ret = append(ret, newDOQ(resolver, s.Addr, s.ProxyAdapter))
+			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter); err == nil {
+				ret = append(ret, doq)
+			}else{
+				log.Fatalln("DoQ format error: %v",err)
+			}
 			continue
 		}
 
