@@ -3,7 +3,6 @@ package tunnel
 import (
 	"context"
 	"fmt"
-	P "github.com/Dreamacro/clash/component/process"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
+	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/sniffer"
 	C "github.com/Dreamacro/clash/constant"
@@ -365,7 +365,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 				err.Error(),
 			)
 		} else {
-			log.Warnln("[TCP] dial %s (match %s(%s)) to %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.RemoteAddress(), err.Error())
+			log.Warnln("[TCP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceAddress(), metadata.RemoteAddress(), err.Error())
 		}
 		return
 	}
