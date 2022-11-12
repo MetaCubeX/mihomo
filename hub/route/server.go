@@ -9,7 +9,6 @@ import (
 	"time"
 
 	C "github.com/Dreamacro/clash/constant"
-	_ "github.com/Dreamacro/clash/constant/mime"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 
@@ -211,16 +210,26 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusOK)
 	}
 
+	ch := make(chan log.Event, 1024)
 	sub := log.Subscribe()
 	defer log.UnSubscribe(sub)
 	buf := &bytes.Buffer{}
-	var err error
-	for elm := range sub {
-		buf.Reset()
-		logM := elm
+
+	go func() {
+		for logM := range sub {
+			select {
+			case ch <- logM:
+			default:
+			}
+		}
+		close(ch)
+	}()
+
+	for logM := range ch {
 		if logM.LogLevel < level {
 			continue
 		}
+		buf.Reset()
 
 		if err := json.NewEncoder(buf).Encode(Log{
 			Type:    logM.Type(),
@@ -229,6 +238,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
+		var err error
 		if wsConn == nil {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()
