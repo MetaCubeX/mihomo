@@ -347,7 +347,7 @@ func (doq *dnsOverQUIC) openConnection() (conn quic.Connection, err error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		conn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", ipAddr, port)
 		if err != nil {
 			return nil, err
@@ -505,7 +505,7 @@ func getDialHandler(r *Resolver, proxyAdapter string) dialHandler {
 		if err != nil {
 			return nil, err
 		}
-		ip, err := r.ResolveIP(host)
+		ip, err := r.ResolveIP(ctx, host)
 		if err != nil {
 			return nil, err
 		}

@@ -38,7 +38,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		if c.r == nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
 		} else {
-			if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
+			if ip, err = resolver.ResolveIPWithResolver(ctx, c.host, c.r); err != nil {
 				return nil, fmt.Errorf("use default dns resolve failed: %w", err)
 			}
 			c.host = ip.String()

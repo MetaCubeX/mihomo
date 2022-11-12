@@ -23,6 +23,7 @@ import (
 )
 
 const DefaultDnsReadTimeout = time.Second * 10
+const DefaultDnsRelayTimeout = time.Second * 5
 
 type ListenerHandler struct {
 	sing.ListenerHandler
@@ -69,8 +70,10 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 			}
 
 			err = func() error {
+				ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
+				defer cancel()
 				inData := buff[:n]
-				msg, err := RelayDnsPacket(inData)
+				msg, err := RelayDnsPacket(ctx, inData)
 				if err != nil {
 					return err
 				}
@@ -117,8 +120,10 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				return err
 			}
 			go func() {
+				ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
+				defer cancel()
 				inData := buff.Bytes()
-				msg, err := RelayDnsPacket(inData)
+				msg, err := RelayDnsPacket(ctx, inData)
 				if err != nil {
 					buff.Release()
 					return
@@ -146,13 +151,13 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 	return h.ListenerHandler.NewPacketConnection(ctx, conn, metadata)
 }
 
-func RelayDnsPacket(payload []byte) ([]byte, error) {
+func RelayDnsPacket(ctx context.Context, payload []byte) ([]byte, error) {
 	msg := &D.Msg{}
 	if err := msg.Unpack(payload); err != nil {
 		return nil, err
 	}
 
-	r, err := resolver.ServeMsg(msg)
+	r, err := resolver.ServeMsg(ctx, msg)
 	if err != nil {
 		m := new(D.Msg)
 		m.SetRcode(msg, D.RcodeServerFailure)

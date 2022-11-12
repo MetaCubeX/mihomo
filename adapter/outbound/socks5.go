@@ -129,7 +129,7 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		err = errors.New("invalid UDP bind address")
 		return
 	} else if bindUDPAddr.IP.IsUnspecified() {
-		serverAddr, err := resolveUDPAddr("udp", ss.Addr())
+		serverAddr, err := resolveUDPAddr(ctx, "udp", ss.Addr())
 		if err != nil {
 			return nil, err
 		}

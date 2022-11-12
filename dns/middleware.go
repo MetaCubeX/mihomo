@@ -156,7 +156,7 @@ func withResolver(resolver *Resolver) handler {
 			return handleMsgWithEmptyAnswer(r), nil
 		}
 
-		msg, err := resolver.Exchange(r)
+		msg, err := resolver.ExchangeContext(ctx, r)
 		if err != nil {
 			log.Debugln("[DNS Server] Exchange %s failed: %v", q.String(), err)
 			return msg, err
