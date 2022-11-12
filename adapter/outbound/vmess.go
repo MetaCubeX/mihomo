@@ -18,6 +18,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	clashVMess "github.com/Dreamacro/clash/transport/vmess"
+
 	"github.com/sagernet/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 )

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/auth"
@@ -396,6 +397,21 @@ func ParseAddrToSocksAddr(addr net.Addr) Addr {
 		binary.BigEndian.PutUint16(parsed[1+net.IPv6len:], uint16(port))
 	}
 	return parsed
+}
+
+func AddrFromStdAddrPort(addrPort netip.AddrPort) Addr {
+	addr := addrPort.Addr()
+	if addr.Is4() {
+		ip4 := addr.As4()
+		return []byte{AtypIPv4, ip4[0], ip4[1], ip4[2], ip4[3], byte(addrPort.Port() >> 8), byte(addrPort.Port())}
+	}
+
+	buf := make([]byte, 1+net.IPv6len+2)
+	buf[0] = AtypIPv6
+	copy(buf[1:], addr.AsSlice())
+	buf[1+net.IPv6len] = byte(addrPort.Port() >> 8)
+	buf[1+net.IPv6len+1] = byte(addrPort.Port())
+	return buf
 }
 
 // DecodeUDPPacket split `packet` to addr payload, and this function is mutable with `packet`

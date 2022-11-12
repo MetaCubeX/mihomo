@@ -3,6 +3,7 @@ package fakeip
 import (
 	"errors"
 	"net/netip"
+	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/common/nnip"
@@ -26,7 +27,7 @@ type store interface {
 	FlushFakeIP() error
 }
 
-// Pool is a implementation about fake ip generator without storage
+// Pool is an implementation about fake ip generator without storage
 type Pool struct {
 	gateway netip.Addr
 	first   netip.Addr
@@ -43,6 +44,9 @@ type Pool struct {
 func (p *Pool) Lookup(host string) netip.Addr {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+
+	// RFC4343: DNS Case Insensitive, we SHOULD return result with all cases.
+	host = strings.ToLower(host)
 	if ip, exist := p.store.GetByHost(host); exist {
 		return ip
 	}

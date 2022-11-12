@@ -33,11 +33,11 @@ var structSize = func() int {
 	}
 }()
 
-func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
+func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32, uint32, error) {
 	return 0, 0, ErrPlatformNotSupport
 }
 
-func findProcessName(network string, ip netip.Addr, port int) (int32, string, error) {
+func findProcessName(network string, ip netip.Addr, port int) (*uint32, string, error) {
 	var spath string
 	switch network {
 	case TCP:
@@ -45,14 +45,14 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 	case UDP:
 		spath = "net.inet.udp.pcblist_n"
 	default:
-		return -1, "", ErrInvalidNetwork
+		return nil, "", ErrInvalidNetwork
 	}
 
 	isIPv4 := ip.Is4()
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
-		return -1, "", err
+		return nil, "", err
 	}
 
 	buf := []byte(value)
@@ -96,7 +96,7 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 			// xsocket_n.so_last_pid
 			pid := readNativeUint32(buf[so+68 : so+72])
 			pp, err := getExecPathFromPID(pid)
-			return -1, pp, err
+			return nil, pp, err
 		}
 
 		// udp packet connection may be not equal with srcIP
@@ -106,10 +106,10 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 	}
 
 	if network == UDP && fallbackUDPProcess != "" {
-		return -1, fallbackUDPProcess, nil
+		return nil, fallbackUDPProcess, nil
 	}
 
-	return -1, "", ErrNotFound
+	return nil, "", ErrNotFound
 }
 
 func getExecPathFromPID(pid uint32) (string, error) {
