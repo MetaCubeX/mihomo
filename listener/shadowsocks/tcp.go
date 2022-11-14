@@ -1,6 +1,8 @@
 package shadowsocks
 
 import (
+	"context"
+	"github.com/database64128/tfo-go/v2"
 	"net"
 	"strings"
 
@@ -21,7 +23,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (*Listener, error) {
+func New(config string, inboundTfo bool, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (*Listener, error) {
 	addr, cipher, password, err := ParseSSURL(config)
 	if err != nil {
 		return nil, err
@@ -46,7 +48,10 @@ func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.Packet
 		sl.udpListeners = append(sl.udpListeners, ul)
 
 		//TCP
-		l, err := net.Listen("tcp", addr)
+		lc := tfo.ListenConfig{
+			DisableTFO: !inboundTfo,
+		}
+		l, err := lc.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			return nil, err
 		}

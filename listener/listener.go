@@ -280,7 +280,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 		return
 	}
 
-	listener, err := sing_shadowsocks.New(shadowSocksConfig, tcpIn, udpIn)
+	listener, err := sing_shadowsocks.New(shadowSocksConfig, inboundTfo, tcpIn, udpIn)
 	if err != nil {
 		return
 	}
@@ -320,7 +320,7 @@ func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- 
 		return
 	}
 
-	listener, err := sing_vmess.New(vmessConfig, tcpIn, udpIn)
+	listener, err := sing_vmess.New(vmessConfig, inboundTfo, tcpIn, udpIn)
 	if err != nil {
 		return
 	}
