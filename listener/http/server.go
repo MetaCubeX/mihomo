@@ -2,7 +2,7 @@ package http
 
 import (
 	"context"
-	"github.com/database64128/tfo-go"
+	"github.com/database64128/tfo-go/v2"
 	"net"
 
 	"github.com/Dreamacro/clash/common/cache"
