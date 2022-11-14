@@ -3,7 +3,6 @@ package tunnel
 import (
 	"context"
 	"fmt"
-	P "github.com/Dreamacro/clash/component/process"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
+	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/sniffer"
 	C "github.com/Dreamacro/clash/constant"
@@ -276,9 +276,15 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
 		if err != nil {
 			if rule == nil {
-				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
+				log.Warnln(
+					"[UDP] dial %s %s --> %s error: %s",
+					proxy.Name(),
+					metadata.SourceAddress(),
+					metadata.RemoteAddress(),
+					err.Error(),
+				)
 			} else {
-				log.Warnln("[UDP] dial %s (match %s/%s) to %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.RemoteAddress(), err.Error())
+				log.Warnln("[UDP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceAddress(), metadata.RemoteAddress(), err.Error())
 			}
 			return
 		}
@@ -351,9 +357,15 @@ func handleTCPConn(connCtx C.ConnContext) {
 	remoteConn, err := proxy.DialContext(ctx, dialMetadata)
 	if err != nil {
 		if rule == nil {
-			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
+			log.Warnln(
+				"[TCP] dial %s %s --> %s error: %s",
+				proxy.Name(),
+				metadata.SourceAddress(),
+				metadata.RemoteAddress(),
+				err.Error(),
+			)
 		} else {
-			log.Warnln("[TCP] dial %s (match %s(%s)) to %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.RemoteAddress(), err.Error())
+			log.Warnln("[TCP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceAddress(), metadata.RemoteAddress(), err.Error())
 		}
 		return
 	}
@@ -375,7 +387,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 	case mode == Direct:
 		log.Infoln("[TCP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 	default:
-		log.Infoln("[TCP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceAddress(), metadata.RemoteAddress())
+		log.Infoln(
+			"[TCP] %s --> %s doesn't match any rule using DIRECT",
+			metadata.SourceAddress(),
+			metadata.RemoteAddress(),
+		)
 	}
 
 	handleSocket(connCtx, remoteConn)
@@ -422,9 +438,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			} else {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
-				if uid != -1 {
-					metadata.Uid = &uid
-				}
+				metadata.Uid = uid
 				processFound = true
 			}
 		}

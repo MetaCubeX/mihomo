@@ -29,7 +29,7 @@ var (
 	once sync.Once
 )
 
-func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
+func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32, uint32, error) {
 	return 0, 0, ErrPlatformNotSupport
 }
 
@@ -62,7 +62,7 @@ func initWin32API() error {
 	return nil
 }
 
-func findProcessName(network string, ip netip.Addr, srcPort int) (int32, string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (*uint32, string, error) {
 	once.Do(func() {
 		err := initWin32API()
 		if err != nil {
@@ -86,22 +86,22 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (int32, string,
 		fn = getExUDPTable
 		class = udpTablePid
 	default:
-		return -1, "", ErrInvalidNetwork
+		return nil, "", ErrInvalidNetwork
 	}
 
 	buf, err := getTransportTable(fn, family, class)
 	if err != nil {
-		return -1, "", err
+		return nil, "", err
 	}
 
 	s := newSearcher(family == windows.AF_INET, network == TCP)
 
 	pid, err := s.Search(buf, ip, uint16(srcPort))
 	if err != nil {
-		return -1, "", err
+		return nil, "", err
 	}
 	pp, err := getExecPathFromPID(pid)
-	return -1, pp, err
+	return nil, pp, err
 }
 
 type searcher struct {
@@ -220,7 +220,8 @@ func getExecPathFromPID(pid uint32) (string, error) {
 		uintptr(h),
 		uintptr(1),
 		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(unsafe.Pointer(&size)))
+		uintptr(unsafe.Pointer(&size)),
+	)
 	if r1 == 0 {
 		return "", err
 	}

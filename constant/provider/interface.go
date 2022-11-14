@@ -1,7 +1,7 @@
 package provider
 
 import (
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant"
 )
 
 // Vehicle Type
@@ -65,7 +65,9 @@ type Provider interface {
 // ProxyProvider interface
 type ProxyProvider interface {
 	Provider
-	Proxies() []C.Proxy
+	Proxies() []constant.Proxy
+	// Touch is used to inform the provider that the proxy is actually being used while getting the list of proxies.
+	// Commonly used in DialContext and DialPacketConn
 	Touch()
 	HealthCheck()
 	Version() uint32
@@ -98,7 +100,7 @@ func (rt RuleType) String() string {
 type RuleProvider interface {
 	Provider
 	Behavior() RuleType
-	Match(*C.Metadata) bool
+	Match(*constant.Metadata) bool
 	ShouldResolveIP() bool
-	AsRule(adaptor string) C.Rule
+	AsRule(adaptor string) constant.Rule
 }
