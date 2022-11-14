@@ -13,6 +13,8 @@ github.com/coreos/go-iptables v0.6.0 h1:is9qnZMPYjLd8LYqmm/qlE+wwEgJIkTYdhV3rfZo
 github.com/coreos/go-iptables v0.6.0/go.mod h1:Qe8Bv2Xik5FyTXwgIbLAnv2sWSBmvWdFETJConOQ//Q=
 github.com/database64128/tfo-go v1.1.2 h1:GwxtJp09BdUTVEoeT421t231eNZoGOCRkklbl4WI1kU=
 github.com/database64128/tfo-go v1.1.2/go.mod h1:jgrSUPyOvTGQyn6irCOpk7L2W/q/0VLZZcovQiMi+bI=
+github.com/database64128/tfo-go/v2 v2.0.2 h1:5rGgkJeLEKlNaqredfrPQNLnctn1b+1fq/8tdKdOzJg=
+github.com/database64128/tfo-go/v2 v2.0.2/go.mod h1:FDdt4JaAsRU66wsYHxSVytYimPkKIHupVsxM+5DhvjY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

@@ -2,7 +2,7 @@ package socks
 
 import (
 	"context"
-	"github.com/database64128/tfo-go"
+	"github.com/database64128/tfo-go/v2"
 	"io"
 	"net"
 
