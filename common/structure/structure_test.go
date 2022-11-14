@@ -137,3 +137,45 @@ func TestStructure_Nest(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, s.BazOptional, goal)
 }
+
+func TestStructure_SliceNilValue(t *testing.T) {
+	rawMap := map[string]any{
+		"foo": 1,
+		"bar": []any{"bar", nil},
+	}
+
+	goal := &BazSlice{
+		Foo: 1,
+		Bar: []string{"bar", ""},
+	}
+
+	s := &BazSlice{}
+	err := weakTypeDecoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.Equal(t, goal.Bar, s.Bar)
+
+	s = &BazSlice{}
+	err = decoder.Decode(rawMap, s)
+	assert.NotNil(t, err)
+}
+
+func TestStructure_SliceNilValueComplex(t *testing.T) {
+	rawMap := map[string]any{
+		"bar": []any{map[string]any{"bar": "foo"}, nil},
+	}
+
+	s := &struct {
+		Bar []map[string]any `test:"bar"`
+	}{}
+
+	err := decoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.Nil(t, s.Bar[1])
+
+	ss := &struct {
+		Bar []Baz `test:"bar"`
+	}{}
+
+	err = decoder.Decode(rawMap, ss)
+	assert.NotNil(t, err)
+}

@@ -5,21 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/convert"
-	clashHttp "github.com/Dreamacro/clash/component/http"
-	"github.com/Dreamacro/clash/component/resource"
-	"github.com/Dreamacro/clash/log"
 	"github.com/dlclark/regexp2"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/convert"
+	clashHttp "github.com/Dreamacro/clash/component/http"
+	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
-
-	"gopkg.in/yaml.v3"
+	"github.com/Dreamacro/clash/log"
 )
 
 const (

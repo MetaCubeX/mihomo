@@ -119,7 +119,7 @@ type Metadata struct {
 	InPort      string     `json:"inboundPort"`
 	Host        string     `json:"host"`
 	DNSMode     DNSMode    `json:"dnsMode"`
-	Uid         *int32     `json:"uid"`
+	Uid         *uint32    `json:"uid"`
 	Process     string     `json:"process"`
 	ProcessPath string     `json:"processPath"`
 	RemoteDst   string     `json:"remoteDestination"`
