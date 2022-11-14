@@ -83,8 +83,9 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 	}
 
 	doh := &dnsOverHTTPS{
-		url: u,
-		r:   r,
+		url:          u,
+		r:            r,
+		proxyAdapter: proxyAdapter,
 		quicConfig: &quic.Config{
 			KeepAlivePeriod: QUICKeepAlivePeriod,
 			TokenStore:      newQUICTokenStore(),
@@ -98,8 +99,8 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 }
 
 // Address implements the Upstream interface for *dnsOverHTTPS.
-func (p *dnsOverHTTPS) Address() string { return p.url.String() }
-func (p *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
+func (doh *dnsOverHTTPS) Address() string { return doh.url.String() }
+func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	// Quote from https://www.rfc-editor.org/rfc/rfc8484.html:
 	// In order to maximize HTTP cache friendliness, DoH clients using media
 	// formats that include the ID field from the DNS message header, such
@@ -117,31 +118,31 @@ func (p *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Ms
 
 	// Check if there was already an active client before sending the request.
 	// We'll only attempt to re-connect if there was one.
-	client, isCached, err := p.getClient()
+	client, isCached, err := doh.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to init http client: %w", err)
 	}
 
 	// Make the first attempt to send the DNS query.
-	msg, err = p.exchangeHTTPS(ctx, client, m)
+	msg, err = doh.exchangeHTTPS(ctx, client, m)
 
 	// Make up to 2 attempts to re-create the HTTP client and send the request
 	// again.  There are several cases (mostly, with QUIC) where this workaround
 	// is necessary to make HTTP client usable.  We need to make 2 attempts in
 	// the case when the connection was closed (due to inactivity for example)
 	// AND the server refuses to open a 0-RTT connection.
-	for i := 0; isCached && p.shouldRetry(err) && i < 2; i++ {
-		client, err = p.resetClient(err)
+	for i := 0; isCached && doh.shouldRetry(err) && i < 2; i++ {
+		client, err = doh.resetClient(err)
 		if err != nil {
 			return nil, fmt.Errorf("failed to reset http client: %w", err)
 		}
 
-		msg, err = p.exchangeHTTPS(ctx, client, m)
+		msg, err = doh.exchangeHTTPS(ctx, client, m)
 	}
 
 	if err != nil {
 		// If the request failed anyway, make sure we don't use this client.
-		_, resErr := p.resetClient(err)
+		_, resErr := doh.resetClient(err)
 
 		return nil, fmt.Errorf("err:%v,resErr:%v", err, resErr)
 	}
@@ -150,28 +151,28 @@ func (p *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Ms
 }
 
 // Exchange implements the Upstream interface for *dnsOverHTTPS.
-func (p *dnsOverHTTPS) Exchange(m *D.Msg) (*D.Msg, error) {
-	return p.ExchangeContext(context.Background(), m)
+func (doh *dnsOverHTTPS) Exchange(m *D.Msg) (*D.Msg, error) {
+	return doh.ExchangeContext(context.Background(), m)
 }
 
 // Close implements the Upstream interface for *dnsOverHTTPS.
-func (p *dnsOverHTTPS) Close() (err error) {
-	p.clientMu.Lock()
-	defer p.clientMu.Unlock()
+func (doh *dnsOverHTTPS) Close() (err error) {
+	doh.clientMu.Lock()
+	defer doh.clientMu.Unlock()
 
-	runtime.SetFinalizer(p, nil)
+	runtime.SetFinalizer(doh, nil)
 
-	if p.client == nil {
+	if doh.client == nil {
 		return nil
 	}
 
-	return p.closeClient(p.client)
+	return doh.closeClient(doh.client)
 }
 
 // closeClient cleans up resources used by client if necessary.  Note, that at
 // this point it should only be done for HTTP/3 as it may leak due to keep-alive
 // connections.
-func (p *dnsOverHTTPS) closeClient(client *http.Client) (err error) {
+func (doh *dnsOverHTTPS) closeClient(client *http.Client) (err error) {
 	if isHTTP3(client) {
 		return client.Transport.(io.Closer).Close()
 	}
@@ -180,15 +181,15 @@ func (p *dnsOverHTTPS) closeClient(client *http.Client) (err error) {
 }
 
 // exchangeHTTPS logs the request and its result and calls exchangeHTTPSClient.
-func (p *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, req *D.Msg) (resp *D.Msg, err error) {
-	resp, err = p.exchangeHTTPSClient(ctx, client, req)
+func (doh *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, req *D.Msg) (resp *D.Msg, err error) {
+	resp, err = doh.exchangeHTTPSClient(ctx, client, req)
 
 	return resp, err
 }
 
 // exchangeHTTPSClient sends the DNS query to a DoH resolver using the specified
 // http.Client instance.
-func (p *dnsOverHTTPS) exchangeHTTPSClient(
+func (doh *dnsOverHTTPS) exchangeHTTPSClient(
 	ctx context.Context,
 	client *http.Client,
 	req *D.Msg,
@@ -206,10 +207,10 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 		method = http3.MethodGet0RTT
 	}
 
-	p.url.RawQuery = fmt.Sprintf("dns=%s", base64.RawURLEncoding.EncodeToString(buf))
-	httpReq, err := http.NewRequest(method, p.url.String(), nil)
+	doh.url.RawQuery = fmt.Sprintf("dns=%s", base64.RawURLEncoding.EncodeToString(buf))
+	httpReq, err := http.NewRequest(method, doh.url.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating http request to %s: %w", p.url, err)
+		return nil, fmt.Errorf("creating http request to %s: %w", doh.url, err)
 	}
 
 	httpReq.Header.Set("Accept", "application/dns-message")
@@ -217,13 +218,13 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 	_ = httpReq.WithContext(ctx)
 	httpResp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("requesting %s: %w", p.url, err)
+		return nil, fmt.Errorf("requesting %s: %w", doh.url, err)
 	}
 	defer httpResp.Body.Close()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", p.url, err)
+		return nil, fmt.Errorf("reading %s: %w", doh.url, err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
@@ -232,7 +233,7 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 				"expected status %d, got %d from %s",
 				http.StatusOK,
 				httpResp.StatusCode,
-				p.url,
+				doh.url,
 			)
 	}
 
@@ -241,7 +242,7 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unpacking response from %s: body is %s: %w",
-			p.url,
+			doh.url,
 			body,
 			err,
 		)
@@ -256,7 +257,7 @@ func (p *dnsOverHTTPS) exchangeHTTPSClient(
 
 // shouldRetry checks what error we have received and returns true if we should
 // re-create the HTTP client and retry the request.
-func (p *dnsOverHTTPS) shouldRetry(err error) (ok bool) {
+func (doh *dnsOverHTTPS) shouldRetry(err error) (ok bool) {
 	if err == nil {
 		return false
 	}
@@ -281,57 +282,57 @@ func (p *dnsOverHTTPS) shouldRetry(err error) (ok bool) {
 // resetClient triggers re-creation of the *http.Client that is used by this
 // upstream.  This method accepts the error that caused resetting client as
 // depending on the error we may also reset the QUIC config.
-func (p *dnsOverHTTPS) resetClient(resetErr error) (client *http.Client, err error) {
-	p.clientMu.Lock()
-	defer p.clientMu.Unlock()
+func (doh *dnsOverHTTPS) resetClient(resetErr error) (client *http.Client, err error) {
+	doh.clientMu.Lock()
+	defer doh.clientMu.Unlock()
 
 	if errors.Is(resetErr, quic.Err0RTTRejected) {
 		// Reset the TokenStore only if 0-RTT was rejected.
-		p.resetQUICConfig()
+		doh.resetQUICConfig()
 	}
 
-	oldClient := p.client
+	oldClient := doh.client
 	if oldClient != nil {
-		closeErr := p.closeClient(oldClient)
+		closeErr := doh.closeClient(oldClient)
 		if closeErr != nil {
 			log.Warnln("warning: failed to close the old http client: %v", closeErr)
 		}
 	}
 
 	log.Debugln("re-creating the http client due to %v", resetErr)
-	p.client, err = p.createClient()
+	doh.client, err = doh.createClient()
 
-	return p.client, err
+	return doh.client, err
 }
 
 // getQUICConfig returns the QUIC config in a thread-safe manner.  Note, that
 // this method returns a pointer, it is forbidden to change its properties.
-func (p *dnsOverHTTPS) getQUICConfig() (c *quic.Config) {
-	p.quicConfigGuard.Lock()
-	defer p.quicConfigGuard.Unlock()
+func (doh *dnsOverHTTPS) getQUICConfig() (c *quic.Config) {
+	doh.quicConfigGuard.Lock()
+	defer doh.quicConfigGuard.Unlock()
 
-	return p.quicConfig
+	return doh.quicConfig
 }
 
 // resetQUICConfig Re-create the token store to make sure we're not trying to
 // use invalid for 0-RTT.
-func (p *dnsOverHTTPS) resetQUICConfig() {
-	p.quicConfigGuard.Lock()
-	defer p.quicConfigGuard.Unlock()
+func (doh *dnsOverHTTPS) resetQUICConfig() {
+	doh.quicConfigGuard.Lock()
+	defer doh.quicConfigGuard.Unlock()
 
-	p.quicConfig = p.quicConfig.Clone()
-	p.quicConfig.TokenStore = newQUICTokenStore()
+	doh.quicConfig = doh.quicConfig.Clone()
+	doh.quicConfig.TokenStore = newQUICTokenStore()
 }
 
 // getClient gets or lazily initializes an HTTP client (and transport) that will
 // be used for this DoH resolver.
-func (p *dnsOverHTTPS) getClient() (c *http.Client, isCached bool, err error) {
+func (doh *dnsOverHTTPS) getClient() (c *http.Client, isCached bool, err error) {
 	startTime := time.Now()
 
-	p.clientMu.Lock()
-	defer p.clientMu.Unlock()
-	if p.client != nil {
-		return p.client, true, nil
+	doh.clientMu.Lock()
+	defer doh.clientMu.Unlock()
+	if doh.client != nil {
+		return doh.client, true, nil
 	}
 
 	// Timeout can be exceeded while waiting for the lock. This happens quite
@@ -342,17 +343,17 @@ func (p *dnsOverHTTPS) getClient() (c *http.Client, isCached bool, err error) {
 	}
 
 	log.Debugln("creating a new http client")
-	p.client, err = p.createClient()
+	doh.client, err = doh.createClient()
 
-	return p.client, false, err
+	return doh.client, false, err
 }
 
 // createClient creates a new *http.Client instance.  The HTTP protocol version
 // will depend on whether HTTP3 is allowed and provided by this upstream.  Note,
 // that we'll attempt to establish a QUIC connection when creating the client in
 // order to check whether HTTP3 is supported.
-func (p *dnsOverHTTPS) createClient() (*http.Client, error) {
-	transport, err := p.createTransport()
+func (doh *dnsOverHTTPS) createClient() (*http.Client, error) {
+	transport, err := doh.createTransport()
 	if err != nil {
 		return nil, fmt.Errorf("initializing http transport: %w", err)
 	}
@@ -363,9 +364,9 @@ func (p *dnsOverHTTPS) createClient() (*http.Client, error) {
 		Jar:       nil,
 	}
 
-	p.client = client
+	doh.client = client
 
-	return p.client, nil
+	return doh.client, nil
 }
 
 // createTransport initializes an HTTP transport that will be used specifically
@@ -374,7 +375,7 @@ func (p *dnsOverHTTPS) createClient() (*http.Client, error) {
 // that this function will first attempt to establish a QUIC connection (if
 // HTTP3 is enabled in the upstream options).  If this attempt is successful,
 // it returns an HTTP3 transport, otherwise it returns the H1/H2 transport.
-func (p *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
+func (doh *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
 	tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(
 		&tls.Config{
 			InsecureSkipVerify:     false,
@@ -382,15 +383,15 @@ func (p *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
 			SessionTicketsDisabled: false,
 		})
 	var nextProtos []string
-	for _, v := range p.httpVersions {
+	for _, v := range doh.httpVersions {
 		nextProtos = append(nextProtos, string(v))
 	}
 	tlsConfig.NextProtos = nextProtos
-	dialContext := getDialHandler(p.r, p.proxyAdapter)
+	dialContext := getDialHandler(doh.r, doh.proxyAdapter)
 	// First, we attempt to create an HTTP3 transport.  If the probe QUIC
 	// connection is established successfully, we'll be using HTTP3 for this
 	// upstream.
-	transportH3, err := p.createTransportH3(tlsConfig, dialContext)
+	transportH3, err := doh.createTransportH3(tlsConfig, dialContext)
 	if err == nil {
 		log.Debugln("using HTTP/3 for this upstream: QUIC was faster")
 		return transportH3, nil
@@ -398,7 +399,7 @@ func (p *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
 
 	log.Debugln("using HTTP/2 for this upstream: %v", err)
 
-	if !p.supportsHTTP() {
+	if !doh.supportsHTTP() {
 		return nil, errors.New("HTTP1/1 and HTTP2 are not supported by this upstream")
 	}
 
@@ -551,14 +552,14 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 // probeH3 runs a test to check whether QUIC is faster than TLS for this
 // upstream.  If the test is successful it will return the address that we
 // should use to establish the QUIC connections.
-func (p *dnsOverHTTPS) probeH3(
+func (doh *dnsOverHTTPS) probeH3(
 	tlsConfig *tls.Config,
 	dialContext dialHandler,
 ) (addr string, err error) {
 	// We're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
 	// what IP is actually reachable (when there are v4/v6 addresses).
-	rawConn, err := dialContext(context.Background(), "udp", p.url.Host)
+	rawConn, err := dialContext(context.Background(), "udp", doh.url.Host)
 	if err != nil {
 		return "", fmt.Errorf("failed to dial: %w", err)
 	}
@@ -567,13 +568,17 @@ func (p *dnsOverHTTPS) probeH3(
 
 	udpConn, ok := rawConn.(*net.UDPConn)
 	if !ok {
-		return "", fmt.Errorf("not a UDP connection to %s", p.Address())
+		if packetConn, ok := rawConn.(*wrapPacketConn); !ok {
+			return "", fmt.Errorf("not a UDP connection to %s", doh.Address())
+		} else {
+			addr = packetConn.RemoteAddr().String()
+		}
+	} else {
+		addr = udpConn.RemoteAddr().String()
 	}
 
-	addr = udpConn.RemoteAddr().String()
-
 	// Avoid spending time on probing if this upstream only supports HTTP/3.
-	if p.supportsH3() && !p.supportsHTTP() {
+	if doh.supportsH3() && !doh.supportsHTTP() {
 		return addr, nil
 	}
 
@@ -593,8 +598,8 @@ func (p *dnsOverHTTPS) probeH3(
 	// Run probeQUIC and probeTLS in parallel and see which one is faster.
 	chQuic := make(chan error, 1)
 	chTLS := make(chan error, 1)
-	go p.probeQUIC(addr, probeTLSCfg, chQuic)
-	go p.probeTLS(dialContext, probeTLSCfg, chTLS)
+	go doh.probeQUIC(addr, probeTLSCfg, chQuic)
+	go doh.probeTLS(dialContext, probeTLSCfg, chTLS)
 
 	select {
 	case quicErr := <-chQuic:
@@ -618,16 +623,16 @@ func (p *dnsOverHTTPS) probeH3(
 
 // probeQUIC attempts to establish a QUIC connection to the specified address.
 // We run probeQUIC and probeTLS in parallel and see which one is faster.
-func (p *dnsOverHTTPS) probeQUIC(addr string, tlsConfig *tls.Config, ch chan error) {
+func (doh *dnsOverHTTPS) probeQUIC(addr string, tlsConfig *tls.Config, ch chan error) {
 	startTime := time.Now()
 
 	timeout := DefaultTimeout
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(timeout))
 	defer cancel()
 
-	conn, err := p.dialQuic(ctx, addr, tlsConfig, p.getQUICConfig())
+	conn, err := doh.dialQuic(ctx, addr, tlsConfig, doh.getQUICConfig())
 	if err != nil {
-		ch <- fmt.Errorf("opening QUIC connection to %s: %w", p.Address(), err)
+		ch <- fmt.Errorf("opening QUIC connection to %s: %w", doh.Address(), err)
 		return
 	}
 
@@ -642,10 +647,10 @@ func (p *dnsOverHTTPS) probeQUIC(addr string, tlsConfig *tls.Config, ch chan err
 
 // probeTLS attempts to establish a TLS connection to the specified address. We
 // run probeQUIC and probeTLS in parallel and see which one is faster.
-func (p *dnsOverHTTPS) probeTLS(dialContext dialHandler, tlsConfig *tls.Config, ch chan error) {
+func (doh *dnsOverHTTPS) probeTLS(dialContext dialHandler, tlsConfig *tls.Config, ch chan error) {
 	startTime := time.Now()
 
-	conn, err := p.tlsDial(dialContext, "tcp", tlsConfig)
+	conn, err := doh.tlsDial(dialContext, "tcp", tlsConfig)
 	if err != nil {
 		ch <- fmt.Errorf("opening TLS connection: %w", err)
 		return
@@ -661,8 +666,8 @@ func (p *dnsOverHTTPS) probeTLS(dialContext dialHandler, tlsConfig *tls.Config, 
 }
 
 // supportsH3 returns true if HTTP/3 is supported by this upstream.
-func (p *dnsOverHTTPS) supportsH3() (ok bool) {
-	for _, v := range p.supportedHTTPVersions() {
+func (doh *dnsOverHTTPS) supportsH3() (ok bool) {
+	for _, v := range doh.supportedHTTPVersions() {
 		if v == C.HTTPVersion3 {
 			return true
 		}
@@ -672,8 +677,8 @@ func (p *dnsOverHTTPS) supportsH3() (ok bool) {
 }
 
 // supportsHTTP returns true if HTTP/1.1 or HTTP2 is supported by this upstream.
-func (p *dnsOverHTTPS) supportsHTTP() (ok bool) {
-	for _, v := range p.supportedHTTPVersions() {
+func (doh *dnsOverHTTPS) supportsHTTP() (ok bool) {
+	for _, v := range doh.supportedHTTPVersions() {
 		if v == C.HTTPVersion11 || v == C.HTTPVersion2 {
 			return true
 		}
@@ -683,8 +688,8 @@ func (p *dnsOverHTTPS) supportsHTTP() (ok bool) {
 }
 
 // supportedHTTPVersions returns the list of supported HTTP versions.
-func (p *dnsOverHTTPS) supportedHTTPVersions() (v []C.HTTPVersion) {
-	v = p.httpVersions
+func (doh *dnsOverHTTPS) supportedHTTPVersions() (v []C.HTTPVersion) {
+	v = doh.httpVersions
 	if v == nil {
 		v = DefaultHTTPVersions
 	}
