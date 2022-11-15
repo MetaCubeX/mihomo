@@ -1,7 +1,7 @@
 github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8 h1:FBo40lMrk1bZZzJRJx8U+bQUPhLDGTUJ/Q5NV5BbO4Q=
 github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8/go.mod h1:ssOrRsOmdxa768Wr78vnh2B8JozgLsMzG/g+0qEC7uk=
-github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115070342-5f9900cebd8b h1:DZ5F0w2b1pAh/IpnB8SP2P22pq6NfafyzyPtrhzzG2g=
-github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115070342-5f9900cebd8b/go.mod h1:16sNARQbsFbYIzAuPySszQA6Wfgzk7GWSzh1a6kDrUU=
+github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115121930-f1357ec9c15e h1:61mKDq9ldYCH3Yb/Pelib+ISIXegprbm1CSPGB+HpT4=
+github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115121930-f1357ec9c15e/go.mod h1:16sNARQbsFbYIzAuPySszQA6Wfgzk7GWSzh1a6kDrUU=
 github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc h1:B1vmR4cwDjJQ6YM8NkuXmt9vIYOdV/+qA+F3UAFE3YY=
 github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc/go.mod h1:1u3pjXA9HmH7kRiBJqM3C/zPxrxnCLd3svmqtub/RFU=
 github.com/ajg/form v1.5.1 h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=

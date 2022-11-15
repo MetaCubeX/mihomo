@@ -46,7 +46,7 @@ replace github.com/lucas-clemente/quic-go => github.com/HyNetwork/quic-go v0.30.
 
 replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc
 
-replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115070342-5f9900cebd8b
+replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115121930-f1357ec9c15e
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
