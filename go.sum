@@ -1,5 +1,7 @@
 github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8 h1:FBo40lMrk1bZZzJRJx8U+bQUPhLDGTUJ/Q5NV5BbO4Q=
 github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8/go.mod h1:ssOrRsOmdxa768Wr78vnh2B8JozgLsMzG/g+0qEC7uk=
+github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115070342-5f9900cebd8b h1:DZ5F0w2b1pAh/IpnB8SP2P22pq6NfafyzyPtrhzzG2g=
+github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115070342-5f9900cebd8b/go.mod h1:16sNARQbsFbYIzAuPySszQA6Wfgzk7GWSzh1a6kDrUU=
 github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc h1:B1vmR4cwDjJQ6YM8NkuXmt9vIYOdV/+qA+F3UAFE3YY=
 github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc/go.mod h1:1u3pjXA9HmH7kRiBJqM3C/zPxrxnCLd3svmqtub/RFU=
 github.com/ajg/form v1.5.1 h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=
@@ -111,8 +113,6 @@ github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJ
 github.com/sagernet/sing v0.0.0-20220817130738-ce854cda8522/go.mod h1:QVsS5L/ZA2Q5UhQwLrn0Trw+msNd/NPGEhBKR/ioWiY=
 github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4 h1:LO7xMvMGhYmjQg2vjhTzsODyzs9/WLYu5Per+/8jIeo=
 github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4/go.mod h1:zvgDYKI+vCAW9RyfyrKTgleI+DOa8lzHMPC7VZo3OL4=
-github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6 h1:JJfDeYYhWunvtxsU/mOVNTmFQmnzGx9dY034qG6G3g4=
-github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6/go.mod h1:EX3RbZvrwAkPI2nuGa78T2iQXmrkT+/VQtskjou42xM=
 github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0 h1:z3kuD3hPNdEq7/wVy5lwE21f+8ZTazBtR81qswxJoCc=
 github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0/go.mod h1:bwhAdSNET1X+j9DOXGj9NIQR39xgcWIk1rOQ9lLD+gM=
 github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c h1:qP3ZOHnjZalvqbjundbXiv/YrNlo3HOgrKc+S1QGs0U=
@@ -147,8 +147,8 @@ go.uber.org/automaxprocs v1.5.1/go.mod h1:BF4eumQw0P9GtnuxxovUd06vwm1o18oMzFtK66
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
-golang.org/x/crypto v0.1.1-0.20221024173537-a3485e174077 h1:t5bjOfJPQfaG9NV1imLZM5E2uzaLGs5/NtyMtRNVjQ4=
-golang.org/x/crypto v0.1.1-0.20221024173537-a3485e174077/go.mod h1:RecgLatLF4+eUMCP1PoPZQb+cVrJcOPbHkTkbkB9sbw=
+golang.org/x/crypto v0.2.0 h1:BRXPfhNivWL5Yq0BGQ39a2sW6t44aODpfxkWjYdzewE=
+golang.org/x/crypto v0.2.0/go.mod h1:hebNnKkNXi2UzZN1eVRvBB7co0a+JxK6XbPiWVs/3J4=
 golang.org/x/exp v0.0.0-20220930202632-ec3f01382ef9 h1:RjggHMcaTVp0LOVZcW0bo8alwHrOaCrGUDgfWUHhnN4=
 golang.org/x/exp v0.0.0-20220930202632-ec3f01382ef9/go.mod h1:cyybsKvd6eL0RnXn6p/Grxp8F5bW7iYuBgsNCOHpMYE=
 golang.org/x/lint v0.0.0-20200302205851-738671d3881b/go.mod h1:3xt1FjdF8hUf6vQPIChWIBhFzV8gjjsPE/fR3IyQdNY=
@@ -168,8 +168,8 @@ golang.org/x/net v0.0.0-20201010224723-4f7140c49acb/go.mod h1:sp8m0HH+o8qH0wwXwY
 golang.org/x/net v0.0.0-20201110031124-69a78807bb2b/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
 golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4/go.mod h1:p54w0d4576C0XHj96bSt6lcn1PtDYWL6XObtHCRCNQM=
 golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
-golang.org/x/net v0.1.1-0.20221102181756-a1278a7f7ee0 h1:vZ44Ys50wUISbPd+jC8cRLSvhyfX9Ii/ZmDnn/aiJtM=
-golang.org/x/net v0.1.1-0.20221102181756-a1278a7f7ee0/go.mod h1:Cx3nUiGt4eDBEyega/BKRp+/AlGL8hYe7U9odMt2Cco=
+golang.org/x/net v0.2.0 h1:sZfSu1wtKLGlWI4ZZayP0ck9Y73K1ynO6gqzTdBVdPU=
+golang.org/x/net v0.2.0/go.mod h1:KqCZLdyyvdV855qA2rE3GC2aiw5xGR5TEjj8smXukLY=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20210220032951-036812b2e83c/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.1.0 h1:wsuoTGHzEhffawBOhz5CYhcrV4IdKZbEyZjBMuTp12o=
@@ -198,8 +198,8 @@ golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20220412211240-33da011f77ad/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220731174439-a90be440212d/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.1.1-0.20221102194838-fc697a31fa06 h1:E1pm64FqQa4v8dHd/bAneyMkR4hk8LTJhoSlc5mc1cM=
-golang.org/x/sys v0.1.1-0.20221102194838-fc697a31fa06/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.2.0 h1:ljd4t30dBnAvMZaQCevtY0xLLD0A+bRZXbgLMLU1F/A=
+golang.org/x/sys v0.2.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.3/go.mod h1:5Zoc/QRtKVWzQhOtBMvqHzDpF6irO9z98xDceosuGiQ=

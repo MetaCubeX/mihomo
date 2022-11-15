@@ -22,7 +22,7 @@ require (
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4
-	github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6
+	github.com/sagernet/sing-shadowsocks v0.0.0-20221112030934-e55284e180ea
 	github.com/sagernet/sing-tun v0.0.0-20221012082254-488c3b75f6fd
 	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0
 	github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c
@@ -32,11 +32,11 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.10.0
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.1.1-0.20221024173537-a3485e174077
+	golang.org/x/crypto v0.2.0
 	golang.org/x/exp v0.0.0-20220930202632-ec3f01382ef9
-	golang.org/x/net v0.1.1-0.20221102181756-a1278a7f7ee0
+	golang.org/x/net v0.2.0
 	golang.org/x/sync v0.1.0
-	golang.org/x/sys v0.1.1-0.20221102194838-fc697a31fa06
+	golang.org/x/sys v0.2.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
 
@@ -45,6 +45,8 @@ require (
 replace github.com/lucas-clemente/quic-go => github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8
 
 replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc
+
+replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115070342-5f9900cebd8b
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
