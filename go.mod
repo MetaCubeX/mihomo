@@ -3,6 +3,7 @@ module github.com/Dreamacro/clash
 go 1.19
 
 require (
+	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
 	github.com/database64128/tfo-go/v2 v2.0.2
@@ -24,7 +25,7 @@ require (
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4
 	github.com/sagernet/sing-shadowsocks v0.0.0-20221112030934-e55284e180ea
-	github.com/sagernet/sing-tun v0.0.0-20221012082254-488c3b75f6fd
+	github.com/sagernet/sing-tun v0.0.0-20221104121441-66c48a57776f
 	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0
 	github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c
 	github.com/sirupsen/logrus v1.9.0
@@ -47,7 +48,7 @@ replace github.com/lucas-clemente/quic-go => github.com/HyNetwork/quic-go v0.30.
 
 replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc
 
-replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221115121930-f1357ec9c15e
+replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221116103607-48a7095182b1
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
