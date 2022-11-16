@@ -159,9 +159,9 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	continueFetch := false
 	defer func() {
 		if continueFetch || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
-			defer cancel()
 			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+				defer cancel()
 				_, _ = r.exchangeWithoutCache(ctx, m) // ignore result, just for putMsgToCache
 			}()
 		}
