@@ -3,11 +3,11 @@ package route
 import (
 	"bytes"
 	"encoding/json"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel/statistic"
@@ -85,7 +85,7 @@ func Start(addr string, secret string) {
 		})
 	}
 
-	l, err := net.Listen("tcp", addr)
+	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		log.Errorln("External controller listen error: %s", err)
 		return

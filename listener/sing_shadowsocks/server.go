@@ -3,7 +3,6 @@ package sing_shadowsocks
 import (
 	"context"
 	"fmt"
-	"github.com/database64128/tfo-go/v2"
 	"net"
 	"strings"
 
@@ -33,7 +32,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, inboundTfo bool, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (C.AdvanceListener, error) {
+func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (C.AdvanceListener, error) {
 	addr, cipher, password, err := embedSS.ParseSSURL(config)
 	if err != nil {
 		return nil, err
@@ -57,7 +56,7 @@ func New(config string, inboundTfo bool, tcpIn chan<- C.ConnContext, udpIn chan<
 		sl.service, err = shadowaead_2022.NewServiceWithPassword(cipher, password, udpTimeout, h)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", cipher)
-		return embedSS.New(config, inboundTfo, tcpIn, udpIn)
+		return embedSS.New(config, tcpIn, udpIn)
 	}
 	if err != nil {
 		return nil, err
@@ -101,10 +100,7 @@ func New(config string, inboundTfo bool, tcpIn chan<- C.ConnContext, udpIn chan<
 		}()
 
 		//TCP
-		lc := tfo.ListenConfig{
-			DisableTFO: !inboundTfo,
-		}
-		l, err := lc.Listen(context.Background(), "tcp", addr)
+		l, err := inbound.Listen("tcp", addr)
 		if err != nil {
 			return nil, err
 		}

@@ -2,14 +2,13 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
 	"runtime"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -19,6 +18,7 @@ import (
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
 	SNI "github.com/Dreamacro/clash/component/sniffer"
+	"github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -26,6 +26,7 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	P "github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tproxy"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -335,7 +336,7 @@ func updateGeneral(general *config.General, force bool) {
 	bindAddress := general.BindAddress
 	P.SetBindAddress(bindAddress)
 
-	P.SetInboundTfo(general.InboundTfo)
+	inbound.SetTfo(general.InboundTfo)
 
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
