@@ -32,7 +32,7 @@ func New(config string, in chan<- C.ConnContext) (*Listener, error) {
 				log.Errorln("invalid target address %q", target)
 				return
 			}
-			l, err := net.Listen("tcp", addr)
+			l, err := inbound.Listen("tcp", addr)
 			if err != nil {
 				return
 			}

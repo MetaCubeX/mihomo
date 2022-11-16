@@ -2,7 +2,6 @@ package sing_vmess
 
 import (
 	"context"
-	"github.com/database64128/tfo-go/v2"
 	"net"
 	"net/url"
 	"strings"
@@ -25,7 +24,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, inboundTfo bool, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (*Listener, error) {
+func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (*Listener, error) {
 	addr, username, password, err := parseVmessURL(config)
 	if err != nil {
 		return nil, err
@@ -55,10 +54,7 @@ func New(config string, inboundTfo bool, tcpIn chan<- C.ConnContext, udpIn chan<
 		addr := addr
 
 		//TCP
-		lc := tfo.ListenConfig{
-			DisableTFO: !inboundTfo,
-		}
-		l, err := lc.Listen(context.Background(), "tcp", addr)
+		l, err := inbound.Listen("tcp", addr)
 		if err != nil {
 			return nil, err
 		}

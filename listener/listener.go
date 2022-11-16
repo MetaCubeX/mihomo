@@ -14,7 +14,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/http"
-	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
 	"github.com/Dreamacro/clash/listener/sing_shadowsocks"
@@ -29,7 +28,6 @@ import (
 var (
 	allowLan    = false
 	bindAddress = "*"
-	inboundTfo  = false
 
 	socksListener       *socks.Listener
 	socksUDPListener    *socks.UDPListener
@@ -103,14 +101,6 @@ func SetBindAddress(host string) {
 	bindAddress = host
 }
 
-func SetInboundTfo(itfo bool) {
-	inboundTfo = itfo
-}
-
-func NewInner(tcpIn chan<- C.ConnContext) {
-	inner.New(tcpIn)
-}
-
 func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 	httpMux.Lock()
 	defer httpMux.Unlock()
@@ -136,7 +126,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 		return
 	}
 
-	httpListener, err = http.New(addr, inboundTfo, tcpIn)
+	httpListener, err = http.New(addr, tcpIn)
 	if err != nil {
 		log.Errorln("Start HTTP server error: %s", err.Error())
 		return
@@ -187,7 +177,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	tcpListener, err := socks.New(addr, inboundTfo, tcpIn)
+	tcpListener, err := socks.New(addr, tcpIn)
 	if err != nil {
 		return
 	}
@@ -280,7 +270,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 		return
 	}
 
-	listener, err := sing_shadowsocks.New(shadowSocksConfig, inboundTfo, tcpIn, udpIn)
+	listener, err := sing_shadowsocks.New(shadowSocksConfig, tcpIn, udpIn)
 	if err != nil {
 		return
 	}
@@ -320,7 +310,7 @@ func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- 
 		return
 	}
 
-	listener, err := sing_vmess.New(vmessConfig, inboundTfo, tcpIn, udpIn)
+	listener, err := sing_vmess.New(vmessConfig, tcpIn, udpIn)
 	if err != nil {
 		return
 	}
@@ -487,7 +477,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 		return
 	}
 
-	mixedListener, err = mixed.New(addr, inboundTfo, tcpIn)
+	mixedListener, err = mixed.New(addr, tcpIn)
 	if err != nil {
 		return
 	}
