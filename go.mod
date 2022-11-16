@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
+	github.com/database64128/tfo-go/v2 v2.0.2
 	github.com/dlclark/regexp2 v1.7.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
@@ -50,7 +51,6 @@ replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadow
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
-	github.com/database64128/tfo-go/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
