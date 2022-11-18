@@ -36,6 +36,7 @@ type WireGuard struct {
 	tunDevice wireguard.Device
 	dialer    *wgDialer
 	startOnce sync.Once
+	startErr  error
 }
 
 type WireGuardOption struct {
@@ -198,10 +199,10 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 	w.dialer.options = opts
 	var conn net.Conn
 	w.startOnce.Do(func() {
-		err = w.tunDevice.Start()
+		w.startErr = w.tunDevice.Start()
 	})
-	if err != nil {
-		return nil, err
+	if w.startErr != nil {
+		return nil, w.startErr
 	}
 	if !metadata.Resolved() {
 		var addrs []netip.Addr
@@ -226,8 +227,11 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	w.dialer.options = opts
 	var pc net.PacketConn
 	w.startOnce.Do(func() {
-		err = w.tunDevice.Start()
+		w.startErr = w.tunDevice.Start()
 	})
+	if w.startErr != nil {
+		return nil, w.startErr
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +245,9 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	pc, err = w.tunDevice.ListenPacket(ctx, M.ParseSocksaddr(metadata.Pure().RemoteAddress()))
 	if err != nil {
 		return nil, err
+	}
+	if pc == nil {
+		return nil, E.New("packetConn is nil")
 	}
 	return newPacketConn(&wgPacketConn{pc, w}, w), nil
 }
