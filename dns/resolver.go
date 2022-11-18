@@ -187,7 +187,10 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	q := m.Question[0]
 
-	ret, err, shared := r.group.Do(q.String(), func() (result any, err error) {
+	ch := r.group.DoChan(q.String(), func() (result any, err error) {
+		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout) // reset timeout in singleflight
+		defer cancel()
+
 		defer func() {
 			if err != nil {
 				return
@@ -208,6 +211,21 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		}
 		return r.batchExchange(ctx, r.main, m)
 	})
+
+	var result singleflight.Result
+
+	select {
+	case result = <-ch:
+		break
+	case <-ctx.Done():
+		select {
+		case result = <-ch:
+			break
+		}
+		return nil, ctx.Err()
+	}
+
+	ret, err, shared := result.Val, result.Err, result.Shared
 
 	if err == nil {
 		msg = ret.(*D.Msg)
