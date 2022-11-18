@@ -18,7 +18,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
-	P "github.com/Dreamacro/clash/listener"
+	"github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -75,10 +75,11 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateGeneral(cfg.General, force)
 	updateDNS(cfg.DNS)
 	updateExperimental(cfg)
+	updateTunnels(cfg.Tunnels)
 }
 
 func GetGeneral() *config.General {
-	ports := P.GetPorts()
+	ports := listener.GetPorts()
 	authenticator := []string{}
 	if auth := authStore.Authenticator(); auth != nil {
 		authenticator = auth.Users()
@@ -92,8 +93,8 @@ func GetGeneral() *config.General {
 			TProxyPort:     ports.TProxyPort,
 			MixedPort:      ports.MixedPort,
 			Authentication: authenticator,
-			AllowLan:       P.AllowLan(),
-			BindAddress:    P.BindAddress(),
+			AllowLan:       listener.AllowLan(),
+			BindAddress:    listener.BindAddress(),
 		},
 		Mode:     tunnel.Mode(),
 		LogLevel: log.Level(),
@@ -161,6 +162,10 @@ func updateRules(rules []C.Rule) {
 	tunnel.UpdateRules(rules)
 }
 
+func updateTunnels(tunnels []config.Tunnel) {
+	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
+}
+
 func updateGeneral(general *config.General, force bool) {
 	log.SetLevel(general.LogLevel)
 	tunnel.SetMode(general.Mode)
@@ -176,19 +181,19 @@ func updateGeneral(general *config.General, force bool) {
 	}
 
 	allowLan := general.AllowLan
-	P.SetAllowLan(allowLan)
+	listener.SetAllowLan(allowLan)
 
 	bindAddress := general.BindAddress
-	P.SetBindAddress(bindAddress)
+	listener.SetBindAddress(bindAddress)
 
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
-	P.ReCreateHTTP(general.Port, tcpIn)
-	P.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
-	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
-	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	listener.ReCreateHTTP(general.Port, tcpIn)
+	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
+	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
+	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
+	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

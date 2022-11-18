@@ -19,6 +19,7 @@ const (
 	SOCKS5
 	REDIR
 	TPROXY
+	TUNNEL
 )
 
 type NetWork int
@@ -61,15 +62,16 @@ func (t Type) MarshalJSON() ([]byte, error) {
 
 // Metadata is used to store connection address
 type Metadata struct {
-	NetWork     NetWork `json:"network"`
-	Type        Type    `json:"type"`
-	SrcIP       net.IP  `json:"sourceIP"`
-	DstIP       net.IP  `json:"destinationIP"`
-	SrcPort     string  `json:"sourcePort"`
-	DstPort     string  `json:"destinationPort"`
-	Host        string  `json:"host"`
-	DNSMode     DNSMode `json:"dnsMode"`
-	ProcessPath string  `json:"processPath"`
+	NetWork      NetWork `json:"network"`
+	Type         Type    `json:"type"`
+	SrcIP        net.IP  `json:"sourceIP"`
+	DstIP        net.IP  `json:"destinationIP"`
+	SrcPort      string  `json:"sourcePort"`
+	DstPort      string  `json:"destinationPort"`
+	Host         string  `json:"host"`
+	DNSMode      DNSMode `json:"dnsMode"`
+	ProcessPath  string  `json:"processPath"`
+	SpecialProxy string  `json:"specialProxy"`
 }
 
 func (m *Metadata) RemoteAddress() string {
