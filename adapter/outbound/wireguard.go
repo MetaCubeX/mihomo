@@ -216,6 +216,9 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 	if err != nil {
 		return nil, err
 	}
+	if conn == nil {
+		return nil, E.New("conn is nil")
+	}
 	return NewConn(&wgConn{conn, w}, w), nil
 }
 
