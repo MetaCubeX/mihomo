@@ -1,34 +1,41 @@
-package proxy
+package listener
 
 import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/http"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/listener/tproxy"
+	"github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/samber/lo"
 )
 
 var (
 	allowLan    = false
 	bindAddress = "*"
 
-	socksListener     *socks.Listener
-	socksUDPListener  *socks.UDPListener
-	httpListener      *http.Listener
-	redirListener     *redir.Listener
-	redirUDPListener  *tproxy.UDPListener
-	tproxyListener    *tproxy.Listener
-	tproxyUDPListener *tproxy.UDPListener
-	mixedListener     *mixed.Listener
-	mixedUDPLister    *socks.UDPListener
+	socksListener      *socks.Listener
+	socksUDPListener   *socks.UDPListener
+	httpListener       *http.Listener
+	redirListener      *redir.Listener
+	redirUDPListener   *tproxy.UDPListener
+	tproxyListener     *tproxy.Listener
+	tproxyUDPListener  *tproxy.UDPListener
+	mixedListener      *mixed.Listener
+	mixedUDPLister     *socks.UDPListener
+	tunnelTCPListeners = map[string]*tunnel.Listener{}
+	tunnelUDPListeners = map[string]*tunnel.PacketConn{}
 
 	// lock for recreate function
 	socksMux  sync.Mutex
@@ -36,6 +43,7 @@ var (
 	redirMux  sync.Mutex
 	tproxyMux sync.Mutex
 	mixedMux  sync.Mutex
+	tunnelMux sync.Mutex
 )
 
 type Ports struct {
@@ -299,6 +307,95 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	}
 
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
+}
+
+func PatchTunnel(tunnels []config.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+	tunnelMux.Lock()
+	defer tunnelMux.Unlock()
+
+	type addrProxy struct {
+		network string
+		addr    string
+		target  string
+		proxy   string
+	}
+
+	tcpOld := lo.Map(
+		lo.Keys(tunnelTCPListeners),
+		func(key string, _ int) addrProxy {
+			parts := strings.Split(key, "/")
+			return addrProxy{
+				network: "tcp",
+				addr:    parts[0],
+				target:  parts[1],
+				proxy:   parts[2],
+			}
+		},
+	)
+	udpOld := lo.Map(
+		lo.Keys(tunnelUDPListeners),
+		func(key string, _ int) addrProxy {
+			parts := strings.Split(key, "/")
+			return addrProxy{
+				network: "udp",
+				addr:    parts[0],
+				target:  parts[1],
+				proxy:   parts[2],
+			}
+		},
+	)
+	oldElm := lo.Union(tcpOld, udpOld)
+
+	newElm := lo.FlatMap(
+		tunnels,
+		func(tunnel config.Tunnel, _ int) []addrProxy {
+			return lo.Map(
+				tunnel.Network,
+				func(network string, _ int) addrProxy {
+					return addrProxy{
+						network: network,
+						addr:    tunnel.Address,
+						target:  tunnel.Target,
+						proxy:   tunnel.Proxy,
+					}
+				},
+			)
+		},
+	)
+
+	needClose, needCreate := lo.Difference(oldElm, newElm)
+
+	for _, elm := range needClose {
+		key := fmt.Sprintf("%s/%s/%s", elm.addr, elm.target, elm.proxy)
+		if elm.network == "tcp" {
+			tunnelTCPListeners[key].Close()
+			delete(tunnelTCPListeners, key)
+		} else {
+			tunnelUDPListeners[key].Close()
+			delete(tunnelUDPListeners, key)
+		}
+	}
+
+	for _, elm := range needCreate {
+		key := fmt.Sprintf("%s/%s/%s", elm.addr, elm.target, elm.proxy)
+		if elm.network == "tcp" {
+			l, err := tunnel.New(elm.addr, elm.target, elm.proxy, tcpIn)
+			if err != nil {
+				log.Errorln("Start tunnel %s error: %w", elm.target, err)
+				continue
+			}
+			tunnelTCPListeners[key] = l
+			log.Infoln("Tunnel(tcp/%s) proxy %s listening at: %s", elm.target, elm.proxy, tunnelTCPListeners[key].Address())
+		} else {
+			l, err := tunnel.NewUDP(elm.addr, elm.target, elm.proxy, udpIn)
+			if err != nil {
+				log.Errorln("Start tunnel %s error: %w", elm.target, err)
+				continue
+			}
+			tunnelUDPListeners[key] = l
+			log.Infoln("Tunnel(udp/%s) proxy %s listening at: %s", elm.target, elm.proxy, tunnelUDPListeners[key].Address())
+		}
+	}
 }
 
 // GetPorts return the ports of proxy servers
