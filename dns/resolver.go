@@ -187,12 +187,16 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	q := m.Question[0]
 
-	ch := r.group.DoChan(q.String(), func() (result any, err error) {
+	retryNum := 0
+	retryMax := 3
+	fn := func() (result any, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout) // reset timeout in singleflight
 		defer cancel()
 
 		defer func() {
 			if err != nil {
+				result = retryNum
+				retryNum++
 				return
 			}
 
@@ -210,7 +214,9 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 			return r.batchExchange(ctx, matched, m)
 		}
 		return r.batchExchange(ctx, r.main, m)
-	})
+	}
+
+	ch := r.group.DoChan(q.String(), fn)
 
 	var result singleflight.Result
 
@@ -219,13 +225,24 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		break
 	case <-ctx.Done():
 		select {
-		case result = <-ch:
+		case result = <-ch: // maybe ctxDone and chFinish in same time, get DoChan's result as much as possible
 			break
+		default:
+			go func() { // start a retrying monitor in background
+				result := <-ch
+				ret, err, shared := result.Val, result.Err, result.Shared
+				if err != nil && !shared && ret.(int) < retryMax { // retry
+					r.group.DoChan(q.String(), fn)
+				}
+			}()
+			return nil, ctx.Err()
 		}
-		return nil, ctx.Err()
 	}
 
 	ret, err, shared := result.Val, result.Err, result.Shared
+	if err != nil && !shared && ret.(int) < retryMax { // retry
+		r.group.DoChan(q.String(), fn)
+	}
 
 	if err == nil {
 		msg = ret.(*D.Msg)
