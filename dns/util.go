@@ -216,7 +216,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
 	for _, client := range clients {
 		r := client
-		fn := func() (*D.Msg, error) {
+		fast.Go(func() (*D.Msg, error) {
 			m, err := r.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
@@ -224,27 +224,6 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 				return nil, errors.New("server failure")
 			}
 			return m, nil
-		}
-		fast.Go(func() (*D.Msg, error) {
-			ch := make(chan result, 1)
-			go func() {
-				m, err := fn()
-				ch <- result{
-					Msg:   m,
-					Error: err,
-				}
-			}()
-			select {
-			case r := <-ch:
-				return r.Msg, r.Error
-			case <-ctx.Done():
-				select {
-				case r := <-ch:
-					return r.Msg, r.Error
-				default:
-					return nil, ctx.Err()
-				}
-			}
 		})
 	}
 
