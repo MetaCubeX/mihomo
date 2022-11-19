@@ -157,7 +157,7 @@ func (doq *dnsOverQUIC) Close() (err error) {
 // through it and return the response it got from the server.
 func (doq *dnsOverQUIC) exchangeQUIC(ctx context.Context, msg *D.Msg) (resp *D.Msg, err error) {
 	var conn quic.Connection
-	conn, err = doq.getConnection(true)
+	conn, err = doq.getConnection(ctx,true)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (doq *dnsOverQUIC) getBytesPool() (pool *sync.Pool) {
 // argument controls whether we should try to use the existing cached
 // connection.  If it is false, we will forcibly create a new connection and
 // close the existing one if needed.
-func (doq *dnsOverQUIC) getConnection(useCached bool) (quic.Connection, error) {
+func (doq *dnsOverQUIC) getConnection(ctx context.Context,useCached bool) (quic.Connection, error) {
 	var conn quic.Connection
 	doq.connMu.RLock()
 	conn = doq.conn
@@ -244,7 +244,7 @@ func (doq *dnsOverQUIC) getConnection(useCached bool) (quic.Connection, error) {
 	defer doq.connMu.Unlock()
 
 	var err error
-	conn, err = doq.openConnection()
+	conn, err = doq.openConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn quic.Connection) (q
 
 	// We can get here if the old QUIC connection is not valid anymore.  We
 	// should try to re-create the connection again in this case.
-	newConn, err := doq.getConnection(false)
+	newConn, err := doq.getConnection(ctx,false)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn quic.Connection) (q
 }
 
 // openConnection opens a new QUIC connection.
-func (doq *dnsOverQUIC) openConnection() (conn quic.Connection, err error) {
+func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connection, err error) {
 	tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(
 		&tls.Config{
 			InsecureSkipVerify: false,
@@ -313,14 +313,12 @@ func (doq *dnsOverQUIC) openConnection() (conn quic.Connection, err error) {
 	// we're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
 	// what IP is actually reachable (when there're v4/v6 addresses).
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
 	rawConn, err := getDialHandler(doq.r, doq.proxyAdapter)(ctx, "udp", doq.addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open a QUIC connection: %w", err)
 	}
 	// It's never actually used
 	_ = rawConn.Close()
-	cancel()
 	var addr string
 	udpConn, ok := rawConn.(*net.UDPConn)
 	if !ok {
@@ -365,8 +363,6 @@ func (doq *dnsOverQUIC) openConnection() (conn quic.Connection, err error) {
 		udp = wrapConn
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), DefaultTimeout)
-	defer cancel()
 	host, _, err := net.SplitHostPort(doq.addr)
 	if err != nil {
 		return nil, err
