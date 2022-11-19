@@ -204,11 +204,17 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 				}
 			}
 		case <-ctx.Done():
+			err=ctx.Err()
 			break
 		}
 	}
 
-	return nil, ctx.Err()
+	if err==nil {
+		err=fmt.Errorf("dual stack dial failed")
+	}else{
+		err=fmt.Errorf("dual stack dial failed:%w",err)
+	}
+	return nil, err
 }
 
 func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
@@ -291,6 +297,7 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 	connCount := len(ips)
 	var fallback dialResult
 	var primaryError error
+	var finalError error
 	for i := 0; i < connCount; i++ {
 		select {
 		case res := <-results:
@@ -315,6 +322,7 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 			if fallback.done && fallback.error == nil {
 				return fallback.Conn, nil
 			}
+			finalError=ctx.Err()
 			break
 		}
 	}
@@ -331,11 +339,13 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 		return nil, fallback.error
 	}
 
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+	if finalError==nil {
+		finalError=fmt.Errorf("all ips %v tcp shake hands failed", ips)
+	}else{
+		finalError=fmt.Errorf("concurrent dial failed:%w",finalError)
 	}
 
-	return nil, fmt.Errorf("all ips %v tcp shake hands failed", ips)
+	return nil, finalError
 }
 
 func singleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
