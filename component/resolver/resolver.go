@@ -70,8 +70,6 @@ func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return DefaultResolver.LookupIPv4(ctx, host)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
-	defer cancel()
 	ipAddrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
 	if err != nil {
 		return nil, err
@@ -129,8 +127,6 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return DefaultResolver.LookupIPv6(ctx, host)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultDNSTimeout)
-	defer cancel()
 	ipAddrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip6", host)
 	if err != nil {
 		return nil, err
