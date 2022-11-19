@@ -140,7 +140,7 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 		msg, err = doh.exchangeHTTPS(ctx, client, m)
 	}
 
-	if err != nil && !errors.Is(err, context.Canceled) {
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		// If the request failed anyway, make sure we don't use this client.
 		_, resErr := doh.resetClient(ctx, err)
 
