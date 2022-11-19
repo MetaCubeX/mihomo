@@ -208,14 +208,13 @@ func (doh *dnsOverHTTPS) exchangeHTTPSClient(
 	}
 
 	doh.url.RawQuery = fmt.Sprintf("dns=%s", base64.RawURLEncoding.EncodeToString(buf))
-	httpReq, err := http.NewRequest(method, doh.url.String(), nil)
+	httpReq, err := http.NewRequestWithContext(ctx, method, doh.url.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating http request to %s: %w", doh.url, err)
 	}
 
 	httpReq.Header.Set("Accept", "application/dns-message")
 	httpReq.Header.Set("User-Agent", "")
-	_ = httpReq.WithContext(ctx)
 	httpResp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("requesting %s: %w", doh.url, err)
