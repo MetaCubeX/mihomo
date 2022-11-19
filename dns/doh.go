@@ -144,7 +144,7 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 		// If the request failed anyway, make sure we don't use this client.
 		_, resErr := doh.resetClient(ctx, err)
 
-		return nil, fmt.Errorf("err:%v,resErr:%v", err, resErr)
+		return nil, fmt.Errorf("%w (resErr:%v)", err, resErr)
 	}
 
 	return msg, err
