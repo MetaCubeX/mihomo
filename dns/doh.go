@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,7 +141,7 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 		msg, err = doh.exchangeHTTPS(ctx, client, m)
 	}
 
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		// If the request failed anyway, make sure we don't use this client.
 		_, resErr := doh.resetClient(ctx, err)
 
