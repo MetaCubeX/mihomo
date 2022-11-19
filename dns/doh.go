@@ -354,7 +354,7 @@ func (doh *dnsOverHTTPS) getClient(ctx context.Context) (c *http.Client, isCache
 func (doh *dnsOverHTTPS) createClient(ctx context.Context) (*http.Client, error) {
 	transport, err := doh.createTransport(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("initializing http transport: %w", err)
+		return nil, fmt.Errorf("[%s] initializing http transport: %w", doh.url.String(), err)
 	}
 
 	client := &http.Client{
@@ -392,11 +392,11 @@ func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripp
 	// upstream.
 	transportH3, err := doh.createTransportH3(ctx, tlsConfig, dialContext)
 	if err == nil {
-		log.Debugln("using HTTP/3 for this upstream: QUIC was faster")
+		log.Debugln("[%s] using HTTP/3 for this upstream: QUIC was faster", doh.url.String())
 		return transportH3, nil
 	}
 
-	log.Debugln("using HTTP/2 for this upstream: %v", err)
+	log.Debugln("[%s] using HTTP/2 for this upstream: %v", doh.url.String(), err)
 
 	if !doh.supportsHTTP() {
 		return nil, errors.New("HTTP1/1 and HTTP2 are not supported by this upstream")
