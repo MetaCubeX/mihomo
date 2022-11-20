@@ -37,8 +37,9 @@ const (
 	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
 	DefaultMaxIncomingStreams      = 1024
 
-	DefaultALPN     = "hysteria"
-	DefaultProtocol = "udp"
+	DefaultALPN        = "hysteria"
+	DefaultProtocol    = "udp"
+	DefaultHopInterval = 114
 )
 
 var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
@@ -89,7 +90,7 @@ type HysteriaOption struct {
 	BasicOption
 	Name                string   `proxy:"name"`
 	Server              string   `proxy:"server"`
-	Port                int      `proxy:"port"`
+	Port                string   `proxy:"port"`
 	Protocol            string   `proxy:"protocol,omitempty"`
 	ObfsProtocol        string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
 	Up                  string   `proxy:"up"`
@@ -108,6 +109,7 @@ type HysteriaOption struct {
 	ReceiveWindowConn   int      `proxy:"recv_window_conn,omitempty"`
 	ReceiveWindow       int      `proxy:"recv_window,omitempty"`
 	DisableMTUDiscovery bool     `proxy:"disable_mtu_discovery,omitempty"`
+	HopInterval         int      `proxy:"hop_interval"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
@@ -132,7 +134,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		},
 	}
 
-	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
+	addr := net.JoinHostPort(option.Server, option.Port)
 	serverName := option.Server
 	if option.SNI != "" {
 		serverName = option.SNI
@@ -198,6 +200,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if option.Protocol == "" {
 		option.Protocol = DefaultProtocol
 	}
+
+	if option.HopInterval == 0 {
+		option.HopInterval = DefaultHopInterval
+	}
+	hopInterval := time.Duration(int64(option.HopInterval)) * time.Second
+
 	if option.ReceiveWindowConn == 0 {
 		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow / 10
 		quicConfig.MaxStreamReceiveWindow = DefaultStreamReceiveWindow
@@ -235,7 +243,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	client, err := core.NewClient(
 		addr, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
 			return hyCongestion.NewBrutalSender(congestion.ByteCount(refBPS))
-		}, obfuscator,
+		}, obfuscator, hopInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("hysteria %s create error: %w", addr, err)

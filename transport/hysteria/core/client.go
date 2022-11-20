@@ -45,11 +45,13 @@ type Client struct {
 	udpSessionMutex sync.RWMutex
 	udpSessionMap   map[uint32]chan *udpMessage
 	udpDefragger    defragger
+
+	hopInterval time.Duration
 }
 
 func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
 	transport *transport.ClientTransport, sendBPS uint64, recvBPS uint64, congestionFactory CongestionFactory,
-	obfuscator obfs.Obfuscator) (*Client, error) {
+	obfuscator obfs.Obfuscator, hopInterval time.Duration) (*Client, error) {
 	quicConfig.DisablePathMTUDiscovery = quicConfig.DisablePathMTUDiscovery || pmtud_fix.DisablePathMTUDiscovery
 	c := &Client{
 		transport:         transport,
@@ -62,12 +64,13 @@ func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.C
 		obfuscator:        obfuscator,
 		tlsConfig:         tlsConfig,
 		quicConfig:        quicConfig,
+		hopInterval:       hopInterval,
 	}
 	return c, nil
 }
 
 func (c *Client) connectToServer(dialer transport.PacketDialer) error {
-	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.tlsConfig, c.quicConfig, c.obfuscator, dialer)
+	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.tlsConfig, c.quicConfig, c.obfuscator, c.hopInterval, dialer)
 	if err != nil {
 		return err
 	}
