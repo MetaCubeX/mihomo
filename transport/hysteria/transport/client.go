@@ -26,13 +26,13 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 		}
 		if obfs != nil {
 			if isMultiPortAddr(server) {
-				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, obfs)
+				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, obfs, dialer)
 			}
 			oc := udp.NewObfsUDPConn(conn, obfs)
 			return oc, nil, nil
 		} else {
 			if isMultiPortAddr(server) {
-				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, nil)
+				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, nil, dialer)
 			}
 			return conn, nil, nil
 		}

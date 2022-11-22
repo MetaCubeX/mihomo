@@ -2,6 +2,7 @@ package udp
 
 import (
 	"errors"
+	"github.com/Dreamacro/clash/transport/hysteria/transport"
 	"math/rand"
 	"net"
 	"strconv"
@@ -57,20 +58,20 @@ type udpPacket struct {
 	addr net.Addr
 }
 
-func NewObfsUDPHopClientPacketConn(server string, hopInterval time.Duration, obfs obfs.Obfuscator) (*ObfsUDPHopClientPacketConn, net.Addr, error) {
+func NewObfsUDPHopClientPacketConn(server string, hopInterval time.Duration, obfs obfs.Obfuscator, dialer transport.PacketDialer) (*ObfsUDPHopClientPacketConn, net.Addr, error) {
 	host, ports, err := parseAddr(server)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Resolve the server IP address, then attach the ports to UDP addresses
-	ip, err := net.ResolveIPAddr("ip", host)
+	ip, err := dialer.RemoteAddr(host)
 	if err != nil {
 		return nil, nil, err
 	}
 	serverAddrs := make([]net.Addr, len(ports))
 	for i, port := range ports {
 		serverAddrs[i] = &net.UDPAddr{
-			IP:   ip.IP,
+			IP:   net.ParseIP(ip.String()),
 			Port: int(port),
 		}
 	}
@@ -89,7 +90,7 @@ func NewObfsUDPHopClientPacketConn(server string, hopInterval time.Duration, obf
 			},
 		},
 	}
-	curConn, err := net.ListenUDP("udp", nil)
+	curConn, err := dialer.ListenPacket()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -99,7 +100,7 @@ func NewObfsUDPHopClientPacketConn(server string, hopInterval time.Duration, obf
 		conn.currentConn = curConn
 	}
 	go conn.recvRoutine(conn.currentConn)
-	go conn.hopRoutine()
+	go conn.hopRoutine(dialer)
 	return conn, conn.serverAddr, nil
 }
 
@@ -119,26 +120,26 @@ func (c *ObfsUDPHopClientPacketConn) recvRoutine(conn net.PacketConn) {
 	}
 }
 
-func (c *ObfsUDPHopClientPacketConn) hopRoutine() {
+func (c *ObfsUDPHopClientPacketConn) hopRoutine(dialer transport.PacketDialer) {
 	ticker := time.NewTicker(c.hopInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			c.hop()
+			c.hop(dialer)
 		case <-c.closeChan:
 			return
 		}
 	}
 }
 
-func (c *ObfsUDPHopClientPacketConn) hop() {
+func (c *ObfsUDPHopClientPacketConn) hop(dialer transport.PacketDialer) {
 	c.connMutex.Lock()
 	defer c.connMutex.Unlock()
 	if c.closed {
 		return
 	}
-	newConn, err := net.ListenUDP("udp", nil)
+	newConn, err := dialer.ListenPacket()
 	if err != nil {
 		// Skip this hop if failed to listen
 		return
