@@ -381,7 +381,7 @@ func PatchTunnel(tunnels []config.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan
 		if elm.network == "tcp" {
 			l, err := tunnel.New(elm.addr, elm.target, elm.proxy, tcpIn)
 			if err != nil {
-				log.Errorln("Start tunnel %s error: %w", elm.target, err)
+				log.Errorln("Start tunnel %s error: %s", elm.target, err.Error())
 				continue
 			}
 			tunnelTCPListeners[key] = l
@@ -389,7 +389,7 @@ func PatchTunnel(tunnels []config.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan
 		} else {
 			l, err := tunnel.NewUDP(elm.addr, elm.target, elm.proxy, udpIn)
 			if err != nil {
-				log.Errorln("Start tunnel %s error: %w", elm.target, err)
+				log.Errorln("Start tunnel %s error: %s", elm.target, err.Error())
 				continue
 			}
 			tunnelUDPListeners[key] = l
