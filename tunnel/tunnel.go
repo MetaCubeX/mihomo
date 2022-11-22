@@ -152,8 +152,8 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 		proxy, exist = proxies[metadata.SpecialProxy]
 		if !exist {
 			err = fmt.Errorf("proxy %s not found", metadata.SpecialProxy)
-			return
 		}
+		return
 	}
 
 	switch mode {
