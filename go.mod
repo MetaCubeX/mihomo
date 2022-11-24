@@ -16,6 +16,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/insomniacslk/dhcp v0.0.0-20221001123530-5308ebe5334c
+	github.com/jpillora/backoff v1.0.0
 	github.com/lucas-clemente/quic-go v0.29.1
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.1.1
