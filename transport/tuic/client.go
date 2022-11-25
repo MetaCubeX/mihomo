@@ -39,6 +39,7 @@ type Client struct {
 	RequestTimeout        int
 	MaxUdpRelayPacketSize int
 
+	Inference   any
 	Key         any
 	LastVisited time.Time
 	UDP         bool
