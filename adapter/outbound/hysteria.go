@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/congestion"
+	"github.com/metacubex/quic-go"
+	"github.com/metacubex/quic-go/congestion"
 	M "github.com/sagernet/sing/common/metadata"
 
 	"github.com/Dreamacro/clash/component/dialer"

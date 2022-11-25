@@ -8,7 +8,7 @@ import (
 	"github.com/Dreamacro/clash/transport/hysteria/conns/udp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/wechat"
 	obfsPkg "github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"github.com/lucas-clemente/quic-go"
+	"github.com/metacubex/quic-go"
 	"net"
 )
 

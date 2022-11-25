@@ -8,7 +8,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/metacubex/quic-go"
 	"lukechampine.com/blake3"
 
 	C "github.com/Dreamacro/clash/constant"

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/metacubex/quic-go"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
@@ -23,23 +23,23 @@ import (
 
 type Tuic struct {
 	*Base
-	option    *TuicOption
 	getClient func(opts ...dialer.Option) *tuic.Client
 }
 
 type TuicOption struct {
 	BasicOption
-	Name              string   `proxy:"name"`
-	Server            string   `proxy:"server"`
-	Port              int      `proxy:"port"`
-	Token             string   `proxy:"token"`
-	Ip                string   `proxy:"ip,omitempty"`
-	HeartbeatInterval int      `proxy:"heartbeat_interval,omitempty"`
-	ALPN              []string `proxy:"alpn,omitempty"`
-	ReduceRtt         bool     `proxy:"reduce_rtt,omitempty"`
-	RequestTimeout    int      `proxy:"request_timeout,omitempty"`
-	UdpRelayMode      string   `proxy:"udp_relay_mode,omitempty"`
-	DisableSni        bool     `proxy:"disable_sni,omitempty"`
+	Name                 string   `proxy:"name"`
+	Server               string   `proxy:"server"`
+	Port                 int      `proxy:"port"`
+	Token                string   `proxy:"token"`
+	Ip                   string   `proxy:"ip,omitempty"`
+	HeartbeatInterval    int      `proxy:"heartbeat_interval,omitempty"`
+	ALPN                 []string `proxy:"alpn,omitempty"`
+	ReduceRtt            bool     `proxy:"reduce_rtt,omitempty"`
+	RequestTimeout       int      `proxy:"request_timeout,omitempty"`
+	UdpRelayMode         string   `proxy:"udp_relay_mode,omitempty"`
+	CongestionController string   `proxy:"congestion_controller,omitempty"`
+	DisableSni           bool     `proxy:"disable_sni,omitempty"`
 
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string `proxy:"fingerprint,omitempty"`
@@ -189,13 +189,14 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			return client
 		}
 		client := &tuic.Client{
-			TlsConfig:      tlsConfig,
-			QuicConfig:     quicConfig,
-			Host:           host,
-			Token:          tkn,
-			UdpRelayMode:   option.UdpRelayMode,
-			ReduceRtt:      option.ReduceRtt,
-			RequestTimeout: option.RequestTimeout,
+			TlsConfig:            tlsConfig,
+			QuicConfig:           quicConfig,
+			Host:                 host,
+			Token:                tkn,
+			UdpRelayMode:         option.UdpRelayMode,
+			CongestionController: option.CongestionController,
+			ReduceRtt:            option.ReduceRtt,
+			RequestTimeout:       option.RequestTimeout,
 		}
 		clientMap[o] = client
 		return client
@@ -210,7 +211,6 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			iface:  option.Interface,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		option:    &option,
 		getClient: getClient,
 	}, nil
 }
