@@ -39,13 +39,14 @@ type Client struct {
 	RequestTimeout        int
 	MaxUdpRelayPacketSize int
 
+	Key         any
 	LastVisited time.Time
 	UDP         bool
 
 	quicConn  quic.Connection
 	connMutex sync.Mutex
 
-	openStreams atomic.Int32
+	OpenStreams atomic.Int32
 
 	udpInputMap sync.Map
 }
@@ -242,9 +243,9 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if err != nil {
 		return nil, err
 	}
-	openStreams := t.openStreams.Add(1)
+	openStreams := t.OpenStreams.Add(1)
 	if openStreams >= MaxOpenStreams {
-		t.openStreams.Add(-1)
+		t.OpenStreams.Add(-1)
 		return nil, TooManyOpenStreams
 	}
 	stream, err := func() (stream *quicStreamConn, err error) {
@@ -300,6 +301,9 @@ type quicStreamConn struct {
 	lAddr  net.Addr
 	rAddr  net.Addr
 	client *Client
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func (q *quicStreamConn) Write(p []byte) (n int, err error) {
@@ -309,8 +313,15 @@ func (q *quicStreamConn) Write(p []byte) (n int, err error) {
 }
 
 func (q *quicStreamConn) Close() error {
+	q.closeOnce.Do(func() {
+		q.closeErr = q.close()
+	})
+	return q.closeErr
+}
+
+func (q *quicStreamConn) close() error {
 	defer time.AfterFunc(C.DefaultTCPTimeout, func() {
-		q.client.openStreams.Add(-1)
+		q.client.OpenStreams.Add(-1)
 	})
 
 	// https://github.com/cloudflare/cloudflared/commit/ed2bac026db46b239699ac5ce4fcf122d7cab2cd
@@ -341,6 +352,11 @@ func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 	quicConn, err := t.getQuicConn(ctx, dialFn)
 	if err != nil {
 		return nil, err
+	}
+	openStreams := t.OpenStreams.Add(1)
+	if openStreams >= MaxOpenStreams {
+		t.OpenStreams.Add(-1)
+		return nil, TooManyOpenStreams
 	}
 
 	pipe1, pipe2 := net.Pipe()
@@ -380,16 +396,21 @@ type quicStreamPacketConn struct {
 
 	closeOnce sync.Once
 	closeErr  error
+	closed    bool
 }
 
 func (q *quicStreamPacketConn) Close() error {
 	q.closeOnce.Do(func() {
+		q.closed = true
 		q.closeErr = q.close()
 	})
 	return q.closeErr
 }
 
 func (q *quicStreamPacketConn) close() (err error) {
+	defer time.AfterFunc(C.DefaultTCPTimeout, func() {
+		q.client.OpenStreams.Add(-1)
+	})
 	defer func() {
 		q.client.deferQuicConn(q.quicConn, err)
 	}()
@@ -440,6 +461,9 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if len(p) > q.client.MaxUdpRelayPacketSize {
 		return 0, fmt.Errorf("udp packet too large(%d > %d)", len(p), q.client.MaxUdpRelayPacketSize)
+	}
+	if q.closed {
+		return 0, net.ErrClosed
 	}
 	defer func() {
 		q.client.deferQuicConn(q.quicConn, err)
