@@ -17,6 +17,7 @@ import (
 
 	"github.com/metacubex/quic-go"
 
+	"github.com/Dreamacro/clash/common/generics/list"
 	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
@@ -25,8 +26,8 @@ import (
 
 type Tuic struct {
 	*Base
-	getClient    func(udp bool, opts ...dialer.Option) *tuic.Client
-	removeClient func(udp bool, opts ...dialer.Option)
+	newClient func(udp bool, opts ...dialer.Option) *tuic.Client
+	getClient func(udp bool, opts ...dialer.Option) *tuic.Client
 }
 
 type TuicOption struct {
@@ -57,7 +58,7 @@ type TuicOption struct {
 // DialContext implements C.ProxyAdapter
 func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	opts = t.Base.DialOptions(opts...)
-	conn, err := t.getClient(false, opts...).DialContext(ctx, metadata, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
+	dialFn := func(ctx context.Context) (net.PacketConn, net.Addr, error) {
 		pc, err := dialer.ListenPacket(ctx, "udp", "", opts...)
 		if err != nil {
 			return nil, nil, err
@@ -67,12 +68,12 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 			return nil, nil, err
 		}
 		return pc, addr, err
-	})
+	}
+	conn, err := t.getClient(false, opts...).DialContext(ctx, metadata, dialFn)
+	if errors.Is(err, tuic.TooManyOpenStreams) {
+		conn, err = t.newClient(false, opts...).DialContext(ctx, metadata, dialFn)
+	}
 	if err != nil {
-		if errors.Is(err, tuic.TooManyOpenStreams) {
-			t.removeClient(false, opts...)
-			return t.DialContext(ctx, metadata, opts...)
-		}
 		return nil, err
 	}
 	return NewConn(conn, t), err
@@ -81,7 +82,7 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	opts = t.Base.DialOptions(opts...)
-	pc, err := t.getClient(true, opts...).ListenPacketContext(ctx, metadata, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
+	dialFn := func(ctx context.Context) (net.PacketConn, net.Addr, error) {
 		pc, err := dialer.ListenPacket(ctx, "udp", "", opts...)
 		if err != nil {
 			return nil, nil, err
@@ -91,12 +92,12 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, op
 			return nil, nil, err
 		}
 		return pc, addr, err
-	})
+	}
+	pc, err := t.getClient(true, opts...).ListenPacketContext(ctx, metadata, dialFn)
+	if errors.Is(err, tuic.TooManyOpenStreams) {
+		pc, err = t.newClient(false, opts...).ListenPacketContext(ctx, metadata, dialFn)
+	}
 	if err != nil {
-		if errors.Is(err, tuic.TooManyOpenStreams) {
-			t.removeClient(true, opts...)
-			return t.ListenPacketContext(ctx, metadata, opts...)
-		}
 		return nil, err
 	}
 	return newPacketConn(pc, t), nil
@@ -194,37 +195,23 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		tlsConfig.ServerName = ""
 	}
 	tkn := tuic.GenTKN(option.Token)
-	tcpClientMap := make(map[any]*tuic.Client)
-	tcpClientMapMutex := &sync.Mutex{}
-	udpClientMap := make(map[any]*tuic.Client)
-	udpClientMapMutex := &sync.Mutex{}
-	getClient := func(udp bool, opts ...dialer.Option) *tuic.Client {
-		clientMap := tcpClientMap
-		clientMapMutex := tcpClientMapMutex
+	tcpClients := list.New[*tuic.Client]()
+	tcpClientsMutex := &sync.Mutex{}
+	udpClients := list.New[*tuic.Client]()
+	udpClientsMutex := &sync.Mutex{}
+	newClient := func(udp bool, opts ...dialer.Option) *tuic.Client {
+		clients := tcpClients
+		clientsMutex := tcpClientsMutex
 		if udp {
-			clientMap = udpClientMap
-			clientMapMutex = udpClientMapMutex
+			clients = udpClients
+			clientsMutex = udpClientsMutex
 		}
 
-		o := *dialer.ApplyOptions(opts...)
+		var o any = *dialer.ApplyOptions(opts...)
 
-		clientMapMutex.Lock()
-		defer clientMapMutex.Unlock()
-		for key := range clientMap {
-			client := clientMap[key]
-			if client == nil {
-				delete(clientMap, key) // It is safe in Golang
-				continue
-			}
-			if key == o {
-				client.LastVisited = time.Now()
-				return client
-			}
-			if time.Now().Sub(client.LastVisited) > 30*time.Minute {
-				delete(clientMap, key)
-				continue
-			}
-		}
+		clientsMutex.Lock()
+		defer clientsMutex.Unlock()
+
 		client := &tuic.Client{
 			TlsConfig:             tlsConfig,
 			QuicConfig:            quicConfig,
@@ -235,26 +222,60 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			ReduceRtt:             option.ReduceRtt,
 			RequestTimeout:        option.RequestTimeout,
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			Key:                   o,
 			LastVisited:           time.Now(),
 			UDP:                   udp,
 		}
-		clientMap[o] = client
+		clients.PushFront(client)
 		runtime.SetFinalizer(client, closeTuicClient)
 		return client
 	}
-	removeClient := func(udp bool, opts ...dialer.Option) {
-		clientMap := tcpClientMap
-		clientMapMutex := tcpClientMapMutex
+	getClient := func(udp bool, opts ...dialer.Option) *tuic.Client {
+		clients := tcpClients
+		clientsMutex := tcpClientsMutex
 		if udp {
-			clientMap = udpClientMap
-			clientMapMutex = udpClientMapMutex
+			clients = udpClients
+			clientsMutex = udpClientsMutex
 		}
 
-		o := *dialer.ApplyOptions(opts...)
+		var o any = *dialer.ApplyOptions(opts...)
+		var bestClient *tuic.Client
 
-		clientMapMutex.Lock()
-		defer clientMapMutex.Unlock()
-		delete(clientMap, o)
+		func() {
+			clientsMutex.Lock()
+			defer clientsMutex.Unlock()
+			for it := clients.Front(); it != nil; {
+				client := it.Value
+				if client == nil {
+					next := it.Next()
+					clients.Remove(it)
+					it = next
+					continue
+				}
+				if client.Key == o {
+					if bestClient == nil {
+						bestClient = client
+					} else {
+						if client.OpenStreams.Load() < bestClient.OpenStreams.Load() {
+							bestClient = client
+						}
+					}
+				}
+				if time.Now().Sub(client.LastVisited) > 30*time.Minute {
+					next := it.Next()
+					clients.Remove(it)
+					it = next
+					continue
+				}
+				it = it.Next()
+			}
+		}()
+
+		if bestClient == nil {
+			return newClient(udp, opts...)
+		} else {
+			return bestClient
+		}
 	}
 
 	return &Tuic{
@@ -266,8 +287,8 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			iface:  option.Interface,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		getClient:    getClient,
-		removeClient: removeClient,
+		newClient: newClient,
+		getClient: getClient,
 	}, nil
 }
 
