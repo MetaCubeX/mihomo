@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/quic-go"
@@ -19,6 +20,13 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic/congestion"
 )
+
+var (
+	ClientClosed       = errors.New("tuic: client closed")
+	TooManyOpenStreams = errors.New("tuic: too many open streams")
+)
+
+const MaxOpenStreams = 100 - 10
 
 type Client struct {
 	TlsConfig             *tls.Config
@@ -36,6 +44,8 @@ type Client struct {
 
 	quicConn  quic.Connection
 	connMutex sync.Mutex
+
+	openStreams atomic.Int32
 
 	udpInputMap sync.Map
 }
@@ -137,6 +147,7 @@ func (t *Client) getQuicConn(ctx context.Context, dialFn func(ctx context.Contex
 								}
 							}
 						}
+						stream.CancelRead(0)
 					}()
 					reader := bufio.NewReader(stream)
 					packet, err := ReadPacket(reader)
@@ -231,6 +242,11 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if err != nil {
 		return nil, err
 	}
+	openStreams := t.openStreams.Add(1)
+	if openStreams >= MaxOpenStreams {
+		t.openStreams.Add(-1)
+		return nil, TooManyOpenStreams
+	}
 	stream, err := func() (stream *quicStreamConn, err error) {
 		defer func() {
 			t.deferQuicConn(quicConn, err)
@@ -281,7 +297,9 @@ type quicStreamConn struct {
 }
 
 func (q *quicStreamConn) Close() error {
+	//defer q.client.openStreams.Add(-1)
 	q.Stream.CancelRead(0)
+	q.Stream.CancelWrite(0)
 	return q.Stream.Close()
 }
 
@@ -419,12 +437,8 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 		if err != nil {
 			return
 		}
+		defer stream.Close()
 		_, err = buf.WriteTo(stream)
-		if err != nil {
-			_ = stream.Close()
-			return
-		}
-		err = stream.Close()
 		if err != nil {
 			return
 		}

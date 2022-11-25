@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -24,7 +25,8 @@ import (
 
 type Tuic struct {
 	*Base
-	getClient func(udp bool, opts ...dialer.Option) *tuic.Client
+	getClient    func(udp bool, opts ...dialer.Option) *tuic.Client
+	removeClient func(udp bool, opts ...dialer.Option)
 }
 
 type TuicOption struct {
@@ -67,6 +69,10 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 		return pc, addr, err
 	})
 	if err != nil {
+		if errors.Is(err, tuic.TooManyOpenStreams) {
+			t.removeClient(false, opts...)
+			return t.DialContext(ctx, metadata, opts...)
+		}
 		return nil, err
 	}
 	return NewConn(conn, t), err
@@ -87,6 +93,10 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, op
 		return pc, addr, err
 	})
 	if err != nil {
+		if errors.Is(err, tuic.TooManyOpenStreams) {
+			t.removeClient(true, opts...)
+			return t.ListenPacketContext(ctx, metadata, opts...)
+		}
 		return nil, err
 	}
 	return newPacketConn(pc, t), nil
@@ -232,6 +242,20 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		runtime.SetFinalizer(client, closeTuicClient)
 		return client
 	}
+	removeClient := func(udp bool, opts ...dialer.Option) {
+		clientMap := tcpClientMap
+		clientMapMutex := tcpClientMapMutex
+		if udp {
+			clientMap = udpClientMap
+			clientMapMutex = udpClientMapMutex
+		}
+
+		o := *dialer.ApplyOptions(opts...)
+
+		clientMapMutex.Lock()
+		defer clientMapMutex.Unlock()
+		delete(clientMap, o)
+	}
 
 	return &Tuic{
 		Base: &Base{
@@ -242,10 +266,11 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			iface:  option.Interface,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		getClient: getClient,
+		getClient:    getClient,
+		removeClient: removeClient,
 	}, nil
 }
 
 func closeTuicClient(client *tuic.Client) {
-	client.Close(nil)
+	client.Close(tuic.ClientClosed)
 }
