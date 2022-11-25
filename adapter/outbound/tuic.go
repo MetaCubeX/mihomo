@@ -24,7 +24,7 @@ import (
 
 type Tuic struct {
 	*Base
-	getClient func(opts ...dialer.Option) *tuic.Client
+	getClient func(udp bool, opts ...dialer.Option) *tuic.Client
 }
 
 type TuicOption struct {
@@ -55,7 +55,7 @@ type TuicOption struct {
 // DialContext implements C.ProxyAdapter
 func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	opts = t.Base.DialOptions(opts...)
-	conn, err := t.getClient(opts...).DialContext(ctx, metadata, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
+	conn, err := t.getClient(false, opts...).DialContext(ctx, metadata, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
 		pc, err := dialer.ListenPacket(ctx, "udp", "", opts...)
 		if err != nil {
 			return nil, nil, err
@@ -75,7 +75,7 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	opts = t.Base.DialOptions(opts...)
-	pc, err := t.getClient(opts...).ListenPacketContext(ctx, metadata, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
+	pc, err := t.getClient(true, opts...).ListenPacketContext(ctx, metadata, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
 		pc, err := dialer.ListenPacket(ctx, "udp", "", opts...)
 		if err != nil {
 			return nil, nil, err
@@ -184,9 +184,18 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		tlsConfig.ServerName = ""
 	}
 	tkn := tuic.GenTKN(option.Token)
-	clientMap := make(map[any]*tuic.Client)
-	clientMapMutex := sync.Mutex{}
-	getClient := func(opts ...dialer.Option) *tuic.Client {
+	tcpClientMap := make(map[any]*tuic.Client)
+	tcpClientMapMutex := &sync.Mutex{}
+	udpClientMap := make(map[any]*tuic.Client)
+	udpClientMapMutex := &sync.Mutex{}
+	getClient := func(udp bool, opts ...dialer.Option) *tuic.Client {
+		clientMap := tcpClientMap
+		clientMapMutex := tcpClientMapMutex
+		if udp {
+			clientMap = udpClientMap
+			clientMapMutex = udpClientMapMutex
+		}
+
 		o := *dialer.ApplyOptions(opts...)
 
 		clientMapMutex.Lock()
@@ -217,6 +226,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			RequestTimeout:        option.RequestTimeout,
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
 			LastVisited:           time.Now(),
+			UDP:                   udp,
 		}
 		clientMap[o] = client
 		runtime.SetFinalizer(client, closeTuicClient)
