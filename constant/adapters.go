@@ -32,6 +32,7 @@ const (
 	Trojan
 	Hysteria
 	WireGuard
+	Tuic
 )
 
 const (
@@ -168,6 +169,8 @@ func (at AdapterType) String() string {
 		return "Hysteria"
 	case WireGuard:
 		return "WireGuard"
+	case Tuic:
+		return "Tuic"
 
 	case Relay:
 		return "Relay"

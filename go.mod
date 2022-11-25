@@ -42,6 +42,7 @@ require (
 	golang.org/x/sys v0.2.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
+	lukechampine.com/blake3 v1.1.7
 
 )
 
@@ -75,5 +76,4 @@ require (
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c // indirect
-	lukechampine.com/blake3 v1.1.7 // indirect
 )
