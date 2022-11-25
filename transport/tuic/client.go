@@ -226,7 +226,7 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if err != nil {
 		return nil, err
 	}
-	stream, err := func() (quic.Stream, error) {
+	stream, err := func() (stream quic.Stream, err error) {
 		defer func() {
 			t.deferQuicConn(quicConn, err)
 		}()
@@ -235,7 +235,7 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 		if err != nil {
 			return nil, err
 		}
-		stream, err := quicConn.OpenStream()
+		stream, err = quicConn.OpenStream()
 		if err != nil {
 			return nil, err
 		}
