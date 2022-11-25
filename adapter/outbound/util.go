@@ -83,6 +83,7 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 		return nil, err
 	}
 	var ip netip.Addr
+	var fallback netip.Addr
 	switch prefer {
 	case C.IPv4Only:
 		ip, err = resolver.ResolveIPv4ProxyServerHost(ctx, host)
@@ -103,13 +104,11 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 					}
 				}
 			}
-			ip = fallback
 		}
 	default:
 		// C.IPv4Prefer, C.DualStack and other
 		var ips []netip.Addr
 		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
-		var fallback netip.Addr
 		if err == nil {
 			for _, addr := range ips {
 				if addr.Is4() {
@@ -122,12 +121,13 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 				}
 			}
 
-			if !ip.IsValid() && fallback.IsValid() {
-				ip = fallback
-			}
 		}
 	}
 
+	if !ip.IsValid() && fallback.IsValid() {
+		ip = fallback
+	}
+	
 	if err != nil {
 		return nil, err
 	}
