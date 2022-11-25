@@ -241,6 +241,9 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 		}
 		return stream, err
 	}()
+	if err != nil {
+		return nil, err
+	}
 
 	if t.RequestTimeout > 0 {
 		_ = stream.SetReadDeadline(time.Now().Add(time.Duration(t.RequestTimeout) * time.Millisecond))
