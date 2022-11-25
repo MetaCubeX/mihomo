@@ -209,7 +209,7 @@ func (t *Client) deferQuicConn(quicConn quic.Connection, err error) {
 func (t *Client) Close(err error) {
 	quicConn := t.quicConn
 	if quicConn != nil {
-		_ = t.quicConn.CloseWithError(ProtocolError, err.Error())
+		_ = quicConn.CloseWithError(ProtocolError, err.Error())
 		t.udpInputMap.Range(func(key, value any) bool {
 			if conn, ok := value.(net.Conn); ok {
 				_ = conn.Close()
@@ -256,14 +256,15 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	conn := N.NewBufferedConn(&quicStreamConn{stream, quicConn.LocalAddr(), quicConn.RemoteAddr(), t})
 	response, err := ReadResponse(conn)
 	if err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
 	if response.IsFailed() {
-		_ = stream.Close()
+		_ = conn.Close()
 		return nil, errors.New("connect failed")
 	}
 	_ = stream.SetReadDeadline(time.Time{})
-	return conn, err
+	return conn, nil
 }
 
 type quicStreamConn struct {
@@ -271,6 +272,11 @@ type quicStreamConn struct {
 	lAddr  net.Addr
 	rAddr  net.Addr
 	client *Client
+}
+
+func (q *quicStreamConn) Close() error {
+	q.Stream.CancelRead(0)
+	return q.Stream.Close()
 }
 
 func (q *quicStreamConn) LocalAddr() net.Addr {
