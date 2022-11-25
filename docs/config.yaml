@@ -468,8 +468,9 @@ proxies:
     # alpn: [h3]
     # disable_sni: true
     reduce_rtt: true
-#    request_timeout: 8000
-    udp_relay_mode: native
+    # request_timeout: 8000
+    udp_relay_mode: native # Available: "native", "quic". Default: "native"
+    # congestion_controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
     # skip-cert-verify: true
 
   # ShadowsocksR

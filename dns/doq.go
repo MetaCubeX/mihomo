@@ -15,7 +15,7 @@ import (
 
 	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
-	"github.com/lucas-clemente/quic-go"
+	"github.com/metacubex/quic-go"
 
 	"github.com/Dreamacro/clash/log"
 	D "github.com/miekg/dns"
@@ -34,7 +34,7 @@ const (
 	// controls the period with with keep-alive frames are being sent to the
 	// connection. We set it to 20s as it would be in the quic-go@v0.27.1 with
 	// KeepAlive field set to true This value is specified in
-	// https://pkg.go.dev/github.com/lucas-clemente/quic-go/internal/protocol#MaxKeepAliveInterval.
+	// https://pkg.go.dev/github.com/metacubex/quic-go/internal/protocol#MaxKeepAliveInterval.
 	//
 	// TODO(ameshkov):  Consider making it configurable.
 	QUICKeepAlivePeriod = time.Second * 20
@@ -157,7 +157,7 @@ func (doq *dnsOverQUIC) Close() (err error) {
 // through it and return the response it got from the server.
 func (doq *dnsOverQUIC) exchangeQUIC(ctx context.Context, msg *D.Msg) (resp *D.Msg, err error) {
 	var conn quic.Connection
-	conn, err = doq.getConnection(ctx,true)
+	conn, err = doq.getConnection(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (doq *dnsOverQUIC) getBytesPool() (pool *sync.Pool) {
 // argument controls whether we should try to use the existing cached
 // connection.  If it is false, we will forcibly create a new connection and
 // close the existing one if needed.
-func (doq *dnsOverQUIC) getConnection(ctx context.Context,useCached bool) (quic.Connection, error) {
+func (doq *dnsOverQUIC) getConnection(ctx context.Context, useCached bool) (quic.Connection, error) {
 	var conn quic.Connection
 	doq.connMu.RLock()
 	conn = doq.conn
@@ -292,7 +292,7 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn quic.Connection) (q
 
 	// We can get here if the old QUIC connection is not valid anymore.  We
 	// should try to re-create the connection again in this case.
-	newConn, err := doq.getConnection(ctx,false)
+	newConn, err := doq.getConnection(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +455,7 @@ func isQUICRetryError(err error) (ok bool) {
 		// and that's why one can run into this.
 		// In addition to that, quic-go HTTP3 client implementation does not
 		// clean up dead connections (this one is specific to DoH3 upstream):
-		// https://github.com/lucas-clemente/quic-go/issues/765
+		// https://github.com/metacubex/quic-go/issues/765
 		return true
 	}
 

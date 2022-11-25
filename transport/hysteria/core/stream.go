@@ -2,7 +2,7 @@ package core
 
 import (
 	"context"
-	"github.com/lucas-clemente/quic-go"
+	"github.com/metacubex/quic-go"
 	"time"
 )
 

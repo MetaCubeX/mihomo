@@ -1,5 +1,3 @@
-github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8 h1:FBo40lMrk1bZZzJRJx8U+bQUPhLDGTUJ/Q5NV5BbO4Q=
-github.com/HyNetwork/quic-go v0.30.1-0.20221105180419-83715d7269a8/go.mod h1:ssOrRsOmdxa768Wr78vnh2B8JozgLsMzG/g+0qEC7uk=
 github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221116103607-48a7095182b1 h1:guMcwJSIjk+jg/38uMPK5hIWVSaLHJ/l+ABZ8w2CKm0=
 github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221116103607-48a7095182b1/go.mod h1:3bW+hVWFXOxRC1HL6CO6QHkegqjLohErGbcvt6dUN18=
 github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc h1:B1vmR4cwDjJQ6YM8NkuXmt9vIYOdV/+qA+F3UAFE3YY=
@@ -91,6 +89,8 @@ github.com/mdlayher/netlink v1.1.1 h1:VqG+Voq9V4uZ+04vjIrcSCWDpf91B1xxbP4QBUmUJE
 github.com/mdlayher/netlink v1.1.1/go.mod h1:WTYpFb/WTvlRJAyKhZL5/uy69TDDpHHu2VZmb2XgV7o=
 github.com/mdlayher/raw v0.0.0-20190606142536-fef19f00fc18/go.mod h1:7EpbotpCmVZcu+KCX4g9WaRNuu11uyhiW7+Le1dKawg=
 github.com/mdlayher/raw v0.0.0-20191009151244-50f2db8cc065/go.mod h1:7EpbotpCmVZcu+KCX4g9WaRNuu11uyhiW7+Le1dKawg=
+github.com/metacubex/quic-go v0.31.1-0.20221125020617-0f0618ad3eaa h1:Zc0nF/kgKDRn/Ab9jL1KNjOOe8JaM/sjsak1gNVVG6g=
+github.com/metacubex/quic-go v0.31.1-0.20221125020617-0f0618ad3eaa/go.mod h1:7NPWVTLiX2Ss9q9gBNZaNHsPqZ3Tg/ApyrXxxUYbl78=
 github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c h1:VHtXDny/TNOF7YDT9d9Qkr+x6K1O4cejXLlyPUXDeXQ=
 github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c/go.mod h1:fULJ451x1/XlpIhl+Oo+EPGKla9tFZaqT5dKLrZ+NvM=
 github.com/miekg/dns v1.1.50 h1:DQUfb9uc6smULcREF09Uc+/Gd46YWqJd5DbpPE9xkcA=

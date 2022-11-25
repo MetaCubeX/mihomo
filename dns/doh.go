@@ -19,8 +19,8 @@ import (
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/http3"
+	"github.com/metacubex/quic-go"
+	"github.com/metacubex/quic-go/http3"
 	D "github.com/miekg/dns"
 	"golang.org/x/net/http2"
 )

@@ -12,20 +12,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/metacubex/quic-go"
 
 	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/tuic/congestion"
 )
 
 type Client struct {
-	TlsConfig      *tls.Config
-	QuicConfig     *quic.Config
-	Host           string
-	Token          [32]byte
-	UdpRelayMode   string
-	ReduceRtt      bool
-	RequestTimeout int
+	TlsConfig            *tls.Config
+	QuicConfig           *quic.Config
+	Host                 string
+	Token                [32]byte
+	UdpRelayMode         string
+	CongestionController string
+	ReduceRtt            bool
+	RequestTimeout       int
 
 	quicConn  quic.Connection
 	connMutex sync.Mutex
@@ -51,6 +53,36 @@ func (t *Client) getQuicConn(ctx context.Context, dialFn func(ctx context.Contex
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	switch t.CongestionController {
+	case "cubic":
+		quicConn.SetCongestionControl(
+			congestion.NewCubicSender(
+				congestion.DefaultClock{},
+				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
+				false,
+				nil,
+			),
+		)
+	case "new_reno":
+		quicConn.SetCongestionControl(
+			congestion.NewCubicSender(
+				congestion.DefaultClock{},
+				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
+				true,
+				nil,
+			),
+		)
+	case "bbr":
+		quicConn.SetCongestionControl(
+			congestion.NewBBRSender(
+				congestion.DefaultClock{},
+				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
+				congestion.InitialCongestionWindow,
+				congestion.DefaultBBRMaxCongestionWindow,
+			),
+		)
 	}
 
 	sendAuthentication := func(quicConn quic.Connection) (err error) {
