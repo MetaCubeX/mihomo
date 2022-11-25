@@ -92,7 +92,6 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 	case C.IPv6Prefer:
 		var ips []netip.Addr
 		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
-		var fallback netip.Addr
 		if err == nil {
 			for _, addr := range ips {
 				if addr.Is6() {
