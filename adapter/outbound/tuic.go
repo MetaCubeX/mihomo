@@ -105,7 +105,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	if len(option.CustomCA) > 0 {
 		bs, err = os.ReadFile(option.CustomCA)
 		if err != nil {
-			return nil, fmt.Errorf("hysteria %s load ca error: %w", addr, err)
+			return nil, fmt.Errorf("tuic %s load ca error: %w", addr, err)
 		}
 	} else if option.CustomCAString != "" {
 		bs = []byte(option.CustomCAString)

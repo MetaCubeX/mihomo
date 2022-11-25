@@ -235,7 +235,7 @@ proxies:
     port: 10443
     type: tuic
     token: TOKEN
-    # ip: 127.0.0.1
+    # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
     # heartbeat_interval: 10000
     # alpn: [h3]
     # disable_sni: true
