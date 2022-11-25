@@ -32,6 +32,7 @@ type Client struct {
 	MaxUdpRelayPacketSize int
 
 	LastVisited time.Time
+	UDP         bool
 
 	quicConn  quic.Connection
 	connMutex sync.Mutex
@@ -113,9 +114,7 @@ func (t *Client) getQuicConn(ctx context.Context, dialFn func(ctx context.Contex
 		return nil
 	}
 
-	go sendAuthentication(quicConn)
-
-	go func(quicConn quic.Connection) (err error) {
+	parseUDP := func(quicConn quic.Connection) (err error) {
 		defer func() {
 			t.deferQuicConn(quicConn, err)
 		}()
@@ -189,7 +188,13 @@ func (t *Client) getQuicConn(ctx context.Context, dialFn func(ctx context.Contex
 				}()
 			}
 		}
-	}(quicConn)
+	}
+
+	go sendAuthentication(quicConn)
+
+	if t.UDP {
+		go parseUDP(quicConn)
+	}
 
 	t.quicConn = quicConn
 	return quicConn, nil
@@ -226,7 +231,7 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if err != nil {
 		return nil, err
 	}
-	stream, err := func() (stream quic.Stream, err error) {
+	stream, err := func() (stream *quicStreamConn, err error) {
 		defer func() {
 			t.deferQuicConn(quicConn, err)
 		}()
@@ -235,10 +240,11 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 		if err != nil {
 			return nil, err
 		}
-		stream, err = quicConn.OpenStream()
+		quicStream, err := quicConn.OpenStream()
 		if err != nil {
 			return nil, err
 		}
+		stream = &quicStreamConn{quicStream, quicConn.LocalAddr(), quicConn.RemoteAddr(), t}
 		_, err = buf.WriteTo(stream)
 		if err != nil {
 			_ = stream.Close()
@@ -253,7 +259,7 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if t.RequestTimeout > 0 {
 		_ = stream.SetReadDeadline(time.Now().Add(time.Duration(t.RequestTimeout) * time.Millisecond))
 	}
-	conn := N.NewBufferedConn(&quicStreamConn{stream, quicConn.LocalAddr(), quicConn.RemoteAddr(), t})
+	conn := N.NewBufferedConn(stream)
 	response, err := ReadResponse(conn)
 	if err != nil {
 		_ = conn.Close()
