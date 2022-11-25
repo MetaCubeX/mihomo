@@ -22,7 +22,7 @@ var (
 	ErrorDisableIPv6           = errors.New("IPv6 is disabled, dialer cancel")
 )
 
-func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
+func ApplyOptions(options ...Option) *option {
 	opt := &option{
 		interfaceName: DefaultInterface.Load(),
 		routingMark:   int(DefaultRoutingMark.Load()),
@@ -35,6 +35,12 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 	for _, o := range options {
 		o(opt)
 	}
+
+	return opt
+}
+
+func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
+	opt := ApplyOptions(options...)
 
 	if opt.network == 4 || opt.network == 6 {
 		if strings.Contains(network, "tcp") {
@@ -204,15 +210,15 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 				}
 			}
 		case <-ctx.Done():
-			err=ctx.Err()
+			err = ctx.Err()
 			break
 		}
 	}
 
-	if err==nil {
-		err=fmt.Errorf("dual stack dial failed")
-	}else{
-		err=fmt.Errorf("dual stack dial failed:%w",err)
+	if err == nil {
+		err = fmt.Errorf("dual stack dial failed")
+	} else {
+		err = fmt.Errorf("dual stack dial failed:%w", err)
 	}
 	return nil, err
 }
@@ -322,7 +328,7 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 			if fallback.done && fallback.error == nil {
 				return fallback.Conn, nil
 			}
-			finalError=ctx.Err()
+			finalError = ctx.Err()
 			break
 		}
 	}
@@ -339,10 +345,10 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 		return nil, fallback.error
 	}
 
-	if finalError==nil {
-		finalError=fmt.Errorf("all ips %v tcp shake hands failed", ips)
-	}else{
-		finalError=fmt.Errorf("concurrent dial failed:%w",finalError)
+	if finalError == nil {
+		finalError = fmt.Errorf("all ips %v tcp shake hands failed", ips)
+	} else {
+		finalError = fmt.Errorf("concurrent dial failed:%w", finalError)
 	}
 
 	return nil, finalError

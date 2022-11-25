@@ -458,6 +458,20 @@ proxies:
     public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
     udp: true
 
+  - name: tuic
+    server: www.example.com
+    port: 10443
+    type: tuic
+    token: TOKEN
+    # ip: 127.0.0.1
+    # heartbeat_interval: 10000
+    # alpn: [h3]
+    # disable_sni: true
+    reduce_rtt: true
+#    request_timeout: 8000
+    udp_relay_mode: native
+    # skip-cert-verify: true
+
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
   # The supported obfses:

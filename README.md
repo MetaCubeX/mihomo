@@ -227,6 +227,25 @@ proxies:
     udp: true
 ```
 
+Support outbound transport protocol `Tuic`
+```yaml
+proxies:
+  - name: "tuic"
+    server: www.example.com
+    port: 10443
+    type: tuic
+    token: TOKEN
+    # ip: 127.0.0.1
+    # heartbeat_interval: 10000
+    # alpn: [h3]
+    # disable_sni: true
+    reduce_rtt: true
+#    request_timeout: 8000
+    udp_relay_mode: native
+    # skip-cert-verify: true
+
+```
+
 ### IPTABLES configuration
 Work on Linux OS who's supported `iptables`
 
