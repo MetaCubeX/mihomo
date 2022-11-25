@@ -214,22 +214,26 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		t.deferQuicConn(quicConn, err)
+	stream, err := func() (quic.Stream, error) {
+		defer func() {
+			t.deferQuicConn(quicConn, err)
+		}()
+		buf := &bytes.Buffer{}
+		err = NewConnect(NewAddress(metadata)).WriteTo(buf)
+		if err != nil {
+			return nil, err
+		}
+		stream, err := quicConn.OpenStream()
+		if err != nil {
+			return nil, err
+		}
+		_, err = buf.WriteTo(stream)
+		if err != nil {
+			return nil, err
+		}
+		return stream, err
 	}()
-	buf := &bytes.Buffer{}
-	err = NewConnect(NewAddress(metadata)).WriteTo(buf)
-	if err != nil {
-		return nil, err
-	}
-	stream, err := quicConn.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-	_, err = buf.WriteTo(stream)
-	if err != nil {
-		return nil, err
-	}
+
 	if t.RequestTimeout > 0 {
 		_ = stream.SetReadDeadline(time.Now().Add(time.Duration(t.RequestTimeout) * time.Millisecond))
 	}
