@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -199,6 +200,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			RequestTimeout:       option.RequestTimeout,
 		}
 		clientMap[o] = client
+		runtime.SetFinalizer(client, closeTuicClient)
 		return client
 	}
 
@@ -213,4 +215,8 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		},
 		getClient: getClient,
 	}, nil
+}
+
+func closeTuicClient(client *tuic.Client) {
+	client.Close(nil)
 }
