@@ -471,6 +471,7 @@ proxies:
     # request_timeout: 8000
     udp_relay_mode: native # Available: "native", "quic". Default: "native"
     # congestion_controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
+    # max_udp_relay_packet_size: 1500
     # skip-cert-verify: true
 
   # ShadowsocksR

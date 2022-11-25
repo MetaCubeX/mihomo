@@ -29,18 +29,19 @@ type Tuic struct {
 
 type TuicOption struct {
 	BasicOption
-	Name                 string   `proxy:"name"`
-	Server               string   `proxy:"server"`
-	Port                 int      `proxy:"port"`
-	Token                string   `proxy:"token"`
-	Ip                   string   `proxy:"ip,omitempty"`
-	HeartbeatInterval    int      `proxy:"heartbeat_interval,omitempty"`
-	ALPN                 []string `proxy:"alpn,omitempty"`
-	ReduceRtt            bool     `proxy:"reduce_rtt,omitempty"`
-	RequestTimeout       int      `proxy:"request_timeout,omitempty"`
-	UdpRelayMode         string   `proxy:"udp_relay_mode,omitempty"`
-	CongestionController string   `proxy:"congestion_controller,omitempty"`
-	DisableSni           bool     `proxy:"disable_sni,omitempty"`
+	Name                  string   `proxy:"name"`
+	Server                string   `proxy:"server"`
+	Port                  int      `proxy:"port"`
+	Token                 string   `proxy:"token"`
+	Ip                    string   `proxy:"ip,omitempty"`
+	HeartbeatInterval     int      `proxy:"heartbeat_interval,omitempty"`
+	ALPN                  []string `proxy:"alpn,omitempty"`
+	ReduceRtt             bool     `proxy:"reduce_rtt,omitempty"`
+	RequestTimeout        int      `proxy:"request_timeout,omitempty"`
+	UdpRelayMode          string   `proxy:"udp_relay_mode,omitempty"`
+	CongestionController  string   `proxy:"congestion_controller,omitempty"`
+	DisableSni            bool     `proxy:"disable_sni,omitempty"`
+	MaxUdpRelayPacketSize int      `proxy:"max_udp_relay_packet_size,omitempty"`
 
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string `proxy:"fingerprint,omitempty"`
@@ -152,6 +153,10 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		option.UdpRelayMode = "native"
 	}
 
+	if option.MaxUdpRelayPacketSize == 0 {
+		option.MaxUdpRelayPacketSize = 1500
+	}
+
 	quicConfig := &quic.Config{
 		InitialStreamReceiveWindow:     uint64(option.ReceiveWindowConn),
 		MaxStreamReceiveWindow:         uint64(option.ReceiveWindowConn),
@@ -186,18 +191,32 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 
 		clientMapMutex.Lock()
 		defer clientMapMutex.Unlock()
-		if client, ok := clientMap[o]; ok && client != nil {
-			return client
+		for key := range clientMap {
+			client := clientMap[key]
+			if client == nil {
+				delete(clientMap, key) // It is safe in Golang
+				continue
+			}
+			if key == o {
+				client.LastVisited = time.Now()
+				return client
+			}
+			if time.Now().Sub(client.LastVisited) > 30*time.Minute {
+				delete(clientMap, key)
+				continue
+			}
 		}
 		client := &tuic.Client{
-			TlsConfig:            tlsConfig,
-			QuicConfig:           quicConfig,
-			Host:                 host,
-			Token:                tkn,
-			UdpRelayMode:         option.UdpRelayMode,
-			CongestionController: option.CongestionController,
-			ReduceRtt:            option.ReduceRtt,
-			RequestTimeout:       option.RequestTimeout,
+			TlsConfig:             tlsConfig,
+			QuicConfig:            quicConfig,
+			Host:                  host,
+			Token:                 tkn,
+			UdpRelayMode:          option.UdpRelayMode,
+			CongestionController:  option.CongestionController,
+			ReduceRtt:             option.ReduceRtt,
+			RequestTimeout:        option.RequestTimeout,
+			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			LastVisited:           time.Now(),
 		}
 		clientMap[o] = client
 		runtime.SetFinalizer(client, closeTuicClient)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -20,14 +21,17 @@ import (
 )
 
 type Client struct {
-	TlsConfig            *tls.Config
-	QuicConfig           *quic.Config
-	Host                 string
-	Token                [32]byte
-	UdpRelayMode         string
-	CongestionController string
-	ReduceRtt            bool
-	RequestTimeout       int
+	TlsConfig             *tls.Config
+	QuicConfig            *quic.Config
+	Host                  string
+	Token                 [32]byte
+	UdpRelayMode          string
+	CongestionController  string
+	ReduceRtt             bool
+	RequestTimeout        int
+	MaxUdpRelayPacketSize int
+
+	LastVisited time.Time
 
 	quicConn  quic.Connection
 	connMutex sync.Mutex
@@ -237,6 +241,7 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 		}
 		_, err = buf.WriteTo(stream)
 		if err != nil {
+			_ = stream.Close()
 			return nil, err
 		}
 		return stream, err
@@ -379,6 +384,9 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 }
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	if len(p) > q.client.MaxUdpRelayPacketSize {
+		return 0, fmt.Errorf("udp packet too large(%d > %d)", len(p), q.client.MaxUdpRelayPacketSize)
+	}
 	defer func() {
 		q.client.deferQuicConn(q.quicConn, err)
 	}()
@@ -401,6 +409,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 		}
 		_, err = buf.WriteTo(stream)
 		if err != nil {
+			_ = stream.Close()
 			return
 		}
 		err = stream.Close()
