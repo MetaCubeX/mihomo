@@ -47,6 +47,7 @@ type TuicOption struct {
 	DisableSni            bool     `proxy:"disable_sni,omitempty"`
 	MaxUdpRelayPacketSize int      `proxy:"max_udp_relay_packet_size,omitempty"`
 
+	FastOpen            bool   `proxy:"fast-open,omitempty"`
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string `proxy:"fingerprint,omitempty"`
 	CustomCA            string `proxy:"ca,omitempty"`
@@ -263,6 +264,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			ReduceRtt:             option.ReduceRtt,
 			RequestTimeout:        option.RequestTimeout,
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			FastOpen:              option.FastOpen,
 			Inference:             t,
 			Key:                   o,
 			LastVisited:           time.Now(),
@@ -303,7 +305,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 						}
 					}
 				}
-				if time.Now().Sub(client.LastVisited) > 30*time.Minute {
+				if client.OpenStreams.Load() == 0 && time.Now().Sub(client.LastVisited) > 30*time.Minute {
 					next := it.Next()
 					clients.Remove(it)
 					it = next
