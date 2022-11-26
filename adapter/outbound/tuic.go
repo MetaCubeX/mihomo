@@ -38,23 +38,23 @@ type TuicOption struct {
 	Port                  int      `proxy:"port"`
 	Token                 string   `proxy:"token"`
 	Ip                    string   `proxy:"ip,omitempty"`
-	HeartbeatInterval     int      `proxy:"heartbeat_interval,omitempty"`
+	HeartbeatInterval     int      `proxy:"heartbeat-interval,omitempty"`
 	ALPN                  []string `proxy:"alpn,omitempty"`
-	ReduceRtt             bool     `proxy:"reduce_rtt,omitempty"`
-	RequestTimeout        int      `proxy:"request_timeout,omitempty"`
-	UdpRelayMode          string   `proxy:"udp_relay_mode,omitempty"`
-	CongestionController  string   `proxy:"congestion_controller,omitempty"`
-	DisableSni            bool     `proxy:"disable_sni,omitempty"`
-	MaxUdpRelayPacketSize int      `proxy:"max_udp_relay_packet_size,omitempty"`
+	ReduceRtt             bool     `proxy:"reduce-rtt,omitempty"`
+	RequestTimeout        int      `proxy:"request-timeout,omitempty"`
+	UdpRelayMode          string   `proxy:"udp-relay-mode,omitempty"`
+	CongestionController  string   `proxy:"congestion-controller,omitempty"`
+	DisableSni            bool     `proxy:"disable-sni,omitempty"`
+	MaxUdpRelayPacketSize int      `proxy:"max-udp-relay-packet-size,omitempty"`
 
 	FastOpen            bool   `proxy:"fast-open,omitempty"`
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string `proxy:"fingerprint,omitempty"`
 	CustomCA            string `proxy:"ca,omitempty"`
-	CustomCAString      string `proxy:"ca_str,omitempty"`
-	ReceiveWindowConn   int    `proxy:"recv_window_conn,omitempty"`
-	ReceiveWindow       int    `proxy:"recv_window,omitempty"`
-	DisableMTUDiscovery bool   `proxy:"disable_mtu_discovery,omitempty"`
+	CustomCAString      string `proxy:"ca-str,omitempty"`
+	ReceiveWindowConn   int    `proxy:"recv-window-conn,omitempty"`
+	ReceiveWindow       int    `proxy:"recv-window,omitempty"`
+	DisableMTUDiscovery bool   `proxy:"disable-mtu-discovery,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter

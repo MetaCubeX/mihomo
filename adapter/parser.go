@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/structure"
@@ -9,6 +10,12 @@ import (
 )
 
 func ParseProxy(mapping map[string]any) (C.Proxy, error) {
+	newMapping := make(map[string]any)
+	for key := range mapping {
+		newMapping[strings.ReplaceAll(key, "_", "-")] = mapping[key]
+	}
+	mapping = newMapping
+
 	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
 	proxyType, existType := mapping["type"].(string)
 	if !existType {

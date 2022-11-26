@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
 	"regexp"
 	"strconv"
 	"time"
@@ -88,33 +87,29 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 
 type HysteriaOption struct {
 	BasicOption
-	Name                   string   `proxy:"name"`
-	Server                 string   `proxy:"server"`
-	Port                   int      `proxy:"port"`
-	Protocol               string   `proxy:"protocol,omitempty"`
-	ObfsProtocol           string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
-	Up                     string   `proxy:"up"`
-	UpSpeed                int      `proxy:"up-speed,omitempty"` // compatible with Stash
-	Down                   string   `proxy:"down"`
-	DownSpeed              int      `proxy:"down-speed,omitempty"` // compatible with Stash
-	Auth                   string   `proxy:"auth,omitempty"`
-	OldAuthString          string   `proxy:"auth_str,omitempty"`
-	AuthString             string   `proxy:"auth-str,omitempty"`
-	Obfs                   string   `proxy:"obfs,omitempty"`
-	SNI                    string   `proxy:"sni,omitempty"`
-	SkipCertVerify         bool     `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint            string   `proxy:"fingerprint,omitempty"`
-	ALPN                   []string `proxy:"alpn,omitempty"`
-	CustomCA               string   `proxy:"ca,omitempty"`
-	OldCustomCAString      string   `proxy:"ca_str,omitempty"`
-	CustomCAString         string   `proxy:"ca-str,omitempty"`
-	OldReceiveWindowConn   int      `proxy:"recv_window_conn,omitempty"`
-	ReceiveWindowConn      int      `proxy:"recv-window-conn,omitempty"`
-	OldReceiveWindow       int      `proxy:"recv_window,omitempty"`
-	ReceiveWindow          int      `proxy:"recv-window,omitempty"`
-	OldDisableMTUDiscovery bool     `proxy:"disable_mtu_discovery,omitempty"`
-	DisableMTUDiscovery    bool     `proxy:"disable-mtu-discovery,omitempty"`
-	FastOpen               bool     `proxy:"fast-open,omitempty"`
+	Name                string   `proxy:"name"`
+	Server              string   `proxy:"server"`
+	Port                int      `proxy:"port"`
+	Protocol            string   `proxy:"protocol,omitempty"`
+	ObfsProtocol        string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
+	Up                  string   `proxy:"up"`
+	UpSpeed             int      `proxy:"up-speed,omitempty"` // compatible with Stash
+	Down                string   `proxy:"down"`
+	DownSpeed           int      `proxy:"down-speed,omitempty"` // compatible with Stash
+	Auth                string   `proxy:"auth,omitempty"`
+	OldAuthString       string   `proxy:"auth_str,omitempty"`
+	AuthString          string   `proxy:"auth-str,omitempty"`
+	Obfs                string   `proxy:"obfs,omitempty"`
+	SNI                 string   `proxy:"sni,omitempty"`
+	SkipCertVerify      bool     `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string   `proxy:"fingerprint,omitempty"`
+	ALPN                []string `proxy:"alpn,omitempty"`
+	CustomCA            string   `proxy:"ca,omitempty"`
+	CustomCAString      string   `proxy:"ca-str,omitempty"`
+	ReceiveWindowConn   int      `proxy:"recv-window-conn,omitempty"`
+	ReceiveWindow       int      `proxy:"recv-window,omitempty"`
+	DisableMTUDiscovery bool     `proxy:"disable-mtu-discovery,omitempty"`
+	FastOpen            bool     `proxy:"fast-open,omitempty"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
@@ -158,8 +153,8 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		if err != nil {
 			return nil, fmt.Errorf("hysteria %s load ca error: %w", addr, err)
 		}
-	} else if compatibilityValue(option.CustomCAString, option.OldCustomCAString) != "" {
-		bs = []byte(compatibilityValue(option.CustomCAString, option.OldCustomCAString))
+	} else if option.CustomCAString != "" {
+		bs = []byte(option.CustomCAString)
 	}
 
 	if len(bs) > 0 {
@@ -190,12 +185,12 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		tlsConfig.NextProtos = []string{DefaultALPN}
 	}
 	quicConfig := &quic.Config{
-		InitialStreamReceiveWindow:     uint64(compatibilityValue(option.ReceiveWindowConn, option.OldReceiveWindow)),
-		MaxStreamReceiveWindow:         uint64(compatibilityValue(option.ReceiveWindowConn, option.OldReceiveWindow)),
-		InitialConnectionReceiveWindow: uint64(compatibilityValue(option.ReceiveWindow, option.OldReceiveWindow)),
-		MaxConnectionReceiveWindow:     uint64(compatibilityValue(option.ReceiveWindow, option.OldReceiveWindow)),
+		InitialStreamReceiveWindow:     uint64(option.ReceiveWindowConn),
+		MaxStreamReceiveWindow:         uint64(option.ReceiveWindowConn),
+		InitialConnectionReceiveWindow: uint64(option.ReceiveWindow),
+		MaxConnectionReceiveWindow:     uint64(option.ReceiveWindow),
 		KeepAlivePeriod:                10 * time.Second,
-		DisablePathMTUDiscovery:        compatibilityValue(option.DisableMTUDiscovery, option.OldDisableMTUDiscovery),
+		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
 	}
 	if option.ObfsProtocol != "" {
@@ -204,11 +199,11 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if option.Protocol == "" {
 		option.Protocol = DefaultProtocol
 	}
-	if compatibilityValue(  option.ReceiveWindowConn,   option.OldReceiveWindowConn)== 0 {
+	if option.ReceiveWindow == 0 {
 		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow / 10
 		quicConfig.MaxStreamReceiveWindow = DefaultStreamReceiveWindow
 	}
-	if compatibilityValue(  option.ReceiveWindow,option.OldReceiveWindow) == 0 {
+	if option.ReceiveWindow == 0 {
 		quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow / 10
 		quicConfig.MaxConnectionReceiveWindow = DefaultConnectionReceiveWindow
 	}
@@ -216,7 +211,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		log.Infoln("hysteria: Path MTU Discovery is not yet supported on this platform")
 	}
 
-	var auth = []byte(compatibilityValue(option.AuthString, option.OldAuthString))
+	var auth = []byte(option.AuthString)
 	if option.Auth != "" {
 		auth, err = base64.StdEncoding.DecodeString(option.Auth)
 		if err != nil {
@@ -260,13 +255,6 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	}, nil
 }
 
-func compatibilityValue[T any](prefer T, fallback T) T {
-	if reflect.ValueOf(prefer).IsZero() {
-		return fallback
-	} else {
-		return prefer
-	}
-}
 func stringToBps(s string) uint64 {
 	if s == "" {
 		return 0
