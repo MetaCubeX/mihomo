@@ -20,6 +20,8 @@ import (
 	"golang.org/x/net/http2"
 )
 
+var ErrUDPRemoteAddrMismatch = errors.New("udp packet dropped due to mismatched remote address")
+
 type Vmess struct {
 	*Base
 	client *vmess.Client
@@ -358,7 +360,14 @@ type vmessPacketConn struct {
 	rAddr net.Addr
 }
 
+// WriteTo implments C.PacketConn.WriteTo
+// Since VMess doesn't support full cone NAT by design, we verify if addr matches uc.rAddr, and drop the packet if not.
 func (uc *vmessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	allowedAddr := uc.rAddr.(*net.UDPAddr)
+	destAddr := addr.(*net.UDPAddr)
+	if !(allowedAddr.IP.Equal(destAddr.IP) && allowedAddr.Port == destAddr.Port) {
+		return 0, ErrUDPRemoteAddrMismatch
+	}
 	return uc.Conn.Write(b)
 }
 
