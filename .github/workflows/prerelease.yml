@@ -1,5 +1,6 @@
 name: Prerelease
 on:
+  workflow_dispatch:
   push:
     branches:
       - Alpha
