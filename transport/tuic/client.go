@@ -38,6 +38,7 @@ type Client struct {
 	ReduceRtt             bool
 	RequestTimeout        int
 	MaxUdpRelayPacketSize int
+	FastOpen              bool
 
 	Inference   any
 	Key         any
@@ -282,18 +283,49 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn f
 	if t.RequestTimeout > 0 {
 		_ = stream.SetReadDeadline(time.Now().Add(time.Duration(t.RequestTimeout) * time.Millisecond))
 	}
-	conn := N.NewBufferedConn(stream)
+	conn := &earlyConn{BufferedConn: N.NewBufferedConn(stream)}
+	if !t.FastOpen {
+		err = conn.Response()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return conn, nil
+}
+
+type earlyConn struct {
+	*N.BufferedConn
+	resOnce sync.Once
+	resErr  error
+}
+
+func (conn *earlyConn) response() error {
 	response, err := ReadResponse(conn)
 	if err != nil {
 		_ = conn.Close()
-		return nil, err
+		return err
 	}
 	if response.IsFailed() {
 		_ = conn.Close()
-		return nil, errors.New("connect failed")
+		return errors.New("connect failed")
 	}
-	_ = stream.SetReadDeadline(time.Time{})
-	return conn, nil
+	_ = conn.SetReadDeadline(time.Time{})
+	return nil
+}
+
+func (conn *earlyConn) Response() error {
+	conn.resOnce.Do(func() {
+		conn.resErr = conn.response()
+	})
+	return conn.resErr
+}
+
+func (conn *earlyConn) Read(b []byte) (n int, err error) {
+	err = conn.Response()
+	if err != nil {
+		return 0, err
+	}
+	return conn.BufferedConn.Read(b)
 }
 
 type quicStreamConn struct {
