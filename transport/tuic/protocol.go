@@ -178,8 +178,8 @@ func NewPacket(ASSOC_ID uint32, LEN uint16, ADDR Address, DATA []byte) Packet {
 	}
 }
 
-func ReadPacket(reader BufferedReader) (c Packet, err error) {
-	c.CommandHead, err = ReadCommandHead(reader)
+func ReadPacketWithHead(head CommandHead, reader BufferedReader) (c Packet, err error) {
+	c.CommandHead = head
 	if err != nil {
 		return
 	}
@@ -204,6 +204,14 @@ func ReadPacket(reader BufferedReader) (c Packet, err error) {
 		return
 	}
 	return
+}
+
+func ReadPacket(reader BufferedReader) (c Packet, err error) {
+	head, err := ReadCommandHead(reader)
+	if err != nil {
+		return
+	}
+	return ReadPacketWithHead(head, reader)
 }
 
 func (c Packet) WriteTo(writer BufferedWriter) (err error) {
@@ -272,15 +280,20 @@ func NewHeartbeat() Heartbeat {
 	}
 }
 
-func ReadHeartbeat(reader BufferedReader) (c Response, err error) {
-	c.CommandHead, err = ReadCommandHead(reader)
-	if err != nil {
-		return
-	}
+func ReadHeartbeatWithHead(head CommandHead, reader BufferedReader) (c Response, err error) {
+	c.CommandHead = head
 	if c.CommandHead.TYPE != HeartbeatType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
 	}
 	return
+}
+
+func ReadHeartbeat(reader BufferedReader) (c Response, err error) {
+	head, err := ReadCommandHead(reader)
+	if err != nil {
+		return
+	}
+	return ReadHeartbeatWithHead(head, reader)
 }
 
 type Response struct {
@@ -295,11 +308,8 @@ func NewResponse(REP byte) Response {
 	}
 }
 
-func ReadResponse(reader BufferedReader) (c Response, err error) {
-	c.CommandHead, err = ReadCommandHead(reader)
-	if err != nil {
-		return
-	}
+func ReadResponseWithHead(head CommandHead, reader BufferedReader) (c Response, err error) {
+	c.CommandHead = head
 	if c.CommandHead.TYPE != ResponseType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
 	}
@@ -308,6 +318,14 @@ func ReadResponse(reader BufferedReader) (c Response, err error) {
 		return
 	}
 	return
+}
+
+func ReadResponse(reader BufferedReader) (c Response, err error) {
+	head, err := ReadCommandHead(reader)
+	if err != nil {
+		return
+	}
+	return ReadResponseWithHead(head, reader)
 }
 
 func (c Response) WriteTo(writer BufferedWriter) (err error) {

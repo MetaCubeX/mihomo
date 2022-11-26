@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/netip"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/metacubex/quic-go"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic/congestion"
 )
@@ -28,7 +30,9 @@ var (
 
 const MaxOpenStreams = 100 - 90
 
-type Client struct {
+type ClientOption struct {
+	DialFn func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error)
+
 	TlsConfig             *tls.Config
 	QuicConfig            *quic.Config
 	Host                  string
@@ -39,27 +43,32 @@ type Client struct {
 	RequestTimeout        int
 	MaxUdpRelayPacketSize int
 	FastOpen              bool
+}
 
-	Inference   any
-	Key         any
-	LastVisited time.Time
-	UDP         bool
+type Client struct {
+	*ClientOption
+	udp bool
 
 	quicConn  quic.Connection
 	connMutex sync.Mutex
 
-	OpenStreams atomic.Int32
+	openStreams atomic.Int32
 
 	udpInputMap sync.Map
+
+	// only ready for PoolClient
+	poolRef     *PoolClient
+	optionRef   any
+	lastVisited time.Time
 }
 
-func (t *Client) getQuicConn(ctx context.Context, dialFn func(ctx context.Context) (net.PacketConn, net.Addr, error)) (quic.Connection, error) {
+func (t *Client) getQuicConn(ctx context.Context) (quic.Connection, error) {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.quicConn != nil {
 		return t.quicConn, nil
 	}
-	pc, addr, err := dialFn(ctx)
+	pc, addr, err := t.DialFn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +215,7 @@ func (t *Client) getQuicConn(ctx context.Context, dialFn func(ctx context.Contex
 
 	go sendAuthentication(quicConn)
 
-	if t.UDP {
+	if t.udp {
 		go parseUDP(quicConn)
 	}
 
@@ -240,14 +249,14 @@ func (t *Client) Close(err error) {
 	}
 }
 
-func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn func(ctx context.Context) (net.PacketConn, net.Addr, error)) (net.Conn, error) {
-	quicConn, err := t.getQuicConn(ctx, dialFn)
+func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata) (net.Conn, error) {
+	quicConn, err := t.getQuicConn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	openStreams := t.OpenStreams.Add(1)
+	openStreams := t.openStreams.Add(1)
 	if openStreams >= MaxOpenStreams {
-		t.OpenStreams.Add(-1)
+		t.openStreams.Add(-1)
 		return nil, TooManyOpenStreams
 	}
 	stream, err := func() (stream *quicStreamConn, err error) {
@@ -354,7 +363,7 @@ func (q *quicStreamConn) Close() error {
 
 func (q *quicStreamConn) close() error {
 	defer time.AfterFunc(C.DefaultTCPTimeout, func() {
-		q.client.OpenStreams.Add(-1)
+		q.client.openStreams.Add(-1)
 	})
 
 	// https://github.com/cloudflare/cloudflared/commit/ed2bac026db46b239699ac5ce4fcf122d7cab2cd
@@ -381,14 +390,14 @@ func (q *quicStreamConn) RemoteAddr() net.Addr {
 
 var _ net.Conn = &quicStreamConn{}
 
-func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata, dialFn func(ctx context.Context) (net.PacketConn, net.Addr, error)) (net.PacketConn, error) {
-	quicConn, err := t.getQuicConn(ctx, dialFn)
+func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (net.PacketConn, error) {
+	quicConn, err := t.getQuicConn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	openStreams := t.OpenStreams.Add(1)
+	openStreams := t.openStreams.Add(1)
 	if openStreams >= MaxOpenStreams {
-		t.OpenStreams.Add(-1)
+		t.openStreams.Add(-1)
 		return nil, TooManyOpenStreams
 	}
 
@@ -442,7 +451,7 @@ func (q *quicStreamPacketConn) Close() error {
 
 func (q *quicStreamPacketConn) close() (err error) {
 	defer time.AfterFunc(C.DefaultTCPTimeout, func() {
-		q.client.OpenStreams.Add(-1)
+		q.client.openStreams.Add(-1)
 	})
 	defer func() {
 		q.client.deferQuicConn(q.quicConn, err)
@@ -539,3 +548,16 @@ func (q *quicStreamPacketConn) LocalAddr() net.Addr {
 }
 
 var _ net.PacketConn = &quicStreamPacketConn{}
+
+func NewClient(clientOption *ClientOption, udp bool) *Client {
+	c := &Client{
+		ClientOption: clientOption,
+		udp:          udp,
+	}
+	runtime.SetFinalizer(c, closeClient)
+	return c
+}
+
+func closeClient(client *Client) {
+	client.Close(ClientClosed)
+}
