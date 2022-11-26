@@ -45,11 +45,12 @@ type Client struct {
 	udpSessionMutex sync.RWMutex
 	udpSessionMap   map[uint32]chan *udpMessage
 	udpDefragger    defragger
+	fastOpen        bool
 }
 
 func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
 	transport *transport.ClientTransport, sendBPS uint64, recvBPS uint64, congestionFactory CongestionFactory,
-	obfuscator obfs.Obfuscator) (*Client, error) {
+	obfuscator obfs.Obfuscator,fastOpen bool) (*Client, error) {
 	quicConfig.DisablePathMTUDiscovery = quicConfig.DisablePathMTUDiscovery || pmtud_fix.DisablePathMTUDiscovery
 	c := &Client{
 		transport:         transport,
@@ -62,6 +63,7 @@ func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.C
 		obfuscator:        obfuscator,
 		tlsConfig:         tlsConfig,
 		quicConfig:        quicConfig,
+		fastOpen: fastOpen,
 	}
 	return c, nil
 }
@@ -205,21 +207,27 @@ func (c *Client) DialTCP(addr string, dialer transport.PacketDialer) (net.Conn, 
 		_ = stream.Close()
 		return nil, err
 	}
-	// Read response
-	var sr serverResponse
-	err = struc.Unpack(stream, &sr)
-	if err != nil {
-		_ = stream.Close()
-		return nil, err
+	// If fast open is enabled, we return the stream immediately
+	// and defer the response handling to the first Read() call
+	if !c.fastOpen {
+		// Read response
+		var sr serverResponse
+		err = struc.Unpack(stream, &sr)
+		if err != nil {
+			_ = stream.Close()
+			return nil, err
+		}
+		if !sr.OK {
+			_ = stream.Close()
+			return nil, fmt.Errorf("connection rejected: %s", sr.Message)
+		}
 	}
-	if !sr.OK {
-		_ = stream.Close()
-		return nil, fmt.Errorf("connection rejected: %s", sr.Message)
-	}
+
 	return &quicConn{
 		Orig:             stream,
 		PseudoLocalAddr:  session.LocalAddr(),
 		PseudoRemoteAddr: session.RemoteAddr(),
+		Established: !c.fastOpen,
 	}, nil
 }
 
@@ -288,9 +296,23 @@ type quicConn struct {
 	Orig             quic.Stream
 	PseudoLocalAddr  net.Addr
 	PseudoRemoteAddr net.Addr
+	Established      bool
 }
 
 func (w *quicConn) Read(b []byte) (n int, err error) {
+	if !w.Established {
+		var sr serverResponse
+		err := struc.Unpack(w.Orig, &sr)
+		if err != nil {
+			_ = w.Close()
+			return 0, err
+		}
+		if !sr.OK {
+			_ = w.Close()
+			return 0, fmt.Errorf("connection rejected: %s", sr.Message)
+		}
+		w.Established = true
+	}
 	return w.Orig.Read(b)
 }
 
