@@ -401,7 +401,6 @@ func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	}
 
 	pipe1, pipe2 := net.Pipe()
-	inputCh := make(chan udpData)
 	var connId uint32
 	for {
 		connId = rand.Uint32()
@@ -416,15 +415,8 @@ func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		lAddr:     quicConn.LocalAddr(),
 		client:    t,
 		inputConn: N.NewBufferedConn(pipe2),
-		inputCh:   inputCh,
 	}
 	return pc, nil
-}
-
-type udpData struct {
-	data []byte
-	addr net.Addr
-	err  error
 }
 
 type quicStreamPacketConn struct {
@@ -433,7 +425,6 @@ type quicStreamPacketConn struct {
 	lAddr     net.Addr
 	client    *Client
 	inputConn *N.BufferedConn
-	inputCh   chan udpData
 
 	closeOnce sync.Once
 	closeErr  error
@@ -455,6 +446,8 @@ func (q *quicStreamPacketConn) close() (err error) {
 	defer func() {
 		q.client.deferQuicConn(q.quicConn, err)
 	}()
+	q.client.udpInputMap.Delete(q.connId)
+	_ = q.inputConn.Close()
 	buf := &bytes.Buffer{}
 	err = NewDissociate(q.connId).WriteTo(buf)
 	if err != nil {
