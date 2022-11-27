@@ -18,6 +18,7 @@ import (
 	"github.com/metacubex/quic-go"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic/congestion"
@@ -119,7 +120,8 @@ func (t *Client) getQuicConn(ctx context.Context) (quic.Connection, error) {
 		if err != nil {
 			return err
 		}
-		buf := &bytes.Buffer{}
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
 		err = NewAuthenticate(t.Token).WriteTo(buf)
 		if err != nil {
 			return err
@@ -262,7 +264,8 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata) (net.Con
 		defer func() {
 			t.deferQuicConn(quicConn, err)
 		}()
-		buf := &bytes.Buffer{}
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
 		err = NewConnect(NewAddress(metadata)).WriteTo(buf)
 		if err != nil {
 			return nil, err
@@ -448,7 +451,8 @@ func (q *quicStreamPacketConn) close() (err error) {
 	}()
 	q.client.udpInputMap.Delete(q.connId)
 	_ = q.inputConn.Close()
-	buf := &bytes.Buffer{}
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	err = NewDissociate(q.connId).WriteTo(buf)
 	if err != nil {
 		return
@@ -503,7 +507,8 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 		q.client.deferQuicConn(q.quicConn, err)
 	}()
 	addr.String()
-	buf := &bytes.Buffer{}
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
 	addrPort, err := netip.ParseAddrPort(addr.String())
 	if err != nil {
 		return
