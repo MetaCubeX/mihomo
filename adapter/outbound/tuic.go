@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"strconv"
@@ -42,6 +43,7 @@ type TuicOption struct {
 	MaxUdpRelayPacketSize int      `proxy:"max-udp-relay-packet-size,omitempty"`
 
 	FastOpen            bool   `proxy:"fast-open,omitempty"`
+	MaxOpenStreams      int    `proxy:"max-open-streams,omitempty"`
 	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string `proxy:"fingerprint,omitempty"`
 	CustomCA            string `proxy:"ca,omitempty"`
@@ -148,11 +150,20 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		option.MaxUdpRelayPacketSize = 1500
 	}
 
+	if option.MaxOpenStreams == 0 {
+		option.MaxOpenStreams = 100
+	}
+
+	// ensure server's incoming stream can handle correctly, increase to 1.1x
+	quicMaxOpenStreams := int64(option.MaxOpenStreams)
+	quicMaxOpenStreams = quicMaxOpenStreams + int64(math.Ceil(float64(quicMaxOpenStreams)/10.0))
 	quicConfig := &quic.Config{
 		InitialStreamReceiveWindow:     uint64(option.ReceiveWindowConn),
 		MaxStreamReceiveWindow:         uint64(option.ReceiveWindowConn),
 		InitialConnectionReceiveWindow: uint64(option.ReceiveWindow),
 		MaxConnectionReceiveWindow:     uint64(option.ReceiveWindow),
+		MaxIncomingStreams:             quicMaxOpenStreams,
+		MaxIncomingUniStreams:          quicMaxOpenStreams,
 		KeepAlivePeriod:                time.Duration(option.HeartbeatInterval) * time.Millisecond,
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 		EnableDatagrams:                true,
@@ -186,6 +197,12 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 	}
+	// to avoid tuic's "too many open streams", decrease to 0.9x
+	clientMaxOpenStreams := int64(option.MaxOpenStreams)
+	clientMaxOpenStreams = clientMaxOpenStreams - int64(math.Ceil(float64(clientMaxOpenStreams)/10.0))
+	if clientMaxOpenStreams < 1 {
+		clientMaxOpenStreams = 1
+	}
 	clientOption := &tuic.ClientOption{
 		DialFn:                t.dial,
 		TlsConfig:             tlsConfig,
@@ -198,6 +215,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		RequestTimeout:        option.RequestTimeout,
 		MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
 		FastOpen:              option.FastOpen,
+		MaxOpenStreams:        clientMaxOpenStreams,
 	}
 
 	t.client = tuic.NewClientPool(clientOption)
