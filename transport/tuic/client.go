@@ -28,8 +28,6 @@ var (
 	TooManyOpenStreams = errors.New("tuic: too many open streams")
 )
 
-const MaxOpenStreams = 100 - 90
-
 type ClientOption struct {
 	DialFn func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error)
 
@@ -43,6 +41,7 @@ type ClientOption struct {
 	RequestTimeout        int
 	MaxUdpRelayPacketSize int
 	FastOpen              bool
+	MaxOpenStreams        int64
 }
 
 type Client struct {
@@ -52,7 +51,7 @@ type Client struct {
 	quicConn  quic.Connection
 	connMutex sync.Mutex
 
-	openStreams atomic.Int32
+	openStreams atomic.Int64
 
 	udpInputMap sync.Map
 
@@ -255,7 +254,7 @@ func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata) (net.Con
 		return nil, err
 	}
 	openStreams := t.openStreams.Add(1)
-	if openStreams >= MaxOpenStreams {
+	if openStreams >= t.MaxOpenStreams {
 		t.openStreams.Add(-1)
 		return nil, TooManyOpenStreams
 	}
@@ -396,7 +395,7 @@ func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		return nil, err
 	}
 	openStreams := t.openStreams.Add(1)
-	if openStreams >= MaxOpenStreams {
+	if openStreams >= t.MaxOpenStreams {
 		t.openStreams.Add(-1)
 		return nil, TooManyOpenStreams
 	}
