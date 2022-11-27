@@ -91,7 +91,7 @@ type HysteriaOption struct {
 	Name                string   `proxy:"name"`
 	Server              string   `proxy:"server"`
 	Port                int      `proxy:"port"`
-	Ports               string   `proxy:"ports"`
+	Ports               string   `proxy:"ports,omitempty"`
 	Protocol            string   `proxy:"protocol,omitempty"`
 	ObfsProtocol        string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
 	Up                  string   `proxy:"up"`
@@ -137,7 +137,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		},
 	}
 	var addr string
-	if option.Ports == "" {
+	if len(option.Ports) == 0 {
 		addr = net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	} else {
 		addr = net.JoinHostPort(option.Server, option.Ports)
