@@ -99,7 +99,6 @@ type HysteriaOption struct {
 	Down                string   `proxy:"down"`
 	DownSpeed           int      `proxy:"down-speed,omitempty"` // compatible with Stash
 	Auth                string   `proxy:"auth,omitempty"`
-	OldAuthString       string   `proxy:"auth_str,omitempty"`
 	AuthString          string   `proxy:"auth-str,omitempty"`
 	Obfs                string   `proxy:"obfs,omitempty"`
 	SNI                 string   `proxy:"sni,omitempty"`

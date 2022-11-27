@@ -9,14 +9,10 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-func ParseProxy(mapping map[string]any) (C.Proxy, error) {
-	newMapping := make(map[string]any)
-	for key := range mapping {
-		newMapping[strings.ReplaceAll(key, "_", "-")] = mapping[key]
-	}
-	mapping = newMapping
+var keyReplacer = strings.NewReplacer("_", "-")
 
-	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true})
+func ParseProxy(mapping map[string]any) (C.Proxy, error) {
+	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true, KeyReplacer: keyReplacer})
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
 		return nil, fmt.Errorf("missing type")
