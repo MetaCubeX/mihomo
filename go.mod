@@ -19,7 +19,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.1.1
-	github.com/metacubex/quic-go v0.31.1-0.20221125020617-0f0618ad3eaa
+	github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e
 	github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0

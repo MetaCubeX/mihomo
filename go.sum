@@ -89,8 +89,8 @@ github.com/mdlayher/netlink v1.1.1 h1:VqG+Voq9V4uZ+04vjIrcSCWDpf91B1xxbP4QBUmUJE
 github.com/mdlayher/netlink v1.1.1/go.mod h1:WTYpFb/WTvlRJAyKhZL5/uy69TDDpHHu2VZmb2XgV7o=
 github.com/mdlayher/raw v0.0.0-20190606142536-fef19f00fc18/go.mod h1:7EpbotpCmVZcu+KCX4g9WaRNuu11uyhiW7+Le1dKawg=
 github.com/mdlayher/raw v0.0.0-20191009151244-50f2db8cc065/go.mod h1:7EpbotpCmVZcu+KCX4g9WaRNuu11uyhiW7+Le1dKawg=
-github.com/metacubex/quic-go v0.31.1-0.20221125020617-0f0618ad3eaa h1:Zc0nF/kgKDRn/Ab9jL1KNjOOe8JaM/sjsak1gNVVG6g=
-github.com/metacubex/quic-go v0.31.1-0.20221125020617-0f0618ad3eaa/go.mod h1:7NPWVTLiX2Ss9q9gBNZaNHsPqZ3Tg/ApyrXxxUYbl78=
+github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e h1:RnfC6+sShJ3biU2Q2wuh4FxZ8/3fp1QG+1zAfswVehA=
+github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e/go.mod h1:7NPWVTLiX2Ss9q9gBNZaNHsPqZ3Tg/ApyrXxxUYbl78=
 github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c h1:VHtXDny/TNOF7YDT9d9Qkr+x6K1O4cejXLlyPUXDeXQ=
 github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c/go.mod h1:fULJ451x1/XlpIhl+Oo+EPGKla9tFZaqT5dKLrZ+NvM=
 github.com/miekg/dns v1.1.50 h1:DQUfb9uc6smULcREF09Uc+/Gd46YWqJd5DbpPE9xkcA=
