@@ -1,31 +1,41 @@
 package transport
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
+	"strings"
+	"time"
+
+	"github.com/metacubex/quic-go"
+
 	"github.com/Dreamacro/clash/transport/hysteria/conns/faketcp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/udp"
 	"github.com/Dreamacro/clash/transport/hysteria/conns/wechat"
 	obfsPkg "github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"github.com/metacubex/quic-go"
-	"net"
+	"github.com/Dreamacro/clash/transport/hysteria/utils"
 )
 
 type ClientTransport struct {
 	Dialer *net.Dialer
 }
 
-func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfsPkg.Obfuscator, dialer PacketDialer) (net.PacketConn, error) {
+func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (net.PacketConn, error) {
 	if len(proto) == 0 || proto == "udp" {
 		conn, err := dialer.ListenPacket()
 		if err != nil {
 			return nil, err
 		}
 		if obfs != nil {
+			if isMultiPortAddr(server) {
+				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, obfs, dialer)
+			}
 			oc := udp.NewObfsUDPConn(conn, obfs)
 			return oc, nil
 		} else {
+			if isMultiPortAddr(server) {
+				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, nil, dialer)
+			}
 			return conn, nil
 		}
 	} else if proto == "wechat-video" {
@@ -54,19 +64,13 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 	}
 }
 
-type PacketDialer interface {
-	ListenPacket() (net.PacketConn, error)
-	Context() context.Context
-	RemoteAddr(host string) (net.Addr, error)
-}
-
-func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfsPkg.Obfuscator, dialer PacketDialer) (quic.Connection, error) {
+func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (quic.Connection, error) {
 	serverUDPAddr, err := dialer.RemoteAddr(server)
 	if err != nil {
 		return nil, err
 	}
 
-	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr.String(), obfs, dialer)
+	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr.String(), obfs, hopInterval, dialer)
 	if err != nil {
 		return nil, err
 	}
@@ -89,4 +93,12 @@ func (ct *ClientTransport) DialTCP(raddr *net.TCPAddr) (*net.TCPConn, error) {
 
 func (ct *ClientTransport) ListenUDP() (*net.UDPConn, error) {
 	return net.ListenUDP("udp", nil)
+}
+
+func isMultiPortAddr(addr string) bool {
+	_, portStr, err := net.SplitHostPort(addr)
+	if err == nil && (strings.Contains(portStr, ",") || strings.Contains(portStr, "-")) {
+		return true
+	}
+	return false
 }
