@@ -112,7 +112,7 @@ type HysteriaOption struct {
 	ReceiveWindow       int      `proxy:"recv-window,omitempty"`
 	DisableMTUDiscovery bool     `proxy:"disable-mtu-discovery,omitempty"`
 	FastOpen            bool     `proxy:"fast-open,omitempty"`
-	HopInterval         int      `proxy:"hop-interval"`
+	HopInterval         int      `proxy:"hop-interval,omitempty"`
 }
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
