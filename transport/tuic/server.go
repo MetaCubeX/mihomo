@@ -261,6 +261,13 @@ func (s *serverHandler) handleUniStream() (err error) {
 					writeClosed := v.(*atomic.Bool)
 					writeClosed.Store(true)
 				}
+			case HeartbeatType:
+				var heartbeat Heartbeat
+				heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
+				if err != nil {
+					return
+				}
+				heartbeat.BytesLen()
 			}
 			return
 		}()
