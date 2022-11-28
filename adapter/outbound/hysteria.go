@@ -30,12 +30,10 @@ import (
 )
 
 const (
-	mbpsToBps   = 125000
-	minSpeedBPS = 16384
+	mbpsToBps = 125000
 
 	DefaultStreamReceiveWindow     = 15728640 // 15 MB/s
 	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
-	DefaultMaxIncomingStreams      = 1024
 
 	DefaultALPN        = "hysteria"
 	DefaultProtocol    = "udp"
@@ -258,6 +256,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			addr:   addr,
 			tp:     C.Hysteria,
 			udp:    true,
+			tfo:    option.FastOpen,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
