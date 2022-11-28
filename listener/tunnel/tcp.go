@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -10,59 +11,68 @@ import (
 )
 
 type Listener struct {
-	closed    bool
-	config    string
-	listeners []net.Listener
+	listener net.Listener
+	addr     string
+	target   socks5.Addr
+	proxy    string
+	closed   bool
 }
 
-func New(config string, in chan<- C.ConnContext) (*Listener, error) {
-	tl := &Listener{false, config, nil}
-	pl := PairList{}
-	err := pl.Set(config)
+// RawAddress implements C.Listener
+func (l *Listener) RawAddress() string {
+	return l.addr
+}
+
+// Address implements C.Listener
+func (l *Listener) Address() string {
+	return l.listener.Addr().String()
+}
+
+// Close implements C.Listener
+func (l *Listener) Close() error {
+	l.closed = true
+	return l.listener.Close()
+}
+
+func (l *Listener) handleTCP(conn net.Conn, in chan<- C.ConnContext) {
+	conn.(*net.TCPConn).SetKeepAlive(true)
+	ctx := inbound.NewSocket(l.target, conn, C.TUNNEL)
+	ctx.Metadata().SpecialProxy = l.proxy
+	in <- ctx
+}
+
+func New(addr, target, proxy string, in chan<- C.ConnContext) (*Listener, error) {
+	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, p := range pl {
-		addr := p[0]
-		target := p[1]
-		go func() {
-			tgt := socks5.ParseAddr(target)
-			if tgt == nil {
-				log.Errorln("invalid target address %q", target)
-				return
-			}
-			l, err := inbound.Listen("tcp", addr)
+	targetAddr := socks5.ParseAddr(target)
+	if targetAddr == nil {
+		return nil, fmt.Errorf("invalid target address %s", target)
+	}
+
+	log.Infoln("TCP tunnel %s <-> %s", l.Addr().String(), target)
+
+	rl := &Listener{
+		listener: l,
+		target:   targetAddr,
+		proxy:    proxy,
+		addr:     addr,
+	}
+
+	go func() {
+		for {
+			c, err := l.Accept()
 			if err != nil {
-				return
-			}
-			tl.listeners = append(tl.listeners, l)
-			log.Infoln("TCP tunnel %s <-> %s", l.Addr().String(), target)
-			for {
-				c, err := l.Accept()
-				if err != nil {
-					if tl.closed {
-						break
-					}
-					continue
+				if rl.closed {
+					break
 				}
-				_ = c.(*net.TCPConn).SetKeepAlive(true)
-
-				in <- inbound.NewSocket(tgt, c, C.TCPTUN)
+				continue
 			}
-		}()
-	}
+			go rl.handleTCP(c, in)
+		}
+	}()
 
-	return tl, nil
-}
-
-func (l *Listener) Close() {
-	l.closed = true
-	for _, lis := range l.listeners {
-		_ = lis.Close()
-	}
-}
-
-func (l *Listener) Config() string {
-	return l.config
+	return rl, nil
 }
