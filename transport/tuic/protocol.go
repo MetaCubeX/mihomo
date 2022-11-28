@@ -349,7 +349,7 @@ func NewHeartbeat() Heartbeat {
 	}
 }
 
-func ReadHeartbeatWithHead(head CommandHead, reader BufferedReader) (c Response, err error) {
+func ReadHeartbeatWithHead(head CommandHead, reader BufferedReader) (c Heartbeat, err error) {
 	c.CommandHead = head
 	if c.CommandHead.TYPE != HeartbeatType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
@@ -357,7 +357,7 @@ func ReadHeartbeatWithHead(head CommandHead, reader BufferedReader) (c Response,
 	return
 }
 
-func ReadHeartbeat(reader BufferedReader) (c Response, err error) {
+func ReadHeartbeat(reader BufferedReader) (c Heartbeat, err error) {
 	head, err := ReadCommandHead(reader)
 	if err != nil {
 		return
