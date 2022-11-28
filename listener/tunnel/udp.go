@@ -7,7 +7,6 @@ import (
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
@@ -45,8 +44,6 @@ func NewUDP(addr, target, proxy string, in chan<- *inbound.PacketAdapter) (*Pack
 	if targetAddr == nil {
 		return nil, fmt.Errorf("invalid target address %s", target)
 	}
-
-	log.Infoln("Udp tunnel %s <-> %s", l.LocalAddr().String(), target)
 
 	sl := &PacketConn{
 		conn:   l,
