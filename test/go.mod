@@ -23,7 +23,7 @@ require (
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/go-units v0.4.0 // indirect
-	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/gofrs/uuid v4.3.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -57,7 +57,7 @@ require (
 	github.com/sagernet/abx-go v0.0.0-20220819185957-dba1257d738e // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
-	github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4 // indirect
+	github.com/sagernet/sing v0.1.0 // indirect
 	github.com/sagernet/sing-shadowsocks v0.0.0-20221112030934-e55284e180ea // indirect
 	github.com/sagernet/sing-tun v0.0.0-20221104121441-66c48a57776f // indirect
 	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0 // indirect
