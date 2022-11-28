@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/quic-go"
@@ -115,6 +116,7 @@ type quicStreamPacketConn struct {
 
 	deferQuicConnFn func(quicConn quic.Connection, err error)
 	closeDeferFn    func()
+	writeClosed     *atomic.Bool
 
 	closeOnce sync.Once
 	closeErr  error
@@ -133,11 +135,11 @@ func (q *quicStreamPacketConn) close() (err error) {
 	if q.closeDeferFn != nil {
 		defer q.closeDeferFn()
 	}
-	defer func() {
-		if q.deferQuicConnFn != nil {
+	if q.deferQuicConnFn != nil {
+		defer func() {
 			q.deferQuicConnFn(q.quicConn, err)
-		}
-	}()
+		}()
+	}
 	if q.inputConn != nil {
 		_ = q.inputConn.Close()
 		q.inputConn = nil
@@ -204,11 +206,15 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	if q.closed {
 		return 0, net.ErrClosed
 	}
-	defer func() {
-		if q.deferQuicConnFn != nil {
+	if q.writeClosed != nil && q.writeClosed.Load() {
+		_ = q.Close()
+		return 0, net.ErrClosed
+	}
+	if q.deferQuicConnFn != nil {
+		defer func() {
 			q.deferQuicConnFn(q.quicConn, err)
-		}
-	}()
+		}()
+	}
 	addr.String()
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
