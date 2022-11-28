@@ -554,6 +554,21 @@ func (c Address) String() string {
 	}
 }
 
+func (c Address) SocksAddr() socks5.Addr {
+	addr := make([]byte, 1+len(c.ADDR)+2)
+	switch c.TYPE {
+	case AtypIPv4:
+		addr[0] = socks5.AtypIPv4
+	case AtypIPv6:
+		addr[0] = socks5.AtypIPv6
+	case AtypDomainName:
+		addr[0] = socks5.AtypDomainName
+	}
+	copy(addr[1:], c.ADDR)
+	binary.BigEndian.PutUint16(addr[len(addr)-2:], c.PORT)
+	return addr
+}
+
 func (c Address) UDPAddr() *net.UDPAddr {
 	return &net.UDPAddr{
 		IP:   c.ADDR,

@@ -60,13 +60,13 @@ func New(config config.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *inb
 	}
 
 	option := &tuic.ServerOption{
-		HandleTcpFn: func(conn net.Conn, addr string) error {
-			tcpIn <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.TUIC)
+		HandleTcpFn: func(conn net.Conn, addr socks5.Addr) error {
+			tcpIn <- inbound.NewSocket(addr, conn, C.TUIC)
 			return nil
 		},
-		HandleUdpFn: func(addr *net.UDPAddr, packet C.UDPPacket) error {
+		HandleUdpFn: func(addr socks5.Addr, packet C.UDPPacket) error {
 			select {
-			case udpIn <- inbound.NewPacket(socks5.ParseAddrToSocksAddr(addr), packet, C.TUIC):
+			case udpIn <- inbound.NewPacket(addr, packet, C.TUIC):
 			default:
 			}
 			return nil

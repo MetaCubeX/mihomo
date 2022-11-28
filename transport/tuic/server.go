@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -16,11 +17,12 @@ import (
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 type ServerOption struct {
-	HandleTcpFn func(conn net.Conn, addr string) error
-	HandleUdpFn func(addr *net.UDPAddr, packet C.UDPPacket) error
+	HandleTcpFn func(conn net.Conn, addr socks5.Addr) error
+	HandleUdpFn func(addr socks5.Addr, packet C.UDPPacket) error
 
 	TlsConfig             *tls.Config
 	QuicConfig            *quic.Config
@@ -78,6 +80,8 @@ type serverHandler struct {
 	authCh   chan struct{}
 	authOk   bool
 	authOnce sync.Once
+
+	udpInputMap sync.Map
 }
 
 func (s *serverHandler) handle() {
@@ -125,6 +129,13 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	var assocId uint32
 
 	assocId = packet.ASSOC_ID
+
+	v, _ := s.udpInputMap.LoadOrStore(assocId, &atomic.Bool{})
+	writeClosed := v.(*atomic.Bool)
+	if writeClosed.Load() {
+		return nil
+	}
+
 	pc := &quicStreamPacketConn{
 		connId:                assocId,
 		quicConn:              s.quicConn,
@@ -135,9 +146,10 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 		ref:                   s,
 		deferQuicConnFn:       nil,
 		closeDeferFn:          nil,
+		writeClosed:           writeClosed,
 	}
 
-	return s.HandleUdpFn(packet.ADDR.UDPAddr(), &serverUDPPacket{
+	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
 		packet: &packet,
 		rAddr:  s.genServerAssocIdAddr(assocId),
@@ -175,7 +187,7 @@ func (s *serverHandler) handleStream() (err error) {
 
 			buf := pool.GetBuffer()
 			defer pool.PutBuffer(buf)
-			err = s.HandleTcpFn(conn, connect.ADDR.String())
+			err = s.HandleTcpFn(conn, connect.ADDR.SocksAddr())
 			if err != nil {
 				err = NewResponseFailed().WriteTo(buf)
 			}
@@ -245,7 +257,10 @@ func (s *serverHandler) handleUniStream() (err error) {
 				if err != nil {
 					return
 				}
-				disassociate.BytesLen()
+				if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
+					writeClosed := v.(*atomic.Bool)
+					writeClosed.Store(true)
+				}
 			}
 			return
 		}()
