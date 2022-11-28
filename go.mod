@@ -24,7 +24,7 @@ require (
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4
+	github.com/sagernet/sing v0.1.0
 	github.com/sagernet/sing-shadowsocks v0.0.0-20221112030934-e55284e180ea
 	github.com/sagernet/sing-tun v0.0.0-20221104121441-66c48a57776f
 	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0
@@ -46,14 +46,14 @@ require (
 	lukechampine.com/blake3 v1.1.7
 )
 
-replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221105124245-542e9b56a6dc
+replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221127052020-dbf40f3160d8
 
 replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221116103607-48a7095182b1
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/btree v1.0.1 // indirect
