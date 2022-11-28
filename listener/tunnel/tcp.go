@@ -6,7 +6,6 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
@@ -51,8 +50,6 @@ func New(addr, target, proxy string, in chan<- C.ConnContext) (*Listener, error)
 	if targetAddr == nil {
 		return nil, fmt.Errorf("invalid target address %s", target)
 	}
-
-	log.Infoln("TCP tunnel %s <-> %s", l.Addr().String(), target)
 
 	rl := &Listener{
 		listener: l,
