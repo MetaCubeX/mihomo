@@ -24,7 +24,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/dns"
-	P "github.com/Dreamacro/clash/listener"
+	"github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tproxy"
@@ -89,6 +89,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateIPTables(cfg)
 	updateTun(cfg.General)
 	updateExperimental(cfg)
+	updateTunnels(cfg.Tunnels)
 
 	log.SetLevel(cfg.General.LogLevel)
 }
@@ -98,7 +99,7 @@ func initInnerTcp() {
 }
 
 func GetGeneral() *config.General {
-	ports := P.GetPorts()
+	ports := listener.GetPorts()
 	var authenticator []string
 	if auth := authStore.Authenticator(); auth != nil {
 		authenticator = auth.Users()
@@ -113,18 +114,16 @@ func GetGeneral() *config.General {
 			MixedPort:         ports.MixedPort,
 			ShadowSocksConfig: ports.ShadowSocksConfig,
 			VmessConfig:       ports.VmessConfig,
-			TcpTunConfig:      ports.TcpTunConfig,
-			UdpTunConfig:      ports.UdpTunConfig,
 			Authentication:    authenticator,
-			AllowLan:          P.AllowLan(),
-			BindAddress:       P.BindAddress(),
+			AllowLan:          listener.AllowLan(),
+			BindAddress:       listener.BindAddress(),
 		},
 		Mode:          tunnel.Mode(),
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
-		Tun:           P.GetTunConf(),
-		TuicServer:    P.GetTuicConf(),
+		Tun:           listener.GetTunConf(),
+		TuicServer:    listener.GetTuicConf(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
 		TCPConcurrent: dialer.GetDial(),
@@ -268,8 +267,8 @@ func updateTun(general *config.General) {
 	if general == nil {
 		return
 	}
-	P.ReCreateTun(general.Tun, tunnel.TCPIn(), tunnel.UDPIn())
-	P.ReCreateRedirToTun(general.Tun.RedirectToTun)
+	listener.ReCreateTun(general.Tun, tunnel.TCPIn(), tunnel.UDPIn())
+	listener.ReCreateRedirToTun(general.Tun.RedirectToTun)
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -293,6 +292,10 @@ func updateSniffer(sniffer *config.Sniffer) {
 		tunnel.UpdateSniffer(dispatcher)
 		log.Infoln("Sniffer is closed")
 	}
+}
+
+func updateTunnels(tunnels []config.Tunnel) {
+	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
 func updateGeneral(general *config.General, force bool) {
@@ -332,27 +335,25 @@ func updateGeneral(general *config.General, force bool) {
 	G.SetLoader(geodataLoader)
 
 	allowLan := general.AllowLan
-	P.SetAllowLan(allowLan)
+	listener.SetAllowLan(allowLan)
 
 	bindAddress := general.BindAddress
-	P.SetBindAddress(bindAddress)
+	listener.SetBindAddress(bindAddress)
 
 	inbound.SetTfo(general.InboundTfo)
 
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
-	P.ReCreateHTTP(general.Port, tcpIn)
-	P.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
-	P.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
-	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
-	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
-	P.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
-	P.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	P.ReCreateTcpTun(general.TcpTunConfig, tcpIn, udpIn)
-	P.ReCreateUdpTun(general.UdpTunConfig, tcpIn, udpIn)
-	P.ReCreateTuic(general.TuicServer, tcpIn, udpIn)
+	listener.ReCreateHTTP(general.Port, tcpIn)
+	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
+	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
+	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
+	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
+	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
+	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
+	listener.ReCreateTuic(general.TuicServer, tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -459,7 +460,7 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func Shutdown() {
-	P.Cleanup(false)
+	listener.Cleanup(false)
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 
