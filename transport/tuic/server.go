@@ -190,8 +190,10 @@ func (s *serverHandler) handleStream() (err error) {
 			err = s.HandleTcpFn(conn, connect.ADDR.SocksAddr())
 			if err != nil {
 				err = NewResponseFailed().WriteTo(buf)
+				defer conn.Close()
+			} else {
+				err = NewResponseSucceed().WriteTo(buf)
 			}
-			err = NewResponseSucceed().WriteTo(buf)
 			if err != nil {
 				_ = conn.Close()
 				return err

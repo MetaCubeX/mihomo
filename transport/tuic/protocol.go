@@ -33,7 +33,7 @@ const (
 	PacketType       = CommandType(0x02)
 	DissociateType   = CommandType(0x03)
 	HeartbeatType    = CommandType(0x04)
-	ResponseType     = CommandType(0x05)
+	ResponseType     = CommandType(0xff)
 )
 
 func (c CommandType) String() string {
@@ -119,6 +119,7 @@ func ReadAuthenticateWithHead(head CommandHead, reader BufferedReader) (c Authen
 	}
 	if c.CommandHead.TYPE != AuthenticateType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+		return
 	}
 	_, err = io.ReadFull(reader, c.TKN[:])
 	if err != nil {
@@ -174,6 +175,7 @@ func ReadConnectWithHead(head CommandHead, reader BufferedReader) (c Connect, er
 	}
 	if c.CommandHead.TYPE != ConnectType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+		return
 	}
 	c.ADDR, err = ReadAddress(reader)
 	if err != nil {
@@ -231,6 +233,7 @@ func ReadPacketWithHead(head CommandHead, reader BufferedReader) (c Packet, err 
 	}
 	if c.CommandHead.TYPE != PacketType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+		return
 	}
 	err = binary.Read(reader, binary.BigEndian, &c.ASSOC_ID)
 	if err != nil {
@@ -305,8 +308,9 @@ func ReadDissociateWithHead(head CommandHead, reader BufferedReader) (c Dissocia
 	if err != nil {
 		return
 	}
-	if c.CommandHead.TYPE != PacketType {
+	if c.CommandHead.TYPE != DissociateType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+		return
 	}
 	err = binary.Read(reader, binary.BigEndian, &c.ASSOC_ID)
 	if err != nil {
@@ -353,6 +357,7 @@ func ReadHeartbeatWithHead(head CommandHead, reader BufferedReader) (c Heartbeat
 	c.CommandHead = head
 	if c.CommandHead.TYPE != HeartbeatType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+		return
 	}
 	return
 }
@@ -389,6 +394,7 @@ func ReadResponseWithHead(head CommandHead, reader BufferedReader) (c Response, 
 	c.CommandHead = head
 	if c.CommandHead.TYPE != ResponseType {
 		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+		return
 	}
 	c.REP, err = reader.ReadByte()
 	if err != nil {
