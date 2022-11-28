@@ -169,12 +169,12 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		EnableDatagrams:                true,
 	}
 	if option.ReceiveWindowConn == 0 {
-		quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow / 10
-		quicConfig.MaxStreamReceiveWindow = DefaultStreamReceiveWindow
+		quicConfig.InitialStreamReceiveWindow = tuic.DefaultStreamReceiveWindow / 10
+		quicConfig.MaxStreamReceiveWindow = tuic.DefaultStreamReceiveWindow
 	}
 	if option.ReceiveWindow == 0 {
-		quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow / 10
-		quicConfig.MaxConnectionReceiveWindow = DefaultConnectionReceiveWindow
+		quicConfig.InitialConnectionReceiveWindow = tuic.DefaultConnectionReceiveWindow / 10
+		quicConfig.MaxConnectionReceiveWindow = tuic.DefaultConnectionReceiveWindow
 	}
 
 	if len(option.Ip) > 0 {
