@@ -21,6 +21,7 @@ import (
 	"github.com/Dreamacro/clash/listener/sing_vmess"
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/listener/tproxy"
+	"github.com/Dreamacro/clash/listener/tuic"
 	"github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 )
@@ -43,6 +44,7 @@ var (
 	vmessListener       *sing_vmess.Listener
 	tcpTunListener      *tunnel.Listener
 	udpTunListener      *tunnel.UdpListener
+	tuicListener        *tuic.Listener
 	autoRedirListener   *autoredir.Listener
 	autoRedirProgram    *ebpf.TcEBpfProgram
 	tcProgram           *ebpf.TcEBpfProgram
@@ -58,6 +60,7 @@ var (
 	vmessMux     sync.Mutex
 	tcpTunMux    sync.Mutex
 	udpTunMux    sync.Mutex
+	tuicMux      sync.Mutex
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
 
@@ -386,6 +389,45 @@ func ReCreateUdpTun(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inb
 	}
 
 	udpTunListener = udpListener
+
+	return
+}
+
+func ReCreateTuic(config config.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+	tuicMux.Lock()
+	defer tuicMux.Unlock()
+	shouldIgnore := false
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start Tuic server error: %s", err.Error())
+		}
+	}()
+
+	if tuicListener != nil {
+		if tuicListener.Config().String() != config.String() {
+			tuicListener.Close()
+			tuicListener = nil
+		} else {
+			shouldIgnore = true
+		}
+	}
+
+	if shouldIgnore {
+		return
+	}
+
+	if !config.Enable {
+		return
+	}
+
+	listener, err := tuic.New(config, tcpIn, udpIn)
+	if err != nil {
+		return
+	}
+
+	tuicListener = listener
 
 	return
 }

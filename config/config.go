@@ -54,6 +54,7 @@ type General struct {
 	TCPConcurrent bool         `json:"tcp-concurrent"`
 	EnableProcess bool         `json:"enable-process"`
 	Tun           Tun          `json:"tun"`
+	TuicServer    TuicServer   `json:"tuic-server"`
 	Sniffing      bool         `json:"sniffing"`
 	EBpf          EBpf         `json:"-"`
 }
@@ -112,6 +113,24 @@ type FallbackFilter struct {
 type Profile struct {
 	StoreSelected bool `yaml:"store-selected"`
 	StoreFakeIP   bool `yaml:"store-fake-ip"`
+}
+
+type TuicServer struct {
+	Enable                bool     `yaml:"enable" json:"enable"`
+	Listen                string   `yaml:"listen" json:"listen"`
+	Token                 []string `yaml:"token" json:"token"`
+	Certificate           string   `yaml:"certificate" json:"certificate"`
+	PrivateKey            string   `yaml:"private-key" json:"private-key"`
+	CongestionController  string   `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
+	MaxIdleTime           int      `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
+	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
+	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+}
+
+func (t TuicServer) String() string {
+	b, _ := json.Marshal(t)
+	return string(b)
 }
 
 // Tun config
@@ -282,6 +301,19 @@ type RawTun struct {
 	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
 }
 
+type RawTuicServer struct {
+	Enable                bool     `yaml:"enable" json:"enable"`
+	Listen                string   `yaml:"listen" json:"listen"`
+	Token                 []string `yaml:"token" json:"token"`
+	Certificate           string   `yaml:"certificate" json:"certificate"`
+	PrivateKey            string   `yaml:"private-key" json:"private-key"`
+	CongestionController  string   `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
+	MaxIdleTime           int      `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
+	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
+	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+}
+
 type RawConfig struct {
 	Port               int          `yaml:"port"`
 	SocksPort          int          `yaml:"socks-port"`
@@ -316,6 +348,7 @@ type RawConfig struct {
 	Hosts         map[string]string         `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
+	TuicServer    RawTuicServer             `yaml:"tuic-server"`
 	EBpf          EBpf                      `yaml:"ebpf"`
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
@@ -391,6 +424,18 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			AutoRoute:           true,
 			AutoDetectInterface: true,
 			Inet6Address:        []ListenPrefix{ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
+		},
+		TuicServer: RawTuicServer{
+			Enable:                false,
+			Token:                 nil,
+			Certificate:           "",
+			PrivateKey:            "",
+			Listen:                "",
+			CongestionController:  "",
+			MaxIdleTime:           15000,
+			AuthenticationTimeout: 1000,
+			ALPN:                  []string{"h3"},
+			MaxUdpRelayPacketSize: 1500,
 		},
 		EBpf: EBpf{
 			RedirectToTun: []string{},
@@ -504,6 +549,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.DNS = dnsCfg
 
 	err = parseTun(rawCfg.Tun, config.General)
+	if err != nil {
+		return nil, err
+	}
+
+	err = parseTuicServer(rawCfg.TuicServer, config.General)
 	if err != nil {
 		return nil, err
 	}
@@ -905,8 +955,8 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
 				host = net.JoinHostPort(host, "443")
 			} else {
-				if err!=nil{
-					return nil,err
+				if err != nil {
+					return nil, err
 				}
 			}
 			clearURL := url.URL{Scheme: "https", Host: host, Path: u.Path}
@@ -1194,6 +1244,22 @@ func parseTun(rawTun RawTun, general *General) error {
 		UDPTimeout:             rawTun.UDPTimeout,
 	}
 
+	return nil
+}
+
+func parseTuicServer(rawTuic RawTuicServer, general *General) error {
+	general.TuicServer = TuicServer{
+		Enable:                rawTuic.Enable,
+		Listen:                rawTuic.Listen,
+		Token:                 rawTuic.Token,
+		Certificate:           rawTuic.Certificate,
+		PrivateKey:            rawTuic.PrivateKey,
+		CongestionController:  rawTuic.CongestionController,
+		MaxIdleTime:           rawTuic.MaxIdleTime,
+		AuthenticationTimeout: rawTuic.AuthenticationTimeout,
+		ALPN:                  rawTuic.ALPN,
+		MaxUdpRelayPacketSize: rawTuic.MaxUdpRelayPacketSize,
+	}
 	return nil
 }
 
