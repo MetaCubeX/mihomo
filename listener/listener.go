@@ -64,7 +64,8 @@ var (
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
 
-	LastTunConf config.Tun
+	LastTunConf  config.Tun
+	LastTuicConf config.TuicServer
 )
 
 type Ports struct {
@@ -86,6 +87,13 @@ func GetTunConf() config.Tun {
 		}
 	}
 	return tunLister.Config()
+}
+
+func GetTuicConf() config.TuicServer {
+	if tuicListener == nil {
+		return config.TuicServer{Enable: false}
+	}
+	return tuicListener.Config()
 }
 
 func AllowLan() bool {
@@ -395,7 +403,10 @@ func ReCreateUdpTun(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inb
 
 func ReCreateTuic(config config.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
 	tuicMux.Lock()
-	defer tuicMux.Unlock()
+	defer func() {
+		LastTuicConf = config
+		tuicMux.Unlock()
+	}()
 	shouldIgnore := false
 
 	var err error

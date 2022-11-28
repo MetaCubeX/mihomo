@@ -124,6 +124,7 @@ func GetGeneral() *config.General {
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
 		Tun:           P.GetTunConf(),
+		TuicServer:    P.GetTuicConf(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
 		TCPConcurrent: dialer.GetDial(),
