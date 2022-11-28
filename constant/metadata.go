@@ -27,6 +27,7 @@ const (
 	TCPTUN
 	UDPTUN
 	TUN
+	TUIC
 	INNER
 )
 
@@ -71,6 +72,8 @@ func (t Type) String() string {
 		return "UdpTun"
 	case TUN:
 		return "Tun"
+	case TUIC:
+		return "Tuic"
 	case INNER:
 		return "Inner"
 	default:
@@ -89,12 +92,22 @@ func ParseType(t string) (*Type, error) {
 		res = SOCKS4
 	case "SOCKS5":
 		res = SOCKS5
+	case "SHADOWSOCKS":
+		res = SHADOWSOCKS
+	case "VMESS":
+		res = VMESS
 	case "REDIR":
 		res = REDIR
 	case "TPROXY":
 		res = TPROXY
+	case "TCPTUN":
+		res = TCPTUN
+	case "UDPTUN":
+		res = UDPTUN
 	case "TUN":
 		res = TUN
+	case "TUIC":
+		res = TUIC
 	case "INNER":
 		res = INNER
 	default:

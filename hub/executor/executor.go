@@ -351,6 +351,7 @@ func updateGeneral(general *config.General, force bool) {
 	P.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
 	P.ReCreateTcpTun(general.TcpTunConfig, tcpIn, udpIn)
 	P.ReCreateUdpTun(general.UdpTunConfig, tcpIn, udpIn)
+	P.ReCreateTuic(general.TuicServer, tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

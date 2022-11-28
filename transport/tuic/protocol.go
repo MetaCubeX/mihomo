@@ -112,6 +112,29 @@ func NewAuthenticate(TKN [32]byte) Authenticate {
 	}
 }
 
+func ReadAuthenticateWithHead(head CommandHead, reader BufferedReader) (c Authenticate, err error) {
+	c.CommandHead = head
+	if err != nil {
+		return
+	}
+	if c.CommandHead.TYPE != AuthenticateType {
+		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+	}
+	_, err = io.ReadFull(reader, c.TKN[:])
+	if err != nil {
+		return
+	}
+	return
+}
+
+func ReadAuthenticate(reader BufferedReader) (c Authenticate, err error) {
+	head, err := ReadCommandHead(reader)
+	if err != nil {
+		return
+	}
+	return ReadAuthenticateWithHead(head, reader)
+}
+
 func GenTKN(token string) [32]byte {
 	return blake3.Sum256([]byte(token))
 }
@@ -142,6 +165,29 @@ func NewConnect(ADDR Address) Connect {
 		CommandHead: NewCommandHead(ConnectType),
 		ADDR:        ADDR,
 	}
+}
+
+func ReadConnectWithHead(head CommandHead, reader BufferedReader) (c Connect, err error) {
+	c.CommandHead = head
+	if err != nil {
+		return
+	}
+	if c.CommandHead.TYPE != ConnectType {
+		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+	}
+	c.ADDR, err = ReadAddress(reader)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func ReadConnect(reader BufferedReader) (c Connect, err error) {
+	head, err := ReadCommandHead(reader)
+	if err != nil {
+		return
+	}
+	return ReadConnectWithHead(head, reader)
 }
 
 func (c Connect) WriteTo(writer BufferedWriter) (err error) {
@@ -254,6 +300,29 @@ func NewDissociate(ASSOC_ID uint32) Dissociate {
 	}
 }
 
+func ReadDissociateWithHead(head CommandHead, reader BufferedReader) (c Dissociate, err error) {
+	c.CommandHead = head
+	if err != nil {
+		return
+	}
+	if c.CommandHead.TYPE != PacketType {
+		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
+	}
+	err = binary.Read(reader, binary.BigEndian, &c.ASSOC_ID)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func ReadDissociate(reader BufferedReader) (c Dissociate, err error) {
+	head, err := ReadCommandHead(reader)
+	if err != nil {
+		return
+	}
+	return ReadDissociateWithHead(head, reader)
+}
+
 func (c Dissociate) WriteTo(writer BufferedWriter) (err error) {
 	err = c.CommandHead.WriteTo(writer)
 	if err != nil {
@@ -306,6 +375,14 @@ func NewResponse(REP byte) Response {
 		CommandHead: NewCommandHead(ResponseType),
 		REP:         REP,
 	}
+}
+
+func NewResponseSucceed() Response {
+	return NewResponse(0x00)
+}
+
+func NewResponseFailed() Response {
+	return NewResponse(0xff)
 }
 
 func ReadResponseWithHead(head CommandHead, reader BufferedReader) (c Response, err error) {
@@ -464,6 +541,17 @@ func (c Address) WriteTo(writer BufferedWriter) (err error) {
 		return
 	}
 	return
+}
+
+func (c Address) String() string {
+	switch c.TYPE {
+	case AtypDomainName:
+		return net.JoinHostPort(string(c.ADDR[1:]), strconv.Itoa(int(c.PORT)))
+	default:
+		addr, _ := netip.AddrFromSlice(c.ADDR)
+		addrPort := netip.AddrPortFrom(addr, c.PORT)
+		return addrPort.String()
+	}
 }
 
 func (c Address) UDPAddr() *net.UDPAddr {

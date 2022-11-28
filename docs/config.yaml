@@ -103,6 +103,21 @@ sniffer:
 # tcptun-config: 127.0.0.1:801=www.example.com:80,127.0.0.1:4431=www.example.com:443
 # udptun-config: 127.0.0.1:531=8.8.8.8:53,127.0.0.1:532=1.1.1.1:53
 
+# tuic服务器入口（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+#tuic-server:
+#  enable: true
+#  listen: 127.0.0.1:10443
+#  token:
+#    - TOKEN
+#  certificate: ./server.crt
+#  private-key: ./server.key
+#  congestion-controller: bbr
+#  max-idle-time: 15000
+#  authentication-timeout: 1000
+#  alpn:
+#    - h3
+#  max-udp-relay-packet-size: 1500
+
 profile:
   # 存储select选择记录
   store-selected: false

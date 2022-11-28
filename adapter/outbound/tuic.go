@@ -212,7 +212,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		UdpRelayMode:          option.UdpRelayMode,
 		CongestionController:  option.CongestionController,
 		ReduceRtt:             option.ReduceRtt,
-		RequestTimeout:        option.RequestTimeout,
+		RequestTimeout:        time.Duration(option.RequestTimeout) * time.Millisecond,
 		MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
 		FastOpen:              option.FastOpen,
 		MaxOpenStreams:        clientMaxOpenStreams,

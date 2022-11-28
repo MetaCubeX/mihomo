@@ -41,6 +41,7 @@ type configSchema struct {
 	TProxyPort        *int               `json:"tproxy-port"`
 	MixedPort         *int               `json:"mixed-port"`
 	Tun               *tunSchema         `json:"tun"`
+	TuicServer        *config.TuicServer `json:"tuic-server"`
 	ShadowSocksConfig *string            `json:"ss-config"`
 	VmessConfig       *string            `json:"vmess-config"`
 	TcptunConfig      *string            `json:"tcptun-config"`
@@ -203,6 +204,9 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tcpIn, udpIn)
 	P.ReCreateTcpTun(pointerOrDefaultString(general.TcptunConfig, ports.TcpTunConfig), tcpIn, udpIn)
 	P.ReCreateUdpTun(pointerOrDefaultString(general.UdptunConfig, ports.UdpTunConfig), tcpIn, udpIn)
+	if general.TuicServer != nil {
+		P.ReCreateTuic(*general.TuicServer, tcpIn, udpIn)
+	}
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)

@@ -75,7 +75,7 @@ func (t *PoolClient) dial(ctx context.Context, opts ...dialer.Option) (pc net.Pa
 	return pc, addr, err
 }
 
-func (t *PoolClient) Close() {
+func (t *PoolClient) forceClose() {
 	t.dialResultMutex.Lock()
 	defer t.dialResultMutex.Unlock()
 	for key := range t.dialResultMap {
@@ -141,6 +141,7 @@ func (t *PoolClient) getClient(udp bool, opts ...dialer.Option) *Client {
 				}
 			}
 			if client.openStreams.Load() == 0 && time.Now().Sub(client.lastVisited) > 30*time.Minute {
+				client.Close()
 				next := it.Next()
 				clients.Remove(it)
 				it = next
@@ -173,5 +174,5 @@ func NewClientPool(clientOption *ClientOption) *PoolClient {
 }
 
 func closeClientPool(client *PoolClient) {
-	client.Close()
+	client.forceClose()
 }
