@@ -97,11 +97,9 @@ sniffer:
     - "443"
     # - 8000-9999
 
-# shadowsocks,vmess,tcp/udp端口转发 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+# shadowsocks,vmess 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
 # ss-config: ss://2022-blake3-aes-256-gcm:vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=@:23456
 # vmess-config: vmess://1:9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68@:12345
-# tcptun-config: 127.0.0.1:801=www.example.com:80,127.0.0.1:4431=www.example.com:443
-# udptun-config: 127.0.0.1:531=8.8.8.8:53,127.0.0.1:532=1.1.1.1:53
 
 # tuic服务器入口（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
 #tuic-server:
@@ -117,6 +115,16 @@ sniffer:
 #  alpn:
 #    - h3
 #  max-udp-relay-packet-size: 1500
+
+tunnels:
+  # one line config
+  - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
+  - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
+  # full yaml config
+  - network: [tcp, udp]
+    address: 127.0.0.1:7777
+    target: target.com
+    proxy: proxy
 
 profile:
   # 存储select选择记录
