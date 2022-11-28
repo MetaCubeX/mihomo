@@ -15,6 +15,11 @@ import (
 	"github.com/Dreamacro/clash/transport/tuic/congestion"
 )
 
+const (
+	DefaultStreamReceiveWindow     = 15728640 // 15 MB/s
+	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
+)
+
 func SetCongestionController(quicConn quic.Connection, cc string) {
 	switch cc {
 	case "cubic":

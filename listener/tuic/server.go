@@ -17,11 +17,6 @@ import (
 	"github.com/Dreamacro/clash/transport/tuic"
 )
 
-const (
-	DefaultStreamReceiveWindow     = 15728640 // 15 MB/s
-	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
-)
-
 type Listener struct {
 	closed       bool
 	config       config.TuicServer
@@ -49,10 +44,10 @@ func New(config config.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *inb
 		MaxIncomingUniStreams: 1 >> 32,
 		EnableDatagrams:       true,
 	}
-	quicConfig.InitialStreamReceiveWindow = DefaultStreamReceiveWindow / 10
-	quicConfig.MaxStreamReceiveWindow = DefaultStreamReceiveWindow
-	quicConfig.InitialConnectionReceiveWindow = DefaultConnectionReceiveWindow / 10
-	quicConfig.MaxConnectionReceiveWindow = DefaultConnectionReceiveWindow
+	quicConfig.InitialStreamReceiveWindow = tuic.DefaultStreamReceiveWindow / 10
+	quicConfig.MaxStreamReceiveWindow = tuic.DefaultStreamReceiveWindow
+	quicConfig.InitialConnectionReceiveWindow = tuic.DefaultConnectionReceiveWindow / 10
+	quicConfig.MaxConnectionReceiveWindow = tuic.DefaultConnectionReceiveWindow
 
 	tokens := make([][32]byte, len(config.Token))
 	for i, token := range config.Token {

@@ -49,12 +49,12 @@ func (d *Decoder) Decode(src map[string]any, dst any) error {
 		key, omitKey, found := strings.Cut(tag, ",")
 		omitempty := found && omitKey == "omitempty"
 
-		if d.option.KeyReplacer != nil {
-			key = d.option.KeyReplacer.Replace(key)
-		}
-
 		value, ok := src[key]
 		if !ok {
+			if d.option.KeyReplacer != nil {
+				key = d.option.KeyReplacer.Replace(key)
+			}
+
 			for _strKey := range src {
 				strKey := _strKey
 				if d.option.KeyReplacer != nil {
@@ -364,9 +364,6 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		tagValue = strings.SplitN(tagValue, ",", 2)[0]
 		if tagValue != "" {
 			fieldName = tagValue
-			if d.option.KeyReplacer != nil {
-				fieldName = d.option.KeyReplacer.Replace(fieldName)
-			}
 		}
 
 		rawMapKey := reflect.ValueOf(fieldName)
@@ -374,6 +371,9 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		if !rawMapVal.IsValid() {
 			// Do a slower search by iterating over each key and
 			// doing case-insensitive search.
+			if d.option.KeyReplacer != nil {
+				fieldName = d.option.KeyReplacer.Replace(fieldName)
+			}
 			for dataValKey := range dataValKeys {
 				mK, ok := dataValKey.Interface().(string)
 				if !ok {
