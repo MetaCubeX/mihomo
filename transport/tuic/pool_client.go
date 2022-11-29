@@ -22,6 +22,7 @@ type dialResult struct {
 type PoolClient struct {
 	*ClientOption
 
+	newClientOption *ClientOption
 	dialResultMap   map[any]dialResult
 	dialResultMutex *sync.Mutex
 	tcpClients      *list.List[*Client]
@@ -100,7 +101,7 @@ func (t *PoolClient) newClient(udp bool, opts ...dialer.Option) *Client {
 	clientsMutex.Lock()
 	defer clientsMutex.Unlock()
 
-	client := NewClient(t.ClientOption, udp)
+	client := NewClient(t.newClientOption, udp)
 	client.poolRef = t // make sure pool has a reference
 	client.optionRef = o
 	client.lastVisited = time.Now()
@@ -169,6 +170,9 @@ func NewClientPool(clientOption *ClientOption) *PoolClient {
 		udpClients:      list.New[*Client](),
 		udpClientsMutex: &sync.Mutex{},
 	}
+	newClientOption := *clientOption
+	newClientOption.DialFn = p.dial
+	p.newClientOption = &newClientOption
 	runtime.SetFinalizer(p, closeClientPool)
 	return p
 }
