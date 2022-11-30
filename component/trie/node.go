@@ -4,13 +4,18 @@ import "strings"
 
 // Node is the trie's node
 type Node[T any] struct {
-	children map[string]*Node[T]
-	inited   bool
-	data     T
+	childNode *Node[T] // optimize for only one child
+	childStr  string
+	children  map[string]*Node[T]
+	inited    bool
+	data      T
 }
 
 func (n *Node[T]) getChild(s string) *Node[T] {
 	if n.children == nil {
+		if n.childNode != nil && n.childStr == s {
+			return n.childNode
+		}
 		return nil
 	}
 	return n.children[s]
@@ -22,8 +27,19 @@ func (n *Node[T]) hasChild(s string) bool {
 
 func (n *Node[T]) addChild(s string, child *Node[T]) {
 	if n.children == nil {
+		if n.childNode == nil {
+			n.childStr = s
+			n.childNode = child
+			return
+		}
 		n.children = map[string]*Node[T]{}
+		if n.childNode != nil {
+			n.children[n.childStr] = n.childNode
+		}
+		n.childStr = ""
+		n.childNode = nil
 	}
+
 	n.children[s] = child
 }
 
@@ -36,12 +52,28 @@ func (n *Node[T]) getOrNewChild(s string) *Node[T] {
 	return node
 }
 
-func (n *Node[T]) finishAdd() {
+func (n *Node[T]) optimize() {
+	if len(n.childStr) > 0 {
+		n.childStr = strings.Clone(n.childStr)
+	}
+	if n.childNode != nil {
+		n.childNode.optimize()
+	}
 	if n.children == nil {
 		return
 	}
-	if len(n.children) == 0 {
+	switch len(n.children) {
+	case 0:
 		n.children = nil
+		return
+	case 1:
+		for key := range n.children {
+			n.childStr = key
+			n.childNode = n.children[key]
+		}
+		n.children = nil
+		n.optimize()
+		return
 	}
 	children := make(map[string]*Node[T], len(n.children)) // avoid map reallocate memory
 	for key := range n.children {
@@ -58,7 +90,7 @@ func (n *Node[T]) finishAdd() {
 			key = strings.Clone(key)
 		}
 		children[key] = child
-		child.finishAdd()
+		child.optimize()
 	}
 	n.children = children
 }
@@ -80,8 +112,5 @@ func (n *Node[T]) Data() T {
 }
 
 func newNode[T any]() *Node[T] {
-	return &Node[T]{
-		children: nil,
-		inited:   false,
-	}
+	return &Node[T]{}
 }

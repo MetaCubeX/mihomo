@@ -119,8 +119,8 @@ func (t *DomainTrie[T]) search(node *Node[T], parts []string) *Node[T] {
 	return node.getChild(dotWildcard)
 }
 
-func (t *DomainTrie[T]) FinishInsert() {
-	t.root.finishAdd()
+func (t *DomainTrie[T]) Optimize() {
+	t.root.optimize()
 }
 
 // New returns a new, empty Trie.
