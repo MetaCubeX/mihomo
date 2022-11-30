@@ -36,6 +36,7 @@ func (d *domainStrategy) OnUpdate(rules []string) {
 			count++
 		}
 	}
+	domainTrie.FinishInsert()
 
 	d.domainRules = domainTrie
 	d.count = count

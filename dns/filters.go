@@ -79,6 +79,7 @@ func NewDomainFilter(domains []string) *domainFilter {
 	for _, domain := range domains {
 		_ = df.tree.Insert(domain, struct{}{})
 	}
+	df.tree.FinishInsert()
 	return &df
 }
 
