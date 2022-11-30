@@ -435,7 +435,7 @@ func NewResolver(config Config) *Resolver {
 		for domain, nameserver := range config.Policy {
 			_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
 		}
-		r.policy.FinishInsert()
+		r.policy.Optimize()
 	}
 
 	fallbackIPFilters := []fallbackIPFilter{}

@@ -972,7 +972,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 			_ = tree.Insert(domain, ip)
 		}
 	}
-	tree.FinishInsert()
+	tree.Optimize()
 
 	return tree, nil
 }
@@ -1207,7 +1207,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 			for _, domain := range cfg.FakeIPFilter {
 				_ = host.Insert(domain, struct{}{})
 			}
-			host.FinishInsert()
+			host.Optimize()
 		}
 
 		if len(dnsCfg.Fallback) != 0 {
@@ -1220,7 +1220,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 				}
 				_ = host.Insert(fb.Addr, struct{}{})
 			}
-			host.FinishInsert()
+			host.Optimize()
 		}
 
 		pool, err := fakeip.New(fakeip.Options{
@@ -1396,7 +1396,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
-	sniffer.ForceDomain.FinishInsert()
+	sniffer.ForceDomain.Optimize()
 
 	sniffer.SkipDomain = trie.New[struct{}]()
 	for _, domain := range snifferRaw.SkipDomain {
@@ -1405,7 +1405,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
 		}
 	}
-	sniffer.SkipDomain.FinishInsert()
+	sniffer.SkipDomain.Optimize()
 
 	return sniffer, nil
 }
