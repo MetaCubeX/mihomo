@@ -73,11 +73,7 @@ func (t *DomainTrie[T]) insert(parts []string, data T) {
 	// reverse storage domain part to save space
 	for i := len(parts) - 1; i >= 0; i-- {
 		part := parts[i]
-		if !node.hasChild(part) {
-			node.addChild(part, newNode[T]())
-		}
-
-		node = node.getChild(part)
+		node = node.getOrNewChild(part)
 	}
 
 	node.setData(data)
@@ -121,6 +117,10 @@ func (t *DomainTrie[T]) search(node *Node[T], parts []string) *Node[T] {
 	}
 
 	return node.getChild(dotWildcard)
+}
+
+func (t *DomainTrie[T]) FinishInsert() {
+	t.root.finishAdd()
 }
 
 // New returns a new, empty Trie.
