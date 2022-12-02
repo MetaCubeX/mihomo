@@ -30,7 +30,7 @@ import (
 const (
 	ImageShadowsocks     = "mritd/shadowsocks:latest"
 	ImageShadowsocksRust = "ghcr.io/shadowsocks/ssserver-rust:latest"
-	ImageVmess           = "v2fly/v2fly-core:latest"
+	ImageVmess           = "v2fly/v2fly-core:v4.45.2"
 	ImageVmessLatest     = "sagernet/v2fly-core:latest"
 	ImageVless           = "teddysun/xray:latest"
 	ImageTrojan          = "trojangfw/trojan:latest"
