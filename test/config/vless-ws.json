@@ -11,7 +11,8 @@
                         "level": 0,
                         "email": "ws@example.com"
                     }
-                ]
+                ],
+                "decryption": "none"
             },
             "streamSettings": {
                 "network": "ws",

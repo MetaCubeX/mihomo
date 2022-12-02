@@ -4,6 +4,7 @@ import (
 	"fmt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	"strings"
 )
 
 type classicalStrategy struct {
@@ -15,7 +16,7 @@ type classicalStrategy struct {
 
 func (c *classicalStrategy) Match(metadata *C.Metadata) bool {
 	for _, rule := range c.rules {
-		if rule.Match(metadata) {
+		if m, _ := rule.Match(metadata); m {
 			return true
 		}
 	}
@@ -52,13 +53,26 @@ func (c *classicalStrategy) OnUpdate(rules []string) {
 	c.count = len(classicalRules)
 }
 
-func NewClassicalStrategy(parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) *classicalStrategy {
+func ruleParse(ruleRaw string) (string, string, []string) {
+	item := strings.Split(ruleRaw, ",")
+	if len(item) == 1 {
+		return "", item[0], nil
+	} else if len(item) == 2 {
+		return item[0], item[1], nil
+	} else if len(item) > 2 {
+		return item[0], item[1], item[2:]
+	}
+
+	return "", "", nil
+}
+
+func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
-		case "MATCH":
+		case "MATCH", "SUB-RULE":
 			return nil, fmt.Errorf("unsupported rule type on rule-set")
 		default:
-			return parse(tp, payload, target, params)
+			return parse(tp, payload, target, params, nil)
 		}
 	}}
 }

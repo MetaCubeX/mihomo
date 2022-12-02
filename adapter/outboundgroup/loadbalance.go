@@ -29,10 +29,8 @@ type LoadBalance struct {
 var errStrategy = errors.New("unsupported strategy")
 
 func parseStrategy(config map[string]any) string {
-	if elm, ok := config["strategy"]; ok {
-		if strategy, ok := elm.(string); ok {
-			return strategy
-		}
+	if strategy, ok := config["strategy"].(string); ok {
+		return strategy
 	}
 	return "consistent-hashing"
 }
@@ -84,16 +82,16 @@ func jumpHash(key uint64, buckets int32) int32 {
 
 // DialContext implements C.ProxyAdapter
 func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
+	proxy := lb.Unwrap(metadata, true)
+
 	defer func() {
 		if err == nil {
 			c.AppendToChains(lb)
 			lb.onDialSuccess()
 		} else {
-			lb.onDialFailed()
+			lb.onDialFailed(proxy.Type(), err)
 		}
 	}()
-
-	proxy := lb.Unwrap(metadata)
 
 	c, err = proxy.DialContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
 	return
@@ -107,7 +105,7 @@ func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		}
 	}()
 
-	proxy := lb.Unwrap(metadata)
+	proxy := lb.Unwrap(metadata, true)
 	return proxy.ListenPacketContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
 }
 
@@ -140,6 +138,13 @@ func strategyConsistentHashing() strategyFn {
 		for i := 0; i < maxRetry; i, key = i+1, key+1 {
 			idx := jumpHash(key, buckets)
 			proxy := proxies[idx]
+			if proxy.Alive() {
+				return proxy
+			}
+		}
+
+		// when availability is poor, traverse the entire list to get the available nodes
+		for _, proxy := range proxies {
 			if proxy.Alive() {
 				return proxy
 			}
@@ -185,8 +190,8 @@ func strategyStickySessions() strategyFn {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (lb *LoadBalance) Unwrap(metadata *C.Metadata) C.Proxy {
-	proxies := lb.GetProxies(true)
+func (lb *LoadBalance) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
+	proxies := lb.GetProxies(touch)
 	return lb.strategyFn(proxies, metadata)
 }
 

@@ -30,6 +30,7 @@ const (
 	Vmess
 	Vless
 	Trojan
+	Hysteria
 )
 
 const (
@@ -105,12 +106,13 @@ type ProxyAdapter interface {
 	ListenPacketOnStreamConn(c net.Conn, metadata *Metadata) (PacketConn, error)
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
-	Unwrap(metadata *Metadata) Proxy
+	Unwrap(metadata *Metadata, touch bool) Proxy
 }
 
 type Group interface {
 	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
 	GetProxies(touch bool) []Proxy
+	Touch()
 }
 
 type DelayHistory struct {
@@ -161,6 +163,8 @@ func (at AdapterType) String() string {
 		return "Vless"
 	case Trojan:
 		return "Trojan"
+	case Hysteria:
+		return "Hysteria"
 
 	case Relay:
 		return "Relay"

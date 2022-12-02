@@ -20,9 +20,9 @@ func (A *AND) ShouldFindProcess() bool {
 }
 
 func NewAND(payload string, adapter string,
-	parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)) (*AND, error) {
+	parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*AND, error) {
 	and := &AND{Base: &common.Base{}, payload: payload, adapter: adapter}
-	rules, err := parseRuleByPayload(payload, parse)
+	rules, err := ParseRuleByPayload(payload, parse)
 	if err != nil {
 		return nil, err
 	}
@@ -45,14 +45,14 @@ func (A *AND) RuleType() C.RuleType {
 	return C.AND
 }
 
-func (A *AND) Match(metadata *C.Metadata) bool {
+func (A *AND) Match(metadata *C.Metadata) (bool, string) {
 	for _, rule := range A.rules {
-		if !rule.Match(metadata) {
-			return false
+		if m, _ := rule.Match(metadata); !m {
+			return false, ""
 		}
 	}
 
-	return true
+	return true, A.adapter
 }
 
 func (A *AND) Adapter() string {

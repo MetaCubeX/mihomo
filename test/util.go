@@ -35,3 +35,16 @@ func ListenPacket(network, address string) (net.PacketConn, error) {
 	}
 	return nil, lastErr
 }
+
+func TCPing(addr string) bool {
+	for i := 0; i < 10; i++ {
+		conn, err := net.Dial("tcp", addr)
+		if err == nil {
+			conn.Close()
+			return true
+		}
+		time.Sleep(time.Millisecond * 500)
+	}
+
+	return false
+}

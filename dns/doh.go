@@ -3,14 +3,18 @@ package dns
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"fmt"
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/http3"
+	D "github.com/miekg/dns"
 	"io"
 	"net"
 	"net/http"
-
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-
-	D "github.com/miekg/dns"
+	"strconv"
 )
 
 const (
@@ -19,9 +23,8 @@ const (
 )
 
 type dohClient struct {
-	url          string
-	proxyAdapter string
-	transport    *http.Transport
+	url       string
+	transport http.RoundTripper
 }
 
 func (dc *dohClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
@@ -63,28 +66,75 @@ func (dc *dohClient) newRequest(m *D.Msg) (*http.Request, error) {
 	return req, nil
 }
 
-func (dc *dohClient) doRequest(req *http.Request) (*D.Msg, error) {
+func (dc *dohClient) doRequest(req *http.Request) (msg *D.Msg, err error) {
 	client := &http.Client{Transport: dc.transport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
 
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	msg := &D.Msg{}
+	msg = &D.Msg{}
 	err = msg.Unpack(buf)
 	return msg, err
 }
 
-func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
-	return &dohClient{
-		url:          url,
-		proxyAdapter: proxyAdapter,
-		transport: &http.Transport{
+func newDoHClient(url string, r *Resolver, params map[string]string, proxyAdapter string) *dohClient {
+	useH3 := params["h3"] == "true"
+	TLCConfig := tlsC.GetDefaultTLSConfig()
+	var transport http.RoundTripper
+	if useH3 {
+		transport = &http3.RoundTripper{
+			Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+
+				ip, err := resolver.ResolveIPWithResolver(host, r)
+				if err != nil {
+					return nil, err
+				}
+
+				portInt, err := strconv.Atoi(port)
+				if err != nil {
+					return nil, err
+				}
+
+				udpAddr := net.UDPAddr{
+					IP:   net.ParseIP(ip.String()),
+					Port: portInt,
+				}
+
+				var conn net.PacketConn
+				if proxyAdapter == "" {
+					conn, err = dialer.ListenPacket(ctx, "udp", "")
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					if wrapConn, err := dialContextExtra(ctx, proxyAdapter, "udp", ip, port); err == nil {
+						if pc, ok := wrapConn.(*wrapPacketConn); ok {
+							conn = pc
+						} else {
+							return nil, fmt.Errorf("conn isn't wrapPacketConn")
+						}
+					} else {
+						return nil, err
+					}
+				}
+
+				return quic.DialEarlyContext(ctx, conn, &udpAddr, host, tlsCfg, cfg)
+			},
+			TLSClientConfig: TLCConfig,
+		}
+	} else {
+		transport = &http.Transport{
 			ForceAttemptHTTP2: true,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, err := net.SplitHostPort(addr)
@@ -103,6 +153,12 @@ func newDoHClient(url string, r *Resolver, proxyAdapter string) *dohClient {
 					return dialContextExtra(ctx, proxyAdapter, "tcp", ip, port)
 				}
 			},
-		},
+			TLSClientConfig: TLCConfig,
+		}
+	}
+
+	return &dohClient{
+		url:       url,
+		transport: transport,
 	}
 }

@@ -10,16 +10,21 @@ import (
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/shadowsocks/core"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	"github.com/Dreamacro/clash/transport/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
+	"github.com/sagernet/sing-shadowsocks"
+	"github.com/sagernet/sing-shadowsocks/shadowimpl"
+	"github.com/sagernet/sing/common/bufio"
+	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/uot"
 )
 
 type ShadowSocks struct {
 	*Base
-	cipher core.Cipher
+	method shadowsocks.Method
 
+	option *ShadowSocksOption
 	// obfs
 	obfsMode    string
 	obfsOption  *simpleObfsOption
@@ -36,6 +41,7 @@ type ShadowSocksOption struct {
 	UDP        bool           `proxy:"udp,omitempty"`
 	Plugin     string         `proxy:"plugin,omitempty"`
 	PluginOpts map[string]any `proxy:"plugin-opts,omitempty"`
+	UDPOverTCP bool           `proxy:"udp-over-tcp,omitempty"`
 }
 
 type simpleObfsOption struct {
@@ -48,6 +54,7 @@ type v2rayObfsOption struct {
 	Host           string            `obfs:"host,omitempty"`
 	Path           string            `obfs:"path,omitempty"`
 	TLS            bool              `obfs:"tls,omitempty"`
+	Fingerprint    string            `obfs:"fingerprint,omitempty"`
 	Headers        map[string]string `obfs:"headers,omitempty"`
 	SkipCertVerify bool              `obfs:"skip-cert-verify,omitempty"`
 	Mux            bool              `obfs:"mux,omitempty"`
@@ -68,9 +75,10 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
 	}
-	c = ss.cipher.StreamConn(c)
-	_, err := c.Write(serializesSocksAddr(metadata))
-	return c, err
+	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
+		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
+	}
+	return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 }
 
 // DialContext implements C.ProxyAdapter
@@ -89,26 +97,43 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, op
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	if ss.option.UDPOverTCP {
+		tcpConn, err := ss.DialContext(ctx, metadata, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return newPacketConn(uot.NewClientConn(tcpConn), ss), nil
+	}
 	pc, err := dialer.ListenPacket(ctx, "udp", "", ss.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err
 	}
 
-	addr, err := resolveUDPAddr("udp", ss.addr)
+	addr, err := resolveUDPAddrWithPrefer("udp", ss.addr, ss.prefer)
 	if err != nil {
 		pc.Close()
 		return nil, err
 	}
+	pc = ss.method.DialPacketConn(&bufio.BindPacketConn{PacketConn: pc, Addr: addr})
+	return newPacketConn(pc, ss), nil
+}
 
-	pc = ss.cipher.PacketConn(pc)
-	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ss), nil
+// ListenPacketOnStreamConn implements C.ProxyAdapter
+func (ss *ShadowSocks) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if ss.option.UDPOverTCP {
+		return newPacketConn(uot.NewClientConn(c), ss), nil
+	}
+	return nil, errors.New("no support")
+}
+
+// SupportUOT implements C.ProxyAdapter
+func (ss *ShadowSocks) SupportUOT() bool {
+	return ss.option.UDPOverTCP
 }
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	cipher := option.Cipher
-	password := option.Password
-	ciph, err := core.PickCipher(cipher, nil, password)
+	method, err := shadowimpl.FetchMethod(option.Cipher, option.Password)
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %w", addr, err)
 	}
@@ -154,15 +179,17 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 
 	return &ShadowSocks{
 		Base: &Base{
-			name:  option.Name,
-			addr:  addr,
-			tp:    C.Shadowsocks,
-			udp:   option.UDP,
-			iface: option.Interface,
-			rmark: option.RoutingMark,
+			name:   option.Name,
+			addr:   addr,
+			tp:     C.Shadowsocks,
+			udp:    option.UDP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		cipher: ciph,
+		method: method,
 
+		option:      &option,
 		obfsMode:    obfsMode,
 		v2rayOption: v2rayOption,
 		obfsOption:  obfsOption,

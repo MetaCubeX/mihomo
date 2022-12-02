@@ -3,9 +3,11 @@ package sniffer
 import (
 	"bytes"
 	"errors"
-	C "github.com/Dreamacro/clash/constant"
+	"fmt"
 	"net"
 	"strings"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (
@@ -88,13 +90,32 @@ func SniffHTTP(b []byte) (*string, error) {
 			host, _, err := net.SplitHostPort(rawHost)
 			if err != nil {
 				if addrError, ok := err.(*net.AddrError); ok && strings.Contains(addrError.Err, "missing port") {
-					host = rawHost
+					return parseHost(rawHost)
 				} else {
 					return nil, err
 				}
 			}
+
+			if net.ParseIP(host) != nil {
+				return nil, fmt.Errorf("host is ip")
+			}
+
 			return &host, nil
 		}
 	}
 	return nil, ErrNoClue
+}
+
+func parseHost(host string) (*string, error) {
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		if net.ParseIP(host[1:len(host)-1]) != nil {
+			return nil, fmt.Errorf("host is ip")
+		}
+	}
+
+	if net.ParseIP(host) != nil {
+		return nil, fmt.Errorf("host is ip")
+	}
+
+	return &host, nil
 }
