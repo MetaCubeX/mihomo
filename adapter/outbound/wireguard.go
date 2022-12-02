@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
+	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -220,7 +220,7 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 	if conn == nil {
 		return nil, E.New("conn is nil")
 	}
-	return NewConn(&wgConn{conn, w}, w), nil
+	return NewConn(CN.NewRefConn(conn, w), w), nil
 }
 
 func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
@@ -249,90 +249,5 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return newPacketConn(&wgPacketConn{pc, w}, w), nil
-}
-
-type wgConn struct {
-	conn net.Conn
-	wg   *WireGuard
-}
-
-func (c *wgConn) Read(b []byte) (n int, err error) {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.Read(b)
-}
-
-func (c *wgConn) Write(b []byte) (n int, err error) {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.Write(b)
-}
-
-func (c *wgConn) Close() error {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.Close()
-}
-
-func (c *wgConn) LocalAddr() net.Addr {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.LocalAddr()
-}
-
-func (c *wgConn) RemoteAddr() net.Addr {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.RemoteAddr()
-}
-
-func (c *wgConn) SetDeadline(t time.Time) error {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.SetDeadline(t)
-}
-
-func (c *wgConn) SetReadDeadline(t time.Time) error {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.SetReadDeadline(t)
-}
-
-func (c *wgConn) SetWriteDeadline(t time.Time) error {
-	defer runtime.KeepAlive(c.wg)
-	return c.conn.SetWriteDeadline(t)
-}
-
-type wgPacketConn struct {
-	pc net.PacketConn
-	wg *WireGuard
-}
-
-func (pc *wgPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.ReadFrom(p)
-}
-
-func (pc *wgPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.WriteTo(p, addr)
-}
-
-func (pc *wgPacketConn) Close() error {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.Close()
-}
-
-func (pc *wgPacketConn) LocalAddr() net.Addr {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.LocalAddr()
-}
-
-func (pc *wgPacketConn) SetDeadline(t time.Time) error {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.SetDeadline(t)
-}
-
-func (pc *wgPacketConn) SetReadDeadline(t time.Time) error {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.SetReadDeadline(t)
-}
-
-func (pc *wgPacketConn) SetWriteDeadline(t time.Time) error {
-	defer runtime.KeepAlive(pc.wg)
-	return pc.pc.SetWriteDeadline(t)
+	return newPacketConn(CN.NewRefPacketConn(pc, w), w), nil
 }
