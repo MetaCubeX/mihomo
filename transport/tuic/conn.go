@@ -58,8 +58,6 @@ type quicStreamConn struct {
 	lAddr net.Addr
 	rAddr net.Addr
 
-	ref any
-
 	closeDeferFn func()
 
 	closeOnce sync.Once
@@ -116,8 +114,6 @@ type quicStreamPacketConn struct {
 
 	udpRelayMode          string
 	maxUdpRelayPacketSize int
-
-	ref any
 
 	deferQuicConnFn func(quicConn quic.Connection, err error)
 	closeDeferFn    func()

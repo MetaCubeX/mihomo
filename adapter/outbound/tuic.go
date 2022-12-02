@@ -56,7 +56,7 @@ type TuicOption struct {
 // DialContext implements C.ProxyAdapter
 func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	opts = t.Base.DialOptions(opts...)
-	conn, err := t.client.DialContext(ctx, metadata, opts...)
+	conn, err := t.client.DialContext(ctx, metadata, t.dial, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	opts = t.Base.DialOptions(opts...)
-	pc, err := t.client.ListenPacketContext(ctx, metadata, opts...)
+	pc, err := t.client.ListenPacketContext(ctx, metadata, t.dial, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,6 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		clientMaxOpenStreams = 1
 	}
 	clientOption := &tuic.ClientOption{
-		DialFn:                t.dial,
 		TlsConfig:             tlsConfig,
 		QuicConfig:            quicConfig,
 		Host:                  host,
@@ -219,7 +218,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		MaxOpenStreams:        clientMaxOpenStreams,
 	}
 
-	t.client = tuic.NewClientPool(clientOption)
+	t.client = tuic.NewPoolClient(clientOption)
 
 	return t, nil
 }

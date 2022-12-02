@@ -143,7 +143,6 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 		inputConn:             nil,
 		udpRelayMode:          udpRelayMode,
 		maxUdpRelayPacketSize: s.MaxUdpRelayPacketSize,
-		ref:                   s,
 		deferQuicConnFn:       nil,
 		closeDeferFn:          nil,
 		writeClosed:           writeClosed,
@@ -173,7 +172,6 @@ func (s *serverHandler) handleStream() (err error) {
 				Stream: quicStream,
 				lAddr:  s.quicConn.LocalAddr(),
 				rAddr:  s.quicConn.RemoteAddr(),
-				ref:    s,
 			}
 			conn := N.NewBufferedConn(stream)
 			connect, err := ReadConnect(conn)
