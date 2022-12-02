@@ -24,11 +24,11 @@ func (p *Port) RuleType() C.RuleType {
 	return C.DstPort
 }
 
-func (p *Port) Match(metadata *C.Metadata) bool {
+func (p *Port) Match(metadata *C.Metadata) (bool, string) {
 	if p.isSource {
-		return p.matchPortReal(metadata.SrcPort)
+		return p.matchPortReal(metadata.SrcPort), p.adapter
 	}
-	return p.matchPortReal(metadata.DstPort)
+	return p.matchPortReal(metadata.DstPort), p.adapter
 }
 
 func (p *Port) Adapter() string {

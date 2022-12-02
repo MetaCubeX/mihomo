@@ -25,7 +25,6 @@ type Result[T any] struct {
 }
 
 // Do single.Do likes sync.singleFlight
-//lint:ignore ST1008 it likes sync.singleFlight
 func (s *Single[T]) Do(fn func() (T, error)) (v T, err error, shared bool) {
 	s.mux.Lock()
 	now := time.Now()

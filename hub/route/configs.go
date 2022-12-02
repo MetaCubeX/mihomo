@@ -46,6 +46,7 @@ type configSchema struct {
 	IPv6          *bool              `json:"ipv6"`
 	Sniffing      *bool              `json:"sniffing"`
 	TcpConcurrent *bool              `json:"tcp-concurrent"`
+	InterfaceName *string            `json:"interface-name"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +84,10 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.TcpConcurrent != nil {
 		dialer.SetDial(*general.TcpConcurrent)
+	}
+
+	if general.InterfaceName != nil {
+		dialer.DefaultInterface.Store(*general.InterfaceName)
 	}
 
 	ports := P.GetPorts()

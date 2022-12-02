@@ -3,10 +3,10 @@ package process
 import (
 	"encoding/binary"
 	"net/netip"
+	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
-
-	"github.com/Dreamacro/clash/common/nnip"
 
 	"golang.org/x/sys/unix"
 )
@@ -16,6 +16,22 @@ const (
 	procpidpathinfosize = 1024
 	proccallnumpidinfo  = 0x2
 )
+
+var structSize = func() int {
+	value, _ := syscall.Sysctl("kern.osrelease")
+	major, _, _ := strings.Cut(value, ".")
+	n, _ := strconv.ParseInt(major, 10, 64)
+	switch true {
+	case n >= 22:
+		return 408
+	default:
+		// from darwin-xnu/bsd/netinet/in_pcblist.c:get_pcblist_n
+		// size/offset are round up (aligned) to 8 bytes in darwin
+		// rup8(sizeof(xinpcb_n)) + rup8(sizeof(xsocket_n)) +
+		// 2 * rup8(sizeof(xsockbuf_n)) + rup8(sizeof(xsockstat_n))
+		return 384
+	}
+}()
 
 func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (int32, int32, error) {
 	return 0, 0, ErrPlatformNotSupport
@@ -40,16 +56,13 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 	}
 
 	buf := []byte(value)
-
-	// from darwin-xnu/bsd/netinet/in_pcblist.c:get_pcblist_n
-	// size/offset are round up (aligned) to 8 bytes in darwin
-	// rup8(sizeof(xinpcb_n)) + rup8(sizeof(xsocket_n)) +
-	// 2 * rup8(sizeof(xsockbuf_n)) + rup8(sizeof(xsockstat_n))
-	itemSize := 384
+	itemSize := structSize
 	if network == TCP {
 		// rup8(sizeof(xtcpcb_n))
 		itemSize += 208
 	}
+
+	var fallbackUDPProcess string
 	// skip the first xinpgen(24 bytes) block
 	for i := 24; i+itemSize <= len(buf); i += itemSize {
 		// offset of xinpcb_n and xsocket_n
@@ -63,26 +76,37 @@ func findProcessName(network string, ip netip.Addr, port int) (int32, string, er
 		// xinpcb_n.inp_vflag
 		flag := buf[inp+44]
 
-		var srcIP netip.Addr
+		var (
+			srcIP     netip.Addr
+			srcIsIPv4 bool
+		)
 		switch {
 		case flag&0x1 > 0 && isIPv4:
 			// ipv4
-			srcIP = nnip.IpToAddr(buf[inp+76 : inp+80])
+			srcIP, _ = netip.AddrFromSlice(buf[inp+76 : inp+80])
+			srcIsIPv4 = true
 		case flag&0x2 > 0 && !isIPv4:
 			// ipv6
-			srcIP = nnip.IpToAddr(buf[inp+64 : inp+80])
+			srcIP, _ = netip.AddrFromSlice(buf[inp+64 : inp+80])
 		default:
 			continue
 		}
 
-		if ip != srcIP && (network == TCP || !srcIP.IsUnspecified()) {
-			continue
+		if ip == srcIP {
+			// xsocket_n.so_last_pid
+			pid := readNativeUint32(buf[so+68 : so+72])
+			pp, err := getExecPathFromPID(pid)
+			return -1, pp, err
 		}
 
-		// xsocket_n.so_last_pid
-		pid := readNativeUint32(buf[so+68 : so+72])
-		pp, err := getExecPathFromPID(pid)
-		return -1, pp, err
+		// udp packet connection may be not equal with srcIP
+		if network == UDP && srcIP.IsUnspecified() && isIPv4 == srcIsIPv4 {
+			fallbackUDPProcess, _ = getExecPathFromPID(readNativeUint32(buf[so+68 : so+72]))
+		}
+	}
+
+	if network == UDP && fallbackUDPProcess != "" {
+		return -1, fallbackUDPProcess, nil
 	}
 
 	return -1, "", ErrNotFound

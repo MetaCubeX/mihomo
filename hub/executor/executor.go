@@ -2,7 +2,7 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/process"
+	"github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/listener/inner"
 	"net/netip"
 	"os"
@@ -73,7 +73,7 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
-
+	preUpdateExperimental(cfg)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.RuleProviders)
@@ -127,7 +127,17 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateExperimental(c *config.Config) {}
+func updateExperimental(c *config.Config) {
+	runtime.GC()
+}
+
+func preUpdateExperimental(c *config.Config) {
+	for _, fingerprint := range c.Experimental.Fingerprints {
+		if err := tls.AddCertFingerprint(fingerprint); err != nil {
+			log.Warnln("fingerprint[%s] is err, %s", fingerprint, err.Error())
+		}
+	}
+}
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
@@ -250,11 +260,15 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 
 func updateTun(tun *config.Tun) {
 	P.ReCreateTun(tun, tunnel.TCPIn(), tunnel.UDPIn())
+	P.ReCreateRedirToTun(tun.RedirectToTun)
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
 	if sniffer.Enable {
-		dispatcher, err := SNI.NewSnifferDispatcher(sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain, sniffer.Ports)
+		dispatcher, err := SNI.NewSnifferDispatcher(
+			sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain, sniffer.Ports,
+			sniffer.ForceDnsMapping, sniffer.ParsePureIp,
+		)
 		if err != nil {
 			log.Warnln("initial sniffer failed, err:%v", err)
 		}
@@ -273,9 +287,8 @@ func updateSniffer(sniffer *config.Sniffer) {
 }
 
 func updateGeneral(general *config.General, force bool) {
-	log.SetLevel(general.LogLevel)
-	process.EnableFindProcess(general.EnableProcess)
 	tunnel.SetMode(general.Mode)
+	tunnel.SetAlwaysFindProcess(general.EnableProcess)
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
 		log.Infoln("Use IPv6")
@@ -315,12 +328,15 @@ func updateGeneral(general *config.General, force bool) {
 	bindAddress := general.BindAddress
 	P.SetBindAddress(bindAddress)
 
+	P.SetInboundTfo(general.InboundTfo)
+
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
 	P.ReCreateHTTP(general.Port, tcpIn)
 	P.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
 	P.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
+	P.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
 	P.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
 	P.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 }

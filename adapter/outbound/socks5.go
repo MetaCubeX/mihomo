@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"strconv"
@@ -33,6 +34,7 @@ type Socks5Option struct {
 	TLS            bool   `proxy:"tls,omitempty"`
 	UDP            bool   `proxy:"udp,omitempty"`
 	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string `proxy:"fingerprint,omitempty"`
 }
 
 // StreamConn implements C.ProxyAdapter
@@ -138,30 +140,40 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	return newPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
 }
 
-func NewSocks5(option Socks5Option) *Socks5 {
+func NewSocks5(option Socks5Option) (*Socks5, error) {
 	var tlsConfig *tls.Config
 	if option.TLS {
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: option.SkipCertVerify,
 			ServerName:         option.Server,
 		}
+
+		if len(option.Fingerprint) == 0 {
+			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		} else {
+			var err error
+			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return &Socks5{
 		Base: &Base{
-			name:  option.Name,
-			addr:  net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:    C.Socks5,
-			udp:   option.UDP,
-			iface: option.Interface,
-			rmark: option.RoutingMark,
+			name:   option.Name,
+			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			tp:     C.Socks5,
+			udp:    option.UDP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		user:           option.UserName,
 		pass:           option.Password,
 		tls:            option.TLS,
 		skipCertVerify: option.SkipCertVerify,
 		tlsConfig:      tlsConfig,
-	}
+	}, nil
 }
 
 type socksPacketConn struct {

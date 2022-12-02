@@ -6,8 +6,9 @@ import (
 	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/oschwald/geoip2-golang"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"runtime"
 )
 
@@ -72,9 +73,9 @@ func downloadForBytes(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 func saveFile(bytes []byte, path string) error {
-	return ioutil.WriteFile(path, bytes, 0o644)
+	return os.WriteFile(path, bytes, 0o644)
 }

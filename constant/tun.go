@@ -7,13 +7,15 @@ import (
 )
 
 var StackTypeMapping = map[string]TUNStack{
-	strings.ToUpper(TunGvisor.String()): TunGvisor,
-	strings.ToUpper(TunSystem.String()): TunSystem,
+	strings.ToLower(TunGvisor.String()): TunGvisor,
+	strings.ToLower(TunSystem.String()): TunSystem,
+	strings.ToLower(TunLWIP.String()):   TunLWIP,
 }
 
 const (
 	TunGvisor TUNStack = iota
 	TunSystem
+	TunLWIP
 )
 
 type TUNStack int
@@ -24,7 +26,7 @@ func (e *TUNStack) UnmarshalYAML(unmarshal func(any) error) error {
 	if err := unmarshal(&tp); err != nil {
 		return err
 	}
-	mode, exist := StackTypeMapping[strings.ToUpper(tp)]
+	mode, exist := StackTypeMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid tun stack")
 	}
@@ -41,7 +43,7 @@ func (e TUNStack) MarshalYAML() (any, error) {
 func (e *TUNStack) UnmarshalJSON(data []byte) error {
 	var tp string
 	json.Unmarshal(data, &tp)
-	mode, exist := StackTypeMapping[strings.ToUpper(tp)]
+	mode, exist := StackTypeMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid tun stack")
 	}
@@ -60,6 +62,8 @@ func (e TUNStack) String() string {
 		return "gVisor"
 	case TunSystem:
 		return "System"
+	case TunLWIP:
+		return "LWIP"
 	default:
 		return "unknown"
 	}

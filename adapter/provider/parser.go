@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/component/resource"
 	"time"
 
 	"github.com/Dreamacro/clash/common/structure"
@@ -20,12 +21,13 @@ type healthCheckSchema struct {
 }
 
 type proxyProviderSchema struct {
-	Type        string            `provider:"type"`
-	Path        string            `provider:"path"`
-	URL         string            `provider:"url,omitempty"`
-	Interval    int               `provider:"interval,omitempty"`
-	Filter      string            `provider:"filter,omitempty"`
-	HealthCheck healthCheckSchema `provider:"health-check,omitempty"`
+	Type          string            `provider:"type"`
+	Path          string            `provider:"path"`
+	URL           string            `provider:"url,omitempty"`
+	Interval      int               `provider:"interval,omitempty"`
+	Filter        string            `provider:"filter,omitempty"`
+	ExcludeFilter string            `provider:"exclude-filter,omitempty"`
+	HealthCheck   healthCheckSchema `provider:"health-check,omitempty"`
 }
 
 func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvider, error) {
@@ -51,14 +53,15 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	var vehicle types.Vehicle
 	switch schema.Type {
 	case "file":
-		vehicle = NewFileVehicle(path)
+		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		vehicle = NewHTTPVehicle(schema.URL, path)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
-	return NewProxySetProvider(name, interval, filter, vehicle, hc)
+	excludeFilter := schema.ExcludeFilter
+	return NewProxySetProvider(name, interval, filter, excludeFilter, vehicle, hc)
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/common/convert"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"
@@ -54,6 +56,7 @@ type VlessOption struct {
 	WSPath         string            `proxy:"ws-path,omitempty"`
 	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string            `proxy:"fingerprint,omitempty"`
 	ServerName     string            `proxy:"servername,omitempty"`
 }
 
@@ -69,27 +72,39 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			Headers:             http.Header{},
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {
-			header := http.Header{}
 			for key, value := range v.option.WSOpts.Headers {
-				header.Add(key, value)
+				wsOpts.Headers.Add(key, value)
 			}
-			wsOpts.Headers = header
 		}
+		if v.option.TLS {
+			wsOpts.TLS = true
+			tlsConfig := &tls.Config{
+				MinVersion:         tls.VersionTLS12,
+				ServerName:         host,
+				InsecureSkipVerify: v.option.SkipCertVerify,
+				NextProtos:         []string{"http/1.1"},
+			}
 
-		wsOpts.TLS = true
-		wsOpts.TLSConfig = &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			ServerName:         host,
-			InsecureSkipVerify: v.option.SkipCertVerify,
-			NextProtos:         []string{"http/1.1"},
-		}
-		if v.option.ServerName != "" {
-			wsOpts.TLSConfig.ServerName = v.option.ServerName
-		} else if host := wsOpts.Headers.Get("Host"); host != "" {
-			wsOpts.TLSConfig.ServerName = host
+			if len(v.option.Fingerprint) == 0 {
+				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+			} else {
+				wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
+			}
+
+			if v.option.ServerName != "" {
+				wsOpts.TLSConfig.ServerName = v.option.ServerName
+			} else if host := wsOpts.Headers.Get("Host"); host != "" {
+				wsOpts.TLSConfig.ServerName = host
+			}
+		} else {
+			if host := wsOpts.Headers.Get("Host"); host == "" {
+				wsOpts.Headers.Set("Host", convert.RandHost())
+				convert.SetUserAgent(wsOpts.Headers)
+			}
 		}
 		c, err = vmess.StreamWebsocketConn(c, wsOpts)
 	case "http":
@@ -146,6 +161,7 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 		xtlsOpts := vless.XTLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
+			FingerPrint:    v.option.Fingerprint,
 		}
 
 		if isH2 {
@@ -162,6 +178,7 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 		tlsOpts := vmess.TLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
+			FingerPrint:    v.option.Fingerprint,
 		}
 
 		if isH2 {
@@ -401,11 +418,12 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 	v := &Vless{
 		Base: &Base{
-			name:  option.Name,
-			addr:  net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:    C.Vless,
-			udp:   option.UDP,
-			iface: option.Interface,
+			name:   option.Name,
+			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			tp:     C.Vless,
+			udp:    option.UDP,
+			iface:  option.Interface,
+			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 		option: &option,
@@ -430,10 +448,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 			ServiceName: v.option.GrpcOpts.GrpcServiceName,
 			Host:        v.option.ServerName,
 		}
-		tlsConfig := &tls.Config{
+		tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(&tls.Config{
 			InsecureSkipVerify: v.option.SkipCertVerify,
 			ServerName:         v.option.ServerName,
-		}
+		})
 
 		if v.option.ServerName == "" {
 			host, _, _ := net.SplitHostPort(v.addr)

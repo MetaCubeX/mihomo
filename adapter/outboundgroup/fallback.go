@@ -31,7 +31,7 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 		c.AppendToChains(f)
 		f.onDialSuccess()
 	} else {
-		f.onDialFailed()
+		f.onDialFailed(proxy.Type(), err)
 	}
 
 	return c, err
@@ -72,24 +72,30 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 }
 
 // Unwrap implements C.ProxyAdapter
-func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
-	proxy := f.findAliveProxy(true)
+func (f *Fallback) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
+	proxy := f.findAliveProxy(touch)
 	return proxy
 }
 
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
-	al := proxies[0]
-	for i := len(proxies) - 1; i > -1; i-- {
-		proxy := proxies[i]
-		if proxy.Name() == f.selected && proxy.Alive() {
-			return proxy
-		}
-		if proxy.Alive() {
-			al = proxy
+	for _, proxy := range proxies {
+		if len(f.selected) == 0 {
+			if proxy.Alive() {
+				return proxy
+			}
+		} else {
+			if proxy.Name() == f.selected {
+				if proxy.Alive() {
+					return proxy
+				} else {
+					f.selected = ""
+				}
+			}
 		}
 	}
-	return al
+
+	return proxies[0]
 }
 
 func (f *Fallback) Set(name string) error {

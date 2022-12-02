@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/component/resolver"
+	"go.uber.org/atomic"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
-
-	"github.com/Dreamacro/clash/component/resolver"
 )
 
 var (
@@ -17,6 +18,8 @@ var (
 	actualDualStackDialContext = dualStackDialContext
 	tcpConcurrent              = false
 	DisableIPv6                = false
+	ErrorInvalidedNetworkStack = errors.New("invalided network stack")
+	ErrorDisableIPv6           = errors.New("IPv6 is disabled, dialer cancel")
 )
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
@@ -33,13 +36,23 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 		o(opt)
 	}
 
+	if opt.network == 4 || opt.network == 6 {
+		if strings.Contains(network, "tcp") {
+			network = "tcp"
+		} else {
+			network = "udp"
+		}
+
+		network = fmt.Sprintf("%s%d", network, opt.network)
+	}
+
 	switch network {
 	case "tcp4", "tcp6", "udp4", "udp6":
 		return actualSingleDialContext(ctx, network, address, opt)
 	case "tcp", "udp":
 		return actualDualStackDialContext(ctx, network, address, opt)
 	default:
-		return nil, errors.New("network invalid")
+		return nil, ErrorInvalidedNetworkStack
 	}
 }
 
@@ -105,7 +118,7 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	if DisableIPv6 && destination.Is6() {
-		return nil, fmt.Errorf("IPv6 is diabled, dialer cancel")
+		return nil, ErrorDisableIPv6
 	}
 
 	return dialer.DialContext(ctx, network, net.JoinHostPort(destination.String(), port))
@@ -167,29 +180,35 @@ func dualStackDialContext(ctx context.Context, network, address string, opt *opt
 	go startRacer(ctx, network+"4", host, opt.direct, false)
 	go startRacer(ctx, network+"6", host, opt.direct, true)
 
-	for res := range results {
-		if res.error == nil {
-			return res.Conn, nil
-		}
-
-		if !res.ipv6 {
-			primary = res
-		} else {
-			fallback = res
-		}
-
-		if primary.done && fallback.done {
-			if primary.resolved {
-				return nil, primary.error
-			} else if fallback.resolved {
-				return nil, fallback.error
-			} else {
-				return nil, primary.error
+	count := 2
+	for i := 0; i < count; i++ {
+		select {
+		case res := <-results:
+			if res.error == nil {
+				return res.Conn, nil
 			}
+
+			if !res.ipv6 {
+				primary = res
+			} else {
+				fallback = res
+			}
+
+			if primary.done && fallback.done {
+				if primary.resolved {
+					return nil, primary.error
+				} else if fallback.resolved {
+					return nil, fallback.error
+				} else {
+					return nil, primary.error
+				}
+			}
+		case <-ctx.Done():
+			break
 		}
 	}
 
-	return nil, errors.New("never touched")
+	return nil, errors.New("dual stack tcp shake hands failed")
 }
 
 func concurrentDualStackDialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
@@ -199,11 +218,14 @@ func concurrentDualStackDialContext(ctx context.Context, network, address string
 	}
 
 	var ips []netip.Addr
-
 	if opt.direct {
 		ips, err = resolver.ResolveAllIP(host)
 	} else {
 		ips, err = resolver.ResolveAllIPProxyServerHost(host)
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	return concurrentDialContext(ctx, network, ips, port, opt)
@@ -217,30 +239,49 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 		ip netip.Addr
 		net.Conn
 		error
-		resolved bool
+		isPrimary bool
+		done      bool
 	}
 
+	preferCount := atomic.NewInt32(0)
 	results := make(chan dialResult)
-
 	tcpRacer := func(ctx context.Context, ip netip.Addr) {
-		result := dialResult{ip: ip}
+		result := dialResult{ip: ip, done: true}
 
 		defer func() {
 			select {
 			case results <- result:
 			case <-returned:
 				if result.Conn != nil {
-					result.Conn.Close()
+					_ = result.Conn.Close()
 				}
 			}
 		}()
-
-		v := "4"
-		if ip.Is6() {
-			v = "6"
+		if strings.Contains(network, "tcp") {
+			network = "tcp"
+		} else {
+			network = "udp"
 		}
 
-		result.Conn, result.error = dialContext(ctx, network+v, ip, port, opt)
+		if ip.Is6() {
+			network += "6"
+			if opt.prefer != 4 {
+				result.isPrimary = true
+			}
+		}
+
+		if ip.Is4() {
+			network += "4"
+			if opt.prefer != 6 {
+				result.isPrimary = true
+			}
+		}
+
+		if result.isPrimary {
+			preferCount.Add(1)
+		}
+
+		result.Conn, result.error = dialContext(ctx, network, ip, port, opt)
 	}
 
 	for _, ip := range ips {
@@ -248,15 +289,46 @@ func concurrentDialContext(ctx context.Context, network string, ips []netip.Addr
 	}
 
 	connCount := len(ips)
-	for res := range results {
-		connCount--
-		if res.error == nil {
-			return res.Conn, nil
-		}
-
-		if connCount == 0 {
+	var fallback dialResult
+	var primaryError error
+	for i := 0; i < connCount; i++ {
+		select {
+		case res := <-results:
+			if res.error == nil {
+				if res.isPrimary {
+					return res.Conn, nil
+				} else {
+					if !fallback.done || fallback.error != nil {
+						fallback = res
+					}
+				}
+			} else {
+				if res.isPrimary {
+					primaryError = res.error
+					preferCount.Add(-1)
+					if preferCount.Load() == 0 && fallback.done && fallback.error == nil {
+						return fallback.Conn, nil
+					}
+				}
+			}
+		case <-ctx.Done():
+			if fallback.done && fallback.error == nil {
+				return fallback.Conn, nil
+			}
 			break
 		}
+	}
+
+	if fallback.done && fallback.error == nil {
+		return fallback.Conn, nil
+	}
+
+	if primaryError != nil {
+		return nil, primaryError
+	}
+
+	if fallback.error != nil {
+		return nil, fallback.error
 	}
 
 	return nil, fmt.Errorf("all ips %v tcp shake hands failed", ips)
@@ -291,25 +363,45 @@ func singleDialContext(ctx context.Context, network string, address string, opt 
 }
 
 func concurrentSingleDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
+	switch network {
+	case "tcp4", "udp4":
+		return concurrentIPv4DialContext(ctx, network, address, opt)
+	default:
+		return concurrentIPv6DialContext(ctx, network, address, opt)
+	}
+}
+
+func concurrentIPv4DialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
 
 	var ips []netip.Addr
-	switch network {
-	case "tcp4", "udp4":
-		if !opt.direct {
-			ips, err = resolver.ResolveAllIPv4ProxyServerHost(host)
-		} else {
-			ips, err = resolver.ResolveAllIPv4(host)
-		}
-	default:
-		if !opt.direct {
-			ips, err = resolver.ResolveAllIPv6ProxyServerHost(host)
-		} else {
-			ips, err = resolver.ResolveAllIPv6(host)
-		}
+	if !opt.direct {
+		ips, err = resolver.ResolveAllIPv4ProxyServerHost(host)
+	} else {
+		ips, err = resolver.ResolveAllIPv4(host)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return concurrentDialContext(ctx, network, ips, port, opt)
+}
+
+func concurrentIPv6DialContext(ctx context.Context, network, address string, opt *option) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	var ips []netip.Addr
+	if !opt.direct {
+		ips, err = resolver.ResolveAllIPv6ProxyServerHost(host)
+	} else {
+		ips, err = resolver.ResolveAllIPv6(host)
 	}
 
 	if err != nil {

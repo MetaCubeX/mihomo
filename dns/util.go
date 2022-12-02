@@ -59,7 +59,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver, s.ProxyAdapter))
+			ret = append(ret, newDoHClient(s.Addr, resolver, s.Params, s.ProxyAdapter))
 			continue
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
@@ -74,8 +74,6 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			Client: &D.Client{
 				Net: s.Net,
 				TLSConfig: &tls.Config{
-					// alpn identifier, see https://tools.ietf.org/html/draft-hoffman-dprive-dns-tls-alpn-00#page-6
-					NextProtos: []string{"dns"},
 					ServerName: host,
 				},
 				UDPSize: 4096,
@@ -143,18 +141,18 @@ func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
 	return wpc.rAddr
 }
 
-func dialContextExtra(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
-	adapter, ok := tunnel.Proxies()[adapterName]
-	if !ok {
-		opts = append(opts, dialer.WithInterface(adapterName))
-		adapter, _ = tunnel.Proxies()[tunnel.Direct.String()]
+func (wpc *wrapPacketConn) LocalAddr() net.Addr {
+	if wpc.PacketConn.LocalAddr() == nil {
+		return &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	} else {
+		return wpc.PacketConn.LocalAddr()
 	}
+}
 
+func dialContextExtra(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
 	networkType := C.TCP
 	if network == "udp" {
-		if !adapter.SupportUDP() {
-			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
-		}
+
 		networkType = C.UDP
 	}
 
@@ -169,6 +167,29 @@ func dialContextExtra(ctx context.Context, adapterName string, network string, d
 		Host:     "",
 		DstIP:    dstIP,
 		DstPort:  port,
+	}
+
+	adapter, ok := tunnel.Proxies()[adapterName]
+	if !ok {
+		opts = append(opts, dialer.WithInterface(adapterName))
+		if C.TCP == networkType {
+			return dialer.DialContext(ctx, network, dstIP.String()+":"+port, opts...)
+		} else {
+			packetConn, err := dialer.ListenPacket(ctx, network, dstIP.String()+":"+port, opts...)
+			if err != nil {
+				return nil, err
+			}
+
+			return &wrapPacketConn{
+				PacketConn: packetConn,
+				rAddr:      metadata.UDPAddr(),
+			}, nil
+
+		}
+	}
+
+	if networkType == C.UDP && !adapter.SupportUDP() {
+		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
 	}
 
 	if networkType == C.UDP {

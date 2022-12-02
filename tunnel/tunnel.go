@@ -38,9 +38,9 @@ var (
 	mode = Rule
 
 	// default timeout for UDP session
-	udpTimeout  = 60 * time.Second
-	procesCache string
-	failTotal   int
+	udpTimeout = 60 * time.Second
+
+	alwaysFindProcess = false
 )
 
 func SetSniffing(b bool) {
@@ -107,7 +107,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
 	configMux.Lock()
-	sniffer.Dispatcher = *dispatcher
+	sniffer.Dispatcher = dispatcher
 	sniffingEnable = true
 	configMux.Unlock()
 }
@@ -120,6 +120,11 @@ func Mode() TunnelMode {
 // SetMode change the mode of tunnel
 func SetMode(m TunnelMode) {
 	mode = m
+}
+
+// SetAlwaysFindProcess set always find process info, may be increase many memory
+func SetAlwaysFindProcess(findProcess bool) {
+	alwaysFindProcess = findProcess
 }
 
 // processUDP starts a loop to handle udp packet
@@ -180,27 +185,6 @@ func preHandleMetadata(metadata *C.Metadata) error {
 		}
 	}
 
-	// pre resolve process name
-	srcPort, err := strconv.Atoi(metadata.SrcPort)
-	if err == nil && P.ShouldFindProcess(metadata) {
-		uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, srcPort)
-		if err != nil {
-			if failTotal < 20 {
-				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
-				failTotal++
-			}
-		} else {
-			metadata.Process = filepath.Base(path)
-			metadata.ProcessPath = path
-			if uid != -1 {
-				metadata.Uid = &uid
-			}
-			if procesCache != metadata.Process {
-				log.Debugln("[Process] %s from process %s", metadata.String(), path)
-			}
-			procesCache = metadata.Process
-		}
-	}
 	return nil
 }
 
@@ -225,14 +209,23 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 	}
 
 	// make a fAddr if request ip is fakeip
-	var fAddr net.Addr
+	var fAddr netip.Addr
 	if resolver.IsExistFakeIP(metadata.DstIP) {
-		fAddr = metadata.UDPAddr()
+		fAddr = metadata.DstIP
 	}
 
 	if err := preHandleMetadata(metadata); err != nil {
 		log.Debugln("[Metadata PreHandle] error: %s", err)
 		return
+	}
+
+	// local resolve UDP dns
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(metadata.Host)
+		if err != nil {
+			return
+		}
+		metadata.DstIP = ip
 	}
 
 	key := packet.LocalAddr().String()
@@ -276,7 +269,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
-		rawPc, err := proxy.ListenPacketContext(ctx, metadata)
+		rawPc, err := proxy.ListenPacketContext(ctx, metadata.Pure())
 		if err != nil {
 			if rule == nil {
 				log.Warnln("[UDP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -304,7 +297,8 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 			log.Infoln("[UDP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		}
 
-		go handleUDPToLocal(packet.UDPPacket, pc, key, fAddr)
+		oAddr := metadata.DstIP
+		go handleUDPToLocal(packet.UDPPacket, pc, key, oAddr, fAddr)
 
 		natTable.Set(key, pc)
 		handle()
@@ -337,9 +331,18 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	dialMetadata := metadata
+	if len(metadata.Host) > 0 {
+		if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
+			dialMetadata.DstIP = node.Data
+			dialMetadata.DNSMode = C.DNSHosts
+			dialMetadata = dialMetadata.Pure()
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
-	remoteConn, err := proxy.DialContext(ctx, metadata)
+	remoteConn, err := proxy.DialContext(ctx, dialMetadata)
 	if err != nil {
 		if rule == nil {
 			log.Warnln("[TCP] dial %s to %s error: %s", proxy.Name(), metadata.RemoteAddress(), err.Error())
@@ -379,7 +382,10 @@ func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
 func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
-	var resolved bool
+	var (
+		resolved     bool
+		processFound bool
+	)
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
 		metadata.DstIP = node.Data
@@ -398,13 +404,36 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			resolved = true
 		}
 
-		if rule.Match(metadata) {
-			adapter, ok := proxies[rule.Adapter()]
+		if !processFound && (alwaysFindProcess || rule.ShouldFindProcess()) {
+			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
+			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
+			if err != nil {
+				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+			} else {
+				metadata.Process = filepath.Base(path)
+				metadata.ProcessPath = path
+				if uid != -1 {
+					metadata.Uid = &uid
+				}
+				processFound = true
+			}
+		}
+
+		if matched, ada := rule.Match(metadata); matched {
+			adapter, ok := proxies[ada]
 			if !ok {
 				continue
 			}
 
-			if adapter.Type() == C.Pass || (adapter.Unwrap(metadata) != nil && adapter.Unwrap(metadata).Type() == C.Pass) {
+			// parse multi-layer nesting
+			passed := false
+			for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
+				if adapter.Type() == C.Pass {
+					passed = true
+					break
+				}
+			}
+			if passed {
 				log.Debugln("%s match Pass rule", adapter.Name())
 				continue
 			}
@@ -412,21 +441,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
 				log.Debugln("%s UDP is not supported", adapter.Name())
 				continue
-			}
-
-			extra := rule.RuleExtra()
-			if extra != nil {
-				if extra.NotMatchNetwork(metadata.NetWork) {
-					continue
-				}
-
-				if extra.NotMatchSourceIP(metadata.SrcIP) {
-					continue
-				}
-
-				if extra.NotMatchProcessName(metadata.Process) {
-					continue
-				}
 			}
 
 			return adapter, rule, nil

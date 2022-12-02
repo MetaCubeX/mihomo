@@ -12,7 +12,7 @@ VERSION=$(shell git rev-parse --short HEAD)
 endif
 
 BUILDTIME=$(shell date -u)
-GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
+GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
@@ -147,3 +147,11 @@ lint:
 
 clean:
 	rm $(BINDIR)/*
+
+CLANG ?= clang-14
+CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
+
+ebpf: export BPF_CLANG := $(CLANG)
+ebpf: export BPF_CFLAGS := $(CFLAGS)
+ebpf:
+	cd component/ebpf/ && go generate ./...
