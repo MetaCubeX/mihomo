@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
@@ -145,4 +146,26 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 		delete(graph, name)
 	}
 	return fmt.Errorf("loop is detected in ProxyGroup, please check following ProxyGroups: %v", loopElements)
+}
+
+func verifyIP6() bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, addr := range addrs {
+		ipNet, isIpNet := addr.(*net.IPNet)
+		if isIpNet && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To16() != nil {
+				s := ipNet.IP.String()
+				for i := 0; i < len(s); i++ {
+					switch s[i] {
+					case ':':
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }
