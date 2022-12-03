@@ -16,7 +16,7 @@ log-level: debug # 日志等级 silent/error/warning/info/debug
 ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
 
 external-controller: 0.0.0.0:9093 # RESTful API 监听地址
-
+external-controller-tls: 0.0.0.0:9443 # RESTful API HTTPS 监听地址，需要配置 tls 部分配置文件
 # secret: "123456" # `Authorization: Bearer ${secret}`
 
 # tcp-concurrent: true # TCP并发连接所有IP, 将使用最快握手的TCP
@@ -51,29 +51,29 @@ tun:
     - 0.0.0.0/1
     - 128.0.0.0/1
   inet6_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
-    - '::/1'
-    - '8000::/1'
+    - "::/1"
+    - "8000::/1"
   # endpoint_independent_nat: false # 启用独立于端点的 NAT
   # include_uid: # UID 规则仅在 Linux 下被支持，并且需要 auto_route
-    # - 0
+  # - 0
   # include_uid_range: # 限制被路由的的用户范围
-    # - 1000-99999
+  # - 1000-99999
   # exclude_uid: # 排除路由的的用户
-    #- 1000
+  #- 1000
   # exclude_uid_range: # 排除路由的的用户范围
-    # - 1000-99999
-    
+  # - 1000-99999
+
   # Android 用户和应用规则仅在 Android 下被支持
   # 并且需要 auto_route
-  
+
   # include_android_user: # 限制被路由的 Android 用户
-    # - 0
-    # - 10
+  # - 0
+  # - 10
   # include_package: # 限制被路由的 Android 应用包名
-    # - com.android.chrome
+  # - com.android.chrome
   # exclude_package: # 排除被路由的 Android 应用包名
-    # - com.android.captiveportallogin
-  
+  # - com.android.captiveportallogin
+
 #ebpf配置
 ebpf:
   auto-redir: # redirect 模式，仅支持 TCP
@@ -219,7 +219,8 @@ proxies:
     server: server
     port: 443
     cipher: chacha20-ietf-poly1305
-    password: "password"
+    password:
+      "password"
       # udp: true
       # udp-over-tcp: false
       # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
@@ -449,7 +450,7 @@ proxies:
       path: "/"
       headers:
         Host: example.com
-  
+
   #hysteria
   - name: "hysteria"
     type: hysteria
@@ -468,7 +469,7 @@ proxies:
     # recv_window_conn: 12582912 # 将会在未来某个时候删除
     # recv-window-conn: 12582912
     # recv_window: 52428800 # 将会在未来某个时候删除
-    # recv-window: 52428800 
+    # recv-window: 52428800
     # ca: "./my.ca"
     # ca_str: "xyz" # 将会在未来某个时候删除
     # ca-str: "xyz"
@@ -657,3 +658,7 @@ sub-rules:
     - IP-CIDR,1.1.1.1/32,REJECT
     - IP-CIDR,8.8.8.8/32,ss1
     - DOMAIN,dns.alidns.com,REJECT
+
+tls:
+  certificate: string # 证书 PEM 格式，或者 证书的路径
+  private-key: string # 证书对应的私钥 PEM 格式，或者私钥路径

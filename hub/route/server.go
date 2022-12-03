@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 
 	"github.com/go-chi/chi/v5"
@@ -43,7 +42,8 @@ func SetUIPath(path string) {
 	uiPath = C.Path.Resolve(path)
 }
 
-func Start(addr string, secret string, tlsPort int, cert string, privateKey string) {
+func Start(addr string, tlsAddr string, secret string,
+	certificat, privateKey string) {
 	if serverAddr != "" {
 		return
 	}
@@ -58,7 +58,6 @@ func Start(addr string, secret string, tlsPort int, cert string, privateKey stri
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
-	r.Use()
 	r.Use(corsM.Handler)
 	r.Group(func(r chi.Router) {
 		r.Use(authentication)
@@ -85,31 +84,31 @@ func Start(addr string, secret string, tlsPort int, cert string, privateKey stri
 			})
 		})
 	}
-	if tlsPort >0 {
+
+	if len(tlsAddr) > 0 {
 		go func() {
-			if host, _, err := net.SplitHostPort(addr); err != nil {
-				log.Errorln("External controller tls serve error,%s", err)
-			} else {
-				l, err := inbound.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(tlsPort)))
-				if err != nil {
-					log.Errorln("External controller tls listen error: %s", err)
-					return
-				}
-				serverAddr = l.Addr().String()
-				log.Infoln("RESTful API tls listening at: %s", serverAddr)
-				certificate, err := tls.X509KeyPair([]byte(cert), []byte(privateKey))
-				if err != nil {
-					log.Errorln("External controller tls sevre error,%s", err)
-				}
-				tlsServe := &http.Server{
-					Handler: r,
-					TLSConfig: &tls.Config{
-						Certificates: []tls.Certificate{certificate},
-					},
-				}
-				if err = tlsServe.ServeTLS(l, "", ""); err != nil {
-					log.Errorln("External controller tls serve error: %s", err)
-				}
+			c, err := CN.ParseCert(certificat, privateKey)
+			if err != nil {
+				log.Errorln("External controller tls listen error: %s", err)
+				return
+			}
+
+			l, err := inbound.Listen("tcp", tlsAddr)
+			if err != nil {
+				log.Errorln("External controller tls listen error: %s", err)
+				return
+			}
+
+			serverAddr = l.Addr().String()
+			log.Infoln("RESTful API tls listening at: %s", serverAddr)
+			tlsServe := &http.Server{
+				Handler: r,
+				TLSConfig: &tls.Config{
+					Certificates: []tls.Certificate{c},
+				},
+			}
+			if err = tlsServe.ServeTLS(l, "", ""); err != nil {
+				log.Errorln("External controller tls serve error: %s", err)
 			}
 		}()
 	}
@@ -125,7 +124,6 @@ func Start(addr string, secret string, tlsPort int, cert string, privateKey stri
 	if err = http.Serve(l, r); err != nil {
 		log.Errorln("External controller serve error: %s", err)
 	}
-
 
 }
 

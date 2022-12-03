@@ -77,12 +77,10 @@ type Inbound struct {
 
 // Controller config
 type Controller struct {
-	ExternalController string `json:"-"`
-	ExternalUI         string `json:"-"`
-	Secret             string `json:"-"`
-	TLSPort            int    `json:"-"`
-	Cert               string `json:"-"`
-	PrivateKey         string `json:"-"`
+	ExternalController    string `json:"-"`
+	ExternalControllerTLS string `json:"-"`
+	ExternalUI            string `json:"-"`
+	Secret                string `json:"-"`
 }
 
 // DNS config
@@ -128,6 +126,11 @@ type TuicServer struct {
 	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
 	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
 	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+}
+
+type TLS struct {
+	Certificate string `yaml:"certificate"`
+	PrivateKey  string `yaml:"private-key"`
 }
 
 func (t TuicServer) String() string {
@@ -230,12 +233,10 @@ type Sniffer struct {
 	ParsePureIp     bool
 }
 
+
 // Experimental config
 type Experimental struct {
 	Fingerprints []string `yaml:"fingerprints"`
-	TLSPort      int      `yaml:"tls-port,omitempty"`
-	Cert         string   `yaml:"cert,omitempty"`
-	PrivateKey   string   `yaml:"private-key,omitempty"`
 }
 
 // Config is clash config manager
@@ -254,6 +255,7 @@ type Config struct {
 	RuleProviders map[string]providerTypes.RuleProvider
 	Tunnels       []Tunnel
 	Sniffer       *Sniffer
+	TLS           *TLS
 }
 
 type RawDNS struct {
@@ -381,31 +383,32 @@ func (t *Tunnel) UnmarshalYAML(unmarshal func(any) error) error {
 }
 
 type RawConfig struct {
-	Port               int          `yaml:"port"`
-	SocksPort          int          `yaml:"socks-port"`
-	RedirPort          int          `yaml:"redir-port"`
-	TProxyPort         int          `yaml:"tproxy-port"`
-	MixedPort          int          `yaml:"mixed-port"`
-	ShadowSocksConfig  string       `yaml:"ss-config"`
-	VmessConfig        string       `yaml:"vmess-config"`
-	InboundTfo         bool         `yaml:"inbound-tfo"`
-	Authentication     []string     `yaml:"authentication"`
-	AllowLan           bool         `yaml:"allow-lan"`
-	BindAddress        string       `yaml:"bind-address"`
-	Mode               T.TunnelMode `yaml:"mode"`
-	UnifiedDelay       bool         `yaml:"unified-delay"`
-	LogLevel           log.LogLevel `yaml:"log-level"`
-	IPv6               bool         `yaml:"ipv6"`
-	ExternalController string       `yaml:"external-controller"`
-	ExternalUI         string       `yaml:"external-ui"`
-	Secret             string       `yaml:"secret"`
-	Interface          string       `yaml:"interface-name"`
-	RoutingMark        int          `yaml:"routing-mark"`
-	Tunnels            []Tunnel     `yaml:"tunnels"`
-	GeodataMode        bool         `yaml:"geodata-mode"`
-	GeodataLoader      string       `yaml:"geodata-loader"`
-	TCPConcurrent      bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	EnableProcess      bool         `yaml:"enable-process" json:"enable-process"`
+	Port                  int          `yaml:"port"`
+	SocksPort             int          `yaml:"socks-port"`
+	RedirPort             int          `yaml:"redir-port"`
+	TProxyPort            int          `yaml:"tproxy-port"`
+	MixedPort             int          `yaml:"mixed-port"`
+	ShadowSocksConfig     string       `yaml:"ss-config"`
+	VmessConfig           string       `yaml:"vmess-config"`
+	InboundTfo            bool         `yaml:"inbound-tfo"`
+	Authentication        []string     `yaml:"authentication"`
+	AllowLan              bool         `yaml:"allow-lan"`
+	BindAddress           string       `yaml:"bind-address"`
+	Mode                  T.TunnelMode `yaml:"mode"`
+	UnifiedDelay          bool         `yaml:"unified-delay"`
+	LogLevel              log.LogLevel `yaml:"log-level"`
+	IPv6                  bool         `yaml:"ipv6"`
+	ExternalController    string       `yaml:"external-controller"`
+	ExternalControllerTLS string       `yaml:"external-controller-tls"`
+	ExternalUI            string       `yaml:"external-ui"`
+	Secret                string       `yaml:"secret"`
+	Interface             string       `yaml:"interface-name"`
+	RoutingMark           int          `yaml:"routing-mark"`
+	Tunnels               []Tunnel     `yaml:"tunnels"`
+	GeodataMode           bool         `yaml:"geodata-mode"`
+	GeodataLoader         string       `yaml:"geodata-loader"`
+	TCPConcurrent         bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	EnableProcess         bool         `yaml:"enable-process" json:"enable-process"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -423,6 +426,7 @@ type RawConfig struct {
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
 	SubRules      map[string][]string       `yaml:"sub-rules"`
+	RawTLS        TLS                    `yaml:"tls"`
 }
 
 type RawGeoXUrl struct {
@@ -572,6 +576,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
 	config.IPTables = &rawCfg.IPTables
+	config.TLS=&rawCfg.RawTLS
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {
@@ -640,6 +645,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 
+
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
 
@@ -652,7 +658,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
-
 		if _, err := os.Stat(externalUI); os.IsNotExist(err) {
 			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
 		}
@@ -675,9 +680,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ExternalController: cfg.ExternalController,
 			ExternalUI:         cfg.ExternalUI,
 			Secret:             cfg.Secret,
-			TLSPort: cfg.Experimental.TLSPort,
-			Cert: cfg.Experimental.Cert,
-			PrivateKey: cfg.Experimental.PrivateKey,
+			ExternalControllerTLS: cfg.ExternalControllerTLS,
 		},
 		UnifiedDelay:  cfg.UnifiedDelay,
 		Mode:          cfg.Mode,
