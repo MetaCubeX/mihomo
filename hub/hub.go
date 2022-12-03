@@ -1,8 +1,6 @@
 package hub
 
 import (
-	"errors"
-
 	"github.com/Dreamacro/clash/config"
 	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/hub/route"
@@ -44,12 +42,8 @@ func Parse(options ...Option) error {
 	}
 
 	if cfg.General.ExternalController != "" {
-		if cfg.General.TLSPort != 0 && (len(cfg.General.PrivateKey) == 0 || len(cfg.General.Cert) == 0) {
-			return errors.New("Must be provided certificates and keys, for tls controller")
-		}
-
-		go route.Start(cfg.General.ExternalController, cfg.General.Secret, cfg.General.TLSPort,
-			cfg.General.Cert, cfg.General.PrivateKey)
+		go route.Start(cfg.General.ExternalController,cfg.General.ExternalControllerTLS, 
+			cfg.General.Secret,cfg.TLS.Certificate,cfg.TLS.PrivateKey)
 	}
 
 	executor.ApplyConfig(cfg, true)
