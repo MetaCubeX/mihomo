@@ -80,6 +80,9 @@ type Controller struct {
 	ExternalController string `json:"-"`
 	ExternalUI         string `json:"-"`
 	Secret             string `json:"-"`
+	TLSPort            int    `json:"-"`
+	Cert               string `json:"-"`
+	PrivateKey         string `json:"-"`
 }
 
 // DNS config
@@ -230,6 +233,9 @@ type Sniffer struct {
 // Experimental config
 type Experimental struct {
 	Fingerprints []string `yaml:"fingerprints"`
+	TLSPort      int      `yaml:"tls-port,omitempty"`
+	Cert         string   `yaml:"cert,omitempty"`
+	PrivateKey   string   `yaml:"private-key,omitempty"`
 }
 
 // Config is clash config manager
@@ -669,6 +675,9 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ExternalController: cfg.ExternalController,
 			ExternalUI:         cfg.ExternalUI,
 			Secret:             cfg.Secret,
+			TLSPort: cfg.Experimental.TLSPort,
+			Cert: cfg.Experimental.Cert,
+			PrivateKey: cfg.Experimental.PrivateKey,
 		},
 		UnifiedDelay:  cfg.UnifiedDelay,
 		Mode:          cfg.Mode,
