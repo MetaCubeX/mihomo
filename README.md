@@ -34,6 +34,26 @@ Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash
 
 ## Advanced usage for this branch
 
+## Build
+
+You should install [golang](https://go.dev) first.
+
+Then get the source code of Clash.Meta:
+```shell
+git clone https://github.com/MetaCubeX/Clash.Meta.git
+cd Clash.Meta && go mod download
+```
+
+If you can't visit github,you should set proxy first:
+```shell
+go env -w GOPROXY=https://goproxy.io,direct
+```
+
+So now you can build it:
+```shell
+go build
+```
+
 ### DNS configuration
 
 Support `geosite` with `fallback-filter`.
