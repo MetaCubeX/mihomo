@@ -2,8 +2,11 @@ package route
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,7 +43,7 @@ func SetUIPath(path string) {
 	uiPath = C.Path.Resolve(path)
 }
 
-func Start(addr string, secret string) {
+func Start(addr string, secret string, tlsPort int, cert string, privateKey string) {
 	if serverAddr != "" {
 		return
 	}
@@ -49,18 +52,16 @@ func Start(addr string, secret string) {
 	serverSecret = secret
 
 	r := chi.NewRouter()
-
 	corsM := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
-
+	r.Use()
 	r.Use(corsM.Handler)
 	r.Group(func(r chi.Router) {
 		r.Use(authentication)
-
 		r.Get("/", hello)
 		r.Get("/logs", getLogs)
 		r.Get("/traffic", traffic)
@@ -84,6 +85,34 @@ func Start(addr string, secret string) {
 			})
 		})
 	}
+	if tlsPort >0 {
+		go func() {
+			if host, _, err := net.SplitHostPort(addr); err != nil {
+				log.Errorln("External controller tls serve error,%s", err)
+			} else {
+				l, err := inbound.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(tlsPort)))
+				if err != nil {
+					log.Errorln("External controller tls listen error: %s", err)
+					return
+				}
+				serverAddr = l.Addr().String()
+				log.Infoln("RESTful API tls listening at: %s", serverAddr)
+				certificate, err := tls.X509KeyPair([]byte(cert), []byte(privateKey))
+				if err != nil {
+					log.Errorln("External controller tls sevre error,%s", err)
+				}
+				tlsServe := &http.Server{
+					Handler: r,
+					TLSConfig: &tls.Config{
+						Certificates: []tls.Certificate{certificate},
+					},
+				}
+				if err = tlsServe.ServeTLS(l, "", ""); err != nil {
+					log.Errorln("External controller tls serve error: %s", err)
+				}
+			}
+		}()
+	}
 
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
@@ -92,9 +121,12 @@ func Start(addr string, secret string) {
 	}
 	serverAddr = l.Addr().String()
 	log.Infoln("RESTful API listening at: %s", serverAddr)
+
 	if err = http.Serve(l, r); err != nil {
 		log.Errorln("External controller serve error: %s", err)
 	}
+
+
 }
 
 func authentication(next http.Handler) http.Handler {
