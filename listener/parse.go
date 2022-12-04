@@ -25,23 +25,38 @@ func ParseListener(mapping map[string]any) (C.NewListener, error) {
 	switch proxyType {
 	case "socks":
 		socksOption := &IN.SocksOption{}
-		decoder.Decode(mapping, socksOption)
+		err = decoder.Decode(mapping, socksOption)
+		if err != nil {
+			return nil, err
+		}
 		listener, err = IN.NewSocks(socksOption)
 	case "http":
 		httpOption := &IN.HTTPOption{}
-		decoder.Decode(mapping, httpOption)
+		err = decoder.Decode(mapping, httpOption)
+		if err != nil {
+			return nil, err
+		}
 		listener, err = IN.NewHTTP(httpOption)
 	case "tproxy":
 		tproxyOption := &IN.TProxyOption{}
-		decoder.Decode(mapping, tproxyOption)
+		err = decoder.Decode(mapping, tproxyOption)
+		if err != nil {
+			return nil, err
+		}
 		listener, err = IN.NewTProxy(tproxyOption)
 	case "redir":
 		redirOption := &IN.RedirOption{}
-		decoder.Decode(mapping, redirOption)
+		err = decoder.Decode(mapping, redirOption)
+		if err != nil {
+			return nil, err
+		}
 		listener, err = IN.NewRedir(redirOption)
 	case "mixed":
 		mixedOption := &IN.MixedOption{}
-		decoder.Decode(mapping, mixedOption)
+		err = decoder.Decode(mapping, mixedOption)
+		if err != nil {
+			return nil, err
+		}
 		listener, err = IN.NewMixed(mixedOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)

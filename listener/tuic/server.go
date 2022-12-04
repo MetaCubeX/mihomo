@@ -2,47 +2,29 @@ package tuic
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/metacubex/quic-go"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/adapter/inbound"
+	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/tuic"
 )
 
-type TuicServer struct {
-	Enable                bool
-	Listen                string
-	Token                 []string
-	Certificate           string
-	PrivateKey            string
-	CongestionController  string
-	MaxIdleTime           int
-	AuthenticationTimeout int
-	ALPN                  []string
-	MaxUdpRelayPacketSize int
-}
-
-func (t TuicServer) String() string {
-	b, _ := json.Marshal(t)
-	return string(b)
-}
-
 type Listener struct {
 	closed       bool
-	config       TuicServer
+	config       LC.TuicServer
 	udpListeners []net.PacketConn
 	servers      []*tuic.Server
 }
 
-func New(config TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) (*Listener, error) {
+func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
 	cert, err := tls.LoadX509KeyPair(config.Certificate, config.PrivateKey)
 	if err != nil {
 		return nil, err
@@ -140,6 +122,6 @@ func (l *Listener) Close() {
 	}
 }
 
-func (l *Listener) Config() TuicServer {
+func (l *Listener) Config() LC.TuicServer {
 	return l.config
 }

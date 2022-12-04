@@ -34,11 +34,11 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- *C.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- C.PacketAdapter) (*UDPListener, error) {
 	return NewUDPWithInfos(addr, "DEFAULT-TPROXY", "", in)
 }
 
-func NewUDPWithInfos(addr, name, preferRulesName string, in chan<- *C.PacketAdapter) (*UDPListener, error) {
+func NewUDPWithInfos(addr, name, preferRulesName string, in chan<- C.PacketAdapter) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func NewUDPWithInfos(addr, name, preferRulesName string, in chan<- *C.PacketAdap
 	return rl, nil
 }
 
-func handlePacketConn(name, preferRulesName string, pc net.PacketConn, in chan<- *C.PacketAdapter, buf []byte, lAddr, rAddr netip.AddrPort) {
+func handlePacketConn(name, preferRulesName string, pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, lAddr, rAddr netip.AddrPort) {
 	target := socks5.AddrFromStdAddrPort(rAddr)
 	pkt := &packet{
 		pc:    pc,

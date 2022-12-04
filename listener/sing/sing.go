@@ -24,7 +24,7 @@ const UDPTimeout = 5 * time.Minute
 
 type ListenerHandler struct {
 	TcpIn chan<- C.ConnContext
-	UdpIn chan<- *C.PacketAdapter
+	UdpIn chan<- C.PacketAdapter
 	Type  C.Type
 }
 

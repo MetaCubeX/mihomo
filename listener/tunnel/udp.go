@@ -34,7 +34,7 @@ func (l *PacketConn) Close() error {
 	return l.conn.Close()
 }
 
-func NewUDP(addr, target, proxy string, in chan<- *C.PacketAdapter) (*PacketConn, error) {
+func NewUDP(addr, target, proxy string, in chan<- C.PacketAdapter) (*PacketConn, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func NewUDP(addr, target, proxy string, in chan<- *C.PacketAdapter) (*PacketConn
 	return sl, nil
 }
 
-func (l *PacketConn) handleUDP(pc net.PacketConn, in chan<- *C.PacketAdapter, buf []byte, addr net.Addr) {
+func (l *PacketConn) handleUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr) {
 	packet := &packet{
 		pc:      pc,
 		rAddr:   addr,

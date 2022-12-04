@@ -9,10 +9,10 @@ import (
 )
 
 type Listener struct {
-	listener net.Listener
-	addr     string
-	closed   bool
-	name string 
+	listener        net.Listener
+	addr            string
+	closed          bool
+	name            string
 	preferRulesName string
 }
 
@@ -33,14 +33,14 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithAuthenticate(addr,"DEFAULT-HTTP","", in, true)
+	return NewWithAuthenticate(addr, "DEFAULT-HTTP", "", in, true)
 }
 
-func NewWithInfos(addr ,name ,preferRulesName string,in chan<-C.ConnContext)(*Listener,error){
-	return NewWithAuthenticate(addr,name,preferRulesName,in,true)
+func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
+	return NewWithAuthenticate(addr, name, preferRulesName, in, true)
 }
 
-func NewWithAuthenticate(addr,name,preferRulesName string, in chan<- C.ConnContext, authenticate bool) (*Listener, error) {
+func NewWithAuthenticate(addr, name, preferRulesName string, in chan<- C.ConnContext, authenticate bool) (*Listener, error) {
 	l, err := inbound.Listen("tcp", addr)
 
 	if err != nil {
@@ -53,10 +53,10 @@ func NewWithAuthenticate(addr,name,preferRulesName string, in chan<- C.ConnConte
 	}
 
 	hl := &Listener{
-		listener: l,
-		name: name,
+		listener:        l,
+		name:            name,
 		preferRulesName: preferRulesName,
-		addr:     addr,
+		addr:            addr,
 	}
 	go func() {
 		for {
@@ -67,7 +67,7 @@ func NewWithAuthenticate(addr,name,preferRulesName string, in chan<- C.ConnConte
 				}
 				continue
 			}
-			go HandleConn(hl.name,hl.preferRulesName,conn, in, c)
+			go HandleConn(hl.name, hl.preferRulesName, conn, in, c)
 		}
 	}()
 

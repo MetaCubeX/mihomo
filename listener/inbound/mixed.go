@@ -39,7 +39,7 @@ func (m *Mixed) Address() string {
 }
 
 // ReCreate implements constant.NewListener
-func (m *Mixed) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) error {
+func (m *Mixed) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	_ = m.Close()
 	m.l, err = mixed.NewWithInfos(m.RawAddress(), m.name, m.preferRulesName, tcpIn)

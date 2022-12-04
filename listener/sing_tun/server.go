@@ -11,6 +11,7 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/iface"
 	C "github.com/Dreamacro/clash/constant"
+	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/log"
 
@@ -25,7 +26,7 @@ var InterfaceName = "Meta"
 
 type Listener struct {
 	closed  bool
-	options Tun
+	options LC.Tun
 	handler *ListenerHandler
 	tunName string
 
@@ -63,7 +64,7 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
-func New(options Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) (l *Listener, err error) {
+func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (l *Listener, err error) {
 	tunName := options.Device
 	if tunName == "" {
 		tunName = CalculateInterfaceName(InterfaceName)
@@ -161,12 +162,12 @@ func New(options Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter)
 	tunOptions := tun.Options{
 		Name:               tunName,
 		MTU:                tunMTU,
-		Inet4Address:       common.Map(options.Inet4Address, ListenPrefix.Build),
-		Inet6Address:       common.Map(options.Inet6Address, ListenPrefix.Build),
+		Inet4Address:       common.Map(options.Inet4Address, LC.ListenPrefix.Build),
+		Inet6Address:       common.Map(options.Inet6Address, LC.ListenPrefix.Build),
 		AutoRoute:          options.AutoRoute,
 		StrictRoute:        options.StrictRoute,
-		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, ListenPrefix.Build),
-		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, ListenPrefix.Build),
+		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, LC.ListenPrefix.Build),
+		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, LC.ListenPrefix.Build),
 		IncludeUID:         includeUID,
 		ExcludeUID:         excludeUID,
 		IncludeAndroidUser: options.IncludeAndroidUser,
@@ -282,6 +283,6 @@ func (l *Listener) Close() {
 	)
 }
 
-func (l *Listener) Config() Tun {
+func (l *Listener) Config() LC.Tun {
 	return l.options
 }
