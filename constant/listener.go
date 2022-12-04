@@ -20,4 +20,5 @@ type NewListener interface {
 	Close() error
 	Address() string
 	RawAddress() string
+	Config() string
 }

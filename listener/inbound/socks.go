@@ -14,9 +14,10 @@ type SocksOption struct {
 
 type Socks struct {
 	*Base
-	udp bool
-	stl *socks.Listener
-	sul *socks.UDPListener
+	config *SocksOption
+	udp    bool
+	stl    *socks.Listener
+	sul    *socks.UDPListener
 }
 
 func NewSocks(options *SocksOption) (*Socks, error) {
@@ -25,9 +26,15 @@ func NewSocks(options *SocksOption) (*Socks, error) {
 		return nil, err
 	}
 	return &Socks{
-		Base: base,
-		udp:  options.UDP == nil || *options.UDP,
+		Base:   base,
+		config: options,
+		udp:    options.UDP == nil || *options.UDP,
 	}, nil
+}
+
+// Config implements constant.NewListener
+func (s *Socks) Config() string {
+	return optionToString(s.config)
 }
 
 // Close implements constant.NewListener
@@ -56,7 +63,7 @@ func (s *Socks) Address() string {
 	return s.stl.Address()
 }
 
-// ReCreate implements constant.NewListener
+// Listen implements constant.NewListener
 func (s *Socks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	if s.stl, err = socks.NewWithInfos(s.RawAddress(), s.name, s.preferRulesName, tcpIn); err != nil {

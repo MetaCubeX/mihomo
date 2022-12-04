@@ -17,9 +17,10 @@ type MixedOption struct {
 
 type Mixed struct {
 	*Base
-	l    *mixed.Listener
-	lUDP *socks.UDPListener
-	udp  bool
+	config *MixedOption
+	l      *mixed.Listener
+	lUDP   *socks.UDPListener
+	udp    bool
 }
 
 func NewMixed(options *MixedOption) (*Mixed, error) {
@@ -28,9 +29,15 @@ func NewMixed(options *MixedOption) (*Mixed, error) {
 		return nil, err
 	}
 	return &Mixed{
-		Base: base,
-		udp:  options.UDP == nil || *options.UDP,
+		Base:   base,
+		config: options,
+		udp:    options.UDP == nil || *options.UDP,
 	}, nil
+}
+
+// Config implements constant.NewListener
+func (m *Mixed) Config() string {
+	return optionToString(m.config)
 }
 
 // Address implements constant.NewListener
@@ -38,7 +45,7 @@ func (m *Mixed) Address() string {
 	return m.l.Address()
 }
 
-// ReCreate implements constant.NewListener
+// Listen implements constant.NewListener
 func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	m.l, err = mixed.NewWithInfos(m.RawAddress(), m.name, m.preferRulesName, tcpIn)

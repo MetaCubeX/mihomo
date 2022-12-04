@@ -15,9 +15,10 @@ type TProxyOption struct {
 
 type TProxy struct {
 	*Base
-	lUDP *tproxy.UDPListener
-	lTCP *tproxy.Listener
-	udp  bool
+	config *TProxyOption
+	lUDP   *tproxy.UDPListener
+	lTCP   *tproxy.Listener
+	udp    bool
 }
 
 func NewTProxy(options *TProxyOption) (*TProxy, error) {
@@ -26,10 +27,16 @@ func NewTProxy(options *TProxyOption) (*TProxy, error) {
 		return nil, err
 	}
 	return &TProxy{
-		Base: base,
-		udp:  options.UDP == nil || *options.UDP,
+		Base:   base,
+		config: options,
+		udp:    options.UDP == nil || *options.UDP,
 	}, nil
 
+}
+
+// Config implements constant.NewListener
+func (t *TProxy) Config() string {
+	return optionToString(t.config)
 }
 
 // Address implements constant.NewListener
@@ -37,7 +44,7 @@ func (t *TProxy) Address() string {
 	return t.lTCP.Address()
 }
 
-// ReCreate implements constant.NewListener
+// Listen implements constant.NewListener
 func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	t.lTCP, err = tproxy.NewWithInfos(t.RawAddress(), t.name, t.preferRulesName, tcpIn)

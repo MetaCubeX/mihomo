@@ -1,6 +1,7 @@
 package inbound
 
 import (
+	"encoding/json"
 	"net"
 	"net/netip"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 )
 
 type Base struct {
+	config          *BaseOption
 	name            string
 	preferRulesName string
 	listenAddr      netip.Addr
@@ -28,7 +30,13 @@ func NewBase(options *BaseOption) (*Base, error) {
 		listenAddr:      addr,
 		preferRulesName: options.PreferRulesName,
 		port:            options.Port,
+		config:          options,
 	}, nil
+}
+
+// Config implements constant.NewListener
+func (b *Base) Config() string {
+	return optionToString(b.config)
 }
 
 // Address implements constant.NewListener
@@ -51,7 +59,7 @@ func (b *Base) RawAddress() string {
 	return net.JoinHostPort(b.listenAddr.String(), strconv.Itoa(int(b.port)))
 }
 
-// ReCreate implements constant.NewListener
+// Listen implements constant.NewListener
 func (*Base) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	return nil
 }
@@ -64,3 +72,8 @@ type BaseOption struct {
 }
 
 var _ C.NewListener = (*Base)(nil)
+
+func optionToString(option any) string {
+	str, _ := json.Marshal(option)
+	return string(str)
+}

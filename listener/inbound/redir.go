@@ -12,7 +12,8 @@ type RedirOption struct {
 
 type Redir struct {
 	*Base
-	l *redir.Listener
+	config *RedirOption
+	l      *redir.Listener
 }
 
 func NewRedir(options *RedirOption) (*Redir, error) {
@@ -21,8 +22,14 @@ func NewRedir(options *RedirOption) (*Redir, error) {
 		return nil, err
 	}
 	return &Redir{
-		Base: base,
+		Base:   base,
+		config: options,
 	}, nil
+}
+
+// Config implements constant.NewListener
+func (r *Redir) Config() string {
+	return optionToString(r.config)
 }
 
 // Address implements constant.NewListener
@@ -30,7 +37,7 @@ func (r *Redir) Address() string {
 	return r.l.Address()
 }
 
-// ReCreate implements constant.NewListener
+// Listen implements constant.NewListener
 func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	r.l, err = redir.NewWithInfos(r.Address(), r.name, r.preferRulesName, tcpIn)

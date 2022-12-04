@@ -11,7 +11,8 @@ type HTTPOption struct {
 }
 type HTTP struct {
 	*Base
-	l *http.Listener
+	config *HTTPOption
+	l      *http.Listener
 }
 
 func NewHTTP(options *HTTPOption) (*HTTP, error) {
@@ -20,8 +21,14 @@ func NewHTTP(options *HTTPOption) (*HTTP, error) {
 		return nil, err
 	}
 	return &HTTP{
-		Base: base,
+		Base:   base,
+		config: options,
 	}, nil
+}
+
+// Config implements constant.NewListener
+func (h *HTTP) Config() string {
+	return optionToString(h.config)
 }
 
 // Address implements constant.NewListener
@@ -29,7 +36,7 @@ func (h *HTTP) Address() string {
 	return h.l.Address()
 }
 
-// ReCreate implements constant.NewListener
+// Listen implements constant.NewListener
 func (h *HTTP) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	h.l, err = http.NewWithInfos(h.RawAddress(), h.name, h.preferRulesName, tcpIn)
