@@ -87,9 +87,10 @@ func Rules() []C.Rule {
 	return rules
 }
 
-func Listeners()map[string]C.NewListener{
+func Listeners() map[string]C.NewListener {
 	return listeners
 }
+
 // UpdateRules handle update rules
 func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]provider.RuleProvider) {
 	configMux.Lock()
@@ -125,7 +126,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 func UpdateListeners(newListeners map[string]C.NewListener) {
 	configMux.Lock()
 	defer configMux.Unlock()
-	listeners=newListeners
+	listeners = newListeners
 }
 
 func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
