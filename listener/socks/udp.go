@@ -15,6 +15,8 @@ type UDPListener struct {
 	packetConn net.PacketConn
 	addr       string
 	closed     bool
+	name string 
+	preferRulesName string
 }
 
 // RawAddress implements C.Listener
@@ -33,7 +35,11 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- *C.PacketAdapter) (*UDPListener, error) {
+	return NewUDPWithInfos(addr,"DEFAULT-SOCKS","",in)
+}
+
+func NewUDPWithInfos(addr,name ,preferRulesName string, in chan<- *C.PacketAdapter) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -46,6 +52,8 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 	sl := &UDPListener{
 		packetConn: l,
 		addr:       addr,
+		preferRulesName: preferRulesName,
+		name: name,
 	}
 	go func() {
 		for {
@@ -58,14 +66,14 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 				}
 				continue
 			}
-			handleSocksUDP(l, in, buf[:n], remoteAddr)
+			handleSocksUDP(sl.name,sl.preferRulesName,l, in, buf[:n], remoteAddr)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, addr net.Addr) {
+func handleSocksUDP(name,preferRulesName string,pc net.PacketConn, in chan<- *C.PacketAdapter, buf []byte, addr net.Addr) {
 	target, payload, err := socks5.DecodeUDPPacket(buf)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
@@ -79,7 +87,7 @@ func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []b
 		bufRef:  buf,
 	}
 	select {
-	case in <- inbound.NewPacket(target, packet, C.SOCKS5):
+	case in <- inbound.NewPacketWithInfos(target, packet, C.SOCKS5,name,preferRulesName):
 	default:
 	}
 }

@@ -16,6 +16,8 @@ type Listener struct {
 	listener net.Listener
 	addr     string
 	closed   bool
+	preferRulesName string 
+	name string
 }
 
 // RawAddress implements C.Listener
@@ -35,6 +37,10 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
+	return NewWithInfos(addr,"DEFAULT-SOCKS","",in)
+}
+
+func NewWithInfos(addr,name,preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -43,6 +49,8 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	sl := &Listener{
 		listener: l,
 		addr:     addr,
+		name: name,
+		preferRulesName: preferRulesName,
 	}
 	go func() {
 		for {
@@ -53,14 +61,14 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 				}
 				continue
 			}
-			go handleSocks(c, in)
+			go handleSocks(sl.name,sl.preferRulesName,c, in)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocks(conn net.Conn, in chan<- C.ConnContext) {
+func handleSocks(name,preferRulesName string,conn net.Conn, in chan<- C.ConnContext) {
 	conn.(*net.TCPConn).SetKeepAlive(true)
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
@@ -71,24 +79,24 @@ func handleSocks(conn net.Conn, in chan<- C.ConnContext) {
 
 	switch head[0] {
 	case socks4.Version:
-		HandleSocks4(bufConn, in)
+		HandleSocks4(name,preferRulesName,bufConn, in)
 	case socks5.Version:
-		HandleSocks5(bufConn, in)
+		HandleSocks5(name,preferRulesName,bufConn, in)
 	default:
 		conn.Close()
 	}
 }
 
-func HandleSocks4(conn net.Conn, in chan<- C.ConnContext) {
+func HandleSocks4(name,preferRulesName string, conn net.Conn, in chan<- C.ConnContext) {
 	addr, _, err := socks4.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
 		return
 	}
-	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4)
+	in <- inbound.NewSocketWithInfos(socks5.ParseAddr(addr), conn, C.SOCKS4,name,preferRulesName)
 }
 
-func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
+func HandleSocks5(name,preferRulesName string,conn net.Conn, in chan<- C.ConnContext) {
 	target, command, err := socks5.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
@@ -99,5 +107,5 @@ func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
 		io.Copy(io.Discard, conn)
 		return
 	}
-	in <- inbound.NewSocket(target, conn, C.SOCKS5)
+	in <- inbound.NewSocketWithInfos(target, conn, C.SOCKS5,name,preferRulesName)
 }

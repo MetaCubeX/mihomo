@@ -10,8 +10,14 @@ import (
 
 // NewHTTPS receive CONNECT request and return ConnContext
 func NewHTTPS(request *http.Request, conn net.Conn) *context.ConnContext {
+	return NewHTTPSWithInfos(request, conn, "", "")
+}
+
+func NewHTTPSWithInfos(request *http.Request, conn net.Conn, inName, preferRulesName string) *context.ConnContext {
 	metadata := parseHTTPAddr(request)
 	metadata.Type = C.HTTPS
+	metadata.PreferRulesName = preferRulesName
+	metadata.InName = inName
 	if ip, port, err := parseAddr(conn.RemoteAddr().String()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port

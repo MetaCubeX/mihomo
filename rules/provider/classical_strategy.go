@@ -66,7 +66,7 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 	return "", "", nil
 }
 
-func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
+func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
 		case "MATCH", "SUB-RULE":

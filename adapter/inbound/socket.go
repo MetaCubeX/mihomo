@@ -9,12 +9,14 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
-// NewSocket receive TCP inbound and return ConnContext
-func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnContext {
+func NewSocketWithInfos(target socks5.Addr, conn net.Conn, source C.Type, inName , preferRulesName string) *context.ConnContext {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
+	metadata.PreferRulesName = preferRulesName
+	metadata.InName = inName
 	remoteAddr := conn.RemoteAddr()
+
 	// Filter when net.Addr interface is nil
 	if remoteAddr != nil {
 		if ip, port, err := parseAddr(remoteAddr.String()); err == nil {
@@ -32,6 +34,11 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnCo
 	}
 
 	return context.NewConnContext(conn, metadata)
+}
+
+// NewSocket receive TCP inbound and return ConnContext
+func NewSocket(target socks5.Addr, conn net.Conn, source C.Type) *context.ConnContext {
+	return NewSocketWithInfos(target, conn, source, "", "")
 }
 
 func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {

@@ -20,7 +20,7 @@ func (A *AND) ShouldFindProcess() bool {
 }
 
 func NewAND(payload string, adapter string,
-	parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*AND, error) {
+	parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*AND, error) {
 	and := &AND{Base: &common.Base{}, payload: payload, adapter: adapter}
 	rules, err := ParseRuleByPayload(payload, parse)
 	if err != nil {

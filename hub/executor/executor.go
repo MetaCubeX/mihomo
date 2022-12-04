@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -26,8 +25,12 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/listener/inner"
+	"github.com/Dreamacro/clash/listener/sing_tun"
 	"github.com/Dreamacro/clash/listener/tproxy"
+	"github.com/Dreamacro/clash/listener/tuic"
+	T "github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -77,7 +80,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	preUpdateExperimental(cfg)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
-	updateRules(cfg.Rules, cfg.RuleProviders)
+	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	initInnerTcp()
@@ -86,6 +89,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
 	updateGeneral(cfg.General, force)
+	updateListeners(cfg.Listeners)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
 	updateExperimental(cfg)
@@ -122,14 +126,24 @@ func GetGeneral() *config.General {
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
-		Tun:           listener.GetTunConf(),
-		TuicServer:    listener.GetTuicConf(),
+		Tun:           config.Tun(listener.GetTunConf()),
+		TuicServer:    config.TuicServer(listener.GetTuicConf()),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
 		TCPConcurrent: dialer.GetDial(),
 	}
 
 	return general
+}
+
+func updateListeners(listeners map[string]C.NewListener) {
+	tcpIn := tunnel.TCPIn()
+	udpIn := tunnel.UDPIn()
+	for _, listener := range listeners {
+		if err := listener.ReCreate(tcpIn, udpIn); err != nil {
+			log.Errorln("Listener %s listen err: %s", listener.Name(), err.Error())
+		}
+	}
 }
 
 func updateExperimental(c *config.Config) {
@@ -203,8 +217,8 @@ func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.Pro
 	tunnel.UpdateProxies(proxies, providers)
 }
 
-func updateRules(rules []C.Rule, ruleProviders map[string]provider.RuleProvider) {
-	tunnel.UpdateRules(rules, ruleProviders)
+func updateRules(rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map[string]provider.RuleProvider) {
+	tunnel.UpdateRules(rules, subRules, ruleProviders)
 }
 
 func loadProvider(pv provider.Provider) {
@@ -267,7 +281,7 @@ func updateTun(general *config.General) {
 	if general == nil {
 		return
 	}
-	listener.ReCreateTun(general.Tun, tunnel.TCPIn(), tunnel.UDPIn())
+	listener.ReCreateTun(sing_tun.Tun(general.Tun), tunnel.TCPIn(), tunnel.UDPIn())
 	listener.ReCreateRedirToTun(general.Tun.RedirectToTun)
 }
 
@@ -294,7 +308,7 @@ func updateSniffer(sniffer *config.Sniffer) {
 	}
 }
 
-func updateTunnels(tunnels []config.Tunnel) {
+func updateTunnels(tunnels []T.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
@@ -353,7 +367,7 @@ func updateGeneral(general *config.General, force bool) {
 	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
 	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	listener.ReCreateTuic(general.TuicServer, tcpIn, udpIn)
+	listener.ReCreateTuic(tuic.TuicServer(general.TuicServer), tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

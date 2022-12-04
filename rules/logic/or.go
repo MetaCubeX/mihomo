@@ -45,7 +45,7 @@ func (or *OR) ShouldResolveIP() bool {
 	return or.needIP
 }
 
-func NewOR(payload string, adapter string, parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*OR, error) {
+func NewOR(payload string, adapter string, parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*OR, error) {
 	or := &OR{Base: &common.Base{}, payload: payload, adapter: adapter}
 	rules, err := ParseRuleByPayload(payload, parse)
 	if err != nil {

@@ -13,7 +13,6 @@ import (
 
 	"github.com/jpillora/backoff"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -27,9 +26,10 @@ import (
 
 var (
 	tcpQueue       = make(chan C.ConnContext, 200)
-	udpQueue       = make(chan *inbound.PacketAdapter, 200)
+	udpQueue       = make(chan *C.PacketAdapter, 200)
 	natTable       = nat.New()
 	rules          []C.Rule
+	subRules       map[string][]C.Rule
 	proxies        = make(map[string]C.Proxy)
 	providers      map[string]provider.ProxyProvider
 	ruleProviders  map[string]provider.RuleProvider
@@ -77,7 +77,7 @@ func TCPIn() chan<- C.ConnContext {
 }
 
 // UDPIn return fan-in udp queue
-func UDPIn() chan<- *inbound.PacketAdapter {
+func UDPIn() chan<- *C.PacketAdapter {
 	return udpQueue
 }
 
@@ -87,10 +87,11 @@ func Rules() []C.Rule {
 }
 
 // UpdateRules handle update rules
-func UpdateRules(newRules []C.Rule, rp map[string]provider.RuleProvider) {
+func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]provider.RuleProvider) {
 	configMux.Lock()
 	rules = newRules
 	ruleProviders = rp
+	subRules = newSubRule
 	configMux.Unlock()
 }
 
@@ -216,7 +217,7 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 	return
 }
 
-func handleUDPConn(packet *inbound.PacketAdapter) {
+func handleUDPConn(packet *C.PacketAdapter) {
 	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
@@ -435,7 +436,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		resolved = true
 	}
 
-	for _, rule := range rules {
+	for _, rule := range getRules(metadata) {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			func() {
 				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
@@ -493,6 +494,14 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	return proxies["DIRECT"], nil, nil
+}
+
+func getRules(metadata *C.Metadata) []C.Rule {
+	if sr, ok := subRules[metadata.PreferRulesName]; ok {
+		return sr
+	} else {
+		return rules
+	}
 }
 
 func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe func(err error)) (t T, err error) {

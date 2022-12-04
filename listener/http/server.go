@@ -12,6 +12,8 @@ type Listener struct {
 	listener net.Listener
 	addr     string
 	closed   bool
+	name string 
+	preferRulesName string
 }
 
 // RawAddress implements C.Listener
@@ -31,10 +33,14 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithAuthenticate(addr, in, true)
+	return NewWithAuthenticate(addr,"DEFAULT-HTTP","", in, true)
 }
 
-func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool) (*Listener, error) {
+func NewWithInfos(addr ,name ,preferRulesName string,in chan<-C.ConnContext)(*Listener,error){
+	return NewWithAuthenticate(addr,name,preferRulesName,in,true)
+}
+
+func NewWithAuthenticate(addr,name,preferRulesName string, in chan<- C.ConnContext, authenticate bool) (*Listener, error) {
 	l, err := inbound.Listen("tcp", addr)
 
 	if err != nil {
@@ -48,6 +54,8 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 
 	hl := &Listener{
 		listener: l,
+		name: name,
+		preferRulesName: preferRulesName,
 		addr:     addr,
 	}
 	go func() {
@@ -59,7 +67,7 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 				}
 				continue
 			}
-			go HandleConn(conn, in, c)
+			go HandleConn(hl.name,hl.preferRulesName,conn, in, c)
 		}
 	}()
 
