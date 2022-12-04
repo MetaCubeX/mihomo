@@ -10,7 +10,11 @@ import (
 
 type TProxyOption struct {
 	BaseOption
-	UDP *bool `inbound:"udp,omitempty"`
+	UDP bool `inbound:"udp,omitempty"`
+}
+
+func (o TProxyOption) Equal(config C.InboundConfig) bool {
+	return optionToString(o) == optionToString(config)
 }
 
 type TProxy struct {
@@ -29,22 +33,22 @@ func NewTProxy(options *TProxyOption) (*TProxy, error) {
 	return &TProxy{
 		Base:   base,
 		config: options,
-		udp:    options.UDP == nil || *options.UDP,
+		udp:    options.UDP,
 	}, nil
 
 }
 
-// Config implements constant.NewListener
-func (t *TProxy) Config() string {
-	return optionToString(t.config)
+// Config implements constant.InboundListener
+func (t *TProxy) Config() C.InboundConfig {
+	return t.config
 }
 
-// Address implements constant.NewListener
+// Address implements constant.InboundListener
 func (t *TProxy) Address() string {
 	return t.lTCP.Address()
 }
 
-// Listen implements constant.NewListener
+// Listen implements constant.InboundListener
 func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	t.lTCP, err = tproxy.NewWithInfos(t.RawAddress(), t.name, t.preferRulesName, tcpIn)
@@ -64,7 +68,7 @@ func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter
 	return nil
 }
 
-// Close implements constant.NewListener
+// Close implements constant.InboundListener
 func (t *TProxy) Close() error {
 	var tcpErr error
 	var udpErr error
@@ -87,4 +91,4 @@ func (t *TProxy) Close() error {
 	return nil
 }
 
-var _ C.NewListener = (*TProxy)(nil)
+var _ C.InboundListener = (*TProxy)(nil)

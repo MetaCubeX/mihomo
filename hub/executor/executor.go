@@ -135,31 +135,11 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateListeners(listeners map[string]C.NewListener) {
+func updateListeners(listeners map[string]C.InboundListener) {
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 
-	skipNames := map[string]struct{}{}
-	for name, oldListener := range tunnel.Listeners() {
-		if newListener, ok := listeners[name]; ok {
-			if newListener.Config() == oldListener.Config() {
-				listeners[name] = oldListener
-				skipNames[name] = struct{}{}
-				continue
-			}
-		}
-		_ = oldListener.Close()
-	}
-
-	for name, newListener := range listeners {
-		if _, ok := skipNames[name]; ok {
-			continue
-		}
-		if err := newListener.Listen(tcpIn, udpIn); err != nil {
-			log.Errorln("Listener %s listen err: %s", newListener.Name(), err.Error())
-		}
-	}
-	tunnel.UpdateListeners(listeners)
+	listener.PatchInboundListeners(listeners, tcpIn, udpIn, true)
 }
 
 func updateExperimental(c *config.Config) {

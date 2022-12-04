@@ -10,6 +10,10 @@ type RedirOption struct {
 	BaseOption
 }
 
+func (o RedirOption) Equal(config C.InboundConfig) bool {
+	return optionToString(o) == optionToString(config)
+}
+
 type Redir struct {
 	*Base
 	config *RedirOption
@@ -27,17 +31,17 @@ func NewRedir(options *RedirOption) (*Redir, error) {
 	}, nil
 }
 
-// Config implements constant.NewListener
-func (r *Redir) Config() string {
-	return optionToString(r.config)
+// Config implements constant.InboundListener
+func (r *Redir) Config() C.InboundConfig {
+	return r.config
 }
 
-// Address implements constant.NewListener
+// Address implements constant.InboundListener
 func (r *Redir) Address() string {
 	return r.l.Address()
 }
 
-// Listen implements constant.NewListener
+// Listen implements constant.InboundListener
 func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	r.l, err = redir.NewWithInfos(r.Address(), r.name, r.preferRulesName, tcpIn)
@@ -48,7 +52,7 @@ func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter)
 	return nil
 }
 
-// Close implements constant.NewListener
+// Close implements constant.InboundListener
 func (r *Redir) Close() error {
 	if r.l != nil {
 		r.l.Close()
@@ -56,4 +60,4 @@ func (r *Redir) Close() error {
 	return nil
 }
 
-var _ C.NewListener = (*Redir)(nil)
+var _ C.InboundListener = (*Redir)(nil)

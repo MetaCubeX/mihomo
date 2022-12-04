@@ -29,7 +29,7 @@ var (
 	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
 	rules          []C.Rule
-	listeners      = make(map[string]C.NewListener)
+	listeners      = make(map[string]C.InboundListener)
 	subRules       map[string][]C.Rule
 	proxies        = make(map[string]C.Proxy)
 	providers      map[string]provider.ProxyProvider
@@ -87,7 +87,7 @@ func Rules() []C.Rule {
 	return rules
 }
 
-func Listeners() map[string]C.NewListener {
+func Listeners() map[string]C.InboundListener {
 	return listeners
 }
 
@@ -123,7 +123,7 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 	configMux.Unlock()
 }
 
-func UpdateListeners(newListeners map[string]C.NewListener) {
+func UpdateListeners(newListeners map[string]C.InboundListener) {
 	configMux.Lock()
 	defer configMux.Unlock()
 	listeners = newListeners

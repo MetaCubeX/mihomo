@@ -9,6 +9,11 @@ import (
 type HTTPOption struct {
 	BaseOption
 }
+
+func (o HTTPOption) Equal(config C.InboundConfig) bool {
+	return optionToString(o) == optionToString(config)
+}
+
 type HTTP struct {
 	*Base
 	config *HTTPOption
@@ -26,17 +31,17 @@ func NewHTTP(options *HTTPOption) (*HTTP, error) {
 	}, nil
 }
 
-// Config implements constant.NewListener
-func (h *HTTP) Config() string {
-	return optionToString(h.config)
+// Config implements constant.InboundListener
+func (h *HTTP) Config() C.InboundConfig {
+	return h.config
 }
 
-// Address implements constant.NewListener
+// Address implements constant.InboundListener
 func (h *HTTP) Address() string {
 	return h.l.Address()
 }
 
-// Listen implements constant.NewListener
+// Listen implements constant.InboundListener
 func (h *HTTP) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	h.l, err = http.NewWithInfos(h.RawAddress(), h.name, h.preferRulesName, tcpIn)
@@ -47,7 +52,7 @@ func (h *HTTP) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) 
 	return nil
 }
 
-// Close implements constant.NewListener
+// Close implements constant.InboundListener
 func (h *HTTP) Close() error {
 	if h.l != nil {
 		return h.l.Close()
@@ -55,4 +60,4 @@ func (h *HTTP) Close() error {
 	return nil
 }
 
-var _ C.NewListener = (*HTTP)(nil)
+var _ C.InboundListener = (*HTTP)(nil)

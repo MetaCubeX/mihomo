@@ -12,7 +12,11 @@ import (
 
 type MixedOption struct {
 	BaseOption
-	UDP *bool `inbound:"udp,omitempty"`
+	UDP bool `inbound:"udp,omitempty"`
+}
+
+func (o MixedOption) Equal(config C.InboundConfig) bool {
+	return optionToString(o) == optionToString(config)
 }
 
 type Mixed struct {
@@ -31,21 +35,21 @@ func NewMixed(options *MixedOption) (*Mixed, error) {
 	return &Mixed{
 		Base:   base,
 		config: options,
-		udp:    options.UDP == nil || *options.UDP,
+		udp:    options.UDP,
 	}, nil
 }
 
-// Config implements constant.NewListener
-func (m *Mixed) Config() string {
-	return optionToString(m.config)
+// Config implements constant.InboundListener
+func (m *Mixed) Config() C.InboundConfig {
+	return m.config
 }
 
-// Address implements constant.NewListener
+// Address implements constant.InboundListener
 func (m *Mixed) Address() string {
 	return m.l.Address()
 }
 
-// Listen implements constant.NewListener
+// Listen implements constant.InboundListener
 func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	m.l, err = mixed.NewWithInfos(m.RawAddress(), m.name, m.preferRulesName, tcpIn)
@@ -62,7 +66,7 @@ func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter)
 	return nil
 }
 
-// Close implements constant.NewListener
+// Close implements constant.InboundListener
 func (m *Mixed) Close() error {
 	var err error
 	if m.l != nil {
@@ -82,4 +86,4 @@ func (m *Mixed) Close() error {
 	return err
 }
 
-var _ C.NewListener = (*Mixed)(nil)
+var _ C.InboundListener = (*Mixed)(nil)
