@@ -12,11 +12,9 @@ import (
 )
 
 type UDPListener struct {
-	packetConn   net.PacketConn
-	addr         string
-	closed       bool
-	name         string
-	specialRules string
+	packetConn net.PacketConn
+	addr       string
+	closed     bool
 }
 
 // RawAddress implements C.Listener
@@ -35,11 +33,13 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- C.PacketAdapter) (*UDPListener, error) {
-	return NewUDPWithInfos(addr, "DEFAULT-SOCKS", "", in)
-}
-
-func NewUDPWithInfos(addr, name, specialRules string, in chan<- C.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*UDPListener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{{
+			InName:       "DEFAULT-SOCKS",
+			SpecialRules: "",
+		}}
+	}
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -50,10 +50,8 @@ func NewUDPWithInfos(addr, name, specialRules string, in chan<- C.PacketAdapter)
 	}
 
 	sl := &UDPListener{
-		packetConn:   l,
-		addr:         addr,
-		specialRules: specialRules,
-		name:         name,
+		packetConn: l,
+		addr:       addr,
 	}
 	go func() {
 		for {
@@ -66,14 +64,14 @@ func NewUDPWithInfos(addr, name, specialRules string, in chan<- C.PacketAdapter)
 				}
 				continue
 			}
-			handleSocksUDP(sl.name, sl.specialRules, l, in, buf[:n], remoteAddr)
+			handleSocksUDP(l, in, buf[:n], remoteAddr, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocksUDP(name, specialRules string, pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr, additions ...inbound.Addition) {
 	target, payload, err := socks5.DecodeUDPPacket(buf)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
@@ -87,7 +85,7 @@ func handleSocksUDP(name, specialRules string, pc net.PacketConn, in chan<- C.Pa
 		bufRef:  buf,
 	}
 	select {
-	case in <- inbound.NewPacketWithInfos(target, packet, C.SOCKS5, name, specialRules):
+	case in <- inbound.NewPacket(target, packet, C.SOCKS5, additions...):
 	default:
 	}
 }

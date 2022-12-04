@@ -25,11 +25,13 @@ type Listener struct {
 	servers      []*tuic.Server
 }
 
-func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
-	return NewWithInfos("DEFAULT-TUIC", "", config, tcpIn, udpIn)
-}
-
-func NewWithInfos(name, specialRules string, config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
+func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{{
+			InName:       "DEFAULT-TUIC",
+			SpecialRules: "",
+		}}
+	}
 	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
 	if err != nil {
 		return nil, err
@@ -61,12 +63,12 @@ func NewWithInfos(name, specialRules string, config LC.TuicServer, tcpIn chan<- 
 
 	option := &tuic.ServerOption{
 		HandleTcpFn: func(conn net.Conn, addr socks5.Addr) error {
-			tcpIn <- inbound.NewSocketWithInfos(addr, conn, C.TUIC, name, specialRules)
+			tcpIn <- inbound.NewSocket(addr, conn, C.TUIC, additions...)
 			return nil
 		},
 		HandleUdpFn: func(addr socks5.Addr, packet C.UDPPacket) error {
 			select {
-			case udpIn <- inbound.NewPacketWithInfos(addr, packet, C.TUIC, name, specialRules):
+			case udpIn <- inbound.NewPacket(addr, packet, C.TUIC, additions...):
 			default:
 			}
 			return nil
@@ -116,7 +118,6 @@ func NewWithInfos(name, specialRules string, config LC.TuicServer, tcpIn chan<- 
 	return sl, nil
 }
 
-// Close implements C.Listener
 func (l *Listener) Close() error {
 	l.closed = true
 	var retErr error

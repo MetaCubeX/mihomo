@@ -44,7 +44,7 @@ func (h *HTTP) Address() string {
 // Listen implements constant.InboundListener
 func (h *HTTP) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	h.l, err = http.NewWithInfos(h.RawAddress(), h.name, h.specialRules, tcpIn)
+	h.l, err = http.New(h.RawAddress(), tcpIn, h.Additions()...)
 	if err != nil {
 		return err
 	}

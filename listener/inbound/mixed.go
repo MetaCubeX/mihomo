@@ -52,12 +52,12 @@ func (m *Mixed) Address() string {
 // Listen implements constant.InboundListener
 func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	m.l, err = mixed.NewWithInfos(m.RawAddress(), m.name, m.specialRules, tcpIn)
+	m.l, err = mixed.New(m.RawAddress(), tcpIn, m.Additions()...)
 	if err != nil {
 		return err
 	}
 	if m.udp {
-		m.lUDP, err = socks.NewUDPWithInfos(m.Address(), m.name, m.specialRules, udpIn)
+		m.lUDP, err = socks.NewUDP(m.Address(), udpIn, m.Additions()...)
 		if err != nil {
 			return err
 		}

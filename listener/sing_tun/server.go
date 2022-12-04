@@ -272,9 +272,9 @@ func parseRange(uidRanges []ranges.Range[uint32], rangeList []string) ([]ranges.
 	return uidRanges, nil
 }
 
-func (l *Listener) Close() {
+func (l *Listener) Close() error {
 	l.closed = true
-	_ = common.Close(
+	return common.Close(
 		l.tunStack,
 		l.tunIf,
 		l.defaultInterfaceMonitor,

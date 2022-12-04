@@ -9,8 +9,9 @@ type Listener interface {
 }
 
 type AdvanceListener interface {
-	Close()
+	Close() error
 	Config() string
+	AddrList() (addrList []net.Addr)
 	HandleConn(conn net.Conn, in chan<- ConnContext)
 }
 

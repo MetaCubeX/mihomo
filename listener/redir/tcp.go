@@ -8,11 +8,9 @@ import (
 )
 
 type Listener struct {
-	listener     net.Listener
-	addr         string
-	closed       bool
-	name         string
-	specialRules string
+	listener net.Listener
+	addr     string
+	closed   bool
 }
 
 // RawAddress implements C.Listener
@@ -31,20 +29,20 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithInfos(addr, "DEFAULT-REDIR", "", in)
-}
-
-func NewWithInfos(addr, name, specialRules string, in chan<- C.ConnContext) (*Listener, error) {
+func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{{
+			InName:       "DEFAULT-REDIR",
+			SpecialRules: "",
+		}}
+	}
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 	rl := &Listener{
-		listener:     l,
-		addr:         addr,
-		name:         name,
-		specialRules: specialRules,
+		listener: l,
+		addr:     addr,
 	}
 
 	go func() {
@@ -56,18 +54,18 @@ func NewWithInfos(addr, name, specialRules string, in chan<- C.ConnContext) (*Li
 				}
 				continue
 			}
-			go handleRedir(rl.name, rl.specialRules, c, in)
+			go handleRedir(c, in, additions...)
 		}
 	}()
 
 	return rl, nil
 }
-func handleRedir(name, specialRules string, conn net.Conn, in chan<- C.ConnContext) {
+func handleRedir(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	target, err := parserPacket(conn)
 	if err != nil {
 		conn.Close()
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	in <- inbound.NewSocketWithInfos(target, conn, C.REDIR, name, specialRules)
+	in <- inbound.NewSocket(target, conn, C.REDIR, additions...)
 }

@@ -59,18 +59,23 @@ func (t *Tuic) Address() string {
 // Listen implements constant.InboundListener
 func (t *Tuic) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	t.l, err = tuic.New(LC.TuicServer{
-		Enable:                true,
-		Listen:                t.RawAddress(),
-		Token:                 t.config.Token,
-		Certificate:           t.config.Certificate,
-		PrivateKey:            t.config.PrivateKey,
-		CongestionController:  t.config.CongestionController,
-		MaxIdleTime:           t.config.MaxIdleTime,
-		AuthenticationTimeout: t.config.AuthenticationTimeout,
-		ALPN:                  t.config.ALPN,
-		MaxUdpRelayPacketSize: t.config.MaxUdpRelayPacketSize,
-	}, tcpIn, udpIn)
+	t.l, err = tuic.New(
+		LC.TuicServer{
+			Enable:                true,
+			Listen:                t.RawAddress(),
+			Token:                 t.config.Token,
+			Certificate:           t.config.Certificate,
+			PrivateKey:            t.config.PrivateKey,
+			CongestionController:  t.config.CongestionController,
+			MaxIdleTime:           t.config.MaxIdleTime,
+			AuthenticationTimeout: t.config.AuthenticationTimeout,
+			ALPN:                  t.config.ALPN,
+			MaxUdpRelayPacketSize: t.config.MaxUdpRelayPacketSize,
+		},
+		tcpIn,
+		udpIn,
+		t.Additions()...,
+	)
 	if err != nil {
 		return err
 	}
