@@ -43,6 +43,7 @@ var (
 	mixedUDPLister      *socks.UDPListener
 	tunnelTCPListeners  = map[string]*tunnel.Listener{}
 	tunnelUDPListeners  = map[string]*tunnel.PacketConn{}
+	inboundListeners    = map[string]C.InboundListener{}
 	tunLister           *sing_tun.Listener
 	shadowSocksListener C.AdvanceListener
 	vmessListener       *sing_vmess.Listener
@@ -58,6 +59,7 @@ var (
 	tproxyMux    sync.Mutex
 	mixedMux     sync.Mutex
 	tunnelMux    sync.Mutex
+	inboundMux   sync.Mutex
 	tunMux       sync.Mutex
 	ssMux        sync.Mutex
 	vmessMux     sync.Mutex
@@ -678,6 +680,35 @@ func PatchTunnel(tunnels []tunnel.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan
 			}
 			tunnelUDPListeners[key] = l
 			log.Infoln("Tunnel(udp/%s) proxy %s listening at: %s", elm.target, elm.proxy, tunnelUDPListeners[key].Address())
+		}
+	}
+}
+
+func PatchInboundListeners(newListenerMap map[string]C.InboundListener, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, dropOld bool) {
+	inboundMux.Lock()
+	defer inboundMux.Unlock()
+
+	for name, newListener := range newListenerMap {
+		if oldListener, ok := inboundListeners[name]; ok {
+			if !oldListener.Config().Equal(newListener.Config()) {
+				_ = oldListener.Close()
+			} else {
+				continue
+			}
+		}
+		if err := newListener.Listen(tcpIn, udpIn); err != nil {
+			log.Errorln("Listener %s listen err: %s", name, err.Error())
+			continue
+		}
+		inboundListeners[name] = newListener
+	}
+
+	if dropOld {
+		for name, oldListener := range inboundListeners {
+			if _, ok := newListenerMap[name]; !ok {
+				_ = oldListener.Close()
+				delete(inboundListeners, name)
+			}
 		}
 	}
 }

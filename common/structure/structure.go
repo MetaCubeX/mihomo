@@ -16,6 +16,8 @@ type Option struct {
 	KeyReplacer      *strings.Replacer
 }
 
+var DefaultKeyReplacer = strings.NewReplacer("_", "-")
+
 // Decoder is the core of structure
 type Decoder struct {
 	option *Option

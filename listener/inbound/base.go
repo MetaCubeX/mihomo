@@ -26,7 +26,7 @@ func NewBase(options *BaseOption) (*Base, error) {
 		return nil, err
 	}
 	return &Base{
-		name:            options.Name,
+		name:            options.Name(),
 		listenAddr:      addr,
 		preferRulesName: options.PreferRulesName,
 		port:            options.Port,
@@ -34,44 +34,54 @@ func NewBase(options *BaseOption) (*Base, error) {
 	}, nil
 }
 
-// Config implements constant.NewListener
-func (b *Base) Config() string {
-	return optionToString(b.config)
+// Config implements constant.InboundListener
+func (b *Base) Config() C.InboundConfig {
+	return b.config
 }
 
-// Address implements constant.NewListener
+// Address implements constant.InboundListener
 func (b *Base) Address() string {
 	return b.RawAddress()
 }
 
-// Close implements constant.NewListener
+// Close implements constant.InboundListener
 func (*Base) Close() error {
 	return nil
 }
 
-// Name implements constant.NewListener
+// Name implements constant.InboundListener
 func (b *Base) Name() string {
 	return b.name
 }
 
-// RawAddress implements constant.NewListener
+// RawAddress implements constant.InboundListener
 func (b *Base) RawAddress() string {
 	return net.JoinHostPort(b.listenAddr.String(), strconv.Itoa(int(b.port)))
 }
 
-// Listen implements constant.NewListener
+// Listen implements constant.InboundListener
 func (*Base) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	return nil
 }
 
+var _ C.InboundListener = (*Base)(nil)
+
 type BaseOption struct {
-	Name            string `inbound:"name"`
+	NameStr         string `inbound:"name"`
 	Listen          string `inbound:"listen,omitempty"`
 	Port            int    `inbound:"port"`
 	PreferRulesName string `inbound:"rule,omitempty"`
 }
 
-var _ C.NewListener = (*Base)(nil)
+func (o BaseOption) Name() string {
+	return o.NameStr
+}
+
+func (o BaseOption) Equal(config C.InboundConfig) bool {
+	return optionToString(o) == optionToString(config)
+}
+
+var _ C.InboundConfig = (*BaseOption)(nil)
 
 func optionToString(option any) string {
 	str, _ := json.Marshal(option)

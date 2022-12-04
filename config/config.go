@@ -200,7 +200,7 @@ type Config struct {
 	SubRules      map[string][]C.Rule
 	Users         []auth.AuthUser
 	Proxies       map[string]C.Proxy
-	Listeners     map[string]C.NewListener
+	Listeners     map[string]C.InboundListener
 	Providers     map[string]providerTypes.ProxyProvider
 	RuleProviders map[string]providerTypes.RuleProvider
 	Tunnels       []tunnel.Tunnel
@@ -694,8 +694,8 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	return proxies, providersMap, nil
 }
 
-func parseListeners(cfg *RawConfig) (listeners map[string]C.NewListener, err error) {
-	listeners = make(map[string]C.NewListener)
+func parseListeners(cfg *RawConfig) (listeners map[string]C.InboundListener, err error) {
+	listeners = make(map[string]C.InboundListener)
 	for index, mapping := range cfg.Listeners {
 		listener, err := L.ParseListener(mapping)
 		if err != nil {

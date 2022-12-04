@@ -9,7 +9,11 @@ import (
 
 type SocksOption struct {
 	BaseOption
-	UDP *bool `inbound:"udp,omitempty"`
+	UDP bool `inbound:"udp,omitempty"`
+}
+
+func (o SocksOption) Equal(config C.InboundConfig) bool {
+	return optionToString(o) == optionToString(config)
 }
 
 type Socks struct {
@@ -28,16 +32,16 @@ func NewSocks(options *SocksOption) (*Socks, error) {
 	return &Socks{
 		Base:   base,
 		config: options,
-		udp:    options.UDP == nil || *options.UDP,
+		udp:    options.UDP,
 	}, nil
 }
 
-// Config implements constant.NewListener
-func (s *Socks) Config() string {
-	return optionToString(s.config)
+// Config implements constant.InboundListener
+func (s *Socks) Config() C.InboundConfig {
+	return s.config
 }
 
-// Close implements constant.NewListener
+// Close implements constant.InboundListener
 func (s *Socks) Close() error {
 	var err error
 	if s.stl != nil {
@@ -58,12 +62,12 @@ func (s *Socks) Close() error {
 	return err
 }
 
-// Address implements constant.NewListener
+// Address implements constant.InboundListener
 func (s *Socks) Address() string {
 	return s.stl.Address()
 }
 
-// Listen implements constant.NewListener
+// Listen implements constant.InboundListener
 func (s *Socks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	if s.stl, err = socks.NewWithInfos(s.RawAddress(), s.name, s.preferRulesName, tcpIn); err != nil {
@@ -79,4 +83,4 @@ func (s *Socks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter)
 	return nil
 }
 
-var _ C.NewListener = (*Socks)(nil)
+var _ C.InboundListener = (*Socks)(nil)

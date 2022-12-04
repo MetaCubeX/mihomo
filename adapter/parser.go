@@ -2,17 +2,13 @@ package adapter
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 )
 
-var keyReplacer = strings.NewReplacer("_", "-")
-
 func ParseProxy(mapping map[string]any) (C.Proxy, error) {
-	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true, KeyReplacer: keyReplacer})
+	decoder := structure.NewDecoder(structure.Option{TagName: "proxy", WeaklyTypedInput: true, KeyReplacer: structure.DefaultKeyReplacer})
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
 		return nil, fmt.Errorf("missing type")

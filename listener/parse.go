@@ -2,29 +2,26 @@ package listener
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
 	IN "github.com/Dreamacro/clash/listener/inbound"
 )
 
-var keyReplacer = strings.NewReplacer("_", "-")
-
-func ParseListener(mapping map[string]any) (C.NewListener, error) {
-	decoder := structure.NewDecoder(structure.Option{TagName: "inbound", WeaklyTypedInput: true, KeyReplacer: keyReplacer})
+func ParseListener(mapping map[string]any) (C.InboundListener, error) {
+	decoder := structure.NewDecoder(structure.Option{TagName: "inbound", WeaklyTypedInput: true, KeyReplacer: structure.DefaultKeyReplacer})
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
 		return nil, fmt.Errorf("missing type")
 	}
 
 	var (
-		listener C.NewListener
+		listener C.InboundListener
 		err      error
 	)
 	switch proxyType {
 	case "socks":
-		socksOption := &IN.SocksOption{}
+		socksOption := &IN.SocksOption{UDP: true}
 		err = decoder.Decode(mapping, socksOption)
 		if err != nil {
 			return nil, err
@@ -38,7 +35,7 @@ func ParseListener(mapping map[string]any) (C.NewListener, error) {
 		}
 		listener, err = IN.NewHTTP(httpOption)
 	case "tproxy":
-		tproxyOption := &IN.TProxyOption{}
+		tproxyOption := &IN.TProxyOption{UDP: true}
 		err = decoder.Decode(mapping, tproxyOption)
 		if err != nil {
 			return nil, err
@@ -52,7 +49,7 @@ func ParseListener(mapping map[string]any) (C.NewListener, error) {
 		}
 		listener, err = IN.NewRedir(redirOption)
 	case "mixed":
-		mixedOption := &IN.MixedOption{}
+		mixedOption := &IN.MixedOption{UDP: true}
 		err = decoder.Decode(mapping, mixedOption)
 		if err != nil {
 			return nil, err
