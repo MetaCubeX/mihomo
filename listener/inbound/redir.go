@@ -31,9 +31,8 @@ func (r *Redir) Address() string {
 }
 
 // ReCreate implements constant.NewListener
-func (r *Redir) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	_ = r.Close()
 	r.l, err = redir.NewWithInfos(r.Address(), r.name, r.preferRulesName, tcpIn)
 	if err != nil {
 		return err
