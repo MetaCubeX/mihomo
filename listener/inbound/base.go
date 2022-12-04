@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"strconv"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -28,7 +29,7 @@ func NewBase(options *BaseOption) (*Base, error) {
 	return &Base{
 		name:         options.Name(),
 		listenAddr:   addr,
-		specialRules: options.PreferRulesName,
+		specialRules: options.SpecialRules,
 		port:         options.Port,
 		config:       options,
 	}, nil
@@ -64,13 +65,17 @@ func (*Base) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) er
 	return nil
 }
 
+func (b *Base) Additions() []inbound.Addition {
+	return b.config.Additions()
+}
+
 var _ C.InboundListener = (*Base)(nil)
 
 type BaseOption struct {
-	NameStr         string `inbound:"name"`
-	Listen          string `inbound:"listen,omitempty"`
-	Port            int    `inbound:"port"`
-	PreferRulesName string `inbound:"rule,omitempty"`
+	NameStr      string `inbound:"name"`
+	Listen       string `inbound:"listen,omitempty"`
+	Port         int    `inbound:"port"`
+	SpecialRules string `inbound:"rule,omitempty"`
 }
 
 func (o BaseOption) Name() string {
@@ -79,6 +84,13 @@ func (o BaseOption) Name() string {
 
 func (o BaseOption) Equal(config C.InboundConfig) bool {
 	return optionToString(o) == optionToString(config)
+}
+
+func (o BaseOption) Additions() []inbound.Addition {
+	return []inbound.Addition{{
+		InName:       o.NameStr,
+		SpecialRules: o.SpecialRules,
+	}}
 }
 
 var _ C.InboundConfig = (*BaseOption)(nil)

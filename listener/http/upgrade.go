@@ -25,7 +25,7 @@ func isUpgradeRequest(req *http.Request) bool {
 	return false
 }
 
-func handleUpgrade(name, specialRules string, conn net.Conn, request *http.Request, in chan<- C.ConnContext) {
+func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	defer conn.Close()
 
 	removeProxyHeaders(request.Header)
@@ -43,7 +43,7 @@ func handleUpgrade(name, specialRules string, conn net.Conn, request *http.Reque
 
 	left, right := net.Pipe()
 
-	in <- inbound.NewHTTPWithInfos(dstAddr, conn.RemoteAddr(), right, name, specialRules)
+	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), right, additions...)
 
 	var bufferedLeft *N.BufferedConn
 	if request.TLS != nil {

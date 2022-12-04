@@ -53,6 +53,10 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
+func (l *UDPListener) LocalAddr() net.Addr {
+	return l.packetConn.LocalAddr()
+}
+
 func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr) {
 	tgtAddr := socks5.SplitAddr(buf)
 	if tgtAddr == nil {

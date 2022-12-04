@@ -14,8 +14,8 @@ import (
 	"github.com/Dreamacro/clash/log"
 )
 
-func HandleConn(name, specialRules string, c net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool]) {
-	client := newClient(c.RemoteAddr(), name, specialRules, in)
+func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
+	client := newClient(c.RemoteAddr(), in, additions...)
 	defer client.CloseIdleConnections()
 
 	conn := N.NewBufferedConn(c)
@@ -48,7 +48,7 @@ func HandleConn(name, specialRules string, c net.Conn, in chan<- C.ConnContext, 
 					break // close connection
 				}
 
-				in <- inbound.NewHTTPSWithInfos(request, conn, name, specialRules)
+				in <- inbound.NewHTTPS(request, conn, additions...)
 
 				return // hijack connection
 			}
@@ -61,7 +61,7 @@ func HandleConn(name, specialRules string, c net.Conn, in chan<- C.ConnContext, 
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
-				handleUpgrade(name, specialRules, conn, request, in)
+				handleUpgrade(conn, request, in, additions...)
 
 				return // hijack connection
 			}

@@ -126,18 +126,36 @@ func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter
 	return sl, nil
 }
 
-func (l *Listener) Close() {
+func (l *Listener) Close() error {
 	l.closed = true
+	var retErr error
 	for _, lis := range l.listeners {
-		_ = lis.Close()
+		err := lis.Close()
+		if err != nil {
+			retErr = err
+		}
 	}
 	for _, lis := range l.udpListeners {
-		_ = lis.Close()
+		err := lis.Close()
+		if err != nil {
+			retErr = err
+		}
 	}
+	return retErr
 }
 
 func (l *Listener) Config() string {
 	return l.config
+}
+
+func (l *Listener) AddrList() (addrList []net.Addr) {
+	for _, lis := range l.listeners {
+		addrList = append(addrList, lis.Addr())
+	}
+	for _, lis := range l.udpListeners {
+		addrList = append(addrList, lis.LocalAddr())
+	}
+	return
 }
 
 func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext) {
