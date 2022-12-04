@@ -14,11 +14,12 @@ import (
 )
 
 type Listener struct {
-	listener net.Listener
-	addr     string
-
-	cache  *cache.LruCache[string, bool]
-	closed bool
+	listener        net.Listener
+	addr            string
+	name            string
+	preferRulesName string
+	cache           *cache.LruCache[string, bool]
+	closed          bool
 }
 
 // RawAddress implements C.Listener
@@ -38,15 +39,21 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
+	return NewWithInfos(addr, "DEFAULT-MIXED", "", in)
+}
+
+func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
 	ml := &Listener{
-		listener: l,
-		addr:     addr,
-		cache:    cache.New[string, bool](cache.WithAge[string, bool](30)),
+		listener:        l,
+		addr:            addr,
+		name:            name,
+		preferRulesName: preferRulesName,
+		cache:           cache.New[string, bool](cache.WithAge[string, bool](30)),
 	}
 	go func() {
 		for {
@@ -57,14 +64,14 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 				}
 				continue
 			}
-			go handleConn(c, in, ml.cache)
+			go handleConn(ml.name, ml.preferRulesName, c, in, ml.cache)
 		}
 	}()
 
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool]) {
+func handleConn(name, preferRulesName string, conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool]) {
 	conn.(*net.TCPConn).SetKeepAlive(true)
 
 	bufConn := N.NewBufferedConn(conn)
@@ -75,10 +82,10 @@ func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[st
 
 	switch head[0] {
 	case socks4.Version:
-		socks.HandleSocks4(bufConn, in)
+		socks.HandleSocks4(name, preferRulesName, bufConn, in)
 	case socks5.Version:
-		socks.HandleSocks5(bufConn, in)
+		socks.HandleSocks5(name, preferRulesName, bufConn, in)
 	default:
-		http.HandleConn(bufConn, in, cache)
+		http.HandleConn(name, preferRulesName, bufConn, in, cache)
 	}
 }

@@ -17,7 +17,7 @@ type UDPListener struct {
 	closed     bool
 }
 
-func NewUDP(addr string, pickCipher core.Cipher, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, pickCipher core.Cipher, in chan<- *C.PacketAdapter) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, in chan<- *C.PacketAdapter, buf []byte, addr net.Addr) {
 	tgtAddr := socks5.SplitAddr(buf)
 	if tgtAddr == nil {
 		// Unresolved UDP packet, return buffer to the pool

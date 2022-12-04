@@ -9,7 +9,7 @@ import (
 	_ "unsafe"
 )
 
-func ParseRuleByPayload(payload string, parseRule func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) ([]C.Rule, error) {
+func ParseRuleByPayload(payload string, parseRule func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) ([]C.Rule, error) {
 	regex, err := regexp.Compile("\\(.*\\)")
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func payloadToRule(subPayload string, parseRule func(tp, payload, target string,
 	return parseRule(tp, param[0], "", param[1:])
 }
 
-func parseLogicSubRule(parseRule func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
+func parseLogicSubRule(parseRule func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 	return func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
 		case "MATCH", "SUB-RULE":

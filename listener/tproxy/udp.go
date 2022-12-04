@@ -11,9 +11,11 @@ import (
 )
 
 type UDPListener struct {
-	packetConn net.PacketConn
-	addr       string
-	closed     bool
+	packetConn      net.PacketConn
+	addr            string
+	closed          bool
+	name            string
+	preferRulesName string
 }
 
 // RawAddress implements C.Listener
@@ -32,7 +34,11 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- *C.PacketAdapter) (*UDPListener, error) {
+	return NewUDPWithInfos(addr, "DEFAULT-TPROXY", "", in)
+}
+
+func NewUDPWithInfos(addr, name, preferRulesName string, in chan<- *C.PacketAdapter) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -77,14 +83,14 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 				// try to unmap 4in6 address
 				lAddr = netip.AddrPortFrom(lAddr.Addr().Unmap(), lAddr.Port())
 			}
-			handlePacketConn(l, in, buf[:n], lAddr, rAddr)
+			handlePacketConn(rl.name, rl.preferRulesName, l, in, buf[:n], lAddr, rAddr)
 		}
 	}()
 
 	return rl, nil
 }
 
-func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, lAddr, rAddr netip.AddrPort) {
+func handlePacketConn(name, preferRulesName string, pc net.PacketConn, in chan<- *C.PacketAdapter, buf []byte, lAddr, rAddr netip.AddrPort) {
 	target := socks5.AddrFromStdAddrPort(rAddr)
 	pkt := &packet{
 		pc:    pc,
@@ -92,7 +98,7 @@ func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf [
 		buf:   buf,
 	}
 	select {
-	case in <- inbound.NewPacket(target, pkt, C.TPROXY):
+	case in <- inbound.NewPacketWithInfos(target, pkt, C.TPROXY, name, preferRulesName):
 	default:
 	}
 }

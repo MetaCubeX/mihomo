@@ -8,10 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/iface"
-	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/log"
@@ -27,7 +25,7 @@ var InterfaceName = "Meta"
 
 type Listener struct {
 	closed  bool
-	options config.Tun
+	options Tun
 	handler *ListenerHandler
 	tunName string
 
@@ -65,7 +63,7 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
-func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (l *Listener, err error) {
+func New(options Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) (l *Listener, err error) {
 	tunName := options.Device
 	if tunName == "" {
 		tunName = CalculateInterfaceName(InterfaceName)
@@ -163,12 +161,12 @@ func New(options config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	tunOptions := tun.Options{
 		Name:               tunName,
 		MTU:                tunMTU,
-		Inet4Address:       common.Map(options.Inet4Address, config.ListenPrefix.Build),
-		Inet6Address:       common.Map(options.Inet6Address, config.ListenPrefix.Build),
+		Inet4Address:       common.Map(options.Inet4Address, ListenPrefix.Build),
+		Inet6Address:       common.Map(options.Inet6Address, ListenPrefix.Build),
 		AutoRoute:          options.AutoRoute,
 		StrictRoute:        options.StrictRoute,
-		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, config.ListenPrefix.Build),
-		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, config.ListenPrefix.Build),
+		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, ListenPrefix.Build),
+		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, ListenPrefix.Build),
 		IncludeUID:         includeUID,
 		ExcludeUID:         excludeUID,
 		IncludeAndroidUser: options.IncludeAndroidUser,
@@ -284,6 +282,6 @@ func (l *Listener) Close() {
 	)
 }
 
-func (l *Listener) Config() config.Tun {
+func (l *Listener) Config() Tun {
 	return l.options
 }

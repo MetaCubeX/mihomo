@@ -12,13 +12,13 @@ type SubRule struct {
 	payload           string
 	payloadRule       C.Rule
 	subName           string
-	subRules          *map[string][]C.Rule
+	subRules          map[string][]C.Rule
 	shouldFindProcess *bool
 	shouldResolveIP   *bool
 }
 
-func NewSubRule(payload, subName string, sub *map[string][]C.Rule,
-	parse func(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*SubRule, error) {
+func NewSubRule(payload, subName string, sub map[string][]C.Rule,
+	parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) (*SubRule, error) {
 	payloadRule, err := ParseRuleByPayload(fmt.Sprintf("(%s)", payload), parse)
 	if err != nil {
 		return nil, err
@@ -45,8 +45,8 @@ func (r *SubRule) Match(metadata *C.Metadata) (bool, string) {
 	return match(metadata, r.subName, r.subRules)
 }
 
-func match(metadata *C.Metadata, name string, subRules *map[string][]C.Rule) (bool, string) {
-	for _, rule := range (*subRules)[name] {
+func match(metadata *C.Metadata, name string, subRules map[string][]C.Rule) (bool, string) {
+	for _, rule := range subRules[name] {
 		if m, a := rule.Match(metadata); m {
 			if rule.RuleType() == C.SubRules {
 				match(metadata, rule.Adapter(), subRules)
@@ -61,7 +61,7 @@ func match(metadata *C.Metadata, name string, subRules *map[string][]C.Rule) (bo
 func (r *SubRule) ShouldResolveIP() bool {
 	if r.shouldResolveIP == nil {
 		s := false
-		for _, rule := range (*r.subRules)[r.subName] {
+		for _, rule := range r.subRules[r.subName] {
 			s = s || rule.ShouldResolveIP()
 		}
 		r.shouldResolveIP = &s
@@ -73,7 +73,7 @@ func (r *SubRule) ShouldResolveIP() bool {
 func (r *SubRule) ShouldFindProcess() bool {
 	if r.shouldFindProcess == nil {
 		s := false
-		for _, rule := range (*r.subRules)[r.subName] {
+		for _, rule := range r.subRules[r.subName] {
 			s = s || rule.ShouldFindProcess()
 		}
 		r.shouldFindProcess = &s

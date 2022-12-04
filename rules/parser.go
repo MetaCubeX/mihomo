@@ -8,7 +8,7 @@ import (
 	RP "github.com/Dreamacro/clash/rules/provider"
 )
 
-func ParseRule(tp, payload, target string, params []string, subRules *map[string][]C.Rule) (parsed C.Rule, parseErr error) {
+func ParseRule(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error) {
 	switch tp {
 	case "DOMAIN":
 		parsed = RC.NewDomain(payload, target)

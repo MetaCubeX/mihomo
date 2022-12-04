@@ -24,7 +24,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) (*Listener, error) {
+func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) (*Listener, error) {
 	addr, username, password, err := parseVmessURL(config)
 	if err != nil {
 		return nil, err

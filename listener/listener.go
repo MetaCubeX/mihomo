@@ -9,9 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/ebpf"
-	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/autoredir"
 	"github.com/Dreamacro/clash/listener/http"
@@ -66,8 +64,8 @@ var (
 	autoRedirMux sync.Mutex
 	tcMux        sync.Mutex
 
-	LastTunConf  config.Tun
-	LastTuicConf config.TuicServer
+	LastTunConf  sing_tun.Tun
+	LastTuicConf tuic.TuicServer
 )
 
 type Ports struct {
@@ -80,18 +78,18 @@ type Ports struct {
 	VmessConfig       string `json:"vmess-config"`
 }
 
-func GetTunConf() config.Tun {
+func GetTunConf() sing_tun.Tun {
 	if tunLister == nil {
-		return config.Tun{
+		return sing_tun.Tun{
 			Enable: false,
 		}
 	}
 	return tunLister.Config()
 }
 
-func GetTuicConf() config.TuicServer {
+func GetTuicConf() tuic.TuicServer {
 	if tuicListener == nil {
-		return config.TuicServer{Enable: false}
+		return tuic.TuicServer{Enable: false}
 	}
 	return tuicListener.Config()
 }
@@ -146,7 +144,7 @@ func ReCreateHTTP(port int, tcpIn chan<- C.ConnContext) {
 	log.Infoln("HTTP proxy listening at: %s", httpListener.Address())
 }
 
-func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	socksMux.Lock()
 	defer socksMux.Unlock()
 
@@ -205,7 +203,7 @@ func ReCreateSocks(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("SOCKS proxy listening at: %s", socksListener.Address())
 }
 
-func ReCreateRedir(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateRedir(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	redirMux.Lock()
 	defer redirMux.Unlock()
 
@@ -251,7 +249,7 @@ func ReCreateRedir(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Redirect proxy listening at: %s", redirListener.Address())
 }
 
-func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	ssMux.Lock()
 	defer ssMux.Unlock()
 
@@ -291,7 +289,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 	return
 }
 
-func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	vmessMux.Lock()
 	defer vmessMux.Unlock()
 
@@ -331,7 +329,7 @@ func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- 
 	return
 }
 
-func ReCreateTuic(config config.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTuic(config tuic.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	tuicMux.Lock()
 	defer func() {
 		LastTuicConf = config
@@ -373,7 +371,7 @@ func ReCreateTuic(config config.TuicServer, tcpIn chan<- C.ConnContext, udpIn ch
 	return
 }
 
-func ReCreateTProxy(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTProxy(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	tproxyMux.Lock()
 	defer tproxyMux.Unlock()
 
@@ -419,7 +417,7 @@ func ReCreateTProxy(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.
 	log.Infoln("TProxy server listening at: %s", tproxyListener.Address())
 }
 
-func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	mixedMux.Lock()
 	defer mixedMux.Unlock()
 
@@ -474,7 +472,7 @@ func ReCreateMixed(port int, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.P
 	log.Infoln("Mixed(http+socks) proxy listening at: %s", mixedListener.Address())
 }
 
-func ReCreateTun(tunConf config.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func ReCreateTun(tunConf sing_tun.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	tunMux.Lock()
 	defer func() {
 		LastTunConf = tunConf
@@ -538,7 +536,7 @@ func ReCreateRedirToTun(ifaceNames []string) {
 	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
 }
 
-func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<- *inbound.PacketAdapter) {
+func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<- *C.PacketAdapter) {
 	autoRedirMux.Lock()
 	defer autoRedirMux.Unlock()
 
@@ -594,7 +592,7 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
-func PatchTunnel(tunnels []config.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- *inbound.PacketAdapter) {
+func PatchTunnel(tunnels []tunnel.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) {
 	tunnelMux.Lock()
 	defer tunnelMux.Unlock()
 
@@ -633,7 +631,7 @@ func PatchTunnel(tunnels []config.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan
 
 	newElm := lo.FlatMap(
 		tunnels,
-		func(tunnel config.Tunnel, _ int) []addrProxy {
+		func(tunnel tunnel.Tunnel, _ int) []addrProxy {
 			return lo.Map(
 				tunnel.Network,
 				func(network string, _ int) addrProxy {
@@ -747,7 +745,7 @@ func genAddr(host string, port int, allowLan bool) string {
 	return fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-func hasTunConfigChange(tunConf *config.Tun) bool {
+func hasTunConfigChange(tunConf *sing_tun.Tun) bool {
 	if LastTunConf.Enable != tunConf.Enable ||
 		LastTunConf.Device != tunConf.Device ||
 		LastTunConf.Stack != tunConf.Stack ||
@@ -835,5 +833,5 @@ func Cleanup(wait bool) {
 		tunLister.Close()
 		tunLister = nil
 	}
-	LastTunConf = config.Tun{}
+	LastTunConf = sing_tun.Tun{}
 }
