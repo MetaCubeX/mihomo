@@ -60,7 +60,7 @@ func (s *Socks) Address() string {
 }
 
 // ReCreate implements constant.NewListener
-func (s *Socks) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) error {
+func (s *Socks) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	var err error

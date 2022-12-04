@@ -210,3 +210,9 @@ type UDPPacket interface {
 type UDPPacketInAddr interface {
 	InAddr() net.Addr
 }
+
+// PacketAdapter is a UDP Packet adapter for socks/redir/tun
+type PacketAdapter interface {
+	UDPPacket
+	Metadata() *Metadata
+}

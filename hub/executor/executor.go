@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -25,11 +26,9 @@ import (
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/listener"
 	authStore "github.com/Dreamacro/clash/listener/auth"
-	"github.com/Dreamacro/clash/adapter/inbound"
+	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/listener/sing_tun"
 	"github.com/Dreamacro/clash/listener/tproxy"
-	"github.com/Dreamacro/clash/listener/tuic"
 	T "github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -281,7 +280,7 @@ func updateTun(general *config.General) {
 	if general == nil {
 		return
 	}
-	listener.ReCreateTun(sing_tun.Tun(general.Tun), tunnel.TCPIn(), tunnel.UDPIn())
+	listener.ReCreateTun(LC.Tun(general.Tun), tunnel.TCPIn(), tunnel.UDPIn())
 	listener.ReCreateRedirToTun(general.Tun.RedirectToTun)
 }
 
@@ -367,7 +366,7 @@ func updateGeneral(general *config.General, force bool) {
 	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
 	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	listener.ReCreateTuic(tuic.TuicServer(general.TuicServer), tcpIn, udpIn)
+	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

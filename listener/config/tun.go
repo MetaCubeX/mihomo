@@ -1,4 +1,4 @@
-package sing_tun
+package config
 
 import (
 	"encoding/json"

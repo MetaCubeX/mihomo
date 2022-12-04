@@ -32,7 +32,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) (C.AdvanceListener, error) {
+func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (C.AdvanceListener, error) {
 	addr, cipher, password, err := embedSS.ParseSSURL(config)
 	if err != nil {
 		return nil, err

@@ -14,16 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/listener/sing_tun"
-	"github.com/Dreamacro/clash/listener/tunnel"
-	R "github.com/Dreamacro/clash/rules"
-	RP "github.com/Dreamacro/clash/rules/provider"
-	L "github.com/Dreamacro/clash/listener"
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/adapter/provider"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/fakeip"
@@ -34,7 +29,12 @@ import (
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
 	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
 	"github.com/Dreamacro/clash/dns"
+	L "github.com/Dreamacro/clash/listener"
+	LC "github.com/Dreamacro/clash/listener/config"
+	"github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
+	R "github.com/Dreamacro/clash/rules"
+	RP "github.com/Dreamacro/clash/rules/provider"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"gopkg.in/yaml.v3"
@@ -148,21 +148,21 @@ type Tun struct {
 	AutoDetectInterface bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	RedirectToTun       []string         `yaml:"-" json:"-"`
 
-	MTU                    uint32         `yaml:"mtu" json:"mtu,omitempty"`
-	Inet4Address           []sing_tun.ListenPrefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
-	Inet6Address           []sing_tun.ListenPrefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
-	StrictRoute            bool           `yaml:"strict-route" json:"strict-route,omitempty"`
-	Inet4RouteAddress      []sing_tun.ListenPrefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
-	Inet6RouteAddress      []sing_tun.ListenPrefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
-	IncludeUID             []uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
-	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
-	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
-	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
-	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
-	IncludePackage         []string       `yaml:"include-package" json:"include-package,omitempty"`
-	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
-	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
-	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+	MTU                    uint32            `yaml:"mtu" json:"mtu,omitempty"`
+	Inet4Address           []LC.ListenPrefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	Inet6Address           []LC.ListenPrefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
+	StrictRoute            bool              `yaml:"strict-route" json:"strict-route,omitempty"`
+	Inet4RouteAddress      []LC.ListenPrefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+	Inet6RouteAddress      []LC.ListenPrefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
+	IncludeUID             []uint32          `yaml:"include-uid" json:"include-uid,omitempty"`
+	IncludeUIDRange        []string          `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
+	ExcludeUID             []uint32          `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
+	ExcludeUIDRange        []string          `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser     []int             `yaml:"include-android-user" json:"include-android-user,omitempty"`
+	IncludePackage         []string          `yaml:"include-package" json:"include-package,omitempty"`
+	ExcludePackage         []string          `yaml:"exclude-package" json:"exclude-package,omitempty"`
+	EndpointIndependentNat bool              `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	UDPTimeout             int64             `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 }
 
 // IPTables config
@@ -244,19 +244,19 @@ type RawTun struct {
 
 	MTU uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	//Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
-	Inet6Address           []sing_tun.ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
-	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
-	Inet4RouteAddress      []sing_tun.ListenPrefix `yaml:"inet4_route_address" json:"inet4_route_address,omitempty"`
-	Inet6RouteAddress      []sing_tun.ListenPrefix `yaml:"inet6_route_address" json:"inet6_route_address,omitempty"`
-	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
-	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
-	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
-	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
-	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
-	IncludePackage         []string       `yaml:"include-package" json:"include_package,omitempty"`
-	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
-	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
-	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+	Inet6Address           []LC.ListenPrefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
+	StrictRoute            bool              `yaml:"strict-route" json:"strict_route,omitempty"`
+	Inet4RouteAddress      []LC.ListenPrefix `yaml:"inet4_route_address" json:"inet4_route_address,omitempty"`
+	Inet6RouteAddress      []LC.ListenPrefix `yaml:"inet6_route_address" json:"inet6_route_address,omitempty"`
+	IncludeUID             []uint32          `yaml:"include-uid" json:"include_uid,omitempty"`
+	IncludeUIDRange        []string          `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
+	ExcludeUID             []uint32          `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
+	ExcludeUIDRange        []string          `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
+	IncludeAndroidUser     []int             `yaml:"include-android-user" json:"include_android_user,omitempty"`
+	IncludePackage         []string          `yaml:"include-package" json:"include_package,omitempty"`
+	ExcludePackage         []string          `yaml:"exclude-package" json:"exclude_package,omitempty"`
+	EndpointIndependentNat bool              `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
+	UDPTimeout             int64             `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
 }
 
 type RawTuicServer struct {
@@ -272,34 +272,33 @@ type RawTuicServer struct {
 	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
 }
 
-
 type RawConfig struct {
-	Port                  int          `yaml:"port"`
-	SocksPort             int          `yaml:"socks-port"`
-	RedirPort             int          `yaml:"redir-port"`
-	TProxyPort            int          `yaml:"tproxy-port"`
-	MixedPort             int          `yaml:"mixed-port"`
-	ShadowSocksConfig     string       `yaml:"ss-config"`
-	VmessConfig           string       `yaml:"vmess-config"`
-	InboundTfo            bool         `yaml:"inbound-tfo"`
-	Authentication        []string     `yaml:"authentication"`
-	AllowLan              bool         `yaml:"allow-lan"`
-	BindAddress           string       `yaml:"bind-address"`
-	Mode                  T.TunnelMode `yaml:"mode"`
-	UnifiedDelay          bool         `yaml:"unified-delay"`
-	LogLevel              log.LogLevel `yaml:"log-level"`
-	IPv6                  bool         `yaml:"ipv6"`
-	ExternalController    string       `yaml:"external-controller"`
-	ExternalControllerTLS string       `yaml:"external-controller-tls"`
-	ExternalUI            string       `yaml:"external-ui"`
-	Secret                string       `yaml:"secret"`
-	Interface             string       `yaml:"interface-name"`
-	RoutingMark           int          `yaml:"routing-mark"`
-	Tunnels               []tunnel.Tunnel     `yaml:"tunnels"`
-	GeodataMode           bool         `yaml:"geodata-mode"`
-	GeodataLoader         string       `yaml:"geodata-loader"`
-	TCPConcurrent         bool         `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	EnableProcess         bool         `yaml:"enable-process" json:"enable-process"`
+	Port                  int             `yaml:"port"`
+	SocksPort             int             `yaml:"socks-port"`
+	RedirPort             int             `yaml:"redir-port"`
+	TProxyPort            int             `yaml:"tproxy-port"`
+	MixedPort             int             `yaml:"mixed-port"`
+	ShadowSocksConfig     string          `yaml:"ss-config"`
+	VmessConfig           string          `yaml:"vmess-config"`
+	InboundTfo            bool            `yaml:"inbound-tfo"`
+	Authentication        []string        `yaml:"authentication"`
+	AllowLan              bool            `yaml:"allow-lan"`
+	BindAddress           string          `yaml:"bind-address"`
+	Mode                  T.TunnelMode    `yaml:"mode"`
+	UnifiedDelay          bool            `yaml:"unified-delay"`
+	LogLevel              log.LogLevel    `yaml:"log-level"`
+	IPv6                  bool            `yaml:"ipv6"`
+	ExternalController    string          `yaml:"external-controller"`
+	ExternalControllerTLS string          `yaml:"external-controller-tls"`
+	ExternalUI            string          `yaml:"external-ui"`
+	Secret                string          `yaml:"secret"`
+	Interface             string          `yaml:"interface-name"`
+	RoutingMark           int             `yaml:"routing-mark"`
+	Tunnels               []tunnel.Tunnel `yaml:"tunnels"`
+	GeodataMode           bool            `yaml:"geodata-mode"`
+	GeodataLoader         string          `yaml:"geodata-loader"`
+	TCPConcurrent         bool            `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	EnableProcess         bool            `yaml:"enable-process" json:"enable-process"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -384,7 +383,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			DNSHijack:           []string{"0.0.0.0:53"}, // default hijack all dns query
 			AutoRoute:           true,
 			AutoDetectInterface: true,
-			Inet6Address:        []sing_tun.ListenPrefix{sing_tun.ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
+			Inet6Address:        []LC.ListenPrefix{LC.ListenPrefix(netip.MustParsePrefix("fdfe:dcba:9876::1/126"))},
 		},
 		TuicServer: RawTuicServer{
 			Enable:                false,
@@ -1232,7 +1231,7 @@ func parseTun(rawTun RawTun, general *General) error {
 		RedirectToTun:       rawTun.RedirectToTun,
 
 		MTU:                    rawTun.MTU,
-		Inet4Address:           []sing_tun.ListenPrefix{sing_tun.ListenPrefix(tunAddressPrefix)},
+		Inet4Address:           []LC.ListenPrefix{LC.ListenPrefix(tunAddressPrefix)},
 		Inet6Address:           rawTun.Inet6Address,
 		StrictRoute:            rawTun.StrictRoute,
 		Inet4RouteAddress:      rawTun.Inet4RouteAddress,

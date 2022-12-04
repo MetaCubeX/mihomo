@@ -5,9 +5,18 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
+// PacketAdapter is a UDP Packet adapter for socks/redir/tun
+type PacketAdapter struct {
+	C.UDPPacket
+	metadata *C.Metadata
+}
 
+// Metadata returns destination metadata
+func (s *PacketAdapter) Metadata() *C.Metadata {
+	return s.metadata
+}
 
-func NewPacketWithInfos(target socks5.Addr, packet C.UDPPacket, source C.Type, inName , preferRulesName string) *C.PacketAdapter {
+func NewPacketWithInfos(target socks5.Addr, packet C.UDPPacket, source C.Type, inName, preferRulesName string) C.PacketAdapter {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.UDP
 	metadata.Type = source
@@ -24,13 +33,13 @@ func NewPacketWithInfos(target socks5.Addr, packet C.UDPPacket, source C.Type, i
 		}
 	}
 
-	return C.NewPacketAdapter(
+	return &PacketAdapter{
 		packet,
 		metadata,
-	)
+	}
 }
 
 // NewPacket is PacketAdapter generator
-func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type) *C.PacketAdapter {
+func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type) C.PacketAdapter {
 	return NewPacketWithInfos(target, packet, source, "", "")
 }

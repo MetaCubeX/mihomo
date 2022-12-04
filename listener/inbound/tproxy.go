@@ -38,7 +38,7 @@ func (t *TProxy) Address() string {
 }
 
 // ReCreate implements constant.NewListener
-func (t *TProxy) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) error {
+func (t *TProxy) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
 	_ = t.Close()
 	t.lTCP, err = tproxy.NewWithInfos(t.RawAddress(), t.name, t.preferRulesName, tcpIn)

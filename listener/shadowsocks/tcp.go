@@ -21,7 +21,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) (*Listener, error) {
+func New(config string, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
 	addr, cipher, password, err := ParseSSURL(config)
 	if err != nil {
 		return nil, err

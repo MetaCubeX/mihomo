@@ -52,7 +52,7 @@ func (b *Base) RawAddress() string {
 }
 
 // ReCreate implements constant.NewListener
-func (*Base) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- *C.PacketAdapter) error {
+func (*Base) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	return nil
 }
 

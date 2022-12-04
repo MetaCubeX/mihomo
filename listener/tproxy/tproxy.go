@@ -9,10 +9,10 @@ import (
 )
 
 type Listener struct {
-	listener net.Listener
-	addr     string
-	closed   bool
-	name string 
+	listener        net.Listener
+	addr            string
+	closed          bool
+	name            string
 	preferRulesName string
 }
 
@@ -32,17 +32,17 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func (l *Listener) handleTProxy(name,preferRulesName string ,conn net.Conn, in chan<- C.ConnContext) {
+func (l *Listener) handleTProxy(name, preferRulesName string, conn net.Conn, in chan<- C.ConnContext) {
 	target := socks5.ParseAddrToSocksAddr(conn.LocalAddr())
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	in <- inbound.NewSocketWithInfos(target, conn, C.TPROXY,name,preferRulesName)
+	in <- inbound.NewSocketWithInfos(target, conn, C.TPROXY, name, preferRulesName)
 }
 
 func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithInfos(addr,"DEFAULT-TPROXY","",in)
+	return NewWithInfos(addr, "DEFAULT-TPROXY", "", in)
 }
 
-func NewWithInfos(addr,name,preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
+func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -60,9 +60,9 @@ func NewWithInfos(addr,name,preferRulesName string, in chan<- C.ConnContext) (*L
 	}
 
 	rl := &Listener{
-		listener: l,
-		addr:     addr,
-		name: name,
+		listener:        l,
+		addr:            addr,
+		name:            name,
 		preferRulesName: preferRulesName,
 	}
 
@@ -75,7 +75,7 @@ func NewWithInfos(addr,name,preferRulesName string, in chan<- C.ConnContext) (*L
 				}
 				continue
 			}
-			go rl.handleTProxy(rl.name,rl.preferRulesName,c, in)
+			go rl.handleTProxy(rl.name, rl.preferRulesName, c, in)
 		}
 	}()
 

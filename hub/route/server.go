@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	CN "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/tunnel/statistic"
 
 	"github.com/go-chi/chi/v5"

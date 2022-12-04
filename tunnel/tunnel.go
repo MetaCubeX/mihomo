@@ -26,7 +26,7 @@ import (
 
 var (
 	tcpQueue       = make(chan C.ConnContext, 200)
-	udpQueue       = make(chan *C.PacketAdapter, 200)
+	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
 	rules          []C.Rule
 	subRules       map[string][]C.Rule
@@ -77,7 +77,7 @@ func TCPIn() chan<- C.ConnContext {
 }
 
 // UDPIn return fan-in udp queue
-func UDPIn() chan<- *C.PacketAdapter {
+func UDPIn() chan<- C.PacketAdapter {
 	return udpQueue
 }
 
@@ -217,7 +217,7 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 	return
 }
 
-func handleUDPConn(packet *C.PacketAdapter) {
+func handleUDPConn(packet C.PacketAdapter) {
 	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
@@ -325,7 +325,7 @@ func handleUDPConn(packet *C.PacketAdapter) {
 		}
 
 		oAddr := metadata.DstIP
-		go handleUDPToLocal(packet.UDPPacket, pc, key, oAddr, fAddr)
+		go handleUDPToLocal(packet, pc, key, oAddr, fAddr)
 
 		natTable.Set(key, pc)
 		handle()
