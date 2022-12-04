@@ -70,11 +70,11 @@ func (s *Socks) Address() string {
 // Listen implements constant.InboundListener
 func (s *Socks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	if s.stl, err = socks.NewWithInfos(s.RawAddress(), s.name, s.preferRulesName, tcpIn); err != nil {
+	if s.stl, err = socks.NewWithInfos(s.RawAddress(), s.name, s.specialRules, tcpIn); err != nil {
 		return err
 	}
 	if s.udp {
-		if s.sul, err = socks.NewUDPWithInfos(s.RawAddress(), s.name, s.preferRulesName, udpIn); err != nil {
+		if s.sul, err = socks.NewUDPWithInfos(s.RawAddress(), s.name, s.specialRules, udpIn); err != nil {
 			return err
 		}
 	}

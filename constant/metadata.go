@@ -117,23 +117,23 @@ func (t Type) MarshalJSON() ([]byte, error) {
 
 // Metadata is used to store connection address
 type Metadata struct {
-	NetWork           NetWork    `json:"network"`
-	Type              Type       `json:"type"`
-	SrcIP             netip.Addr `json:"sourceIP"`
-	DstIP             netip.Addr `json:"destinationIP"`
-	SrcPort           string     `json:"sourcePort"`
-	DstPort           string     `json:"destinationPort"`
-	InIP              netip.Addr `json:"inboundIP"`
-	InPort            string     `json:"inboundPort"`
-	Host              string     `json:"host"`
-	DNSMode           DNSMode    `json:"dnsMode"`
-	Uid               *uint32    `json:"uid"`
-	Process           string     `json:"process"`
-	ProcessPath       string     `json:"processPath"`
-	SpecialProxy      string     `json:"specialProxy"`
-	RemoteDst         string     `json:"remoteDestination"`
-	InName            string     `jsson:"-"`
-	PreferRulesName string
+	NetWork      NetWork    `json:"network"`
+	Type         Type       `json:"type"`
+	SrcIP        netip.Addr `json:"sourceIP"`
+	DstIP        netip.Addr `json:"destinationIP"`
+	SrcPort      string     `json:"sourcePort"`
+	DstPort      string     `json:"destinationPort"`
+	InIP         netip.Addr `json:"inboundIP"`
+	InPort       string     `json:"inboundPort"`
+	Host         string     `json:"host"`
+	DNSMode      DNSMode    `json:"dnsMode"`
+	Uid          *uint32    `json:"uid"`
+	Process      string     `json:"process"`
+	ProcessPath  string     `json:"processPath"`
+	SpecialProxy string     `json:"specialProxy"`
+	RemoteDst    string     `json:"remoteDestination"`
+	InName       string     `json:"inboundName"`
+	SpecialRules string     `json:"specialRules"`
 }
 
 func (m *Metadata) RemoteAddress() string {

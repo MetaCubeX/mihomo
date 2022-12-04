@@ -14,12 +14,12 @@ import (
 )
 
 type Listener struct {
-	listener        net.Listener
-	addr            string
-	name            string
-	preferRulesName string
-	cache           *cache.LruCache[string, bool]
-	closed          bool
+	listener     net.Listener
+	addr         string
+	name         string
+	specialRules string
+	cache        *cache.LruCache[string, bool]
+	closed       bool
 }
 
 // RawAddress implements C.Listener
@@ -42,18 +42,18 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	return NewWithInfos(addr, "DEFAULT-MIXED", "", in)
 }
 
-func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
+func NewWithInfos(addr, name, specialRules string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
 	ml := &Listener{
-		listener:        l,
-		addr:            addr,
-		name:            name,
-		preferRulesName: preferRulesName,
-		cache:           cache.New[string, bool](cache.WithAge[string, bool](30)),
+		listener:     l,
+		addr:         addr,
+		name:         name,
+		specialRules: specialRules,
+		cache:        cache.New[string, bool](cache.WithAge[string, bool](30)),
 	}
 	go func() {
 		for {
@@ -64,14 +64,14 @@ func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (
 				}
 				continue
 			}
-			go handleConn(ml.name, ml.preferRulesName, c, in, ml.cache)
+			go handleConn(ml.name, ml.specialRules, c, in, ml.cache)
 		}
 	}()
 
 	return ml, nil
 }
 
-func handleConn(name, preferRulesName string, conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool]) {
+func handleConn(name, specialRules string, conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool]) {
 	conn.(*net.TCPConn).SetKeepAlive(true)
 
 	bufConn := N.NewBufferedConn(conn)
@@ -82,10 +82,10 @@ func handleConn(name, preferRulesName string, conn net.Conn, in chan<- C.ConnCon
 
 	switch head[0] {
 	case socks4.Version:
-		socks.HandleSocks4(name, preferRulesName, bufConn, in)
+		socks.HandleSocks4(name, specialRules, bufConn, in)
 	case socks5.Version:
-		socks.HandleSocks5(name, preferRulesName, bufConn, in)
+		socks.HandleSocks5(name, specialRules, bufConn, in)
 	default:
-		http.HandleConn(name, preferRulesName, bufConn, in, cache)
+		http.HandleConn(name, specialRules, bufConn, in, cache)
 	}
 }

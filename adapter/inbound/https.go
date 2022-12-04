@@ -13,10 +13,10 @@ func NewHTTPS(request *http.Request, conn net.Conn) *context.ConnContext {
 	return NewHTTPSWithInfos(request, conn, "", "")
 }
 
-func NewHTTPSWithInfos(request *http.Request, conn net.Conn, inName, preferRulesName string) *context.ConnContext {
+func NewHTTPSWithInfos(request *http.Request, conn net.Conn, inName, specialRules string) *context.ConnContext {
 	metadata := parseHTTPAddr(request)
 	metadata.Type = C.HTTPS
-	metadata.PreferRulesName = preferRulesName
+	metadata.SpecialRules = specialRules
 	metadata.InName = inName
 	if ip, port, err := parseAddr(conn.RemoteAddr().String()); err == nil {
 		metadata.SrcIP = ip

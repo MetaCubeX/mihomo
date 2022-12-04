@@ -51,13 +51,13 @@ func (t *TProxy) Address() string {
 // Listen implements constant.InboundListener
 func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	t.lTCP, err = tproxy.NewWithInfos(t.RawAddress(), t.name, t.preferRulesName, tcpIn)
+	t.lTCP, err = tproxy.NewWithInfos(t.RawAddress(), t.name, t.specialRules, tcpIn)
 	if err != nil {
 		return err
 	}
 	if t.udp {
 		if t.lUDP != nil {
-			t.lUDP, err = tproxy.NewUDPWithInfos(t.Address(), t.name, t.preferRulesName, udpIn)
+			t.lUDP, err = tproxy.NewUDPWithInfos(t.Address(), t.name, t.specialRules, udpIn)
 			if err != nil {
 				return err
 			}

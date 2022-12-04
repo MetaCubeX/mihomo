@@ -10,11 +10,11 @@ import (
 )
 
 type Base struct {
-	config          *BaseOption
-	name            string
-	preferRulesName string
-	listenAddr      netip.Addr
-	port            int
+	config       *BaseOption
+	name         string
+	specialRules string
+	listenAddr   netip.Addr
+	port         int
 }
 
 func NewBase(options *BaseOption) (*Base, error) {
@@ -26,11 +26,11 @@ func NewBase(options *BaseOption) (*Base, error) {
 		return nil, err
 	}
 	return &Base{
-		name:            options.Name(),
-		listenAddr:      addr,
-		preferRulesName: options.PreferRulesName,
-		port:            options.Port,
-		config:          options,
+		name:         options.Name(),
+		listenAddr:   addr,
+		specialRules: options.PreferRulesName,
+		port:         options.Port,
+		config:       options,
 	}, nil
 }
 
