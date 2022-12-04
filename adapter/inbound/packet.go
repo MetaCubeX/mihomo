@@ -16,12 +16,12 @@ func (s *PacketAdapter) Metadata() *C.Metadata {
 	return s.metadata
 }
 
-func NewPacketWithInfos(target socks5.Addr, packet C.UDPPacket, source C.Type, inName, preferRulesName string) C.PacketAdapter {
+func NewPacketWithInfos(target socks5.Addr, packet C.UDPPacket, source C.Type, inName, specialRules string) C.PacketAdapter {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.UDP
 	metadata.Type = source
 	metadata.InName = inName
-	metadata.PreferRulesName = preferRulesName
+	metadata.SpecialRules = specialRules
 	if ip, port, err := parseAddr(packet.LocalAddr().String()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port

@@ -8,11 +8,11 @@ import (
 )
 
 type Listener struct {
-	listener        net.Listener
-	addr            string
-	closed          bool
-	name            string
-	preferRulesName string
+	listener     net.Listener
+	addr         string
+	closed       bool
+	name         string
+	specialRules string
 }
 
 // RawAddress implements C.Listener
@@ -35,16 +35,16 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 	return NewWithInfos(addr, "DEFAULT-REDIR", "", in)
 }
 
-func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (*Listener, error) {
+func NewWithInfos(addr, name, specialRules string, in chan<- C.ConnContext) (*Listener, error) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 	rl := &Listener{
-		listener:        l,
-		addr:            addr,
-		name:            name,
-		preferRulesName: preferRulesName,
+		listener:     l,
+		addr:         addr,
+		name:         name,
+		specialRules: specialRules,
 	}
 
 	go func() {
@@ -56,18 +56,18 @@ func NewWithInfos(addr, name, preferRulesName string, in chan<- C.ConnContext) (
 				}
 				continue
 			}
-			go handleRedir(rl.name, rl.preferRulesName, c, in)
+			go handleRedir(rl.name, rl.specialRules, c, in)
 		}
 	}()
 
 	return rl, nil
 }
-func handleRedir(name, preferRulesName string, conn net.Conn, in chan<- C.ConnContext) {
+func handleRedir(name, specialRules string, conn net.Conn, in chan<- C.ConnContext) {
 	target, err := parserPacket(conn)
 	if err != nil {
 		conn.Close()
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	in <- inbound.NewSocketWithInfos(target, conn, C.REDIR, name, preferRulesName)
+	in <- inbound.NewSocketWithInfos(target, conn, C.REDIR, name, specialRules)
 }

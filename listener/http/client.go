@@ -12,7 +12,7 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
-func newClient(source net.Addr,name,preferRulesName string, in chan<- C.ConnContext) *http.Client {
+func newClient(source net.Addr, name, specialRules string, in chan<- C.ConnContext) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			// from http.DefaultTransport
@@ -32,7 +32,7 @@ func newClient(source net.Addr,name,preferRulesName string, in chan<- C.ConnCont
 
 				left, right := net.Pipe()
 
-				in <- inbound.NewHTTPWithInfos(dstAddr, source, right,name,preferRulesName)
+				in <- inbound.NewHTTPWithInfos(dstAddr, source, right, name, specialRules)
 
 				return left, nil
 			},

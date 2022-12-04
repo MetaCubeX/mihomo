@@ -9,11 +9,11 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
-func NewSocketWithInfos(target socks5.Addr, conn net.Conn, source C.Type, inName , preferRulesName string) *context.ConnContext {
+func NewSocketWithInfos(target socks5.Addr, conn net.Conn, source C.Type, inName, specialRules string) *context.ConnContext {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
-	metadata.PreferRulesName = preferRulesName
+	metadata.SpecialRules = specialRules
 	metadata.InName = inName
 	remoteAddr := conn.RemoteAddr()
 
