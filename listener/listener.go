@@ -371,6 +371,9 @@ func ReCreateTuic(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<-
 
 	tuicListener = listener
 
+	for _, addr := range tuicListener.AddrList() {
+		log.Infoln("Tuic proxy listening at: %s", addr.String())
+	}
 	return
 }
 

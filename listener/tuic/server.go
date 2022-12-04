@@ -9,6 +9,7 @@ import (
 	"github.com/metacubex/quic-go"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
 	LC "github.com/Dreamacro/clash/listener/config"
@@ -25,7 +26,11 @@ type Listener struct {
 }
 
 func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
-	cert, err := tls.LoadX509KeyPair(config.Certificate, config.PrivateKey)
+	return NewWithInfos("DEFAULT-TUIC", "", config, tcpIn, udpIn)
+}
+
+func NewWithInfos(name, specialRules string, config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
+	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -56,12 +61,12 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 
 	option := &tuic.ServerOption{
 		HandleTcpFn: func(conn net.Conn, addr socks5.Addr) error {
-			tcpIn <- inbound.NewSocket(addr, conn, C.TUIC)
+			tcpIn <- inbound.NewSocketWithInfos(addr, conn, C.TUIC, name, specialRules)
 			return nil
 		},
 		HandleUdpFn: func(addr socks5.Addr, packet C.UDPPacket) error {
 			select {
-			case udpIn <- inbound.NewPacket(addr, packet, C.TUIC):
+			case udpIn <- inbound.NewPacketWithInfos(addr, packet, C.TUIC, name, specialRules):
 			default:
 			}
 			return nil
@@ -99,7 +104,6 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 		sl.servers = append(sl.servers, server)
 
 		go func() {
-			log.Infoln("Tuic proxy listening at: %s", ul.LocalAddr().String())
 			err := server.Serve()
 			if err != nil {
 				if sl.closed {
@@ -112,16 +116,32 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 	return sl, nil
 }
 
-func (l *Listener) Close() {
+// Close implements C.Listener
+func (l *Listener) Close() error {
 	l.closed = true
+	var retErr error
 	for _, lis := range l.servers {
-		_ = lis.Close()
+		err := lis.Close()
+		if err != nil {
+			retErr = err
+		}
 	}
 	for _, lis := range l.udpListeners {
-		_ = lis.Close()
+		err := lis.Close()
+		if err != nil {
+			retErr = err
+		}
 	}
+	return retErr
 }
 
 func (l *Listener) Config() LC.TuicServer {
 	return l.config
+}
+
+func (l *Listener) AddrList() (addrList []net.Addr) {
+	for _, lis := range l.udpListeners {
+		addrList = append(addrList, lis.LocalAddr())
+	}
+	return
 }

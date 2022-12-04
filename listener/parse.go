@@ -55,6 +55,18 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewMixed(mixedOption)
+	case "tuic":
+		tuicOption := &IN.TuicOption{
+			MaxIdleTime:           15000,
+			AuthenticationTimeout: 1000,
+			ALPN:                  []string{"h3"},
+			MaxUdpRelayPacketSize: 1500,
+		}
+		err = decoder.Decode(mapping, tuicOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewTuic(tuicOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
