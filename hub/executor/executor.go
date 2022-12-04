@@ -138,11 +138,16 @@ func GetGeneral() *config.General {
 func updateListeners(listeners map[string]C.NewListener) {
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
+	for _, listener := range tunnel.Listeners() {
+		_ = listener.Close()
+	}
+
 	for _, listener := range listeners {
-		if err := listener.ReCreate(tcpIn, udpIn); err != nil {
+		if err := listener.Listen(tcpIn, udpIn); err != nil {
 			log.Errorln("Listener %s listen err: %s", listener.Name(), err.Error())
 		}
 	}
+	tunnel.UpdateListeners(listeners)
 }
 
 func updateExperimental(c *config.Config) {

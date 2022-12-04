@@ -16,7 +16,7 @@ type AdvanceListener interface {
 
 type NewListener interface {
 	Name() string
-	ReCreate(tcpIn chan<- ConnContext, udpIn chan<- PacketAdapter) error
+	Listen(tcpIn chan<- ConnContext, udpIn chan<- PacketAdapter) error
 	Close() error
 	Address() string
 	RawAddress() string

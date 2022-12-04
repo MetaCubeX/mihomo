@@ -2,8 +2,6 @@ package inbound
 
 import (
 	"fmt"
-	"sync"
-
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/socks"
 	"github.com/Dreamacro/clash/log"
@@ -16,7 +14,6 @@ type SocksOption struct {
 
 type Socks struct {
 	*Base
-	mux sync.Mutex
 	udp bool
 	stl *socks.Listener
 	sul *socks.UDPListener
@@ -60,11 +57,8 @@ func (s *Socks) Address() string {
 }
 
 // ReCreate implements constant.NewListener
-func (s *Socks) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
+func (s *Socks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	_ = s.Close()
 	if s.stl, err = socks.NewWithInfos(s.RawAddress(), s.name, s.preferRulesName, tcpIn); err != nil {
 		return err
 	}

@@ -30,9 +30,8 @@ func (h *HTTP) Address() string {
 }
 
 // ReCreate implements constant.NewListener
-func (h *HTTP) ReCreate(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (h *HTTP) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	_ = h.Close()
 	h.l, err = http.NewWithInfos(h.RawAddress(), h.name, h.preferRulesName, tcpIn)
 	if err != nil {
 		return err
