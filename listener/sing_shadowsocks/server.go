@@ -14,9 +14,9 @@ import (
 	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/log"
 
-	shadowsocks "github.com/sagernet/sing-shadowsocks"
-	"github.com/sagernet/sing-shadowsocks/shadowaead"
-	"github.com/sagernet/sing-shadowsocks/shadowaead_2022"
+	shadowsocks "github.com/metacubex/sing-shadowsocks"
+	"github.com/metacubex/sing-shadowsocks/shadowaead"
+	"github.com/metacubex/sing-shadowsocks/shadowaead_2022"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"

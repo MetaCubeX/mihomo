@@ -11,7 +11,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.2
-	github.com/gofrs/uuid v4.3.0+incompatible
+	github.com/gofrs/uuid v4.3.1+incompatible
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.5.4
@@ -20,14 +20,14 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.0
 	github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e
+	github.com/metacubex/sing-shadowsocks v0.1.0
+	github.com/metacubex/sing-tun v0.1.0
 	github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.1.0
-	github.com/sagernet/sing-shadowsocks v0.0.0-20221112030934-e55284e180ea
-	github.com/sagernet/sing-tun v0.0.0-20221104121441-66c48a57776f
-	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0
+	github.com/sagernet/sing-vmess v0.1.0
 	github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c
 	github.com/samber/lo v1.35.0
 	github.com/sirupsen/logrus v1.9.0
@@ -45,10 +45,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.1.7
 )
-
-replace github.com/sagernet/sing-tun => github.com/MetaCubeX/sing-tun v0.0.0-20221127052020-dbf40f3160d8
-
-replace github.com/sagernet/sing-shadowsocks => github.com/MetaCubeX/sing-shadowsocks v0.0.0-20221116103607-48a7095182b1
 
 require (
 	github.com/ajg/form v1.5.1 // indirect

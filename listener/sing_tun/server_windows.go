@@ -5,7 +5,7 @@ import (
 
 	"github.com/Dreamacro/clash/log"
 
-	tun "github.com/sagernet/sing-tun"
+	tun "github.com/metacubex/sing-tun"
 )
 
 func tunOpen(options tun.Options) (tunIf tun.Tun, err error) {
