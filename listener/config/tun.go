@@ -58,6 +58,18 @@ func (p ListenPrefix) Build() netip.Prefix {
 	return netip.Prefix(p)
 }
 
+func StringSliceToListenPrefixSlice(ss []string) ([]ListenPrefix, error) {
+	lps := make([]ListenPrefix, 0, len(ss))
+	for _, s := range ss {
+		prefix, err := netip.ParsePrefix(s)
+		if err != nil {
+			return nil, err
+		}
+		lps = append(lps, ListenPrefix(prefix))
+	}
+	return lps, nil
+}
+
 type Tun struct {
 	Enable              bool
 	Device              string

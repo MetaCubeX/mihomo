@@ -62,6 +62,16 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewTunnel(tunnelOption)
+	case "tun":
+		tunOption := &IN.TunOption{
+			Stack:     C.TunGvisor.String(),
+			DNSHijack: []string{"0.0.0.0:53"}, // default hijack all dns query
+		}
+		err = decoder.Decode(mapping, tunOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewTun(tunOption)
 	case "shadowsocks":
 		shadowsocksOption := &IN.ShadowSocksOption{}
 		err = decoder.Decode(mapping, shadowsocksOption)

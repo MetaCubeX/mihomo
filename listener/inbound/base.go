@@ -74,7 +74,7 @@ var _ C.InboundListener = (*Base)(nil)
 type BaseOption struct {
 	NameStr      string `inbound:"name"`
 	Listen       string `inbound:"listen,omitempty"`
-	Port         int    `inbound:"port"`
+	Port         int    `inbound:"port,omitempty"`
 	SpecialRules string `inbound:"rule,omitempty"`
 }
 

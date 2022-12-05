@@ -26,6 +26,7 @@ type Vmess struct {
 	*Base
 	config *VmessOption
 	l      C.MultiAddrListener
+	vs     LC.VmessServer
 }
 
 func NewVmess(options *VmessOption) (*Vmess, error) {
@@ -33,11 +34,23 @@ func NewVmess(options *VmessOption) (*Vmess, error) {
 	if err != nil {
 		return nil, err
 	}
+	users := make([]LC.VmessUser, len(options.Users))
+	for i, v := range options.Users {
+		users[i] = LC.VmessUser{
+			Username: v.Username,
+			UUID:     v.UUID,
+			AlterID:  v.AlterID,
+		}
+	}
 	return &Vmess{
 		Base:   base,
 		config: options,
+		vs: LC.VmessServer{
+			Enable: true,
+			Listen: base.RawAddress(),
+			Users:  users,
+		},
 	}, nil
-
 }
 
 // Config implements constant.InboundListener
@@ -66,16 +79,7 @@ func (v *Vmess) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter)
 			AlterID:  v.AlterID,
 		}
 	}
-	v.l, err = sing_vmess.New(
-		LC.VmessServer{
-			Enable: true,
-			Listen: v.RawAddress(),
-			Users:  users,
-		},
-		tcpIn,
-		udpIn,
-		v.Additions()...,
-	)
+	v.l, err = sing_vmess.New(v.vs, tcpIn, udpIn, v.Additions()...)
 	if err != nil {
 		return err
 	}
