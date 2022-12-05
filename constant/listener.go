@@ -8,11 +8,10 @@ type Listener interface {
 	Close() error
 }
 
-type AdvanceListener interface {
+type MultiAddrListener interface {
 	Close() error
 	Config() string
 	AddrList() (addrList []net.Addr)
-	HandleConn(conn net.Conn, in chan<- ConnContext)
 }
 
 type InboundListener interface {

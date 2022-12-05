@@ -55,6 +55,20 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewMixed(mixedOption)
+	case "shadowsocks":
+		shadowsocksOption := &IN.ShadowSocksOption{}
+		err = decoder.Decode(mapping, shadowsocksOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewShadowSocks(shadowsocksOption)
+	case "vmess":
+		vmessOption := &IN.VmessOption{}
+		err = decoder.Decode(mapping, vmessOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewVmess(vmessOption)
 	case "tuic":
 		tuicOption := &IN.TuicOption{
 			MaxIdleTime:           15000,

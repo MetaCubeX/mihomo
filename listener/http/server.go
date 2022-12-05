@@ -36,10 +36,10 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 
 func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
-		additions = []inbound.Addition{{
-			InName:       "DEFAULT-HTTP",
-			SpecialRules: "",
-		}}
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-HTTP"),
+			inbound.WithSpecialRules(""),
+		}
 	}
 	l, err := inbound.Listen("tcp", addr)
 

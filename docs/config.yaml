@@ -121,7 +121,7 @@ tunnels:
   - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
   - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
   # full yaml config
-  - network: [tcp, udp]
+  - network: [ tcp, udp ]
     address: 127.0.0.1:7777
     target: target.com
     proxy: proxy
@@ -693,13 +693,32 @@ listeners:
     type: tproxy
     port: 10812
     listen: 0.0.0.0
-    # udp: false # 默认 true
     # rule: sub-rule
+    # udp: false # 默认 true
+
+  - name: shadowsocks-in-1
+    type: shadowsocks
+    port: 10813
+    listen: 0.0.0.0
+    # rule: sub-rule
+    password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
+    cipher: 2022-blake3-aes-256-gcm
+
+  - name: vmess-in-1
+    type: vmess
+    port: 10814
+    listen: 0.0.0.0
+    # rule: sub-rule
+    users:
+      - username: 1
+        uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
+        alterId: 1
 
   - name: tuic-in-1
     type: tuic
-    port: 10813
+    port: 10815
     listen: 0.0.0.0
+    #  rule: sub-rule
     #  token:
     #    - TOKEN
     #  certificate: ./server.crt

@@ -16,6 +16,7 @@ import (
 	"github.com/Dreamacro/clash/listener/http"
 	"github.com/Dreamacro/clash/listener/mixed"
 	"github.com/Dreamacro/clash/listener/redir"
+	embedSS "github.com/Dreamacro/clash/listener/shadowsocks"
 	"github.com/Dreamacro/clash/listener/sing_shadowsocks"
 	"github.com/Dreamacro/clash/listener/sing_tun"
 	"github.com/Dreamacro/clash/listener/sing_vmess"
@@ -45,7 +46,7 @@ var (
 	tunnelUDPListeners  = map[string]*tunnel.PacketConn{}
 	inboundListeners    = map[string]C.InboundListener{}
 	tunLister           *sing_tun.Listener
-	shadowSocksListener C.AdvanceListener
+	shadowSocksListener C.MultiAddrListener
 	vmessListener       *sing_vmess.Listener
 	tuicListener        *tuic.Listener
 	autoRedirListener   *autoredir.Listener
@@ -263,10 +264,20 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 		}
 	}()
 
+	var ssConfig LC.ShadowsocksServer
+	if addr, cipher, password, err := embedSS.ParseSSURL(shadowSocksConfig); err == nil {
+		ssConfig = LC.ShadowsocksServer{
+			Enable:   true,
+			Listen:   addr,
+			Password: password,
+			Cipher:   cipher,
+		}
+	}
+
 	shouldIgnore := false
 
 	if shadowSocksListener != nil {
-		if shadowSocksListener.Config() != shadowSocksConfig {
+		if shadowSocksListener.Config() != ssConfig.String() {
 			shadowSocksListener.Close()
 			shadowSocksListener = nil
 		} else {
@@ -278,17 +289,20 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 		return
 	}
 
-	if len(shadowSocksConfig) == 0 {
+	if !ssConfig.Enable {
 		return
 	}
 
-	listener, err := sing_shadowsocks.New(shadowSocksConfig, tcpIn, udpIn)
+	listener, err := sing_shadowsocks.New(ssConfig, tcpIn, udpIn)
 	if err != nil {
 		return
 	}
 
 	shadowSocksListener = listener
 
+	for _, addr := range shadowSocksListener.AddrList() {
+		log.Infoln("ShadowSocks proxy listening at: %s", addr.String())
+	}
 	return
 }
 
@@ -303,10 +317,19 @@ func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- 
 		}
 	}()
 
+	var vsConfig LC.VmessServer
+	if addr, username, password, err := sing_vmess.ParseVmessURL(vmessConfig); err == nil {
+		vsConfig = LC.VmessServer{
+			Enable: true,
+			Listen: addr,
+			Users:  []LC.VmessUser{{Username: username, UUID: password, AlterID: 1}},
+		}
+	}
+
 	shouldIgnore := false
 
 	if vmessListener != nil {
-		if vmessListener.Config() != vmessConfig {
+		if vmessListener.Config() != vsConfig.String() {
 			vmessListener.Close()
 			vmessListener = nil
 		} else {
@@ -318,17 +341,20 @@ func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- 
 		return
 	}
 
-	if len(vmessConfig) == 0 {
+	if !vsConfig.Enable {
 		return
 	}
 
-	listener, err := sing_vmess.New(vmessConfig, tcpIn, udpIn)
+	listener, err := sing_vmess.New(vsConfig, tcpIn, udpIn)
 	if err != nil {
 		return
 	}
 
 	vmessListener = listener
 
+	for _, addr := range vmessListener.AddrList() {
+		log.Infoln("Vmess proxy listening at: %s", addr.String())
+	}
 	return
 }
 
