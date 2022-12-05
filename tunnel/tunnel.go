@@ -509,8 +509,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 func getRules(metadata *C.Metadata) []C.Rule {
 	if sr, ok := subRules[metadata.SpecialRules]; ok {
+		log.Debugln("[Rule] use %s rules", metadata.SpecialRules)
 		return sr
 	} else {
+		log.Debugln("[Rule] use default rules")
 		return rules
 	}
 }
