@@ -25,7 +25,7 @@ require (
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
-	github.com/gofrs/uuid v4.3.0+incompatible // indirect
+	github.com/gofrs/uuid v4.3.1+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/btree v1.0.1 // indirect
@@ -44,6 +44,8 @@ require (
 	github.com/mdlayher/netlink v1.7.0 // indirect
 	github.com/mdlayher/socket v0.4.0 // indirect
 	github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e // indirect
+	github.com/metacubex/sing-shadowsocks v0.1.0 // indirect
+	github.com/metacubex/sing-tun v0.1.0 // indirect
 	github.com/metacubex/sing-wireguard v0.0.0-20221109114053-16c22adda03c // indirect
 	github.com/moby/term v0.0.0-20221105221325-4eb28fa6025c // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
@@ -58,9 +60,7 @@ require (
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
 	github.com/sagernet/sing v0.1.0 // indirect
-	github.com/sagernet/sing-shadowsocks v0.0.0-20221112030934-e55284e180ea // indirect
-	github.com/sagernet/sing-tun v0.0.0-20221104121441-66c48a57776f // indirect
-	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0 // indirect
+	github.com/sagernet/sing-vmess v0.1.0 // indirect
 	github.com/sagernet/wireguard-go v0.0.0-20221108054404-7c2acadba17c // indirect
 	github.com/samber/lo v1.35.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect

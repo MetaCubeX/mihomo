@@ -15,7 +15,7 @@ import (
 	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/log"
 
-	tun "github.com/sagernet/sing-tun"
+	tun "github.com/metacubex/sing-tun"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"

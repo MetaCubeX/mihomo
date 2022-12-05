@@ -3,7 +3,7 @@
 package sing_tun
 
 import (
-	tun "github.com/sagernet/sing-tun"
+	tun "github.com/metacubex/sing-tun"
 )
 
 func (l *Listener) buildAndroidRules(tunOptions *tun.Options) error {
