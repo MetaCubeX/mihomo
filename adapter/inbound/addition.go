@@ -4,12 +4,20 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-type Addition struct {
-	InName       string
-	SpecialRules string
-}
+type Addition func(metadata *C.Metadata)
 
 func (a Addition) Apply(metadata *C.Metadata) {
-	metadata.InName = a.InName
-	metadata.SpecialRules = a.SpecialRules
+	a(metadata)
+}
+
+func WithInName(name string) Addition {
+	return func(metadata *C.Metadata) {
+		metadata.InName = name
+	}
+}
+
+func WithSpecialRules(specialRules string) Addition {
+	return func(metadata *C.Metadata) {
+		metadata.SpecialRules = specialRules
+	}
 }

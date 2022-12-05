@@ -34,10 +34,10 @@ func (l *UDPListener) Close() error {
 
 func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*UDPListener, error) {
 	if len(additions) == 0 {
-		additions = []inbound.Addition{{
-			InName:       "DEFAULT-TPROXY",
-			SpecialRules: "",
-		}}
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-TPROXY"),
+			inbound.WithSpecialRules(""),
+		}
 	}
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {

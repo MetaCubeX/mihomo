@@ -38,10 +38,10 @@ func (l *Listener) Close() error {
 
 func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
-		additions = []inbound.Addition{{
-			InName:       "DEFAULT-MIXED",
-			SpecialRules: "",
-		}}
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-MIXED"),
+			inbound.WithSpecialRules(""),
+		}
 	}
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {

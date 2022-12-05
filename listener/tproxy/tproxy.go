@@ -38,10 +38,10 @@ func (l *Listener) handleTProxy(conn net.Conn, in chan<- C.ConnContext, addition
 
 func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
-		additions = []inbound.Addition{{
-			InName:       "DEFAULT-TPROXY",
-			SpecialRules: "",
-		}}
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-TPROXY"),
+			inbound.WithSpecialRules(""),
+		}
 	}
 	l, err := net.Listen("tcp", addr)
 	if err != nil {

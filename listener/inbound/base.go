@@ -87,10 +87,10 @@ func (o BaseOption) Equal(config C.InboundConfig) bool {
 }
 
 func (o BaseOption) Additions() []inbound.Addition {
-	return []inbound.Addition{{
-		InName:       o.NameStr,
-		SpecialRules: o.SpecialRules,
-	}}
+	return []inbound.Addition{
+		inbound.WithInName(o.NameStr),
+		inbound.WithSpecialRules(o.SpecialRules),
+	}
 }
 
 var _ C.InboundConfig = (*BaseOption)(nil)

@@ -27,10 +27,10 @@ type Listener struct {
 
 func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
-		additions = []inbound.Addition{{
-			InName:       "DEFAULT-TUIC",
-			SpecialRules: "",
-		}}
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-TUIC"),
+			inbound.WithSpecialRules(""),
+		}
 	}
 	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
 	if err != nil {
