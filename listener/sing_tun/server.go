@@ -2,12 +2,14 @@ package sing_tun
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
 	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/iface"
 	C "github.com/Dreamacro/clash/constant"
@@ -29,6 +31,7 @@ type Listener struct {
 	options LC.Tun
 	handler *ListenerHandler
 	tunName string
+	addrStr string
 
 	tunIf    tun.Tun
 	tunStack tun.Stack
@@ -64,7 +67,13 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
-func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (l *Listener, err error) {
+func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (l *Listener, err error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-TUN"),
+			inbound.WithSpecialRules(""),
+		}
+	}
 	tunName := options.Device
 	if tunName == "" {
 		tunName = CalculateInterfaceName(InterfaceName)
@@ -113,9 +122,10 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 
 	handler := &ListenerHandler{
 		ListenerHandler: sing.ListenerHandler{
-			TcpIn: tcpIn,
-			UdpIn: udpIn,
-			Type:  C.TUN,
+			TcpIn:     tcpIn,
+			UdpIn:     udpIn,
+			Type:      C.TUN,
+			Additions: additions,
 		},
 		DnsAdds: dnsAdds,
 	}
@@ -211,7 +221,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 
 	//l.openAndroidHotspot(tunOptions)
 
-	log.Infoln("[TUN] Tun adapter listening at: %s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
+	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.Stack)
 	return
 }
@@ -285,4 +295,8 @@ func (l *Listener) Close() error {
 
 func (l *Listener) Config() LC.Tun {
 	return l.options
+}
+
+func (l *Listener) Address() string {
+	return l.addrStr
 }

@@ -21,6 +21,7 @@ type ShadowSocks struct {
 	*Base
 	config *ShadowSocksOption
 	l      C.MultiAddrListener
+	ss     LC.ShadowsocksServer
 }
 
 func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
@@ -31,8 +32,13 @@ func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
 	return &ShadowSocks{
 		Base:   base,
 		config: options,
+		ss: LC.ShadowsocksServer{
+			Enable:   true,
+			Listen:   base.RawAddress(),
+			Password: options.Password,
+			Cipher:   options.Cipher,
+		},
 	}, nil
-
 }
 
 // Config implements constant.InboundListener
@@ -53,17 +59,7 @@ func (s *ShadowSocks) Address() string {
 // Listen implements constant.InboundListener
 func (s *ShadowSocks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	s.l, err = sing_shadowsocks.New(
-		LC.ShadowsocksServer{
-			Enable:   true,
-			Listen:   s.RawAddress(),
-			Password: s.config.Password,
-			Cipher:   s.config.Cipher,
-		},
-		tcpIn,
-		udpIn,
-		s.Additions()...,
-	)
+	s.l, err = sing_shadowsocks.New(s.ss, tcpIn, udpIn, s.Additions()...)
 	if err != nil {
 		return err
 	}

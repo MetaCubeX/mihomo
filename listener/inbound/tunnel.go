@@ -55,7 +55,7 @@ func (t *Tunnel) Close() error {
 			if err == nil {
 				err = udpErr
 			} else {
-				return fmt.Errorf("close tcp err: %t, close udp err: %t", err.Error(), udpErr.Error())
+				return fmt.Errorf("close tcp err: %s, close udp err: %s", err.Error(), udpErr.Error())
 			}
 		}
 	}
@@ -82,7 +82,8 @@ func (t *Tunnel) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter
 				return err
 			}
 		default:
-			return fmt.Errorf("unknow network type: %s", network)
+			log.Warnln("unknown network type: %s, passed", network)
+			continue
 		}
 		log.Infoln("Tunnel[%s](%s/%s)proxy listening at: %s", t.Name(), network, t.config.Target, t.Address())
 	}

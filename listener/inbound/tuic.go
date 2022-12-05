@@ -27,6 +27,7 @@ type Tuic struct {
 	*Base
 	config *TuicOption
 	l      *tuic.Listener
+	ts     LC.TuicServer
 }
 
 func NewTuic(options *TuicOption) (*Tuic, error) {
@@ -37,8 +38,19 @@ func NewTuic(options *TuicOption) (*Tuic, error) {
 	return &Tuic{
 		Base:   base,
 		config: options,
+		ts: LC.TuicServer{
+			Enable:                true,
+			Listen:                base.RawAddress(),
+			Token:                 options.Token,
+			Certificate:           options.Certificate,
+			PrivateKey:            options.PrivateKey,
+			CongestionController:  options.CongestionController,
+			MaxIdleTime:           options.MaxIdleTime,
+			AuthenticationTimeout: options.AuthenticationTimeout,
+			ALPN:                  options.ALPN,
+			MaxUdpRelayPacketSize: options.MaxUdpRelayPacketSize,
+		},
 	}, nil
-
 }
 
 // Config implements constant.InboundListener
@@ -59,23 +71,7 @@ func (t *Tuic) Address() string {
 // Listen implements constant.InboundListener
 func (t *Tuic) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	t.l, err = tuic.New(
-		LC.TuicServer{
-			Enable:                true,
-			Listen:                t.RawAddress(),
-			Token:                 t.config.Token,
-			Certificate:           t.config.Certificate,
-			PrivateKey:            t.config.PrivateKey,
-			CongestionController:  t.config.CongestionController,
-			MaxIdleTime:           t.config.MaxIdleTime,
-			AuthenticationTimeout: t.config.AuthenticationTimeout,
-			ALPN:                  t.config.ALPN,
-			MaxUdpRelayPacketSize: t.config.MaxUdpRelayPacketSize,
-		},
-		tcpIn,
-		udpIn,
-		t.Additions()...,
-	)
+	t.l, err = tuic.New(t.ts, tcpIn, udpIn, t.Additions()...)
 	if err != nil {
 		return err
 	}

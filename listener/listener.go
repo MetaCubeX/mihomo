@@ -533,6 +533,7 @@ func ReCreateTun(tunConf LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.Pack
 	}
 
 	tunLister, err = sing_tun.New(tunConf, tcpIn, udpIn)
+	log.Infoln("[TUN] Tun adapter listening at: %s", tunLister.Address())
 }
 
 func ReCreateRedirToTun(ifaceNames []string) {
