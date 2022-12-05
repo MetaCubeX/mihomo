@@ -267,7 +267,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 	var ssConfig LC.ShadowsocksServer
 	if addr, cipher, password, err := embedSS.ParseSSURL(shadowSocksConfig); err == nil {
 		ssConfig = LC.ShadowsocksServer{
-			Enable:   true,
+			Enable:   len(shadowSocksConfig) > 0,
 			Listen:   addr,
 			Password: password,
 			Cipher:   cipher,
@@ -320,7 +320,7 @@ func ReCreateVmess(vmessConfig string, tcpIn chan<- C.ConnContext, udpIn chan<- 
 	var vsConfig LC.VmessServer
 	if addr, username, password, err := sing_vmess.ParseVmessURL(vmessConfig); err == nil {
 		vsConfig = LC.VmessServer{
-			Enable: true,
+			Enable: len(vmessConfig) > 0,
 			Listen: addr,
 			Users:  []LC.VmessUser{{Username: username, UUID: password, AlterID: 1}},
 		}
