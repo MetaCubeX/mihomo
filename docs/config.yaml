@@ -670,39 +670,45 @@ listeners:
     port: 10808
     #listen: 0.0.0.0 # 默认监听 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理
     # udp: false # 默认 true
 
   - name: http-in-1
     type: http
     port: 10809
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
 
   - name: mixed-in-1
     type: mixed #  HTTP(S) 和 SOCKS 代理混合
     port: 10810
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     # udp: false # 默认 true
 
   - name: reidr-in-1
     type: redir
     port: 10811
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
 
   - name: tproxy-in-1
     type: tproxy
     port: 10812
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     # udp: false # 默认 true
 
   - name: shadowsocks-in-1
     type: shadowsocks
     port: 10813
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
     cipher: 2022-blake3-aes-256-gcm
 
@@ -710,7 +716,8 @@ listeners:
     type: vmess
     port: 10814
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     users:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
@@ -720,7 +727,8 @@ listeners:
     type: tuic
     port: 10815
     listen: 0.0.0.0
-    #  rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     #  token:
     #    - TOKEN
     #  certificate: ./server.crt
@@ -736,13 +744,15 @@ listeners:
     type: tunnel
     port: 10816
     listen: 0.0.0.0
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     network: [ tcp, udp ]
     target: target.com
 
   - name: tun-in-1
     type: tun
-    # rule: sub-rule
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     stack: system # gvisor / lwip
     dns-hijack:
       - 0.0.0.0:53 # 需要劫持的 DNS

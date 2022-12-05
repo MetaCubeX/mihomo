@@ -21,3 +21,9 @@ func WithSpecialRules(specialRules string) Addition {
 		metadata.SpecialRules = specialRules
 	}
 }
+
+func WithSpecialProxy(specialProxy string) Addition {
+	return func(metadata *C.Metadata) {
+		metadata.SpecialProxy = specialProxy
+	}
+}

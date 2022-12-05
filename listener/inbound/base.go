@@ -76,6 +76,7 @@ type BaseOption struct {
 	Listen       string `inbound:"listen,omitempty"`
 	Port         int    `inbound:"port,omitempty"`
 	SpecialRules string `inbound:"rule,omitempty"`
+	SpecialProxy string `inbound:"proxy,omitempty"`
 }
 
 func (o BaseOption) Name() string {
@@ -90,6 +91,7 @@ func (o BaseOption) Additions() []inbound.Addition {
 	return []inbound.Addition{
 		inbound.WithInName(o.NameStr),
 		inbound.WithSpecialRules(o.SpecialRules),
+		inbound.WithSpecialProxy(o.SpecialProxy),
 	}
 }
 
