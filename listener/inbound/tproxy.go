@@ -57,7 +57,7 @@ func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter
 	}
 	if t.udp {
 		if t.lUDP != nil {
-			t.lUDP, err = tproxy.NewUDP(t.Address(), udpIn, t.Additions()...)
+			t.lUDP, err = tproxy.NewUDP(t.RawAddress(), udpIn, t.Additions()...)
 			if err != nil {
 				return err
 			}

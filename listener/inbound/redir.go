@@ -44,7 +44,7 @@ func (r *Redir) Address() string {
 // Listen implements constant.InboundListener
 func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
 	var err error
-	r.l, err = redir.New(r.Address(), tcpIn, r.Additions()...)
+	r.l, err = redir.New(r.RawAddress(), tcpIn, r.Additions()...)
 	if err != nil {
 		return err
 	}

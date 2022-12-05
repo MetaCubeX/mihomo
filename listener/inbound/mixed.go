@@ -57,7 +57,7 @@ func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter)
 		return err
 	}
 	if m.udp {
-		m.lUDP, err = socks.NewUDP(m.Address(), udpIn, m.Additions()...)
+		m.lUDP, err = socks.NewUDP(m.RawAddress(), udpIn, m.Additions()...)
 		if err != nil {
 			return err
 		}
