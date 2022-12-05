@@ -55,6 +55,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewMixed(mixedOption)
+	case "tunnel":
+		tunnelOption := &IN.TunnelOption{}
+		err = decoder.Decode(mapping, tunnelOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewTunnel(tunnelOption)
 	case "shadowsocks":
 		shadowsocksOption := &IN.ShadowSocksOption{}
 		err = decoder.Decode(mapping, shadowsocksOption)
