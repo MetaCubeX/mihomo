@@ -12,7 +12,6 @@ type TunnelOption struct {
 	BaseOption
 	Network []string `inbound:"network"`
 	Target  string   `inbound:"target"`
-	Proxy   string   `inbound:"proxy,omitempty"`
 }
 
 func (o TunnelOption) Equal(config C.InboundConfig) bool {
@@ -74,11 +73,11 @@ func (t *Tunnel) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter
 	for _, network := range t.config.Network {
 		switch network {
 		case "tcp":
-			if t.ttl, err = tunnel.New(t.RawAddress(), t.config.Target, t.config.Proxy, tcpIn, t.Additions()...); err != nil {
+			if t.ttl, err = tunnel.New(t.RawAddress(), t.config.Target, t.config.SpecialProxy, tcpIn, t.Additions()...); err != nil {
 				return err
 			}
 		case "udp":
-			if t.tul, err = tunnel.NewUDP(t.RawAddress(), t.config.Target, t.config.Proxy, udpIn, t.Additions()...); err != nil {
+			if t.tul, err = tunnel.NewUDP(t.RawAddress(), t.config.Target, t.config.SpecialProxy, udpIn, t.Additions()...); err != nil {
 				return err
 			}
 		default:
