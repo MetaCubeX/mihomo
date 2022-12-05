@@ -489,14 +489,20 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Listeners = listener
 
-	subRules, ruleProviders, err := parseSubRules(rawCfg, proxies)
+	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
+	ruleProviders, err := parseRuleProviders(rawCfg)
+	if err != nil {
+		return nil, err
+	}
+	config.RuleProviders = ruleProviders
+
+	subRules, err := parseSubRules(rawCfg, proxies)
 	if err != nil {
 		return nil, err
 	}
 	config.SubRules = subRules
-	config.RuleProviders = ruleProviders
 
-	rules, err := parseRules(rawCfg, proxies, subRules)
+	rules, err := parseRules(rawCfg.Rule, proxies, subRules, "rules")
 	if err != nil {
 		return nil, err
 	}
@@ -712,75 +718,36 @@ func parseListeners(cfg *RawConfig) (listeners map[string]C.InboundListener, err
 	return
 }
 
-func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, ruleProviders map[string]providerTypes.RuleProvider, err error) {
+func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.RuleProvider, err error) {
 	ruleProviders = map[string]providerTypes.RuleProvider{}
-	subRules = map[string][]C.Rule{}
-	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
 		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		ruleProviders[name] = rp
 		RP.SetRuleProvider(rp)
 	}
+	return
+}
 
+func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, err error) {
 	for name, rawRules := range cfg.SubRules {
 		if len(name) == 0 {
-			return nil, nil, fmt.Errorf("sub-rule name is empty")
+			return nil, fmt.Errorf("sub-rule name is empty")
 		}
 		var rules []C.Rule
-		for idx, line := range rawRules {
-			rawRule := trimArr(strings.Split(line, ","))
-			var (
-				payload  string
-				target   string
-				params   []string
-				ruleName = strings.ToUpper(rawRule[0])
-			)
-
-			l := len(rawRule)
-
-			if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" || ruleName == "SUB-RULE" {
-				target = rawRule[l-1]
-				payload = strings.Join(rawRule[1:l-1], ",")
-			} else {
-				if l < 2 {
-					return nil, nil, fmt.Errorf("sub-rules[%d] [%s] error: format invalid", idx, line)
-				}
-				if l < 4 {
-					rawRule = append(rawRule, make([]string, 4-l)...)
-				}
-				if ruleName == "MATCH" {
-					l = 2
-				}
-				if l >= 3 {
-					l = 3
-					payload = rawRule[1]
-				}
-				target = rawRule[l-1]
-				params = rawRule[l:]
-			}
-
-			if _, ok := proxies[target]; !ok && ruleName != "SUB-RULE" {
-				return nil, nil, fmt.Errorf("sub-rules[%d:%s] [%s] error: proxy [%s] not found", idx, name, line, target)
-			}
-
-			params = trimArr(params)
-			parsed, parseErr := R.ParseRule(ruleName, payload, target, params, subRules)
-			if parseErr != nil {
-				return nil, nil, fmt.Errorf("sub-rules[%d] [%s] error: %s", idx, line, parseErr.Error())
-			}
-
-			rules = append(rules, parsed)
+		rules, err = parseRules(rawRules, proxies, subRules, fmt.Sprintf("sub-rules[%s]", name))
+		if err != nil {
+			return nil, err
 		}
 		subRules[name] = rules
 	}
 
 	if err = verifySubRule(subRules); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	return
@@ -825,9 +792,8 @@ func verifySubRuleCircularReferences(n string, subRules map[string][]C.Rule, arr
 	return nil
 }
 
-func parseRules(cfg *RawConfig, proxies map[string]C.Proxy, subRules map[string][]C.Rule) ([]C.Rule, error) {
+func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[string][]C.Rule, format string) ([]C.Rule, error) {
 	var rules []C.Rule
-	rulesConfig := cfg.Rule
 
 	// parse rules
 	for idx, line := range rulesConfig {
@@ -846,7 +812,7 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy, subRules map[string]
 			payload = strings.Join(rule[1:l-1], ",")
 		} else {
 			if l < 2 {
-				return nil, fmt.Errorf("rules[%d] [%s] error: format invalid", idx, line)
+				return nil, fmt.Errorf("%s[%d] [%s] error: format invalid", format, idx, line)
 			}
 			if l < 4 {
 				rule = append(rule, make([]string, 4-l)...)
@@ -863,16 +829,16 @@ func parseRules(cfg *RawConfig, proxies map[string]C.Proxy, subRules map[string]
 		}
 		if _, ok := proxies[target]; !ok {
 			if ruleName != "SUB-RULE" {
-				return nil, fmt.Errorf("rules[%d] [%s] error: proxy [%s] not found", idx, line, target)
+				return nil, fmt.Errorf("%s[%d] [%s] error: proxy [%s] not found", format, idx, line, target)
 			} else if _, ok = subRules[target]; !ok {
-				return nil, fmt.Errorf("rules[%d] [%s] error: sub-rule [%s] not found", idx, line, target)
+				return nil, fmt.Errorf("%s[%d] [%s] error: sub-rule [%s] not found", format, idx, line, target)
 			}
 		}
 
 		params = trimArr(params)
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params, subRules)
 		if parseErr != nil {
-			return nil, fmt.Errorf("rules[%d] [%s] error: %s", idx, line, parseErr.Error())
+			return nil, fmt.Errorf("%s[%d] [%s] error: %s", format, idx, line, parseErr.Error())
 		}
 
 		rules = append(rules, parsed)
