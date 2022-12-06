@@ -625,7 +625,7 @@ func ReCreateAutoRedir(ifaceNames []string, tcpIn chan<- C.ConnContext, _ chan<-
 	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
-func PatchTunnel(tunnels []tunnel.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) {
+func PatchTunnel(tunnels []LC.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) {
 	tunnelMux.Lock()
 	defer tunnelMux.Unlock()
 
@@ -664,7 +664,7 @@ func PatchTunnel(tunnels []tunnel.Tunnel, tcpIn chan<- C.ConnContext, udpIn chan
 
 	newElm := lo.FlatMap(
 		tunnels,
-		func(tunnel tunnel.Tunnel, _ int) []addrProxy {
+		func(tunnel LC.Tunnel, _ int) []addrProxy {
 			return lo.Map(
 				tunnel.Network,
 				func(network string, _ int) addrProxy {
