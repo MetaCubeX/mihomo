@@ -825,7 +825,7 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 	}
 
 	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
-		return tunConf.DNSHijack[i].Addr().Less(tunConf.DNSHijack[j].Addr())
+		return tunConf.DNSHijack[i] < tunConf.DNSHijack[j]
 	})
 
 	sort.Slice(tunConf.Inet4Address, func(i, j int) bool {

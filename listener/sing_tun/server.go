@@ -109,7 +109,16 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 	var dnsAdds []netip.AddrPort
 
 	for _, d := range options.DNSHijack {
-		dnsAdds = append(dnsAdds, d)
+		if _, after, ok := strings.Cut(d, "://"); ok {
+			d = after
+		}
+		d = strings.Replace(d, "any", "0.0.0.0", 1)
+		addrPort, err := netip.ParseAddrPort(d)
+		if err != nil {
+			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
+		}
+
+		dnsAdds = append(dnsAdds, addrPort)
 	}
 	for _, a := range options.Inet4Address {
 		addrPort := netip.AddrPortFrom(a.Build().Addr().Next(), 53)

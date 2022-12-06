@@ -2,7 +2,6 @@ package route
 
 import (
 	"net/http"
-	"net/netip"
 	"path/filepath"
 	"sync"
 
@@ -58,12 +57,12 @@ type configSchema struct {
 }
 
 type tunSchema struct {
-	Enable              bool              `yaml:"enable" json:"enable"`
-	Device              *string           `yaml:"device" json:"device"`
-	Stack               *C.TUNStack       `yaml:"stack" json:"stack"`
-	DNSHijack           *[]netip.AddrPort `yaml:"dns-hijack" json:"dns-hijack"`
-	AutoRoute           *bool             `yaml:"auto-route" json:"auto-route"`
-	AutoDetectInterface *bool             `yaml:"auto-detect-interface" json:"auto-detect-interface"`
+	Enable              bool        `yaml:"enable" json:"enable"`
+	Device              *string     `yaml:"device" json:"device"`
+	Stack               *C.TUNStack `yaml:"stack" json:"stack"`
+	DNSHijack           *[]string   `yaml:"dns-hijack" json:"dns-hijack"`
+	AutoRoute           *bool       `yaml:"auto-route" json:"auto-route"`
+	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	//RedirectToTun       []string   		  `yaml:"-" json:"-"`
 
 	MTU *uint32 `yaml:"mtu" json:"mtu,omitempty"`
