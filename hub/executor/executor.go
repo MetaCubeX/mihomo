@@ -29,7 +29,6 @@ import (
 	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/inner"
 	"github.com/Dreamacro/clash/listener/tproxy"
-	T "github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
 )
@@ -115,6 +114,8 @@ func GetGeneral() *config.General {
 			RedirPort:         ports.RedirPort,
 			TProxyPort:        ports.TProxyPort,
 			MixedPort:         ports.MixedPort,
+			Tun:               listener.GetTunConf(),
+			TuicServer:        listener.GetTuicConf(),
 			ShadowSocksConfig: ports.ShadowSocksConfig,
 			VmessConfig:       ports.VmessConfig,
 			Authentication:    authenticator,
@@ -125,8 +126,6 @@ func GetGeneral() *config.General {
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
 		GeodataLoader: G.LoaderName(),
-		Tun:           listener.GetTunConf(),
-		TuicServer:    listener.GetTuicConf(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
 		TCPConcurrent: dialer.GetDial(),
@@ -304,7 +303,7 @@ func updateSniffer(sniffer *config.Sniffer) {
 	}
 }
 
-func updateTunnels(tunnels []T.Tunnel) {
+func updateTunnels(tunnels []LC.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
