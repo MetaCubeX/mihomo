@@ -2,7 +2,6 @@ package inbound
 
 import (
 	"errors"
-	"net/netip"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -56,15 +55,6 @@ func NewTun(options *TunOption) (*Tun, error) {
 	if !exist {
 		return nil, errors.New("invalid tun stack")
 	}
-	dnsHijack := make([]netip.AddrPort, 0, len(options.DNSHijack))
-	for _, str := range options.DNSHijack {
-		var a netip.AddrPort
-		err = a.UnmarshalText([]byte(str))
-		if err != nil {
-			return nil, err
-		}
-		dnsHijack = append(dnsHijack, a)
-	}
 	inet4Address, err := LC.StringSliceToListenPrefixSlice(options.Inet4Address)
 	if err != nil {
 		return nil, err
@@ -88,7 +78,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 			Enable:                 true,
 			Device:                 options.Device,
 			Stack:                  stack,
-			DNSHijack:              dnsHijack,
+			DNSHijack:              options.DNSHijack,
 			AutoRoute:              options.AutoRoute,
 			AutoDetectInterface:    options.AutoDetectInterface,
 			MTU:                    options.MTU,
