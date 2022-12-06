@@ -125,15 +125,15 @@ type Metadata struct {
 	DstPort      string     `json:"destinationPort"`
 	InIP         netip.Addr `json:"inboundIP"`
 	InPort       string     `json:"inboundPort"`
+	InName       string     `json:"inboundName"`
 	Host         string     `json:"host"`
 	DNSMode      DNSMode    `json:"dnsMode"`
 	Uid          *uint32    `json:"uid"`
 	Process      string     `json:"process"`
 	ProcessPath  string     `json:"processPath"`
 	SpecialProxy string     `json:"specialProxy"`
-	RemoteDst    string     `json:"remoteDestination"`
-	InName       string     `json:"inboundName"`
 	SpecialRules string     `json:"specialRules"`
+	RemoteDst    string     `json:"remoteDestination"`
 }
 
 func (m *Metadata) RemoteAddress() string {
