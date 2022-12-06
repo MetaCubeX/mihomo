@@ -239,6 +239,7 @@ proxies:
     # heartbeat-interval: 10000
     # alpn: [h3]
     # disable-sni: true
+    # sni: # Optional, only use when disable-sni is false and this is not empty
     reduce-rtt: true
     # request-timeout: 8000
     udp-relay-mode: native # Available: "native", "quic". Default: "native"

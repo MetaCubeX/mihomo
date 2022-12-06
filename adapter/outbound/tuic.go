@@ -33,6 +33,7 @@ type TuicOption struct {
 	Port                  int      `proxy:"port"`
 	Token                 string   `proxy:"token"`
 	Ip                    string   `proxy:"ip,omitempty"`
+	Sni                   string   `proxy:"sni,omitempty"`
 	HeartbeatInterval     int      `proxy:"heartbeat-interval,omitempty"`
 	ALPN                  []string `proxy:"alpn,omitempty"`
 	ReduceRtt             bool     `proxy:"reduce-rtt,omitempty"`
@@ -184,6 +185,11 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	if option.DisableSni {
 		host = ""
 		tlsConfig.ServerName = ""
+	} else {
+		if option.Sni != "" {
+			host = option.Sni
+			tlsConfig.ServerName = option.Sni
+		}
 	}
 	tkn := tuic.GenTKN(option.Token)
 
