@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/netip"
 	"runtime"
 	"strconv"
 	"sync"
@@ -40,8 +39,6 @@ const (
 	QUICKeepAlivePeriod = time.Second * 20
 	DefaultTimeout      = time.Second * 5
 )
-
-type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // dnsOverQUIC is a struct that implements the Upstream interface for the
 // DNS-over-QUIC protocol (spec: https://www.rfc-editor.org/rfc/rfc9250.html).
@@ -345,12 +342,7 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 			return nil, err
 		}
 	} else {
-		ipAddr, err := netip.ParseAddr(ip)
-		if err != nil {
-			return nil, err
-		}
-
-		conn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", ipAddr, port)
+		conn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", addr, doq.r)
 		if err != nil {
 			return nil, err
 		}
@@ -497,22 +489,4 @@ func isQUICRetryError(err error) (ok bool) {
 	}
 
 	return false
-}
-
-func getDialHandler(r *Resolver, proxyAdapter string) dialHandler {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			return nil, err
-		}
-		ip, err := r.ResolveIP(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-		if len(proxyAdapter) == 0 {
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port), dialer.WithDirect())
-		} else {
-			return dialContextExtra(ctx, proxyAdapter, network, ip.Unmap(), port)
-		}
-	}
 }
