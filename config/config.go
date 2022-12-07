@@ -855,7 +855,9 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		var addr, dnsNetType, proxyAdapter string
+		proxyAdapter := u.Fragment
+
+		var addr, dnsNetType string
 		params := map[string]string{}
 		switch u.Scheme {
 		case "udp":
