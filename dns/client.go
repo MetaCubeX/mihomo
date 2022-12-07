@@ -60,13 +60,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
 
-	var conn net.Conn
-	if c.proxyAdapter != "" {
-		conn, err = dialContextExtra(ctx, c.proxyAdapter, network, ip, c.port, options...)
-	} else {
-		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
-	}
-
+	conn, err := getDialHandler(c.r, c.proxyAdapter, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
 	if err != nil {
 		return nil, err
 	}

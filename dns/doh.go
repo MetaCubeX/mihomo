@@ -536,7 +536,7 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 			return nil, err
 		}
 	} else {
-		if wrapConn, err := dialContextExtra(ctx, doh.proxyAdapter, "udp", udpAddr.AddrPort().Addr(), port); err == nil {
+		if wrapConn, err := dialContextExtra(ctx, doh.proxyAdapter, "udp", addr, doh.r); err == nil {
 			if pc, ok := wrapConn.(*wrapPacketConn); ok {
 				conn = pc
 			} else {

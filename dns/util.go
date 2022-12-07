@@ -160,27 +160,54 @@ func (wpc *wrapPacketConn) LocalAddr() net.Addr {
 	}
 }
 
-func dialContextExtra(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
-	networkType := C.TCP
-	if network == "udp" {
+type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
 
-		networkType = C.UDP
+func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dialHandler {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if len(proxyAdapter) == 0 {
+			opts = append(opts, dialer.WithResolver(r))
+			return dialer.DialContext(ctx, network, addr, opts...)
+		} else {
+			return dialContextExtra(ctx, proxyAdapter, network, addr, r, opts...)
+		}
 	}
+}
 
-	metadata := &C.Metadata{
-		NetWork: networkType,
-		Host:    "",
-		DstIP:   dstIP,
-		DstPort: port,
+func dialContextExtra(ctx context.Context, adapterName string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
 	}
-
 	adapter, ok := tunnel.Proxies()[adapterName]
 	if !ok {
 		opts = append(opts, dialer.WithInterface(adapterName))
-		if C.TCP == networkType {
-			return dialer.DialContext(ctx, network, dstIP.String()+":"+port, opts...)
-		} else {
-			packetConn, err := dialer.ListenPacket(ctx, network, dstIP.String()+":"+port, opts...)
+	}
+	if strings.Contains(network, "tcp") {
+		// tcp can resolve host by remote
+		metadata := &C.Metadata{
+			NetWork: C.TCP,
+			Host:    host,
+			DstPort: port,
+		}
+		if ok {
+			return adapter.DialContext(ctx, metadata, opts...)
+		}
+		opts = append(opts, dialer.WithResolver(r))
+		return dialer.DialContext(ctx, network, addr, opts...)
+	} else {
+		// udp must resolve host first
+		dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
+		if err != nil {
+			return nil, err
+		}
+		metadata := &C.Metadata{
+			NetWork: C.UDP,
+			Host:    "",
+			DstIP:   dstIP,
+			DstPort: port,
+		}
+		if !ok {
+			packetConn, err := dialer.ListenPacket(ctx, network, metadata.RemoteAddress(), opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -189,15 +216,12 @@ func dialContextExtra(ctx context.Context, adapterName string, network string, d
 				PacketConn: packetConn,
 				rAddr:      metadata.UDPAddr(),
 			}, nil
-
 		}
-	}
 
-	if networkType == C.UDP && !adapter.SupportUDP() {
-		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
-	}
+		if !adapter.SupportUDP() {
+			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
+		}
 
-	if networkType == C.UDP {
 		packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
 		if err != nil {
 			return nil, err
@@ -208,8 +232,6 @@ func dialContextExtra(ctx context.Context, adapterName string, network string, d
 			rAddr:      metadata.UDPAddr(),
 		}, nil
 	}
-
-	return adapter.DialContext(ctx, metadata, opts...)
 }
 
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
