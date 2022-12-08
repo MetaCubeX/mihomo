@@ -65,6 +65,9 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 				}
 				continue
 			}
+			if t, ok := conn.(*net.TCPConn); ok {
+				t.SetKeepAlive(false)
+			}
 			go HandleConn(conn, in, c, additions...)
 		}
 	}()

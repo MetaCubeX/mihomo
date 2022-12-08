@@ -3,6 +3,8 @@ package inbound
 import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
+	"net"
+	"strconv"
 )
 
 // PacketAdapter is a UDP Packet adapter for socks/redir/tun
@@ -28,11 +30,10 @@ func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type, additions 
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}
-	if p, ok := packet.(C.UDPPacketInAddr); ok {
-		if ip, port, err := parseAddr(p.InAddr()); err == nil {
-			metadata.InIP = ip
-			metadata.InPort = port
-		}
+
+	if port, err := strconv.Atoi(metadata.DstPort); err == nil {
+		metadata.RawSrcAddr = packet.LocalAddr()
+		metadata.RawDstAddr = &net.UDPAddr{IP: metadata.DstIP.AsSlice(), Port: port}
 	}
 
 	return &PacketAdapter{

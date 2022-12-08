@@ -15,7 +15,7 @@ import (
 )
 
 func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
-	client := newClient(c.RemoteAddr(), in, additions...)
+	client := newClient(c.RemoteAddr(), c.LocalAddr(), in, additions...)
 	defer client.CloseIdleConnections()
 
 	conn := N.NewBufferedConn(c)

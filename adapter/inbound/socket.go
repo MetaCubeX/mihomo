@@ -18,14 +18,18 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Ad
 		addition.Apply(metadata)
 	}
 
-	if ip, port, err := parseAddr(conn.RemoteAddr()); err == nil {
-		metadata.SrcIP = ip
-		metadata.SrcPort = port
+	remoteAddr := conn.RemoteAddr()
+
+	// Filter when net.Addr interface is nil
+	if remoteAddr != nil {
+		if ip, port, err := parseAddr(remoteAddr); err == nil {
+			metadata.SrcIP = ip
+			metadata.SrcPort = port
+		}
 	}
-	if ip, port, err := parseAddr(conn.LocalAddr()); err == nil {
-		metadata.InIP = ip
-		metadata.InPort = port
-	}
+
+	metadata.RawSrcAddr = conn.RemoteAddr()
+	metadata.RawDstAddr = conn.LocalAddr()
 
 	return context.NewConnContext(conn, metadata)
 }

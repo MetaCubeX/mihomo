@@ -43,7 +43,7 @@ func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext
 
 	left, right := net.Pipe()
 
-	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), right, additions...)
+	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), conn.LocalAddr(), right, additions...)
 
 	var bufferedLeft *N.BufferedConn
 	if request.TLS != nil {
