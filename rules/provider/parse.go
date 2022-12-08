@@ -18,7 +18,7 @@ var (
 type ruleProviderSchema struct {
 	Type     string `provider:"type"`
 	Behavior string `provider:"behavior"`
-	Path     string `provider:"path,omitempty"`
+	Path     string `provider:"path"`
 	URL      string `provider:"url,omitempty"`
 	Format   string `provider:"format,omitempty"`
 	Interval int    `provider:"interval,omitempty"`
@@ -54,23 +54,13 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 		return nil, fmt.Errorf("unsupported format type: %s", schema.Format)
 	}
 
+	path := C.Path.Resolve(schema.Path)
 	var vehicle P.Vehicle
 	switch schema.Type {
 	case "file":
-		path := C.Path.Resolve(schema.Path)
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		if schema.Path != "" {
-			path := C.Path.Resolve(schema.Path)
-			if !C.Path.IsSafePath(path) {
-				return nil, fmt.Errorf("%w: %s", errSubPath, path)
-			}
-			vehicle = resource.NewHTTPVehicle(schema.URL, path)
-		} else {
-			path := C.Path.GetPathByHash("rules", schema.URL)
-			vehicle = resource.NewHTTPVehicle(schema.URL, path)
-		}
-
+		vehicle = resource.NewHTTPVehicle(schema.URL, path)
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}

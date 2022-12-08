@@ -172,7 +172,7 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	listener.ReCreateHTTP(general.Port, tunnel.Tunnel)
 	listener.ReCreateSocks(general.SocksPort, tunnel.Tunnel)
 	listener.ReCreateRedir(general.RedirPort, tunnel.Tunnel)
-	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tunnel.Tunnel)
+	// listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tunnel.Tunnel)
 	listener.ReCreateTProxy(general.TProxyPort, tunnel.Tunnel)
 	listener.ReCreateMixed(general.MixedPort, tunnel.Tunnel)
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
@@ -259,7 +259,6 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
-	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
 
 	if pr.Invalid() {
 		resolver.ProxyServerHostResolver = pr
@@ -380,9 +379,6 @@ func updateGeneral(general *config.General) {
 		dialer.SetTcpConcurrent(general.TCPConcurrent)
 		log.Infoln("Use tcp concurrent")
 	}
-
-	inbound.SetTfo(general.InboundTfo)
-	inbound.SetMPTCP(general.InboundMPTCP)
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 

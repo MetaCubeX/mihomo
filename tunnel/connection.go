@@ -83,5 +83,11 @@ func closeAllLocalCoon(lAddr string) {
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
+	left := unwrap(ctx.Conn())
+	right := unwrap(outbound)
+
+	if relayHijack(left, right) {
+		return
+	}
 	N.Relay(ctx.Conn(), outbound)
 }
