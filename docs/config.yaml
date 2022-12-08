@@ -136,7 +136,7 @@ profile:
 # DNS配置
 dns:
   enable: false # 关闭将使用系统 DNS
-  perfer-h3: true # 开启 DoH 支持 HTTP/3，将并发尝试
+  prefer-h3: true # 开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
   # ipv6: false # false 将返回 AAAA 的空结果
 
