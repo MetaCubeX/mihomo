@@ -871,6 +871,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
 			host := u.Host
+			proxyAdapter = ""
 			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
 				host = net.JoinHostPort(host, "443")
 			} else {
