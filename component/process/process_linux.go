@@ -185,7 +185,7 @@ func splitCmdline(cmdline []byte) string {
 	cmdline = bytes.Trim(cmdline, " ")
 
 	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r)
+		return unicode.IsControl(r) || unicode.IsSpace(r) || r == ':'
 	})
 
 	if idx == -1 {
