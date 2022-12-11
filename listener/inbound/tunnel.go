@@ -64,7 +64,13 @@ func (t *Tunnel) Close() error {
 
 // Address implements constant.InboundListener
 func (t *Tunnel) Address() string {
-	return t.ttl.Address()
+	if t.ttl != nil {
+		return t.ttl.Address()
+	}
+	if t.tul != nil {
+		return t.tul.Address()
+	}
+	return ""
 }
 
 // Listen implements constant.InboundListener
