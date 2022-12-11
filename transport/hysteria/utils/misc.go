@@ -43,7 +43,7 @@ func last(s string, b byte) int {
 }
 
 type PacketDialer interface {
-	ListenPacket() (net.PacketConn, error)
+	ListenPacket(rAddr net.Addr) (net.PacketConn, error)
 	Context() context.Context
 	RemoteAddr(host string) (net.Addr, error)
 }
