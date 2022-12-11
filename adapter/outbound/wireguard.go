@@ -212,7 +212,8 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 		}
 		conn, err = N.DialSerial(ctx, w.tunDevice, "tcp", M.ParseSocksaddr(metadata.RemoteAddress()), addrs)
 	} else {
-		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.ParseSocksaddr(metadata.Pure().RemoteAddress()))
+		port, _ := strconv.Atoi(metadata.DstPort)
+		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, uint16(port)))
 	}
 	if err != nil {
 		return nil, err
@@ -242,7 +243,8 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		}
 		metadata.DstIP = ip
 	}
-	pc, err = w.tunDevice.ListenPacket(ctx, M.ParseSocksaddr(metadata.Pure().RemoteAddress()))
+	port, _ := strconv.Atoi(metadata.DstPort)
+	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, uint16(port)))
 	if err != nil {
 		return nil, err
 	}
