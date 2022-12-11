@@ -90,7 +90,7 @@ func NewObfsUDPHopClientPacketConn(server string, hopInterval time.Duration, obf
 			},
 		},
 	}
-	curConn, err := dialer.ListenPacket()
+	curConn, err := dialer.ListenPacket(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func NewObfsUDPHopClientPacketConn(server string, hopInterval time.Duration, obf
 		conn.currentConn = curConn
 	}
 	go conn.recvRoutine(conn.currentConn)
-	go conn.hopRoutine(dialer)
+	go conn.hopRoutine(dialer, ip)
 	return conn, nil
 }
 
@@ -120,26 +120,26 @@ func (c *ObfsUDPHopClientPacketConn) recvRoutine(conn net.PacketConn) {
 	}
 }
 
-func (c *ObfsUDPHopClientPacketConn) hopRoutine(dialer utils.PacketDialer) {
+func (c *ObfsUDPHopClientPacketConn) hopRoutine(dialer utils.PacketDialer, rAddr net.Addr) {
 	ticker := time.NewTicker(c.hopInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			c.hop(dialer)
+			c.hop(dialer, rAddr)
 		case <-c.closeChan:
 			return
 		}
 	}
 }
 
-func (c *ObfsUDPHopClientPacketConn) hop(dialer utils.PacketDialer) {
+func (c *ObfsUDPHopClientPacketConn) hop(dialer utils.PacketDialer, rAddr net.Addr) {
 	c.connMutex.Lock()
 	defer c.connMutex.Unlock()
 	if c.closed {
 		return
 	}
-	newConn, err := dialer.ListenPacket()
+	newConn, err := dialer.ListenPacket(rAddr)
 	if err != nil {
 		// Skip this hop if failed to listen
 		return

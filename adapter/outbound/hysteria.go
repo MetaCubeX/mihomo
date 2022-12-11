@@ -58,7 +58,6 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 		remoteAddr: func(addr string) (net.Addr, error) {
 			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
 		},
-		network: "udp",
 	}
 
 	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
@@ -78,7 +77,6 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 		remoteAddr: func(addr string) (net.Addr, error) {
 			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
 		},
-		network: "udp",
 	}
 	udpConn, err := h.client.DialUDP(&hdc)
 	if err != nil {
@@ -331,11 +329,16 @@ type hyDialerWithContext struct {
 	hyDialer   func(network string) (net.PacketConn, error)
 	ctx        context.Context
 	remoteAddr func(host string) (net.Addr, error)
-	network    string
 }
 
-func (h *hyDialerWithContext) ListenPacket() (net.PacketConn, error) {
-	return h.hyDialer(h.network)
+func (h *hyDialerWithContext) ListenPacket(rAddr net.Addr) (net.PacketConn, error) {
+	network := "udp"
+	if addrPort, err := netip.ParseAddrPort(rAddr.String()); err == nil {
+		if addrPort.Addr().Is6() {
+			network = "udp6"
+		}
+	}
+	return h.hyDialer(network)
 }
 
 func (h *hyDialerWithContext) Context() context.Context {
@@ -343,16 +346,5 @@ func (h *hyDialerWithContext) Context() context.Context {
 }
 
 func (h *hyDialerWithContext) RemoteAddr(host string) (net.Addr, error) {
-	addr, err := h.remoteAddr(host)
-	if err != nil {
-		return nil, err
-	}
-	if addrPort, err := netip.ParseAddrPort(addr.String()); err != nil {
-		if addrPort.Addr().Is6() {
-			h.network = "udp6"
-		} else {
-			h.network = "udp"
-		}
-	}
-	return addr, nil
+	return h.remoteAddr(host)
 }

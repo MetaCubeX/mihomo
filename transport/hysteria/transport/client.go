@@ -20,9 +20,10 @@ type ClientTransport struct {
 	Dialer *net.Dialer
 }
 
-func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (net.PacketConn, error) {
+func (ct *ClientTransport) quicPacketConn(proto string, rAddr net.Addr, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (net.PacketConn, error) {
+	server := rAddr.String()
 	if len(proto) == 0 || proto == "udp" {
-		conn, err := dialer.ListenPacket()
+		conn, err := dialer.ListenPacket(rAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -39,7 +40,7 @@ func (ct *ClientTransport) quicPacketConn(proto string, server string, obfs obfs
 			return conn, nil
 		}
 	} else if proto == "wechat-video" {
-		conn, err := dialer.ListenPacket()
+		conn, err := dialer.ListenPacket(rAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +71,7 @@ func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.
 		return nil, err
 	}
 
-	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr.String(), obfs, hopInterval, dialer)
+	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr, obfs, hopInterval, dialer)
 	if err != nil {
 		return nil, err
 	}
