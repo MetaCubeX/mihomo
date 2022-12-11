@@ -334,7 +334,7 @@ type hyDialerWithContext struct {
 func (h *hyDialerWithContext) ListenPacket(rAddr net.Addr) (net.PacketConn, error) {
 	network := "udp"
 	if addrPort, err := netip.ParseAddrPort(rAddr.String()); err == nil {
-		if addrPort.Addr().Is6() {
+		if addrPort.Addr().Unmap().Is6() {
 			network = "udp6"
 		}
 	}
