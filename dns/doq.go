@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/metacubex/quic-go"
 
@@ -336,23 +335,14 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 	p, err := strconv.Atoi(port)
 	udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: p}
 	var udp net.PacketConn
-	if doq.proxyAdapter == "" {
-		udp, err = dialer.ListenPacket(ctx, "udp", "")
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		conn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", addr, doq.r)
-		if err != nil {
-			return nil, err
-		}
-
-		wrapConn, ok := conn.(*wrapPacketConn)
-		if !ok {
+	if wrapConn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", addr, doq.r); err == nil {
+		if pc, ok := wrapConn.(*wrapPacketConn); ok {
+			udp = pc
+		} else {
 			return nil, fmt.Errorf("quic create packet failed")
 		}
-
-		udp = wrapConn
+	} else {
+		return nil, err
 	}
 
 	host, _, err := net.SplitHostPort(doq.addr)
