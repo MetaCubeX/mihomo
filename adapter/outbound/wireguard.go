@@ -41,18 +41,19 @@ type WireGuard struct {
 
 type WireGuardOption struct {
 	BasicOption
-	Name         string `proxy:"name"`
-	Server       string `proxy:"server"`
-	Port         int    `proxy:"port"`
-	Ip           string `proxy:"ip,omitempty"`
-	Ipv6         string `proxy:"ipv6,omitempty"`
-	PrivateKey   string `proxy:"private-key"`
-	PublicKey    string `proxy:"public-key"`
-	PreSharedKey string `proxy:"pre-shared-key,omitempty"`
-	Reserved     []int  `proxy:"reserved,omitempty"`
-	Workers      int    `proxy:"workers,omitempty"`
-	MTU          int    `proxy:"mtu,omitempty"`
-	UDP          bool   `proxy:"udp,omitempty"`
+	Name                string `proxy:"name"`
+	Server              string `proxy:"server"`
+	Port                int    `proxy:"port"`
+	Ip                  string `proxy:"ip,omitempty"`
+	Ipv6                string `proxy:"ipv6,omitempty"`
+	PrivateKey          string `proxy:"private-key"`
+	PublicKey           string `proxy:"public-key"`
+	PreSharedKey        string `proxy:"pre-shared-key,omitempty"`
+	Reserved            []int  `proxy:"reserved,omitempty"`
+	Workers             int    `proxy:"workers,omitempty"`
+	MTU                 int    `proxy:"mtu,omitempty"`
+	UDP                 bool   `proxy:"udp,omitempty"`
+	PersistentKeepalive int    `proxy:"persistent-keepalive,omitempty"`
 }
 
 type wgDialer struct {
@@ -158,6 +159,9 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	if has6 {
 		ipcConf += "\nallowed_ip=::/0"
+	}
+	if option.PersistentKeepalive != 0 {
+		ipcConf += fmt.Sprintf("\npersistent_keepalive_interval=%d", option.PersistentKeepalive)
 	}
 	mtu := option.MTU
 	if mtu == 0 {
