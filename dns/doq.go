@@ -313,19 +313,9 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 	if err != nil {
 		return nil, fmt.Errorf("failed to open a QUIC connection: %w", err)
 	}
+	addr := rawConn.RemoteAddr().String()
 	// It's never actually used
 	_ = rawConn.Close()
-	var addr string
-	udpConn, ok := rawConn.(*net.UDPConn)
-	if !ok {
-		if packetConn, ok := rawConn.(*wrapPacketConn); !ok {
-			return nil, fmt.Errorf("failed to open connection to %s", doq.addr)
-		} else {
-			addr = packetConn.RemoteAddr().String()
-		}
-	} else {
-		addr = udpConn.RemoteAddr().String()
-	}
 
 	ip, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -334,14 +324,8 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 
 	p, err := strconv.Atoi(port)
 	udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: p}
-	var udp net.PacketConn
-	if wrapConn, err := dialContextExtra(ctx, doq.proxyAdapter, "udp", addr, doq.r); err == nil {
-		if pc, ok := wrapConn.(*wrapPacketConn); ok {
-			udp = pc
-		} else {
-			return nil, fmt.Errorf("quic create packet failed")
-		}
-	} else {
+	udp, err := listenPacket(ctx, doq.proxyAdapter, "udp", addr, doq.r)
+	if err != nil {
 		return nil, err
 	}
 

@@ -168,70 +168,90 @@ func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dia
 			opts = append(opts, dialer.WithResolver(r))
 			return dialer.DialContext(ctx, network, addr, opts...)
 		} else {
-			return dialContextExtra(ctx, proxyAdapter, network, addr, r, opts...)
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			adapter, ok := tunnel.Proxies()[proxyAdapter]
+			if !ok {
+				opts = append(opts, dialer.WithInterface(proxyAdapter))
+			}
+			if strings.Contains(network, "tcp") {
+				// tcp can resolve host by remote
+				metadata := &C.Metadata{
+					NetWork: C.TCP,
+					Host:    host,
+					DstPort: port,
+				}
+				if ok {
+					return adapter.DialContext(ctx, metadata, opts...)
+				}
+				opts = append(opts, dialer.WithResolver(r))
+				return dialer.DialContext(ctx, network, addr, opts...)
+			} else {
+				// udp must resolve host first
+				dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
+				if err != nil {
+					return nil, err
+				}
+				metadata := &C.Metadata{
+					NetWork: C.UDP,
+					Host:    "",
+					DstIP:   dstIP,
+					DstPort: port,
+				}
+				if !ok {
+					return dialer.DialContext(ctx, network, addr, opts...)
+				}
+
+				if !adapter.SupportUDP() {
+					return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
+				}
+
+				packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
+				if err != nil {
+					return nil, err
+				}
+
+				return &wrapPacketConn{
+					PacketConn: packetConn,
+					rAddr:      metadata.UDPAddr(),
+				}, nil
+			}
 		}
 	}
 }
 
-func dialContextExtra(ctx context.Context, adapterName string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.Conn, error) {
+func listenPacket(ctx context.Context, proxyAdapter string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.PacketConn, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
-	adapter, ok := tunnel.Proxies()[adapterName]
+	adapter, ok := tunnel.Proxies()[proxyAdapter]
+	if !ok && len(proxyAdapter) != 0 {
+		opts = append(opts, dialer.WithInterface(proxyAdapter))
+	}
+
+	// udp must resolve host first
+	dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
+	if err != nil {
+		return nil, err
+	}
+	metadata := &C.Metadata{
+		NetWork: C.UDP,
+		Host:    "",
+		DstIP:   dstIP,
+		DstPort: port,
+	}
 	if !ok {
-		opts = append(opts, dialer.WithInterface(adapterName))
+		return dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
 	}
-	if strings.Contains(network, "tcp") {
-		// tcp can resolve host by remote
-		metadata := &C.Metadata{
-			NetWork: C.TCP,
-			Host:    host,
-			DstPort: port,
-		}
-		if ok {
-			return adapter.DialContext(ctx, metadata, opts...)
-		}
-		opts = append(opts, dialer.WithResolver(r))
-		return dialer.DialContext(ctx, network, addr, opts...)
-	} else {
-		// udp must resolve host first
-		dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-		if err != nil {
-			return nil, err
-		}
-		metadata := &C.Metadata{
-			NetWork: C.UDP,
-			Host:    "",
-			DstIP:   dstIP,
-			DstPort: port,
-		}
-		if !ok {
-			packetConn, err := dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
-			if err != nil {
-				return nil, err
-			}
 
-			return &wrapPacketConn{
-				PacketConn: packetConn,
-				rAddr:      metadata.UDPAddr(),
-			}, nil
-		}
-
-		if !adapter.SupportUDP() {
-			return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
-		}
-
-		packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
-		if err != nil {
-			return nil, err
-		}
-
-		return &wrapPacketConn{
-			PacketConn: packetConn,
-			rAddr:      metadata.UDPAddr(),
-		}, nil
+	if !adapter.SupportUDP() {
+		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
 	}
+
+	return adapter.ListenPacketContext(ctx, metadata, opts...)
 }
 
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
