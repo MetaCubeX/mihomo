@@ -114,19 +114,6 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		return
 	}
 
-	pc, err := dialer.ListenPacket(ctx, "udp", "", ss.Base.DialOptions(opts...)...)
-	if err != nil {
-		return
-	}
-
-	go func() {
-		io.Copy(io.Discard, c)
-		c.Close()
-		// A UDP association terminates when the TCP connection that the UDP
-		// ASSOCIATE request arrived on terminates. RFC1928
-		pc.Close()
-	}()
-
 	// Support unspecified UDP bind address.
 	bindUDPAddr := bindAddr.UDPAddr()
 	if bindUDPAddr == nil {
@@ -140,6 +127,19 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 
 		bindUDPAddr.IP = serverAddr.IP
 	}
+
+	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", bindUDPAddr.AddrPort().Addr()), "", ss.Base.DialOptions(opts...)...)
+	if err != nil {
+		return
+	}
+
+	go func() {
+		io.Copy(io.Discard, c)
+		c.Close()
+		// A UDP association terminates when the TCP connection that the UDP
+		// ASSOCIATE request arrived on terminates. RFC1928
+		pc.Close()
+	}()
 
 	return newPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
 }

@@ -65,7 +65,7 @@ func (d *wgDialer) DialContext(ctx context.Context, network string, destination 
 }
 
 func (d *wgDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return dialer.ListenPacket(ctx, "udp", "", d.options...)
+	return dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", destination.Addr), "", d.options...)
 }
 
 func NewWireGuard(option WireGuardOption) (*WireGuard, error) {

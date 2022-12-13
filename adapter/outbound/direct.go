@@ -27,7 +27,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 // ListenPacketContext implements C.ProxyAdapter
 func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	opts = append(opts, dialer.WithResolver(resolver.DefaultResolver))
-	pc, err := dialer.ListenPacket(ctx, "udp", "", d.Base.DialOptions(opts...)...)
+	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", metadata.DstIP), "", d.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err
 	}
