@@ -79,11 +79,7 @@ func (t *Tuic) dial(ctx context.Context, opts ...dialer.Option) (pc net.PacketCo
 		return nil, nil, err
 	}
 	addr = udpAddr
-	network := "udp"
-	if udpAddr.AddrPort().Addr().Unmap().Is6() {
-		network = "udp6"
-	}
-	pc, err = dialer.ListenPacket(ctx, network, "", opts...)
+	pc, err = dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", udpAddr.AddrPort().Addr()), "", opts...)
 	if err != nil {
 		return nil, nil, err
 	}

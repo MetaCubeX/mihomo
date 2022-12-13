@@ -74,14 +74,13 @@ func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata, 
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	pc, err := dialer.ListenPacket(ctx, "udp", "", ssr.Base.DialOptions(opts...)...)
+	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ssr.addr, ssr.prefer)
 	if err != nil {
 		return nil, err
 	}
 
-	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ssr.addr, ssr.prefer)
+	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", addr.AddrPort().Addr()), "", ssr.Base.DialOptions(opts...)...)
 	if err != nil {
-		pc.Close()
 		return nil, err
 	}
 

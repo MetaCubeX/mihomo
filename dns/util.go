@@ -207,7 +207,7 @@ func dialContextExtra(ctx context.Context, adapterName string, network string, a
 			DstPort: port,
 		}
 		if !ok {
-			packetConn, err := dialer.ListenPacket(ctx, network, metadata.RemoteAddress(), opts...)
+			packetConn, err := dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
 			if err != nil {
 				return nil, err
 			}
