@@ -126,7 +126,7 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 	if !ip.IsValid() && fallback.IsValid() {
 		ip = fallback
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 }
 
 func safeConnClose(c net.Conn, err error) {
-	if err != nil {
+	if err != nil && c != nil {
 		_ = c.Close()
 	}
 }
