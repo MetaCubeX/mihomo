@@ -528,14 +528,8 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 		IP:   net.ParseIP(ip),
 		Port: portInt,
 	}
-	var conn net.PacketConn
-	if wrapConn, err := dialContextExtra(ctx, doh.proxyAdapter, "udp", addr, doh.r); err == nil {
-		if pc, ok := wrapConn.(*wrapPacketConn); ok {
-			conn = pc
-		} else {
-			return nil, fmt.Errorf("conn isn't wrapPacketConn")
-		}
-	} else {
+	conn, err := listenPacket(ctx, doh.proxyAdapter, "udp", addr, doh.r)
+	if err != nil {
 		return nil, err
 	}
 	return quic.DialEarlyContext(ctx, conn, &udpAddr, doh.url.Host, tlsCfg, cfg)
@@ -556,19 +550,9 @@ func (doh *dnsOverHTTPS) probeH3(
 	if err != nil {
 		return "", fmt.Errorf("failed to dial: %w", err)
 	}
+	addr = rawConn.RemoteAddr().String()
 	// It's never actually used.
 	_ = rawConn.Close()
-
-	udpConn, ok := rawConn.(*net.UDPConn)
-	if !ok {
-		if packetConn, ok := rawConn.(*wrapPacketConn); !ok {
-			return "", fmt.Errorf("not a UDP connection to %s", doh.Address())
-		} else {
-			addr = packetConn.RemoteAddr().String()
-		}
-	} else {
-		addr = udpConn.RemoteAddr().String()
-	}
 
 	// Avoid spending time on probing if this upstream only supports HTTP/3.
 	if doh.supportsH3() && !doh.supportsHTTP() {
