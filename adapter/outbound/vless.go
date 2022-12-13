@@ -208,7 +208,9 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		if err != nil {
 			return nil, err
 		}
-		defer safeConnClose(c, err)
+		defer func() {
+			safeConnClose(c, err)
+		}()
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 		if err != nil {
@@ -223,7 +225,9 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 	tcpKeepAlive(c)
-	defer safeConnClose(c, err)
+	defer func() {
+		safeConnClose(c, err)
+	}()
 
 	c, err = v.StreamConn(c, metadata)
 	return NewConn(c, v), err
@@ -247,7 +251,9 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		if err != nil {
 			return nil, err
 		}
-		defer safeConnClose(c, err)
+		defer func() {
+			safeConnClose(c, err)
+		}()
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 	} else {
@@ -256,7 +262,9 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 		}
 		tcpKeepAlive(c)
-		defer safeConnClose(c, err)
+		defer func() {
+			safeConnClose(c, err)
+		}()
 
 		c, err = v.StreamConn(c, metadata)
 	}

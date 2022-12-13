@@ -71,7 +71,9 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	}
 	tcpKeepAlive(c)
 
-	defer safeConnClose(c, err)
+	defer func() {
+		safeConnClose(c, err)
+	}()
 
 	c, err = ss.StreamConn(c, metadata)
 	if err != nil {
@@ -97,7 +99,9 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		c = cc
 	}
 
-	defer safeConnClose(c, err)
+	defer func() {
+		safeConnClose(c, err)
+	}()
 
 	tcpKeepAlive(c)
 	var user *socks5.User
