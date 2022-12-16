@@ -67,9 +67,9 @@ func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 	}
 	tcpKeepAlive(c)
 
-	defer func() {
+	defer func(c net.Conn) {
 		safeConnClose(c, err)
-	}()
+	}(c)
 
 	c, err = h.StreamConn(c, metadata)
 	if err != nil {
