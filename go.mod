@@ -74,3 +74,5 @@ require (
 	golang.org/x/tools v0.1.12 // indirect
 	gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c // indirect
 )
+
+replace gvisor.dev/gvisor v0.0.0-20220901235040-6ca97ef2ce1c => github.com/metacubex/gvisor v0.0.0-20221217030112-bdcd835fd60e
