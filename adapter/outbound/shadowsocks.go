@@ -120,6 +120,22 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 	return newPacketConn(pc, ss), nil
 }
 
+// ListenPacketOnPacketConn implements C.ProxyAdapter
+func (ss *ShadowSocks) ListenPacketOnPacketConn(ctx context.Context, c C.PacketConn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ss.addr, ss.prefer)
+	if err != nil {
+		return nil, err
+	}
+
+	pc := ss.method.DialPacketConn(&bufio.BindPacketConn{PacketConn: c, Addr: addr})
+	return newPacketConn(pc, ss), nil
+}
+
+// SupportLPPC implements C.ProxyAdapter
+func (ss *ShadowSocks) SupportLPPC() bool {
+	return true
+}
+
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if ss.option.UDPOverTCP {
