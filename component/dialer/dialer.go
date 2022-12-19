@@ -444,3 +444,15 @@ func concurrentIPv6DialContext(ctx context.Context, network, address string, opt
 
 	return concurrentDialContext(ctx, network, ips, port, opt)
 }
+
+type Dialer struct {
+	Options []Option
+}
+
+func (d Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return DialContext(ctx, network, address, d.Options...)
+}
+
+func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, d.Options...)
+}

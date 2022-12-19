@@ -57,24 +57,24 @@ func (b *Base) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 	return nil, errors.New("no support")
 }
 
+// DialContextWithDialer implements C.ProxyAdapter
+func (b *Base) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	return nil, errors.New("no support")
+}
+
 // ListenPacketContext implements C.ProxyAdapter
 func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	return nil, errors.New("no support")
 }
 
-// ListenPacketOnPacketConn implements C.ProxyAdapter
-func (b *Base) ListenPacketOnPacketConn(ctx context.Context, c C.PacketConn, metadata *C.Metadata) (C.PacketConn, error) {
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (b *Base) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return nil, errors.New("no support")
 }
 
-// SupportLPPC implements C.ProxyAdapter
-func (b *Base) SupportLPPC() bool {
+// SupportWithDialer implements C.ProxyAdapter
+func (b *Base) SupportWithDialer() bool {
 	return false
-}
-
-// ListenPacketOnStreamConn implements C.ProxyAdapter
-func (b *Base) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	return nil, errors.New("no support")
 }
 
 // SupportUOT implements C.ProxyAdapter

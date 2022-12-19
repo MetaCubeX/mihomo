@@ -24,7 +24,7 @@ func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
 	} else {
 		addr = &C.Metadata{
 			Host:    "",
-			DstIP:   ip,
+			DstIP:   ip.Unmap(),
 			DstPort: port,
 		}
 	}
