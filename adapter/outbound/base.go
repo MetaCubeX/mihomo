@@ -62,6 +62,16 @@ func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, op
 	return nil, errors.New("no support")
 }
 
+// ListenPacketOnPacketConn implements C.ProxyAdapter
+func (b *Base) ListenPacketOnPacketConn(ctx context.Context, c C.PacketConn, metadata *C.Metadata) (C.PacketConn, error) {
+	return nil, errors.New("no support")
+}
+
+// SupportLPPC implements C.ProxyAdapter
+func (b *Base) SupportLPPC() bool {
+	return false
+}
+
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (b *Base) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return nil, errors.New("no support")

@@ -108,6 +108,9 @@ type ProxyAdapter interface {
 	SupportUOT() bool
 	ListenPacketOnStreamConn(c net.Conn, metadata *Metadata) (PacketConn, error)
 
+	SupportLPPC() bool
+	ListenPacketOnPacketConn(ctx context.Context, c PacketConn, metadata *Metadata) (PacketConn, error)
+
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata, touch bool) Proxy
 }
