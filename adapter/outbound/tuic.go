@@ -63,6 +63,15 @@ func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 	return NewConn(conn, t), err
 }
 
+// DialContextWithDialer implements C.ProxyAdapter
+func (t *Tuic) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (C.Conn, error) {
+	conn, err := t.client.DialContextWithDialer(ctx, dialer, metadata, t.dialWithDialer)
+	if err != nil {
+		return nil, err
+	}
+	return NewConn(conn, t), err
+}
+
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	opts = t.Base.DialOptions(opts...)
@@ -73,13 +82,31 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, op
 	return newPacketConn(pc, t), nil
 }
 
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (t *Tuic) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	pc, err := t.client.ListenPacketWithDialer(ctx, dialer, metadata, t.dialWithDialer)
+	if err != nil {
+		return nil, err
+	}
+	return newPacketConn(pc, t), nil
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (t *Tuic) SupportWithDialer() bool {
+	return true
+}
+
 func (t *Tuic) dial(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {
+	return t.dialWithDialer(ctx, dialer.NewDialer(opts...))
+}
+
+func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error) {
 	udpAddr, err := resolveUDPAddrWithPrefer(ctx, "udp", t.addr, t.prefer)
 	if err != nil {
 		return nil, nil, err
 	}
 	addr = udpAddr
-	pc, err = dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", udpAddr.AddrPort().Addr()), "", opts...)
+	pc, err = dialer.ListenPacket(ctx, "udp", "", udpAddr.AddrPort())
 	if err != nil {
 		return nil, nil, err
 	}

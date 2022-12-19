@@ -28,6 +28,7 @@ var (
 )
 
 type DialFunc func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error)
+type DialWithDialerFunc func(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error)
 
 type ClientOption struct {
 	TlsConfig             *tls.Config

@@ -65,7 +65,7 @@ func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error)
 
 // DialContext implements C.ProxyAdapter
 func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	return ss.DialContextWithDialer(ctx, dialer.Dialer{Options: ss.Base.DialOptions(opts...)}, metadata)
+	return ss.DialContextWithDialer(ctx, dialer.NewDialer(ss.Base.DialOptions(opts...)...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter

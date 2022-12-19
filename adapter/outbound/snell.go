@@ -78,7 +78,7 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		return NewConn(c, s), err
 	}
 
-	return s.DialContextWithDialer(ctx, dialer.Dialer{Options: s.Base.DialOptions(opts...)}, metadata)
+	return s.DialContextWithDialer(ctx, dialer.NewDialer(s.Base.DialOptions(opts...)...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
@@ -99,7 +99,7 @@ func (s *Snell) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 
 // ListenPacketContext implements C.ProxyAdapter
 func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	return s.ListenPacketWithDialer(ctx, dialer.Dialer{Options: s.Base.DialOptions(opts...)}, metadata)
+	return s.ListenPacketWithDialer(ctx, dialer.NewDialer(s.Base.DialOptions(opts...)...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter

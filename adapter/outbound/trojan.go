@@ -120,7 +120,7 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 
 		return NewConn(c, t), nil
 	}
-	return t.DialContextWithDialer(ctx, dialer.Dialer{Options: t.Base.DialOptions(opts...)}, metadata)
+	return t.DialContextWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
@@ -164,7 +164,7 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		pc := t.instance.PacketConn(c)
 		return newPacketConn(pc, t), err
 	}
-	return t.ListenPacketWithDialer(ctx, dialer.Dialer{Options: t.Base.DialOptions(opts...)}, metadata)
+	return t.ListenPacketWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter

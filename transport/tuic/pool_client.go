@@ -37,9 +37,25 @@ func (t *PoolClient) DialContext(ctx context.Context, metadata *C.Metadata, dial
 	newDialFn := func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {
 		return t.dial(ctx, dialFn, opts...)
 	}
-	conn, err := t.getClient(false, opts...).DialContext(ctx, metadata, newDialFn, opts...)
+	var o any = *dialer.ApplyOptions(opts...)
+	conn, err := t.getClient(false, o).DialContext(ctx, metadata, newDialFn, opts...)
 	if errors.Is(err, TooManyOpenStreams) {
-		conn, err = t.newClient(false, opts...).DialContext(ctx, metadata, newDialFn, opts...)
+		conn, err = t.newClient(false, o).DialContext(ctx, metadata, newDialFn, opts...)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return N.NewRefConn(conn, t), err
+}
+
+func (t *PoolClient) DialContextWithDialer(ctx context.Context, d C.Dialer, metadata *C.Metadata, dialFn DialWithDialerFunc) (net.Conn, error) {
+	newDialFn := func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {
+		return dialFn(ctx, d)
+	}
+	var o any = d
+	conn, err := t.getClient(false, o).DialContext(ctx, metadata, newDialFn)
+	if errors.Is(err, TooManyOpenStreams) {
+		conn, err = t.newClient(false, o).DialContext(ctx, metadata, newDialFn)
 	}
 	if err != nil {
 		return nil, err
@@ -51,9 +67,25 @@ func (t *PoolClient) ListenPacketContext(ctx context.Context, metadata *C.Metada
 	newDialFn := func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {
 		return t.dial(ctx, dialFn, opts...)
 	}
-	pc, err := t.getClient(true, opts...).ListenPacketContext(ctx, metadata, newDialFn, opts...)
+	var o any = *dialer.ApplyOptions(opts...)
+	pc, err := t.getClient(true, o).ListenPacketContext(ctx, metadata, newDialFn, opts...)
 	if errors.Is(err, TooManyOpenStreams) {
-		pc, err = t.newClient(false, opts...).ListenPacketContext(ctx, metadata, newDialFn, opts...)
+		pc, err = t.newClient(true, o).ListenPacketContext(ctx, metadata, newDialFn, opts...)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return N.NewRefPacketConn(pc, t), nil
+}
+
+func (t *PoolClient) ListenPacketWithDialer(ctx context.Context, d C.Dialer, metadata *C.Metadata, dialFn DialWithDialerFunc) (net.PacketConn, error) {
+	newDialFn := func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {
+		return dialFn(ctx, d)
+	}
+	var o any = d
+	pc, err := t.getClient(true, o).ListenPacketContext(ctx, metadata, newDialFn)
+	if errors.Is(err, TooManyOpenStreams) {
+		pc, err = t.newClient(true, o).ListenPacketContext(ctx, metadata, newDialFn)
 	}
 	if err != nil {
 		return nil, err
@@ -96,15 +128,13 @@ func (t *PoolClient) forceClose() {
 	}
 }
 
-func (t *PoolClient) newClient(udp bool, opts ...dialer.Option) *Client {
+func (t *PoolClient) newClient(udp bool, o any) *Client {
 	clients := t.tcpClients
 	clientsMutex := t.tcpClientsMutex
 	if udp {
 		clients = t.udpClients
 		clientsMutex = t.udpClientsMutex
 	}
-
-	var o any = *dialer.ApplyOptions(opts...)
 
 	clientsMutex.Lock()
 	defer clientsMutex.Unlock()
@@ -117,15 +147,13 @@ func (t *PoolClient) newClient(udp bool, opts ...dialer.Option) *Client {
 	return client
 }
 
-func (t *PoolClient) getClient(udp bool, opts ...dialer.Option) *Client {
+func (t *PoolClient) getClient(udp bool, o any) *Client {
 	clients := t.tcpClients
 	clientsMutex := t.tcpClientsMutex
 	if udp {
 		clients = t.udpClients
 		clientsMutex = t.udpClientsMutex
 	}
-
-	var o any = *dialer.ApplyOptions(opts...)
 	var bestClient *Client
 
 	func() {
@@ -164,7 +192,7 @@ func (t *PoolClient) getClient(udp bool, opts ...dialer.Option) *Client {
 	}
 
 	if bestClient == nil {
-		return t.newClient(udp, opts...)
+		return t.newClient(udp, o)
 	} else {
 		bestClient.lastVisited = time.Now()
 		return bestClient

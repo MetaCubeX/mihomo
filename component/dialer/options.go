@@ -68,3 +68,9 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 		}
 	}
 }
+
+func withOption(o option) Option {
+	return func(opt *option) {
+		*opt = o
+	}
+}

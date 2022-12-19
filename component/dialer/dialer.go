@@ -445,14 +445,19 @@ func concurrentIPv6DialContext(ctx context.Context, network, address string, opt
 	return concurrentDialContext(ctx, network, ips, port, opt)
 }
 
-type Dialer struct {
-	Options []Option
+type dialer struct {
+	opt option
 }
 
-func (d Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return DialContext(ctx, network, address, d.Options...)
+func (d dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return DialContext(ctx, network, address, withOption(d.opt))
 }
 
-func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, d.Options...)
+func (d dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, withOption(d.opt))
+}
+
+func NewDialer(options ...Option) dialer {
+	opt := ApplyOptions(options...)
+	return dialer{opt: *opt}
 }
