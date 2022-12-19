@@ -3,10 +3,12 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
+	"net/netip"
+	"strings"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -14,6 +16,36 @@ import (
 
 type Relay struct {
 	*GroupBase
+}
+
+type proxyDialer struct {
+	proxy  C.Proxy
+	dialer C.Dialer
+}
+
+func (p proxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	currentMeta, err := addrToMetadata(address)
+	if err != nil {
+		return nil, err
+	}
+	if strings.Contains(network, "udp") { // should not support this operation
+		currentMeta.NetWork = C.UDP
+		pc, err := p.proxy.ListenPacketWithDialer(ctx, p.dialer, currentMeta)
+		if err != nil {
+			return nil, err
+		}
+		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
+	}
+	return p.proxy.DialContextWithDialer(ctx, p.dialer, currentMeta)
+}
+
+func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	currentMeta, err := addrToMetadata(rAddrPort.String())
+	if err != nil {
+		return nil, err
+	}
+	currentMeta.NetWork = C.UDP
+	return p.proxy.ListenPacketWithDialer(ctx, p.dialer, currentMeta)
 }
 
 // DialContext implements C.ProxyAdapter
@@ -26,46 +58,19 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 	case 1:
 		return proxies[0].DialContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	}
-
-	first := proxies[0]
+	var d C.Dialer
+	d = dialer.Dialer{Options: r.Base.DialOptions(opts...)}
+	for _, proxy := range proxies[:len(proxies)-1] {
+		d = proxyDialer{
+			proxy:  proxy,
+			dialer: d,
+		}
+	}
 	last := proxies[len(proxies)-1]
-
-	var c net.Conn
-	var currentMeta *C.Metadata
-	var err error
-
-	currentMeta, err = addrToMetadata(proxies[1].Addr())
+	conn, err := last.DialContextWithDialer(ctx, d, metadata)
 	if err != nil {
 		return nil, err
 	}
-
-	c, err = first.DialContext(ctx, currentMeta, r.Base.DialOptions(opts...)...)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-	}
-
-	first = proxies[1]
-
-	for _, proxy := range proxies[2:] {
-		currentMeta, err = addrToMetadata(proxy.Addr())
-		if err != nil {
-			return nil, err
-		}
-
-		c, err = first.StreamConn(c, currentMeta)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-
-		first = proxy
-	}
-
-	c, err = last.StreamConn(c, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", last.Addr(), err)
-	}
-
-	conn := outbound.NewConn(c, last)
 
 	for i := len(chainProxies) - 2; i >= 0; i-- {
 		conn.AppendToChains(chainProxies[i])
@@ -87,95 +92,18 @@ func (r *Relay) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		return proxies[0].ListenPacketContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	}
 
-	udtId := -1
-	for i, proxy := range proxies {
-		if !proxy.SupportUDP() {
-			return nil, fmt.Errorf("%s don't support udp", proxy.Name())
-		}
-		if proxy.SupportUOT() {
-			udtId = i // we need the latest id, so don't break
+	var d C.Dialer
+	d = dialer.Dialer{Options: r.Base.DialOptions(opts...)}
+	for _, proxy := range proxies[:len(proxies)-1] {
+		d = proxyDialer{
+			proxy:  proxy,
+			dialer: d,
 		}
 	}
-
-	first := proxies[0]
 	last := proxies[len(proxies)-1]
-
-	var pc C.PacketConn
-	var currentMeta *C.Metadata
-	if udtId != -1 {
-		c, err := dialer.DialContext(ctx, "tcp", first.Addr(), r.Base.DialOptions(opts...)...)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-		tcpKeepAlive(c)
-
-		for _, proxy := range proxies[1 : udtId+1] {
-			currentMeta, err = addrToMetadata(proxy.Addr())
-			if err != nil {
-				return nil, err
-			}
-
-			c, err = first.StreamConn(c, currentMeta)
-			if err != nil {
-				return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-			}
-
-			first = proxy
-		}
-
-		if first == last {
-			currentMeta = metadata
-		} else {
-			currentMeta, err = addrToMetadata(proxies[udtId+1].Addr())
-			if err != nil {
-				return nil, err
-			}
-			currentMeta.NetWork = C.UDP
-		}
-		c, err = first.StreamConn(c, currentMeta)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-
-		pc, err = first.ListenPacketOnStreamConn(c, currentMeta)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-		if first == last {
-			return pc, nil
-		}
-	} else {
-		currentMeta, err = addrToMetadata(proxies[1].Addr())
-		if err != nil {
-			return nil, err
-		}
-		currentMeta.NetWork = C.UDP
-		pc, err = first.ListenPacketContext(ctx, currentMeta, r.Base.DialOptions(opts...)...)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-		udtId = 0
-	}
-
-	first = proxies[udtId+1]
-	for _, proxy := range proxies[udtId+2:] {
-		currentMeta, err = addrToMetadata(proxy.Addr())
-		if err != nil {
-			return nil, err
-		}
-		currentMeta.NetWork = C.UDP
-
-		pc, err = first.ListenPacketOnPacketConn(ctx, pc, currentMeta)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", first.Addr(), err)
-		}
-
-		first = proxy
-	}
-
-	pc, err = last.ListenPacketOnPacketConn(ctx, pc, metadata)
+	pc, err := last.ListenPacketWithDialer(ctx, d, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %w", last.Addr(), err)
+		return nil, err
 	}
 
 	for i := len(chainProxies) - 2; i >= 0; i-- {
@@ -201,7 +129,7 @@ func (r *Relay) SupportUDP() bool {
 		if proxy.SupportUOT() {
 			return true
 		}
-		if !proxy.SupportLPPC() {
+		if !proxy.SupportWithDialer() {
 			return false
 		}
 	}

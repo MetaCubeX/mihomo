@@ -65,7 +65,12 @@ func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error)
 
 // DialContext implements C.ProxyAdapter
 func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	c, err := dialer.DialContext(ctx, "tcp", ss.addr, ss.Base.DialOptions(opts...)...)
+	return ss.DialContextWithDialer(ctx, dialer.Dialer{Options: ss.Base.DialOptions(opts...)}, metadata)
+}
+
+// DialContextWithDialer implements C.ProxyAdapter
+func (ss *Socks5) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
@@ -81,6 +86,11 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	}
 
 	return NewConn(c, ss), nil
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (ss *Socks5) SupportWithDialer() bool {
+	return true
 }
 
 // ListenPacketContext implements C.ProxyAdapter

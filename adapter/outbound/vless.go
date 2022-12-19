@@ -219,8 +219,12 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 		return NewConn(c, v), nil
 	}
+	return v.DialContextWithDialer(ctx, dialer.Dialer{Options: v.Base.DialOptions(opts...)}, metadata)
+}
 
-	c, err := dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
+// DialContextWithDialer implements C.ProxyAdapter
+func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
@@ -256,24 +260,47 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}()
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
-	} else {
-		c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-		}
-		tcpKeepAlive(c)
-		defer func() {
-			safeConnClose(c, err)
-		}()
 
-		c, err = v.StreamConn(c, metadata)
+		if err != nil {
+			return nil, fmt.Errorf("new vless client error: %v", err)
+		}
+
+		return v.ListenPacketOnStreamConn(c, metadata)
 	}
+	return v.ListenPacketWithDialer(ctx, dialer.Dialer{Options: v.Base.DialOptions(opts...)}, metadata)
+}
+
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+	c, err := dialer.DialContext(ctx, "tcp", v.addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
+	tcpKeepAlive(c)
+	defer func() {
+		safeConnClose(c, err)
+	}()
+
+	c, err = v.StreamConn(c, metadata)
 
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
 	return v.ListenPacketOnStreamConn(c, metadata)
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (v *Vless) SupportWithDialer() bool {
+	return true
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

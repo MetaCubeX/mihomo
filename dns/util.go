@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/common/picker"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -134,32 +135,6 @@ func msgToDomain(msg *D.Msg) string {
 	return ""
 }
 
-type wrapPacketConn struct {
-	net.PacketConn
-	rAddr net.Addr
-}
-
-func (wpc *wrapPacketConn) Read(b []byte) (n int, err error) {
-	n, _, err = wpc.PacketConn.ReadFrom(b)
-	return n, err
-}
-
-func (wpc *wrapPacketConn) Write(b []byte) (n int, err error) {
-	return wpc.PacketConn.WriteTo(b, wpc.rAddr)
-}
-
-func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
-	return wpc.rAddr
-}
-
-func (wpc *wrapPacketConn) LocalAddr() net.Addr {
-	if wpc.PacketConn.LocalAddr() == nil {
-		return &net.UDPAddr{IP: net.IPv4zero, Port: 0}
-	} else {
-		return wpc.PacketConn.LocalAddr()
-	}
-}
-
 type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
 
 func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dialHandler {
@@ -213,10 +188,7 @@ func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dia
 					return nil, err
 				}
 
-				return &wrapPacketConn{
-					PacketConn: packetConn,
-					rAddr:      metadata.UDPAddr(),
-				}, nil
+				return N.NewBindPacketConn(packetConn, metadata.UDPAddr()), nil
 			}
 		}
 	}
