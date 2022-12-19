@@ -59,7 +59,7 @@ func (r *Relay) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		return proxies[0].DialContext(ctx, metadata, r.Base.DialOptions(opts...)...)
 	}
 	var d C.Dialer
-	d = dialer.Dialer{Options: r.Base.DialOptions(opts...)}
+	d = dialer.NewDialer(r.Base.DialOptions(opts...)...)
 	for _, proxy := range proxies[:len(proxies)-1] {
 		d = proxyDialer{
 			proxy:  proxy,
@@ -93,7 +93,7 @@ func (r *Relay) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	}
 
 	var d C.Dialer
-	d = dialer.Dialer{Options: r.Base.DialOptions(opts...)}
+	d = dialer.NewDialer(r.Base.DialOptions(opts...)...)
 	for _, proxy := range proxies[:len(proxies)-1] {
 		d = proxyDialer{
 			proxy:  proxy,

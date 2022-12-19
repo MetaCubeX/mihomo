@@ -232,7 +232,7 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 		return NewConn(c, v), nil
 	}
-	return v.DialContextWithDialer(ctx, dialer.Dialer{Options: v.Base.DialOptions(opts...)}, metadata)
+	return v.DialContextWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
@@ -300,7 +300,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 	}()
 
 	c, err = v.StreamConn(c, metadata)
-	return v.ListenPacketWithDialer(ctx, dialer.Dialer{Options: v.Base.DialOptions(opts...)}, metadata)
+	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
