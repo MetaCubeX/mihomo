@@ -17,7 +17,6 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -27,8 +26,7 @@ var (
 	TooManyOpenStreams = errors.New("tuic: too many open streams")
 )
 
-type DialFunc func(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error)
-type DialWithDialerFunc func(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error)
+type DialFunc func(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error)
 
 type ClientOption struct {
 	TlsConfig             *tls.Config
@@ -57,17 +55,17 @@ type clientImpl struct {
 	udpInputMap sync.Map
 
 	// only ready for PoolClient
-	optionRef   any
+	dialerRef   C.Dialer
 	lastVisited time.Time
 }
 
-func (t *clientImpl) getQuicConn(ctx context.Context, dialFn DialFunc, opts ...dialer.Option) (quic.Connection, error) {
+func (t *clientImpl) getQuicConn(ctx context.Context, dialer C.Dialer, dialFn DialFunc) (quic.Connection, error) {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.quicConn != nil {
 		return t.quicConn, nil
 	}
-	pc, addr, err := dialFn(ctx, opts...)
+	pc, addr, err := dialFn(ctx, dialer)
 	if err != nil {
 		return nil, err
 	}
@@ -242,8 +240,8 @@ func (t *clientImpl) Close() {
 	}
 }
 
-func (t *clientImpl) DialContext(ctx context.Context, metadata *C.Metadata, dialFn DialFunc, opts ...dialer.Option) (net.Conn, error) {
-	quicConn, err := t.getQuicConn(ctx, dialFn, opts...)
+func (t *clientImpl) DialContextWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.Conn, error) {
+	quicConn, err := t.getQuicConn(ctx, dialer, dialFn)
 	if err != nil {
 		return nil, err
 	}
@@ -340,8 +338,8 @@ func (conn *earlyConn) Read(b []byte) (n int, err error) {
 	return conn.BufferedConn.Read(b)
 }
 
-func (t *clientImpl) ListenPacketContext(ctx context.Context, metadata *C.Metadata, dialFn DialFunc, opts ...dialer.Option) (net.PacketConn, error) {
-	quicConn, err := t.getQuicConn(ctx, dialFn, opts...)
+func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.PacketConn, error) {
+	quicConn, err := t.getQuicConn(ctx, dialer, dialFn)
 	if err != nil {
 		return nil, err
 	}
@@ -385,16 +383,16 @@ type Client struct {
 	*clientImpl // use an independent pointer to let Finalizer can work no matter somewhere handle an influence in clientImpl inner
 }
 
-func (t *Client) DialContext(ctx context.Context, metadata *C.Metadata, dialFn DialFunc, opts ...dialer.Option) (net.Conn, error) {
-	conn, err := t.clientImpl.DialContext(ctx, metadata, dialFn, opts...)
+func (t *Client) DialContextWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.Conn, error) {
+	conn, err := t.clientImpl.DialContextWithDialer(ctx, metadata, dialer, dialFn)
 	if err != nil {
 		return nil, err
 	}
 	return N.NewRefConn(conn, t), err
 }
 
-func (t *Client) ListenPacketContext(ctx context.Context, metadata *C.Metadata, dialFn DialFunc, opts ...dialer.Option) (net.PacketConn, error) {
-	pc, err := t.clientImpl.ListenPacketContext(ctx, metadata, dialFn, opts...)
+func (t *Client) ListenPacketWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.PacketConn, error) {
+	pc, err := t.clientImpl.ListenPacketWithDialer(ctx, metadata, dialer, dialFn)
 	if err != nil {
 		return nil, err
 	}
