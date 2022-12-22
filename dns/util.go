@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
@@ -16,6 +17,12 @@ import (
 )
 
 func putMsgToCache(c *cache.LruCache, key string, msg *D.Msg) {
+	// skip dns cache for acme challenge
+	if q := msg.Question[0]; q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge") {
+		log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)
+		return
+	}
+
 	var ttl uint32
 	switch {
 	case len(msg.Answer) != 0:
