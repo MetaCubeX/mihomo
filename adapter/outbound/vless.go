@@ -208,9 +208,9 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		if err != nil {
 			return nil, err
 		}
-		defer func() {
+		defer func(c net.Conn) {
 			safeConnClose(c, err)
-		}()
+		}(c)
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 		if err != nil {
@@ -255,9 +255,9 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		if err != nil {
 			return nil, err
 		}
-		defer func() {
+		defer func(c net.Conn) {
 			safeConnClose(c, err)
-		}()
+		}(c)
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 
@@ -285,9 +285,9 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 	tcpKeepAlive(c)
-	defer func() {
+	defer func(c net.Conn) {
 		safeConnClose(c, err)
-	}()
+	}(c)
 
 	c, err = v.StreamConn(c, metadata)
 

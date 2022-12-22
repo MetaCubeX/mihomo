@@ -153,9 +153,9 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
-		defer func() {
+		defer func(c net.Conn) {
 			safeConnClose(c, err)
-		}()
+		}(c)
 		err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
 		if err != nil {
 			return nil, err
@@ -173,9 +173,9 @@ func (t *Trojan) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, me
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
-	defer func() {
+	defer func(c net.Conn) {
 		safeConnClose(c, err)
-	}()
+	}(c)
 	tcpKeepAlive(c)
 	c, err = t.plainStream(c)
 	if err != nil {
