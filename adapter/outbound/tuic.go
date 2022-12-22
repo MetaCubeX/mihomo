@@ -55,17 +55,12 @@ type TuicOption struct {
 
 // DialContext implements C.ProxyAdapter
 func (t *Tuic) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	opts = t.Base.DialOptions(opts...)
-	conn, err := t.client.DialContext(ctx, metadata, t.dial, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return NewConn(conn, t), err
+	return t.DialContextWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (t *Tuic) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (C.Conn, error) {
-	conn, err := t.client.DialContextWithDialer(ctx, dialer, metadata, t.dialWithDialer)
+	conn, err := t.client.DialContextWithDialer(ctx, metadata, dialer, t.dialWithDialer)
 	if err != nil {
 		return nil, err
 	}
@@ -74,17 +69,12 @@ func (t *Tuic) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metad
 
 // ListenPacketContext implements C.ProxyAdapter
 func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	opts = t.Base.DialOptions(opts...)
-	pc, err := t.client.ListenPacketContext(ctx, metadata, t.dial, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return newPacketConn(pc, t), nil
+	return t.ListenPacketWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (t *Tuic) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	pc, err := t.client.ListenPacketWithDialer(ctx, dialer, metadata, t.dialWithDialer)
+	pc, err := t.client.ListenPacketWithDialer(ctx, metadata, dialer, t.dialWithDialer)
 	if err != nil {
 		return nil, err
 	}

@@ -36,7 +36,7 @@ func ParseNetwork(network string, addr netip.Addr) string {
 	return network
 }
 
-func ApplyOptions(options ...Option) *option {
+func applyOptions(options ...Option) *option {
 	opt := &option{
 		interfaceName: DefaultInterface.Load(),
 		routingMark:   int(DefaultRoutingMark.Load()),
@@ -54,7 +54,7 @@ func ApplyOptions(options ...Option) *option {
 }
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
-	opt := ApplyOptions(options...)
+	opt := applyOptions(options...)
 
 	if opt.network == 4 || opt.network == 6 {
 		if strings.Contains(network, "tcp") {
@@ -445,19 +445,19 @@ func concurrentIPv6DialContext(ctx context.Context, network, address string, opt
 	return concurrentDialContext(ctx, network, ips, port, opt)
 }
 
-type dialer struct {
-	opt option
+type Dialer struct {
+	Opt option
 }
 
-func (d dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return DialContext(ctx, network, address, withOption(d.opt))
+func (d Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return DialContext(ctx, network, address, WithOption(d.Opt))
 }
 
-func (d dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, withOption(d.opt))
+func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, WithOption(d.Opt))
 }
 
-func NewDialer(options ...Option) dialer {
-	opt := ApplyOptions(options...)
-	return dialer{opt: *opt}
+func NewDialer(options ...Option) Dialer {
+	opt := applyOptions(options...)
+	return Dialer{Opt: *opt}
 }
