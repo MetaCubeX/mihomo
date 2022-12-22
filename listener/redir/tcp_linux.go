@@ -32,7 +32,11 @@ func parserPacket(conn net.Conn) (socks5.Addr, error) {
 	var addr netip.AddrPort
 
 	rc.Control(func(fd uintptr) {
-		addr, err = getorigdst(fd)
+		if ip4 := c.LocalAddr().(*net.TCPAddr).IP.To4(); ip4 != nil {
+			addr, err = getorigdst(fd)
+		} else {
+			addr, err = getorigdst6(fd)
+		}
 	})
 
 	return socks5.AddrFromStdAddrPort(addr), err
@@ -47,4 +51,14 @@ func getorigdst(fd uintptr) (netip.AddrPort, error) {
 	}
 	port := binary.BigEndian.Uint16((*(*[2]byte)(unsafe.Pointer(&addr.Port)))[:])
 	return netip.AddrPortFrom(netip.AddrFrom4(addr.Addr), port), nil
+}
+
+func getorigdst6(fd uintptr) (netip.AddrPort, error) {
+	addr := unix.RawSockaddrInet6{}
+	size := uint32(unsafe.Sizeof(addr))
+	if err := socketcall(GETSOCKOPT, fd, syscall.IPPROTO_IPV6, IP6T_SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&addr)), uintptr(unsafe.Pointer(&size)), 0); err != nil {
+		return netip.AddrPort{}, err
+	}
+	port := binary.BigEndian.Uint16((*(*[2]byte)(unsafe.Pointer(&addr.Port)))[:])
+	return netip.AddrPortFrom(netip.AddrFrom16(addr.Addr), port), nil
 }
