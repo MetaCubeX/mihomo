@@ -1,12 +1,16 @@
 package redir
 
 import (
+	"encoding/binary"
 	"errors"
 	"net"
+	"net/netip"
 	"syscall"
 	"unsafe"
 
 	"github.com/Dreamacro/clash/transport/socks5"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -25,27 +29,22 @@ func parserPacket(conn net.Conn) (socks5.Addr, error) {
 		return nil, err
 	}
 
-	var addr socks5.Addr
+	var addr netip.AddrPort
 
 	rc.Control(func(fd uintptr) {
 		addr, err = getorigdst(fd)
 	})
 
-	return addr, err
+	return socks5.AddrFromStdAddrPort(addr), err
 }
 
 // Call getorigdst() from linux/net/ipv4/netfilter/nf_conntrack_l3proto_ipv4.c
-func getorigdst(fd uintptr) (socks5.Addr, error) {
-	raw := syscall.RawSockaddrInet4{}
-	siz := uint32(unsafe.Sizeof(raw))
-	if err := socketcall(GETSOCKOPT, fd, syscall.IPPROTO_IP, SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&raw)), uintptr(unsafe.Pointer(&siz)), 0); err != nil {
-		return nil, err
+func getorigdst(fd uintptr) (netip.AddrPort, error) {
+	addr := unix.RawSockaddrInet4{}
+	size := uint32(unsafe.Sizeof(addr))
+	if err := socketcall(GETSOCKOPT, fd, syscall.IPPROTO_IP, SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&addr)), uintptr(unsafe.Pointer(&size)), 0); err != nil {
+		return netip.AddrPort{}, err
 	}
-
-	addr := make([]byte, 1+net.IPv4len+2)
-	addr[0] = socks5.AtypIPv4
-	copy(addr[1:1+net.IPv4len], raw.Addr[:])
-	port := (*[2]byte)(unsafe.Pointer(&raw.Port)) // big-endian
-	addr[1+net.IPv4len], addr[1+net.IPv4len+1] = port[0], port[1]
-	return addr, nil
+	port := binary.BigEndian.Uint16((*(*[2]byte)(unsafe.Pointer(&addr.Port)))[:])
+	return netip.AddrPortFrom(netip.AddrFrom4(addr.Addr), port), nil
 }
