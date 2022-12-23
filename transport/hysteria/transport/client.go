@@ -20,7 +20,7 @@ type ClientTransport struct {
 	Dialer *net.Dialer
 }
 
-func (ct *ClientTransport) quicPacketConn(proto string, rAddr net.Addr, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (net.PacketConn, error) {
+func (ct *ClientTransport) quicPacketConn(proto string, rAddr net.Addr, serverPorts string, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (net.PacketConn, error) {
 	server := rAddr.String()
 	if len(proto) == 0 || proto == "udp" {
 		conn, err := dialer.ListenPacket(rAddr)
@@ -28,14 +28,14 @@ func (ct *ClientTransport) quicPacketConn(proto string, rAddr net.Addr, obfs obf
 			return nil, err
 		}
 		if obfs != nil {
-			if isMultiPortAddr(server) {
-				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, obfs, dialer)
+			if serverPorts != "" {
+				return udp.NewObfsUDPHopClientPacketConn(server, serverPorts, hopInterval, obfs, dialer)
 			}
 			oc := udp.NewObfsUDPConn(conn, obfs)
 			return oc, nil
 		} else {
-			if isMultiPortAddr(server) {
-				return udp.NewObfsUDPHopClientPacketConn(server, hopInterval, nil, dialer)
+			if serverPorts != "" {
+				return udp.NewObfsUDPHopClientPacketConn(server, serverPorts, hopInterval, nil, dialer)
 			}
 			return conn, nil
 		}
@@ -65,13 +65,13 @@ func (ct *ClientTransport) quicPacketConn(proto string, rAddr net.Addr, obfs obf
 	}
 }
 
-func (ct *ClientTransport) QUICDial(proto string, server string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (quic.Connection, error) {
+func (ct *ClientTransport) QUICDial(proto string, server string, serverPorts string, tlsConfig *tls.Config, quicConfig *quic.Config, obfs obfsPkg.Obfuscator, hopInterval time.Duration, dialer utils.PacketDialer) (quic.Connection, error) {
 	serverUDPAddr, err := dialer.RemoteAddr(server)
 	if err != nil {
 		return nil, err
 	}
 
-	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr, obfs, hopInterval, dialer)
+	pktConn, err := ct.quicPacketConn(proto, serverUDPAddr, serverPorts, obfs, hopInterval, dialer)
 	if err != nil {
 		return nil, err
 	}

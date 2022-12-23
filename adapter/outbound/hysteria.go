@@ -89,7 +89,7 @@ type HysteriaOption struct {
 	BasicOption
 	Name                string   `proxy:"name"`
 	Server              string   `proxy:"server"`
-	Port                int      `proxy:"port"`
+	Port                int      `proxy:"port,omitempty"`
 	Ports               string   `proxy:"ports,omitempty"`
 	Protocol            string   `proxy:"protocol,omitempty"`
 	ObfsProtocol        string   `proxy:"obfs-protocol,omitempty"` // compatible with Stash
@@ -134,12 +134,8 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			Timeout: 8 * time.Second,
 		},
 	}
-	var addr string
-	if len(option.Ports) == 0 {
-		addr = net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	} else {
-		addr = net.JoinHostPort(option.Server, option.Ports)
-	}
+	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
+	ports := option.Ports
 
 	serverName := option.Server
 	if option.SNI != "" {
@@ -244,7 +240,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		down = uint64(option.DownSpeed * mbpsToBps)
 	}
 	client, err := core.NewClient(
-		addr, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
+		addr, ports, option.Protocol, auth, tlsConfig, quicConfig, clientTransport, up, down, func(refBPS uint64) congestion.CongestionControl {
 			return hyCongestion.NewBrutalSender(congestion.ByteCount(refBPS))
 		}, obfuscator, hopInterval, option.FastOpen,
 	)
