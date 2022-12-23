@@ -31,6 +31,7 @@ type CongestionFactory func(refBPS uint64) congestion.CongestionControl
 type Client struct {
 	transport         *transport.ClientTransport
 	serverAddr        string
+	serverPorts       string
 	protocol          string
 	sendBPS, recvBPS  uint64
 	auth              []byte
@@ -51,13 +52,14 @@ type Client struct {
 	fastOpen        bool
 }
 
-func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
+func NewClient(serverAddr string, serverPorts string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
 	transport *transport.ClientTransport, sendBPS uint64, recvBPS uint64, congestionFactory CongestionFactory,
 	obfuscator obfs.Obfuscator, hopInterval time.Duration, fastOpen bool) (*Client, error) {
 	quicConfig.DisablePathMTUDiscovery = quicConfig.DisablePathMTUDiscovery || pmtud_fix.DisablePathMTUDiscovery
 	c := &Client{
 		transport:         transport,
 		serverAddr:        serverAddr,
+		serverPorts:       serverPorts,
 		protocol:          protocol,
 		sendBPS:           sendBPS,
 		recvBPS:           recvBPS,
@@ -73,7 +75,7 @@ func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.C
 }
 
 func (c *Client) connectToServer(dialer utils.PacketDialer) error {
-	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.tlsConfig, c.quicConfig, c.obfuscator, c.hopInterval, dialer)
+	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.serverPorts, c.tlsConfig, c.quicConfig, c.obfuscator, c.hopInterval, dialer)
 	if err != nil {
 		return err
 	}
