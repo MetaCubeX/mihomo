@@ -58,7 +58,7 @@ type udpPacket struct {
 	addr net.Addr
 }
 
-func NewObfsUDPHopClientPacketConn(server string, serverPorts string, hopInterval time.Duration, obfs obfs.Obfuscator, dialer utils.PacketDialer) (*ObfsUDPHopClientPacketConn, error) {
+func NewObfsUDPHopClientPacketConn(server string, serverPorts string, hopInterval time.Duration, obfs obfs.Obfuscator, dialer utils.PacketDialer) (net.PacketConn, error) {
 	ports, err := parsePorts(serverPorts)
 	if err != nil {
 		return nil, err
@@ -105,6 +105,9 @@ func NewObfsUDPHopClientPacketConn(server string, serverPorts string, hopInterva
 	}
 	go conn.recvRoutine(conn.currentConn)
 	go conn.hopRoutine(dialer, rAddr)
+	if _, ok := conn.currentConn.(syscall.Conn); ok {
+		return &ObfsUDPHopClientPacketConnWithSyscall{conn}, nil
+	}
 	return conn, nil
 }
 
@@ -281,16 +284,6 @@ func (c *ObfsUDPHopClientPacketConn) SetWriteBuffer(bytes int) error {
 	return trySetPacketConnWriteBuffer(c.currentConn, bytes)
 }
 
-func (c *ObfsUDPHopClientPacketConn) SyscallConn() (syscall.RawConn, error) {
-	c.connMutex.RLock()
-	defer c.connMutex.RUnlock()
-	sc, ok := c.currentConn.(syscall.Conn)
-	if !ok {
-		return nil, errors.New("not supported")
-	}
-	return sc.SyscallConn()
-}
-
 func trySetPacketConnReadBuffer(pc net.PacketConn, bytes int) error {
 	sc, ok := pc.(interface {
 		SetReadBuffer(bytes int) error
@@ -309,6 +302,20 @@ func trySetPacketConnWriteBuffer(pc net.PacketConn, bytes int) error {
 		return sc.SetWriteBuffer(bytes)
 	}
 	return nil
+}
+
+type ObfsUDPHopClientPacketConnWithSyscall struct {
+	*ObfsUDPHopClientPacketConn
+}
+
+func (c *ObfsUDPHopClientPacketConnWithSyscall) SyscallConn() (syscall.RawConn, error) {
+	c.connMutex.RLock()
+	defer c.connMutex.RUnlock()
+	sc, ok := c.currentConn.(syscall.Conn)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return sc.SyscallConn()
 }
 
 // parsePorts parses the multi-port server address and returns the host and ports.
