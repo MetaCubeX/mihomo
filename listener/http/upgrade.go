@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	N "github.com/Dreamacro/clash/common/net"
@@ -26,17 +25,15 @@ func isUpgradeRequest(req *http.Request) bool {
 	return false
 }
 
-func handleUpgrade(localConn net.Conn, source net.Addr, request *http.Request, in chan<- C.ConnContext) (resp *http.Response) {
+func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext, additions ...inbound.Addition) {
+	defer conn.Close()
+
 	removeProxyHeaders(request.Header)
 	removeExtraHTTPHostPort(request)
 
 	address := request.Host
 	if _, _, err := net.SplitHostPort(address); err != nil {
-		port := "80"
-		if request.TLS != nil {
-			port = "443"
-		}
-		address = net.JoinHostPort(address, port)
+		address = net.JoinHostPort(address, "80")
 	}
 
 	dstAddr := socks5.ParseAddr(address)
@@ -46,9 +43,9 @@ func handleUpgrade(localConn net.Conn, source net.Addr, request *http.Request, i
 
 	left, right := net.Pipe()
 
-	in <- inbound.NewHTTP(dstAddr, source, right)
+	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), right, additions...)
 
-	var remoteServer *N.BufferedConn
+	var bufferedLeft *N.BufferedConn
 	if request.TLS != nil {
 		tlsConn := tls.Client(left, &tls.Config{
 			ServerName: request.URL.Hostname(),
@@ -57,47 +54,36 @@ func handleUpgrade(localConn net.Conn, source net.Addr, request *http.Request, i
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 		defer cancel()
 		if tlsConn.HandshakeContext(ctx) != nil {
-			_ = localConn.Close()
 			_ = left.Close()
 			return
 		}
 
-		remoteServer = N.NewBufferedConn(tlsConn)
+		bufferedLeft = N.NewBufferedConn(tlsConn)
 	} else {
-		remoteServer = N.NewBufferedConn(left)
+		bufferedLeft = N.NewBufferedConn(left)
 	}
 	defer func() {
-		_ = remoteServer.Close()
+		_ = bufferedLeft.Close()
 	}()
 
-	err := request.Write(remoteServer)
+	err := request.Write(bufferedLeft)
 	if err != nil {
-		_ = localConn.Close()
 		return
 	}
 
-	resp, err = http.ReadResponse(remoteServer.Reader(), request)
+	resp, err := http.ReadResponse(bufferedLeft.Reader(), request)
 	if err != nil {
-		_ = localConn.Close()
+		return
+	}
+
+	removeProxyHeaders(resp.Header)
+
+	err = resp.Write(conn)
+	if err != nil {
 		return
 	}
 
 	if resp.StatusCode == http.StatusSwitchingProtocols {
-		removeProxyHeaders(resp.Header)
-
-		err = localConn.SetReadDeadline(time.Time{}) // set to not time out
-		if err != nil {
-			return
-		}
-
-		err = resp.Write(localConn)
-		if err != nil {
-			return
-		}
-
-		N.Relay(remoteServer, localConn) // blocking here
-		_ = localConn.Close()
-		resp = nil
+		N.Relay(bufferedLeft, conn)
 	}
-	return
 }

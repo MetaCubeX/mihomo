@@ -9,7 +9,7 @@ import (
 
 type domainStrategy struct {
 	count       int
-	domainRules *trie.DomainTrie[bool]
+	domainRules *trie.DomainTrie[struct{}]
 }
 
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
@@ -25,17 +25,18 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 }
 
 func (d *domainStrategy) OnUpdate(rules []string) {
-	domainTrie := trie.New[bool]()
+	domainTrie := trie.New[struct{}]()
 	count := 0
 	for _, rule := range rules {
 		actualDomain, _ := idna.ToASCII(rule)
-		err := domainTrie.Insert(actualDomain, true)
+		err := domainTrie.Insert(actualDomain, struct{}{})
 		if err != nil {
 			log.Warnln("invalid domain:[%s]", rule)
 		} else {
 			count++
 		}
 	}
+	domainTrie.Optimize()
 
 	d.domainRules = domainTrie
 	d.count = count

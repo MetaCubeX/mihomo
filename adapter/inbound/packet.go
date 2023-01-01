@@ -17,17 +17,26 @@ func (s *PacketAdapter) Metadata() *C.Metadata {
 }
 
 // NewPacket is PacketAdapter generator
-func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type) *PacketAdapter {
+func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type, additions ...Addition) C.PacketAdapter {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.UDP
 	metadata.Type = source
+	for _, addition := range additions {
+		addition.Apply(metadata)
+	}
 	if ip, port, err := parseAddr(packet.LocalAddr().String()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}
+	if p, ok := packet.(C.UDPPacketInAddr); ok {
+		if ip, port, err := parseAddr(p.InAddr().String()); err == nil {
+			metadata.InIP = ip
+			metadata.InPort = port
+		}
+	}
 
 	return &PacketAdapter{
-		UDPPacket: packet,
-		metadata:  metadata,
+		packet,
+		metadata,
 	}
 }

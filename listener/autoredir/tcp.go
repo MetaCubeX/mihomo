@@ -14,6 +14,7 @@ type Listener struct {
 	listener   net.Listener
 	addr       string
 	closed     bool
+	additions  []inbound.Addition
 	lookupFunc func(netip.AddrPort) (socks5.Addr, error)
 }
 
@@ -56,17 +57,24 @@ func (l *Listener) handleRedir(conn net.Conn, in chan<- C.ConnContext) {
 
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 
-	in <- inbound.NewSocket(target, conn, C.REDIR)
+	in <- inbound.NewSocket(target, conn, C.REDIR, l.additions...)
 }
 
-func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
+func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-REDIR"),
+			inbound.WithSpecialRules(""),
+		}
+	}
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 	rl := &Listener{
-		listener: l,
-		addr:     addr,
+		listener:  l,
+		addr:      addr,
+		additions: additions,
 	}
 
 	go func() {

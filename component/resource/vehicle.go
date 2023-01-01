@@ -2,7 +2,7 @@ package resource
 
 import (
 	"context"
-	netHttp "github.com/Dreamacro/clash/component/http"
+	clashHttp "github.com/Dreamacro/clash/component/http"
 	types "github.com/Dreamacro/clash/constant/provider"
 	"io"
 	"net/http"
@@ -35,6 +35,10 @@ type HTTPVehicle struct {
 	path string
 }
 
+func (h *HTTPVehicle) Url() string {
+	return h.url
+}
+
 func (h *HTTPVehicle) Type() types.VehicleType {
 	return types.HTTP
 }
@@ -46,7 +50,7 @@ func (h *HTTPVehicle) Path() string {
 func (h *HTTPVehicle) Read() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
-	resp, err := netHttp.HttpRequest(ctx, h.url, http.MethodGet, nil, nil)
+	resp, err := clashHttp.HttpRequest(ctx, h.url, http.MethodGet, nil, nil)
 	if err != nil {
 		return nil, err
 	}

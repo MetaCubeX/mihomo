@@ -212,6 +212,43 @@ proxies:
       grpc-service-name: grpcname
 ```
 
+
+Support outbound transport protocol `Wireguard`
+```yaml
+proxies:
+  - name: "wg"
+    type: wireguard
+    server: 162.159.192.1
+    port: 2480
+    ip: 172.16.0.2
+    ipv6: fd01:5ca1:ab1e:80fa:ab85:6eea:213f:f4a5
+    private-key: eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=
+    public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
+    udp: true
+```
+
+Support outbound transport protocol `Tuic`
+```yaml
+proxies:
+  - name: "tuic"
+    server: www.example.com
+    port: 10443
+    type: tuic
+    token: TOKEN
+    # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
+    # heartbeat-interval: 10000
+    # alpn: [h3]
+    # disable-sni: true
+    reduce-rtt: true
+    # request-timeout: 8000
+    udp-relay-mode: native # Available: "native", "quic". Default: "native"
+    # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
+    # max-udp-relay-packet-size: 1500
+    # fast-open: true
+    # skip-cert-verify: true
+
+```
+
 ### IPTABLES configuration
 Work on Linux OS who's supported `iptables`
 
@@ -286,6 +323,7 @@ the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library
 ## Credits
 
 * [Dreamacro/clash](https://github.com/Dreamacro/clash)
+* [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
 * [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
 * [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 * [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)

@@ -13,6 +13,7 @@ const (
 	SrcIPSuffix
 	SrcPort
 	DstPort
+	InPort
 	Process
 	ProcessPath
 	RuleSet
@@ -52,6 +53,8 @@ func (rt RuleType) String() string {
 		return "SrcPort"
 	case DstPort:
 		return "DstPort"
+	case InPort:
+		return "InPort"
 	case Process:
 		return "Process"
 	case ProcessPath:

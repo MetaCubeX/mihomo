@@ -35,3 +35,7 @@ func (c *packet) LocalAddr() net.Addr {
 func (c *packet) Drop() {
 	pool.Put(c.bufRef)
 }
+
+func (c *packet) InAddr() net.Addr {
+	return c.pc.LocalAddr()
+}

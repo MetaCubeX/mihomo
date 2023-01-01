@@ -42,7 +42,8 @@ func Parse(options ...Option) error {
 	}
 
 	if cfg.General.ExternalController != "" {
-		go route.Start(cfg.General.ExternalController, cfg.General.Secret)
+		go route.Start(cfg.General.ExternalController,cfg.General.ExternalControllerTLS, 
+			cfg.General.Secret,cfg.TLS.Certificate,cfg.TLS.PrivateKey)
 	}
 
 	executor.ApplyConfig(cfg, true)

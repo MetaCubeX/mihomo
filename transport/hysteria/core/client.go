@@ -6,18 +6,20 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
-	"github.com/Dreamacro/clash/transport/hysteria/transport"
-	"github.com/Dreamacro/clash/transport/hysteria/utils"
-	"github.com/lucas-clemente/quic-go"
-	"github.com/lucas-clemente/quic-go/congestion"
-	"github.com/lunixbochs/struc"
 	"math/rand"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/lunixbochs/struc"
+	"github.com/metacubex/quic-go"
+	"github.com/metacubex/quic-go/congestion"
+
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
+	"github.com/Dreamacro/clash/transport/hysteria/transport"
+	"github.com/Dreamacro/clash/transport/hysteria/utils"
 )
 
 var (
@@ -29,6 +31,7 @@ type CongestionFactory func(refBPS uint64) congestion.CongestionControl
 type Client struct {
 	transport         *transport.ClientTransport
 	serverAddr        string
+	serverPorts       string
 	protocol          string
 	sendBPS, recvBPS  uint64
 	auth              []byte
@@ -45,15 +48,18 @@ type Client struct {
 	udpSessionMutex sync.RWMutex
 	udpSessionMap   map[uint32]chan *udpMessage
 	udpDefragger    defragger
+	hopInterval     time.Duration
+	fastOpen        bool
 }
 
-func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
+func NewClient(serverAddr string, serverPorts string, protocol string, auth []byte, tlsConfig *tls.Config, quicConfig *quic.Config,
 	transport *transport.ClientTransport, sendBPS uint64, recvBPS uint64, congestionFactory CongestionFactory,
-	obfuscator obfs.Obfuscator) (*Client, error) {
+	obfuscator obfs.Obfuscator, hopInterval time.Duration, fastOpen bool) (*Client, error) {
 	quicConfig.DisablePathMTUDiscovery = quicConfig.DisablePathMTUDiscovery || pmtud_fix.DisablePathMTUDiscovery
 	c := &Client{
 		transport:         transport,
 		serverAddr:        serverAddr,
+		serverPorts:       serverPorts,
 		protocol:          protocol,
 		sendBPS:           sendBPS,
 		recvBPS:           recvBPS,
@@ -62,12 +68,14 @@ func NewClient(serverAddr string, protocol string, auth []byte, tlsConfig *tls.C
 		obfuscator:        obfuscator,
 		tlsConfig:         tlsConfig,
 		quicConfig:        quicConfig,
+		hopInterval:       hopInterval,
+		fastOpen:          fastOpen,
 	}
 	return c, nil
 }
 
-func (c *Client) connectToServer(dialer transport.PacketDialer) error {
-	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.tlsConfig, c.quicConfig, c.obfuscator, dialer)
+func (c *Client) connectToServer(dialer utils.PacketDialer) error {
+	qs, err := c.transport.QUICDial(c.protocol, c.serverAddr, c.serverPorts, c.tlsConfig, c.quicConfig, c.obfuscator, c.hopInterval, dialer)
 	if err != nil {
 		return err
 	}
@@ -154,7 +162,7 @@ func (c *Client) handleMessage(qs quic.Connection) {
 	}
 }
 
-func (c *Client) openStreamWithReconnect(dialer transport.PacketDialer) (quic.Connection, quic.Stream, error) {
+func (c *Client) openStreamWithReconnect(dialer utils.PacketDialer) (quic.Connection, quic.Stream, error) {
 	c.reconnectMutex.Lock()
 	defer c.reconnectMutex.Unlock()
 	if c.closed {
@@ -186,7 +194,7 @@ func (c *Client) openStreamWithReconnect(dialer transport.PacketDialer) (quic.Co
 	return c.quicSession, &wrappedQUICStream{stream}, err
 }
 
-func (c *Client) DialTCP(addr string, dialer transport.PacketDialer) (net.Conn, error) {
+func (c *Client) DialTCP(addr string, dialer utils.PacketDialer) (net.Conn, error) {
 	host, port, err := utils.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -205,25 +213,31 @@ func (c *Client) DialTCP(addr string, dialer transport.PacketDialer) (net.Conn, 
 		_ = stream.Close()
 		return nil, err
 	}
-	// Read response
-	var sr serverResponse
-	err = struc.Unpack(stream, &sr)
-	if err != nil {
-		_ = stream.Close()
-		return nil, err
+	// If fast open is enabled, we return the stream immediately
+	// and defer the response handling to the first Read() call
+	if !c.fastOpen {
+		// Read response
+		var sr serverResponse
+		err = struc.Unpack(stream, &sr)
+		if err != nil {
+			_ = stream.Close()
+			return nil, err
+		}
+		if !sr.OK {
+			_ = stream.Close()
+			return nil, fmt.Errorf("connection rejected: %s", sr.Message)
+		}
 	}
-	if !sr.OK {
-		_ = stream.Close()
-		return nil, fmt.Errorf("connection rejected: %s", sr.Message)
-	}
+
 	return &quicConn{
 		Orig:             stream,
 		PseudoLocalAddr:  session.LocalAddr(),
 		PseudoRemoteAddr: session.RemoteAddr(),
+		Established:      !c.fastOpen,
 	}, nil
 }
 
-func (c *Client) DialUDP(dialer transport.PacketDialer) (UDPConn, error) {
+func (c *Client) DialUDP(dialer utils.PacketDialer) (UDPConn, error) {
 	session, stream, err := c.openStreamWithReconnect(dialer)
 	if err != nil {
 		return nil, err
@@ -288,9 +302,23 @@ type quicConn struct {
 	Orig             quic.Stream
 	PseudoLocalAddr  net.Addr
 	PseudoRemoteAddr net.Addr
+	Established      bool
 }
 
 func (w *quicConn) Read(b []byte) (n int, err error) {
+	if !w.Established {
+		var sr serverResponse
+		err := struc.Unpack(w.Orig, &sr)
+		if err != nil {
+			_ = w.Close()
+			return 0, err
+		}
+		if !sr.OK {
+			_ = w.Close()
+			return 0, fmt.Errorf("connection rejected: %s", sr.Message)
+		}
+		w.Established = true
+	}
 	return w.Orig.Read(b)
 }
 

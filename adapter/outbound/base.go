@@ -18,6 +18,7 @@ type Base struct {
 	iface  string
 	tp     C.AdapterType
 	udp    bool
+	tfo    bool
 	rmark  int
 	id     string
 	prefer C.DNSPrefer
@@ -56,14 +57,24 @@ func (b *Base) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 	return nil, errors.New("no support")
 }
 
+// DialContextWithDialer implements C.ProxyAdapter
+func (b *Base) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	return nil, errors.New("no support")
+}
+
 // ListenPacketContext implements C.ProxyAdapter
 func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	return nil, errors.New("no support")
 }
 
-// ListenPacketOnStreamConn implements C.ProxyAdapter
-func (b *Base) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (b *Base) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	return nil, errors.New("no support")
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (b *Base) SupportWithDialer() bool {
+	return false
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -74,6 +85,11 @@ func (b *Base) SupportUOT() bool {
 // SupportUDP implements C.ProxyAdapter
 func (b *Base) SupportUDP() bool {
 	return b.udp
+}
+
+// SupportTFO implements C.ProxyAdapter
+func (b *Base) SupportTFO() bool {
+	return b.tfo
 }
 
 // MarshalJSON implements C.ProxyAdapter
@@ -130,6 +146,7 @@ type BaseOption struct {
 	Addr        string
 	Type        C.AdapterType
 	UDP         bool
+	TFO         bool
 	Interface   string
 	RoutingMark int
 	Prefer      C.DNSPrefer
@@ -141,6 +158,7 @@ func NewBase(opt BaseOption) *Base {
 		addr:   opt.Addr,
 		tp:     opt.Type,
 		udp:    opt.UDP,
+		tfo:    opt.TFO,
 		iface:  opt.Interface,
 		rmark:  opt.RoutingMark,
 		prefer: opt.Prefer,

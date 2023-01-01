@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -31,6 +32,8 @@ const (
 	Vless
 	Trojan
 	Hysteria
+	WireGuard
+	Tuic
 )
 
 const (
@@ -79,13 +82,20 @@ type PacketConn interface {
 	// WriteWithMetadata(p []byte, metadata *Metadata) (n int, err error)
 }
 
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+	ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error)
+}
+
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
+	SupportTFO() bool
 	MarshalJSON() ([]byte, error)
 
+	// Deprecated: use DialContextWithDialer and ListenPacketWithDialer instead.
 	// StreamConn wraps a protocol around net.Conn with Metadata.
 	//
 	// Examples:
@@ -103,7 +113,10 @@ type ProxyAdapter interface {
 
 	// SupportUOT return UDP over TCP support
 	SupportUOT() bool
-	ListenPacketOnStreamConn(c net.Conn, metadata *Metadata) (PacketConn, error)
+
+	SupportWithDialer() bool
+	DialContextWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (Conn, error)
+	ListenPacketWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (PacketConn, error)
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata, touch bool) Proxy
@@ -165,6 +178,10 @@ func (at AdapterType) String() string {
 		return "Trojan"
 	case Hysteria:
 		return "Hysteria"
+	case WireGuard:
+		return "WireGuard"
+	case Tuic:
+		return "Tuic"
 
 	case Relay:
 		return "Relay"
@@ -198,4 +215,14 @@ type UDPPacket interface {
 
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr
+}
+
+type UDPPacketInAddr interface {
+	InAddr() net.Addr
+}
+
+// PacketAdapter is a UDP Packet adapter for socks/redir/tun
+type PacketAdapter interface {
+	UDPPacket
+	Metadata() *Metadata
 }

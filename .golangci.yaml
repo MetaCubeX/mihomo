@@ -8,9 +8,10 @@ linters:
 
 linters-settings:
   gci:
+    custom-order: true
     sections:
       - standard
       - prefix(github.com/Dreamacro/clash)
       - default
   staticcheck:
-    go: '1.18'
+    go: '1.19'

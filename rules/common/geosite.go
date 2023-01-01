@@ -2,13 +2,14 @@ package common
 
 import (
 	"fmt"
+
 	"github.com/Dreamacro/clash/component/geodata"
 	_ "github.com/Dreamacro/clash/component/geodata/memconservative"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	_ "unsafe"
+	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 type GEOSITE struct {
@@ -24,7 +25,7 @@ func (gs *GEOSITE) RuleType() C.RuleType {
 }
 
 func (gs *GEOSITE) Match(metadata *C.Metadata) (bool, string) {
-	if metadata.AddrType != C.AtypDomainName {
+	if metadata.AddrType() != socks5.AtypDomainName {
 		return false, ""
 	}
 

@@ -1,7 +1,7 @@
 package congestion
 
 import (
-	"github.com/lucas-clemente/quic-go/congestion"
+	"github.com/metacubex/quic-go/congestion"
 	"math"
 	"time"
 )

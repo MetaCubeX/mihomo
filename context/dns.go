@@ -1,6 +1,8 @@
 package context
 
 import (
+	"context"
+
 	"github.com/gofrs/uuid"
 	"github.com/miekg/dns"
 )
@@ -12,14 +14,18 @@ const (
 )
 
 type DNSContext struct {
+	context.Context
+
 	id  uuid.UUID
 	msg *dns.Msg
 	tp  string
 }
 
-func NewDNSContext(msg *dns.Msg) *DNSContext {
+func NewDNSContext(ctx context.Context, msg *dns.Msg) *DNSContext {
 	id, _ := uuid.NewV4()
 	return &DNSContext{
+		Context: ctx,
+
 		id:  id,
 		msg: msg,
 	}

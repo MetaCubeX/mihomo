@@ -18,23 +18,30 @@ import (
 
 type GroupBase struct {
 	*outbound.Base
-	filterRegs    []*regexp2.Regexp
-	providers     []provider.ProxyProvider
-	failedTestMux sync.Mutex
-	failedTimes   int
-	failedTime    time.Time
-	failedTesting *atomic.Bool
-	proxies       [][]C.Proxy
-	versions      []atomic.Uint32
+	filterRegs       []*regexp2.Regexp
+	excludeFilterReg *regexp2.Regexp
+	providers        []provider.ProxyProvider
+	failedTestMux    sync.Mutex
+	failedTimes      int
+	failedTime       time.Time
+	failedTesting    *atomic.Bool
+	proxies          [][]C.Proxy
+	versions         []atomic.Uint32
 }
 
 type GroupBaseOption struct {
 	outbound.BaseOption
-	filter    string
-	providers []provider.ProxyProvider
+	filter        string
+	excludeFilter string
+	providers     []provider.ProxyProvider
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
+	var excludeFilterReg *regexp2.Regexp
+	if opt.excludeFilter != "" {
+		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, 0)
+	}
+
 	var filterRegs []*regexp2.Regexp
 	if opt.filter != "" {
 		for _, filter := range strings.Split(opt.filter, "`") {
@@ -44,10 +51,11 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	}
 
 	gb := &GroupBase{
-		Base:          outbound.NewBase(opt.BaseOption),
-		filterRegs:    filterRegs,
-		providers:     opt.providers,
-		failedTesting: atomic.NewBool(false),
+		Base:             outbound.NewBase(opt.BaseOption),
+		filterRegs:       filterRegs,
+		excludeFilterReg: excludeFilterReg,
+		providers:        opt.providers,
+		failedTesting:    atomic.NewBool(false),
 	}
 
 	gb.proxies = make([][]C.Proxy, len(opt.providers))
@@ -63,59 +71,54 @@ func (gb *GroupBase) Touch() {
 }
 
 func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
+	var proxies []C.Proxy
 	if len(gb.filterRegs) == 0 {
-		var proxies []C.Proxy
 		for _, pd := range gb.providers {
 			if touch {
 				pd.Touch()
 			}
 			proxies = append(proxies, pd.Proxies()...)
 		}
-		if len(proxies) == 0 {
-			return append(proxies, tunnel.Proxies()["COMPATIBLE"])
-		}
-		return proxies
-	}
+	} else {
+		for i, pd := range gb.providers {
+			if touch {
+				pd.Touch()
+			}
 
-	for i, pd := range gb.providers {
-		if touch {
-			pd.Touch()
-		}
+			if pd.VehicleType() == types.Compatible {
+				gb.versions[i].Store(pd.Version())
+				gb.proxies[i] = pd.Proxies()
+				continue
+			}
 
-		if pd.VehicleType() == types.Compatible {
-			gb.versions[i].Store(pd.Version())
-			gb.proxies[i] = pd.Proxies()
-			continue
-		}
+			version := gb.versions[i].Load()
+			if version != pd.Version() && gb.versions[i].CompareAndSwap(version, pd.Version()) {
+				var (
+					proxies    []C.Proxy
+					newProxies []C.Proxy
+				)
 
-		version := gb.versions[i].Load()
-		if version != pd.Version() && gb.versions[i].CompareAndSwap(version, pd.Version()) {
-			var (
-				proxies    []C.Proxy
-				newProxies []C.Proxy
-			)
-
-			proxies = pd.Proxies()
-			proxiesSet := map[string]struct{}{}
-			for _, filterReg := range gb.filterRegs {
-				for _, p := range proxies {
-					name := p.Name()
-					if mat, _ := filterReg.FindStringMatch(name); mat != nil {
-						if _, ok := proxiesSet[name]; !ok {
-							proxiesSet[name] = struct{}{}
-							newProxies = append(newProxies, p)
+				proxies = pd.Proxies()
+				proxiesSet := map[string]struct{}{}
+				for _, filterReg := range gb.filterRegs {
+					for _, p := range proxies {
+						name := p.Name()
+						if mat, _ := filterReg.FindStringMatch(name); mat != nil {
+							if _, ok := proxiesSet[name]; !ok {
+								proxiesSet[name] = struct{}{}
+								newProxies = append(newProxies, p)
+							}
 						}
 					}
 				}
+
+				gb.proxies[i] = newProxies
 			}
-
-			gb.proxies[i] = newProxies
 		}
-	}
 
-	var proxies []C.Proxy
-	for _, p := range gb.proxies {
-		proxies = append(proxies, p...)
+		for _, p := range gb.proxies {
+			proxies = append(proxies, p...)
+		}
 	}
 
 	if len(proxies) == 0 {
@@ -142,6 +145,18 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				proxiesSet[name] = struct{}{}
 				newProxies = append(newProxies, p)
 			}
+		}
+		proxies = newProxies
+	}
+
+	if gb.excludeFilterReg != nil {
+		var newProxies []C.Proxy
+		for _, p := range proxies {
+			name := p.Name()
+			if mat, _ := gb.excludeFilterReg.FindStringMatch(name); mat != nil {
+				continue
+			}
+			newProxies = append(newProxies, p)
 		}
 		proxies = newProxies
 	}

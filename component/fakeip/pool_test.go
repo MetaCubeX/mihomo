@@ -104,6 +104,27 @@ func TestPool_BasicV6(t *testing.T) {
 	}
 }
 
+func TestPool_Case_Insensitive(t *testing.T) {
+	ipnet := netip.MustParsePrefix("192.168.0.1/29")
+	pools, tempfile, err := createPools(Options{
+		IPNet: &ipnet,
+		Size:  10,
+	})
+	assert.Nil(t, err)
+	defer os.Remove(tempfile)
+
+	for _, pool := range pools {
+		first := pool.Lookup("foo.com")
+		last := pool.Lookup("Foo.Com")
+		foo, exist := pool.LookBack(last)
+
+		assert.Equal(t, first, pool.Lookup("Foo.Com"))
+		assert.Equal(t, pool.Lookup("fOo.cOM"), first)
+		assert.True(t, exist)
+		assert.Equal(t, foo, "foo.com")
+	}
+}
+
 func TestPool_CycleUsed(t *testing.T) {
 	ipnet := netip.MustParsePrefix("192.168.0.16/28")
 	pools, tempfile, err := createPools(Options{
@@ -128,8 +149,8 @@ func TestPool_CycleUsed(t *testing.T) {
 
 func TestPool_Skip(t *testing.T) {
 	ipnet := netip.MustParsePrefix("192.168.0.1/29")
-	tree := trie.New[bool]()
-	tree.Insert("example.com", true)
+	tree := trie.New[struct{}]()
+	tree.Insert("example.com", struct{}{})
 	pools, tempfile, err := createPools(Options{
 		IPNet: &ipnet,
 		Size:  10,

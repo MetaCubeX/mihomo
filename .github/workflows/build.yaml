@@ -5,12 +5,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
-        uses: actions/setup-go@v1
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.18
-      - name: Check out code
-        uses: actions/checkout@v1
+          go-version: '1.19'
+          check-latest: true
+          cache: true
       - name: Build
         run: make all
       - name: Release

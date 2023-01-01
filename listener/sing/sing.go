@@ -3,6 +3,7 @@ package sing
 import (
 	"context"
 	"errors"
+	"golang.org/x/exp/slices"
 	"net"
 	"sync"
 	"time"
@@ -23,9 +24,10 @@ import (
 const UDPTimeout = 5 * time.Minute
 
 type ListenerHandler struct {
-	TcpIn chan<- C.ConnContext
-	UdpIn chan<- *inbound.PacketAdapter
-	Type  C.Type
+	TcpIn     chan<- C.ConnContext
+	UdpIn     chan<- C.PacketAdapter
+	Type      C.Type
+	Additions []inbound.Addition
 }
 
 type waitCloseConn struct {
@@ -47,6 +49,11 @@ func (c *waitCloseConn) RemoteAddr() net.Addr {
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
+	additions := h.Additions
+	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
+		additions = slices.Clone(additions)
+		additions = append(additions, ctxAdditions...)
+	}
 	switch metadata.Destination.Fqdn {
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
@@ -58,11 +65,17 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	wg := &sync.WaitGroup{}
 	defer wg.Wait() // this goroutine must exit after conn.Close()
 	wg.Add(1)
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{Conn: conn, wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type)
+
+	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{Conn: conn, wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
 	return nil
 }
 
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
+	additions := h.Additions
+	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
+		additions = slices.Clone(additions)
+		additions = append(additions, ctxAdditions...)
+	}
 	defer func() { _ = conn.Close() }()
 	mutex := sync.Mutex{}
 	conn2 := conn // a new interface to set nil in defer
@@ -90,7 +103,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			buff:  buff,
 		}
 		select {
-		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type):
+		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type, additions...):
 		default:
 		}
 	}

@@ -29,7 +29,13 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
+func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-REDIR"),
+			inbound.WithSpecialRules(""),
+		}
+	}
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -48,19 +54,18 @@ func New(addr string, in chan<- C.ConnContext) (*Listener, error) {
 				}
 				continue
 			}
-			go handleRedir(c, in)
+			go handleRedir(c, in, additions...)
 		}
 	}()
 
 	return rl, nil
 }
-
-func handleRedir(conn net.Conn, in chan<- C.ConnContext) {
+func handleRedir(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	target, err := parserPacket(conn)
 	if err != nil {
 		conn.Close()
 		return
 	}
 	conn.(*net.TCPConn).SetKeepAlive(true)
-	in <- inbound.NewSocket(target, conn, C.REDIR)
+	in <- inbound.NewSocket(target, conn, C.REDIR, additions...)
 }

@@ -65,8 +65,8 @@ type LruCache[K comparable, V any] struct {
 	onEvict        EvictCallback[K, V]
 }
 
-// NewLRUCache creates an LruCache
-func NewLRUCache[K comparable, V any](options ...Option[K, V]) *LruCache[K, V] {
+// New creates an LruCache
+func New[K comparable, V any](options ...Option[K, V]) *LruCache[K, V] {
 	lc := &LruCache[K, V]{
 		lru:   list.New[*entry[K, V]](),
 		cache: make(map[K]*list.Element[*entry[K, V]]),

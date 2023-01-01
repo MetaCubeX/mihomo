@@ -99,6 +99,7 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 				RoutingMark: option.RoutingMark,
 			},
 			option.Filter,
+			option.ExcludeFilter,
 			providers,
 		}),
 		selected:   "COMPATIBLE",

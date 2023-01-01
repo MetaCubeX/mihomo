@@ -1,7 +1,11 @@
 package sing_tun
 
 import (
-	tun "github.com/sagernet/sing-tun"
+	"github.com/Dreamacro/clash/log"
+	tun "github.com/metacubex/sing-tun"
+	"github.com/sagernet/netlink"
+	"golang.org/x/sys/unix"
+	"runtime"
 )
 
 func (l *Listener) buildAndroidRules(tunOptions *tun.Options) error {
@@ -20,4 +24,26 @@ func (l *Listener) buildAndroidRules(tunOptions *tun.Options) error {
 
 func (h *ListenerHandler) OnPackagesUpdated(packages int, sharedUsers int) {
 	return
+}
+
+func (l *Listener) openAndroidHotspot(tunOptions tun.Options) {
+	if runtime.GOOS == "android" && tunOptions.AutoRoute {
+		priority := 9000
+		if len(tunOptions.ExcludedRanges()) > 0 {
+			priority++
+		}
+		if tunOptions.InterfaceMonitor.AndroidVPNEnabled() {
+			priority++
+		}
+		it := netlink.NewRule()
+		it.Priority = priority
+		it.IifName = tunOptions.Name
+		it.Table = 254 //main
+		it.Family = unix.AF_INET
+		it.SuppressPrefixlen = 0
+		err := netlink.RuleAdd(it)
+		if err != nil {
+			log.Warnln("[TUN] add AndroidHotspot rule error")
+		}
+	}
 }

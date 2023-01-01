@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cache"
@@ -15,8 +14,8 @@ import (
 	"github.com/Dreamacro/clash/log"
 )
 
-func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
-	client := newClient(c.RemoteAddr(), in)
+func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
+	client := newClient(c.RemoteAddr(), in, additions...)
 	defer client.CloseIdleConnections()
 
 	conn := N.NewBufferedConn(c)
@@ -49,7 +48,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 					break // close connection
 				}
 
-				in <- inbound.NewHTTPS(request, conn)
+				in <- inbound.NewHTTPS(request, conn, additions...)
 
 				return // hijack connection
 			}
@@ -62,9 +61,9 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 			request.RequestURI = ""
 
 			if isUpgradeRequest(request) {
-				if resp = handleUpgrade(conn, conn.RemoteAddr(), request, in); resp == nil {
-					return // hijack connection
-				}
+				handleUpgrade(conn, request, in, additions...)
+
+				return // hijack connection
 			}
 
 			removeHopByHopHeaders(request.Header)
@@ -99,7 +98,7 @@ func HandleConn(c net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, 
 	_ = conn.Close()
 }
 
-func authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http.Response {
+func authenticate(request *http.Request, cache *cache.LruCache[string, bool]) *http.Response {
 	authenticator := authStore.Authenticator()
 	if authenticator != nil {
 		credential := parseBasicProxyAuthorization(request)
@@ -109,11 +108,11 @@ func authenticate(request *http.Request, cache *cache.Cache[string, bool]) *http
 			return resp
 		}
 
-		var authed bool
-		if authed = cache.Get(credential); !authed {
+		authed, exist := cache.Get(credential)
+		if !exist {
 			user, pass, err := decodeBasicProxyAuthorization(credential)
 			authed = err == nil && authenticator.Verify(user, pass)
-			cache.Put(credential, authed, time.Minute)
+			cache.Set(credential, authed)
 		}
 		if !authed {
 			log.Infoln("Auth failed from %s", request.RemoteAddr)

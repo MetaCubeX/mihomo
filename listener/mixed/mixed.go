@@ -1,10 +1,8 @@
 package mixed
 
 import (
-	"context"
-	"github.com/database64128/tfo-go"
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"net"
-	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
 	N "github.com/Dreamacro/clash/common/net"
@@ -18,7 +16,7 @@ import (
 type Listener struct {
 	listener net.Listener
 	addr     string
-	cache    *cache.Cache[string, bool]
+	cache    *cache.LruCache[string, bool]
 	closed   bool
 }
 
@@ -38,11 +36,14 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, error) {
-	lc := tfo.ListenConfig{
-		DisableTFO: !inboundTfo,
+func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-MIXED"),
+			inbound.WithSpecialRules(""),
+		}
 	}
-	l, err := lc.Listen(context.Background(), "tcp", addr)
+	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +51,7 @@ func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, erro
 	ml := &Listener{
 		listener: l,
 		addr:     addr,
-		cache:    cache.New[string, bool](30 * time.Second),
+		cache:    cache.New[string, bool](cache.WithAge[string, bool](30)),
 	}
 	go func() {
 		for {
@@ -61,14 +62,14 @@ func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, erro
 				}
 				continue
 			}
-			go handleConn(c, in, ml.cache)
+			go handleConn(c, in, ml.cache, additions...)
 		}
 	}()
 
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache[string, bool]) {
+func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
 	conn.(*net.TCPConn).SetKeepAlive(true)
 
 	bufConn := N.NewBufferedConn(conn)
@@ -79,10 +80,10 @@ func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.Cache[strin
 
 	switch head[0] {
 	case socks4.Version:
-		socks.HandleSocks4(bufConn, in)
+		socks.HandleSocks4(bufConn, in, additions...)
 	case socks5.Version:
-		socks.HandleSocks5(bufConn, in)
+		socks.HandleSocks5(bufConn, in, additions...)
 	default:
-		http.HandleConn(bufConn, in, cache)
+		http.HandleConn(bufConn, in, cache, additions...)
 	}
 }

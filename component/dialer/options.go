@@ -1,6 +1,8 @@
 package dialer
 
 import (
+	"github.com/Dreamacro/clash/component/resolver"
+
 	"go.uber.org/atomic"
 )
 
@@ -14,9 +16,9 @@ type option struct {
 	interfaceName string
 	addrReuse     bool
 	routingMark   int
-	direct        bool
 	network       int
 	prefer        int
+	resolver      resolver.Resolver
 }
 
 type Option func(opt *option)
@@ -39,9 +41,9 @@ func WithRoutingMark(mark int) Option {
 	}
 }
 
-func WithDirect() Option {
+func WithResolver(r resolver.Resolver) Option {
 	return func(opt *option) {
-		opt.direct = true
+		opt.resolver = r
 	}
 }
 
@@ -64,5 +66,11 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 		} else {
 			opt.network = 6
 		}
+	}
+}
+
+func WithOption(o option) Option {
+	return func(opt *option) {
+		*opt = o
 	}
 }

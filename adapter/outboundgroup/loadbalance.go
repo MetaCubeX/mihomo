@@ -157,7 +157,7 @@ func strategyConsistentHashing() strategyFn {
 func strategyStickySessions() strategyFn {
 	ttl := time.Minute * 10
 	maxRetry := 5
-	lruCache := cache.NewLRUCache[uint64, int](
+	lruCache := cache.New[uint64, int](
 		cache.WithAge[uint64, int](int64(ttl.Seconds())),
 		cache.WithSize[uint64, int](1000))
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
@@ -228,6 +228,7 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 				RoutingMark: option.RoutingMark,
 			},
 			option.Filter,
+			option.ExcludeFilter,
 			providers,
 		}),
 		strategyFn: strategyFn,

@@ -71,14 +71,15 @@ type fallbackDomainFilter interface {
 }
 
 type domainFilter struct {
-	tree *trie.DomainTrie[bool]
+	tree *trie.DomainTrie[struct{}]
 }
 
 func NewDomainFilter(domains []string) *domainFilter {
-	df := domainFilter{tree: trie.New[bool]()}
+	df := domainFilter{tree: trie.New[struct{}]()}
 	for _, domain := range domains {
-		_ = df.tree.Insert(domain, true)
+		_ = df.tree.Insert(domain, struct{}{})
 	}
+	df.tree.Optimize()
 	return &df
 }
 
