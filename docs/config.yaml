@@ -16,7 +16,7 @@ log-level: debug # 日志等级 silent/error/warning/info/debug
 ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
 
 external-controller: 0.0.0.0:9093 # RESTful API 监听地址
-
+external-controller-tls: 0.0.0.0:9443 # RESTful API HTTPS 监听地址，需要配置 tls 部分配置文件
 # secret: "123456" # `Authorization: Bearer ${secret}`
 
 # tcp-concurrent: true # TCP并发连接所有IP, 将使用最快握手的TCP
@@ -40,11 +40,39 @@ hosts:
 # Tun 配置
 tun:
   enable: false
-  stack: system # gvisor
+  stack: system # gvisor / lwip
   dns-hijack:
-    - 198.18.0.2:53 # 需要劫持的 DNS
+    - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
   # auto-route: true # 配置路由表
+  # mtu: 9000 # 最大传输单元
+  # strict_route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
+  inet4_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
+    - 0.0.0.0/1
+    - 128.0.0.0/1
+  inet6_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
+    - "::/1"
+    - "8000::/1"
+  # endpoint_independent_nat: false # 启用独立于端点的 NAT
+  # include_uid: # UID 规则仅在 Linux 下被支持，并且需要 auto_route
+  # - 0
+  # include_uid_range: # 限制被路由的的用户范围
+  # - 1000-99999
+  # exclude_uid: # 排除路由的的用户
+  #- 1000
+  # exclude_uid_range: # 排除路由的的用户范围
+  # - 1000-99999
+
+  # Android 用户和应用规则仅在 Android 下被支持
+  # 并且需要 auto_route
+
+  # include_android_user: # 限制被路由的 Android 用户
+  # - 0
+  # - 10
+  # include_package: # 限制被路由的 Android 应用包名
+  # - com.android.chrome
+  # exclude_package: # 排除被路由的 Android 应用包名
+  # - com.android.captiveportallogin
 
 #ebpf配置
 ebpf:
@@ -69,6 +97,35 @@ sniffer:
     - "443"
     # - 8000-9999
 
+# shadowsocks,vmess 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+# ss-config: ss://2022-blake3-aes-256-gcm:vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=@:23456
+# vmess-config: vmess://1:9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68@:12345
+
+# tuic服务器入口（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+#tuic-server:
+#  enable: true
+#  listen: 127.0.0.1:10443
+#  token:
+#    - TOKEN
+#  certificate: ./server.crt
+#  private-key: ./server.key
+#  congestion-controller: bbr
+#  max-idle-time: 15000
+#  authentication-timeout: 1000
+#  alpn:
+#    - h3
+#  max-udp-relay-packet-size: 1500
+
+tunnels:
+  # one line config
+  - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
+  - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
+  # full yaml config
+  - network: [ tcp, udp ]
+    address: 127.0.0.1:7777
+    target: target.com
+    proxy: proxy
+
 profile:
   # 存储select选择记录
   store-selected: false
@@ -79,6 +136,7 @@ profile:
 # DNS配置
 dns:
   enable: false # 关闭将使用系统 DNS
+  prefer-h3: true # 开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
   # ipv6: false # false 将返回 AAAA 的空结果
 
@@ -108,7 +166,7 @@ dns:
     - 8.8.8.8 # default value
     - tls://223.5.5.5:853 # DNS over TLS
     - https://doh.pub/dns-query # DNS over HTTPS
-    - https://dns.alidns.com/dns-query#h3=true # 强制HTTP/3
+    - https://dns.alidns.com/dns-query#h3=true # 强制 HTTP/3，与 perfer-h3 无关，强制开启 DoH 的 HTTP/3 支持，若不支持将无法使用
     - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
@@ -161,7 +219,8 @@ proxies:
     server: server
     port: 443
     cipher: chacha20-ietf-poly1305
-    password: "password"
+    password:
+      "password"
       # udp: true
       # udp-over-tcp: false
       # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
@@ -391,27 +450,59 @@ proxies:
       path: "/"
       headers:
         Host: example.com
-  
+
   #hysteria
   - name: "hysteria"
     type: hysteria
     server: server.com
     port: 443
-    auth_str: yourpassword
+    auth_str: yourpassword # 将会在未来某个时候删除
+    # auth-str: yourpassword
     # obfs: obfs_str
     # alpn:
     #   - h3
     protocol: udp # 支持 udp/wechat-video/faketcp
     up: "30 Mbps" # 若不写单位，默认为 Mbps
     down: "200 Mbps" # 若不写单位，默认为 Mbps
-    #sni: server.com
-    #skip-cert-verify: false
-    #recv_window_conn: 12582912
-    #recv_window: 52428800
-    #ca: "./my.ca"
-    #ca_str: "xyz"
-    #disable_mtu_discovery: false
+    # sni: server.com
+    # skip-cert-verify: false
+    # recv_window_conn: 12582912 # 将会在未来某个时候删除
+    # recv-window-conn: 12582912
+    # recv_window: 52428800 # 将会在未来某个时候删除
+    # recv-window: 52428800
+    # ca: "./my.ca"
+    # ca_str: "xyz" # 将会在未来某个时候删除
+    # ca-str: "xyz"
+    # disable_mtu_discovery: false
     # fingerprint: xxxx
+    # fast-open: true # 支持 TCP 快速打开，默认为 false
+
+  - name: "wg"
+    type: wireguard
+    server: 162.159.192.1
+    port: 2480
+    ip: 172.16.0.2
+    ipv6: fd01:5ca1:ab1e:80fa:ab85:6eea:213f:f4a5
+    private-key: eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=
+    public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
+    udp: true
+
+  - name: tuic
+    server: www.example.com
+    port: 10443
+    type: tuic
+    token: TOKEN
+    # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
+    # heartbeat-interval: 10000
+    # alpn: [h3]
+    # disable-sni: true
+    reduce-rtt: true
+    # request-timeout: 8000
+    udp-relay-mode: native # Available: "native", "quic". Default: "native"
+    # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
+    # max-udp-relay-packet-size: 1500
+    # fast-open: true
+    # skip-cert-verify: true
 
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
@@ -567,3 +658,136 @@ sub-rules:
     - IP-CIDR,1.1.1.1/32,REJECT
     - IP-CIDR,8.8.8.8/32,ss1
     - DOMAIN,dns.alidns.com,REJECT
+
+tls:
+  certificate: string # 证书 PEM 格式，或者 证书的路径
+  private-key: string # 证书对应的私钥 PEM 格式，或者私钥路径
+
+# 流量入站
+listeners:
+  - name: socks5-in-1
+    type: socks
+    port: 10808
+    #listen: 0.0.0.0 # 默认监听 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理
+    # udp: false # 默认 true
+
+  - name: http-in-1
+    type: http
+    port: 10809
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+
+  - name: mixed-in-1
+    type: mixed #  HTTP(S) 和 SOCKS 代理混合
+    port: 10810
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # udp: false # 默认 true
+
+  - name: reidr-in-1
+    type: redir
+    port: 10811
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+
+  - name: tproxy-in-1
+    type: tproxy
+    port: 10812
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # udp: false # 默认 true
+
+  - name: shadowsocks-in-1
+    type: shadowsocks
+    port: 10813
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
+    cipher: 2022-blake3-aes-256-gcm
+
+  - name: vmess-in-1
+    type: vmess
+    port: 10814
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    users:
+      - username: 1
+        uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
+        alterId: 1
+
+  - name: tuic-in-1
+    type: tuic
+    port: 10815
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    #  token:
+    #    - TOKEN
+    #  certificate: ./server.crt
+    #  private-key: ./server.key
+    #  congestion-controller: bbr
+    #  max-idle-time: 15000
+    #  authentication-timeout: 1000
+    #  alpn:
+    #    - h3
+    #  max-udp-relay-packet-size: 1500
+
+  - name: tunnel-in-1
+    type: tunnel
+    port: 10816
+    listen: 0.0.0.0
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    network: [ tcp, udp ]
+    target: target.com
+
+  - name: tun-in-1
+    type: tun
+    # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    stack: system # gvisor / lwip
+    dns-hijack:
+      - 0.0.0.0:53 # 需要劫持的 DNS
+    # auto-detect-interface: false # 自动识别出口网卡
+    # auto-route: false # 配置路由表
+    # mtu: 9000 # 最大传输单元
+    inet4-address: # 必须手动设置ipv4地址段
+      - 198.19.0.1/30
+    inet6-address: # 必须手动设置ipv6地址段
+      - "fdfe:dcba:9877::1/126"
+    # strict_route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
+    #    inet4_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
+    #      - 0.0.0.0/1
+    #      - 128.0.0.0/1
+    #    inet6_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
+    #      - "::/1"
+    #      - "8000::/1"
+    # endpoint_independent_nat: false # 启用独立于端点的 NAT
+    # include_uid: # UID 规则仅在 Linux 下被支持，并且需要 auto_route
+    # - 0
+    # include_uid_range: # 限制被路由的的用户范围
+    # - 1000-99999
+    # exclude_uid: # 排除路由的的用户
+    #- 1000
+    # exclude_uid_range: # 排除路由的的用户范围
+    # - 1000-99999
+
+    # Android 用户和应用规则仅在 Android 下被支持
+    # 并且需要 auto_route
+
+    # include_android_user: # 限制被路由的 Android 用户
+    # - 0
+    # - 10
+    # include_package: # 限制被路由的 Android 应用包名
+    # - com.android.chrome
+    # exclude_package: # 排除被路由的 Android 应用包名
+    # - com.android.captiveportallogin
+

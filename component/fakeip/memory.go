@@ -73,7 +73,7 @@ func (m *memoryStore) FlushFakeIP() error {
 
 func newMemoryStore(size int) *memoryStore {
 	return &memoryStore{
-		cacheIP:   cache.NewLRUCache[string, netip.Addr](cache.WithSize[string, netip.Addr](size)),
-		cacheHost: cache.NewLRUCache[netip.Addr, string](cache.WithSize[netip.Addr, string](size)),
+		cacheIP:   cache.New[string, netip.Addr](cache.WithSize[string, netip.Addr](size)),
+		cacheHost: cache.New[netip.Addr, string](cache.WithSize[netip.Addr, string](size)),
 	}
 }

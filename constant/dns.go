@@ -114,3 +114,14 @@ func NewDNSPrefer(prefer string) DNSPrefer {
 		return DualStack
 	}
 }
+
+type HTTPVersion string
+
+const (
+	// HTTPVersion11 is HTTP/1.1.
+	HTTPVersion11 HTTPVersion = "http/1.1"
+	// HTTPVersion2 is HTTP/2.
+	HTTPVersion2 HTTPVersion = "h2"
+	// HTTPVersion3 is HTTP/3.
+	HTTPVersion3 HTTPVersion = "h3"
+)

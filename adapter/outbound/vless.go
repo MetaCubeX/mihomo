@@ -6,18 +6,19 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/convert"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"
 	"strconv"
 	"sync"
 
+	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
+	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
 )
@@ -207,7 +208,9 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 		if err != nil {
 			return nil, err
 		}
-		defer safeConnClose(c, err)
+		defer func(c net.Conn) {
+			safeConnClose(c, err)
+		}(c)
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
 		if err != nil {
@@ -216,13 +219,19 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 		return NewConn(c, v), nil
 	}
+	return v.DialContextWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
+}
 
-	c, err := dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
+// DialContextWithDialer implements C.ProxyAdapter
+func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
 	tcpKeepAlive(c)
-	defer safeConnClose(c, err)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
 
 	c, err = v.StreamConn(c, metadata)
 	return NewConn(c, v), err
@@ -232,7 +241,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
 	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(metadata.Host)
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
 			return nil, errors.New("can't resolve ip")
 		}
@@ -246,25 +255,52 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		if err != nil {
 			return nil, err
 		}
-		defer safeConnClose(c, err)
+		defer func(c net.Conn) {
+			safeConnClose(c, err)
+		}(c)
 
 		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
-	} else {
-		c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-		}
-		tcpKeepAlive(c)
-		defer safeConnClose(c, err)
 
-		c, err = v.StreamConn(c, metadata)
+		if err != nil {
+			return nil, fmt.Errorf("new vless client error: %v", err)
+		}
+
+		return v.ListenPacketOnStreamConn(c, metadata)
 	}
+	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
+}
+
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+	c, err := dialer.DialContext(ctx, "tcp", v.addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
+	tcpKeepAlive(c)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
+
+	c, err = v.StreamConn(c, metadata)
 
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
 	return v.ListenPacketOnStreamConn(c, metadata)
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (v *Vless) SupportWithDialer() bool {
+	return true
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
@@ -280,16 +316,16 @@ func (v *Vless) SupportUOT() bool {
 func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 	var addrType byte
 	var addr []byte
-	switch metadata.AddrType {
-	case C.AtypIPv4:
+	switch metadata.AddrType() {
+	case socks5.AtypIPv4:
 		addrType = vless.AtypIPv4
 		addr = make([]byte, net.IPv4len)
 		copy(addr[:], metadata.DstIP.AsSlice())
-	case C.AtypIPv6:
+	case socks5.AtypIPv6:
 		addrType = vless.AtypIPv6
 		addr = make([]byte, net.IPv6len)
 		copy(addr[:], metadata.DstIP.AsSlice())
-	case C.AtypDomainName:
+	case socks5.AtypDomainName:
 		addrType = vless.AtypDomainName
 		addr = make([]byte, len(metadata.Host)+1)
 		addr[0] = byte(len(metadata.Host))

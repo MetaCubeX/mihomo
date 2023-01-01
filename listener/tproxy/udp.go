@@ -2,6 +2,7 @@ package tproxy
 
 import (
 	"net"
+	"net/netip"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/pool"
@@ -31,7 +32,13 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*UDPListener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-TPROXY"),
+			inbound.WithSpecialRules(""),
+		}
+	}
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -58,7 +65,7 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 		oob := make([]byte, 1024)
 		for {
 			buf := pool.Get(pool.UDPBufferSize)
-			n, oobn, _, lAddr, err := c.ReadMsgUDP(buf, oob)
+			n, oobn, _, lAddr, err := c.ReadMsgUDPAddrPort(buf, oob)
 			if err != nil {
 				pool.Put(buf)
 				if rl.closed {
@@ -67,25 +74,31 @@ func NewUDP(addr string, in chan<- *inbound.PacketAdapter) (*UDPListener, error)
 				continue
 			}
 
-			rAddr, err := getOrigDst(oob, oobn)
+			rAddr, err := getOrigDst(oob[:oobn])
 			if err != nil {
 				continue
 			}
-			handlePacketConn(l, in, buf[:n], lAddr, rAddr)
+
+			if rAddr.Addr().Is4() {
+				// try to unmap 4in6 address
+				lAddr = netip.AddrPortFrom(lAddr.Addr().Unmap(), lAddr.Port())
+			}
+			handlePacketConn(l, in, buf[:n], lAddr, rAddr, additions...)
 		}
 	}()
 
 	return rl, nil
 }
 
-func handlePacketConn(pc net.PacketConn, in chan<- *inbound.PacketAdapter, buf []byte, lAddr *net.UDPAddr, rAddr *net.UDPAddr) {
-	target := socks5.ParseAddrToSocksAddr(rAddr)
+func handlePacketConn(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, lAddr, rAddr netip.AddrPort, additions ...inbound.Addition) {
+	target := socks5.AddrFromStdAddrPort(rAddr)
 	pkt := &packet{
+		pc:    pc,
 		lAddr: lAddr,
 		buf:   buf,
 	}
 	select {
-	case in <- inbound.NewPacket(target, pkt, C.TPROXY):
+	case in <- inbound.NewPacket(target, pkt, C.TPROXY, additions...):
 	default:
 	}
 }

@@ -41,7 +41,9 @@ type Socks5Option struct {
 func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if ss.tls {
 		cc := tls.Client(c, ss.tlsConfig)
-		err := cc.Handshake()
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		err := cc.HandshakeContext(ctx)
 		c = cc
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
@@ -63,13 +65,20 @@ func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error)
 
 // DialContext implements C.ProxyAdapter
 func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	c, err := dialer.DialContext(ctx, "tcp", ss.addr, ss.Base.DialOptions(opts...)...)
+	return ss.DialContextWithDialer(ctx, dialer.NewDialer(ss.Base.DialOptions(opts...)...), metadata)
+}
+
+// DialContextWithDialer implements C.ProxyAdapter
+func (ss *Socks5) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
 	tcpKeepAlive(c)
 
-	defer safeConnClose(c, err)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
 
 	c, err = ss.StreamConn(c, metadata)
 	if err != nil {
@@ -77,6 +86,11 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	}
 
 	return NewConn(c, ss), nil
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (ss *Socks5) SupportWithDialer() bool {
+	return true
 }
 
 // ListenPacketContext implements C.ProxyAdapter
@@ -89,11 +103,15 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 
 	if ss.tls {
 		cc := tls.Client(c, ss.tlsConfig)
-		err = cc.Handshake()
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		err = cc.HandshakeContext(ctx)
 		c = cc
 	}
 
-	defer safeConnClose(c, err)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
 
 	tcpKeepAlive(c)
 	var user *socks5.User
@@ -110,7 +128,21 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		return
 	}
 
-	pc, err := dialer.ListenPacket(ctx, "udp", "", ss.Base.DialOptions(opts...)...)
+	// Support unspecified UDP bind address.
+	bindUDPAddr := bindAddr.UDPAddr()
+	if bindUDPAddr == nil {
+		err = errors.New("invalid UDP bind address")
+		return
+	} else if bindUDPAddr.IP.IsUnspecified() {
+		serverAddr, err := resolveUDPAddr(ctx, "udp", ss.Addr())
+		if err != nil {
+			return nil, err
+		}
+
+		bindUDPAddr.IP = serverAddr.IP
+	}
+
+	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", bindUDPAddr.AddrPort().Addr()), "", ss.Base.DialOptions(opts...)...)
 	if err != nil {
 		return
 	}
@@ -122,20 +154,6 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		// ASSOCIATE request arrived on terminates. RFC1928
 		pc.Close()
 	}()
-
-	// Support unspecified UDP bind address.
-	bindUDPAddr := bindAddr.UDPAddr()
-	if bindUDPAddr == nil {
-		err = errors.New("invalid UDP bind address")
-		return
-	} else if bindUDPAddr.IP.IsUnspecified() {
-		serverAddr, err := resolveUDPAddr("udp", ss.Addr())
-		if err != nil {
-			return nil, err
-		}
-
-		bindUDPAddr.IP = serverAddr.IP
-	}
 
 	return newPacketConn(&socksPacketConn{PacketConn: pc, rAddr: bindUDPAddr, tcpConn: c}, ss), nil
 }

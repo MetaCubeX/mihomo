@@ -1,8 +1,6 @@
 package socks
 
 import (
-	"context"
-	"github.com/database64128/tfo-go"
 	"io"
 	"net"
 
@@ -36,11 +34,14 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, error) {
-	lc := tfo.ListenConfig{
-		DisableTFO: !inboundTfo,
+func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-SOCKS"),
+			inbound.WithSpecialRules(""),
+		}
 	}
-	l, err := lc.Listen(context.Background(), "tcp", addr)
+	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -58,14 +59,14 @@ func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, erro
 				}
 				continue
 			}
-			go handleSocks(c, in)
+			go handleSocks(c, in, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocks(conn net.Conn, in chan<- C.ConnContext) {
+func handleSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	conn.(*net.TCPConn).SetKeepAlive(true)
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
@@ -76,24 +77,24 @@ func handleSocks(conn net.Conn, in chan<- C.ConnContext) {
 
 	switch head[0] {
 	case socks4.Version:
-		HandleSocks4(bufConn, in)
+		HandleSocks4(bufConn, in, additions...)
 	case socks5.Version:
-		HandleSocks5(bufConn, in)
+		HandleSocks5(bufConn, in, additions...)
 	default:
 		conn.Close()
 	}
 }
 
-func HandleSocks4(conn net.Conn, in chan<- C.ConnContext) {
+func HandleSocks4(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	addr, _, err := socks4.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
 		return
 	}
-	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4)
+	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4, additions...)
 }
 
-func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
+func HandleSocks5(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	target, command, err := socks5.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
@@ -104,5 +105,5 @@ func HandleSocks5(conn net.Conn, in chan<- C.ConnContext) {
 		io.Copy(io.Discard, conn)
 		return
 	}
-	in <- inbound.NewSocket(target, conn, C.SOCKS5)
+	in <- inbound.NewSocket(target, conn, C.SOCKS5, additions...)
 }

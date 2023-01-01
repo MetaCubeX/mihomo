@@ -16,14 +16,14 @@ const (
 	UDP = "udp"
 )
 
-func FindProcessName(network string, srcIP netip.Addr, srcPort int) (int32, string, error) {
+func FindProcessName(network string, srcIP netip.Addr, srcPort int) (*uint32, string, error) {
 	return findProcessName(network, srcIP, srcPort)
 }
 
-func FindUid(network string, srcIP netip.Addr, srcPort int) (int32, error) {
+func FindUid(network string, srcIP netip.Addr, srcPort int) (*uint32, error) {
 	_, uid, err := resolveSocketByNetlink(network, srcIP, srcPort)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
-	return uid, nil
+	return &uid, nil
 }

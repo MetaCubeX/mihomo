@@ -37,7 +37,7 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip
 				return next(ctx, r)
 			}
 
-			ip := record.Data
+			ip := record.Data()
 			msg := r.Copy()
 
 			if ip.Is4() && q.Qtype == D.TypeA {
@@ -156,7 +156,7 @@ func withResolver(resolver *Resolver) handler {
 			return handleMsgWithEmptyAnswer(r), nil
 		}
 
-		msg, err := resolver.Exchange(r)
+		msg, err := resolver.ExchangeContext(ctx, r)
 		if err != nil {
 			log.Debugln("[DNS Server] Exchange %s failed: %v", q.String(), err)
 			return msg, err

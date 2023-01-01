@@ -287,7 +287,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 			}
 
-			ss := make(map[string]any, 20)
+			ss := make(map[string]any, 10)
 
 			ss["name"] = name
 			ss["type"] = scheme
@@ -297,6 +297,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			ss["password"] = password
 			query := urlSS.Query()
 			ss["udp"] = true
+			if query.Get("udp-over-tcp") == "true" || query.Get("uot") == "1" {
+				ss["udp-over-tcp"] = true
+			}
 			if strings.Contains(query.Get("plugin"), "obfs") {
 				obfsParams := strings.Split(query.Get("plugin"), ";")
 				ss["plugin"] = "obfs"

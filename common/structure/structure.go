@@ -3,6 +3,7 @@ package structure
 // references: https://github.com/mitchellh/mapstructure
 
 import (
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -13,7 +14,10 @@ import (
 type Option struct {
 	TagName          string
 	WeaklyTypedInput bool
+	KeyReplacer      *strings.Replacer
 }
+
+var DefaultKeyReplacer = strings.NewReplacer("_", "-")
 
 // Decoder is the core of structure
 type Decoder struct {
@@ -49,6 +53,23 @@ func (d *Decoder) Decode(src map[string]any, dst any) error {
 		omitempty := found && omitKey == "omitempty"
 
 		value, ok := src[key]
+		if !ok {
+			if d.option.KeyReplacer != nil {
+				key = d.option.KeyReplacer.Replace(key)
+			}
+
+			for _strKey := range src {
+				strKey := _strKey
+				if d.option.KeyReplacer != nil {
+					strKey = d.option.KeyReplacer.Replace(strKey)
+				}
+				if strings.EqualFold(key, strKey) {
+					value = src[_strKey]
+					ok = true
+					break
+				}
+			}
+		}
 		if !ok || value == nil {
 			if omitempty {
 				continue
@@ -65,9 +86,16 @@ func (d *Decoder) Decode(src map[string]any, dst any) error {
 }
 
 func (d *Decoder) decode(name string, data any, val reflect.Value) error {
-	switch val.Kind() {
-	case reflect.Int:
+	kind := val.Kind()
+	switch {
+	case isInt(kind):
 		return d.decodeInt(name, data, val)
+	case isUint(kind):
+		return d.decodeUint(name, data, val)
+	case isFloat(kind):
+		return d.decodeFloat(name, data, val)
+	}
+	switch kind {
 	case reflect.String:
 		return d.decodeString(name, data, val)
 	case reflect.Bool:
@@ -85,13 +113,42 @@ func (d *Decoder) decode(name string, data any, val reflect.Value) error {
 	}
 }
 
+func isInt(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return true
+	default:
+		return false
+	}
+}
+
+func isUint(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	default:
+		return false
+	}
+}
+
+func isFloat(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
+}
+
 func (d *Decoder) decodeInt(name string, data any, val reflect.Value) (err error) {
 	dataVal := reflect.ValueOf(data)
 	kind := dataVal.Kind()
 	switch {
-	case kind == reflect.Int:
+	case isInt(kind):
 		val.SetInt(dataVal.Int())
-	case kind == reflect.Float64 && d.option.WeaklyTypedInput:
+	case isUint(kind) && d.option.WeaklyTypedInput:
+		val.SetInt(int64(dataVal.Uint()))
+	case isFloat(kind) && d.option.WeaklyTypedInput:
 		val.SetInt(int64(dataVal.Float()))
 	case kind == reflect.String && d.option.WeaklyTypedInput:
 		var i int64
@@ -110,14 +167,72 @@ func (d *Decoder) decodeInt(name string, data any, val reflect.Value) (err error
 	return err
 }
 
+func (d *Decoder) decodeUint(name string, data any, val reflect.Value) (err error) {
+	dataVal := reflect.ValueOf(data)
+	kind := dataVal.Kind()
+	switch {
+	case isUint(kind):
+		val.SetUint(dataVal.Uint())
+	case isInt(kind) && d.option.WeaklyTypedInput:
+		val.SetUint(uint64(dataVal.Int()))
+	case isFloat(kind) && d.option.WeaklyTypedInput:
+		val.SetUint(uint64(dataVal.Float()))
+	case kind == reflect.String && d.option.WeaklyTypedInput:
+		var i uint64
+		i, err = strconv.ParseUint(dataVal.String(), 0, val.Type().Bits())
+		if err == nil {
+			val.SetUint(i)
+		} else {
+			err = fmt.Errorf("cannot parse '%s' as int: %s", name, err)
+		}
+	default:
+		err = fmt.Errorf(
+			"'%s' expected type '%s', got unconvertible type '%s'",
+			name, val.Type(), dataVal.Type(),
+		)
+	}
+	return err
+}
+
+func (d *Decoder) decodeFloat(name string, data any, val reflect.Value) (err error) {
+	dataVal := reflect.ValueOf(data)
+	kind := dataVal.Kind()
+	switch {
+	case isFloat(kind):
+		val.SetFloat(dataVal.Float())
+	case isUint(kind):
+		val.SetFloat(float64(dataVal.Uint()))
+	case isInt(kind) && d.option.WeaklyTypedInput:
+		val.SetFloat(float64(dataVal.Int()))
+	case kind == reflect.String && d.option.WeaklyTypedInput:
+		var i float64
+		i, err = strconv.ParseFloat(dataVal.String(), val.Type().Bits())
+		if err == nil {
+			val.SetFloat(i)
+		} else {
+			err = fmt.Errorf("cannot parse '%s' as int: %s", name, err)
+		}
+	default:
+		err = fmt.Errorf(
+			"'%s' expected type '%s', got unconvertible type '%s'",
+			name, val.Type(), dataVal.Type(),
+		)
+	}
+	return err
+}
+
 func (d *Decoder) decodeString(name string, data any, val reflect.Value) (err error) {
 	dataVal := reflect.ValueOf(data)
 	kind := dataVal.Kind()
 	switch {
 	case kind == reflect.String:
 		val.SetString(dataVal.String())
-	case kind == reflect.Int && d.option.WeaklyTypedInput:
+	case isInt(kind) && d.option.WeaklyTypedInput:
 		val.SetString(strconv.FormatInt(dataVal.Int(), 10))
+	case isUint(kind) && d.option.WeaklyTypedInput:
+		val.SetString(strconv.FormatUint(dataVal.Uint(), 10))
+	case isFloat(kind) && d.option.WeaklyTypedInput:
+		val.SetString(strconv.FormatFloat(dataVal.Float(), 'E', -1, dataVal.Type().Bits()))
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -133,8 +248,10 @@ func (d *Decoder) decodeBool(name string, data any, val reflect.Value) (err erro
 	switch {
 	case kind == reflect.Bool:
 		val.SetBool(dataVal.Bool())
-	case kind == reflect.Int && d.option.WeaklyTypedInput:
+	case isInt(kind) && d.option.WeaklyTypedInput:
 		val.SetBool(dataVal.Int() != 0)
+	case isUint(kind) && d.option.WeaklyTypedInput:
+		val.SetString(strconv.FormatUint(dataVal.Uint(), 10))
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -148,6 +265,17 @@ func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
 	dataVal := reflect.Indirect(reflect.ValueOf(data))
 	valType := val.Type()
 	valElemType := valType.Elem()
+
+	if dataVal.Kind() == reflect.String && valElemType.Kind() == reflect.Uint8 { // from encoding/json
+		s := []byte(dataVal.String())
+		b := make([]byte, base64.StdEncoding.DecodedLen(len(s)))
+		n, err := base64.StdEncoding.Decode(b, s)
+		if err != nil {
+			return fmt.Errorf("try decode '%s' by base64 error: %w", name, err)
+		}
+		val.SetBytes(b[:n])
+		return nil
+	}
 
 	if dataVal.Kind() != reflect.Slice {
 		return fmt.Errorf("'%s' is not a slice", name)
@@ -353,11 +481,17 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		if !rawMapVal.IsValid() {
 			// Do a slower search by iterating over each key and
 			// doing case-insensitive search.
+			if d.option.KeyReplacer != nil {
+				fieldName = d.option.KeyReplacer.Replace(fieldName)
+			}
 			for dataValKey := range dataValKeys {
 				mK, ok := dataValKey.Interface().(string)
 				if !ok {
 					// Not a string key
 					continue
+				}
+				if d.option.KeyReplacer != nil {
+					mK = d.option.KeyReplacer.Replace(mK)
 				}
 
 				if strings.EqualFold(mK, fieldName) {

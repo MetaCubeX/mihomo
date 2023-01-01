@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -10,8 +11,11 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/cache"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/nnip"
+	"github.com/Dreamacro/clash/common/picker"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
@@ -19,7 +23,16 @@ import (
 	D "github.com/miekg/dns"
 )
 
+const (
+	MaxMsgSize = 65535
+)
+
 func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
+	// skip dns cache for acme challenge
+	if q := msg.Question[0]; q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge") {
+		log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)
+		return
+	}
 	var ttl uint32
 	switch {
 	case len(msg.Answer) != 0:
@@ -59,13 +72,17 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver, s.Params, s.ProxyAdapter))
+			ret = append(ret, newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter))
 			continue
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		case "quic":
-			ret = append(ret, newDOQ(resolver, s.Addr, s.ProxyAdapter))
+			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter); err == nil {
+				ret = append(ret, doq)
+			} else {
+				log.Fatalln("DoQ format error: %v", err)
+			}
 			continue
 		}
 
@@ -123,86 +140,121 @@ func msgToDomain(msg *D.Msg) string {
 	return ""
 }
 
-type wrapPacketConn struct {
-	net.PacketConn
-	rAddr net.Addr
-}
+type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
 
-func (wpc *wrapPacketConn) Read(b []byte) (n int, err error) {
-	n, _, err = wpc.PacketConn.ReadFrom(b)
-	return n, err
-}
-
-func (wpc *wrapPacketConn) Write(b []byte) (n int, err error) {
-	return wpc.PacketConn.WriteTo(b, wpc.rAddr)
-}
-
-func (wpc *wrapPacketConn) RemoteAddr() net.Addr {
-	return wpc.rAddr
-}
-
-func (wpc *wrapPacketConn) LocalAddr() net.Addr {
-	if wpc.PacketConn.LocalAddr() == nil {
-		return &net.UDPAddr{IP: net.IPv4zero, Port: 0}
-	} else {
-		return wpc.PacketConn.LocalAddr()
-	}
-}
-
-func dialContextExtra(ctx context.Context, adapterName string, network string, dstIP netip.Addr, port string, opts ...dialer.Option) (net.Conn, error) {
-	networkType := C.TCP
-	if network == "udp" {
-
-		networkType = C.UDP
-	}
-
-	addrType := C.AtypIPv4
-	if dstIP.Is6() {
-		addrType = C.AtypIPv6
-	}
-
-	metadata := &C.Metadata{
-		NetWork:  networkType,
-		AddrType: addrType,
-		Host:     "",
-		DstIP:    dstIP,
-		DstPort:  port,
-	}
-
-	adapter, ok := tunnel.Proxies()[adapterName]
-	if !ok {
-		opts = append(opts, dialer.WithInterface(adapterName))
-		if C.TCP == networkType {
-			return dialer.DialContext(ctx, network, dstIP.String()+":"+port, opts...)
+func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dialHandler {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if len(proxyAdapter) == 0 {
+			opts = append(opts, dialer.WithResolver(r))
+			return dialer.DialContext(ctx, network, addr, opts...)
 		} else {
-			packetConn, err := dialer.ListenPacket(ctx, network, dstIP.String()+":"+port, opts...)
+			host, port, err := net.SplitHostPort(addr)
 			if err != nil {
 				return nil, err
 			}
+			adapter, ok := tunnel.Proxies()[proxyAdapter]
+			if !ok {
+				opts = append(opts, dialer.WithInterface(proxyAdapter))
+			}
+			if strings.Contains(network, "tcp") {
+				// tcp can resolve host by remote
+				metadata := &C.Metadata{
+					NetWork: C.TCP,
+					Host:    host,
+					DstPort: port,
+				}
+				if ok {
+					return adapter.DialContext(ctx, metadata, opts...)
+				}
+				opts = append(opts, dialer.WithResolver(r))
+				return dialer.DialContext(ctx, network, addr, opts...)
+			} else {
+				// udp must resolve host first
+				dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
+				if err != nil {
+					return nil, err
+				}
+				metadata := &C.Metadata{
+					NetWork: C.UDP,
+					Host:    "",
+					DstIP:   dstIP,
+					DstPort: port,
+				}
+				if !ok {
+					return dialer.DialContext(ctx, network, addr, opts...)
+				}
 
-			return &wrapPacketConn{
-				PacketConn: packetConn,
-				rAddr:      metadata.UDPAddr(),
-			}, nil
+				if !adapter.SupportUDP() {
+					return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
+				}
 
+				packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
+				if err != nil {
+					return nil, err
+				}
+
+				return N.NewBindPacketConn(packetConn, metadata.UDPAddr()), nil
+			}
 		}
 	}
+}
 
-	if networkType == C.UDP && !adapter.SupportUDP() {
-		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", adapterName)
+func listenPacket(ctx context.Context, proxyAdapter string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.PacketConn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	adapter, ok := tunnel.Proxies()[proxyAdapter]
+	if !ok && len(proxyAdapter) != 0 {
+		opts = append(opts, dialer.WithInterface(proxyAdapter))
 	}
 
-	if networkType == C.UDP {
-		packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
-		if err != nil {
-			return nil, err
+	// udp must resolve host first
+	dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
+	if err != nil {
+		return nil, err
+	}
+	metadata := &C.Metadata{
+		NetWork: C.UDP,
+		Host:    "",
+		DstIP:   dstIP,
+		DstPort: port,
+	}
+	if !ok {
+		return dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
+	}
+
+	if !adapter.SupportUDP() {
+		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
+	}
+
+	return adapter.ListenPacketContext(ctx, metadata, opts...)
+}
+
+func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
+	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
+	for _, client := range clients {
+		r := client
+		fast.Go(func() (*D.Msg, error) {
+			m, err := r.ExchangeContext(ctx, m)
+			if err != nil {
+				return nil, err
+			} else if m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused {
+				return nil, errors.New("server failure")
+			}
+			return m, nil
+		})
+	}
+
+	elm := fast.Wait()
+	if elm == nil {
+		err := errors.New("all DNS requests failed")
+		if fErr := fast.Error(); fErr != nil {
+			err = fmt.Errorf("%w, first error: %s", err, fErr.Error())
 		}
-
-		return &wrapPacketConn{
-			PacketConn: packetConn,
-			rAddr:      metadata.UDPAddr(),
-		}, nil
+		return nil, err
 	}
 
-	return adapter.DialContext(ctx, metadata, opts...)
+	msg = elm
+	return
 }

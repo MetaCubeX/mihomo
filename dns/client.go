@@ -6,6 +6,7 @@ import (
 	"fmt"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"go.uber.org/atomic"
+	"math/rand"
 	"net"
 	"net/netip"
 	"strings"
@@ -34,15 +35,19 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		ip  netip.Addr
 		err error
 	)
-	if ip, err = netip.ParseAddr(c.host); err != nil {
-		if c.r == nil {
+	if c.r == nil {
+		// a default ip dns
+		if ip, err = netip.ParseAddr(c.host); err != nil {
 			return nil, fmt.Errorf("dns %s not a valid ip", c.host)
-		} else {
-			if ip, err = resolver.ResolveIPWithResolver(c.host, c.r); err != nil {
-				return nil, fmt.Errorf("use default dns resolve failed: %w", err)
-			}
-			c.host = ip.String()
 		}
+	} else {
+		ips, err := resolver.LookupIPWithResolver(ctx, c.host, c.r)
+		if err != nil {
+			return nil, fmt.Errorf("use default dns resolve failed: %w", err)
+		} else if len(ips) == 0 {
+			return nil, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, c.host)
+		}
+		ip = ips[rand.Intn(len(ips))]
 	}
 
 	network := "udp"
@@ -55,13 +60,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
 
-	var conn net.Conn
-	if c.proxyAdapter != "" {
-		conn, err = dialContextExtra(ctx, c.proxyAdapter, network, ip, c.port, options...)
-	} else {
-		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), c.port), options...)
-	}
-
+	conn, err := getDialHandler(c.r, c.proxyAdapter, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
 	if err != nil {
 		return nil, err
 	}

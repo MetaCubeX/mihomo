@@ -5,12 +5,13 @@ package tproxy
 import (
 	"errors"
 	"net"
+	"net/netip"
 )
 
-func getOrigDst(oob []byte, oobn int) (*net.UDPAddr, error) {
-	return nil, errors.New("UDP redir not supported on current platform")
+func getOrigDst(oob []byte) (netip.AddrPort, error) {
+	return netip.AddrPort{}, errors.New("UDP redir not supported on current platform")
 }
 
-func dialUDP(network string, lAddr *net.UDPAddr, rAddr *net.UDPAddr) (*net.UDPConn, error) {
+func dialUDP(network string, lAddr, rAddr netip.AddrPort) (*net.UDPConn, error) {
 	return nil, errors.New("UDP redir not supported on current platform")
 }

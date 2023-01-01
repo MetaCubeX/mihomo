@@ -120,14 +120,20 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 
 		return NewConn(c, t), nil
 	}
+	return t.DialContextWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
+}
 
-	c, err := dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
+// DialContextWithDialer implements C.ProxyAdapter
+func (t *Trojan) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", t.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 	tcpKeepAlive(c)
 
-	defer safeConnClose(c, err)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
 
 	c, err = t.StreamConn(c, metadata)
 	if err != nil {
@@ -147,18 +153,33 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 		}
-		defer safeConnClose(c, err)
-	} else {
-		c, err = dialer.DialContext(ctx, "tcp", t.addr, t.Base.DialOptions(opts...)...)
+		defer func(c net.Conn) {
+			safeConnClose(c, err)
+		}(c)
+		err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
 		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
+			return nil, err
 		}
-		defer safeConnClose(c, err)
-		tcpKeepAlive(c)
-		c, err = t.plainStream(c)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
-		}
+
+		pc := t.instance.PacketConn(c)
+		return newPacketConn(pc, t), err
+	}
+	return t.ListenPacketWithDialer(ctx, dialer.NewDialer(t.Base.DialOptions(opts...)...), metadata)
+}
+
+// ListenPacketWithDialer implements C.ProxyAdapter
+func (t *Trojan) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	c, err := dialer.DialContext(ctx, "tcp", t.addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
+	}
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
+	tcpKeepAlive(c)
+	c, err = t.plainStream(c)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 
 	err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
@@ -168,6 +189,11 @@ func (t *Trojan) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 
 	pc := t.instance.PacketConn(c)
 	return newPacketConn(pc, t), err
+}
+
+// SupportWithDialer implements C.ProxyAdapter
+func (t *Trojan) SupportWithDialer() bool {
+	return true
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

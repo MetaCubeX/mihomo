@@ -1,6 +1,7 @@
 package dns
 
 import (
+	stdContext "context"
 	"errors"
 	"net"
 
@@ -25,7 +26,7 @@ type Server struct {
 
 // ServeDNS implement D.Handler ServeDNS
 func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
-	msg, err := handlerWithContext(s.handler, r)
+	msg, err := handlerWithContext(stdContext.Background(), s.handler, r)
 	if err != nil {
 		D.HandleFailed(w, r)
 		return
@@ -34,12 +35,12 @@ func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 	w.WriteMsg(msg)
 }
 
-func handlerWithContext(handler handler, msg *D.Msg) (*D.Msg, error) {
+func handlerWithContext(stdCtx stdContext.Context, handler handler, msg *D.Msg) (*D.Msg, error) {
 	if len(msg.Question) == 0 {
 		return nil, errors.New("at least one question is required")
 	}
 
-	ctx := context.NewDNSContext(msg)
+	ctx := context.NewDNSContext(stdCtx, msg)
 	return handler(ctx, msg)
 }
 

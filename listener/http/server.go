@@ -1,11 +1,9 @@
 package http
 
 import (
-	"context"
-	"github.com/database64128/tfo-go"
 	"net"
-	"time"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/cache"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -32,23 +30,26 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, inboundTfo bool, in chan<- C.ConnContext) (*Listener, error) {
-	return NewWithAuthenticate(addr, in, true, inboundTfo)
+func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+	return NewWithAuthenticate(addr, in, true, additions...)
 }
 
-func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool, inboundTfo bool) (*Listener, error) {
-	lc := tfo.ListenConfig{
-		DisableTFO: !inboundTfo,
+func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
+	if len(additions) == 0 {
+		additions = []inbound.Addition{
+			inbound.WithInName("DEFAULT-HTTP"),
+			inbound.WithSpecialRules(""),
+		}
 	}
-	l, err := lc.Listen(context.Background(), "tcp", addr)
+	l, err := inbound.Listen("tcp", addr)
 
 	if err != nil {
 		return nil, err
 	}
 
-	var c *cache.Cache[string, bool]
+	var c *cache.LruCache[string, bool]
 	if authenticate {
-		c = cache.New[string, bool](time.Second * 30)
+		c = cache.New[string, bool](cache.WithAge[string, bool](30))
 	}
 
 	hl := &Listener{
@@ -64,7 +65,7 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 				}
 				continue
 			}
-			go HandleConn(conn, in, c)
+			go HandleConn(conn, in, c, additions...)
 		}
 	}()
 

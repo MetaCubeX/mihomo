@@ -23,12 +23,12 @@
       {
         overlay = final: prev: {
 
-          clash-meta = final.buildGoModule {
+          clash-meta = final.buildGo119Module {
             pname = "clash-meta";
             inherit version;
             src = ./.;
 
-            vendorSha256 = "sha256-yhq4WHQcS4CrdcO6KJ5tSn4m7l5g1lNgE9/2BWd9Iys=";
+            vendorSha256 = "sha256-XVz2vts4on42lfxnov4jnUrHzSFF05+i1TVY3C7bgdw=";
 
             # Do not build testing suit
             excludedPackages = [ "./test" ];

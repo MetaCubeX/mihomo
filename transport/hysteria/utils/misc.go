@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"net"
 	"strconv"
 )
@@ -39,4 +40,10 @@ func last(s string, b byte) int {
 		}
 	}
 	return i
+}
+
+type PacketDialer interface {
+	ListenPacket(rAddr net.Addr) (net.PacketConn, error)
+	Context() context.Context
+	RemoteAddr(host string) (net.Addr, error)
 }

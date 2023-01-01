@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/Dreamacro/clash/common/cmd"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/ebpf/redir"
 	"github.com/Dreamacro/clash/component/ebpf/tc"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/sagernet/netlink"
 )
 
 func GetAutoDetectInterface() (string, error) {

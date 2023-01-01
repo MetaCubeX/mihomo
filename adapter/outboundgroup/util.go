@@ -16,32 +16,19 @@ func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
 		return
 	}
 
-	ip, err := netip.ParseAddr(host)
-	if err != nil {
+	if ip, err := netip.ParseAddr(host); err != nil {
 		addr = &C.Metadata{
-			AddrType: C.AtypDomainName,
-			Host:     host,
-			DstIP:    netip.Addr{},
-			DstPort:  port,
+			Host:    host,
+			DstPort: port,
 		}
-		err = nil
-		return
-	} else if ip.Is4() {
+	} else {
 		addr = &C.Metadata{
-			AddrType: C.AtypIPv4,
-			Host:     "",
-			DstIP:    ip,
-			DstPort:  port,
+			Host:    "",
+			DstIP:   ip.Unmap(),
+			DstPort: port,
 		}
-		return
 	}
 
-	addr = &C.Metadata{
-		AddrType: C.AtypIPv6,
-		Host:     "",
-		DstIP:    ip,
-		DstPort:  port,
-	}
 	return
 }
 

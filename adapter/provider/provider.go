@@ -1,21 +1,24 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/convert"
-	"github.com/Dreamacro/clash/component/resource"
 	"github.com/dlclark/regexp2"
+	"gopkg.in/yaml.v3"
+	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/convert"
+	clashHttp "github.com/Dreamacro/clash/component/http"
+	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
-
-	"gopkg.in/yaml.v3"
+	"github.com/Dreamacro/clash/log"
 )
 
 const (
@@ -33,18 +36,20 @@ type ProxySetProvider struct {
 
 type proxySetProvider struct {
 	*resource.Fetcher[[]C.Proxy]
-	proxies     []C.Proxy
-	healthCheck *HealthCheck
-	version     uint32
+	proxies          []C.Proxy
+	healthCheck      *HealthCheck
+	version          uint32
+	subscriptionInfo *SubscriptionInfo
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
-		"name":        pp.Name(),
-		"type":        pp.Type().String(),
-		"vehicleType": pp.VehicleType().String(),
-		"proxies":     pp.Proxies(),
-		"updatedAt":   pp.UpdatedAt,
+		"name":             pp.Name(),
+		"type":             pp.Type().String(),
+		"vehicleType":      pp.VehicleType().String(),
+		"proxies":          pp.Proxies(),
+		"updatedAt":        pp.UpdatedAt,
+		"subscriptionInfo": pp.subscriptionInfo,
 	})
 }
 
@@ -97,6 +102,40 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	}
 }
 
+func (pp *proxySetProvider) getSubscriptionInfo() {
+	if pp.VehicleType() != types.HTTP {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+		defer cancel()
+		resp, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
+		if userInfoStr == "" {
+			resp2, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil)
+			if err != nil {
+				return
+			}
+			defer resp2.Body.Close()
+			userInfoStr = strings.TrimSpace(resp2.Header.Get("subscription-userinfo"))
+			if userInfoStr == "" {
+				return
+			}
+		}
+		pp.subscriptionInfo, err = NewSubscriptionInfo(userInfoStr)
+		if err != nil {
+			log.Warnln("[Provider] get subscription-userinfo: %e", err)
+		}
+	}()
+}
+
 func stopProxyProvider(pd *ProxySetProvider) {
 	pd.healthCheck.close()
 	_ = pd.Fetcher.Destroy()
@@ -128,6 +167,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, filterRegs, excludeFilterReg), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
 
+	pd.getSubscriptionInfo()
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
 	return wrapper, nil
@@ -218,6 +258,7 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
 		pd.version += 1
+		pd.getSubscriptionInfo()
 	}
 }
 

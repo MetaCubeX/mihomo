@@ -92,6 +92,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	mapping["history"] = p.DelayHistory()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
+	mapping["tfo"] = p.SupportTFO()
 	return json.Marshal(mapping)
 }
 
@@ -198,10 +199,9 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 	}
 
 	addr = C.Metadata{
-		AddrType: C.AtypDomainName,
-		Host:     u.Hostname(),
-		DstIP:    netip.Addr{},
-		DstPort:  port,
+		Host:    u.Hostname(),
+		DstIP:   netip.Addr{},
+		DstPort: port,
 	}
 	return
 }
