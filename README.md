@@ -340,6 +340,11 @@ To display process name in GUI please use [Dashboard For Meta](https://github.co
 If you want to build an application that uses clash as a library, check out the
 the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
+## Clients that use Clash.Meta kernel:
+
+- Windows/Linux/macOS: [Clash-verge](https://github.com/zzzgydi/clash-verge)
+- Android: [ClashMetaForAndroid](https://github.com/MetaCubeX/ClashMetaForAndroid)
+
 ## Credits
 
 * [Dreamacro/clash](https://github.com/Dreamacro/clash)
