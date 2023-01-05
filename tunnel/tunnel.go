@@ -43,7 +43,7 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	alwaysFindProcess = false
+	findProcessMode P.FindProcessMode
 
 	fakeIPRange netip.Prefix
 )
@@ -146,9 +146,14 @@ func SetMode(m TunnelMode) {
 	mode = m
 }
 
-// SetAlwaysFindProcess set always find process info, may be increase many memory
-func SetAlwaysFindProcess(findProcess bool) {
-	alwaysFindProcess = findProcess
+// SetFindProcessMode replace SetAlwaysFindProcess
+// always find process info if legacyAlways = true or mode.Always() = true, may be increase many memory
+func SetFindProcessMode(legacyAlways bool, mode P.FindProcessMode) {
+	if legacyAlways {
+		findProcessMode = P.FindProcessAlways
+	} else {
+		findProcessMode = mode
+	}
 }
 
 // processUDP starts a loop to handle udp packet
@@ -463,7 +468,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}()
 		}
 
-		if !processFound && (alwaysFindProcess || rule.ShouldFindProcess()) {
+		if !findProcessMode.Off() && !processFound && (findProcessMode.Always() || rule.ShouldFindProcess()) {
 			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
 			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
 			if err != nil {
