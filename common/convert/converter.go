@@ -162,8 +162,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if jsonDc.Decode(&values) != nil {
 				continue
 			}
-
-			name := uniqueName(names, values["ps"].(string))
+            tempName,ok:=values["ps"].(string)
+            if !ok{
+                continue
+            }
+			name := uniqueName(names, tempName)
 			vmess := make(map[string]any, 20)
 
 			vmess["name"] = name

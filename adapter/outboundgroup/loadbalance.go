@@ -229,6 +229,7 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 			},
 			option.Filter,
 			option.ExcludeFilter,
+            option.ExcludeType,
 			providers,
 		}),
 		strategyFn: strategyFn,
