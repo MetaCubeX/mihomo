@@ -191,7 +191,7 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 			},
 			"",
 			"",
-            "",
+			"",
 			providers,
 		}),
 	}
