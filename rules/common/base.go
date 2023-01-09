@@ -6,7 +6,6 @@ import (
 
 var (
 	errPayload = errors.New("payloadRule error")
-	initFlag   bool
 	noResolve  = "no-resolve"
 )
 

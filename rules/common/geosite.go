@@ -50,12 +50,9 @@ func (gs *GEOSITE) GetRecodeSize() int {
 }
 
 func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
-	if !initFlag {
-		if err := geodata.InitGeoSite(); err != nil {
-			log.Errorln("can't initial GeoSite: %s", err)
-			return nil, err
-		}
-		initFlag = true
+	if err := geodata.InitGeoSite(); err != nil {
+		log.Errorln("can't initial GeoSite: %s", err)
+		return nil, err
 	}
 
 	matcher, size, err := geodata.LoadGeoSiteMatcher(country)
@@ -76,4 +73,4 @@ func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 	return geoSite, nil
 }
 
-//var _ C.Rule = (*GEOSITE)(nil)
+var _ C.Rule = (*GEOSITE)(nil)
