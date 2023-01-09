@@ -71,6 +71,11 @@ func (g *GEOIP) GetRecodeSize() int {
 }
 
 func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) {
+	if err := geodata.InitGeoIP(); err != nil {
+		log.Errorln("can't initial GeoIP: %s", err)
+		return nil, err
+	}
+
 	if !C.GeodataMode || strings.EqualFold(country, "LAN") {
 		geoip := &GEOIP{
 			Base:        &Base{},
