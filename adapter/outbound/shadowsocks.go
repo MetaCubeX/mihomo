@@ -205,7 +205,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	} else if option.Plugin == shadowtls.MODE {
 		obfsMode = shadowtls.MODE
 		shadowTLSOpt = &shadowTLSOption{}
-		if err := decoder.Decode(option.PluginOpts, &shadowTLSOpt); err != nil {
+		if err := decoder.Decode(option.PluginOpts, shadowTLSOpt); err != nil {
 			return nil, fmt.Errorf("ss %s initialize shadow-tls-plugin error: %w", addr, err)
 		}
 	}

@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	chunkSize        = 1 << 14 // 2 ** 14 == 16 * 1024
-	MODE      string = "shadow-tls"
+	chunkSize             = 1 << 13
+	MODE           string = "shadow-tls"
+	HASH_LEN       int    = 8
+	TLS_HEADER_LEN int    = 5
 )
 
 // TLSObfs is shadowsocks tls simple-obfs implementation
@@ -40,21 +42,19 @@ func newHashedStream(conn net.Conn, password []byte) HashedConn {
 }
 
 func (h HashedConn) Read(b []byte) (n int, err error) {
-	n, err = io.ReadFull(h.Conn, b)
-	h.hasher.Write(b)
+	n, err = h.Conn.Read(b)
+	h.hasher.Write(b[:n])
 	return
 }
-
-const TLS_HEADER_LEN int = 5
 
 func (to *ShadowTls) read(b []byte) (int, error) {
 	buf := pool.Get(TLS_HEADER_LEN)
 	_, err := io.ReadFull(to.Conn, buf)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("shadowtls read failed %w", err)
 	}
 	if buf[0] != 0x17 || buf[1] != 0x3 || buf[2] != 0x3 {
-		return 0, fmt.Errorf("invalid shadowtls header %s", buf)
+		return 0, fmt.Errorf("invalid shadowtls header %v", buf)
 	}
 	length := int(binary.BigEndian.Uint16(buf[3:]))
 	pool.Put(buf)
@@ -79,8 +79,11 @@ func (to *ShadowTls) Read(b []byte) (int, error) {
 		}
 
 		n, err := io.ReadFull(to.Conn, b[:length])
+		if err != nil {
+			return n, fmt.Errorf("shadowtls Read failed with %w", err)
+		}
 		to.remain -= n
-		return n, err
+		return n, nil
 	}
 
 	return to.read(b)
@@ -96,21 +99,19 @@ func (to *ShadowTls) Write(b []byte) (int, error) {
 
 		n, err := to.write(b[i:end])
 		if err != nil {
-			return n, err
+			return n, fmt.Errorf("shadowtls Write failed with %w, i=%d, end=%d, n=%d", err, i, end, n)
 		}
 	}
 	return length, nil
 }
 
-const HASH_LEN int = 8
-
 func (s *ShadowTls) write(b []byte) (int, error) {
 	var hashVal []byte
 	if s.firstRequest {
-		tlsConn := trojan.New(&trojan.Option{ServerName: s.server})
+		tlsConn := trojan.New(&trojan.Option{ServerName: s.server, SkipCertVerify: false})
 		hashedConn := newHashedStream(s.Conn, s.password)
 		if _, err := tlsConn.StreamConn(hashedConn); err != nil {
-			return 0, err
+			return 0, fmt.Errorf("tls connect failed with %w", err)
 		}
 		hashVal = hashedConn.hasher.Sum(nil)[:HASH_LEN]
 		s.firstRequest = false
