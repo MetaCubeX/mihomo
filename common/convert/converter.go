@@ -268,15 +268,21 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			var (
-				cipher   = urlSS.User.Username()
-				password string
+				cipherRaw = urlSS.User.Username()
+				cipher    string
+				password  string
 			)
 
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := encRaw.DecodeString(cipher)
+				dcBuf, _ := enc.DecodeString(cipherRaw)
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
+				}
+				err := VerifyMethod(cipher, password)
+				if err != nil {
+					dcBuf, _ := encRaw.DecodeString(cipherRaw)
+					cipher, password, found = strings.Cut(string(dcBuf), ":")
 				}
 			}
 

@@ -2,6 +2,7 @@ package convert
 
 import (
 	"encoding/base64"
+	"github.com/metacubex/sing-shadowsocks/shadowimpl"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -313,4 +314,9 @@ func SetUserAgent(header http.Header) {
 	}
 	userAgent := RandUserAgent()
 	header.Set("User-Agent", userAgent)
+}
+
+func VerifyMethod(cipher, password string) (err error) {
+	_, err = shadowimpl.FetchMethod(cipher, password)
+	return
 }
