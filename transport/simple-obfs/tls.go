@@ -108,16 +108,11 @@ func (to *TLSObfs) write(b []byte) (int, error) {
 	buf.Write([]byte{0x17, 0x03, 0x03})
 	binary.Write(buf, binary.BigEndian, uint16(len(b)))
 	buf.Write(b)
-	written := 0
-	bufBytes := buf.Bytes()
-	for written < len(bufBytes) {
-		n, err := to.Conn.Write(bufBytes[written:])
-		if err != nil {
-			// return 0 because errors occur here make the
-			// whole situation irrecoverable
-			return 0, err
-		}
-		written += n
+	_, err := to.Conn.Write(buf.Bytes())
+	if err != nil {
+		// return 0 because errors occur here make the
+		// whole situation irrecoverable
+		return 0, err
 	}
 	return len(b), nil
 }

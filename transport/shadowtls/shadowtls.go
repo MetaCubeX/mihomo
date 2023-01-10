@@ -122,16 +122,11 @@ func (s *ShadowTls) write(b []byte) (int, error) {
 	binary.Write(buf, binary.BigEndian, uint16(len(b)+len(hashVal)))
 	buf.Write(hashVal)
 	buf.Write(b)
-	written := 0
-	bufBytes := buf.Bytes()
-	for written < len(bufBytes) {
-		n, err := s.Conn.Write(bufBytes[written:])
-		if err != nil {
-			// return 0 because errors occur here make the
-			// whole situation irrecoverable
-			return 0, err
-		}
-		written += n
+	_, err := s.Conn.Write(buf.Bytes())
+	if err != nil {
+		// return 0 because errors occur here make the
+		// whole situation irrecoverable
+		return 0, err
 	}
 	return len(b), nil
 }
