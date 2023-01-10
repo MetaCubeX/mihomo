@@ -172,6 +172,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["alterId"] = 0
 			}
 			vmess["udp"] = true
+			vmess["xudp"] = true
 			vmess["tls"] = false
 			vmess["skip-cert-verify"] = false
 
