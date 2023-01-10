@@ -36,16 +36,14 @@ jobs:
         run: make -j$(($(nproc) + 1)) releases
 
       - name: Delete current release assets
-        uses: mknejp/delete-release-assets@v1
+        uses: andreaswilli/delete-release-assets-action@v2.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: Prerelease-${{ github.ref_name }}
-          assets: |
-              *.zip
-              *.gz
+          tag: Prerelease-${{ github.ref_name }}
+          deleteOnlyFromDrafts: false
 
       - name: Tag Repo
-        uses: richardsimko/update-tag@v1.0.6
+        uses: richardsimko/update-tag@v1
         with:
           tag_name: Prerelease-${{ github.ref_name }}
         env:
@@ -55,6 +53,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
+          tag: ${{ github.ref_name }}
           tag_name: Prerelease-${{ github.ref_name }}
           files: bin/*
           prerelease: true
