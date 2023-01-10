@@ -13,14 +13,12 @@ import (
 	"net/http"
 	"sync"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
-
 	"github.com/Dreamacro/clash/common/pool"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
-
 	xtls "github.com/xtls/go"
 )
 

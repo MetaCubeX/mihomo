@@ -13,6 +13,7 @@ import (
 	"github.com/Dreamacro/clash/transport/shadowtls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/Dreamacro/clash/transport/trojan"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	shadowsocks "github.com/metacubex/sing-shadowsocks"
@@ -32,6 +33,7 @@ type ShadowSocks struct {
 	obfsOption      *simpleObfsOption
 	v2rayOption     *v2rayObfs.Option
 	shadowTLSOption *shadowTLSOption
+	tlsConnector    *trojan.Trojan
 }
 
 type ShadowSocksOption struct {
@@ -82,8 +84,11 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
-	case shadowtls.MODE:
-		c = shadowtls.NewShadowTls(c, ss.shadowTLSOption.Host, ss.shadowTLSOption.Password)
+	case shadowtls.Mode:
+		if ss.tlsConnector == nil {
+			ss.tlsConnector = trojan.New(&trojan.Option{ServerName: ss.shadowTLSOption.Host, SkipCertVerify: false})
+		}
+		c = shadowtls.NewShadowTls(c, ss.shadowTLSOption.Password, ss.tlsConnector)
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
 		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
@@ -202,8 +207,8 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			v2rayOption.TLS = true
 			v2rayOption.SkipCertVerify = opts.SkipCertVerify
 		}
-	} else if option.Plugin == shadowtls.MODE {
-		obfsMode = shadowtls.MODE
+	} else if option.Plugin == shadowtls.Mode {
+		obfsMode = shadowtls.Mode
 		shadowTLSOpt = &shadowTLSOption{}
 		if err := decoder.Decode(option.PluginOpts, shadowTLSOpt); err != nil {
 			return nil, fmt.Errorf("ss %s initialize shadow-tls-plugin error: %w", addr, err)
