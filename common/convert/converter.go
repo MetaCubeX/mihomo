@@ -144,14 +144,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				if encryption := query.Get("encryption"); encryption != "" {
 					vmess["cipher"] = encryption
 				}
-				if packetEncoding := query.Get("packetEncoding"); packetEncoding != "" {
-					switch packetEncoding {
-					case "packet":
-						vmess["packet-addr"] = true
-					case "xudp":
-						vmess["xudp"] = true
-					}
-				}
 				proxies = append(proxies, vmess)
 				continue
 			}
