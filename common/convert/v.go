@@ -15,6 +15,7 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	proxy["port"] = url.Port()
 	proxy["uuid"] = url.User.Username()
 	proxy["udp"] = true
+	proxy["xudp"] = true
 	proxy["skip-cert-verify"] = false
 	proxy["tls"] = false
 	tls := strings.ToLower(query.Get("security"))
