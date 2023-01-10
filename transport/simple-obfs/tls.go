@@ -109,7 +109,12 @@ func (to *TLSObfs) write(b []byte) (int, error) {
 	binary.Write(buf, binary.BigEndian, uint16(len(b)))
 	buf.Write(b)
 	_, err := to.Conn.Write(buf.Bytes())
-	return len(b), err
+	if err != nil {
+		// return 0 because errors occur here make the
+		// whole situation irrecoverable
+		return 0, err
+	}
+	return len(b), nil
 }
 
 // NewTLSObfs return a SimpleObfs
