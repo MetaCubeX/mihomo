@@ -280,10 +280,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			)
 
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := enc.DecodeString(cipher)
-				if !strings.Contains(string(dcBuf), "2022-blake3") {
-					dcBuf, _ = encRaw.DecodeString(cipher)
-				}
+				dcBuf, _ := encRaw.DecodeString(cipher)
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
