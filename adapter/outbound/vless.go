@@ -258,15 +258,15 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		var packetAddrMetadata *C.Metadata
 		if v.option.PacketAddr {
-			_metadata := *metadata // make a copy
-			packetAddrMetadata = &_metadata
+			packetAddrMetadata := *metadata // make a copy
 			packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
 			packetAddrMetadata.DstPort = "443"
-		}
 
-		c, err = v.client.StreamConn(c, parseVlessAddr(packetAddrMetadata, v.option.XUDP))
+			c, err = v.client.StreamConn(c, parseVlessAddr(&packetAddrMetadata, false))
+		} else {
+			c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+		}
 
 		if err != nil {
 			return nil, fmt.Errorf("new vless client error: %v", err)
@@ -296,15 +296,15 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	var packetAddrMetadata *C.Metadata
 	if v.option.PacketAddr {
-		_metadata := *metadata // make a copy
-		packetAddrMetadata = &_metadata
+		packetAddrMetadata := *metadata // make a copy
 		packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
 		packetAddrMetadata.DstPort = "443"
-	}
 
-	c, err = v.StreamConn(c, packetAddrMetadata)
+		c, err = v.StreamConn(c, &packetAddrMetadata)
+	} else {
+		c, err = v.StreamConn(c, metadata)
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
