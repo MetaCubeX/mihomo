@@ -25,6 +25,14 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		proxy["servername"] = sni
 	}
 
+	switch query.Get("packetEncoding") {
+	case "none":
+	case "packet":
+		proxy["packet-addr"] = true
+	default:
+		proxy["xudp"] = true
+	}
+
 	network := strings.ToLower(query.Get("type"))
 	if network == "" {
 		network = "tcp"

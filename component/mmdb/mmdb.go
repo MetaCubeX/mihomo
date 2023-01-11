@@ -2,6 +2,9 @@ package mmdb
 
 import (
 	"github.com/oschwald/geoip2-golang"
+	"io"
+	"net/http"
+	"os"
 	"sync"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -41,4 +44,21 @@ func Instance() *geoip2.Reader {
 	})
 
 	return mmdb
+}
+
+func DownloadMMDB(path string) (err error) {
+	resp, err := http.Get(C.MmdbUrl)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+
+	return err
 }

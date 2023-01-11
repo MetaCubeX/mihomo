@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
+
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
-	"time"
 )
 
 type Fallback struct {
@@ -132,6 +133,7 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			},
 			option.Filter,
 			option.ExcludeFilter,
+			option.ExcludeType,
 			providers,
 		}),
 		disableUDP: option.DisableUDP,

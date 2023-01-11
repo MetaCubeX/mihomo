@@ -116,7 +116,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			if len(v.option.Fingerprint) == 0 {
 				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
 			} else {
-				var err error
 				if wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint); err != nil {
 					return nil, err
 				}
@@ -290,16 +289,6 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}
 		return v.ListenPacketOnStreamConn(c, metadata)
 	}
-	c, err = dialer.DialContext(ctx, "tcp", v.addr, v.Base.DialOptions(opts...)...)
-	if err != nil {
-		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-	}
-	tcpKeepAlive(c)
-	defer func(c net.Conn) {
-		safeConnClose(c, err)
-	}(c)
-
-	c, err = v.StreamConn(c, metadata)
 	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
 }
 
@@ -316,9 +305,17 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
+	tcpKeepAlive(c)
+	defer func(c net.Conn) {
+		safeConnClose(c, err)
+	}(c)
+
+	c, err = v.StreamConn(c, metadata)
+	if err != nil {
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
-
 	return v.ListenPacketOnStreamConn(c, metadata)
 }
 

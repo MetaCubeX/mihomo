@@ -31,6 +31,7 @@ type GroupCommonOption struct {
 	DisableUDP    bool     `group:"disable-udp,omitempty"`
 	Filter        string   `group:"filter,omitempty"`
 	ExcludeFilter string   `group:"exclude-filter,omitempty"`
+	ExcludeType   string   `group:"exclude-type,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
