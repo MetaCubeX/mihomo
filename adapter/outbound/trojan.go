@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	"net"
 	"net/http"
 	"strconv"
+
+	tlsC "github.com/Dreamacro/clash/component/tls"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -265,7 +266,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		}
 
 		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {

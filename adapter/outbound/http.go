@@ -7,12 +7,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	tlsC "github.com/Dreamacro/clash/component/tls"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -150,7 +151,7 @@ func NewHttp(option HttpOption) (*Http, error) {
 			sni = option.SNI
 		}
 		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(&tls.Config{
+			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(&tls.Config{
 				InsecureSkipVerify: option.SkipCertVerify,
 				ServerName:         sni,
 			})

@@ -5,10 +5,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	"io"
 	"net"
 	"strconv"
+
+	tlsC "github.com/Dreamacro/clash/component/tls"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -167,7 +168,7 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 		}
 
 		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
