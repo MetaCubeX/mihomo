@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	MaxDatagramSize = 1252
-	//DefaultTCPMSS                 congestion.ByteCount = 1302
+	MaxDatagramSize                                    = 1252
 	DefaultBBRMaxCongestionWindow congestion.ByteCount = 2000 * MaxDatagramSize
 	InitialCongestionWindow       congestion.ByteCount = 10 * MaxDatagramSize
 	MinInitialPacketSize                               = 1200
@@ -36,13 +35,29 @@ func GetMaxPacketSize(addr net.Addr) congestion.ByteCount {
 	return maxSize
 }
 
+func GetMaxOutgoingPacketSize(addr net.Addr) congestion.ByteCount {
+	maxSize := congestion.ByteCount(MinInitialPacketSize)
+	// If this is not a UDP address, we don't know anything about the MTU.
+	// Use the minimum size of an Initial packet as the max packet size.
+	if udpAddr, ok := addr.(*net.UDPAddr); ok {
+
+		if udpAddr.IP.To4() != nil {
+			// IPv4
+			maxSize = congestion.ByteCount(1472)
+		} else {
+			// IPv6
+			maxSize = congestion.ByteCount(1452)
+		}
+	}
+	return maxSize
+}
+
 var (
 	// The maximum outgoing packet size allowed.
 	// The maximum packet size of any QUIC packet over IPv6, based on ethernet's max
 	// size, minus the IP and UDP headers. IPv6 has a 40 byte header, UDP adds an
 	// additional 8 bytes.  This is a total overhead of 48 bytes.  Ethernet's
 	// max packet size is 1500 bytes,  1500 - 48 = 1452.
-	MaxOutgoingPacketSize = congestion.ByteCount(1302)
 
 	// Default maximum packet size used in the Linux TCP implementation.
 	// Used in QUIC for congestion window computations in bytes.
@@ -252,11 +267,14 @@ type bbrSender struct {
 	// Latched value of --quic_always_get_bw_sample_when_acked.
 	alwaysGetBwSampleWhenAcked bool
 
-	pacer           *pacer
+	pacer *pacer
+
 	maxDatagramSize congestion.ByteCount
+
+	MaxOutgoingPacketSize congestion.ByteCount
 }
 
-func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, maxCongestionWindow congestion.ByteCount) *bbrSender {
+func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, initialMaxOutgoingPacketSize, maxCongestionWindow congestion.ByteCount) *bbrSender {
 	b := &bbrSender{
 		mode:                      STARTUP,
 		clock:                     clock,
@@ -277,6 +295,7 @@ func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, 
 		recoveryState:             NOT_IN_RECOVERY,
 		recoveryWindow:            maxCongestionWindow,
 		minRttSinceLastProbeRtt:   InfiniteRTT,
+		MaxOutgoingPacketSize:     initialMaxOutgoingPacketSize,
 		maxDatagramSize:           initialMaxDatagramSize,
 	}
 	b.pacer = newPacer(b.BandwidthEstimate)
@@ -793,7 +812,7 @@ func (b *bbrSender) MaybeEnterOrExitProbeRtt(now time.Time, isRoundStart, minRtt
 			// PROBE_RTT.  The CWND during PROBE_RTT is kMinimumCongestionWindow, but
 			// we allow an extra packet since QUIC checks CWND before sending a
 			// packet.
-			if b.GetBytesInFlight() < b.ProbeRttCongestionWindow()+MaxOutgoingPacketSize {
+			if b.GetBytesInFlight() < b.ProbeRttCongestionWindow()+b.MaxOutgoingPacketSize {
 				b.exitProbeRttAt = now.Add(ProbeRttTime)
 				b.probeRttRoundPassed = false
 			}
