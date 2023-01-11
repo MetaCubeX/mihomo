@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -9,11 +10,11 @@ import (
 
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/shadowtls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/trojan"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	shadowsocks "github.com/metacubex/sing-shadowsocks"
@@ -33,7 +34,7 @@ type ShadowSocks struct {
 	obfsOption      *simpleObfsOption
 	v2rayOption     *v2rayObfs.Option
 	shadowTLSOption *shadowTLSOption
-	tlsConnector    *trojan.Trojan
+	tlsConfig       *tls.Config
 }
 
 type ShadowSocksOption struct {
@@ -66,8 +67,10 @@ type v2rayObfsOption struct {
 }
 
 type shadowTLSOption struct {
-	Password string `obfs:"password"`
-	Host     string `obfs:"host"`
+	Password       string `obfs:"password"`
+	Host           string `obfs:"host"`
+	Fingerprint    string `obfs:"fingerprint,omitempty"`
+	SkipCertVerify bool   `obfs:"skip-cert-verify,omitempty"`
 }
 
 // StreamConn implements C.ProxyAdapter
@@ -85,10 +88,7 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
 	case shadowtls.Mode:
-		if ss.tlsConnector == nil {
-			ss.tlsConnector = trojan.New(&trojan.Option{ServerName: ss.shadowTLSOption.Host, SkipCertVerify: false})
-		}
-		c = shadowtls.NewShadowTls(c, ss.shadowTLSOption.Password, ss.tlsConnector)
+		c = shadowtls.NewShadowTLS(c, ss.shadowTLSOption.Password, ss.tlsConfig)
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
 		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
@@ -172,6 +172,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	var v2rayOption *v2rayObfs.Option
 	var obfsOption *simpleObfsOption
 	var shadowTLSOpt *shadowTLSOption
+	var tlsConfig *tls.Config
 	obfsMode := ""
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
@@ -213,6 +214,21 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		if err := decoder.Decode(option.PluginOpts, shadowTLSOpt); err != nil {
 			return nil, fmt.Errorf("ss %s initialize shadow-tls-plugin error: %w", addr, err)
 		}
+
+		tlsConfig = &tls.Config{
+			NextProtos:         shadowtls.DefaultALPN,
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: shadowTLSOpt.SkipCertVerify,
+			ServerName:         shadowTLSOpt.Host,
+		}
+
+		if len(shadowTLSOpt.Fingerprint) == 0 {
+			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		} else {
+			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, shadowTLSOpt.Fingerprint); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return &ShadowSocks{
@@ -232,6 +248,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		v2rayOption:     v2rayOption,
 		obfsOption:      obfsOption,
 		shadowTLSOption: shadowTLSOpt,
+		tlsConfig:       tlsConfig,
 	}, nil
 }
 
