@@ -12,6 +12,10 @@ import (
 	"strconv"
 	"sync"
 
+	vmess2 "github.com/sagernet/sing-vmess"
+	"github.com/sagernet/sing-vmess/packetaddr"
+	M "github.com/sagernet/sing/common/metadata"
+
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -49,6 +53,9 @@ type VlessOption struct {
 	FlowShow       bool              `proxy:"flow-show,omitempty"`
 	TLS            bool              `proxy:"tls,omitempty"`
 	UDP            bool              `proxy:"udp,omitempty"`
+	PacketAddr     bool              `proxy:"packet-addr,omitempty"`
+	XUDP           bool              `proxy:"xudp,omitempty"`
+	PacketEncoding string            `proxy:"packet-encoding,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
 	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
 	HTTP2Opts      HTTP2Options      `proxy:"h2-opts,omitempty"`
@@ -148,7 +155,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		return nil, err
 	}
 
-	return v.client.StreamConn(c, parseVlessAddr(metadata))
+	return v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
 }
 
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
@@ -204,7 +211,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
+		c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +258,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
+		c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
 
 		if err != nil {
 			return nil, fmt.Errorf("new vless client error: %v", err)
@@ -297,6 +304,15 @@ func (v *Vless) SupportWithDialer() bool {
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (v *Vless) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if v.option.XUDP {
+		return newPacketConn(&threadSafePacketConn{
+			PacketConn: vmess2.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
+		}, v), nil
+	} else if v.option.PacketAddr {
+		return newPacketConn(&threadSafePacketConn{
+			PacketConn: packetaddr.NewBindConn(c),
+		}, v), nil
+	}
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }
 
@@ -305,7 +321,7 @@ func (v *Vless) SupportUOT() bool {
 	return true
 }
 
-func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
+func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 	var addrType byte
 	var addr []byte
 	switch metadata.AddrType() {
@@ -329,7 +345,8 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,
 		Addr:     addr,
-		Port:     uint(port),
+		Port:     uint16(port),
+		Mux:      xudp,
 	}
 }
 
@@ -456,6 +473,16 @@ func NewVless(option VlessOption) (*Vless, error) {
 		},
 		client: client,
 		option: &option,
+	}
+
+	switch option.PacketEncoding {
+	case "packetaddr", "packet":
+		option.PacketAddr = true
+	case "xudp":
+		option.XUDP = true
+	}
+	if option.XUDP {
+		option.PacketAddr = false
 	}
 
 	switch option.Network {
