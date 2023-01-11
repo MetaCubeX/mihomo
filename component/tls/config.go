@@ -97,7 +97,7 @@ func GetSpecifiedFingerprintTLSConfig(tlsConfig *tls.Config, fingerprint string)
 }
 
 func GetGlobalFingerprintTLSConfig(tlsConfig *tls.Config) *tls.Config {
-	// If there's more than one fingerprints then we could skip the general check
+	// If there's at least one fingerprint then we could skip the general check
 	// If there's no fingerprints but the config insists then we should skip.
 	// Otherwise we should do a general verification.
 	shouldSkipVerify := len(globalFingerprints) != 0 || tlsConfig != nil && tlsConfig.InsecureSkipVerify
