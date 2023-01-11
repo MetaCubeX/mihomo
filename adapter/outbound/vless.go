@@ -137,11 +137,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		c, err = vmess.StreamH2Conn(c, h2Opts)
 	case "grpc":
-		if v.isXTLSEnabled() {
-			c, err = gun.StreamGunWithXTLSConn(c, v.gunTLSConfig, v.gunConfig)
-		} else {
-			c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
-		}
+		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
 	default:
 		// default tcp network
 		// handle TLS And XTLS
@@ -158,15 +154,11 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
 	host, _, _ := net.SplitHostPort(v.addr)
 
-	if v.isXTLSEnabled() {
+	if v.isXTLSEnabled() && !isH2 {
 		xtlsOpts := vless.XTLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
-			FingerPrint:    v.option.Fingerprint,
-		}
-
-		if isH2 {
-			xtlsOpts.NextProtos = []string{"h2"}
+			Fingerprint:    v.option.Fingerprint,
 		}
 
 		if v.option.ServerName != "" {
@@ -498,11 +490,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
-		if v.isXTLSEnabled() {
-			v.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)
-		} else {
-			v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
-		}
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
 	}
 
 	return v, nil

@@ -12,7 +12,7 @@ import (
 type XTLSConfig struct {
 	Host           string
 	SkipCertVerify bool
-	FingerPrint    string
+	Fingerprint    string
 	NextProtos     []string
 }
 
@@ -22,11 +22,11 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 		InsecureSkipVerify: cfg.SkipCertVerify,
 		NextProtos:         cfg.NextProtos,
 	}
-	if len(cfg.FingerPrint) == 0 {
+	if len(cfg.Fingerprint) == 0 {
 		xtlsConfig = tlsC.GetGlobalFingerprintXTLCConfig(xtlsConfig)
 	} else {
 		var err error
-		if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, cfg.FingerPrint); err != nil {
+		if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, cfg.Fingerprint); err != nil {
 			return nil, err
 		}
 	}
