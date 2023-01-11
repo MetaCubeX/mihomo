@@ -1,8 +1,10 @@
 package shadowtls
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -10,7 +12,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/trojan"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 const (
@@ -20,13 +22,17 @@ const (
 	tlsHeaderLen int    = 5
 )
 
-// TLSObfs is shadowsocks tls simple-obfs implementation
-type ShadowTls struct {
+var (
+	DefaultALPN = []string{"h2", "http/1.1"}
+)
+
+// ShadowTLS is shadow-tls implementation
+type ShadowTLS struct {
 	net.Conn
 	password     []byte
 	remain       int
 	firstRequest bool
-	tlsConnector *trojan.Trojan
+	tlsConfig    *tls.Config
 }
 
 type HashedConn struct {
@@ -47,9 +53,9 @@ func (h HashedConn) Read(b []byte) (n int, err error) {
 	return
 }
 
-func (to *ShadowTls) read(b []byte) (int, error) {
+func (s *ShadowTLS) read(b []byte) (int, error) {
 	buf := pool.Get(tlsHeaderLen)
-	_, err := io.ReadFull(to.Conn, buf)
+	_, err := io.ReadFull(s.Conn, buf)
 	if err != nil {
 		return 0, fmt.Errorf("shadowtls read failed %w", err)
 	}
@@ -60,36 +66,36 @@ func (to *ShadowTls) read(b []byte) (int, error) {
 	pool.Put(buf)
 
 	if length > len(b) {
-		n, err := to.Conn.Read(b)
+		n, err := s.Conn.Read(b)
 		if err != nil {
 			return n, err
 		}
-		to.remain = length - n
+		s.remain = length - n
 		return n, nil
 	}
 
-	return io.ReadFull(to.Conn, b[:length])
+	return io.ReadFull(s.Conn, b[:length])
 }
 
-func (to *ShadowTls) Read(b []byte) (int, error) {
-	if to.remain > 0 {
-		length := to.remain
+func (s *ShadowTLS) Read(b []byte) (int, error) {
+	if s.remain > 0 {
+		length := s.remain
 		if length > len(b) {
 			length = len(b)
 		}
 
-		n, err := io.ReadFull(to.Conn, b[:length])
+		n, err := io.ReadFull(s.Conn, b[:length])
 		if err != nil {
 			return n, fmt.Errorf("shadowtls Read failed with %w", err)
 		}
-		to.remain -= n
+		s.remain -= n
 		return n, nil
 	}
 
-	return to.read(b)
+	return s.read(b)
 }
 
-func (to *ShadowTls) Write(b []byte) (int, error) {
+func (s *ShadowTLS) Write(b []byte) (int, error) {
 	length := len(b)
 	for i := 0; i < length; i += chunkSize {
 		end := i + chunkSize
@@ -97,7 +103,7 @@ func (to *ShadowTls) Write(b []byte) (int, error) {
 			end = length
 		}
 
-		n, err := to.write(b[i:end])
+		n, err := s.write(b[i:end])
 		if err != nil {
 			return n, fmt.Errorf("shadowtls Write failed with %w, i=%d, end=%d, n=%d", err, i, end, n)
 		}
@@ -105,11 +111,15 @@ func (to *ShadowTls) Write(b []byte) (int, error) {
 	return length, nil
 }
 
-func (s *ShadowTls) write(b []byte) (int, error) {
+func (s *ShadowTLS) write(b []byte) (int, error) {
 	var hashVal []byte
 	if s.firstRequest {
 		hashedConn := newHashedStream(s.Conn, s.password)
-		if _, err := s.tlsConnector.StreamConn(hashedConn); err != nil {
+		tlsConn := tls.Client(hashedConn, s.tlsConfig)
+		// fix tls handshake not timeout
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			return 0, fmt.Errorf("tls connect failed with %w", err)
 		}
 		hashVal = hashedConn.hasher.Sum(nil)[:hashLen]
@@ -131,12 +141,12 @@ func (s *ShadowTls) write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// NewShadowTls return a ShadowTls
-func NewShadowTls(conn net.Conn, password string, tlsConnector *trojan.Trojan) net.Conn {
-	return &ShadowTls{
+// NewShadowTLS return a ShadowTLS
+func NewShadowTLS(conn net.Conn, password string, tlsConfig *tls.Config) net.Conn {
+	return &ShadowTLS{
 		Conn:         conn,
 		password:     []byte(password),
 		firstRequest: true,
-		tlsConnector: tlsConnector,
+		tlsConfig:    tlsConfig,
 	}
 }
