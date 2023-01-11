@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"sync"
 
-	vmess2 "github.com/sagernet/sing-vmess"
+	vmessSing "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 
@@ -258,7 +258,15 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+		var packetAddrMetadata *C.Metadata
+		if v.option.PacketAddr {
+			_metadata := *metadata // make a copy
+			packetAddrMetadata = &_metadata
+			packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
+			packetAddrMetadata.DstPort = "443"
+		}
+
+		c, err = v.client.StreamConn(c, parseVlessAddr(packetAddrMetadata, v.option.XUDP))
 
 		if err != nil {
 			return nil, fmt.Errorf("new vless client error: %v", err)
@@ -288,7 +296,15 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = v.StreamConn(c, metadata)
+	var packetAddrMetadata *C.Metadata
+	if v.option.PacketAddr {
+		_metadata := *metadata // make a copy
+		packetAddrMetadata = &_metadata
+		packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
+		packetAddrMetadata.DstPort = "443"
+	}
+
+	c, err = v.StreamConn(c, packetAddrMetadata)
 
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
@@ -306,11 +322,13 @@ func (v *Vless) SupportWithDialer() bool {
 func (v *Vless) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if v.option.XUDP {
 		return newPacketConn(&threadSafePacketConn{
-			PacketConn: vmess2.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
+			PacketConn: vmessSing.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
 		}, v), nil
 	} else if v.option.PacketAddr {
 		return newPacketConn(&threadSafePacketConn{
-			PacketConn: packetaddr.NewBindConn(c),
+			PacketConn: packetaddr.NewConn(&vlessPacketConn{
+				Conn: c, rAddr: metadata.UDPAddr(),
+			}, M.ParseSocksaddr(metadata.RemoteAddress())),
 		}, v), nil
 	}
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
@@ -346,7 +364,7 @@ func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 		AddrType: addrType,
 		Addr:     addr,
 		Port:     uint16(port),
-		Mux:      xudp,
+		Mux:      metadata.NetWork == C.UDP && xudp,
 	}
 }
 
