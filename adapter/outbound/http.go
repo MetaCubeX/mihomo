@@ -13,9 +13,8 @@ import (
 	"net/url"
 	"strconv"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
-
 	"github.com/Dreamacro/clash/component/dialer"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 )
 

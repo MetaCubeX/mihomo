@@ -6,7 +6,6 @@ import (
 	"net"
 
 	tlsC "github.com/Dreamacro/clash/component/tls"
-
 	C "github.com/Dreamacro/clash/constant"
 )
 
