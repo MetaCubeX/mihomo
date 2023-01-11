@@ -12,12 +12,15 @@ import (
 	"github.com/metacubex/quic-go/congestion"
 )
 
-const DefaultTCPMSS congestion.ByteCount = 1460
-const DefaultBBRMaxCongestionWindow congestion.ByteCount = 2000 * DefaultTCPMSS
-const InitialCongestionWindow congestion.ByteCount = 32 * DefaultTCPMSS
-const MinInitialPacketSize = 1200
-const InitialPacketSizeIPv4 = 1252
-const InitialPacketSizeIPv6 = 1232
+const (
+	MaxDatagramSize = 1252
+	//DefaultTCPMSS                 congestion.ByteCount = 1302
+	DefaultBBRMaxCongestionWindow congestion.ByteCount = 2000 * MaxDatagramSize
+	InitialCongestionWindow       congestion.ByteCount = 10 * MaxDatagramSize
+	MinInitialPacketSize                               = 1200
+	InitialPacketSizeIPv4                              = 1252
+	InitialPacketSizeIPv6                              = 1232
+)
 
 func GetMaxPacketSize(addr net.Addr) congestion.ByteCount {
 	maxSize := congestion.ByteCount(MinInitialPacketSize)
@@ -39,11 +42,11 @@ var (
 	// size, minus the IP and UDP headers. IPv6 has a 40 byte header, UDP adds an
 	// additional 8 bytes.  This is a total overhead of 48 bytes.  Ethernet's
 	// max packet size is 1500 bytes,  1500 - 48 = 1452.
-	MaxOutgoingPacketSize = congestion.ByteCount(1452)
+	MaxOutgoingPacketSize = congestion.ByteCount(1302)
 
 	// Default maximum packet size used in the Linux TCP implementation.
 	// Used in QUIC for congestion window computations in bytes.
-	MaxSegmentSize = DefaultTCPMSS
+	MaxSegmentSize = MaxDatagramSize
 
 	// Default initial rtt used before any samples are received.
 	InitialRtt = 100 * time.Millisecond
@@ -51,10 +54,10 @@ var (
 	// Constants based on TCP defaults.
 	// The minimum CWND to ensure delayed acks don't reduce bandwidth measurements.
 	// Does not inflate the pacing rate.
-	DefaultMinimumCongestionWindow = 4 * DefaultTCPMSS
+	DefaultMinimumCongestionWindow = 4 * MaxDatagramSize
 
 	// The gain used for the STARTUP, equal to 2/ln(2).
-	DefaultHighGain = 2.885
+	DefaultHighGain = 2.89
 
 	// The gain used in STARTUP after loss has been detected.
 	// 1.5 is enough to allow for 25% exogenous loss and still observe a 25% growth
@@ -263,7 +266,7 @@ func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, 
 		congestionWindow:          initialCongestionWindow,
 		initialCongestionWindow:   initialCongestionWindow,
 		maxCongestionWindow:       maxCongestionWindow,
-		minCongestionWindow:       DefaultMinimumCongestionWindow,
+		minCongestionWindow:       congestion.ByteCount(DefaultMinimumCongestionWindow),
 		highGain:                  DefaultHighGain,
 		highCwndGain:              DefaultHighGain,
 		drainGain:                 1.0 / DefaultHighGain,
@@ -924,7 +927,7 @@ func (b *bbrSender) CalculateRecoveryWindow(ackedBytes, lostBytes congestion.Byt
 	if b.recoveryWindow >= lostBytes {
 		b.recoveryWindow -= lostBytes
 	} else {
-		b.recoveryWindow = MaxSegmentSize
+		b.recoveryWindow = congestion.ByteCount(MaxSegmentSize)
 	}
 	// In CONSERVATION mode, just subtracting losses is sufficient.  In GROWTH,
 	// release additional |bytes_acked| to achieve a slow-start-like behavior.
