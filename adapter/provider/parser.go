@@ -3,10 +3,10 @@ package provider
 import (
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/component/resource"
 	"time"
 
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
 )
@@ -27,6 +27,7 @@ type proxyProviderSchema struct {
 	Interval      int               `provider:"interval,omitempty"`
 	Filter        string            `provider:"filter,omitempty"`
 	ExcludeFilter string            `provider:"exclude-filter,omitempty"`
+	ExcludeType   string            `provider:"exclude-type,omitempty"`
 	HealthCheck   healthCheckSchema `provider:"health-check,omitempty"`
 }
 
@@ -63,5 +64,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
 	excludeFilter := schema.ExcludeFilter
-	return NewProxySetProvider(name, interval, filter, excludeFilter, vehicle, hc)
+	excludeType := schema.ExcludeType
+
+	return NewProxySetProvider(name, interval, filter, excludeFilter, excludeType, vehicle, hc)
 }

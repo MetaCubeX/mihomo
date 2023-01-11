@@ -144,14 +144,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				if encryption := query.Get("encryption"); encryption != "" {
 					vmess["cipher"] = encryption
 				}
-				if packetEncoding := query.Get("packetEncoding"); packetEncoding != "" {
-					switch packetEncoding {
-					case "packet":
-						vmess["packet-addr"] = true
-					case "xudp":
-						vmess["xudp"] = true
-					}
-				}
 				proxies = append(proxies, vmess)
 				continue
 			}
@@ -162,8 +154,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if jsonDc.Decode(&values) != nil {
 				continue
 			}
-
-			name := uniqueName(names, values["ps"].(string))
+			tempName, ok := values["ps"].(string)
+			if !ok {
+				continue
+			}
+			name := uniqueName(names, tempName)
 			vmess := make(map[string]any, 20)
 
 			vmess["name"] = name
@@ -177,6 +172,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["alterId"] = 0
 			}
 			vmess["udp"] = true
+			vmess["xudp"] = true
 			vmess["tls"] = false
 			vmess["skip-cert-verify"] = false
 
@@ -272,18 +268,21 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			var (
-				cipher   = urlSS.User.Username()
-				password string
+				cipherRaw = urlSS.User.Username()
+				cipher    string
+				password  string
 			)
 
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := enc.DecodeString(cipher)
-				if !strings.Contains(string(dcBuf), "2022-blake3") {
-					dcBuf, _ = encRaw.DecodeString(cipher)
-				}
+				dcBuf, _ := enc.DecodeString(cipherRaw)
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
+				}
+				err := VerifyMethod(cipher, password)
+				if err != nil {
+					dcBuf, _ := encRaw.DecodeString(cipherRaw)
+					cipher, password, found = strings.Cut(string(dcBuf), ":")
 				}
 			}
 

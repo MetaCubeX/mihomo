@@ -258,6 +258,17 @@ proxies:
       # headers:
       #   custom: value
 
+  - name: "ss4"
+    type: ss
+    server: server
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    plugin: shadow-tls
+    plugin-opts:
+      host: "cloud.tencent.com"
+      password: "shadow_tls_password"
+
   # vmess
   # cipher支持 auto/aes-128-gcm/chacha20-poly1305/none
   - name: "vmess"

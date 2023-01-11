@@ -12,6 +12,10 @@ import (
 	"strconv"
 	"sync"
 
+	vmessSing "github.com/sagernet/sing-vmess"
+	"github.com/sagernet/sing-vmess/packetaddr"
+	M "github.com/sagernet/sing/common/metadata"
+
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -49,6 +53,9 @@ type VlessOption struct {
 	FlowShow       bool              `proxy:"flow-show,omitempty"`
 	TLS            bool              `proxy:"tls,omitempty"`
 	UDP            bool              `proxy:"udp,omitempty"`
+	PacketAddr     bool              `proxy:"packet-addr,omitempty"`
+	XUDP           bool              `proxy:"xudp,omitempty"`
+	PacketEncoding string            `proxy:"packet-encoding,omitempty"`
 	Network        string            `proxy:"network,omitempty"`
 	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
 	HTTP2Opts      HTTP2Options      `proxy:"h2-opts,omitempty"`
@@ -137,11 +144,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		c, err = vmess.StreamH2Conn(c, h2Opts)
 	case "grpc":
-		if v.isXTLSEnabled() {
-			c, err = gun.StreamGunWithXTLSConn(c, v.gunTLSConfig, v.gunConfig)
-		} else {
-			c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
-		}
+		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
 	default:
 		// default tcp network
 		// handle TLS And XTLS
@@ -152,21 +155,17 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		return nil, err
 	}
 
-	return v.client.StreamConn(c, parseVlessAddr(metadata))
+	return v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
 }
 
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
 	host, _, _ := net.SplitHostPort(v.addr)
 
-	if v.isXTLSEnabled() {
+	if v.isXTLSEnabled() && !isH2 {
 		xtlsOpts := vless.XTLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
-			FingerPrint:    v.option.Fingerprint,
-		}
-
-		if isH2 {
-			xtlsOpts.NextProtos = []string{"h2"}
+			Fingerprint:    v.option.Fingerprint,
 		}
 
 		if v.option.ServerName != "" {
@@ -212,7 +211,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
+		c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
 		if err != nil {
 			return nil, err
 		}
@@ -259,7 +258,15 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.StreamConn(c, parseVlessAddr(metadata))
+		if v.option.PacketAddr {
+			packetAddrMetadata := *metadata // make a copy
+			packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
+			packetAddrMetadata.DstPort = "443"
+
+			c, err = v.client.StreamConn(c, parseVlessAddr(&packetAddrMetadata, false))
+		} else {
+			c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+		}
 
 		if err != nil {
 			return nil, fmt.Errorf("new vless client error: %v", err)
@@ -289,7 +296,15 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = v.StreamConn(c, metadata)
+	if v.option.PacketAddr {
+		packetAddrMetadata := *metadata // make a copy
+		packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
+		packetAddrMetadata.DstPort = "443"
+
+		c, err = v.StreamConn(c, &packetAddrMetadata)
+	} else {
+		c, err = v.StreamConn(c, metadata)
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
@@ -305,6 +320,17 @@ func (v *Vless) SupportWithDialer() bool {
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (v *Vless) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if v.option.XUDP {
+		return newPacketConn(&threadSafePacketConn{
+			PacketConn: vmessSing.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
+		}, v), nil
+	} else if v.option.PacketAddr {
+		return newPacketConn(&threadSafePacketConn{
+			PacketConn: packetaddr.NewConn(&vlessPacketConn{
+				Conn: c, rAddr: metadata.UDPAddr(),
+			}, M.ParseSocksaddr(metadata.RemoteAddress())),
+		}, v), nil
+	}
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }
 
@@ -313,7 +339,7 @@ func (v *Vless) SupportUOT() bool {
 	return true
 }
 
-func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
+func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 	var addrType byte
 	var addr []byte
 	switch metadata.AddrType() {
@@ -337,7 +363,8 @@ func parseVlessAddr(metadata *C.Metadata) *vless.DstAddr {
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,
 		Addr:     addr,
-		Port:     uint(port),
+		Port:     uint16(port),
+		Mux:      metadata.NetWork == C.UDP && xudp,
 	}
 }
 
@@ -459,10 +486,21 @@ func NewVless(option VlessOption) (*Vless, error) {
 			tp:     C.Vless,
 			udp:    option.UDP,
 			iface:  option.Interface,
+			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 		option: &option,
+	}
+
+	switch option.PacketEncoding {
+	case "packetaddr", "packet":
+		option.PacketAddr = true
+	case "xudp":
+		option.XUDP = true
+	}
+	if option.XUDP {
+		option.PacketAddr = false
 	}
 
 	switch option.Network {
@@ -497,11 +535,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
-		if v.isXTLSEnabled() {
-			v.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)
-		} else {
-			v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
-		}
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
 	}
 
 	return v, nil

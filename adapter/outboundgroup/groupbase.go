@@ -3,23 +3,26 @@ package outboundgroup
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Dreamacro/clash/adapter/outbound"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
 	types "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel"
+
 	"github.com/dlclark/regexp2"
 	"go.uber.org/atomic"
-	"strings"
-	"sync"
-	"time"
 )
 
 type GroupBase struct {
 	*outbound.Base
 	filterRegs       []*regexp2.Regexp
 	excludeFilterReg *regexp2.Regexp
+	excludeTypeArray []string
 	providers        []provider.ProxyProvider
 	failedTestMux    sync.Mutex
 	failedTimes      int
@@ -33,6 +36,7 @@ type GroupBaseOption struct {
 	outbound.BaseOption
 	filter        string
 	excludeFilter string
+	excludeType   string
 	providers     []provider.ProxyProvider
 }
 
@@ -40,6 +44,10 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	var excludeFilterReg *regexp2.Regexp
 	if opt.excludeFilter != "" {
 		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, 0)
+	}
+	var excludeTypeArray []string
+	if opt.excludeType != "" {
+		excludeTypeArray = strings.Split(opt.excludeType, "|")
 	}
 
 	var filterRegs []*regexp2.Regexp
@@ -54,6 +62,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		Base:             outbound.NewBase(opt.BaseOption),
 		filterRegs:       filterRegs,
 		excludeFilterReg: excludeFilterReg,
+		excludeTypeArray: excludeTypeArray,
 		providers:        opt.providers,
 		failedTesting:    atomic.NewBool(false),
 	}
@@ -145,6 +154,24 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				proxiesSet[name] = struct{}{}
 				newProxies = append(newProxies, p)
 			}
+		}
+		proxies = newProxies
+	}
+	if gb.excludeTypeArray != nil {
+		var newProxies []C.Proxy
+		for _, p := range proxies {
+			mType := p.Type().String()
+			flag := false
+			for i := range gb.excludeTypeArray {
+				if strings.EqualFold(mType, gb.excludeTypeArray[i]) {
+					flag = true
+				}
+
+			}
+			if flag {
+				continue
+			}
+			newProxies = append(newProxies, p)
 		}
 		proxies = newProxies
 	}

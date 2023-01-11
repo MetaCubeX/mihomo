@@ -8,10 +8,11 @@ import (
 )
 
 type classicalStrategy struct {
-	rules           []C.Rule
-	count           int
-	shouldResolveIP bool
-	parse           func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
+	rules             []C.Rule
+	count             int
+	shouldResolveIP   bool
+	shouldFindProcess bool
+	parse             func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
 }
 
 func (c *classicalStrategy) Match(metadata *C.Metadata) bool {
@@ -32,6 +33,10 @@ func (c *classicalStrategy) ShouldResolveIP() bool {
 	return c.shouldResolveIP
 }
 
+func (c *classicalStrategy) ShouldFindProcess() bool {
+	return c.shouldFindProcess
+}
+
 func (c *classicalStrategy) OnUpdate(rules []string) {
 	var classicalRules []C.Rule
 	shouldResolveIP := false
@@ -43,6 +48,10 @@ func (c *classicalStrategy) OnUpdate(rules []string) {
 		} else {
 			if !shouldResolveIP {
 				shouldResolveIP = r.ShouldResolveIP()
+			}
+
+			if !c.shouldFindProcess {
+				c.shouldFindProcess = r.ShouldFindProcess()
 			}
 
 			classicalRules = append(classicalRules, r)

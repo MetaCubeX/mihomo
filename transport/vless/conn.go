@@ -51,17 +51,20 @@ func (vc *Conn) sendRequest() error {
 		buf.WriteByte(0) // addon data length. 0 means no addon data
 	}
 
-	// command
-	if vc.dst.UDP {
-		buf.WriteByte(CommandUDP)
+	if vc.dst.Mux {
+		buf.WriteByte(CommandMux)
 	} else {
-		buf.WriteByte(CommandTCP)
-	}
+		if vc.dst.UDP {
+			buf.WriteByte(CommandUDP)
+		} else {
+			buf.WriteByte(CommandTCP)
+		}
 
-	// Port AddrType Addr
-	binary.Write(buf, binary.BigEndian, uint16(vc.dst.Port))
-	buf.WriteByte(vc.dst.AddrType)
-	buf.Write(vc.dst.Addr)
+		// Port AddrType Addr
+		binary.Write(buf, binary.BigEndian, vc.dst.Port)
+		buf.WriteByte(vc.dst.AddrType)
+		buf.Write(vc.dst.Addr)
+	}
 
 	_, err := vc.Conn.Write(buf.Bytes())
 	return err
