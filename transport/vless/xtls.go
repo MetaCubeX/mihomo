@@ -2,9 +2,9 @@ package vless
 
 import (
 	"context"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	"net"
 
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	xtls "github.com/xtls/go"
 )
@@ -23,7 +23,7 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 		NextProtos:         cfg.NextProtos,
 	}
 	if len(cfg.Fingerprint) == 0 {
-		xtlsConfig = tlsC.GetGlobalFingerprintXTLCConfig(xtlsConfig)
+		xtlsConfig = tlsC.GetGlobalFingerprintXTLSConfig(xtlsConfig)
 	} else {
 		var err error
 		if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, cfg.Fingerprint); err != nil {

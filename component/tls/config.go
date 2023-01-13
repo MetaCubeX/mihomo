@@ -7,12 +7,13 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
-	xtls "github.com/xtls/go"
 	"sync"
 	"time"
+
+	xtls "github.com/xtls/go"
 )
 
-var globalFingerprints = make([][32]byte, 0, 0)
+var globalFingerprints = make([][32]byte, 0)
 var mutex sync.Mutex
 
 func verifyPeerCertificateAndFingerprints(fingerprints *[][32]byte, insecureSkipVerify bool) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -74,7 +75,7 @@ func convertFingerprint(fingerprint string) (*[32]byte, error) {
 }
 
 func GetDefaultTLSConfig() *tls.Config {
-	return GetGlobalFingerprintTLCConfig(nil)
+	return GetGlobalFingerprintTLSConfig(nil)
 }
 
 // GetSpecifiedFingerprintTLSConfig specified fingerprint
@@ -95,16 +96,20 @@ func GetSpecifiedFingerprintTLSConfig(tlsConfig *tls.Config, fingerprint string)
 	}
 }
 
-func GetGlobalFingerprintTLCConfig(tlsConfig *tls.Config) *tls.Config {
+func GetGlobalFingerprintTLSConfig(tlsConfig *tls.Config) *tls.Config {
+	// If there's at least one fingerprint then we could skip the general check
+	// If there's no fingerprints but the config insists then we should skip.
+	// Otherwise we should do a general verification.
+	shouldSkipVerify := len(globalFingerprints) != 0 || tlsConfig != nil && tlsConfig.InsecureSkipVerify
 	if tlsConfig == nil {
 		return &tls.Config{
-			InsecureSkipVerify:    true,
+			InsecureSkipVerify:    shouldSkipVerify,
 			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(&globalFingerprints, false),
 		}
 	}
 
 	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(&globalFingerprints, tlsConfig.InsecureSkipVerify)
-	tlsConfig.InsecureSkipVerify = true
+	tlsConfig.InsecureSkipVerify = shouldSkipVerify
 	return tlsConfig
 }
 
@@ -126,15 +131,16 @@ func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint strin
 	}
 }
 
-func GetGlobalFingerprintXTLCConfig(tlsConfig *xtls.Config) *xtls.Config {
+func GetGlobalFingerprintXTLSConfig(tlsConfig *xtls.Config) *xtls.Config {
+	shouldSkipVerify := len(globalFingerprints) != 0 || tlsConfig != nil && tlsConfig.InsecureSkipVerify
 	if tlsConfig == nil {
 		return &xtls.Config{
-			InsecureSkipVerify:    true,
+			InsecureSkipVerify:    shouldSkipVerify,
 			VerifyPeerCertificate: verifyPeerCertificateAndFingerprints(&globalFingerprints, false),
 		}
 	}
 
 	tlsConfig.VerifyPeerCertificate = verifyPeerCertificateAndFingerprints(&globalFingerprints, tlsConfig.InsecureSkipVerify)
-	tlsConfig.InsecureSkipVerify = true
+	tlsConfig.InsecureSkipVerify = shouldSkipVerify
 	return tlsConfig
 }

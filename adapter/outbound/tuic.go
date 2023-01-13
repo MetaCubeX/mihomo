@@ -143,7 +143,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			return nil, err
 		}
 	} else {
-		tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
 	}
 
 	if len(option.ALPN) > 0 {
