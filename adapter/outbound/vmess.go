@@ -5,13 +5,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	vmess "github.com/sagernet/sing-vmess"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	vmess "github.com/sagernet/sing-vmess"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -114,7 +115,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			}
 
 			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
 			} else {
 				if wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint); err != nil {
 					return nil, err

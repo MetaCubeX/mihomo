@@ -3,9 +3,9 @@ package vmess
 import (
 	"context"
 	"crypto/tls"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	"net"
 
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -24,7 +24,7 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 	}
 
 	if len(cfg.FingerPrint) == 0 {
-		tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
 	} else {
 		var err error
 		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, cfg.FingerPrint); err != nil {
