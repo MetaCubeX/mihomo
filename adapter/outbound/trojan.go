@@ -219,13 +219,16 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		Fingerprint:    option.Fingerprint,
 	}
 
-	if option.Network != "ws" && len(option.Flow) >= 16 {
-		option.Flow = option.Flow[:16]
-		switch option.Flow {
-		case vless.XRO, vless.XRD, vless.XRS:
-			tOption.Flow = option.Flow
-		default:
-			return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
+	switch option.Network {
+	case "", "tcp":
+		if len(option.Flow) >= 16 {
+			option.Flow = option.Flow[:16]
+			switch option.Flow {
+			case vless.XRO, vless.XRD, vless.XRS:
+				tOption.Flow = option.Flow
+			default:
+				return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
+			}
 		}
 	}
 
@@ -273,11 +276,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			}
 		}
 
-		if t.option.Flow != "" {
-			t.transport = gun.NewHTTP2XTLSClient(dialFn, tlsConfig)
-		} else {
-			t.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
-		}
+		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
 
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{

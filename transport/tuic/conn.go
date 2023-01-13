@@ -45,6 +45,7 @@ func SetCongestionController(quicConn quic.Connection, cc string) {
 			congestion.NewBBRSender(
 				congestion.DefaultClock{},
 				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
+				congestion.GetMaxOutgoingPacketSize(quicConn.RemoteAddr()),
 				congestion.InitialCongestionWindow,
 				congestion.DefaultBBRMaxCongestionWindow,
 			),

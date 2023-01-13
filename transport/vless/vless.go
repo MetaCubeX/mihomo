@@ -1,8 +1,9 @@
 package vless
 
 import (
-	"github.com/Dreamacro/clash/common/utils"
 	"net"
+
+	"github.com/Dreamacro/clash/common/utils"
 
 	"github.com/gofrs/uuid"
 )
@@ -19,6 +20,7 @@ const (
 const (
 	CommandTCP byte = 1
 	CommandUDP byte = 2
+	CommandMux byte = 3
 )
 
 // Addr types
@@ -33,7 +35,8 @@ type DstAddr struct {
 	UDP      bool
 	AddrType byte
 	Addr     []byte
-	Port     uint
+	Port     uint16
+	Mux      bool // currently used for XUDP only
 }
 
 // Client is vless connection generator
