@@ -43,7 +43,7 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 			NextProtos:         []string{"http/1.1"},
 		}
 		if len(option.Fingerprint) == 0 {
-			config.TLSConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
+			config.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if config.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {

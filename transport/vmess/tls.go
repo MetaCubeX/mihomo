@@ -24,7 +24,7 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 	}
 
 	if len(cfg.FingerPrint) == 0 {
-		tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
+		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 	} else {
 		var err error
 		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, cfg.FingerPrint); err != nil {

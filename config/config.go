@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	P "github.com/Dreamacro/clash/component/process"
 	"net"
 	"net/netip"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	P "github.com/Dreamacro/clash/component/process"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -116,6 +117,11 @@ type Profile struct {
 }
 
 type TLS struct {
+	RawCert
+	CustomTrustCert []RawCert `yaml:"custom-certifactes"`
+}
+
+type RawCert struct {
 	Certificate string `yaml:"certificate"`
 	PrivateKey  string `yaml:"private-key"`
 }

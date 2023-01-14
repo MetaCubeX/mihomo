@@ -223,7 +223,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		}
 
 		if len(shadowTLSOpt.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 		} else {
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, shadowTLSOpt.Fingerprint); err != nil {
 				return nil, err

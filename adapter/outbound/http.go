@@ -150,7 +150,7 @@ func NewHttp(option HttpOption) (*Http, error) {
 			sni = option.SNI
 		}
 		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(&tls.Config{
+			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
 				InsecureSkipVerify: option.SkipCertVerify,
 				ServerName:         sni,
 			})

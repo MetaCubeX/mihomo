@@ -298,7 +298,7 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn quic.Connection) (q
 
 // openConnection opens a new QUIC connection.
 func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connection, err error) {
-	tlsConfig := tlsC.GetGlobalFingerprintTLSConfig(
+	tlsConfig := tlsC.GetGlobalTLSConfig(
 		&tls.Config{
 			InsecureSkipVerify: false,
 			NextProtos: []string{

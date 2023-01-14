@@ -18,7 +18,7 @@ import (
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
 	SNI "github.com/Dreamacro/clash/component/sniffer"
-	"github.com/Dreamacro/clash/component/tls"
+	CTLS "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -146,10 +146,9 @@ func updateExperimental(c *config.Config) {
 }
 
 func preUpdateExperimental(c *config.Config) {
-	for _, fingerprint := range c.Experimental.Fingerprints {
-		if err := tls.AddCertFingerprint(fingerprint); err != nil {
-			log.Warnln("fingerprint[%s] is err, %s", fingerprint, err.Error())
-		}
+	CTLS.AddCertificate(c.TLS.PrivateKey, c.TLS.Certificate)
+	for _, c := range c.TLS.CustomTrustCert {
+		CTLS.AddCertificate(c.PrivateKey, c.Certificate)
 	}
 }
 

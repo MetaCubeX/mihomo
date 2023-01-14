@@ -98,7 +98,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			}
 
 			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
+				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 			} else {
 				wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
 			}
@@ -522,7 +522,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 			ServiceName: v.option.GrpcOpts.GrpcServiceName,
 			Host:        v.option.ServerName,
 		}
-		tlsConfig := tlsC.GetGlobalFingerprintTLSConfig(&tls.Config{
+		tlsConfig := tlsC.GetGlobalTLSConfig(&tls.Config{
 			InsecureSkipVerify: v.option.SkipCertVerify,
 			ServerName:         v.option.ServerName,
 		})

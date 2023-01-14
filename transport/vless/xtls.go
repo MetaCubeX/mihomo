@@ -23,7 +23,7 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 		NextProtos:         cfg.NextProtos,
 	}
 	if len(cfg.Fingerprint) == 0 {
-		xtlsConfig = tlsC.GetGlobalFingerprintXTLSConfig(xtlsConfig)
+		xtlsConfig = tlsC.GetGlobalXTLSConfig(xtlsConfig)
 	} else {
 		var err error
 		if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, cfg.Fingerprint); err != nil {
