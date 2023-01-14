@@ -82,7 +82,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 		}
 
 		if len(t.option.Fingerprint) == 0 {
-			xtlsConfig = tlsC.GetGlobalFingerprintXTLSConfig(xtlsConfig)
+			xtlsConfig = tlsC.GetGlobalXTLSConfig(xtlsConfig)
 		} else {
 			var err error
 			if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, t.option.Fingerprint); err != nil {
@@ -107,7 +107,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 		}
 
 		if len(t.option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint); err != nil {

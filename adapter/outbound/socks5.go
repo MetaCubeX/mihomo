@@ -167,7 +167,7 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 		}
 
 		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLSConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
