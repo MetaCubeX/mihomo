@@ -26,11 +26,7 @@ external-ui: /path/to/ui/folder # 配置WEB UI目录，使用http://{{external-c
 
 # routing-mark: 6666 # 配置 fwmark 仅用于Linux
 experimental:
-  # 具体配置待定
-  # 证书指纹,SHA256格式,补充校验TLS证书
-  # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
-  fingerprints:
-    - "8F111FA9AD3CD8E917A118522CAC39EA33741B3BBE73F91CECE548D5CCB0E5E8" # 忽略大小写
+
 # 类似于 /etc/hosts, 仅支持配置单个 IP
 hosts:
 # '*.clash.dev': 127.0.0.1
@@ -121,7 +117,7 @@ tunnels:
   - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
   - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
   # full yaml config
-  - network: [ tcp, udp ]
+  - network: [tcp, udp]
     address: 127.0.0.1:7777
     target: target.com
     proxy: proxy
@@ -250,6 +246,8 @@ proxies:
     plugin-opts:
       mode: websocket # no QUIC now
       # tls: true # wss
+      # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
+      # 配置指纹将实现 SSL Pining 效果
       # fingerprint: xxxx
       # skip-cert-verify: true
       # host: bing.com
@@ -673,6 +671,11 @@ sub-rules:
 tls:
   certificate: string # 证书 PEM 格式，或者 证书的路径
   private-key: string # 证书对应的私钥 PEM 格式，或者私钥路径
+  # 自定义证书验证，将加入 Clash 证书验证中，绝大多数 TLS 相关支持，如：DNS
+  # 可用于自定义证书的验证
+  custom-certificates:
+    - certificate: string # 证书 PEM 格式，或者 证书的路径
+      private-key: string # 证书对应的私钥 PEM 格式，或者私钥路径
 
 # 流量入站
 listeners:
@@ -757,7 +760,7 @@ listeners:
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-    network: [ tcp, udp ]
+    network: [tcp, udp]
     target: target.com
 
   - name: tun-in-1
@@ -801,4 +804,3 @@ listeners:
     # - com.android.chrome
     # exclude_package: # 排除被路由的 Android 应用包名
     # - com.android.captiveportallogin
-
