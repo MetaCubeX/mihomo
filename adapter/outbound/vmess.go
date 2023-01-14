@@ -367,7 +367,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	switch option.Network {
 	case "h2", "grpc":
 		if !option.TLS {
-			return nil, fmt.Errorf("TLS must be true with h2/grpc network")
+			option.TLS = true
 		}
 	}
 
