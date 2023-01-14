@@ -117,7 +117,7 @@ type Profile struct {
 }
 
 type TLS struct {
-	RawCert
+	RawCert `yaml:",inline"`
 	CustomTrustCert []RawCert `yaml:"custom-certifactes"`
 }
 
