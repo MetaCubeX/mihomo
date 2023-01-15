@@ -5,16 +5,45 @@ on:
     branches:
       - Alpha
       - Beta
-  pull_request:
+  pull_request_target:
     branches:
       - Alpha
       - Beta
 jobs:
   Build-Prerelease-WithoutCGO:
+    permissions: write-all
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: "linux-amd64 linux-amd64-compatible linux-arm64 linux-armv5 linux-armv6 linux-armv7", id: "1" }
+          - { target: "linux-mips64 linux-mips64le linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat", id: "2" }
+          - { target: "android-arm64 freebsd-386 freebsd-amd64 freebsd-arm64", id: "3" }
+          - { target: "windows-amd64-compatible windows-amd64 windows-arm64 windows-arm32v7 windows-386", id: "4" }
+          - { target: "darwin-amd64 darwin-arm64", id: "5" }
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
+
+      - name: Set variables
+        run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='Alpha'}}
+        run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='Beta'}}
+        run: echo "VERSION=beta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name==''}}
+        run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+        shell: bash
 
       - name: Setup Go
         uses: actions/setup-go@v3
@@ -22,19 +51,8 @@ jobs:
           go-version: '1.19'
           check-latest: true
 
-      - name: Cache go module
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-WithoutCGO-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-WithoutCGO-
-            ${{ runner.os }}-go-
-
       - name: Test
-        if: ${{github.ref_name=='Beta'}}
+        if: ${{ github.ref_name=='Beta' && matrix.job.id=='5' }}
         run: |
           go test ./...
 
@@ -43,69 +61,14 @@ jobs:
         env:
           NAME: Clash.Meta
           BINDIR: bin
-        run: make -j$(($(nproc) + 1)) releases
-
-      - name: Delete current release assets
-        uses: andreaswilli/delete-release-assets-action@v2.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{ github.ref_name }}
-          deleteOnlyFromDrafts: false
-
-  Build-Prerelease-WithCGO:
-    permissions: write-all
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
-
-      - name: Set variables
-        if: ${{github.ref_name=='Alpha'}}
-        run: echo "VERSION=alpha" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
-        if: ${{github.ref_name=='Beta'}}
-        run: echo "VERSION=beta" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set ENV
         run: |
-          echo "NAME=clash.meta" >> $GITHUB_ENV
-          echo "BUILD_TIME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
-          echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
-          echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
-          echo "$ShortSHA"
-          echo "$REPO"
-        shell: bash
-
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.19'
-          check-latest: true
-
-      - name: Set up xgo
-        run: |
-          docker pull techknowlogick/xgo:latest
-          go install src.techknowlogick.com/xgo@latest
-
-      - name: Build
-        if: success()
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          mkdir bin
-          cp .github/release-cgo.sh ./bin/
-          cp .github/rename-cgo.sh ./bin/
+          make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
           cd bin
           ls -la
           chmod +x *
-          bash ./release-cgo.sh
-          rm ./release-cgo.sh
-          bash ./rename-cgo.sh
-          rm ./rename-cgo.sh
+          cp ../.github/release.sh ./
+          bash ./release.sh
+          rm ./release.sh
           ls -la
           cd ..
 
@@ -115,22 +78,41 @@ jobs:
           name: artifact
           path: bin/
 
-  Build-Prerelease-WithCGO-Android:
+  Build-Prerelease-WithCGO:
     permissions: write-all
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: windows/* }
+          - { target: linux/386,linux/amd64,linux/arm64 }
+          - { target: linux/arm,linux/arm-6,linux/arm-7,linux/riscv64 }
+          - { target: linux/mips,linux/mipsle,linux/mips64,linux/mips64le }
+          - { target: darwin-10.16/* }
+          - { target: android }
 
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
       - name: Set variables
+        run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
         if: ${{github.ref_name=='Alpha'}}
-        run: echo "VERSION=alpha" >> $GITHUB_ENV
+        run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set variables
         if: ${{github.ref_name=='Beta'}}
-        run: echo "VERSION=beta" >> $GITHUB_ENV
+        run: echo "VERSION=beta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name==''}}
+        run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
@@ -139,8 +121,13 @@ jobs:
           echo "BUILD_TIME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
-          echo "$ShortSHA"
-          echo "$REPO"
+          echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set ENV
+        run: |
+          echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
+          echo "LDFLAGS=-X 'github.com/Dreamacro/clash/constant.Version=${VERSION}' -X 'github.com/Dreamacro/clash/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
@@ -149,36 +136,50 @@ jobs:
           go-version: '1.19'
           check-latest: true
 
-      - name: Cache go module
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-WithCGO-Android-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-WithCGO-Android-
-            ${{ runner.os }}-go-
-
       - uses: nttld/setup-ndk@v1
+        if: ${{matrix.job.target=='android'}}
         id: setup-ndk
         with:
           ndk-version: r25b
           add-to-path: false
 
-      - name: Build
-        if: success()
+      - name: Build Android
+        if: ${{matrix.job.target=='android'}}
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
-          cp .github/release-cgo-android.sh ./
-          bash ./release-cgo-android.sh
-          rm ./release-cgo-android.sh
-          cp .github/rename-cgo.sh ./bin/
+          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
+          CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
           cd bin
           ls -la
           chmod +x *
+          cp ../.github/rename-cgo.sh ./
+          bash ./rename-cgo.sh
+          rm ./rename-cgo.sh
+          cp ../.github/release.sh ./
+          bash ./release.sh
+          rm ./release.sh
+          ls -la
+          cd ..
+
+      - name: Set up xgo
+        if: ${{matrix.job.target!='android'}}
+        run: |
+          docker pull techknowlogick/xgo:latest
+          go install src.techknowlogick.com/xgo@latest
+
+      - name: Build by xgo
+        if: ${{matrix.job.target!='android'}}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          mkdir bin
+          xgo --branch ${{ github.ref_name }} --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} github.com/${{ github.repository }}
+          cd bin
+          ls -la
+          chmod +x *
+          cp ../.github/rename-cgo.sh ./
           bash ./rename-cgo.sh
           rm ./rename-cgo.sh
           ls -la
@@ -190,8 +191,10 @@ jobs:
           name: artifact
           path: bin/
 
+
   Upload-Prerelease:
-    needs: [ Build-Prerelease-WithoutCGO, Build-Prerelease-WithCGO, Build-Prerelease-WithCGO-Android ]
+    permissions: write-all
+    needs: [ Build-Prerelease-WithoutCGO, Build-Prerelease-WithCGO ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -203,8 +206,15 @@ jobs:
         run: ls -R
         working-directory: bin
 
+      - name: Delete current release assets
+        uses: andreaswilli/delete-release-assets-action@v2.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-${{ github.ref_name }}
+          deleteOnlyFromDrafts: false
+
       - name: Tag Repo
-        uses: richardsimko/update-tag@v1
+        uses: richardsimko/update-tag@v1.0.6
         with:
           tag_name: Prerelease-${{ github.ref_name }}
         env:
