@@ -47,22 +47,8 @@ all:linux-amd64 linux-arm64\
 	darwin-amd64 darwin-arm64\
  	windows-amd64 windows-arm64\
 
-xgoTarget = windows/*,linux/*,darwin-10.16/*
-xgoTags = with_gvisor,with_lwip
-Ldflags =-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" -X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" -w -s -buildid=
-
-xgoall: SHELL:=/bin/bash
-xgoall:
-	xgo  --branch $(BRANCH) --out=$(BINDIR)/$(NAME) --targets='$(xgoTarget)' --tags='$(xgoTags)' -ldflags='$(Ldflags)' github.com/$(REPO)
-
 
 darwin-all: darwin-amd64 darwin-arm64
-
-GOBUILDCGO = CGO_ENABLED=1 go build -tags with_gvisor,with_lwip -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
-		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
-		-w -s -buildid='
-
-CCAndroid=$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
 
 docker:
 	GOAMD64=v3 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -116,7 +102,7 @@ linux-mips64le:
 	GOARCH=mips64le GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 android-arm64:
-	CC=$(CCAndroid) GOARCH=arm64 GOOS=android $(GOBUILDCGO) -o $(BINDIR)/$(NAME)-$@
+	GOARCH=arm64 GOOS=android $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 freebsd-386:
 	GOARCH=386 GOOS=freebsd $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
