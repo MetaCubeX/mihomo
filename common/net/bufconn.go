@@ -56,8 +56,5 @@ func (c *BufferedConn) ReadBuffer(buffer *buf.Buffer) (err error) {
 }
 
 func (c *BufferedConn) Upstream() any {
-	if wrapper, ok := c.ExtendedConn.(*ExtendedConnWrapper); ok {
-		return wrapper.Conn
-	}
 	return c.ExtendedConn
 }

@@ -188,9 +188,6 @@ func (c *conn) AppendToChains(a C.ProxyAdapter) {
 }
 
 func (c *conn) Upstream() any {
-	if wrapper, ok := c.ExtendedConn.(*N.ExtendedConnWrapper); ok {
-		return wrapper.Conn
-	}
 	return c.ExtendedConn
 }
 

@@ -123,9 +123,6 @@ func (vc *Conn) recvResponse() error {
 }
 
 func (vc *Conn) Upstream() any {
-	if wrapper, ok := vc.ExtendedConn.(*N.ExtendedConnWrapper); ok {
-		return wrapper.Conn
-	}
 	return vc.ExtendedConn
 }
 
