@@ -17,16 +17,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-	_ "unsafe"
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
 
 	"github.com/gorilla/websocket"
 )
-
-//go:linkname maskBytes github.com/gorilla/websocket.maskBytes
-func maskBytes(key [4]byte, pos int, b []byte) int
 
 type websocketConn struct {
 	conn       *websocket.Conn

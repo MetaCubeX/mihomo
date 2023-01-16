@@ -8,8 +8,6 @@ import (
 	"github.com/sagernet/sing/common/network"
 )
 
-type ExtendedConnWrapper = bufio.ExtendedConnWrapper
-
 var NewExtendedConn = bufio.NewExtendedConn
 var NewExtendedWriter = bufio.NewExtendedWriter
 var NewExtendedReader = bufio.NewExtendedReader
