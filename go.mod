@@ -26,7 +26,7 @@ require (
 	github.com/miekg/dns v1.1.50
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.1.5
+	github.com/sagernet/sing v0.1.6-0.20230114115804-bc788b027182
 	github.com/sagernet/sing-vmess v0.1.1
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
 	github.com/samber/lo v1.35.0
