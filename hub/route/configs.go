@@ -104,7 +104,6 @@ func pointerOrDefault(p *int, def int) int {
 	if p != nil {
 		return *p
 	}
-
 	return def
 }
 
@@ -210,7 +209,7 @@ func pointerOrDefaultTuicServer(p *tuicServerSchema, def LC.TuicServer) LC.TuicS
 
 func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	general := &configSchema{}
-	if err := render.DecodeJSON(r.Body, general); err != nil {
+	if err := render.DecodeJSON(r.Body, &general); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
 		return
@@ -266,13 +265,11 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	render.NoContent(w, r)
 }
 
-type updateConfigRequest struct {
-	Path    string `json:"path"`
-	Payload string `json:"payload"`
-}
-
 func updateConfigs(w http.ResponseWriter, r *http.Request) {
-	req := updateConfigRequest{}
+	req := struct {
+		Path    string `json:"path"`
+		Payload string `json:"payload"`
+	}{}
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
