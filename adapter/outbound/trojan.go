@@ -14,6 +14,8 @@ import (
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/trojan"
 	"github.com/Dreamacro/clash/transport/vless"
+
+	"github.com/sagernet/sing/common/bufio"
 )
 
 type Trojan struct {
@@ -95,7 +97,7 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 		return c, err
 	}
 	err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata))
-	return c, err
+	return bufio.NewExtendedConn(c), err
 }
 
 // DialContext implements C.ProxyAdapter

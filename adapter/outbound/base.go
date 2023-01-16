@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/gofrs/uuid"
 	"net"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+
+	"github.com/gofrs/uuid"
+	"github.com/sagernet/sing/common/bufio"
+	"github.com/sagernet/sing/common/network"
 )
 
 type Base struct {
@@ -166,7 +169,7 @@ func NewBase(opt BaseOption) *Base {
 }
 
 type conn struct {
-	net.Conn
+	network.ExtendedConn
 	chain                   C.Chain
 	actualRemoteDestination string
 }
@@ -185,8 +188,15 @@ func (c *conn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
+func (c *conn) Upstream() any {
+	if wrapper, ok := c.ExtendedConn.(*bufio.ExtendedConnWrapper); ok {
+		return wrapper.Conn
+	}
+	return c.ExtendedConn
+}
+
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
-	return &conn{c, []string{a.Name()}, parseRemoteDestination(a.Addr())}
+	return &conn{bufio.NewExtendedConn(c), []string{a.Name()}, parseRemoteDestination(a.Addr())}
 }
 
 type packetConn struct {

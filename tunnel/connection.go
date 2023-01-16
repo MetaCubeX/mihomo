@@ -1,14 +1,16 @@
 package tunnel
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/netip"
 	"time"
 
-	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
+
+	"github.com/sagernet/sing/common/bufio"
 )
 
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
@@ -60,5 +62,5 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
-	N.Relay(ctx.Conn(), outbound)
+	bufio.CopyConn(context.TODO(), ctx.Conn(), outbound)
 }
