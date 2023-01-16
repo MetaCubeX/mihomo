@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/component/trie"
+
+	"github.com/miekg/dns"
 )
 
 var (
@@ -44,6 +46,7 @@ type Resolver interface {
 	ResolveIP(ctx context.Context, host string) (ip netip.Addr, err error)
 	ResolveIPv4(ctx context.Context, host string) (ip netip.Addr, err error)
 	ResolveIPv6(ctx context.Context, host string) (ip netip.Addr, err error)
+	ExchangeContext(ctx context.Context, m *dns.Msg) (msg *dns.Msg, err error)
 }
 
 // LookupIPv4WithResolver same as LookupIPv4, but with a resolver
