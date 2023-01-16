@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/common/pool"
 
 	"go.uber.org/atomic"
@@ -121,13 +122,13 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 func (g *Conn) Write(b []byte) (n int, err error) {
 	protobufHeader := [binary.MaxVarintLen64 + 1]byte{0x0A}
 	varuintSize := binary.PutUvarint(protobufHeader[1:], uint64(len(b)))
-	grpcHeader := make([]byte, 5)
+	var grpcHeader [5]byte
 	grpcPayloadLen := uint32(varuintSize + 1 + len(b))
 	binary.BigEndian.PutUint32(grpcHeader[1:5], grpcPayloadLen)
 
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
-	buf.Write(grpcHeader)
+	buf.Write(grpcHeader[:])
 	buf.Write(protobufHeader[:varuintSize+1])
 	buf.Write(b)
 
@@ -137,6 +138,28 @@ func (g *Conn) Write(b []byte) (n int, err error) {
 	}
 
 	return len(b), err
+}
+
+func (g *Conn) WriteBuffer(buffer *buf.Buffer) error {
+	defer buffer.Release()
+	dataLen := buffer.Len()
+	varLen := UVarintLen(uint64(dataLen))
+	header := buffer.ExtendHeader(6 + varLen)
+	header[0] = 0x00
+	binary.BigEndian.PutUint32(header[1:5], uint32(1+varLen+dataLen))
+	header[5] = 0x0A
+	binary.PutUvarint(header[6:], uint64(dataLen))
+	_, err := g.writer.Write(buffer.Bytes())
+
+	if err == io.ErrClosedPipe && g.err != nil {
+		err = g.err
+	}
+
+	return err
+}
+
+func (g *Conn) FrontHeadroom() int {
+	return 6 + binary.MaxVarintLen64
 }
 
 func (g *Conn) Close() error {
