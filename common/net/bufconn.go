@@ -58,3 +58,10 @@ func (c *BufferedConn) ReadBuffer(buffer *buf.Buffer) (err error) {
 func (c *BufferedConn) Upstream() any {
 	return c.ExtendedConn
 }
+
+func (c *BufferedConn) ReaderReplaceable() bool {
+	if c.r.Buffered() > 0 {
+		return false
+	}
+	return true
+}
