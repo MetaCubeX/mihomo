@@ -48,6 +48,10 @@ func (c *waitCloseConn) RemoteAddr() net.Addr {
 	return c.rAddr
 }
 
+func (c *waitCloseConn) Upstream() any {
+	return c.Conn
+}
+
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
 	additions := h.Additions
 	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
