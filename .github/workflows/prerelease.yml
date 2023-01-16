@@ -17,11 +17,14 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: "linux-amd64 linux-amd64-compatible linux-arm64 linux-armv5 linux-armv6 linux-armv7", id: "1" }
-          - { target: "linux-mips64 linux-mips64le linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat", id: "2" }
-          - { target: "android-arm64 freebsd-386 freebsd-amd64 freebsd-arm64", id: "3" }
-          - { target: "windows-amd64-compatible windows-amd64 windows-arm64 windows-arm32v7 windows-386", id: "4" }
-          - { target: "darwin-amd64 darwin-arm64", id: "5" }
+          - { target: "linux-amd64 linux-amd64-compatible", id: "1" }
+          - { target: "linux-armv5 linux-armv6 linux-armv7", id: "2" }
+          - { target: "linux-arm64 linux-mips64 linux-mips64le", id: "3" }
+          - { target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat", id: "4" }
+          - { target: "freebsd-386 freebsd-amd64 freebsd-arm64", id: "5" }
+          - { target: "windows-amd64-compatible windows-amd64 windows-386", id: "6" }
+          - { target: "windows-arm64 windows-arm32v7", id: "7" }
+          - { target: "darwin-amd64 darwin-arm64 android-arm64", id: "8" }
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -52,7 +55,7 @@ jobs:
           check-latest: true
 
       - name: Test
-        if: ${{ github.ref_name=='Beta' && matrix.job.id=='5' }}
+        if: ${{ github.ref_name=='Beta' && matrix.job.id=='1' }}
         run: |
           go test ./...
 
@@ -85,12 +88,14 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: windows/* }
-          - { target: linux/386,linux/amd64,linux/arm64 }
-          - { target: linux/arm,linux/arm-6,linux/arm-7,linux/riscv64 }
-          - { target: linux/mips,linux/mipsle,linux/mips64,linux/mips64le }
-          - { target: darwin-10.16/* }
-          - { target: android }
+          - { target: "windows/*", id: "1" }
+          - { target: "linux/386,linux/amd64", id: "2" }
+          - { target: "linux/arm64,linux/riscv64", id: "3" }
+          - { target: "linux/arm,linux/arm-6,linux/arm-7", id: "4" }
+          - { target: "linux/mips,linux/mipsle", id: "5" }
+          - { target: "linux/mips64,linux/mips64le", id: "6" }
+          - { target: "darwin-10.16/*", id: "7" }
+          - { target: "android", id: "8" }
 
     steps:
       - name: Check out code into the Go module directory
@@ -151,17 +156,6 @@ jobs:
           mkdir bin
           CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
           CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
-          cd bin
-          ls -la
-          chmod +x *
-          cp ../.github/rename-cgo.sh ./
-          bash ./rename-cgo.sh
-          rm ./rename-cgo.sh
-          cp ../.github/release.sh ./
-          bash ./release.sh
-          rm ./release.sh
-          ls -la
-          cd ..
 
       - name: Set up xgo
         if: ${{matrix.job.target!='android'}}
@@ -176,12 +170,21 @@ jobs:
         run: |
           mkdir bin
           xgo --branch ${{ github.ref_name }} --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} github.com/${{ github.repository }}
+
+      - name: Rename and zip
+        if: ${{  success() }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
           cd bin
           ls -la
           chmod +x *
           cp ../.github/rename-cgo.sh ./
           bash ./rename-cgo.sh
           rm ./rename-cgo.sh
+          cp ../.github/release.sh ./
+          bash ./release.sh
+          rm ./release.sh
           ls -la
           cd ..
 
