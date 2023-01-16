@@ -146,7 +146,7 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		err = errors.New("writeBack to closed connection")
 		return
 	}
-	err = conn.WritePacket(buff, M.ParseSocksaddr(addr.String()))
+	err = conn.WritePacket(buff, M.SocksaddrFromNet(addr))
 	return
 }
 
