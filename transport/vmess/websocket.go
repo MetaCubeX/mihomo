@@ -123,8 +123,8 @@ func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
 	}
 
 	maskKey := rand.Uint32()
-	binary.BigEndian.PutUint32(header[1+payloadBitLength:], maskKey)
-	maskBytes(*(*[4]byte)(header[1+payloadBitLength:]), 0, data)
+	binary.LittleEndian.PutUint32(header[1+payloadBitLength:], maskKey)
+	N.MaskWebSocket(maskKey, data)
 
 	wsc.wMux.Lock()
 	defer wsc.wMux.Unlock()
