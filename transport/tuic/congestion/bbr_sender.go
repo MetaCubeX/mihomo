@@ -13,16 +13,21 @@ import (
 )
 
 const (
-	MaxDatagramSize                                    = 1252
-	DefaultBBRMaxCongestionWindow congestion.ByteCount = 2000 * MaxDatagramSize
-	InitialCongestionWindow       congestion.ByteCount = 10 * MaxDatagramSize
-	MinInitialPacketSize                               = 1200
+	// InitialMaxDatagramSize is the default maximum packet size used in QUIC for congestion window computations in bytes.
+	InitialMaxDatagramSize                             = 1252
+	InitialCongestionWindow       congestion.ByteCount = 10
 	InitialPacketSizeIPv4                              = 1252
 	InitialPacketSizeIPv6                              = 1232
+	DefaultBBRMaxCongestionWindow congestion.ByteCount = 10000
 )
 
-func GetMaxPacketSize(addr net.Addr) congestion.ByteCount {
-	maxSize := congestion.ByteCount(MinInitialPacketSize)
+const (
+	initialMinCongestionWindow = 4
+	minInitialPacketSize       = 1200
+)
+
+func GetInitialPacketSize(addr net.Addr) congestion.ByteCount {
+	maxSize := congestion.ByteCount(minInitialPacketSize)
 	// If this is not a UDP address, we don't know anything about the MTU.
 	// Use the minimum size of an Initial packet as the max packet size.
 	if udpAddr, ok := addr.(*net.UDPAddr); ok {
@@ -35,40 +40,10 @@ func GetMaxPacketSize(addr net.Addr) congestion.ByteCount {
 	return maxSize
 }
 
-func GetMaxOutgoingPacketSize(addr net.Addr) congestion.ByteCount {
-	maxSize := congestion.ByteCount(MinInitialPacketSize)
-	// If this is not a UDP address, we don't know anything about the MTU.
-	// Use the minimum size of an Initial packet as the max packet size.
-	if udpAddr, ok := addr.(*net.UDPAddr); ok {
-
-		if udpAddr.IP.To4() != nil {
-			//The maximum packet size of any QUIC packet over IPv4. 1500(Ethernet) - 20(IPv4 header) - 8(UDP header) = 1472.
-			maxSize = congestion.ByteCount(1472)
-		} else {
-			// The maximum outgoing packet size allowed.
-			// The maximum packet size of any QUIC packet over IPv6, based on ethernet's max
-			// size, minus the IP and UDP headers. IPv6 has a 40 byte header, UDP adds an
-			// additional 8 bytes.  This is a total overhead of 48 bytes.  Ethernet's
-			// max packet size is 1500 bytes,  1500 - 48 = 1452.
-			maxSize = congestion.ByteCount(1452)
-		}
-	}
-	return maxSize
-}
-
 var (
-
-	// Default maximum packet size used in the Linux TCP implementation.
-	// Used in QUIC for congestion window computations in bytes.
-	MaxSegmentSize = MaxDatagramSize
 
 	// Default initial rtt used before any samples are received.
 	InitialRtt = 100 * time.Millisecond
-
-	// Constants based on TCP defaults.
-	// The minimum CWND to ensure delayed acks don't reduce bandwidth measurements.
-	// Does not inflate the pacing rate.
-	DefaultMinimumCongestionWindow = 4 * MaxDatagramSize
 
 	// The gain used for the STARTUP, equal to 2/ln(2).
 	DefaultHighGain = 2.89
@@ -174,9 +149,9 @@ type bbrSender struct {
 	// The initial value of the |congestion_window_|.
 	initialCongestionWindow congestion.ByteCount
 	// The largest value the |congestion_window_| can achieve.
-	maxCongestionWindow congestion.ByteCount
+	initialMaxCongestionWindow congestion.ByteCount
 	// The smallest value the |congestion_window_| can achieve.
-	minCongestionWindow congestion.ByteCount
+	//minCongestionWindow congestion.ByteCount
 	// The pacing gain applied during the STARTUP phase.
 	highGain float64
 	// The CWND gain applied during the STARTUP phase.
@@ -269,11 +244,14 @@ type bbrSender struct {
 	pacer *pacer
 
 	maxDatagramSize congestion.ByteCount
-
-	MaxOutgoingPacketSize congestion.ByteCount
 }
 
-func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, initialMaxOutgoingPacketSize, maxCongestionWindow congestion.ByteCount) *bbrSender {
+func NewBBRSender(
+	clock Clock,
+	initialMaxDatagramSize,
+	initialCongestionWindow,
+	initialMaxCongestionWindow congestion.ByteCount,
+) *bbrSender {
 	b := &bbrSender{
 		mode:                      STARTUP,
 		clock:                     clock,
@@ -282,8 +260,6 @@ func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, 
 		maxAckHeight:              NewWindowedFilter(int64(BandwidthWindowSize), MaxFilter),
 		congestionWindow:          initialCongestionWindow,
 		initialCongestionWindow:   initialCongestionWindow,
-		maxCongestionWindow:       maxCongestionWindow,
-		minCongestionWindow:       congestion.ByteCount(DefaultMinimumCongestionWindow),
 		highGain:                  DefaultHighGain,
 		highCwndGain:              DefaultHighGain,
 		drainGain:                 1.0 / DefaultHighGain,
@@ -292,13 +268,20 @@ func NewBBRSender(clock Clock, initialMaxDatagramSize, initialCongestionWindow, 
 		congestionWindowGainConst: DefaultCongestionWindowGainConst,
 		numStartupRtts:            RoundTripsWithoutGrowthBeforeExitingStartup,
 		recoveryState:             NOT_IN_RECOVERY,
-		recoveryWindow:            maxCongestionWindow,
+		recoveryWindow:            initialMaxCongestionWindow,
 		minRttSinceLastProbeRtt:   InfiniteRTT,
-		MaxOutgoingPacketSize:     initialMaxOutgoingPacketSize,
 		maxDatagramSize:           initialMaxDatagramSize,
 	}
 	b.pacer = newPacer(b.BandwidthEstimate)
 	return b
+}
+
+func (b *bbrSender) maxCongestionWindow() congestion.ByteCount {
+	return b.maxDatagramSize * DefaultBBRMaxCongestionWindow
+}
+
+func (b *bbrSender) minCongestionWindow() congestion.ByteCount {
+	return b.maxDatagramSize * initialMinCongestionWindow
 }
 
 func (b *bbrSender) SetRTTStatsProvider(provider congestion.RTTStatsProvider) {
@@ -323,10 +306,10 @@ func (b *bbrSender) SetMaxDatagramSize(s congestion.ByteCount) {
 	if s < b.maxDatagramSize {
 		panic(fmt.Sprintf("congestion BUG: decreased max datagram size from %d to %d", b.maxDatagramSize, s))
 	}
-	cwndIsMinCwnd := b.congestionWindow == b.minCongestionWindow
+	cwndIsMinCwnd := b.congestionWindow == b.minCongestionWindow()
 	b.maxDatagramSize = s
 	if cwndIsMinCwnd {
-		b.congestionWindow = b.minCongestionWindow
+		b.congestionWindow = b.minCongestionWindow()
 	}
 	b.pacer.SetMaxDatagramSize(s)
 }
@@ -393,6 +376,7 @@ func (b *bbrSender) OnPacketAcked(number congestion.PacketNumber, ackedBytes con
 	b.CalculatePacingRate()
 	b.CalculateCongestionWindow(bytesAcked, excessAcked)
 	b.CalculateRecoveryWindow(bytesAcked, congestion.ByteCount(0))
+
 }
 
 func (b *bbrSender) OnPacketLost(number congestion.PacketNumber, lostBytes congestion.ByteCount, priorInFlight congestion.ByteCount) {
@@ -491,8 +475,21 @@ func (b *bbrSender) OnRetransmissionTimeout(packetsRetransmitted bool) {
 //
 //}
 
+//func (b *bbrSender) BandwidthEstimate() Bandwidth {
+//	return Bandwidth(b.maxBandwidth.GetBest())
+//}
+
+// BandwidthEstimate returns the current bandwidth estimate
 func (b *bbrSender) BandwidthEstimate() Bandwidth {
-	return Bandwidth(b.maxBandwidth.GetBest())
+	if b.rttStats == nil {
+		return infBandwidth
+	}
+	srtt := b.rttStats.SmoothedRTT()
+	if srtt == 0 {
+		// If we haven't measured an rtt, the bandwidth estimate is unknown.
+		return infBandwidth
+	}
+	return BandwidthFromDelta(b.GetCongestionWindow(), srtt)
 }
 
 //func (b *bbrSender) HybridSlowStart() *HybridSlowStart {
@@ -740,7 +737,7 @@ func (b *bbrSender) GetTargetCongestionWindow(gain float64) congestion.ByteCount
 		congestionWindow = congestion.ByteCount(gain * float64(b.initialCongestionWindow))
 	}
 
-	return maxByteCount(congestionWindow, b.minCongestionWindow)
+	return maxByteCount(congestionWindow, b.minCongestionWindow())
 }
 
 func (b *bbrSender) CheckIfFullBandwidthReached() {
@@ -811,7 +808,7 @@ func (b *bbrSender) MaybeEnterOrExitProbeRtt(now time.Time, isRoundStart, minRtt
 			// PROBE_RTT.  The CWND during PROBE_RTT is kMinimumCongestionWindow, but
 			// we allow an extra packet since QUIC checks CWND before sending a
 			// packet.
-			if b.GetBytesInFlight() < b.ProbeRttCongestionWindow()+b.MaxOutgoingPacketSize {
+			if b.GetBytesInFlight() < b.ProbeRttCongestionWindow()+b.maxDatagramSize {
 				b.exitProbeRttAt = now.Add(ProbeRttTime)
 				b.probeRttRoundPassed = false
 			}
@@ -836,7 +833,7 @@ func (b *bbrSender) ProbeRttCongestionWindow() congestion.ByteCount {
 	if b.probeRttBasedOnBdp {
 		return b.GetTargetCongestionWindow(ModerateProbeRttMultiplier)
 	} else {
-		return b.minCongestionWindow
+		return b.minCongestionWindow()
 	}
 }
 
@@ -921,8 +918,8 @@ func (b *bbrSender) CalculateCongestionWindow(ackedBytes, excessAcked congestion
 	}
 
 	// Enforce the limits on the congestion window.
-	b.congestionWindow = maxByteCount(b.congestionWindow, b.minCongestionWindow)
-	b.congestionWindow = minByteCount(b.congestionWindow, b.maxCongestionWindow)
+	b.congestionWindow = maxByteCount(b.congestionWindow, b.minCongestionWindow())
+	b.congestionWindow = minByteCount(b.congestionWindow, b.maxCongestionWindow())
 }
 
 func (b *bbrSender) CalculateRecoveryWindow(ackedBytes, lostBytes congestion.ByteCount) {
@@ -936,7 +933,7 @@ func (b *bbrSender) CalculateRecoveryWindow(ackedBytes, lostBytes congestion.Byt
 
 	// Set up the initial recovery window.
 	if b.recoveryWindow == 0 {
-		b.recoveryWindow = maxByteCount(b.GetBytesInFlight()+ackedBytes, b.minCongestionWindow)
+		b.recoveryWindow = maxByteCount(b.GetBytesInFlight()+ackedBytes, b.minCongestionWindow())
 		return
 	}
 
@@ -945,7 +942,7 @@ func (b *bbrSender) CalculateRecoveryWindow(ackedBytes, lostBytes congestion.Byt
 	if b.recoveryWindow >= lostBytes {
 		b.recoveryWindow -= lostBytes
 	} else {
-		b.recoveryWindow = congestion.ByteCount(MaxSegmentSize)
+		b.recoveryWindow = congestion.ByteCount(b.maxDatagramSize)
 	}
 	// In CONSERVATION mode, just subtracting losses is sufficient.  In GROWTH,
 	// release additional |bytes_acked| to achieve a slow-start-like behavior.
@@ -955,7 +952,7 @@ func (b *bbrSender) CalculateRecoveryWindow(ackedBytes, lostBytes congestion.Byt
 	// Sanity checks.  Ensure that we always allow to send at least an MSS or
 	// |bytes_acked| in response, whichever is larger.
 	b.recoveryWindow = maxByteCount(b.recoveryWindow, b.GetBytesInFlight()+ackedBytes)
-	b.recoveryWindow = maxByteCount(b.recoveryWindow, b.minCongestionWindow)
+	b.recoveryWindow = maxByteCount(b.recoveryWindow, b.minCongestionWindow())
 }
 
 var _ congestion.CongestionControl = &bbrSender{}
