@@ -95,6 +95,7 @@ jobs:
         with:
           ndk-version: r25b
           add-to-path: false
+          local-cache: true
 
       - name: Build Android
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
