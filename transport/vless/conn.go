@@ -7,17 +7,16 @@ import (
 	"io"
 	"net"
 
+	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
+
 	"github.com/gofrs/uuid"
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/network"
 	xtls "github.com/xtls/go"
 	"google.golang.org/protobuf/proto"
 )
 
 type Conn struct {
-	network.ExtendedConn
+	N.ExtendedConn
 	dst      *DstAddr
 	id       *uuid.UUID
 	addons   *Addons
@@ -67,30 +66,30 @@ func (vc *Conn) sendRequest() (err error) {
 		requestLen += len(vc.dst.Addr)
 	}
 	_buffer := buf.StackNewSize(requestLen)
-	defer common.KeepAlive(_buffer)
-	buffer := common.Dup(_buffer)
+	defer buf.KeepAlive(_buffer)
+	buffer := buf.Dup(_buffer)
 	defer buffer.Release()
 
-	common.Must(
-		buffer.WriteByte(Version),                 // protocol version
-		common.Error(buffer.Write(vc.id.Bytes())), // 16 bytes of uuid
+	buf.Must(
+		buffer.WriteByte(Version),              // protocol version
+		buf.Error(buffer.Write(vc.id.Bytes())), // 16 bytes of uuid
 		buffer.WriteByte(byte(len(addonsBytes))),
-		common.Error(buffer.Write(addonsBytes)),
+		buf.Error(buffer.Write(addonsBytes)),
 	)
 
 	if vc.dst.Mux {
-		common.Must(buffer.WriteByte(CommandMux))
+		buf.Must(buffer.WriteByte(CommandMux))
 	} else {
 		if vc.dst.UDP {
-			common.Must(buffer.WriteByte(CommandUDP))
+			buf.Must(buffer.WriteByte(CommandUDP))
 		} else {
-			common.Must(buffer.WriteByte(CommandTCP))
+			buf.Must(buffer.WriteByte(CommandTCP))
 		}
 
 		binary.BigEndian.PutUint16(buffer.Extend(2), vc.dst.Port)
-		common.Must(
+		buf.Must(
 			buffer.WriteByte(vc.dst.AddrType),
-			common.Error(buffer.Write(vc.dst.Addr)),
+			buf.Error(buffer.Write(vc.dst.Addr)),
 		)
 	}
 
@@ -124,7 +123,7 @@ func (vc *Conn) recvResponse() error {
 }
 
 func (vc *Conn) Upstream() any {
-	if wrapper, ok := vc.ExtendedConn.(*bufio.ExtendedConnWrapper); ok {
+	if wrapper, ok := vc.ExtendedConn.(*N.ExtendedConnWrapper); ok {
 		return wrapper.Conn
 	}
 	return vc.ExtendedConn
@@ -133,7 +132,7 @@ func (vc *Conn) Upstream() any {
 // newConn return a Conn instance
 func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 	c := &Conn{
-		ExtendedConn: bufio.NewExtendedConn(conn),
+		ExtendedConn: N.NewExtendedConn(conn),
 		id:           client.uuid,
 		dst:          dst,
 	}

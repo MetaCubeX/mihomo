@@ -4,23 +4,21 @@ import (
 	"bufio"
 	"net"
 
-	"github.com/sagernet/sing/common/buf"
-	sing_bufio "github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/network"
+	"github.com/Dreamacro/clash/common/buf"
 )
 
-var _ network.ExtendedConn = (*BufferedConn)(nil)
+var _ ExtendedConn = (*BufferedConn)(nil)
 
 type BufferedConn struct {
 	r *bufio.Reader
-	network.ExtendedConn
+	ExtendedConn
 }
 
 func NewBufferedConn(c net.Conn) *BufferedConn {
 	if bc, ok := c.(*BufferedConn); ok {
 		return bc
 	}
-	return &BufferedConn{bufio.NewReader(c), sing_bufio.NewExtendedConn(c)}
+	return &BufferedConn{bufio.NewReader(c), NewExtendedConn(c)}
 }
 
 // Reader returns the internal bufio.Reader.
@@ -58,7 +56,7 @@ func (c *BufferedConn) ReadBuffer(buffer *buf.Buffer) (err error) {
 }
 
 func (c *BufferedConn) Upstream() any {
-	if wrapper, ok := c.ExtendedConn.(*sing_bufio.ExtendedConnWrapper); ok {
+	if wrapper, ok := c.ExtendedConn.(*ExtendedConnWrapper); ok {
 		return wrapper.Conn
 	}
 	return c.ExtendedConn

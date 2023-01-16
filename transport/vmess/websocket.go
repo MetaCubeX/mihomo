@@ -19,10 +19,10 @@ import (
 	"time"
 	_ "unsafe"
 
+	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
+
 	"github.com/gorilla/websocket"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/network"
 )
 
 //go:linkname maskBytes github.com/gorilla/websocket.maskBytes
@@ -33,7 +33,7 @@ type websocketConn struct {
 	reader     io.Reader
 	remoteAddr net.Addr
 
-	rawWriter network.ExtendedWriter
+	rawWriter N.ExtendedWriter
 
 	// https://godoc.org/github.com/gorilla/websocket#hdr-Concurrency
 	rMux sync.Mutex
@@ -42,7 +42,7 @@ type websocketConn struct {
 
 type websocketWithEarlyDataConn struct {
 	net.Conn
-	wsWriter network.ExtendedWriter
+	wsWriter N.ExtendedWriter
 	underlay net.Conn
 	closed   bool
 	dialed   chan bool
@@ -209,7 +209,7 @@ func (wsedc *websocketWithEarlyDataConn) Dial(earlyData []byte) error {
 	}
 
 	wsedc.dialed <- true
-	wsedc.wsWriter = bufio.NewExtendedWriter(wsedc.Conn)
+	wsedc.wsWriter = N.NewExtendedWriter(wsedc.Conn)
 	if earlyDataBuf.Len() != 0 {
 		_, err = wsedc.Conn.Write(earlyDataBuf.Bytes())
 	}
@@ -373,7 +373,7 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 
 	return &websocketConn{
 		conn:       wsConn,
-		rawWriter:  bufio.NewExtendedWriter(wsConn.UnderlyingConn()),
+		rawWriter:  N.NewExtendedWriter(wsConn.UnderlyingConn()),
 		remoteAddr: conn.RemoteAddr(),
 	}, nil
 }

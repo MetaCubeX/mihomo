@@ -8,14 +8,13 @@ import (
 	"net/http"
 	"strconv"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/trojan"
 	"github.com/Dreamacro/clash/transport/vless"
-
-	"github.com/sagernet/sing/common/bufio"
 )
 
 type Trojan struct {
@@ -97,7 +96,7 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 		return c, err
 	}
 	err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata))
-	return bufio.NewExtendedConn(c), err
+	return N.NewExtendedConn(c), err
 }
 
 // DialContext implements C.ProxyAdapter

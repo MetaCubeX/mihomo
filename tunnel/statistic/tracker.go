@@ -4,12 +4,11 @@ import (
 	"net"
 	"time"
 
+	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/gofrs/uuid"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/network"
 	"go.uber.org/atomic"
 )
 
@@ -33,8 +32,8 @@ type tcpTracker struct {
 	C.Conn `json:"-"`
 	*trackerInfo
 	manager        *Manager
-	extendedReader network.ExtendedReader
-	extendedWriter network.ExtendedWriter
+	extendedReader N.ExtendedReader
+	extendedWriter N.ExtendedWriter
 }
 
 func (tt *tcpTracker) ID() string {
@@ -107,8 +106,8 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 			UploadTotal:   atomic.NewInt64(0),
 			DownloadTotal: atomic.NewInt64(0),
 		},
-		extendedReader: bufio.NewExtendedReader(conn),
-		extendedWriter: bufio.NewExtendedWriter(conn),
+		extendedReader: N.NewExtendedReader(conn),
+		extendedWriter: N.NewExtendedWriter(conn),
 	}
 
 	if rule != nil {
