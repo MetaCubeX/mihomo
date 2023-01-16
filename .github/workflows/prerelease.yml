@@ -10,92 +10,29 @@ on:
       - Alpha
       - Beta
 jobs:
-  Build-Prerelease-WithoutCGO:
+  Build:
     permissions: write-all
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         job:
-          - { target: "linux-amd64 linux-amd64-compatible", id: "1" }
-          - { target: "linux-armv5 linux-armv6 linux-armv7", id: "2" }
-          - { target: "linux-arm64 linux-mips64 linux-mips64le", id: "3" }
-          - { target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat", id: "4" }
-          - { target: "freebsd-386 freebsd-amd64 freebsd-arm64", id: "5" }
-          - { target: "windows-amd64-compatible windows-amd64 windows-386", id: "6" }
-          - { target: "windows-arm64 windows-arm32v7", id: "7" }
-          - { target: "darwin-amd64 darwin-arm64 android-arm64", id: "8" }
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
-
-      - name: Set variables
-        run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
-        if: ${{github.ref_name=='Alpha'}}
-        run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
-        if: ${{github.ref_name=='Beta'}}
-        run: echo "VERSION=beta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
-        if: ${{github.ref_name==''}}
-        run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.19'
-          check-latest: true
-
-      - name: Test
-        if: ${{ github.ref_name=='Beta' && matrix.job.id=='1' }}
-        run: |
-          go test ./...
-
-      - name: Build
-        if: success()
-        env:
-          NAME: Clash.Meta
-          BINDIR: bin
-        run: |
-          make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
-          cd bin
-          ls -la
-          chmod +x *
-          cp ../.github/release.sh ./
-          bash ./release.sh
-          rm ./release.sh
-          ls -la
-          cd ..
-
-      - uses: actions/upload-artifact@v3
-        if: ${{  success() }}
-        with:
-          name: artifact
-          path: bin/
-
-  Build-Prerelease-WithCGO:
-    permissions: write-all
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        job:
-          - { target: "windows/*", id: "1" }
-          - { target: "linux/386,linux/amd64", id: "2" }
-          - { target: "linux/arm64,linux/riscv64", id: "3" }
-          - { target: "linux/arm,linux/arm-6,linux/arm-7", id: "4" }
-          - { target: "linux/mips,linux/mipsle", id: "5" }
-          - { target: "linux/mips64,linux/mips64le", id: "6" }
-          - { target: "darwin-10.16/*", id: "7" }
-          - { target: "android", id: "8" }
+          - { type: "WithoutCGO", target: "linux-amd64 linux-amd64-compatible", id: "1" }
+          - { type: "WithoutCGO", target: "linux-armv5 linux-armv6 linux-armv7", id: "2" }
+          - { type: "WithoutCGO", target: "linux-arm64 linux-mips64 linux-mips64le", id: "3" }
+          - { type: "WithoutCGO", target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat", id: "4" }
+          - { type: "WithoutCGO", target: "freebsd-386 freebsd-amd64 freebsd-arm64", id: "5" }
+          - { type: "WithoutCGO", target: "windows-amd64-compatible windows-amd64 windows-386", id: "6" }
+          - { type: "WithoutCGO", target: "windows-arm64 windows-arm32v7", id: "7" }
+          - { type: "WithoutCGO", target: "darwin-amd64 darwin-arm64 android-arm64", id: "8" }
+          - { type: "WithCGO", target: "windows/*", id: "1" }
+          - { type: "WithCGO", target: "linux/386,linux/amd64", id: "2" }
+          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "3" }
+          - { type: "WithCGO", target: "linux/arm,linux/arm-6,linux/arm-7", id: "4" }
+          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "5" }
+          - { type: "WithCGO", target: "linux/mips64,linux/mips64le", id: "6" }
+          - { type: "WithCGO", target: "darwin-10.16/*", id: "7" }
+          - { type: "WithCGO", target: "android", id: "8" }
 
     steps:
       - name: Check out code into the Go module directory
@@ -123,7 +60,6 @@ jobs:
       - name: Set ENV
         run: |
           echo "NAME=clash.meta" >> $GITHUB_ENV
-          echo "BUILD_TIME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
           echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
@@ -141,15 +77,27 @@ jobs:
           go-version: '1.19'
           check-latest: true
 
+      - name: Test
+        if: ${{ github.ref_name=='Beta' && matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
+        run: |
+          go test ./...
+
+      - name: Build WithoutCGO
+        if: ${{ matrix.job.type=='WithoutCGO' }}
+        env:
+          NAME: Clash.Meta
+          BINDIR: bin
+        run: make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
+
       - uses: nttld/setup-ndk@v1
-        if: ${{matrix.job.target=='android'}}
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
         id: setup-ndk
         with:
           ndk-version: r25b
           add-to-path: false
 
       - name: Build Android
-        if: ${{matrix.job.target=='android'}}
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
@@ -158,30 +106,36 @@ jobs:
           CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
 
       - name: Set up xgo
-        if: ${{matrix.job.target!='android'}}
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
         run: |
           docker pull techknowlogick/xgo:latest
           go install src.techknowlogick.com/xgo@latest
 
       - name: Build by xgo
-        if: ${{matrix.job.target!='android'}}
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
           xgo --branch ${{ github.ref_name }} --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} github.com/${{ github.repository }}
 
-      - name: Rename and zip
+      - name: Rename
+        if: ${{ matrix.job.type=='WithCGO' }}
+        run: |
+          cd bin
+          ls -la
+          cp ../.github/rename-cgo.sh ./
+          bash ./rename-cgo.sh
+          rm ./rename-cgo.sh
+          ls -la
+          cd ..
+
+      - name: Zip
         if: ${{  success() }}
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           cd bin
           ls -la
           chmod +x *
-          cp ../.github/rename-cgo.sh ./
-          bash ./rename-cgo.sh
-          rm ./rename-cgo.sh
           cp ../.github/release.sh ./
           bash ./release.sh
           rm ./release.sh
@@ -195,9 +149,9 @@ jobs:
           path: bin/
 
 
-  Upload-Prerelease:
+  Upload:
     permissions: write-all
-    needs: [ Build-Prerelease-WithoutCGO, Build-Prerelease-WithCGO ]
+    needs: [ Build ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
