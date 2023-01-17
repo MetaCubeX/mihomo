@@ -65,11 +65,8 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 }
 
 func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
+	upload := int64(buffer.Len())
 	err = tt.extendedWriter.WriteBuffer(buffer)
-	var upload int64
-	if err != nil {
-		upload = int64(buffer.Len())
-	}
 	tt.manager.PushUploaded(upload)
 	tt.UploadTotal.Add(upload)
 	return
