@@ -109,7 +109,6 @@ var _ net.Conn = &quicStreamConn{}
 type quicStreamPacketConn struct {
 	connId    uint32
 	quicConn  quic.Connection
-	lAddr     net.Addr
 	inputConn *N.BufferedConn
 
 	udpRelayMode          string
@@ -251,7 +250,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 }
 
 func (q *quicStreamPacketConn) LocalAddr() net.Addr {
-	return q.lAddr
+	return q.quicConn.LocalAddr()
 }
 
 var _ net.PacketConn = &quicStreamPacketConn{}

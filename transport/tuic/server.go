@@ -140,7 +140,6 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	pc := &quicStreamPacketConn{
 		connId:                assocId,
 		quicConn:              s.quicConn,
-		lAddr:                 s.quicConn.LocalAddr(),
 		inputConn:             nil,
 		udpRelayMode:          udpRelayMode,
 		maxUdpRelayPacketSize: s.MaxUdpRelayPacketSize,
@@ -152,12 +151,12 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
 		packet: &packet,
-		rAddr:  s.genServerAssocIdAddr(assocId),
+		rAddr:  s.genServerAssocIdAddr(assocId, s.quicConn.RemoteAddr()),
 	})
 }
 
-func (s *serverHandler) genServerAssocIdAddr(assocId uint32) net.Addr {
-	return ServerAssocIdAddr(fmt.Sprintf("tuic-%s-%d", s.uuid.String(), assocId))
+func (s *serverHandler) genServerAssocIdAddr(assocId uint32, addr net.Addr) net.Addr {
+	return &ServerAssocIdAddr{assocId: fmt.Sprintf("tuic-%s-%d", s.uuid.String(), assocId), addr: addr}
 }
 
 func (s *serverHandler) handleStream() (err error) {
@@ -274,14 +273,21 @@ func (s *serverHandler) handleUniStream() (err error) {
 	}
 }
 
-type ServerAssocIdAddr string
+type ServerAssocIdAddr struct {
+	assocId string
+	addr    net.Addr
+}
 
 func (a ServerAssocIdAddr) Network() string {
 	return "ServerAssocIdAddr"
 }
 
 func (a ServerAssocIdAddr) String() string {
-	return string(a)
+	return a.assocId
+}
+
+func (a ServerAssocIdAddr) RawAddr() net.Addr {
+	return a.addr
 }
 
 type serverUDPPacket struct {
