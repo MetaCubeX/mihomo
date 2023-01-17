@@ -54,6 +54,7 @@ func (s *Server) Serve() error {
 		if err != nil {
 			return err
 		}
+		SetCongestionController(conn, s.CongestionController)
 		uuid, err := uuid.NewV4()
 		if err != nil {
 			return err
@@ -73,7 +74,6 @@ func (s *Server) Close() error {
 }
 
 type serverHandler struct {
-	serverOption ServerOption
 	*Server
 	quicConn quic.Connection
 	uuid     uuid.UUID
@@ -167,7 +167,6 @@ func (s *serverHandler) handleStream() (err error) {
 		if err != nil {
 			return err
 		}
-		SetCongestionController(s.quicConn, s.CongestionController)
 		go func() (err error) {
 			stream := &quicStreamConn{
 				Stream: quicStream,
@@ -215,7 +214,6 @@ func (s *serverHandler) handleUniStream() (err error) {
 		if err != nil {
 			return err
 		}
-		SetCongestionController(s.quicConn, s.CongestionController)
 		go func() (err error) {
 			defer func() {
 				stream.CancelRead(0)
