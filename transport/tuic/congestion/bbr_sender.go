@@ -14,11 +14,11 @@ import (
 
 const (
 	// InitialMaxDatagramSize is the default maximum packet size used in QUIC for congestion window computations in bytes.
-	InitialMaxDatagramSize                             = 1252
-	InitialCongestionWindow       congestion.ByteCount = 10
-	InitialPacketSizeIPv4                              = 1252
-	InitialPacketSizeIPv6                              = 1232
-	DefaultBBRMaxCongestionWindow congestion.ByteCount = 10000
+	InitialMaxDatagramSize        = 1252
+	InitialPacketSizeIPv4         = 1252
+	InitialPacketSizeIPv6         = 1232
+	InitialCongestionWindow       = 10
+	DefaultBBRMaxCongestionWindow = 10000
 )
 
 const (
