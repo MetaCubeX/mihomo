@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - Beta
+      - Alpha
     tags:
       - "v*"
 env:
