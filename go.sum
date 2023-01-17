@@ -93,8 +93,8 @@ github.com/mdlayher/socket v0.4.0 h1:280wsy40IC9M9q1uPGcLBwXpcTQDtoGwVt+BNoITxIw
 github.com/mdlayher/socket v0.4.0/go.mod h1:xxFqz5GRCUN3UEOm9CZqEJsAbe1C8OwSK46NlmWuVoc=
 github.com/metacubex/gvisor v0.0.0-20221217030112-bdcd835fd60e h1:3PHqNvIAwYbv9cOQbRFIUgzJ+K6fhV1HHj+Vpg8U7g8=
 github.com/metacubex/gvisor v0.0.0-20221217030112-bdcd835fd60e/go.mod h1:TIvkJD0sxe8pIob3p6T8IzxXunlp6yfgktvTNp+DGNM=
-github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e h1:RnfC6+sShJ3biU2Q2wuh4FxZ8/3fp1QG+1zAfswVehA=
-github.com/metacubex/quic-go v0.31.1-0.20221127023445-9f0ce65a734e/go.mod h1:7NPWVTLiX2Ss9q9gBNZaNHsPqZ3Tg/ApyrXxxUYbl78=
+github.com/metacubex/quic-go v0.31.1-0.20230117135846-c981c4c16e91 h1:CGn1ku3QZ/OjJjnRH4eO9jtXegdPQZUJ7y1Y6CppLd0=
+github.com/metacubex/quic-go v0.31.1-0.20230117135846-c981c4c16e91/go.mod h1:8VvqBlJaARNcwAE9zrbhKI/I1R5Lu4gqmt3CSGrJl7s=
 github.com/metacubex/sing-shadowsocks v0.1.0 h1:uGBtNkpy4QFlofaNkJf+iFegeLU11VzTUlkC46FHF8A=
 github.com/metacubex/sing-shadowsocks v0.1.0/go.mod h1:8pBSYDKVxTtqUtGZyEh4ZpFJXwP6wBVVKrs6oQiOwmQ=
 github.com/metacubex/sing-tun v0.1.0 h1:iQj0+0WjJynSKAtfv87wOZlVKWl3w9RvkOSkVe9zuMg=
