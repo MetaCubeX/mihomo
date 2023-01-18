@@ -20,6 +20,12 @@ func dnsRouter() http.Handler {
 }
 
 func queryDNS(w http.ResponseWriter, r *http.Request) {
+	if resolver.DefaultResolver == nil {
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError("DNS section is disabled"))
+		return
+	}
+
 	name := r.URL.Query().Get("name")
 	qTypeStr, _ := lo.Coalesce(r.URL.Query().Get("type"), "A")
 
