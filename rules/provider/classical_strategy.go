@@ -42,6 +42,11 @@ func (c *classicalStrategy) OnUpdate(rules []string) {
 	shouldResolveIP := false
 	for _, rawRule := range rules {
 		ruleType, rule, params := ruleParse(rawRule)
+
+		if ruleType == "PROCESS-NAME" {
+			c.shouldFindProcess = true
+		}
+
 		r, err := c.parse(ruleType, rule, "", params)
 		if err != nil {
 			log.Warnln("parse rule error:[%s]", err.Error())

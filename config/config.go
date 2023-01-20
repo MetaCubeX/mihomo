@@ -53,7 +53,6 @@ type General struct {
 	GeodataMode     bool              `json:"geodata-mode"`
 	GeodataLoader   string            `json:"geodata-loader"`
 	TCPConcurrent   bool              `json:"tcp-concurrent"`
-	EnableProcess   bool              `json:"enable-process"`
 	FindProcessMode P.FindProcessMode `json:"find-process-mode"`
 	Sniffing        bool              `json:"sniffing"`
 	EBpf            EBpf              `json:"-"`
@@ -117,7 +116,7 @@ type Profile struct {
 }
 
 type TLS struct {
-	RawCert `yaml:",inline"`
+	RawCert         `yaml:",inline"`
 	CustomTrustCert []RawCert `yaml:"custom-certifactes"`
 }
 
@@ -259,7 +258,6 @@ type RawConfig struct {
 	GeodataMode           bool              `yaml:"geodata-mode"`
 	GeodataLoader         string            `yaml:"geodata-loader"`
 	TCPConcurrent         bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	EnableProcess         bool              `yaml:"enable-process" json:"enable-process"`
 	FindProcessMode       P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
@@ -337,7 +335,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:           []map[string]any{},
 		ProxyGroup:      []map[string]any{},
 		TCPConcurrent:   false,
-		EnableProcess:   false,
 		FindProcessMode: P.FindProcessStrict,
 		Tun: RawTun{
 			Enable:              false,
@@ -555,7 +552,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataMode:     cfg.GeodataMode,
 		GeodataLoader:   cfg.GeodataLoader,
 		TCPConcurrent:   cfg.TCPConcurrent,
-		EnableProcess:   cfg.EnableProcess,
 		FindProcessMode: cfg.FindProcessMode,
 		EBpf:            cfg.EBpf,
 	}, nil

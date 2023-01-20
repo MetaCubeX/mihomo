@@ -37,6 +37,7 @@ type ruleStrategy interface {
 	Match(metadata *C.Metadata) bool
 	Count() int
 	ShouldResolveIP() bool
+	ShouldFindProcess() bool
 	OnUpdate(rules []string)
 }
 
@@ -84,6 +85,10 @@ func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
 
 func (rp *ruleSetProvider) ShouldResolveIP() bool {
 	return rp.strategy.ShouldResolveIP()
+}
+
+func (rp *ruleSetProvider) ShouldFindProcess() bool {
+	return rp.strategy.ShouldFindProcess()
 }
 
 func (rp *ruleSetProvider) AsRule(adaptor string) C.Rule {

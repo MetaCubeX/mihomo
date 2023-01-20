@@ -9,14 +9,15 @@ import (
 
 type RuleSet struct {
 	*common.Base
-	ruleProviderName string
-	adapter          string
-	ruleProvider     P.RuleProvider
-	noResolveIP      bool
+	ruleProviderName  string
+	adapter           string
+	ruleProvider      P.RuleProvider
+	noResolveIP       bool
+	shouldFindProcess bool
 }
 
 func (rs *RuleSet) ShouldFindProcess() bool {
-	return false
+	return !rs.shouldFindProcess && rs.getProviders().ShouldFindProcess()
 }
 
 func (rs *RuleSet) RuleType() C.RuleType {
