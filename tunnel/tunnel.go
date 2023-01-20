@@ -148,12 +148,8 @@ func SetMode(m TunnelMode) {
 
 // SetFindProcessMode replace SetAlwaysFindProcess
 // always find process info if legacyAlways = true or mode.Always() = true, may be increase many memory
-func SetFindProcessMode(legacyAlways bool, mode P.FindProcessMode) {
-	if legacyAlways {
-		findProcessMode = P.FindProcessAlways
-	} else {
-		findProcessMode = mode
-	}
+func SetFindProcessMode(mode P.FindProcessMode) {
+	findProcessMode = mode
 }
 
 // processUDP starts a loop to handle udp packet

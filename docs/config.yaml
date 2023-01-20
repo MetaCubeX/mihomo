@@ -9,6 +9,13 @@ mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
 allow-lan: true # 允许局域网连接
 bind-address: "*" # 绑定IP地址，仅作用于 allow-lan 为 true，'*'表示所有地址
 
+
+#  find-process-mode has 3 values: always, strict, off
+#  - always, 开启，强制匹配所有进程
+#  - strict, 默认，由clash判断是否开启
+#  - off, 不匹配进程，推荐在路由器上使用此模式
+find-process-mode: strict
+
 mode: rule
 
 log-level: debug # 日志等级 silent/error/warning/info/debug
