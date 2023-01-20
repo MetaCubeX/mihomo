@@ -29,8 +29,8 @@
 - Netfilter TCP redirecting. Deploy Clash on your Internet gateway with `iptables`.
 - Comprehensive HTTP RESTful API controller
 
-## Getting Started
-Documentations are now moved to [GitHub Wiki](https://github.com/Dreamacro/clash/wiki).
+## Wiki
+Documentation is available on [Clash.Meta Wiki](https://docs.metacubex.one/).
 
 ## Advanced usage for this branch
 
@@ -49,9 +49,14 @@ If you can't visit github,you should set proxy first:
 go env -w GOPROXY=https://goproxy.io,direct
 ```
 
-So now you can build it:
+Now you can build it:
 ```shell
 go build
+```
+
+If you need gvisor for tun stack, build with:
+```shell
+go build -tags with_gvisor
 ```
 
 ### DNS configuration
@@ -110,7 +115,7 @@ Built-in [Wintun](https://www.wintun.net) driver.
 # Enable the TUN listener
 tun:
   enable: true
-  stack: gvisor #  only gvisor
+  stack: system #   system/gvisor
   dns-hijack: 
     - 0.0.0.0:53 # additional dns server listen on TUN
   auto-route: true # auto set global route
