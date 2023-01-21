@@ -17,7 +17,7 @@ type RuleSet struct {
 }
 
 func (rs *RuleSet) ShouldFindProcess() bool {
-	return !rs.shouldFindProcess && rs.getProviders().ShouldFindProcess()
+	return rs.shouldFindProcess || rs.getProviders().ShouldFindProcess()
 }
 
 func (rs *RuleSet) RuleType() C.RuleType {
