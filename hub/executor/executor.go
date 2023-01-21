@@ -154,20 +154,17 @@ func preUpdateExperimental(c *config.Config) {
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
-		resolver.DisableIPv6 = !generalIPv6
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
 		resolver.DefaultLocalServer = nil
 		dns.ReCreateServer("", nil, nil)
 		return
-	} else {
-		resolver.DisableIPv6 = !c.IPv6
 	}
 
 	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
-		IPv6:         c.IPv6,
+		IPv6:         c.IPv6 && generalIPv6,
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
 		Hosts:        c.Hosts,
@@ -312,9 +309,8 @@ func updateGeneral(general *config.General, force bool) {
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
 		log.Infoln("Use IPv6")
-	} else {
-		resolver.DisableIPv6 = true
 	}
+	resolver.DisableIPv6 = dialer.DisableIPv6
 
 	if general.TCPConcurrent {
 		dialer.SetDial(general.TCPConcurrent)
