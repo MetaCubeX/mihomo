@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/atomic"
 	"math/rand"
 	"net/netip"
+	"strings"
 	"time"
+
+	"go.uber.org/atomic"
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
@@ -15,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
 	"golang.org/x/sync/singleflight"
@@ -30,6 +33,12 @@ type result struct {
 	Error error
 }
 
+type geositePolicyRecord struct {
+	matcher          fallbackDomainFilter
+	policy           *Policy
+	inversedMatching bool
+}
+
 type Resolver struct {
 	ipv6                  bool
 	hosts                 *trie.DomainTrie[netip.Addr]
@@ -40,6 +49,7 @@ type Resolver struct {
 	group                 singleflight.Group
 	lruCache              *cache.LruCache[string, *D.Msg]
 	policy                *trie.DomainTrie[*Policy]
+	geositePolicy         []geositePolicyRecord
 	proxyServer           []dnsClient
 }
 
@@ -272,12 +282,18 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 	}
 
 	record := r.policy.Search(domain)
-	if record == nil {
-		return nil
+	if record != nil {
+		p := record.Data()
+		return p.GetData()
 	}
 
-	p := record.Data()
-	return p.GetData()
+	for _, geositeRecord := range r.geositePolicy {
+		matched := geositeRecord.matcher.Match(domain)
+		if matched != geositeRecord.inversedMatching {
+			return geositeRecord.policy.GetData()
+		}
+	}
+	return nil
 }
 
 func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
@@ -433,7 +449,26 @@ func NewResolver(config Config) *Resolver {
 	if len(config.Policy) != 0 {
 		r.policy = trie.New[*Policy]()
 		for domain, nameserver := range config.Policy {
-			_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
+			if strings.HasPrefix(strings.ToLower(domain), "@geosite:") {
+				groupname := domain[9:]
+				inverse := false
+				if strings.HasPrefix(groupname, "!") {
+					inverse = true
+					groupname = groupname[1:]
+				}
+				log.Debugln("adding geosite policy: %s inversed %s", groupname, inverse)
+				matcher, err := NewGeoSite(groupname)
+				if err != nil {
+					continue
+				}
+				r.geositePolicy = append(r.geositePolicy, geositePolicyRecord{
+					matcher:          matcher,
+					policy:           NewPolicy(transform([]NameServer{nameserver}, defaultResolver)),
+					inversedMatching: inverse,
+				})
+			} else {
+				_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
+			}
 		}
 		r.policy.Optimize()
 	}

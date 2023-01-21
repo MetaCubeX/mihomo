@@ -91,6 +91,17 @@ type geoSiteFilter struct {
 	matchers []*router.DomainMatcher
 }
 
+func NewGeoSite(group string) (fallbackDomainFilter, error) {
+	matcher, _, err := geodata.LoadGeoSiteMatcher(group)
+	if err != nil {
+		return nil, err
+	}
+	filter := &geoSiteFilter{
+		matchers: []*router.DomainMatcher{matcher},
+	}
+	return filter, nil
+}
+
 func (gsf *geoSiteFilter) Match(domain string) bool {
 	for _, matcher := range gsf.matchers {
 		if matcher.ApplyDomain(domain) {
