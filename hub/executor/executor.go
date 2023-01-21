@@ -161,7 +161,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		dns.ReCreateServer("", nil, nil)
 		return
 	} else {
-		resolver.DisableIPv6 = !c.IPv6
+		resolver.DisableIPv6 = !(c.IPv6 || generalIPv6)
 	}
 
 	cfg := dns.Config{
