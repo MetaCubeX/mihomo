@@ -2,9 +2,9 @@ name: Prerelease
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '!README.md'
-      - '!docs/**'
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
     branches:
       - Alpha
       - Beta
