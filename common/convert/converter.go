@@ -120,7 +120,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-			handleVShareLink(names, urlVLess, scheme, vless)
+			err = handleVShareLink(names, urlVLess, scheme, vless)
+			if err != nil {
+				continue
+			}
 			if flow := query.Get("flow"); flow != "" {
 				vless["flow"] = strings.ToLower(flow)
 			}
@@ -138,7 +141,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 				query := urlVMess.Query()
 				vmess := make(map[string]any, 20)
-				handleVShareLink(names, urlVMess, scheme, vmess)
+				err = handleVShareLink(names, urlVMess, scheme, vmess)
+				if err != nil {
+					continue
+				}
 				vmess["alterId"] = 0
 				vmess["cipher"] = "auto"
 				if encryption := query.Get("encryption"); encryption != "" {
