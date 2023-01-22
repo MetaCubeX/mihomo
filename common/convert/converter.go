@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Dreamacro/clash/log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -122,6 +123,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless := make(map[string]any, 20)
 			err = handleVShareLink(names, urlVLess, scheme, vless)
 			if err != nil {
+				log.Debugln("error:%s line:%s", err.Error(), line)
 				continue
 			}
 			if flow := query.Get("flow"); flow != "" {
@@ -143,6 +145,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess := make(map[string]any, 20)
 				err = handleVShareLink(names, urlVMess, scheme, vmess)
 				if err != nil {
+					log.Debugln("error:%s line:%s", err.Error(), line)
 					continue
 				}
 				vmess["alterId"] = 0
