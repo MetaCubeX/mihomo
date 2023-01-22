@@ -832,25 +832,33 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 	return tree, nil
 }
 
-func hostWithDefaultPort(host string, defPort string) (string, error) {
-	if !strings.Contains(host, ":") {
-		host += ":"
-	}
-
-	hostname, port, err := net.SplitHostPort(host)
-	if err != nil {
-		return "", err
-	}
-
-	if port == "" {
-		port = defPort
-	}
-
-	return net.JoinHostPort(hostname, port), nil
-}
-
 func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) {
 	var nameservers []dns.NameServer
+
+	getHost := func(u *url.URL, defPort string) (string, error) {
+		port := u.Port()
+		host := u.Hostname()
+
+		//ipv6 dns server
+		if strings.Count(u.Host, ":") > 1 {
+			if !strings.ContainsAny(u.Host, "[]") {
+				host = u.Host
+				// if host == 2001:db8::1, u.port == ":1", so we need to set port
+				port = ""
+			}
+		}
+
+		if port == "" {
+			port = defPort
+		}
+
+		hostPort := net.JoinHostPort(host, port)
+		if _, _, err := net.SplitHostPort(hostPort); err != nil {
+			return "", err
+		}
+
+		return hostPort, nil
+	}
 
 	for idx, server := range servers {
 		// parse without scheme .e.g 8.8.8.8:53
@@ -868,25 +876,18 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 		params := map[string]string{}
 		switch u.Scheme {
 		case "udp":
-			addr, err = hostWithDefaultPort(u.Host, "53")
+			addr, err = getHost(u, "53")
 			dnsNetType = "" // UDP
 		case "tcp":
-			addr, err = hostWithDefaultPort(u.Host, "53")
+			addr, err = getHost(u, "53")
 			dnsNetType = "tcp" // TCP
 		case "tls":
-			addr, err = hostWithDefaultPort(u.Host, "853")
+			addr, err = getHost(u, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
-			host := u.Host
 			proxyAdapter = ""
-			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
-				host = net.JoinHostPort(host, "443")
-			} else {
-				if err != nil {
-					return nil, err
-				}
-			}
-			clearURL := url.URL{Scheme: "https", Host: host, Path: u.Path}
+			addr, err = getHost(u, "443")
+			clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path}
 			addr = clearURL.String()
 			dnsNetType = "https" // DNS over HTTPS
 			if len(u.Fragment) != 0 {
@@ -907,7 +908,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			addr = u.Host
 			dnsNetType = "dhcp" // UDP from DHCP
 		case "quic":
-			addr, err = hostWithDefaultPort(u.Host, "853")
+			addr, err = getHost(u, "853")
 			dnsNetType = "quic" // DNS over QUIC
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
