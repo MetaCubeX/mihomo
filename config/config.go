@@ -14,6 +14,7 @@ import (
 	"time"
 
 	P "github.com/Dreamacro/clash/component/process"
+	SNIFF "github.com/Dreamacro/clash/component/sniffer"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
@@ -134,11 +135,10 @@ type IPTables struct {
 
 type Sniffer struct {
 	Enable          bool
-	Sniffers        []snifferTypes.Type
+	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
 	Reverses        *trie.DomainTrie[struct{}]
 	ForceDomain     *trie.DomainTrie[struct{}]
 	SkipDomain      *trie.DomainTrie[struct{}]
-	Ports           *[]utils.Range[uint16]
 	ForceDnsMapping bool
 	ParsePureIp     bool
 }
@@ -287,13 +287,18 @@ type RawGeoXUrl struct {
 }
 
 type RawSniffer struct {
-	Enable          bool     `yaml:"enable" json:"enable"`
-	Sniffing        []string `yaml:"sniffing" json:"sniffing"`
-	ForceDomain     []string `yaml:"force-domain" json:"force-domain"`
-	SkipDomain      []string `yaml:"skip-domain" json:"skip-domain"`
-	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
-	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
-	ParsePureIp     bool     `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+	Enable          bool                         `yaml:"enable" json:"enable"`
+	Sniffing        []string                     `yaml:"sniffing" json:"sniffing"`
+	ForceDomain     []string                     `yaml:"force-domain" json:"force-domain"`
+	SkipDomain      []string                     `yaml:"skip-domain" json:"skip-domain"`
+	Ports           []string                     `yaml:"port-whitelist" json:"port-whitelist"`
+	ForceDnsMapping bool                         `yaml:"force-dns-mapping" json:"force-dns-mapping"`
+	ParsePureIp     bool                         `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+	Sniff           map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
+}
+
+type RawSniffingConfig struct {
+	Ports []string `yaml:"ports" json:"ports"`
 }
 
 // EBpf config
@@ -1187,55 +1192,54 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 		ForceDnsMapping: snifferRaw.ForceDnsMapping,
 		ParsePureIp:     snifferRaw.ParsePureIp,
 	}
+	loadSniffer := make(map[snifferTypes.Type]SNIFF.SnifferConfig)
 
-	var ports []utils.Range[uint16]
-	if len(snifferRaw.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](80, 80))
-		ports = append(ports, *utils.NewRange[uint16](443, 443))
-	} else {
-		for _, portRange := range snifferRaw.Ports {
-			portRaws := strings.Split(portRange, "-")
-			p, err := strconv.ParseUint(portRaws[0], 10, 16)
+	if len(snifferRaw.Sniff) != 0 {
+		for sniffType, sniffConfig := range snifferRaw.Sniff {
+			find := false
+			ports, err := parsePortRange(sniffConfig.Ports)
 			if err != nil {
-				return nil, fmt.Errorf("%s format error", portRange)
+				return nil, err
 			}
-
-			start := uint16(p)
-			if len(portRaws) > 1 {
-				p, err = strconv.ParseUint(portRaws[1], 10, 16)
-				if err != nil {
-					return nil, fmt.Errorf("%s format error", portRange)
+			for _, snifferType := range snifferTypes.List {
+				if snifferType.String() == strings.ToUpper(sniffType) {
+					find = true
+					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+						Ports: ports,
+					}
 				}
+			}
 
-				end := uint16(p)
-				ports = append(ports, *utils.NewRange(start, end))
-			} else {
-				ports = append(ports, *utils.NewRange(start, start))
+			if !find {
+				return nil, fmt.Errorf("not find the sniffer[%s]", sniffType)
+			}
+		}
+	} else {
+		// Deprecated: Use Sniff instead
+		log.Warnln("Deprecated: Use Sniff instead")
+		globalPorts, err := parsePortRange(snifferRaw.Ports)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, snifferName := range snifferRaw.Sniffing {
+			find := false
+			for _, snifferType := range snifferTypes.List {
+				if snifferType.String() == strings.ToUpper(snifferName) {
+					find = true
+					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+						Ports: globalPorts,
+					}
+				}
+			}
+
+			if !find {
+				return nil, fmt.Errorf("not find the sniffer[%s]", snifferName)
 			}
 		}
 	}
 
-	sniffer.Ports = &ports
-
-	loadSniffer := make(map[snifferTypes.Type]struct{})
-
-	for _, snifferName := range snifferRaw.Sniffing {
-		find := false
-		for _, snifferType := range snifferTypes.List {
-			if snifferType.String() == strings.ToUpper(snifferName) {
-				find = true
-				loadSniffer[snifferType] = struct{}{}
-			}
-		}
-
-		if !find {
-			return nil, fmt.Errorf("not find the sniffer[%s]", snifferName)
-		}
-	}
-
-	for st := range loadSniffer {
-		sniffer.Sniffers = append(sniffer.Sniffers, st)
-	}
+	sniffer.Sniffers = loadSniffer
 	sniffer.ForceDomain = trie.New[struct{}]()
 	for _, domain := range snifferRaw.ForceDomain {
 		err := sniffer.ForceDomain.Insert(domain, struct{}{})
@@ -1255,4 +1259,29 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer.SkipDomain.Optimize()
 
 	return sniffer, nil
+}
+
+func parsePortRange(portRanges []string) ([]utils.Range[uint16], error) {
+	ports := make([]utils.Range[uint16], 0)
+	for _, portRange := range portRanges {
+		portRaws := strings.Split(portRange, "-")
+		p, err := strconv.ParseUint(portRaws[0], 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("%s format error", portRange)
+		}
+
+		start := uint16(p)
+		if len(portRaws) > 1 {
+			p, err = strconv.ParseUint(portRaws[1], 10, 16)
+			if err != nil {
+				return nil, fmt.Errorf("%s format error", portRange)
+			}
+
+			end := uint16(p)
+			ports = append(ports, *utils.NewRange(start, end))
+		} else {
+			ports = append(ports, *utils.NewRange(start, start))
+		}
+	}
+	return ports, nil
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/Dreamacro/clash/common/cache"
 	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/sniffer"
@@ -33,7 +32,6 @@ type SnifferDispatcher struct {
 
 	forceDomain *trie.DomainTrie[struct{}]
 	skipSNI     *trie.DomainTrie[struct{}]
-	portRanges  *[]utils.Range[uint16]
 	skipList    *cache.LruCache[string, uint8]
 	rwMux       sync.RWMutex
 
@@ -55,10 +53,12 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		}
 
 		inWhitelist := false
-		for _, portRange := range *sd.portRanges {
-			if portRange.Contains(uint16(port)) {
-				inWhitelist = true
-				break
+		for _, sniffer := range sd.sniffers {
+			if sniffer.SupportNetwork() == C.TCP || sniffer.SupportNetwork() == C.ALLNet {
+				inWhitelist = sniffer.SupportPort(uint16(port))
+				if inWhitelist {
+					break
+				}
 			}
 		}
 
@@ -182,21 +182,20 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(needSniffer []sniffer.Type, forceDomain *trie.DomainTrie[struct{}],
-	skipSNI *trie.DomainTrie[struct{}], ports *[]utils.Range[uint16],
+func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig, forceDomain *trie.DomainTrie[struct{}],
+	skipSNI *trie.DomainTrie[struct{}],
 	forceDnsMapping bool, parsePureIp bool) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:          true,
 		forceDomain:     forceDomain,
 		skipSNI:         skipSNI,
-		portRanges:      ports,
 		skipList:        cache.New[string, uint8](cache.WithSize[string, uint8](128), cache.WithAge[string, uint8](600)),
 		forceDnsMapping: forceDnsMapping,
 		parsePureIp:     parsePureIp,
 	}
 
-	for _, snifferName := range needSniffer {
-		s, err := NewSniffer(snifferName)
+	for snifferName, config := range snifferConfig {
+		s, err := NewSniffer(snifferName, config)
 		if err != nil {
 			log.Errorln("Sniffer name[%s] is error", snifferName)
 			return &SnifferDispatcher{enable: false}, err
@@ -208,12 +207,12 @@ func NewSnifferDispatcher(needSniffer []sniffer.Type, forceDomain *trie.DomainTr
 	return &dispatcher, nil
 }
 
-func NewSniffer(name sniffer.Type) (sniffer.Sniffer, error) {
+func NewSniffer(name sniffer.Type, snifferConfig SnifferConfig) (sniffer.Sniffer, error) {
 	switch name {
 	case sniffer.TLS:
-		return &TLSSniffer{}, nil
+		return NewTLSSniffer(snifferConfig)
 	case sniffer.HTTP:
-		return &HTTPSniffer{}, nil
+		return NewHTTPSniffer(snifferConfig)
 	default:
 		return nil, ErrorUnsupportedSniffer
 	}

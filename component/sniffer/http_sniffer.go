@@ -7,7 +7,9 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/sniffer"
 )
 
 var (
@@ -24,8 +26,23 @@ const (
 )
 
 type HTTPSniffer struct {
+	*BaseSniffer
 	version version
 	host    string
+}
+
+var _ sniffer.Sniffer = (*HTTPSniffer)(nil)
+
+func NewHTTPSniffer(snifferConfig SnifferConfig) (*HTTPSniffer, error) {
+	ports := make([]utils.Range[uint16], 0)
+	if len(snifferConfig.Ports) == 0 {
+		ports = append(ports, *utils.NewRange[uint16](80, 80))
+	} else {
+		ports = append(ports, snifferConfig.Ports...)
+	}
+	return &HTTPSniffer{
+		BaseSniffer: NewBaseSniffer(ports, C.TCP),
+	}, nil
 }
 
 func (http *HTTPSniffer) Protocol() string {
