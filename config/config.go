@@ -288,6 +288,7 @@ type RawGeoXUrl struct {
 
 type RawSniffer struct {
 	Enable          bool                         `yaml:"enable" json:"enable"`
+	OverrideDest    bool                         `yaml:"override-destination" json:"override-destination"`
 	Sniffing        []string                     `yaml:"sniffing" json:"sniffing"`
 	ForceDomain     []string                     `yaml:"force-domain" json:"force-domain"`
 	SkipDomain      []string                     `yaml:"skip-domain" json:"skip-domain"`
@@ -298,7 +299,8 @@ type RawSniffer struct {
 }
 
 type RawSniffingConfig struct {
-	Ports []string `yaml:"ports" json:"ports"`
+	Ports        []string `yaml:"ports" json:"ports"`
+	OverrideDest *bool    `yaml:"override-destination" json:"override-destination"`
 }
 
 // EBpf config
@@ -1201,11 +1203,16 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			if err != nil {
 				return nil, err
 			}
+			overrideDest := snifferRaw.OverrideDest
+			if sniffConfig.OverrideDest != nil {
+				overrideDest = *sniffConfig.OverrideDest
+			}
 			for _, snifferType := range snifferTypes.List {
 				if snifferType.String() == strings.ToUpper(sniffType) {
 					find = true
 					loadSniffer[snifferType] = SNIFF.SnifferConfig{
-						Ports: ports,
+						Ports:        ports,
+						OverrideDest: overrideDest,
 					}
 				}
 			}
@@ -1228,7 +1235,8 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 				if snifferType.String() == strings.ToUpper(snifferName) {
 					find = true
 					loadSniffer[snifferType] = SNIFF.SnifferConfig{
-						Ports: globalPorts,
+						Ports:        globalPorts,
+						OverrideDest: snifferRaw.OverrideDest,
 					}
 				}
 			}

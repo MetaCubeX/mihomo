@@ -9,7 +9,8 @@ import (
 )
 
 type SnifferConfig struct {
-	Ports []utils.Range[uint16]
+	OverrideDest bool
+	Ports        []utils.Range[uint16]
 }
 
 type BaseSniffer struct {
