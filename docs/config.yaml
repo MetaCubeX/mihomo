@@ -86,7 +86,8 @@ ebpf:
 # 嗅探域名 可选配置
 sniffer:
   enable: false
-  # 是否适用嗅探结果作为实际访问，默认 false
+  # 是否使用嗅探结果作为实际访问，默认 false
+  # 全局配置，优先级低于 sniffer.sniff 实际配置
   override-destination: false
   sniff:
     # TLS 默认如果不配置 ports 默认嗅探 443
