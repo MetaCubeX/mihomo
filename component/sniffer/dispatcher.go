@@ -101,13 +101,13 @@ func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
 	}
 	originHost := metadata.Host
 	if originHost != host {
-		log.Infoln("[Sniffer] Sniff TCP [%s:%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
-			metadata.SrcIP, metadata.SrcPort,
+		log.Infoln("[Sniffer] Sniff TCP [%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
+			metadata.SourceDetail(),
 			dstIP, metadata.DstPort,
 			metadata.Host, host)
 	} else {
-		log.Debugln("[Sniffer] Sniff TCP [%s:%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
-			metadata.SrcIP, metadata.SrcPort,
+		log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s:%s] success, replace domain [%s]-->[%s]",
+			metadata.SourceDetail(),
 			dstIP, metadata.DstPort,
 			metadata.Host, host)
 	}
