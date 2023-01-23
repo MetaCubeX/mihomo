@@ -86,6 +86,11 @@ ebpf:
 # 嗅探域名 可选配置
 sniffer:
   enable: false
+  ## 对 redir-host 类型识别的流量进行强制嗅探
+  ## 如：Tun、Redir 和 TProxy 并 DNS 为 redir-host 皆属于
+  # force-dns-mapping: false
+  ## 对所有未获取到域名的流量进行强制嗅探
+  # parse-pure-ip: false
   # 是否使用嗅探结果作为实际访问，默认 false
   # 全局配置，优先级低于 sniffer.sniff 实际配置
   override-destination: false
@@ -103,6 +108,9 @@ sniffer:
       override-destination: true
   force-domain:
     - +.v2ex.com
+  ## 对嗅探结果进行跳过
+  # skip-domain:
+  #   - Mijia Cloud
   # 需要嗅探协议
   # 已废弃，若 sniffer.sniff 配置则此项无效
   sniffing:
