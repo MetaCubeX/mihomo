@@ -9,7 +9,6 @@ mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
 allow-lan: true # 允许局域网连接
 bind-address: "*" # 绑定IP地址，仅作用于 allow-lan 为 true，'*'表示所有地址
 
-
 #  find-process-mode has 3 values: always, strict, off
 #  - always, 开启，强制匹配所有进程
 #  - strict, 默认，由clash判断是否开启
@@ -87,14 +86,31 @@ ebpf:
 # 嗅探域名 可选配置
 sniffer:
   enable: false
+  # 是否适用嗅探结果作为实际访问，默认 false
+  override-destination: false
+  sniff:
+    # TLS 默认如果不配置 ports 默认嗅探 443
+    TLS:
+    #  ports: [443, 8443]
+
+    # 默认嗅探 80
+    HTTP:
+      # 需要嗅探的端口
+
+      ports: [80, 8080-8880]
+      # 可覆盖 sniffer.override-destination
+      override-destination: true
+  force-domain:
+    - +.v2ex.com
   # 需要嗅探协议
+  # 已废弃
   sniffing:
     - tls
     - http
   # 强制对此域名进行嗅探
-  force-domain:
-    - +.v2ex.com
+
   # 仅对白名单中的端口进行嗅探，默认为 443，80
+  # 已废弃
   port-whitelist:
     - "80"
     - "443"
