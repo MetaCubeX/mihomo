@@ -223,11 +223,11 @@ func loadProvider(pv provider.Provider) {
 		switch pv.Type() {
 		case provider.Proxy:
 			{
-				log.Warnln("initial proxy provider %s error: %v", (pv).Name(), err)
+				log.Errorln("initial proxy provider %s error: %v", (pv).Name(), err)
 			}
 		case provider.Rule:
 			{
-				log.Warnln("initial rule provider %s error: %v", (pv).Name(), err)
+				log.Errorln("initial rule provider %s error: %v", (pv).Name(), err)
 			}
 
 		}
