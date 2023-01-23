@@ -26,15 +26,12 @@ var (
 var Dispatcher *SnifferDispatcher
 
 type SnifferDispatcher struct {
-	enable bool
-
-	sniffers []sniffer.Sniffer
-
-	forceDomain *trie.DomainTrie[struct{}]
-	skipSNI     *trie.DomainTrie[struct{}]
-	skipList    *cache.LruCache[string, uint8]
-	rwMux       sync.RWMutex
-
+	enable          bool
+	sniffers        map[sniffer.Sniffer]SnifferConfig
+	forceDomain     *trie.DomainTrie[struct{}]
+	skipSNI         *trie.DomainTrie[struct{}]
+	skipList        *cache.LruCache[string, uint8]
+	rwMux           sync.RWMutex
 	forceDnsMapping bool
 	parsePureIp     bool
 }
@@ -53,10 +50,12 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		}
 
 		inWhitelist := false
-		for _, sniffer := range sd.sniffers {
+		overrideDest := false
+		for sniffer, config := range sd.sniffers {
 			if sniffer.SupportNetwork() == C.TCP || sniffer.SupportNetwork() == C.ALLNet {
 				inWhitelist = sniffer.SupportPort(uint16(port))
 				if inWhitelist {
+					overrideDest = config.OverrideDest
 					break
 				}
 			}
@@ -89,12 +88,12 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 			sd.skipList.Delete(dst)
 			sd.rwMux.RUnlock()
 
-			sd.replaceDomain(metadata, host)
+			sd.replaceDomain(metadata, host, overrideDest)
 		}
 	}
 }
 
-func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
+func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
 	dstIP := ""
 	if metadata.DstIP.IsValid() {
 		dstIP = metadata.DstIP.String()
@@ -112,7 +111,11 @@ func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string) {
 			metadata.Host, host)
 	}
 
-	metadata.Host = host
+	if overrideDest {
+		metadata.Host = host
+	} else {
+		metadata.SniffHost = host
+	}
 	metadata.DNSMode = C.DNSNormal
 }
 
@@ -121,7 +124,7 @@ func (sd *SnifferDispatcher) Enable() bool {
 }
 
 func (sd *SnifferDispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (string, error) {
-	for _, s := range sd.sniffers {
+	for s := range sd.sniffers {
 		if s.SupportNetwork() == C.TCP {
 			_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 			_, err := conn.Peek(1)
@@ -189,9 +192,10 @@ func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig, forceDom
 		enable:          true,
 		forceDomain:     forceDomain,
 		skipSNI:         skipSNI,
-		skipList:        cache.New[string, uint8](cache.WithSize[string, uint8](128), cache.WithAge[string, uint8](600)),
+		skipList:        cache.New(cache.WithSize[string, uint8](128), cache.WithAge[string, uint8](600)),
 		forceDnsMapping: forceDnsMapping,
 		parsePureIp:     parsePureIp,
+		sniffers:        make(map[sniffer.Sniffer]SnifferConfig, 0),
 	}
 
 	for snifferName, config := range snifferConfig {
@@ -200,8 +204,7 @@ func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig, forceDom
 			log.Errorln("Sniffer name[%s] is error", snifferName)
 			return &SnifferDispatcher{enable: false}, err
 		}
-
-		dispatcher.sniffers = append(dispatcher.sniffers, s)
+		dispatcher.sniffers[s] = config
 	}
 
 	return &dispatcher, nil

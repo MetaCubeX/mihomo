@@ -17,7 +17,7 @@ func (d *domainStrategy) ShouldFindProcess() bool {
 }
 
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
-	return d.domainRules != nil && d.domainRules.Search(metadata.Host) != nil
+	return d.domainRules != nil && d.domainRules.Search(metadata.RuleHost()) != nil
 }
 
 func (d *domainStrategy) Count() int {

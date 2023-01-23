@@ -134,6 +134,8 @@ type Metadata struct {
 	SpecialProxy string     `json:"specialProxy"`
 	SpecialRules string     `json:"specialRules"`
 	RemoteDst    string     `json:"remoteDestination"`
+	// Only domain rule
+	SniffHost 	 string
 }
 
 func (m *Metadata) RemoteAddress() string {
@@ -174,6 +176,14 @@ func (m *Metadata) AddrType() int {
 
 func (m *Metadata) Resolved() bool {
 	return m.DstIP.IsValid()
+}
+
+func (m *Metadata) RuleHost() string {
+	if len(m.SniffHost) == 0 {
+		return m.Host
+	} else {
+		return m.SniffHost
+	}
 }
 
 // Pure is used to solve unexpected behavior

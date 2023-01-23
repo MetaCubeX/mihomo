@@ -29,7 +29,7 @@ func (gs *GEOSITE) Match(metadata *C.Metadata) (bool, string) {
 		return false, ""
 	}
 
-	domain := metadata.Host
+	domain := metadata.RuleHost()
 	return gs.matcher.ApplyDomain(domain), gs.adapter
 }
 
