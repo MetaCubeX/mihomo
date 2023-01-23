@@ -103,14 +103,14 @@ sniffer:
   force-domain:
     - +.v2ex.com
   # 需要嗅探协议
-  # 已废弃
+  # 已废弃，若 sniffer.sniff 配置则此项无效
   sniffing:
     - tls
     - http
   # 强制对此域名进行嗅探
 
   # 仅对白名单中的端口进行嗅探，默认为 443，80
-  # 已废弃
+  # 已废弃，若 sniffer.sniff 配置则此项无效
   port-whitelist:
     - "80"
     - "443"
