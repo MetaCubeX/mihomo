@@ -1,15 +1,22 @@
 package convert
 
 import (
+	"errors"
 	"net/url"
 	"strings"
 )
 
-func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy map[string]any) {
+func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy map[string]any) error {
 	// Xray VMessAEAD / VLESS share link standard
 	// https://github.com/XTLS/Xray-core/discussions/716
 	query := url.Query()
 	proxy["name"] = uniqueName(names, url.Fragment)
+	if url.Hostname() == "" {
+		return errors.New("url.Hostname() is empty")
+	}
+	if url.Port() == "" {
+		return errors.New("url.Port() is empty")
+	}
 	proxy["type"] = scheme
 	proxy["server"] = url.Hostname()
 	proxy["port"] = url.Port()
@@ -94,4 +101,5 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		grpcOpts["grpc-service-name"] = query.Get("serviceName")
 		proxy["grpc-opts"] = grpcOpts
 	}
+	return nil
 }

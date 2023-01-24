@@ -165,6 +165,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 			for i := range gb.excludeTypeArray {
 				if strings.EqualFold(mType, gb.excludeTypeArray[i]) {
 					flag = true
+					break
 				}
 
 			}
