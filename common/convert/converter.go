@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Dreamacro/clash/log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -120,7 +121,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-			handleVShareLink(names, urlVLess, scheme, vless)
+			err = handleVShareLink(names, urlVLess, scheme, vless)
+			if err != nil {
+				log.Warnln("error:%s line:%s", err.Error(), line)
+				continue
+			}
 			if flow := query.Get("flow"); flow != "" {
 				vless["flow"] = strings.ToLower(flow)
 			}
@@ -138,7 +143,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 				query := urlVMess.Query()
 				vmess := make(map[string]any, 20)
-				handleVShareLink(names, urlVMess, scheme, vmess)
+				err = handleVShareLink(names, urlVMess, scheme, vmess)
+				if err != nil {
+					log.Warnln("error:%s line:%s", err.Error(), line)
+					continue
+				}
 				vmess["alterId"] = 0
 				vmess["cipher"] = "auto"
 				if encryption := query.Get("encryption"); encryption != "" {
