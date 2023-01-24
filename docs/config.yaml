@@ -544,6 +544,7 @@ proxies:
     # max-udp-relay-packet-size: 1500
     # fast-open: true
     # skip-cert-verify: true
+    max-open-streams: 16 # default 100, too many open streams may hurt performance
 
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
