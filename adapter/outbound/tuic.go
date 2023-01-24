@@ -165,7 +165,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	}
 
 	if option.MaxUdpRelayPacketSize == 0 {
-		option.MaxUdpRelayPacketSize = 1500
+		option.MaxUdpRelayPacketSize = 1252
 	}
 
 	if option.MaxOpenStreams == 0 {
@@ -216,9 +216,14 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 	}
-	// to avoid tuic's "too many open streams", decrease to 0.9x
+
 	clientMaxOpenStreams := int64(option.MaxOpenStreams)
-	clientMaxOpenStreams = clientMaxOpenStreams - int64(math.Ceil(float64(clientMaxOpenStreams)/10.0))
+
+	// to avoid tuic's "too many open streams", decrease to 0.9x
+	if clientMaxOpenStreams == 100 {
+		clientMaxOpenStreams = clientMaxOpenStreams - int64(math.Ceil(float64(clientMaxOpenStreams)/10.0))
+	}
+
 	if clientMaxOpenStreams < 1 {
 		clientMaxOpenStreams = 1
 	}
