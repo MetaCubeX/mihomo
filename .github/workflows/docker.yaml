@@ -2,6 +2,9 @@ name: Docker
 
 on:
   push:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
     branches:
       - Beta
       - Alpha
