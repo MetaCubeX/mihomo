@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
   push:
     paths-ignore:
-      - 'docs/**'
-      - 'README.md'
+      - "docs/**"
+      - "README.md"
     branches:
       - Alpha
       - Beta
@@ -12,6 +12,8 @@ on:
     branches:
       - Alpha
       - Beta
+env:
+  REGISTRY: docker.io
 jobs:
   Build:
     permissions: write-all
@@ -20,18 +22,54 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { type: "WithoutCGO", target: "linux-amd64 linux-amd64-compatible", id: "1" }
-          - { type: "WithoutCGO", target: "linux-armv5 linux-armv6 linux-armv7", id: "2" }
-          - { type: "WithoutCGO", target: "linux-arm64 linux-mips64 linux-mips64le", id: "3" }
-          - { type: "WithoutCGO", target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat", id: "4" }
-          - { type: "WithoutCGO", target: "freebsd-386 freebsd-amd64 freebsd-arm64", id: "5" }
-          - { type: "WithoutCGO", target: "windows-amd64-compatible windows-amd64 windows-386", id: "6" }
-          - { type: "WithoutCGO", target: "windows-arm64 windows-arm32v7", id: "7" }
-          - { type: "WithoutCGO", target: "darwin-amd64 darwin-arm64 android-arm64", id: "8" }
+          - {
+              type: "WithoutCGO",
+              target: "linux-amd64 linux-amd64-compatible",
+              id: "1",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "linux-armv5 linux-armv6 linux-armv7",
+              id: "2",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "linux-arm64 linux-mips64 linux-mips64le",
+              id: "3",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
+              id: "4",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "freebsd-386 freebsd-amd64 freebsd-arm64",
+              id: "5",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "windows-amd64-compatible windows-amd64 windows-386",
+              id: "6",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "windows-arm64 windows-arm32v7",
+              id: "7",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "darwin-amd64 darwin-arm64 android-arm64",
+              id: "8",
+            }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386,linux/amd64", id: "2" }
           - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "3" }
-          - { type: "WithCGO", target: "linux/arm,linux/arm-6,linux/arm-7", id: "4" }
+          - {
+              type: "WithCGO",
+              target: "linux/arm,linux/arm-6,linux/arm-7",
+              id: "4",
+            }
           - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "5" }
           - { type: "WithCGO", target: "linux/mips64,linux/mips64le", id: "6" }
           - { type: "WithCGO", target: "darwin-10.16/*", id: "7" }
@@ -77,7 +115,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.19'
+          go-version: "1.19"
           check-latest: true
 
       - name: Test
@@ -152,10 +190,9 @@ jobs:
           name: artifact
           path: bin/
 
-
   Upload:
     permissions: write-all
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -190,3 +227,64 @@ jobs:
           files: bin/*
           prerelease: true
           generate_release_notes: true
+  Docker:
+    permissions: write-all
+    needs: [Build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: bin/
+
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          version: latest
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_ACCOUNT }}/${{secrets.DOCKERHUB_REPO}}
+      - name: Show files
+        run: |
+          ls .
+          ls bin/
+      - name: Log into registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: |
+            linux/386
+            linux/amd64
+            linux/arm64/v8
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
