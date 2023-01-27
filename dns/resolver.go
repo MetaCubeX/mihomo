@@ -449,8 +449,8 @@ func NewResolver(config Config) *Resolver {
 	if len(config.Policy) != 0 {
 		r.policy = trie.New[*Policy]()
 		for domain, nameserver := range config.Policy {
-			if strings.HasPrefix(strings.ToLower(domain), "@geosite:") {
-				groupname := domain[9:]
+			if strings.HasPrefix(strings.ToLower(domain), "geosite:") {
+				groupname := domain[8:]
 				inverse := false
 				if strings.HasPrefix(groupname, "!") {
 					inverse = true
