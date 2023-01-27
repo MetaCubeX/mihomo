@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"net"
+    "net"
 	"net/netip"
 	"net/url"
 	"os"
@@ -840,18 +840,17 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 }
 
 func hostWithDefaultPort(host string, defPort string) (string, error) {
-	if !strings.Contains(host, ":") {
-		host += ":"
-	}
-
 	hostname, port, err := net.SplitHostPort(host)
-	if err != nil {
+    if err != nil&&!strings.Contains(err.Error(),"missing port in address") {
 		return "", err
 	}
 
 	if port == "" {
 		port = defPort
 	}
+    if hostname==""{
+        hostname=host
+    }
 
 	return net.JoinHostPort(hostname, port), nil
 }
@@ -860,7 +859,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
-		server, _ = parsePureDNSServer(server)
+		server = parsePureDNSServer(server)
 		u, err := url.Parse(server)
 		if err != nil {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
