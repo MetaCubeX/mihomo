@@ -17,6 +17,13 @@ find-process-mode: strict
 
 mode: rule
 
+#自定义 geox-url
+geox-url:
+  geoip: "https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat"
+  geosite: "https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat"
+  mmdb: "https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb"
+
+
 log-level: debug # 日志等级 silent/error/warning/info/debug
 
 ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
@@ -252,10 +259,10 @@ proxies:
       # udp: true
       # udp-over-tcp: false
       # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
-      # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
-      # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
-      # UDP 则为双栈解析，获取结果中的第一个 IPv4
-      # ipv6-prefer 同 ipv4-prefer
+    # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
+    # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
+    # UDP 则为双栈解析，获取结果中的第一个 IPv4
+    # ipv6-prefer 同 ipv4-prefer
     # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
   - name: "ss2"
     type: ss
