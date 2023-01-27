@@ -860,10 +860,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
-		// parse without scheme .e.g 8.8.8.8:53
-		if !strings.Contains(server, "://") {
-			server = "udp://" + server
-		}
+		server, _ = parsePureDNSServer(server)
 		u, err := url.Parse(server)
 		if err != nil {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
@@ -939,6 +936,25 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 	return nameservers, nil
 }
 
+func parsePureDNSServer(server string) (string, bool) {
+	addPre := func(server string) string {
+		return "udp://" + server
+	}
+	if ip := net.ParseIP(server); ip == nil {
+		// parse without scheme .e.g 8.8.8.8:53
+
+        if strings.Contains(server,"://") {
+			return server, true
+		}
+		if addr, err := net.ResolveUDPAddr("", server); err == nil {
+			return addPre(addr.String()), true
+		} else {
+			return addPre(server), false
+		}
+	} else {
+		return addPre(net.JoinHostPort(ip.String(), "53")), true
+	}
+}
 func parseNameServerPolicy(nsPolicy map[string]string, preferH3 bool) (map[string]dns.NameServer, error) {
 	policy := map[string]dns.NameServer{}
 
