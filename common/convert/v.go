@@ -2,7 +2,9 @@ package convert
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -93,6 +95,17 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		headers["Host"] = query.Get("host")
 		wsOpts["path"] = query.Get("path")
 		wsOpts["headers"] = headers
+
+		if earlyData := query.Get("ed"); earlyData != "" {
+			med, err := strconv.Atoi(earlyData)
+			if err != nil {
+				return fmt.Errorf("bad WebSocket max early data size: %v", err)
+			}
+			wsOpts["max-early-data"] = med
+		}
+		if earlyDataHeader := query.Get("eh"); earlyDataHeader != "" {
+			wsOpts["early-data-header-name"] = earlyDataHeader
+		}
 
 		proxy["ws-opts"] = wsOpts
 
