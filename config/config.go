@@ -936,28 +936,22 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 	return nameservers, nil
 }
 
-func parsePureDNSServer(server string) (string, bool) {
+func parsePureDNSServer(server string) string {
 	addPre := func(server string) string {
 		return "udp://" + server
 	}
 
-	//IPv6 server without "[" and "]" e.g., "2400:3200:baba::1"
-	if strings.Count(server, ":") >= 2 && strings.Count(server, "[") == 0 && strings.Count(server, "]") == 0 {
-		server = "[" + server + "]:53"
-	}
-
-	if ip := net.ParseIP(server); ip == nil {
-		// parse without scheme .e.g 8.8.8.8:53
+    if ip,err := netip.ParseAddr(server); err != nil {
 		if strings.Contains(server, "://") {
-			return server, true
+			return server
 		}
-		if addr, err := net.ResolveUDPAddr("", server); err == nil {
-			return addPre(addr.String()), true
-		} else {
-			return addPre(server), false
-		}
+        return addPre(server)
 	} else {
-		return addPre(server), true
+        if ip.Is4(){
+            return addPre(server)
+        }else{
+            return addPre("["+server+"]")
+        }
 	}
 }
 func parseNameServerPolicy(nsPolicy map[string]string, preferH3 bool) (map[string]dns.NameServer, error) {
