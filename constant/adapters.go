@@ -92,6 +92,7 @@ type ProxyAdapter interface {
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
+	SupportXUDP() bool
 	SupportTFO() bool
 	MarshalJSON() ([]byte, error)
 

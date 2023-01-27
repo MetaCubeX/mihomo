@@ -92,6 +92,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	mapping["history"] = p.DelayHistory()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
+	mapping["xudp"] = p.SupportXUDP()
 	mapping["tfo"] = p.SupportTFO()
 	return json.Marshal(mapping)
 }

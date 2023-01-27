@@ -474,6 +474,16 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 	}
 
+	switch option.PacketEncoding {
+	case "packetaddr", "packet":
+		option.PacketAddr = true
+	case "xudp":
+		option.XUDP = true
+	}
+	if option.XUDP {
+		option.PacketAddr = false
+	}
+
 	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
 	if err != nil {
 		return nil, err
@@ -485,22 +495,13 @@ func NewVless(option VlessOption) (*Vless, error) {
 			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:     C.Vless,
 			udp:    option.UDP,
+			xudp:   option.XUDP,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 		option: &option,
-	}
-
-	switch option.PacketEncoding {
-	case "packetaddr", "packet":
-		option.PacketAddr = true
-	case "xudp":
-		option.XUDP = true
-	}
-	if option.XUDP {
-		option.PacketAddr = false
 	}
 
 	switch option.Network {
