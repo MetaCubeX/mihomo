@@ -940,10 +940,15 @@ func parsePureDNSServer(server string) (string, bool) {
 	addPre := func(server string) string {
 		return "udp://" + server
 	}
+
+	//IPv6 server without "[" and "]" e.g., "2400:3200:baba::1"
+	if strings.Count(server, ":") >= 2 && strings.Count(server, "[") == 0 && strings.Count(server, "]") == 0 {
+		server = "[" + server + "]:53"
+	}
+
 	if ip := net.ParseIP(server); ip == nil {
 		// parse without scheme .e.g 8.8.8.8:53
-
-        if strings.Contains(server,"://") {
+		if strings.Contains(server, "://") {
 			return server, true
 		}
 		if addr, err := net.ResolveUDPAddr("", server); err == nil {
@@ -952,7 +957,7 @@ func parsePureDNSServer(server string) (string, bool) {
 			return addPre(server), false
 		}
 	} else {
-		return addPre(net.JoinHostPort(ip.String(), "53")), true
+		return addPre(server), true
 	}
 }
 func parseNameServerPolicy(nsPolicy map[string]string, preferH3 bool) (map[string]dns.NameServer, error) {
