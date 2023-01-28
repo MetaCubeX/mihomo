@@ -477,11 +477,11 @@ func NewVless(option VlessOption) (*Vless, error) {
 	switch option.PacketEncoding {
 	case "packetaddr", "packet":
 		option.PacketAddr = true
-	case "xudp":
-		option.XUDP = true
-	}
-	if option.XUDP {
-		option.PacketAddr = false
+		option.XUDP = false
+	default: // https://github.com/XTLS/Xray-core/pull/1567#issuecomment-1407305458
+		if !option.PacketAddr {
+			option.XUDP = true
+		}
 	}
 
 	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
