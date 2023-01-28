@@ -30,34 +30,39 @@
 - Comprehensive HTTP RESTful API controller
 
 ## Wiki
-Documentation is available on [Clash.Meta Wiki](https://docs.metacubex.one/).
 
-## Advanced usage for this branch
+Documentation is available on [Clash.Meta Wiki](https://docs.metacubex.one/).
 
 ## Build
 
 You should install [golang](https://go.dev) first.
 
 Then get the source code of Clash.Meta:
+
 ```shell
 git clone https://github.com/MetaCubeX/Clash.Meta.git
 cd Clash.Meta && go mod download
 ```
 
 If you can't visit github,you should set proxy first:
+
 ```shell
 go env -w GOPROXY=https://goproxy.io,direct
 ```
 
 Now you can build it:
+
 ```shell
 go build
 ```
 
 If you need gvisor for tun stack, build with:
+
 ```shell
 go build -tags with_gvisor
 ```
+
+## Advanced usage of this fork
 
 ### DNS configuration
 
@@ -69,7 +74,6 @@ Support resolve ip with a `Proxy Tunnel`.
 
 ```yaml
 proxy-groups:
-
   - name: DNS
     type: url-test
     use:
@@ -78,6 +82,7 @@ proxy-groups:
     interval: 180
     lazy: true
 ```
+
 ```yaml
 dns:
   enable: true
@@ -93,12 +98,12 @@ dns:
     - https://doh.pub/dns-query
     - tls://223.5.5.5:853
   fallback:
-    - 'https://1.0.0.1/dns-query#DNS'  # append the proxy adapter name or group name to the end of DNS URL with '#' prefix.
-    - 'tls://8.8.4.4:853#DNS'
+    - "https://1.0.0.1/dns-query#DNS" # append the proxy adapter name or group name to the end of DNS URL with '#' prefix.
+    - "tls://8.8.4.4:853#DNS"
   fallback-filter:
     geoip: false
     geosite:
-      - gfw  # `geosite` filter only use fallback server to resolve ip, prevent DNS leaks to unsafe DNS providers.
+      - gfw # `geosite` filter only use fallback server to resolve ip, prevent DNS leaks to unsafe DNS providers.
     domain:
       - +.example.com
     ipcidr:
@@ -116,27 +121,29 @@ Built-in [Wintun](https://www.wintun.net) driver.
 tun:
   enable: true
   stack: system #   system/gvisor
-  dns-hijack: 
+  dns-hijack:
     - 0.0.0.0:53 # additional dns server listen on TUN
   auto-route: true # auto set global route
 ```
+
 ### Rules configuration
+
 - Support rule `GEOSITE`.
 - Support rule-providers `RULE-SET`.
 - Support `multiport` condition for rule `SRC-PORT` and `DST-PORT`.
 - Support `network` condition for all rules.
 - Support source IPCIDR condition for all rules, just append to the end.
 - The `GEOSITE` databases via https://github.com/Loyalsoldier/v2ray-rules-dat.
+
 ```yaml
 rules:
-
   # network(tcp/udp) condition for all rules
   - DOMAIN-SUFFIX,bilibili.com,DIRECT,tcp
   - DOMAIN-SUFFIX,bilibili.com,REJECT,udp
-    
+
   # multiport condition for rules SRC-PORT and DST-PORT
   - DST-PORT,123/136/137-139,DIRECT,udp
-  
+
   # rule GEOSITE
   - GEOSITE,category-ads-all,REJECT
   - GEOSITE,icloud@cn,DIRECT
@@ -147,17 +154,16 @@ rules:
   - GEOSITE,youtube,PROXY
   - GEOSITE,geolocation-cn,DIRECT
   - GEOSITE,geolocation-!cn,PROXY
-    
+
   # source IPCIDR condition for all rules in gateway proxy
   #- GEOSITE,geolocation-!cn,REJECT,192.168.1.88/32,192.168.1.99/32
 
   - GEOIP,telegram,PROXY,no-resolve
   - GEOIP,private,DIRECT,no-resolve
   - GEOIP,cn,DIRECT
-  
+
   - MATCH,PROXY
 ```
-
 
 ### Proxies configuration
 
@@ -167,18 +173,17 @@ Support `Policy Group Filter`
 
 ```yaml
 proxy-groups:
-
   - name: 🚀 HK Group
     type: select
     use:
       - ALL
-    filter: 'HK'
+    filter: "HK"
 
   - name: 🚀 US Group
     type: select
     use:
       - ALL
-    filter: 'US'
+    filter: "US"
 
 proxy-providers:
   ALL:
@@ -190,14 +195,12 @@ proxy-providers:
       enable: true
       interval: 600
       url: http://www.gstatic.com/generate_204
-
 ```
-
-
 
 Support outbound transport protocol `VLESS`.
 
 The XTLS support (TCP/UDP) transport by the XRAY-CORE.
+
 ```yaml
 proxies:
   - name: "vless"
@@ -208,7 +211,7 @@ proxies:
     servername: example.com # AKA SNI
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
-    
+
   - name: "vless-ws"
     type: vless
     server: server
@@ -233,12 +236,12 @@ proxies:
     network: grpc
     servername: example.com # priority over wss host
     # skip-cert-verify: true
-    grpc-opts: 
+    grpc-opts:
       grpc-service-name: grpcname
 ```
 
-
 Support outbound transport protocol `Wireguard`
+
 ```yaml
 proxies:
   - name: "wg"
@@ -253,6 +256,7 @@ proxies:
 ```
 
 Support outbound transport protocol `Tuic`
+
 ```yaml
 proxies:
   - name: "tuic"
@@ -271,10 +275,10 @@ proxies:
     # max-udp-relay-packet-size: 1500
     # fast-open: true
     # skip-cert-verify: true
-
 ```
 
 ### IPTABLES configuration
+
 Work on Linux OS who's supported `iptables`
 
 ```yaml
@@ -286,17 +290,15 @@ iptables:
   inbound-interface: eth0 # detect the inbound interface, default is 'lo'
 ```
 
+### General installation guide for Linux
 
-### General installation guide for Linux  
-+ Create user given name `clash-meta`
+- Create user given name `clash-meta`
 
-+ Download and decompress pre-built binaries from [releases](https://github.com/MetaCubeX/Clash.Meta/releases)  
+- Download and decompress pre-built binaries from [releases](https://github.com/MetaCubeX/Clash.Meta/releases)
 
-+ Rename executable file to `Clash-Meta` and move to `/usr/local/bin/` 
+- Rename executable file to `Clash-Meta` and move to `/usr/local/bin/`
 
-+ Create folder `/etc/Clash-Meta/` as working directory 
-
-
+- Create folder `/etc/Clash-Meta/` as working directory
 
 Run Meta Kernel by user `clash-meta` as a daemon.
 
@@ -322,10 +324,13 @@ ExecStart=/usr/local/bin/Clash-Meta -d /etc/Clash-Meta
 [Install]
 WantedBy=multi-user.target
 ```
+
 Launch clashd on system startup with:
+
 ```shell
 $ systemctl enable Clash-Meta
 ```
+
 Launch clashd immediately with:
 
 ```shell
@@ -336,9 +341,11 @@ $ systemctl start Clash-Meta
 
 Clash add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
 
-To display process name in GUI please use [Dashboard For Meta](https://github.com/MetaCubeX/clash-dashboard).
+To display process name in GUI please use [Razord-meta](https://github.com/MetaCubeX/Razord-meta).
 
-![img.png](https://github.com/Clash-Mini/Dashboard/raw/master/View/Dashboard-Process.png)
+### Dashboard
+
+We also made a custom fork of yacd provide better support for this project, check it out at [Yacd-meta](https://github.com/MetaCubeX/Yacd-meta)
 
 ## Development
 
@@ -347,12 +354,12 @@ the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library
 
 ## Credits
 
-* [Dreamacro/clash](https://github.com/Dreamacro/clash)
-* [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
-* [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
-* [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
-* [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
-* [yaling888/clash-plus-pro](https://github.com/yaling888/clash)
+- [Dreamacro/clash](https://github.com/Dreamacro/clash)
+- [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
+- [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
+- [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
+- [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
+- [yaling888/clash-plus-pro](https://github.com/yaling888/clash)
 
 ## License
 
