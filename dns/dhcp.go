@@ -2,11 +2,13 @@ package dns
 
 import (
 	"context"
-	"go.uber.org/atomic"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/atomic"
 
 	"github.com/Dreamacro/clash/component/dhcp"
 	"github.com/Dreamacro/clash/component/iface"
@@ -32,6 +34,17 @@ type dhcpClient struct {
 	done      chan struct{}
 	clients   []dnsClient
 	err       error
+}
+
+var _ dnsClient = (*dhcpClient)(nil)
+
+// Address implements dnsClient
+func (d *dhcpClient) Address() string {
+	addrs := make([]string, 0)
+	for _, c := range d.clients {
+		addrs = append(addrs, c.Address())
+	}
+	return strings.Join(addrs, ",")
 }
 
 func (d *dhcpClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
