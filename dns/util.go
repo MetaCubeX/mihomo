@@ -235,15 +235,18 @@ func listenPacket(ctx context.Context, proxyAdapter string, network string, addr
 
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
+	domain := msgToDomain(m)
 	for _, client := range clients {
 		r := client
 		fast.Go(func() (*D.Msg, error) {
+			log.Debugln("[DNS] resolve %s from %s", domain, r.Address())
 			m, err := r.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
 			} else if m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused {
 				return nil, errors.New("server failure")
 			}
+			log.Debugln("[DNS] %s --> %s, from %s", domain, msgToIP(m), r.Address())
 			return m, nil
 		})
 	}
@@ -256,7 +259,6 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 		}
 		return nil, err
 	}
-
 	msg = elm
 	return
 }

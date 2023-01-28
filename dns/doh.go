@@ -64,6 +64,7 @@ type dnsOverHTTPS struct {
 	r               *Resolver
 	httpVersions    []C.HTTPVersion
 	proxyAdapter    string
+	addr            string
 }
 
 // type check
@@ -83,6 +84,7 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 
 	doh := &dnsOverHTTPS{
 		url:          u,
+		addr:         u.String(),
 		r:            r,
 		proxyAdapter: proxyAdapter,
 		quicConfig: &quic.Config{
@@ -98,7 +100,9 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 }
 
 // Address implements the Upstream interface for *dnsOverHTTPS.
-func (doh *dnsOverHTTPS) Address() string { return doh.url.String() }
+func (doh *dnsOverHTTPS) Address() string {
+	return doh.addr
+}
 func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	// Quote from https://www.rfc-editor.org/rfc/rfc8484.html:
 	// In order to maximize HTTP cache friendliness, DoH clients using media

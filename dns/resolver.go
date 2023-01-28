@@ -26,6 +26,7 @@ import (
 type dnsClient interface {
 	Exchange(m *D.Msg) (msg *D.Msg, err error)
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
+	Address() string
 }
 
 type result struct {
