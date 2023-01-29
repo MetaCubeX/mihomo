@@ -43,7 +43,7 @@ func (c *client) Address() string {
 		}
 	}
 
-	c.addr = fmt.Sprintf("%s//:%s", schema, net.JoinHostPort(c.host, c.port))
+	c.addr = fmt.Sprintf("%s://%s", schema, net.JoinHostPort(c.host, c.port))
 	return c.addr
 }
 
