@@ -63,17 +63,16 @@ jobs:
               id: "8",
             }
           - { type: "WithCGO", target: "windows/*", id: "1" }
-          - { type: "WithCGO", target: "linux/386,linux/amd64", id: "2" }
-          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "3" }
-          - {
-              type: "WithCGO",
-              target: "linux/arm,linux/arm-6,linux/arm-7",
-              id: "4",
-            }
-          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "5" }
-          - { type: "WithCGO", target: "linux/mips64,linux/mips64le", id: "6" }
-          - { type: "WithCGO", target: "darwin-10.16/*", id: "7" }
-          - { type: "WithCGO", target: "android", id: "8" }
+          - { type: "WithCGO", target: "linux/386", id: "2" }
+          - { type: "WithCGO", target: "linux/amd64", id: "3" }
+          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
+          - { type: "WithCGO", target: "linux/arm,", id: "5" }
+          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
+          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
+          - { type: "WithCGO", target: "linux/mips64", id: "8" }
+          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
+          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
+          - { type: "WithCGO", target: "android", id: "11" }
 
     steps:
       - name: Check out code into the Go module directory
