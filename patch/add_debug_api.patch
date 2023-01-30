@@ -1,0 +1,53 @@
+Subject: [PATCH] Chore: add debug api
+---
+Index: hub/route/debug.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/hub/route/debug.go b/hub/route/debug.go
+new file mode 100644
+--- /dev/null	(revision df1007e2b14f7a526d176410995998bf06054657)
++++ b/hub/route/debug.go	(revision df1007e2b14f7a526d176410995998bf06054657)
+@@ -0,0 +1,21 @@
++package route
++
++import (
++	"github.com/Dreamacro/clash/log"
++	"github.com/go-chi/chi/v5"
++	"github.com/go-chi/chi/v5/middleware"
++	"net/http"
++	"runtime"
++)
++
++func debugRouter() http.Handler {
++	handler := middleware.Profiler()
++	r := chi.NewRouter()
++	r.Mount("/", handler)
++	r.Put("/gc", func(writer http.ResponseWriter, request *http.Request) {
++		log.Debugln("trigger GC")
++		runtime.GC()
++	})
++
++	return r
++}
+Index: hub/route/server.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/hub/route/server.go b/hub/route/server.go
+--- a/hub/route/server.go	(revision f83fd6c690928ca7861196e3ca5af566303f95d5)
++++ b/hub/route/server.go	(revision df1007e2b14f7a526d176410995998bf06054657)
+@@ -59,6 +59,11 @@
+ 		MaxAge:         300,
+ 	})
+ 	r.Use(corsM.Handler)
++
++	r.Group(func(r chi.Router) {
++		r.Mount("/debug", debugRouter())
++	})
++
+ 	r.Group(func(r chi.Router) {
+ 		r.Use(authentication)
+ 		r.Get("/", hello)
