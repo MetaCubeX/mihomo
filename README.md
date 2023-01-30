@@ -352,6 +352,10 @@ We also made a custom fork of yacd provide better support for this project, chec
 If you want to build an application that uses clash as a library, check out the
 the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
+## Debugging
+Check [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki/How-to-use-debug-api) to get an instruction on using debug API.
+
+
 ## Credits
 
 - [Dreamacro/clash](https://github.com/Dreamacro/clash)
