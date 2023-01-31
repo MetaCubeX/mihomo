@@ -63,7 +63,7 @@ func convertFingerprint(fingerprint string) (*[32]byte, error) {
 	}
 
 	if len(fpByte) != 32 {
-		return nil, fmt.Errorf("fingerprint string length error,need sha25 fingerprint")
+		return nil, fmt.Errorf("fingerprint string length error,need sha256 fingerprint")
 	}
 	return (*[32]byte)(fpByte), nil
 }
@@ -99,10 +99,10 @@ func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint strin
 	if fingerprintBytes, err := convertFingerprint(fingerprint); err != nil {
 		return nil, err
 	} else {
-		tlsConfig=GetGlobalXTLSConfig(tlsConfig)
-			tlsConfig.VerifyPeerCertificate = verifyFingerprint(fingerprintBytes)
-			tlsConfig.InsecureSkipVerify = true
-			return tlsConfig, nil
+		tlsConfig = GetGlobalXTLSConfig(tlsConfig)
+		tlsConfig.VerifyPeerCertificate = verifyFingerprint(fingerprintBytes)
+		tlsConfig.InsecureSkipVerify = true
+		return tlsConfig, nil
 	}
 }
 
