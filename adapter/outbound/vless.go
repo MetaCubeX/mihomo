@@ -236,12 +236,15 @@ func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	}(c)
 
 	c, err = v.StreamConn(c, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
 	return NewConn(c, v), err
 }
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
@@ -282,7 +285,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
