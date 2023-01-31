@@ -101,6 +101,9 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 			} else {
 				wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			if v.option.ServerName != "" {
