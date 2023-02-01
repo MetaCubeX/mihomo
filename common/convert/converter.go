@@ -2,6 +2,7 @@ package convert
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/Dreamacro/clash/log"
@@ -283,14 +284,17 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			)
 			cipher = cipherRaw
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := enc.DecodeString(cipherRaw)
+				dcBuf, err := base64.RawURLEncoding.DecodeString(cipherRaw)
+				if err != nil {
+					dcBuf, _ = enc.DecodeString(cipherRaw)
+				}
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
 				}
-				err := VerifyMethod(cipher, password)
+				err = VerifyMethod(cipher, password)
 				if err != nil {
-					dcBuf, _ := encRaw.DecodeString(cipherRaw)
+					dcBuf, _ = encRaw.DecodeString(cipherRaw)
 					cipher, password, found = strings.Cut(string(dcBuf), ":")
 				}
 			}
