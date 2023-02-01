@@ -46,13 +46,14 @@ const (
 )
 
 type Option struct {
-	Password       string
-	ALPN           []string
-	ServerName     string
-	SkipCertVerify bool
-	Fingerprint    string
-	Flow           string
-	FlowShow       bool
+	Password          string
+	ALPN              []string
+	ServerName        string
+	SkipCertVerify    bool
+	Fingerprint       string
+	Flow              string
+	FlowShow          bool
+	ClientFingerprint string
 }
 
 type WebsocketOption struct {

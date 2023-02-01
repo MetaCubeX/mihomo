@@ -19,6 +19,8 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/common/pool"
+	U "github.com/Dreamacro/clash/transport/vmess"
+	utls "github.com/refraction-networking/utls"
 
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
@@ -51,8 +53,9 @@ type Conn struct {
 }
 
 type Config struct {
-	ServiceName string
-	Host        string
+	ServiceName       string
+	Host              string
+	ClientFingerprint string
 }
 
 func (g *Conn) initRequest() {
@@ -188,8 +191,9 @@ func (g *Conn) SetDeadline(t time.Time) error {
 	return nil
 }
 
-func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config) *TransportWrap {
+func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string) *TransportWrap {
 	wrap := TransportWrap{}
+
 	dialFunc := func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
 		pconn, err := dialFn(network, addr)
 		if err != nil {
@@ -197,17 +201,38 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config) *TransportWrap {
 		}
 
 		wrap.remoteAddr = pconn.RemoteAddr()
-		cn := tls.Client(pconn, cfg)
-		if err := cn.HandshakeContext(ctx); err != nil {
+
+		if len(Fingerprint) != 0 {
+			if fingerprint, exists := U.GetFingerprint(Fingerprint); exists {
+				utlsConn := U.UClient(pconn, cfg, &utls.ClientHelloID{
+					Client:  fingerprint.Client,
+					Version: fingerprint.Version,
+					Seed:    nil,
+				})
+				if err := utlsConn.(*U.UConn).HandshakeContext(ctx); err != nil {
+					pconn.Close()
+					return nil, err
+				}
+				state := utlsConn.(*U.UConn).ConnectionState()
+				if p := state.NegotiatedProtocol; p != http2.NextProtoTLS {
+					utlsConn.Close()
+					return nil, fmt.Errorf("http2: unexpected ALPN protocol %s, want %s", p, http2.NextProtoTLS)
+				}
+				return utlsConn, nil
+			}
+		}
+
+		conn := tls.Client(pconn, cfg)
+		if err := conn.HandshakeContext(ctx); err != nil {
 			pconn.Close()
 			return nil, err
 		}
-		state := cn.ConnectionState()
+		state := conn.ConnectionState()
 		if p := state.NegotiatedProtocol; p != http2.NextProtoTLS {
-			cn.Close()
+			conn.Close()
 			return nil, fmt.Errorf("http2: unexpected ALPN protocol %s, want %s", p, http2.NextProtoTLS)
 		}
-		return cn, nil
+		return conn, nil
 	}
 
 	wrap.Transport = &http2.Transport{
@@ -260,6 +285,6 @@ func StreamGunWithConn(conn net.Conn, tlsConfig *tls.Config, cfg *Config) (net.C
 		return conn, nil
 	}
 
-	transport := NewHTTP2Client(dialFn, tlsConfig)
+	transport := NewHTTP2Client(dialFn, tlsConfig, cfg.ClientFingerprint)
 	return StreamGunWithTransport(transport, cfg)
 }

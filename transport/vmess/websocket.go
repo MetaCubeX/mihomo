@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
 	"io"
 	"math/rand"
 	"net"
@@ -20,8 +21,9 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
-
 	"github.com/gorilla/websocket"
+
+	utls "github.com/refraction-networking/utls"
 )
 
 type websocketConn struct {
@@ -56,6 +58,7 @@ type WebsocketConfig struct {
 	TLSConfig           *tls.Config
 	MaxEarlyData        int
 	EarlyDataHeaderName string
+	ClientFingerprint   string
 }
 
 // Read implements net.Conn.Read()
@@ -136,15 +139,15 @@ func (wsc *websocketConn) Upstream() any {
 }
 
 func (wsc *websocketConn) Close() error {
-	var errors []string
+	var e []string
 	if err := wsc.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second*5)); err != nil {
-		errors = append(errors, err.Error())
+		e = append(e, err.Error())
 	}
 	if err := wsc.conn.Close(); err != nil {
-		errors = append(errors, err.Error())
+		e = append(e, err.Error())
 	}
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to close connection: %s", strings.Join(errors, ","))
+	if len(e) > 0 {
+		return fmt.Errorf("failed to close connection: %s", strings.Join(e, ","))
 	}
 	return nil
 }
@@ -316,6 +319,7 @@ func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Co
 }
 
 func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
+
 	dialer := &websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
 			return conn, nil
@@ -329,6 +333,22 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 	if c.TLS {
 		scheme = "wss"
 		dialer.TLSClientConfig = c.TLSConfig
+		if len(c.ClientFingerprint) != 0 {
+			if fingerprint, exists := GetFingerprint(c.ClientFingerprint); exists {
+				dialer.NetDialTLSContext = func(_ context.Context, _, addr string) (net.Conn, error) {
+					utlsConn := UClient(conn, c.TLSConfig, &utls.ClientHelloID{
+						Client:  fingerprint.Client,
+						Version: fingerprint.Version,
+						Seed:    fingerprint.Seed,
+					})
+
+					if err := utlsConn.(*UConn).WebsocketHandshake(); err != nil {
+						return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
+					}
+					return utlsConn, nil
+				}
+			}
+		}
 	}
 
 	u, err := url.Parse(c.Path)

@@ -30,20 +30,21 @@ type Trojan struct {
 
 type TrojanOption struct {
 	BasicOption
-	Name           string      `proxy:"name"`
-	Server         string      `proxy:"server"`
-	Port           int         `proxy:"port"`
-	Password       string      `proxy:"password"`
-	ALPN           []string    `proxy:"alpn,omitempty"`
-	SNI            string      `proxy:"sni,omitempty"`
-	SkipCertVerify bool        `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint    string      `proxy:"fingerprint,omitempty"`
-	UDP            bool        `proxy:"udp,omitempty"`
-	Network        string      `proxy:"network,omitempty"`
-	GrpcOpts       GrpcOptions `proxy:"grpc-opts,omitempty"`
-	WSOpts         WSOptions   `proxy:"ws-opts,omitempty"`
-	Flow           string      `proxy:"flow,omitempty"`
-	FlowShow       bool        `proxy:"flow-show,omitempty"`
+	Name              string      `proxy:"name"`
+	Server            string      `proxy:"server"`
+	Port              int         `proxy:"port"`
+	Password          string      `proxy:"password"`
+	ALPN              []string    `proxy:"alpn,omitempty"`
+	SNI               string      `proxy:"sni,omitempty"`
+	SkipCertVerify    bool        `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint       string      `proxy:"fingerprint,omitempty"`
+	UDP               bool        `proxy:"udp,omitempty"`
+	Network           string      `proxy:"network,omitempty"`
+	GrpcOpts          GrpcOptions `proxy:"grpc-opts,omitempty"`
+	WSOpts            WSOptions   `proxy:"ws-opts,omitempty"`
+	Flow              string      `proxy:"flow,omitempty"`
+	FlowShow          bool        `proxy:"flow-show,omitempty"`
+	ClientFingerprint string      `proxy:"client-fingerprint,omitempty"`
 }
 
 func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
@@ -212,12 +213,13 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 
 	tOption := &trojan.Option{
-		Password:       option.Password,
-		ALPN:           option.ALPN,
-		ServerName:     option.Server,
-		SkipCertVerify: option.SkipCertVerify,
-		FlowShow:       option.FlowShow,
-		Fingerprint:    option.Fingerprint,
+		Password:          option.Password,
+		ALPN:              option.ALPN,
+		ServerName:        option.Server,
+		SkipCertVerify:    option.SkipCertVerify,
+		FlowShow:          option.FlowShow,
+		Fingerprint:       option.Fingerprint,
+		ClientFingerprint: option.ClientFingerprint,
 	}
 
 	switch option.Network {
@@ -277,7 +279,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			}
 		}
 
-		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig, tOption.ClientFingerprint)
 
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{
