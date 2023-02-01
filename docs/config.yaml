@@ -23,7 +23,6 @@ geox-url:
   geosite: "https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat"
   mmdb: "https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/Country.mmdb"
 
-
 log-level: debug # 日志等级 silent/error/warning/info/debug
 
 ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
@@ -237,9 +236,9 @@ dns:
 
   # 配置查询域名使用的 DNS 服务器
   nameserver-policy:
-  #   'www.baidu.com': '114.114.114.114'
-  #   '+.internal.crop.com': '10.0.0.1'
-      'geosite:cn': 'https://doh.pub/dns-query'
+    #   'www.baidu.com': '114.114.114.114'
+    #   '+.internal.crop.com': '10.0.0.1'
+    "geosite:cn": "https://doh.pub/dns-query"
 
 proxies:
   # Shadowsocks
@@ -255,9 +254,8 @@ proxies:
     server: server
     port: 443
     cipher: chacha20-ietf-poly1305
-    password:
-      "password"
-      # udp: true
+    password: "password"
+    # udp: true
     # udp-over-tcp: false
     # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
     # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
@@ -319,6 +317,7 @@ proxies:
     # udp: true
     # tls: true
     # fingerprint: xxxx
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
     # skip-cert-verify: true
     # servername: example.com # priority over wss host
     # network: ws
@@ -483,6 +482,7 @@ proxies:
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
     # fingerprint: xxxx
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
 
   - name: "vless-ws"
     type: vless
@@ -492,6 +492,7 @@ proxies:
     udp: true
     tls: true
     network: ws
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
     servername: example.com # priority over wss host
     # skip-cert-verify: true
     # fingerprint: xxxx
@@ -535,9 +536,7 @@ proxies:
     private-key: eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=
     public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
     udp: true
-#    reserved: 'U4An'
-
-
+  #    reserved: 'U4An'
   - name: tuic
     server: www.example.com
     port: 10443
