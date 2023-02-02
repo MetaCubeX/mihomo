@@ -99,6 +99,8 @@ github.com/metacubex/sing-tun v0.1.1-0.20230129141228-645f74b2208b h1:k0Wnbfp7ls
 github.com/metacubex/sing-tun v0.1.1-0.20230129141228-645f74b2208b/go.mod h1:lJWUpVKefklkLUL3ukp9Iapz+zSxS/fvfbevoUL2Vwg=
 github.com/metacubex/sing-wireguard v0.0.0-20230129141512-65b25e764f8e h1:ZpzW8ymNjU2Gi7ieJexUV8BDrIuBfCBaZdgAyB1RsYs=
 github.com/metacubex/sing-wireguard v0.0.0-20230129141512-65b25e764f8e/go.mod h1:hF5lqFsfWeDrImIQ5XkOTS8aucCWvK4GOoCUNYKTrPU=
+github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370 h1:UkViS4DCESAUEYgbIEQdD02hyMacFt6Dny+1MOJtNIo=
+github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
 github.com/miekg/dns v1.1.50 h1:DQUfb9uc6smULcREF09Uc+/Gd46YWqJd5DbpPE9xkcA=
 github.com/miekg/dns v1.1.50/go.mod h1:e3IlAVfNqAllflbibAZEWOXOQ+Ynzk/dDozDxY7XnME=
 github.com/mroth/weightedrand/v2 v2.0.0 h1:ADehnByWbliEDIazDAKFdBHoqgHSXAkgyKqM/9YsPoo=
@@ -162,8 +164,6 @@ github.com/xtls/go v0.0.0-20220914232946-0441cf4cf837/go.mod h1:YJTRELIWrGxR1s8x
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 go.etcd.io/bbolt v1.3.6 h1:/ecaJf0sk1l4l6V4awd65v2C3ILy7MSj+s/x1ADCIMU=
 go.etcd.io/bbolt v1.3.6/go.mod h1:qXsaaIqmgQH0T+OPdb99Bf+PKfBBQVAdyD6TY9G8XM4=
-go.uber.org/atomic v1.10.0 h1:9qC72Qh0+3MqyJbAn8YU5xVq1frD8bn3JtD2oXtafVQ=
-go.uber.org/atomic v1.10.0/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
 go.uber.org/automaxprocs v1.5.1 h1:e1YG66Lrk73dn4qhg8WFSvhF0JuFQF0ERIp4rpuV8Qk=
 go.uber.org/automaxprocs v1.5.1/go.mod h1:BF4eumQw0P9GtnuxxovUd06vwm1o18oMzFtK66vU6XU=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
