@@ -12,7 +12,7 @@ type TuicOption struct {
 	Token                 []string `inbound:"token"`
 	Certificate           string   `inbound:"certificate"`
 	PrivateKey            string   `inbound:"private-key"`
-	CongestionController  string   `inbound:"congestion-controllerr,omitempty"`
+	CongestionController  string   `inbound:"congestion-controller,omitempty"`
 	MaxIdleTime           int      `inbound:"max-idle-timer,omitempty"`
 	AuthenticationTimeout int      `inbound:"authentication-timeoutr,omitempty"`
 	ALPN                  []string `inbound:"alpnr,omitempty"`
