@@ -13,10 +13,10 @@ type TuicOption struct {
 	Certificate           string   `inbound:"certificate"`
 	PrivateKey            string   `inbound:"private-key"`
 	CongestionController  string   `inbound:"congestion-controller,omitempty"`
-	MaxIdleTime           int      `inbound:"max-idle-timer,omitempty"`
-	AuthenticationTimeout int      `inbound:"authentication-timeoutr,omitempty"`
-	ALPN                  []string `inbound:"alpnr,omitempty"`
-	MaxUdpRelayPacketSize int      `inbound:"max-udp-relay-packet-sizer,omitempty"`
+	MaxIdleTime           int      `inbound:"max-idle-time,omitempty"`
+	AuthenticationTimeout int      `inbound:"authentication-timeout,omitempty"`
+	ALPN                  []string `inbound:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int      `inbound:"max-udp-relay-packet-size,omitempty"`
 }
 
 func (o TuicOption) Equal(config C.InboundConfig) bool {
