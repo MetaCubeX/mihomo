@@ -239,7 +239,7 @@ dns:
     #   'www.baidu.com': '114.114.114.114'
     #   '+.internal.crop.com': '10.0.0.1'
     "geosite:cn": "https://doh.pub/dns-query"
-
+    "www.baidu.com": [https://doh.pub/dns-query,https://dns.alidns.com/dns-query]
 proxies:
   # Shadowsocks
   # cipher支持:
