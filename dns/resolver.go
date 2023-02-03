@@ -423,19 +423,19 @@ type Config struct {
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
 	Hosts          *trie.DomainTrie[netip.Addr]
-	Policy         map[string]NameServer
+	Policy         map[string][]NameServer
 }
 
 func NewResolver(config Config) *Resolver {
 	defaultResolver := &Resolver{
 		main:     transform(config.Default, nil),
-		lruCache: cache.New[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		lruCache: cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 	}
 
 	r := &Resolver{
 		ipv6:     config.IPv6,
 		main:     transform(config.Main, defaultResolver),
-		lruCache: cache.New[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		lruCache: cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 		hosts:    config.Hosts,
 	}
 
@@ -464,11 +464,11 @@ func NewResolver(config Config) *Resolver {
 				}
 				r.geositePolicy = append(r.geositePolicy, geositePolicyRecord{
 					matcher:          matcher,
-					policy:           NewPolicy(transform([]NameServer{nameserver}, defaultResolver)),
+					policy:           NewPolicy(transform(nameserver, defaultResolver)),
 					inversedMatching: inverse,
 				})
 			} else {
-				_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
+				_ = r.policy.Insert(domain, NewPolicy(transform(nameserver, defaultResolver)))
 			}
 		}
 		r.policy.Optimize()
