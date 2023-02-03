@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -97,7 +98,7 @@ type DNS struct {
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[netip.Addr]
-	NameServerPolicy      map[string]dns.NameServer
+	NameServerPolicy      map[string][]dns.NameServer
 	ProxyServerNameserver []dns.NameServer
 }
 
@@ -181,7 +182,7 @@ type RawDNS struct {
 	FakeIPRange           string            `yaml:"fake-ip-range"`
 	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
 	DefaultNameserver     []string          `yaml:"default-nameserver"`
-	NameServerPolicy      map[string]string `yaml:"nameserver-policy"`
+	NameServerPolicy      map[string]any    `yaml:"nameserver-policy"`
 	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
 }
 
@@ -952,18 +953,35 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy map[string]string, preferH3 bool) (map[string]dns.NameServer, error) {
-	policy := map[string]dns.NameServer{}
+func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][]dns.NameServer, error) {
+	policy := map[string][]dns.NameServer{}
 
 	for domain, server := range nsPolicy {
-		nameservers, err := parseNameServer([]string{server}, preferH3)
+		var (
+			nameservers []dns.NameServer
+			err         error
+		)
+
+		switch reflect.TypeOf(server).Kind() {
+		case reflect.Slice, reflect.Array:
+			origin := reflect.ValueOf(server)
+			servers := make([]string, 0)
+			for i := 0; i < origin.Len(); i++ {
+				servers = append(servers, fmt.Sprintf("%v", origin.Index(i)))
+			}
+			nameservers, err = parseNameServer(servers, preferH3)
+		case reflect.String:
+			nameservers, err = parseNameServer([]string{fmt.Sprintf("%v", server)}, preferH3)
+		default:
+			return nil, errors.New("server format error, must be string or array")
+		}
 		if err != nil {
 			return nil, err
 		}
 		if _, valid := trie.ValidAndSplitDomain(domain); !valid {
 			return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
 		}
-		policy[domain] = nameservers[0]
+		policy[domain] = nameservers
 	}
 
 	return policy, nil
