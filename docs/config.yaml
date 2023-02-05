@@ -109,7 +109,7 @@ sniffer:
     HTTP:
       # 需要嗅探的端口
 
-      ports: [ 80, 8080-8880 ]
+      ports: [80, 8080-8880]
       # 可覆盖 sniffer.override-destination
       override-destination: true
   force-domain:
@@ -155,7 +155,7 @@ tunnels:
   - tcp/udp,127.0.0.1:6553,114.114.114.114:53,proxy
   - tcp,127.0.0.1:6666,rds.mysql.com:3306,vpn
   # full yaml config
-  - network: [ tcp, udp ]
+  - network: [tcp, udp]
     address: 127.0.0.1:7777
     target: target.com
     proxy: proxy
@@ -317,7 +317,7 @@ proxies:
     # udp: true
     # tls: true
     # fingerprint: xxxx
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
+    # client-fingerprint: chrome    # Available: "chrome","firefox","safari","ios","random", currently only support TLS transport in TCP/GRPC/WS/HTTP for VLESS/Vmess and trojan.
     # skip-cert-verify: true
     # servername: example.com # priority over wss host
     # network: ws
@@ -423,6 +423,7 @@ proxies:
     server: server
     port: 443
     password: yourpsk
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
     # fingerprint: xxxx
     # udp: true
     # sni: example.com # aka server name
@@ -802,7 +803,7 @@ listeners:
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-    network: [ tcp, udp ]
+    network: [tcp, udp]
     target: target.com
 
   - name: tun-in-1
