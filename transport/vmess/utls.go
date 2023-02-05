@@ -38,6 +38,7 @@ func RollFingerprint() (*utls.ClientHelloID, bool) {
 	chooser, _ := weightedrand.NewChooser(
 		weightedrand.NewChoice("chrome", 6),
 		weightedrand.NewChoice("safari", 3),
+		weightedrand.NewChoice("ios", 2),
 		weightedrand.NewChoice("firefox", 1),
 	)
 	initClient := chooser.Pick()
@@ -50,6 +51,7 @@ var Fingerprints = map[string]*utls.ClientHelloID{
 	"chrome":     &utls.HelloChrome_Auto,
 	"firefox":    &utls.HelloFirefox_Auto,
 	"safari":     &utls.HelloSafari_Auto,
+	"ios":        &utls.HelloIOS_Auto,
 	"randomized": &utls.HelloRandomized,
 }
 
@@ -64,6 +66,7 @@ func CopyConfig(c *tls.Config) *utls.Config {
 
 // WebsocketHandshake basically calls UConn.Handshake inside it but it will only send
 // http/1.1 in its ALPN.
+// Copy from https://github.com/XTLS/Xray-core/blob/main/transport/internet/tls/tls.go
 func (c *UConn) WebsocketHandshake() error {
 	// Build the handshake state. This will apply every variable of the TLS of the
 	// fingerprint in the UConn

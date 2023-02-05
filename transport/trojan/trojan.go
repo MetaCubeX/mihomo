@@ -116,15 +116,26 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 			}
 		}
 
+		if len(t.option.ClientFingerprint) != 0 {
+			utlsConn, valid := vmess.GetUtlsConnWithClientFingerprint(conn, t.option.ClientFingerprint, tlsConfig)
+			if valid {
+				ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+				defer cancel()
+
+				err := utlsConn.(*vmess.UConn).HandshakeContext(ctx)
+				return utlsConn, err
+
+			}
+		}
+
 		tlsConn := tls.Client(conn, tlsConfig)
+
 		// fix tls handshake not timeout
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 		defer cancel()
-		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			return nil, err
-		}
 
-		return tlsConn, nil
+		err := tlsConn.HandshakeContext(ctx)
+		return tlsConn, err
 	}
 }
 
@@ -142,12 +153,13 @@ func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) 
 	}
 
 	return vmess.StreamWebsocketConn(conn, &vmess.WebsocketConfig{
-		Host:      wsOptions.Host,
-		Port:      wsOptions.Port,
-		Path:      wsOptions.Path,
-		Headers:   wsOptions.Headers,
-		TLS:       true,
-		TLSConfig: tlsConfig,
+		Host:              wsOptions.Host,
+		Port:              wsOptions.Port,
+		Path:              wsOptions.Path,
+		Headers:           wsOptions.Headers,
+		TLS:               true,
+		TLSConfig:         tlsConfig,
+		ClientFingerprint: t.option.ClientFingerprint,
 	})
 }
 

@@ -36,13 +36,8 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 	}
 
 	if len(cfg.ClientFingerprint) != 0 {
-		if fingerprint, exists := GetFingerprint(cfg.ClientFingerprint); exists {
-			utlsConn := UClient(conn, tlsConfig, &utls.ClientHelloID{
-				Client:  fingerprint.Client,
-				Version: fingerprint.Version,
-				Seed:    nil,
-			})
-
+		utlsConn, valid := GetUtlsConnWithClientFingerprint(conn, cfg.ClientFingerprint, tlsConfig)
+		if valid {
 			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 			defer cancel()
 
@@ -50,7 +45,6 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 			return utlsConn, err
 		}
 	}
-
 	tlsConn := tls.Client(conn, tlsConfig)
 
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
@@ -58,4 +52,19 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 
 	err := tlsConn.HandshakeContext(ctx)
 	return tlsConn, err
+}
+
+func GetUtlsConnWithClientFingerprint(conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config) (net.Conn, bool) {
+
+	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
+		utlsConn := UClient(conn, tlsConfig, &utls.ClientHelloID{
+			Client:  fingerprint.Client,
+			Version: fingerprint.Version,
+			Seed:    nil,
+		})
+
+		return utlsConn, true
+	}
+
+	return nil, false
 }
