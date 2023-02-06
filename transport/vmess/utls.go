@@ -15,20 +15,42 @@ type UConn struct {
 }
 
 var initRandomFingerprint *utls.ClientHelloID
+var initUtlsClient string
 
 func UClient(c net.Conn, config *tls.Config, fingerprint *utls.ClientHelloID) net.Conn {
 	utlsConn := utls.UClient(c, CopyConfig(config), *fingerprint)
 	return &UConn{UConn: utlsConn}
 }
 
+func SetGlobalUtlsClient(Client string) {
+	initUtlsClient = Client
+}
+
+func HaveGlobalFingerprint() bool {
+	if len(initUtlsClient) != 0 && initUtlsClient != "none" {
+		return true
+	}
+	return false
+}
+
+func GetGlobalFingerprint() string {
+	return initUtlsClient
+}
+
 func GetFingerprint(ClientFingerprint string) (*utls.ClientHelloID, bool) {
+	if ClientFingerprint == "none" {
+		return nil, false
+	}
+
 	if initRandomFingerprint == nil {
 		initRandomFingerprint, _ = RollFingerprint()
 	}
+
 	if ClientFingerprint == "random" {
 		log.Debugln("use initial random HelloID:%s", initRandomFingerprint.Client)
 		return initRandomFingerprint, true
 	}
+
 	fingerprint, ok := Fingerprints[ClientFingerprint]
 	log.Debugln("use specified fingerprint:%s", fingerprint.Client)
 	return fingerprint, ok

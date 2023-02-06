@@ -14,9 +14,6 @@ import (
 	"strings"
 	"time"
 
-	P "github.com/Dreamacro/clash/component/process"
-	SNIFF "github.com/Dreamacro/clash/component/sniffer"
-
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
@@ -27,6 +24,8 @@ import (
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
+	P "github.com/Dreamacro/clash/component/process"
+	SNIFF "github.com/Dreamacro/clash/component/sniffer"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
@@ -37,6 +36,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 	R "github.com/Dreamacro/clash/rules"
 	RP "github.com/Dreamacro/clash/rules/provider"
+	"github.com/Dreamacro/clash/transport/vmess"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"gopkg.in/yaml.v3"
@@ -46,18 +46,19 @@ import (
 type General struct {
 	Inbound
 	Controller
-	Mode            T.TunnelMode `json:"mode"`
-	UnifiedDelay    bool
-	LogLevel        log.LogLevel      `json:"log-level"`
-	IPv6            bool              `json:"ipv6"`
-	Interface       string            `json:"interface-name"`
-	RoutingMark     int               `json:"-"`
-	GeodataMode     bool              `json:"geodata-mode"`
-	GeodataLoader   string            `json:"geodata-loader"`
-	TCPConcurrent   bool              `json:"tcp-concurrent"`
-	FindProcessMode P.FindProcessMode `json:"find-process-mode"`
-	Sniffing        bool              `json:"sniffing"`
-	EBpf            EBpf              `json:"-"`
+	Mode                    T.TunnelMode `json:"mode"`
+	UnifiedDelay            bool
+	LogLevel                log.LogLevel      `json:"log-level"`
+	IPv6                    bool              `json:"ipv6"`
+	Interface               string            `json:"interface-name"`
+	RoutingMark             int               `json:"-"`
+	GeodataMode             bool              `json:"geodata-mode"`
+	GeodataLoader           string            `json:"geodata-loader"`
+	TCPConcurrent           bool              `json:"tcp-concurrent"`
+	FindProcessMode         P.FindProcessMode `json:"find-process-mode"`
+	Sniffing                bool              `json:"sniffing"`
+	EBpf                    EBpf              `json:"-"`
+	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 }
 
 // Inbound config
@@ -234,32 +235,33 @@ type RawTuicServer struct {
 }
 
 type RawConfig struct {
-	Port                  int               `yaml:"port"`
-	SocksPort             int               `yaml:"socks-port"`
-	RedirPort             int               `yaml:"redir-port"`
-	TProxyPort            int               `yaml:"tproxy-port"`
-	MixedPort             int               `yaml:"mixed-port"`
-	ShadowSocksConfig     string            `yaml:"ss-config"`
-	VmessConfig           string            `yaml:"vmess-config"`
-	InboundTfo            bool              `yaml:"inbound-tfo"`
-	Authentication        []string          `yaml:"authentication"`
-	AllowLan              bool              `yaml:"allow-lan"`
-	BindAddress           string            `yaml:"bind-address"`
-	Mode                  T.TunnelMode      `yaml:"mode"`
-	UnifiedDelay          bool              `yaml:"unified-delay"`
-	LogLevel              log.LogLevel      `yaml:"log-level"`
-	IPv6                  bool              `yaml:"ipv6"`
-	ExternalController    string            `yaml:"external-controller"`
-	ExternalControllerTLS string            `yaml:"external-controller-tls"`
-	ExternalUI            string            `yaml:"external-ui"`
-	Secret                string            `yaml:"secret"`
-	Interface             string            `yaml:"interface-name"`
-	RoutingMark           int               `yaml:"routing-mark"`
-	Tunnels               []LC.Tunnel       `yaml:"tunnels"`
-	GeodataMode           bool              `yaml:"geodata-mode"`
-	GeodataLoader         string            `yaml:"geodata-loader"`
-	TCPConcurrent         bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	FindProcessMode       P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	Port                    int               `yaml:"port"`
+	SocksPort               int               `yaml:"socks-port"`
+	RedirPort               int               `yaml:"redir-port"`
+	TProxyPort              int               `yaml:"tproxy-port"`
+	MixedPort               int               `yaml:"mixed-port"`
+	ShadowSocksConfig       string            `yaml:"ss-config"`
+	VmessConfig             string            `yaml:"vmess-config"`
+	InboundTfo              bool              `yaml:"inbound-tfo"`
+	Authentication          []string          `yaml:"authentication"`
+	AllowLan                bool              `yaml:"allow-lan"`
+	BindAddress             string            `yaml:"bind-address"`
+	Mode                    T.TunnelMode      `yaml:"mode"`
+	UnifiedDelay            bool              `yaml:"unified-delay"`
+	LogLevel                log.LogLevel      `yaml:"log-level"`
+	IPv6                    bool              `yaml:"ipv6"`
+	ExternalController      string            `yaml:"external-controller"`
+	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
+	ExternalUI              string            `yaml:"external-ui"`
+	Secret                  string            `yaml:"secret"`
+	Interface               string            `yaml:"interface-name"`
+	RoutingMark             int               `yaml:"routing-mark"`
+	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
+	GeodataMode             bool              `yaml:"geodata-mode"`
+	GeodataLoader           string            `yaml:"geodata-loader"`
+	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -519,6 +521,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
 
+	if len(config.General.GlobalClientFingerprint) != 0 {
+		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
+		vmess.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
+	}
+
 	return config, nil
 }
 
@@ -552,17 +559,18 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			Secret:                cfg.Secret,
 			ExternalControllerTLS: cfg.ExternalControllerTLS,
 		},
-		UnifiedDelay:    cfg.UnifiedDelay,
-		Mode:            cfg.Mode,
-		LogLevel:        cfg.LogLevel,
-		IPv6:            cfg.IPv6,
-		Interface:       cfg.Interface,
-		RoutingMark:     cfg.RoutingMark,
-		GeodataMode:     cfg.GeodataMode,
-		GeodataLoader:   cfg.GeodataLoader,
-		TCPConcurrent:   cfg.TCPConcurrent,
-		FindProcessMode: cfg.FindProcessMode,
-		EBpf:            cfg.EBpf,
+		UnifiedDelay:            cfg.UnifiedDelay,
+		Mode:                    cfg.Mode,
+		LogLevel:                cfg.LogLevel,
+		IPv6:                    cfg.IPv6,
+		Interface:               cfg.Interface,
+		RoutingMark:             cfg.RoutingMark,
+		GeodataMode:             cfg.GeodataMode,
+		GeodataLoader:           cfg.GeodataLoader,
+		TCPConcurrent:           cfg.TCPConcurrent,
+		FindProcessMode:         cfg.FindProcessMode,
+		EBpf:                    cfg.EBpf,
+		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 	}, nil
 }
 
