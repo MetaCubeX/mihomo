@@ -15,6 +15,11 @@ bind-address: "*" # 绑定IP地址，仅作用于 allow-lan 为 true，'*'表示
 #  - off, 不匹配进程，推荐在路由器上使用此模式
 find-process-mode: strict
 
+#  global-client-fingerprint:全局TLS指纹,优先低于proxy内的 client-fingerprint
+#  accepts "chrome","firefox","safari","ios","random","none" options.
+#  Utls is currently support TLS transport in TCP/grpc/WS/HTTP for VLESS/Vmess and trojan.
+global-client-fingerprint: chrome
+
 mode: rule
 
 #自定义 geox-url
@@ -423,7 +428,7 @@ proxies:
     server: server
     port: 443
     password: yourpsk
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
     # fingerprint: xxxx
     # udp: true
     # sni: example.com # aka server name
@@ -483,7 +488,7 @@ proxies:
     # flow: xtls-rprx-direct # xtls-rprx-origin  # enable XTLS
     # skip-cert-verify: true
     # fingerprint: xxxx
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
 
   - name: "vless-ws"
     type: vless
@@ -493,7 +498,7 @@ proxies:
     udp: true
     tls: true
     network: ws
-    # client-fingerprint: random # Available: "chrome","firefox","safari","random"
+    # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
     servername: example.com # priority over wss host
     # skip-cert-verify: true
     # fingerprint: xxxx
