@@ -410,6 +410,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Ports:           []string{},
 			ForceDnsMapping: true,
 			ParsePureIp:     true,
+			OverrideDest:    true,
 		},
 		Profile: Profile{
 			StoreSelected: true,
