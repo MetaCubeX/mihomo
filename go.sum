@@ -133,10 +133,10 @@ github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 h1:iL5gZI3uFp0X6EslacyapiRz7LLSJyr4RajF/BhMVyE=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
 github.com/sagernet/sing v0.0.0-20220817130738-ce854cda8522/go.mod h1:QVsS5L/ZA2Q5UhQwLrn0Trw+msNd/NPGEhBKR/ioWiY=
-github.com/sagernet/sing v0.1.6 h1:Qy63OUfKpcqKjfd5rPmUlj0RGjHZSK/PJn0duyCCsRg=
-github.com/sagernet/sing v0.1.6/go.mod h1:JLSXsPTGRJFo/3X7EcAOCUgJH2/gAoxSJgBsnCZRp/w=
-github.com/sagernet/sing-vmess v0.1.1 h1:WMdkJcc3icIqpDQZGQ7X+jfLilooIZ0zAaC0qeQTWFU=
-github.com/sagernet/sing-vmess v0.1.1/go.mod h1:COSSEmy19vMWOTEKIUSDiTEyx6yBfTYIzekDlCMow+Q=
+github.com/sagernet/sing v0.1.7-0.20230207063819-27d2950cdbe9 h1:qnXh4RjHsNjdZXkfbqwVqAzYUfc160gfkS5gepmsA+A=
+github.com/sagernet/sing v0.1.7-0.20230207063819-27d2950cdbe9/go.mod h1:JLSXsPTGRJFo/3X7EcAOCUgJH2/gAoxSJgBsnCZRp/w=
+github.com/sagernet/sing-vmess v0.1.1-0.20230207064843-983dde690564 h1:+CFee8wEc79nFDBV8tDm2yKPrAXb5Mrf2Q5kM2Bb/xo=
+github.com/sagernet/sing-vmess v0.1.1-0.20230207064843-983dde690564/go.mod h1:9KkmnQzTL4Gvv8U2TRAH2BOITCGsGPpHtUPP5sxn5sY=
 github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c h1:vK2wyt9aWYHHvNLWniwijBu/n4pySypiKRhN32u/JGo=
 github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c/go.mod h1:euOmN6O5kk9dQmgSS8Df4psAl3TCjxOz0NW60EWkSaI=
 github.com/samber/lo v1.37.0 h1:XjVcB8g6tgUp8rsPsJ2CvhClfImrpL04YpQHXeHPhRw=
