@@ -7,8 +7,6 @@ import (
 
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
-
-	utls "github.com/refraction-networking/utls"
 )
 
 type TLSConfig struct {
@@ -41,7 +39,7 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 			defer cancel()
 
-			err := utlsConn.(*UConn).HandshakeContext(ctx)
+			err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
 			return utlsConn, err
 		}
 	}
@@ -56,11 +54,9 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 
 func GetUtlsConnWithClientFingerprint(conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config) (net.Conn, bool) {
 
-	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
-		utlsConn := UClient(conn, tlsConfig, &utls.ClientHelloID{
-			Client:  fingerprint.Client,
-			Version: fingerprint.Version,
-			Seed:    nil,
+	if fingerprint, exists := tlsC.GetFingerprint(ClientFingerprint); exists {
+		utlsConn := tlsC.UClient(conn, tlsConfig, &tlsC.UClientHelloID{
+			ClientHelloID: fingerprint,
 		})
 
 		return utlsConn, true

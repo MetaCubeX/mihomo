@@ -15,7 +15,6 @@ import (
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/trojan"
 	"github.com/Dreamacro/clash/transport/vless"
-	"github.com/Dreamacro/clash/transport/vmess"
 )
 
 type Trojan struct {
@@ -79,8 +78,8 @@ func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
 func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 
-	if vmess.HaveGlobalFingerprint() && len(t.option.ClientFingerprint) == 0 {
-		t.option.ClientFingerprint = vmess.GetGlobalFingerprint()
+	if tlsC.HaveGlobalFingerprint() && len(t.option.ClientFingerprint) == 0 {
+		t.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
 	}
 
 	if t.transport != nil {

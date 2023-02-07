@@ -1,4 +1,4 @@
-package vmess
+package tls
 
 import (
 	"crypto/tls"
@@ -14,27 +14,20 @@ type UConn struct {
 	*utls.UConn
 }
 
+type UClientHelloID struct {
+	*utls.ClientHelloID
+}
+
 var initRandomFingerprint *utls.ClientHelloID
 var initUtlsClient string
 
-func UClient(c net.Conn, config *tls.Config, fingerprint *utls.ClientHelloID) net.Conn {
-	utlsConn := utls.UClient(c, CopyConfig(config), *fingerprint)
+func UClient(c net.Conn, config *tls.Config, fingerprint *UClientHelloID) net.Conn {
+	utlsConn := utls.UClient(c, CopyConfig(config), utls.ClientHelloID{
+		Client:  fingerprint.Client,
+		Version: fingerprint.Version,
+		Seed:    fingerprint.Seed,
+	})
 	return &UConn{UConn: utlsConn}
-}
-
-func SetGlobalUtlsClient(Client string) {
-	initUtlsClient = Client
-}
-
-func HaveGlobalFingerprint() bool {
-	if len(initUtlsClient) != 0 && initUtlsClient != "none" {
-		return true
-	}
-	return false
-}
-
-func GetGlobalFingerprint() string {
-	return initUtlsClient
 }
 
 func GetFingerprint(ClientFingerprint string) (*utls.ClientHelloID, bool) {
@@ -112,4 +105,19 @@ func (c *UConn) WebsocketHandshake() error {
 		return err
 	}
 	return c.Handshake()
+}
+
+func SetGlobalUtlsClient(Client string) {
+	initUtlsClient = Client
+}
+
+func HaveGlobalFingerprint() bool {
+	if len(initUtlsClient) != 0 && initUtlsClient != "none" {
+		return true
+	}
+	return false
+}
+
+func GetGlobalFingerprint() string {
+	return initUtlsClient
 }

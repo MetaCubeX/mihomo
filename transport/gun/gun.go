@@ -19,9 +19,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/common/pool"
-	U "github.com/Dreamacro/clash/transport/vmess"
-	utls "github.com/refraction-networking/utls"
-
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"go.uber.org/atomic"
 	"golang.org/x/net/http2"
 )
@@ -203,17 +201,15 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string) *T
 		wrap.remoteAddr = pconn.RemoteAddr()
 
 		if len(Fingerprint) != 0 {
-			if fingerprint, exists := U.GetFingerprint(Fingerprint); exists {
-				utlsConn := U.UClient(pconn, cfg, &utls.ClientHelloID{
-					Client:  fingerprint.Client,
-					Version: fingerprint.Version,
-					Seed:    nil,
+			if fingerprint, exists := tlsC.GetFingerprint(Fingerprint); exists {
+				utlsConn := tlsC.UClient(pconn, cfg, &tlsC.UClientHelloID{
+					ClientHelloID: fingerprint,
 				})
-				if err := utlsConn.(*U.UConn).HandshakeContext(ctx); err != nil {
+				if err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx); err != nil {
 					pconn.Close()
 					return nil, err
 				}
-				state := utlsConn.(*U.UConn).ConnectionState()
+				state := utlsConn.(*tlsC.UConn).ConnectionState()
 				if p := state.NegotiatedProtocol; p != http2.NextProtoTLS {
 					utlsConn.Close()
 					return nil, fmt.Errorf("http2: unexpected ALPN protocol %s, want %s", p, http2.NextProtoTLS)

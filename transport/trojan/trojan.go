@@ -122,7 +122,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 				ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 				defer cancel()
 
-				err := utlsConn.(*vmess.UConn).HandshakeContext(ctx)
+				err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
 				return utlsConn, err
 
 			}
