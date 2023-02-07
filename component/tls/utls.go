@@ -18,11 +18,11 @@ type UClientHelloID struct {
 	*utls.ClientHelloID
 }
 
-var initRandomFingerprint *utls.ClientHelloID
+var initRandomFingerprint UClientHelloID
 var initUtlsClient string
 
-func UClient(c net.Conn, config *tls.Config, fingerprint *UClientHelloID) net.Conn {
-	utlsConn := utls.UClient(c, CopyConfig(config), utls.ClientHelloID{
+func UClient(c net.Conn, config *tls.Config, fingerprint UClientHelloID) net.Conn {
+	utlsConn := utls.UClient(c, copyConfig(config), utls.ClientHelloID{
 		Client:  fingerprint.Client,
 		Version: fingerprint.Version,
 		Seed:    fingerprint.Seed,
@@ -30,12 +30,12 @@ func UClient(c net.Conn, config *tls.Config, fingerprint *UClientHelloID) net.Co
 	return &UConn{UConn: utlsConn}
 }
 
-func GetFingerprint(ClientFingerprint string) (*utls.ClientHelloID, bool) {
+func GetFingerprint(ClientFingerprint string) (UClientHelloID, bool) {
 	if ClientFingerprint == "none" {
-		return nil, false
+		return UClientHelloID{}, false
 	}
 
-	if initRandomFingerprint == nil {
+	if initRandomFingerprint.ClientHelloID == nil {
 		initRandomFingerprint, _ = RollFingerprint()
 	}
 
@@ -49,7 +49,7 @@ func GetFingerprint(ClientFingerprint string) (*utls.ClientHelloID, bool) {
 	return fingerprint, ok
 }
 
-func RollFingerprint() (*utls.ClientHelloID, bool) {
+func RollFingerprint() (UClientHelloID, bool) {
 	chooser, _ := weightedrand.NewChooser(
 		weightedrand.NewChoice("chrome", 6),
 		weightedrand.NewChoice("safari", 3),
@@ -62,15 +62,15 @@ func RollFingerprint() (*utls.ClientHelloID, bool) {
 	return fingerprint, ok
 }
 
-var Fingerprints = map[string]*utls.ClientHelloID{
-	"chrome":     &utls.HelloChrome_Auto,
-	"firefox":    &utls.HelloFirefox_Auto,
-	"safari":     &utls.HelloSafari_Auto,
-	"ios":        &utls.HelloIOS_Auto,
-	"randomized": &utls.HelloRandomized,
+var Fingerprints = map[string]UClientHelloID{
+	"chrome":     {&utls.HelloChrome_Auto},
+	"firefox":    {&utls.HelloFirefox_Auto},
+	"safari":     {&utls.HelloSafari_Auto},
+	"ios":        {&utls.HelloIOS_Auto},
+	"randomized": {&utls.HelloRandomized},
 }
 
-func CopyConfig(c *tls.Config) *utls.Config {
+func copyConfig(c *tls.Config) *utls.Config {
 	return &utls.Config{
 		RootCAs:               c.RootCAs,
 		ServerName:            c.ServerName,

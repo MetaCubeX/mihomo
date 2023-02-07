@@ -55,9 +55,7 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 func GetUtlsConnWithClientFingerprint(conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config) (net.Conn, bool) {
 
 	if fingerprint, exists := tlsC.GetFingerprint(ClientFingerprint); exists {
-		utlsConn := tlsC.UClient(conn, tlsConfig, &tlsC.UClientHelloID{
-			ClientHelloID: fingerprint,
-		})
+		utlsConn := tlsC.UClient(conn, tlsConfig, fingerprint)
 
 		return utlsConn, true
 	}
