@@ -72,8 +72,8 @@ type VlessOption struct {
 func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 
-	if vmess.HaveGlobalFingerprint() && len(v.option.ClientFingerprint) == 0 {
-		v.option.ClientFingerprint = vmess.GetGlobalFingerprint()
+	if tlsC.HaveGlobalFingerprint() && len(v.option.ClientFingerprint) == 0 {
+		v.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
 	}
 
 	switch v.option.Network {

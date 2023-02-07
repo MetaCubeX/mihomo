@@ -21,9 +21,8 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/gorilla/websocket"
-
-	utls "github.com/refraction-networking/utls"
 )
 
 type websocketConn struct {
@@ -334,15 +333,13 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 		scheme = "wss"
 		dialer.TLSClientConfig = c.TLSConfig
 		if len(c.ClientFingerprint) != 0 {
-			if fingerprint, exists := GetFingerprint(c.ClientFingerprint); exists {
+			if fingerprint, exists := tlsC.GetFingerprint(c.ClientFingerprint); exists {
 				dialer.NetDialTLSContext = func(_ context.Context, _, addr string) (net.Conn, error) {
-					utlsConn := UClient(conn, c.TLSConfig, &utls.ClientHelloID{
-						Client:  fingerprint.Client,
-						Version: fingerprint.Version,
-						Seed:    fingerprint.Seed,
+					utlsConn := tlsC.UClient(conn, c.TLSConfig, &tlsC.UClientHelloID{
+						ClientHelloID: fingerprint,
 					})
 
-					if err := utlsConn.(*UConn).WebsocketHandshake(); err != nil {
+					if err := utlsConn.(*tlsC.UConn).WebsocketHandshake(); err != nil {
 						return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
 					}
 					return utlsConn, nil

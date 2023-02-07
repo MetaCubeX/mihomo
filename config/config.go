@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+
 	"net"
 	"net/netip"
 	"net/url"
@@ -26,6 +27,7 @@ import (
 	"github.com/Dreamacro/clash/component/geodata/router"
 	P "github.com/Dreamacro/clash/component/process"
 	SNIFF "github.com/Dreamacro/clash/component/sniffer"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
@@ -36,7 +38,6 @@ import (
 	"github.com/Dreamacro/clash/log"
 	R "github.com/Dreamacro/clash/rules"
 	RP "github.com/Dreamacro/clash/rules/provider"
-	"github.com/Dreamacro/clash/transport/vmess"
 	T "github.com/Dreamacro/clash/tunnel"
 
 	"gopkg.in/yaml.v3"
@@ -523,7 +524,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	if len(config.General.GlobalClientFingerprint) != 0 {
 		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
-		vmess.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
+		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
 	}
 
 	return config, nil

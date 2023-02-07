@@ -88,8 +88,8 @@ type WSOptions struct {
 func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 
-	if clashVMess.HaveGlobalFingerprint() && (len(v.option.ClientFingerprint) == 0) {
-		v.option.ClientFingerprint = clashVMess.GetGlobalFingerprint()
+	if tlsC.HaveGlobalFingerprint() && (len(v.option.ClientFingerprint) == 0) {
+		v.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
 	}
 
 	switch v.option.Network {

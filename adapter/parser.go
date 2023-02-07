@@ -3,10 +3,11 @@ package adapter
 import (
 	"fmt"
 
+	tlsC "github.com/Dreamacro/clash/component/tls"
+
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/structure"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/vmess"
 )
 
 func ParseProxy(mapping map[string]any) (C.Proxy, error) {
@@ -57,7 +58,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			},
 		}
 
-		if GlobalUtlsClient := vmess.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
+		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
 			vmessOption.ClientFingerprint = GlobalUtlsClient
 		}
 
@@ -69,7 +70,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	case "vless":
 		vlessOption := &outbound.VlessOption{}
 
-		if GlobalUtlsClient := vmess.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
+		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
 			vlessOption.ClientFingerprint = GlobalUtlsClient
 		}
 
@@ -88,7 +89,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	case "trojan":
 		trojanOption := &outbound.TrojanOption{}
 
-		if GlobalUtlsClient := vmess.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
+		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
 			trojanOption.ClientFingerprint = GlobalUtlsClient
 		}
 
