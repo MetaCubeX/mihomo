@@ -335,9 +335,7 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 		if len(c.ClientFingerprint) != 0 {
 			if fingerprint, exists := tlsC.GetFingerprint(c.ClientFingerprint); exists {
 				dialer.NetDialTLSContext = func(_ context.Context, _, addr string) (net.Conn, error) {
-					utlsConn := tlsC.UClient(conn, c.TLSConfig, &tlsC.UClientHelloID{
-						ClientHelloID: fingerprint,
-					})
+					utlsConn := tlsC.UClient(conn, c.TLSConfig, fingerprint)
 
 					if err := utlsConn.(*tlsC.UConn).WebsocketHandshake(); err != nil {
 						return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
