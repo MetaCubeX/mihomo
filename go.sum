@@ -11,8 +11,6 @@ github.com/cilium/ebpf v0.9.3 h1:5KtxXZU+scyERvkJMEm16TbScVvuuMrlhPly78ZMbSc=
 github.com/cilium/ebpf v0.9.3/go.mod h1:w27N4UjpaQ9X/DGrSugxUG+H+NhgntDuPb5lCzxCn8A=
 github.com/coreos/go-iptables v0.6.0 h1:is9qnZMPYjLd8LYqmm/qlE+wwEgJIkTYdhV3rfZo4jk=
 github.com/coreos/go-iptables v0.6.0/go.mod h1:Qe8Bv2Xik5FyTXwgIbLAnv2sWSBmvWdFETJConOQ//Q=
-github.com/database64128/tfo-go/v2 v2.0.2 h1:5rGgkJeLEKlNaqredfrPQNLnctn1b+1fq/8tdKdOzJg=
-github.com/database64128/tfo-go/v2 v2.0.2/go.mod h1:FDdt4JaAsRU66wsYHxSVytYimPkKIHupVsxM+5DhvjY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -137,6 +135,8 @@ github.com/sagernet/sing v0.1.7-0.20230207063819-27d2950cdbe9 h1:qnXh4RjHsNjdZXk
 github.com/sagernet/sing v0.1.7-0.20230207063819-27d2950cdbe9/go.mod h1:JLSXsPTGRJFo/3X7EcAOCUgJH2/gAoxSJgBsnCZRp/w=
 github.com/sagernet/sing-vmess v0.1.1-0.20230207064843-983dde690564 h1:+CFee8wEc79nFDBV8tDm2yKPrAXb5Mrf2Q5kM2Bb/xo=
 github.com/sagernet/sing-vmess v0.1.1-0.20230207064843-983dde690564/go.mod h1:9KkmnQzTL4Gvv8U2TRAH2BOITCGsGPpHtUPP5sxn5sY=
+github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d h1:trP/l6ZPWvQ/5Gv99Z7/t/v8iYy06akDMejxW1sznUk=
+github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d/go.mod h1:jk6Ii8Y3En+j2KQDLgdgQGwb3M6y7EL567jFnGYhN9g=
 github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c h1:vK2wyt9aWYHHvNLWniwijBu/n4pySypiKRhN32u/JGo=
 github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c/go.mod h1:euOmN6O5kk9dQmgSS8Df4psAl3TCjxOz0NW60EWkSaI=
 github.com/samber/lo v1.37.0 h1:XjVcB8g6tgUp8rsPsJ2CvhClfImrpL04YpQHXeHPhRw=
