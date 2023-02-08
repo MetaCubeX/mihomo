@@ -6,7 +6,6 @@ require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
-	github.com/database64128/tfo-go/v2 v2.0.2
 	github.com/dlclark/regexp2 v1.7.0
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/go-chi/cors v1.2.1
@@ -30,6 +29,7 @@ require (
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.1.7-0.20230207063819-27d2950cdbe9
 	github.com/sagernet/sing-vmess v0.1.1-0.20230207064843-983dde690564
+	github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
 	github.com/samber/lo v1.37.0
 	github.com/sirupsen/logrus v1.9.0
