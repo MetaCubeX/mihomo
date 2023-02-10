@@ -94,15 +94,11 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
-	originHost := metadata.Host
-	if originHost != host {
-		if overrideDest {
-			metadata.Host = host
-		} else {
-			metadata.SniffHost = host
-		}
-		metadata.DNSMode = C.DNSNormal
+	metadata.SniffHost = host
+	if overrideDest {
+		metadata.Host = host
 	}
+	metadata.DNSMode = C.DNSNormal
 	log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s] success, replace domain [%s]-->[%s]",
 		metadata.SourceDetail(),
 		metadata.RemoteAddress(),
