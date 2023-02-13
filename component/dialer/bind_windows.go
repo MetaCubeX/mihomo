@@ -1,14 +1,30 @@
 package dialer
 
 import (
+	"encoding/binary"
 	"net"
 	"net/netip"
 	"syscall"
+	"unsafe"
 
 	"github.com/Dreamacro/clash/component/iface"
-
-	"golang.org/x/sys/unix"
 )
+
+const (
+	IP_UNICAST_IF   = 31
+	IPV6_UNICAST_IF = 31
+)
+
+func bind4(handle syscall.Handle, ifaceIdx int) error {
+	var bytes [4]byte
+	binary.BigEndian.PutUint32(bytes[:], uint32(ifaceIdx))
+	idx := *(*uint32)(unsafe.Pointer(&bytes[0]))
+	return syscall.SetsockoptInt(handle, syscall.IPPROTO_IP, IP_UNICAST_IF, int(idx))
+}
+
+func bind6(handle syscall.Handle, ifaceIdx int) error {
+	return syscall.SetsockoptInt(handle, syscall.IPPROTO_IPV6, IPV6_UNICAST_IF, ifaceIdx)
+}
 
 type controlFn = func(network, address string, c syscall.RawConn) error
 
@@ -27,11 +43,15 @@ func bindControl(ifaceIdx int, chain controlFn) controlFn {
 
 		var innerErr error
 		err = c.Control(func(fd uintptr) {
+			handle := syscall.Handle(fd)
 			switch network {
-			case "tcp4", "udp4":
-				innerErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_BOUND_IF, ifaceIdx)
 			case "tcp6", "udp6":
-				innerErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_BOUND_IF, ifaceIdx)
+				innerErr = bind6(handle, ifaceIdx)
+				_ = bind4(handle, ifaceIdx)
+			default:
+				innerErr = bind4(handle, ifaceIdx)
+				// try bind ipv6, if failed, ignore. it's a workaround for windows disable interface ipv6
+				_ = bind6(handle, ifaceIdx)
 			}
 		})
 
