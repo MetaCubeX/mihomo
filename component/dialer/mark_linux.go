@@ -3,26 +3,22 @@
 package dialer
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"syscall"
 )
 
 func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ netip.Addr) {
-	dialer.Control = bindMarkToControl(mark, dialer.Control)
+	addControlToDialer(dialer, bindMarkToControl(mark))
 }
 
 func bindMarkToListenConfig(mark int, lc *net.ListenConfig, _, _ string) {
-	lc.Control = bindMarkToControl(mark, lc.Control)
+	addControlToListenConfig(lc, bindMarkToControl(mark))
 }
 
-func bindMarkToControl(mark int, chain controlFn) controlFn {
-	return func(network, address string, c syscall.RawConn) (err error) {
-		defer func() {
-			if err == nil && chain != nil {
-				err = chain(network, address, c)
-			}
-		}()
+func bindMarkToControl(mark int) controlFn {
+	return func(ctx context.Context, network, address string, c syscall.RawConn) (err error) {
 
 		addrPort, err := netip.ParseAddrPort(address)
 		if err == nil && !addrPort.Addr().IsGlobalUnicast() {

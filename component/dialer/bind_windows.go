@@ -1,6 +1,7 @@
 package dialer
 
 import (
+	"context"
 	"encoding/binary"
 	"net"
 	"net/netip"
@@ -26,16 +27,8 @@ func bind6(handle syscall.Handle, ifaceIdx int) error {
 	return syscall.SetsockoptInt(handle, syscall.IPPROTO_IPV6, IPV6_UNICAST_IF, ifaceIdx)
 }
 
-type controlFn = func(network, address string, c syscall.RawConn) error
-
-func bindControl(ifaceIdx int, chain controlFn) controlFn {
-	return func(network, address string, c syscall.RawConn) (err error) {
-		defer func() {
-			if err == nil && chain != nil {
-				err = chain(network, address, c)
-			}
-		}()
-
+func bindControl(ifaceIdx int) controlFn {
+	return func(ctx context.Context, network, address string, c syscall.RawConn) (err error) {
 		addrPort, err := netip.ParseAddrPort(address)
 		if err == nil && !addrPort.Addr().IsGlobalUnicast() {
 			return
@@ -69,7 +62,7 @@ func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.A
 		return err
 	}
 
-	dialer.Control = bindControl(ifaceObj.Index, dialer.Control)
+	addControlToDialer(dialer, bindControl(ifaceObj.Index))
 	return nil
 }
 
@@ -79,7 +72,7 @@ func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address 
 		return "", err
 	}
 
-	lc.Control = bindControl(ifaceObj.Index, lc.Control)
+	addControlToListenConfig(lc, bindControl(ifaceObj.Index))
 	return address, nil
 }
 
