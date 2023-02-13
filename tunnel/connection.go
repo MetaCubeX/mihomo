@@ -44,11 +44,12 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 		}
 
 		fromUDPAddr := from.(*net.UDPAddr)
-		if fAddr.IsValid() {
-			fromAddr, _ := netip.AddrFromSlice(fromUDPAddr.IP)
-			fromAddr.Unmap()
-			if oAddr == fromAddr {
-				fromUDPAddr.IP = fAddr.AsSlice()
+		fromUDPAddr = &(*fromUDPAddr) // make a copy
+		if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
+			if fAddr.IsValid() && (oAddr.Unmap() == fromAddr.Unmap()) {
+				fromUDPAddr.IP = fAddr.Unmap().AsSlice()
+			} else {
+				fromUDPAddr.IP = fromAddr.Unmap().AsSlice()
 			}
 		}
 
