@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -24,17 +23,6 @@ var (
 	ErrorInvalidedNetworkStack = errors.New("invalided network stack")
 	ErrorDisableIPv6           = errors.New("IPv6 is disabled, dialer cancel")
 )
-
-func ParseNetwork(network string, addr netip.Addr) string {
-	if runtime.GOOS == "windows" { // fix bindIfaceToListenConfig() in windows force bind to an ipv4 address
-		if !strings.HasSuffix(network, "4") &&
-			!strings.HasSuffix(network, "6") &&
-			addr.Unmap().Is6() {
-			network += "6"
-		}
-	}
-	return network
-}
 
 func applyOptions(options ...Option) *option {
 	opt := &option{

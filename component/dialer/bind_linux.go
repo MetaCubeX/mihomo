@@ -47,3 +47,7 @@ func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address 
 
 	return address, nil
 }
+
+func ParseNetwork(network string, addr netip.Addr) string {
+	return network
+}
