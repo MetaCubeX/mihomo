@@ -109,6 +109,7 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 	// formats that include the ID field from the DNS message header, such
 	// as "application/dns-message", SHOULD use a DNS ID of 0 in every DNS
 	// request.
+	m=m.Copy()
 	id := m.Id
 	m.Id = 0
 	defer func() {

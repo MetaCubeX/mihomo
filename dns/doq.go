@@ -89,6 +89,7 @@ func (doq *dnsOverQUIC) Address() string { return doq.addr }
 func (doq *dnsOverQUIC) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	// When sending queries over a QUIC connection, the DNS Message ID MUST be
 	// set to zero.
+	m = m.Copy()
 	id := m.Id
 	m.Id = 0
 	defer func() {
