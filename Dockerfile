@@ -9,9 +9,10 @@ RUN apk add --no-cache make git && \
 
 COPY . /clash-src
 WORKDIR /clash-src
-RUN go mod download &&\
-    make docker &&\
-    mv ./bin/clash.meta-docker /clash
+
+RUN go mod download
+RUN make docker
+RUN mv ./bin/clash.meta-docker /clash
 
 FROM alpine:latest
 LABEL org.opencontainers.image.source="https://github.com/MetaCubeX/Clash.Meta"
