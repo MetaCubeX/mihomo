@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"errors"
+	"github.com/Dreamacro/clash/log"
 	"net"
 	"net/netip"
 	"time"
@@ -32,6 +33,7 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 	buf := pool.Get(pool.UDPBufferSize)
 	defer func() {
 		_ = pc.Close()
+		closeAllLocalCoon(key)
 		natTable.Delete(key)
 		_ = pool.Put(buf)
 	}()
@@ -58,6 +60,19 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 			return
 		}
 	}
+}
+
+func closeAllLocalCoon(lAddr string) {
+	natTable.RangeLocalConn(lAddr, func(key, value any) bool {
+		conn, ok := value.(*net.UDPConn)
+		if !ok || conn == nil {
+			log.Debugln("Value %#v unknown value when closing TProxy local conn...", conn)
+			return true
+		}
+		conn.Close()
+		log.Debugln("Closing TProxy local conn... lAddr=%s rAddr=%s", lAddr, key)
+		return true
+	})
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {
