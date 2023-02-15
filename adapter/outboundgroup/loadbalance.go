@@ -115,11 +115,20 @@ func (lb *LoadBalance) SupportUDP() bool {
 }
 
 func strategyRoundRobin() strategyFn {
+	flag := true
 	idx := 0
 	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
 		length := len(proxies)
 		for i := 0; i < length; i++ {
-			idx = (idx + 1) % length
+			flag = !flag
+			if flag {
+				idx = (idx - 1) % length
+			} else {
+				idx = (idx + 2) % length
+			}
+			if idx < 0 {
+				idx = idx + length
+			}
 			proxy := proxies[idx]
 			if proxy.Alive() {
 				return proxy
