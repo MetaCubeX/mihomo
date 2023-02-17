@@ -1017,6 +1017,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 		if err := geodata.InitGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %s", err)
 		}
+		log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
 	}
 
 	for _, country := range countries {
