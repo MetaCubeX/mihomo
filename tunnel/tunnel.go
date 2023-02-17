@@ -337,9 +337,12 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 
 		oAddr := metadata.DstIP
+		natTable.Set(key, pc)
+		packet.SetNatTable(natTable)
+		packet.SetUdpInChan(udpQueue)
+
 		go handleUDPToLocal(packet, pc, key, oAddr, fAddr)
 
-		natTable.Set(key, pc)
 		handle()
 	}()
 }
