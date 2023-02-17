@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
+	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
@@ -38,4 +39,12 @@ func (c *packet) Drop() {
 
 func (c *packet) InAddr() net.Addr {
 	return c.pc.LocalAddr()
+}
+
+func (c *packet) SetNatTable(natTable C.NatTable) {
+	// no need
+}
+
+func (c *packet) SetUdpInChan(in chan<- C.PacketAdapter) {
+	// no need
 }
