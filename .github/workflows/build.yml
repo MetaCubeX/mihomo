@@ -1,4 +1,4 @@
-name: Prerelease
+name: Build
 on:
   workflow_dispatch:
   push:
@@ -8,10 +8,14 @@ on:
     branches:
       - Alpha
       - Beta
+      - Meta
+    tags:
+      - "v*"
   pull_request_target:
     branches:
       - Alpha
       - Beta
+      - Meta
 env:
   REGISTRY: docker.io
 jobs:
@@ -93,7 +97,12 @@ jobs:
         shell: bash
 
       - name: Set variables
-        if: ${{github.ref_name==''}}
+        if: ${{github.ref_name=='Meta'}}
+        run: echo "VERSION=meta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='' || github.ref_type=='tag'}}
         run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
         shell: bash
 
@@ -103,6 +112,7 @@ jobs:
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
           echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+          echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
@@ -118,7 +128,7 @@ jobs:
           check-latest: true
 
       - name: Test
-        if: ${{ github.ref_name=='Beta' && matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
+        if: ${{ matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
         run: |
           go test ./...
 
@@ -158,7 +168,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
-          xgo --branch ${{ github.ref_name }} --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} github.com/${{ github.repository }}
+          xgo --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} ./
 
       - name: Rename
         if: ${{ matrix.job.type=='WithCGO' }}
@@ -189,9 +199,10 @@ jobs:
           name: artifact
           path: bin/
 
-  Upload:
+  Upload-Prerelease:
     permissions: write-all
-    needs: [Build]
+    if: ${{ github.ref_type=='branch' }}
+    needs: [ Build ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -217,7 +228,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Alpha
+      - name: Upload Prerelease
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
@@ -226,9 +237,34 @@ jobs:
           files: bin/*
           prerelease: true
           generate_release_notes: true
+
+  Upload-Release:
+    permissions: write-all
+    if: ${{ github.ref_type=='tag' }}
+    needs: [ Build ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: bin/
+
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        if: ${{  success() }}
+        with:
+          tag: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: bin/*
+          generate_release_notes: true
+
   Docker:
     permissions: write-all
-    needs: [Build]
+    needs: [ Build ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
