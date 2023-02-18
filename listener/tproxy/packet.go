@@ -15,8 +15,8 @@ type packet struct {
 	pc       net.PacketConn
 	lAddr    netip.AddrPort
 	buf      []byte
-	natTable C.NatTable
 	in       chan<- C.PacketAdapter
+	natTable C.NatTable
 }
 
 func (c *packet) Data() []byte {
@@ -25,7 +25,7 @@ func (c *packet) Data() []byte {
 
 // WriteBack opens a new socket binding `addr` to write UDP packet back
 func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
-	tc, err := createOrGetLocalConn(addr, c.LocalAddr(), c.natTable, c.in)
+	tc, err := createOrGetLocalConn(addr, c.LocalAddr(), c.in, c.natTable)
 	if err != nil {
 		n = 0
 		return
@@ -47,18 +47,10 @@ func (c *packet) InAddr() net.Addr {
 	return c.pc.LocalAddr()
 }
 
-func (c *packet) SetNatTable(natTable C.NatTable) {
-	c.natTable = natTable
-}
-
-func (c *packet) SetUdpInChan(in chan<- C.PacketAdapter) {
-	c.in = in
-}
-
 // this function listen at rAddr and write to lAddr
 // for here, rAddr is the ip/port client want to access
 // lAddr is the ip/port client opened
-func createOrGetLocalConn(rAddr, lAddr net.Addr, natTable C.NatTable, in chan<- C.PacketAdapter) (*net.UDPConn, error) {
+func createOrGetLocalConn(rAddr, lAddr net.Addr, in chan<- C.PacketAdapter, natTable C.NatTable) (*net.UDPConn, error) {
 	remote := rAddr.String()
 	local := lAddr.String()
 	localConn := natTable.GetLocalConn(local, remote)
@@ -83,7 +75,7 @@ func createOrGetLocalConn(rAddr, lAddr net.Addr, natTable C.NatTable, in chan<- 
 				natTable.DeleteLocalConnMap(local, lockKey)
 				cond.Broadcast()
 			}()
-			conn, err := listenLocalConn(rAddr, lAddr, in)
+			conn, err := listenLocalConn(rAddr, lAddr, in, natTable)
 			if err != nil {
 				log.Errorln("listenLocalConn failed with error: %s, packet loss", err.Error())
 				return nil, err
@@ -97,7 +89,7 @@ func createOrGetLocalConn(rAddr, lAddr net.Addr, natTable C.NatTable, in chan<- 
 
 // this function listen at rAddr
 // and send what received to program itself, then send to real remote
-func listenLocalConn(rAddr, lAddr net.Addr, in chan<- C.PacketAdapter) (*net.UDPConn, error) {
+func listenLocalConn(rAddr, lAddr net.Addr, in chan<- C.PacketAdapter, natTable C.NatTable) (*net.UDPConn, error) {
 	additions := []inbound.Addition{
 		inbound.WithInName("DEFAULT-TPROXY"),
 		inbound.WithSpecialRules(""),
@@ -120,7 +112,7 @@ func listenLocalConn(rAddr, lAddr net.Addr, in chan<- C.PacketAdapter) (*net.UDP
 			}
 			// since following localPackets are pass through this socket which listen rAddr
 			// I choose current listener as packet's packet conn
-			handlePacketConn(lc, in, buf[:br], lAddr.(*net.UDPAddr).AddrPort(), rAddr.(*net.UDPAddr).AddrPort(), additions...)
+			handlePacketConn(lc, in, natTable, buf[:br], lAddr.(*net.UDPAddr).AddrPort(), rAddr.(*net.UDPAddr).AddrPort(), additions...)
 		}
 	}()
 	return lc, nil

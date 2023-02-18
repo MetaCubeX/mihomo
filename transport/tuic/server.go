@@ -316,13 +316,5 @@ func (s *serverUDPPacket) Drop() {
 	s.packet.DATA = nil
 }
 
-func (s *serverUDPPacket) SetNatTable(natTable C.NatTable) {
-	// no need
-}
-
-func (s *serverUDPPacket) SetUdpInChan(in chan<- C.PacketAdapter) {
-	// no need
-}
-
 var _ C.UDPPacket = &serverUDPPacket{}
 var _ C.UDPPacketInAddr = &serverUDPPacket{}

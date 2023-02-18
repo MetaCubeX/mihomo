@@ -217,10 +217,6 @@ type UDPPacket interface {
 
 	// LocalAddr returns the source IP/Port of packet
 	LocalAddr() net.Addr
-
-	SetNatTable(natTable NatTable)
-
-	SetUdpInChan(in chan<- PacketAdapter)
 }
 
 type UDPPacketInAddr interface {

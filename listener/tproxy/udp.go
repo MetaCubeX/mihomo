@@ -32,7 +32,7 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*UDPListener, error) {
+func NewUDP(addr string, in chan<- C.PacketAdapter, natTable C.NatTable, additions ...inbound.Addition) (*UDPListener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TPROXY"),
@@ -83,19 +83,21 @@ func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Additio
 				// try to unmap 4in6 address
 				lAddr = netip.AddrPortFrom(lAddr.Addr().Unmap(), lAddr.Port())
 			}
-			handlePacketConn(l, in, buf[:n], lAddr, rAddr, additions...)
+			handlePacketConn(l, in, natTable, buf[:n], lAddr, rAddr, additions...)
 		}
 	}()
 
 	return rl, nil
 }
 
-func handlePacketConn(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, lAddr, rAddr netip.AddrPort, additions ...inbound.Addition) {
+func handlePacketConn(pc net.PacketConn, in chan<- C.PacketAdapter, natTable C.NatTable, buf []byte, lAddr, rAddr netip.AddrPort, additions ...inbound.Addition) {
 	target := socks5.AddrFromStdAddrPort(rAddr)
 	pkt := &packet{
-		pc:    pc,
-		lAddr: lAddr,
-		buf:   buf,
+		pc:       pc,
+		lAddr:    lAddr,
+		buf:      buf,
+		in:       in,
+		natTable: natTable,
 	}
 	select {
 	case in <- inbound.NewPacket(target, pkt, C.TPROXY, additions...):

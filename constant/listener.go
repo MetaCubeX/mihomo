@@ -16,7 +16,7 @@ type MultiAddrListener interface {
 
 type InboundListener interface {
 	Name() string
-	Listen(tcpIn chan<- ConnContext, udpIn chan<- PacketAdapter) error
+	Listen(tcpIn chan<- ConnContext, udpIn chan<- PacketAdapter, natTable NatTable) error
 	Close() error
 	Address() string
 	RawAddress() string

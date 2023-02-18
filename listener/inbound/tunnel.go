@@ -74,7 +74,7 @@ func (t *Tunnel) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Tunnel) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (t *Tunnel) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
 	var err error
 	for _, network := range t.config.Network {
 		switch network {

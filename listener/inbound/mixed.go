@@ -50,7 +50,7 @@ func (m *Mixed) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (m *Mixed) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
 	var err error
 	m.l, err = mixed.New(m.RawAddress(), tcpIn, m.Additions()...)
 	if err != nil {
