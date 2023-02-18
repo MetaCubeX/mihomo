@@ -2,7 +2,6 @@ package tunnel
 
 import (
 	"errors"
-	"github.com/Dreamacro/clash/log"
 	"net"
 	"net/netip"
 	"time"
@@ -10,6 +9,7 @@ import (
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {

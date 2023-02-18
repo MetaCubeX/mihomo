@@ -61,7 +61,7 @@ func (b *Base) RawAddress() string {
 }
 
 // Listen implements constant.InboundListener
-func (*Base) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (*Base) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
 	return nil
 }
 
