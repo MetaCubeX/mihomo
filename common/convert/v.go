@@ -1,15 +1,24 @@
 package convert
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
-func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy map[string]any) {
+func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy map[string]any) error {
 	// Xray VMessAEAD / VLESS share link standard
 	// https://github.com/XTLS/Xray-core/discussions/716
 	query := url.Query()
 	proxy["name"] = uniqueName(names, url.Fragment)
+	if url.Hostname() == "" {
+		return errors.New("url.Hostname() is empty")
+	}
+	if url.Port() == "" {
+		return errors.New("url.Port() is empty")
+	}
 	proxy["type"] = scheme
 	proxy["server"] = url.Hostname()
 	proxy["port"] = url.Port()
@@ -20,6 +29,11 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	tls := strings.ToLower(query.Get("security"))
 	if strings.HasSuffix(tls, "tls") {
 		proxy["tls"] = true
+		if fingerprint := query.Get("fp"); fingerprint == "" {
+			proxy["client-fingerprint"] = "chrome"
+		} else {
+			proxy["client-fingerprint"] = fingerprint
+		}
 	}
 	if sni := query.Get("sni"); sni != "" {
 		proxy["servername"] = sni
@@ -87,6 +101,17 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		wsOpts["path"] = query.Get("path")
 		wsOpts["headers"] = headers
 
+		if earlyData := query.Get("ed"); earlyData != "" {
+			med, err := strconv.Atoi(earlyData)
+			if err != nil {
+				return fmt.Errorf("bad WebSocket max early data size: %v", err)
+			}
+			wsOpts["max-early-data"] = med
+		}
+		if earlyDataHeader := query.Get("eh"); earlyDataHeader != "" {
+			wsOpts["early-data-header-name"] = earlyDataHeader
+		}
+
 		proxy["ws-opts"] = wsOpts
 
 	case "grpc":
@@ -94,4 +119,5 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		grpcOpts["grpc-service-name"] = query.Get("serviceName")
 		proxy["grpc-opts"] = grpcOpts
 	}
+	return nil
 }

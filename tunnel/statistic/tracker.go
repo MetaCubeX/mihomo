@@ -4,6 +4,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/gofrs/uuid"
@@ -29,7 +31,9 @@ type trackerInfo struct {
 type tcpTracker struct {
 	C.Conn `json:"-"`
 	*trackerInfo
-	manager *Manager
+	manager        *Manager
+	extendedReader N.ExtendedReader
+	extendedWriter N.ExtendedWriter
 }
 
 func (tt *tcpTracker) ID() string {
@@ -44,6 +48,14 @@ func (tt *tcpTracker) Read(b []byte) (int, error) {
 	return n, err
 }
 
+func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
+	err = tt.extendedReader.ReadBuffer(buffer)
+	download := int64(buffer.Len())
+	tt.manager.PushDownloaded(download)
+	tt.DownloadTotal.Add(download)
+	return
+}
+
 func (tt *tcpTracker) Write(b []byte) (int, error) {
 	n, err := tt.Conn.Write(b)
 	upload := int64(n)
@@ -52,9 +64,21 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 	return n, err
 }
 
+func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
+	upload := int64(buffer.Len())
+	err = tt.extendedWriter.WriteBuffer(buffer)
+	tt.manager.PushUploaded(upload)
+	tt.UploadTotal.Add(upload)
+	return
+}
+
 func (tt *tcpTracker) Close() error {
 	tt.manager.Leave(tt)
 	return tt.Conn.Close()
+}
+
+func (tt *tcpTracker) Upstream() any {
+	return tt.Conn
 }
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
@@ -79,6 +103,8 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 			UploadTotal:   atomic.NewInt64(0),
 			DownloadTotal: atomic.NewInt64(0),
 		},
+		extendedReader: N.NewExtendedReader(conn),
+		extendedWriter: N.NewExtendedWriter(conn),
 	}
 
 	if rule != nil {

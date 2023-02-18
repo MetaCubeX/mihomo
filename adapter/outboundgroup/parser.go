@@ -78,7 +78,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			providersMap[groupName] = pd
 		} else {
 			if groupOption.URL == "" {
-				groupOption.URL = "http://www.gstatic.com/generate_204"
+				groupOption.URL = "https://cp.cloudflare.com/generate_204"
 			}
 
 			if groupOption.Interval == 0 {

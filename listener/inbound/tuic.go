@@ -12,11 +12,11 @@ type TuicOption struct {
 	Token                 []string `inbound:"token"`
 	Certificate           string   `inbound:"certificate"`
 	PrivateKey            string   `inbound:"private-key"`
-	CongestionController  string   `inbound:"congestion-controllerr,omitempty"`
-	MaxIdleTime           int      `inbound:"max-idle-timer,omitempty"`
-	AuthenticationTimeout int      `inbound:"authentication-timeoutr,omitempty"`
-	ALPN                  []string `inbound:"alpnr,omitempty"`
-	MaxUdpRelayPacketSize int      `inbound:"max-udp-relay-packet-sizer,omitempty"`
+	CongestionController  string   `inbound:"congestion-controller,omitempty"`
+	MaxIdleTime           int      `inbound:"max-idle-time,omitempty"`
+	AuthenticationTimeout int      `inbound:"authentication-timeout,omitempty"`
+	ALPN                  []string `inbound:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int      `inbound:"max-udp-relay-packet-size,omitempty"`
 }
 
 func (o TuicOption) Equal(config C.InboundConfig) bool {
@@ -69,7 +69,7 @@ func (t *Tuic) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Tuic) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (t *Tuic) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
 	var err error
 	t.l, err = tuic.New(t.ts, tcpIn, udpIn, t.Additions()...)
 	if err != nil {

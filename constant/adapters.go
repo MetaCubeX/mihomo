@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -92,6 +93,7 @@ type ProxyAdapter interface {
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
+	SupportXUDP() bool
 	SupportTFO() bool
 	MarshalJSON() ([]byte, error)
 
@@ -225,4 +227,24 @@ type UDPPacketInAddr interface {
 type PacketAdapter interface {
 	UDPPacket
 	Metadata() *Metadata
+}
+
+type NatTable interface {
+	Set(key string, e PacketConn)
+
+	Get(key string) PacketConn
+
+	GetOrCreateLock(key string) (*sync.Cond, bool)
+
+	Delete(key string)
+
+	GetLocalConn(lAddr, rAddr string) *net.UDPConn
+
+	AddLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
+
+	RangeLocalConn(lAddr string, f func(key, value any) bool)
+
+	GetOrCreateLockForLocalConn(lAddr, key string) (*sync.Cond, bool)
+
+	DeleteLocalConnMap(lAddr, key string)
 }

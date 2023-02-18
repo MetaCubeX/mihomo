@@ -12,10 +12,6 @@ import (
 	"strconv"
 	"sync"
 
-	vmessSing "github.com/sagernet/sing-vmess"
-	"github.com/sagernet/sing-vmess/packetaddr"
-	M "github.com/sagernet/sing/common/metadata"
-
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -25,6 +21,10 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
+
+	vmessSing "github.com/sagernet/sing-vmess"
+	"github.com/sagernet/sing-vmess/packetaddr"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 const (
@@ -45,31 +45,37 @@ type Vless struct {
 
 type VlessOption struct {
 	BasicOption
-	Name           string            `proxy:"name"`
-	Server         string            `proxy:"server"`
-	Port           int               `proxy:"port"`
-	UUID           string            `proxy:"uuid"`
-	Flow           string            `proxy:"flow,omitempty"`
-	FlowShow       bool              `proxy:"flow-show,omitempty"`
-	TLS            bool              `proxy:"tls,omitempty"`
-	UDP            bool              `proxy:"udp,omitempty"`
-	PacketAddr     bool              `proxy:"packet-addr,omitempty"`
-	XUDP           bool              `proxy:"xudp,omitempty"`
-	PacketEncoding string            `proxy:"packet-encoding,omitempty"`
-	Network        string            `proxy:"network,omitempty"`
-	HTTPOpts       HTTPOptions       `proxy:"http-opts,omitempty"`
-	HTTP2Opts      HTTP2Options      `proxy:"h2-opts,omitempty"`
-	GrpcOpts       GrpcOptions       `proxy:"grpc-opts,omitempty"`
-	WSOpts         WSOptions         `proxy:"ws-opts,omitempty"`
-	WSPath         string            `proxy:"ws-path,omitempty"`
-	WSHeaders      map[string]string `proxy:"ws-headers,omitempty"`
-	SkipCertVerify bool              `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint    string            `proxy:"fingerprint,omitempty"`
-	ServerName     string            `proxy:"servername,omitempty"`
+	Name              string            `proxy:"name"`
+	Server            string            `proxy:"server"`
+	Port              int               `proxy:"port"`
+	UUID              string            `proxy:"uuid"`
+	Flow              string            `proxy:"flow,omitempty"`
+	FlowShow          bool              `proxy:"flow-show,omitempty"`
+	TLS               bool              `proxy:"tls,omitempty"`
+	UDP               bool              `proxy:"udp,omitempty"`
+	PacketAddr        bool              `proxy:"packet-addr,omitempty"`
+	XUDP              bool              `proxy:"xudp,omitempty"`
+	PacketEncoding    string            `proxy:"packet-encoding,omitempty"`
+	Network           string            `proxy:"network,omitempty"`
+	HTTPOpts          HTTPOptions       `proxy:"http-opts,omitempty"`
+	HTTP2Opts         HTTP2Options      `proxy:"h2-opts,omitempty"`
+	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
+	WSOpts            WSOptions         `proxy:"ws-opts,omitempty"`
+	WSPath            string            `proxy:"ws-path,omitempty"`
+	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
+	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint       string            `proxy:"fingerprint,omitempty"`
+	ServerName        string            `proxy:"servername,omitempty"`
+	ClientFingerprint string            `proxy:"client-fingerprint,omitempty"`
 }
 
 func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
+
+	if tlsC.HaveGlobalFingerprint() && len(v.option.ClientFingerprint) == 0 {
+		v.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
+	}
+
 	switch v.option.Network {
 	case "ws":
 
@@ -80,6 +86,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			ClientFingerprint:   v.option.ClientFingerprint,
 			Headers:             http.Header{},
 		}
 
@@ -98,9 +105,12 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			}
 
 			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 			} else {
 				wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			if v.option.ServerName != "" {
@@ -176,9 +186,10 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 
 	} else if v.option.TLS {
 		tlsOpts := vmess.TLSConfig{
-			Host:           host,
-			SkipCertVerify: v.option.SkipCertVerify,
-			FingerPrint:    v.option.Fingerprint,
+			Host:              host,
+			SkipCertVerify:    v.option.SkipCertVerify,
+			FingerPrint:       v.option.Fingerprint,
+			ClientFingerprint: v.option.ClientFingerprint,
 		}
 
 		if isH2 {
@@ -233,12 +244,15 @@ func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	}(c)
 
 	c, err = v.StreamConn(c, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+	}
 	return NewConn(c, v), err
 }
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
@@ -279,7 +293,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	// vless use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
@@ -474,6 +488,16 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 	}
 
+	switch option.PacketEncoding {
+	case "packetaddr", "packet":
+		option.PacketAddr = true
+		option.XUDP = false
+	default: // https://github.com/XTLS/Xray-core/pull/1567#issuecomment-1407305458
+		if !option.PacketAddr {
+			option.XUDP = true
+		}
+	}
+
 	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
 	if err != nil {
 		return nil, err
@@ -485,22 +509,13 @@ func NewVless(option VlessOption) (*Vless, error) {
 			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:     C.Vless,
 			udp:    option.UDP,
+			xudp:   option.XUDP,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 		option: &option,
-	}
-
-	switch option.PacketEncoding {
-	case "packetaddr", "packet":
-		option.PacketAddr = true
-	case "xudp":
-		option.XUDP = true
-	}
-	if option.XUDP {
-		option.PacketAddr = false
 	}
 
 	switch option.Network {
@@ -519,10 +534,11 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 
 		gunConfig := &gun.Config{
-			ServiceName: v.option.GrpcOpts.GrpcServiceName,
-			Host:        v.option.ServerName,
+			ServiceName:       v.option.GrpcOpts.GrpcServiceName,
+			Host:              v.option.ServerName,
+			ClientFingerprint: v.option.ClientFingerprint,
 		}
-		tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(&tls.Config{
+		tlsConfig := tlsC.GetGlobalTLSConfig(&tls.Config{
 			InsecureSkipVerify: v.option.SkipCertVerify,
 			ServerName:         v.option.ServerName,
 		})
@@ -535,7 +551,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
-		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint)
+
 	}
 
 	return v, nil

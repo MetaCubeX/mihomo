@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/database64128/tfo-go/v2"
+	"github.com/sagernet/tfo-go"
 )
 
 var (

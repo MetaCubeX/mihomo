@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
+
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,6 +19,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/gorilla/websocket"
 )
 
@@ -24,6 +30,8 @@ type websocketConn struct {
 	reader     io.Reader
 	remoteAddr net.Addr
 
+	rawWriter N.ExtendedWriter
+
 	// https://godoc.org/github.com/gorilla/websocket#hdr-Concurrency
 	rMux sync.Mutex
 	wMux sync.Mutex
@@ -31,6 +39,7 @@ type websocketConn struct {
 
 type websocketWithEarlyDataConn struct {
 	net.Conn
+	wsWriter N.ExtendedWriter
 	underlay net.Conn
 	closed   bool
 	dialed   chan bool
@@ -48,6 +57,7 @@ type WebsocketConfig struct {
 	TLSConfig           *tls.Config
 	MaxEarlyData        int
 	EarlyDataHeaderName string
+	ClientFingerprint   string
 }
 
 // Read implements net.Conn.Read()
@@ -79,16 +89,64 @@ func (wsc *websocketConn) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
+	var payloadBitLength int
+	dataLen := buffer.Len()
+	data := buffer.Bytes()
+	if dataLen < 126 {
+		payloadBitLength = 1
+	} else if dataLen < 65536 {
+		payloadBitLength = 3
+	} else {
+		payloadBitLength = 9
+	}
+
+	var headerLen int
+	headerLen += 1 // FIN / RSV / OPCODE
+	headerLen += payloadBitLength
+	headerLen += 4 // MASK KEY
+
+	header := buffer.ExtendHeader(headerLen)
+	header[0] = websocket.BinaryMessage | 1<<7
+	header[1] = 1 << 7
+
+	if dataLen < 126 {
+		header[1] |= byte(dataLen)
+	} else if dataLen < 65536 {
+		header[1] |= 126
+		binary.BigEndian.PutUint16(header[2:], uint16(dataLen))
+	} else {
+		header[1] |= 127
+		binary.BigEndian.PutUint64(header[2:], uint64(dataLen))
+	}
+
+	maskKey := rand.Uint32()
+	binary.LittleEndian.PutUint32(header[1+payloadBitLength:], maskKey)
+	N.MaskWebSocket(maskKey, data)
+
+	wsc.wMux.Lock()
+	defer wsc.wMux.Unlock()
+	return wsc.rawWriter.WriteBuffer(buffer)
+}
+
+func (wsc *websocketConn) FrontHeadroom() int {
+	return 14
+}
+
+func (wsc *websocketConn) Upstream() any {
+	return wsc.conn.UnderlyingConn()
+}
+
 func (wsc *websocketConn) Close() error {
-	var errors []string
+	var e []string
 	if err := wsc.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second*5)); err != nil {
-		errors = append(errors, err.Error())
+		e = append(e, err.Error())
 	}
 	if err := wsc.conn.Close(); err != nil {
-		errors = append(errors, err.Error())
+		e = append(e, err.Error())
 	}
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to close connection: %s", strings.Join(errors, ","))
+	if len(e) > 0 {
+		return fmt.Errorf("failed to close connection: %s", strings.Join(e, ","))
 	}
 	return nil
 }
@@ -149,6 +207,7 @@ func (wsedc *websocketWithEarlyDataConn) Dial(earlyData []byte) error {
 	}
 
 	wsedc.dialed <- true
+	wsedc.wsWriter = N.NewExtendedWriter(wsedc.Conn)
 	if earlyDataBuf.Len() != 0 {
 		_, err = wsedc.Conn.Write(earlyDataBuf.Bytes())
 	}
@@ -168,6 +227,20 @@ func (wsedc *websocketWithEarlyDataConn) Write(b []byte) (int, error) {
 	}
 
 	return wsedc.Conn.Write(b)
+}
+
+func (wsedc *websocketWithEarlyDataConn) WriteBuffer(buffer *buf.Buffer) error {
+	if wsedc.closed {
+		return io.ErrClosedPipe
+	}
+	if wsedc.Conn == nil {
+		if err := wsedc.Dial(buffer.Bytes()); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return wsedc.wsWriter.WriteBuffer(buffer)
 }
 
 func (wsedc *websocketWithEarlyDataConn) Read(b []byte) (int, error) {
@@ -228,6 +301,17 @@ func (wsedc *websocketWithEarlyDataConn) SetWriteDeadline(t time.Time) error {
 	return wsedc.Conn.SetWriteDeadline(t)
 }
 
+func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
+	return wsedc.Conn == nil
+}
+
+func (wsedc *websocketWithEarlyDataConn) Upstream() any {
+	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
+		return nil
+	}
+	return wsedc.Conn
+}
+
 func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	conn = &websocketWithEarlyDataConn{
@@ -241,6 +325,7 @@ func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Co
 }
 
 func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
+
 	dialer := &websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
 			return conn, nil
@@ -254,6 +339,18 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 	if c.TLS {
 		scheme = "wss"
 		dialer.TLSClientConfig = c.TLSConfig
+		if len(c.ClientFingerprint) != 0 {
+			if fingerprint, exists := tlsC.GetFingerprint(c.ClientFingerprint); exists {
+				dialer.NetDialTLSContext = func(_ context.Context, _, addr string) (net.Conn, error) {
+					utlsConn := tlsC.UClient(conn, c.TLSConfig, fingerprint)
+
+					if err := utlsConn.(*tlsC.UConn).WebsocketHandshake(); err != nil {
+						return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
+					}
+					return utlsConn, nil
+				}
+			}
+		}
 	}
 
 	u, err := url.Parse(c.Path)
@@ -294,6 +391,7 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 
 	return &websocketConn{
 		conn:       wsConn,
+		rawWriter:  N.NewExtendedWriter(wsConn.UnderlyingConn()),
 		remoteAddr: conn.RemoteAddr(),
 	}, nil
 }

@@ -69,7 +69,7 @@ func (v *Vmess) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (v *Vmess) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) error {
+func (v *Vmess) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
 	var err error
 	users := make([]LC.VmessUser, len(v.config.Users))
 	for i, v := range v.config.Users {

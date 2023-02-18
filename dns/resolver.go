@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/atomic"
 	"math/rand"
 	"net/netip"
+	"strings"
 	"time"
+
+	"go.uber.org/atomic"
 
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
@@ -15,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
 	"golang.org/x/sync/singleflight"
@@ -23,11 +26,18 @@ import (
 type dnsClient interface {
 	Exchange(m *D.Msg) (msg *D.Msg, err error)
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
+	Address() string
 }
 
 type result struct {
 	Msg   *D.Msg
 	Error error
+}
+
+type geositePolicyRecord struct {
+	matcher          fallbackDomainFilter
+	policy           *Policy
+	inversedMatching bool
 }
 
 type Resolver struct {
@@ -40,6 +50,7 @@ type Resolver struct {
 	group                 singleflight.Group
 	lruCache              *cache.LruCache[string, *D.Msg]
 	policy                *trie.DomainTrie[*Policy]
+	geositePolicy         []geositePolicyRecord
 	proxyServer           []dnsClient
 }
 
@@ -272,12 +283,18 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 	}
 
 	record := r.policy.Search(domain)
-	if record == nil {
-		return nil
+	if record != nil {
+		p := record.Data()
+		return p.GetData()
 	}
 
-	p := record.Data()
-	return p.GetData()
+	for _, geositeRecord := range r.geositePolicy {
+		matched := geositeRecord.matcher.Match(domain)
+		if matched != geositeRecord.inversedMatching {
+			return geositeRecord.policy.GetData()
+		}
+	}
+	return nil
 }
 
 func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
@@ -406,19 +423,19 @@ type Config struct {
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
 	Hosts          *trie.DomainTrie[netip.Addr]
-	Policy         map[string]NameServer
+	Policy         map[string][]NameServer
 }
 
 func NewResolver(config Config) *Resolver {
 	defaultResolver := &Resolver{
 		main:     transform(config.Default, nil),
-		lruCache: cache.New[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		lruCache: cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 	}
 
 	r := &Resolver{
 		ipv6:     config.IPv6,
 		main:     transform(config.Main, defaultResolver),
-		lruCache: cache.New[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		lruCache: cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
 		hosts:    config.Hosts,
 	}
 
@@ -433,7 +450,26 @@ func NewResolver(config Config) *Resolver {
 	if len(config.Policy) != 0 {
 		r.policy = trie.New[*Policy]()
 		for domain, nameserver := range config.Policy {
-			_ = r.policy.Insert(domain, NewPolicy(transform([]NameServer{nameserver}, defaultResolver)))
+			if strings.HasPrefix(strings.ToLower(domain), "geosite:") {
+				groupname := domain[8:]
+				inverse := false
+				if strings.HasPrefix(groupname, "!") {
+					inverse = true
+					groupname = groupname[1:]
+				}
+				log.Debugln("adding geosite policy: %s inversed %t", groupname, inverse)
+				matcher, err := NewGeoSite(groupname)
+				if err != nil {
+					continue
+				}
+				r.geositePolicy = append(r.geositePolicy, geositePolicyRecord{
+					matcher:          matcher,
+					policy:           NewPolicy(transform(nameserver, defaultResolver)),
+					inversedMatching: inverse,
+				})
+			} else {
+				_ = r.policy.Insert(domain, NewPolicy(transform(nameserver, defaultResolver)))
+			}
 		}
 		r.policy.Optimize()
 	}

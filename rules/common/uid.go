@@ -3,7 +3,6 @@ package common
 import (
 	"fmt"
 	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/process"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"runtime"
@@ -72,27 +71,14 @@ func (u *Uid) RuleType() C.RuleType {
 }
 
 func (u *Uid) Match(metadata *C.Metadata) (bool, string) {
-	srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
-	if err != nil {
-		return false, ""
-	}
-	var uid *uint32
-	if metadata.Uid != nil {
-		uid = metadata.Uid
-	} else if uid, err = process.FindUid(metadata.NetWork.String(), metadata.SrcIP, int(srcPort)); err == nil {
-		metadata.Uid = uid
-	} else {
-		log.Warnln("[UID] could not get uid from %s", metadata.String())
-		return false, ""
-	}
-
-	if uid != nil {
-		for _, _uid := range u.uids {
-			if _uid.Contains(*uid) {
+	if metadata.Uid != 0 {
+		for _, uid := range u.uids {
+			if uid.Contains(metadata.Uid) {
 				return true, u.adapter
 			}
 		}
 	}
+	log.Warnln("[UID] could not get uid from %s", metadata.String())
 	return false, ""
 }
 
@@ -102,4 +88,8 @@ func (u *Uid) Adapter() string {
 
 func (u *Uid) Payload() string {
 	return u.oUid
+}
+
+func (u *Uid) ShouldFindProcess() bool {
+	return true
 }

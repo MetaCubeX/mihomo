@@ -64,6 +64,7 @@ type dnsOverHTTPS struct {
 	r               *Resolver
 	httpVersions    []C.HTTPVersion
 	proxyAdapter    string
+	addr            string
 }
 
 // type check
@@ -83,6 +84,7 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 
 	doh := &dnsOverHTTPS{
 		url:          u,
+		addr:         u.String(),
 		r:            r,
 		proxyAdapter: proxyAdapter,
 		quicConfig: &quic.Config{
@@ -98,13 +100,16 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 }
 
 // Address implements the Upstream interface for *dnsOverHTTPS.
-func (doh *dnsOverHTTPS) Address() string { return doh.url.String() }
+func (doh *dnsOverHTTPS) Address() string {
+	return doh.addr
+}
 func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	// Quote from https://www.rfc-editor.org/rfc/rfc8484.html:
 	// In order to maximize HTTP cache friendliness, DoH clients using media
 	// formats that include the ID field from the DNS message header, such
 	// as "application/dns-message", SHOULD use a DNS ID of 0 in every DNS
 	// request.
+	m = m.Copy()
 	id := m.Id
 	m.Id = 0
 	defer func() {
@@ -374,7 +379,7 @@ func (doh *dnsOverHTTPS) createClient(ctx context.Context) (*http.Client, error)
 // HTTP3 is enabled in the upstream options).  If this attempt is successful,
 // it returns an HTTP3 transport, otherwise it returns the H1/H2 transport.
 func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripper, err error) {
-	tlsConfig := tlsC.GetGlobalFingerprintTLCConfig(
+	tlsConfig := tlsC.GetGlobalTLSConfig(
 		&tls.Config{
 			InsecureSkipVerify:     false,
 			MinVersion:             tls.VersionTLS12,

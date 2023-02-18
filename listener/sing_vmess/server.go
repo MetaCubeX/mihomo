@@ -42,7 +42,7 @@ func New(config LC.VmessServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packe
 		Additions: additions,
 	}
 
-	service := vmess.NewService[string](h)
+	service := vmess.NewService[string](h, vmess.ServiceWithDisableHeaderProtection())
 	err = service.UpdateUsers(
 		common.Map(config.Users, func(it LC.VmessUser) string {
 			return it.Username

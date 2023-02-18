@@ -361,7 +361,6 @@ func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Met
 	pc := &quicStreamPacketConn{
 		connId:                connId,
 		quicConn:              quicConn,
-		lAddr:                 quicConn.LocalAddr(),
 		inputConn:             N.NewBufferedConn(pipe2),
 		udpRelayMode:          t.UdpRelayMode,
 		maxUdpRelayPacketSize: t.MaxUdpRelayPacketSize,

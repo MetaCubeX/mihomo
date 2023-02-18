@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	vmess "github.com/sagernet/sing-vmess"
 	"net"
 	"net/http"
 	"strconv"
@@ -15,10 +13,12 @@ import (
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	clashVMess "github.com/Dreamacro/clash/transport/vmess"
 
+	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 )
@@ -59,6 +59,7 @@ type VmessOption struct {
 	PacketEncoding      string       `proxy:"packet-encoding,omitempty"`
 	GlobalPadding       bool         `proxy:"global-padding,omitempty"`
 	AuthenticatedLength bool         `proxy:"authenticated-length,omitempty"`
+	ClientFingerprint   string       `proxy:"client-fingerprint,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -86,6 +87,11 @@ type WSOptions struct {
 // StreamConn implements C.ProxyAdapter
 func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
+
+	if tlsC.HaveGlobalFingerprint() && (len(v.option.ClientFingerprint) == 0) {
+		v.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
+	}
+
 	switch v.option.Network {
 	case "ws":
 
@@ -96,6 +102,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			ClientFingerprint:   v.option.ClientFingerprint,
 			Headers:             http.Header{},
 		}
 
@@ -114,7 +121,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			}
 
 			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 			} else {
 				if wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint); err != nil {
 					return nil, err
@@ -133,8 +140,9 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		if v.option.TLS {
 			host, _, _ := net.SplitHostPort(v.addr)
 			tlsOpts := &clashVMess.TLSConfig{
-				Host:           host,
-				SkipCertVerify: v.option.SkipCertVerify,
+				Host:              host,
+				SkipCertVerify:    v.option.SkipCertVerify,
+				ClientFingerprint: v.option.ClientFingerprint,
 			}
 
 			if v.option.ServerName != "" {
@@ -159,9 +167,10 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	case "h2":
 		host, _, _ := net.SplitHostPort(v.addr)
 		tlsOpts := clashVMess.TLSConfig{
-			Host:           host,
-			SkipCertVerify: v.option.SkipCertVerify,
-			NextProtos:     []string{"h2"},
+			Host:              host,
+			SkipCertVerify:    v.option.SkipCertVerify,
+			NextProtos:        []string{"h2"},
+			ClientFingerprint: v.option.ClientFingerprint,
 		}
 
 		if v.option.ServerName != "" {
@@ -186,8 +195,9 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		if v.option.TLS {
 			host, _, _ := net.SplitHostPort(v.addr)
 			tlsOpts := &clashVMess.TLSConfig{
-				Host:           host,
-				SkipCertVerify: v.option.SkipCertVerify,
+				Host:              host,
+				SkipCertVerify:    v.option.SkipCertVerify,
+				ClientFingerprint: v.option.ClientFingerprint,
 			}
 
 			if v.option.ServerName != "" {
@@ -251,7 +261,7 @@ func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
@@ -294,7 +304,7 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	// vmess use stream-oriented udp with a special address, so we needs a net.UDPAddr
+	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
 		if err != nil {
@@ -366,7 +376,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	switch option.Network {
 	case "h2", "grpc":
 		if !option.TLS {
-			return nil, fmt.Errorf("TLS must be true with h2/grpc network")
+			option.TLS = true
 		}
 	}
 
@@ -376,6 +386,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:     C.Vmess,
 			udp:    option.UDP,
+			xudp:   option.XUDP,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
@@ -400,8 +411,9 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		}
 
 		gunConfig := &gun.Config{
-			ServiceName: v.option.GrpcOpts.GrpcServiceName,
-			Host:        v.option.ServerName,
+			ServiceName:       v.option.GrpcOpts.GrpcServiceName,
+			Host:              v.option.ServerName,
+			ClientFingerprint: v.option.ClientFingerprint,
 		}
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: v.option.SkipCertVerify,
@@ -416,7 +428,9 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
-		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint)
+
 	}
 	return v, nil
 }

@@ -57,7 +57,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 		f.UpdatedAt = &modTime
 		isLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
-			log.Infoln("[Provider] %s not updated for a long time, force refresh", f.Name())
+			log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
 			forceUpdate = true
 		}
 	} else {
@@ -162,7 +162,7 @@ func (f *Fetcher[V]) pullLoop() {
 		case <-f.ticker.C:
 			elm, same, err := f.Update()
 			if err != nil {
-				log.Warnln("[Provider] %s pull error: %s", f.Name(), err.Error())
+				log.Errorln("[Provider] %s pull error: %s", f.Name(), err.Error())
 				continue
 			}
 

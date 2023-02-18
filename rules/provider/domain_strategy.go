@@ -12,8 +12,12 @@ type domainStrategy struct {
 	domainRules *trie.DomainTrie[struct{}]
 }
 
+func (d *domainStrategy) ShouldFindProcess() bool {
+	return false
+}
+
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
-	return d.domainRules != nil && d.domainRules.Search(metadata.Host) != nil
+	return d.domainRules != nil && d.domainRules.Search(metadata.RuleHost()) != nil
 }
 
 func (d *domainStrategy) Count() int {

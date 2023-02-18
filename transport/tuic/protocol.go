@@ -454,12 +454,10 @@ func NewAddress(metadata *C.Metadata) Address {
 	switch metadata.AddrType() {
 	case socks5.AtypIPv4:
 		addrType = AtypIPv4
-		addr = make([]byte, net.IPv4len)
-		copy(addr[:], metadata.DstIP.AsSlice())
+		addr = metadata.DstIP.AsSlice()
 	case socks5.AtypIPv6:
 		addrType = AtypIPv6
-		addr = make([]byte, net.IPv6len)
-		copy(addr[:], metadata.DstIP.AsSlice())
+		addr = metadata.DstIP.AsSlice()
 	case socks5.AtypDomainName:
 		addrType = AtypDomainName
 		addr = make([]byte, len(metadata.Host)+1)
@@ -478,18 +476,14 @@ func NewAddress(metadata *C.Metadata) Address {
 
 func NewAddressAddrPort(addrPort netip.AddrPort) Address {
 	var addrType byte
-	var addr []byte
 	if addrPort.Addr().Is4() {
 		addrType = AtypIPv4
-		addr = make([]byte, net.IPv4len)
 	} else {
 		addrType = AtypIPv6
-		addr = make([]byte, net.IPv6len)
 	}
-	copy(addr[:], addrPort.Addr().AsSlice())
 	return Address{
 		TYPE: addrType,
-		ADDR: addr,
+		ADDR: addrPort.Addr().AsSlice(),
 		PORT: addrPort.Port(),
 	}
 }

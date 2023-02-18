@@ -109,7 +109,7 @@ func NewEnhancer(cfg Config) *ResolverEnhancer {
 
 	if cfg.EnhancedMode != C.DNSNormal {
 		fakePool = cfg.Pool
-		mapping = cache.New[netip.Addr, string](cache.WithSize[netip.Addr, string](4096), cache.WithStale[netip.Addr, string](true))
+		mapping = cache.New(cache.WithSize[netip.Addr, string](4096), cache.WithStale[netip.Addr, string](true))
 	}
 
 	return &ResolverEnhancer{

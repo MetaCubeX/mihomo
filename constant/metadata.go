@@ -128,12 +128,14 @@ type Metadata struct {
 	InName       string     `json:"inboundName"`
 	Host         string     `json:"host"`
 	DNSMode      DNSMode    `json:"dnsMode"`
-	Uid          *uint32    `json:"uid"`
+	Uid          uint32     `json:"uid"`
 	Process      string     `json:"process"`
 	ProcessPath  string     `json:"processPath"`
 	SpecialProxy string     `json:"specialProxy"`
 	SpecialRules string     `json:"specialRules"`
 	RemoteDst    string     `json:"remoteDestination"`
+	// Only domain rule
+	SniffHost string `json:"sniffHost"`
 }
 
 func (m *Metadata) RemoteAddress() string {
@@ -146,16 +148,17 @@ func (m *Metadata) SourceAddress() string {
 
 func (m *Metadata) SourceDetail() string {
 	if m.Type == INNER {
-		return fmt.Sprintf("[%s]", ClashName)
+		return fmt.Sprintf("%s", ClashName)
 	}
 
-	if m.Process != "" && m.Uid != nil {
-		return fmt.Sprintf("%s(%s, uid=%d)", m.SourceAddress(), m.Process, *m.Uid)
-	} else if m.Uid != nil {
-		return fmt.Sprintf("%s(uid=%d)", m.SourceAddress(), *m.Uid)
-	} else if m.Process != "" {
+	switch {
+	case m.Process != "" && m.Uid != 0:
+		return fmt.Sprintf("%s(%s, uid=%d)", m.SourceAddress(), m.Process, m.Uid)
+	case m.Uid != 0:
+		return fmt.Sprintf("%s(uid=%d)", m.SourceAddress(), m.Uid)
+	case m.Process != "":
 		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
-	} else {
+	default:
 		return fmt.Sprintf("%s", m.SourceAddress())
 	}
 }
@@ -173,6 +176,14 @@ func (m *Metadata) AddrType() int {
 
 func (m *Metadata) Resolved() bool {
 	return m.DstIP.IsValid()
+}
+
+func (m *Metadata) RuleHost() string {
+	if len(m.SniffHost) == 0 {
+		return m.Host
+	} else {
+		return m.SniffHost
+	}
 }
 
 // Pure is used to solve unexpected behavior

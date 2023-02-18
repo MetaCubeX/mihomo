@@ -82,6 +82,11 @@ func UDPIn() chan<- C.PacketAdapter {
 	return udpQueue
 }
 
+// NatTable return nat table
+func NatTable() C.NatTable {
+	return natTable
+}
+
 // Rules return all rules
 func Rules() []C.Rule {
 	return rules
@@ -148,12 +153,8 @@ func SetMode(m TunnelMode) {
 
 // SetFindProcessMode replace SetAlwaysFindProcess
 // always find process info if legacyAlways = true or mode.Always() = true, may be increase many memory
-func SetFindProcessMode(legacyAlways bool, mode P.FindProcessMode) {
-	if legacyAlways {
-		findProcessMode = P.FindProcessAlways
-	} else {
-		findProcessMode = mode
-	}
+func SetFindProcessMode(mode P.FindProcessMode) {
+	findProcessMode = mode
 }
 
 // processUDP starts a loop to handle udp packet
@@ -308,12 +309,12 @@ func handleUDPConn(packet C.PacketAdapter) {
 				log.Warnln(
 					"[UDP] dial %s %s --> %s error: %s",
 					proxy.Name(),
-					metadata.SourceAddress(),
+					metadata.SourceDetail(),
 					metadata.RemoteAddress(),
 					err.Error(),
 				)
 			} else {
-				log.Warnln("[UDP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceAddress(), metadata.RemoteAddress(), err.Error())
+				log.Warnln("[UDP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
 			}
 		})
 		if err != nil {
@@ -325,7 +326,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 
 		switch true {
 		case metadata.SpecialProxy != "":
-			log.Infoln("[UDP] %s --> %s using %s", metadata.SourceAddress(), metadata.RemoteAddress(), metadata.SpecialProxy)
+			log.Infoln("[UDP] %s --> %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
 		case rule != nil:
 			if rule.Payload() != "" {
 				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), rawPc.Chains().String())
@@ -341,9 +342,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 
 		oAddr := metadata.DstIP
+		natTable.Set(key, pc)
+
 		go handleUDPToLocal(packet, pc, key, oAddr, fAddr)
 
-		natTable.Set(key, pc)
 		handle()
 	}()
 }
@@ -394,12 +396,12 @@ func handleTCPConn(connCtx C.ConnContext) {
 			log.Warnln(
 				"[TCP] dial %s %s --> %s error: %s",
 				proxy.Name(),
-				metadata.SourceAddress(),
+				metadata.SourceDetail(),
 				metadata.RemoteAddress(),
 				err.Error(),
 			)
 		} else {
-			log.Warnln("[TCP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceAddress(), metadata.RemoteAddress(), err.Error())
+			log.Warnln("[TCP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
 		}
 	})
 	if err != nil {
@@ -413,7 +415,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	switch true {
 	case metadata.SpecialProxy != "":
-		log.Infoln("[TCP] %s --> %s using %s", metadata.SourceAddress(), metadata.RemoteAddress(), metadata.SpecialProxy)
+		log.Infoln("[TCP] %s --> %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
 	case rule != nil:
 		if rule.Payload() != "" {
 			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
@@ -427,7 +429,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	default:
 		log.Infoln(
 			"[TCP] %s --> %s doesn't match any rule using DIRECT",
-			metadata.SourceAddress(),
+			metadata.SourceDetail(),
 			metadata.RemoteAddress(),
 		)
 	}

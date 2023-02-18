@@ -1,0 +1,325 @@
+name: Build
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+    branches:
+      - Alpha
+      - Beta
+      - Meta
+    tags:
+      - "v*"
+  pull_request_target:
+    branches:
+      - Alpha
+      - Beta
+      - Meta
+env:
+  REGISTRY: docker.io
+jobs:
+  Build:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              type: "WithoutCGO",
+              target: "linux-amd64 linux-amd64-compatible",
+              id: "1",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "linux-armv5 linux-armv6 linux-armv7",
+              id: "2",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "linux-arm64 linux-mips64 linux-mips64le",
+              id: "3",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
+              id: "4",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "freebsd-386 freebsd-amd64 freebsd-arm64",
+              id: "5",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "windows-amd64-compatible windows-amd64 windows-386",
+              id: "6",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "windows-arm64 windows-arm32v7",
+              id: "7",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "darwin-amd64 darwin-arm64 android-arm64",
+              id: "8",
+            }
+          - { type: "WithCGO", target: "windows/*", id: "1" }
+          - { type: "WithCGO", target: "linux/386", id: "2" }
+          - { type: "WithCGO", target: "linux/amd64", id: "3" }
+          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
+          - { type: "WithCGO", target: "linux/arm,", id: "5" }
+          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
+          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
+          - { type: "WithCGO", target: "linux/mips64", id: "8" }
+          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
+          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
+          - { type: "WithCGO", target: "android", id: "11" }
+
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Set variables
+        run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='Alpha'}}
+        run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='Beta'}}
+        run: echo "VERSION=beta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='Meta'}}
+        run: echo "VERSION=meta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set variables
+        if: ${{github.ref_name=='' || github.ref_type=='tag'}}
+        run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set ENV
+        run: |
+          echo "NAME=clash.meta" >> $GITHUB_ENV
+          echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
+          echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
+          echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+          echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set ENV
+        run: |
+          echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
+          echo "LDFLAGS=-X 'github.com/Dreamacro/clash/constant.Version=${VERSION}' -X 'github.com/Dreamacro/clash/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.20"
+          check-latest: true
+
+      - name: Test
+        if: ${{ matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
+        run: |
+          go test ./...
+
+      - name: Build WithoutCGO
+        if: ${{ matrix.job.type=='WithoutCGO' }}
+        env:
+          NAME: Clash.Meta
+          BINDIR: bin
+        run: make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
+
+      - uses: nttld/setup-ndk@v1
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
+        id: setup-ndk
+        with:
+          ndk-version: r25b
+          add-to-path: false
+          local-cache: true
+
+      - name: Build Android
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          mkdir bin
+          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
+          CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
+
+      - name: Set up xgo
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
+        run: |
+          docker pull techknowlogick/xgo:latest
+          go install src.techknowlogick.com/xgo@latest
+
+      - name: Build by xgo
+        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          mkdir bin
+          xgo --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} ./
+
+      - name: Rename
+        if: ${{ matrix.job.type=='WithCGO' }}
+        run: |
+          cd bin
+          ls -la
+          cp ../.github/rename-cgo.sh ./
+          bash ./rename-cgo.sh
+          rm ./rename-cgo.sh
+          ls -la
+          cd ..
+
+      - name: Zip
+        if: ${{  success() }}
+        run: |
+          cd bin
+          ls -la
+          chmod +x *
+          cp ../.github/release.sh ./
+          bash ./release.sh
+          rm ./release.sh
+          ls -la
+          cd ..
+
+      - uses: actions/upload-artifact@v3
+        if: ${{  success() }}
+        with:
+          name: artifact
+          path: bin/
+
+  Upload-Prerelease:
+    permissions: write-all
+    if: ${{ github.ref_type=='branch' }}
+    needs: [ Build ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: bin/
+
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+
+      - name: Delete current release assets
+        uses: andreaswilli/delete-release-assets-action@v2.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-${{ github.ref_name }}
+          deleteOnlyFromDrafts: false
+
+      - name: Tag Repo
+        uses: richardsimko/update-tag@v1.0.6
+        with:
+          tag_name: Prerelease-${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Prerelease
+        uses: softprops/action-gh-release@v1
+        if: ${{  success() }}
+        with:
+          tag: ${{ github.ref_name }}
+          tag_name: Prerelease-${{ github.ref_name }}
+          files: bin/*
+          prerelease: true
+          generate_release_notes: true
+
+  Upload-Release:
+    permissions: write-all
+    if: ${{ github.ref_type=='tag' }}
+    needs: [ Build ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: bin/
+
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        if: ${{  success() }}
+        with:
+          tag: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: bin/*
+          generate_release_notes: true
+
+  Docker:
+    permissions: write-all
+    needs: [ Build ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifact
+          path: bin/
+
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          version: latest
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_ACCOUNT }}/${{secrets.DOCKERHUB_REPO}}
+      - name: Show files
+        run: |
+          ls .
+          ls bin/
+      - name: Log into registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # Build and push Docker image with Buildx (don't push on PR)
+      # https://github.com/docker/build-push-action
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: |
+            linux/386
+            linux/amd64
+            linux/arm64/v8
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

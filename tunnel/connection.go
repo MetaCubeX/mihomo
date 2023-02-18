@@ -9,6 +9,7 @@ import (
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
@@ -32,6 +33,7 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 	buf := pool.Get(pool.UDPBufferSize)
 	defer func() {
 		_ = pc.Close()
+		closeAllLocalCoon(key)
 		natTable.Delete(key)
 		_ = pool.Put(buf)
 	}()
@@ -44,11 +46,12 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 		}
 
 		fromUDPAddr := from.(*net.UDPAddr)
-		if fAddr.IsValid() {
-			fromAddr, _ := netip.AddrFromSlice(fromUDPAddr.IP)
-			fromAddr.Unmap()
-			if oAddr == fromAddr {
-				fromUDPAddr.IP = fAddr.AsSlice()
+		fromUDPAddr = &(*fromUDPAddr) // make a copy
+		if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
+			if fAddr.IsValid() && (oAddr.Unmap() == fromAddr.Unmap()) {
+				fromUDPAddr.IP = fAddr.Unmap().AsSlice()
+			} else {
+				fromUDPAddr.IP = fromAddr.Unmap().AsSlice()
 			}
 		}
 
@@ -57,6 +60,19 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 			return
 		}
 	}
+}
+
+func closeAllLocalCoon(lAddr string) {
+	natTable.RangeLocalConn(lAddr, func(key, value any) bool {
+		conn, ok := value.(*net.UDPConn)
+		if !ok || conn == nil {
+			log.Debugln("Value %#v unknown value when closing TProxy local conn...", conn)
+			return true
+		}
+		conn.Close()
+		log.Debugln("Closing TProxy local conn... lAddr=%s rAddr=%s", lAddr, key)
+		return true
+	})
 }
 
 func handleSocket(ctx C.ConnContext, outbound net.Conn) {

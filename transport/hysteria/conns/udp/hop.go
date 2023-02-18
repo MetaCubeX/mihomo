@@ -212,6 +212,9 @@ func (c *ObfsUDPHopClientPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 func (c *ObfsUDPHopClientPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	c.connMutex.RLock()
 	defer c.connMutex.RUnlock()
+	if c.closed {
+		return 0, net.ErrClosed
+	}
 	/*
 		// Check if the address is the server address
 		if addr.String() != c.serverAddr.String() {
@@ -237,6 +240,7 @@ func (c *ObfsUDPHopClientPacketConn) Close() error {
 	err := c.currentConn.Close()
 	close(c.closeChan)
 	c.closed = true
+	c.serverAddrs = nil // For GC
 	return err
 }
 

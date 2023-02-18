@@ -12,6 +12,10 @@ type ipcidrStrategy struct {
 	trie            *trie.IpCidrTrie
 }
 
+func (i *ipcidrStrategy) ShouldFindProcess() bool {
+	return false
+}
+
 func (i *ipcidrStrategy) Match(metadata *C.Metadata) bool {
 	return i.trie != nil && i.trie.IsContain(metadata.DstIP.AsSlice())
 }
