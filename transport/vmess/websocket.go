@@ -306,6 +306,9 @@ func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
 }
 
 func (wsedc *websocketWithEarlyDataConn) Upstream() any {
+	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
+		return nil
+	}
 	return wsedc.Conn
 }
 
