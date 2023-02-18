@@ -457,7 +457,7 @@ func NewResolver(config Config) *Resolver {
 					inverse = true
 					groupname = groupname[1:]
 				}
-				log.Debugln("adding geosite policy: %s inversed %s", groupname, inverse)
+				log.Debugln("adding geosite policy: %s inversed %t", groupname, inverse)
 				matcher, err := NewGeoSite(groupname)
 				if err != nil {
 					continue
