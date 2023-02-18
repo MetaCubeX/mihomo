@@ -54,8 +54,8 @@ func (h HashedConn) Read(b []byte) (n int, err error) {
 }
 
 func (s *ShadowTLS) read(b []byte) (int, error) {
-	buf := pool.Get(tlsHeaderLen)
-	_, err := io.ReadFull(s.Conn, buf)
+	var buf [tlsHeaderLen]byte
+	_, err := io.ReadFull(s.Conn, buf[:])
 	if err != nil {
 		return 0, fmt.Errorf("shadowtls read failed %w", err)
 	}
@@ -63,7 +63,6 @@ func (s *ShadowTLS) read(b []byte) (int, error) {
 		return 0, fmt.Errorf("invalid shadowtls header %v", buf)
 	}
 	length := int(binary.BigEndian.Uint16(buf[3:]))
-	pool.Put(buf)
 
 	if length > len(b) {
 		n, err := s.Conn.Read(b)

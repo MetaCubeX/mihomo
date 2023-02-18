@@ -26,7 +26,7 @@ func SetCongestionController(quicConn quic.Connection, cc string) {
 		quicConn.SetCongestionControl(
 			congestion.NewCubicSender(
 				congestion.DefaultClock{},
-				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
+				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
 				false,
 				nil,
 			),
@@ -35,7 +35,7 @@ func SetCongestionController(quicConn quic.Connection, cc string) {
 		quicConn.SetCongestionControl(
 			congestion.NewCubicSender(
 				congestion.DefaultClock{},
-				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
+				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
 				true,
 				nil,
 			),
@@ -44,10 +44,9 @@ func SetCongestionController(quicConn quic.Connection, cc string) {
 		quicConn.SetCongestionControl(
 			congestion.NewBBRSender(
 				congestion.DefaultClock{},
-				congestion.GetMaxPacketSize(quicConn.RemoteAddr()),
-				congestion.GetMaxOutgoingPacketSize(quicConn.RemoteAddr()),
-				congestion.InitialCongestionWindow,
-				congestion.DefaultBBRMaxCongestionWindow,
+				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
+				congestion.InitialCongestionWindow*congestion.InitialMaxDatagramSize,
+				congestion.DefaultBBRMaxCongestionWindow*congestion.InitialMaxDatagramSize,
 			),
 		)
 	}
@@ -110,7 +109,6 @@ var _ net.Conn = &quicStreamConn{}
 type quicStreamPacketConn struct {
 	connId    uint32
 	quicConn  quic.Connection
-	lAddr     net.Addr
 	inputConn *N.BufferedConn
 
 	udpRelayMode          string
@@ -252,7 +250,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 }
 
 func (q *quicStreamPacketConn) LocalAddr() net.Addr {
-	return q.lAddr
+	return q.quicConn.LocalAddr()
 }
 
 var _ net.PacketConn = &quicStreamPacketConn{}

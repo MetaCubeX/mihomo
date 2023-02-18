@@ -51,6 +51,10 @@ func (c *refConn) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
 
+func (c *refConn) Upstream() any {
+	return c.conn
+}
+
 func NewRefConn(conn net.Conn, ref any) net.Conn {
 	return &refConn{conn: conn, ref: ref}
 }

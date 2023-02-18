@@ -4,11 +4,12 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	P "github.com/Dreamacro/clash/component/process"
+
 	"net"
 	"net/netip"
 	"net/url"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -24,6 +25,9 @@ import (
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
+	P "github.com/Dreamacro/clash/component/process"
+	SNIFF "github.com/Dreamacro/clash/component/sniffer"
+	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	providerTypes "github.com/Dreamacro/clash/constant/provider"
@@ -43,19 +47,19 @@ import (
 type General struct {
 	Inbound
 	Controller
-	Mode            T.TunnelMode `json:"mode"`
-	UnifiedDelay    bool
-	LogLevel        log.LogLevel      `json:"log-level"`
-	IPv6            bool              `json:"ipv6"`
-	Interface       string            `json:"interface-name"`
-	RoutingMark     int               `json:"-"`
-	GeodataMode     bool              `json:"geodata-mode"`
-	GeodataLoader   string            `json:"geodata-loader"`
-	TCPConcurrent   bool              `json:"tcp-concurrent"`
-	EnableProcess   bool              `json:"enable-process"`
-	FindProcessMode P.FindProcessMode `json:"find-process-mode"`
-	Sniffing        bool              `json:"sniffing"`
-	EBpf            EBpf              `json:"-"`
+	Mode                    T.TunnelMode `json:"mode"`
+	UnifiedDelay            bool
+	LogLevel                log.LogLevel      `json:"log-level"`
+	IPv6                    bool              `json:"ipv6"`
+	Interface               string            `json:"interface-name"`
+	RoutingMark             int               `json:"-"`
+	GeodataMode             bool              `json:"geodata-mode"`
+	GeodataLoader           string            `json:"geodata-loader"`
+	TCPConcurrent           bool              `json:"tcp-concurrent"`
+	FindProcessMode         P.FindProcessMode `json:"find-process-mode"`
+	Sniffing                bool              `json:"sniffing"`
+	EBpf                    EBpf              `json:"-"`
+	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 }
 
 // Inbound config
@@ -96,7 +100,7 @@ type DNS struct {
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[netip.Addr]
-	NameServerPolicy      map[string]dns.NameServer
+	NameServerPolicy      map[string][]dns.NameServer
 	ProxyServerNameserver []dns.NameServer
 }
 
@@ -116,6 +120,11 @@ type Profile struct {
 }
 
 type TLS struct {
+	RawCert         `yaml:",inline"`
+	CustomTrustCert []RawCert `yaml:"custom-certifactes"`
+}
+
+type RawCert struct {
 	Certificate string `yaml:"certificate"`
 	PrivateKey  string `yaml:"private-key"`
 }
@@ -129,11 +138,10 @@ type IPTables struct {
 
 type Sniffer struct {
 	Enable          bool
-	Sniffers        []snifferTypes.Type
+	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
 	Reverses        *trie.DomainTrie[struct{}]
 	ForceDomain     *trie.DomainTrie[struct{}]
 	SkipDomain      *trie.DomainTrie[struct{}]
-	Ports           *[]utils.Range[uint16]
 	ForceDnsMapping bool
 	ParsePureIp     bool
 }
@@ -176,7 +184,7 @@ type RawDNS struct {
 	FakeIPRange           string            `yaml:"fake-ip-range"`
 	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
 	DefaultNameserver     []string          `yaml:"default-nameserver"`
-	NameServerPolicy      map[string]string `yaml:"nameserver-policy"`
+	NameServerPolicy      map[string]any    `yaml:"nameserver-policy"`
 	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
 }
 
@@ -228,33 +236,33 @@ type RawTuicServer struct {
 }
 
 type RawConfig struct {
-	Port                  int               `yaml:"port"`
-	SocksPort             int               `yaml:"socks-port"`
-	RedirPort             int               `yaml:"redir-port"`
-	TProxyPort            int               `yaml:"tproxy-port"`
-	MixedPort             int               `yaml:"mixed-port"`
-	ShadowSocksConfig     string            `yaml:"ss-config"`
-	VmessConfig           string            `yaml:"vmess-config"`
-	InboundTfo            bool              `yaml:"inbound-tfo"`
-	Authentication        []string          `yaml:"authentication"`
-	AllowLan              bool              `yaml:"allow-lan"`
-	BindAddress           string            `yaml:"bind-address"`
-	Mode                  T.TunnelMode      `yaml:"mode"`
-	UnifiedDelay          bool              `yaml:"unified-delay"`
-	LogLevel              log.LogLevel      `yaml:"log-level"`
-	IPv6                  bool              `yaml:"ipv6"`
-	ExternalController    string            `yaml:"external-controller"`
-	ExternalControllerTLS string            `yaml:"external-controller-tls"`
-	ExternalUI            string            `yaml:"external-ui"`
-	Secret                string            `yaml:"secret"`
-	Interface             string            `yaml:"interface-name"`
-	RoutingMark           int               `yaml:"routing-mark"`
-	Tunnels               []LC.Tunnel       `yaml:"tunnels"`
-	GeodataMode           bool              `yaml:"geodata-mode"`
-	GeodataLoader         string            `yaml:"geodata-loader"`
-	TCPConcurrent         bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	EnableProcess         bool              `yaml:"enable-process" json:"enable-process"`
-	FindProcessMode       P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	Port                    int               `yaml:"port"`
+	SocksPort               int               `yaml:"socks-port"`
+	RedirPort               int               `yaml:"redir-port"`
+	TProxyPort              int               `yaml:"tproxy-port"`
+	MixedPort               int               `yaml:"mixed-port"`
+	ShadowSocksConfig       string            `yaml:"ss-config"`
+	VmessConfig             string            `yaml:"vmess-config"`
+	InboundTfo              bool              `yaml:"inbound-tfo"`
+	Authentication          []string          `yaml:"authentication"`
+	AllowLan                bool              `yaml:"allow-lan"`
+	BindAddress             string            `yaml:"bind-address"`
+	Mode                    T.TunnelMode      `yaml:"mode"`
+	UnifiedDelay            bool              `yaml:"unified-delay"`
+	LogLevel                log.LogLevel      `yaml:"log-level"`
+	IPv6                    bool              `yaml:"ipv6"`
+	ExternalController      string            `yaml:"external-controller"`
+	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
+	ExternalUI              string            `yaml:"external-ui"`
+	Secret                  string            `yaml:"secret"`
+	Interface               string            `yaml:"interface-name"`
+	RoutingMark             int               `yaml:"routing-mark"`
+	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
+	GeodataMode             bool              `yaml:"geodata-mode"`
+	GeodataLoader           string            `yaml:"geodata-loader"`
+	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -283,13 +291,20 @@ type RawGeoXUrl struct {
 }
 
 type RawSniffer struct {
-	Enable          bool     `yaml:"enable" json:"enable"`
-	Sniffing        []string `yaml:"sniffing" json:"sniffing"`
-	ForceDomain     []string `yaml:"force-domain" json:"force-domain"`
-	SkipDomain      []string `yaml:"skip-domain" json:"skip-domain"`
-	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
-	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
-	ParsePureIp     bool     `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+	Enable          bool                         `yaml:"enable" json:"enable"`
+	OverrideDest    bool                         `yaml:"override-destination" json:"override-destination"`
+	Sniffing        []string                     `yaml:"sniffing" json:"sniffing"`
+	ForceDomain     []string                     `yaml:"force-domain" json:"force-domain"`
+	SkipDomain      []string                     `yaml:"skip-domain" json:"skip-domain"`
+	Ports           []string                     `yaml:"port-whitelist" json:"port-whitelist"`
+	ForceDnsMapping bool                         `yaml:"force-dns-mapping" json:"force-dns-mapping"`
+	ParsePureIp     bool                         `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+	Sniff           map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
+}
+
+type RawSniffingConfig struct {
+	Ports        []string `yaml:"ports" json:"ports"`
+	OverrideDest *bool    `yaml:"override-destination" json:"override-destination"`
 }
 
 // EBpf config
@@ -331,7 +346,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Proxy:           []map[string]any{},
 		ProxyGroup:      []map[string]any{},
 		TCPConcurrent:   false,
-		EnableProcess:   false,
 		FindProcessMode: P.FindProcessStrict,
 		Tun: RawTun{
 			Enable:              false,
@@ -399,6 +413,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Ports:           []string{},
 			ForceDnsMapping: true,
 			ParsePureIp:     true,
+			OverrideDest:    true,
 		},
 		Profile: Profile{
 			StoreSelected: true,
@@ -507,6 +522,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
 
+	if len(config.General.GlobalClientFingerprint) != 0 {
+		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
+		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
+	}
+
 	return config, nil
 }
 
@@ -540,18 +560,18 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			Secret:                cfg.Secret,
 			ExternalControllerTLS: cfg.ExternalControllerTLS,
 		},
-		UnifiedDelay:    cfg.UnifiedDelay,
-		Mode:            cfg.Mode,
-		LogLevel:        cfg.LogLevel,
-		IPv6:            cfg.IPv6,
-		Interface:       cfg.Interface,
-		RoutingMark:     cfg.RoutingMark,
-		GeodataMode:     cfg.GeodataMode,
-		GeodataLoader:   cfg.GeodataLoader,
-		TCPConcurrent:   cfg.TCPConcurrent,
-		EnableProcess:   cfg.EnableProcess,
-		FindProcessMode: cfg.FindProcessMode,
-		EBpf:            cfg.EBpf,
+		UnifiedDelay:            cfg.UnifiedDelay,
+		Mode:                    cfg.Mode,
+		LogLevel:                cfg.LogLevel,
+		IPv6:                    cfg.IPv6,
+		Interface:               cfg.Interface,
+		RoutingMark:             cfg.RoutingMark,
+		GeodataMode:             cfg.GeodataMode,
+		GeodataLoader:           cfg.GeodataLoader,
+		TCPConcurrent:           cfg.TCPConcurrent,
+		FindProcessMode:         cfg.FindProcessMode,
+		EBpf:                    cfg.EBpf,
+		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 	}, nil
 }
 
@@ -831,17 +851,15 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
 }
 
 func hostWithDefaultPort(host string, defPort string) (string, error) {
-	if !strings.Contains(host, ":") {
-		host += ":"
-	}
-
 	hostname, port, err := net.SplitHostPort(host)
 	if err != nil {
-		return "", err
-	}
-
-	if port == "" {
-		port = defPort
+		if !strings.Contains(err.Error(), "missing port in address") {
+			return "", err
+		}
+		host = host + ":" + defPort
+		if hostname, port, err = net.SplitHostPort(host); err != nil {
+			return "", err
+		}
 	}
 
 	return net.JoinHostPort(hostname, port), nil
@@ -851,10 +869,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
-		// parse without scheme .e.g 8.8.8.8:53
-		if !strings.Contains(server, "://") {
-			server = "udp://" + server
-		}
+		server = parsePureDNSServer(server)
 		u, err := url.Parse(server)
 		if err != nil {
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
@@ -875,29 +890,24 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
 		case "https":
-			host := u.Host
-			proxyAdapter = ""
-			if _, _, err := net.SplitHostPort(host); err != nil && strings.Contains(err.Error(), "missing port in address") {
-				host = net.JoinHostPort(host, "443")
-			} else {
-				if err != nil {
-					return nil, err
-				}
-			}
-			clearURL := url.URL{Scheme: "https", Host: host, Path: u.Path}
-			addr = clearURL.String()
-			dnsNetType = "https" // DNS over HTTPS
-			if len(u.Fragment) != 0 {
-				for _, s := range strings.Split(u.Fragment, "&") {
-					arr := strings.Split(s, "=")
-					if len(arr) == 0 {
-						continue
-					} else if len(arr) == 1 {
-						proxyAdapter = arr[0]
-					} else if len(arr) == 2 {
-						params[arr[0]] = arr[1]
-					} else {
-						params[arr[0]] = strings.Join(arr[1:], "=")
+			addr, err = hostWithDefaultPort(u.Host, "443")
+			if err == nil {
+				proxyAdapter = ""
+				clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path}
+				addr = clearURL.String()
+				dnsNetType = "https" // DNS over HTTPS
+				if len(u.Fragment) != 0 {
+					for _, s := range strings.Split(u.Fragment, "&") {
+						arr := strings.Split(s, "=")
+						if len(arr) == 0 {
+							continue
+						} else if len(arr) == 1 {
+							proxyAdapter = arr[0]
+						} else if len(arr) == 2 {
+							params[arr[0]] = arr[1]
+						} else {
+							params[arr[0]] = strings.Join(arr[1:], "=")
+						}
 					}
 				}
 			}
@@ -930,18 +940,53 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 	return nameservers, nil
 }
 
-func parseNameServerPolicy(nsPolicy map[string]string, preferH3 bool) (map[string]dns.NameServer, error) {
-	policy := map[string]dns.NameServer{}
+func parsePureDNSServer(server string) string {
+	addPre := func(server string) string {
+		return "udp://" + server
+	}
+
+	if ip, err := netip.ParseAddr(server); err != nil {
+		if strings.Contains(server, "://") {
+			return server
+		}
+		return addPre(server)
+	} else {
+		if ip.Is4() {
+			return addPre(server)
+		} else {
+			return addPre("[" + server + "]")
+		}
+	}
+}
+func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][]dns.NameServer, error) {
+	policy := map[string][]dns.NameServer{}
 
 	for domain, server := range nsPolicy {
-		nameservers, err := parseNameServer([]string{server}, preferH3)
+		var (
+			nameservers []dns.NameServer
+			err         error
+		)
+
+		switch reflect.TypeOf(server).Kind() {
+		case reflect.Slice, reflect.Array:
+			origin := reflect.ValueOf(server)
+			servers := make([]string, 0)
+			for i := 0; i < origin.Len(); i++ {
+				servers = append(servers, fmt.Sprintf("%v", origin.Index(i)))
+			}
+			nameservers, err = parseNameServer(servers, preferH3)
+		case reflect.String:
+			nameservers, err = parseNameServer([]string{fmt.Sprintf("%v", server)}, preferH3)
+		default:
+			return nil, errors.New("server format error, must be string or array")
+		}
 		if err != nil {
 			return nil, err
 		}
 		if _, valid := trie.ValidAndSplitDomain(domain); !valid {
 			return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
 		}
-		policy[domain] = nameservers[0]
+		policy[domain] = nameservers
 	}
 
 	return policy, nil
@@ -967,6 +1012,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 		if err := geodata.InitGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %s", err)
 		}
+		log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
 	}
 
 	for _, country := range countries {
@@ -1185,55 +1231,60 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 		ForceDnsMapping: snifferRaw.ForceDnsMapping,
 		ParsePureIp:     snifferRaw.ParsePureIp,
 	}
+	loadSniffer := make(map[snifferTypes.Type]SNIFF.SnifferConfig)
 
-	var ports []utils.Range[uint16]
-	if len(snifferRaw.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](80, 80))
-		ports = append(ports, *utils.NewRange[uint16](443, 443))
-	} else {
-		for _, portRange := range snifferRaw.Ports {
-			portRaws := strings.Split(portRange, "-")
-			p, err := strconv.ParseUint(portRaws[0], 10, 16)
+	if len(snifferRaw.Sniff) != 0 {
+		for sniffType, sniffConfig := range snifferRaw.Sniff {
+			find := false
+			ports, err := parsePortRange(sniffConfig.Ports)
 			if err != nil {
-				return nil, fmt.Errorf("%s format error", portRange)
+				return nil, err
 			}
-
-			start := uint16(p)
-			if len(portRaws) > 1 {
-				p, err = strconv.ParseUint(portRaws[1], 10, 16)
-				if err != nil {
-					return nil, fmt.Errorf("%s format error", portRange)
+			overrideDest := snifferRaw.OverrideDest
+			if sniffConfig.OverrideDest != nil {
+				overrideDest = *sniffConfig.OverrideDest
+			}
+			for _, snifferType := range snifferTypes.List {
+				if snifferType.String() == strings.ToUpper(sniffType) {
+					find = true
+					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+						Ports:        ports,
+						OverrideDest: overrideDest,
+					}
 				}
+			}
 
-				end := uint16(p)
-				ports = append(ports, *utils.NewRange(start, end))
-			} else {
-				ports = append(ports, *utils.NewRange(start, start))
+			if !find {
+				return nil, fmt.Errorf("not find the sniffer[%s]", sniffType)
+			}
+		}
+	} else {
+		// Deprecated: Use Sniff instead
+		log.Warnln("Deprecated: Use Sniff instead")
+		globalPorts, err := parsePortRange(snifferRaw.Ports)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, snifferName := range snifferRaw.Sniffing {
+			find := false
+			for _, snifferType := range snifferTypes.List {
+				if snifferType.String() == strings.ToUpper(snifferName) {
+					find = true
+					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+						Ports:        globalPorts,
+						OverrideDest: snifferRaw.OverrideDest,
+					}
+				}
+			}
+
+			if !find {
+				return nil, fmt.Errorf("not find the sniffer[%s]", snifferName)
 			}
 		}
 	}
 
-	sniffer.Ports = &ports
-
-	loadSniffer := make(map[snifferTypes.Type]struct{})
-
-	for _, snifferName := range snifferRaw.Sniffing {
-		find := false
-		for _, snifferType := range snifferTypes.List {
-			if snifferType.String() == strings.ToUpper(snifferName) {
-				find = true
-				loadSniffer[snifferType] = struct{}{}
-			}
-		}
-
-		if !find {
-			return nil, fmt.Errorf("not find the sniffer[%s]", snifferName)
-		}
-	}
-
-	for st := range loadSniffer {
-		sniffer.Sniffers = append(sniffer.Sniffers, st)
-	}
+	sniffer.Sniffers = loadSniffer
 	sniffer.ForceDomain = trie.New[struct{}]()
 	for _, domain := range snifferRaw.ForceDomain {
 		err := sniffer.ForceDomain.Insert(domain, struct{}{})
@@ -1253,4 +1304,29 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer.SkipDomain.Optimize()
 
 	return sniffer, nil
+}
+
+func parsePortRange(portRanges []string) ([]utils.Range[uint16], error) {
+	ports := make([]utils.Range[uint16], 0)
+	for _, portRange := range portRanges {
+		portRaws := strings.Split(portRange, "-")
+		p, err := strconv.ParseUint(portRaws[0], 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("%s format error", portRange)
+		}
+
+		start := uint16(p)
+		if len(portRaws) > 1 {
+			p, err = strconv.ParseUint(portRaws[1], 10, 16)
+			if err != nil {
+				return nil, fmt.Errorf("%s format error", portRange)
+			}
+
+			end := uint16(p)
+			ports = append(ports, *utils.NewRange(start, end))
+		} else {
+			ports = append(ports, *utils.NewRange(start, start))
+		}
+	}
+	return ports, nil
 }

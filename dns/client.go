@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"go.uber.org/atomic"
 	"math/rand"
 	"net"
 	"net/netip"
 	"strings"
+
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	"go.uber.org/atomic"
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -24,6 +25,26 @@ type client struct {
 	host         string
 	iface        *atomic.String
 	proxyAdapter string
+	addr         string
+}
+
+var _ dnsClient = (*client)(nil)
+
+// Address implements dnsClient
+func (c *client) Address() string {
+	if len(c.addr) != 0 {
+		return c.addr
+	}
+	schema := "udp"
+	if strings.HasPrefix(c.Client.Net, "tcp") {
+		schema = "tcp"
+		if strings.HasSuffix(c.Client.Net, "tls") {
+			schema = "tls"
+		}
+	}
+
+	c.addr = fmt.Sprintf("%s://%s", schema, net.JoinHostPort(c.host, c.port))
+	return c.addr
 }
 
 func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
@@ -77,7 +98,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	ch := make(chan result, 1)
 	go func() {
 		if strings.HasSuffix(c.Client.Net, "tls") {
-			conn = tls.Client(conn, tlsC.GetGlobalFingerprintTLCConfig(c.Client.TLSConfig))
+			conn = tls.Client(conn, tlsC.GetGlobalTLSConfig(c.Client.TLSConfig))
 		}
 
 		msg, _, err := c.Client.ExchangeWithConn(m, &D.Conn{

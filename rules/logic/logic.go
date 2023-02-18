@@ -247,7 +247,10 @@ func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Ru
 func (logic *Logic) Match(metadata *C.Metadata) (bool, string) {
 	switch logic.ruleType {
 	case C.SubRules:
-		return matchSubRules(metadata, logic.adapter, logic.subRules)
+		if m, _ := logic.rules[0].Match(metadata); m {
+			return matchSubRules(metadata, logic.adapter, logic.subRules)
+		}
+		return false, ""
 	case C.NOT:
 		if m, _ := logic.rules[0].Match(metadata); !m {
 			return true, logic.adapter

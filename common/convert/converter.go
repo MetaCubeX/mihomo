@@ -2,8 +2,10 @@ package convert
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/Dreamacro/clash/log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -111,6 +113,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				trojan["grpc-opts"] = grpcOpts
 			}
 
+			if fingerprint := query.Get("fp"); fingerprint == "" {
+				trojan["client-fingerprint"] = "chrome"
+			} else {
+				trojan["client-fingerprint"] = fingerprint
+			}
+
 			proxies = append(proxies, trojan)
 
 		case "vless":
@@ -120,7 +128,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			query := urlVLess.Query()
 			vless := make(map[string]any, 20)
-			handleVShareLink(names, urlVLess, scheme, vless)
+			err = handleVShareLink(names, urlVLess, scheme, vless)
+			if err != nil {
+				log.Warnln("error:%s line:%s", err.Error(), line)
+				continue
+			}
 			if flow := query.Get("flow"); flow != "" {
 				vless["flow"] = strings.ToLower(flow)
 			}
@@ -138,7 +150,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 				query := urlVMess.Query()
 				vmess := make(map[string]any, 20)
-				handleVShareLink(names, urlVMess, scheme, vmess)
+				err = handleVShareLink(names, urlVMess, scheme, vmess)
+				if err != nil {
+					log.Warnln("error:%s line:%s", err.Error(), line)
+					continue
+				}
 				vmess["alterId"] = 0
 				vmess["cipher"] = "auto"
 				if encryption := query.Get("encryption"); encryption != "" {
@@ -272,16 +288,19 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				cipher    string
 				password  string
 			)
-
+			cipher = cipherRaw
 			if password, found = urlSS.User.Password(); !found {
-				dcBuf, _ := enc.DecodeString(cipherRaw)
+				dcBuf, err := base64.RawURLEncoding.DecodeString(cipherRaw)
+				if err != nil {
+					dcBuf, _ = enc.DecodeString(cipherRaw)
+				}
 				cipher, password, found = strings.Cut(string(dcBuf), ":")
 				if !found {
 					continue
 				}
-				err := VerifyMethod(cipher, password)
+				err = VerifyMethod(cipher, password)
 				if err != nil {
-					dcBuf, _ := encRaw.DecodeString(cipherRaw)
+					dcBuf, _ = encRaw.DecodeString(cipherRaw)
 					cipher, password, found = strings.Cut(string(dcBuf), ":")
 				}
 			}

@@ -178,7 +178,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			return nil, err
 		}
 	} else {
-		tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 	}
 
 	if len(option.ALPN) > 0 {

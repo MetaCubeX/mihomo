@@ -1,4 +1,4 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package dialer
 
@@ -90,4 +90,14 @@ func bindIfaceToListenConfig(ifaceName string, _ *net.ListenConfig, network, add
 	}
 
 	return addr.String(), nil
+}
+
+func ParseNetwork(network string, addr netip.Addr) string {
+	// fix bindIfaceToListenConfig() force bind to an ipv4 address
+	if !strings.HasSuffix(network, "4") &&
+		!strings.HasSuffix(network, "6") &&
+		addr.Unmap().Is6() {
+		network += "6"
+	}
+	return network
 }

@@ -6,6 +6,7 @@ type Sniffer interface {
 	SupportNetwork() constant.NetWork
 	SniffTCP(bytes []byte) (string, error)
 	Protocol() string
+	SupportPort(port uint16) bool
 }
 
 const (

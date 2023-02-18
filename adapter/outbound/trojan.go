@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
@@ -29,20 +30,21 @@ type Trojan struct {
 
 type TrojanOption struct {
 	BasicOption
-	Name           string      `proxy:"name"`
-	Server         string      `proxy:"server"`
-	Port           int         `proxy:"port"`
-	Password       string      `proxy:"password"`
-	ALPN           []string    `proxy:"alpn,omitempty"`
-	SNI            string      `proxy:"sni,omitempty"`
-	SkipCertVerify bool        `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint    string      `proxy:"fingerprint,omitempty"`
-	UDP            bool        `proxy:"udp,omitempty"`
-	Network        string      `proxy:"network,omitempty"`
-	GrpcOpts       GrpcOptions `proxy:"grpc-opts,omitempty"`
-	WSOpts         WSOptions   `proxy:"ws-opts,omitempty"`
-	Flow           string      `proxy:"flow,omitempty"`
-	FlowShow       bool        `proxy:"flow-show,omitempty"`
+	Name              string      `proxy:"name"`
+	Server            string      `proxy:"server"`
+	Port              int         `proxy:"port"`
+	Password          string      `proxy:"password"`
+	ALPN              []string    `proxy:"alpn,omitempty"`
+	SNI               string      `proxy:"sni,omitempty"`
+	SkipCertVerify    bool        `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint       string      `proxy:"fingerprint,omitempty"`
+	UDP               bool        `proxy:"udp,omitempty"`
+	Network           string      `proxy:"network,omitempty"`
+	GrpcOpts          GrpcOptions `proxy:"grpc-opts,omitempty"`
+	WSOpts            WSOptions   `proxy:"ws-opts,omitempty"`
+	Flow              string      `proxy:"flow,omitempty"`
+	FlowShow          bool        `proxy:"flow-show,omitempty"`
+	ClientFingerprint string      `proxy:"client-fingerprint,omitempty"`
 }
 
 func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
@@ -75,6 +77,11 @@ func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
 // StreamConn implements C.ProxyAdapter
 func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
+
+	if tlsC.HaveGlobalFingerprint() && len(t.option.ClientFingerprint) == 0 {
+		t.option.ClientFingerprint = tlsC.GetGlobalFingerprint()
+	}
+
 	if t.transport != nil {
 		c, err = gun.StreamGunWithConn(c, t.gunTLSConfig, t.gunConfig)
 	} else {
@@ -95,7 +102,7 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 		return c, err
 	}
 	err = t.instance.WriteHeader(c, trojan.CommandTCP, serializesSocksAddr(metadata))
-	return c, err
+	return N.NewExtendedConn(c), err
 }
 
 // DialContext implements C.ProxyAdapter
@@ -211,12 +218,13 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 
 	tOption := &trojan.Option{
-		Password:       option.Password,
-		ALPN:           option.ALPN,
-		ServerName:     option.Server,
-		SkipCertVerify: option.SkipCertVerify,
-		FlowShow:       option.FlowShow,
-		Fingerprint:    option.Fingerprint,
+		Password:          option.Password,
+		ALPN:              option.ALPN,
+		ServerName:        option.Server,
+		SkipCertVerify:    option.SkipCertVerify,
+		FlowShow:          option.FlowShow,
+		Fingerprint:       option.Fingerprint,
+		ClientFingerprint: option.ClientFingerprint,
 	}
 
 	switch option.Network {
@@ -268,7 +276,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		}
 
 		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalFingerprintTLCConfig(tlsConfig)
+			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
 		} else {
 			var err error
 			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
@@ -276,7 +284,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			}
 		}
 
-		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig)
+		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig, tOption.ClientFingerprint)
 
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{

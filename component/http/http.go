@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	UA = "Clash"
+	UA = "clash.meta"
 )
 
 func HttpRequest(ctx context.Context, url, method string, header map[string][]string, body io.Reader) (*http.Response, error) {

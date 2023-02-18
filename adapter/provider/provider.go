@@ -301,6 +301,7 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 					for i := range excludeTypeArray {
 						if strings.EqualFold(pType, excludeTypeArray[i]) {
 							flag = true
+							break
 						}
 
 					}

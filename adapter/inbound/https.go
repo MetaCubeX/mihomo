@@ -15,11 +15,11 @@ func NewHTTPS(request *http.Request, conn net.Conn, additions ...Addition) *cont
 	for _, addition := range additions {
 		addition.Apply(metadata)
 	}
-	if ip, port, err := parseAddr(conn.RemoteAddr().String()); err == nil {
+	if ip, port, err := parseAddr(conn.RemoteAddr()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}
-	if ip, port, err := parseAddr(conn.LocalAddr().String()); err == nil {
+	if ip, port, err := parseAddr(conn.LocalAddr()); err == nil {
 		metadata.InIP = ip
 		metadata.InPort = port
 	}

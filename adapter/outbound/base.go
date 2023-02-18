@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/gofrs/uuid"
 	"net"
 	"strings"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+
+	"github.com/gofrs/uuid"
 )
 
 type Base struct {
@@ -18,6 +20,7 @@ type Base struct {
 	iface  string
 	tp     C.AdapterType
 	udp    bool
+	xudp   bool
 	tfo    bool
 	rmark  int
 	id     string
@@ -87,6 +90,11 @@ func (b *Base) SupportUDP() bool {
 	return b.udp
 }
 
+// SupportXUDP implements C.ProxyAdapter
+func (b *Base) SupportXUDP() bool {
+	return b.xudp
+}
+
 // SupportTFO implements C.ProxyAdapter
 func (b *Base) SupportTFO() bool {
 	return b.tfo
@@ -146,6 +154,7 @@ type BaseOption struct {
 	Addr        string
 	Type        C.AdapterType
 	UDP         bool
+	XUDP        bool
 	TFO         bool
 	Interface   string
 	RoutingMark int
@@ -158,6 +167,7 @@ func NewBase(opt BaseOption) *Base {
 		addr:   opt.Addr,
 		tp:     opt.Type,
 		udp:    opt.UDP,
+		xudp:   opt.XUDP,
 		tfo:    opt.TFO,
 		iface:  opt.Interface,
 		rmark:  opt.RoutingMark,
@@ -166,7 +176,7 @@ func NewBase(opt BaseOption) *Base {
 }
 
 type conn struct {
-	net.Conn
+	N.ExtendedConn
 	chain                   C.Chain
 	actualRemoteDestination string
 }
@@ -185,8 +195,12 @@ func (c *conn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
+func (c *conn) Upstream() any {
+	return c.ExtendedConn
+}
+
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
-	return &conn{c, []string{a.Name()}, parseRemoteDestination(a.Addr())}
+	return &conn{N.NewExtendedConn(c), []string{a.Name()}, parseRemoteDestination(a.Addr())}
 }
 
 type packetConn struct {

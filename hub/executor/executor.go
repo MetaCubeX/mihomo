@@ -18,7 +18,7 @@ import (
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
 	SNI "github.com/Dreamacro/clash/component/sniffer"
-	"github.com/Dreamacro/clash/component/tls"
+	CTLS "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -137,8 +137,9 @@ func GetGeneral() *config.General {
 func updateListeners(listeners map[string]C.InboundListener) {
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
+	natTable := tunnel.NatTable()
 
-	listener.PatchInboundListeners(listeners, tcpIn, udpIn, true)
+	listener.PatchInboundListeners(listeners, tcpIn, udpIn, natTable, true)
 }
 
 func updateExperimental(c *config.Config) {
@@ -146,29 +147,25 @@ func updateExperimental(c *config.Config) {
 }
 
 func preUpdateExperimental(c *config.Config) {
-	for _, fingerprint := range c.Experimental.Fingerprints {
-		if err := tls.AddCertFingerprint(fingerprint); err != nil {
-			log.Warnln("fingerprint[%s] is err, %s", fingerprint, err.Error())
-		}
+	CTLS.AddCertificate(c.TLS.PrivateKey, c.TLS.Certificate)
+	for _, c := range c.TLS.CustomTrustCert {
+		CTLS.AddCertificate(c.PrivateKey, c.Certificate)
 	}
 }
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
-		resolver.DisableIPv6 = !generalIPv6
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
 		resolver.DefaultLocalServer = nil
 		dns.ReCreateServer("", nil, nil)
 		return
-	} else {
-		resolver.DisableIPv6 = !c.IPv6
 	}
 
 	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
-		IPv6:         c.IPv6,
+		IPv6:         c.IPv6 && generalIPv6,
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
 		Hosts:        c.Hosts,
@@ -227,11 +224,11 @@ func loadProvider(pv provider.Provider) {
 		switch pv.Type() {
 		case provider.Proxy:
 			{
-				log.Warnln("initial proxy provider %s error: %v", (pv).Name(), err)
+				log.Errorln("initial proxy provider %s error: %v", (pv).Name(), err)
 			}
 		case provider.Rule:
 			{
-				log.Warnln("initial rule provider %s error: %v", (pv).Name(), err)
+				log.Errorln("initial rule provider %s error: %v", (pv).Name(), err)
 			}
 
 		}
@@ -283,7 +280,7 @@ func updateTun(general *config.General) {
 func updateSniffer(sniffer *config.Sniffer) {
 	if sniffer.Enable {
 		dispatcher, err := SNI.NewSnifferDispatcher(
-			sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain, sniffer.Ports,
+			sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain,
 			sniffer.ForceDnsMapping, sniffer.ParsePureIp,
 		)
 		if err != nil {
@@ -309,13 +306,12 @@ func updateTunnels(tunnels []LC.Tunnel) {
 
 func updateGeneral(general *config.General, force bool) {
 	tunnel.SetMode(general.Mode)
-	tunnel.SetFindProcessMode(general.EnableProcess, general.FindProcessMode)
+	tunnel.SetFindProcessMode(general.FindProcessMode)
 	dialer.DisableIPv6 = !general.IPv6
 	if !dialer.DisableIPv6 {
 		log.Infoln("Use IPv6")
-	} else {
-		resolver.DisableIPv6 = true
 	}
+	resolver.DisableIPv6 = dialer.DisableIPv6
 
 	if general.TCPConcurrent {
 		dialer.SetDial(general.TCPConcurrent)
@@ -353,12 +349,13 @@ func updateGeneral(general *config.General, force bool) {
 
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
+	natTable := tunnel.NatTable()
 
 	listener.ReCreateHTTP(general.Port, tcpIn)
 	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn)
+	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn, natTable)
 	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
-	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn)
+	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn, natTable)
 	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
 	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)

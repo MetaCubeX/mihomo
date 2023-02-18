@@ -1,6 +1,7 @@
 package dialer
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"syscall"
@@ -8,16 +9,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type controlFn = func(network, address string, c syscall.RawConn) error
-
-func bindControl(ifaceName string, chain controlFn) controlFn {
-	return func(network, address string, c syscall.RawConn) (err error) {
-		defer func() {
-			if err == nil && chain != nil {
-				err = chain(network, address, c)
-			}
-		}()
-
+func bindControl(ifaceName string) controlFn {
+	return func(ctx context.Context, network, address string, c syscall.RawConn) (err error) {
 		addrPort, err := netip.ParseAddrPort(address)
 		if err == nil && !addrPort.Addr().IsGlobalUnicast() {
 			return
@@ -37,13 +30,17 @@ func bindControl(ifaceName string, chain controlFn) controlFn {
 }
 
 func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, _ string, _ netip.Addr) error {
-	dialer.Control = bindControl(ifaceName, dialer.Control)
+	addControlToDialer(dialer, bindControl(ifaceName))
 
 	return nil
 }
 
 func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, _, address string) (string, error) {
-	lc.Control = bindControl(ifaceName, lc.Control)
+	addControlToListenConfig(lc, bindControl(ifaceName))
 
 	return address, nil
+}
+
+func ParseNetwork(network string, addr netip.Addr) string {
+	return network
 }
