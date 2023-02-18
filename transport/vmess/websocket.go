@@ -301,6 +301,10 @@ func (wsedc *websocketWithEarlyDataConn) SetWriteDeadline(t time.Time) error {
 	return wsedc.Conn.SetWriteDeadline(t)
 }
 
+func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
+	return wsedc.Conn == nil
+}
+
 func (wsedc *websocketWithEarlyDataConn) Upstream() any {
 	return wsedc.Conn
 }
