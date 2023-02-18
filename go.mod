@@ -28,7 +28,7 @@ require (
 	github.com/refraction-networking/utls v1.2.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.1.7-0.20230207063819-27d2950cdbe9
-	github.com/sagernet/sing-vmess v0.1.1-0.20230207064843-983dde690564
+	github.com/sagernet/sing-vmess v0.1.1-0.20230212211128-cb4e47dd0acb
 	github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
 	github.com/samber/lo v1.37.0
