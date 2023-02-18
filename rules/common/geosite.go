@@ -9,7 +9,6 @@ import (
 	_ "github.com/Dreamacro/clash/component/geodata/standard"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 type GEOSITE struct {
@@ -25,11 +24,10 @@ func (gs *GEOSITE) RuleType() C.RuleType {
 }
 
 func (gs *GEOSITE) Match(metadata *C.Metadata) (bool, string) {
-	if metadata.AddrType() != socks5.AtypDomainName {
+	domain := metadata.RuleHost()
+	if len(domain) == 0 {
 		return false, ""
 	}
-
-	domain := metadata.RuleHost()
 	return gs.matcher.ApplyDomain(domain), gs.adapter
 }
 
