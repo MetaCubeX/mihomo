@@ -2,6 +2,7 @@ package vless
 
 import (
 	"bytes"
+	"crypto/subtle"
 	gotls "crypto/tls"
 	"encoding/binary"
 	"errors"
@@ -9,7 +10,9 @@ import (
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/log"
 	utls "github.com/refraction-networking/utls"
+	buf2 "github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing/common/rw"
 	"io"
 	"net"
 	"reflect"
@@ -48,17 +51,22 @@ type Conn struct {
 	enableXTLS                 bool
 	cipher                     uint16
 	remainingServerHello       uint16
-	readRemainingContent       uint16
-	readRemainingPadding       uint16
-	readFilterUUID             bool
+	readRemainingContent       int
+	readRemainingPadding       int
+	readFilter                 bool
 	readDirect                 bool
+	readLastCommand            byte
 	writeFilterApplicationData bool
 	writeDirect                bool
 }
 
 func (vc *Conn) Read(b []byte) (int, error) {
 	if vc.received {
-
+		if vc.readFilter {
+			buffer := buf2.As(b)
+			err := vc.ReadBuffer(buffer)
+			return buffer.Len(), err
+		}
 		return vc.ExtendedReader.Read(b)
 	}
 
@@ -71,7 +79,64 @@ func (vc *Conn) Read(b []byte) (int, error) {
 
 func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 	if vc.received {
-
+		toRead := buffer.FreeBytes()
+		if vc.readRemainingContent > 0 {
+			if vc.readRemainingContent < buffer.FreeLen() {
+				toRead = toRead[:vc.readRemainingContent]
+			}
+			n, err := vc.ExtendedReader.Read(buffer.FreeBytes())
+			buffer.Truncate(n)
+			vc.readRemainingPadding -= n
+			return err
+		}
+		if vc.readRemainingPadding > 0 {
+			rw.SkipN(vc.ExtendedReader, vc.readRemainingPadding)
+		}
+		if vc.readFilter {
+			switch vc.readLastCommand {
+			case commandPaddingContinue:
+				if vc.isTLS || vc.packetsToFilter > 0 {
+					header := buffer.FreeBytes()[:paddingHeaderLen]
+					_, err := io.ReadFull(vc.ExtendedReader, header)
+					if err != nil {
+						return err
+					}
+					if subtle.ConstantTimeCompare(vc.id.Bytes(), header[:uuid.Size]) != 1 {
+						return fmt.Errorf("XTLS Vision server responded unknown UUID: %s",
+							uuid.FromBytesOrNil(header[:uuid.Size]).String())
+					}
+					vc.readLastCommand = header[uuid.Size]
+					vc.readRemainingContent = int(binary.BigEndian.Uint16(header[uuid.Size+1:]))
+					vc.readRemainingPadding = int(binary.BigEndian.Uint16(header[uuid.Size+3:]))
+					return vc.ReadBuffer(buffer)
+				}
+			case commandPaddingEnd:
+				vc.readFilter = false
+			case commandPaddingDirect:
+				if vc.input != nil {
+					_, err := buffer.ReadFrom(vc.input)
+					if err != nil {
+						return err
+					}
+					if vc.input.Len() == 0 {
+						vc.input = nil
+					}
+				}
+				if vc.rawInput != nil {
+					_, err := buffer.ReadFrom(vc.rawInput)
+					if err != nil {
+						return err
+					}
+					if vc.rawInput.Len() == 0 {
+						vc.rawInput = nil
+					}
+				}
+				if vc.input == nil && vc.rawInput == nil {
+					vc.readFilter = false
+					vc.ExtendedReader = N.NewExtendedReader(vc.Conn)
+				}
+			}
+		}
 		return vc.ExtendedReader.ReadBuffer(buffer)
 	}
 
@@ -349,6 +414,7 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 			}
 		case XRV:
 			c.packetsToFilter = 2048
+			c.readFilter = true
 			c.writeFilterApplicationData = true
 			var t reflect.Type
 			var p uintptr
