@@ -171,7 +171,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
 	host, _, _ := net.SplitHostPort(v.addr)
 
-	if v.isXTLSEnabled() && !isH2 {
+	if v.isLegacyXTLSEnabled() && !isH2 {
 		xtlsOpts := vless.XTLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
@@ -206,8 +206,8 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 	return conn, nil
 }
 
-func (v *Vless) isXTLSEnabled() bool {
-	return v.client.Addons != nil
+func (v *Vless) isLegacyXTLSEnabled() bool {
+	return v.client.Addons != nil && v.client.Addons.Flow != vless.XRV
 }
 
 // DialContext implements C.ProxyAdapter

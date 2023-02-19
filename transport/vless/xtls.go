@@ -2,11 +2,16 @@ package vless
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	xtls "github.com/xtls/go"
+)
+
+var (
+	ErrNotTLS13 = errors.New("XTLS Vision based on TLS 1.3 outer connection")
 )
 
 type XTLSConfig struct {

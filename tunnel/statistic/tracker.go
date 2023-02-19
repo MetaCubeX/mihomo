@@ -28,7 +28,7 @@ type trackerInfo struct {
 	RulePayload   string        `json:"rulePayload"`
 }
 
-type tcpTracker struct {
+type TCPTracker struct {
 	C.Conn `json:"-"`
 	*trackerInfo
 	manager        *Manager
@@ -36,11 +36,16 @@ type tcpTracker struct {
 	extendedWriter N.ExtendedWriter
 }
 
-func (tt *tcpTracker) ID() string {
+func (tt *TCPTracker) ID() string {
 	return tt.UUID.String()
 }
 
-func (tt *tcpTracker) Read(b []byte) (int, error) {
+func (tt *TCPTracker) AddDownload(n int64) {
+	tt.manager.PushDownloaded(n)
+	tt.DownloadTotal.Add(n)
+}
+
+func (tt *TCPTracker) Read(b []byte) (int, error) {
 	n, err := tt.Conn.Read(b)
 	download := int64(n)
 	tt.manager.PushDownloaded(download)
@@ -48,7 +53,7 @@ func (tt *tcpTracker) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
+func (tt *TCPTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
 	err = tt.extendedReader.ReadBuffer(buffer)
 	download := int64(buffer.Len())
 	tt.manager.PushDownloaded(download)
@@ -56,7 +61,12 @@ func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
 	return
 }
 
-func (tt *tcpTracker) Write(b []byte) (int, error) {
+func (tt *TCPTracker) AddUpload(n int64) {
+	tt.manager.PushUploaded(n)
+	tt.UploadTotal.Add(n)
+}
+
+func (tt *TCPTracker) Write(b []byte) (int, error) {
 	n, err := tt.Conn.Write(b)
 	upload := int64(n)
 	tt.manager.PushUploaded(upload)
@@ -64,7 +74,7 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
+func (tt *TCPTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
 	upload := int64(buffer.Len())
 	err = tt.extendedWriter.WriteBuffer(buffer)
 	tt.manager.PushUploaded(upload)
@@ -72,16 +82,16 @@ func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
 	return
 }
 
-func (tt *tcpTracker) Close() error {
+func (tt *TCPTracker) Close() error {
 	tt.manager.Leave(tt)
 	return tt.Conn.Close()
 }
 
-func (tt *tcpTracker) Upstream() any {
+func (tt *TCPTracker) Upstream() any {
 	return tt.Conn
 }
 
-func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *TCPTracker {
 	uuid, _ := uuid.NewV4()
 	if conn != nil {
 		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
@@ -91,7 +101,7 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 		}
 	}
 
-	t := &tcpTracker{
+	t := &TCPTracker{
 		Conn:    conn,
 		manager: manager,
 		trackerInfo: &trackerInfo{

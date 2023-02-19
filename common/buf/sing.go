@@ -7,6 +7,7 @@ import (
 
 type Buffer = buf.Buffer
 
+var StackNew = buf.StackNew
 var StackNewSize = buf.StackNewSize
 var KeepAlive = common.KeepAlive
 
