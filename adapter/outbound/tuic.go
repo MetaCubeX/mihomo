@@ -51,6 +51,7 @@ type TuicOption struct {
 	ReceiveWindowConn   int    `proxy:"recv-window-conn,omitempty"`
 	ReceiveWindow       int    `proxy:"recv-window,omitempty"`
 	DisableMTUDiscovery bool   `proxy:"disable-mtu-discovery,omitempty"`
+	SNI                 string `proxy:"sni,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -106,11 +107,13 @@ func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (pc net.Pack
 func NewTuic(option TuicOption) (*Tuic, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	serverName := option.Server
-
 	tlsConfig := &tls.Config{
 		ServerName:         serverName,
 		InsecureSkipVerify: option.SkipCertVerify,
 		MinVersion:         tls.VersionTLS13,
+	}
+	if option.SNI != "" {
+		tlsConfig.ServerName = option.SNI
 	}
 
 	var bs []byte
