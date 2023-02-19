@@ -67,6 +67,26 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
+func checkTunName(tunName string) (ok bool) {
+	defer func() {
+		if !ok {
+			log.Warnln("[TUN] Unsupported tunName(%s) in %s, force regenerate by ourselves.", tunName, runtime.GOOS)
+		}
+	}()
+	if runtime.GOOS == "darwin" {
+		if len(tunName) <= 4 {
+			return false
+		}
+		if tunName[:4] == "utun" {
+			return false
+		}
+		if _, parseErr := strconv.ParseInt(tunName[4:], 10, 16); parseErr != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (l *Listener, err error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
@@ -75,7 +95,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		}
 	}
 	tunName := options.Device
-	if tunName == "" {
+	if tunName == "" || !checkTunName(tunName) {
 		tunName = CalculateInterfaceName(InterfaceName)
 		options.Device = tunName
 	}
