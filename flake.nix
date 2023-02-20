@@ -14,7 +14,7 @@
             overlays = [ self.overlay ];
           };
         in
-        rec {
+        {
           packages.default = pkgs.clash-meta;
         }
       ) //
@@ -28,12 +28,10 @@
             inherit version;
             src = ./.;
 
-            vendorSha256 = "sha256-8cbcE9gKJjU14DNTLPc6nneEPZg7Akt+FlSDlPRvG5k=";
+            vendorHash = "sha256-3j+5fF57eu7JJd3rnrWYwuWDivycUkUTTzptYaK3G/Q=";
 
             # Do not build testing suit
             excludedPackages = [ "./test" ];
-
-            CGO_ENABLED = 0;
 
             ldflags = [
               "-s"
@@ -41,7 +39,7 @@
               "-X github.com/Dreamacro/clash/constant.Version=dev-${version}"
               "-X github.com/Dreamacro/clash/constant.BuildTime=${version}"
             ];
-            
+
             tags = [
               "with_gvisor"
             ];
