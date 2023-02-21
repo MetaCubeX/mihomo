@@ -17,7 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/sing"
+	"github.com/Dreamacro/clash/log"
 
 	wireguard "github.com/metacubex/sing-wireguard"
 
@@ -174,14 +174,14 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
-			sing.Logger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
+			log.SingLogger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
 		},
 		Errorf: func(format string, args ...interface{}) {
-			sing.Logger.Error(fmt.Sprintf(strings.ToLower(format), args...))
+			log.SingLogger.Error(fmt.Sprintf(strings.ToLower(format), args...))
 		},
 	}, option.Workers)
 	if debug.Enabled {
-		sing.Logger.Trace("created wireguard ipc conf: \n", ipcConf)
+		log.SingLogger.Trace("created wireguard ipc conf: \n", ipcConf)
 	}
 	err = outbound.device.IpcSet(ipcConf)
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 
 	"github.com/mroth/weightedrand/v2"
-	utls "github.com/refraction-networking/utls"
+	utls "github.com/sagernet/utls"
 )
 
 type UConn struct {

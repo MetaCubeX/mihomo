@@ -10,10 +10,9 @@ import (
 
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/shadowtls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
+	shadowtls "github.com/Dreamacro/clash/transport/sing-shadowtls"
 	"github.com/Dreamacro/clash/transport/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
@@ -33,7 +32,7 @@ type ShadowSocks struct {
 	obfsMode        string
 	obfsOption      *simpleObfsOption
 	v2rayOption     *v2rayObfs.Option
-	shadowTLSOption *shadowTLSOption
+	shadowTLSOption *shadowtls.ShadowTLSOption
 	tlsConfig       *tls.Config
 }
 
@@ -67,14 +66,31 @@ type v2rayObfsOption struct {
 }
 
 type shadowTLSOption struct {
-	Password       string `obfs:"password"`
-	Host           string `obfs:"host"`
-	Fingerprint    string `obfs:"fingerprint,omitempty"`
-	SkipCertVerify bool   `obfs:"skip-cert-verify,omitempty"`
+	Password          string `obfs:"password"`
+	Host              string `obfs:"host"`
+	Fingerprint       string `obfs:"fingerprint,omitempty"`
+	ClientFingerprint string `obfs:"client-fingerprint,omitempty"`
+	SkipCertVerify    bool   `obfs:"skip-cert-verify,omitempty"`
+	Version           int    `obfs:"version,omitempty"`
 }
 
 // StreamConn implements C.ProxyAdapter
 func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	switch ss.obfsMode {
+	case shadowtls.Mode:
+		// fix tls handshake not timeout
+		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		defer cancel()
+		var err error
+		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ss.streamConn(c, metadata)
+}
+
+func (ss *ShadowSocks) streamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	switch ss.obfsMode {
 	case "tls":
 		c = obfs.NewTLSObfs(c, ss.obfsOption.Host)
@@ -87,8 +103,6 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
-	case shadowtls.Mode:
-		c = shadowtls.NewShadowTLS(c, ss.shadowTLSOption.Password, ss.tlsConfig)
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
 		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
@@ -113,7 +127,15 @@ func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Diale
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = ss.StreamConn(c, metadata)
+	switch ss.obfsMode {
+	case shadowtls.Mode:
+		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	c, err = ss.streamConn(c, metadata)
 	return NewConn(c, ss), err
 }
 
@@ -171,7 +193,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 
 	var v2rayOption *v2rayObfs.Option
 	var obfsOption *simpleObfsOption
-	var shadowTLSOpt *shadowTLSOption
+	var shadowTLSOpt *shadowtls.ShadowTLSOption
 	var tlsConfig *tls.Config
 	obfsMode := ""
 
@@ -210,24 +232,20 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		}
 	} else if option.Plugin == shadowtls.Mode {
 		obfsMode = shadowtls.Mode
-		shadowTLSOpt = &shadowTLSOption{}
-		if err := decoder.Decode(option.PluginOpts, shadowTLSOpt); err != nil {
+		opt := &shadowTLSOption{
+			Version: 2,
+		}
+		if err := decoder.Decode(option.PluginOpts, opt); err != nil {
 			return nil, fmt.Errorf("ss %s initialize shadow-tls-plugin error: %w", addr, err)
 		}
 
-		tlsConfig = &tls.Config{
-			NextProtos:         shadowtls.DefaultALPN,
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: shadowTLSOpt.SkipCertVerify,
-			ServerName:         shadowTLSOpt.Host,
-		}
-
-		if len(shadowTLSOpt.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-		} else {
-			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, shadowTLSOpt.Fingerprint); err != nil {
-				return nil, err
-			}
+		shadowTLSOpt = &shadowtls.ShadowTLSOption{
+			Password:          opt.Password,
+			Host:              opt.Host,
+			Fingerprint:       opt.Fingerprint,
+			ClientFingerprint: opt.ClientFingerprint,
+			SkipCertVerify:    opt.SkipCertVerify,
+			Version:           opt.Version,
 		}
 	}
 

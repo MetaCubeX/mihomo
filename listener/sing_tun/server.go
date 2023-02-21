@@ -237,7 +237,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		EndpointIndependentNat: options.EndpointIndependentNat,
 		UDPTimeout:             udpTimeout,
 		Handler:                handler,
-		Logger:                 sing.Logger,
+		Logger:                 log.SingLogger,
 	})
 	if err != nil {
 		return
