@@ -7,12 +7,13 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 
+	"github.com/Dreamacro/clash/log"
 	"github.com/gofrs/uuid"
 	buf2 "github.com/sagernet/sing/common/buf"
 )
 
 const (
-	paddingHeaderLen = 16 + 1 + 2 + 2 // =21
+	paddingHeaderLen = uuid.Size + 1 + 2 + 2 // =21
 
 	commandPaddingContinue byte = 0x00
 	commandPaddingEnd      byte = 0x01
@@ -34,6 +35,7 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 	binary.BigEndian.PutUint16(buffer.Extend(2), uint16(paddingLen))
 	buffer.Write(p)
 	buffer.Extend(int(paddingLen))
+	log.Debugln("XTLS Vision write padding1: command=%v, payloadLen=%v, paddingLen=%v", command, contentLen, paddingLen)
 }
 
 func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID) {
@@ -50,6 +52,7 @@ func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID) {
 		copy(buffer.ExtendHeader(uuid.Size), userUUID.Bytes())
 	}
 	buffer.Extend(int(paddingLen))
+	log.Debugln("XTLS Vision write padding2: command=%d, payloadLen=%d, paddingLen=%d", command, contentLen, paddingLen)
 }
 
 func ReshapeBuffer(buffer *buf.Buffer) *buf.Buffer {

@@ -479,7 +479,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
 		switch option.Flow {
-		case vless.XRO, vless.XRD, vless.XRS:
+		case vless.XRO, vless.XRD, vless.XRS, vless.XRV:
 			addons = &vless.Addons{
 				Flow: option.Flow,
 			}
