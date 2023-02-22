@@ -447,7 +447,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	dialer.DefaultInterface.Store(config.General.Interface)
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
 		return nil, err
