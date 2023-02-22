@@ -37,14 +37,25 @@ func bindControl(ifaceIdx int) controlFn {
 		var innerErr error
 		err = c.Control(func(fd uintptr) {
 			handle := syscall.Handle(fd)
+			bind6err := bind6(handle, ifaceIdx)
+			bind4err := bind4(handle, ifaceIdx)
 			switch network {
-			case "tcp6", "udp6":
-				innerErr = bind6(handle, ifaceIdx)
-				_ = bind4(handle, ifaceIdx)
-			default:
-				innerErr = bind4(handle, ifaceIdx)
-				// try bind ipv6, if failed, ignore. it's a workaround for windows disable interface ipv6
-				_ = bind6(handle, ifaceIdx)
+			case "ip6", "tcp6":
+				innerErr = bind6err
+			case "ip4", "tcp4", "udp4":
+				innerErr = bind4err
+			case "udp6":
+				// golang will set network to udp6 when listenUDP on wildcard ip (eg: ":0", "")
+				if (!addrPort.Addr().IsValid() || addrPort.Addr().IsUnspecified()) && bind6err != nil {
+					// try bind ipv6, if failed, ignore. it's a workaround for windows disable interface ipv6
+					if bind4err != nil {
+						innerErr = bind6err
+					} else {
+						innerErr = bind4err
+					}
+				} else {
+					innerErr = bind6err
+				}
 			}
 		})
 
