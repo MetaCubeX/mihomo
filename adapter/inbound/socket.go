@@ -34,7 +34,7 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 	metadata := &C.Metadata{}
 	metadata.NetWork = C.TCP
 	metadata.Type = C.INNER
-	metadata.DNSMode = C.DNSMapping
+	metadata.DNSMode = C.DNSNormal
 	metadata.Host = host
 	metadata.Process = C.ClashName
 	if h, port, err := net.SplitHostPort(dst); err == nil {
