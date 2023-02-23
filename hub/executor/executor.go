@@ -144,6 +144,10 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 		return
 	}
 
+	if general.Interface == "" && (!general.Tun.Enable || !general.Tun.AutoDetectInterface) {
+		dialer.DefaultInterface.Store(general.Interface)
+	}
+
 	inbound.SetTfo(general.InboundTfo)
 	allowLan := general.AllowLan
 	listener.SetAllowLan(allowLan)
@@ -339,9 +343,14 @@ func updateGeneral(general *config.General) {
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 	// Avoid reload configuration clean the value, causing traffic loops
-	if general.Interface != "" && general.Tun.Enable && !general.Tun.AutoDetectInterface {
+	if listener.GetTunConf().Enable && listener.GetTunConf().AutoDetectInterface {
+		// changed only when the name is specified
+		// if name is empty, setting delay until after tun loaded
+		if general.Interface != "" && (!general.Tun.Enable || !general.Tun.AutoDetectInterface) {
+			dialer.DefaultInterface.Store(general.Interface)
+		}
+	} else {
 		dialer.DefaultInterface.Store(general.Interface)
-		log.Infoln("Use interface name: %s", general.Interface)
 	}
 
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
