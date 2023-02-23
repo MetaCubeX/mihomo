@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel/statistic"
-
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/gorilla/websocket"
@@ -43,7 +44,7 @@ func SetUIPath(path string) {
 }
 
 func Start(addr string, tlsAddr string, secret string,
-	certificat, privateKey string) {
+	certificat, privateKey string, isDebug bool) {
 	if serverAddr != "" {
 		return
 	}
@@ -59,6 +60,17 @@ func Start(addr string, tlsAddr string, secret string,
 		MaxAge:         300,
 	})
 	r.Use(corsM.Handler)
+	if isDebug {
+		r.Mount("/debug", func() http.Handler {
+			r := chi.NewRouter()
+			r.Put("/gc", func(w http.ResponseWriter, r *http.Request) {
+				debug.FreeOSMemory()
+			})
+			handler := middleware.Profiler
+			r.Mount("/", handler())
+			return r
+		}())
+	}
 	r.Group(func(r chi.Router) {
 		r.Use(authentication)
 		r.Get("/", hello)
