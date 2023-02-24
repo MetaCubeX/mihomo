@@ -387,6 +387,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			tp:     C.Vmess,
 			udp:    option.UDP,
 			xudp:   option.XUDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),

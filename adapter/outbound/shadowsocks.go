@@ -252,6 +252,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			addr:   addr,
 			tp:     C.Shadowsocks,
 			udp:    option.UDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),

@@ -140,10 +140,15 @@ func (b *Base) DialOptions(opts ...dialer.Option) []dialer.Option {
 	default:
 	}
 
+	if b.tfo {
+		opts = append(opts, dialer.WithTFO(true))
+	}
+
 	return opts
 }
 
 type BasicOption struct {
+	TFO         bool   `proxy:"tfo,omitempty" group:"tfo,omitempty"`
 	Interface   string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
 	RoutingMark int    `proxy:"routing-mark,omitempty" group:"routing-mark,omitempty"`
 	IPVersion   string `proxy:"ip-version,omitempty" group:"ip-version,omitempty"`

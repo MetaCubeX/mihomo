@@ -18,6 +18,7 @@ type option struct {
 	routingMark   int
 	network       int
 	prefer        int
+	tfo           bool
 	resolver      resolver.Resolver
 }
 
@@ -66,6 +67,12 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 		} else {
 			opt.network = 6
 		}
+	}
+}
+
+func WithTFO(tfo bool) Option {
+	return func(opt *option) {
+		opt.tfo = tfo
 	}
 }
 
