@@ -11,7 +11,6 @@ import (
 	"net"
 	"reflect"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/Dreamacro/clash/common/buf"
@@ -20,10 +19,10 @@ import (
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/log"
 	"github.com/gofrs/uuid"
-	utls "github.com/refraction-networking/utls"
 	buf2 "github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/rw"
+	utls "github.com/sagernet/utls"
 	xtls "github.com/xtls/go"
 	"google.golang.org/protobuf/proto"
 )
@@ -487,12 +486,5 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 		}
 	}
 
-	go func() {
-		select {
-		case <-c.handshake:
-		case <-time.After(200 * time.Millisecond):
-			c.sendRequest(nil)
-		}
-	}()
 	return c, nil
 }
