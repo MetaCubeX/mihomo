@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	paddingHeaderLen = uuid.Size + 1 + 2 + 2 // =21
+	paddingHeaderLen = 1 + 2 + 2 // =5
 
 	commandPaddingContinue byte = 0x00
 	commandPaddingEnd      byte = 0x01

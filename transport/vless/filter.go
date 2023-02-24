@@ -28,6 +28,9 @@ const (
 )
 
 func (vc *Conn) FilterTLS(p []byte) (index int) {
+	if vc.packetsToFilter <= 0 {
+		return 0
+	}
 	lenP := len(p)
 	vc.packetsToFilter -= 1
 	if index = bytes.Index(p, tlsServerHandshakeStart); index != -1 {

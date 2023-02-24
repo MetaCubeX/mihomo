@@ -53,7 +53,8 @@ type Conn struct {
 	remainingServerHello       uint16
 	readRemainingContent       int
 	readRemainingPadding       int
-	readFilter                 bool
+	readProcess                bool
+	readFilterUUID             bool
 	readLastCommand            byte
 	writeFilterApplicationData bool
 	writeDirect                bool
@@ -61,7 +62,7 @@ type Conn struct {
 
 func (vc *Conn) Read(b []byte) (int, error) {
 	if vc.received {
-		if vc.readFilter {
+		if vc.readProcess {
 			buffer := buf2.As(b)
 			err := vc.ReadBuffer(buffer)
 			return buffer.Len(), err
@@ -86,7 +87,7 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 			n, err := vc.ExtendedReader.Read(toRead)
 			buffer.Truncate(n)
 			vc.readRemainingContent -= n
-			vc.FilterTLS(buffer.Bytes())
+			vc.FilterTLS(toRead)
 			return err
 		}
 		if vc.readRemainingPadding > 0 {
@@ -96,31 +97,41 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 			}
 			vc.readRemainingPadding = 0
 		}
-		if vc.readFilter {
+		if vc.readProcess {
 			switch vc.readLastCommand {
 			case commandPaddingContinue:
 				//if vc.isTLS || vc.packetsToFilter > 0 {
-				header := buffer.FreeBytes()[:paddingHeaderLen]
+				headerUUIDLen := 0
+				if vc.readFilterUUID {
+					headerUUIDLen = uuid.Size
+				}
+				header := buffer.FreeBytes()[:paddingHeaderLen+headerUUIDLen]
 				_, err := io.ReadFull(vc.ExtendedReader, header)
 				if err != nil {
 					return err
 				}
-				if subtle.ConstantTimeCompare(vc.id.Bytes(), header[:uuid.Size]) != 1 {
-					return fmt.Errorf("XTLS Vision server responded unknown UUID: %s",
-						uuid.FromBytesOrNil(header[:uuid.Size]).String())
+				pos := 0
+				if vc.readFilterUUID {
+					vc.readFilterUUID = false
+					pos = uuid.Size
+					if subtle.ConstantTimeCompare(vc.id.Bytes(), header[:uuid.Size]) != 1 {
+						err = fmt.Errorf("XTLS Vision server responded unknown UUID: %s",
+							uuid.FromBytesOrNil(header[:uuid.Size]).String())
+						log.Errorln(err.Error())
+						return err
+					}
 				}
-				vc.readLastCommand = header[uuid.Size]
-				vc.readRemainingContent = int(binary.BigEndian.Uint16(header[uuid.Size+1:]))
-				vc.readRemainingPadding = int(binary.BigEndian.Uint16(header[uuid.Size+3:]))
+				vc.readLastCommand = header[pos]
+				vc.readRemainingContent = int(binary.BigEndian.Uint16(header[pos+1:]))
+				vc.readRemainingPadding = int(binary.BigEndian.Uint16(header[pos+3:]))
 				log.Debugln("XTLS Vision read padding: command=%d, payloadLen=%d, paddingLen=%d",
 					vc.readLastCommand, vc.readRemainingContent, vc.readRemainingPadding)
 				return vc.ReadBuffer(buffer)
 				//}
 			case commandPaddingEnd:
-				vc.readFilter = false
+				vc.readProcess = false
 				return vc.ReadBuffer(buffer)
 			case commandPaddingDirect:
-				log.Debugln("command read direct")
 				if vc.input != nil {
 					_, err := buffer.ReadFrom(vc.input)
 					if err != nil {
@@ -143,12 +154,14 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 					}
 				}
 				if vc.input == nil && vc.rawInput == nil {
-					vc.readFilter = false
+					vc.readProcess = false
 					vc.ExtendedReader = N.NewExtendedReader(vc.Conn)
-					log.Debugln("XTLS Vision Direct read start")
+					log.Debugln("XTLS Vision direct read start")
 				}
 			default:
-				log.Debugln("XTLS Vision read unknown command: %d", vc.readLastCommand)
+				err := fmt.Errorf("XTLS Vision read unknown command: %d", vc.readLastCommand)
+				log.Debugln(err.Error())
+				return err
 			}
 		}
 		return vc.ExtendedReader.ReadBuffer(buffer)
@@ -214,14 +227,15 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 			}
 			vc.writeFilterApplicationData = false
 		}
-		ApplyPadding(buffer, command, vc.id)
+		ApplyPadding(buffer, command, nil)
 		err := vc.ExtendedWriter.WriteBuffer(buffer)
 		if err != nil {
 			return err
 		}
 		if vc.writeDirect {
 			vc.ExtendedWriter = N.NewExtendedWriter(vc.Conn)
-			time.Sleep(20 * time.Millisecond)
+			log.Debugln("XTLS Vision direct write start")
+			//time.Sleep(10 * time.Millisecond)
 		}
 		if buffer2 != nil {
 			if vc.writeDirect {
@@ -237,18 +251,19 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 				}
 				vc.writeFilterApplicationData = false
 			}
-			ApplyPadding(buffer2, command, vc.id)
+			ApplyPadding(buffer2, command, nil)
 			err = vc.ExtendedWriter.WriteBuffer(buffer2)
 			if vc.writeDirect {
 				vc.ExtendedWriter = N.NewExtendedWriter(vc.Conn)
-				time.Sleep(20 * time.Millisecond)
+				log.Debugln("XTLS Vision direct write start")
+				//time.Sleep(10 * time.Millisecond)
 			}
 		}
 		return err
 	}
-	if vc.writeDirect {
+	/*if vc.writeDirect {
 		log.Debugln("XTLS Vision Direct write, payloadLen=%d", buffer.Len())
-	}
+	}*/
 	return vc.ExtendedWriter.WriteBuffer(buffer)
 }
 
@@ -333,6 +348,9 @@ func (vc *Conn) sendRequest(p []byte) bool {
 				WriteWithPadding(buffer, p, commandPaddingContinue, vc.id)
 			} else {
 				buf.Must(buf.Error(buffer.Write(p)))
+				vc.readProcess = false
+				vc.writeFilterApplicationData = false
+				vc.packetsToFilter = 0
 			}
 		}
 	} else {
@@ -350,10 +368,6 @@ func (vc *Conn) sendRequest(p []byte) bool {
 				vc.err = ErrNotTLS13
 			}
 		case *utls.UConn:
-			if underlying.ConnectionState().Version != utls.VersionTLS13 {
-				vc.err = ErrNotTLS13
-			}
-		case *tlsC.UConn:
 			if underlying.ConnectionState().Version != utls.VersionTLS13 {
 				vc.err = ErrNotTLS13
 			}
@@ -437,8 +451,9 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 				return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", client.Addons.Flow)
 			}
 		case XRV:
-			c.packetsToFilter = 10
-			c.readFilter = true
+			c.packetsToFilter = 6
+			c.readProcess = true
+			c.readFilterUUID = true
 			c.writeFilterApplicationData = true
 			c.addons = client.Addons
 			var t reflect.Type
@@ -446,12 +461,12 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 			switch underlying := conn.(type) {
 			case *gotls.Conn:
 				c.Conn = underlying.NetConn()
-				c.tlsConn = conn
+				c.tlsConn = underlying
 				t = reflect.TypeOf(underlying).Elem()
 				p = uintptr(unsafe.Pointer(underlying))
 			case *utls.UConn:
 				c.Conn = underlying.NetConn()
-				c.tlsConn = conn
+				c.tlsConn = underlying
 				t = reflect.TypeOf(underlying.Conn).Elem()
 				p = uintptr(unsafe.Pointer(underlying.Conn))
 			case *tlsC.UConn:
