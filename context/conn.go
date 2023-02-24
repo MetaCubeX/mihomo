@@ -12,7 +12,7 @@ import (
 type ConnContext struct {
 	id       uuid.UUID
 	metadata *C.Metadata
-	conn     net.Conn
+	conn     *N.BufferedConn
 }
 
 func NewConnContext(conn net.Conn, metadata *C.Metadata) *ConnContext {
@@ -36,6 +36,6 @@ func (c *ConnContext) Metadata() *C.Metadata {
 }
 
 // Conn implement C.ConnContext Conn
-func (c *ConnContext) Conn() net.Conn {
+func (c *ConnContext) Conn() *N.BufferedConn {
 	return c.conn
 }

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
@@ -208,12 +207,12 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 		}
 	}
 
-	go func() {
-		select {
-		case <-c.handshake:
-		case <-time.After(200 * time.Millisecond):
-			c.sendRequest(nil)
-		}
-	}()
+	//go func() {
+	//	select {
+	//	case <-c.handshake:
+	//	case <-time.After(200 * time.Millisecond):
+	//		c.sendRequest(nil)
+	//	}
+	//}()
 	return c, nil
 }

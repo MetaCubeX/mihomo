@@ -213,12 +213,12 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	}
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
-			return v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			return v.client.DialEarlyXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
 		} else {
-			return v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			return v.client.DialEarlyPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
 		}
 	} else {
-		return v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		return v.client.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
 	}
 }
 
@@ -289,9 +289,9 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}(c)
 
 		if v.option.XUDP {
-			c, err = v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			c = v.client.DialEarlyXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 		} else {
-			c, err = v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			c = v.client.DialEarlyPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 		}
 
 		if err != nil {

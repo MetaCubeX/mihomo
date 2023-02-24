@@ -53,6 +53,9 @@ func (rw *nopConn) Read(b []byte) (int, error) {
 }
 
 func (rw *nopConn) Write(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
 	return 0, io.EOF
 }
 

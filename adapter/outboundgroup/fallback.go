@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
+	"github.com/Dreamacro/clash/common/callback"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -30,9 +31,19 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
-		f.onDialSuccess()
 	} else {
 		f.onDialFailed(proxy.Type(), err)
+	}
+
+	c = &callback.FirstWriteCallBackConn{
+		Conn: c,
+		Callback: func(err error) {
+			if err == nil {
+				f.onDialSuccess()
+			} else {
+				f.onDialFailed(proxy.Type(), err)
+			}
+		},
 	}
 
 	return c, err
