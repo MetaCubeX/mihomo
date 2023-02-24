@@ -216,6 +216,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			udp:    true,
 			tfo:    option.FastOpen,
 			iface:  option.Interface,
+			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 	}
