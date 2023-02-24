@@ -103,9 +103,9 @@ func (ss *ShadowSocks) streamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		}
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
-		return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
+		return ss.method.DialEarlyConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443")), nil
 	}
-	return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+	return ss.method.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
 }
 
 // DialContext implements C.ProxyAdapter
