@@ -510,6 +510,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 			tp:     C.Vless,
 			udp:    option.UDP,
 			xudp:   option.XUDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
