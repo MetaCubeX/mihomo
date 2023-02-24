@@ -104,7 +104,12 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 				if vc.readFilterUUID {
 					headerUUIDLen = uuid.Size
 				}
-				header := buffer.FreeBytes()[:paddingHeaderLen+headerUUIDLen]
+				var header []byte
+				if need := headerUUIDLen + paddingHeaderLen; buffer.FreeLen() < need {
+					header = make([]byte, need)
+				} else {
+					header = buffer.FreeBytes()[:need]
+				}
 				_, err := io.ReadFull(vc.ExtendedReader, header)
 				if err != nil {
 					return err
