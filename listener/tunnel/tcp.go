@@ -41,7 +41,7 @@ func (l *Listener) handleTCP(conn net.Conn, in chan<- C.ConnContext, additions .
 }
 
 func New(addr, target, proxy string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
-	l, err := net.Listen("tcp", addr)
+	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}

@@ -148,7 +148,6 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 		dialer.DefaultInterface.Store(general.Interface)
 	}
 
-	inbound.SetTfo(general.InboundTfo)
 	allowLan := general.AllowLan
 	listener.SetAllowLan(allowLan)
 
@@ -340,6 +339,8 @@ func updateGeneral(general *config.General) {
 		dialer.SetDial(general.TCPConcurrent)
 		log.Infoln("Use tcp concurrent")
 	}
+
+	inbound.SetTfo(general.InboundTfo)
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 	// Avoid reload configuration clean the value, causing traffic loops
