@@ -77,7 +77,7 @@ func checkTunName(tunName string) (ok bool) {
 		if len(tunName) <= 4 {
 			return false
 		}
-		if tunName[:4] == "utun" {
+		if tunName[:4] != "utun" {
 			return false
 		}
 		if _, parseErr := strconv.ParseInt(tunName[4:], 10, 16); parseErr != nil {
