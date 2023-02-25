@@ -11,31 +11,30 @@ import (
 	"strings"
 	"sync"
 
-	CN "github.com/Dreamacro/clash/common/net"
-
 	xtls "github.com/xtls/go"
 )
 
-var tlsCertificates = make([]tls.Certificate, 0)
+var trustCert,_ = x509.SystemCertPool()
 
 var mutex sync.RWMutex
 var errNotMacth error = errors.New("certificate fingerprints do not match")
 
-func AddCertificate(privateKey, certificate string) error {
+func AddCertificate(certificate string) error {
 	mutex.Lock()
 	defer mutex.Unlock()
-	if cert, err := CN.ParseCert(certificate, privateKey); err != nil {
-		return err
-	} else {
-		tlsCertificates = append(tlsCertificates, cert)
+	if certificate == "" {
+		return fmt.Errorf("certificate is empty")
+	}
+	if ok := trustCert.AppendCertsFromPEM([]byte(certificate)); !ok {
+		return fmt.Errorf("add certificate failed")
 	}
 	return nil
 }
 
-func GetCertificates() []tls.Certificate {
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return tlsCertificates
+func ResetCertificate(){
+	mutex.Lock()
+	defer mutex.Unlock()
+	trustCert,_=x509.SystemCertPool()
 }
 
 func verifyFingerprint(fingerprint *[32]byte) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -87,10 +86,10 @@ func GetSpecifiedFingerprintTLSConfig(tlsConfig *tls.Config, fingerprint string)
 func GetGlobalTLSConfig(tlsConfig *tls.Config) *tls.Config {
 	if tlsConfig == nil {
 		return &tls.Config{
-			Certificates: tlsCertificates,
+			RootCAs: trustCert,
 		}
 	}
-	tlsConfig.Certificates = append(tlsConfig.Certificates, tlsCertificates...)
+	tlsConfig.RootCAs = trustCert
 	return tlsConfig
 }
 
@@ -107,29 +106,12 @@ func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint strin
 }
 
 func GetGlobalXTLSConfig(tlsConfig *xtls.Config) *xtls.Config {
-	xtlsCerts := make([]xtls.Certificate, len(tlsCertificates))
-	for _, cert := range tlsCertificates {
-		tlsSsaList := make([]xtls.SignatureScheme, len(cert.SupportedSignatureAlgorithms))
-		for _, ssa := range cert.SupportedSignatureAlgorithms {
-			tlsSsa := xtls.SignatureScheme(ssa)
-			tlsSsaList = append(tlsSsaList, tlsSsa)
-		}
-		xtlsCert := xtls.Certificate{
-			Certificate:                  cert.Certificate,
-			PrivateKey:                   cert.PrivateKey,
-			OCSPStaple:                   cert.OCSPStaple,
-			SignedCertificateTimestamps:  cert.SignedCertificateTimestamps,
-			Leaf:                         cert.Leaf,
-			SupportedSignatureAlgorithms: tlsSsaList,
-		}
-		xtlsCerts = append(xtlsCerts, xtlsCert)
-	}
 	if tlsConfig == nil {
 		return &xtls.Config{
-			Certificates: xtlsCerts,
+			RootCAs: trustCert,
 		}
 	}
 
-	tlsConfig.Certificates = xtlsCerts
+	tlsConfig.RootCAs = trustCert
 	return tlsConfig
 }

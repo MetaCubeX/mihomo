@@ -169,9 +169,11 @@ func updateExperimental(c *config.Config) {
 }
 
 func preUpdateExperimental(c *config.Config) {
-	CTLS.AddCertificate(c.TLS.PrivateKey, c.TLS.Certificate)
+	CTLS.ResetCertificate()
 	for _, c := range c.TLS.CustomTrustCert {
-		CTLS.AddCertificate(c.PrivateKey, c.Certificate)
+		if err := CTLS.AddCertificate(c); err != nil {
+			log.Warnln("%s\nadd error: %s", c, err.Error())
+		}
 	}
 }
 
