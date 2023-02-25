@@ -309,6 +309,7 @@ proxies:
     plugin-opts:
       host: "cloud.tencent.com"
       password: "shadow_tls_password"
+      version: 2 # support 1/2/3
 
   # vmess
   # cipher支持 auto/aes-128-gcm/chacha20-poly1305/none
