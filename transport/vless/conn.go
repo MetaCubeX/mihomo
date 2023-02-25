@@ -62,7 +62,7 @@ type Conn struct {
 func (vc *Conn) Read(b []byte) (int, error) {
 	if vc.received {
 		if vc.readProcess {
-			buffer := buf2.As(b)
+			buffer := buf2.With(b)
 			err := vc.ReadBuffer(buffer)
 			return buffer.Len(), err
 		}
