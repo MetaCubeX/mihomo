@@ -81,7 +81,7 @@ func (tt *tcpTracker) Upstream() any {
 	return tt.Conn
 }
 
-func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *tcpTracker {
 	uuid, _ := uuid.NewV4()
 	if conn != nil {
 		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
@@ -100,8 +100,8 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 			Metadata:      metadata,
 			Chain:         conn.Chains(),
 			Rule:          "",
-			UploadTotal:   atomic.NewInt64(0),
-			DownloadTotal: atomic.NewInt64(0),
+			UploadTotal:   atomic.NewInt64(uploadTotal),
+			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
 		extendedReader: N.NewExtendedReader(conn),
 		extendedWriter: N.NewExtendedWriter(conn),
@@ -147,7 +147,7 @@ func (ut *udpTracker) Close() error {
 	return ut.PacketConn.Close()
 }
 
-func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
+func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *udpTracker {
 	uuid, _ := uuid.NewV4()
 	metadata.RemoteDst = conn.RemoteDestination()
 
@@ -160,8 +160,8 @@ func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, ru
 			Metadata:      metadata,
 			Chain:         conn.Chains(),
 			Rule:          "",
-			UploadTotal:   atomic.NewInt64(0),
-			DownloadTotal: atomic.NewInt64(0),
+			UploadTotal:   atomic.NewInt64(uploadTotal),
+			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
 	}
 

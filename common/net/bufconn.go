@@ -27,6 +27,10 @@ func (c *BufferedConn) Reader() *bufio.Reader {
 	return c.r
 }
 
+func (c *BufferedConn) ResetPeeked() {
+	c.peeked = false
+}
+
 func (c *BufferedConn) Peeked() bool {
 	return c.peeked
 }

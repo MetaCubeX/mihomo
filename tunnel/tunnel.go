@@ -322,7 +322,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 		pCtx.InjectPacketConn(rawPc)
 
-		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
+		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0)
 
 		switch true {
 		case metadata.SpecialProxy != "":
@@ -367,6 +367,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	}
 
 	conn := connCtx.Conn()
+	conn.ResetPeeked()
 	if sniffer.Dispatcher.Enable() && sniffingEnable {
 		sniffer.Dispatcher.TCPSniff(conn, metadata)
 	}
@@ -400,6 +401,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	}
 
 	var peekBytes []byte
+	var peekLen int
 
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
@@ -415,7 +417,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		if err != nil {
 			return nil, err
 		}
-		if peekLen := len(peekBytes); peekLen > 0 {
+		if peekLen = len(peekBytes); peekLen > 0 {
 			_, _ = conn.Discard(peekLen)
 		}
 		return remoteConn, err
@@ -436,7 +438,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
+	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, 0, int64(peekLen))
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()
 	}(remoteConn)
