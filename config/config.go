@@ -120,13 +120,9 @@ type Profile struct {
 }
 
 type TLS struct {
-	RawCert         `yaml:",inline"`
-	CustomTrustCert []RawCert `yaml:"custom-certifactes"`
-}
-
-type RawCert struct {
-	Certificate string `yaml:"certificate"`
-	PrivateKey  string `yaml:"private-key"`
+	Certificate     string   `yaml:"certificate"`
+	PrivateKey      string   `yaml:"private-key"`
+	CustomTrustCert []string `yaml:"custom-certifactes"`
 }
 
 // IPTables config
@@ -447,6 +443,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
+	dialer.DefaultInterface.Store(config.General.Interface)
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
 		return nil, err
