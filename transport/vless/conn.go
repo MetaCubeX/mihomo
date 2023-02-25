@@ -340,15 +340,20 @@ func (vc *Conn) sendRequest(p []byte) bool {
 
 	if isVision && !vc.dst.UDP && !vc.dst.Mux {
 		if len(p) == 0 {
-			vc.packetsToFilter = 0
-			vc.writeFilterApplicationData = false
 			WriteWithPadding(buffer, nil, commandPaddingEnd, vc.id)
+
+			// disable XTLS
+			vc.readProcess = false
+			vc.writeFilterApplicationData = false
+			vc.packetsToFilter = 0
 		} else {
 			vc.FilterTLS(p)
 			if vc.isTLS {
 				WriteWithPadding(buffer, p, commandPaddingContinue, vc.id)
 			} else {
 				buf.Must(buf.Error(buffer.Write(p)))
+
+				// disable XTLS
 				vc.readProcess = false
 				vc.writeFilterApplicationData = false
 				vc.packetsToFilter = 0
