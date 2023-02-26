@@ -314,7 +314,7 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 		}
 	default:
 		if preferResolver == nil {
-			ips, err = resolver.LookupIP(ctx, host)
+			ips, err = resolver.LookupIPProxyServerHost(ctx, host)
 		} else {
 			ips, err = resolver.LookupIPWithResolver(ctx, host, preferResolver)
 		}
@@ -328,7 +328,7 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 func sortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
 	for _, v := range ips {
 		if v.Is4() || v.Is4In6() {
-			ipv4s = append(ipv4s, v)
+			ipv4s = append(ipv4s, v.Unmap())
 		} else {
 			ipv6s = append(ipv6s, v)
 		}
