@@ -12,6 +12,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/callback"
 	"github.com/Dreamacro/clash/common/murmur3"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -92,16 +93,19 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, op
 		lb.onDialFailed(proxy.Type(), err)
 	}
 
-	c = &callback.FirstWriteCallBackConn{
-		Conn: c,
-		Callback: func(err error) {
-			if err == nil {
-				lb.onDialSuccess()
-			} else {
-				lb.onDialFailed(proxy.Type(), err)
-			}
-		},
+	if N.NeedHandshake(c) {
+		c = &callback.FirstWriteCallBackConn{
+			Conn: c,
+			Callback: func(err error) {
+				if err == nil {
+					lb.onDialSuccess()
+				} else {
+					lb.onDialFailed(proxy.Type(), err)
+				}
+			},
+		}
 	}
+
 	return
 }
 

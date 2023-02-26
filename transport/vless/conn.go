@@ -430,6 +430,15 @@ func (vc *Conn) Upstream() any {
 	return vc.tlsConn
 }
 
+func (vc *Conn) NeedHandshake() bool {
+	select {
+	case <-vc.handshake:
+		return true
+	default:
+	}
+	return false
+}
+
 func (vc *Conn) IsXTLSVisionEnabled() bool {
 	return vc.addons != nil && vc.addons.Flow == XRV
 }

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gofrs/uuid"
 )
@@ -317,6 +318,6 @@ func SetUserAgent(header http.Header) {
 }
 
 func VerifyMethod(cipher, password string) (err error) {
-	_, err = shadowimpl.FetchMethod(cipher, password)
+	_, err = shadowimpl.FetchMethod(cipher, password, time.Now)
 	return
 }

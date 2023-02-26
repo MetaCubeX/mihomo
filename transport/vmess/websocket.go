@@ -301,15 +301,27 @@ func (wsedc *websocketWithEarlyDataConn) SetWriteDeadline(t time.Time) error {
 	return wsedc.Conn.SetWriteDeadline(t)
 }
 
-func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
-	return wsedc.Conn == nil
+func (wsedc *websocketWithEarlyDataConn) FrontHeadroom() int {
+	return 14
 }
 
 func (wsedc *websocketWithEarlyDataConn) Upstream() any {
-	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
-		return nil
-	}
-	return wsedc.Conn
+	return wsedc.underlay
+}
+
+//func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
+//	return wsedc.Conn == nil
+//}
+//
+//func (wsedc *websocketWithEarlyDataConn) Upstream() any {
+//	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
+//		return nil
+//	}
+//	return wsedc.Conn
+//}
+
+func (wsedc *websocketWithEarlyDataConn) NeedHandshake() bool {
+	return wsedc.Conn == nil
 }
 
 func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/jpillora/backoff"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -367,7 +368,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	}
 
 	conn := connCtx.Conn()
-	conn.ResetPeeked()
+	conn.ResetPeeked() // reset before sniffer
 	if sniffer.Dispatcher.Enable() && sniffingEnable {
 		sniffer.Dispatcher.TCPSniff(conn, metadata)
 	}
@@ -415,15 +416,17 @@ func handleTCPConn(connCtx C.ConnContext) {
 				return remoteConn, nil
 			}
 		}
-		peekMutex.Lock()
-		defer peekMutex.Unlock()
-		peekBytes, _ = conn.Peek(conn.Buffered())
-		_, err = remoteConn.Write(peekBytes)
-		if err != nil {
-			return nil, err
-		}
-		if peekLen = len(peekBytes); peekLen > 0 {
-			_, _ = conn.Discard(peekLen)
+		if N.NeedHandshake(remoteConn) {
+			peekMutex.Lock()
+			defer peekMutex.Unlock()
+			peekBytes, _ = conn.Peek(conn.Buffered())
+			_, err = remoteConn.Write(peekBytes)
+			if err != nil {
+				return nil, err
+			}
+			if peekLen = len(peekBytes); peekLen > 0 {
+				_, _ = conn.Discard(peekLen)
+			}
 		}
 		return remoteConn, err
 	}, func(err error) {
@@ -469,8 +472,10 @@ func handleTCPConn(connCtx C.ConnContext) {
 		)
 	}
 
+	_ = conn.SetReadDeadline(time.Now()) // stop unfinished peek
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
+	_ = conn.SetReadDeadline(time.Time{}) // reset
 	handleSocket(connCtx, remoteConn)
 }
 
