@@ -105,6 +105,10 @@ func (c *tfoConn) Upstream() any {
 	return c.Conn
 }
 
+func (c *tfoConn) NeedHandshake() bool {
+	return c.Conn == nil
+}
+
 func dialTFO(ctx context.Context, netDialer net.Dialer, network, address string) (net.Conn, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	dialer := tfo.Dialer{Dialer: netDialer, DisableTFO: false}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/callback"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -43,16 +44,19 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 		u.onDialFailed(proxy.Type(), err)
 	}
 
-	c = &callback.FirstWriteCallBackConn{
-		Conn: c,
-		Callback: func(err error) {
-			if err == nil {
-				u.onDialSuccess()
-			} else {
-				u.onDialFailed(proxy.Type(), err)
-			}
-		},
+	if N.NeedHandshake(c) {
+		c = &callback.FirstWriteCallBackConn{
+			Conn: c,
+			Callback: func(err error) {
+				if err == nil {
+					u.onDialSuccess()
+				} else {
+					u.onDialFailed(proxy.Type(), err)
+				}
+			},
+		}
 	}
+
 	return c, err
 }
 
