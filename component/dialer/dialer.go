@@ -2,7 +2,6 @@ package dialer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -19,7 +18,6 @@ var (
 	actualSingleStackDialContext = serialSingleStackDialContext
 	actualDualStackDialContext   = serialDualStackDialContext
 	tcpConcurrent                = false
-	ErrorInvalidedNetworkStack   = errors.New("invalided network stack")
 	fallbackTimeout              = 300 * time.Millisecond
 )
 
@@ -227,7 +225,7 @@ func dualStackDialContext(
 
 func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
 	if len(ips) == 0 {
-		return nil, errors.New("no ip address")
+		return nil, ErrorNoIpAddress
 	}
 	results := make(chan dialResult)
 	returned := make(chan struct{})
@@ -272,7 +270,7 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 
 func serialDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
 	if len(ips) == 0 {
-		return nil, errors.New("no ip address")
+		return nil, ErrorNoIpAddress
 	}
 	var (
 		conn net.Conn
@@ -286,7 +284,7 @@ func serialDialContext(ctx context.Context, network string, ips []netip.Addr, po
 			errs = append(errs, err)
 		}
 	}
-	return nil, errors.Join(errs...)
+	return nil, errorsJoin(errs...)
 }
 
 type dialResult struct {
