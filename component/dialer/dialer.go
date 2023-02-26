@@ -133,15 +133,12 @@ func serialDualStackDialContext(ctx context.Context, network, address string, op
 	if err != nil {
 		return nil, err
 	}
-	if opt.prefer != 4 && opt.prefer != 6 {
-		return serialDialContext(ctx, network, ips, port, opt)
-	}
 	ipv4s, ipv6s := sortationAddr(ips)
 	return dualStackDialContext(
 		ctx,
 		func(ctx context.Context) (net.Conn, error) { return serialDialContext(ctx, network, ipv4s, port, opt) },
 		func(ctx context.Context) (net.Conn, error) { return serialDialContext(ctx, network, ipv6s, port, opt) },
-		opt.prefer == 4)
+		opt.prefer)
 }
 
 func concurrentSingleStackDialContext(ctx context.Context, network string, address string, opt *option) (net.Conn, error) {
@@ -174,14 +171,14 @@ func concurrentDualStackDialContext(ctx context.Context, network, address string
 		func(ctx context.Context) (net.Conn, error) {
 			return parallelDialContext(ctx, network, ipv6s, port, opt)
 		},
-		opt.prefer == 4)
+		opt.prefer)
 }
 
 func dualStackDialContext(
 	ctx context.Context,
 	ipv4DialFn func(ctx context.Context) (net.Conn, error),
 	ipv6DialFn func(ctx context.Context) (net.Conn, error),
-	preferIPv4 bool) (net.Conn, error) {
+	preferIPVersion int) (net.Conn, error) {
 	fallbackTicker := time.NewTicker(fallbackTimeout)
 	defer fallbackTicker.Stop()
 	results := make(chan dialResult)
@@ -200,8 +197,8 @@ func dualStackDialContext(
 		}()
 		result.Conn, result.error = dial(ctx)
 	}
-	go racer(ipv4DialFn, preferIPv4)
-	go racer(ipv6DialFn, !preferIPv4)
+	go racer(ipv4DialFn, preferIPVersion != 6)
+	go racer(ipv6DialFn, preferIPVersion != 4)
 	var fallback dialResult
 	var err error
 	for {
