@@ -410,6 +410,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 		if err != nil {
 			return nil, err
 		}
+		for _, chain := range remoteConn.Chains() {
+			if chain == "REJECT" {
+				return remoteConn, nil
+			}
+		}
 		peekMutex.Lock()
 		defer peekMutex.Unlock()
 		peekBytes, _ = conn.Peek(conn.Buffered())
