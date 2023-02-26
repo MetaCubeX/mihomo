@@ -248,7 +248,7 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 		if vc.writeDirect {
 			vc.ExtendedWriter = N.NewExtendedWriter(vc.Conn)
 			log.Debugln("XTLS Vision direct write start")
-			//time.Sleep(10 * time.Millisecond)
+			//time.Sleep(5 * time.Millisecond)
 		}
 		if buffer2 != nil {
 			if vc.writeDirect || !vc.isTLS {
@@ -393,22 +393,22 @@ func (vc *Conn) sendRequest(p []byte) bool {
 }
 
 func (vc *Conn) recvResponse() error {
-	var buf [1]byte
-	_, vc.err = io.ReadFull(vc.ExtendedReader, buf[:])
+	var buffer [1]byte
+	_, vc.err = io.ReadFull(vc.ExtendedReader, buffer[:])
 	if vc.err != nil {
 		return vc.err
 	}
 
-	if buf[0] != Version {
+	if buffer[0] != Version {
 		return errors.New("unexpected response version")
 	}
 
-	_, vc.err = io.ReadFull(vc.ExtendedReader, buf[:])
+	_, vc.err = io.ReadFull(vc.ExtendedReader, buffer[:])
 	if vc.err != nil {
 		return vc.err
 	}
 
-	length := int64(buf[0])
+	length := int64(buffer[0])
 	if length != 0 { // addon data length > 0
 		io.CopyN(io.Discard, vc.ExtendedReader, length) // just discard
 	}
@@ -482,19 +482,23 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 			var p uintptr
 			switch underlying := conn.(type) {
 			case *gotls.Conn:
+				//log.Debugln("type tls")
 				c.Conn = underlying.NetConn()
 				c.tlsConn = underlying
 				t = reflect.TypeOf(underlying).Elem()
 				p = uintptr(unsafe.Pointer(underlying))
 			case *utls.UConn:
+				//log.Debugln("type *utls.UConn")
 				c.Conn = underlying.NetConn()
 				c.tlsConn = underlying
 				t = reflect.TypeOf(underlying.Conn).Elem()
 				p = uintptr(unsafe.Pointer(underlying.Conn))
 			case *tlsC.UConn:
+				//log.Debugln("type *tlsC.UConn")
 				c.Conn = underlying.NetConn()
 				c.tlsConn = underlying.UConn
 				t = reflect.TypeOf(underlying.Conn).Elem()
+				//log.Debugln("t:%v", t)
 				p = uintptr(unsafe.Pointer(underlying.Conn))
 			default:
 				return nil, fmt.Errorf(`failed to use %s, maybe "security" is not "tls" or "utls"`, client.Addons.Flow)
@@ -503,9 +507,9 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 			r, _ := t.FieldByName("rawInput")
 			c.input = (*bytes.Reader)(unsafe.Pointer(p + i.Offset))
 			c.rawInput = (*bytes.Buffer)(unsafe.Pointer(p + r.Offset))
-			// if _, ok := c.Conn.(*net.TCPConn); !ok {
-			// 	log.Debugln("XTLS underlying conn is not *net.TCPConn, got %T", c.Conn)
-			// }
+			//if _, ok := c.Conn.(*net.TCPConn); !ok {
+			//	log.Debugln("XTLS underlying conn is not *net.TCPConn, got %T", c.Conn)
+			//}
 		}
 	}
 

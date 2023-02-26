@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/Dreamacro/clash/log"
 )
 
 var (
@@ -27,24 +27,30 @@ const (
 	tlsHandshakeTypeServerHello byte = 0x02
 )
 
-func (vc *Conn) FilterTLS(p []byte) (index int) {
+func (vc *Conn) FilterTLS(buffer []byte) (index int) {
 	if vc.packetsToFilter <= 0 {
 		return 0
 	}
-	lenP := len(p)
-	vc.packetsToFilter -= 1
-	if index = bytes.Index(p, tlsServerHandshakeStart); index != -1 {
-		if lenP >= index+5 && p[index+5] == tlsHandshakeTypeServerHello {
-			vc.remainingServerHello = binary.BigEndian.Uint16(p[index+3:]) + 5
-			vc.isTLS = true
-			vc.isTLS12orAbove = true
-			if lenP-index >= 79 && vc.remainingServerHello >= 79 {
-				sessionIDLen := int(p[index+43])
-				vc.cipher = binary.BigEndian.Uint16(p[index+43+sessionIDLen+1:])
+	lenP := len(buffer)
+	vc.packetsToFilter--
+	if index := bytes.Index(buffer, tlsServerHandshakeStart); index != -1 {
+		if lenP >= index+5 {
+			if buffer[0] == 22 && buffer[1] == 3 && buffer[2] == 3 {
+				vc.isTLS = true
+				if buffer[5] == tlsHandshakeTypeServerHello {
+					log.Debugln("isTLS12orAbove")
+					vc.remainingServerHello = binary.BigEndian.Uint16(buffer[index+3:]) + 5
+
+					vc.isTLS12orAbove = true
+					if lenP-index >= 79 && vc.remainingServerHello >= 79 {
+						sessionIDLen := int(buffer[index+43])
+						vc.cipher = binary.BigEndian.Uint16(buffer[index+43+sessionIDLen+1:])
+					}
+				}
 			}
 		}
-	} else if index = bytes.Index(p, tlsClientHandshakeStart); index != -1 {
-		if lenP >= index+5 && p[index+5] == tlsHandshakeTypeClientHello {
+	} else if index := bytes.Index(buffer, tlsClientHandshakeStart); index != -1 {
+		if lenP >= index+5 && buffer[index+5] == tlsHandshakeTypeClientHello {
 			vc.isTLS = true
 		}
 	}
@@ -62,22 +68,21 @@ func (vc *Conn) FilterTLS(p []byte) (index int) {
 			vc.remainingServerHello -= uint16(end)
 			end += i
 		}
-		if bytes.Contains(p[i:end], tls13SupportedVersions) {
+		if bytes.Contains(buffer[i:end], tls13SupportedVersions) {
 			// TLS 1.3 Client Hello
 			cs, ok := tls13CipherSuiteMap[vc.cipher]
 			if ok && cs != "TLS_AES_128_CCM_8_SHA256" {
 				vc.enableXTLS = true
 			}
-			log.Debugln("XTLS Vision found TLS 1.3, packetLength=", lenP, ", CipherSuite=", cs)
+			log.Debugln("XTLS Vision found TLS 1.3, packetLength= %d CipherSuite= %s", lenP, cs)
 			vc.packetsToFilter = 0
 			return
 		} else if vc.remainingServerHello <= 0 {
-			log.Debugln("XTLS Vision found TLS 1.2, packetLength=", lenP)
+			log.Debugln("XTLS Vision found TLS 1.2, packetLength= %d", lenP)
 			vc.packetsToFilter = 0
 			return
 		}
-		log.Debugln("XTLS Vision found inconclusive server hello, packetLength=", lenP,
-			", remainingServerHelloBytes=", vc.remainingServerHello)
+		log.Debugln("XTLS Vision found inconclusive server hello, packetLength= %d,remainingServerHelloBytes= %d", lenP, vc.remainingServerHello)
 	}
 	if vc.packetsToFilter <= 0 {
 		log.Debugln("XTLS Vision stop filtering")
