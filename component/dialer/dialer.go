@@ -17,9 +17,7 @@ var (
 	actualSingleStackDialContext = serialSingleStackDialContext
 	actualDualStackDialContext   = serialDualStackDialContext
 	tcpConcurrent                = false
-	DisableIPv6                  = false
 	ErrorInvalidedNetworkStack   = errors.New("invalided network stack")
-	ErrorDisableIPv6             = errors.New("IPv6 is disabled, dialer cancel")
 	ErrorConnTimeout             = errors.New("connect timeout")
 )
 
@@ -111,10 +109,6 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 	if opt.routingMark != 0 {
 		bindMarkToDialer(opt.routingMark, dialer, network, destination)
-	}
-
-	if DisableIPv6 && destination.Is6() {
-		return nil, ErrorDisableIPv6
 	}
 
 	address := net.JoinHostPort(destination.String(), port)
@@ -296,7 +290,7 @@ type dialResult struct {
 	isPrimary bool
 }
 
-func parseAddr(ctx context.Context,  network,address string, preferResolver resolver.Resolver) ([]netip.Addr, string, error) {
+func parseAddr(ctx context.Context, network, address string, preferResolver resolver.Resolver) ([]netip.Addr, string, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, "-1", err
