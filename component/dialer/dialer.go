@@ -197,8 +197,6 @@ func dualStackDialContext(
 	preferIPv4 bool) (net.Conn, error) {
 	fallbackTimer := time.NewTimer(fallbackTimeout)
 	defer fallbackTimer.Stop()
-	fallbackCtx, fallbackCancel := context.WithCancel(ctx)
-	defer fallbackCancel()
 	results := make(chan dialResult)
 	returned := make(chan struct{})
 	defer close(returned)
@@ -213,7 +211,7 @@ func dualStackDialContext(
 				}
 			}
 		}()
-		result.Conn, result.error = dial(fallbackCtx)
+		result.Conn, result.error = dial(ctx)
 	}
 	go racer(ipv4DialFn, preferIPv4)
 	go racer(ipv6DialFn, !preferIPv4)
