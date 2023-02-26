@@ -136,10 +136,11 @@ func serialDualStackDialContext(ctx context.Context, network, address string, op
 	if opt.prefer != 4 && opt.prefer != 6 {
 		return serialDialContext(ctx, network, ips, port, opt)
 	}
+	ipv4s, ipv6s := sortationAddr(ips)
 	return dualStackDialContext(
 		ctx,
-		func(ctx context.Context) (net.Conn, error) { return serialDialContext(ctx, network, ips, port, opt) },
-		func(ctx context.Context) (net.Conn, error) { return serialDialContext(ctx, network, ips, port, opt) },
+		func(ctx context.Context) (net.Conn, error) { return serialDialContext(ctx, network, ipv4s, port, opt) },
+		func(ctx context.Context) (net.Conn, error) { return serialDialContext(ctx, network, ipv6s, port, opt) },
 		opt.prefer == 4)
 }
 
