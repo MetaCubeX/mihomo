@@ -195,8 +195,8 @@ func dualStackDialContext(
 	ipv4DialFn func(ctx context.Context) (net.Conn, error),
 	ipv6DialFn func(ctx context.Context) (net.Conn, error),
 	preferIPv4 bool) (net.Conn, error) {
-	fallbackTimer := time.NewTimer(fallbackTimeout)
-	defer fallbackTimer.Stop()
+	fallbackTicker := time.NewTicker(fallbackTimeout)
+	defer fallbackTicker.Stop()
 	results := make(chan dialResult)
 	returned := make(chan struct{})
 	defer close(returned)
@@ -224,7 +224,7 @@ func dualStackDialContext(
 				return fallback.Conn, nil
 			}
 			return nil, fmt.Errorf("dual stack connect failed: %w", err)
-		case <-fallbackTimer.C:
+		case <-fallbackTicker.C:
 			if fallback.error == nil && fallback.Conn != nil {
 				return fallback.Conn, nil
 			}
