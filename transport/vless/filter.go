@@ -51,14 +51,18 @@ func (vc *Conn) FilterTLS(p []byte) (index int) {
 
 	if vc.remainingServerHello > 0 {
 		end := int(vc.remainingServerHello)
-		if index+end > lenP {
+		i := index
+		if i < 0 {
+			i = 0
+		}
+		if i+end > lenP {
 			end = lenP
-			vc.remainingServerHello -= uint16(end - index)
+			vc.remainingServerHello -= uint16(end - i)
 		} else {
 			vc.remainingServerHello -= uint16(end)
-			end += index
+			end += i
 		}
-		if bytes.Contains(p[index:end], tls13SupportedVersions) {
+		if bytes.Contains(p[i:end], tls13SupportedVersions) {
 			// TLS 1.3 Client Hello
 			cs, ok := tls13CipherSuiteMap[vc.cipher]
 			if ok && cs != "TLS_AES_128_CCM_8_SHA256" {
