@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,6 @@ var (
 	actualDualStackDialContext   = serialDualStackDialContext
 	tcpConcurrent                = false
 	ErrorInvalidedNetworkStack   = errors.New("invalided network stack")
-	ErrorConnTimeout             = errors.New("connect timeout")
 	fallbackTimeout              = 300 * time.Millisecond
 )
 
@@ -257,7 +257,7 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 				return nil, err
 			}
 			if ctx.Err() == context.DeadlineExceeded {
-				return nil, ErrorConnTimeout
+				return nil, os.ErrDeadlineExceeded
 			}
 			return nil, ctx.Err()
 		case res := <-results:
