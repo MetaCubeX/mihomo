@@ -469,6 +469,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 		)
 	}
 
+	peekMutex.Lock()
+	defer peekMutex.Unlock()
 	handleSocket(connCtx, remoteConn)
 }
 
