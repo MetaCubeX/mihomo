@@ -14,7 +14,7 @@ import (
 	xtls "github.com/xtls/go"
 )
 
-var trustCert,_ = x509.SystemCertPool()
+var trustCert, _ = x509.SystemCertPool()
 
 var mutex sync.RWMutex
 var errNotMacth error = errors.New("certificate fingerprints do not match")
@@ -31,10 +31,10 @@ func AddCertificate(certificate string) error {
 	return nil
 }
 
-func ResetCertificate(){
+func ResetCertificate() {
 	mutex.Lock()
 	defer mutex.Unlock()
-	trustCert,_=x509.SystemCertPool()
+	trustCert, _ = x509.SystemCertPool()
 }
 
 func verifyFingerprint(fingerprint *[32]byte) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
