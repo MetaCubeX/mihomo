@@ -133,15 +133,16 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 				vc.readProcess = false
 				return vc.ReadBuffer(buffer)
 			case commandPaddingDirect:
+				needReturn := false
 				if vc.input != nil {
 					_, err := buffer.ReadFrom(vc.input)
 					if err != nil {
 						return err
 					}
 					if vc.input.Len() == 0 {
+						needReturn = true
 						vc.input = nil
-					}
-					if buffer.IsFull() {
+					} else { // buffer is full
 						return nil
 					}
 				}
@@ -150,6 +151,7 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 					if err != nil {
 						return err
 					}
+					needReturn = true
 					if vc.rawInput.Len() == 0 {
 						vc.rawInput = nil
 					}
@@ -158,6 +160,9 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 					vc.readProcess = false
 					vc.ExtendedReader = N.NewExtendedReader(vc.Conn)
 					log.Debugln("XTLS Vision direct read start")
+				}
+				if needReturn {
+					return nil
 				}
 			default:
 				err := fmt.Errorf("XTLS Vision read unknown command: %d", vc.readLastCommand)
@@ -489,9 +494,9 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 			r, _ := t.FieldByName("rawInput")
 			c.input = (*bytes.Reader)(unsafe.Pointer(p + i.Offset))
 			c.rawInput = (*bytes.Buffer)(unsafe.Pointer(p + r.Offset))
-			if _, ok := c.Conn.(*net.TCPConn); !ok {
-				log.Debugln("XTLS underlying conn is not *net.TCPConn, got %s", reflect.TypeOf(conn).Name())
-			}
+			// if _, ok := c.Conn.(*net.TCPConn); !ok {
+			// 	log.Debugln("XTLS underlying conn is not *net.TCPConn, got %T", c.Conn)
+			// }
 		}
 	}
 

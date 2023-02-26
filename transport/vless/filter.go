@@ -50,10 +50,13 @@ func (vc *Conn) FilterTLS(p []byte) (index int) {
 	}
 
 	if vc.remainingServerHello > 0 {
-		end := vc.remainingServerHello
-		vc.remainingServerHello -= end
-		if end > uint16(lenP) {
-			end = uint16(lenP)
+		end := int(vc.remainingServerHello)
+		if index+end > lenP {
+			end = lenP
+			vc.remainingServerHello -= uint16(end - index)
+		} else {
+			vc.remainingServerHello -= uint16(end)
+			end += index
 		}
 		if bytes.Contains(p[index:end], tls13SupportedVersions) {
 			// TLS 1.3 Client Hello
@@ -64,7 +67,7 @@ func (vc *Conn) FilterTLS(p []byte) (index int) {
 			log.Debugln("XTLS Vision found TLS 1.3, packetLength=", lenP, ", CipherSuite=", cs)
 			vc.packetsToFilter = 0
 			return
-		} else if vc.remainingServerHello < 0 {
+		} else if vc.remainingServerHello <= 0 {
 			log.Debugln("XTLS Vision found TLS 1.2, packetLength=", lenP)
 			vc.packetsToFilter = 0
 			return
