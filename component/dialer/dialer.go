@@ -218,13 +218,17 @@ func dualStackDialContext(
 					return res.Conn, nil
 				}
 				fallback = res
+			} else {
+				err = res.error
 			}
-			err = res.error
 		}
 	}
 }
 
 func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
+	if len(ips) == 0 {
+		return nil, errors.New("no ip address")
+	}
 	results := make(chan dialResult)
 	returned := make(chan struct{})
 	defer close(returned)
@@ -267,6 +271,9 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 }
 
 func serialDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
+	if len(ips) == 0 {
+		return nil, errors.New("no ip address")
+	}
 	var (
 		conn net.Conn
 		err  error
