@@ -33,8 +33,8 @@ type Conn struct {
 	addons   *Addons
 	received bool
 
-	handshake      chan struct{}
 	handshakeMutex sync.Mutex
+	needHandshake  bool
 	err            error
 
 	tlsConn  net.Conn
@@ -181,19 +181,25 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 }
 
 func (vc *Conn) Write(p []byte) (int, error) {
-	select {
-	case <-vc.handshake:
-	default:
-		if vc.sendRequest(p) {
+	if vc.needHandshake {
+		vc.handshakeMutex.Lock()
+		if vc.needHandshake {
+			vc.needHandshake = false
+			if vc.sendRequest(p) {
+				vc.handshakeMutex.Unlock()
+				if vc.err != nil {
+					return 0, vc.err
+				}
+				return len(p), vc.err
+			}
 			if vc.err != nil {
+				vc.handshakeMutex.Unlock()
 				return 0, vc.err
 			}
-			return len(p), vc.err
 		}
-		if vc.err != nil {
-			return 0, vc.err
-		}
+		vc.handshakeMutex.Unlock()
 	}
+
 	if vc.writeFilterApplicationData {
 		_buffer := buf.StackNew()
 		defer buf.KeepAlive(_buffer)
@@ -210,16 +216,22 @@ func (vc *Conn) Write(p []byte) (int, error) {
 }
 
 func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
-	select {
-	case <-vc.handshake:
-	default:
-		if vc.sendRequest(buffer.Bytes()) {
-			return vc.err
+	if vc.needHandshake {
+		vc.handshakeMutex.Lock()
+		if vc.needHandshake {
+			vc.needHandshake = false
+			if vc.sendRequest(buffer.Bytes()) {
+				vc.handshakeMutex.Unlock()
+				return vc.err
+			}
+			if vc.err != nil {
+				vc.handshakeMutex.Unlock()
+				return vc.err
+			}
 		}
-		if vc.err != nil {
-			return vc.err
-		}
+		vc.handshakeMutex.Unlock()
 	}
+
 	if vc.writeFilterApplicationData {
 		buffer2 := ReshapeBuffer(buffer)
 		defer buffer2.Release()
@@ -281,18 +293,6 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 }
 
 func (vc *Conn) sendRequest(p []byte) bool {
-	vc.handshakeMutex.Lock()
-	defer vc.handshakeMutex.Unlock()
-
-	select {
-	case <-vc.handshake:
-		// The handshake has been completed before.
-		// So return false to remind the caller.
-		return false
-	default:
-	}
-	defer close(vc.handshake)
-
 	var addonsBytes []byte
 	if vc.addons != nil {
 		addonsBytes, vc.err = proto.Marshal(vc.addons)
@@ -431,12 +431,7 @@ func (vc *Conn) Upstream() any {
 }
 
 func (vc *Conn) NeedHandshake() bool {
-	select {
-	case <-vc.handshake:
-		return false
-	default:
-	}
-	return true
+	return vc.needHandshake
 }
 
 func (vc *Conn) IsXTLSVisionEnabled() bool {
@@ -451,7 +446,7 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 		Conn:           conn,
 		id:             client.uuid,
 		dst:            dst,
-		handshake:      make(chan struct{}),
+		needHandshake:  true,
 	}
 
 	if !dst.UDP && client.Addons != nil {
