@@ -221,6 +221,10 @@ jobs:
           tag: Prerelease-${{ github.ref_name }}
           deleteOnlyFromDrafts: false
 
+      - name: Set Env
+        run: echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+        shell: bash
+
       - name: Tag Repo
         uses: richardsimko/update-tag@v1.0.6
         with:
@@ -237,6 +241,10 @@ jobs:
           files: bin/*
           prerelease: true
           generate_release_notes: true
+          body: |
+            Release created at  ${{ env.BUILDTIME }}
+            Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
+            <br>
 
   Upload-Release:
     permissions: write-all
