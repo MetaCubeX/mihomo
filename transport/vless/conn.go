@@ -433,10 +433,10 @@ func (vc *Conn) Upstream() any {
 func (vc *Conn) NeedHandshake() bool {
 	select {
 	case <-vc.handshake:
-		return true
+		return false
 	default:
 	}
-	return false
+	return true
 }
 
 func (vc *Conn) IsXTLSVisionEnabled() bool {
