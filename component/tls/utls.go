@@ -67,7 +67,22 @@ var Fingerprints = map[string]UClientHelloID{
 	"firefox":    {&utls.HelloFirefox_Auto},
 	"safari":     {&utls.HelloSafari_Auto},
 	"ios":        {&utls.HelloIOS_Auto},
-	"randomized": {&utls.HelloRandomized},
+	"android":    {&utls.HelloAndroid_11_OkHttp},
+	"edge":       {&utls.HelloEdge_Auto},
+	"360":        {&utls.Hello360_Auto},
+	"qq":         {&utls.HelloQQ_Auto},
+	"random":     {nil},
+	"randomized": {nil},
+}
+
+func init() {
+	weights := utls.DefaultWeights
+	weights.TLSVersMax_Set_VersionTLS13 = 1
+	weights.FirstKeyShare_Set_CurveP256 = 0
+	randomized := utls.HelloRandomized
+	randomized.Seed, _ = utls.NewPRNGSeed()
+	randomized.Weights = &weights
+	Fingerprints["randomized"] = UClientHelloID{&randomized}
 }
 
 func copyConfig(c *tls.Config) *utls.Config {
