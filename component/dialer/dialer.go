@@ -347,7 +347,12 @@ func (d Dialer) DialContext(ctx context.Context, network, address string) (net.C
 }
 
 func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, WithOption(d.Opt))
+	opt := WithOption(d.Opt)
+	if rAddrPort.Addr().Unmap().IsLoopback() {
+		// avoid "The requested address is not valid in its context."
+		opt = WithInterface("")
+	}
+	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, opt)
 }
 
 func NewDialer(options ...Option) Dialer {
