@@ -37,40 +37,36 @@ jobs:
               id: "2",
             }
           - {
-            type: "WithoutCGO",
-            target: "linux-arm64 linux-mips64 linux-mips64le",
-            id: "3",
-          }
+              type: "WithoutCGO",
+              target: "linux-arm64 linux-mips64 linux-mips64le",
+              id: "3",
+            }
           - {
-            type: "WithoutCGO",
-            target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
-            id: "4",
-          }
+              type: "WithoutCGO",
+              target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
+              id: "4",
+            }
+          - { type: "WithoutCGO", target: "linux-386 linux-riscv64", id: "5" }
           - {
-            type: "WithoutCGO",
-            target: "linux-386 linux-riscv64",
-            id: "5",
-          }
+              type: "WithoutCGO",
+              target: "freebsd-386 freebsd-amd64 freebsd-arm64",
+              id: "6",
+            }
           - {
-            type: "WithoutCGO",
-            target: "freebsd-386 freebsd-amd64 freebsd-arm64",
-            id: "6",
-          }
+              type: "WithoutCGO",
+              target: "windows-amd64-compatible windows-amd64 windows-386",
+              id: "7",
+            }
           - {
-            type: "WithoutCGO",
-            target: "windows-amd64-compatible windows-amd64 windows-386",
-            id: "7",
-          }
+              type: "WithoutCGO",
+              target: "windows-arm64 windows-arm32v7",
+              id: "8",
+            }
           - {
-            type: "WithoutCGO",
-            target: "windows-arm64 windows-arm32v7",
-            id: "8",
-          }
-          - {
-            type: "WithoutCGO",
-            target: "darwin-amd64 darwin-arm64 android-arm64",
-            id: "9",
-          }
+              type: "WithoutCGO",
+              target: "darwin-amd64 darwin-arm64 android-arm64",
+              id: "9",
+            }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
           - { type: "WithCGO", target: "linux/amd64", id: "3" }
@@ -113,10 +109,11 @@ jobs:
 
       - name: Set ENV
         run: |
+          sudo timedatectl set-timezone "Asia/Shanghai"
           echo "NAME=clash.meta" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
-          echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
           echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
         shell: bash
 
@@ -211,7 +208,7 @@ jobs:
   Upload-Prerelease:
     permissions: write-all
     if: ${{ github.ref_type=='branch' }}
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -231,7 +228,8 @@ jobs:
           deleteOnlyFromDrafts: false
 
       - name: Set Env
-        run: echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+        run: |
+          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
         shell: bash
 
       - name: Tag Repo
@@ -241,24 +239,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - run: |
+          echo 'Release created at  ${{ env.BUILDTIME }}
+          Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
+          <br>
+          ### release version
+          `default(not specified in file name)`: compiled with GOAMD64=v3
+          `cgo`: support lwip tun stack, compiled with GOAMD64=v1
+          `compatible`: compiled with GOAMD64=v1
+          Check details between different architectural levels [here](https://github.com/golang/go/wiki/MinimumRequirements#amd64).' > release.txt
+
       - name: Upload Prerelease
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
           tag: ${{ github.ref_name }}
           tag_name: Prerelease-${{ github.ref_name }}
-          files: bin/*
+          files: |
+            bin/*
           prerelease: true
           generate_release_notes: true
-          body: |
-            Release created at  ${{ env.BUILDTIME }}
-            Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
-            <br>
+          body_path: release.txt
 
   Upload-Release:
     permissions: write-all
     if: ${{ github.ref_type=='tag' }}
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -281,7 +287,7 @@ jobs:
 
   Docker:
     permissions: write-all
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
