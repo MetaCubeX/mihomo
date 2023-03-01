@@ -101,6 +101,9 @@ linux-mips64:
 linux-mips64le:
 	GOARCH=mips64le GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
+linux-riscv64:
+	GOARCH=riscv64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
+
 android-arm64:
 	GOARCH=arm64 GOOS=android $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
