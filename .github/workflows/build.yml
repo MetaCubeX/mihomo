@@ -37,35 +37,40 @@ jobs:
               id: "2",
             }
           - {
-              type: "WithoutCGO",
-              target: "linux-arm64 linux-mips64 linux-mips64le",
-              id: "3",
-            }
+            type: "WithoutCGO",
+            target: "linux-arm64 linux-mips64 linux-mips64le",
+            id: "3",
+          }
           - {
-              type: "WithoutCGO",
-              target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
-              id: "4",
-            }
+            type: "WithoutCGO",
+            target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
+            id: "4",
+          }
           - {
-              type: "WithoutCGO",
-              target: "freebsd-386 freebsd-amd64 freebsd-arm64",
-              id: "5",
-            }
+            type: "WithoutCGO",
+            target: "linux-386 linux-riscv64",
+            id: "5",
+          }
           - {
-              type: "WithoutCGO",
-              target: "windows-amd64-compatible windows-amd64 windows-386",
-              id: "6",
-            }
+            type: "WithoutCGO",
+            target: "freebsd-386 freebsd-amd64 freebsd-arm64",
+            id: "6",
+          }
           - {
-              type: "WithoutCGO",
-              target: "windows-arm64 windows-arm32v7",
-              id: "7",
-            }
+            type: "WithoutCGO",
+            target: "windows-amd64-compatible windows-amd64 windows-386",
+            id: "7",
+          }
           - {
-              type: "WithoutCGO",
-              target: "darwin-amd64 darwin-arm64 android-arm64",
-              id: "8",
-            }
+            type: "WithoutCGO",
+            target: "windows-arm64 windows-arm32v7",
+            id: "8",
+          }
+          - {
+            type: "WithoutCGO",
+            target: "darwin-amd64 darwin-arm64 android-arm64",
+            id: "9",
+          }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
           - { type: "WithCGO", target: "linux/amd64", id: "3" }
@@ -192,6 +197,10 @@ jobs:
           rm ./release.sh
           ls -la
           cd ..
+
+      - name: Save version
+        run: echo ${VERSION} > bin/version.txt
+        shell: bash
 
       - uses: actions/upload-artifact@v3
         if: ${{  success() }}
@@ -329,5 +338,7 @@ jobs:
             linux/386
             linux/amd64
             linux/arm64/v8
+            linux/arm/v7
+          #            linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
