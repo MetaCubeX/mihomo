@@ -229,7 +229,7 @@ jobs:
 
       - name: Set Env
         run: |
-          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
+          echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
         shell: bash
 
       - name: Tag Repo
