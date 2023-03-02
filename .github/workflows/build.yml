@@ -240,14 +240,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - run: |
-          echo 'Release created at  ${{ env.BUILDTIME }}
+          cat > release.txt << 'EOF'
+          Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
           ### release version
           `default(not specified in file name)`: compiled with GOAMD64=v3
           `cgo`: support lwip tun stack, compiled with GOAMD64=v1
           `compatible`: compiled with GOAMD64=v1
-          Check details between different architectural levels [here](https://github.com/golang/go/wiki/MinimumRequirements#amd64).' > release.txt
+          Check details between different architectural levels [here](https://github.com/golang/go/wiki/MinimumRequirements#amd64).
+          EOF
 
       - name: Upload Prerelease
         uses: softprops/action-gh-release@v1
