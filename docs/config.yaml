@@ -569,6 +569,7 @@ proxies: # socks5
     # fast-open: true
     # skip-cert-verify: true
     # max-open-streams: 20 # default 100, too many open streams may hurt performance
+    # sni: example.com
     
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
