@@ -19,16 +19,22 @@ const (
 	commandPaddingDirect   byte = 0x02
 )
 
-func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid.UUID) {
+func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(len(p))
 	var paddingLen int32
-	if contentLen < 900 {
+	if contentLen < 900 && paddingTLS {
+		log.Debugln("long padding")
 		paddingLen = rand.Int31n(500) + 900 - contentLen
+	} else {
+		paddingLen = rand.Int31n(256)
 	}
-
+	if paddingLen > buf.BufferSize-21-contentLen {
+		paddingLen = buf.BufferSize - 21 - contentLen
+	}
 	if userUUID != nil { // unnecessary, but keep the same with Xray
 		buffer.Write(userUUID.Bytes())
 	}
+
 	buffer.WriteByte(command)
 	binary.BigEndian.PutUint16(buffer.Extend(2), uint16(contentLen))
 	binary.BigEndian.PutUint16(buffer.Extend(2), uint16(paddingLen))
@@ -37,13 +43,18 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 	log.Debugln("XTLS Vision write padding1: command=%v, payloadLen=%v, paddingLen=%v", command, contentLen, paddingLen)
 }
 
-func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID) {
+func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(buffer.Len())
 	var paddingLen int32
-	if contentLen < 900 {
+	if contentLen < 900 && paddingTLS {
+		log.Debugln("long padding")
 		paddingLen = rand.Int31n(500) + 900 - contentLen
+	} else {
+		paddingLen = rand.Int31n(256)
 	}
-
+	if paddingLen > buf.BufferSize-21-contentLen {
+		paddingLen = buf.BufferSize - 21 - contentLen
+	}
 	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(paddingLen))
 	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(contentLen))
 	buffer.ExtendHeader(1)[0] = command

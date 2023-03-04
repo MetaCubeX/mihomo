@@ -241,7 +241,7 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 			command = commandPaddingEnd
 
 			// disable XTLS
-			vc.readProcess = false
+			//vc.readProcess = false
 			vc.writeFilterApplicationData = false
 			vc.packetsToFilter = 0
 		} else if buffer.Len() > 6 && bytes.Equal(buffer.To(3), tlsApplicationDataStart) || vc.packetsToFilter <= 0 {
@@ -252,7 +252,7 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 			}
 			vc.writeFilterApplicationData = false
 		}
-		ApplyPadding(buffer, command, nil)
+		ApplyPadding(buffer, command, nil, vc.isTLS)
 		err := vc.ExtendedWriter.WriteBuffer(buffer)
 		if err != nil {
 			return err
@@ -276,7 +276,7 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 				}
 				vc.writeFilterApplicationData = false
 			}
-			ApplyPadding(buffer2, command, nil)
+			ApplyPadding(buffer2, command, nil, vc.isTLS)
 			err = vc.ExtendedWriter.WriteBuffer(buffer2)
 			if vc.writeDirect {
 				vc.ExtendedWriter = N.NewExtendedWriter(vc.Conn)
@@ -352,19 +352,19 @@ func (vc *Conn) sendRequest(p []byte) bool {
 
 	if isVision && !vc.dst.UDP && !vc.dst.Mux {
 		if len(p) == 0 {
-			WriteWithPadding(buffer, nil, commandPaddingContinue, vc.id)
+			WriteWithPadding(buffer, nil, commandPaddingContinue, vc.id, vc.isTLS)
 		} else {
 			vc.FilterTLS(p)
-			if vc.isTLS {
-				WriteWithPadding(buffer, p, commandPaddingContinue, vc.id)
-			} else {
-				buf.Must(buf.Error(buffer.Write(p)))
-
-				// disable XTLS
-				vc.readProcess = false
-				vc.writeFilterApplicationData = false
-				vc.packetsToFilter = 0
-			}
+			//if vc.isTLS {
+			WriteWithPadding(buffer, p, commandPaddingContinue, vc.id, vc.isTLS)
+			//} else {
+			//	buf.Must(buf.Error(buffer.Write(p)))
+			//
+			//	// disable XTLS
+			//	vc.readProcess = false
+			//	vc.writeFilterApplicationData = false
+			//	vc.packetsToFilter = 0
+			//}
 		}
 	} else {
 		buf.Must(buf.Error(buffer.Write(p)))
