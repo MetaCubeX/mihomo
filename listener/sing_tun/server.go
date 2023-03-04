@@ -221,7 +221,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		err = E.Cause(err, "build android rules")
 		return
 	}
-	tunIf, err := tunOpen(tunOptions)
+	tunIf, err := tunNew(tunOptions)
 	if err != nil {
 		err = E.Cause(err, "configure tun interface")
 		return

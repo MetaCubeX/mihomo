@@ -20,15 +20,15 @@ require (
 	github.com/mdlayher/netlink v1.7.2-0.20221213171556-9881fafed8c7
 	github.com/metacubex/quic-go v0.32.0
 	github.com/metacubex/sing-shadowsocks v0.1.1-0.20230226153717-4e80da7e6947
-	github.com/metacubex/sing-tun v0.1.1-0.20230222113101-fbfa2dab826d
+	github.com/metacubex/sing-tun v0.1.1-0.20230304153753-5058534177f3
 	github.com/metacubex/sing-wireguard v0.0.0-20230213124601-d04406a109b4
 	github.com/miekg/dns v1.1.50
 	github.com/mroth/weightedrand/v2 v2.0.0
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.1.8-0.20230226150041-83d9121b04c6
-	github.com/sagernet/sing-shadowtls v0.0.0-20230221130515-dac782ca098e
-	github.com/sagernet/sing-vmess v0.1.3-0.20230226144228-40c1abdb85be
+	github.com/sagernet/sing v0.1.8-0.20230303052048-c875a4ffab1a
+	github.com/sagernet/sing-shadowtls v0.1.0
+	github.com/sagernet/sing-vmess v0.1.3-0.20230303082804-627cc46ae68b
 	github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d
 	github.com/sagernet/utls v0.0.0-20230220130002-c08891932056
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
@@ -41,7 +41,7 @@ require (
 	go.uber.org/automaxprocs v1.5.1
 	golang.org/x/crypto v0.6.0
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
-	golang.org/x/net v0.6.0
+	golang.org/x/net v0.7.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.5.0
 	google.golang.org/protobuf v1.28.2-0.20230118093459-a9481185b34d
@@ -63,7 +63,7 @@ require (
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/mdlayher/socket v0.4.0 // indirect
-	github.com/metacubex/gvisor v0.0.0-20230222112937-bdbcd206ec65 // indirect
+	github.com/metacubex/gvisor v0.0.0-20230304153416-e2bb9c726005 // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
