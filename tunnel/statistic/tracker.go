@@ -6,6 +6,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/gofrs/uuid"
@@ -82,7 +83,7 @@ func (tt *tcpTracker) Upstream() any {
 }
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *tcpTracker {
-	uuid, _ := uuid.NewV4()
+	uuid, _ := utils.UnsafeUUIDGenerator.NewV4()
 	if conn != nil {
 		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 			metadata.RemoteDst = tcpAddr.IP.String()
@@ -148,7 +149,7 @@ func (ut *udpTracker) Close() error {
 }
 
 func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *udpTracker {
-	uuid, _ := uuid.NewV4()
+	uuid, _ := utils.UnsafeUUIDGenerator.NewV4()
 	metadata.RemoteDst = conn.RemoteDestination()
 
 	ut := &udpTracker{

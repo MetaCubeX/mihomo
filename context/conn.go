@@ -1,6 +1,7 @@
 package context
 
 import (
+	"github.com/Dreamacro/clash/common/utils"
 	"net"
 
 	N "github.com/Dreamacro/clash/common/net"
@@ -16,7 +17,7 @@ type ConnContext struct {
 }
 
 func NewConnContext(conn net.Conn, metadata *C.Metadata) *ConnContext {
-	id, _ := uuid.NewV4()
+	id, _ := utils.UnsafeUUIDGenerator.NewV4()
 
 	return &ConnContext{
 		id:       id,

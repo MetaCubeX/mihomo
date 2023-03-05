@@ -2,13 +2,14 @@ package convert
 
 import (
 	"encoding/base64"
-	"github.com/metacubex/sing-shadowsocks/shadowimpl"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/Dreamacro/clash/common/utils"
+
+	"github.com/metacubex/sing-shadowsocks/shadowimpl"
 )
 
 var hostsSuffix = []string{
@@ -293,7 +294,7 @@ var (
 )
 
 func RandHost() string {
-	id, _ := uuid.NewV4()
+	id, _ := utils.UnsafeUUIDGenerator.NewV4()
 	base := strings.ToLower(base64.RawURLEncoding.EncodeToString(id.Bytes()))
 	base = strings.ReplaceAll(base, "-", "")
 	base = strings.ReplaceAll(base, "_", "")
