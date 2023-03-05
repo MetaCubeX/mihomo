@@ -16,6 +16,11 @@ on:
       - Alpha
       - Beta
       - Meta
+      
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+  
 env:
   REGISTRY: docker.io
 jobs:
