@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
-
-	"github.com/gofrs/uuid"
 )
 
 type Base struct {
@@ -35,7 +34,7 @@ func (b *Base) Name() string {
 // Id implements C.ProxyAdapter
 func (b *Base) Id() string {
 	if b.id == "" {
-		id, err := uuid.NewV6()
+		id, err := utils.UnsafeUUIDGenerator.NewV6()
 		if err != nil {
 			b.id = b.name
 		} else {

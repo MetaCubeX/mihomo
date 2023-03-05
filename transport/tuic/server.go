@@ -11,13 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gofrs/uuid"
-	"github.com/metacubex/quic-go"
-
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
+
+	"github.com/gofrs/uuid"
+	"github.com/metacubex/quic-go"
 )
 
 type ServerOption struct {
@@ -55,7 +56,7 @@ func (s *Server) Serve() error {
 			return err
 		}
 		SetCongestionController(conn, s.CongestionController)
-		uuid, err := uuid.NewV4()
+		uuid, err := utils.UnsafeUUIDGenerator.NewV4()
 		if err != nil {
 			return err
 		}

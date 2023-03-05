@@ -6,10 +6,10 @@ import (
 
 	"github.com/Dreamacro/clash/common/batch"
 	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 
-	"github.com/gofrs/uuid"
 	"go.uber.org/atomic"
 )
 
@@ -77,7 +77,7 @@ func (hc *HealthCheck) touch() {
 func (hc *HealthCheck) check() {
 	_, _, _ = hc.singleDo.Do(func() (struct{}, error) {
 		id := ""
-		if uid, err := uuid.NewV4(); err == nil {
+		if uid, err := utils.UnsafeUUIDGenerator.NewV4(); err == nil {
 			id = uid.String()
 		}
 		log.Debugln("Start New Health Checking {%s}", id)
