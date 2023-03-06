@@ -69,10 +69,6 @@ func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return r.LookupIPv4(ctx, host)
 	}
 
-	if DefaultResolver != nil {
-		return DefaultResolver.LookupIPv4(ctx, host)
-	}
-
 	ipAddrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
 	if err != nil {
 		return nil, err
@@ -126,9 +122,6 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 	if r != nil {
 		return r.LookupIPv6(ctx, host)
 	}
-	if DefaultResolver != nil {
-		return DefaultResolver.LookupIPv6(ctx, host)
-	}
 
 	ipAddrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip6", host)
 	if err != nil {
@@ -172,7 +165,7 @@ func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip
 		}
 		return r.LookupIP(ctx, host)
 	} else if DisableIPv6 {
-		return LookupIPv4(ctx, host)
+		return LookupIPv4WithResolver(ctx, host, r)
 	}
 
 	if ip, err := netip.ParseAddr(host); err == nil {
