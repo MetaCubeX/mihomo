@@ -128,7 +128,7 @@ func GetGeneral() *config.General {
 		GeodataLoader: G.LoaderName(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
-		TCPConcurrent: dialer.GetDial(),
+		TCPConcurrent: dialer.GetTcpConcurrent(),
 	}
 
 	return general
@@ -331,10 +331,10 @@ func updateTunnels(tunnels []LC.Tunnel) {
 func updateGeneral(general *config.General) {
 	tunnel.SetMode(general.Mode)
 	tunnel.SetFindProcessMode(general.FindProcessMode)
-	resolver.DisableIPv6 =!general.IPv6
+	resolver.DisableIPv6 = !general.IPv6
 
 	if general.TCPConcurrent {
-		dialer.SetDial(general.TCPConcurrent)
+		dialer.SetTcpConcurrent(general.TCPConcurrent)
 		log.Infoln("Use tcp concurrent")
 	}
 
