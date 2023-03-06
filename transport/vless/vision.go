@@ -3,12 +3,11 @@ package vless
 import (
 	"bytes"
 	"encoding/binary"
-	"math/rand"
-
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/log"
 
 	"github.com/gofrs/uuid"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 const (
@@ -24,9 +23,9 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 	var paddingLen int32
 	if contentLen < 900 && paddingTLS {
 		log.Debugln("long padding")
-		paddingLen = rand.Int31n(500) + 900 - contentLen
+		paddingLen = fastrand.Int31n(500) + 900 - contentLen
 	} else {
-		paddingLen = rand.Int31n(256)
+		paddingLen = fastrand.Int31n(256)
 	}
 	if paddingLen > buf.BufferSize-21-contentLen {
 		paddingLen = buf.BufferSize - 21 - contentLen
@@ -48,9 +47,9 @@ func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, padding
 	var paddingLen int32
 	if contentLen < 900 && paddingTLS {
 		log.Debugln("long padding")
-		paddingLen = rand.Int31n(500) + 900 - contentLen
+		paddingLen = fastrand.Int31n(500) + 900 - contentLen
 	} else {
-		paddingLen = rand.Int31n(256)
+		paddingLen = fastrand.Int31n(256)
 	}
 	if paddingLen > buf.BufferSize-21-contentLen {
 		paddingLen = buf.BufferSize - 21 - contentLen

@@ -6,13 +6,14 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/binary"
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/shadowsocks/core"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type Base struct {
@@ -37,8 +38,8 @@ func (a *authData) next() *authData {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	if a.connectionID > 0xff000000 || a.connectionID == 0 {
-		rand.Read(a.clientID[:])
-		a.connectionID = rand.Uint32() & 0xffffff
+		fastrand.Read(a.clientID[:])
+		a.connectionID = fastrand.Uint32() & 0xffffff
 	}
 	a.connectionID++
 	copy(r.clientID[:], a.clientID[:])

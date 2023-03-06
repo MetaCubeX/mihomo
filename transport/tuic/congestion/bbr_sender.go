@@ -5,11 +5,11 @@ package congestion
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"net"
 	"time"
 
 	"github.com/metacubex/quic-go/congestion"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 const (
@@ -780,7 +780,7 @@ func (b *bbrSender) EnterProbeBandwidthMode(now time.Time) {
 	// Pick a random offset for the gain cycle out of {0, 2..7} range. 1 is
 	// excluded because in that case increased gain and decreased gain would not
 	// follow each other.
-	b.cycleCurrentOffset = rand.Int() % (GainCycleLength - 1)
+	b.cycleCurrentOffset = fastrand.Int() % (GainCycleLength - 1)
 	if b.cycleCurrentOffset >= 1 {
 		b.cycleCurrentOffset += 1
 	}

@@ -6,20 +6,20 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/lunixbochs/struc"
-	"github.com/metacubex/quic-go"
-	"github.com/metacubex/quic-go/congestion"
-
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
 	"github.com/Dreamacro/clash/transport/hysteria/transport"
 	"github.com/Dreamacro/clash/transport/hysteria/utils"
+
+	"github.com/lunixbochs/struc"
+	"github.com/metacubex/quic-go"
+	"github.com/metacubex/quic-go/congestion"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 var (
@@ -408,7 +408,7 @@ func (c *quicPktConn) WriteTo(p []byte, addr string) error {
 	if err != nil {
 		if errSize, ok := err.(quic.ErrMessageTooLarge); ok {
 			// need to frag
-			msg.MsgID = uint16(rand.Intn(0xFFFF)) + 1 // msgID must be > 0 when fragCount > 1
+			msg.MsgID = uint16(fastrand.Intn(0xFFFF)) + 1 // msgID must be > 0 when fragCount > 1
 			fragMsgs := fragUDPMessage(msg, int(errSize))
 			for _, fragMsg := range fragMsgs {
 				msgBuf.Reset()

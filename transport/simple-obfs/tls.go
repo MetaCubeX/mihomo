@@ -4,16 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"math/rand"
 	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/common/pool"
-)
 
-func init() {
-	rand.Seed(time.Now().Unix())
-}
+	"github.com/zhangyunhao116/fastrand"
+)
 
 const (
 	chunkSize = 1 << 14 // 2 ** 14 == 16 * 1024
@@ -130,8 +127,8 @@ func NewTLSObfs(conn net.Conn, server string) net.Conn {
 func makeClientHelloMsg(data []byte, server string) []byte {
 	random := make([]byte, 28)
 	sessionID := make([]byte, 32)
-	rand.Read(random)
-	rand.Read(sessionID)
+	fastrand.Read(random)
+	fastrand.Read(sessionID)
 
 	buf := &bytes.Buffer{}
 

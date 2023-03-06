@@ -6,19 +6,19 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"math/rand"
 	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/quic-go"
-
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/metacubex/quic-go"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 var (
@@ -352,7 +352,7 @@ func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Met
 	pipe1, pipe2 := net.Pipe()
 	var connId uint32
 	for {
-		connId = rand.Uint32()
+		connId = fastrand.Uint32()
 		_, loaded := t.udpInputMap.LoadOrStore(connId, pipe1)
 		if !loaded {
 			break

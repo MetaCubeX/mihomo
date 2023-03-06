@@ -2,9 +2,8 @@ package obfs
 
 import (
 	"crypto/sha256"
-	"math/rand"
-	"sync"
-	"time"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 // [salt][obfuscated payload]
@@ -12,16 +11,12 @@ import (
 const saltLen = 16
 
 type XPlusObfuscator struct {
-	Key     []byte
-	RandSrc *rand.Rand
-
-	lk sync.Mutex
+	Key []byte
 }
 
 func NewXPlusObfuscator(key []byte) *XPlusObfuscator {
 	return &XPlusObfuscator{
-		Key:     key,
-		RandSrc: rand.New(rand.NewSource(time.Now().UnixNano())),
+		Key: key,
 	}
 }
 
@@ -40,9 +35,7 @@ func (x *XPlusObfuscator) Deobfuscate(in []byte, out []byte) int {
 }
 
 func (x *XPlusObfuscator) Obfuscate(in []byte, out []byte) int {
-	x.lk.Lock()
-	_, _ = x.RandSrc.Read(out[:saltLen]) // salt
-	x.lk.Unlock()
+	_, _ = fastrand.Read(out[:saltLen]) // salt
 	// Obfuscate the payload
 	key := sha256.Sum256(append(x.Key, out[:saltLen]...))
 	for i, c := range in {

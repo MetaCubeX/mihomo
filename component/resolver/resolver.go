@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/netip"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 
 	"github.com/miekg/dns"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 var (
@@ -96,7 +96,7 @@ func ResolveIPv4WithResolver(ctx context.Context, host string, r Resolver) (neti
 	} else if len(ips) == 0 {
 		return netip.Addr{}, fmt.Errorf("%w: %s", ErrIPNotFound, host)
 	}
-	return ips[rand.Intn(len(ips))], nil
+	return ips[fastrand.Intn(len(ips))], nil
 }
 
 // ResolveIPv4 with a host, return ipv4
@@ -153,7 +153,7 @@ func ResolveIPv6WithResolver(ctx context.Context, host string, r Resolver) (neti
 	} else if len(ips) == 0 {
 		return netip.Addr{}, fmt.Errorf("%w: %s", ErrIPNotFound, host)
 	}
-	return ips[rand.Intn(len(ips))], nil
+	return ips[fastrand.Intn(len(ips))], nil
 }
 
 func ResolveIPv6(ctx context.Context, host string) (netip.Addr, error) {
@@ -202,7 +202,7 @@ func ResolveIPWithResolver(ctx context.Context, host string, r Resolver) (netip.
 	} else if len(ips) == 0 {
 		return netip.Addr{}, fmt.Errorf("%w: %s", ErrIPNotFound, host)
 	}
-	return ips[rand.Intn(len(ips))], nil
+	return ips[fastrand.Intn(len(ips))], nil
 }
 
 // ResolveIP with a host, return ip
