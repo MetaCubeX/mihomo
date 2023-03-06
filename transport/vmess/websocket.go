@@ -8,9 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -22,7 +20,9 @@ import (
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
 	tlsC "github.com/Dreamacro/clash/component/tls"
+
 	"github.com/gorilla/websocket"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type websocketConn struct {
@@ -120,7 +120,7 @@ func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
 		binary.BigEndian.PutUint64(header[2:], uint64(dataLen))
 	}
 
-	maskKey := rand.Uint32()
+	maskKey := fastrand.Uint32()
 	binary.LittleEndian.PutUint32(header[1+payloadBitLength:], maskKey)
 	N.MaskWebSocket(maskKey, data)
 

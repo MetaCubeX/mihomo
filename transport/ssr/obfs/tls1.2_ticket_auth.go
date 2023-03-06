@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"encoding/binary"
-	"math/rand"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/transport/ssr/tools"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
@@ -25,7 +26,7 @@ type tls12Ticket struct {
 
 func newTLS12Ticket(b *Base) Obfs {
 	r := &tls12Ticket{Base: b, authData: &authData{}}
-	rand.Read(r.clientID[:])
+	fastrand.Read(r.clientID[:])
 	return r
 }
 
@@ -90,7 +91,7 @@ func (c *tls12TicketConn) Write(b []byte) (int, error) {
 		buf := pool.GetBuffer()
 		defer pool.PutBuffer(buf)
 		for len(b) > 2048 {
-			size := rand.Intn(4096) + 100
+			size := fastrand.Intn(4096) + 100
 			if len(b) < size {
 				size = len(b)
 			}
@@ -196,7 +197,7 @@ func packSNIData(buf *bytes.Buffer, u string) {
 }
 
 func (c *tls12TicketConn) packTicketBuf(buf *bytes.Buffer, u string) {
-	length := 16 * (rand.Intn(17) + 8)
+	length := 16 * (fastrand.Intn(17) + 8)
 	buf.Write([]byte{0, 0x23})
 	binary.Write(buf, binary.BigEndian, uint16(length))
 	tools.AppendRandBytes(buf, length)
@@ -221,6 +222,6 @@ func (t *tls12Ticket) getHost() string {
 		host = ""
 	}
 	hosts := strings.Split(host, ",")
-	host = hosts[rand.Intn(len(hosts))]
+	host = hosts[fastrand.Intn(len(hosts))]
 	return host
 }

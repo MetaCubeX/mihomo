@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/netip"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 
 	D "github.com/miekg/dns"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type client struct {
@@ -68,7 +68,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		} else if len(ips) == 0 {
 			return nil, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, c.host)
 		}
-		ip = ips[rand.Intn(len(ips))]
+		ip = ips[fastrand.Intn(len(ips))]
 	}
 
 	network := "udp"

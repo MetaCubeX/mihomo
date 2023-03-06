@@ -2,12 +2,13 @@ package vmess
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/common/utils"
-	"math/rand"
 	"net"
 	"runtime"
 
+	"github.com/Dreamacro/clash/common/utils"
+
 	"github.com/gofrs/uuid"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 // Version of vmess
@@ -77,7 +78,7 @@ type Config struct {
 
 // StreamConn return a Conn with net.Conn and DstAddr
 func (c *Client) StreamConn(conn net.Conn, dst *DstAddr) (net.Conn, error) {
-	r := rand.Intn(len(c.user))
+	r := fastrand.Intn(len(c.user))
 	return newConn(conn, c.user[r], dst, c.security, c.isAead)
 }
 

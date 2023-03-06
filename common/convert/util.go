@@ -2,7 +2,6 @@ package convert
 
 import (
 	"encoding/base64"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/Dreamacro/clash/common/utils"
 
 	"github.com/metacubex/sing-shadowsocks/shadowimpl"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 var hostsSuffix = []string{
@@ -303,11 +303,11 @@ func RandHost() string {
 	prefix += string(buf[6:8]) + "-"
 	prefix += string(buf[len(buf)-8:])
 
-	return prefix + hostsSuffix[rand.Intn(hostsLen)]
+	return prefix + hostsSuffix[fastrand.Intn(hostsLen)]
 }
 
 func RandUserAgent() string {
-	return userAgents[rand.Intn(uaLen)]
+	return userAgents[fastrand.Intn(uaLen)]
 }
 
 func SetUserAgent(header http.Header) {

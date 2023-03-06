@@ -2,7 +2,6 @@ package udp
 
 import (
 	"errors"
-	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -12,6 +11,8 @@ import (
 
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/utils"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 const (
@@ -85,7 +86,7 @@ func NewObfsUDPHopClientPacketConn(server string, serverPorts string, hopInterva
 		serverAddrs: serverAddrs,
 		hopInterval: hopInterval,
 		obfs:        obfs,
-		addrIndex:   rand.Intn(len(serverAddrs)),
+		addrIndex:   fastrand.Intn(len(serverAddrs)),
 		recvQueue:   make(chan *udpPacket, packetQueueSize),
 		closeChan:   make(chan struct{}),
 		bufPool: sync.Pool{
@@ -176,7 +177,7 @@ func (c *ObfsUDPHopClientPacketConn) hop(dialer utils.PacketDialer, rAddr net.Ad
 		_ = trySetPacketConnWriteBuffer(c.currentConn, c.writeBufferSize)
 	}
 	go c.recvRoutine(c.currentConn)
-	c.addrIndex = rand.Intn(len(c.serverAddrs))
+	c.addrIndex = fastrand.Intn(len(c.serverAddrs))
 }
 
 func (c *ObfsUDPHopClientPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {

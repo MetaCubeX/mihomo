@@ -1,10 +1,10 @@
 package pool
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func TestAllocGet(t *testing.T) {
@@ -43,6 +43,6 @@ func TestAllocPutThenGet(t *testing.T) {
 
 func BenchmarkMSB(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		msb(rand.Int())
+		msb(fastrand.Int())
 	}
 }
