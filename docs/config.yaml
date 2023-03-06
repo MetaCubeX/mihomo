@@ -550,6 +550,8 @@ proxies: # socks5
     public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
     udp: true
     reserved: "U4An"
+    # 数组格式也是合法的
+    # reserved: [209,98,59]
   
   # tuic
   - name: tuic
