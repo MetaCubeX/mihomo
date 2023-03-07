@@ -24,13 +24,15 @@ var mutex sync.RWMutex
 
 func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(len(p))
-	mutex.Lock()
 	var paddingLen int32
-	if contentLen < 900 && paddingTLS {
-		//log.Debugln("long padding")
-		paddingLen = fastrand.Int31n(500) + 900 - contentLen
-	} else {
-		paddingLen = fastrand.Int31n(256)
+	mutex.Lock()
+	if contentLen < 900 {
+		if paddingTLS {
+			//log.Debugln("long padding")
+			paddingLen = fastrand.Int31n(500) + 900 - contentLen
+		} else {
+			paddingLen = fastrand.Int31n(256)
+		}
 	}
 	mutex.Unlock()
 	if userUUID != nil { // unnecessary, but keep the same with Xray
@@ -48,13 +50,15 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 
 func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(buffer.Len())
-	mutex.Lock()
 	var paddingLen int32
-	if contentLen < 900 && paddingTLS {
-		//log.Debugln("long padding")
-		paddingLen = fastrand.Int31n(500) + 900 - contentLen
-	} else {
-		paddingLen = fastrand.Int31n(256)
+	mutex.Lock()
+	if contentLen < 900 {
+		if paddingTLS {
+			//log.Debugln("long padding")
+			paddingLen = fastrand.Int31n(500) + 900 - contentLen
+		} else {
+			paddingLen = fastrand.Int31n(256)
+		}
 	}
 	mutex.Unlock()
 
