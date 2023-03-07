@@ -3,6 +3,8 @@ package vless
 import (
 	"bytes"
 	"encoding/binary"
+	"sync"
+
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/log"
 
@@ -18,18 +20,19 @@ const (
 	commandPaddingDirect   byte = 0x02
 )
 
+var mutex sync.RWMutex
+
 func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(len(p))
+	mutex.Lock()
 	var paddingLen int32
 	if contentLen < 900 && paddingTLS {
-		log.Debugln("long padding")
+		//log.Debugln("long padding")
 		paddingLen = fastrand.Int31n(500) + 900 - contentLen
 	} else {
 		paddingLen = fastrand.Int31n(256)
 	}
-	if paddingLen > buf.BufferSize-21-contentLen {
-		paddingLen = buf.BufferSize - 21 - contentLen
-	}
+	mutex.Unlock()
 	if userUUID != nil { // unnecessary, but keep the same with Xray
 		buffer.Write(userUUID.Bytes())
 	}
@@ -38,28 +41,30 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 	binary.BigEndian.PutUint16(buffer.Extend(2), uint16(contentLen))
 	binary.BigEndian.PutUint16(buffer.Extend(2), uint16(paddingLen))
 	buffer.Write(p)
+
 	buffer.Extend(int(paddingLen))
 	log.Debugln("XTLS Vision write padding1: command=%v, payloadLen=%v, paddingLen=%v", command, contentLen, paddingLen)
 }
 
 func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(buffer.Len())
+	mutex.Lock()
 	var paddingLen int32
 	if contentLen < 900 && paddingTLS {
-		log.Debugln("long padding")
+		//log.Debugln("long padding")
 		paddingLen = fastrand.Int31n(500) + 900 - contentLen
 	} else {
 		paddingLen = fastrand.Int31n(256)
 	}
-	if paddingLen > buf.BufferSize-21-contentLen {
-		paddingLen = buf.BufferSize - 21 - contentLen
-	}
+	mutex.Unlock()
+
 	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(paddingLen))
 	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(contentLen))
 	buffer.ExtendHeader(1)[0] = command
 	if userUUID != nil { // unnecessary, but keep the same with Xray
 		copy(buffer.ExtendHeader(uuid.Size), userUUID.Bytes())
 	}
+
 	buffer.Extend(int(paddingLen))
 	log.Debugln("XTLS Vision write padding2: command=%d, payloadLen=%d, paddingLen=%d", command, contentLen, paddingLen)
 }
