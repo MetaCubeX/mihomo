@@ -109,7 +109,19 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
-	dialer := &net.Dialer{}
+	address := net.JoinHostPort(destination.String(), port)
+
+	netDialer := opt.netDialer
+	switch netDialer.(type) {
+	case nil:
+		netDialer = &net.Dialer{}
+	case *net.Dialer:
+		netDialer = &*netDialer.(*net.Dialer) // make a copy
+	default:
+		return netDialer.DialContext(ctx, network, address)
+	}
+
+	dialer := netDialer.(*net.Dialer)
 	if opt.interfaceName != "" {
 		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
 			return nil, err
@@ -118,8 +130,6 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	if opt.routingMark != 0 {
 		bindMarkToDialer(opt.routingMark, dialer, network, destination)
 	}
-
-	address := net.JoinHostPort(destination.String(), port)
 	if opt.tfo {
 		return dialTFO(ctx, *dialer, network, address)
 	}
@@ -307,15 +317,15 @@ func sortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
 }
 
 type Dialer struct {
-	Opt option
+	opt option
 }
 
 func (d Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return DialContext(ctx, network, address, WithOption(d.Opt))
+	return DialContext(ctx, network, address, WithOption(d.opt))
 }
 
 func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	opt := WithOption(d.Opt)
+	opt := WithOption(d.opt)
 	if rAddrPort.Addr().Unmap().IsLoopback() {
 		// avoid "The requested address is not valid in its context."
 		opt = WithInterface("")
@@ -325,5 +335,5 @@ func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddr
 
 func NewDialer(options ...Option) Dialer {
 	opt := applyOptions(options...)
-	return Dialer{Opt: *opt}
+	return Dialer{opt: *opt}
 }
