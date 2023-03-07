@@ -26,9 +26,9 @@ require (
 	github.com/mroth/weightedrand/v2 v2.0.0
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.1.8-0.20230303052048-c875a4ffab1a
+	github.com/sagernet/sing v0.1.8-0.20230307054559-0560a4da412b
 	github.com/sagernet/sing-shadowtls v0.1.0
-	github.com/sagernet/sing-vmess v0.1.3-0.20230303082804-627cc46ae68b
+	github.com/sagernet/sing-vmess v0.1.3-0.20230307060529-d110e81a50bc
 	github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d
 	github.com/sagernet/utls v0.0.0-20230220130002-c08891932056
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
