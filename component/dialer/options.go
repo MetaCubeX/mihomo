@@ -1,6 +1,9 @@
 package dialer
 
 import (
+	"context"
+	"net"
+
 	"github.com/Dreamacro/clash/component/resolver"
 
 	"go.uber.org/atomic"
@@ -12,6 +15,10 @@ var (
 	DefaultRoutingMark = atomic.NewInt32(0)
 )
 
+type NetDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
 type option struct {
 	interfaceName string
 	addrReuse     bool
@@ -20,6 +27,7 @@ type option struct {
 	prefer        int
 	tfo           bool
 	resolver      resolver.Resolver
+	netDialer     NetDialer
 }
 
 type Option func(opt *option)
@@ -73,6 +81,12 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 func WithTFO(tfo bool) Option {
 	return func(opt *option) {
 		opt.tfo = tfo
+	}
+}
+
+func WithNetDialer(netDialer NetDialer) Option {
+	return func(opt *option) {
+		opt.netDialer = netDialer
 	}
 }
 
