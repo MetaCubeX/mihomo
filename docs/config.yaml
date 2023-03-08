@@ -436,11 +436,29 @@ proxies: # socks5
     tls: true
     udp: true
     xudp: true
-    flow: xtls-rprx-vision # xtls-rprx-origin  # enable XTLS
+    flow: xtls-rprx-vision 
     client-fingerprint: chrome
     # fingerprint: xxxx
     # skip-cert-verify: true
-  
+    
+  - name: "vless-reality-vision"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    network: tcp
+    tls: true
+    udp: true
+    xudp: true
+    flow: xtls-rprx-vision
+    reality-opts:
+      server-name: www.microsoft.com
+      public-key: xxx
+      short-id: xxx
+    client-fingerprint: chrome
+    # fingerprint: xxxx
+    # skip-cert-verify: true
+    
   - name: "vless-ws"
     type: vless
     server: server
