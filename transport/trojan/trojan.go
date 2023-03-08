@@ -19,6 +19,7 @@ import (
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
+
 	xtls "github.com/xtls/go"
 )
 
@@ -54,6 +55,7 @@ type Option struct {
 	Flow              string
 	FlowShow          bool
 	ClientFingerprint string
+	Reality           *tlsC.RealityConfig
 }
 
 type WebsocketOption struct {
@@ -117,15 +119,23 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 		}
 
 		if len(t.option.ClientFingerprint) != 0 {
-			utlsConn, valid := vmess.GetUtlsConnWithClientFingerprint(conn, t.option.ClientFingerprint, tlsConfig)
-			if valid {
+			if t.option.Reality == nil {
+				utlsConn, valid := vmess.GetUTLSConn(conn, t.option.ClientFingerprint, tlsConfig)
+				if valid {
+					ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+					defer cancel()
+
+					err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
+					return utlsConn, err
+				}
+			} else {
 				ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 				defer cancel()
-
-				err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
-				return utlsConn, err
-
+				return tlsC.GetRealityConn(ctx, conn, t.option.ClientFingerprint, tlsConfig, t.option.Reality)
 			}
+		}
+		if t.option.Reality != nil {
+			return nil, errors.New("REALITY is based on uTLS, please set a client-fingerprint")
 		}
 
 		tlsConn := tls.Client(conn, tlsConfig)

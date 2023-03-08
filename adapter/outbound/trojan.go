@@ -30,21 +30,22 @@ type Trojan struct {
 
 type TrojanOption struct {
 	BasicOption
-	Name              string      `proxy:"name"`
-	Server            string      `proxy:"server"`
-	Port              int         `proxy:"port"`
-	Password          string      `proxy:"password"`
-	ALPN              []string    `proxy:"alpn,omitempty"`
-	SNI               string      `proxy:"sni,omitempty"`
-	SkipCertVerify    bool        `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint       string      `proxy:"fingerprint,omitempty"`
-	UDP               bool        `proxy:"udp,omitempty"`
-	Network           string      `proxy:"network,omitempty"`
-	GrpcOpts          GrpcOptions `proxy:"grpc-opts,omitempty"`
-	WSOpts            WSOptions   `proxy:"ws-opts,omitempty"`
-	Flow              string      `proxy:"flow,omitempty"`
-	FlowShow          bool        `proxy:"flow-show,omitempty"`
-	ClientFingerprint string      `proxy:"client-fingerprint,omitempty"`
+	Name              string         `proxy:"name"`
+	Server            string         `proxy:"server"`
+	Port              int            `proxy:"port"`
+	Password          string         `proxy:"password"`
+	ALPN              []string       `proxy:"alpn,omitempty"`
+	SNI               string         `proxy:"sni,omitempty"`
+	SkipCertVerify    bool           `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint       string         `proxy:"fingerprint,omitempty"`
+	UDP               bool           `proxy:"udp,omitempty"`
+	Network           string         `proxy:"network,omitempty"`
+	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
+	GrpcOpts          GrpcOptions    `proxy:"grpc-opts,omitempty"`
+	WSOpts            WSOptions      `proxy:"ws-opts,omitempty"`
+	Flow              string         `proxy:"flow,omitempty"`
+	FlowShow          bool           `proxy:"flow-show,omitempty"`
+	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
 
 func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
@@ -242,6 +243,12 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 
 	if option.SNI != "" {
 		tOption.ServerName = option.SNI
+	}
+
+	var err error
+	tOption.Reality, err = option.RealityOpts.Parse()
+	if err != nil {
+		return nil, err
 	}
 
 	t := &Trojan{
