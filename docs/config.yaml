@@ -451,13 +451,11 @@ proxies: # socks5
     udp: true
     xudp: true
     flow: xtls-rprx-vision
+    servername: www.microsoft.com # REALITY servername
     reality-opts:
-      server-name: www.microsoft.com
       public-key: xxx
-      short-id: xxx
-    client-fingerprint: chrome
-    # fingerprint: xxxx
-    # skip-cert-verify: true
+      short-id: xxx # optional
+    client-fingerprint: chrome # cannot be empty
     
   - name: "vless-ws"
     type: vless

@@ -30,21 +30,21 @@ import (
 )
 
 type RealityConfig struct {
-	ServerName string
-	PublicKey  [curve25519.ScalarSize]byte
-	ShortID    []byte
+	PublicKey [curve25519.ScalarSize]byte
+	ShortID   []byte
 }
 
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
 	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
 		verifier := &realityVerifier{
-			serverName: realityConfig.ServerName,
+			serverName: tlsConfig.ServerName,
 		}
-		uConfig := copyConfig(tlsConfig)
-		uConfig.ServerName = realityConfig.ServerName
-		uConfig.InsecureSkipVerify = true
-		uConfig.SessionTicketsDisabled = true
-		uConfig.VerifyPeerCertificate = verifier.VerifyPeerCertificate
+		uConfig := &utls.Config{
+			ServerName:             tlsConfig.ServerName,
+			InsecureSkipVerify:     true,
+			SessionTicketsDisabled: true,
+			VerifyPeerCertificate:  verifier.VerifyPeerCertificate,
+		}
 		clientID := utls.ClientHelloID{
 			Client:  fingerprint.Client,
 			Version: fingerprint.Version,
