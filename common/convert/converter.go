@@ -83,7 +83,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["port"] = urlTrojan.Port()
 			trojan["password"] = urlTrojan.User.Username()
 			trojan["udp"] = true
-			trojan["skip-cert-verify"] = false
+			trojan["skip-cert-verify"], _ = strconv.ParseBool(query.Get("allowInsecure"))
 
 			sni := query.Get("sni")
 			if sni != "" {
