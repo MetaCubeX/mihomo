@@ -89,7 +89,7 @@ type serverHandler struct {
 func (s *serverHandler) handle() {
 	time.AfterFunc(s.AuthenticationTimeout, func() {
 		s.authOnce.Do(func() {
-			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "")
+			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
 			s.authOk = false
 			close(s.authCh)
 		})
@@ -239,7 +239,7 @@ func (s *serverHandler) handleUniStream() (err error) {
 				}
 				s.authOnce.Do(func() {
 					if !ok {
-						_ = s.quicConn.CloseWithError(AuthenticationFailed, "")
+						_ = s.quicConn.CloseWithError(AuthenticationFailed, "AuthenticationFailed")
 					}
 					s.authOk = ok
 					close(s.authCh)
