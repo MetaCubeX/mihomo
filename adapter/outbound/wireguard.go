@@ -77,7 +77,7 @@ type wgNetDialer struct {
 var _ dialer.NetDialer = &wgNetDialer{}
 
 func (d wgNetDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return d.tunDevice.DialContext(ctx, network, M.ParseSocksaddr(address))
+	return d.tunDevice.DialContext(ctx, network, M.ParseSocksaddr(address).Unwrap())
 }
 
 func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
@@ -225,7 +225,7 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
 		port, _ := strconv.Atoi(metadata.DstPort)
-		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, uint16(port)))
+		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, uint16(port)).Unwrap())
 	}
 	if err != nil {
 		return nil, err
@@ -257,7 +257,7 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		metadata.DstIP = ip
 	}
 	port, _ := strconv.Atoi(metadata.DstPort)
-	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, uint16(port)))
+	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, uint16(port)).Unwrap())
 	if err != nil {
 		return nil, err
 	}
