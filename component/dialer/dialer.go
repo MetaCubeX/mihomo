@@ -302,13 +302,18 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 	if err != nil {
 		return nil, "-1", fmt.Errorf("dns resolve failed: %w", err)
 	}
+	for i, ip := range ips {
+		if ip.Is4In6() {
+			ips[i] = ip.Unmap()
+		}
+	}
 	return ips, port, nil
 }
 
 func sortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
 	for _, v := range ips {
-		if v.Is4() || v.Is4In6() {
-			ipv4s = append(ipv4s, v.Unmap())
+		if v.Is4() { // 4in6 parse was in parseAddr
+			ipv4s = append(ipv4s, v)
 		} else {
 			ipv6s = append(ipv6s, v)
 		}
