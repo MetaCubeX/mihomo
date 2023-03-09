@@ -216,7 +216,7 @@ func strategyStickySessions() strategyFn {
 // Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	proxies := lb.GetProxies(touch)
-	return lb.strategyFn(proxies, metadata, true)
+	return lb.strategyFn(proxies, metadata, touch)
 }
 
 // MarshalJSON implements C.ProxyAdapter
