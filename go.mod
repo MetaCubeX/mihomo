@@ -51,7 +51,7 @@ require (
 )
 
 require (
-	github.com/3andne/restls-client-go v0.1.1
+	github.com/3andne/restls-client-go v0.1.3
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -83,4 +83,3 @@ require (
 )
 
 replace go.uber.org/atomic v1.10.0 => github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370
-replace github.com/3andne/restls-client-go v0.1.1 => ../go
