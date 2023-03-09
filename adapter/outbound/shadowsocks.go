@@ -97,12 +97,6 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		if err != nil {
 			return nil, err
 		}
-	case restls.Mode:
-		var err error
-		c, err = restls.NewRestls(c, ss.restlsConfig)
-		if err != nil {
-			return nil, fmt.Errorf("%s (restls) connect error: %w", ss.addr, err)
-		}
 
 	}
 	return ss.streamConn(c, metadata)
@@ -120,6 +114,12 @@ func (ss *ShadowSocks) streamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		c, err = v2rayObfs.NewV2rayObfs(c, ss.v2rayOption)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
+		}
+	case restls.Mode:
+		var err error
+		c, err = restls.NewRestls(c, ss.restlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("%s (restls) connect error: %w", ss.addr, err)
 		}
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
@@ -161,7 +161,7 @@ func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Diale
 		}
 	}
 
-	c, err = ss.StreamConn(c, metadata)
+	c, err = ss.streamConn(c, metadata)
 	return NewConn(c, ss), err
 }
 
