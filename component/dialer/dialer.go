@@ -182,16 +182,8 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 	go racer(ipv6s, preferIPVersion != 4)
 	var fallback dialResult
 	var errs []error
-	for {
+	for i := 0; i < 2; i++ {
 		select {
-		case <-ctx.Done():
-			if fallback.error == nil && fallback.Conn != nil {
-				return fallback.Conn, nil
-			}
-			if res, ok := <-results; ok && res.error == nil {
-				return res.Conn, nil
-			}
-			return nil, errorsJoin(errs...)
 		case <-fallbackTicker.C:
 			if fallback.error == nil && fallback.Conn != nil {
 				return fallback.Conn, nil
@@ -211,6 +203,10 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 			}
 		}
 	}
+	if fallback.error == nil && fallback.Conn != nil {
+		return fallback.Conn, nil
+	}
+	return nil, errorsJoin(errs...)
 }
 
 func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
