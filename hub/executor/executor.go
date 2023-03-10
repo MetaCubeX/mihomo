@@ -190,6 +190,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
 		IPv6:         c.IPv6 && generalIPv6,
+		IPv6Timeout:  c.IPv6Timeout,
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
 		Hosts:        c.Hosts,
