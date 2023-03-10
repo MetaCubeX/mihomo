@@ -116,7 +116,8 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	case nil:
 		netDialer = &net.Dialer{}
 	case *net.Dialer:
-		netDialer = &*netDialer.(*net.Dialer) // make a copy
+		_netDialer := *netDialer.(*net.Dialer)
+		netDialer = &_netDialer // make a copy
 	default:
 		return netDialer.DialContext(ctx, network, address)
 	}
