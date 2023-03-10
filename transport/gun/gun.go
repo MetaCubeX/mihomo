@@ -217,7 +217,7 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string, re
 					return utlsConn, nil
 				}
 			} else {
-				realityConn, err := tlsC.GetRealityConn(ctx, pconn, Fingerprint, tlsConfig, realityConfig)
+				realityConn, err := tlsC.GetRealityConn(ctx, pconn, Fingerprint, cfg, realityConfig)
 				if err != nil {
 					pconn.Close()
 					return nil, err
