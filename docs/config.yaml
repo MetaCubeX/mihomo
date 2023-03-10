@@ -59,10 +59,9 @@ hosts:
 # '.dev': 127.0.0.1
 # 'alpha.clash.dev': '::1'
 
-profile:
-  # 存储 select 选择记录
+profile: # 存储 select 选择记录
   store-selected: false
-
+  
   # 持久化 fake-ip
   store-fake-ip: true
 
@@ -273,7 +272,7 @@ proxies: # socks5
     # obfs-opts:
     # mode: http # or tls
     # host: bing.com
-    
+  
   # Shadowsocks
   # cipher支持:
   #   aes-128-gcm aes-192-gcm aes-256-gcm
@@ -296,7 +295,7 @@ proxies: # socks5
     # UDP 则为双栈解析，获取结果中的第一个 IPv4
     # ipv6-prefer 同 ipv4-prefer
     # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
-
+  
   - name: "ss2"
     type: ss
     server: server
@@ -435,12 +434,11 @@ proxies: # socks5
     network: tcp
     tls: true
     udp: true
-    xudp: true
-    flow: xtls-rprx-vision 
+    flow: xtls-rprx-vision
     client-fingerprint: chrome
     # fingerprint: xxxx
     # skip-cert-verify: true
-    
+  
   - name: "vless-reality-vision"
     type: vless
     server: server
@@ -449,14 +447,31 @@ proxies: # socks5
     network: tcp
     tls: true
     udp: true
-    xudp: true
     flow: xtls-rprx-vision
     servername: www.microsoft.com # REALITY servername
     reality-opts:
       public-key: xxx
       short-id: xxx # optional
     client-fingerprint: chrome # cannot be empty
-    
+  
+  - name: "vless-reality-grpc"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    network: grpc
+    tls: true
+    udp: true
+    flow:
+    # skip-cert-verify: true
+    client-fingerprint: chrome
+    servername: testingcf.jsdelivr.net
+    grpc-opts:
+      grpc-service-name: "grpc"
+    reality-opts:
+      public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
+      short-id: 10f897e26c4b9478
+  
   - name: "vless-ws"
     type: vless
     server: server
@@ -528,7 +543,7 @@ proxies: # socks5
     # sni: example.com # aka server name
     # skip-cert-verify: true
     # fingerprint: xxxx
-
+  
   #hysteria
   - name: "hysteria"
     type: hysteria
@@ -588,7 +603,7 @@ proxies: # socks5
     # skip-cert-verify: true
     # max-open-streams: 20 # default 100, too many open streams may hurt performance
     # sni: example.com
-    
+  
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
   # The supported obfses:
@@ -717,7 +732,7 @@ rules:
   - IP-CIDR,1.1.1.1/32,ss1
   - IP-CIDR6,2409::/64,DIRECT
   # 当满足条件是 TCP 或 UDP 流量时，使用名为 sub-rule-name1 的规则集
-  - SUB-RULE,(OR,((NETWORK,TCP),(NETWORK,UDP))),sub-rule-name1 
+  - SUB-RULE,(OR,((NETWORK,TCP),(NETWORK,UDP))),sub-rule-name1
   - SUB-RULE,(AND,((NETWORK,UDP))),sub-rule-name2
 # 定义多个子规则集，规则将以分叉匹配，使用 SUB-RULE 使用
 #                                               google.com(not match)--> baidu.com(match)
