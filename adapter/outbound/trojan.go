@@ -26,6 +26,8 @@ type Trojan struct {
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
 	transport    *gun.TransportWrap
+
+	realityConfig *tlsC.RealityConfig
 }
 
 type TrojanOption struct {
@@ -84,7 +86,7 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 	}
 
 	if t.transport != nil {
-		c, err = gun.StreamGunWithConn(c, t.gunTLSConfig, t.gunConfig)
+		c, err = gun.StreamGunWithConn(c, t.gunTLSConfig, t.gunConfig, t.realityConfig)
 	} else {
 		c, err = t.plainStream(c)
 	}
@@ -245,12 +247,6 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		tOption.ServerName = option.SNI
 	}
 
-	var err error
-	tOption.Reality, err = option.RealityOpts.Parse()
-	if err != nil {
-		return nil, err
-	}
-
 	t := &Trojan{
 		Base: &Base{
 			name:   option.Name,
@@ -265,6 +261,13 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		instance: trojan.New(tOption),
 		option:   &option,
 	}
+
+	var err error
+	t.realityConfig, err = option.RealityOpts.Parse()
+	if err != nil {
+		return nil, err
+	}
+	tOption.Reality = t.realityConfig
 
 	if option.Network == "grpc" {
 		dialFn := func(network, addr string) (net.Conn, error) {
@@ -292,7 +295,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			}
 		}
 
-		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig, tOption.ClientFingerprint)
+		t.transport = gun.NewHTTP2Client(dialFn, tlsConfig, tOption.ClientFingerprint, t.realityConfig)
 
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{
