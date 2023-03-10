@@ -170,7 +170,7 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 			select {
 			case results <- result:
 			case <-returned:
-				if result.Conn != nil {
+				if result.Conn != nil && result.error == nil {
 					_ = result.Conn.Close()
 				}
 			}
@@ -218,7 +218,7 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 			select {
 			case results <- result:
 			case <-returned:
-				if result.Conn != nil {
+				if result.Conn != nil && result.error == nil {
 					_ = result.Conn.Close()
 				}
 			}

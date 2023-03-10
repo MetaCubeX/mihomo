@@ -21,12 +21,12 @@ require (
 	github.com/metacubex/quic-go v0.32.0
 	github.com/metacubex/sing-shadowsocks v0.1.1-0.20230226153717-4e80da7e6947
 	github.com/metacubex/sing-tun v0.1.1-0.20230304153753-5058534177f3
-	github.com/metacubex/sing-wireguard v0.0.0-20230213124601-d04406a109b4
+	github.com/metacubex/sing-wireguard v0.0.0-20230310035749-f7595fcae5cb
 	github.com/miekg/dns v1.1.50
 	github.com/mroth/weightedrand/v2 v2.0.0
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.1.8-0.20230307054559-0560a4da412b
+	github.com/sagernet/sing v0.1.8
 	github.com/sagernet/sing-shadowtls v0.1.0
 	github.com/sagernet/sing-vmess v0.1.3-0.20230307060529-d110e81a50bc
 	github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d
