@@ -89,6 +89,7 @@ func copyConfig(c *tls.Config) *utls.Config {
 	return &utls.Config{
 		RootCAs:               c.RootCAs,
 		ServerName:            c.ServerName,
+		NextProtos:            c.NextProtos,
 		InsecureSkipVerify:    c.InsecureSkipVerify,
 		VerifyPeerCertificate: c.VerifyPeerCertificate,
 	}
