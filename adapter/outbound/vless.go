@@ -17,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vless"
@@ -482,7 +483,10 @@ func NewVless(option VlessOption) (*Vless, error) {
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
 		switch option.Flow {
-		case vless.XRO, vless.XRD, vless.XRS, vless.XRV:
+		case vless.XRV:
+			log.Warnln("To use %s, ensure your server is upgrade to Xray-core v1.8.0+", vless.XRV)
+			fallthrough
+		case vless.XRO, vless.XRD, vless.XRS:
 			addons = &vless.Addons{
 				Flow: option.Flow,
 			}
