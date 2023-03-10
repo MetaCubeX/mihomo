@@ -92,6 +92,7 @@ type DNS struct {
 	Enable                bool             `yaml:"enable"`
 	PreferH3              bool             `yaml:"prefer-h3"`
 	IPv6                  bool             `yaml:"ipv6"`
+	IPv6Timeout           uint             `yaml:"ipv6-timeout"`
 	NameServer            []dns.NameServer `yaml:"nameserver"`
 	Fallback              []dns.NameServer `yaml:"fallback"`
 	FallbackFilter        FallbackFilter   `yaml:"fallback-filter"`
@@ -171,6 +172,7 @@ type RawDNS struct {
 	Enable                bool              `yaml:"enable"`
 	PreferH3              bool              `yaml:"prefer-h3"`
 	IPv6                  bool              `yaml:"ipv6"`
+	IPv6Timeout           uint              `yaml:"ipv6-timeout"`
 	UseHosts              bool              `yaml:"use-hosts"`
 	NameServer            []string          `yaml:"nameserver"`
 	Fallback              []string          `yaml:"fallback"`
@@ -377,6 +379,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:       false,
 			IPv6:         false,
 			UseHosts:     true,
+			IPv6Timeout:  100,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
@@ -1048,6 +1051,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		Enable:       cfg.Enable,
 		Listen:       cfg.Listen,
 		PreferH3:     cfg.PreferH3,
+		IPv6Timeout:  cfg.IPv6Timeout,
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
