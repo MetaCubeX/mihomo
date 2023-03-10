@@ -180,14 +180,17 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 	go racer(ipv4s, preferIPVersion != 6)
 	go racer(ipv6s, preferIPVersion != 4)
 	var fallback dialResult
-	var err error
+	var errs []error
 	for {
 		select {
 		case <-ctx.Done():
 			if fallback.error == nil && fallback.Conn != nil {
 				return fallback.Conn, nil
 			}
-			return nil, fmt.Errorf("dual stack connect failed: %w", err)
+			if res, ok := <-results; ok && res.error == nil {
+				return res.Conn, nil
+			}
+			return nil, errorsJoin(errs...)
 		case <-fallbackTicker.C:
 			if fallback.error == nil && fallback.Conn != nil {
 				return fallback.Conn, nil
@@ -199,7 +202,11 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 				}
 				fallback = res
 			} else {
-				err = res.error
+				if res.isPrimary {
+					errs = append([]error{fmt.Errorf("connect failed: %w", res.error)}, errs...)
+				} else {
+					errs = append(errs, fmt.Errorf("connect failed: %w", res.error))
+				}
 			}
 		}
 	}
@@ -230,12 +237,12 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 	for _, ip := range ips {
 		go racer(ctx, ip)
 	}
-	var err error
+	var errs []error
 	for {
 		select {
 		case <-ctx.Done():
-			if err != nil {
-				return nil, err
+			if len(errs) > 0 {
+				return nil, errorsJoin(errs...)
 			}
 			if ctx.Err() == context.DeadlineExceeded {
 				return nil, os.ErrDeadlineExceeded
@@ -245,7 +252,7 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 			if res.error == nil {
 				return res.Conn, nil
 			}
-			err = res.error
+			errs = append(errs, res.error)
 		}
 	}
 }
