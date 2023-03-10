@@ -1255,8 +1255,10 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			}
 		}
 	} else {
-		// Deprecated: Use Sniff instead
-		log.Warnln("Deprecated: Use Sniff instead")
+		if sniffer.Enable {
+			// Deprecated: Use Sniff instead
+			log.Warnln("Deprecated: Use Sniff instead")
+		}
 		globalPorts, err := parsePortRange(snifferRaw.Ports)
 		if err != nil {
 			return nil, err
