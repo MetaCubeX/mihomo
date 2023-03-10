@@ -131,21 +131,23 @@ func strategyRoundRobin() strategyFn {
 	idx := 0
 	idxMutex := sync.Mutex{}
 	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
-		id := idx // value could be wrong due to no lock, but don't care if we don't touch
+		idxMutex.Lock()
+		defer idxMutex.Unlock()
+
+		i := 0
+		length := len(proxies)
+
 		if touch {
-			idxMutex.Lock()
-			defer idxMutex.Unlock()
-			id = idx // get again by lock's protect, so it must be right
 			defer func() {
-				idx = id
+				idx = (idx + i) % length
 			}()
 		}
 
-		length := len(proxies)
-		for i := 0; i < length; i++ {
-			id = (id + 1) % length
+		for ; i < length; i++ {
+			id := (idx + i) % length
 			proxy := proxies[id]
 			if proxy.Alive() {
+				i++
 				return proxy
 			}
 		}
