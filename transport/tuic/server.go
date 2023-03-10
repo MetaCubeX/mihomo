@@ -76,7 +76,7 @@ func (s *Server) Close() error {
 
 type serverHandler struct {
 	*Server
-	quicConn quic.Connection
+	quicConn quic.EarlyConnection
 	uuid     uuid.UUID
 
 	authCh   chan struct{}
@@ -87,13 +87,6 @@ type serverHandler struct {
 }
 
 func (s *serverHandler) handle() {
-	time.AfterFunc(s.AuthenticationTimeout, func() {
-		s.authOnce.Do(func() {
-			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
-			s.authOk = false
-			close(s.authCh)
-		})
-	})
 	go func() {
 		_ = s.handleUniStream()
 	}()
@@ -103,6 +96,15 @@ func (s *serverHandler) handle() {
 	go func() {
 		_ = s.handleMessage()
 	}()
+
+	<-s.quicConn.HandshakeComplete().Done()
+	time.AfterFunc(s.AuthenticationTimeout, func() {
+		s.authOnce.Do(func() {
+			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
+			s.authOk = false
+			close(s.authCh)
+		})
+	})
 }
 
 func (s *serverHandler) handleMessage() (err error) {
