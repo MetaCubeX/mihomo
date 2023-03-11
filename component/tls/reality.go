@@ -20,6 +20,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/log"
 
 	utls "github.com/sagernet/utls"
@@ -29,9 +30,11 @@ import (
 	"golang.org/x/net/http2"
 )
 
+const RealityMaxShortIDLen = 8
+
 type RealityConfig struct {
 	PublicKey [curve25519.ScalarSize]byte
-	ShortID   []byte
+	ShortID   [RealityMaxShortIDLen]byte
 }
 
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
@@ -73,7 +76,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 		hello.SessionId[0] = 1
 		hello.SessionId[1] = 7
 		hello.SessionId[2] = 5
-		copy(hello.SessionId[8:], realityConfig.ShortID)
+		copy(hello.SessionId[8:], realityConfig.ShortID[:])
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
@@ -112,7 +115,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 
 func realityClientFallback(uConn net.Conn, serverName string, fingerprint utls.ClientHelloID) {
 	defer uConn.Close()
-	client := &http.Client{
+	client := http.Client{
 		Transport: &http2.Transport{
 			DialTLSContext: func(ctx context.Context, network, addr string, config *tls.Config) (net.Conn, error) {
 				return uConn, nil
@@ -139,9 +142,11 @@ type realityVerifier struct {
 	verified   bool
 }
 
+var pOffset = utils.MustOK(reflect.TypeOf((*utls.UConn)(nil)).Elem().FieldByName("peerCertificates")).Offset
+
 func (c *realityVerifier) VerifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	p, _ := reflect.TypeOf(c.Conn).Elem().FieldByName("peerCertificates")
-	certs := *(*([]*x509.Certificate))(unsafe.Pointer(uintptr(unsafe.Pointer(c.Conn)) + p.Offset))
+	//p, _ := reflect.TypeOf(c.Conn).Elem().FieldByName("peerCertificates")
+	certs := *(*[]*x509.Certificate)(unsafe.Pointer(uintptr(unsafe.Pointer(c.Conn)) + pOffset))
 	if pub, ok := certs[0].PublicKey.(ed25519.PublicKey); ok {
 		h := hmac.New(sha512.New, c.authKey)
 		h.Write(pub)
