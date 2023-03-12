@@ -58,6 +58,9 @@ hosts:
 # '*.clash.dev': 127.0.0.1
 # '.dev': 127.0.0.1
 # 'alpha.clash.dev': '::1'
+# test.com: [1.1.1.1, 2.2.2.2]
+# clash.lan: clash # clash 为特别字段，将加入本地所有网卡的地址
+# baidu.com: google.com # 只允许配置一个别名
 
 profile: # 存储 select 选择记录
   store-selected: false
