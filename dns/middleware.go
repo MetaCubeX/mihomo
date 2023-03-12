@@ -40,7 +40,7 @@ func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCac
 
 			hostValue := record.Data()
 			msg := r.Copy()
-			if !hostValue.IsDomain {
+			handleIPs := func() {
 				for _, ipAddr := range hostValue.IPs {
 					if ipAddr.Is4() && q.Qtype == D.TypeA {
 						rr := &D.A{}
@@ -61,12 +61,38 @@ func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCac
 						}
 					}
 				}
-			} else if q.Qtype == D.TypeCNAME {
+			}
+			fillMsg := func() {
+				if !hostValue.IsDomain {
+					handleIPs()
+				} else {
+					for {
+						if hostValue.IsDomain {
+							if node := hosts.Search(hostValue.Domain); node != nil {
+								hostValue = node.Data()
+							} else {
+								break
+							}
+						}else{
+							break
+						}
+					}
+					if !hostValue.IsDomain {
+						handleIPs()
+					}
+				}
+			}
+			switch q.Qtype {
+			case D.TypeA:
+				fillMsg()
+			case D.TypeAAAA:
+				fillMsg()
+			case D.TypeCNAME:
 				rr := &D.CNAME{}
 				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 10}
-				rr.Target = hostValue.Domain+"."
+				rr.Target = hostValue.Domain + "."
 				msg.Answer = append(msg.Answer, rr)
-			} else {
+			default:
 				return next(ctx, r)
 			}
 
