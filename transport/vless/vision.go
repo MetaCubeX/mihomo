@@ -3,7 +3,6 @@ package vless
 import (
 	"bytes"
 	"encoding/binary"
-	"sync"
 
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/log"
@@ -20,12 +19,9 @@ const (
 	commandPaddingDirect   byte = 0x02
 )
 
-var mutex sync.RWMutex
-
 func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(len(p))
 	var paddingLen int32
-	mutex.Lock()
 	if contentLen < 900 {
 		if paddingTLS {
 			//log.Debugln("long padding")
@@ -34,8 +30,7 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 			paddingLen = fastrand.Int31n(256)
 		}
 	}
-	mutex.Unlock()
-	if userUUID != nil { // unnecessary, but keep the same with Xray
+	if userUUID != nil {
 		buffer.Write(userUUID.Bytes())
 	}
 
@@ -51,7 +46,6 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, paddingTLS bool) {
 	contentLen := int32(buffer.Len())
 	var paddingLen int32
-	mutex.Lock()
 	if contentLen < 900 {
 		if paddingTLS {
 			//log.Debugln("long padding")
@@ -60,12 +54,11 @@ func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, padding
 			paddingLen = fastrand.Int31n(256)
 		}
 	}
-	mutex.Unlock()
 
 	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(paddingLen))
 	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(contentLen))
 	buffer.ExtendHeader(1)[0] = command
-	if userUUID != nil { // unnecessary, but keep the same with Xray
+	if userUUID != nil {
 		copy(buffer.ExtendHeader(uuid.Size), userUUID.Bytes())
 	}
 
