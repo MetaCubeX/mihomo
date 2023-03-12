@@ -47,7 +47,7 @@ func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middl
 					if err == nil {
 						resp.Id = r.Id
 						resp.Question = r.Question
-						handleCName(resp,record.Domain)
+						handleCName(resp, record.Domain)
 					}
 					return resp, err
 				}
@@ -84,7 +84,7 @@ func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middl
 			case D.TypeAAAA:
 				handleIPs()
 			case D.TypeCNAME:
-				handleCName(r,record.Domain)
+				handleCName(r, record.Domain)
 			default:
 				return next(ctx, r)
 			}
