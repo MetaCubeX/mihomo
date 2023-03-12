@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -154,12 +153,8 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
 		packet: &packet,
-		rAddr:  s.genServerAssocIdAddr(assocId, s.quicConn.RemoteAddr()),
+		rAddr:  &packetAddr{addrStr: "tuic-" + s.uuid.String(), connId: assocId, rawAddr: s.quicConn.RemoteAddr()},
 	})
-}
-
-func (s *serverHandler) genServerAssocIdAddr(assocId uint32, addr net.Addr) net.Addr {
-	return &ServerAssocIdAddr{assocId: fmt.Sprintf("tuic-%s-%d", s.uuid.String(), assocId), addr: addr}
 }
 
 func (s *serverHandler) handleStream() (err error) {
@@ -274,23 +269,6 @@ func (s *serverHandler) handleUniStream() (err error) {
 			return
 		}()
 	}
-}
-
-type ServerAssocIdAddr struct {
-	assocId string
-	addr    net.Addr
-}
-
-func (a ServerAssocIdAddr) Network() string {
-	return "ServerAssocIdAddr"
-}
-
-func (a ServerAssocIdAddr) String() string {
-	return a.assocId
-}
-
-func (a ServerAssocIdAddr) RawAddr() net.Addr {
-	return a.addr
 }
 
 type serverUDPPacket struct {
