@@ -78,11 +78,11 @@ type shadowTLSOption struct {
 }
 
 type restlsOption struct {
-	Password     string `obfs:"password"`
-	Host         string `obfs:"host"`
-	VersionHint  string `obfs:"version-hint"`
-	RestlsScript string `obfs:"restls-script,omitempty"`
-	ClientID     string `obfs:"client-id,omitempty"`
+	Password          string `obfs:"password"`
+	Host              string `obfs:"host"`
+	VersionHint       string `obfs:"version-hint"`
+	RestlsScript      string `obfs:"restls-script,omitempty"`
+	ClientFingerprint string `obfs:"client-fingerprint,omitempty"`
 }
 
 // StreamConn implements C.ProxyAdapter
@@ -280,7 +280,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
 		}
 
-		restlsConfig, err = restlsC.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, restlsOpt.ClientID)
+		restlsConfig, err = restlsC.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, restlsOpt.ClientFingerprint)
 		restlsConfig.SessionTicketsDisabled = true
 		if err != nil {
 			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
