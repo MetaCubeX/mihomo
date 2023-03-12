@@ -31,21 +31,27 @@ func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middl
 			}
 
 			host := strings.TrimRight(q.Name, ".")
-
+			handleCName := func(resp *D.Msg, domain string) {
+				rr := &D.CNAME{}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 10}
+				rr.Target = domain + "."
+				resp.Answer = append([]D.RR{rr}, resp.Answer...)
+			}
 			record, ok := hosts.Search(host, q.Qtype != D.TypeA && q.Qtype != D.TypeAAAA)
 			if !ok {
 				if record != nil && record.IsDomain {
 					// replace request domain
 					newR := r.Copy()
-					newR.Question[0].Name = record.Domain+"."
+					newR.Question[0].Name = record.Domain + "."
 					resp, err := next(ctx, newR)
-					if err==nil{
-						resp.Id=r.Id
-						resp.Question=r.Question
+					if err == nil {
+						resp.Id = r.Id
+						resp.Question = r.Question
+						handleCName(resp,record.Domain)
 					}
-					return resp,err
+					return resp, err
 				}
-				return next(ctx,r)
+				return next(ctx, r)
 			}
 
 			msg := r.Copy()
@@ -78,10 +84,7 @@ func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middl
 			case D.TypeAAAA:
 				handleIPs()
 			case D.TypeCNAME:
-				rr := &D.CNAME{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 10}
-				rr.Target = record.Domain + "."
-				msg.Answer = append(msg.Answer, rr)
+				handleCName(r,record.Domain)
 			default:
 				return next(ctx, r)
 			}
