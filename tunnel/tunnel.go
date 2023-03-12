@@ -201,13 +201,18 @@ func preHandleMetadata(metadata *C.Metadata) error {
 			if resolver.FakeIPEnabled() {
 				metadata.DstIP = netip.Addr{}
 				metadata.DNSMode = C.DNSFakeIP
-			} else if node := resolver.DefaultHosts.Search(host); node != nil {
+			} else if node, ok := resolver.DefaultHosts.Search(host, false); ok {
 				// redir-host should lookup the hosts
-				metadata.DstIP = node.Data()
+				metadata.DstIP, _ = node.RandIP()
+			} else if node != nil && node.IsDomain {
+				metadata.Host = node.Domain
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
+	} else if node, ok := resolver.DefaultHosts.Search(metadata.Host, true); ok {
+		// try use domain mapping
+		metadata.Host = node.Domain
 	}
 
 	return nil
@@ -392,8 +397,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	dialMetadata := metadata
 	if len(metadata.Host) > 0 {
-		if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-			if dstIp := node.Data(); !FakeIPRange().Contains(dstIp) {
+		if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
+			if dstIp, _ := node.RandIP(); !FakeIPRange().Contains(dstIp) {
 				dialMetadata.DstIP = dstIp
 				dialMetadata.DNSMode = C.DNSHosts
 				dialMetadata = dialMetadata.Pure()
@@ -498,8 +503,8 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		processFound bool
 	)
 
-	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		metadata.DstIP = node.Data()
+	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
+		metadata.DstIP, _ = node.RandIP()
 		resolved = true
 	}
 

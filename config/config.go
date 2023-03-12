@@ -9,7 +9,6 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -26,6 +25,7 @@ import (
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	P "github.com/Dreamacro/clash/component/process"
+	"github.com/Dreamacro/clash/component/resolver"
 	SNIFF "github.com/Dreamacro/clash/component/sniffer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
@@ -100,7 +100,7 @@ type DNS struct {
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
-	Hosts                 *trie.DomainTrie[netip.Addr]
+	Hosts                 *trie.DomainTrie[resolver.HostValue]
 	NameServerPolicy      map[string][]dns.NameServer
 	ProxyServerNameserver []dns.NameServer
 }
@@ -154,7 +154,7 @@ type Config struct {
 	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
-	Hosts         *trie.DomainTrie[netip.Addr]
+	Hosts         *trie.DomainTrie[resolver.HostValue]
 	Profile       *Profile
 	Rules         []C.Rule
 	SubRules      map[string][]C.Rule
@@ -265,7 +265,7 @@ type RawConfig struct {
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
-	Hosts         map[string]string         `yaml:"hosts"`
+	Hosts         map[string]any            `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
@@ -339,7 +339,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		UnifiedDelay:    false,
 		Authentication:  []string{},
 		LogLevel:        log.INFO,
-		Hosts:           map[string]string{},
+		Hosts:           map[string]any{},
 		Rule:            []string{},
 		Proxy:           []map[string]any{},
 		ProxyGroup:      []map[string]any{},
@@ -827,21 +827,47 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 	return rules, nil
 }
 
-func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
-	tree := trie.New[netip.Addr]()
+func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
+	tree := trie.New[resolver.HostValue]()
 
 	// add default hosts
-	if err := tree.Insert("localhost", netip.AddrFrom4([4]byte{127, 0, 0, 1})); err != nil {
+	hostValue, _ := resolver.NewHostValueByIPs(
+		[]netip.Addr{netip.AddrFrom4([4]byte{127, 0, 0, 1})})
+	if err := tree.Insert("localhost", hostValue); err != nil {
 		log.Errorln("insert localhost to host error: %s", err.Error())
 	}
 
 	if len(cfg.Hosts) != 0 {
-		for domain, ipStr := range cfg.Hosts {
-			ip, err := netip.ParseAddr(ipStr)
-			if err != nil {
-				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
+		for domain, anyValue := range cfg.Hosts {
+			if str, ok := anyValue.(string); ok && str == "clash" {
+				if addrs, err := net.InterfaceAddrs(); err != nil {
+					log.Errorln("insert clash to host error: %s", err)
+				} else {
+					ips := make([]netip.Addr, 0)
+					for _, addr := range addrs {
+						if ipnet, ok := addr.(*net.IPNet); ok {
+							if ip, err := netip.ParseAddr(ipnet.IP.String()); err == nil {
+								ips = append(ips, ip)
+							}
+						}
+					}
+					anyValue = ips
+				}
 			}
-			_ = tree.Insert(domain, ip)
+			value, err := resolver.NewHostValue(anyValue)
+			if err != nil {
+				return nil, fmt.Errorf("%s is not a valid value", anyValue)
+			}
+			if value.IsDomain {
+				node := tree.Search(value.Domain)
+				for node != nil && node.Data().IsDomain {
+					if node.Data().Domain == domain {
+						return nil, fmt.Errorf("%s, there is a cycle in domain name mapping", domain)
+					}
+					node = tree.Search(node.Data().Domain)
+				}
+			}
+			_ = tree.Insert(domain, value)
 		}
 	}
 	tree.Optimize()
@@ -961,24 +987,12 @@ func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][
 	policy := map[string][]dns.NameServer{}
 
 	for domain, server := range nsPolicy {
-		var (
-			nameservers []dns.NameServer
-			err         error
-		)
 
-		switch reflect.TypeOf(server).Kind() {
-		case reflect.Slice, reflect.Array:
-			origin := reflect.ValueOf(server)
-			servers := make([]string, 0)
-			for i := 0; i < origin.Len(); i++ {
-				servers = append(servers, fmt.Sprintf("%v", origin.Index(i)))
-			}
-			nameservers, err = parseNameServer(servers, preferH3)
-		case reflect.String:
-			nameservers, err = parseNameServer([]string{fmt.Sprintf("%v", server)}, preferH3)
-		default:
-			return nil, errors.New("server format error, must be string or array")
+		servers, err := utils.ToStringSlice(server)
+		if err != nil {
+			return nil, err
 		}
+		nameservers, err := parseNameServer(servers, preferH3)
 		if err != nil {
 			return nil, err
 		}
@@ -1041,7 +1055,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 	return sites, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.Rule) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
