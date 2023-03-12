@@ -116,7 +116,8 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	case nil:
 		netDialer = &net.Dialer{}
 	case *net.Dialer:
-		netDialer = &*netDialer.(*net.Dialer) // make a copy
+		_netDialer := *netDialer.(*net.Dialer)
+		netDialer = &_netDialer // make a copy
 	default:
 		return netDialer.DialContext(ctx, network, address)
 	}
@@ -170,7 +171,7 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 			select {
 			case results <- result:
 			case <-returned:
-				if result.Conn != nil {
+				if result.Conn != nil && result.error == nil {
 					_ = result.Conn.Close()
 				}
 			}
@@ -180,29 +181,33 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 	go racer(ipv4s, preferIPVersion != 6)
 	go racer(ipv6s, preferIPVersion != 4)
 	var fallback dialResult
-	var err error
-	for {
+	var errs []error
+	for i := 0; i < 2; {
 		select {
-		case <-ctx.Done():
-			if fallback.error == nil && fallback.Conn != nil {
-				return fallback.Conn, nil
-			}
-			return nil, fmt.Errorf("dual stack connect failed: %w", err)
 		case <-fallbackTicker.C:
 			if fallback.error == nil && fallback.Conn != nil {
 				return fallback.Conn, nil
 			}
 		case res := <-results:
+			i++
 			if res.error == nil {
 				if res.isPrimary {
 					return res.Conn, nil
 				}
 				fallback = res
 			} else {
-				err = res.error
+				if res.isPrimary {
+					errs = append([]error{fmt.Errorf("connect failed: %w", res.error)}, errs...)
+				} else {
+					errs = append(errs, fmt.Errorf("connect failed: %w", res.error))
+				}
 			}
 		}
 	}
+	if fallback.error == nil && fallback.Conn != nil {
+		return fallback.Conn, nil
+	}
+	return nil, errorsJoin(errs...)
 }
 
 func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
@@ -213,41 +218,35 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 	returned := make(chan struct{})
 	defer close(returned)
 	racer := func(ctx context.Context, ip netip.Addr) {
-		result := dialResult{isPrimary: true}
+		result := dialResult{isPrimary: true, ip: ip}
 		defer func() {
 			select {
 			case results <- result:
 			case <-returned:
-				if result.Conn != nil {
+				if result.Conn != nil && result.error == nil {
 					_ = result.Conn.Close()
 				}
 			}
 		}()
-		result.ip = ip
 		result.Conn, result.error = dialContext(ctx, network, ip, port, opt)
 	}
 
 	for _, ip := range ips {
 		go racer(ctx, ip)
 	}
-	var err error
-	for {
-		select {
-		case <-ctx.Done():
-			if err != nil {
-				return nil, err
-			}
-			if ctx.Err() == context.DeadlineExceeded {
-				return nil, os.ErrDeadlineExceeded
-			}
-			return nil, ctx.Err()
-		case res := <-results:
-			if res.error == nil {
-				return res.Conn, nil
-			}
-			err = res.error
+	var errs []error
+	for i := 0; i < len(ips); i++ {
+		res := <-results
+		if res.error == nil {
+			return res.Conn, nil
 		}
+		errs = append(errs, res.error)
 	}
+
+	if len(errs) > 0 {
+		return nil, errorsJoin(errs...)
+	}
+	return nil, os.ErrDeadlineExceeded
 }
 
 func serialDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
@@ -302,13 +301,18 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 	if err != nil {
 		return nil, "-1", fmt.Errorf("dns resolve failed: %w", err)
 	}
+	for i, ip := range ips {
+		if ip.Is4In6() {
+			ips[i] = ip.Unmap()
+		}
+	}
 	return ips, port, nil
 }
 
 func sortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
 	for _, v := range ips {
-		if v.Is4() || v.Is4In6() {
-			ipv4s = append(ipv4s, v.Unmap())
+		if v.Is4() { // 4in6 parse was in parseAddr
+			ipv4s = append(ipv4s, v)
 		} else {
 			ipv6s = append(ipv6s, v)
 		}

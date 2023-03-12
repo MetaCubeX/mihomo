@@ -8,7 +8,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/fakeip"
-	"github.com/Dreamacro/clash/component/trie"
+	R "github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
@@ -21,7 +21,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip.Addr, string]) middleware {
+func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -31,40 +31,68 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip
 			}
 
 			host := strings.TrimRight(q.Name, ".")
-
-			record := hosts.Search(host)
-			if record == nil {
+			handleCName := func(resp *D.Msg, domain string) {
+				rr := &D.CNAME{}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 10}
+				rr.Target = domain + "."
+				resp.Answer = append([]D.RR{rr}, resp.Answer...)
+			}
+			record, ok := hosts.Search(host, q.Qtype != D.TypeA && q.Qtype != D.TypeAAAA)
+			if !ok {
+				if record != nil && record.IsDomain {
+					// replace request domain
+					newR := r.Copy()
+					newR.Question[0].Name = record.Domain + "."
+					resp, err := next(ctx, newR)
+					if err == nil {
+						resp.Id = r.Id
+						resp.Question = r.Question
+						handleCName(resp, record.Domain)
+					}
+					return resp, err
+				}
 				return next(ctx, r)
 			}
 
-			ip := record.Data()
 			msg := r.Copy()
-
-			if ip.Is4() && q.Qtype == D.TypeA {
-				rr := &D.A{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
-				rr.A = ip.AsSlice()
-
-				msg.Answer = []D.RR{rr}
-			} else if q.Qtype == D.TypeAAAA {
-				rr := &D.AAAA{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
-				ip := ip.As16()
-				rr.AAAA = ip[:]
-				msg.Answer = []D.RR{rr}
-			} else {
-				return next(ctx, r)
+			handleIPs := func() {
+				for _, ipAddr := range record.IPs {
+					if ipAddr.Is4() && q.Qtype == D.TypeA {
+						rr := &D.A{}
+						rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
+						rr.A = ipAddr.AsSlice()
+						msg.Answer = append(msg.Answer, rr)
+						if mapping != nil {
+							mapping.SetWithExpire(ipAddr, host, time.Now().Add(time.Second*10))
+						}
+					} else if q.Qtype == D.TypeAAAA {
+						rr := &D.AAAA{}
+						rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
+						ip := ipAddr.As16()
+						rr.AAAA = ip[:]
+						msg.Answer = append(msg.Answer, rr)
+						if mapping != nil {
+							mapping.SetWithExpire(ipAddr, host, time.Now().Add(time.Second*10))
+						}
+					}
+				}
 			}
 
-			if mapping != nil {
-				mapping.SetWithExpire(ip, host, time.Now().Add(time.Second*10))
+			switch q.Qtype {
+			case D.TypeA:
+				handleIPs()
+			case D.TypeAAAA:
+				handleIPs()
+			case D.TypeCNAME:
+				handleCName(r, record.Domain)
+			default:
+				return next(ctx, r)
 			}
 
 			ctx.SetType(context.DNSTypeHost)
 			msg.SetRcode(r, D.RcodeSuccess)
 			msg.Authoritative = true
 			msg.RecursionAvailable = true
-
 			return msg, nil
 		}
 	}
@@ -149,6 +177,7 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 func withResolver(resolver *Resolver) handler {
 	return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 		ctx.SetType(context.DNSTypeRaw)
+
 		q := r.Question[0]
 
 		// return a empty AAAA msg when ipv6 disabled
@@ -183,7 +212,7 @@ func NewHandler(resolver *Resolver, mapper *ResolverEnhancer) handler {
 	middlewares := []middleware{}
 
 	if resolver.hosts != nil {
-		middlewares = append(middlewares, withHosts(resolver.hosts, mapper.mapping))
+		middlewares = append(middlewares, withHosts(R.NewHosts(resolver.hosts), mapper.mapping))
 	}
 
 	if mapper.mode == C.DNSFakeIP {

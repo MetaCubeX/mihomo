@@ -42,7 +42,8 @@ type geositePolicyRecord struct {
 
 type Resolver struct {
 	ipv6                  bool
-	hosts                 *trie.DomainTrie[netip.Addr]
+	ipv6Timeout           time.Duration
+	hosts                 *trie.DomainTrie[resolver.HostValue]
 	main                  []dnsClient
 	fallback              []dnsClient
 	fallbackDomainFilters []fallbackDomainFilter
@@ -91,14 +92,20 @@ func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr,
 	}()
 
 	ips, err = r.lookupIP(ctx, host, D.TypeA)
-
+	var waitIPv6 *time.Timer
+	if r != nil {
+		waitIPv6 = time.NewTimer(r.ipv6Timeout)
+	} else {
+		waitIPv6 = time.NewTimer(100 * time.Millisecond)
+	}
+	defer waitIPv6.Stop()
 	select {
 	case ipv6s, open := <-ch:
 		if !open && err != nil {
 			return nil, resolver.ErrIPNotFound
 		}
 		ips = append(ips, ipv6s...)
-	case <-time.After(30 * time.Millisecond):
+	case <-waitIPv6.C:
 		// wait ipv6 result
 	}
 
@@ -419,24 +426,27 @@ type Config struct {
 	Default        []NameServer
 	ProxyServer    []NameServer
 	IPv6           bool
+	IPv6Timeout    uint
 	EnhancedMode   C.DNSMode
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
-	Hosts          *trie.DomainTrie[netip.Addr]
+	Hosts          *trie.DomainTrie[resolver.HostValue]
 	Policy         map[string][]NameServer
 }
 
 func NewResolver(config Config) *Resolver {
 	defaultResolver := &Resolver{
-		main:     transform(config.Default, nil),
-		lruCache: cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		main:        transform(config.Default, nil),
+		lruCache:    cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
 	r := &Resolver{
-		ipv6:     config.IPv6,
-		main:     transform(config.Main, defaultResolver),
-		lruCache: cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
-		hosts:    config.Hosts,
+		ipv6:        config.IPv6,
+		main:        transform(config.Main, defaultResolver),
+		lruCache:    cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		hosts:       config.Hosts,
+		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
 	if len(config.Fallback) != 0 {
@@ -502,11 +512,12 @@ func NewResolver(config Config) *Resolver {
 
 func NewProxyServerHostResolver(old *Resolver) *Resolver {
 	r := &Resolver{
-		ipv6:     old.ipv6,
-		main:     old.proxyServer,
-		lruCache: old.lruCache,
-		hosts:    old.hosts,
-		policy:   old.policy,
+		ipv6:        old.ipv6,
+		main:        old.proxyServer,
+		lruCache:    old.lruCache,
+		hosts:       old.hosts,
+		policy:      old.policy,
+		ipv6Timeout: old.ipv6Timeout,
 	}
 	return r
 }

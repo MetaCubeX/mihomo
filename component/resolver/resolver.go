@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/trie"
 
 	"github.com/miekg/dns"
@@ -27,7 +28,7 @@ var (
 	DisableIPv6 = true
 
 	// DefaultHosts aim to resolve hosts
-	DefaultHosts = trie.New[netip.Addr]()
+	DefaultHosts = NewHosts(trie.New[HostValue]())
 
 	// DefaultDNSTimeout defined the default dns request timeout
 	DefaultDNSTimeout = time.Second * 5
@@ -51,9 +52,11 @@ type Resolver interface {
 
 // LookupIPv4WithResolver same as LookupIPv4, but with a resolver
 func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]netip.Addr, error) {
-	if node := DefaultHosts.Search(host); node != nil {
-		if ip := node.Data(); ip.Is4() {
-			return []netip.Addr{node.Data()}, nil
+	if node, ok := DefaultHosts.Search(host, false); ok {
+		if addrs := utils.Filter(node.IPs, func(ip netip.Addr) bool {
+			return ip.Is4()
+		}); len(addrs) > 0 {
+			return addrs, nil
 		}
 	}
 
@@ -106,9 +109,11 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return nil, ErrIPv6Disabled
 	}
 
-	if node := DefaultHosts.Search(host); node != nil {
-		if ip := node.Data(); ip.Is6() {
-			return []netip.Addr{ip}, nil
+	if node, ok := DefaultHosts.Search(host, false); ok {
+		if addrs := utils.Filter(node.IPs, func(ip netip.Addr) bool {
+			return ip.Is6()
+		}); len(addrs) > 0 {
+			return addrs, nil
 		}
 	}
 
@@ -155,8 +160,8 @@ func ResolveIPv6(ctx context.Context, host string) (netip.Addr, error) {
 
 // LookupIPWithResolver same as LookupIP, but with a resolver
 func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip.Addr, error) {
-	if node := DefaultHosts.Search(host); node != nil {
-		return []netip.Addr{node.Data()}, nil
+	if node, ok := DefaultHosts.Search(host, false); ok {
+		return node.IPs, nil
 	}
 
 	if r != nil {

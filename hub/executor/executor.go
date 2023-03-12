@@ -190,6 +190,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
 		IPv6:         c.IPv6 && generalIPv6,
+		IPv6Timeout:  c.IPv6Timeout,
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
 		Hosts:        c.Hosts,
@@ -225,8 +226,8 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 	dns.ReCreateServer(c.Listen, r, m)
 }
 
-func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
-	resolver.DefaultHosts = tree
+func updateHosts(tree *trie.DomainTrie[resolver.HostValue]) {
+	resolver.DefaultHosts = resolver.NewHosts(tree)
 }
 
 func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.ProxyProvider) {
