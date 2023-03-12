@@ -446,6 +446,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
+	if len(config.General.GlobalClientFingerprint) != 0 {
+		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
+		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
+	}
+
 	dialer.DefaultInterface.Store(config.General.Interface)
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
@@ -520,11 +525,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
-
-	if len(config.General.GlobalClientFingerprint) != 0 {
-		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
-		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
-	}
 
 	return config, nil
 }
