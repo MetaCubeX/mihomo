@@ -8,8 +8,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/fakeip"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/component/trie"
+	R "github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/log"
@@ -22,7 +21,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCache[netip.Addr, string]) middleware {
+func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -33,15 +32,25 @@ func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCac
 
 			host := strings.TrimRight(q.Name, ".")
 
-			record := hosts.Search(host)
-			if record == nil {
-				return next(ctx, r)
+			record, ok := hosts.Search(host, q.Qtype != D.TypeA && q.Qtype != D.TypeAAAA)
+			if !ok {
+				if record != nil && record.IsDomain {
+					// replace request domain
+					newR := r.Copy()
+					newR.Question[0].Name = record.Domain+"."
+					resp, err := next(ctx, newR)
+					if err==nil{
+						resp.Id=r.Id
+						resp.Question=r.Question
+					}
+					return resp,err
+				}
+				return next(ctx,r)
 			}
 
-			hostValue := record.Data()
 			msg := r.Copy()
 			handleIPs := func() {
-				for _, ipAddr := range hostValue.IPs {
+				for _, ipAddr := range record.IPs {
 					if ipAddr.Is4() && q.Qtype == D.TypeA {
 						rr := &D.A{}
 						rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
@@ -62,35 +71,16 @@ func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCac
 					}
 				}
 			}
-			fillMsg := func() {
-				if !hostValue.IsDomain {
-					handleIPs()
-				} else {
-					for {
-						if hostValue.IsDomain {
-							if node := hosts.Search(hostValue.Domain); node != nil {
-								hostValue = node.Data()
-							} else {
-								break
-							}
-						}else{
-							break
-						}
-					}
-					if !hostValue.IsDomain {
-						handleIPs()
-					}
-				}
-			}
+
 			switch q.Qtype {
 			case D.TypeA:
-				fillMsg()
+				handleIPs()
 			case D.TypeAAAA:
-				fillMsg()
+				handleIPs()
 			case D.TypeCNAME:
 				rr := &D.CNAME{}
 				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 10}
-				rr.Target = hostValue.Domain + "."
+				rr.Target = record.Domain + "."
 				msg.Answer = append(msg.Answer, rr)
 			default:
 				return next(ctx, r)
@@ -100,7 +90,6 @@ func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCac
 			msg.SetRcode(r, D.RcodeSuccess)
 			msg.Authoritative = true
 			msg.RecursionAvailable = true
-
 			return msg, nil
 		}
 	}
@@ -185,6 +174,7 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 func withResolver(resolver *Resolver) handler {
 	return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 		ctx.SetType(context.DNSTypeRaw)
+
 		q := r.Question[0]
 
 		// return a empty AAAA msg when ipv6 disabled
@@ -219,7 +209,7 @@ func NewHandler(resolver *Resolver, mapper *ResolverEnhancer) handler {
 	middlewares := []middleware{}
 
 	if resolver.hosts != nil {
-		middlewares = append(middlewares, withHosts(resolver.hosts, mapper.mapping))
+		middlewares = append(middlewares, withHosts(R.NewHosts(resolver.hosts), mapper.mapping))
 	}
 
 	if mapper.mode == C.DNSFakeIP {

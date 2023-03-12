@@ -7,7 +7,41 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/trie"
 )
+
+type Hosts struct {
+	*trie.DomainTrie[HostValue]
+}
+
+func NewHosts(hosts *trie.DomainTrie[HostValue]) Hosts {
+	return Hosts{
+		hosts,
+	}
+}
+
+func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
+	value := h.DomainTrie.Search(domain)
+	if value == nil {
+		return nil, false
+	}
+	hostValue := value.Data()
+	for {
+		if isDomain && hostValue.IsDomain {
+			return &hostValue, true
+		} else {
+			if node := h.DomainTrie.Search(hostValue.Domain); node != nil {
+				hostValue = node.Data()
+			} else {
+				break
+			}
+		}
+	}
+	if isDomain == hostValue.IsDomain {
+		return &hostValue, true
+	}
+	return &hostValue, false
+}
 
 type HostValue struct {
 	IsDomain bool
@@ -23,7 +57,7 @@ func NewHostValue(value any) (HostValue, error) {
 		return HostValue{}, err
 	} else {
 		if len(valueArr) > 1 {
-			isDomain=false
+			isDomain = false
 			for _, str := range valueArr {
 				if ip, err := netip.ParseAddr(str); err == nil {
 					ips = append(ips, ip)
