@@ -3,6 +3,7 @@ package tunnel
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -203,7 +204,11 @@ func preHandleMetadata(metadata *C.Metadata) error {
 				metadata.DNSMode = C.DNSFakeIP
 			} else if node := resolver.DefaultHosts.Search(host); node != nil {
 				// redir-host should lookup the hosts
-				metadata.DstIP = node.Data()
+				if !node.Data().IsDomain {
+					metadata.DstIP,_ = node.Data().RandIP()
+				} else {
+					metadata.Host = node.Data().Domain
+				}
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
@@ -393,10 +398,13 @@ func handleTCPConn(connCtx C.ConnContext) {
 	dialMetadata := metadata
 	if len(metadata.Host) > 0 {
 		if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-			if dstIp := node.Data(); !FakeIPRange().Contains(dstIp) {
-				dialMetadata.DstIP = dstIp
-				dialMetadata.DNSMode = C.DNSHosts
-				dialMetadata = dialMetadata.Pure()
+			hostValue := node.Data()
+			if !hostValue.IsDomain {
+				if dstIp, _ := hostValue.RandIP(); !FakeIPRange().Contains(dstIp) {
+					dialMetadata.DstIP = dstIp
+					dialMetadata.DNSMode = C.DNSHosts
+					dialMetadata = dialMetadata.Pure()
+				}
 			}
 		}
 	}
@@ -499,8 +507,11 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	)
 
 	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		metadata.DstIP = node.Data()
-		resolved = true
+		if !node.Data().IsDomain {
+			metadata.DstIP = node.Data().IPs[rand.Intn(len(node.Data().IPs)-1)]
+			resolved = true
+		}
+
 	}
 
 	for _, rule := range getRules(metadata) {

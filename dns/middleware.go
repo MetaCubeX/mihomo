@@ -8,6 +8,7 @@ import (
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/nnip"
 	"github.com/Dreamacro/clash/component/fakeip"
+	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
@@ -21,7 +22,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip.Addr, string]) middleware {
+func withHosts(hosts *trie.DomainTrie[resolver.HostValue], mapping *cache.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -37,27 +38,36 @@ func withHosts(hosts *trie.DomainTrie[netip.Addr], mapping *cache.LruCache[netip
 				return next(ctx, r)
 			}
 
-			ip := record.Data()
+			hostValue := record.Data()
 			msg := r.Copy()
-
-			if ip.Is4() && q.Qtype == D.TypeA {
-				rr := &D.A{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
-				rr.A = ip.AsSlice()
-
-				msg.Answer = []D.RR{rr}
-			} else if q.Qtype == D.TypeAAAA {
-				rr := &D.AAAA{}
-				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
-				ip := ip.As16()
-				rr.AAAA = ip[:]
-				msg.Answer = []D.RR{rr}
+			if !hostValue.IsDomain {
+				for _, ipAddr := range hostValue.IPs {
+					if ipAddr.Is4() && q.Qtype == D.TypeA {
+						rr := &D.A{}
+						rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: 10}
+						rr.A = ipAddr.AsSlice()
+						msg.Answer = append(msg.Answer, rr)
+						if mapping != nil {
+							mapping.SetWithExpire(ipAddr, host, time.Now().Add(time.Second*10))
+						}
+					} else if q.Qtype == D.TypeAAAA {
+						rr := &D.AAAA{}
+						rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
+						ip := ipAddr.As16()
+						rr.AAAA = ip[:]
+						msg.Answer = append(msg.Answer, rr)
+						if mapping != nil {
+							mapping.SetWithExpire(ipAddr, host, time.Now().Add(time.Second*10))
+						}
+					}
+				}
+			} else if q.Qtype == D.TypeCNAME {
+				rr := &D.CNAME{}
+				rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeCNAME, Class: D.ClassINET, Ttl: 10}
+				rr.Target = hostValue.Domain+"."
+				msg.Answer = append(msg.Answer, rr)
 			} else {
 				return next(ctx, r)
-			}
-
-			if mapping != nil {
-				mapping.SetWithExpire(ip, host, time.Now().Add(time.Second*10))
 			}
 
 			ctx.SetType(context.DNSTypeHost)

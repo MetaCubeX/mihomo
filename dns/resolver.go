@@ -43,7 +43,7 @@ type geositePolicyRecord struct {
 type Resolver struct {
 	ipv6                  bool
 	ipv6Timeout           time.Duration
-	hosts                 *trie.DomainTrie[netip.Addr]
+	hosts                 *trie.DomainTrie[resolver.HostValue]
 	main                  []dnsClient
 	fallback              []dnsClient
 	fallbackDomainFilters []fallbackDomainFilter
@@ -430,7 +430,7 @@ type Config struct {
 	EnhancedMode   C.DNSMode
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
-	Hosts          *trie.DomainTrie[netip.Addr]
+	Hosts          *trie.DomainTrie[resolver.HostValue]
 	Policy         map[string][]NameServer
 }
 

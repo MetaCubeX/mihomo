@@ -226,7 +226,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 	dns.ReCreateServer(c.Listen, r, m)
 }
 
-func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
+func updateHosts(tree *trie.DomainTrie[resolver.HostValue]) {
 	resolver.DefaultHosts = tree
 }
 
