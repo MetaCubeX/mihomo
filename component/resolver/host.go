@@ -2,12 +2,12 @@ package resolver
 
 import (
 	"errors"
-	"math/rand"
 	"net/netip"
 	"strings"
 
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/trie"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type Hosts struct {
@@ -109,5 +109,5 @@ func (hv HostValue) RandIP() (netip.Addr, error) {
 	if hv.IsDomain {
 		return netip.Addr{}, errors.New("value type is error")
 	}
-	return hv.IPs[rand.Intn(len(hv.IPs)-1)], nil
+	return hv.IPs[fastrand.Intn(len(hv.IPs))], nil
 }

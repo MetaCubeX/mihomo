@@ -845,7 +845,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {
-						if ipnet, ok := addr.(*net.IPNet); ok {
+						if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 							if ip, err := netip.ParseAddr(ipnet.IP.String()); err == nil {
 								ips = append(ips, ip)
 							}
