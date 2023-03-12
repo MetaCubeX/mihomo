@@ -839,10 +839,25 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 	}
 
 	if len(cfg.Hosts) != 0 {
-		for domain, valueStr := range cfg.Hosts {
-			value, err := resolver.NewHostValue(valueStr)
+		for domain, anyValue := range cfg.Hosts {
+			if str, ok := anyValue.(string); ok && str == "clash" {
+				if addrs, err := net.InterfaceAddrs(); err != nil {
+					log.Errorln("insert clash to host error: %s", err)
+				} else {
+					ips := make([]netip.Addr, 0)
+					for _, addr := range addrs {
+						if ipnet, ok := addr.(*net.IPNet); ok {
+							if ip, err := netip.ParseAddr(ipnet.IP.String()); err == nil {
+								ips = append(ips, ip)
+							}
+						}
+					}
+					anyValue=ips
+				}
+			}
+			value, err := resolver.NewHostValue(anyValue)
 			if err != nil {
-				return nil, fmt.Errorf("%s is not a valid value", valueStr)
+				return nil, fmt.Errorf("%s is not a valid value", anyValue)
 			}
 			if value.IsDomain {
 				node := tree.Search(value.Domain)
