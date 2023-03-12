@@ -2,11 +2,11 @@ package resolver
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"net/netip"
-	"reflect"
 	"strings"
+
+	"github.com/Dreamacro/clash/common/utils"
 )
 
 type HostValue struct {
@@ -19,27 +19,27 @@ func NewHostValue(value any) (HostValue, error) {
 	isDomain := true
 	ips := make([]netip.Addr, 0)
 	domain := ""
-	switch reflect.TypeOf(value).Kind() {
-	case reflect.Slice, reflect.Array:
-		isDomain = false
-		origin := reflect.ValueOf(value)
-		for i := 0; i < origin.Len(); i++ {
-			if ip, err := netip.ParseAddr(fmt.Sprintf("%v", origin.Index(i))); err == nil {
+	if valueArr, err := utils.ToStringSlice(value); err != nil {
+		return HostValue{}, err
+	} else {
+		if len(valueArr) > 1 {
+			isDomain=false
+			for _, str := range valueArr {
+				if ip, err := netip.ParseAddr(str); err == nil {
+					ips = append(ips, ip)
+				} else {
+					return HostValue{}, err
+				}
+			}
+		} else if len(valueArr) == 1 {
+			host := valueArr[0]
+			if ip, err := netip.ParseAddr(host); err == nil {
 				ips = append(ips, ip)
+				isDomain = false
 			} else {
-				return HostValue{}, err
+				domain = host
 			}
 		}
-	case reflect.String:
-		host := fmt.Sprintf("%v", value)
-		if ip, err := netip.ParseAddr(host); err == nil {
-			ips = append(ips, ip)
-			isDomain = false
-		} else {
-			domain = host
-		}
-	default:
-		return HostValue{}, errors.New("value format error, must be string or array")
 	}
 	if isDomain {
 		return NewHostValueByDomain(domain)

@@ -9,7 +9,6 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -852,7 +851,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 							}
 						}
 					}
-					anyValue=ips
+					anyValue = ips
 				}
 			}
 			value, err := resolver.NewHostValue(anyValue)
@@ -988,24 +987,12 @@ func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][
 	policy := map[string][]dns.NameServer{}
 
 	for domain, server := range nsPolicy {
-		var (
-			nameservers []dns.NameServer
-			err         error
-		)
 
-		switch reflect.TypeOf(server).Kind() {
-		case reflect.Slice, reflect.Array:
-			origin := reflect.ValueOf(server)
-			servers := make([]string, 0)
-			for i := 0; i < origin.Len(); i++ {
-				servers = append(servers, fmt.Sprintf("%v", origin.Index(i)))
-			}
-			nameservers, err = parseNameServer(servers, preferH3)
-		case reflect.String:
-			nameservers, err = parseNameServer([]string{fmt.Sprintf("%v", server)}, preferH3)
-		default:
-			return nil, errors.New("server format error, must be string or array")
+		servers, err := utils.ToStringSlice(server)
+		if err != nil {
+			return nil, err
 		}
+		nameservers, err := parseNameServer(servers, preferH3)
 		if err != nil {
 			return nil, err
 		}
