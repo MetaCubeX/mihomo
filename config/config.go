@@ -4,11 +4,11 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-
 	"net"
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -985,8 +985,33 @@ func parsePureDNSServer(server string) string {
 }
 func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][]dns.NameServer, error) {
 	policy := map[string][]dns.NameServer{}
+	updatedPolicy := make(map[string]interface{})
+	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
-	for domain, server := range nsPolicy {
+	for k, v := range nsPolicy {
+		if strings.Contains(k, "geosite:") {
+			subkeys := strings.Split(k, ":")
+			subkeys = subkeys[1:]
+			subkeys = strings.Split(subkeys[0], ",")
+			//log.Infoln("subkeys:%+v", subkeys)
+			for _, subkey := range subkeys {
+				newKey := "geosite:" + subkey
+				//log.Infoln("newKey:%+v", newKey)
+				updatedPolicy[newKey] = v
+			}
+		} else if re.MatchString(k) {
+			subkeys := strings.Split(k, ",")
+			//log.Infoln("subkeys:%+v", subkeys)
+			for _, subkey := range subkeys {
+				updatedPolicy[subkey] = v
+			}
+		} else {
+			updatedPolicy[k] = v
+		}
+	}
+	//log.Infoln("updatedPolicy:%+v", updatedPolicy)
+
+	for domain, server := range updatedPolicy {
 
 		servers, err := utils.ToStringSlice(server)
 		if err != nil {
