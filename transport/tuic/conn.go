@@ -200,7 +200,7 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 }
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	if len(p) > q.maxUdpRelayPacketSize {
+	if q.udpRelayMode != "quic" && len(p) > q.maxUdpRelayPacketSize {
 		return 0, fmt.Errorf("udp packet too large(%d > %d)", len(p), q.maxUdpRelayPacketSize)
 	}
 	if q.closed {
@@ -215,7 +215,6 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 			q.deferQuicConnFn(q.quicConn, err)
 		}()
 	}
-	addr.String()
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
 	addrPort, err := netip.ParseAddrPort(addr.String())
@@ -239,7 +238,8 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 			return
 		}
 	default: // native
-		err = q.quicConn.SendMessage(buf.Bytes())
+		data := buf.Bytes()
+		err = q.quicConn.SendMessage(data)
 		if err != nil {
 			return
 		}
@@ -250,7 +250,29 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 }
 
 func (q *quicStreamPacketConn) LocalAddr() net.Addr {
-	return q.quicConn.LocalAddr()
+	addr := q.quicConn.LocalAddr()
+	if q.inputConn != nil { // client
+		return &packetAddr{addrStr: q.quicConn.LocalAddr().String(), connId: q.connId, rawAddr: addr}
+	}
+	return addr // server
 }
 
 var _ net.PacketConn = &quicStreamPacketConn{}
+
+type packetAddr struct {
+	addrStr string
+	connId  uint32
+	rawAddr net.Addr
+}
+
+func (a packetAddr) Network() string {
+	return "tuic"
+}
+
+func (a packetAddr) String() string {
+	return fmt.Sprintf("%s-%d", a.addrStr, a.connId)
+}
+
+func (a packetAddr) RawAddr() net.Addr {
+	return a.rawAddr
+}
