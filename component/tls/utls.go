@@ -45,8 +45,13 @@ func GetFingerprint(ClientFingerprint string) (UClientHelloID, bool) {
 	}
 
 	fingerprint, ok := Fingerprints[ClientFingerprint]
-	log.Debugln("use specified fingerprint:%s", fingerprint.Client)
-	return fingerprint, ok
+	if ok {
+		log.Debugln("use specified fingerprint:%s", fingerprint.Client)
+		return fingerprint, ok
+	} else {
+		log.Warnln("wrong ClientFingerprint:%s", ClientFingerprint)
+		return UClientHelloID{}, false
+	}
 }
 
 func RollFingerprint() (UClientHelloID, bool) {
@@ -128,10 +133,7 @@ func SetGlobalUtlsClient(Client string) {
 }
 
 func HaveGlobalFingerprint() bool {
-	if len(initUtlsClient) != 0 && initUtlsClient != "none" {
-		return true
-	}
-	return false
+	return len(initUtlsClient) != 0 && initUtlsClient != "none"
 }
 
 func GetGlobalFingerprint() string {
