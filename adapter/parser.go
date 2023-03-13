@@ -24,6 +24,11 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	switch proxyType {
 	case "ss":
 		ssOption := &outbound.ShadowSocksOption{}
+
+		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
+			ssOption.ClientFingerprint = GlobalUtlsClient
+		}
+
 		err = decoder.Decode(mapping, ssOption)
 		if err != nil {
 			break
