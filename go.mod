@@ -51,6 +51,7 @@ require (
 )
 
 require (
+	github.com/3andne/restls-client-go v0.1.4
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

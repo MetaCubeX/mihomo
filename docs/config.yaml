@@ -331,17 +331,55 @@ proxies: # socks5
     # headers:
     #   custom: value
   
-  - name: "ss4"
+  - name: "ss4-shadow-tls"
     type: ss
     server: server
     port: 443
     cipher: chacha20-ietf-poly1305
     password: "password"
     plugin: shadow-tls
+    client-fingerprint: chrome
     plugin-opts:
       host: "cloud.tencent.com"
       password: "shadow_tls_password"
       version: 2 # support 1/2/3
+
+  - name: "ss-restls-tls13"
+    type: ss
+    server: [YOUR_SERVER_IP]
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: [YOUR_SS_PASSWORD]
+    client-fingerprint: chrome # One of: chrome, ios, firefox or safari
+                               # 可以是chrome, ios, firefox, safari中的一个
+    plugin: restls
+    plugin-opts:
+        host: "www.microsoft.com" # Must be a TLS 1.3 server
+                                  # 应当是一个TLS 1.3 服务器
+        password: [YOUR_RESTLS_PASSWORD]
+        version-hint: "tls13"
+        # Control your post-handshake traffic through restls-script
+        # Hide proxy behaviors like "tls in tls". 
+        # see https://github.com/3andne/restls/blob/main/Restls-Script:%20Hide%20Your%20Proxy%20Traffic%20Behavior.md
+        # 用restls剧本来控制握手后的行为，隐藏"tls in tls"等特征
+        # 详情：https://github.com/3andne/restls/blob/main/Restls-Script:%20%E9%9A%90%E8%97%8F%E4%BD%A0%E7%9A%84%E4%BB%A3%E7%90%86%E8%A1%8C%E4%B8%BA.md
+        restls-script: "300?100<1,400~100,350~100,600~100,300~200,300~100"
+
+  - name: "ss-restls-tls12"
+    type: ss
+    server: [YOUR_SERVER_IP]
+    port: 443
+    cipher: chacha20-ietf-poly1305
+    password: [YOUR_SS_PASSWORD]
+    client-fingerprint: chrome # One of: chrome, ios, firefox or safari
+                               # 可以是chrome, ios, firefox, safari中的一个
+    plugin: restls
+    plugin-opts:
+        host: "vscode.dev" # Must be a TLS 1.2 server
+                           # 应当是一个TLS 1.2 服务器
+        password: [YOUR_RESTLS_PASSWORD]
+        version-hint: "tls12"
+        restls-script: "1000?100<1,500~100,350~100,600~100,400~200"
   
   # vmess
   # cipher支持 auto/aes-128-gcm/chacha20-poly1305/none

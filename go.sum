@@ -1,3 +1,5 @@
+github.com/3andne/restls-client-go v0.1.4 h1:kLNC2aSRHPlEVYmTj6EOqJoorCpobEe2toMRSfBF7FU=
+github.com/3andne/restls-client-go v0.1.4/go.mod h1:04CGbRk1BwBiEDles8b5mlKgTqIwE5MqF7JDloJV47I=
 github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da h1:KjTM2ks9d14ZYCvmHS9iAKVt9AyzRSqNU1qabPih5BY=
 github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da/go.mod h1:eHEWzANqSiWQsof+nXEI9bUVUyV6F53Fp89EuCh2EAA=
 github.com/ajg/form v1.5.1 h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=

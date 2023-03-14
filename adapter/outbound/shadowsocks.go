@@ -12,11 +12,13 @@ import (
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/transport/restls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	shadowtls "github.com/Dreamacro/clash/transport/sing-shadowtls"
 	"github.com/Dreamacro/clash/transport/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
+	restlsC "github.com/3andne/restls-client-go"
 	shadowsocks "github.com/metacubex/sing-shadowsocks"
 	"github.com/metacubex/sing-shadowsocks/shadowimpl"
 	"github.com/sagernet/sing/common/bufio"
@@ -34,19 +36,21 @@ type ShadowSocks struct {
 	obfsOption      *simpleObfsOption
 	v2rayOption     *v2rayObfs.Option
 	shadowTLSOption *shadowtls.ShadowTLSOption
+	restlsConfig    *restlsC.Config
 }
 
 type ShadowSocksOption struct {
 	BasicOption
-	Name       string         `proxy:"name"`
-	Server     string         `proxy:"server"`
-	Port       int            `proxy:"port"`
-	Password   string         `proxy:"password"`
-	Cipher     string         `proxy:"cipher"`
-	UDP        bool           `proxy:"udp,omitempty"`
-	Plugin     string         `proxy:"plugin,omitempty"`
-	PluginOpts map[string]any `proxy:"plugin-opts,omitempty"`
-	UDPOverTCP bool           `proxy:"udp-over-tcp,omitempty"`
+	Name              string         `proxy:"name"`
+	Server            string         `proxy:"server"`
+	Port              int            `proxy:"port"`
+	Password          string         `proxy:"password"`
+	Cipher            string         `proxy:"cipher"`
+	UDP               bool           `proxy:"udp,omitempty"`
+	Plugin            string         `proxy:"plugin,omitempty"`
+	PluginOpts        map[string]any `proxy:"plugin-opts,omitempty"`
+	UDPOverTCP        bool           `proxy:"udp-over-tcp,omitempty"`
+	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
 
 type simpleObfsOption struct {
@@ -66,12 +70,18 @@ type v2rayObfsOption struct {
 }
 
 type shadowTLSOption struct {
-	Password          string `obfs:"password"`
-	Host              string `obfs:"host"`
-	Fingerprint       string `obfs:"fingerprint,omitempty"`
-	ClientFingerprint string `obfs:"client-fingerprint,omitempty"`
-	SkipCertVerify    bool   `obfs:"skip-cert-verify,omitempty"`
-	Version           int    `obfs:"version,omitempty"`
+	Password       string `obfs:"password"`
+	Host           string `obfs:"host"`
+	Fingerprint    string `obfs:"fingerprint,omitempty"`
+	SkipCertVerify bool   `obfs:"skip-cert-verify,omitempty"`
+	Version        int    `obfs:"version,omitempty"`
+}
+
+type restlsOption struct {
+	Password     string `obfs:"password"`
+	Host         string `obfs:"host"`
+	VersionHint  string `obfs:"version-hint"`
+	RestlsScript string `obfs:"restls-script,omitempty"`
 }
 
 // StreamConn implements C.ProxyAdapter
@@ -86,6 +96,7 @@ func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		if err != nil {
 			return nil, err
 		}
+
 	}
 	return ss.streamConn(c, metadata)
 }
@@ -102,6 +113,12 @@ func (ss *ShadowSocks) streamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		c, err = v2rayObfs.NewV2rayObfs(c, ss.v2rayOption)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
+		}
+	case restls.Mode:
+		var err error
+		c, err = restls.NewRestls(c, ss.restlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("%s (restls) connect error: %w", ss.addr, err)
 		}
 	}
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
@@ -202,6 +219,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	var v2rayOption *v2rayObfs.Option
 	var obfsOption *simpleObfsOption
 	var shadowTLSOpt *shadowtls.ShadowTLSOption
+	var restlsConfig *restlsC.Config
 	obfsMode := ""
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "obfs", WeaklyTypedInput: true})
@@ -250,10 +268,23 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			Password:          opt.Password,
 			Host:              opt.Host,
 			Fingerprint:       opt.Fingerprint,
-			ClientFingerprint: opt.ClientFingerprint,
+			ClientFingerprint: option.ClientFingerprint,
 			SkipCertVerify:    opt.SkipCertVerify,
 			Version:           opt.Version,
 		}
+	} else if option.Plugin == restls.Mode {
+		obfsMode = restls.Mode
+		restlsOpt := &restlsOption{}
+		if err := decoder.Decode(option.PluginOpts, restlsOpt); err != nil {
+			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
+		}
+
+		restlsConfig, err = restlsC.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, option.ClientFingerprint)
+		restlsConfig.SessionTicketsDisabled = true
+		if err != nil {
+			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
+		}
+
 	}
 
 	return &ShadowSocks{
@@ -274,6 +305,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		v2rayOption:     v2rayOption,
 		obfsOption:      obfsOption,
 		shadowTLSOption: shadowTLSOpt,
+		restlsConfig:    restlsConfig,
 	}, nil
 }
 
