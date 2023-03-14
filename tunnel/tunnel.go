@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jpillora/backoff"
-	"go.uber.org/atomic"
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/nat"
@@ -27,7 +26,7 @@ import (
 )
 
 var (
-	status         = atomic.NewInt32(int32(C.TunnelSuspend))
+	status         = newAtomicStatus(Suspend)
 	tcpQueue       = make(chan C.ConnContext, 200)
 	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
@@ -52,18 +51,22 @@ var (
 )
 
 func OnSuspend() {
-	status.Store(int32(C.TunnelSuspend))
+	status.Store(Suspend)
 	for _, c := range statistic.DefaultManager.Snapshot().Connections {
 		_ = c.Close()
 	}
 }
 
 func OnInnerLoading() {
-	status.Store(int32(C.TunnelInner))
+	status.Store(Inner)
 }
 
 func OnRunning() {
-	status.Store(int32(C.TunnelRunning))
+	status.Store(Running)
+}
+
+func Status() TunnelStatus {
+	return status.Load()
 }
 
 func SetFakeIPRange(p netip.Prefix) {
@@ -176,8 +179,8 @@ func SetFindProcessMode(mode P.FindProcessMode) {
 }
 
 func isHandle(t C.Type) bool {
-	status := C.TunnelStatus(status.Load())
-	return status == C.TunnelRunning || (status == C.TunnelInner && t == C.INNER)
+	status := status.Load()
+	return status == Running || (status == Inner && t == C.INNER)
 }
 
 // processUDP starts a loop to handle udp packet
