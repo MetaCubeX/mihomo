@@ -34,31 +34,19 @@ type HealthCheck struct {
 
 func (hc *HealthCheck) process() {
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
-
-	go func() {
-		time.Sleep(30 * time.Second)
-		hc.lazyCheck()
-	}()
-
 	for {
 		select {
 		case <-ticker.C:
-			hc.lazyCheck()
+			now := time.Now().Unix()
+			if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
+				hc.check()
+			} else {
+				log.Debugln("Skip once health check because we are lazy")
+			}
 		case <-hc.done:
 			ticker.Stop()
 			return
 		}
-	}
-}
-
-func (hc *HealthCheck) lazyCheck() bool {
-	now := time.Now().Unix()
-	if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
-		hc.check()
-		return true
-	} else {
-		log.Debugln("Skip once health check because we are lazy")
-		return false
 	}
 }
 
