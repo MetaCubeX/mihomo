@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jpillora/backoff"
+	"go.uber.org/atomic"
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/nat"
@@ -26,7 +27,7 @@ import (
 )
 
 var (
-	status         C.TunnelStatus
+	status         = atomic.NewInt32(int32(C.TunnelSuspend))
 	tcpQueue       = make(chan C.ConnContext, 200)
 	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
@@ -51,15 +52,18 @@ var (
 )
 
 func OnSuspend() {
-	status = C.TunnelSuspend
+	status.Store(int32(C.TunnelSuspend))
+	for _, c := range statistic.DefaultManager.Snapshot().Connections {
+		_ = c.Close()
+	}
 }
 
 func OnInnerLoading() {
-	status = C.TunnelInner
+	status.Store(int32(C.TunnelInner))
 }
 
 func OnRunning() {
-	status = C.TunnelRunning
+	status.Store(int32(C.TunnelRunning))
 }
 
 func SetFakeIPRange(p netip.Prefix) {
@@ -172,6 +176,7 @@ func SetFindProcessMode(mode P.FindProcessMode) {
 }
 
 func isHandle(t C.Type) bool {
+	status := C.TunnelStatus(status.Load())
 	return status == C.TunnelRunning || (status == C.TunnelInner && t == C.INNER)
 }
 
