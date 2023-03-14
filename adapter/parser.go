@@ -23,12 +23,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	)
 	switch proxyType {
 	case "ss":
-		ssOption := &outbound.ShadowSocksOption{}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			ssOption.ClientFingerprint = GlobalUtlsClient
-		}
-
+		ssOption := &outbound.ShadowSocksOption{ClientFingerprint: tlsC.GetGlobalFingerprint()}
 		err = decoder.Decode(mapping, ssOption)
 		if err != nil {
 			break
@@ -61,10 +56,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 				Method: "GET",
 				Path:   []string{"/"},
 			},
-		}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			vmessOption.ClientFingerprint = GlobalUtlsClient
+			ClientFingerprint: tlsC.GetGlobalFingerprint(),
 		}
 
 		err = decoder.Decode(mapping, vmessOption)
@@ -73,12 +65,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		}
 		proxy, err = outbound.NewVmess(*vmessOption)
 	case "vless":
-		vlessOption := &outbound.VlessOption{}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			vlessOption.ClientFingerprint = GlobalUtlsClient
-		}
-
+		vlessOption := &outbound.VlessOption{ClientFingerprint: tlsC.GetGlobalFingerprint()}
 		err = decoder.Decode(mapping, vlessOption)
 		if err != nil {
 			break
@@ -92,12 +79,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		}
 		proxy, err = outbound.NewSnell(*snellOption)
 	case "trojan":
-		trojanOption := &outbound.TrojanOption{}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			trojanOption.ClientFingerprint = GlobalUtlsClient
-		}
-
+		trojanOption := &outbound.TrojanOption{ClientFingerprint: tlsC.GetGlobalFingerprint()}
 		err = decoder.Decode(mapping, trojanOption)
 		if err != nil {
 			break
