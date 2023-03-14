@@ -86,22 +86,14 @@ type restlsOption struct {
 
 // StreamConn implements C.ProxyAdapter
 func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	switch ss.obfsMode {
-	case shadowtls.Mode:
-		// fix tls handshake not timeout
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-		defer cancel()
-		var err error
-		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
-		if err != nil {
-			return nil, err
-		}
-
-	}
-	return ss.streamConn(c, metadata)
+	// fix tls handshake not timeout
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+	defer cancel()
+	return ss.StreamConnContext(ctx, c, metadata)
 }
 
-func (ss *ShadowSocks) streamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	useEarly := false
 	switch ss.obfsMode {
 	case "tls":
 		c = obfs.NewTLSObfs(c, ss.obfsOption.Host)
@@ -114,21 +106,30 @@ func (ss *ShadowSocks) streamConn(c net.Conn, metadata *C.Metadata) (net.Conn, e
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
+	case shadowtls.Mode:
+		var err error
+		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
+		if err != nil {
+			return nil, err
+		}
+		useEarly = true
 	case restls.Mode:
 		var err error
-		c, err = restls.NewRestls(c, ss.restlsConfig)
+		c, err = restls.NewRestls(ctx, c, ss.restlsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("%s (restls) connect error: %w", ss.addr, err)
 		}
+		useEarly = true
 	}
+	useEarly = useEarly || N.NeedHandshake(c)
 	if metadata.NetWork == C.UDP && ss.option.UDPOverTCP {
-		if N.NeedHandshake(c) {
+		if useEarly {
 			return ss.method.DialEarlyConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443")), nil
 		} else {
 			return ss.method.DialConn(c, M.ParseSocksaddr(uot.UOTMagicAddress+":443"))
 		}
 	}
-	if N.NeedHandshake(c) {
+	if useEarly {
 		return ss.method.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
 	} else {
 		return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
@@ -152,15 +153,7 @@ func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Diale
 		safeConnClose(c, err)
 	}(c)
 
-	switch ss.obfsMode {
-	case shadowtls.Mode:
-		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	c, err = ss.streamConn(c, metadata)
+	c, err = ss.StreamConnContext(ctx, c, metadata)
 	return NewConn(c, ss), err
 }
 
