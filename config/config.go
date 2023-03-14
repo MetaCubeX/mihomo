@@ -451,7 +451,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
 	}
 
-	dialer.DefaultInterface.Store(config.General.Interface)
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
 		return nil, err
