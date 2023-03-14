@@ -86,6 +86,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Mount("/providers/rules", ruleProviderRouter())
 		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
+		r.Mount("/restart", restartRouter())
 	})
 
 	if uiPath != "" {
