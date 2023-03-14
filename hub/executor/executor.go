@@ -75,23 +75,37 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
-	preUpdateExperimental(cfg)
+
+	tunnel.OnSuspend()
+
+	CTLS.ResetCertificate()
+	for _, c := range cfg.TLS.CustomTrustCert {
+		if err := CTLS.AddCertificate(c); err != nil {
+			log.Warnln("%s\nadd error: %s", c, err.Error())
+		}
+	}
+
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateGeneral(cfg.General)
-	initInnerTcp()
 	updateDNS(cfg.DNS, cfg.General.IPv6)
-	loadProxyProvider(cfg.Providers)
-	updateProfile(cfg)
-	loadRuleProvider(cfg.RuleProviders)
 	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
 	updateExperimental(cfg)
 	updateTunnels(cfg.Tunnels)
+
+	tunnel.OnInnerLoading()
+
+	initInnerTcp()
+	loadProxyProvider(cfg.Providers)
+	updateProfile(cfg)
+	loadRuleProvider(cfg.RuleProviders)
+
+	tunnel.OnRunning()
 
 	log.SetLevel(cfg.General.LogLevel)
 }
@@ -144,10 +158,6 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 		return
 	}
 
-	if general.Interface == "" && (!general.Tun.Enable || !general.Tun.AutoDetectInterface) {
-		dialer.DefaultInterface.Store(general.Interface)
-	}
-
 	allowLan := general.AllowLan
 	listener.SetAllowLan(allowLan)
 
@@ -166,15 +176,6 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 
 func updateExperimental(c *config.Config) {
 	runtime.GC()
-}
-
-func preUpdateExperimental(c *config.Config) {
-	CTLS.ResetCertificate()
-	for _, c := range c.TLS.CustomTrustCert {
-		if err := CTLS.AddCertificate(c); err != nil {
-			log.Warnln("%s\nadd error: %s", c, err.Error())
-		}
-	}
 }
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
@@ -342,17 +343,8 @@ func updateGeneral(general *config.General) {
 	inbound.SetTfo(general.InboundTfo)
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
-	// Avoid reload configuration clean the value, causing traffic loops
-	if listener.GetTunConf().Enable && listener.GetTunConf().AutoDetectInterface {
-		// changed only when the name is specified
-		// if name is empty, setting delay until after tun loaded
-		if general.Interface != "" && (!general.Tun.Enable || !general.Tun.AutoDetectInterface) {
-			dialer.DefaultInterface.Store(general.Interface)
-		}
-	} else {
-		dialer.DefaultInterface.Store(general.Interface)
-	}
 
+	dialer.DefaultInterface.Store(general.Interface)
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
 	if general.RoutingMark > 0 {
 		log.Infoln("Use routing mark: %#x", general.RoutingMark)

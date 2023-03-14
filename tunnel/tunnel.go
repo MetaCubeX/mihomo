@@ -26,6 +26,7 @@ import (
 )
 
 var (
+	status         C.TunnelStatus
 	tcpQueue       = make(chan C.ConnContext, 200)
 	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
@@ -48,6 +49,18 @@ var (
 
 	fakeIPRange netip.Prefix
 )
+
+func OnSuspend() {
+	status = C.TunnelSuspend
+}
+
+func OnInnerLoading() {
+	status = C.TunnelInner
+}
+
+func OnRunning() {
+	status = C.TunnelRunning
+}
 
 func SetFakeIPRange(p netip.Prefix) {
 	fakeIPRange = p
@@ -158,10 +171,18 @@ func SetFindProcessMode(mode P.FindProcessMode) {
 	findProcessMode = mode
 }
 
+func isHandle(t C.Type) bool {
+	return status == C.TunnelRunning || (status == C.TunnelInner && t == C.INNER)
+}
+
 // processUDP starts a loop to handle udp packet
 func processUDP() {
 	queue := udpQueue
 	for conn := range queue {
+		if !isHandle(conn.Metadata().Type) {
+			conn.Drop()
+			continue
+		}
 		handleUDPConn(conn)
 	}
 }
@@ -177,6 +198,10 @@ func process() {
 
 	queue := tcpQueue
 	for conn := range queue {
+		if !isHandle(conn.Metadata().Type) {
+			_ = conn.Conn().Close()
+			continue
+		}
 		go handleTCPConn(conn)
 	}
 }
