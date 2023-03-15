@@ -212,6 +212,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		IncludeAndroidUser: options.IncludeAndroidUser,
 		IncludePackage:     options.IncludePackage,
 		ExcludePackage:     options.ExcludePackage,
+		FileDescriptor:     options.FileDescriptor,
 		InterfaceMonitor:   defaultInterfaceMonitor,
 		TableIndex:         2022,
 	}

@@ -33,6 +33,7 @@ type TunOption struct {
 	ExcludePackage         []string `inbound:"exclude_package,omitempty"`
 	EndpointIndependentNat bool     `inbound:"endpoint_independent_nat,omitempty"`
 	UDPTimeout             int64    `inbound:"udp_timeout,omitempty"`
+	FileDescriptor         int      `inbound:"file-descriptor,omitempty"`
 }
 
 func (o TunOption) Equal(config C.InboundConfig) bool {
@@ -96,6 +97,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 			ExcludePackage:         options.ExcludePackage,
 			EndpointIndependentNat: options.EndpointIndependentNat,
 			UDPTimeout:             options.UDPTimeout,
+			FileDescriptor:         options.FileDescriptor,
 		},
 	}, nil
 }
