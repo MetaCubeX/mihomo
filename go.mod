@@ -3,6 +3,7 @@ module github.com/Dreamacro/clash
 go 1.19
 
 require (
+	github.com/3andne/restls-client-go v0.1.4
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/cilium/ebpf v0.9.3
 	github.com/coreos/go-iptables v0.6.0
@@ -20,16 +21,16 @@ require (
 	github.com/mdlayher/netlink v1.7.2-0.20221213171556-9881fafed8c7
 	github.com/metacubex/quic-go v0.33.1
 	github.com/metacubex/sing-shadowsocks v0.1.1-0.20230226153717-4e80da7e6947
-	github.com/metacubex/sing-tun v0.1.1-0.20230304153753-5058534177f3
+	github.com/metacubex/sing-tun v0.1.2
 	github.com/metacubex/sing-wireguard v0.0.0-20230310035749-f7595fcae5cb
-	github.com/miekg/dns v1.1.50
+	github.com/miekg/dns v1.1.52
 	github.com/mroth/weightedrand/v2 v2.0.0
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.1.9-0.20230315063014-2731df16725b
 	github.com/sagernet/sing-shadowtls v0.1.0
-	github.com/sagernet/sing-vmess v0.1.3-0.20230307060529-d110e81a50bc
-	github.com/sagernet/tfo-go v0.0.0-20230207095944-549363a7327d
+	github.com/sagernet/sing-vmess v0.1.3
+	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
 	github.com/samber/lo v1.37.0
@@ -40,9 +41,9 @@ require (
 	go.etcd.io/bbolt v1.3.6
 	go.uber.org/atomic v1.10.0
 	go.uber.org/automaxprocs v1.5.1
-	golang.org/x/crypto v0.6.0
+	golang.org/x/crypto v0.7.0
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
-	golang.org/x/net v0.7.0
+	golang.org/x/net v0.8.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.6.0
 	google.golang.org/protobuf v1.28.2-0.20230118093459-a9481185b34d
@@ -51,7 +52,6 @@ require (
 )
 
 require (
-	github.com/3andne/restls-client-go v0.1.4
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -65,7 +65,7 @@ require (
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/mdlayher/socket v0.4.0 // indirect
-	github.com/metacubex/gvisor v0.0.0-20230304153416-e2bb9c726005 // indirect
+	github.com/metacubex/gvisor v0.0.0-20230315105319-c03631d706be // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -75,10 +75,10 @@ require (
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/u-root/uio v0.0.0-20221213070652-c3537552635f // indirect
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
-	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
-	golang.org/x/tools v0.5.0 // indirect
+	golang.org/x/tools v0.6.0 // indirect
 )
 
 replace go.uber.org/atomic v1.10.0 => github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370
