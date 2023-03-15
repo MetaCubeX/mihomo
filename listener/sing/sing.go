@@ -5,6 +5,7 @@ import (
 	"errors"
 	"golang.org/x/exp/slices"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -61,9 +62,16 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	switch metadata.Destination.Fqdn {
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
-	case uot.UOTMagicAddress:
-		metadata.Destination = M.Socksaddr{}
-		return h.NewPacketConnection(ctx, uot.NewClientConn(conn), metadata)
+	case uot.MagicAddress:
+		request, err := uot.ReadRequest(conn)
+		if err != nil {
+			return E.Cause(err, "read UoT request")
+		}
+		metadata.Destination = request.Destination
+		return h.NewPacketConnection(ctx, uot.NewConn(conn, request.IsConnect, metadata.Destination), metadata)
+	case uot.LegacyMagicAddress:
+		metadata.Destination = M.Socksaddr{Addr: netip.IPv4Unspecified()}
+		return h.NewPacketConnection(ctx, uot.NewConn(conn, false, metadata.Destination), metadata)
 	}
 	target := socks5.ParseAddr(metadata.Destination.String())
 	wg := &sync.WaitGroup{}
