@@ -62,16 +62,12 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 		}
 
 		hello := uConn.HandshakeState.Hello
-		hello.SessionId = make([]byte, 32)
+		for i := range hello.SessionId { // https://github.com/golang/go/issues/5373
+			hello.SessionId[i] = 0
+		}
 		copy(hello.Raw[39:], hello.SessionId)
 
-		var nowTime time.Time
-		if uConfig.Time != nil {
-			nowTime = uConfig.Time()
-		} else {
-			nowTime = time.Now()
-		}
-		binary.BigEndian.PutUint64(hello.SessionId, uint64(nowTime.Unix()))
+		binary.BigEndian.PutUint64(hello.SessionId, uint64(time.Now().Unix()))
 
 		hello.SessionId[0] = 1
 		hello.SessionId[1] = 7
@@ -130,7 +126,7 @@ func realityClientFallback(uConn net.Conn, serverName string, fingerprint utls.C
 		return
 	}
 	//_, _ = io.Copy(io.Discard, response.Body)
-	time.Sleep(time.Duration(5 + fastrand.Int63n(10)))
+	time.Sleep(time.Duration(5+fastrand.Int63n(10)) * time.Second)
 	response.Body.Close()
 	client.CloseIdleConnections()
 }
