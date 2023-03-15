@@ -194,6 +194,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		ExcludePackage:     options.ExcludePackage,
 		InterfaceMonitor:   defaultInterfaceMonitor,
 		TableIndex:         2022,
+		FileDescriptor:     options.FileDescriptor,
 	}
 
 	err = l.buildAndroidRules(&tunOptions)

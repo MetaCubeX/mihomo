@@ -204,6 +204,7 @@ type RawTun struct {
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
 	RedirectToTun       []string   `yaml:"-" json:"-"`
+	FileDescriptor      int        `yaml:"file-descriptor" json:"file-descriptor"`
 
 	MTU uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	//Inet4Address           []LC.ListenPrefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
@@ -1188,6 +1189,7 @@ func parseTun(rawTun RawTun, general *General) error {
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
 		RedirectToTun:       rawTun.RedirectToTun,
+		FileDescriptor:      rawTun.FileDescriptor,
 
 		MTU:                    rawTun.MTU,
 		Inet4Address:           []LC.ListenPrefix{LC.ListenPrefix(tunAddressPrefix)},

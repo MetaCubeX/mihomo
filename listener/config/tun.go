@@ -79,6 +79,7 @@ type Tun struct {
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	RedirectToTun       []string   `yaml:"-" json:"-"`
+	FileDescriptor      int        `yaml:"file-descriptor" json:"file-descriptor"`
 
 	MTU                    uint32         `yaml:"mtu" json:"mtu,omitempty"`
 	Inet4Address           []ListenPrefix `yaml:"inet4-address" json:"inet4-address,omitempty"`

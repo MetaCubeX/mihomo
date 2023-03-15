@@ -7,5 +7,5 @@ import (
 )
 
 func tunOpen(options tun.Options) (tun.Tun, error) {
-	return tun.Open(options)
+	return tun.New(options)
 }
