@@ -218,6 +218,7 @@ type RawTun struct {
 	ExcludePackage         []string          `yaml:"exclude-package" json:"exclude_package,omitempty"`
 	EndpointIndependentNat bool              `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
 	UDPTimeout             int64             `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+	FileDescriptor         int               `yaml:"file-descriptor" json:"file-descriptor"`
 }
 
 type RawTuicServer struct {
@@ -1239,6 +1240,7 @@ func parseTun(rawTun RawTun, general *General) error {
 		ExcludePackage:         rawTun.ExcludePackage,
 		EndpointIndependentNat: rawTun.EndpointIndependentNat,
 		UDPTimeout:             rawTun.UDPTimeout,
+		FileDescriptor:         rawTun.FileDescriptor,
 	}
 
 	return nil
