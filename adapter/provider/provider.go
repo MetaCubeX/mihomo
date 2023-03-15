@@ -80,6 +80,7 @@ func (pp *proxySetProvider) Initial() error {
 		return err
 	}
 	pp.OnUpdate(elm)
+	pp.getSubscriptionInfo()
 	return nil
 }
 
@@ -172,8 +173,6 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 
 	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
-
-	pd.getSubscriptionInfo()
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
 	return wrapper, nil
