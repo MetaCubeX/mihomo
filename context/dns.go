@@ -23,11 +23,10 @@ type DNSContext struct {
 }
 
 func NewDNSContext(ctx context.Context, msg *dns.Msg) *DNSContext {
-	id, _ := utils.UnsafeUUIDGenerator.NewV4()
 	return &DNSContext{
 		Context: ctx,
 
-		id:  id,
+		id:  utils.NewUUIDV4(),
 		msg: msg,
 	}
 }

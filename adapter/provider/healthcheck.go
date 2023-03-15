@@ -64,10 +64,7 @@ func (hc *HealthCheck) touch() {
 
 func (hc *HealthCheck) check() {
 	_, _, _ = hc.singleDo.Do(func() (struct{}, error) {
-		id := ""
-		if uid, err := utils.UnsafeUUIDGenerator.NewV4(); err == nil {
-			id = uid.String()
-		}
+		id := utils.NewUUIDV4().String()
 		log.Debugln("Start New Health Checking {%s}", id)
 		b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
 		for _, proxy := range hc.proxies {

@@ -34,12 +34,7 @@ func (b *Base) Name() string {
 // Id implements C.ProxyAdapter
 func (b *Base) Id() string {
 	if b.id == "" {
-		id, err := utils.UnsafeUUIDGenerator.NewV6()
-		if err != nil {
-			b.id = b.name
-		} else {
-			b.id = id.String()
-		}
+		b.id = utils.NewUUIDV6().String()
 	}
 
 	return b.id
@@ -235,8 +230,7 @@ func (c *packetConn) LocalAddr() net.Addr {
 }
 
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
-	id, _ := utils.UnsafeUUIDGenerator.NewV4()
-	return &packetConn{pc, []string{a.Name()}, a.Name(), id.String(), parseRemoteDestination(a.Addr())}
+	return &packetConn{pc, []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
 }
 
 func parseRemoteDestination(addr string) string {
