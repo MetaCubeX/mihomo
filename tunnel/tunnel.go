@@ -52,9 +52,6 @@ var (
 
 func OnSuspend() {
 	status.Store(Suspend)
-	for _, c := range statistic.DefaultManager.Snapshot().Connections {
-		_ = c.Close()
-	}
 }
 
 func OnInnerLoading() {
