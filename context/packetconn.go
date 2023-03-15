@@ -16,9 +16,8 @@ type PacketConnContext struct {
 }
 
 func NewPacketConnContext(metadata *C.Metadata) *PacketConnContext {
-	id, _ := utils.UnsafeUUIDGenerator.NewV4()
 	return &PacketConnContext{
-		id:       id,
+		id:       utils.NewUUIDV4(),
 		metadata: metadata,
 	}
 }

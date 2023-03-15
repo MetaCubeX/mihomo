@@ -56,14 +56,10 @@ func (s *Server) Serve() error {
 			return err
 		}
 		SetCongestionController(conn, s.CongestionController)
-		uuid, err := utils.UnsafeUUIDGenerator.NewV4()
-		if err != nil {
-			return err
-		}
 		h := &serverHandler{
 			Server:   s,
 			quicConn: conn,
-			uuid:     uuid,
+			uuid:     utils.NewUUIDV4(),
 			authCh:   make(chan struct{}),
 		}
 		go h.handle()
