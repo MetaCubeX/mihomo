@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -153,7 +154,7 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
 		packet: &packet,
-		rAddr:  &packetAddr{addrStr: "tuic-" + s.uuid.String(), connId: assocId, rawAddr: s.quicConn.RemoteAddr()},
+		rAddr:  N.NewCustomAddr("tuic", fmt.Sprintf("tuic-%s-%d", s.uuid, assocId), s.quicConn.RemoteAddr()), // for tunnel's handleUDPConn
 	})
 }
 

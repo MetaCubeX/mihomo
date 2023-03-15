@@ -250,29 +250,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 }
 
 func (q *quicStreamPacketConn) LocalAddr() net.Addr {
-	addr := q.quicConn.LocalAddr()
-	if q.inputConn != nil { // client
-		return &packetAddr{addrStr: q.quicConn.LocalAddr().String(), connId: q.connId, rawAddr: addr}
-	}
-	return addr // server
+	return q.quicConn.LocalAddr()
 }
 
 var _ net.PacketConn = &quicStreamPacketConn{}
-
-type packetAddr struct {
-	addrStr string
-	connId  uint32
-	rawAddr net.Addr
-}
-
-func (a packetAddr) Network() string {
-	return "tuic"
-}
-
-func (a packetAddr) String() string {
-	return fmt.Sprintf("%s-%d", a.addrStr, a.connId)
-}
-
-func (a packetAddr) RawAddr() net.Addr {
-	return a.rawAddr
-}
