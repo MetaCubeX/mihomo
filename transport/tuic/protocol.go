@@ -282,6 +282,8 @@ func (c Packet) BytesLen() int {
 	return c.CommandHead.BytesLen() + 4 + 2 + c.ADDR.BytesLen() + len(c.DATA)
 }
 
+var PacketOverHead = NewPacket(0, 0, NewAddressAddrPort(netip.AddrPortFrom(netip.IPv6Unspecified(), 0)), nil).BytesLen()
+
 type Dissociate struct {
 	CommandHead
 	ASSOC_ID uint32
