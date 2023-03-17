@@ -68,10 +68,10 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 			return E.Cause(err, "read UoT request")
 		}
 		metadata.Destination = request.Destination
-		return h.NewPacketConnection(ctx, uot.NewConn(conn, request.IsConnect, metadata.Destination), metadata)
+		return h.NewPacketConnection(ctx, uot.NewConn(conn, *request), metadata)
 	case uot.LegacyMagicAddress:
 		metadata.Destination = M.Socksaddr{Addr: netip.IPv4Unspecified()}
-		return h.NewPacketConnection(ctx, uot.NewConn(conn, false, metadata.Destination), metadata)
+		return h.NewPacketConnection(ctx, uot.NewConn(conn, uot.Request{}), metadata)
 	}
 	target := socks5.ParseAddr(metadata.Destination.String())
 	wg := &sync.WaitGroup{}
