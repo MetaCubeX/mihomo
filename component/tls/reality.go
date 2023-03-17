@@ -44,7 +44,6 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 		}
 		uConfig := &utls.Config{
 			ServerName:             tlsConfig.ServerName,
-			NextProtos:             tlsConfig.NextProtos,
 			InsecureSkipVerify:     true,
 			SessionTicketsDisabled: true,
 			VerifyPeerCertificate:  verifier.VerifyPeerCertificate,
