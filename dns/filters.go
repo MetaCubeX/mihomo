@@ -92,6 +92,10 @@ type geoSiteFilter struct {
 }
 
 func NewGeoSite(group string) (fallbackDomainFilter, error) {
+	if err := geodata.InitGeoSite(); err != nil {
+		log.Errorln("can't initial GeoSite: %s", err)
+		return nil, err
+	}
 	matcher, _, err := geodata.LoadGeoSiteMatcher(group)
 	if err != nil {
 		return nil, err
