@@ -38,6 +38,12 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	if sni := query.Get("sni"); sni != "" {
 		proxy["servername"] = sni
 	}
+	if realityPublicKey := query.Get("pbk"); realityPublicKey != "" {
+		proxy["reality-opts"] = map[string]any{
+			"public-key": realityPublicKey,
+			"short-id":   query.Get("sid"),
+		}
+	}
 
 	switch query.Get("packetEncoding") {
 	case "none":
