@@ -133,7 +133,7 @@ func (t *clientImpl) parseUDP(quicConn quic.Connection) (err error) {
 			if err != nil {
 				return err
 			}
-			go func() (err error) {
+			go func(stream quic.ReceiveStream) (err error) {
 				var assocId uint32
 				defer func() {
 					t.deferQuicConn(quicConn, err)
@@ -160,7 +160,7 @@ func (t *clientImpl) parseUDP(quicConn quic.Connection) (err error) {
 					}
 				}
 				return
-			}()
+			}(stream)
 		}
 	default: // native
 		for {
@@ -169,7 +169,7 @@ func (t *clientImpl) parseUDP(quicConn quic.Connection) (err error) {
 			if err != nil {
 				return err
 			}
-			go func() (err error) {
+			go func(message []byte) (err error) {
 				var assocId uint32
 				defer func() {
 					t.deferQuicConn(quicConn, err)
@@ -193,7 +193,7 @@ func (t *clientImpl) parseUDP(quicConn quic.Connection) (err error) {
 					}
 				}
 				return
-			}()
+			}(message)
 		}
 	}
 }

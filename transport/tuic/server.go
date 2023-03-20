@@ -111,14 +111,14 @@ func (s *serverHandler) handleMessage() (err error) {
 		if err != nil {
 			return err
 		}
-		go func() (err error) {
+		go func(message []byte) (err error) {
 			buffer := bytes.NewBuffer(message)
 			packet, err := ReadPacket(buffer)
 			if err != nil {
 				return
 			}
 			return s.parsePacket(packet, "native")
-		}()
+		}(message)
 	}
 }
 
@@ -166,7 +166,7 @@ func (s *serverHandler) handleStream() (err error) {
 		if err != nil {
 			return err
 		}
-		go func() (err error) {
+		go func(quicStream quic.Stream) (err error) {
 			stream := &quicStreamConn{
 				Stream: quicStream,
 				lAddr:  s.quicConn.LocalAddr(),
@@ -202,7 +202,7 @@ func (s *serverHandler) handleStream() (err error) {
 			}
 
 			return
-		}()
+		}(quicStream)
 	}
 }
 
@@ -213,7 +213,7 @@ func (s *serverHandler) handleUniStream() (err error) {
 		if err != nil {
 			return err
 		}
-		go func() (err error) {
+		go func(stream quic.ReceiveStream) (err error) {
 			defer func() {
 				stream.CancelRead(0)
 			}()
@@ -269,7 +269,7 @@ func (s *serverHandler) handleUniStream() (err error) {
 				heartbeat.BytesLen()
 			}
 			return
-		}()
+		}(stream)
 	}
 }
 
