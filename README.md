@@ -31,7 +31,7 @@
 
 ## Wiki
 
-Documentation and configuring examples are available on [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki) and [Clash.Meta Wiki](https://docs.metacubex.one/).
+Documentation and configuring examples are available on [Clash.Meta Wiki](https://clash-meta.wiki).
 
 ## Build
 
