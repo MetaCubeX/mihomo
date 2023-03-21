@@ -11,6 +11,7 @@ type ShadowSocksOption struct {
 	BaseOption
 	Password string `inbound:"password"`
 	Cipher   string `inbound:"cipher"`
+	UDP      bool   `inbound:"udp,omitempty"`
 }
 
 func (o ShadowSocksOption) Equal(config C.InboundConfig) bool {
@@ -37,6 +38,7 @@ func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
 			Listen:   base.RawAddress(),
 			Password: options.Password,
 			Cipher:   options.Cipher,
+			Udp:      options.UDP,
 		},
 	}, nil
 }

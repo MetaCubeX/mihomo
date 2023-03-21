@@ -271,6 +271,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 			Listen:   addr,
 			Password: password,
 			Cipher:   cipher,
+			Udp:      true,
 		}
 	}
 
