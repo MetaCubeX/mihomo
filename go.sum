@@ -91,8 +91,8 @@ github.com/mdlayher/socket v0.4.0 h1:280wsy40IC9M9q1uPGcLBwXpcTQDtoGwVt+BNoITxIw
 github.com/mdlayher/socket v0.4.0/go.mod h1:xxFqz5GRCUN3UEOm9CZqEJsAbe1C8OwSK46NlmWuVoc=
 github.com/metacubex/gvisor v0.0.0-20230315105319-c03631d706be h1:zg8lXHo8t+dCSPHQ/wCJui1V+eO9TSh9NoIjKNvUykA=
 github.com/metacubex/gvisor v0.0.0-20230315105319-c03631d706be/go.mod h1:wqEuzdImyqD2MCGE8CYRJXbB77oSEJeoSSXXdwKjnsE=
-github.com/metacubex/quic-go v0.33.2 h1:DsDdTaLvGI0eVV0C/jzPrw5MBwK5VR20r5Mt9uU5Djw=
-github.com/metacubex/quic-go v0.33.2/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
+github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594 h1:KD96JPdTIayTGGgRl6PuVqo2Bpo6+x3LqDDyqrYDDXw=
+github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
 github.com/metacubex/sing-shadowsocks v0.1.1-0.20230226153717-4e80da7e6947 h1:NnjC2+aIiyzzvFlo+C2WzBOJdsp+HAtu18FZomqYhUE=
 github.com/metacubex/sing-shadowsocks v0.1.1-0.20230226153717-4e80da7e6947/go.mod h1:U2gwhxzqgbhKCgn2B4z3t0Cj0LpMWFl/02BGCoG421w=
 github.com/metacubex/sing-tun v0.1.2 h1:rQzy+11rt2ZCpCNIsFab5lWoYDTqkdaurofHo8f97yU=
@@ -127,8 +127,6 @@ github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 h1:iL5gZI3uFp0X6EslacyapiRz7LLSJyr4RajF/BhMVyE=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
 github.com/sagernet/sing v0.0.0-20220817130738-ce854cda8522/go.mod h1:QVsS5L/ZA2Q5UhQwLrn0Trw+msNd/NPGEhBKR/ioWiY=
-github.com/sagernet/sing v0.1.9-0.20230315063014-2731df16725b h1:1iKGftQ59+shDSx2RaLaxXJcMK/B+IU9WqUPwyBW+E0=
-github.com/sagernet/sing v0.1.9-0.20230315063014-2731df16725b/go.mod h1:9uHswk2hITw8leDbiLS/xn0t9nzBcbePxzm9PJhwdlw=
 github.com/sagernet/sing v0.2.0 h1:iyc4TaeXG5XYXixl48zSDDTw46C9NOEAVFq6ZE0dA2k=
 github.com/sagernet/sing v0.2.0/go.mod h1:9uHswk2hITw8leDbiLS/xn0t9nzBcbePxzm9PJhwdlw=
 github.com/sagernet/sing-shadowtls v0.1.0 h1:05MYce8aR5xfKIn+y7xRFsdKhKt44QZTSEQW+lG5IWQ=
