@@ -69,8 +69,8 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(time.Now().Unix()))
 
 		hello.SessionId[0] = 1
-		hello.SessionId[1] = 7
-		hello.SessionId[2] = 5
+		hello.SessionId[1] = 8
+		hello.SessionId[2] = 0
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
