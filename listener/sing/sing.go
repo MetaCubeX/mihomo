@@ -3,6 +3,7 @@ package sing
 import (
 	"context"
 	"errors"
+	"go.uber.org/atomic"
 	"golang.org/x/exp/slices"
 	"net"
 	"net/netip"
@@ -14,6 +15,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 
+	tun "github.com/metacubex/sing-tun"
 	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -25,10 +27,11 @@ import (
 const UDPTimeout = 5 * time.Minute
 
 type ListenerHandler struct {
-	TcpIn     chan<- C.ConnContext
-	UdpIn     chan<- C.PacketAdapter
-	Type      C.Type
-	Additions []inbound.Addition
+	TcpIn      chan<- C.ConnContext
+	UdpIn      chan<- C.PacketAdapter
+	Type       C.Type
+	Additions  []inbound.Addition
+	UDPTimeout time.Duration
 }
 
 type waitCloseConn struct {
@@ -96,11 +99,23 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		defer mutex.Unlock()
 		conn2 = nil
 	}()
+	lastWrite := atomic.NewTime(time.Now())
+	needTimeout := tun.NeedTimeoutFromContext(ctx) // gvisor stack call NewPacketConnection() with ContextWithNeedTimeout()
+	udpTimeout := h.UDPTimeout
+	if udpTimeout == 0 {
+		udpTimeout = UDPTimeout
+	}
 	for {
 		buff := buf.NewPacket() // do not use stack buffer
+		if needTimeout {
+			_ = conn.SetReadDeadline(time.Now().Add(udpTimeout))
+		}
 		dest, err := conn.ReadPacket(buff)
 		if err != nil {
 			buff.Release()
+			if needTimeout && E.IsTimeout(err) && time.Now().Sub(lastWrite.Load()) < udpTimeout {
+				continue // someone write successful in time, so we continue read instead of return error
+			}
 			if E.IsClosed(err) {
 				break
 			}
@@ -108,11 +123,12 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		}
 		target := socks5.ParseAddr(dest.String())
 		packet := &packet{
-			conn:  &conn2,
-			mutex: &mutex,
-			rAddr: metadata.Source.UDPAddr(),
-			lAddr: conn.LocalAddr(),
-			buff:  buff,
+			conn:      &conn2,
+			mutex:     &mutex,
+			rAddr:     metadata.Source.UDPAddr(),
+			lAddr:     conn.LocalAddr(),
+			buff:      buff,
+			lastWrite: lastWrite,
 		}
 		select {
 		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type, additions...):
@@ -127,11 +143,12 @@ func (h *ListenerHandler) NewError(ctx context.Context, err error) {
 }
 
 type packet struct {
-	conn  *network.PacketConn
-	mutex *sync.Mutex
-	rAddr net.Addr
-	lAddr net.Addr
-	buff  *buf.Buffer
+	conn      *network.PacketConn
+	mutex     *sync.Mutex
+	rAddr     net.Addr
+	lAddr     net.Addr
+	buff      *buf.Buffer
+	lastWrite *atomic.Time
 }
 
 func (c *packet) Data() []byte {
@@ -159,6 +176,10 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		return
 	}
 	err = conn.WritePacket(buff, M.SocksaddrFromNet(addr))
+	if err != nil {
+		return
+	}
+	c.lastWrite.Store(time.Now())
 	return
 }
 
