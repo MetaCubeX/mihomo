@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -151,10 +152,11 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 
 	handler := &ListenerHandler{
 		ListenerHandler: sing.ListenerHandler{
-			TcpIn:     tcpIn,
-			UdpIn:     udpIn,
-			Type:      C.TUN,
-			Additions: additions,
+			TcpIn:      tcpIn,
+			UdpIn:      udpIn,
+			Type:       C.TUN,
+			Additions:  additions,
+			UDPTimeout: time.Second * time.Duration(udpTimeout),
 		},
 		DnsAdds: dnsAdds,
 	}
