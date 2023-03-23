@@ -516,7 +516,7 @@ func NewProxyServerHostResolver(old *Resolver) *Resolver {
 		main:        old.proxyServer,
 		lruCache:    old.lruCache,
 		hosts:       old.hosts,
-		policy:      old.policy,
+		policy:      trie.New[*Policy](),
 		ipv6Timeout: old.ipv6Timeout,
 	}
 	return r
