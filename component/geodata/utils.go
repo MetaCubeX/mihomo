@@ -1,12 +1,14 @@
 package geodata
 
 import (
+	"errors"
 	"fmt"
 	"golang.org/x/sync/singleflight"
 	"strings"
 
 	"github.com/Dreamacro/clash/component/geodata/router"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 var geoLoaderName = "memconservative"
@@ -51,17 +53,51 @@ func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) 
 	}
 	countryCode = strings.ToLower(countryCode)
 
-	v, err, _ := loadGeoSiteMatcherSF.Do(countryCode, func() (interface{}, error) {
+	parts := strings.Split(countryCode, "@")
+	if len(parts) == 0 {
+		return nil, 0, errors.New("empty rule")
+	}
+	listName := strings.TrimSpace(parts[0])
+	attrVal := parts[1:]
+
+	if len(listName) == 0 {
+		return nil, 0, fmt.Errorf("empty listname in rule: %s", countryCode)
+	}
+
+	v, err, shared := loadGeoSiteMatcherSF.Do(listName, func() (interface{}, error) {
 		geoLoader, err := GetGeoDataLoader(geoLoaderName)
 		if err != nil {
 			return nil, err
 		}
-		return geoLoader.LoadGeoSite(countryCode)
+		return geoLoader.LoadGeoSite(listName)
 	})
 	if err != nil {
+		if !shared {
+			loadGeoSiteMatcherSF.Forget(listName) // don't store the error result
+		}
 		return nil, 0, err
 	}
 	domains := v.([]*router.Domain)
+
+	attrs := parseAttrs(attrVal)
+	if attrs.IsEmpty() {
+		if strings.Contains(countryCode, "@") {
+			log.Warnln("empty attribute list: %s", countryCode)
+		}
+	} else {
+		filteredDomains := make([]*router.Domain, 0, len(domains))
+		hasAttrMatched := false
+		for _, domain := range domains {
+			if attrs.Match(domain) {
+				hasAttrMatched = true
+				filteredDomains = append(filteredDomains, domain)
+			}
+		}
+		if !hasAttrMatched {
+			log.Warnln("attribute match no rule: geosite: %s", countryCode)
+		}
+		domains = filteredDomains
+	}
 
 	/**
 	linear: linear algorithm
@@ -90,7 +126,7 @@ func LoadGeoIPMatcher(country string) (*router.GeoIPMatcher, int, error) {
 	}
 	country = strings.ToLower(country)
 
-	v, err, _ := loadGeoIPMatcherSF.Do(country, func() (interface{}, error) {
+	v, err, shared := loadGeoIPMatcherSF.Do(country, func() (interface{}, error) {
 		geoLoader, err := GetGeoDataLoader(geoLoaderName)
 		if err != nil {
 			return nil, err
@@ -98,6 +134,9 @@ func LoadGeoIPMatcher(country string) (*router.GeoIPMatcher, int, error) {
 		return geoLoader.LoadGeoIP(country)
 	})
 	if err != nil {
+		if !shared {
+			loadGeoIPMatcherSF.Forget(country) // don't store the error result
+		}
 		return nil, 0, err
 	}
 	records := v.([]*router.CIDR)
