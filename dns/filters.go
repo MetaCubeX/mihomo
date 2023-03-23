@@ -29,29 +29,10 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	}
 
 	if geoIPMatcher == nil {
-		countryCode := "cn"
-		geoLoader, err := geodata.GetGeoDataLoader(geodata.LoaderName())
+		var err error
+		geoIPMatcher, _, err = geodata.LoadGeoIPMatcher("CN")
 		if err != nil {
-			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
-			return false
-		}
-
-		records, err := geoLoader.LoadGeoIP(countryCode)
-		if err != nil {
-			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
-			return false
-		}
-
-		geoIP := &router.GeoIP{
-			CountryCode:  countryCode,
-			Cidr:         records,
-			ReverseMatch: false,
-		}
-
-		geoIPMatcher, err = router.NewGeoIPMatcher(geoIP)
-
-		if err != nil {
-			log.Errorln("[GeoIPFilter] NewGeoIPMatcher error: %s", err.Error())
+			log.Errorln("[GeoIPFilter] LoadGeoIPMatcher error: %s", err.Error())
 			return false
 		}
 	}
