@@ -42,8 +42,8 @@ var (
 	updateExeName  string // 更新后的可执行文件
 	unpackedFile   string
 
-	baseURL       = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/clash.meta"
-	versionURL    = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://ghproxy.com/https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/clash.meta"
+	versionURL    string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )

@@ -10,9 +10,9 @@ import (
 
 	"github.com/Dreamacro/clash/hub/updater"
 	"github.com/Dreamacro/clash/log"
-	"github.com/go-chi/render"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
 )
 
 func upgradeRouter() http.Handler {

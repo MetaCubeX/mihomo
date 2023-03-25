@@ -2,14 +2,15 @@ package http
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/listener/inner"
 	"io"
 	"net"
 	"net/http"
 	URL "net/url"
 	"strings"
 	"time"
+
+	"github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/listener/inner"
 )
 
 const (
