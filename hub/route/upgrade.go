@@ -27,6 +27,7 @@ func upgrade(w http.ResponseWriter, r *http.Request) {
 	err := updater.Update()
 	if err != nil {
 		log.Errorln("err:%s", err)
+		return
 	}
 
 	execPath, err := os.Executable()
