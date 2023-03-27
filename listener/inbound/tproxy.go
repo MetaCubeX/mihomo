@@ -56,13 +56,10 @@ func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter
 		return err
 	}
 	if t.udp {
-		if t.lUDP != nil {
-			t.lUDP, err = tproxy.NewUDP(t.RawAddress(), udpIn, natTable, t.Additions()...)
-			if err != nil {
-				return err
-			}
+		t.lUDP, err = tproxy.NewUDP(t.RawAddress(), udpIn, natTable, t.Additions()...)
+		if err != nil {
+			return err
 		}
-
 	}
 	log.Infoln("TProxy[%s] proxy listening at: %s", t.Name(), t.Address())
 	return nil
