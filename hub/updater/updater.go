@@ -3,6 +3,7 @@ package updater
 import (
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +12,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -26,8 +29,7 @@ var (
 	goarm  string
 	gomips string
 
-	workDir         string
-	versionCheckURL string
+	workDir string
 
 	// mu protects all fields below.
 	mu sync.RWMutex
@@ -42,8 +44,8 @@ var (
 	updateExeName  string // 更新后的可执行文件
 	unpackedFile   string
 
-	baseURL       string = "https://ghproxy.com/https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/clash.meta"
-	versionURL    string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://testingcf.jsdelivr.net/gh/MetaCubeX/Clash.Meta@release/clash.meta"
+	versionURL    string = "https://raw.githubusercontent.com/MetaCubeX/Clash.Meta/release/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -61,7 +63,11 @@ func (e *updateError) Error() string {
 func Update() (err error) {
 	goos = runtime.GOOS
 	goarch = runtime.GOARCH
-	latestVersion = getLatestVersion()
+	latestVersion, err = getLatestVersion()
+	if err != nil {
+		err := &updateError{Message: err.Error()}
+		return err
+	}
 
 	if latestVersion == constant.Version {
 		err := &updateError{Message: "Already using latest version"}
@@ -113,14 +119,6 @@ func Update() (err error) {
 	}
 
 	return nil
-}
-
-// VersionCheckURL returns the version check URL.
-func VersionCheckURL() (vcu string) {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	return versionCheckURL
 }
 
 // prepare fills all necessary fields in Updater object.
@@ -226,8 +224,11 @@ const MaxPackageFileSize = 32 * 1024 * 1024
 
 // Download package file and save it to disk
 func downloadPackageFile() (err error) {
-	var resp *http.Response
-	resp, err = client.Get(packageURL)
+	// var resp *http.Response
+	// resp, err = client.Get(packageURL)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
@@ -405,10 +406,12 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-func getLatestVersion() string {
-	resp, err := http.Get(versionURL)
+func getLatestVersion() (version string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}
 	defer func() {
 		closeErr := resp.Body.Close()
@@ -419,11 +422,11 @@ func getLatestVersion() string {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}
 	content := strings.TrimRight(string(body), "\n")
 	log.Infoln("latest:%s", content)
-	return content
+	return content, nil
 }
 
 func updateDownloadURL() {
