@@ -27,6 +27,13 @@ type Set struct {
 func NewDomainTrieSet(keys []string) *Set {
 	filter := make(map[string]struct{}, len(keys))
 	reserveDomains := make([]string, 0, len(keys))
+	filterFunc := func(reserveDomain string) bool {
+		_, ok := filter[reserveDomain]
+		if !ok {
+			filter[reserveDomain] = struct{}{}
+		}
+		return ok
+	}
 	for _, key := range keys {
 		items, ok := ValidAndSplitDomain(key)
 		if !ok {
@@ -35,16 +42,20 @@ func NewDomainTrieSet(keys []string) *Set {
 		if items[0] == complexWildcard {
 			domain := strings.Join(items[1:], domainStep)
 			reserveDomain := utils.Reverse(domain)
-			filter[reserveDomain] = struct{}{}
-			reserveDomains = append(reserveDomains, reserveDomain)
+			if !filterFunc(reserveDomain) {
+				reserveDomains = append(reserveDomains, reserveDomain)
+			}
 		}
 
 		domain := strings.Join(items, domainStep)
 		reserveDomain := utils.Reverse(domain)
-		filter[reserveDomain] = struct{}{}
-		reserveDomains = append(reserveDomains, reserveDomain)
+		if !filterFunc(reserveDomain) {
+			reserveDomains = append(reserveDomains, reserveDomain)
+		}
 	}
-	sort.Strings(reserveDomains)
+	sort.Slice(reserveDomains, func(i, j int) bool {
+		return len(reserveDomains[i]) < len(reserveDomains[j])
+	})
 	keys = reserveDomains
 	ss := &Set{}
 	if len(keys) == 0 {
