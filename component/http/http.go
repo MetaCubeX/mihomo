@@ -53,7 +53,7 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			conn := inner.HandleTcp(address, urlRes.Hostname())
+			conn := inner.HandleTcp(address, "")
 			return conn, nil
 		},
 		TLSClientConfig: tls.GetDefaultTLSConfig(),
