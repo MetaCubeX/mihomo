@@ -195,7 +195,7 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 			prefix := temp[0]
 			key := temp[1]
 			switch strings.ToLower(prefix) {
-			case "domain-set":
+			case "rule-set":
 				if p, ok := ruleProvider[key]; ok {
 					domainSetPolicies[p] = nameservers
 				}

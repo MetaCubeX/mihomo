@@ -997,12 +997,12 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 					newKey := "geosite:" + subkey
 					updatedPolicy[newKey] = v
 				}
-			} else if strings.Contains(k, "domain-set:") {
+			} else if strings.Contains(k, "rule-set:") {
 				subkeys := strings.Split(k, ":")
 				subkeys = subkeys[1:]
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
-					newKey := "domain-set:" + subkey
+					newKey := "rule-set:" + subkey
 					updatedPolicy[newKey] = v
 				}
 			} else if re.MatchString(k) {
@@ -1028,12 +1028,17 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 		if _, valid := trie.ValidAndSplitDomain(domain); !valid {
 			return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
 		}
-		if strings.HasPrefix(domain, "domain-set:") {
-			domainSetName := domain[11:]
+		if strings.HasPrefix(domain, "rule-set:") {
+			domainSetName := domain[9:]
 			if provider, ok := ruleProviders[domainSetName]; !ok {
-				return nil, fmt.Errorf("not found domain-set: %s", domainSetName)
-			} else if provider.Behavior() != providerTypes.Domain {
-				return nil, fmt.Errorf("rule provider type error, except domain,actual %s", provider.Behavior())
+				return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
+			} else {
+				switch provider.Behavior() {
+				case providerTypes.IPCIDR:
+					return nil, fmt.Errorf("rule provider type error, except domain,actual %s", provider.Behavior())
+				case providerTypes.Classical:
+					log.Infoln("%s provider is %s, only matching it contain domain rule", provider.Name(), provider.Behavior())
+				}
 			}
 		}
 		policy[domain] = nameservers
