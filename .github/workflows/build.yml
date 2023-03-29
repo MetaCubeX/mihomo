@@ -268,14 +268,6 @@ jobs:
           generate_release_notes: true
           body_path: release.txt
 
-      - name: Push to `MetaCubeX/AlphaBinary`
-        uses: s0/git-publish-subdir-action@develop
-        env:
-          REPO: git@github.com:MetaCubeX/AlphaBinary.git
-          BRANCH: release
-          FOLDER: bin
-          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
-
   Upload-Release:
     permissions: write-all
     if: ${{ github.ref_type=='tag' }}
