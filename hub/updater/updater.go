@@ -3,6 +3,7 @@ package updater
 import (
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +12,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -19,21 +22,16 @@ import (
 // modify from https://github.com/AdguardTeam/AdGuardHome/blob/595484e0b3fb4c457f9bb727a6b94faa78a66c5f/internal/updater/updater.go
 // Updater is the Clash.Meta updater.
 var (
-	client http.Client
-
 	goarch string
 	goos   string
 	goarm  string
 	gomips string
 
-	workDir         string
-	versionCheckURL string
+	workDir string
 
 	// mu protects all fields below.
 	mu sync.RWMutex
 
-	// TODO(a.garipov): See if all of these fields actually have to be in
-	// this struct.
 	currentExeName string // 当前可执行文件
 	updateDir      string // 更新目录
 	packageName    string // 更新压缩文件
@@ -42,8 +40,8 @@ var (
 	updateExeName  string // 更新后的可执行文件
 	unpackedFile   string
 
-	baseURL       string = "https://ghproxy.com/https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/clash.meta"
-	versionURL    string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://testingcf.jsdelivr.net/gh/MetaCubeX/Clash.Meta@release/clash.meta"
+	versionURL    string = "https://raw.githubusercontent.com/MetaCubeX/Clash.Meta/release/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -61,7 +59,13 @@ func (e *updateError) Error() string {
 func Update() (err error) {
 	goos = runtime.GOOS
 	goarch = runtime.GOARCH
-	latestVersion = getLatestVersion()
+	latestVersion, err = getLatestVersion()
+	if err != nil {
+		err := &updateError{Message: err.Error()}
+		return err
+	}
+
+	log.Infoln("current version alpha-%s, latest version alpha-%s", constant.Version, latestVersion)
 
 	if latestVersion == constant.Version {
 		err := &updateError{Message: "Already using latest version"}
@@ -71,8 +75,6 @@ func Update() (err error) {
 	updateDownloadURL()
 	mu.Lock()
 	defer mu.Unlock()
-
-	log.Infoln("current version alpha-%s", constant.Version)
 
 	defer func() {
 		if err != nil {
@@ -113,14 +115,6 @@ func Update() (err error) {
 	}
 
 	return nil
-}
-
-// VersionCheckURL returns the version check URL.
-func VersionCheckURL() (vcu string) {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	return versionCheckURL
 }
 
 // prepare fills all necessary fields in Updater object.
@@ -226,8 +220,11 @@ const MaxPackageFileSize = 32 * 1024 * 1024
 
 // Download package file and save it to disk
 func downloadPackageFile() (err error) {
-	var resp *http.Response
-	resp, err = client.Get(packageURL)
+	// var resp *http.Response
+	// resp, err = client.Get(packageURL)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
@@ -255,11 +252,11 @@ func downloadPackageFile() (err error) {
 	log.Debugln("updateDir %s", updateDir)
 	err = os.Mkdir(updateDir, 0o755)
 	if err != nil {
-		fmt.Errorf("mkdir error: %w", err)
+		return fmt.Errorf("mkdir error: %w", err)
 	}
 
 	log.Debugln("updater: saving package to file %s", packageName)
-	err = os.WriteFile(packageName, body, 0o755)
+	err = os.WriteFile(packageName, body, 0o644)
 	if err != nil {
 		return fmt.Errorf("os.WriteFile() failed: %w", err)
 	}
@@ -405,10 +402,12 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-func getLatestVersion() string {
-	resp, err := http.Get(versionURL)
+func getLatestVersion() (version string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}
 	defer func() {
 		closeErr := resp.Body.Close()
@@ -419,11 +418,11 @@ func getLatestVersion() string {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}
 	content := strings.TrimRight(string(body), "\n")
 	log.Infoln("latest:%s", content)
-	return content
+	return content, nil
 }
 
 func updateDownloadURL() {

@@ -66,7 +66,7 @@ func (p *path) MMDB() string {
 			// 目录则直接跳过
 			continue
 		} else {
-			if strings.EqualFold(strings.ToLower(fi.Name()), "country.mmdb") {
+			if strings.EqualFold(fi.Name(), "Country.mmdb") {
 				GeoipName = fi.Name()
 				return P.Join(p.homeDir, fi.Name())
 			}
@@ -93,7 +93,7 @@ func (p *path) GeoIP() string {
 			// 目录则直接跳过
 			continue
 		} else {
-			if strings.EqualFold(strings.ToLower(fi.Name()), "geoip.dat") {
+			if strings.EqualFold(fi.Name(), "GeoIP.dat") {
 				GeoipName = fi.Name()
 				return P.Join(p.homeDir, fi.Name())
 			}
@@ -112,7 +112,7 @@ func (p *path) GeoSite() string {
 			// 目录则直接跳过
 			continue
 		} else {
-			if strings.EqualFold(strings.ToLower(fi.Name()), "geosite.dat") {
+			if strings.EqualFold(fi.Name(), "GeoSite.dat") {
 				GeositeName = fi.Name()
 				return P.Join(p.homeDir, fi.Name())
 			}
