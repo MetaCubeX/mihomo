@@ -42,6 +42,8 @@ func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
 		if host == "" {
 			if ip, err := netip.ParseAddr(h); err == nil {
 				metadata.DstIP = ip
+			} else {
+				metadata.Host = h
 			}
 		}
 	}
