@@ -268,17 +268,13 @@ jobs:
           generate_release_notes: true
           body_path: release.txt
 
-      - name: Git push assets to "release" branch
-        run: |
-          cd bin || exit 1
-          git init
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b release
-          git add .
-          git commit -m "${{ env.BUILDTIME }}"
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
-          git push -f -u origin release
+      - name: Push to `MetaCubeX/AlphaBinary`
+        uses: s0/git-publish-subdir-action@develop
+        env:
+          REPO: git@github.com:MetaCubeX/AlphaBinary.git
+          BRANCH: release
+          FOLDER: bin
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
 
   Upload-Release:
     permissions: write-all
