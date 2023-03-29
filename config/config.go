@@ -1037,7 +1037,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				case providerTypes.IPCIDR:
 					return nil, fmt.Errorf("rule provider type error, except domain,actual %s", provider.Behavior())
 				case providerTypes.Classical:
-					log.Infoln("%s provider is %s, only matching it contain domain rule", provider.Name(), provider.Behavior())
+					log.Warnln("%s provider is %s, only matching it contain domain rule", provider.Name(), provider.Behavior())
 				}
 			}
 		}
