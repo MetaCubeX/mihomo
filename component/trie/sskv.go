@@ -1,7 +1,7 @@
 package trie
 
 // Package succinct provides several succinct data types.
-// Modify from https://github.com/openacid/succinct/sskv.go
+// Modify from https://github.com/openacid/succinct/blob/d4684c35d123f7528b14e03c24327231723db704/sskv.go
 
 import (
 	"sort"
