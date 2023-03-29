@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -105,7 +106,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
-
+	debug.FreeOSMemory()
 	tunnel.OnRunning()
 
 	log.SetLevel(cfg.General.LogLevel)
