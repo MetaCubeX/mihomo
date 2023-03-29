@@ -1,7 +1,6 @@
 package common
 
 import (
-	"golang.org/x/net/idna"
 	"strings"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -11,7 +10,6 @@ type Domain struct {
 	*Base
 	domain  string
 	adapter string
-	isIDNA  bool
 }
 
 func (d *Domain) RuleType() C.RuleType {
@@ -27,20 +25,14 @@ func (d *Domain) Adapter() string {
 }
 
 func (d *Domain) Payload() string {
-	domain := d.domain
-	if d.isIDNA {
-		domain, _ = idna.ToUnicode(domain)
-	}
-	return domain
+	return d.domain
 }
 
 func NewDomain(domain string, adapter string) *Domain {
-	actualDomain, _ := idna.ToASCII(domain)
 	return &Domain{
 		Base:    &Base{},
-		domain:  strings.ToLower(actualDomain),
+		domain:  strings.ToLower(domain),
 		adapter: adapter,
-		isIDNA:  actualDomain != domain,
 	}
 }
 
