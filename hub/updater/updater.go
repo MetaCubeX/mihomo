@@ -38,10 +38,9 @@ var (
 	backupDir      string // 备份目录
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
-	unpackedFile   string
 
-	baseURL       string = "https://testingcf.jsdelivr.net/gh/MetaCubeX/Clash.Meta@release/clash.meta"
-	versionURL    string = "https://raw.githubusercontent.com/MetaCubeX/Clash.Meta/release/version.txt"
+	baseURL       string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/clash.meta"
+	versionURL    string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -57,6 +56,9 @@ func (e *updateError) Error() string {
 // Update performs the auto-updater.  It returns an error if the updater failed.
 // If firstRun is true, it assumes the configuration file doesn't exist.
 func Update() (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	goos = runtime.GOOS
 	goarch = runtime.GOARCH
 	latestVersion, err = getLatestVersion()
@@ -73,8 +75,6 @@ func Update() (err error) {
 	}
 
 	updateDownloadURL()
-	mu.Lock()
-	defer mu.Unlock()
 
 	defer func() {
 		if err != nil {
@@ -90,7 +90,6 @@ func Update() (err error) {
 	}
 
 	workDir = filepath.Dir(execPath)
-	//log.Infoln("workDir %s", execPath)
 
 	err = prepare(execPath)
 	if err != nil {
@@ -107,6 +106,11 @@ func Update() (err error) {
 	err = unpack()
 	if err != nil {
 		return fmt.Errorf("unpacking: %w", err)
+	}
+
+	err = backup()
+	if err != nil {
+		return fmt.Errorf("replacing: %w", err)
 	}
 
 	err = replace()
@@ -136,7 +140,7 @@ func prepare(exePath string) (err error) {
 		updateExeName = "clash.meta" + "-" + goos + "-" + goarch
 	}
 
-	log.Infoln("updateExeName: %s ,currentExeName: %s", updateExeName, currentExeName)
+	log.Infoln("updateExeName: %s ", updateExeName)
 
 	backupExeName = filepath.Join(backupDir, filepath.Base(exePath))
 	updateExeName = filepath.Join(updateDir, updateExeName)
@@ -162,13 +166,13 @@ func unpack() error {
 
 	log.Debugln("updater: unpacking package")
 	if strings.HasSuffix(pkgNameOnly, ".zip") {
-		unpackedFile, err = zipFileUnpack(packageName, updateDir)
+		_, err = zipFileUnpack(packageName, updateDir)
 		if err != nil {
 			return fmt.Errorf(".zip unpack failed: %w", err)
 		}
 
 	} else if strings.HasSuffix(pkgNameOnly, ".gz") {
-		unpackedFile, err = gzFileUnpack(packageName, updateDir)
+		_, err = gzFileUnpack(packageName, updateDir)
 		if err != nil {
 			return fmt.Errorf(".gz unpack failed: %w", err)
 		}
@@ -180,25 +184,37 @@ func unpack() error {
 	return nil
 }
 
+// backup makes a backup of the current configuration and supporting files.  It
+// ignores the configuration file if firstRun is true.
+func backup() (err error) {
+	log.Infoln("updater: backing up current Exefile")
+	_ = os.Mkdir(backupDir, 0o755)
+
+	err = copyFile(currentExeName, backupExeName)
+	if err != nil {
+		return fmt.Errorf("copySupportingFiles(%s, %s) failed: %w", currentExeName, backupExeName, err)
+	}
+
+	return nil
+}
+
 // replace moves the current executable with the updated one and also copies the
 // supporting files.
 func replace() error {
-	//err := copySupportingFiles(unpackedFiles, updateDir, workDir)
-	//if err != nil {
-	//	return fmt.Errorf("copySupportingFiles(%s, %s) failed: %w", updateDir, workDir, err)
-	//}
+	var err error
 
-	log.Infoln("updater: renaming: %s to %s", currentExeName, backupExeName)
-	err := os.Rename(currentExeName, backupExeName)
-	if err != nil {
-		return err
-	}
+	// log.Infoln("updater: renaming: %s to %s", currentExeName, backupExeName)
+	// err := os.Rename(currentExeName, backupExeName)
+	// if err != nil {
+	// 	return err
+	// }
 
 	if goos == "windows" {
 		// rename fails with "File in use" error
-		log.Infoln("copying:%s to %s", updateExeName, currentExeName)
+		log.Infoln("copying: %s to %s", updateExeName, currentExeName)
 		err = copyFile(updateExeName, currentExeName)
 	} else {
+		log.Infoln("copying: %s to %s", updateExeName, currentExeName)
 		err = os.Rename(updateExeName, currentExeName)
 	}
 	if err != nil {
@@ -421,7 +437,6 @@ func getLatestVersion() (version string, err error) {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}
 	content := strings.TrimRight(string(body), "\n")
-	log.Infoln("latest:%s", content)
 	return content, nil
 }
 
