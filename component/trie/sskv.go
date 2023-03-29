@@ -20,6 +20,7 @@ type Set struct {
 	leaves, labelBitmap []uint64
 	labels              []byte
 	ranks, selects      []int32
+	isEmpty bool
 }
 
 // NewSet creates a new *Set struct, from a slice of sorted strings.
@@ -46,6 +47,10 @@ func NewDomainTrieSet(keys []string) *Set {
 	sort.Strings(reserveDomains)
 	keys = reserveDomains
 	ss := &Set{}
+	if len(keys) == 0 {
+		ss.isEmpty=true
+		return ss
+	}
 	lIdx := 0
 
 	type qElt struct{ s, e, col int }
@@ -79,6 +84,9 @@ func NewDomainTrieSet(keys []string) *Set {
 
 // Has query for a key and return whether it presents in the Set.
 func (ss *Set) Has(key string) bool {
+	if ss.isEmpty{
+		return false
+	}
 	key = utils.Reverse(key)
 	// no more labels in this node
 	// skip character matching
