@@ -47,7 +47,7 @@ func restart(w http.ResponseWriter, r *http.Request) {
 			cmd.Stderr = os.Stderr
 			err = cmd.Start()
 			if err != nil {
-				log.Fatalln("restarting:: %s", err)
+				log.Fatalln("restarting: %s", err)
 			}
 
 			os.Exit(0)
