@@ -136,9 +136,8 @@ type IPTables struct {
 type Sniffer struct {
 	Enable          bool
 	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
-	Reverses        *trie.DomainTrie[struct{}]
-	ForceDomain     *trie.DomainTrie[struct{}]
-	SkipDomain      *trie.DomainTrie[struct{}]
+	ForceDomain     *trie.Set
+	SkipDomain      *trie.Set
 	ForceDnsMapping bool
 	ParsePureIp     bool
 }
@@ -1340,24 +1339,8 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	}
 
 	sniffer.Sniffers = loadSniffer
-	sniffer.ForceDomain = trie.New[struct{}]()
-	for _, domain := range snifferRaw.ForceDomain {
-		err := sniffer.ForceDomain.Insert(domain, struct{}{})
-		if err != nil {
-			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
-		}
-	}
-	sniffer.ForceDomain.Optimize()
-
-	sniffer.SkipDomain = trie.New[struct{}]()
-	for _, domain := range snifferRaw.SkipDomain {
-		err := sniffer.SkipDomain.Insert(domain, struct{}{})
-		if err != nil {
-			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
-		}
-	}
-	sniffer.SkipDomain.Optimize()
-
+	sniffer.ForceDomain = trie.NewDomainTrieSet(snifferRaw.ForceDomain)
+	sniffer.SkipDomain = trie.NewDomainTrieSet(snifferRaw.SkipDomain)
 	return sniffer, nil
 }
 

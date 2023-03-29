@@ -198,7 +198,7 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 			case "domain-set":
 				if p, ok := ruleProvider[key]; ok {
 					domainSetPolicies[p] = nameservers
-				} 
+				}
 			case "geosite":
 				// TODO:
 			}
@@ -221,9 +221,9 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 			Domain:    c.FallbackFilter.Domain,
 			GeoSite:   c.FallbackFilter.GeoSite,
 		},
-		Default:     c.DefaultNameserver,
-		Policy:      c.NameServerPolicy,
-		ProxyServer: c.ProxyServerNameserver,
+		Default:         c.DefaultNameserver,
+		Policy:          c.NameServerPolicy,
+		ProxyServer:     c.ProxyServerNameserver,
 		DomainSetPolicy: domainSetPolicies,
 	}
 

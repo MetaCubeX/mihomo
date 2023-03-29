@@ -44,7 +44,7 @@ func NewDomainTrieSet(keys []string) *Set {
 		reserveDomains = append(reserveDomains, reserveDomain)
 	}
 	sort.Strings(reserveDomains)
-	keys=reserveDomains
+	keys = reserveDomains
 	ss := &Set{}
 	lIdx := 0
 
@@ -79,7 +79,7 @@ func NewDomainTrieSet(keys []string) *Set {
 
 // Has query for a key and return whether it presents in the Set.
 func (ss *Set) Has(key string) bool {
-	key=utils.Reverse(key)
+	key = utils.Reverse(key)
 	// no more labels in this node
 	// skip character matching
 	// go to next level
