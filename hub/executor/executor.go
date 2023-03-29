@@ -5,7 +5,6 @@ import (
 	"net/netip"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -106,7 +105,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadProxyProvider(cfg.Providers)
 	updateProfile(cfg)
 	loadRuleProvider(cfg.RuleProviders)
-	debug.FreeOSMemory()
+	runtime.GC()
 	tunnel.OnRunning()
 
 	log.SetLevel(cfg.General.LogLevel)
@@ -177,7 +176,6 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 }
 
 func updateExperimental(c *config.Config) {
-	runtime.GC()
 }
 
 func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, generalIPv6 bool) {

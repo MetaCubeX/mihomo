@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -821,8 +820,6 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 		rules = append(rules, parsed)
 	}
 
-	runtime.GC()
-
 	return rules, nil
 }
 
@@ -1093,7 +1090,6 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 			log.Infoln("Start initial GeoSite dns fallback filter `%s`, records: %d", country, recordsCount)
 		}
 	}
-	runtime.GC()
 	return sites, nil
 }
 
