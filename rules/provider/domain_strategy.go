@@ -7,7 +7,7 @@ import (
 
 type domainStrategy struct {
 	count       int
-	domainRules *trie.Set
+	domainRules *trie.DomainSet
 }
 
 func (d *domainStrategy) ShouldFindProcess() bool {
@@ -27,7 +27,7 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 }
 
 func (d *domainStrategy) OnUpdate(rules []string) {
-	domainTrie := trie.NewDomainTrieSet(rules)
+	domainTrie := trie.NewDomainSet(rules)
 	d.domainRules = domainTrie
 	d.count = len(rules)
 }

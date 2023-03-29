@@ -28,8 +28,8 @@ var Dispatcher *SnifferDispatcher
 type SnifferDispatcher struct {
 	enable          bool
 	sniffers        map[sniffer.Sniffer]SnifferConfig
-	forceDomain     *trie.Set
-	skipSNI         *trie.Set
+	forceDomain     *trie.DomainSet
+	skipSNI         *trie.DomainSet
 	skipList        *cache.LruCache[string, uint8]
 	rwMux           sync.RWMutex
 	forceDnsMapping bool
@@ -167,7 +167,7 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 }
 
 func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig,
-	forceDomain *trie.Set, skipSNI *trie.Set,
+	forceDomain *trie.DomainSet, skipSNI *trie.DomainSet,
 	forceDnsMapping bool, parsePureIp bool) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:          true,

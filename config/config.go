@@ -136,8 +136,8 @@ type IPTables struct {
 type Sniffer struct {
 	Enable          bool
 	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
-	ForceDomain     *trie.Set
-	SkipDomain      *trie.Set
+	ForceDomain     *trie.DomainSet
+	SkipDomain      *trie.DomainSet
 	ForceDnsMapping bool
 	ParsePureIp     bool
 }
@@ -1344,8 +1344,8 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	}
 
 	sniffer.Sniffers = loadSniffer
-	sniffer.ForceDomain = trie.NewDomainTrieSet(snifferRaw.ForceDomain)
-	sniffer.SkipDomain = trie.NewDomainTrieSet(snifferRaw.SkipDomain)
+	sniffer.ForceDomain = trie.NewDomainSet(snifferRaw.ForceDomain)
+	sniffer.SkipDomain = trie.NewDomainSet(snifferRaw.SkipDomain)
 	return sniffer, nil
 }
 

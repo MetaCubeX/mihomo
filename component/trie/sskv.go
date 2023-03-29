@@ -1,6 +1,7 @@
+package trie
+
 // Package succinct provides several succinct data types.
 // Modify from https://github.com/openacid/succinct/sskv.go
-package trie
 
 import (
 	"sort"
@@ -16,23 +17,23 @@ const (
 	domainStepByte      = byte('.')
 )
 
-type Set struct {
+type DomainSet struct {
 	leaves, labelBitmap []uint64
 	labels              []byte
 	ranks, selects      []int32
-	isEmpty             bool
 }
 
-// NewSet creates a new *Set struct, from a slice of sorted strings.
-func NewDomainTrieSet(keys []string) *Set {
+// NewDomainSet creates a new *DomainSet struct, from a slice of sorted strings.
+func NewDomainSet(keys []string) *DomainSet {
 	filter := make(map[string]struct{}, len(keys))
 	reserveDomains := make([]string, 0, len(keys))
-	filterFunc := func(reserveDomain string) bool {
-		_, ok := filter[reserveDomain]
-		if !ok {
+	insert := func(reserveDomain string) {
+		reserveDomain = utils.Reverse(reserveDomain)
+		reserveDomain = strings.ToLower(reserveDomain)
+		if _, ok := filter[reserveDomain]; !ok {
 			filter[reserveDomain] = struct{}{}
+			reserveDomains = append(reserveDomains, reserveDomain)
 		}
-		return ok
 	}
 	for _, key := range keys {
 		items, ok := ValidAndSplitDomain(key)
@@ -41,27 +42,20 @@ func NewDomainTrieSet(keys []string) *Set {
 		}
 		if items[0] == complexWildcard {
 			domain := strings.Join(items[1:], domainStep)
-			reserveDomain := utils.Reverse(domain)
-			if !filterFunc(reserveDomain) {
-				reserveDomains = append(reserveDomains, reserveDomain)
-			}
+			insert(domain)
 		}
 
 		domain := strings.Join(items, domainStep)
-		reserveDomain := utils.Reverse(domain)
-		if !filterFunc(reserveDomain) {
-			reserveDomains = append(reserveDomains, reserveDomain)
-		}
+		insert(domain)
 	}
 	sort.Slice(reserveDomains, func(i, j int) bool {
 		return len(reserveDomains[i]) < len(reserveDomains[j])
 	})
 	keys = reserveDomains
-	ss := &Set{}
 	if len(keys) == 0 {
-		ss.isEmpty = true
-		return ss
+		return nil
 	}
+	ss := &DomainSet{}
 	lIdx := 0
 
 	type qElt struct{ s, e, col int }
@@ -93,12 +87,13 @@ func NewDomainTrieSet(keys []string) *Set {
 	return ss
 }
 
-// Has query for a key and return whether it presents in the Set.
-func (ss *Set) Has(key string) bool {
-	if ss.isEmpty {
+// Has query for a key and return whether it presents in the DomainSet.
+func (ss *DomainSet) Has(key string) bool {
+	if ss == nil {
 		return false
 	}
 	key = utils.Reverse(key)
+	key = strings.ToLower(key)
 	// no more labels in this node
 	// skip character matching
 	// go to next level
@@ -150,7 +145,7 @@ func getBit(bm []uint64, i int) uint64 {
 }
 
 // init builds pre-calculated cache to speed up rank() and select()
-func (ss *Set) init() {
+func (ss *DomainSet) init() {
 	ss.selects, ss.ranks = bitmap.IndexSelect32R64(ss.labelBitmap)
 }
 
