@@ -67,6 +67,7 @@ require (
 	github.com/mdlayher/socket v0.4.0 // indirect
 	github.com/metacubex/gvisor v0.0.0-20230323114922-412956fb6a03 // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
+	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
