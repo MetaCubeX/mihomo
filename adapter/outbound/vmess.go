@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
@@ -34,32 +35,35 @@ type Vmess struct {
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
 	transport    *gun.TransportWrap
+
+	realityConfig *tlsC.RealityConfig
 }
 
 type VmessOption struct {
 	BasicOption
-	Name                string       `proxy:"name"`
-	Server              string       `proxy:"server"`
-	Port                int          `proxy:"port"`
-	UUID                string       `proxy:"uuid"`
-	AlterID             int          `proxy:"alterId"`
-	Cipher              string       `proxy:"cipher"`
-	UDP                 bool         `proxy:"udp,omitempty"`
-	Network             string       `proxy:"network,omitempty"`
-	TLS                 bool         `proxy:"tls,omitempty"`
-	SkipCertVerify      bool         `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string       `proxy:"fingerprint,omitempty"`
-	ServerName          string       `proxy:"servername,omitempty"`
-	HTTPOpts            HTTPOptions  `proxy:"http-opts,omitempty"`
-	HTTP2Opts           HTTP2Options `proxy:"h2-opts,omitempty"`
-	GrpcOpts            GrpcOptions  `proxy:"grpc-opts,omitempty"`
-	WSOpts              WSOptions    `proxy:"ws-opts,omitempty"`
-	PacketAddr          bool         `proxy:"packet-addr,omitempty"`
-	XUDP                bool         `proxy:"xudp,omitempty"`
-	PacketEncoding      string       `proxy:"packet-encoding,omitempty"`
-	GlobalPadding       bool         `proxy:"global-padding,omitempty"`
-	AuthenticatedLength bool         `proxy:"authenticated-length,omitempty"`
-	ClientFingerprint   string       `proxy:"client-fingerprint,omitempty"`
+	Name                string         `proxy:"name"`
+	Server              string         `proxy:"server"`
+	Port                int            `proxy:"port"`
+	UUID                string         `proxy:"uuid"`
+	AlterID             int            `proxy:"alterId"`
+	Cipher              string         `proxy:"cipher"`
+	UDP                 bool           `proxy:"udp,omitempty"`
+	Network             string         `proxy:"network,omitempty"`
+	TLS                 bool           `proxy:"tls,omitempty"`
+	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string         `proxy:"fingerprint,omitempty"`
+	ServerName          string         `proxy:"servername,omitempty"`
+	RealityOpts         RealityOptions `proxy:"reality-opts,omitempty"`
+	HTTPOpts            HTTPOptions    `proxy:"http-opts,omitempty"`
+	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
+	GrpcOpts            GrpcOptions    `proxy:"grpc-opts,omitempty"`
+	WSOpts              WSOptions      `proxy:"ws-opts,omitempty"`
+	PacketAddr          bool           `proxy:"packet-addr,omitempty"`
+	XUDP                bool           `proxy:"xudp,omitempty"`
+	PacketEncoding      string         `proxy:"packet-encoding,omitempty"`
+	GlobalPadding       bool           `proxy:"global-padding,omitempty"`
+	AuthenticatedLength bool           `proxy:"authenticated-length,omitempty"`
+	ClientFingerprint   string         `proxy:"client-fingerprint,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -94,7 +98,6 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 	switch v.option.Network {
 	case "ws":
-
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &clashVMess.WebsocketConfig{
 			Host:                host,
@@ -143,12 +146,12 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				Host:              host,
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
+				Reality:           v.realityConfig,
 			}
 
 			if v.option.ServerName != "" {
 				tlsOpts.Host = v.option.ServerName
 			}
-
 			c, err = clashVMess.StreamTLSConn(c, tlsOpts)
 			if err != nil {
 				return nil, err
@@ -171,6 +174,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			SkipCertVerify:    v.option.SkipCertVerify,
 			NextProtos:        []string{"h2"},
 			ClientFingerprint: v.option.ClientFingerprint,
+			Reality:           v.realityConfig,
 		}
 
 		if v.option.ServerName != "" {
@@ -189,7 +193,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		c, err = clashVMess.StreamH2Conn(c, h2Opts)
 	case "grpc":
-		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
+		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.realityConfig)
 	default:
 		// handle TLS
 		if v.option.TLS {
@@ -198,6 +202,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				Host:              host,
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
+				Reality:           v.realityConfig,
 			}
 
 			if v.option.ServerName != "" {
@@ -213,12 +218,24 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	}
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
-			return v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			if N.NeedHandshake(c) {
+				return v.client.DialEarlyXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+			} else {
+				return v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			}
 		} else {
-			return v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			if N.NeedHandshake(c) {
+				return v.client.DialEarlyPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+			} else {
+				return v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			}
 		}
 	} else {
-		return v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		if N.NeedHandshake(c) {
+			return v.client.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+		} else {
+			return v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		}
 	}
 }
 
@@ -289,9 +306,17 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}(c)
 
 		if v.option.XUDP {
-			c, err = v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			if N.NeedHandshake(c) {
+				c = v.client.DialEarlyXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			} else {
+				c, err = v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			}
 		} else {
-			c, err = v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			if N.NeedHandshake(c) {
+				c = v.client.DialEarlyPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			} else {
+				c, err = v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			}
 		}
 
 		if err != nil {
@@ -387,6 +412,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			tp:     C.Vmess,
 			udp:    option.UDP,
 			xudp:   option.XUDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
@@ -429,9 +455,14 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
 
-		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint)
-
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.realityConfig)
 	}
+
+	v.realityConfig, err = v.option.RealityOpts.Parse()
+	if err != nil {
+		return nil, err
+	}
+
 	return v, nil
 }
 

@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/cache"
+	"github.com/Dreamacro/clash/common/callback"
 	"github.com/Dreamacro/clash/common/murmur3"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -18,7 +21,7 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy
+type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy
 
 type LoadBalance struct {
 	*GroupBase
@@ -83,17 +86,27 @@ func jumpHash(key uint64, buckets int32) int32 {
 // DialContext implements C.ProxyAdapter
 func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
 	proxy := lb.Unwrap(metadata, true)
-
-	defer func() {
-		if err == nil {
-			c.AppendToChains(lb)
-			lb.onDialSuccess()
-		} else {
-			lb.onDialFailed(proxy.Type(), err)
-		}
-	}()
-
 	c, err = proxy.DialContext(ctx, metadata, lb.Base.DialOptions(opts...)...)
+
+	if err == nil {
+		c.AppendToChains(lb)
+	} else {
+		lb.onDialFailed(proxy.Type(), err)
+	}
+
+	if N.NeedHandshake(c) {
+		c = &callback.FirstWriteCallBackConn{
+			Conn: c,
+			Callback: func(err error) {
+				if err == nil {
+					lb.onDialSuccess()
+				} else {
+					lb.onDialFailed(proxy.Type(), err)
+				}
+			},
+		}
+	}
+
 	return
 }
 
@@ -115,22 +128,26 @@ func (lb *LoadBalance) SupportUDP() bool {
 }
 
 func strategyRoundRobin() strategyFn {
-	flag := true
 	idx := 0
-	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
+	idxMutex := sync.Mutex{}
+	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
+		idxMutex.Lock()
+		defer idxMutex.Unlock()
+
+		i := 0
 		length := len(proxies)
-		for i := 0; i < length; i++ {
-			flag = !flag
-			if flag {
-				idx = (idx - 1) % length
-			} else {
-				idx = (idx + 2) % length
-			}
-			if idx < 0 {
-				idx = idx + length
-			}
-			proxy := proxies[idx]
+
+		if touch {
+			defer func() {
+				idx = (idx + i) % length
+			}()
+		}
+
+		for ; i < length; i++ {
+			id := (idx + i) % length
+			proxy := proxies[id]
 			if proxy.Alive() {
+				i++
 				return proxy
 			}
 		}
@@ -141,7 +158,7 @@ func strategyRoundRobin() strategyFn {
 
 func strategyConsistentHashing() strategyFn {
 	maxRetry := 5
-	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
+	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
 		key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
 		buckets := int32(len(proxies))
 		for i := 0; i < maxRetry; i, key = i+1, key+1 {
@@ -169,7 +186,7 @@ func strategyStickySessions() strategyFn {
 	lruCache := cache.New[uint64, int](
 		cache.WithAge[uint64, int](int64(ttl.Seconds())),
 		cache.WithSize[uint64, int](1000))
-	return func(proxies []C.Proxy, metadata *C.Metadata) C.Proxy {
+	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
 		key := uint64(murmur3.Sum32([]byte(getKeyWithSrcAndDst(metadata))))
 		length := len(proxies)
 		idx, has := lruCache.Get(key)
@@ -201,7 +218,7 @@ func strategyStickySessions() strategyFn {
 // Unwrap implements C.ProxyAdapter
 func (lb *LoadBalance) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	proxies := lb.GetProxies(touch)
-	return lb.strategyFn(proxies, metadata)
+	return lb.strategyFn(proxies, metadata, touch)
 }
 
 // MarshalJSON implements C.ProxyAdapter

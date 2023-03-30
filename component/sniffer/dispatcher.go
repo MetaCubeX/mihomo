@@ -36,12 +36,7 @@ type SnifferDispatcher struct {
 	parsePureIp     bool
 }
 
-func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
-	bufConn, ok := conn.(*N.BufferedConn)
-	if !ok {
-		return
-	}
-
+func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) {
 	if (metadata.Host == "" && sd.parsePureIp) || sd.forceDomain.Search(metadata.Host) != nil || (metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping) {
 		port, err := strconv.ParseUint(metadata.DstPort, 10, 16)
 		if err != nil {
@@ -74,7 +69,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn net.Conn, metadata *C.Metadata) {
 		}
 		sd.rwMux.RUnlock()
 
-		if host, err := sd.sniffDomain(bufConn, metadata); err != nil {
+		if host, err := sd.sniffDomain(conn, metadata); err != nil {
 			sd.cacheSniffFailed(metadata)
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return

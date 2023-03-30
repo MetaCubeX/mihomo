@@ -2,12 +2,14 @@ package convert
 
 import (
 	"encoding/base64"
-	"github.com/metacubex/sing-shadowsocks/shadowimpl"
-	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/Dreamacro/clash/common/utils"
+
+	"github.com/metacubex/sing-shadowsocks/shadowimpl"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 var hostsSuffix = []string{
@@ -292,8 +294,7 @@ var (
 )
 
 func RandHost() string {
-	id, _ := uuid.NewV4()
-	base := strings.ToLower(base64.RawURLEncoding.EncodeToString(id.Bytes()))
+	base := strings.ToLower(base64.RawURLEncoding.EncodeToString(utils.NewUUIDV4().Bytes()))
 	base = strings.ReplaceAll(base, "-", "")
 	base = strings.ReplaceAll(base, "_", "")
 	buf := []byte(base)
@@ -301,11 +302,11 @@ func RandHost() string {
 	prefix += string(buf[6:8]) + "-"
 	prefix += string(buf[len(buf)-8:])
 
-	return prefix + hostsSuffix[rand.Intn(hostsLen)]
+	return prefix + hostsSuffix[fastrand.Intn(hostsLen)]
 }
 
 func RandUserAgent() string {
-	return userAgents[rand.Intn(uaLen)]
+	return userAgents[fastrand.Intn(uaLen)]
 }
 
 func SetUserAgent(header http.Header) {
@@ -317,6 +318,6 @@ func SetUserAgent(header http.Header) {
 }
 
 func VerifyMethod(cipher, password string) (err error) {
-	_, err = shadowimpl.FetchMethod(cipher, password)
+	_, err = shadowimpl.FetchMethod(cipher, password, time.Now)
 	return
 }

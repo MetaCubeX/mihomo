@@ -6,6 +6,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/gofrs/uuid"
@@ -81,8 +82,7 @@ func (tt *tcpTracker) Upstream() any {
 	return tt.Conn
 }
 
-func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule) *tcpTracker {
-	uuid, _ := uuid.NewV4()
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *tcpTracker {
 	if conn != nil {
 		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 			metadata.RemoteDst = tcpAddr.IP.String()
@@ -95,13 +95,13 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 		Conn:    conn,
 		manager: manager,
 		trackerInfo: &trackerInfo{
-			UUID:          uuid,
+			UUID:          utils.NewUUIDV4(),
 			Start:         time.Now(),
 			Metadata:      metadata,
 			Chain:         conn.Chains(),
 			Rule:          "",
-			UploadTotal:   atomic.NewInt64(0),
-			DownloadTotal: atomic.NewInt64(0),
+			UploadTotal:   atomic.NewInt64(uploadTotal),
+			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
 		extendedReader: N.NewExtendedReader(conn),
 		extendedWriter: N.NewExtendedWriter(conn),
@@ -147,21 +147,20 @@ func (ut *udpTracker) Close() error {
 	return ut.PacketConn.Close()
 }
 
-func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule) *udpTracker {
-	uuid, _ := uuid.NewV4()
+func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *udpTracker {
 	metadata.RemoteDst = conn.RemoteDestination()
 
 	ut := &udpTracker{
 		PacketConn: conn,
 		manager:    manager,
 		trackerInfo: &trackerInfo{
-			UUID:          uuid,
+			UUID:          utils.NewUUIDV4(),
 			Start:         time.Now(),
 			Metadata:      metadata,
 			Chain:         conn.Chains(),
 			Rule:          "",
-			UploadTotal:   atomic.NewInt64(0),
-			DownloadTotal: atomic.NewInt64(0),
+			UploadTotal:   atomic.NewInt64(uploadTotal),
+			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
 	}
 

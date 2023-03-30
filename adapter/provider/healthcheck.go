@@ -6,10 +6,10 @@ import (
 
 	"github.com/Dreamacro/clash/common/batch"
 	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 
-	"github.com/gofrs/uuid"
 	"go.uber.org/atomic"
 )
 
@@ -34,31 +34,19 @@ type HealthCheck struct {
 
 func (hc *HealthCheck) process() {
 	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
-
-	go func() {
-		time.Sleep(30 * time.Second)
-		hc.lazyCheck()
-	}()
-
 	for {
 		select {
 		case <-ticker.C:
-			hc.lazyCheck()
+			now := time.Now().Unix()
+			if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
+				hc.check()
+			} else {
+				log.Debugln("Skip once health check because we are lazy")
+			}
 		case <-hc.done:
 			ticker.Stop()
 			return
 		}
-	}
-}
-
-func (hc *HealthCheck) lazyCheck() bool {
-	now := time.Now().Unix()
-	if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
-		hc.check()
-		return true
-	} else {
-		log.Debugln("Skip once health check because we are lazy")
-		return false
 	}
 }
 
@@ -76,10 +64,7 @@ func (hc *HealthCheck) touch() {
 
 func (hc *HealthCheck) check() {
 	_, _, _ = hc.singleDo.Do(func() (struct{}, error) {
-		id := ""
-		if uid, err := uuid.NewV4(); err == nil {
-			id = uid.String()
-		}
+		id := utils.NewUUIDV4().String()
 		log.Debugln("Start New Health Checking {%s}", id)
 		b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
 		for _, proxy := range hc.proxies {

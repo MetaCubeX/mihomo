@@ -4,10 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/textproto"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type httpConn struct {
@@ -51,16 +52,16 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 		return hc.Conn.Write(b)
 	}
 
-	path := hc.cfg.Path[rand.Intn(len(hc.cfg.Path))]
+	path := hc.cfg.Path[fastrand.Intn(len(hc.cfg.Path))]
 	host := hc.cfg.Host
 	if header := hc.cfg.Headers["Host"]; len(header) != 0 {
-		host = header[rand.Intn(len(header))]
+		host = header[fastrand.Intn(len(header))]
 	}
 
 	u := fmt.Sprintf("http://%s%s", host, path)
 	req, _ := http.NewRequest("GET", u, bytes.NewBuffer(b))
 	for key, list := range hc.cfg.Headers {
-		req.Header.Set(key, list[rand.Intn(len(list))])
+		req.Header.Set(key, list[fastrand.Intn(len(list))])
 	}
 	req.ContentLength = int64(len(b))
 	if err := req.Write(hc.Conn); err != nil {

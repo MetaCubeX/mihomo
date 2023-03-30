@@ -11,13 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gofrs/uuid"
-	"github.com/metacubex/quic-go"
-
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
+
+	"github.com/gofrs/uuid"
+	"github.com/metacubex/quic-go"
 )
 
 type ServerOption struct {
@@ -55,14 +56,10 @@ func (s *Server) Serve() error {
 			return err
 		}
 		SetCongestionController(conn, s.CongestionController)
-		uuid, err := uuid.NewV4()
-		if err != nil {
-			return err
-		}
 		h := &serverHandler{
 			Server:   s,
 			quicConn: conn,
-			uuid:     uuid,
+			uuid:     utils.NewUUIDV4(),
 			authCh:   make(chan struct{}),
 		}
 		go h.handle()
@@ -75,7 +72,7 @@ func (s *Server) Close() error {
 
 type serverHandler struct {
 	*Server
-	quicConn quic.Connection
+	quicConn quic.EarlyConnection
 	uuid     uuid.UUID
 
 	authCh   chan struct{}
@@ -86,13 +83,6 @@ type serverHandler struct {
 }
 
 func (s *serverHandler) handle() {
-	time.AfterFunc(s.AuthenticationTimeout, func() {
-		s.authOnce.Do(func() {
-			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "")
-			s.authOk = false
-			close(s.authCh)
-		})
-	})
 	go func() {
 		_ = s.handleUniStream()
 	}()
@@ -102,6 +92,15 @@ func (s *serverHandler) handle() {
 	go func() {
 		_ = s.handleMessage()
 	}()
+
+	<-s.quicConn.HandshakeComplete().Done()
+	time.AfterFunc(s.AuthenticationTimeout, func() {
+		s.authOnce.Do(func() {
+			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
+			s.authOk = false
+			close(s.authCh)
+		})
+	})
 }
 
 func (s *serverHandler) handleMessage() (err error) {
@@ -151,12 +150,8 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
 		packet: &packet,
-		rAddr:  s.genServerAssocIdAddr(assocId, s.quicConn.RemoteAddr()),
+		rAddr:  N.NewCustomAddr("tuic", fmt.Sprintf("tuic-%s-%d", s.uuid, assocId), s.quicConn.RemoteAddr()), // for tunnel's handleUDPConn
 	})
-}
-
-func (s *serverHandler) genServerAssocIdAddr(assocId uint32, addr net.Addr) net.Addr {
-	return &ServerAssocIdAddr{assocId: fmt.Sprintf("tuic-%s-%d", s.uuid.String(), assocId), addr: addr}
 }
 
 func (s *serverHandler) handleStream() (err error) {
@@ -238,7 +233,7 @@ func (s *serverHandler) handleUniStream() (err error) {
 				}
 				s.authOnce.Do(func() {
 					if !ok {
-						_ = s.quicConn.CloseWithError(AuthenticationFailed, "")
+						_ = s.quicConn.CloseWithError(AuthenticationFailed, "AuthenticationFailed")
 					}
 					s.authOk = ok
 					close(s.authCh)
@@ -271,23 +266,6 @@ func (s *serverHandler) handleUniStream() (err error) {
 			return
 		}()
 	}
-}
-
-type ServerAssocIdAddr struct {
-	assocId string
-	addr    net.Addr
-}
-
-func (a ServerAssocIdAddr) Network() string {
-	return "ServerAssocIdAddr"
-}
-
-func (a ServerAssocIdAddr) String() string {
-	return a.assocId
-}
-
-func (a ServerAssocIdAddr) RawAddr() net.Addr {
-	return a.addr
 }
 
 type serverUDPPacket struct {

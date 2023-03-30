@@ -15,6 +15,7 @@ type TuicServer struct {
 	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
 	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
 	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+	MaxDatagramFrameSize  int      `yaml:"max-datagram-frame-size" json:"max-datagram-frame-size,omitempty"`
 }
 
 func (t TuicServer) String() string {

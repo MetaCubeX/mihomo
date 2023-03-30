@@ -4,12 +4,11 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-
 	"net"
 	"net/netip"
 	"net/url"
 	"os"
-	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -26,6 +25,7 @@ import (
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	P "github.com/Dreamacro/clash/component/process"
+	"github.com/Dreamacro/clash/component/resolver"
 	SNIFF "github.com/Dreamacro/clash/component/sniffer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
@@ -92,6 +92,7 @@ type DNS struct {
 	Enable                bool             `yaml:"enable"`
 	PreferH3              bool             `yaml:"prefer-h3"`
 	IPv6                  bool             `yaml:"ipv6"`
+	IPv6Timeout           uint             `yaml:"ipv6-timeout"`
 	NameServer            []dns.NameServer `yaml:"nameserver"`
 	Fallback              []dns.NameServer `yaml:"fallback"`
 	FallbackFilter        FallbackFilter   `yaml:"fallback-filter"`
@@ -99,7 +100,7 @@ type DNS struct {
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
-	Hosts                 *trie.DomainTrie[netip.Addr]
+	Hosts                 *trie.DomainTrie[resolver.HostValue]
 	NameServerPolicy      map[string][]dns.NameServer
 	ProxyServerNameserver []dns.NameServer
 }
@@ -120,13 +121,9 @@ type Profile struct {
 }
 
 type TLS struct {
-	RawCert         `yaml:",inline"`
-	CustomTrustCert []RawCert `yaml:"custom-certifactes"`
-}
-
-type RawCert struct {
-	Certificate string `yaml:"certificate"`
-	PrivateKey  string `yaml:"private-key"`
+	Certificate     string   `yaml:"certificate"`
+	PrivateKey      string   `yaml:"private-key"`
+	CustomTrustCert []string `yaml:"custom-certifactes"`
 }
 
 // IPTables config
@@ -157,7 +154,7 @@ type Config struct {
 	IPTables      *IPTables
 	DNS           *DNS
 	Experimental  *Experimental
-	Hosts         *trie.DomainTrie[netip.Addr]
+	Hosts         *trie.DomainTrie[resolver.HostValue]
 	Profile       *Profile
 	Rules         []C.Rule
 	SubRules      map[string][]C.Rule
@@ -175,6 +172,7 @@ type RawDNS struct {
 	Enable                bool              `yaml:"enable"`
 	PreferH3              bool              `yaml:"prefer-h3"`
 	IPv6                  bool              `yaml:"ipv6"`
+	IPv6Timeout           uint              `yaml:"ipv6-timeout"`
 	UseHosts              bool              `yaml:"use-hosts"`
 	NameServer            []string          `yaml:"nameserver"`
 	Fallback              []string          `yaml:"fallback"`
@@ -220,6 +218,7 @@ type RawTun struct {
 	ExcludePackage         []string          `yaml:"exclude-package" json:"exclude_package,omitempty"`
 	EndpointIndependentNat bool              `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
 	UDPTimeout             int64             `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+	FileDescriptor         int               `yaml:"file-descriptor" json:"file-descriptor"`
 }
 
 type RawTuicServer struct {
@@ -267,7 +266,7 @@ type RawConfig struct {
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
-	Hosts         map[string]string         `yaml:"hosts"`
+	Hosts         map[string]any            `yaml:"hosts"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
@@ -341,7 +340,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		UnifiedDelay:    false,
 		Authentication:  []string{},
 		LogLevel:        log.INFO,
-		Hosts:           map[string]string{},
+		Hosts:           map[string]any{},
 		Rule:            []string{},
 		Proxy:           []map[string]any{},
 		ProxyGroup:      []map[string]any{},
@@ -381,6 +380,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:       false,
 			IPv6:         false,
 			UseHosts:     true,
+			IPv6Timeout:  100,
 			EnhancedMode: C.DNSMapping,
 			FakeIPRange:  "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
@@ -419,9 +419,9 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			StoreSelected: true,
 		},
 		GeoXUrl: RawGeoXUrl{
-			GeoIp:   "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geoip.dat",
-			Mmdb:    "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country.mmdb",
-			GeoSite: "https://ghproxy.com/https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/geosite.dat",
+			Mmdb:    "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
+			GeoIp:   "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+			GeoSite: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		},
 	}
 
@@ -447,7 +447,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	dialer.DefaultInterface.Store(config.General.Interface)
+	if len(config.General.GlobalClientFingerprint) != 0 {
+		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
+		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
+	}
+
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
 		return nil, err
@@ -521,11 +525,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
-
-	if len(config.General.GlobalClientFingerprint) != 0 {
-		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
-		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
-	}
 
 	return config, nil
 }
@@ -828,21 +827,47 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 	return rules, nil
 }
 
-func parseHosts(cfg *RawConfig) (*trie.DomainTrie[netip.Addr], error) {
-	tree := trie.New[netip.Addr]()
+func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
+	tree := trie.New[resolver.HostValue]()
 
 	// add default hosts
-	if err := tree.Insert("localhost", netip.AddrFrom4([4]byte{127, 0, 0, 1})); err != nil {
+	hostValue, _ := resolver.NewHostValueByIPs(
+		[]netip.Addr{netip.AddrFrom4([4]byte{127, 0, 0, 1})})
+	if err := tree.Insert("localhost", hostValue); err != nil {
 		log.Errorln("insert localhost to host error: %s", err.Error())
 	}
 
 	if len(cfg.Hosts) != 0 {
-		for domain, ipStr := range cfg.Hosts {
-			ip, err := netip.ParseAddr(ipStr)
-			if err != nil {
-				return nil, fmt.Errorf("%s is not a valid IP", ipStr)
+		for domain, anyValue := range cfg.Hosts {
+			if str, ok := anyValue.(string); ok && str == "clash" {
+				if addrs, err := net.InterfaceAddrs(); err != nil {
+					log.Errorln("insert clash to host error: %s", err)
+				} else {
+					ips := make([]netip.Addr, 0)
+					for _, addr := range addrs {
+						if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+							if ip, err := netip.ParseAddr(ipnet.IP.String()); err == nil {
+								ips = append(ips, ip)
+							}
+						}
+					}
+					anyValue = ips
+				}
 			}
-			_ = tree.Insert(domain, ip)
+			value, err := resolver.NewHostValue(anyValue)
+			if err != nil {
+				return nil, fmt.Errorf("%s is not a valid value", anyValue)
+			}
+			if value.IsDomain {
+				node := tree.Search(value.Domain)
+				for node != nil && node.Data().IsDomain {
+					if node.Data().Domain == domain {
+						return nil, fmt.Errorf("%s, there is a cycle in domain name mapping", domain)
+					}
+					node = tree.Search(node.Data().Domain)
+				}
+			}
+			_ = tree.Insert(domain, value)
 		}
 	}
 	tree.Optimize()
@@ -960,26 +985,36 @@ func parsePureDNSServer(server string) string {
 }
 func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][]dns.NameServer, error) {
 	policy := map[string][]dns.NameServer{}
+	updatedPolicy := make(map[string]interface{})
+	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
-	for domain, server := range nsPolicy {
-		var (
-			nameservers []dns.NameServer
-			err         error
-		)
-
-		switch reflect.TypeOf(server).Kind() {
-		case reflect.Slice, reflect.Array:
-			origin := reflect.ValueOf(server)
-			servers := make([]string, 0)
-			for i := 0; i < origin.Len(); i++ {
-				servers = append(servers, fmt.Sprintf("%v", origin.Index(i)))
+	for k, v := range nsPolicy {
+		if strings.Contains(k, ",") {
+			if strings.Contains(k, "geosite:") {
+				subkeys := strings.Split(k, ":")
+				subkeys = subkeys[1:]
+				subkeys = strings.Split(subkeys[0], ",")
+				for _, subkey := range subkeys {
+					newKey := "geosite:" + subkey
+					updatedPolicy[newKey] = v
+				}
+			} else if re.MatchString(k) {
+				subkeys := strings.Split(k, ",")
+				for _, subkey := range subkeys {
+					updatedPolicy[subkey] = v
+				}
 			}
-			nameservers, err = parseNameServer(servers, preferH3)
-		case reflect.String:
-			nameservers, err = parseNameServer([]string{fmt.Sprintf("%v", server)}, preferH3)
-		default:
-			return nil, errors.New("server format error, must be string or array")
+		} else {
+			updatedPolicy[k] = v
 		}
+	}
+
+	for domain, server := range updatedPolicy {
+		servers, err := utils.ToStringSlice(server)
+		if err != nil {
+			return nil, err
+		}
+		nameservers, err := parseNameServer(servers, preferH3)
 		if err != nil {
 			return nil, err
 		}
@@ -1042,7 +1077,7 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 	return sites, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.Rule) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -1052,6 +1087,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[netip.Addr], rules []C.R
 		Enable:       cfg.Enable,
 		Listen:       cfg.Listen,
 		PreferH3:     cfg.PreferH3,
+		IPv6Timeout:  cfg.IPv6Timeout,
 		IPv6:         cfg.IPv6,
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
@@ -1204,6 +1240,7 @@ func parseTun(rawTun RawTun, general *General) error {
 		ExcludePackage:         rawTun.ExcludePackage,
 		EndpointIndependentNat: rawTun.EndpointIndependentNat,
 		UDPTimeout:             rawTun.UDPTimeout,
+		FileDescriptor:         rawTun.FileDescriptor,
 	}
 
 	return nil
@@ -1259,8 +1296,10 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			}
 		}
 	} else {
-		// Deprecated: Use Sniff instead
-		log.Warnln("Deprecated: Use Sniff instead")
+		if sniffer.Enable {
+			// Deprecated: Use Sniff instead
+			log.Warnln("Deprecated: Use Sniff instead")
+		}
 		globalPorts, err := parsePortRange(snifferRaw.Ports)
 		if err != nil {
 			return nil, err

@@ -5,11 +5,12 @@ import (
 	"encoding/binary"
 	"hash/adler32"
 	"hash/crc32"
-	"math/rand"
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/transport/ssr/tools"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
@@ -176,7 +177,7 @@ func (a *authSHA1V4) getRandDataLength(size int) int {
 		return 0
 	}
 	if size > 400 {
-		return rand.Intn(256)
+		return fastrand.Intn(256)
 	}
-	return rand.Intn(512)
+	return fastrand.Intn(512)
 }

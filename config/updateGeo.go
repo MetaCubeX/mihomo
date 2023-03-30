@@ -63,6 +63,8 @@ func UpdateGeoDatabases() error {
 		return fmt.Errorf("can't save GeoSite database file: %w", err)
 	}
 
+	geodata.ClearCache()
+
 	return nil
 }
 

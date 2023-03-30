@@ -66,7 +66,7 @@ func setMsgTTL(msg *D.Msg, ttl uint32) {
 }
 
 func isIPRequest(q D.Question) bool {
-	return q.Qclass == D.ClassINET && (q.Qtype == D.TypeA || q.Qtype == D.TypeAAAA)
+	return q.Qclass == D.ClassINET && (q.Qtype == D.TypeA || q.Qtype == D.TypeAAAA || q.Qtype == D.TypeCNAME)
 }
 
 func transform(servers []NameServer, resolver *Resolver) []dnsClient {

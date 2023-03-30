@@ -11,31 +11,42 @@ import (
 	"strings"
 	"sync"
 
-	CN "github.com/Dreamacro/clash/common/net"
-
 	xtls "github.com/xtls/go"
 )
 
-var tlsCertificates = make([]tls.Certificate, 0)
+var trustCerts []*x509.Certificate
 
 var mutex sync.RWMutex
 var errNotMacth error = errors.New("certificate fingerprints do not match")
 
-func AddCertificate(privateKey, certificate string) error {
+func AddCertificate(certificate string) error {
 	mutex.Lock()
 	defer mutex.Unlock()
-	if cert, err := CN.ParseCert(certificate, privateKey); err != nil {
-		return err
-	} else {
-		tlsCertificates = append(tlsCertificates, cert)
+	if certificate == "" {
+		return fmt.Errorf("certificate is empty")
 	}
-	return nil
+	if cert, err := x509.ParseCertificate([]byte(certificate)); err == nil {
+		trustCerts = append(trustCerts, cert)
+		return nil
+	} else {
+		return fmt.Errorf("add certificate failed")
+	}
 }
 
-func GetCertificates() []tls.Certificate {
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return tlsCertificates
+func ResetCertificate() {
+	mutex.Lock()
+	defer mutex.Unlock()
+	trustCerts = nil
+}
+
+func getCertPool() *x509.CertPool {
+	certPool, err := x509.SystemCertPool()
+	if err == nil {
+		for _, cert := range trustCerts {
+			certPool.AddCert(cert)
+		}
+	}
+	return certPool
 }
 
 func verifyFingerprint(fingerprint *[32]byte) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -85,12 +96,13 @@ func GetSpecifiedFingerprintTLSConfig(tlsConfig *tls.Config, fingerprint string)
 }
 
 func GetGlobalTLSConfig(tlsConfig *tls.Config) *tls.Config {
+	certPool := getCertPool()
 	if tlsConfig == nil {
 		return &tls.Config{
-			Certificates: tlsCertificates,
+			RootCAs: certPool,
 		}
 	}
-	tlsConfig.Certificates = append(tlsConfig.Certificates, tlsCertificates...)
+	tlsConfig.RootCAs = certPool
 	return tlsConfig
 }
 
@@ -107,29 +119,13 @@ func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint strin
 }
 
 func GetGlobalXTLSConfig(tlsConfig *xtls.Config) *xtls.Config {
-	xtlsCerts := make([]xtls.Certificate, len(tlsCertificates))
-	for _, cert := range tlsCertificates {
-		tlsSsaList := make([]xtls.SignatureScheme, len(cert.SupportedSignatureAlgorithms))
-		for _, ssa := range cert.SupportedSignatureAlgorithms {
-			tlsSsa := xtls.SignatureScheme(ssa)
-			tlsSsaList = append(tlsSsaList, tlsSsa)
-		}
-		xtlsCert := xtls.Certificate{
-			Certificate:                  cert.Certificate,
-			PrivateKey:                   cert.PrivateKey,
-			OCSPStaple:                   cert.OCSPStaple,
-			SignedCertificateTimestamps:  cert.SignedCertificateTimestamps,
-			Leaf:                         cert.Leaf,
-			SupportedSignatureAlgorithms: tlsSsaList,
-		}
-		xtlsCerts = append(xtlsCerts, xtlsCert)
-	}
+	certPool := getCertPool()
 	if tlsConfig == nil {
 		return &xtls.Config{
-			Certificates: xtlsCerts,
+			RootCAs: certPool,
 		}
 	}
 
-	tlsConfig.Certificates = xtlsCerts
+	tlsConfig.RootCAs = certPool
 	return tlsConfig
 }

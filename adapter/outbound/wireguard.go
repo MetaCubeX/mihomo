@@ -17,7 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/sing"
+	"github.com/Dreamacro/clash/log"
 
 	wireguard "github.com/metacubex/sing-wireguard"
 
@@ -34,7 +34,7 @@ type WireGuard struct {
 	bind      *wireguard.ClientBind
 	device    *device.Device
 	tunDevice wireguard.Device
-	dialer    *wgDialer
+	dialer    *wgSingDialer
 	startOnce sync.Once
 	startErr  error
 }
@@ -56,16 +56,28 @@ type WireGuardOption struct {
 	PersistentKeepalive int     `proxy:"persistent-keepalive,omitempty"`
 }
 
-type wgDialer struct {
-	options []dialer.Option
+type wgSingDialer struct {
+	dialer dialer.Dialer
 }
 
-func (d *wgDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	return dialer.DialContext(ctx, network, destination.String(), d.options...)
+var _ N.Dialer = &wgSingDialer{}
+
+func (d *wgSingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	return d.dialer.DialContext(ctx, network, destination.String())
 }
 
-func (d *wgDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", destination.Addr), "", d.options...)
+func (d *wgSingDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	return d.dialer.ListenPacket(ctx, "udp", "", destination.AddrPort())
+}
+
+type wgNetDialer struct {
+	tunDevice wireguard.Device
+}
+
+var _ dialer.NetDialer = &wgNetDialer{}
+
+func (d wgNetDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return d.tunDevice.DialContext(ctx, network, M.ParseSocksaddr(address).Unwrap())
 }
 
 func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
@@ -79,7 +91,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		dialer: &wgDialer{},
+		dialer: &wgSingDialer{dialer: dialer.NewDialer()},
 	}
 	runtime.SetFinalizer(outbound, closeWireGuard)
 
@@ -174,14 +186,14 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
-			sing.Logger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
+			log.SingLogger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
 		},
 		Errorf: func(format string, args ...interface{}) {
-			sing.Logger.Error(fmt.Sprintf(strings.ToLower(format), args...))
+			log.SingLogger.Error(fmt.Sprintf(strings.ToLower(format), args...))
 		},
 	}, option.Workers)
 	if debug.Enabled {
-		sing.Logger.Trace("created wireguard ipc conf: \n", ipcConf)
+		log.SingLogger.Trace("created wireguard ipc conf: \n", ipcConf)
 	}
 	err = outbound.device.IpcSet(ipcConf)
 	if err != nil {
@@ -199,7 +211,8 @@ func closeWireGuard(w *WireGuard) {
 }
 
 func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	w.dialer.options = opts
+	options := w.Base.DialOptions(opts...)
+	w.dialer.dialer = dialer.NewDialer(options...)
 	var conn net.Conn
 	w.startOnce.Do(func() {
 		w.startErr = w.tunDevice.Start()
@@ -208,15 +221,12 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 		return nil, w.startErr
 	}
 	if !metadata.Resolved() {
-		var addrs []netip.Addr
-		addrs, err = resolver.LookupIP(ctx, metadata.Host)
-		if err != nil {
-			return nil, err
-		}
-		conn, err = N.DialSerial(ctx, w.tunDevice, "tcp", M.ParseSocksaddr(metadata.RemoteAddress()), addrs)
+		options = append(options, dialer.WithResolver(resolver.DefaultResolver))
+		options = append(options, dialer.WithNetDialer(wgNetDialer{tunDevice: w.tunDevice}))
+		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
 		port, _ := strconv.Atoi(metadata.DstPort)
-		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, uint16(port)))
+		conn, err = w.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, uint16(port)).Unwrap())
 	}
 	if err != nil {
 		return nil, err
@@ -228,7 +238,8 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 }
 
 func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	w.dialer.options = opts
+	options := w.Base.DialOptions(opts...)
+	w.dialer.dialer = dialer.NewDialer(options...)
 	var pc net.PacketConn
 	w.startOnce.Do(func() {
 		w.startErr = w.tunDevice.Start()
@@ -247,7 +258,7 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		metadata.DstIP = ip
 	}
 	port, _ := strconv.Atoi(metadata.DstPort)
-	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, uint16(port)))
+	pc, err = w.tunDevice.ListenPacket(ctx, M.SocksaddrFrom(metadata.DstIP, uint16(port)).Unwrap())
 	if err != nil {
 		return nil, err
 	}

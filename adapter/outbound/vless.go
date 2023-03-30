@@ -17,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/vless"
@@ -41,6 +42,8 @@ type Vless struct {
 	gunTLSConfig *tls.Config
 	gunConfig    *gun.Config
 	transport    *gun.TransportWrap
+
+	realityConfig *tlsC.RealityConfig
 }
 
 type VlessOption struct {
@@ -57,6 +60,7 @@ type VlessOption struct {
 	XUDP              bool              `proxy:"xudp,omitempty"`
 	PacketEncoding    string            `proxy:"packet-encoding,omitempty"`
 	Network           string            `proxy:"network,omitempty"`
+	RealityOpts       RealityOptions    `proxy:"reality-opts,omitempty"`
 	HTTPOpts          HTTPOptions       `proxy:"http-opts,omitempty"`
 	HTTP2Opts         HTTP2Options      `proxy:"h2-opts,omitempty"`
 	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
@@ -78,7 +82,6 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 	switch v.option.Network {
 	case "ws":
-
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
 			Host:                host,
@@ -154,7 +157,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 		c, err = vmess.StreamH2Conn(c, h2Opts)
 	case "grpc":
-		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig)
+		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.realityConfig)
 	default:
 		// default tcp network
 		// handle TLS And XTLS
@@ -171,7 +174,7 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
 	host, _, _ := net.SplitHostPort(v.addr)
 
-	if v.isXTLSEnabled() && !isH2 {
+	if v.isLegacyXTLSEnabled() && !isH2 {
 		xtlsOpts := vless.XTLSConfig{
 			Host:           host,
 			SkipCertVerify: v.option.SkipCertVerify,
@@ -190,6 +193,7 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 			SkipCertVerify:    v.option.SkipCertVerify,
 			FingerPrint:       v.option.Fingerprint,
 			ClientFingerprint: v.option.ClientFingerprint,
+			Reality:           v.realityConfig,
 		}
 
 		if isH2 {
@@ -206,8 +210,8 @@ func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) 
 	return conn, nil
 }
 
-func (v *Vless) isXTLSEnabled() bool {
-	return v.client.Addons != nil
+func (v *Vless) isLegacyXTLSEnabled() bool {
+	return v.client.Addons != nil && v.client.Addons.Flow != vless.XRV
 }
 
 // DialContext implements C.ProxyAdapter
@@ -479,6 +483,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
 		switch option.Flow {
+		case vless.XRV:
+			log.Warnln("To use %s, ensure your server is upgrade to Xray-core v1.8.0+", vless.XRV)
+			fallthrough
 		case vless.XRO, vless.XRD, vless.XRS:
 			addons = &vless.Addons{
 				Flow: option.Flow,
@@ -510,12 +517,18 @@ func NewVless(option VlessOption) (*Vless, error) {
 			tp:     C.Vless,
 			udp:    option.UDP,
 			xudp:   option.XUDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 		client: client,
 		option: &option,
+	}
+
+	v.realityConfig, err = v.option.RealityOpts.Parse()
+	if err != nil {
+		return nil, err
 	}
 
 	switch option.Network {
@@ -552,8 +565,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		v.gunTLSConfig = tlsConfig
 		v.gunConfig = gunConfig
 
-		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint)
-
+		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.realityConfig)
 	}
 
 	return v, nil

@@ -73,7 +73,7 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 		}
 		listener, err = IN.NewTun(tunOption)
 	case "shadowsocks":
-		shadowsocksOption := &IN.ShadowSocksOption{}
+		shadowsocksOption := &IN.ShadowSocksOption{UDP: true}
 		err = decoder.Decode(mapping, shadowsocksOption)
 		if err != nil {
 			return nil, err

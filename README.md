@@ -30,8 +30,7 @@
 - Comprehensive HTTP RESTful API controller
 
 ## Wiki
-
-Documentation and configuring examples are available on [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki) and [Clash.Meta Wiki](https://docs.metacubex.one/).
+Configuration examples can be found at [/docs/config.yaml](https://github.com/MetaCubeX/Clash.Meta/blob/Alpha/docs/config.yaml), while documentation can be found [Clash.Meta Wiki](https://clash-meta.wiki).
 
 ## Build
 

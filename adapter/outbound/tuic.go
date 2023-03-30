@@ -42,15 +42,17 @@ type TuicOption struct {
 	DisableSni            bool     `proxy:"disable-sni,omitempty"`
 	MaxUdpRelayPacketSize int      `proxy:"max-udp-relay-packet-size,omitempty"`
 
-	FastOpen            bool   `proxy:"fast-open,omitempty"`
-	MaxOpenStreams      int    `proxy:"max-open-streams,omitempty"`
-	SkipCertVerify      bool   `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string `proxy:"fingerprint,omitempty"`
-	CustomCA            string `proxy:"ca,omitempty"`
-	CustomCAString      string `proxy:"ca-str,omitempty"`
-	ReceiveWindowConn   int    `proxy:"recv-window-conn,omitempty"`
-	ReceiveWindow       int    `proxy:"recv-window,omitempty"`
-	DisableMTUDiscovery bool   `proxy:"disable-mtu-discovery,omitempty"`
+	FastOpen             bool   `proxy:"fast-open,omitempty"`
+	MaxOpenStreams       int    `proxy:"max-open-streams,omitempty"`
+	SkipCertVerify       bool   `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint          string `proxy:"fingerprint,omitempty"`
+	CustomCA             string `proxy:"ca,omitempty"`
+	CustomCAString       string `proxy:"ca-str,omitempty"`
+	ReceiveWindowConn    int    `proxy:"recv-window-conn,omitempty"`
+	ReceiveWindow        int    `proxy:"recv-window,omitempty"`
+	DisableMTUDiscovery  bool   `proxy:"disable-mtu-discovery,omitempty"`
+	MaxDatagramFrameSize int    `proxy:"max-datagram-frame-size,omitempty"`
+	SNI                  string `proxy:"sni,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -106,11 +108,13 @@ func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (pc net.Pack
 func NewTuic(option TuicOption) (*Tuic, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	serverName := option.Server
-
 	tlsConfig := &tls.Config{
 		ServerName:         serverName,
 		InsecureSkipVerify: option.SkipCertVerify,
 		MinVersion:         tls.VersionTLS13,
+	}
+	if option.SNI != "" {
+		tlsConfig.ServerName = option.SNI
 	}
 
 	var bs []byte
@@ -172,6 +176,15 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		option.MaxOpenStreams = 100
 	}
 
+	if option.MaxDatagramFrameSize == 0 {
+		option.MaxDatagramFrameSize = option.MaxUdpRelayPacketSize + tuic.PacketOverHead
+	}
+
+	if option.MaxDatagramFrameSize > 1400 {
+		option.MaxDatagramFrameSize = 1400
+	}
+	option.MaxUdpRelayPacketSize = option.MaxDatagramFrameSize - tuic.PacketOverHead
+
 	// ensure server's incoming stream can handle correctly, increase to 1.1x
 	quicMaxOpenStreams := int64(option.MaxOpenStreams)
 	quicMaxOpenStreams = quicMaxOpenStreams + int64(math.Ceil(float64(quicMaxOpenStreams)/10.0))
@@ -184,6 +197,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		MaxIncomingUniStreams:          quicMaxOpenStreams,
 		KeepAlivePeriod:                time.Duration(option.HeartbeatInterval) * time.Millisecond,
 		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
+		MaxDatagramFrameSize:           int64(option.MaxDatagramFrameSize),
 		EnableDatagrams:                true,
 	}
 	if option.ReceiveWindowConn == 0 {
@@ -213,6 +227,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			udp:    true,
 			tfo:    option.FastOpen,
 			iface:  option.Interface,
+			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 	}

@@ -182,6 +182,7 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 			tp:     C.Socks5,
 			udp:    option.UDP,
+			tfo:    option.TFO,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),

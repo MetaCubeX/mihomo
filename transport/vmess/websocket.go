@@ -8,9 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -22,7 +20,9 @@ import (
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
 	tlsC "github.com/Dreamacro/clash/component/tls"
+
 	"github.com/gorilla/websocket"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type websocketConn struct {
@@ -120,7 +120,7 @@ func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
 		binary.BigEndian.PutUint64(header[2:], uint64(dataLen))
 	}
 
-	maskKey := rand.Uint32()
+	maskKey := fastrand.Uint32()
 	binary.LittleEndian.PutUint32(header[1+payloadBitLength:], maskKey)
 	N.MaskWebSocket(maskKey, data)
 
@@ -301,15 +301,27 @@ func (wsedc *websocketWithEarlyDataConn) SetWriteDeadline(t time.Time) error {
 	return wsedc.Conn.SetWriteDeadline(t)
 }
 
-func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
-	return wsedc.Conn == nil
+func (wsedc *websocketWithEarlyDataConn) FrontHeadroom() int {
+	return 14
 }
 
 func (wsedc *websocketWithEarlyDataConn) Upstream() any {
-	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
-		return nil
-	}
-	return wsedc.Conn
+	return wsedc.underlay
+}
+
+//func (wsedc *websocketWithEarlyDataConn) LazyHeadroom() bool {
+//	return wsedc.Conn == nil
+//}
+//
+//func (wsedc *websocketWithEarlyDataConn) Upstream() any {
+//	if wsedc.Conn == nil { // ensure return a nil interface not an interface with nil value
+//		return nil
+//	}
+//	return wsedc.Conn
+//}
+
+func (wsedc *websocketWithEarlyDataConn) NeedHandshake() bool {
+	return wsedc.Conn == nil
 }
 
 func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {

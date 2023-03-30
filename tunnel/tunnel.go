@@ -13,6 +13,7 @@ import (
 
 	"github.com/jpillora/backoff"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/nat"
 	P "github.com/Dreamacro/clash/component/process"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -25,6 +26,7 @@ import (
 )
 
 var (
+	status         = newAtomicStatus(Suspend)
 	tcpQueue       = make(chan C.ConnContext, 200)
 	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
@@ -47,6 +49,22 @@ var (
 
 	fakeIPRange netip.Prefix
 )
+
+func OnSuspend() {
+	status.Store(Suspend)
+}
+
+func OnInnerLoading() {
+	status.Store(Inner)
+}
+
+func OnRunning() {
+	status.Store(Running)
+}
+
+func Status() TunnelStatus {
+	return status.Load()
+}
 
 func SetFakeIPRange(p netip.Prefix) {
 	fakeIPRange = p
@@ -157,10 +175,19 @@ func SetFindProcessMode(mode P.FindProcessMode) {
 	findProcessMode = mode
 }
 
+func isHandle(t C.Type) bool {
+	status := status.Load()
+	return status == Running || (status == Inner && t == C.INNER)
+}
+
 // processUDP starts a loop to handle udp packet
 func processUDP() {
 	queue := udpQueue
 	for conn := range queue {
+		if !isHandle(conn.Metadata().Type) {
+			conn.Drop()
+			continue
+		}
 		handleUDPConn(conn)
 	}
 }
@@ -176,6 +203,10 @@ func process() {
 
 	queue := tcpQueue
 	for conn := range queue {
+		if !isHandle(conn.Metadata().Type) {
+			_ = conn.Conn().Close()
+			continue
+		}
 		go handleTCPConn(conn)
 	}
 }
@@ -200,13 +231,18 @@ func preHandleMetadata(metadata *C.Metadata) error {
 			if resolver.FakeIPEnabled() {
 				metadata.DstIP = netip.Addr{}
 				metadata.DNSMode = C.DNSFakeIP
-			} else if node := resolver.DefaultHosts.Search(host); node != nil {
+			} else if node, ok := resolver.DefaultHosts.Search(host, false); ok {
 				// redir-host should lookup the hosts
-				metadata.DstIP = node.Data()
+				metadata.DstIP, _ = node.RandIP()
+			} else if node != nil && node.IsDomain {
+				metadata.Host = node.Domain
 			}
 		} else if resolver.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
 		}
+	} else if node, ok := resolver.DefaultHosts.Search(metadata.Host, true); ok {
+		// try use domain mapping
+		metadata.Host = node.Domain
 	}
 
 	return nil
@@ -322,7 +358,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 		pCtx.InjectPacketConn(rawPc)
 
-		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule)
+		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0)
 
 		switch true {
 		case metadata.SpecialProxy != "":
@@ -366,8 +402,21 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	conn := connCtx.Conn()
+	conn.ResetPeeked() // reset before sniffer
 	if sniffer.Dispatcher.Enable() && sniffingEnable {
-		sniffer.Dispatcher.TCPSniff(connCtx.Conn(), metadata)
+		sniffer.Dispatcher.TCPSniff(conn, metadata)
+	}
+
+	peekMutex := sync.Mutex{}
+	if !conn.Peeked() {
+		peekMutex.Lock()
+		go func() {
+			defer peekMutex.Unlock()
+			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+			_, _ = conn.Peek(1)
+			_ = conn.SetReadDeadline(time.Time{})
+		}()
 	}
 
 	proxy, rule, err := resolveMetadata(connCtx, metadata)
@@ -378,8 +427,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	dialMetadata := metadata
 	if len(metadata.Host) > 0 {
-		if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-			if dstIp := node.Data(); !FakeIPRange().Contains(dstIp) {
+		if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
+			if dstIp, _ := node.RandIP(); !FakeIPRange().Contains(dstIp) {
 				dialMetadata.DstIP = dstIp
 				dialMetadata.DNSMode = C.DNSHosts
 				dialMetadata = dialMetadata.Pure()
@@ -387,10 +436,41 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}
 	}
 
+	var peekBytes []byte
+	var peekLen int
+
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
 	defer cancel()
-	remoteConn, err := retry(ctx, func(ctx context.Context) (C.Conn, error) {
-		return proxy.DialContext(ctx, dialMetadata)
+	remoteConn, err := retry(ctx, func(ctx context.Context) (remoteConn C.Conn, err error) {
+		remoteConn, err = proxy.DialContext(ctx, dialMetadata)
+		if err != nil {
+			return
+		}
+
+		if N.NeedHandshake(remoteConn) {
+			defer func() {
+				for _, chain := range remoteConn.Chains() {
+					if chain == "REJECT" {
+						err = nil
+						return
+					}
+				}
+				if err != nil {
+					remoteConn = nil
+				}
+			}()
+			peekMutex.Lock()
+			defer peekMutex.Unlock()
+			peekBytes, _ = conn.Peek(conn.Buffered())
+			_, err = remoteConn.Write(peekBytes)
+			if err != nil {
+				return
+			}
+			if peekLen = len(peekBytes); peekLen > 0 {
+				_, _ = conn.Discard(peekLen)
+			}
+		}
+		return
 	}, func(err error) {
 		if rule == nil {
 			log.Warnln(
@@ -408,7 +488,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule)
+	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, 0, int64(peekLen))
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()
 	}(remoteConn)
@@ -434,6 +514,10 @@ func handleTCPConn(connCtx C.ConnContext) {
 		)
 	}
 
+	_ = conn.SetReadDeadline(time.Now()) // stop unfinished peek
+	peekMutex.Lock()
+	defer peekMutex.Unlock()
+	_ = conn.SetReadDeadline(time.Time{}) // reset
 	handleSocket(connCtx, remoteConn)
 }
 
@@ -449,8 +533,8 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		processFound bool
 	)
 
-	if node := resolver.DefaultHosts.Search(metadata.Host); node != nil {
-		metadata.DstIP = node.Data()
+	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
+		metadata.DstIP, _ = node.RandIP()
 		resolved = true
 	}
 

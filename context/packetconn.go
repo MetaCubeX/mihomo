@@ -3,6 +3,7 @@ package context
 import (
 	"net"
 
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/gofrs/uuid"
@@ -15,9 +16,8 @@ type PacketConnContext struct {
 }
 
 func NewPacketConnContext(metadata *C.Metadata) *PacketConnContext {
-	id, _ := uuid.NewV4()
 	return &PacketConnContext{
-		id:       id,
+		id:       utils.NewUUIDV4(),
 		metadata: metadata,
 	}
 }

@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
-
-	"github.com/gofrs/uuid"
 )
 
 type Base struct {
@@ -35,12 +34,7 @@ func (b *Base) Name() string {
 // Id implements C.ProxyAdapter
 func (b *Base) Id() string {
 	if b.id == "" {
-		id, err := uuid.NewV6()
-		if err != nil {
-			b.id = b.name
-		} else {
-			b.id = id.String()
-		}
+		b.id = utils.NewUUIDV6().String()
 	}
 
 	return b.id
@@ -140,10 +134,15 @@ func (b *Base) DialOptions(opts ...dialer.Option) []dialer.Option {
 	default:
 	}
 
+	if b.tfo {
+		opts = append(opts, dialer.WithTFO(true))
+	}
+
 	return opts
 }
 
 type BasicOption struct {
+	TFO         bool   `proxy:"tfo,omitempty" group:"tfo,omitempty"`
 	Interface   string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
 	RoutingMark int    `proxy:"routing-mark,omitempty" group:"routing-mark,omitempty"`
 	IPVersion   string `proxy:"ip-version,omitempty" group:"ip-version,omitempty"`
@@ -206,6 +205,8 @@ func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 type packetConn struct {
 	net.PacketConn
 	chain                   C.Chain
+	adapterName             string
+	connID                  string
 	actualRemoteDestination string
 }
 
@@ -223,8 +224,13 @@ func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
 	c.chain = append(c.chain, a.Name())
 }
 
+func (c *packetConn) LocalAddr() net.Addr {
+	lAddr := c.PacketConn.LocalAddr()
+	return N.NewCustomAddr(c.adapterName, c.connID, lAddr) // make quic-go's connMultiplexer happy
+}
+
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
-	return &packetConn{pc, []string{a.Name()}, parseRemoteDestination(a.Addr())}
+	return &packetConn{pc, []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
 }
 
 func parseRemoteDestination(addr string) string {

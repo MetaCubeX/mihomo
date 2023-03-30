@@ -75,23 +75,37 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
-	preUpdateExperimental(cfg)
+
+	tunnel.OnSuspend()
+
+	CTLS.ResetCertificate()
+	for _, c := range cfg.TLS.CustomTrustCert {
+		if err := CTLS.AddCertificate(c); err != nil {
+			log.Warnln("%s\nadd error: %s", c, err.Error())
+		}
+	}
+
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
-	initInnerTcp()
+	updateGeneral(cfg.General)
 	updateDNS(cfg.DNS, cfg.General.IPv6)
-	loadProxyProvider(cfg.Providers)
-	updateProfile(cfg)
-	loadRuleProvider(cfg.RuleProviders)
-	updateGeneral(cfg.General, force)
-	updateListeners(cfg.Listeners)
+	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
 	updateExperimental(cfg)
 	updateTunnels(cfg.Tunnels)
+
+	tunnel.OnInnerLoading()
+
+	initInnerTcp()
+	loadProxyProvider(cfg.Providers)
+	updateProfile(cfg)
+	loadRuleProvider(cfg.RuleProviders)
+
+	tunnel.OnRunning()
 
 	log.SetLevel(cfg.General.LogLevel)
 }
@@ -128,29 +142,40 @@ func GetGeneral() *config.General {
 		GeodataLoader: G.LoaderName(),
 		Interface:     dialer.DefaultInterface.Load(),
 		Sniffing:      tunnel.IsSniffing(),
-		TCPConcurrent: dialer.GetDial(),
+		TCPConcurrent: dialer.GetTcpConcurrent(),
 	}
 
 	return general
 }
 
-func updateListeners(listeners map[string]C.InboundListener) {
+func updateListeners(general *config.General, listeners map[string]C.InboundListener, force bool) {
 	tcpIn := tunnel.TCPIn()
 	udpIn := tunnel.UDPIn()
 	natTable := tunnel.NatTable()
 
 	listener.PatchInboundListeners(listeners, tcpIn, udpIn, natTable, true)
+	if !force {
+		return
+	}
+
+	allowLan := general.AllowLan
+	listener.SetAllowLan(allowLan)
+
+	bindAddress := general.BindAddress
+	listener.SetBindAddress(bindAddress)
+	listener.ReCreateHTTP(general.Port, tcpIn)
+	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
+	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn, natTable)
+	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
+	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn, natTable)
+	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
+	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
+	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
+	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
 }
 
 func updateExperimental(c *config.Config) {
 	runtime.GC()
-}
-
-func preUpdateExperimental(c *config.Config) {
-	CTLS.AddCertificate(c.TLS.PrivateKey, c.TLS.Certificate)
-	for _, c := range c.TLS.CustomTrustCert {
-		CTLS.AddCertificate(c.PrivateKey, c.Certificate)
-	}
 }
 
 func updateDNS(c *config.DNS, generalIPv6 bool) {
@@ -166,6 +191,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
 		IPv6:         c.IPv6 && generalIPv6,
+		IPv6Timeout:  c.IPv6Timeout,
 		EnhancedMode: c.EnhancedMode,
 		Pool:         c.FakeIPRange,
 		Hosts:        c.Hosts,
@@ -201,8 +227,8 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 	dns.ReCreateServer(c.Listen, r, m)
 }
 
-func updateHosts(tree *trie.DomainTrie[netip.Addr]) {
-	resolver.DefaultHosts = tree
+func updateHosts(tree *trie.DomainTrie[resolver.HostValue]) {
+	resolver.DefaultHosts = resolver.NewHosts(tree)
 }
 
 func updateProxies(proxies map[string]C.Proxy, providers map[string]provider.ProxyProvider) {
@@ -304,62 +330,29 @@ func updateTunnels(tunnels []LC.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
 }
 
-func updateGeneral(general *config.General, force bool) {
+func updateGeneral(general *config.General) {
 	tunnel.SetMode(general.Mode)
 	tunnel.SetFindProcessMode(general.FindProcessMode)
-	dialer.DisableIPv6 = !general.IPv6
-	if !dialer.DisableIPv6 {
-		log.Infoln("Use IPv6")
-	}
-	resolver.DisableIPv6 = dialer.DisableIPv6
+	resolver.DisableIPv6 = !general.IPv6
 
 	if general.TCPConcurrent {
-		dialer.SetDial(general.TCPConcurrent)
+		dialer.SetTcpConcurrent(general.TCPConcurrent)
 		log.Infoln("Use tcp concurrent")
 	}
 
+	inbound.SetTfo(general.InboundTfo)
+
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
+
 	dialer.DefaultInterface.Store(general.Interface)
-
-	if dialer.DefaultInterface.Load() != "" {
-		log.Infoln("Use interface name: %s", general.Interface)
-	}
-
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
 	if general.RoutingMark > 0 {
 		log.Infoln("Use routing mark: %#x", general.RoutingMark)
 	}
 
 	iface.FlushCache()
-
-	if !force {
-		return
-	}
-
 	geodataLoader := general.GeodataLoader
 	G.SetLoader(geodataLoader)
-
-	allowLan := general.AllowLan
-	listener.SetAllowLan(allowLan)
-
-	bindAddress := general.BindAddress
-	listener.SetBindAddress(bindAddress)
-
-	inbound.SetTfo(general.InboundTfo)
-
-	tcpIn := tunnel.TCPIn()
-	udpIn := tunnel.UDPIn()
-	natTable := tunnel.NatTable()
-
-	listener.ReCreateHTTP(general.Port, tcpIn)
-	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn, natTable)
-	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
-	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn, natTable)
-	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
-	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
-	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
 }
 
 func updateUsers(users []auth.AuthUser) {

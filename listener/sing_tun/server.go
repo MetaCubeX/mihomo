@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -67,6 +68,26 @@ func CalculateInterfaceName(name string) (tunName string) {
 	return
 }
 
+func checkTunName(tunName string) (ok bool) {
+	defer func() {
+		if !ok {
+			log.Warnln("[TUN] Unsupported tunName(%s) in %s, force regenerate by ourselves.", tunName, runtime.GOOS)
+		}
+	}()
+	if runtime.GOOS == "darwin" {
+		if len(tunName) <= 4 {
+			return false
+		}
+		if tunName[:4] != "utun" {
+			return false
+		}
+		if _, parseErr := strconv.ParseInt(tunName[4:], 10, 16); parseErr != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (l *Listener, err error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
@@ -75,7 +96,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		}
 	}
 	tunName := options.Device
-	if tunName == "" {
+	if tunName == "" || !checkTunName(tunName) {
 		tunName = CalculateInterfaceName(InterfaceName)
 		options.Device = tunName
 	}
@@ -131,10 +152,11 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 
 	handler := &ListenerHandler{
 		ListenerHandler: sing.ListenerHandler{
-			TcpIn:     tcpIn,
-			UdpIn:     udpIn,
-			Type:      C.TUN,
-			Additions: additions,
+			TcpIn:      tcpIn,
+			UdpIn:      udpIn,
+			Type:       C.TUN,
+			Additions:  additions,
+			UDPTimeout: time.Second * time.Duration(udpTimeout),
 		},
 		DnsAdds: dnsAdds,
 	}
@@ -192,6 +214,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		IncludeAndroidUser: options.IncludeAndroidUser,
 		IncludePackage:     options.IncludePackage,
 		ExcludePackage:     options.ExcludePackage,
+		FileDescriptor:     options.FileDescriptor,
 		InterfaceMonitor:   defaultInterfaceMonitor,
 		TableIndex:         2022,
 	}
@@ -201,7 +224,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		err = E.Cause(err, "build android rules")
 		return
 	}
-	tunIf, err := tunOpen(tunOptions)
+	tunIf, err := tunNew(tunOptions)
 	if err != nil {
 		err = E.Cause(err, "configure tun interface")
 		return
@@ -217,7 +240,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		EndpointIndependentNat: options.EndpointIndependentNat,
 		UDPTimeout:             udpTimeout,
 		Handler:                handler,
-		Logger:                 sing.Logger,
+		Logger:                 log.SingLogger,
 	})
 	if err != nil {
 		return

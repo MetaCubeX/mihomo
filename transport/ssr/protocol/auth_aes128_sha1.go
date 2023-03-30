@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
-	"math/rand"
 	"net"
 	"strconv"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/ssr/tools"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type (
@@ -64,7 +65,7 @@ func (a *authAES128) initUserData() {
 	}
 	if len(a.userKey) == 0 {
 		a.userKey = a.Key
-		rand.Read(a.userID[:])
+		fastrand.Read(a.userID[:])
 	}
 }
 
@@ -198,7 +199,7 @@ func (a *authAES128) packData(poolBuf *bytes.Buffer, data []byte, fullDataLength
 }
 
 func trapezoidRandom(max int, d float64) int {
-	base := rand.Float64()
+	base := fastrand.Float64()
 	if d-0 > 1e-6 {
 		a := 1 - d
 		base = (math.Sqrt(a*a+4*d*base) - a) / (2 * d)
@@ -219,10 +220,10 @@ func (a *authAES128) getRandDataLengthForPackData(dataLength, fullDataLength int
 		if revLength > -1460 {
 			return trapezoidRandom(revLength+1460, -0.3)
 		}
-		return rand.Intn(32)
+		return fastrand.Intn(32)
 	}
 	if dataLength > 900 {
-		return rand.Intn(revLength)
+		return fastrand.Intn(revLength)
 	}
 	return trapezoidRandom(revLength, -0.3)
 }
@@ -247,7 +248,7 @@ func (a *authAES128) packAuthData(poolBuf *bytes.Buffer, data []byte) {
 	copy(macKey, a.iv)
 	copy(macKey[len(a.iv):], a.Key)
 
-	poolBuf.WriteByte(byte(rand.Intn(256)))
+	poolBuf.WriteByte(byte(fastrand.Intn(256)))
 	poolBuf.Write(a.hmac(macKey, poolBuf.Bytes())[:6])
 	poolBuf.Write(a.userID[:])
 	err := a.authData.putEncryptedData(poolBuf, a.userKey, [2]int{packedAuthDataLength, randDataLength}, a.salt)
@@ -263,9 +264,9 @@ func (a *authAES128) packAuthData(poolBuf *bytes.Buffer, data []byte) {
 
 func (a *authAES128) getRandDataLengthForPackAuthData(size int) int {
 	if size > 400 {
-		return rand.Intn(512)
+		return fastrand.Intn(512)
 	}
-	return rand.Intn(1024)
+	return fastrand.Intn(1024)
 }
 
 func (a *authAES128) packRandData(poolBuf *bytes.Buffer, size int) {

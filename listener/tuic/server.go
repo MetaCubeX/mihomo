@@ -61,6 +61,16 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 	quicConfig.InitialConnectionReceiveWindow = tuic.DefaultConnectionReceiveWindow / 10
 	quicConfig.MaxConnectionReceiveWindow = tuic.DefaultConnectionReceiveWindow
 
+	if config.MaxUdpRelayPacketSize == 0 {
+		config.MaxUdpRelayPacketSize = 1500
+	}
+	maxDatagramFrameSize := config.MaxUdpRelayPacketSize + tuic.PacketOverHead
+	if maxDatagramFrameSize > 1400 {
+		maxDatagramFrameSize = 1400
+	}
+	config.MaxUdpRelayPacketSize = maxDatagramFrameSize - tuic.PacketOverHead
+	quicConfig.MaxDatagramFrameSize = int64(maxDatagramFrameSize)
+
 	tokens := make([][32]byte, len(config.Token))
 	for i, token := range config.Token {
 		tokens[i] = tuic.GenTKN(token)

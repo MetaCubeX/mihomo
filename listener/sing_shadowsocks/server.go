@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/common/sockopt"
@@ -63,7 +64,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 	case common.Contains(shadowaead.List, config.Cipher):
 		sl.service, err = shadowaead.NewService(config.Cipher, nil, config.Password, udpTimeout, h)
 	case common.Contains(shadowaead_2022.List, config.Cipher):
-		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h)
+		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h, time.Now)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", config.Cipher)
 		return embedSS.New(config, tcpIn, udpIn)
@@ -75,37 +76,39 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
 
-		//UDP
-		ul, err := net.ListenPacket("udp", addr)
-		if err != nil {
-			return nil, err
-		}
-
-		err = sockopt.UDPReuseaddr(ul.(*net.UDPConn))
-		if err != nil {
-			log.Warnln("Failed to Reuse UDP Address: %s", err)
-		}
-
-		sl.udpListeners = append(sl.udpListeners, ul)
-
-		go func() {
-			conn := bufio.NewPacketConn(ul)
-			for {
-				buff := buf.NewPacket()
-				remoteAddr, err := conn.ReadPacket(buff)
-				if err != nil {
-					buff.Release()
-					if sl.closed {
-						break
-					}
-					continue
-				}
-				_ = sl.service.NewPacket(context.TODO(), conn, buff, metadata.Metadata{
-					Protocol: "shadowsocks",
-					Source:   remoteAddr,
-				})
+		if config.Udp {
+			//UDP
+			ul, err := net.ListenPacket("udp", addr)
+			if err != nil {
+				return nil, err
 			}
-		}()
+
+			err = sockopt.UDPReuseaddr(ul.(*net.UDPConn))
+			if err != nil {
+				log.Warnln("Failed to Reuse UDP Address: %s", err)
+			}
+
+			sl.udpListeners = append(sl.udpListeners, ul)
+
+			go func() {
+				conn := bufio.NewPacketConn(ul)
+				for {
+					buff := buf.NewPacket()
+					remoteAddr, err := conn.ReadPacket(buff)
+					if err != nil {
+						buff.Release()
+						if sl.closed {
+							break
+						}
+						continue
+					}
+					_ = sl.service.NewPacket(context.TODO(), conn, buff, metadata.Metadata{
+						Protocol: "shadowsocks",
+						Source:   remoteAddr,
+					})
+				}
+			}()
+		}
 
 		//TCP
 		l, err := inbound.Listen("tcp", addr)

@@ -33,12 +33,14 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
 
-		//UDP
-		ul, err := NewUDP(addr, pickCipher, udpIn)
-		if err != nil {
-			return nil, err
+		if config.Udp {
+			//UDP
+			ul, err := NewUDP(addr, pickCipher, udpIn)
+			if err != nil {
+				return nil, err
+			}
+			sl.udpListeners = append(sl.udpListeners, ul)
 		}
-		sl.udpListeners = append(sl.udpListeners, ul)
 
 		//TCP
 		l, err := inbound.Listen("tcp", addr)

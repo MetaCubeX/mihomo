@@ -176,7 +176,7 @@ func (r *Relay) proxies(metadata *C.Metadata, touch bool) ([]C.Proxy, []C.Proxy)
 }
 
 func (r *Relay) Addr() string {
-	proxies, _ := r.proxies(nil, true)
+	proxies, _ := r.proxies(nil, false)
 	return proxies[len(proxies)-1].Addr()
 }
 

@@ -16,6 +16,11 @@ on:
       - Alpha
       - Beta
       - Meta
+      
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+  
 env:
   REGISTRY: docker.io
 jobs:
@@ -46,25 +51,26 @@ jobs:
               target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
               id: "4",
             }
+          - { type: "WithoutCGO", target: "linux-386 linux-riscv64", id: "5" }
           - {
               type: "WithoutCGO",
               target: "freebsd-386 freebsd-amd64 freebsd-arm64",
-              id: "5",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "windows-amd64-compatible windows-amd64 windows-386",
               id: "6",
             }
           - {
               type: "WithoutCGO",
-              target: "windows-arm64 windows-arm32v7",
+              target: "windows-amd64-compatible windows-amd64 windows-386",
               id: "7",
             }
           - {
               type: "WithoutCGO",
-              target: "darwin-amd64 darwin-arm64 android-arm64",
+              target: "windows-arm64 windows-arm32v7",
               id: "8",
+            }
+          - {
+              type: "WithoutCGO",
+              target: "darwin-amd64 darwin-arm64 android-arm64",
+              id: "9",
             }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
@@ -108,10 +114,11 @@ jobs:
 
       - name: Set ENV
         run: |
+          sudo timedatectl set-timezone "Asia/Shanghai"
           echo "NAME=clash.meta" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
-          echo "BUILDTIME=$(date -u)" >> $GITHUB_ENV
+          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
           echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
         shell: bash
 
@@ -193,6 +200,10 @@ jobs:
           ls -la
           cd ..
 
+      - name: Save version
+        run: echo ${VERSION} > bin/version.txt
+        shell: bash
+
       - uses: actions/upload-artifact@v3
         if: ${{  success() }}
         with:
@@ -202,7 +213,7 @@ jobs:
   Upload-Prerelease:
     permissions: write-all
     if: ${{ github.ref_type=='branch' }}
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -221,6 +232,11 @@ jobs:
           tag: Prerelease-${{ github.ref_name }}
           deleteOnlyFromDrafts: false
 
+      - name: Set Env
+        run: |
+          echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
+        shell: bash
+
       - name: Tag Repo
         uses: richardsimko/update-tag@v1.0.6
         with:
@@ -228,20 +244,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - run: |
+          cat > release.txt << 'EOF'
+          Release created at  ${{ env.BUILDTIME }}
+          Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
+          <br>
+          ### release version
+          `default(not specified in file name)`: compiled with GOAMD64=v3
+          `cgo`: support lwip tun stack, compiled with GOAMD64=v1
+          `compatible`: compiled with GOAMD64=v1
+          Check details between different architectural levels [here](https://github.com/golang/go/wiki/MinimumRequirements#amd64).
+          EOF
+
       - name: Upload Prerelease
         uses: softprops/action-gh-release@v1
         if: ${{  success() }}
         with:
           tag: ${{ github.ref_name }}
           tag_name: Prerelease-${{ github.ref_name }}
-          files: bin/*
+          files: |
+            bin/*
           prerelease: true
           generate_release_notes: true
+          body_path: release.txt
 
   Upload-Release:
     permissions: write-all
     if: ${{ github.ref_type=='tag' }}
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
@@ -264,7 +294,7 @@ jobs:
 
   Docker:
     permissions: write-all
-    needs: [ Build ]
+    needs: [Build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -321,5 +351,7 @@ jobs:
             linux/386
             linux/amd64
             linux/arm64/v8
+            linux/arm/v7
+          #            linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"golang.org/x/exp/slices"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -24,10 +25,11 @@ import (
 const UDPTimeout = 5 * time.Minute
 
 type ListenerHandler struct {
-	TcpIn     chan<- C.ConnContext
-	UdpIn     chan<- C.PacketAdapter
-	Type      C.Type
-	Additions []inbound.Addition
+	TcpIn      chan<- C.ConnContext
+	UdpIn      chan<- C.PacketAdapter
+	Type       C.Type
+	Additions  []inbound.Addition
+	UDPTimeout time.Duration
 }
 
 type waitCloseConn struct {
@@ -61,9 +63,16 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	switch metadata.Destination.Fqdn {
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
-	case uot.UOTMagicAddress:
-		metadata.Destination = M.Socksaddr{}
-		return h.NewPacketConnection(ctx, uot.NewClientConn(conn), metadata)
+	case uot.MagicAddress:
+		request, err := uot.ReadRequest(conn)
+		if err != nil {
+			return E.Cause(err, "read UoT request")
+		}
+		metadata.Destination = request.Destination
+		return h.NewPacketConnection(ctx, uot.NewConn(conn, *request), metadata)
+	case uot.LegacyMagicAddress:
+		metadata.Destination = M.Socksaddr{Addr: netip.IPv4Unspecified()}
+		return h.NewPacketConnection(ctx, uot.NewConn(conn, uot.Request{}), metadata)
 	}
 	target := socks5.ParseAddr(metadata.Destination.String())
 	wg := &sync.WaitGroup{}
@@ -151,6 +160,9 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		return
 	}
 	err = conn.WritePacket(buff, M.SocksaddrFromNet(addr))
+	if err != nil {
+		return
+	}
 	return
 }
 

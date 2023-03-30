@@ -2,12 +2,14 @@ package wechat
 
 import (
 	"encoding/binary"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/transport/hysteria/obfs"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 const udpBufferSize = 65535
@@ -29,7 +31,7 @@ func NewObfsWeChatUDPConn(orig net.PacketConn, obfs obfs.Obfuscator) *ObfsWeChat
 		obfs:     obfs,
 		readBuf:  make([]byte, udpBufferSize),
 		writeBuf: make([]byte, udpBufferSize),
-		sn:       rand.Uint32() & 0xFFFF,
+		sn:       fastrand.Uint32() & 0xFFFF,
 	}
 }
 

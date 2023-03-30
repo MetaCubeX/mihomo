@@ -271,6 +271,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tcpIn chan<- C.ConnContext, u
 			Listen:   addr,
 			Password: password,
 			Cipher:   cipher,
+			Udp:      true,
 		}
 	}
 
@@ -821,7 +822,8 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 		LastTunConf.MTU != tunConf.MTU ||
 		LastTunConf.StrictRoute != tunConf.StrictRoute ||
 		LastTunConf.EndpointIndependentNat != tunConf.EndpointIndependentNat ||
-		LastTunConf.UDPTimeout != tunConf.UDPTimeout {
+		LastTunConf.UDPTimeout != tunConf.UDPTimeout ||
+		LastTunConf.FileDescriptor != tunConf.FileDescriptor {
 		return true
 	}
 
