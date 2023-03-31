@@ -108,8 +108,8 @@ func (ss *DomainSet) Has(key string) bool {
 	// go to next level
 	nodeId, bmIdx := 0, 0
 	type wildcardCursor struct {
-		nodeId, bmIdx, index int
-		find          bool
+		bmIdx, index int
+		find         bool
 	}
 	cursor := wildcardCursor{}
 	for i := 0; i < len(key); i++ {
@@ -132,7 +132,7 @@ func (ss *DomainSet) Has(key string) bool {
 							bmIdx = nextBmIdx
 							nodeId = nextNodeId
 							i = j
-							cursor.find=false
+							cursor.find = false
 							goto RESTART
 						}
 					}
@@ -145,10 +145,9 @@ func (ss *DomainSet) Has(key string) bool {
 			} else if ss.labels[bmIdx-nodeId] == wildcardByte {
 				cursor.find = true
 				cursor.bmIdx = bmIdx
-				cursor.nodeId = nodeId
 				cursor.index = i
 			} else if ss.labels[bmIdx-nodeId] == c {
-				cursor.find=false
+				cursor.find = false
 				break
 			}
 		}
