@@ -105,3 +105,23 @@ func TestTrie_WildcardBoundary(t *testing.T) {
 
 	assert.NotNil(t, tree.Search("example.com"))
 }
+
+func TestTrie_Foreach(t *testing.T) {
+	tree := New[netip.Addr]()
+	domainList := []string{
+		"google.com",
+		"stun.*.*.*",
+		"test.*.google.com",
+		"+.baidu.com",
+		"*.baidu.com",
+		"*.*.baidu.com",
+	}
+	for _, domain := range domainList {
+		tree.Insert(domain, localIP)
+	}
+	count := 0
+	tree.Foreach(func(domain string, data netip.Addr) {
+		count++
+	})
+	assert.Equal(t, 7, count)
+}

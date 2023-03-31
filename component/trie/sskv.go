@@ -25,38 +25,14 @@ type DomainSet struct {
 
 // NewDomainSet creates a new *DomainSet struct, from a slice of sorted strings.
 func NewDomainSet(keys []string) *DomainSet {
-	filter := make(map[string]struct{}, len(keys))
+	domainTrie := New[struct{}]()
+	for _, domain := range keys {
+		domainTrie.Insert(domain, struct{}{})
+	}
 	reserveDomains := make([]string, 0, len(keys))
-	insert := func(domain string) {
-		reserveDomain := utils.Reverse(domain)
-		reserveDomain = strings.ToLower(reserveDomain)
-		if _, ok := filter[reserveDomain]; !ok {
-			filter[reserveDomain] = struct{}{}
-			domains := make([]string, 0, len(reserveDomains))
-			if strings.HasSuffix(reserveDomain, ".+") {
-				for _, domain := range reserveDomains {
-					if !strings.HasPrefix(domain, reserveDomain[0:len(reserveDomain)-2]) {
-						domains = append(domains, domain)
-					}
-				}
-				reserveDomains = domains
-			}
-			reserveDomains = append(reserveDomains, reserveDomain)
-		}
-	}
-	for _, key := range keys {
-		items, ok := ValidAndSplitDomain(key)
-		if !ok {
-			continue
-		}
-		if items[0] == complexWildcard {
-			domain := strings.Join(items[1:], domainStep)
-			insert(domain)
-		}
-
-		domain := strings.Join(items, domainStep)
-		insert(domain)
-	}
+	domainTrie.Foreach(func(domain string, data struct{}) {
+		reserveDomains = append(reserveDomains, utils.Reverse(domain))
+	})
 	sort.Slice(reserveDomains, func(i, j int) bool {
 		return len(reserveDomains[i]) < len(reserveDomains[j])
 	})
