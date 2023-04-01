@@ -34,6 +34,7 @@ func NewDomainSet(keys []string) *DomainSet {
 		reserveDomains = append(reserveDomains, utils.Reverse(domain))
 	})
 	// ensure that the same prefix is continuous
+	// and according to the ascending sequence of length
 	sort.Strings(reserveDomains)
 	keys = reserveDomains
 	if len(keys) == 0 {
