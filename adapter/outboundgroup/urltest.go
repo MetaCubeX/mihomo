@@ -45,16 +45,13 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	}
 
 	if N.NeedHandshake(c) {
-		c = &callback.FirstWriteCallBackConn{
-			Conn: c,
-			Callback: func(err error) {
-				if err == nil {
-					u.onDialSuccess()
-				} else {
-					u.onDialFailed(proxy.Type(), err)
-				}
-			},
-		}
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				u.onDialSuccess()
+			} else {
+				u.onDialFailed(proxy.Type(), err)
+			}
+		})
 	}
 
 	return c, err

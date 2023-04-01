@@ -37,16 +37,13 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	}
 
 	if N.NeedHandshake(c) {
-		c = &callback.FirstWriteCallBackConn{
-			Conn: c,
-			Callback: func(err error) {
-				if err == nil {
-					f.onDialSuccess()
-				} else {
-					f.onDialFailed(proxy.Type(), err)
-				}
-			},
-		}
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				f.onDialSuccess()
+			} else {
+				f.onDialFailed(proxy.Type(), err)
+			}
+		})
 	}
 
 	return c, err
