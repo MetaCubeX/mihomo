@@ -12,9 +12,12 @@ func TestDomain(t *testing.T) {
 		"baidu.com",
 		"google.com",
 		"www.google.com",
+		"test.a.net",
+		"test.a.oc",
 	}
 	set := trie.NewDomainSet(domainSet)
 	assert.NotNil(t, set)
+	assert.True(t, set.Has("test.a.net"))
 	assert.True(t, set.Has("google.com"))
 	assert.False(t, set.Has("www.baidu.com"))
 }
@@ -24,6 +27,8 @@ func TestDomainComplexWildcard(t *testing.T) {
 		"+.baidu.com",
 		"+.a.baidu.com",
 		"www.baidu.com",
+		"test.a.net",
+		"test.a.oc",
 		"www.qq.com",
 	}
 	set := trie.NewDomainSet(domainSet)

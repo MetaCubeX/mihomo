@@ -33,9 +33,8 @@ func NewDomainSet(keys []string) *DomainSet {
 	domainTrie.Foreach(func(domain string, data struct{}) {
 		reserveDomains = append(reserveDomains, utils.Reverse(domain))
 	})
-	sort.Slice(reserveDomains, func(i, j int) bool {
-		return len(reserveDomains[i]) < len(reserveDomains[j])
-	})
+	// ensure that the same prefix is continuous
+	sort.Strings(reserveDomains)
 	keys = reserveDomains
 	if len(keys) == 0 {
 		return nil
@@ -77,6 +76,7 @@ func (ss *DomainSet) Has(key string) bool {
 	if ss == nil {
 		return false
 	}
+	key = strings.TrimSpace(key)
 	key = utils.Reverse(key)
 	key = strings.ToLower(key)
 	// no more labels in this node
@@ -123,7 +123,9 @@ func (ss *DomainSet) Has(key string) bool {
 				cursor.bmIdx = bmIdx
 				cursor.index = i
 			} else if ss.labels[bmIdx-nodeId] == c {
-				cursor.find = false
+				if ss.labels[bmIdx-nodeId] == domainStepByte {
+					cursor.find = false
+				}
 				break
 			}
 		}
