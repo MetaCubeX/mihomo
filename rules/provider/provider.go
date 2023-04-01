@@ -1,12 +1,10 @@
 package provider
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"gopkg.in/yaml.v3"
-	"io"
 	"runtime"
 	"time"
 
@@ -161,36 +159,30 @@ func rulesParse(buf []byte, strategy ruleStrategy) (any, error) {
 
 	schema := &RulePayload{}
 
-	reader := bufio.NewReader(bytes.NewReader(buf))
-
 	firstLineBuffer := pool.GetBuffer()
 	defer pool.PutBuffer(firstLineBuffer)
 	firstLineLength := 0
 
-	for {
-		line, isPrefix, err := reader.ReadLine()
-		if err != nil {
-			if err == io.EOF {
-				if firstLineLength == 0 { // find payload head
-					return nil, ErrNoPayload
-				}
-				break
+	s := 0 // search start index
+	for s < len(buf) {
+		// search buffer for a new line.
+		line := buf[s:]
+		if i := bytes.IndexByte(line, '\n'); i >= 0 {
+			i += s
+			line = buf[s : i+1]
+			s = i + 1
+		} else {
+			s = len(buf)              // stop loop in next step
+			if firstLineLength == 0 { // no head or only one line body
+				return nil, ErrNoPayload
 			}
-			return nil, err
 		}
-		firstLineBuffer.Write(line) // need a copy because the returned buffer is only valid until the next call to ReadLine
-		if isPrefix {
-			// If the line was too long for the buffer then isPrefix is set and the
-			// beginning of the line is returned. The rest of the line will be returned
-			// from future calls.
-			continue
-		}
+		firstLineBuffer.Write(line)
 		if firstLineLength == 0 { // find payload head
-			firstLineBuffer.WriteByte('\n')
 			firstLineLength = firstLineBuffer.Len()
 			firstLineBuffer.WriteString("  - ''") // a test line
 
-			err = yaml.Unmarshal(firstLineBuffer.Bytes(), schema)
+			err := yaml.Unmarshal(firstLineBuffer.Bytes(), schema)
 			firstLineBuffer.Truncate(firstLineLength)
 			if err == nil && (len(schema.Rules) > 0 || len(schema.Payload) > 0) { // found
 				continue
@@ -203,7 +195,7 @@ func rulesParse(buf []byte, strategy ruleStrategy) (any, error) {
 		}
 
 		// parse payload body
-		err = yaml.Unmarshal(firstLineBuffer.Bytes(), schema)
+		err := yaml.Unmarshal(firstLineBuffer.Bytes(), schema)
 		firstLineBuffer.Truncate(firstLineLength)
 		if err != nil {
 			continue
