@@ -1,13 +1,19 @@
 package provider
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
+	"gopkg.in/yaml.v3"
+	"io"
+	"runtime"
+	"time"
+
+	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
-	"gopkg.in/yaml.v3"
-	"runtime"
-	"time"
 )
 
 var (
@@ -29,8 +35,8 @@ type RulePayload struct {
 	key: Domain or IP Cidr
 	value: Rule type or is empty
 	*/
-	Rules  []string `yaml:"payload"`
-	Rules2 []string `yaml:"rules"`
+	Payload []string `yaml:"payload"`
+	Rules   []string `yaml:"rules"`
 }
 
 type ruleStrategy interface {
@@ -38,7 +44,9 @@ type ruleStrategy interface {
 	Count() int
 	ShouldResolveIP() bool
 	ShouldFindProcess() bool
-	OnUpdate(rules []string)
+	Reset()
+	Insert(rule string)
+	FinishInsert()
 }
 
 func RuleProviders() map[string]P.RuleProvider {
@@ -114,13 +122,12 @@ func NewRuleSetProvider(name string, behavior P.RuleType, interval time.Duration
 	}
 
 	onUpdate := func(elm interface{}) {
-		rulesRaw := elm.([]string)
-		rp.strategy.OnUpdate(rulesRaw)
+		strategy := elm.(ruleStrategy)
+		rp.strategy = strategy
 	}
 
-	fetcher := resource.NewFetcher(name, interval, vehicle, rulesParse, onUpdate)
-	rp.Fetcher = fetcher
 	rp.strategy = newStrategy(behavior, parse)
+	rp.Fetcher = resource.NewFetcher(name, interval, vehicle, func(bytes []byte) (any, error) { return rulesParse(bytes, newStrategy(behavior, parse)) }, onUpdate)
 
 	wrapper := &RuleSetProvider{
 		rp,
@@ -147,12 +154,75 @@ func newStrategy(behavior P.RuleType, parse func(tp, payload, target string, par
 	}
 }
 
-func rulesParse(buf []byte) (any, error) {
-	rulePayload := RulePayload{}
-	err := yaml.Unmarshal(buf, &rulePayload)
-	if err != nil {
-		return nil, err
+var ErrNoPayload = errors.New("file must have a `payload` field")
+
+func rulesParse(buf []byte, strategy ruleStrategy) (any, error) {
+	strategy.Reset()
+
+	schema := &RulePayload{}
+
+	reader := bufio.NewReader(bytes.NewReader(buf))
+
+	firstLineBuffer := pool.GetBuffer()
+	defer pool.PutBuffer(firstLineBuffer)
+	firstLineLength := 0
+
+	for {
+		line, isPrefix, err := reader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				if firstLineLength == 0 { // find payload head
+					return nil, ErrNoPayload
+				}
+				break
+			}
+			return nil, err
+		}
+		firstLineBuffer.Write(line) // need a copy because the returned buffer is only valid until the next call to ReadLine
+		if isPrefix {
+			// If the line was too long for the buffer then isPrefix is set and the
+			// beginning of the line is returned. The rest of the line will be returned
+			// from future calls.
+			continue
+		}
+		if firstLineLength == 0 { // find payload head
+			firstLineBuffer.WriteByte('\n')
+			firstLineLength = firstLineBuffer.Len()
+			firstLineBuffer.WriteString("  - ''") // a test line
+
+			err = yaml.Unmarshal(firstLineBuffer.Bytes(), schema)
+			firstLineBuffer.Truncate(firstLineLength)
+			if err == nil && (len(schema.Rules) > 0 || len(schema.Payload) > 0) { // found
+				continue
+			}
+
+			// not found or err!=nil
+			firstLineBuffer.Truncate(0)
+			firstLineLength = 0
+			continue
+		}
+
+		// parse payload body
+		err = yaml.Unmarshal(firstLineBuffer.Bytes(), schema)
+		firstLineBuffer.Truncate(firstLineLength)
+		if err != nil {
+			continue
+		}
+		var str string
+		if len(schema.Rules) > 0 {
+			str = schema.Rules[0]
+		}
+		if len(schema.Payload) > 0 {
+			str = schema.Payload[0]
+		}
+		if str == "" {
+			continue
+		}
+
+		strategy.Insert(str)
 	}
 
-	return append(rulePayload.Rules, rulePayload.Rules2...), nil
+	strategy.FinishInsert()
+
+	return strategy, nil
 }
