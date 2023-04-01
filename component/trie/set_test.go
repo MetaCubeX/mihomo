@@ -27,6 +27,7 @@ func TestDomainComplexWildcard(t *testing.T) {
 		"+.baidu.com",
 		"+.a.baidu.com",
 		"www.baidu.com",
+		"+.bb.baidu.com",
 		"test.a.net",
 		"test.a.oc",
 		"www.qq.com",
@@ -40,8 +41,8 @@ func TestDomainComplexWildcard(t *testing.T) {
 
 func TestDomainWildcard(t *testing.T) {
 	domainSet := []string{
-		"*.baidu.com",
-		"www.baidu.com",
+		"*.*.*.baidu.com",
+		"www.baidu.*",
 		"*.*.qq.com",
 		"test.*.baidu.com",
 	}
