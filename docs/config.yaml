@@ -238,6 +238,7 @@ dns:
       - https://doh.pub/dns-query
       - https://dns.alidns.com/dns-query
     "www.baidu.com,+.google.cn": [223.5.5.5, https://dns.alidns.com/dns-query]
+    # "rule-set:global,dns": 8.8.8.8 # global，dns 为 rule-providers 中的名为 global 和 dns 的规则提供器名字，且 behavior 必须为 domain 
 
 proxies: # socks5
   - name: "socks"

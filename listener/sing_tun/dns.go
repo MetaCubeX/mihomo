@@ -110,7 +110,10 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			conn2 = nil
 		}()
 		for {
-			buff := buf.NewPacket()
+			// safe size which is 1232 from https://dnsflagday.net/2020/.
+			// so 2048 is enough
+			buff := buf.NewSize(2 * 1024)
+			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
 			dest, err := conn.ReadPacket(buff)
 			if err != nil {
 				buff.Release()
