@@ -3,6 +3,7 @@ package provider
 import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 type domainStrategy struct {
@@ -27,8 +28,14 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 }
 
 func (d *domainStrategy) OnUpdate(rules []string) {
-	domainTrie := trie.NewDomainSet(rules)
-	d.domainRules = domainTrie
+	domainTrie := trie.New[struct{}]()
+	for _, rule := range rules {
+		err := domainTrie.Insert(rule, struct{}{})
+		if err != nil {
+			log.Warnln("invalid domain:[%s]", rule)
+		}
+	}
+	d.domainRules = domainTrie.NewDomainSet()
 	d.count = len(rules)
 }
 

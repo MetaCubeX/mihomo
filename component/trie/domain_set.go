@@ -23,20 +23,16 @@ type DomainSet struct {
 	ranks, selects      []int32
 }
 
-// NewDomainSet creates a new *DomainSet struct, from a slice of sorted strings.
-func NewDomainSet(keys []string) *DomainSet {
-	domainTrie := New[struct{}]()
-	for _, domain := range keys {
-		domainTrie.Insert(domain, struct{}{})
-	}
-	reserveDomains := make([]string, 0, len(keys))
-	domainTrie.Foreach(func(domain string, data struct{}) {
+// NewDomainSet creates a new *DomainSet struct, from a DomainTrie.
+func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
+	reserveDomains := make([]string, 0)
+	t.Foreach(func(domain string, data T) {
 		reserveDomains = append(reserveDomains, utils.Reverse(domain))
 	})
 	// ensure that the same prefix is continuous
 	// and according to the ascending sequence of length
 	sort.Strings(reserveDomains)
-	keys = reserveDomains
+	keys := reserveDomains
 	if len(keys) == 0 {
 		return nil
 	}
@@ -104,7 +100,7 @@ func (ss *DomainSet) Has(key string) bool {
 					if j == len(key) {
 						if getBit(ss.leaves, nextNodeId) != 0 {
 							return true
-						}else {
+						} else {
 							goto RESTART
 						}
 					}

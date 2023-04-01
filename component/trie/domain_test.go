@@ -1,16 +1,17 @@
-package trie
+package trie_test
 
 import (
 	"net/netip"
 	"testing"
 
+	"github.com/Dreamacro/clash/component/trie"
 	"github.com/stretchr/testify/assert"
 )
 
 var localIP = netip.AddrFrom4([4]byte{127, 0, 0, 1})
 
 func TestTrie_Basic(t *testing.T) {
-	tree := New[netip.Addr]()
+	tree := trie.New[netip.Addr]()
 	domains := []string{
 		"example.com",
 		"google.com",
@@ -18,7 +19,7 @@ func TestTrie_Basic(t *testing.T) {
 	}
 
 	for _, domain := range domains {
-		tree.Insert(domain, localIP)
+		assert.NoError(t, tree.Insert(domain, localIP))
 	}
 
 	node := tree.Search("example.com")
@@ -31,7 +32,7 @@ func TestTrie_Basic(t *testing.T) {
 }
 
 func TestTrie_Wildcard(t *testing.T) {
-	tree := New[netip.Addr]()
+	tree := trie.New[netip.Addr]()
 	domains := []string{
 		"*.example.com",
 		"sub.*.example.com",
@@ -47,7 +48,7 @@ func TestTrie_Wildcard(t *testing.T) {
 	}
 
 	for _, domain := range domains {
-		tree.Insert(domain, localIP)
+		assert.NoError(t, tree.Insert(domain, localIP))
 	}
 
 	assert.NotNil(t, tree.Search("sub.example.com"))
@@ -64,7 +65,7 @@ func TestTrie_Wildcard(t *testing.T) {
 }
 
 func TestTrie_Priority(t *testing.T) {
-	tree := New[int]()
+	tree := trie.New[int]()
 	domains := []string{
 		".dev",
 		"example.dev",
@@ -79,7 +80,7 @@ func TestTrie_Priority(t *testing.T) {
 	}
 
 	for idx, domain := range domains {
-		tree.Insert(domain, idx+1)
+		assert.NoError(t, tree.Insert(domain, idx+1))
 	}
 
 	assertFn("test.dev", 1)
@@ -90,8 +91,8 @@ func TestTrie_Priority(t *testing.T) {
 }
 
 func TestTrie_Boundary(t *testing.T) {
-	tree := New[netip.Addr]()
-	tree.Insert("*.dev", localIP)
+	tree := trie.New[netip.Addr]()
+	assert.NoError(t, tree.Insert("*.dev", localIP))
 
 	assert.NotNil(t, tree.Insert(".", localIP))
 	assert.NotNil(t, tree.Insert("..dev", localIP))
@@ -99,15 +100,15 @@ func TestTrie_Boundary(t *testing.T) {
 }
 
 func TestTrie_WildcardBoundary(t *testing.T) {
-	tree := New[netip.Addr]()
-	tree.Insert("+.*", localIP)
-	tree.Insert("stun.*.*.*", localIP)
+	tree := trie.New[netip.Addr]()
+	assert.NoError(t, tree.Insert("+.*", localIP))
+	assert.NoError(t, tree.Insert("stun.*.*.*", localIP))
 
 	assert.NotNil(t, tree.Search("example.com"))
 }
 
 func TestTrie_Foreach(t *testing.T) {
-	tree := New[netip.Addr]()
+	tree := trie.New[netip.Addr]()
 	domainList := []string{
 		"google.com",
 		"stun.*.*.*",
@@ -117,7 +118,7 @@ func TestTrie_Foreach(t *testing.T) {
 		"*.*.baidu.com",
 	}
 	for _, domain := range domainList {
-		tree.Insert(domain, localIP)
+		assert.NoError(t, tree.Insert(domain, localIP))
 	}
 	count := 0
 	tree.Foreach(func(domain string, data netip.Addr) {

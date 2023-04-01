@@ -1340,8 +1340,25 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	}
 
 	sniffer.Sniffers = loadSniffer
-	sniffer.ForceDomain = trie.NewDomainSet(snifferRaw.ForceDomain)
-	sniffer.SkipDomain = trie.NewDomainSet(snifferRaw.SkipDomain)
+
+	forceDomainTrie := trie.New[struct{}]()
+	for _, domain := range snifferRaw.ForceDomain {
+		err := forceDomainTrie.Insert(domain, struct{}{})
+		if err != nil {
+			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
+		}
+	}
+	sniffer.ForceDomain = forceDomainTrie.NewDomainSet()
+
+	skipDomainTrie := trie.New[struct{}]()
+	for _, domain := range snifferRaw.SkipDomain {
+		err := skipDomainTrie.Insert(domain, struct{}{})
+		if err != nil {
+			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
+		}
+	}
+	sniffer.SkipDomain = skipDomainTrie.NewDomainSet()
+
 	return sniffer, nil
 }
 
