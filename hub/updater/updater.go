@@ -67,7 +67,7 @@ func Update() (err error) {
 		return err
 	}
 
-	log.Infoln("current version alpha-%s, latest version alpha-%s", constant.Version, latestVersion)
+	log.Infoln("current version %s, latest version %s", constant.Version, latestVersion)
 
 	if latestVersion == constant.Version {
 		err := &updateError{Message: "Already using latest version"}
@@ -134,8 +134,10 @@ func prepare(exePath string) (err error) {
 	//log.Infoln(packageName)
 	backupDir = filepath.Join(workDir, "meta-backup")
 
-	if goos == "windows" {
-		updateExeName = "clash.meta" + "-" + goos + "-" + goarch + ".exe"
+	if goos == "windows" && goarch == "amd64" {
+		updateExeName = "clash.meta" + "-" + goos + "-" + goarch + "-compatible.exe"
+	} else if goos == "linux" && goarch == "amd64" {
+		updateExeName = "clash.meta" + "-" + goos + "-" + goarch + "-compatible"
 	} else {
 		updateExeName = "clash.meta" + "-" + goos + "-" + goarch
 	}
@@ -164,7 +166,7 @@ func unpack() error {
 	var err error
 	_, pkgNameOnly := filepath.Split(packageURL)
 
-	log.Debugln("updater: unpacking package")
+	log.Infoln("updater: unpacking package")
 	if strings.HasSuffix(pkgNameOnly, ".zip") {
 		_, err = zipFileUnpack(packageName, updateDir)
 		if err != nil {
@@ -184,15 +186,14 @@ func unpack() error {
 	return nil
 }
 
-// backup makes a backup of the current configuration and supporting files.  It
-// ignores the configuration file if firstRun is true.
+// backup makes a backup of the current configuration and supporting files.
 func backup() (err error) {
-	log.Infoln("updater: backing up current Exefile")
+	log.Infoln("updater: backing up current ExecFile:%s", currentExeName)
 	_ = os.Mkdir(backupDir, 0o755)
 
-	err = copyFile(currentExeName, backupExeName)
+	err = os.Rename(currentExeName, backupExeName)
 	if err != nil {
-		return fmt.Errorf("copySupportingFiles(%s, %s) failed: %w", currentExeName, backupExeName, err)
+		return err
 	}
 
 	return nil
@@ -203,24 +204,17 @@ func backup() (err error) {
 func replace() error {
 	var err error
 
-	// log.Infoln("updater: renaming: %s to %s", currentExeName, backupExeName)
-	// err := os.Rename(currentExeName, backupExeName)
-	// if err != nil {
-	// 	return err
-	// }
-
+	log.Infoln("copying: %s to %s", updateExeName, currentExeName)
 	if goos == "windows" {
 		// rename fails with "File in use" error
-		log.Infoln("copying: %s to %s", updateExeName, currentExeName)
 		err = copyFile(updateExeName, currentExeName)
 	} else {
-		log.Infoln("copying: %s to %s", updateExeName, currentExeName)
 		err = os.Rename(updateExeName, currentExeName)
 	}
 	if err != nil {
 		return err
 	}
-
+	log.Infoln("updater: renamed: %s to %s", updateExeName, currentExeName)
 	return nil
 }
 
@@ -236,8 +230,6 @@ const MaxPackageFileSize = 32 * 1024 * 1024
 
 // Download package file and save it to disk
 func downloadPackageFile() (err error) {
-	// var resp *http.Response
-	// resp, err = client.Get(packageURL)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
 	resp, err := clashHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
@@ -447,6 +439,8 @@ func updateDownloadURL() {
 		middle = fmt.Sprintf("-%s-%sv%s-%s", goos, goarch, goarm, latestVersion)
 	} else if isMIPS(goarch) && gomips != "" {
 		middle = fmt.Sprintf("-%s-%s-%s-%s", goos, goarch, gomips, latestVersion)
+	} else if goarch == "amd64" && (goos == "windows" || goos == "linux") {
+		middle = fmt.Sprintf("-%s-%s-compatible-%s", goos, goarch, latestVersion)
 	} else {
 		middle = fmt.Sprintf("-%s-%s-%s", goos, goarch, latestVersion)
 	}
