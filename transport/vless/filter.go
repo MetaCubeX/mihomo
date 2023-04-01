@@ -34,7 +34,7 @@ func (vc *Conn) FilterTLS(buffer []byte) (index int) {
 	lenP := len(buffer)
 	vc.packetsToFilter--
 	if index = bytes.Index(buffer, tlsServerHandshakeStart); index != -1 {
-		if lenP >= index+5 {
+		if lenP > index+5 {
 			if buffer[0] == 22 && buffer[1] == 3 && buffer[2] == 3 {
 				vc.isTLS = true
 				if buffer[5] == tlsHandshakeTypeServerHello {
@@ -49,7 +49,7 @@ func (vc *Conn) FilterTLS(buffer []byte) (index int) {
 			}
 		}
 	} else if index = bytes.Index(buffer, tlsClientHandshakeStart); index != -1 {
-		if lenP >= index+5 && buffer[index+5] == tlsHandshakeTypeClientHello {
+		if lenP > index+5 && buffer[index+5] == tlsHandshakeTypeClientHello {
 			vc.isTLS = true
 		}
 	}
