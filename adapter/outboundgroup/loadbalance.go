@@ -95,16 +95,13 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, op
 	}
 
 	if N.NeedHandshake(c) {
-		c = &callback.FirstWriteCallBackConn{
-			Conn: c,
-			Callback: func(err error) {
-				if err == nil {
-					lb.onDialSuccess()
-				} else {
-					lb.onDialFailed(proxy.Type(), err)
-				}
-			},
-		}
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				lb.onDialSuccess()
+			} else {
+				lb.onDialFailed(proxy.Type(), err)
+			}
+		})
 	}
 
 	return
