@@ -7,8 +7,9 @@ import (
 )
 
 type domainStrategy struct {
-	count       int
-	domainRules *trie.DomainSet
+	count      int
+	domainTrie *trie.DomainTrie[struct{}]
+	domainSet  *trie.DomainSet
 }
 
 func (d *domainStrategy) ShouldFindProcess() bool {
@@ -16,7 +17,7 @@ func (d *domainStrategy) ShouldFindProcess() bool {
 }
 
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
-	return d.domainRules != nil && d.domainRules.Has(metadata.RuleHost())
+	return d.domainSet != nil && d.domainSet.Has(metadata.RuleHost())
 }
 
 func (d *domainStrategy) Count() int {
@@ -27,16 +28,24 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 	return false
 }
 
-func (d *domainStrategy) OnUpdate(rules []string) {
-	domainTrie := trie.New[struct{}]()
-	for _, rule := range rules {
-		err := domainTrie.Insert(rule, struct{}{})
-		if err != nil {
-			log.Warnln("invalid domain:[%s]", rule)
-		}
+func (d *domainStrategy) Reset() {
+	d.domainTrie = trie.New[struct{}]()
+	d.domainSet = nil
+	d.count = 0
+}
+
+func (d *domainStrategy) Insert(rule string) {
+	err := d.domainTrie.Insert(rule, struct{}{})
+	if err != nil {
+		log.Warnln("invalid domain:[%s]", rule)
+	} else {
+		d.count++
 	}
-	d.domainRules = domainTrie.NewDomainSet()
-	d.count = len(rules)
+}
+
+func (d *domainStrategy) FinishInsert() {
+	d.domainSet = d.domainTrie.NewDomainSet()
+	d.domainTrie = nil
 }
 
 func NewDomainStrategy() *domainStrategy {
