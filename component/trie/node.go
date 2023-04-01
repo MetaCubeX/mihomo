@@ -116,6 +116,18 @@ func (n *Node[T]) setData(data T) {
 	n.inited = true
 }
 
+func (n *Node[T]) getChildren() map[string]*Node[T] {
+	if n.childMap == nil {
+		if n.childNode != nil {
+			m := make(map[string]*Node[T])
+			m[n.childStr] = n.childNode
+			return m
+		}
+	} else {
+		return n.childMap
+	}
+	return nil
+}
 func (n *Node[T]) Data() T {
 	return n.data
 }

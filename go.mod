@@ -52,6 +52,11 @@ require (
 )
 
 require (
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+)
+
+require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -67,6 +72,7 @@ require (
 	github.com/mdlayher/socket v0.4.0 // indirect
 	github.com/metacubex/gvisor v0.0.0-20230323114922-412956fb6a03 // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
+	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect

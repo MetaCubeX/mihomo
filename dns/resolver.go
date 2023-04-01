@@ -16,6 +16,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
@@ -40,6 +41,11 @@ type geositePolicyRecord struct {
 	inversedMatching bool
 }
 
+type domainSetPolicyRecord struct {
+	domainSetProvider provider.RuleProvider
+	policy            *Policy
+}
+
 type Resolver struct {
 	ipv6                  bool
 	ipv6Timeout           time.Duration
@@ -51,6 +57,7 @@ type Resolver struct {
 	group                 singleflight.Group
 	lruCache              *cache.LruCache[string, *D.Msg]
 	policy                *trie.DomainTrie[*Policy]
+	domainSetPolicy       []domainSetPolicyRecord
 	geositePolicy         []geositePolicyRecord
 	proxyServer           []dnsClient
 }
@@ -301,6 +308,12 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 			return geositeRecord.policy.GetData()
 		}
 	}
+	metadata := &C.Metadata{Host: domain}
+	for _, domainSetRecord := range r.domainSetPolicy {
+		if ok := domainSetRecord.domainSetProvider.Match(metadata); ok {
+			return domainSetRecord.policy.GetData()
+		}
+	}
 	return nil
 }
 
@@ -422,16 +435,18 @@ type FallbackFilter struct {
 }
 
 type Config struct {
-	Main, Fallback []NameServer
-	Default        []NameServer
-	ProxyServer    []NameServer
-	IPv6           bool
-	IPv6Timeout    uint
-	EnhancedMode   C.DNSMode
-	FallbackFilter FallbackFilter
-	Pool           *fakeip.Pool
-	Hosts          *trie.DomainTrie[resolver.HostValue]
-	Policy         map[string][]NameServer
+	Main, Fallback  []NameServer
+	Default         []NameServer
+	ProxyServer     []NameServer
+	IPv6            bool
+	IPv6Timeout     uint
+	EnhancedMode    C.DNSMode
+	FallbackFilter  FallbackFilter
+	Pool            *fakeip.Pool
+	Hosts           *trie.DomainTrie[resolver.HostValue]
+	Policy          map[string][]NameServer
+	DomainSetPolicy map[provider.RuleProvider][]NameServer
+	GeositePolicy   map[router.DomainMatcher][]NameServer
 }
 
 func NewResolver(config Config) *Resolver {
@@ -482,6 +497,14 @@ func NewResolver(config Config) *Resolver {
 			}
 		}
 		r.policy.Optimize()
+	}
+	if len(config.DomainSetPolicy) > 0 {
+		for p, n := range config.DomainSetPolicy {
+			r.domainSetPolicy = append(r.domainSetPolicy, domainSetPolicyRecord{
+				domainSetProvider: p,
+				policy:            NewPolicy(transform(n, defaultResolver)),
+			})
+		}
 	}
 
 	fallbackIPFilters := []fallbackIPFilter{}

@@ -25,7 +25,7 @@ func ValidAndSplitDomain(domain string) ([]string, bool) {
 	if domain != "" && domain[len(domain)-1] == '.' {
 		return nil, false
 	}
-
+	domain=strings.ToLower(domain)
 	parts := strings.Split(domain, domainStep)
 	if len(parts) == 1 {
 		if parts[0] == "" {
@@ -121,6 +121,30 @@ func (t *DomainTrie[T]) search(node *Node[T], parts []string) *Node[T] {
 
 func (t *DomainTrie[T]) Optimize() {
 	t.root.optimize()
+}
+
+func (t *DomainTrie[T]) Foreach(print func(domain string, data T)) {
+	for key, data := range t.root.getChildren() {
+		recursion([]string{key}, data, print)
+	}
+}
+
+func recursion[T any](items []string, node *Node[T], fn func(domain string, data T)) {
+	for key, data := range node.getChildren() {
+		newItems := append([]string{key}, items...)
+		if data != nil && data.inited {
+			domain := joinDomain(newItems)
+			if domain[0] == domainStepByte {
+				domain = complexWildcard + domain
+			}
+			fn(domain, data.Data())
+		}
+		recursion(newItems, data, fn)
+	}
+}
+
+func joinDomain(items []string) string {
+	return strings.Join(items, domainStep)
 }
 
 // New returns a new, empty Trie.

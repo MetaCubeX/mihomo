@@ -28,8 +28,8 @@ var Dispatcher *SnifferDispatcher
 type SnifferDispatcher struct {
 	enable          bool
 	sniffers        map[sniffer.Sniffer]SnifferConfig
-	forceDomain     *trie.DomainTrie[struct{}]
-	skipSNI         *trie.DomainTrie[struct{}]
+	forceDomain     *trie.DomainSet
+	skipSNI         *trie.DomainSet
 	skipList        *cache.LruCache[string, uint8]
 	rwMux           sync.RWMutex
 	forceDnsMapping bool
@@ -37,7 +37,7 @@ type SnifferDispatcher struct {
 }
 
 func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) {
-	if (metadata.Host == "" && sd.parsePureIp) || sd.forceDomain.Search(metadata.Host) != nil || (metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping) {
+	if (metadata.Host == "" && sd.parsePureIp) || sd.forceDomain.Has(metadata.Host) || (metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping) {
 		port, err := strconv.ParseUint(metadata.DstPort, 10, 16)
 		if err != nil {
 			log.Debugln("[Sniffer] Dst port is error")
@@ -74,7 +74,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return
 		} else {
-			if sd.skipSNI.Search(host) != nil {
+			if sd.skipSNI.Has(host) {
 				log.Debugln("[Sniffer] Skip sni[%s]", host)
 				return
 			}
@@ -166,8 +166,8 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 	return &dispatcher, nil
 }
 
-func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig, forceDomain *trie.DomainTrie[struct{}],
-	skipSNI *trie.DomainTrie[struct{}],
+func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig,
+	forceDomain *trie.DomainSet, skipSNI *trie.DomainSet,
 	forceDnsMapping bool, parsePureIp bool) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:          true,

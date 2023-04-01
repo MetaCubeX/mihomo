@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -136,9 +135,8 @@ type IPTables struct {
 type Sniffer struct {
 	Enable          bool
 	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
-	Reverses        *trie.DomainTrie[struct{}]
-	ForceDomain     *trie.DomainTrie[struct{}]
-	SkipDomain      *trie.DomainTrie[struct{}]
+	ForceDomain     *trie.DomainSet
+	SkipDomain      *trie.DomainSet
 	ForceDnsMapping bool
 	ParsePureIp     bool
 }
@@ -490,7 +488,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
-	dnsCfg, err := parseDNS(rawCfg, hosts, rules)
+	dnsCfg, err := parseDNS(rawCfg, hosts, rules, ruleProviders)
 	if err != nil {
 		return nil, err
 	}
@@ -822,8 +820,6 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 		rules = append(rules, parsed)
 	}
 
-	runtime.GC()
-
 	return rules, nil
 }
 
@@ -983,7 +979,7 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][]dns.NameServer, error) {
+func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (map[string][]dns.NameServer, error) {
 	policy := map[string][]dns.NameServer{}
 	updatedPolicy := make(map[string]interface{})
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
@@ -996,6 +992,14 @@ func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
+					updatedPolicy[newKey] = v
+				}
+			} else if strings.Contains(k, "rule-set:") {
+				subkeys := strings.Split(k, ":")
+				subkeys = subkeys[1:]
+				subkeys = strings.Split(subkeys[0], ",")
+				for _, subkey := range subkeys {
+					newKey := "rule-set:" + subkey
 					updatedPolicy[newKey] = v
 				}
 			} else if re.MatchString(k) {
@@ -1020,6 +1024,19 @@ func parseNameServerPolicy(nsPolicy map[string]any, preferH3 bool) (map[string][
 		}
 		if _, valid := trie.ValidAndSplitDomain(domain); !valid {
 			return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
+		}
+		if strings.HasPrefix(domain, "rule-set:") {
+			domainSetName := domain[9:]
+			if provider, ok := ruleProviders[domainSetName]; !ok {
+				return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
+			} else {
+				switch provider.Behavior() {
+				case providerTypes.IPCIDR:
+					return nil, fmt.Errorf("rule provider type error, except domain,actual %s", provider.Behavior())
+				case providerTypes.Classical:
+					log.Warnln("%s provider is %s, only matching it contain domain rule", provider.Name(), provider.Behavior())
+				}
+			}
 		}
 		policy[domain] = nameservers
 	}
@@ -1073,11 +1090,10 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 			log.Infoln("Start initial GeoSite dns fallback filter `%s`, records: %d", country, recordsCount)
 		}
 	}
-	runtime.GC()
 	return sites, nil
 }
 
-func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule) (*DNS, error) {
+func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider) (*DNS, error) {
 	cfg := rawCfg.DNS
 	if cfg.Enable && len(cfg.NameServer) == 0 {
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
@@ -1104,7 +1120,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		return nil, err
 	}
 
-	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, cfg.PreferH3); err != nil {
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
@@ -1324,24 +1340,8 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	}
 
 	sniffer.Sniffers = loadSniffer
-	sniffer.ForceDomain = trie.New[struct{}]()
-	for _, domain := range snifferRaw.ForceDomain {
-		err := sniffer.ForceDomain.Insert(domain, struct{}{})
-		if err != nil {
-			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
-		}
-	}
-	sniffer.ForceDomain.Optimize()
-
-	sniffer.SkipDomain = trie.New[struct{}]()
-	for _, domain := range snifferRaw.SkipDomain {
-		err := sniffer.SkipDomain.Insert(domain, struct{}{})
-		if err != nil {
-			return nil, fmt.Errorf("error domian[%s] in force-domain, error:%v", domain, err)
-		}
-	}
-	sniffer.SkipDomain.Optimize()
-
+	sniffer.ForceDomain = trie.NewDomainSet(snifferRaw.ForceDomain)
+	sniffer.SkipDomain = trie.NewDomainSet(snifferRaw.SkipDomain)
 	return sniffer, nil
 }
 
