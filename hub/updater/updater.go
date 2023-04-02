@@ -50,12 +50,12 @@ type updateError struct {
 }
 
 func (e *updateError) Error() string {
-	return fmt.Sprintf("error: %s", e.Message)
+	return fmt.Sprintf("update error: %s", e.Message)
 }
 
 // Update performs the auto-updater.  It returns an error if the updater failed.
 // If firstRun is true, it assumes the configuration file doesn't exist.
-func Update() (err error) {
+func Update(execPath string) (err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -63,7 +63,6 @@ func Update() (err error) {
 	goarch = runtime.GOARCH
 	latestVersion, err = getLatestVersion()
 	if err != nil {
-		err := &updateError{Message: err.Error()}
 		return err
 	}
 
@@ -83,11 +82,6 @@ func Update() (err error) {
 			log.Infoln("updater: finished")
 		}
 	}()
-
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("getting executable path: %w", err)
-	}
 
 	workDir = filepath.Dir(execPath)
 
@@ -110,7 +104,7 @@ func Update() (err error) {
 
 	err = backup()
 	if err != nil {
-		return fmt.Errorf("replacing: %w", err)
+		return fmt.Errorf("backuping: %w", err)
 	}
 
 	err = replace()
@@ -186,9 +180,9 @@ func unpack() error {
 	return nil
 }
 
-// backup makes a backup of the current configuration and supporting files.
+// backup makes a backup of the current executable file
 func backup() (err error) {
-	log.Infoln("updater: backing up current ExecFile:%s", currentExeName)
+	log.Infoln("updater: backing up current ExecFile:%s to %s", currentExeName, backupExeName)
 	_ = os.Mkdir(backupDir, 0o755)
 
 	err = os.Rename(currentExeName, backupExeName)
@@ -199,12 +193,11 @@ func backup() (err error) {
 	return nil
 }
 
-// replace moves the current executable with the updated one and also copies the
-// supporting files.
+// replace moves the current executable with the updated one
 func replace() error {
 	var err error
 
-	log.Infoln("copying: %s to %s", updateExeName, currentExeName)
+	log.Infoln("replacing: %s to %s", updateExeName, currentExeName)
 	if goos == "windows" {
 		// rename fails with "File in use" error
 		err = copyFile(updateExeName, currentExeName)
@@ -214,7 +207,9 @@ func replace() error {
 	if err != nil {
 		return err
 	}
+
 	log.Infoln("updater: renamed: %s to %s", updateExeName, currentExeName)
+
 	return nil
 }
 
