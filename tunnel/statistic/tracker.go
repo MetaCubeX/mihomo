@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/buf"
-	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 
@@ -32,9 +31,7 @@ type trackerInfo struct {
 type tcpTracker struct {
 	C.Conn `json:"-"`
 	*trackerInfo
-	manager        *Manager
-	extendedReader N.ExtendedReader
-	extendedWriter N.ExtendedWriter
+	manager *Manager
 }
 
 func (tt *tcpTracker) ID() string {
@@ -50,7 +47,7 @@ func (tt *tcpTracker) Read(b []byte) (int, error) {
 }
 
 func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
-	err = tt.extendedReader.ReadBuffer(buffer)
+	err = tt.Conn.ReadBuffer(buffer)
 	download := int64(buffer.Len())
 	tt.manager.PushDownloaded(download)
 	tt.DownloadTotal.Add(download)
@@ -67,7 +64,7 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 
 func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
 	upload := int64(buffer.Len())
-	err = tt.extendedWriter.WriteBuffer(buffer)
+	err = tt.Conn.WriteBuffer(buffer)
 	tt.manager.PushUploaded(upload)
 	tt.UploadTotal.Add(upload)
 	return
@@ -103,8 +100,6 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 			UploadTotal:   atomic.NewInt64(uploadTotal),
 			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
-		extendedReader: N.NewExtendedReader(conn),
-		extendedWriter: N.NewExtendedWriter(conn),
 	}
 
 	if rule != nil {

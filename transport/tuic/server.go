@@ -294,5 +294,5 @@ func (s *serverUDPPacket) Drop() {
 	s.packet.DATA = nil
 }
 
-var _ C.UDPPacket = &serverUDPPacket{}
-var _ C.UDPPacketInAddr = &serverUDPPacket{}
+var _ C.UDPPacket = (*serverUDPPacket)(nil)
+var _ C.UDPPacketInAddr = (*serverUDPPacket)(nil)

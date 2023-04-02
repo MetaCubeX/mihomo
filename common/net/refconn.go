@@ -4,10 +4,12 @@ import (
 	"net"
 	"runtime"
 	"time"
+
+	"github.com/Dreamacro/clash/common/buf"
 )
 
 type refConn struct {
-	conn net.Conn
+	conn ExtendedConn
 	ref  any
 }
 
@@ -55,8 +57,20 @@ func (c *refConn) Upstream() any {
 	return c.conn
 }
 
+func (c *refConn) ReadBuffer(buffer *buf.Buffer) error {
+	defer runtime.KeepAlive(c.ref)
+	return c.conn.ReadBuffer(buffer)
+}
+
+func (c *refConn) WriteBuffer(buffer *buf.Buffer) error {
+	defer runtime.KeepAlive(c.ref)
+	return c.conn.WriteBuffer(buffer)
+}
+
+var _ ExtendedConn = (*refConn)(nil)
+
 func NewRefConn(conn net.Conn, ref any) net.Conn {
-	return &refConn{conn: conn, ref: ref}
+	return &refConn{conn: NewExtendedConn(conn), ref: ref}
 }
 
 type refPacketConn struct {
