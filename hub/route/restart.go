@@ -38,25 +38,29 @@ func restart(w http.ResponseWriter, r *http.Request) {
 	// The background context is used because the underlying functions wrap it
 	// with timeout and shut down the server, which handles current request.  It
 	// also should be done in a separate goroutine for the same reason.
-	go func() {
-		if runtime.GOOS == "windows" {
-			cmd := exec.Command(execPath, os.Args[1:]...)
-			log.Infoln("restarting: %q %q", execPath, os.Args[1:])
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Start()
-			if err != nil {
-				log.Fatalln("restarting: %s", err)
-			}
+	go runRestart(execPath)
+}
 
-			os.Exit(0)
-		}
+func runRestart(execPath string) {
+	var err error
 
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command(execPath, os.Args[1:]...)
 		log.Infoln("restarting: %q %q", execPath, os.Args[1:])
-		err = syscall.Exec(execPath, os.Args, os.Environ())
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Start()
 		if err != nil {
 			log.Fatalln("restarting: %s", err)
 		}
-	}()
+
+		os.Exit(0)
+	}
+
+	log.Infoln("restarting: %q %q", execPath, os.Args[1:])
+	err = syscall.Exec(execPath, os.Args, os.Environ())
+	if err != nil {
+		log.Fatalln("restarting: %s", err)
+	}
 }
