@@ -60,7 +60,7 @@ type wgSingDialer struct {
 	dialer dialer.Dialer
 }
 
-var _ N.Dialer = &wgSingDialer{}
+var _ N.Dialer = (*wgSingDialer)(nil)
 
 func (d *wgSingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	return d.dialer.DialContext(ctx, network, destination.String())
@@ -74,7 +74,7 @@ type wgNetDialer struct {
 	tunDevice wireguard.Device
 }
 
-var _ dialer.NetDialer = &wgNetDialer{}
+var _ dialer.NetDialer = (*wgNetDialer)(nil)
 
 func (d wgNetDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return d.tunDevice.DialContext(ctx, network, M.ParseSocksaddr(address).Unwrap())

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -33,7 +34,7 @@ type ListenerHandler struct {
 }
 
 type waitCloseConn struct {
-	net.Conn
+	N.ExtendedConn
 	wg    *sync.WaitGroup
 	close sync.Once
 	rAddr net.Addr
@@ -43,7 +44,7 @@ func (c *waitCloseConn) Close() error { // call from handleTCPConn(connCtx C.Con
 	c.close.Do(func() {
 		c.wg.Done()
 	})
-	return c.Conn.Close()
+	return c.ExtendedConn.Close()
 }
 
 func (c *waitCloseConn) RemoteAddr() net.Addr {
@@ -51,7 +52,7 @@ func (c *waitCloseConn) RemoteAddr() net.Addr {
 }
 
 func (c *waitCloseConn) Upstream() any {
-	return c.Conn
+	return c.ExtendedConn
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
@@ -79,7 +80,7 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	defer wg.Wait() // this goroutine must exit after conn.Close()
 	wg.Add(1)
 
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{Conn: conn, wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
+	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
 	return nil
 }
 

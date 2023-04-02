@@ -103,7 +103,7 @@ func (q *quicStreamConn) RemoteAddr() net.Addr {
 	return q.rAddr
 }
 
-var _ net.Conn = &quicStreamConn{}
+var _ net.Conn = (*quicStreamConn)(nil)
 
 type quicStreamPacketConn struct {
 	connId    uint32
@@ -252,4 +252,4 @@ func (q *quicStreamPacketConn) LocalAddr() net.Addr {
 	return q.quicConn.LocalAddr()
 }
 
-var _ net.PacketConn = &quicStreamPacketConn{}
+var _ net.PacketConn = (*quicStreamPacketConn)(nil)

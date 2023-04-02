@@ -955,7 +955,7 @@ func (b *bbrSender) CalculateRecoveryWindow(ackedBytes, lostBytes congestion.Byt
 	b.recoveryWindow = maxByteCount(b.recoveryWindow, b.minCongestionWindow())
 }
 
-var _ congestion.CongestionControl = &bbrSender{}
+var _ congestion.CongestionControl = (*bbrSender)(nil)
 
 func (b *bbrSender) GetMinRtt() time.Duration {
 	if b.minRtt > 0 {
