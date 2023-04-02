@@ -105,7 +105,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		reserved[2] = uint8(option.Reserved[2])
 	}
 	peerAddr := M.ParseSocksaddrHostPort(option.Server, uint16(option.Port))
-	outbound.bind = wireguard.NewClientBind(context.Background(), outbound.dialer, peerAddr, reserved)
+	outbound.bind = wireguard.NewClientBind(context.Background(), outbound.dialer, true, peerAddr, reserved)
 	localPrefixes := make([]netip.Prefix, 0, 2)
 	if len(option.Ip) > 0 {
 		if !strings.Contains(option.Ip, "/") {

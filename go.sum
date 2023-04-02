@@ -95,8 +95,8 @@ github.com/metacubex/sing-shadowsocks v0.2.1 h1:tpSZQIzXT/qWDNPZjnb6jnj/htkcESLR
 github.com/metacubex/sing-shadowsocks v0.2.1/go.mod h1:PNgGOvhangviWQkUH/spVwVt5w42nvs8jYckRh5WoCM=
 github.com/metacubex/sing-tun v0.1.3 h1:LCz8TlAZUWwnBYZxs1PEE04PyfLA9xdsye6CjHZlZGQ=
 github.com/metacubex/sing-tun v0.1.3/go.mod h1:kHkYHoRlYA4I12QPTt/ADyRGqy5YweLUfye1E1hC/q4=
-github.com/metacubex/sing-wireguard v0.0.0-20230310035749-f7595fcae5cb h1:uhvzbtOvyg2c1k1H2EeVPuPvTEjDHCq4+U0AljG40P8=
-github.com/metacubex/sing-wireguard v0.0.0-20230310035749-f7595fcae5cb/go.mod h1:7mPG9qYln+CLKBcDt7Dk4c7b3S53VzEfexMVPe6T6FM=
+github.com/metacubex/sing-wireguard v0.0.0-20230402083957-d134f603ac98 h1:Dr6A4drhVkjPaJ5lIf3DwhH2HSo+Qmf8fCQmJoDG5YU=
+github.com/metacubex/sing-wireguard v0.0.0-20230402083957-d134f603ac98/go.mod h1:7mPG9qYln+CLKBcDt7Dk4c7b3S53VzEfexMVPe6T6FM=
 github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370 h1:UkViS4DCESAUEYgbIEQdD02hyMacFt6Dny+1MOJtNIo=
 github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
 github.com/miekg/dns v1.1.52 h1:Bmlc/qsNNULOe6bpXcUTsuOajd0DzRHwup6D9k1An0c=
