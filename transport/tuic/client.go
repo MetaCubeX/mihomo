@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
@@ -336,6 +337,14 @@ func (conn *earlyConn) Read(b []byte) (n int, err error) {
 		return 0, err
 	}
 	return conn.BufferedConn.Read(b)
+}
+
+func (conn *earlyConn) ReadBuffer(buffer *buf.Buffer) (err error) {
+	err = conn.Response()
+	if err != nil {
+		return err
+	}
+	return conn.BufferedConn.ReadBuffer(buffer)
 }
 
 func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.PacketConn, error) {
