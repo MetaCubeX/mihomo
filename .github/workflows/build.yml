@@ -5,17 +5,15 @@ on:
     paths-ignore:
       - "docs/**"
       - "README.md"
+      - ".github/ISSUE_TEMPLATE/**"
     branches:
       - Alpha
-      - Beta
       - Meta
     tags:
       - "v*"
   pull_request_target:
     branches:
       - Alpha
-      - Beta
-      - Meta
       
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
