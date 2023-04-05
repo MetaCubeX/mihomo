@@ -107,6 +107,7 @@ func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
 	headerLen += 4 // MASK KEY
 
 	header := buffer.ExtendHeader(headerLen)
+	_ = header[2] // bounds check hint to compiler
 	header[0] = websocket.BinaryMessage | 1<<7
 	header[1] = 1 << 7
 
