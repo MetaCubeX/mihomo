@@ -147,6 +147,7 @@ func (g *Conn) WriteBuffer(buffer *buf.Buffer) error {
 	dataLen := buffer.Len()
 	varLen := UVarintLen(uint64(dataLen))
 	header := buffer.ExtendHeader(6 + varLen)
+	_ = header[6] // bounds check hint to compiler
 	header[0] = 0x00
 	binary.BigEndian.PutUint32(header[1:5], uint32(1+varLen+dataLen))
 	header[5] = 0x0A
