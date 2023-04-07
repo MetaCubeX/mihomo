@@ -250,11 +250,19 @@ func memory(w http.ResponseWriter, r *http.Request) {
 	t := statistic.DefaultManager
 	buf := &bytes.Buffer{}
 	var err error
+	first := true
 	for range tick.C {
 		buf.Reset()
 
+		inuse := t.Memory()
+		// make chat.js begin with zero
+		// this is shit var,but we need output 0 for first time
+		if first {
+			inuse = 0
+			first = false
+		}
 		if err := json.NewEncoder(buf).Encode(Memory{
-			Inuse:   t.Memory(),
+			Inuse:   inuse,
 			OSLimit: 0,
 		}); err != nil {
 			break
