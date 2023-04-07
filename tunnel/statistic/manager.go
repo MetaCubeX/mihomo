@@ -1,10 +1,11 @@
 package statistic
 
 import (
-	"runtime"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/process"
 	"go.uber.org/atomic"
 )
 
@@ -18,6 +19,7 @@ func init() {
 		downloadBlip:  atomic.NewInt64(0),
 		uploadTotal:   atomic.NewInt64(0),
 		downloadTotal: atomic.NewInt64(0),
+		pid:           os.Getpid(),
 	}
 
 	go DefaultManager.handle()
@@ -31,6 +33,7 @@ type Manager struct {
 	downloadBlip  *atomic.Int64
 	uploadTotal   *atomic.Int64
 	downloadTotal *atomic.Int64
+	pid           int
 }
 
 func (m *Manager) Join(c tracker) {
@@ -63,9 +66,15 @@ func (m *Manager) Snapshot() *Snapshot {
 	})
 
 	getMem := func() uint64 {
-		var memStats runtime.MemStats
-		runtime.ReadMemStats(&memStats)
-		return memStats.StackInuse + memStats.HeapInuse + memStats.HeapIdle - memStats.HeapReleased
+		p, err := process.NewProcess(int32(m.pid))
+		if err != nil {
+			return 0
+		}
+		stat, err := p.MemoryInfo()
+		if err != nil {
+			return 0
+		}
+		return stat.RSS
 	}
 
 	return &Snapshot{
