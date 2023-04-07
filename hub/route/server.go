@@ -39,6 +39,11 @@ type Traffic struct {
 	Down int64 `json:"down"`
 }
 
+type Memory struct {
+	Inuse   uint64 `json:"inuse"`
+	OSLimit uint64 `json:"oslimit"` // maybe we need it in the future
+}
+
 func SetUIPath(path string) {
 	uiPath = C.Path.Resolve(path)
 }
@@ -76,6 +81,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Get("/", hello)
 		r.Get("/logs", getLogs)
 		r.Get("/traffic", traffic)
+		r.Get("/memory", memory)
 		r.Get("/version", version)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
@@ -211,6 +217,48 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
+		if wsConn == nil {
+			_, err = w.Write(buf.Bytes())
+			w.(http.Flusher).Flush()
+		} else {
+			err = wsConn.WriteMessage(websocket.TextMessage, buf.Bytes())
+		}
+
+		if err != nil {
+			break
+		}
+	}
+}
+
+func memory(w http.ResponseWriter, r *http.Request) {
+	var wsConn *websocket.Conn
+	if websocket.IsWebSocketUpgrade(r) {
+		var err error
+		wsConn, err = upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+	}
+
+	if wsConn == nil {
+		w.Header().Set("Content-Type", "application/json")
+		render.Status(r, http.StatusOK)
+	}
+
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	t := statistic.DefaultManager
+	buf := &bytes.Buffer{}
+	var err error
+	for range tick.C {
+		buf.Reset()
+
+		if err := json.NewEncoder(buf).Encode(Memory{
+			Inuse:   t.Memory(),
+			OSLimit: 0,
+		}); err != nil {
+			break
+		}
 		if wsConn == nil {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()
