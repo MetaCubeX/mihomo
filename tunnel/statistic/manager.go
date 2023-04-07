@@ -1,6 +1,7 @@
 package statistic
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
@@ -61,10 +62,17 @@ func (m *Manager) Snapshot() *Snapshot {
 		return true
 	})
 
+	getMem := func() uint64 {
+		var memStats runtime.MemStats
+		runtime.ReadMemStats(&memStats)
+		return memStats.StackInuse + memStats.HeapInuse + memStats.HeapIdle - memStats.HeapReleased
+	}
+
 	return &Snapshot{
 		UploadTotal:   m.uploadTotal.Load(),
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
+		Memory:        getMem(),
 	}
 }
 
@@ -92,4 +100,5 @@ type Snapshot struct {
 	DownloadTotal int64     `json:"downloadTotal"`
 	UploadTotal   int64     `json:"uploadTotal"`
 	Connections   []tracker `json:"connections"`
+	Memory        uint64    `json:"memory"`
 }
