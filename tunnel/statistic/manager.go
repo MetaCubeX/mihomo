@@ -34,6 +34,7 @@ type Manager struct {
 	uploadTotal   *atomic.Int64
 	downloadTotal *atomic.Int64
 	pid           int
+	memory        uint64
 }
 
 func (m *Manager) Join(c tracker) {
@@ -58,6 +59,10 @@ func (m *Manager) Now() (up int64, down int64) {
 	return m.uploadBlip.Load(), m.downloadBlip.Load()
 }
 
+func (m *Manager) Memory() uint64 {
+	return m.memory
+}
+
 func (m *Manager) Snapshot() *Snapshot {
 	connections := []tracker{}
 	m.connections.Range(func(key, value any) bool {
@@ -76,12 +81,13 @@ func (m *Manager) Snapshot() *Snapshot {
 		}
 		return stat.RSS
 	}
+	m.memory = getMem()
 
 	return &Snapshot{
 		UploadTotal:   m.uploadTotal.Load(),
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
-		Memory:        getMem(),
+		Memory:        m.memory,
 	}
 }
 
