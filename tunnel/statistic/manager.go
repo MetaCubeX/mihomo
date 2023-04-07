@@ -65,7 +65,7 @@ func (m *Manager) Snapshot() *Snapshot {
 	getMem := func() uint64 {
 		var memStats runtime.MemStats
 		runtime.ReadMemStats(&memStats)
-		return memStats.Sys + memStats.GCSys + memStats.MSpanInuse + memStats.MSpanSys - memStats.HeapReleased
+		return memStats.StackInuse + memStats.HeapInuse + memStats.HeapIdle - memStats.HeapReleased
 	}
 
 	return &Snapshot{
