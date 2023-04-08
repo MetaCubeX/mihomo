@@ -19,7 +19,7 @@ func init() {
 		downloadBlip:  atomic.NewInt64(0),
 		uploadTotal:   atomic.NewInt64(0),
 		downloadTotal: atomic.NewInt64(0),
-		pid:           os.Getpid(),
+		process:       &process.Process{Pid: int32(os.Getpid())},
 	}
 
 	go DefaultManager.handle()
@@ -33,7 +33,7 @@ type Manager struct {
 	downloadBlip  *atomic.Int64
 	uploadTotal   *atomic.Int64
 	downloadTotal *atomic.Int64
-	pid           int
+	process       *process.Process
 	memory        uint64
 }
 
@@ -71,11 +71,7 @@ func (m *Manager) Snapshot() *Snapshot {
 	})
 
 	getMem := func() uint64 {
-		p, err := process.NewProcess(int32(m.pid))
-		if err != nil {
-			return 0
-		}
-		stat, err := p.MemoryInfo()
+		stat, err := m.process.MemoryInfo()
 		if err != nil {
 			return 0
 		}
