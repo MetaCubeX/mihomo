@@ -103,7 +103,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		dest, err := conn.ReadPacket(buff)
 		if err != nil {
 			buff.Release()
-			if E.IsClosed(err) {
+			if ShouldIgnorePacketError(err) {
 				break
 			}
 			return err
@@ -126,6 +126,14 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 
 func (h *ListenerHandler) NewError(ctx context.Context, err error) {
 	log.Warnln("%s listener get error: %+v", h.Type.String(), err)
+}
+
+func ShouldIgnorePacketError(err error) bool {
+	// ignore simple error
+	if E.IsTimeout(err) || E.IsClosed(err) || E.IsCanceled(err) {
+		return true
+	}
+	return false
 }
 
 type packet struct {
