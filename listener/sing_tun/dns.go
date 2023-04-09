@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
 	"time"
 
@@ -117,7 +118,8 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			dest, err := conn.ReadPacket(buff)
 			if err != nil {
 				buff.Release()
-				if E.IsClosed(err) {
+				// ignore simple error
+				if err == os.ErrDeadlineExceeded || E.IsClosed(err) {
 					break
 				}
 				return err
