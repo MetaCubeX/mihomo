@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
@@ -29,7 +30,7 @@ func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UD
 	}
 
 	sl := &UDPListener{l, false}
-	conn := pickCipher.PacketConn(l)
+	conn := N.NewDeadlinePacketConn(pickCipher.PacketConn(l))
 	go func() {
 		for {
 			buf := pool.Get(pool.RelayBufferSize)
