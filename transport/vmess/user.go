@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 
-	"github.com/gofrs/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 // ID cmdKey length
