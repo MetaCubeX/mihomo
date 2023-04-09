@@ -28,7 +28,7 @@ require (
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.2
+	github.com/sagernet/sing v0.2.3-0.20230409094616-7f8eaee1b6c8
 	github.com/sagernet/sing-shadowtls v0.1.1-0.20230408141548-81d74d2a8661
 	github.com/sagernet/sing-vmess v0.1.4-0.20230409073451-6921c3dd77c7
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9

@@ -199,7 +199,7 @@ func (c *conn) Upstream() any {
 }
 
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
-	return &conn{N.NewExtendedConn(c), []string{a.Name()}, parseRemoteDestination(a.Addr())}
+	return &conn{N.NewDeadlineConn(c), []string{a.Name()}, parseRemoteDestination(a.Addr())}
 }
 
 type packetConn struct {
@@ -230,7 +230,7 @@ func (c *packetConn) LocalAddr() net.Addr {
 }
 
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
-	return &packetConn{pc, []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
+	return &packetConn{N.NewDeadlinePacketConn(pc), []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
 }
 
 func parseRemoteDestination(addr string) string {
