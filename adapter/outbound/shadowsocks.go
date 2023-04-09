@@ -187,7 +187,7 @@ func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dial
 	if err != nil {
 		return nil, err
 	}
-	pc = ss.method.DialPacketConn(&bufio.BindPacketConn{PacketConn: pc, Addr: addr})
+	pc = ss.method.DialPacketConn(bufio.NewBindPacketConn(pc, addr))
 	return newPacketConn(pc, ss), nil
 }
 
