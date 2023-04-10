@@ -21,6 +21,8 @@ type Option struct {
 	SkipCertVerify bool
 	Fingerprint    string
 	Mux            bool
+	MaxEarlyData        int
+	EarlyDataHeaderName string
 }
 
 // NewV2rayObfs return a HTTPObfs
@@ -33,8 +35,8 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	if u, err := url.Parse(option.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
 			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
-				vmess.websocket.MaxEarlyData = ed
-				vmess.websocket.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				option.MaxEarlyData = ed
+				option.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
 				q.Del("ed")
 				u.RawQuery = q.Encode()
 				option.Path = u.String()
@@ -45,6 +47,8 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 		Port:    option.Port,
 		Path:    option.Path,
 		Headers: header,
+		MaxEarlyData:    option.MaxEarlyData,
+		EarlyDataHeaderName option.EarlyDataHeaderName,
 	}
 
 	if option.TLS {
