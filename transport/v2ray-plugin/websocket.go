@@ -89,4 +89,3 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	}
 	return conn, nil
 }
-}
