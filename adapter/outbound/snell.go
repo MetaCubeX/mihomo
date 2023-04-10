@@ -8,6 +8,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	C "github.com/Dreamacro/clash/constant"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	"github.com/Dreamacro/clash/transport/snell"
@@ -15,6 +16,7 @@ import (
 
 type Snell struct {
 	*Base
+	option     *SnellOption
 	psk        []byte
 	pool       *snell.Pool
 	obfsOption *simpleObfsOption
@@ -83,6 +85,12 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (s *Snell) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(s.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(s.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
@@ -104,6 +112,13 @@ func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (s *Snell) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (C.PacketConn, error) {
+	var err error
+	if len(s.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(s.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
 		return nil, err
@@ -172,6 +187,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+		option:     &option,
 		psk:        psk,
 		obfsOption: obfsOption,
 		version:    option.Version,
@@ -179,7 +195,15 @@ func NewSnell(option SnellOption) (*Snell, error) {
 
 	if option.Version == snell.Version2 {
 		s.pool = snell.NewPool(func(ctx context.Context) (*snell.Snell, error) {
-			c, err := dialer.DialContext(ctx, "tcp", addr, s.Base.DialOptions()...)
+			var err error
+			var cDialer C.Dialer = dialer.NewDialer(s.Base.DialOptions()...)
+			if len(s.option.DialerProxy) > 0 {
+				cDialer, err = proxydialer.NewByName(s.option.DialerProxy, cDialer)
+				if err != nil {
+					return nil, err
+				}
+			}
+			c, err := cDialer.DialContext(ctx, "tcp", addr)
 			if err != nil {
 				return nil, err
 			}

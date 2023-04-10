@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -17,6 +18,7 @@ import (
 
 type Socks5 struct {
 	*Base
+	option         *Socks5Option
 	user           string
 	pass           string
 	tls            bool
@@ -70,6 +72,12 @@ func (ss *Socks5) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (ss *Socks5) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
@@ -95,7 +103,14 @@ func (ss *Socks5) SupportWithDialer() bool {
 
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	c, err := dialer.DialContext(ctx, "tcp", ss.addr, ss.Base.DialOptions(opts...)...)
+	var cDialer C.Dialer = dialer.NewDialer(ss.Base.DialOptions(opts...)...)
+	if len(ss.option.DialerProxy) > 0 {
+		cDialer, err = proxydialer.NewByName(ss.option.DialerProxy, cDialer)
+		if err != nil {
+			return nil, err
+		}
+	}
+	c, err := cDialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		err = fmt.Errorf("%s connect error: %w", ss.addr, err)
 		return
@@ -187,6 +202,7 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+		option:         &option,
 		user:           option.UserName,
 		pass:           option.Password,
 		tls:            option.TLS,
