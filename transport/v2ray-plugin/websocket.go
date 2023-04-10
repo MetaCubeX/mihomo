@@ -25,6 +25,16 @@ type Option struct {
 	EarlyDataHeaderName string
 }
 
+	if q := u.Query(); q.Get("ed") != "" {
+		if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
+			option.MaxEarlyData = ed
+			option.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+			q.Del("ed")
+			u.RawQuery = q.Encode()
+			option.Path = u.String()
+		}
+	}
+
 // NewV2rayObfs return a HTTPObfs
 func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	header := http.Header{}
@@ -32,16 +42,6 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 		header.Add(k, v)
 	}
 
-	if u, err := url.Parse(option.Path); err == nil {
-		if q := u.Query(); q.Get("ed") != "" {
-			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
-				option.MaxEarlyData = ed
-				option.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
-				q.Del("ed")
-				u.RawQuery = q.Encode()
-				option.Path = u.String()
-			}
-		}
 	config := &vmess.WebsocketConfig{
 		Host:    option.Host,
 		Port:    option.Port,
