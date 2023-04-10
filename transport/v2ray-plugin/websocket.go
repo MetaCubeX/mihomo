@@ -21,6 +21,8 @@ type Option struct {
 	SkipCertVerify bool
 	Fingerprint    string
 	Mux            bool
+	MaxEarlyData        int
+	EarlyDataHeaderName string
 }
 
 // NewV2rayObfs return a HTTPObfs
@@ -29,7 +31,7 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	for k, v := range option.Headers {
 		header.Add(k, v)
 	}
-	var ed uint32
+
 	if u, err := url.Parse(option.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
 			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
