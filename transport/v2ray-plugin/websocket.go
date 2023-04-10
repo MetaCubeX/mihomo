@@ -8,7 +8,7 @@ import (
 	"net/url"
 	
 	tlsC "github.com/Dreamacro/clash/component/tls"
-	ws "github.com/Dreamacro/clash/transport/vmess"
+	"github.com/Dreamacro/clash/transport/vmess"
 )
 
 // Option is options of websocket obfs
@@ -33,8 +33,8 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	if u, err := url.Parse(option.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
 			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
-				ws.MaxEarlyData = ed
-				ws.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				vmess.WebsocketMaxEarlyData = ed
+				vmess.WebsocketEarlyDataHeaderName = "Sec-WebSocket-Protocol"
 				q.Del("ed")
 				u.RawQuery = q.Encode()
 				option.Path = u.String()
