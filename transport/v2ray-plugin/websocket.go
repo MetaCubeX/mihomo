@@ -48,7 +48,7 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 		Path:    option.Path,
 		Headers: header,
 		MaxEarlyData:    option.MaxEarlyData,
-		EarlyDataHeaderName option.EarlyDataHeaderName,
+		EarlyDataHeaderName: option.EarlyDataHeaderName,
 	}
 
 	if option.TLS {
