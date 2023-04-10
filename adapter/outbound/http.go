@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -66,6 +67,12 @@ func (h *Http) DialContext(ctx context.Context, metadata *C.Metadata, opts ...di
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (h *Http) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(h.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(h.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", h.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)

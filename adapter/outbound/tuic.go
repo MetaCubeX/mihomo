@@ -16,6 +16,7 @@ import (
 	"github.com/metacubex/quic-go"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic"
@@ -23,6 +24,7 @@ import (
 
 type Tuic struct {
 	*Base
+	option *TuicOption
 	client *tuic.PoolClient
 }
 
@@ -93,6 +95,12 @@ func (t *Tuic) dial(ctx context.Context, opts ...dialer.Option) (pc net.PacketCo
 }
 
 func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error) {
+	if len(t.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(t.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	udpAddr, err := resolveUDPAddrWithPrefer(ctx, "udp", t.addr, t.prefer)
 	if err != nil {
 		return nil, nil, err
@@ -230,6 +238,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+		option: &option,
 	}
 
 	clientMaxOpenStreams := int64(option.MaxOpenStreams)

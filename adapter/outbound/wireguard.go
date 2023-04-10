@@ -49,7 +49,6 @@ type WireGuardOption struct {
 	MTU                 int    `proxy:"mtu,omitempty"`
 	UDP                 bool   `proxy:"udp,omitempty"`
 	PersistentKeepalive int    `proxy:"persistent-keepalive,omitempty"`
-	DialerProxy         string `proxy:"dialer-proxy,omitempty"`
 
 	Peers []WireGuardPeerOption `proxy:"peers,omitempty"`
 }

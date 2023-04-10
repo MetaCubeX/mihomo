@@ -11,6 +11,7 @@ import (
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/restls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
@@ -145,6 +146,12 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata, op
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", ss.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
@@ -166,6 +173,12 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if ss.option.UDPOverTCP {
 		tcpConn, err := ss.DialContextWithDialer(ctx, dialer, metadata)
 		if err != nil {
