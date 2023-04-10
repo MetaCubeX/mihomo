@@ -1,14 +1,18 @@
 package mmdb
 
 import (
-	"github.com/oschwald/geoip2-golang"
+	"context"
 	"io"
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
+	clashHttp "github.com/Dreamacro/clash/component/http"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/oschwald/geoip2-golang"
 )
 
 var (
@@ -47,7 +51,9 @@ func Instance() *geoip2.Reader {
 }
 
 func DownloadMMDB(path string) (err error) {
-	resp, err := http.Get(C.MmdbUrl)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, C.MmdbUrl, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
 		return
 	}
