@@ -285,14 +285,14 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
-			log.SingLogger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
+			log.SingLogger.Debug(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
 		},
 		Errorf: func(format string, args ...interface{}) {
-			log.SingLogger.Error(fmt.Sprintf(strings.ToLower(format), args...))
+			log.SingLogger.Error(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
 		},
 	}, option.Workers)
 	if debug.Enabled {
-		log.SingLogger.Trace("created wireguard ipc conf: \n", ipcConf)
+		log.SingLogger.Trace(fmt.Sprintf("[WG](%s) created wireguard ipc conf: \n %s", option.Name, ipcConf))
 	}
 	err = outbound.device.IpcSet(ipcConf)
 	if err != nil {
