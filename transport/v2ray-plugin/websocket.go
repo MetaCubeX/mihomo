@@ -26,13 +26,14 @@ type Option struct {
 }
 
 func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
-	if q := u.Query(); q.Get("ed") != "" {
-		if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
-			option.MaxEarlyData = ed
-			option.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
-			q.Del("ed")
-			u.RawQuery = q.Encode()
-			option.Path = u.String()
+	if u, err := url.Parse(option.Path); err == nil {
+		if q := u.Query(); q.Get("ed") != "" {
+			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
+				option.MaxEarlyData = ed
+				option.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				q.Del("ed")
+				u.RawQuery = q.Encode()
+				option.Path = u.String()
 		}
 	}
 	return streamWebsocketConn(conn, c, nil)
