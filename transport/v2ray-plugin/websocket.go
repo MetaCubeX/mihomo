@@ -37,7 +37,8 @@ func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 		}
 	}
 	return streamWebsocketConn(conn, c, nil)
-	})
+	}
+}
 // NewV2rayObfs return a HTTPObfs
 func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	header := http.Header{}
