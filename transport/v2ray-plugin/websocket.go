@@ -5,7 +5,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-
+	"net/url"
 	
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/transport/vmess"
@@ -32,12 +32,23 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	for k, v := range option.Headers {
 		header.Add(k, v)
 	}
-
+	if u, err := url.Parse(option.Path); err == nil {
+		if q := u.Query(); q.Get("ed") != "" {
+			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
+				option.MaxEarlyData = ed
+				option.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				q.Del("ed")
+				u.RawQuery = q.Encode()
+				option.Path = u.String()
+		}
+	}
 	config := &vmess.WebsocketConfig{
 		Host:    option.Host,
 		Port:    option.Port,
 		Path:    option.Path,
 		Headers: header,
+		MaxEarlyData:    option.MaxEarlyData,
+		EarlyDataHeaderName: option.EarlyDataHeaderName,
 	}
 
 	if option.TLS {
