@@ -15,6 +15,7 @@ import (
 
 	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -48,6 +49,7 @@ type WireGuardOption struct {
 	MTU                 int    `proxy:"mtu,omitempty"`
 	UDP                 bool   `proxy:"udp,omitempty"`
 	PersistentKeepalive int    `proxy:"persistent-keepalive,omitempty"`
+	DialerProxy         string `proxy:"dialer-proxy,omitempty"`
 
 	Peers []WireGuardPeerOption `proxy:"peers,omitempty"`
 }
@@ -64,17 +66,34 @@ type WireGuardPeerOption struct {
 }
 
 type wgSingDialer struct {
-	dialer dialer.Dialer
+	dialer    dialer.Dialer
+	proxyName string
 }
 
 var _ N.Dialer = (*wgSingDialer)(nil)
 
 func (d *wgSingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	return d.dialer.DialContext(ctx, network, destination.String())
+	var cDialer C.Dialer = d.dialer
+	if len(d.proxyName) > 0 {
+		pd, err := proxydialer.NewByName(d.proxyName, d.dialer)
+		if err != nil {
+			return nil, err
+		}
+		cDialer = pd
+	}
+	return cDialer.DialContext(ctx, network, destination.String())
 }
 
 func (d *wgSingDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return d.dialer.ListenPacket(ctx, "udp", "", destination.AddrPort())
+	var cDialer C.Dialer = d.dialer
+	if len(d.proxyName) > 0 {
+		pd, err := proxydialer.NewByName(d.proxyName, d.dialer)
+		if err != nil {
+			return nil, err
+		}
+		cDialer = pd
+	}
+	return cDialer.ListenPacket(ctx, "udp", "", destination.AddrPort())
 }
 
 type wgNetDialer struct {
@@ -130,7 +149,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		dialer: &wgSingDialer{dialer: dialer.NewDialer()},
+		dialer: &wgSingDialer{dialer: dialer.NewDialer(), proxyName: option.DialerProxy},
 	}
 	runtime.SetFinalizer(outbound, closeWireGuard)
 
