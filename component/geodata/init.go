@@ -1,13 +1,17 @@
 package geodata
 
 import (
+	"context"
 	"fmt"
-	"github.com/Dreamacro/clash/component/mmdb"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	"io"
 	"net/http"
 	"os"
+	"time"
+
+	clashHttp "github.com/Dreamacro/clash/component/http"
+	"github.com/Dreamacro/clash/component/mmdb"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 var initGeoSite bool
@@ -38,7 +42,9 @@ func InitGeoSite() error {
 }
 
 func downloadGeoSite(path string) (err error) {
-	resp, err := http.Get(C.GeoSiteUrl)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, C.GeoSiteUrl, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
 		return
 	}
@@ -55,7 +61,9 @@ func downloadGeoSite(path string) (err error) {
 }
 
 func downloadGeoIP(path string) (err error) {
-	resp, err := http.Get(C.GeoIpUrl)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := clashHttp.HttpRequest(ctx, C.GeoIpUrl, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
 	if err != nil {
 		return
 	}
