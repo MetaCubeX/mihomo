@@ -33,8 +33,8 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	if u, err := url.Parse(option.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
 			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
-				vmess.WebsocketMaxEarlyData = ed
-				vmess.WebsocketEarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				vmess.Websocket.MaxEarlyData = ed
+				vmess.Websocket.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
 				q.Del("ed")
 				u.RawQuery = q.Encode()
 				option.Path = u.String()
