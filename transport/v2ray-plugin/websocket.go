@@ -32,11 +32,12 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	var ed uint32
 	if u, err := url.Parse(option.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
-			Ed, _ := strconv.Atoi(q.Get("ed"))
-			ed = uint32(Ed)
-			q.Del("ed")
-			u.RawQuery = q.Encode()
-			option.Path = u.String()
+			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
+				c.MaxEarlyData = ed
+				c.EarlyDataHeaderName = "Sec-WebSocket-Protocol"
+				q.Del("ed")
+				u.RawQuery = q.Encode()
+				option.Path = u.String()
 			}
 		}
 	config := &vmess.WebsocketConfig{
@@ -44,7 +45,6 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 		Port:    option.Port,
 		Path:    option.Path,
 		Headers: header,
-		Ed:      ed,
 	}
 
 	if option.TLS {
