@@ -67,11 +67,14 @@ func (t *PoolClient) dial(ctx context.Context, dialer C.Dialer, dialFn DialFunc)
 		return nil, nil, err
 	}
 
-	dr.pc, dr.addr, dr.err = pc, addr, err
+	if _, ok := pc.(*net.UDPConn); ok { // only cache the system's UDPConn
+		dr.pc, dr.addr, dr.err = pc, addr, err
 
-	t.dialResultMutex.Lock()
-	t.dialResultMap[dialer] = dr
-	t.dialResultMutex.Unlock()
+		t.dialResultMutex.Lock()
+		t.dialResultMap[dialer] = dr
+		t.dialResultMutex.Unlock()
+	}
+
 	return pc, addr, err
 }
 
