@@ -107,6 +107,7 @@ func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metada
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
+		useEarly = true
 	case shadowtls.Mode:
 		var err error
 		c, err = shadowtls.NewShadowTLS(ctx, c, ss.shadowTLSOption)
