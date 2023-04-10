@@ -40,6 +40,7 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 				q.Del("ed")
 				u.RawQuery = q.Encode()
 				option.Path = u.String()
+			}
 		}
 	}
 	config := &vmess.WebsocketConfig{
