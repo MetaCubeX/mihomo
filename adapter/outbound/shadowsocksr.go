@@ -116,8 +116,8 @@ func (ssr *ShadowSocksR) ListenPacketWithDialer(ctx context.Context, dialer C.Di
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (ssr *ShadowSocksR) SupportWithDialer() bool {
-	return true
+func (ssr *ShadowSocksR) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {

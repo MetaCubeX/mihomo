@@ -86,8 +86,8 @@ func (t *Tuic) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, meta
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (t *Tuic) SupportWithDialer() bool {
-	return true
+func (t *Tuic) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 func (t *Tuic) dial(ctx context.Context, opts ...dialer.Option) (pc net.PacketConn, addr net.Addr, err error) {

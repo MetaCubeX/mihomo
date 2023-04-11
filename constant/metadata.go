@@ -15,7 +15,10 @@ const (
 	TCP NetWork = iota
 	UDP
 	ALLNet
+	InvalidNet = 0xff
+)
 
+const (
 	HTTP Type = iota
 	HTTPS
 	SOCKS4
@@ -33,12 +36,16 @@ const (
 type NetWork int
 
 func (n NetWork) String() string {
-	if n == TCP {
+	switch n {
+	case TCP:
 		return "tcp"
-	} else if n == UDP {
+	case UDP:
 		return "udp"
+	case ALLNet:
+		return "all"
+	default:
+		return "invalid"
 	}
-	return "all"
 }
 
 func (n NetWork) MarshalJSON() ([]byte, error) {

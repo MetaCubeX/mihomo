@@ -368,8 +368,8 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (v *Vmess) SupportWithDialer() bool {
-	return true
+func (v *Vmess) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

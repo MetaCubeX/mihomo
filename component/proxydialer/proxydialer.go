@@ -8,16 +8,17 @@ import (
 	"strings"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 )
 
 type proxyDialer struct {
-	proxy  C.Proxy
+	proxy  C.ProxyAdapter
 	dialer C.Dialer
 }
 
-func New(proxy C.Proxy, dialer C.Dialer) C.Dialer {
+func New(proxy C.ProxyAdapter, dialer C.Dialer) C.Dialer {
 	return proxyDialer{proxy: proxy, dialer: dialer}
 }
 
@@ -35,14 +36,23 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		return nil, err
 	}
 	if strings.Contains(network, "udp") { // using in wireguard outbound
-		currentMeta.NetWork = C.UDP
-		pc, err := p.proxy.ListenPacketWithDialer(ctx, p.dialer, currentMeta)
+		pc, err := p.listenPacket(ctx, currentMeta)
 		if err != nil {
 			return nil, err
 		}
 		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
 	}
-	return p.proxy.DialContextWithDialer(ctx, p.dialer, currentMeta)
+	switch p.proxy.SupportWithDialer() {
+	case C.ALLNet:
+		fallthrough
+	case C.TCP:
+		return p.proxy.DialContextWithDialer(ctx, p.dialer, currentMeta)
+	default: // fallback to old function
+		if d, ok := p.dialer.(dialer.Dialer); ok { // fallback to old function
+			return p.proxy.DialContext(ctx, currentMeta, dialer.WithOption(d.Opt))
+		}
+		return nil, C.ErrNotSupport
+	}
 }
 
 func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
@@ -50,8 +60,22 @@ func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, 
 	if err != nil {
 		return nil, err
 	}
+	return p.listenPacket(ctx, currentMeta)
+}
+
+func (p proxyDialer) listenPacket(ctx context.Context, currentMeta *C.Metadata) (net.PacketConn, error) {
 	currentMeta.NetWork = C.UDP
-	return p.proxy.ListenPacketWithDialer(ctx, p.dialer, currentMeta)
+	switch p.proxy.SupportWithDialer() {
+	case C.ALLNet:
+		fallthrough
+	case C.UDP:
+		return p.proxy.ListenPacketWithDialer(ctx, p.dialer, currentMeta)
+	default: // fallback to old function
+		if d, ok := p.dialer.(dialer.Dialer); ok { // fallback to old function
+			return p.proxy.ListenPacketContext(ctx, currentMeta, dialer.WithOption(d.Opt))
+		}
+		return nil, C.ErrNotSupport
+	}
 }
 
 func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
