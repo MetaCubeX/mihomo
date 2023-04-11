@@ -364,7 +364,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 		pCtx.InjectPacketConn(rawPc)
 
-		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0)
+		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
 
 		switch true {
 		case metadata.SpecialProxy != "":
@@ -494,7 +494,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, 0, int64(peekLen))
+	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, 0, int64(peekLen), true)
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()
 	}(remoteConn)
