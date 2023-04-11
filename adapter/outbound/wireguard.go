@@ -401,3 +401,8 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	}
 	return newPacketConn(CN.NewRefPacketConn(pc, w), w), nil
 }
+
+// IsL3Protocol implements C.ProxyAdapter
+func (w *WireGuard) IsL3Protocol(metadata *C.Metadata) bool {
+	return true
+}

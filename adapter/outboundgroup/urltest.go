@@ -147,6 +147,11 @@ func (u *URLTest) SupportUDP() bool {
 	return u.fast(false).SupportUDP()
 }
 
+// IsL3Protocol implements C.ProxyAdapter
+func (u *URLTest) IsL3Protocol(metadata *C.Metadata) bool {
+	return u.fast(false).IsL3Protocol(metadata)
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (u *URLTest) MarshalJSON() ([]byte, error) {
 	all := []string{}

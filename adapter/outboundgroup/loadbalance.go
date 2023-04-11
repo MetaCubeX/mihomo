@@ -124,6 +124,11 @@ func (lb *LoadBalance) SupportUDP() bool {
 	return !lb.disableUDP
 }
 
+// IsL3Protocol implements C.ProxyAdapter
+func (lb *LoadBalance) IsL3Protocol(metadata *C.Metadata) bool {
+	return lb.Unwrap(metadata, false).IsL3Protocol(metadata)
+}
+
 func strategyRoundRobin() strategyFn {
 	idx := 0
 	idxMutex := sync.Mutex{}

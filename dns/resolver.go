@@ -412,8 +412,11 @@ func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D
 	return ch
 }
 
-// HasProxyServer has proxy server dns client
-func (r *Resolver) HasProxyServer() bool {
+// Invalid return this resolver can or can't be used
+func (r *Resolver) Invalid() bool {
+	if r == nil {
+		return false
+	}
 	return len(r.main) > 0
 }
 
