@@ -124,6 +124,9 @@ type ProxyAdapter interface {
 	DialContextWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (Conn, error)
 	ListenPacketWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (PacketConn, error)
 
+	// IsL3Protocol return ProxyAdapter working in L3 (tell dns module not pass the domain to avoid loopback)
+	IsL3Protocol(metadata *Metadata) bool
+
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata, touch bool) Proxy
 }

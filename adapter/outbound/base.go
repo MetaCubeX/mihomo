@@ -93,6 +93,11 @@ func (b *Base) SupportTFO() bool {
 	return b.tfo
 }
 
+// IsL3Protocol implements C.ProxyAdapter
+func (b *Base) IsL3Protocol(metadata *C.Metadata) bool {
+	return false
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (b *Base) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{

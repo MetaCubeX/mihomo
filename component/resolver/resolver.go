@@ -48,6 +48,7 @@ type Resolver interface {
 	ResolveIPv4(ctx context.Context, host string) (ip netip.Addr, err error)
 	ResolveIPv6(ctx context.Context, host string) (ip netip.Addr, err error)
 	ExchangeContext(ctx context.Context, m *dns.Msg) (msg *dns.Msg, err error)
+	Invalid() bool
 }
 
 // LookupIPv4WithResolver same as LookupIPv4, but with a resolver
@@ -68,7 +69,7 @@ func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return []netip.Addr{}, ErrIPVersion
 	}
 
-	if r != nil {
+	if r != nil && r.Invalid() {
 		return r.LookupIPv4(ctx, host)
 	}
 
@@ -124,7 +125,7 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return nil, ErrIPVersion
 	}
 
-	if r != nil {
+	if r != nil && r.Invalid() {
 		return r.LookupIPv6(ctx, host)
 	}
 
@@ -164,7 +165,7 @@ func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip
 		return node.IPs, nil
 	}
 
-	if r != nil {
+	if r != nil && r.Invalid() {
 		if DisableIPv6 {
 			return r.LookupIPv4(ctx, host)
 		}

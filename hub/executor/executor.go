@@ -239,7 +239,7 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 	resolver.DefaultHostMapper = m
 	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
 
-	if pr.HasProxyServer() {
+	if pr.Invalid() {
 		resolver.ProxyServerHostResolver = pr
 	}
 

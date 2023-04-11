@@ -70,6 +70,11 @@ func (f *Fallback) SupportUDP() bool {
 	return proxy.SupportUDP()
 }
 
+// IsL3Protocol implements C.ProxyAdapter
+func (f *Fallback) IsL3Protocol(metadata *C.Metadata) bool {
+	return f.findAliveProxy(false).IsL3Protocol(metadata)
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
 	all := []string{}
