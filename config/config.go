@@ -896,7 +896,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
-		proxyAdapter := u.Fragment
+		proxyName := u.Fragment
 
 		var addr, dnsNetType string
 		params := map[string]string{}
@@ -913,7 +913,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 		case "https":
 			addr, err = hostWithDefaultPort(u.Host, "443")
 			if err == nil {
-				proxyAdapter = ""
+				proxyName = ""
 				clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path}
 				addr = clearURL.String()
 				dnsNetType = "https" // DNS over HTTPS
@@ -923,7 +923,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 						if len(arr) == 0 {
 							continue
 						} else if len(arr) == 1 {
-							proxyAdapter = arr[0]
+							proxyName = arr[0]
 						} else if len(arr) == 2 {
 							params[arr[0]] = arr[1]
 						} else {
@@ -949,16 +949,22 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 		nameservers = append(
 			nameservers,
 			dns.NameServer{
-				Net:          dnsNetType,
-				Addr:         addr,
-				ProxyAdapter: proxyAdapter,
-				Interface:    dialer.DefaultInterface,
-				Params:       params,
-				PreferH3:     preferH3,
+				Net:       dnsNetType,
+				Addr:      addr,
+				ProxyName: proxyName,
+				Interface: dialer.DefaultInterface,
+				Params:    params,
+				PreferH3:  preferH3,
 			},
 		)
 	}
 	return nameservers, nil
+}
+
+func init() {
+	dns.ParseNameServer = func(servers []string) ([]dns.NameServer, error) { // using by wireguard
+		return parseNameServer(servers, false)
+	}
 }
 
 func parsePureDNSServer(server string) string {

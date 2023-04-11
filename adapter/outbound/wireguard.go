@@ -18,6 +18,7 @@ import (
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 
 	wireguard "github.com/metacubex/sing-wireguard"
@@ -38,6 +39,7 @@ type WireGuard struct {
 	dialer    *wgSingDialer
 	startOnce sync.Once
 	startErr  error
+	resolver  *dns.Resolver
 }
 
 type WireGuardOption struct {
@@ -51,6 +53,9 @@ type WireGuardOption struct {
 	PersistentKeepalive int    `proxy:"persistent-keepalive,omitempty"`
 
 	Peers []WireGuardPeerOption `proxy:"peers,omitempty"`
+
+	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
+	Dns              []string `proxy:"dns,omitempty"`
 }
 
 type WireGuardPeerOption struct {
@@ -298,6 +303,29 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		return nil, E.Cause(err, "setup wireguard")
 	}
 	//err = outbound.tunDevice.Start()
+
+	var has6 bool
+	for _, address := range localPrefixes {
+		if !address.Addr().Unmap().Is4() {
+			has6 = true
+			break
+		}
+	}
+
+	if option.RemoteDnsResolve && len(option.Dns) > 0 {
+		nss, err := dns.ParseNameServer(option.Dns)
+		if err != nil {
+			return nil, err
+		}
+		for i := range nss {
+			nss[i].ProxyAdapter = outbound
+		}
+		outbound.resolver = dns.NewResolver(dns.Config{
+			Main: nss,
+			IPv6: has6,
+		})
+	}
+
 	return outbound, nil
 }
 
@@ -318,8 +346,12 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 	if w.startErr != nil {
 		return nil, w.startErr
 	}
-	if !metadata.Resolved() {
-		options = append(options, dialer.WithResolver(resolver.DefaultResolver))
+	if !metadata.Resolved() || w.resolver != nil {
+		r := resolver.DefaultResolver
+		if w.resolver != nil {
+			r = w.resolver
+		}
+		options = append(options, dialer.WithResolver(r))
 		options = append(options, dialer.WithNetDialer(wgNetDialer{tunDevice: w.tunDevice}))
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
@@ -348,8 +380,12 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if err != nil {
 		return nil, err
 	}
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+	if (!metadata.Resolved() || w.resolver != nil) && metadata.Host != "" {
+		r := resolver.DefaultResolver
+		if w.resolver != nil {
+			r = w.resolver
+		}
+		ip, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
 		if err != nil {
 			return nil, errors.New("can't resolve ip")
 		}
