@@ -32,6 +32,8 @@ type tcpTracker struct {
 	C.Conn `json:"-"`
 	*trackerInfo
 	manager *Manager
+
+	pushToManager bool `json:"-"`
 }
 
 func (tt *tcpTracker) ID() string {
@@ -41,7 +43,9 @@ func (tt *tcpTracker) ID() string {
 func (tt *tcpTracker) Read(b []byte) (int, error) {
 	n, err := tt.Conn.Read(b)
 	download := int64(n)
-	tt.manager.PushDownloaded(download)
+	if tt.pushToManager {
+		tt.manager.PushDownloaded(download)
+	}
 	tt.DownloadTotal.Add(download)
 	return n, err
 }
@@ -49,7 +53,9 @@ func (tt *tcpTracker) Read(b []byte) (int, error) {
 func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
 	err = tt.Conn.ReadBuffer(buffer)
 	download := int64(buffer.Len())
-	tt.manager.PushDownloaded(download)
+	if tt.pushToManager {
+		tt.manager.PushDownloaded(download)
+	}
 	tt.DownloadTotal.Add(download)
 	return
 }
@@ -57,7 +63,9 @@ func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
 func (tt *tcpTracker) Write(b []byte) (int, error) {
 	n, err := tt.Conn.Write(b)
 	upload := int64(n)
-	tt.manager.PushUploaded(upload)
+	if tt.pushToManager {
+		tt.manager.PushUploaded(upload)
+	}
 	tt.UploadTotal.Add(upload)
 	return n, err
 }
@@ -65,7 +73,9 @@ func (tt *tcpTracker) Write(b []byte) (int, error) {
 func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
 	upload := int64(buffer.Len())
 	err = tt.Conn.WriteBuffer(buffer)
-	tt.manager.PushUploaded(upload)
+	if tt.pushToManager {
+		tt.manager.PushUploaded(upload)
+	}
 	tt.UploadTotal.Add(upload)
 	return
 }
@@ -79,7 +89,7 @@ func (tt *tcpTracker) Upstream() any {
 	return tt.Conn
 }
 
-func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *tcpTracker {
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *tcpTracker {
 	if conn != nil {
 		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 			metadata.RemoteDst = tcpAddr.IP.String()
@@ -100,6 +110,16 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 			UploadTotal:   atomic.NewInt64(uploadTotal),
 			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
+		pushToManager: pushToManager,
+	}
+
+	if pushToManager {
+		if uploadTotal > 0 {
+			manager.PushUploaded(uploadTotal)
+		}
+		if downloadTotal > 0 {
+			manager.PushDownloaded(downloadTotal)
+		}
 	}
 
 	if rule != nil {
@@ -115,6 +135,8 @@ type udpTracker struct {
 	C.PacketConn `json:"-"`
 	*trackerInfo
 	manager *Manager
+
+	pushToManager bool `json:"-"`
 }
 
 func (ut *udpTracker) ID() string {
@@ -124,7 +146,9 @@ func (ut *udpTracker) ID() string {
 func (ut *udpTracker) ReadFrom(b []byte) (int, net.Addr, error) {
 	n, addr, err := ut.PacketConn.ReadFrom(b)
 	download := int64(n)
-	ut.manager.PushDownloaded(download)
+	if ut.pushToManager {
+		ut.manager.PushDownloaded(download)
+	}
 	ut.DownloadTotal.Add(download)
 	return n, addr, err
 }
@@ -132,7 +156,9 @@ func (ut *udpTracker) ReadFrom(b []byte) (int, net.Addr, error) {
 func (ut *udpTracker) WriteTo(b []byte, addr net.Addr) (int, error) {
 	n, err := ut.PacketConn.WriteTo(b, addr)
 	upload := int64(n)
-	ut.manager.PushUploaded(upload)
+	if ut.pushToManager {
+		ut.manager.PushUploaded(upload)
+	}
 	ut.UploadTotal.Add(upload)
 	return n, err
 }
@@ -142,7 +168,7 @@ func (ut *udpTracker) Close() error {
 	return ut.PacketConn.Close()
 }
 
-func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64) *udpTracker {
+func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *udpTracker {
 	metadata.RemoteDst = conn.RemoteDestination()
 
 	ut := &udpTracker{
@@ -157,6 +183,16 @@ func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, ru
 			UploadTotal:   atomic.NewInt64(uploadTotal),
 			DownloadTotal: atomic.NewInt64(downloadTotal),
 		},
+		pushToManager: pushToManager,
+	}
+
+	if pushToManager {
+		if uploadTotal > 0 {
+			manager.PushUploaded(uploadTotal)
+		}
+		if downloadTotal > 0 {
+			manager.PushDownloaded(downloadTotal)
+		}
 	}
 
 	if rule != nil {
