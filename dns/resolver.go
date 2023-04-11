@@ -100,7 +100,7 @@ func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr,
 
 	ips, err = r.lookupIP(ctx, host, D.TypeA)
 	var waitIPv6 *time.Timer
-	if r != nil {
+	if r != nil && r.ipv6Timeout > 0 {
 		waitIPv6 = time.NewTimer(r.ipv6Timeout)
 	} else {
 		waitIPv6 = time.NewTimer(100 * time.Millisecond)
@@ -421,7 +421,8 @@ type NameServer struct {
 	Net          string
 	Addr         string
 	Interface    *atomic.String
-	ProxyAdapter string
+	ProxyAdapter C.ProxyAdapter
+	ProxyName    string
 	Params       map[string]string
 	PreferH3     bool
 }
@@ -544,3 +545,5 @@ func NewProxyServerHostResolver(old *Resolver) *Resolver {
 	}
 	return r
 }
+
+var ParseNameServer func(servers []string) ([]NameServer, error) // define in config/config.go

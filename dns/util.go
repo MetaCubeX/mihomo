@@ -74,13 +74,13 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter))
+			ret = append(ret, newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter, s.ProxyName))
 			continue
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		case "quic":
-			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter); err == nil {
+			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter, s.ProxyName); err == nil {
 				ret = append(ret, doq)
 			} else {
 				log.Fatalln("DoQ format error: %v", err)
@@ -103,6 +103,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			iface:        s.Interface,
 			r:            resolver,
 			proxyAdapter: s.ProxyAdapter,
+			proxyName:    s.ProxyName,
 		})
 	}
 	return ret
@@ -144,9 +145,9 @@ func msgToDomain(msg *D.Msg) string {
 
 type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
 
-func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dialHandler {
+func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, opts ...dialer.Option) dialHandler {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		if len(proxyAdapter) == 0 {
+		if len(proxyName) == 0 && proxyAdapter == nil {
 			opts = append(opts, dialer.WithResolver(r))
 			return dialer.DialContext(ctx, network, addr, opts...)
 		} else {
@@ -154,10 +155,14 @@ func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dia
 			if err != nil {
 				return nil, err
 			}
-			adapter, ok := tunnel.Proxies()[proxyAdapter]
-			if !ok {
-				opts = append(opts, dialer.WithInterface(proxyAdapter))
+			if proxyAdapter == nil {
+				var ok bool
+				proxyAdapter, ok = tunnel.Proxies()[proxyName]
+				if !ok {
+					opts = append(opts, dialer.WithInterface(proxyName))
+				}
 			}
+
 			if strings.Contains(network, "tcp") {
 				// tcp can resolve host by remote
 				metadata := &C.Metadata{
@@ -165,8 +170,8 @@ func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dia
 					Host:    host,
 					DstPort: port,
 				}
-				if ok {
-					return adapter.DialContext(ctx, metadata, opts...)
+				if proxyAdapter != nil {
+					return proxyAdapter.DialContext(ctx, metadata, opts...)
 				}
 				opts = append(opts, dialer.WithResolver(r))
 				return dialer.DialContext(ctx, network, addr, opts...)
@@ -182,15 +187,15 @@ func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dia
 					DstIP:   dstIP,
 					DstPort: port,
 				}
-				if !ok {
+				if proxyAdapter == nil {
 					return dialer.DialContext(ctx, network, addr, opts...)
 				}
 
-				if !adapter.SupportUDP() {
+				if !proxyAdapter.SupportUDP() {
 					return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
 				}
 
-				packetConn, err := adapter.ListenPacketContext(ctx, metadata, opts...)
+				packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
 				if err != nil {
 					return nil, err
 				}
@@ -201,14 +206,17 @@ func getDialHandler(r *Resolver, proxyAdapter string, opts ...dialer.Option) dia
 	}
 }
 
-func listenPacket(ctx context.Context, proxyAdapter string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.PacketConn, error) {
+func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.PacketConn, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
-	adapter, ok := tunnel.Proxies()[proxyAdapter]
-	if !ok && len(proxyAdapter) != 0 {
-		opts = append(opts, dialer.WithInterface(proxyAdapter))
+	if proxyAdapter == nil {
+		var ok bool
+		proxyAdapter, ok = tunnel.Proxies()[proxyName]
+		if !ok {
+			opts = append(opts, dialer.WithInterface(proxyName))
+		}
 	}
 
 	// udp must resolve host first
@@ -222,15 +230,15 @@ func listenPacket(ctx context.Context, proxyAdapter string, network string, addr
 		DstIP:   dstIP,
 		DstPort: port,
 	}
-	if !ok {
+	if proxyAdapter == nil {
 		return dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
 	}
 
-	if !adapter.SupportUDP() {
+	if !proxyAdapter.SupportUDP() {
 		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
 	}
 
-	return adapter.ListenPacketContext(ctx, metadata, opts...)
+	return proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
 }
 
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
