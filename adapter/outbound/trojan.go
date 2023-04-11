@@ -214,8 +214,8 @@ func (t *Trojan) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, me
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (t *Trojan) SupportWithDialer() bool {
-	return true
+func (t *Trojan) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

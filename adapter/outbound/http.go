@@ -92,8 +92,8 @@ func (h *Http) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metad
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (h *Http) SupportWithDialer() bool {
-	return true
+func (h *Http) SupportWithDialer() C.NetWork {
+	return C.TCP
 }
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {

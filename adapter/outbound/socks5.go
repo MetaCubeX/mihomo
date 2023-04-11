@@ -97,8 +97,8 @@ func (ss *Socks5) DialContextWithDialer(ctx context.Context, dialer C.Dialer, me
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (ss *Socks5) SupportWithDialer() bool {
-	return true
+func (ss *Socks5) SupportWithDialer() C.NetWork {
+	return C.TCP
 }
 
 // ListenPacketContext implements C.ProxyAdapter

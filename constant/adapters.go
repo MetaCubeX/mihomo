@@ -2,6 +2,7 @@ package constant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -43,6 +44,8 @@ const (
 	DefaultUDPTimeout = DefaultTCPTimeout
 	DefaultTLSTimeout = DefaultTCPTimeout
 )
+
+var ErrNotSupport = errors.New("no support")
 
 type Connection interface {
 	Chains() Chain
@@ -117,7 +120,7 @@ type ProxyAdapter interface {
 	// SupportUOT return UDP over TCP support
 	SupportUOT() bool
 
-	SupportWithDialer() bool
+	SupportWithDialer() NetWork
 	DialContextWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (Conn, error)
 	ListenPacketWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (PacketConn, error)
 
