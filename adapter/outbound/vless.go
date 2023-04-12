@@ -169,7 +169,34 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		return nil, err
 	}
 
-	return v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+	return v.streamConn(c, metadata)
+}
+
+func (v *Vless) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
+	metadata = &C.Metadata{ // a clear metadata only contains ip
+		NetWork: metadata.NetWork,
+		DstIP:   metadata.DstIP,
+		DstPort: metadata.DstPort,
+	}
+	if metadata.NetWork == C.UDP {
+		if v.option.PacketAddr {
+			metadata = &C.Metadata{
+				NetWork: C.UDP,
+				Host:    packetaddr.SeqPacketMagicAddress,
+				DstPort: "443",
+			}
+		}
+		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+		if v.option.PacketAddr {
+			conn = packetaddr.NewBindConn(conn)
+		}
+	} else {
+		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, false))
+	}
+	if err != nil {
+		conn = nil
+	}
+	return
 }
 
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
@@ -271,7 +298,6 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}
 		metadata.DstIP = ip
 	}
-
 	var c net.Conn
 	// gun transport
 	if v.transport != nil && len(opts) == 0 {
@@ -283,21 +309,12 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		if v.option.PacketAddr {
-			packetAddrMetadata := *metadata // make a copy
-			packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
-			packetAddrMetadata.DstPort = "443"
-
-			c, err = v.client.StreamConn(c, parseVlessAddr(&packetAddrMetadata, false))
-		} else {
-			c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
-		}
-
+		c, err = v.streamConn(c, metadata)
 		if err != nil {
 			return nil, fmt.Errorf("new vless client error: %v", err)
 		}
 
-		return v.ListenPacketOnStreamConn(c, metadata)
+		return v.ListenPacketOnStreamConn(ctx, c, metadata)
 	}
 	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
 }
@@ -310,6 +327,7 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 			return nil, err
 		}
 	}
+
 	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
@@ -318,6 +336,7 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		}
 		metadata.DstIP = ip
 	}
+
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
@@ -327,21 +346,12 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	if v.option.PacketAddr {
-		packetAddrMetadata := *metadata // make a copy
-		packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
-		packetAddrMetadata.DstPort = "443"
-
-		c, err = v.StreamConn(c, &packetAddrMetadata)
-	} else {
-		c, err = v.StreamConn(c, metadata)
-	}
-
+	c, err = v.streamConn(c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
-	return v.ListenPacketOnStreamConn(c, metadata)
+	return v.ListenPacketOnStreamConn(ctx, c, metadata)
 }
 
 // SupportWithDialer implements C.ProxyAdapter
@@ -350,7 +360,16 @@ func (v *Vless) SupportWithDialer() C.NetWork {
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
-func (v *Vless) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+
 	if v.option.XUDP {
 		return newPacketConn(&threadSafePacketConn{
 			PacketConn: vmessSing.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
@@ -516,6 +535,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 		if !option.PacketAddr {
 			option.XUDP = true
 		}
+	}
+	if option.XUDP {
+		option.PacketAddr = false
 	}
 
 	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)

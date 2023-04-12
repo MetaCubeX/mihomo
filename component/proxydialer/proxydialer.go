@@ -2,6 +2,7 @@ package proxydialer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -9,6 +10,7 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/Dreamacro/clash/tunnel/statistic"
@@ -38,17 +40,18 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		return nil, err
 	}
 	if strings.Contains(network, "udp") { // using in wireguard outbound
+		if !currentMeta.Resolved() {
+			ip, err := resolver.ResolveIP(ctx, currentMeta.Host)
+			if err != nil {
+				return nil, errors.New("can't resolve ip")
+			}
+			currentMeta.DstIP = ip
+		}
 		pc, err := p.listenPacket(ctx, currentMeta)
 		if err != nil {
 			return nil, err
 		}
-		var rAddr net.Addr
-		if udpAddr := currentMeta.UDPAddr(); udpAddr != nil {
-			rAddr = udpAddr
-		} else { // the domain name was not resolved, will appear in not stream-oriented udp like Shadowsocks/Tuic
-			rAddr = N.NewCustomAddr("udp", currentMeta.RemoteAddress(), nil)
-		}
-		return N.NewBindPacketConn(pc, rAddr), nil
+		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
 	}
 	var conn C.Conn
 	var err error
