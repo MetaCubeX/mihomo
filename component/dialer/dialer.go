@@ -157,7 +157,7 @@ func concurrentDualStackDialContext(ctx context.Context, network string, ips []n
 }
 
 func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
-	ipv4s, ipv6s := sortationAddr(ips)
+	ipv4s, ipv6s := resolver.SortationAddr(ips)
 	preferIPVersion := opt.prefer
 
 	fallbackTicker := time.NewTicker(fallbackTimeout)
@@ -307,17 +307,6 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 		}
 	}
 	return ips, port, nil
-}
-
-func sortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
-	for _, v := range ips {
-		if v.Is4() { // 4in6 parse was in parseAddr
-			ipv4s = append(ipv4s, v)
-		} else {
-			ipv6s = append(ipv6s, v)
-		}
-	}
-	return
 }
 
 type Dialer struct {
