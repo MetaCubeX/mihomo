@@ -686,7 +686,7 @@ proxies: # socks5
 
 proxy-groups:
   # 代理链，目前relay可以支持udp的只有vmess/vless/trojan/ss/ssr/tuic
-  # wireguard目前不支持在relay中使用，请使用tunnels功能模拟
+  # wireguard目前不支持在relay中使用，请使用proxy中的dialer-proxy配置项
   # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
   - name: "relay"
     type: relay
