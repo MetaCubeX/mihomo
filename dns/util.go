@@ -170,15 +170,15 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 					Host:    host,
 					DstPort: port,
 				}
-				if proxyAdapter.IsL3Protocol(metadata) {
-					dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-					if err != nil {
-						return nil, err
-					}
-					metadata.Host = ""
-					metadata.DstIP = dstIP
-				}
 				if proxyAdapter != nil {
+					if proxyAdapter.IsL3Protocol(metadata) { // L3 proxy should resolve domain before to avoid loopback
+						dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
+						if err != nil {
+							return nil, err
+						}
+						metadata.Host = ""
+						metadata.DstIP = dstIP
+					}
 					return proxyAdapter.DialContext(ctx, metadata, opts...)
 				}
 				opts = append(opts, dialer.WithResolver(r))

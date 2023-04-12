@@ -45,23 +45,13 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
 	}
 	var conn C.Conn
-	switch p.proxy.SupportWithDialer() {
-	case C.ALLNet:
-		fallthrough
-	case C.TCP:
+	if d, ok := p.dialer.(dialer.Dialer); ok { // first using old function to let mux work
+		conn, err = p.proxy.DialContext(ctx, currentMeta, dialer.WithOption(d.Opt))
+	} else {
 		conn, err = p.proxy.DialContextWithDialer(ctx, p.dialer, currentMeta)
-		if err != nil {
-			return nil, err
-		}
-	default: // fallback to old function
-		if d, ok := p.dialer.(dialer.Dialer); ok { // fallback to old function
-			conn, err = p.proxy.DialContext(ctx, currentMeta, dialer.WithOption(d.Opt))
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, C.ErrNotSupport
-		}
+	}
+	if err != nil {
+		return nil, err
 	}
 	if p.statistic {
 		conn = statistic.NewTCPTracker(conn, statistic.DefaultManager, currentMeta, nil, 0, 0, false)
@@ -81,23 +71,13 @@ func (p proxyDialer) listenPacket(ctx context.Context, currentMeta *C.Metadata) 
 	var pc C.PacketConn
 	var err error
 	currentMeta.NetWork = C.UDP
-	switch p.proxy.SupportWithDialer() {
-	case C.ALLNet:
-		fallthrough
-	case C.UDP:
+	if d, ok := p.dialer.(dialer.Dialer); ok { // first using old function to let mux work
+		pc, err = p.proxy.ListenPacketContext(ctx, currentMeta, dialer.WithOption(d.Opt))
+	} else {
 		pc, err = p.proxy.ListenPacketWithDialer(ctx, p.dialer, currentMeta)
-		if err != nil {
-			return nil, err
-		}
-	default: // fallback to old function
-		if d, ok := p.dialer.(dialer.Dialer); ok { // fallback to old function
-			pc, err = p.proxy.ListenPacketContext(ctx, currentMeta, dialer.WithOption(d.Opt))
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, C.ErrNotSupport
-		}
+	}
+	if err != nil {
+		return nil, err
 	}
 	if p.statistic {
 		pc = statistic.NewUDPTracker(pc, statistic.DefaultManager, currentMeta, nil, 0, 0, false)
