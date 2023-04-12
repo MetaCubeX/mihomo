@@ -12,6 +12,7 @@ import (
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/restls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
@@ -184,12 +185,7 @@ func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dial
 		if err != nil {
 			return nil, err
 		}
-		destination := M.ParseSocksaddr(metadata.RemoteAddress())
-		if ss.option.UDPOverTCPVersion == 1 {
-			return newPacketConn(uot.NewConn(tcpConn, uot.Request{Destination: destination}), ss), nil
-		} else {
-			return newPacketConn(uot.NewLazyConn(tcpConn, uot.Request{Destination: destination}), ss), nil
-		}
+		return ss.ListenPacketOnStreamConn(ctx, tcpConn, metadata)
 	}
 	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ss.addr, ss.prefer)
 	if err != nil {
@@ -210,9 +206,18 @@ func (ss *ShadowSocks) SupportWithDialer() C.NetWork {
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
-func (ss *ShadowSocks) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if ss.option.UDPOverTCP {
-		destination := M.ParseSocksaddr(metadata.RemoteAddress())
+		// ss uot use stream-oriented udp with a special address, so we need a net.UDPAddr
+		if !metadata.Resolved() {
+			ip, err := resolver.ResolveIP(ctx, metadata.Host)
+			if err != nil {
+				return nil, errors.New("can't resolve ip")
+			}
+			metadata.DstIP = ip
+		}
+
+		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
 			return newPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), ss), nil
 		} else {
