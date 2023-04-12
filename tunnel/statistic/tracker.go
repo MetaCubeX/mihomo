@@ -15,6 +15,7 @@ import (
 type tracker interface {
 	ID() string
 	Close() error
+	C.Connection
 }
 
 type trackerInfo struct {
