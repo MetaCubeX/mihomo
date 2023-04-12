@@ -42,8 +42,10 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		if err != nil {
 			return nil, err
 		}
-		var rAddr net.Addr = currentMeta.UDPAddr()
-		if rAddr == nil { // the domain name was not resolved, will appear in not stream-oriented udp like Shadowsocks/Tuic
+		var rAddr net.Addr
+		if udpAddr := currentMeta.UDPAddr(); udpAddr != nil {
+			rAddr = udpAddr
+		} else { // the domain name was not resolved, will appear in not stream-oriented udp like Shadowsocks/Tuic
 			rAddr = N.NewCustomAddr("udp", currentMeta.RemoteAddress(), nil)
 		}
 		return N.NewBindPacketConn(pc, rAddr), nil
