@@ -143,7 +143,7 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	_ = pd.Fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, dialerProxy string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
 	excludeFilterReg, err := regexp2.Compile(excludeFilter, 0)
 	if err != nil {
 		return nil, fmt.Errorf("invalid excludeFilter regex: %w", err)
@@ -171,7 +171,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 		healthCheck: hc,
 	}
 
-	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg), proxiesOnUpdate(pd))
+	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
@@ -267,7 +267,7 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	}
 }
 
-func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp) resource.Parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp, dialerProxy string) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
@@ -329,6 +329,9 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 				}
 				if _, ok := proxiesSet[name]; ok {
 					continue
+				}
+				if len(dialerProxy) > 0 {
+					mapping["dialer-proxy"] = dialerProxy
 				}
 				proxy, err := adapter.ParseProxy(mapping)
 				if err != nil {
