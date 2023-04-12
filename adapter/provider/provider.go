@@ -17,6 +17,7 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/tunnel/statistic"
 
 	"github.com/dlclark/regexp2"
 	"gopkg.in/yaml.v3"
@@ -81,6 +82,7 @@ func (pp *proxySetProvider) Initial() error {
 	}
 	pp.OnUpdate(elm)
 	pp.getSubscriptionInfo()
+	pp.closeAllConnections()
 	return nil
 }
 
@@ -136,6 +138,18 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 			log.Warnln("[Provider] get subscription-userinfo: %e", err)
 		}
 	}()
+}
+
+func (pp *proxySetProvider) closeAllConnections() {
+	snapshot := statistic.DefaultManager.Snapshot()
+	for _, c := range snapshot.Connections {
+		for _, chain := range c.Chains() {
+			if chain == pp.Name() {
+				_ = c.Close()
+				break
+			}
+		}
+	}
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
