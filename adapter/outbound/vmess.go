@@ -507,9 +507,9 @@ type vmessPacketConn struct {
 // WriteTo implments C.PacketConn.WriteTo
 // Since VMess doesn't support full cone NAT by design, we verify if addr matches uc.rAddr, and drop the packet if not.
 func (uc *vmessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	allowedAddr := uc.rAddr.(*net.UDPAddr)
-	destAddr := addr.(*net.UDPAddr)
-	if !(allowedAddr.IP.Equal(destAddr.IP) && allowedAddr.Port == destAddr.Port) {
+	allowedAddr := uc.rAddr
+	destAddr := addr
+	if allowedAddr.String() != destAddr.String() {
 		return 0, ErrUDPRemoteAddrMismatch
 	}
 	uc.access.Lock()

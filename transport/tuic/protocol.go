@@ -464,6 +464,18 @@ func NewAddress(metadata *C.Metadata) Address {
 	}
 }
 
+func NewAddressNetAddr(addr net.Addr) (Address, error) {
+	addrStr := addr.String()
+	if addrPort, err := netip.ParseAddrPort(addrStr); err == nil {
+		return NewAddressAddrPort(addrPort), nil
+	}
+	metadata := &C.Metadata{}
+	if err := metadata.SetRemoteAddress(addrStr); err != nil {
+		return Address{}, err
+	}
+	return NewAddress(metadata), nil
+}
+
 func NewAddressAddrPort(addrPort netip.AddrPort) Address {
 	var addrType byte
 	port := addrPort.Port()

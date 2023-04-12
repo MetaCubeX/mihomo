@@ -229,3 +229,21 @@ func (m *Metadata) String() string {
 func (m *Metadata) Valid() bool {
 	return m.Host != "" || m.DstIP.IsValid()
 }
+
+func (m *Metadata) SetRemoteAddress(rawAddress string) error {
+	host, port, err := net.SplitHostPort(rawAddress)
+	if err != nil {
+		return err
+	}
+
+	if ip, err := netip.ParseAddr(host); err != nil {
+		m.Host = host
+		m.DstIP = netip.Addr{}
+	} else {
+		m.Host = ""
+		m.DstIP = ip.Unmap()
+	}
+	m.DstPort = port
+
+	return nil
+}

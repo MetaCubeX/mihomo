@@ -2,7 +2,6 @@ package tuic
 
 import (
 	"net"
-	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -216,11 +215,11 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	}
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
-	addrPort, err := netip.ParseAddrPort(addr.String())
+	address, err := NewAddressNetAddr(addr)
 	if err != nil {
 		return
 	}
-	err = NewPacket(q.connId, uint16(len(p)), NewAddressAddrPort(addrPort), p).WriteTo(buf)
+	err = NewPacket(q.connId, uint16(len(p)), address, p).WriteTo(buf)
 	if err != nil {
 		return
 	}

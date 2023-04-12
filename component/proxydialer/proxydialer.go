@@ -33,8 +33,8 @@ func NewByName(proxyName string, dialer C.Dialer) (C.Dialer, error) {
 }
 
 func (p proxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	currentMeta, err := addrToMetadata(address)
-	if err != nil {
+	currentMeta := &C.Metadata{Type: C.INNER}
+	if err := currentMeta.SetRemoteAddress(address); err != nil {
 		return nil, err
 	}
 	if strings.Contains(network, "udp") { // using in wireguard outbound
@@ -42,9 +42,14 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 		if err != nil {
 			return nil, err
 		}
-		return N.NewBindPacketConn(pc, currentMeta.UDPAddr()), nil
+		var rAddr net.Addr = currentMeta.UDPAddr()
+		if rAddr == nil { // the domain name was not resolved, will appear in not stream-oriented udp like Shadowsocks/Tuic
+			rAddr = N.NewCustomAddr("udp", currentMeta.RemoteAddress(), nil)
+		}
+		return N.NewBindPacketConn(pc, rAddr), nil
 	}
 	var conn C.Conn
+	var err error
 	if d, ok := p.dialer.(dialer.Dialer); ok { // first using old function to let mux work
 		conn, err = p.proxy.DialContext(ctx, currentMeta, dialer.WithOption(d.Opt))
 	} else {
@@ -60,8 +65,8 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 }
 
 func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	currentMeta, err := addrToMetadata(rAddrPort.String())
-	if err != nil {
+	currentMeta := &C.Metadata{Type: C.INNER}
+	if err := currentMeta.SetRemoteAddress(address); err != nil {
 		return nil, err
 	}
 	return p.listenPacket(ctx, currentMeta)
@@ -83,28 +88,4 @@ func (p proxyDialer) listenPacket(ctx context.Context, currentMeta *C.Metadata) 
 		pc = statistic.NewUDPTracker(pc, statistic.DefaultManager, currentMeta, nil, 0, 0, false)
 	}
 	return pc, nil
-}
-
-func addrToMetadata(rawAddress string) (addr *C.Metadata, err error) {
-	host, port, err := net.SplitHostPort(rawAddress)
-	if err != nil {
-		err = fmt.Errorf("addrToMetadata failed: %w", err)
-		return
-	}
-
-	if ip, err := netip.ParseAddr(host); err != nil {
-		addr = &C.Metadata{
-			Host:    host,
-			DstPort: port,
-		}
-	} else {
-		addr = &C.Metadata{
-			Host:    "",
-			DstIP:   ip.Unmap(),
-			DstPort: port,
-		}
-	}
-	addr.Type = C.INNER
-
-	return
 }
