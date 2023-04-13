@@ -173,12 +173,12 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 }
 
 func (v *Vless) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
-	metadata = &C.Metadata{ // a clear metadata only contains ip
-		NetWork: metadata.NetWork,
-		DstIP:   metadata.DstIP,
-		DstPort: metadata.DstPort,
-	}
 	if metadata.NetWork == C.UDP {
+		metadata = &C.Metadata{ // a clear metadata only contains ip
+			NetWork: metadata.NetWork,
+			DstIP:   metadata.DstIP,
+			DstPort: metadata.DstPort,
+		}
 		if v.option.PacketAddr {
 			metadata = &C.Metadata{
 				NetWork: C.UDP,
