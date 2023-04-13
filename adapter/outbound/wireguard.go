@@ -174,7 +174,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			connectAddr = option.Addr()
 		}
 	}
-	outbound.bind = wireguard.NewClientBind(context.Background(), outbound.dialer, isConnect, connectAddr, reserved)
+	outbound.bind = wireguard.NewClientBind(context.Background(), outbound, outbound.dialer, isConnect, connectAddr, reserved)
 
 	var localPrefixes []netip.Prefix
 
@@ -327,6 +327,14 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 
 	return outbound, nil
+}
+
+func (w *WireGuard) NewError(ctx context.Context, err error) {
+	if E.IsClosedOrCanceled(err) {
+		log.SingLogger.Debug(fmt.Sprintf("[WG](%s) connection closed: %s", w.Name(), err))
+		return
+	}
+	log.SingLogger.Error(fmt.Sprintf("[WG](%s) %s", w.Name(), err))
 }
 
 func closeWireGuard(w *WireGuard) {
