@@ -17,8 +17,8 @@ I have searched on the [issue tracker](……/) for a related feature request.
 "
           required: true
         - label: "
-我已经仔细看过 [Documentation](https://clash-meta.wiki/) 并无法自行解决问题
-I have read the [documentation](https://clash-meta.wiki/) and was unable to solve the issue.
+我已经仔细看过 [Documentation](https://wiki.metacubex.one/) 并无法找到这个功能
+I have read the [documentation](https://wiki.metacubex.one/) and was unable to solve the issue.
 "
           required: true
   - type: textarea
