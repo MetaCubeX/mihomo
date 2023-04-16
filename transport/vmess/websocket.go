@@ -334,7 +334,10 @@ func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Co
 		underlay: conn,
 		config:   c,
 	}
-	return conn, nil
+	// websocketWithEarlyDataConn can't correct handle Deadline
+	// it will not apply the already set Deadline after Dial()
+	// so call N.NewDeadlineConn to add a safe wrapper
+	return N.NewDeadlineConn(conn), nil
 }
 
 func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
@@ -402,11 +405,16 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 		return nil, fmt.Errorf("dial %s error: %s", uri.Host, reason)
 	}
 
-	return &websocketConn{
+	conn = &websocketConn{
 		conn:       wsConn,
 		rawWriter:  N.NewExtendedWriter(wsConn.UnderlyingConn()),
 		remoteAddr: conn.RemoteAddr(),
-	}, nil
+	}
+	// websocketConn can't correct handle ReadDeadline
+	// gorilla/websocket will cache the os.ErrDeadlineExceeded from conn.Read()
+	// it will cause read fail and event panic in *websocket.Conn.NextReader()
+	// so call N.NewDeadlineConn to add a safe wrapper
+	return N.NewDeadlineConn(conn), nil
 }
 
 func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
