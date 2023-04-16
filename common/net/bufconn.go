@@ -79,3 +79,7 @@ func (c *BufferedConn) ReaderReplaceable() bool {
 	}
 	return true
 }
+
+func (c *BufferedConn) WriterReplaceable() bool {
+	return true
+}
