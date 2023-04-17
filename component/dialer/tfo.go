@@ -105,6 +105,10 @@ func (c *tfoConn) Upstream() any {
 	return c.Conn
 }
 
+func (c *tfoConn) NeedAdditionalReadDeadline() bool {
+	return c.Conn == nil
+}
+
 func (c *tfoConn) NeedHandshake() bool {
 	return c.Conn == nil
 }

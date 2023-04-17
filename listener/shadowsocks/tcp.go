@@ -100,7 +100,8 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 }
 
 func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
-	conn = N.NewDeadlineConn(l.pickCipher.StreamConn(conn))
+	conn = l.pickCipher.StreamConn(conn)
+	conn = N.NewDeadlineConn(conn) // embed ss can't handle readDeadline correctly
 
 	target, err := socks5.ReadAddr(conn, make([]byte, socks5.MaxAddrLen))
 	if err != nil {
