@@ -229,8 +229,8 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		err = E.Cause(err, "configure tun interface")
 		return
 	}
-	l.tunIf = tunIf
-	l.tunStack, err = tun.NewStack(strings.ToLower(options.Stack.String()), tun.StackOptions{
+
+	stackOptions := tun.StackOptions{
 		Context:                context.TODO(),
 		Tun:                    tunIf,
 		MTU:                    tunOptions.MTU,
@@ -241,7 +241,16 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		UDPTimeout:             udpTimeout,
 		Handler:                handler,
 		Logger:                 log.SingLogger,
-	})
+	}
+
+	if options.FileDescriptor > 0 {
+		if tunName, err := getTunnelName(int32(options.FileDescriptor)); err != nil {
+			stackOptions.Name = tunName
+			stackOptions.UnderPlatform = true
+		}
+	}
+	l.tunIf = tunIf
+	l.tunStack, err = tun.NewStack(strings.ToLower(options.Stack.String()), stackOptions)
 	if err != nil {
 		return
 	}

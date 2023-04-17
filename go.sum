@@ -98,8 +98,8 @@ github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594 h1:KD96JPdTIa
 github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230417103204-e2bcd32a73cc h1:ctwahnHNAgoicCUJqKrHNVcyjEeNIoK4Dqyjh5uIkEE=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230417103204-e2bcd32a73cc/go.mod h1:4uQQReKMTU7KTfOykVBe/oGJ00pl38d+BYJ99+mx26s=
-github.com/metacubex/sing-tun v0.1.4-0.20230417114323-ef78a871e13f h1:vS2bII9IjwpNaf311kWn9hi7p6WSzHM4dFdvmYECvEs=
-github.com/metacubex/sing-tun v0.1.4-0.20230417114323-ef78a871e13f/go.mod h1:ifLPYzRpV/u8bLE39zGb4nuX1NuUqzzLZmF8iZvxjIA=
+github.com/metacubex/sing-tun v0.1.4-0.20230417120711-05d852989e84 h1:3L4glttGciACRBYV1Z1eglcYFYWiXmTExWjTySgaGdM=
+github.com/metacubex/sing-tun v0.1.4-0.20230417120711-05d852989e84/go.mod h1:kHkYHoRlYA4I12QPTt/ADyRGqy5YweLUfye1E1hC/q4=
 github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025 h1:itjCqEeem+BKZFiBEhQmWHDHKK4FgTGvnYCFS0JOb3A=
 github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025/go.mod h1:7mPG9qYln+CLKBcDt7Dk4c7b3S53VzEfexMVPe6T6FM=
 github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370 h1:UkViS4DCESAUEYgbIEQdD02hyMacFt6Dny+1MOJtNIo=

@@ -21,7 +21,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2-0.20221213171556-9881fafed8c7
 	github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594
 	github.com/metacubex/sing-shadowsocks v0.2.2-0.20230417103204-e2bcd32a73cc
-	github.com/metacubex/sing-tun v0.1.4-0.20230417114323-ef78a871e13f
+	github.com/metacubex/sing-tun v0.1.4-0.20230417120711-05d852989e84
 	github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025
 	github.com/miekg/dns v1.1.53
 	github.com/mroth/weightedrand/v2 v2.0.0
