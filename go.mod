@@ -15,15 +15,15 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/insomniacslk/dhcp v0.0.0-20230307103557-e252950ab961
+	github.com/insomniacslk/dhcp v0.0.0-20230407062729-974c6f05fe16
 	github.com/jpillora/backoff v1.0.0
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2-0.20221213171556-9881fafed8c7
 	github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594
 	github.com/metacubex/sing-shadowsocks v0.2.2-0.20230417103204-e2bcd32a73cc
-	github.com/metacubex/sing-tun v0.1.3
+	github.com/metacubex/sing-tun v0.1.4-0.20230417114323-ef78a871e13f
 	github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025
-	github.com/miekg/dns v1.1.52
+	github.com/miekg/dns v1.1.53
 	github.com/mroth/weightedrand/v2 v2.0.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
@@ -34,7 +34,7 @@ require (
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
 	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
-	github.com/samber/lo v1.37.0
+	github.com/samber/lo v1.38.1
 	github.com/shirou/gopsutil/v3 v3.23.3
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
@@ -75,7 +75,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mdlayher/socket v0.4.0 // indirect
-	github.com/metacubex/gvisor v0.0.0-20230323114922-412956fb6a03 // indirect
+	github.com/metacubex/gvisor v0.0.0-20230417114019-3c3ee672d60c // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
