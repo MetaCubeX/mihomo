@@ -19,17 +19,11 @@ type ExtendedWriter = network.ExtendedWriter
 type ExtendedReader = network.ExtendedReader
 
 func NewDeadlineConn(conn net.Conn) ExtendedConn {
-	if dc, ok := conn.(*deadline.Conn); ok {
-		return dc
-	}
-	return deadline.NewConn(conn)
+	return deadline.NewFallbackConn(conn)
 }
 
 func NewDeadlinePacketConn(pc net.PacketConn) net.PacketConn {
-	if dpc, ok := pc.(*deadline.PacketConn); ok {
-		return dpc
-	}
-	return deadline.NewPacketConn(bufio.NewPacketConn(pc))
+	return deadline.NewFallbackPacketConn(bufio.NewPacketConn(pc))
 }
 
 func NeedHandshake(conn any) bool {

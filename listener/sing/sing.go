@@ -17,6 +17,7 @@ import (
 
 	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio/deadline"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
@@ -80,6 +81,9 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	defer wg.Wait() // this goroutine must exit after conn.Close()
 	wg.Add(1)
 
+	if deadline.NeedAdditionalReadDeadline(conn) {
+		conn = N.NewDeadlineConn(conn) // conn from sing should check NeedAdditionalReadDeadline
+	}
 	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
 	return nil
 }
