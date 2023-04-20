@@ -3,6 +3,7 @@ package dialer
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"net/netip"
 	"syscall"
@@ -20,11 +21,19 @@ func bind4(handle syscall.Handle, ifaceIdx int) error {
 	var bytes [4]byte
 	binary.BigEndian.PutUint32(bytes[:], uint32(ifaceIdx))
 	idx := *(*uint32)(unsafe.Pointer(&bytes[0]))
-	return syscall.SetsockoptInt(handle, syscall.IPPROTO_IP, IP_UNICAST_IF, int(idx))
+	err := syscall.SetsockoptInt(handle, syscall.IPPROTO_IP, IP_UNICAST_IF, int(idx))
+	if err != nil {
+		err = fmt.Errorf("bind4: %w", err)
+	}
+	return err
 }
 
 func bind6(handle syscall.Handle, ifaceIdx int) error {
-	return syscall.SetsockoptInt(handle, syscall.IPPROTO_IPV6, IPV6_UNICAST_IF, ifaceIdx)
+	err := syscall.SetsockoptInt(handle, syscall.IPPROTO_IPV6, IPV6_UNICAST_IF, ifaceIdx)
+	if err != nil {
+		err = fmt.Errorf("bind6: %w", err)
+	}
+	return err
 }
 
 func bindControl(ifaceIdx int) controlFn {
@@ -49,9 +58,9 @@ func bindControl(ifaceIdx int) controlFn {
 				if (!addrPort.Addr().IsValid() || addrPort.Addr().IsUnspecified()) && bind6err != nil {
 					// try bind ipv6, if failed, ignore. it's a workaround for windows disable interface ipv6
 					if bind4err != nil {
-						innerErr = bind6err
+						innerErr = fmt.Errorf("%w (%s)", bind6err, bind4err)
 					} else {
-						innerErr = bind4err
+						innerErr = nil
 					}
 				} else {
 					innerErr = bind6err
