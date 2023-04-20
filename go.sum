@@ -98,10 +98,10 @@ github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594 h1:KD96JPdTIa
 github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230419154412-11ec6808f588 h1:bOuVbeG5iwYyiDB2am3xIrt7GwbZC8cZIoJqLtvkcfY=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230419154412-11ec6808f588/go.mod h1:4uQQReKMTU7KTfOykVBe/oGJ00pl38d+BYJ99+mx26s=
-github.com/metacubex/sing-tun v0.1.4-0.20230419154912-049c66801ff8 h1:BQFEnZUnPvmER8JIQPsfaaWzMXOvY5o+2ToDcRfAh58=
-github.com/metacubex/sing-tun v0.1.4-0.20230419154912-049c66801ff8/go.mod h1:5CR2e0WQQiLSPd46Qaz3uhDRRik3QvvXiyMvlT3bXoc=
-github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025 h1:itjCqEeem+BKZFiBEhQmWHDHKK4FgTGvnYCFS0JOb3A=
-github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025/go.mod h1:7mPG9qYln+CLKBcDt7Dk4c7b3S53VzEfexMVPe6T6FM=
+github.com/metacubex/sing-tun v0.1.4-0.20230420054006-376d37578990 h1:VpC69WWsOyhwwRkMVop6ao30dh4ZtlqaroT5uK6EBYU=
+github.com/metacubex/sing-tun v0.1.4-0.20230420054006-376d37578990/go.mod h1:5CR2e0WQQiLSPd46Qaz3uhDRRik3QvvXiyMvlT3bXoc=
+github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb h1:uoeOqHaQmNPev9RewQlff9Z55yuczEhRizcgDf4lSAw=
+github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb/go.mod h1:Bsw2BvKMMMY0FhZPseDI50ZOalvoUPMKYyGpyqvIIqY=
 github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370 h1:UkViS4DCESAUEYgbIEQdD02hyMacFt6Dny+1MOJtNIo=
 github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
 github.com/miekg/dns v1.1.53 h1:ZBkuHr5dxHtB1caEOlZTLPo7D3L3TWckgUUs/RHfDxw=
@@ -144,8 +144,8 @@ github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 h1:iL5gZI3uFp0X6EslacyapiRz7LLSJyr4RajF/BhMVyE=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
 github.com/sagernet/sing v0.0.0-20220817130738-ce854cda8522/go.mod h1:QVsS5L/ZA2Q5UhQwLrn0Trw+msNd/NPGEhBKR/ioWiY=
-github.com/sagernet/sing v0.2.4-0.20230419153323-5fae6fa434c1 h1:CdzNL25lzfVo0NMeghPqsupNsWvkzrbrUt5t8DoDPcQ=
-github.com/sagernet/sing v0.2.4-0.20230419153323-5fae6fa434c1/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
+github.com/sagernet/sing v0.2.4-0.20230420044236-72471d9b35b5 h1:UtihSORXefZYQrGIssu65bP18VEgMGCNHdy60VHc14M=
+github.com/sagernet/sing v0.2.4-0.20230420044236-72471d9b35b5/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b h1:ouW/6IDCrxkBe19YSbdCd7buHix7b+UZ6BM4Zz74XF4=
 github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b/go.mod h1:oG8bPerYI6cZ74KquY3DvA7ynECyrILPBnce6wtBqeI=
 github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3 h1:BHOnxrbC929JonuKqFdJ7ZbDp7zs4oTlH5KFvKtWu9U=
@@ -154,8 +154,8 @@ github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9 h1:2ItpW1nMNkPzmBT
 github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9/go.mod h1:FUyTEc5ye5NjKnDTDMuiLF2M6T4BE6y6KZuax//UCEg=
 github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2 h1:kDUqhc9Vsk5HJuhfIATJ8oQwBmpOZJuozQG7Vk88lL4=
 github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2/go.mod h1:JKQMZq/O2qnZjdrt+B57olmfgEmLtY9iiSIEYtWvoSM=
-github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c h1:vK2wyt9aWYHHvNLWniwijBu/n4pySypiKRhN32u/JGo=
-github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c/go.mod h1:euOmN6O5kk9dQmgSS8Df4psAl3TCjxOz0NW60EWkSaI=
+github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77 h1:g6QtRWQ2dKX7EQP++1JLNtw4C2TNxd4/ov8YUpOPOSo=
+github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77/go.mod h1:pJDdXzZIwJ+2vmnT0TKzmf8meeum+e2mTDSehw79eE0=
 github.com/samber/lo v1.38.1 h1:j2XEAqXKb09Am4ebOg31SpvzUTTs6EN3VfgeLUhPdXM=
 github.com/samber/lo v1.38.1/go.mod h1:+m/ZKRl6ClXCE2Lgf3MsQlWfh4bn1bz6CXEOxnEXnEA=
 github.com/shirou/gopsutil/v3 v3.23.3 h1:Syt5vVZXUDXPEXpIBt5ziWsJ4LdSAAxF4l/xZeQgSEE=
