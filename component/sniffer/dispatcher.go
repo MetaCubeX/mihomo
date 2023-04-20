@@ -26,14 +26,14 @@ var (
 var Dispatcher *SnifferDispatcher
 
 type SnifferDispatcher struct {
-	enable          bool
-	sniffers        map[sniffer.Sniffer]SnifferConfig
-	forceDomain     *trie.DomainSet
-	skipSNI         *trie.DomainSet
-	skipList        *cache.LruCache[string, uint8]
-	rwMux           sync.RWMutex
-	forceDnsMapping bool
-	parsePureIp     bool
+	enable           bool
+	sniffers         map[sniffer.Sniffer]SnifferConfig
+	forceDomain      *trie.DomainSet
+	skipSNI          *trie.DomainSet
+	skipList         *cache.LruCache[string, uint8]
+	rwMux            sync.RWMutex
+	forceDnsMapping  bool
+	parsePureIp      bool
 }
 
 func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) {

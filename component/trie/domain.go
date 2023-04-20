@@ -25,7 +25,7 @@ func ValidAndSplitDomain(domain string) ([]string, bool) {
 	if domain != "" && domain[len(domain)-1] == '.' {
 		return nil, false
 	}
-	domain=strings.ToLower(domain)
+	domain = strings.ToLower(domain)
 	parts := strings.Split(domain, domainStep)
 	if len(parts) == 1 {
 		if parts[0] == "" {
@@ -126,6 +126,9 @@ func (t *DomainTrie[T]) Optimize() {
 func (t *DomainTrie[T]) Foreach(print func(domain string, data T)) {
 	for key, data := range t.root.getChildren() {
 		recursion([]string{key}, data, print)
+		if data != nil && data.inited {
+			print(joinDomain([]string{key}), data.data)
+		}
 	}
 }
 
