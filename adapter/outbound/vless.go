@@ -174,16 +174,17 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 
 func (v *Vless) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
 	if metadata.NetWork == C.UDP {
-		metadata = &C.Metadata{ // a clear metadata only contains ip
-			NetWork: metadata.NetWork,
-			DstIP:   metadata.DstIP,
-			DstPort: metadata.DstPort,
-		}
 		if v.option.PacketAddr {
 			metadata = &C.Metadata{
 				NetWork: C.UDP,
 				Host:    packetaddr.SeqPacketMagicAddress,
 				DstPort: "443",
+			}
+		} else {
+			metadata = &C.Metadata{ // a clear metadata only contains ip
+				NetWork: C.UDP,
+				DstIP:   metadata.DstIP,
+				DstPort: metadata.DstPort,
 			}
 		}
 		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
@@ -346,7 +347,7 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = v.streamConn(c, metadata)
+	c, err = v.StreamConn(c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
@@ -372,13 +373,13 @@ func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 
 	if v.option.XUDP {
 		return newPacketConn(&threadSafePacketConn{
-			PacketConn: vmessSing.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
+			PacketConn: vmessSing.NewXUDPConn(c, M.SocksaddrFromNet(metadata.UDPAddr())),
 		}, v), nil
 	} else if v.option.PacketAddr {
 		return newPacketConn(&threadSafePacketConn{
 			PacketConn: packetaddr.NewConn(&vlessPacketConn{
 				Conn: c, rAddr: metadata.UDPAddr(),
-			}, M.ParseSocksaddr(metadata.RemoteAddress())),
+			}, M.SocksaddrFromNet(metadata.UDPAddr())),
 		}, v), nil
 	}
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
