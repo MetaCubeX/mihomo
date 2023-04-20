@@ -21,19 +21,19 @@ require (
 	github.com/mdlayher/netlink v1.7.2-0.20221213171556-9881fafed8c7
 	github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594
 	github.com/metacubex/sing-shadowsocks v0.2.2-0.20230419154412-11ec6808f588
-	github.com/metacubex/sing-tun v0.1.4-0.20230419154912-049c66801ff8
-	github.com/metacubex/sing-wireguard v0.0.0-20230413082948-e51777dcf025
+	github.com/metacubex/sing-tun v0.1.4-0.20230420054006-376d37578990
+	github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb
 	github.com/miekg/dns v1.1.53
 	github.com/mroth/weightedrand/v2 v2.0.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.4-0.20230419153323-5fae6fa434c1
+	github.com/sagernet/sing v0.2.4-0.20230420044236-72471d9b35b5
 	github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b
 	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
-	github.com/sagernet/wireguard-go v0.0.0-20221116151939-c99467f53f2c
+	github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77
 	github.com/samber/lo v1.38.1
 	github.com/shirou/gopsutil/v3 v3.23.3
 	github.com/sirupsen/logrus v1.9.0

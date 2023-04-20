@@ -246,7 +246,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 	if options.FileDescriptor > 0 {
 		if tunName, err := getTunnelName(int32(options.FileDescriptor)); err != nil {
 			stackOptions.Name = tunName
-			stackOptions.UnderPlatform = true
+			stackOptions.ForwarderBindInterface = true
 		}
 	}
 	l.tunIf = tunIf
