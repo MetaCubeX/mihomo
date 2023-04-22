@@ -41,7 +41,6 @@ require (
 	github.com/xtls/go v0.0.0-20220914232946-0441cf4cf837
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.6
-	go.uber.org/atomic v1.10.0
 	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.8.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
@@ -103,5 +102,3 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 )
-
-replace go.uber.org/atomic v1.10.0 => github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370

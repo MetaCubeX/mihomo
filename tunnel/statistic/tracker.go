@@ -4,12 +4,12 @@ import (
 	"net"
 	"time"
 
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/gofrs/uuid/v5"
-	"go.uber.org/atomic"
 )
 
 type tracker interface {
