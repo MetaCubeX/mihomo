@@ -102,8 +102,6 @@ github.com/metacubex/sing-tun v0.1.4-0.20230420054006-376d37578990 h1:VpC69WWsOy
 github.com/metacubex/sing-tun v0.1.4-0.20230420054006-376d37578990/go.mod h1:5CR2e0WQQiLSPd46Qaz3uhDRRik3QvvXiyMvlT3bXoc=
 github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb h1:uoeOqHaQmNPev9RewQlff9Z55yuczEhRizcgDf4lSAw=
 github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb/go.mod h1:Bsw2BvKMMMY0FhZPseDI50ZOalvoUPMKYyGpyqvIIqY=
-github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370 h1:UkViS4DCESAUEYgbIEQdD02hyMacFt6Dny+1MOJtNIo=
-github.com/metacubex/uber-atomic v0.0.0-20230202125923-feb10b770370/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
 github.com/miekg/dns v1.1.53 h1:ZBkuHr5dxHtB1caEOlZTLPo7D3L3TWckgUUs/RHfDxw=
 github.com/miekg/dns v1.1.53/go.mod h1:uInx36IzPl7FYnDcMeVWxj9byh7DutNykX4G9Sj60FY=
 github.com/mroth/weightedrand/v2 v2.0.0 h1:ADehnByWbliEDIazDAKFdBHoqgHSXAkgyKqM/9YsPoo=

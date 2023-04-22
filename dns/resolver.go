@@ -7,8 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/atomic"
-
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -388,7 +387,7 @@ func (r *Resolver) Invalid() bool {
 type NameServer struct {
 	Net          string
 	Addr         string
-	Interface    *atomic.String
+	Interface    *atomic.TypedValue[string]
 	ProxyAdapter C.ProxyAdapter
 	ProxyName    string
 	Params       map[string]string

@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
@@ -15,7 +16,6 @@ import (
 
 	D "github.com/miekg/dns"
 	"github.com/zhangyunhao116/fastrand"
-	"go.uber.org/atomic"
 )
 
 type client struct {
@@ -23,7 +23,7 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        *atomic.String
+	iface        *atomic.TypedValue[string]
 	proxyAdapter C.ProxyAdapter
 	proxyName    string
 	addr         string

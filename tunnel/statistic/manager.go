@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dreamacro/clash/common/atomic"
+
 	"github.com/shirou/gopsutil/v3/process"
-	"go.uber.org/atomic"
 )
 
 var DefaultManager *Manager
