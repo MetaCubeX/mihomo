@@ -16,9 +16,10 @@ import (
 
 type SingMux struct {
 	C.ProxyAdapter
-	base   ProxyBase
-	client *mux.Client
-	dialer *muxSingDialer
+	base    ProxyBase
+	client  *mux.Client
+	dialer  *muxSingDialer
+	onlyTcp bool
 }
 
 type SingMuxOption struct {
@@ -28,6 +29,8 @@ type SingMuxOption struct {
 	MinStreams     int    `proxy:"min-streams,omitempty"`
 	MaxStreams     int    `proxy:"max-streams,omitempty"`
 	Padding        bool   `proxy:"padding,omitempty"`
+	Statistic      bool   `proxy:"statistic,omitempty"`
+	OnlyTcp        bool   `proxy:"only-tcp,omitempty"`
 }
 
 type ProxyBase interface {
@@ -35,19 +38,20 @@ type ProxyBase interface {
 }
 
 type muxSingDialer struct {
-	dialer dialer.Dialer
-	proxy  C.ProxyAdapter
+	dialer    dialer.Dialer
+	proxy     C.ProxyAdapter
+	statistic bool
 }
 
 var _ N.Dialer = (*muxSingDialer)(nil)
 
 func (d *muxSingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	var cDialer C.Dialer = proxydialer.New(d.proxy, d.dialer, false)
+	var cDialer C.Dialer = proxydialer.New(d.proxy, d.dialer, d.statistic)
 	return cDialer.DialContext(ctx, network, destination.String())
 }
 
 func (d *muxSingDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	var cDialer C.Dialer = proxydialer.New(d.proxy, d.dialer, false)
+	var cDialer C.Dialer = proxydialer.New(d.proxy, d.dialer, d.statistic)
 	return cDialer.ListenPacket(ctx, "udp", "", destination.AddrPort())
 }
 
@@ -62,6 +66,9 @@ func (s *SingMux) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 }
 
 func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
+	if s.onlyTcp {
+		return s.ProxyAdapter.ListenPacketContext(ctx, metadata, opts...)
+	}
 	options := s.base.DialOptions(opts...)
 	s.dialer.dialer = dialer.NewDialer(options...)
 	pc, err := s.client.ListenPacket(ctx, M.ParseSocksaddr(metadata.RemoteAddress()))
@@ -75,7 +82,7 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 }
 
 func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.ProxyAdapter, error) {
-	singDialer := &muxSingDialer{dialer: dialer.NewDialer(), proxy: proxy}
+	singDialer := &muxSingDialer{dialer: dialer.NewDialer(), proxy: proxy, statistic: option.Statistic}
 	client, err := mux.NewClient(mux.Options{
 		Context:        context.TODO(),
 		Dialer:         singDialer,
@@ -93,5 +100,6 @@ func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.P
 		base:         base,
 		client:       client,
 		dialer:       singDialer,
+		onlyTcp:      option.OnlyTcp,
 	}, nil
 }
