@@ -81,6 +81,20 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	return newPacketConn(pc, s.ProxyAdapter), nil
 }
 
+func (s *SingMux) SupportUDP() bool {
+	if s.onlyTcp {
+		return s.ProxyAdapter.SupportUOT()
+	}
+	return true
+}
+
+func (s *SingMux) SupportUOT() bool {
+	if s.onlyTcp {
+		return s.ProxyAdapter.SupportUOT()
+	}
+	return true
+}
+
 func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.ProxyAdapter, error) {
 	singDialer := &muxSingDialer{dialer: dialer.NewDialer(), proxy: proxy, statistic: option.Statistic}
 	client, err := mux.NewClient(mux.Options{

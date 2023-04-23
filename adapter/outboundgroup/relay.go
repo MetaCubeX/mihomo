@@ -92,7 +92,7 @@ func (r *Relay) SupportUDP() bool {
 		switch proxy.SupportWithDialer() {
 		case C.ALLNet:
 		case C.UDP:
-		default: // C.TCP and C.NONet
+		default: // C.TCP and C.InvalidNet
 			return false
 		}
 	}
