@@ -309,6 +309,8 @@ proxies: # socks5
       # min-streams: 4 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
       # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
       # padding: false # Enable padding. Requires sing-box server version 1.3-beta9 or later.
+      # statistic: false # 控制是否将底层连接显示在面板中，方面打断底层连接
+      # only-tcp: false # 如果设置为true, smux的设置将不会对udp生效，udp连接会直接走底层协议
   
   - name: "ss2"
     type: ss
