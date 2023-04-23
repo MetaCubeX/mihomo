@@ -302,6 +302,13 @@ proxies: # socks5
     # UDP 则为双栈解析，获取结果中的第一个 IPv4
     # ipv6-prefer 同 ipv4-prefer
     # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
+    smux:
+      enabled: false
+      protocol: smux # smux/yamux/h2mux
+      # max-connections: 4 # Maximum connections. Conflict with max-streams.
+      # min-streams: 4 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
+      # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
+      # padding: false # Enable padding. Requires sing-box server version 1.3-beta9 or later.
   
   - name: "ss2"
     type: ss
