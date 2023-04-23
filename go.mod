@@ -28,7 +28,8 @@ require (
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.4
+	github.com/sagernet/sing v0.2.5-0.20230423085534-0902e6216207
+	github.com/sagernet/sing-mux v0.0.0-20230423111236-a3ebc1453fd6
 	github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b
 	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
@@ -69,6 +70,7 @@ require (
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
+	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
@@ -86,6 +88,7 @@ require (
 	github.com/quic-go/qtls-go1-19 v0.2.1 // indirect
 	github.com/quic-go/qtls-go1-20 v0.1.1 // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
+	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37 // indirect
 	github.com/shoenig/go-m1cpu v0.1.5 // indirect
 	github.com/sina-ghaderi/poly1305 v0.0.0-20220724002748-c5926b03988b // indirect
 	github.com/sina-ghaderi/rabaead v0.0.0-20220730151906-ab6e06b96e8c // indirect

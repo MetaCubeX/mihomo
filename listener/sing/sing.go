@@ -15,6 +15,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 
+	mux "github.com/sagernet/sing-mux"
 	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio/deadline"
@@ -56,6 +57,13 @@ func (c *waitCloseConn) Upstream() any {
 	return c.ExtendedConn
 }
 
+func UpstreamMetadata(metadata M.Metadata) M.Metadata {
+	return M.Metadata{
+		Source:      metadata.Source,
+		Destination: metadata.Destination,
+	}
+}
+
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
 	additions := h.Additions
 	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
@@ -63,6 +71,8 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 		additions = append(additions, ctxAdditions...)
 	}
 	switch metadata.Destination.Fqdn {
+	case mux.Destination.Fqdn:
+		return mux.HandleConnection(ctx, h, log.SingLogger, conn, UpstreamMetadata(metadata))
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
 	case uot.MagicAddress:
