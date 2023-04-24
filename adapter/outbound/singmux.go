@@ -3,7 +3,9 @@ package outbound
 import (
 	"context"
 	"net"
+	"runtime"
 
+	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	C "github.com/Dreamacro/clash/constant"
@@ -62,7 +64,7 @@ func (s *SingMux) DialContext(ctx context.Context, metadata *C.Metadata, opts ..
 	if err != nil {
 		return nil, err
 	}
-	return NewConn(c, s.ProxyAdapter), err
+	return NewConn(CN.NewRefConn(c, s), s.ProxyAdapter), err
 }
 
 func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
@@ -78,7 +80,7 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return newPacketConn(pc, s.ProxyAdapter), nil
+	return newPacketConn(CN.NewRefPacketConn(pc, s), s.ProxyAdapter), nil
 }
 
 func (s *SingMux) SupportUDP() bool {
@@ -95,10 +97,13 @@ func (s *SingMux) SupportUOT() bool {
 	return true
 }
 
+func closeSingMux(s *SingMux) {
+	_ = s.client.Close()
+}
+
 func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.ProxyAdapter, error) {
 	singDialer := &muxSingDialer{dialer: dialer.NewDialer(), proxy: proxy, statistic: option.Statistic}
 	client, err := mux.NewClient(mux.Options{
-		Context:        context.TODO(),
 		Dialer:         singDialer,
 		Protocol:       option.Protocol,
 		MaxConnections: option.MaxConnections,
@@ -109,11 +114,13 @@ func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.P
 	if err != nil {
 		return nil, err
 	}
-	return &SingMux{
+	outbound := &SingMux{
 		ProxyAdapter: proxy,
 		base:         base,
 		client:       client,
 		dialer:       singDialer,
 		onlyTcp:      option.OnlyTcp,
-	}, nil
+	}
+	runtime.SetFinalizer(outbound, closeSingMux)
+	return outbound, nil
 }
