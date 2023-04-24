@@ -78,6 +78,10 @@ func (s *Selector) Set(name string) error {
 	return errors.New("proxy not exist")
 }
 
+func (s *Selector) ForceSet(name string) {
+	s.selected = name
+}
+
 // Unwrap implements C.ProxyAdapter
 func (s *Selector) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return s.selectedProxy(touch)

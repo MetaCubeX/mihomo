@@ -53,6 +53,10 @@ func (u *URLTest) Set(name string) error {
 	return nil
 }
 
+func (u *URLTest) ForceSet(name string) {
+	u.selected = name
+}
+
 // DialContext implements C.ProxyAdapter
 func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (c C.Conn, err error) {
 	proxy := u.fast(true)

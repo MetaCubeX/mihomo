@@ -14,4 +14,5 @@ func tcpKeepAlive(c net.Conn) {
 
 type SelectAble interface {
 	Set(string) error
+	ForceSet(name string)
 }
