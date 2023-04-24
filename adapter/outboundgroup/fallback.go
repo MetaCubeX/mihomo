@@ -138,6 +138,10 @@ func (f *Fallback) Set(name string) error {
 	return nil
 }
 
+func (f *Fallback) ForceSet(name string) {
+	f.selected = name
+}
+
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
 		GroupBase: NewGroupBase(GroupBaseOption{
