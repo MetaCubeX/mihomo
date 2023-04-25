@@ -1,11 +1,13 @@
 package statistic
 
 import (
+	"io"
 	"net"
 	"time"
 
 	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/buf"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 
@@ -61,6 +63,15 @@ func (tt *tcpTracker) ReadBuffer(buffer *buf.Buffer) (err error) {
 	return
 }
 
+func (tt *tcpTracker) UnwrapReader() (io.Reader, []N.CountFunc) {
+	return tt.Conn, []N.CountFunc{func(download int64) {
+		if tt.pushToManager {
+			tt.manager.PushDownloaded(download)
+		}
+		tt.DownloadTotal.Add(download)
+	}}
+}
+
 func (tt *tcpTracker) Write(b []byte) (int, error) {
 	n, err := tt.Conn.Write(b)
 	upload := int64(n)
@@ -79,6 +90,15 @@ func (tt *tcpTracker) WriteBuffer(buffer *buf.Buffer) (err error) {
 	}
 	tt.UploadTotal.Add(upload)
 	return
+}
+
+func (tt *tcpTracker) UnwrapWriter() (io.Writer, []N.CountFunc) {
+	return tt.Conn, []N.CountFunc{func(upload int64) {
+		if tt.pushToManager {
+			tt.manager.PushUploaded(upload)
+		}
+		tt.UploadTotal.Add(upload)
+	}}
 }
 
 func (tt *tcpTracker) Close() error {

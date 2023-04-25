@@ -67,6 +67,14 @@ func (c *refConn) WriteBuffer(buffer *buf.Buffer) error {
 	return c.conn.WriteBuffer(buffer)
 }
 
+func (c *refConn) ReaderReplaceable() bool { // Relay() will handle reference
+	return true
+}
+
+func (c *refConn) WriterReplaceable() bool { // Relay() will handle reference
+	return true
+}
+
 var _ ExtendedConn = (*refConn)(nil)
 
 func NewRefConn(conn net.Conn, ref any) net.Conn {

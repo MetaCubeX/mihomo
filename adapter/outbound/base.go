@@ -204,6 +204,14 @@ func (c *conn) Upstream() any {
 	return c.ExtendedConn
 }
 
+func (c *conn) WriterReplaceable() bool {
+	return true
+}
+
+func (c *conn) ReaderReplaceable() bool {
+	return true
+}
+
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 	if _, ok := c.(syscall.Conn); !ok { // exclusion system conn like *net.TCPConn
 		c = N.NewDeadlineConn(c) // most conn from outbound can't handle readDeadline correctly

@@ -69,6 +69,16 @@ func (c *BufferedConn) ReadBuffer(buffer *buf.Buffer) (err error) {
 	return c.ExtendedConn.ReadBuffer(buffer)
 }
 
+func (c *BufferedConn) ReadCached() *buf.Buffer { // call in sing/common/bufio.Copy
+	if c.r.Buffered() > 0 {
+		length := c.r.Buffered()
+		b, _ := c.r.Peek(length)
+		_, _ = c.r.Discard(length)
+		return buf.As(b)
+	}
+	return nil
+}
+
 func (c *BufferedConn) Upstream() any {
 	return c.ExtendedConn
 }

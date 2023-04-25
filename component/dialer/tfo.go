@@ -113,6 +113,14 @@ func (c *tfoConn) NeedHandshake() bool {
 	return c.Conn == nil
 }
 
+func (c *tfoConn) ReaderReplaceable() bool {
+	return c.Conn != nil
+}
+
+func (c *tfoConn) WriterReplaceable() bool {
+	return c.Conn != nil
+}
+
 func dialTFO(ctx context.Context, netDialer net.Dialer, network, address string) (net.Conn, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	dialer := tfo.Dialer{Dialer: netDialer, DisableTFO: false}

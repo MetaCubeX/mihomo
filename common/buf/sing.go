@@ -9,12 +9,12 @@ const BufferSize = buf.BufferSize
 
 type Buffer = buf.Buffer
 
-var (
-	New          = buf.New
-	StackNew     = buf.StackNew
-	StackNewSize = buf.StackNewSize
-	With         = buf.With
-)
+var New = buf.New
+var NewSize = buf.NewSize
+var StackNew = buf.StackNew
+var StackNewSize = buf.StackNewSize
+var With = buf.With
+var As = buf.As
 
 var KeepAlive = common.KeepAlive
 

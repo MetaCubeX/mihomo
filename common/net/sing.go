@@ -3,6 +3,7 @@ package net
 import (
 	"context"
 	"net"
+	"runtime"
 
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
@@ -33,7 +34,11 @@ func NeedHandshake(conn any) bool {
 	return false
 }
 
+type CountFunc = network.CountFunc
+
 // Relay copies between left and right bidirectionally.
 func Relay(leftConn, rightConn net.Conn) {
+	defer runtime.KeepAlive(leftConn)
+	defer runtime.KeepAlive(rightConn)
 	_ = bufio.CopyConn(context.TODO(), leftConn, rightConn)
 }
