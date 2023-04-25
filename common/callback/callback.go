@@ -36,6 +36,14 @@ func (c *firstWriteCallBackConn) Upstream() any {
 	return c.Conn
 }
 
+func (c *firstWriteCallBackConn) WriterReplaceable() bool {
+	return c.written
+}
+
+func (c *firstWriteCallBackConn) ReaderReplaceable() bool {
+	return true
+}
+
 var _ N.ExtendedConn = (*firstWriteCallBackConn)(nil)
 
 func NewFirstWriteCallBackConn(c C.Conn, callback func(error)) C.Conn {
