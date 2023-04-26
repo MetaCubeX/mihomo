@@ -2,12 +2,14 @@ package outbound
 
 import (
 	"context"
+	"errors"
 	"net"
 	"runtime"
 
 	CN "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
 
 	mux "github.com/sagernet/sing-mux"
@@ -73,7 +75,17 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	}
 	options := s.base.DialOptions(opts...)
 	s.dialer.dialer = dialer.NewDialer(options...)
-	pc, err := s.client.ListenPacket(ctx, M.ParseSocksaddr(metadata.RemoteAddress()))
+
+	// sing-mux use stream-oriented udp with a special address, so we need a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+
+	pc, err := s.client.ListenPacket(ctx, M.SocksaddrFromNet(metadata.UDPAddr()))
 	if err != nil {
 		return nil, err
 	}
