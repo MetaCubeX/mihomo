@@ -65,6 +65,7 @@ func TestDomainSetWildcard(t *testing.T) {
 		"stun.*.*",
 		"*.*.qq.com",
 		"test.*.baidu.com",
+		"*.apple.com",
 	}
 
 	for _, domain := range domainSet {
@@ -78,6 +79,7 @@ func TestDomainSetWildcard(t *testing.T) {
 	assert.True(t, set.Has("stun.ab.cd"))
 	assert.False(t, set.Has("test.baidu.com"))
 	assert.False(t, set.Has("www.google.com"))
+	assert.False(t, set.Has("a.www.google.com"))
 	assert.False(t, set.Has("test.qq.com"))
 	assert.False(t, set.Has("test.test.test.qq.com"))
 }

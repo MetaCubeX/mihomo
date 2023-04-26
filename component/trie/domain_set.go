@@ -105,7 +105,7 @@ func (ss *DomainSet) Has(key string) bool {
 						}
 					}
 					for ; ; nextBmIdx++ {
-						if ss.labels[nextBmIdx-nextNodeId] == domainStepByte {
+						if nextBmIdx-nextNodeId < len(ss.labels) && ss.labels[nextBmIdx-nextNodeId] == domainStepByte {
 							bmIdx = nextBmIdx
 							nodeId = nextNodeId
 							i = j
