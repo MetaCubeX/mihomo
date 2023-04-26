@@ -64,7 +64,7 @@ hosts:
 
 profile: # 存储 select 选择记录
   store-selected: false
-  
+
   # 持久化 fake-ip
   store-fake-ip: true
 
@@ -93,10 +93,10 @@ tun:
   #- 1000
   # exclude_uid_range: # 排除路由的的用户范围
   # - 1000-99999
-  
+
   # Android 用户和应用规则仅在 Android 下被支持
   # 并且需要 auto_route
-  
+
   # include_android_user: # 限制被路由的 Android 用户
   # - 0
   # - 10
@@ -126,10 +126,10 @@ sniffer:
   sniff: # TLS 默认如果不配置 ports 默认嗅探 443
     TLS:
     #  ports: [443, 8443]
-    
+
     # 默认嗅探 80
     HTTP: # 需要嗅探的端口
-      
+
       ports: [80, 8080-8880]
       # 可覆盖 sniffer.override-destination
       override-destination: true
@@ -144,7 +144,7 @@ sniffer:
     - tls
     - http
   # 强制对此域名进行嗅探
-  
+
   # 仅对白名单中的端口进行嗅探，默认为 443，80
   # 已废弃，若 sniffer.sniff 配置则此项无效
   port-whitelist:
@@ -177,17 +177,18 @@ dns:
     - 8.8.8.8
     - tls://1.12.12.12:853
     - tls://223.5.5.5:853
+    - system:// # 读取系统 DNS, 暂不支持windows
   enhanced-mode: fake-ip # or redir-host
-  
+
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
-  
+
   # use-hosts: true # 查询 hosts
-  
+
   # 配置不使用fake-ip的域名
   # fake-ip-filter:
   #   - '*.lan'
   #   - localhost.ptlogin2.qq.com
-  
+
   # DNS主要域名配置
   # 支持 UDP，TCP，DoT，DoH，DoQ
   # 这部分为主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS
@@ -201,20 +202,20 @@ dns:
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - '8.8.8.8#en0' # 兼容指定DNS出口网卡
-  
+
   # 当配置 fallback 时，会查询 nameserver 中返回的 IP 是否为 CN，非必要配置
   # 当不是 CN，则使用 fallback 中的 DNS 查询结果
   # 确保配置 fallback 时能够正常查询
   # fallback:
   #   - tcp://1.1.1.1
   #   - 'tcp://1.1.1.1#ProxyGroupName' # 指定 DNS 过代理查询，ProxyGroupName 为策略组名或节点名，过代理配置优先于配置出口网卡，当找不到策略组或节点名则设置为出口网卡
-  
+
   # 专用于节点域名解析的 DNS 服务器，非必要配置项
   # 配置服务器若查询失败将使用 nameserver，非并发查询
   # proxy-server-nameserver:
   # - https://dns.google/dns-query
   # - tls://one.one.one.one
-  
+
   # 配置 fallback 使用条件
   # fallback-filter:
   #   geoip: true # 配置是否使用 geoip
@@ -229,7 +230,7 @@ dns:
   #     - '+.google.com'
   #     - '+.facebook.com'
   #     - '+.youtube.com'
-  
+
   # 配置查询域名使用的 DNS 服务器
   nameserver-policy:
     #   'www.baidu.com': '114.114.114.114'
@@ -251,7 +252,7 @@ proxies: # socks5
     # skip-cert-verify: true
     # udp: true
     # ip-version: ipv6
-  
+
   # http
   - name: "http"
     type: http
@@ -264,7 +265,7 @@ proxies: # socks5
     # sni: custom.com
     # fingerprint: xxxx # 同 experimental.fingerprints 使用 sha256 指纹，配置协议独立的指纹，将忽略 experimental.fingerprints
     # ip-version: dual
-  
+
   # Snell
   # Beware that there's currently no UDP support yet
   - name: "snell"
@@ -276,7 +277,7 @@ proxies: # socks5
     # obfs-opts:
     # mode: http # or tls
     # host: bing.com
-  
+
   # Shadowsocks
   # cipher支持:
   #   aes-128-gcm aes-192-gcm aes-256-gcm
@@ -299,7 +300,7 @@ proxies: # socks5
     # UDP 则为双栈解析，获取结果中的第一个 IPv4
     # ipv6-prefer 同 ipv4-prefer
     # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
-  
+
   - name: "ss2"
     type: ss
     server: server
@@ -310,7 +311,7 @@ proxies: # socks5
     plugin-opts:
       mode: tls # or http
       # host: bing.com
-  
+
   - name: "ss3"
     type: ss
     server: server
@@ -330,7 +331,7 @@ proxies: # socks5
     # mux: true
     # headers:
     #   custom: value
-  
+
   - name: "ss4-shadow-tls"
     type: ss
     server: server
@@ -359,7 +360,7 @@ proxies: # socks5
         password: [YOUR_RESTLS_PASSWORD]
         version-hint: "tls13"
         # Control your post-handshake traffic through restls-script
-        # Hide proxy behaviors like "tls in tls". 
+        # Hide proxy behaviors like "tls in tls".
         # see https://github.com/3andne/restls/blob/main/Restls-Script:%20Hide%20Your%20Proxy%20Traffic%20Behavior.md
         # 用restls剧本来控制握手后的行为，隐藏"tls in tls"等特征
         # 详情：https://github.com/3andne/restls/blob/main/Restls-Script:%20%E9%9A%90%E8%97%8F%E4%BD%A0%E7%9A%84%E4%BB%A3%E7%90%86%E8%A1%8C%E4%B8%BA.md
@@ -380,7 +381,7 @@ proxies: # socks5
         password: [YOUR_RESTLS_PASSWORD]
         version-hint: "tls12"
         restls-script: "1000?100<1,500~100,350~100,600~100,400~200"
-  
+
   # vmess
   # cipher支持 auto/aes-128-gcm/chacha20-poly1305/none
   - name: "vmess"
@@ -403,7 +404,7 @@ proxies: # socks5
     #     Host: v2ray.com
     #   max-early-data: 2048
     #   early-data-header-name: Sec-WebSocket-Protocol
-  
+
   - name: "vmess-h2"
     type: vmess
     server: server
@@ -419,7 +420,7 @@ proxies: # socks5
         - http.example.com
         - http-alt.example.com
       path: /
-  
+
   - name: "vmess-http"
     type: vmess
     server: server
@@ -438,7 +439,7 @@ proxies: # socks5
     #     Connection:
     #       - keep-alive
     # ip-version: ipv4 # 设置使用 IP 类型偏好，可选：ipv4，ipv6，dual，默认值：dual
-  
+
   - name: vmess-grpc
     server: server
     port: 443
@@ -454,7 +455,7 @@ proxies: # socks5
     grpc-opts:
       grpc-service-name: "example"
     # ip-version: ipv4
-  
+
   # vless
   - name: "vless-tcp"
     type: vless
@@ -467,7 +468,7 @@ proxies: # socks5
     # skip-cert-verify: true
     # fingerprint: xxxx
     # client-fingerprint: random # Available: "chrome","firefox","safari","random","none"
-  
+
   - name: "vless-vision"
     type: vless
     server: server
@@ -480,7 +481,7 @@ proxies: # socks5
     client-fingerprint: chrome
     # fingerprint: xxxx
     # skip-cert-verify: true
-  
+
   - name: "vless-reality-vision"
     type: vless
     server: server
@@ -495,7 +496,7 @@ proxies: # socks5
       public-key: xxx
       short-id: xxx # optional
     client-fingerprint: chrome # cannot be empty
-  
+
   - name: "vless-reality-grpc"
     type: vless
     server: server
@@ -513,7 +514,7 @@ proxies: # socks5
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
-  
+
   - name: "vless-ws"
     type: vless
     server: server
@@ -530,7 +531,7 @@ proxies: # socks5
       path: "/"
       headers:
         Host: example.com
-  
+
   # Trojan
   - name: "trojan"
     type: trojan
@@ -545,7 +546,7 @@ proxies: # socks5
     #   - h2
     #   - http/1.1
     # skip-cert-verify: true
-  
+
   - name: trojan-grpc
     server: server
     port: 443
@@ -558,7 +559,7 @@ proxies: # socks5
     udp: true
     grpc-opts:
       grpc-service-name: "example"
-  
+
   - name: trojan-ws
     server: server
     port: 443
@@ -573,7 +574,7 @@ proxies: # socks5
     # path: /path
     # headers:
     #   Host: example.com
-  
+
   - name: "trojan-xtls"
     type: trojan
     server: server
@@ -585,7 +586,7 @@ proxies: # socks5
     # sni: example.com # aka server name
     # skip-cert-verify: true
     # fingerprint: xxxx
-  
+
   #hysteria
   - name: "hysteria"
     type: hysteria
@@ -611,7 +612,7 @@ proxies: # socks5
     # disable_mtu_discovery: false
     # fingerprint: xxxx
     # fast-open: true # 支持 TCP 快速打开，默认为 false
-  
+
   # wireguard
   - name: "wg"
     type: wireguard
@@ -625,7 +626,7 @@ proxies: # socks5
     reserved: "U4An"
     # 数组格式也是合法的
     # reserved: [209,98,59]
-  
+
   # tuic
   - name: tuic
     server: www.example.com
@@ -645,7 +646,7 @@ proxies: # socks5
     # skip-cert-verify: true
     # max-open-streams: 20 # default 100, too many open streams may hurt performance
     # sni: example.com
-  
+
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss
   # The supported obfses:
@@ -675,7 +676,7 @@ proxy-groups: # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
       - vmess
       - ss1
       - ss2
-  
+
   # url-test 将按照 url 测试结果使用延迟最低节点
   - name: "auto"
     type: url-test
@@ -687,7 +688,7 @@ proxy-groups: # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
     # lazy: true
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
-  
+
   # fallback 将按照 url 测试结果按照节点顺序选择
   - name: "fallback-auto"
     type: fallback
@@ -697,7 +698,7 @@ proxy-groups: # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
       - vmess1
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
-  
+
   # load-balance 将按照算法随机选择节点
   - name: "load-balance"
     type: load-balance
@@ -708,7 +709,7 @@ proxy-groups: # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
   # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
-  
+
   # select 用户自行选择节点
   - name: Proxy
     type: select
@@ -718,7 +719,7 @@ proxy-groups: # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
       - ss2
       - vmess1
       - auto
-  
+
   # 配置指定 interface-name 和 fwmark 的 DIRECT
   - name: en1
     type: select
@@ -726,7 +727,7 @@ proxy-groups: # 代理链，若落地协议支持 UDP over TCP 则可支持 UDP
     routing-mark: 6667
     proxies:
       - DIRECT
-  
+
   - name: UseProvider
     type: select
     filter: "HK|TW" # 正则表达式，过滤 provider1 中节点名包含 HK 或 TW
@@ -810,14 +811,14 @@ listeners:
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理
     # udp: false # 默认 true
-  
+
   - name: http-in-1
     type: http
     port: 10809
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-  
+
   - name: mixed-in-1
     type: mixed #  HTTP(S) 和 SOCKS 代理混合
     port: 10810
@@ -825,14 +826,14 @@ listeners:
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     # udp: false # 默认 true
-  
+
   - name: reidr-in-1
     type: redir
     port: 10811
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-  
+
   - name: tproxy-in-1
     type: tproxy
     port: 10812
@@ -840,7 +841,7 @@ listeners:
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     # udp: false # 默认 true
-  
+
   - name: shadowsocks-in-1
     type: shadowsocks
     port: 10813
@@ -849,7 +850,7 @@ listeners:
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
     cipher: 2022-blake3-aes-256-gcm
-  
+
   - name: vmess-in-1
     type: vmess
     port: 10814
@@ -860,7 +861,7 @@ listeners:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
         alterId: 1
-  
+
   - name: tuic-in-1
     type: tuic
     port: 10815
@@ -877,7 +878,7 @@ listeners:
     #  alpn:
     #    - h3
     #  max-udp-relay-packet-size: 1500
-  
+
   - name: tunnel-in-1
     type: tunnel
     port: 10816
@@ -886,7 +887,7 @@ listeners:
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
     network: [tcp, udp]
     target: target.com
-  
+
   - name: tun-in-1
     type: tun
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
@@ -917,10 +918,10 @@ listeners:
     # - 1000
     # exclude_uid_range: # 排除路由的的用户范围
     # - 1000-99999
-    
+
     # Android 用户和应用规则仅在 Android 下被支持
     # 并且需要 auto_route
-    
+
     # include_android_user: # 限制被路由的 Android 用户
     # - 0
     # - 10
