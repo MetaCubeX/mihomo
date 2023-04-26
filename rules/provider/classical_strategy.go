@@ -37,35 +37,37 @@ func (c *classicalStrategy) ShouldFindProcess() bool {
 	return c.shouldFindProcess
 }
 
-func (c *classicalStrategy) OnUpdate(rules []string) {
-	var classicalRules []C.Rule
-	shouldResolveIP := false
-	for _, rawRule := range rules {
-		ruleType, rule, params := ruleParse(rawRule)
+func (c *classicalStrategy) Reset() {
+	c.rules = nil
+	c.count = 0
+	c.shouldFindProcess = false
+	c.shouldResolveIP = false
+}
 
-		if ruleType == "PROCESS-NAME" {
+func (c *classicalStrategy) Insert(rule string) {
+	ruleType, rule, params := ruleParse(rule)
+
+	if ruleType == "PROCESS-NAME" {
+		c.shouldFindProcess = true
+	}
+
+	r, err := c.parse(ruleType, rule, "", params)
+	if err != nil {
+		log.Warnln("parse rule error:[%s]", err.Error())
+	} else {
+		if r.ShouldResolveIP() {
+			c.shouldResolveIP = true
+		}
+		if r.ShouldFindProcess() {
 			c.shouldFindProcess = true
 		}
 
-		r, err := c.parse(ruleType, rule, "", params)
-		if err != nil {
-			log.Warnln("parse rule error:[%s]", err.Error())
-		} else {
-			if !shouldResolveIP {
-				shouldResolveIP = r.ShouldResolveIP()
-			}
-
-			if !c.shouldFindProcess {
-				c.shouldFindProcess = r.ShouldFindProcess()
-			}
-
-			classicalRules = append(classicalRules, r)
-		}
+		c.rules = append(c.rules, r)
+		c.count++
 	}
-
-	c.rules = classicalRules
-	c.count = len(classicalRules)
 }
+
+func (c *classicalStrategy) FinishInsert() {}
 
 func ruleParse(ruleRaw string) (string, string, []string) {
 	item := strings.Split(ruleRaw, ",")

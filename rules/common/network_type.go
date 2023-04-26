@@ -21,10 +21,8 @@ func NewNetworkType(network, adapter string) (*NetworkType, error) {
 	switch strings.ToUpper(network) {
 	case "TCP":
 		ntType.network = C.TCP
-		break
 	case "UDP":
 		ntType.network = C.UDP
-		break
 	default:
 		return nil, fmt.Errorf("unsupported network type, only TCP/UDP")
 	}

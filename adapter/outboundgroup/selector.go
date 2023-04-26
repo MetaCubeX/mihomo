@@ -44,6 +44,11 @@ func (s *Selector) SupportUDP() bool {
 	return s.selectedProxy(false).SupportUDP()
 }
 
+// IsL3Protocol implements C.ProxyAdapter
+func (s *Selector) IsL3Protocol(metadata *C.Metadata) bool {
+	return s.selectedProxy(false).IsL3Protocol(metadata)
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (s *Selector) MarshalJSON() ([]byte, error) {
 	all := []string{}
@@ -71,6 +76,10 @@ func (s *Selector) Set(name string) error {
 	}
 
 	return errors.New("proxy not exist")
+}
+
+func (s *Selector) ForceSet(name string) {
+	s.selected = name
 }
 
 // Unwrap implements C.ProxyAdapter

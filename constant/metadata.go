@@ -15,7 +15,10 @@ const (
 	TCP NetWork = iota
 	UDP
 	ALLNet
+	InvalidNet = 0xff
+)
 
+const (
 	HTTP Type = iota
 	HTTPS
 	SOCKS4
@@ -33,12 +36,16 @@ const (
 type NetWork int
 
 func (n NetWork) String() string {
-	if n == TCP {
+	switch n {
+	case TCP:
 		return "tcp"
-	} else if n == UDP {
+	case UDP:
 		return "udp"
+	case ALLNet:
+		return "all"
+	default:
+		return "invalid"
 	}
-	return "all"
 }
 
 func (n NetWork) MarshalJSON() ([]byte, error) {
@@ -221,4 +228,22 @@ func (m *Metadata) String() string {
 
 func (m *Metadata) Valid() bool {
 	return m.Host != "" || m.DstIP.IsValid()
+}
+
+func (m *Metadata) SetRemoteAddress(rawAddress string) error {
+	host, port, err := net.SplitHostPort(rawAddress)
+	if err != nil {
+		return err
+	}
+
+	if ip, err := netip.ParseAddr(host); err != nil {
+		m.Host = host
+		m.DstIP = netip.Addr{}
+	} else {
+		m.Host = ""
+		m.DstIP = ip.Unmap()
+	}
+	m.DstPort = port
+
+	return nil
 }

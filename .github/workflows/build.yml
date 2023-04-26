@@ -8,13 +8,11 @@ on:
       - ".github/ISSUE_TEMPLATE/**"
     branches:
       - Alpha
-      - Meta
     tags:
       - "v*"
   pull_request_target:
     branches:
       - Alpha
-      - Meta
       
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}

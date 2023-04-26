@@ -10,9 +10,11 @@ const BufferSize = buf.BufferSize
 type Buffer = buf.Buffer
 
 var New = buf.New
+var NewSize = buf.NewSize
 var StackNew = buf.StackNew
 var StackNewSize = buf.StackNewSize
 var With = buf.With
+var As = buf.As
 
 var KeepAlive = common.KeepAlive
 
@@ -21,5 +23,7 @@ func Dup[T any](obj T) T {
 	return common.Dup(obj)
 }
 
-var Must = common.Must
-var Error = common.Error
+var (
+	Must  = common.Must
+	Error = common.Error
+)

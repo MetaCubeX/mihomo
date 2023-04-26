@@ -18,7 +18,7 @@ import (
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/log"
 
-	"github.com/gofrs/uuid"
+	"github.com/gofrs/uuid/v5"
 	utls "github.com/sagernet/utls"
 	xtls "github.com/xtls/go"
 	"google.golang.org/protobuf/proto"

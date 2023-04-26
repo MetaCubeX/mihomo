@@ -20,6 +20,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -28,6 +29,7 @@ import (
 	"github.com/Dreamacro/clash/transport/hysteria/obfs"
 	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
 	"github.com/Dreamacro/clash/transport/hysteria/transport"
+	"github.com/Dreamacro/clash/transport/hysteria/utils"
 )
 
 const (
@@ -46,21 +48,12 @@ var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
 type Hysteria struct {
 	*Base
 
+	option *HysteriaOption
 	client *core.Client
 }
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	hdc := hyDialerWithContext{
-		ctx: context.Background(),
-		hyDialer: func(network string) (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, network, "", h.Base.DialOptions(opts...)...)
-		},
-		remoteAddr: func(addr string) (net.Addr, error) {
-			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
-		},
-	}
-
-	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), &hdc)
+	tcpConn, err := h.client.DialTCP(metadata.RemoteAddress(), h.genHdc(ctx, opts...))
 	if err != nil {
 		return nil, err
 	}
@@ -69,20 +62,32 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	hdc := hyDialerWithContext{
+	udpConn, err := h.client.DialUDP(h.genHdc(ctx, opts...))
+	if err != nil {
+		return nil, err
+	}
+	return newPacketConn(&hyPacketConn{udpConn}, h), nil
+}
+
+func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.PacketDialer {
+	return &hyDialerWithContext{
 		ctx: context.Background(),
 		hyDialer: func(network string) (net.PacketConn, error) {
-			return dialer.ListenPacket(ctx, network, "", h.Base.DialOptions(opts...)...)
+			var err error
+			var cDialer C.Dialer = dialer.NewDialer(h.Base.DialOptions(opts...)...)
+			if len(h.option.DialerProxy) > 0 {
+				cDialer, err = proxydialer.NewByName(h.option.DialerProxy, cDialer)
+				if err != nil {
+					return nil, err
+				}
+			}
+			rAddrPort, _ := netip.ParseAddrPort(h.Addr())
+			return cDialer.ListenPacket(ctx, network, "", rAddrPort)
 		},
 		remoteAddr: func(addr string) (net.Addr, error) {
 			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
 		},
 	}
-	udpConn, err := h.client.DialUDP(&hdc)
-	if err != nil {
-		return nil, err
-	}
-	return newPacketConn(&hyPacketConn{udpConn}, h), nil
 }
 
 type HysteriaOption struct {
@@ -258,6 +263,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+		option: &option,
 		client: client,
 	}, nil
 }

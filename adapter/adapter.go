@@ -4,16 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Dreamacro/clash/common/queue"
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"time"
 
-	"go.uber.org/atomic"
+	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/Dreamacro/clash/common/queue"
+	"github.com/Dreamacro/clash/component/dialer"
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var UnifiedDelay = atomic.NewBool(false)

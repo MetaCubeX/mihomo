@@ -17,7 +17,6 @@ import (
 	D "github.com/miekg/dns"
 
 	"github.com/sagernet/sing/common/buf"
-	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
 )
@@ -110,11 +109,14 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			conn2 = nil
 		}()
 		for {
-			buff := buf.NewPacket()
+			// safe size which is 1232 from https://dnsflagday.net/2020/.
+			// so 2048 is enough
+			buff := buf.NewSize(2 * 1024)
+			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
 			dest, err := conn.ReadPacket(buff)
 			if err != nil {
 				buff.Release()
-				if E.IsClosed(err) {
+				if sing.ShouldIgnorePacketError(err) {
 					break
 				}
 				return err

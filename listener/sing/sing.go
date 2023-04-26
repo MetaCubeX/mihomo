@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 
+	mux "github.com/sagernet/sing-mux"
 	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio/deadline"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
@@ -33,7 +36,7 @@ type ListenerHandler struct {
 }
 
 type waitCloseConn struct {
-	net.Conn
+	N.ExtendedConn
 	wg    *sync.WaitGroup
 	close sync.Once
 	rAddr net.Addr
@@ -43,7 +46,7 @@ func (c *waitCloseConn) Close() error { // call from handleTCPConn(connCtx C.Con
 	c.close.Do(func() {
 		c.wg.Done()
 	})
-	return c.Conn.Close()
+	return c.ExtendedConn.Close()
 }
 
 func (c *waitCloseConn) RemoteAddr() net.Addr {
@@ -51,7 +54,14 @@ func (c *waitCloseConn) RemoteAddr() net.Addr {
 }
 
 func (c *waitCloseConn) Upstream() any {
-	return c.Conn
+	return c.ExtendedConn
+}
+
+func UpstreamMetadata(metadata M.Metadata) M.Metadata {
+	return M.Metadata{
+		Source:      metadata.Source,
+		Destination: metadata.Destination,
+	}
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
@@ -61,6 +71,8 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 		additions = append(additions, ctxAdditions...)
 	}
 	switch metadata.Destination.Fqdn {
+	case mux.Destination.Fqdn:
+		return mux.HandleConnection(ctx, h, log.SingLogger, conn, UpstreamMetadata(metadata))
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
 	case uot.MagicAddress:
@@ -79,7 +91,10 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	defer wg.Wait() // this goroutine must exit after conn.Close()
 	wg.Add(1)
 
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{Conn: conn, wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
+	if deadline.NeedAdditionalReadDeadline(conn) {
+		conn = N.NewDeadlineConn(conn) // conn from sing should check NeedAdditionalReadDeadline
+	}
+	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
 	return nil
 }
 
@@ -102,7 +117,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		dest, err := conn.ReadPacket(buff)
 		if err != nil {
 			buff.Release()
-			if E.IsClosed(err) {
+			if ShouldIgnorePacketError(err) {
 				break
 			}
 			return err
@@ -125,6 +140,14 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 
 func (h *ListenerHandler) NewError(ctx context.Context, err error) {
 	log.Warnln("%s listener get error: %+v", h.Type.String(), err)
+}
+
+func ShouldIgnorePacketError(err error) bool {
+	// ignore simple error
+	if E.IsTimeout(err) || E.IsClosed(err) || E.IsCanceled(err) {
+		return true
+	}
+	return false
 }
 
 type packet struct {

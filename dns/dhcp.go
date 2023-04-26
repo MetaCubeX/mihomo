@@ -8,8 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
-
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/component/dhcp"
 	"github.com/Dreamacro/clash/component/iface"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -86,7 +85,7 @@ func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {
 				for _, item := range dns {
 					nameserver = append(nameserver, NameServer{
 						Addr:      net.JoinHostPort(item.String(), "53"),
-						Interface: atomic.NewString(d.ifaceName),
+						Interface: atomic.NewTypedValue(d.ifaceName),
 					})
 				}
 

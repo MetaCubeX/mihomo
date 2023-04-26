@@ -13,6 +13,7 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
@@ -216,27 +217,42 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	return v.streamConn(c, metadata)
+}
+
+func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
 			if N.NeedHandshake(c) {
-				return v.client.DialEarlyXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+				conn = v.client.DialEarlyXUDPPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
 			} else {
-				return v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+				conn, err = v.client.DialXUDPPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
 			}
+		} else if v.option.PacketAddr {
+			if N.NeedHandshake(c) {
+				conn = v.client.DialEarlyPacketConn(c, M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
+			} else {
+				conn, err = v.client.DialPacketConn(c, M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
+			}
+			conn = packetaddr.NewBindConn(conn)
 		} else {
 			if N.NeedHandshake(c) {
-				return v.client.DialEarlyPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+				conn = v.client.DialEarlyPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
 			} else {
-				return v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+				conn, err = v.client.DialPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
 			}
 		}
 	} else {
 		if N.NeedHandshake(c) {
-			return v.client.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+			conn = v.client.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 		} else {
-			return v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			conn, err = v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
 		}
 	}
+	if err != nil {
+		conn = nil
+	}
+	return
 }
 
 // DialContext implements C.ProxyAdapter
@@ -263,6 +279,12 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(v.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(v.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
@@ -286,14 +308,6 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}
 		metadata.DstIP = ip
 	}
-
-	if v.option.PacketAddr {
-		_metadata := *metadata // make a copy
-		metadata = &_metadata
-		metadata.Host = packetaddr.SeqPacketMagicAddress
-		metadata.DstPort = "443"
-	}
-
 	var c net.Conn
 	// gun transport
 	if v.transport != nil && len(opts) == 0 {
@@ -305,30 +319,24 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		if v.option.XUDP {
-			if N.NeedHandshake(c) {
-				c = v.client.DialEarlyXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
-			} else {
-				c, err = v.client.DialXUDPPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
-			}
-		} else {
-			if N.NeedHandshake(c) {
-				c = v.client.DialEarlyPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
-			} else {
-				c, err = v.client.DialPacketConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
-			}
-		}
-
+		c, err = v.streamConn(c, metadata)
 		if err != nil {
 			return nil, fmt.Errorf("new vmess client error: %v", err)
 		}
-		return v.ListenPacketOnStreamConn(c, metadata)
+		return v.ListenPacketOnStreamConn(ctx, c, metadata)
 	}
 	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if len(v.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(v.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
@@ -351,19 +359,26 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 	if err != nil {
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
-	return v.ListenPacketOnStreamConn(c, metadata)
+	return v.ListenPacketOnStreamConn(ctx, c, metadata)
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (v *Vmess) SupportWithDialer() bool {
-	return true
+func (v *Vmess) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
-func (v *Vmess) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if v.option.PacketAddr {
-		return newPacketConn(&threadSafePacketConn{PacketConn: packetaddr.NewBindConn(c)}, v), nil
-	} else if pc, ok := c.(net.PacketConn); ok {
+func (v *Vmess) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	// vmess use stream-oriented udp with a special address, so we need a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+
+	if pc, ok := c.(net.PacketConn); ok {
 		return newPacketConn(&threadSafePacketConn{PacketConn: pc}, v), nil
 	}
 	return newPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
@@ -428,7 +443,15 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		}
 	case "grpc":
 		dialFn := func(network, addr string) (net.Conn, error) {
-			c, err := dialer.DialContext(context.Background(), "tcp", v.addr, v.Base.DialOptions()...)
+			var err error
+			var cDialer C.Dialer = dialer.NewDialer(v.Base.DialOptions()...)
+			if len(v.option.DialerProxy) > 0 {
+				cDialer, err = proxydialer.NewByName(v.option.DialerProxy, cDialer)
+				if err != nil {
+					return nil, err
+				}
+			}
+			c, err := cDialer.DialContext(context.Background(), "tcp", v.addr)
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
@@ -486,9 +509,9 @@ type vmessPacketConn struct {
 // WriteTo implments C.PacketConn.WriteTo
 // Since VMess doesn't support full cone NAT by design, we verify if addr matches uc.rAddr, and drop the packet if not.
 func (uc *vmessPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	allowedAddr := uc.rAddr.(*net.UDPAddr)
-	destAddr := addr.(*net.UDPAddr)
-	if !(allowedAddr.IP.Equal(destAddr.IP) && allowedAddr.Port == destAddr.Port) {
+	allowedAddr := uc.rAddr
+	destAddr := addr
+	if allowedAddr.String() != destAddr.String() {
 		return 0, ErrUDPRemoteAddrMismatch
 	}
 	uc.access.Lock()

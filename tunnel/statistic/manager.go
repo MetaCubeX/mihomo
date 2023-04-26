@@ -1,10 +1,13 @@
 package statistic
 
 import (
+	"os"
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
+	"github.com/Dreamacro/clash/common/atomic"
+
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 var DefaultManager *Manager
@@ -17,6 +20,7 @@ func init() {
 		downloadBlip:  atomic.NewInt64(0),
 		uploadTotal:   atomic.NewInt64(0),
 		downloadTotal: atomic.NewInt64(0),
+		process:       &process.Process{Pid: int32(os.Getpid())},
 	}
 
 	go DefaultManager.handle()
@@ -30,6 +34,8 @@ type Manager struct {
 	downloadBlip  *atomic.Int64
 	uploadTotal   *atomic.Int64
 	downloadTotal *atomic.Int64
+	process       *process.Process
+	memory        uint64
 }
 
 func (m *Manager) Join(c tracker) {
@@ -54,6 +60,10 @@ func (m *Manager) Now() (up int64, down int64) {
 	return m.uploadBlip.Load(), m.downloadBlip.Load()
 }
 
+func (m *Manager) Memory() uint64 {
+	return m.memory
+}
+
 func (m *Manager) Snapshot() *Snapshot {
 	connections := []tracker{}
 	m.connections.Range(func(key, value any) bool {
@@ -61,10 +71,20 @@ func (m *Manager) Snapshot() *Snapshot {
 		return true
 	})
 
+	getMem := func() uint64 {
+		stat, err := m.process.MemoryInfo()
+		if err != nil {
+			return 0
+		}
+		return stat.RSS
+	}
+	m.memory = getMem()
+
 	return &Snapshot{
 		UploadTotal:   m.uploadTotal.Load(),
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
+		Memory:        m.memory,
 	}
 }
 
@@ -92,4 +112,5 @@ type Snapshot struct {
 	DownloadTotal int64     `json:"downloadTotal"`
 	UploadTotal   int64     `json:"uploadTotal"`
 	Connections   []tracker `json:"connections"`
+	Memory        uint64    `json:"memory"`
 }

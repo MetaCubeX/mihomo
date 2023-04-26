@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dreamacro/clash/common/atomic"
+
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 )
 
 func TestBasic(t *testing.T) {
@@ -26,7 +27,7 @@ func TestBasic(t *testing.T) {
 		go func() {
 			_, _, shard := single.Do(call)
 			if shard {
-				shardCount.Inc()
+				shardCount.Add(1)
 			}
 			wg.Done()
 		}()
