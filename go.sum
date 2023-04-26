@@ -102,8 +102,8 @@ github.com/metacubex/sing-shadowsocks v0.2.2-0.20230422111054-f54786eee8ba h1:He
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230422111054-f54786eee8ba/go.mod h1:4uQQReKMTU7KTfOykVBe/oGJ00pl38d+BYJ99+mx26s=
 github.com/metacubex/sing-tun v0.1.4 h1:OQDBNHjuPKrOprCiK+sLt97YQ0K6b9ZWmJB6z51ibZQ=
 github.com/metacubex/sing-tun v0.1.4/go.mod h1:BMfG00enVf90/CzcdX9PK3Dymgl7BZqHXJfexEyB7Cc=
-github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb h1:uoeOqHaQmNPev9RewQlff9Z55yuczEhRizcgDf4lSAw=
-github.com/metacubex/sing-wireguard v0.0.0-20230420053659-05c12d25b6eb/go.mod h1:Bsw2BvKMMMY0FhZPseDI50ZOalvoUPMKYyGpyqvIIqY=
+github.com/metacubex/sing-wireguard v0.0.0-20230426030325-41db09ae771a h1:cWKym33Qvl6HA3hj4/YuYD8hHyqQPb47wT5cJRAPgco=
+github.com/metacubex/sing-wireguard v0.0.0-20230426030325-41db09ae771a/go.mod h1:Bsw2BvKMMMY0FhZPseDI50ZOalvoUPMKYyGpyqvIIqY=
 github.com/miekg/dns v1.1.53 h1:ZBkuHr5dxHtB1caEOlZTLPo7D3L3TWckgUUs/RHfDxw=
 github.com/miekg/dns v1.1.53/go.mod h1:uInx36IzPl7FYnDcMeVWxj9byh7DutNykX4G9Sj60FY=
 github.com/mroth/weightedrand/v2 v2.0.0 h1:ADehnByWbliEDIazDAKFdBHoqgHSXAkgyKqM/9YsPoo=
