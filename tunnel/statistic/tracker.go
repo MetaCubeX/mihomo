@@ -112,7 +112,7 @@ func (tt *tcpTracker) Upstream() any {
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *tcpTracker {
 	if conn != nil {
-		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok && tcpAddr.IP != nil {
 			metadata.RemoteDst = tcpAddr.IP.String()
 		} else {
 			metadata.RemoteDst = conn.RemoteDestination()
