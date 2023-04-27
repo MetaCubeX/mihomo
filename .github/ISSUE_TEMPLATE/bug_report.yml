@@ -44,6 +44,7 @@ This is an issue of the Clash core *per se*, not to the derivatives of Clash, li
   - type: input
     attributes:
       label: Clash version
+      description: "use `clash -v`"
     validations:
       required: true
   - type: dropdown
