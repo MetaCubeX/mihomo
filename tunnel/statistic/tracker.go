@@ -3,6 +3,7 @@ package statistic
 import (
 	"io"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/Dreamacro/clash/common/atomic"
@@ -110,13 +111,24 @@ func (tt *tcpTracker) Upstream() any {
 	return tt.Conn
 }
 
+func parseRemoteDestination(addr net.Addr, conn C.Connection) string {
+	if addr == nil && conn != nil {
+		return conn.RemoteDestination()
+	}
+	if addrPort, err := netip.ParseAddrPort(addr.String()); err == nil && addrPort.Addr().IsValid() {
+		return addrPort.Addr().String()
+	} else {
+		if conn != nil {
+			return conn.RemoteDestination()
+		} else {
+			return ""
+		}
+	}
+}
+
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *tcpTracker {
 	if conn != nil {
-		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok && tcpAddr.IP != nil {
-			metadata.RemoteDst = tcpAddr.IP.String()
-		} else {
-			metadata.RemoteDst = conn.RemoteDestination()
-		}
+		metadata.RemoteDst = parseRemoteDestination(conn.RemoteAddr(), conn)
 	}
 
 	t := &tcpTracker{
@@ -190,7 +202,7 @@ func (ut *udpTracker) Close() error {
 }
 
 func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *udpTracker {
-	metadata.RemoteDst = conn.RemoteDestination()
+	metadata.RemoteDst = parseRemoteDestination(nil, conn)
 
 	ut := &udpTracker{
 		PacketConn: conn,
