@@ -61,6 +61,7 @@ func (m *Manager) Now() (up int64, down int64) {
 }
 
 func (m *Manager) Memory() uint64 {
+	m.updateMemory()
 	return m.memory
 }
 
@@ -70,22 +71,20 @@ func (m *Manager) Snapshot() *Snapshot {
 		connections = append(connections, value.(tracker))
 		return true
 	})
-
-	getMem := func() uint64 {
-		stat, err := m.process.MemoryInfo()
-		if err != nil {
-			return 0
-		}
-		return stat.RSS
-	}
-	m.memory = getMem()
-
 	return &Snapshot{
 		UploadTotal:   m.uploadTotal.Load(),
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
 		Memory:        m.memory,
 	}
+}
+
+func (m *Manager) updateMemory() {
+	stat, err := m.process.MemoryInfo()
+	if err != nil {
+		return
+	}
+	m.memory = stat.RSS
 }
 
 func (m *Manager) ResetStatistic() {
