@@ -85,6 +85,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Get("/version", version)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
+		r.Mount("/editConfigFile", configFileRouter())
 		r.Mount("/group", GroupRouter())
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
