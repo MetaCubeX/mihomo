@@ -106,7 +106,7 @@ func (h *Bdzl) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	total, err := rw.Write([]byte(header))
 
 	if err != nil {
-		log.Errorln("connect %s:", addr, err)
+		log.Errorln("connect "+addr, err)
 		return nil
 	}
 	rd := make([]byte, total)
