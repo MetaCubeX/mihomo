@@ -180,6 +180,8 @@ func (at AdapterType) String() string {
 		return "Socks5"
 	case Http:
 		return "Http"
+	case Bdzl:
+		return "Bdzl"
 	case Vmess:
 		return "Vmess"
 	case Vless:
