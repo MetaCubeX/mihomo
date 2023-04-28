@@ -37,6 +37,7 @@ const (
 	Hysteria
 	WireGuard
 	Tuic
+	Bdzl
 )
 
 const (
