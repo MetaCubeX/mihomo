@@ -307,6 +307,10 @@ type earlyConn struct {
 	RequestTimeout time.Duration
 }
 
+func (conn *earlyConn) ReaderReplaceable() bool {
+	return false
+}
+
 func (conn *earlyConn) response() error {
 	if conn.RequestTimeout > 0 {
 		_ = conn.SetReadDeadline(time.Now().Add(conn.RequestTimeout))
