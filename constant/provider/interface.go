@@ -73,17 +73,27 @@ type ProxyProvider interface {
 	Version() uint32
 }
 
-// Rule Type
+// RuleProvider interface
+type RuleProvider interface {
+	Provider
+	Behavior() RuleBehavior
+	Match(*constant.Metadata) bool
+	ShouldResolveIP() bool
+	ShouldFindProcess() bool
+	AsRule(adaptor string) constant.Rule
+}
+
+// Rule Behavior
 const (
-	Domain RuleType = iota
+	Domain RuleBehavior = iota
 	IPCIDR
 	Classical
 )
 
-// RuleType defined
-type RuleType int
+// RuleBehavior defined
+type RuleBehavior int
 
-func (rt RuleType) String() string {
+func (rt RuleBehavior) String() string {
 	switch rt {
 	case Domain:
 		return "Domain"
@@ -96,12 +106,20 @@ func (rt RuleType) String() string {
 	}
 }
 
-// RuleProvider interface
-type RuleProvider interface {
-	Provider
-	Behavior() RuleType
-	Match(*constant.Metadata) bool
-	ShouldResolveIP() bool
-	ShouldFindProcess() bool
-	AsRule(adaptor string) constant.Rule
+const (
+	YamlRule RuleFormat = iota
+	TextRule
+)
+
+type RuleFormat int
+
+func (rf RuleFormat) String() string {
+	switch rf {
+	case YamlRule:
+		return "YamlRule"
+	case TextRule:
+		return "TextRule"
+	default:
+		return "Unknown"
+	}
 }

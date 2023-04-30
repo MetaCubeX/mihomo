@@ -2,7 +2,6 @@ package tuic
 
 import (
 	"net"
-	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -103,7 +102,7 @@ func (q *quicStreamConn) RemoteAddr() net.Addr {
 	return q.rAddr
 }
 
-var _ net.Conn = &quicStreamConn{}
+var _ net.Conn = (*quicStreamConn)(nil)
 
 type quicStreamPacketConn struct {
 	connId    uint32
@@ -216,11 +215,11 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	}
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
-	addrPort, err := netip.ParseAddrPort(addr.String())
+	address, err := NewAddressNetAddr(addr)
 	if err != nil {
 		return
 	}
-	err = NewPacket(q.connId, uint16(len(p)), NewAddressAddrPort(addrPort), p).WriteTo(buf)
+	err = NewPacket(q.connId, uint16(len(p)), address, p).WriteTo(buf)
 	if err != nil {
 		return
 	}
@@ -252,4 +251,4 @@ func (q *quicStreamPacketConn) LocalAddr() net.Addr {
 	return q.quicConn.LocalAddr()
 }
 
-var _ net.PacketConn = &quicStreamPacketConn{}
+var _ net.PacketConn = (*quicStreamPacketConn)(nil)

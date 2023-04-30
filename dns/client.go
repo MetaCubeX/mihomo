@@ -8,11 +8,11 @@ import (
 	"net/netip"
 	"strings"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"go.uber.org/atomic"
-
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
+	tlsC "github.com/Dreamacro/clash/component/tls"
+	C "github.com/Dreamacro/clash/constant"
 
 	D "github.com/miekg/dns"
 	"github.com/zhangyunhao116/fastrand"
@@ -23,8 +23,9 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        *atomic.String
-	proxyAdapter string
+	iface        *atomic.TypedValue[string]
+	proxyAdapter C.ProxyAdapter
+	proxyName    string
 	addr         string
 }
 
@@ -81,7 +82,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
 
-	conn, err := getDialHandler(c.r, c.proxyAdapter, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
+	conn, err := getDialHandler(c.r, c.proxyAdapter, c.proxyName, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
 	if err != nil {
 		return nil, err
 	}

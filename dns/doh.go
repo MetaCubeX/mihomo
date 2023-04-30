@@ -21,6 +21,7 @@ import (
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/http3"
 	D "github.com/miekg/dns"
+	"golang.org/x/exp/slices"
 	"golang.org/x/net/http2"
 )
 
@@ -63,7 +64,8 @@ type dnsOverHTTPS struct {
 	url             *url.URL
 	r               *Resolver
 	httpVersions    []C.HTTPVersion
-	proxyAdapter    string
+	proxyAdapter    C.ProxyAdapter
+	proxyName       string
 	addr            string
 }
 
@@ -71,7 +73,7 @@ type dnsOverHTTPS struct {
 var _ dnsClient = (*dnsOverHTTPS)(nil)
 
 // newDoH returns the DNS-over-HTTPS Upstream.
-func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[string]string, proxyAdapter string) dnsClient {
+func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[string]string, proxyAdapter C.ProxyAdapter, proxyName string) dnsClient {
 	u, _ := url.Parse(urlString)
 	httpVersions := DefaultHTTPVersions
 	if preferH3 {
@@ -87,6 +89,7 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 		addr:         u.String(),
 		r:            r,
 		proxyAdapter: proxyAdapter,
+		proxyName:    proxyName,
 		quicConfig: &quic.Config{
 			KeepAlivePeriod: QUICKeepAlivePeriod,
 			TokenStore:      newQUICTokenStore(),
@@ -390,14 +393,17 @@ func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripp
 		nextProtos = append(nextProtos, string(v))
 	}
 	tlsConfig.NextProtos = nextProtos
-	dialContext := getDialHandler(doh.r, doh.proxyAdapter)
-	// First, we attempt to create an HTTP3 transport.  If the probe QUIC
-	// connection is established successfully, we'll be using HTTP3 for this
-	// upstream.
-	transportH3, err := doh.createTransportH3(ctx, tlsConfig, dialContext)
-	if err == nil {
-		log.Debugln("[%s] using HTTP/3 for this upstream: QUIC was faster", doh.url.String())
-		return transportH3, nil
+	dialContext := getDialHandler(doh.r, doh.proxyAdapter, doh.proxyName)
+
+	if slices.Contains(doh.httpVersions, C.HTTPVersion3) {
+		// First, we attempt to create an HTTP3 transport.  If the probe QUIC
+		// connection is established successfully, we'll be using HTTP3 for this
+		// upstream.
+		transportH3, err := doh.createTransportH3(ctx, tlsConfig, dialContext)
+		if err == nil {
+			log.Debugln("[%s] using HTTP/3 for this upstream: QUIC was faster", doh.url.String())
+			return transportH3, nil
+		}
 	}
 
 	log.Debugln("[%s] using HTTP/2 for this upstream: %v", doh.url.String(), err)
@@ -533,7 +539,7 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 		IP:   net.ParseIP(ip),
 		Port: portInt,
 	}
-	conn, err := listenPacket(ctx, doh.proxyAdapter, "udp", addr, doh.r)
+	conn, err := listenPacket(ctx, doh.proxyAdapter, doh.proxyName, "udp", addr, doh.r)
 	if err != nil {
 		return nil, err
 	}

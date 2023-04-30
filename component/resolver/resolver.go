@@ -44,10 +44,8 @@ type Resolver interface {
 	LookupIP(ctx context.Context, host string) (ips []netip.Addr, err error)
 	LookupIPv4(ctx context.Context, host string) (ips []netip.Addr, err error)
 	LookupIPv6(ctx context.Context, host string) (ips []netip.Addr, err error)
-	ResolveIP(ctx context.Context, host string) (ip netip.Addr, err error)
-	ResolveIPv4(ctx context.Context, host string) (ip netip.Addr, err error)
-	ResolveIPv6(ctx context.Context, host string) (ip netip.Addr, err error)
 	ExchangeContext(ctx context.Context, m *dns.Msg) (msg *dns.Msg, err error)
+	Invalid() bool
 }
 
 // LookupIPv4WithResolver same as LookupIPv4, but with a resolver
@@ -68,7 +66,7 @@ func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return []netip.Addr{}, ErrIPVersion
 	}
 
-	if r != nil {
+	if r != nil && r.Invalid() {
 		return r.LookupIPv4(ctx, host)
 	}
 
@@ -124,7 +122,7 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return nil, ErrIPVersion
 	}
 
-	if r != nil {
+	if r != nil && r.Invalid() {
 		return r.LookupIPv6(ctx, host)
 	}
 
@@ -164,7 +162,7 @@ func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip
 		return node.IPs, nil
 	}
 
-	if r != nil {
+	if r != nil && r.Invalid() {
 		if DisableIPv6 {
 			return r.LookupIPv4(ctx, host)
 		}
@@ -200,10 +198,14 @@ func ResolveIPWithResolver(ctx context.Context, host string, r Resolver) (netip.
 	} else if len(ips) == 0 {
 		return netip.Addr{}, fmt.Errorf("%w: %s", ErrIPNotFound, host)
 	}
-	return ips[fastrand.Intn(len(ips))], nil
+	ipv4s, ipv6s := SortationAddr(ips)
+	if len(ipv4s) > 0 {
+		return ipv4s[fastrand.Intn(len(ipv4s))], nil
+	}
+	return ipv6s[fastrand.Intn(len(ipv6s))], nil
 }
 
-// ResolveIP with a host, return ip
+// ResolveIP with a host, return ip and priority return TypeA
 func ResolveIP(ctx context.Context, host string) (netip.Addr, error) {
 	return ResolveIPWithResolver(ctx, host, DefaultResolver)
 }
@@ -263,4 +265,15 @@ func LookupIPProxyServerHost(ctx context.Context, host string) ([]netip.Addr, er
 		return LookupIPWithResolver(ctx, host, ProxyServerHostResolver)
 	}
 	return LookupIP(ctx, host)
+}
+
+func SortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
+	for _, v := range ips {
+		if v.Unmap().Is4() {
+			ipv4s = append(ipv4s, v)
+		} else {
+			ipv6s = append(ipv6s, v)
+		}
+	}
+	return
 }

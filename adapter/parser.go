@@ -114,5 +114,19 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		return nil, err
 	}
 
+	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {
+		muxOption := &outbound.SingMuxOption{}
+		err = decoder.Decode(muxMapping, muxOption)
+		if err != nil {
+			return nil, err
+		}
+		if muxOption.Enabled {
+			proxy, err = outbound.NewSingMux(*muxOption, proxy, proxy.(outbound.ProxyBase))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	return NewProxy(proxy), nil
 }

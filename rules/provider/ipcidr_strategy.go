@@ -28,22 +28,23 @@ func (i *ipcidrStrategy) ShouldResolveIP() bool {
 	return i.shouldResolveIP
 }
 
-func (i *ipcidrStrategy) OnUpdate(rules []string) {
-	ipCidrTrie := trie.NewIpCidrTrie()
-	count := 0
-	for _, rule := range rules {
-		err := ipCidrTrie.AddIpCidrForString(rule)
-		if err != nil {
-			log.Warnln("invalid Ipcidr:[%s]", rule)
-		} else {
-			count++
-		}
-	}
-
-	i.trie = ipCidrTrie
-	i.count = count
-	i.shouldResolveIP = i.count > 0
+func (i *ipcidrStrategy) Reset() {
+	i.trie = trie.NewIpCidrTrie()
+	i.count = 0
+	i.shouldResolveIP = false
 }
+
+func (i *ipcidrStrategy) Insert(rule string) {
+	err := i.trie.AddIpCidrForString(rule)
+	if err != nil {
+		log.Warnln("invalid Ipcidr:[%s]", rule)
+	} else {
+		i.shouldResolveIP = true
+		i.count++
+	}
+}
+
+func (i *ipcidrStrategy) FinishInsert() {}
 
 func NewIPCidrStrategy() *ipcidrStrategy {
 	return &ipcidrStrategy{}

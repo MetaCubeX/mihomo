@@ -37,16 +37,13 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	}
 
 	if N.NeedHandshake(c) {
-		c = &callback.FirstWriteCallBackConn{
-			Conn: c,
-			Callback: func(err error) {
-				if err == nil {
-					f.onDialSuccess()
-				} else {
-					f.onDialFailed(proxy.Type(), err)
-				}
-			},
-		}
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				f.onDialSuccess()
+			} else {
+				f.onDialFailed(proxy.Type(), err)
+			}
+		})
 	}
 
 	return c, err
@@ -71,6 +68,11 @@ func (f *Fallback) SupportUDP() bool {
 
 	proxy := f.findAliveProxy(false)
 	return proxy.SupportUDP()
+}
+
+// IsL3Protocol implements C.ProxyAdapter
+func (f *Fallback) IsL3Protocol(metadata *C.Metadata) bool {
+	return f.findAliveProxy(false).IsL3Protocol(metadata)
 }
 
 // MarshalJSON implements C.ProxyAdapter
@@ -134,6 +136,10 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	return nil
+}
+
+func (f *Fallback) ForceSet(name string) {
+	f.selected = name
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {

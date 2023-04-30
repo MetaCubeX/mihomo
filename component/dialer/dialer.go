@@ -157,7 +157,7 @@ func concurrentDualStackDialContext(ctx context.Context, network string, ips []n
 }
 
 func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
-	ipv4s, ipv6s := sortationAddr(ips)
+	ipv4s, ipv6s := resolver.SortationAddr(ips)
 	preferIPVersion := opt.prefer
 
 	fallbackTicker := time.NewTicker(fallbackTimeout)
@@ -309,27 +309,16 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 	return ips, port, nil
 }
 
-func sortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {
-	for _, v := range ips {
-		if v.Is4() { // 4in6 parse was in parseAddr
-			ipv4s = append(ipv4s, v)
-		} else {
-			ipv6s = append(ipv6s, v)
-		}
-	}
-	return
-}
-
 type Dialer struct {
-	opt option
+	Opt option
 }
 
 func (d Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return DialContext(ctx, network, address, WithOption(d.opt))
+	return DialContext(ctx, network, address, WithOption(d.Opt))
 }
 
 func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	opt := WithOption(d.opt)
+	opt := WithOption(d.Opt)
 	if rAddrPort.Addr().Unmap().IsLoopback() {
 		// avoid "The requested address is not valid in its context."
 		opt = WithInterface("")
@@ -339,5 +328,5 @@ func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddr
 
 func NewDialer(options ...Option) Dialer {
 	opt := applyOptions(options...)
-	return Dialer{opt: *opt}
+	return Dialer{Opt: *opt}
 }

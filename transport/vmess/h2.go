@@ -1,6 +1,7 @@
 package vmess
 
 import (
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -84,10 +85,16 @@ func (hc *h2Conn) Write(b []byte) (int, error) {
 }
 
 func (hc *h2Conn) Close() error {
-	if err := hc.pwriter.Close(); err != nil {
-		return err
+	if hc.pwriter != nil {
+		if err := hc.pwriter.Close(); err != nil {
+			return err
+		}
 	}
-	if err := hc.ClientConn.Shutdown(hc.res.Request.Context()); err != nil {
+	ctx := context.Background()
+	if hc.res != nil {
+		ctx = hc.res.Request.Context()
+	}
+	if err := hc.ClientConn.Shutdown(ctx); err != nil {
 		return err
 	}
 	return hc.Conn.Close()

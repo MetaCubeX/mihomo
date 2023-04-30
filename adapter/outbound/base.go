@@ -3,9 +3,9 @@ package outbound
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
 	"strings"
+	"syscall"
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
@@ -47,31 +47,31 @@ func (b *Base) Type() C.AdapterType {
 
 // StreamConn implements C.ProxyAdapter
 func (b *Base) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	return c, errors.New("no support")
+	return c, C.ErrNotSupport
 }
 
 func (b *Base) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	return nil, errors.New("no support")
+	return nil, C.ErrNotSupport
 }
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (b *Base) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
-	return nil, errors.New("no support")
+	return nil, C.ErrNotSupport
 }
 
 // ListenPacketContext implements C.ProxyAdapter
 func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	return nil, errors.New("no support")
+	return nil, C.ErrNotSupport
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (b *Base) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	return nil, errors.New("no support")
+	return nil, C.ErrNotSupport
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (b *Base) SupportWithDialer() bool {
-	return false
+func (b *Base) SupportWithDialer() C.NetWork {
+	return C.InvalidNet
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -92,6 +92,11 @@ func (b *Base) SupportXUDP() bool {
 // SupportTFO implements C.ProxyAdapter
 func (b *Base) SupportTFO() bool {
 	return b.tfo
+}
+
+// IsL3Protocol implements C.ProxyAdapter
+func (b *Base) IsL3Protocol(metadata *C.Metadata) bool {
+	return false
 }
 
 // MarshalJSON implements C.ProxyAdapter
@@ -146,6 +151,7 @@ type BasicOption struct {
 	Interface   string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
 	RoutingMark int    `proxy:"routing-mark,omitempty" group:"routing-mark,omitempty"`
 	IPVersion   string `proxy:"ip-version,omitempty" group:"ip-version,omitempty"`
+	DialerProxy string `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
 }
 
 type BaseOption struct {
@@ -198,7 +204,18 @@ func (c *conn) Upstream() any {
 	return c.ExtendedConn
 }
 
+func (c *conn) WriterReplaceable() bool {
+	return true
+}
+
+func (c *conn) ReaderReplaceable() bool {
+	return true
+}
+
 func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
+	if _, ok := c.(syscall.Conn); !ok { // exclusion system conn like *net.TCPConn
+		c = N.NewDeadlineConn(c) // most conn from outbound can't handle readDeadline correctly
+	}
 	return &conn{N.NewExtendedConn(c), []string{a.Name()}, parseRemoteDestination(a.Addr())}
 }
 
@@ -230,6 +247,9 @@ func (c *packetConn) LocalAddr() net.Addr {
 }
 
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
+	if _, ok := pc.(syscall.Conn); !ok { // exclusion system conn like *net.UDPConn
+		pc = N.NewDeadlinePacketConn(pc) // most conn from outbound can't handle readDeadline correctly
+	}
 	return &packetConn{pc, []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
 }
 

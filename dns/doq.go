@@ -13,9 +13,10 @@ import (
 	"time"
 
 	tlsC "github.com/Dreamacro/clash/component/tls"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 	"github.com/metacubex/quic-go"
 
-	"github.com/Dreamacro/clash/log"
 	D "github.com/miekg/dns"
 )
 
@@ -60,7 +61,8 @@ type dnsOverQUIC struct {
 	bytesPoolGuard sync.Mutex
 
 	addr         string
-	proxyAdapter string
+	proxyAdapter C.ProxyAdapter
+	proxyName    string
 	r            *Resolver
 }
 
@@ -68,10 +70,11 @@ type dnsOverQUIC struct {
 var _ dnsClient = (*dnsOverQUIC)(nil)
 
 // newDoQ returns the DNS-over-QUIC Upstream.
-func newDoQ(resolver *Resolver, addr string, adapter string) (dnsClient, error) {
+func newDoQ(resolver *Resolver, addr string, proxyAdapter C.ProxyAdapter, proxyName string) (dnsClient, error) {
 	doq := &dnsOverQUIC{
 		addr:         addr,
-		proxyAdapter: adapter,
+		proxyAdapter: proxyAdapter,
+		proxyName:    proxyName,
 		r:            resolver,
 		quicConfig: &quic.Config{
 			KeepAlivePeriod: QUICKeepAlivePeriod,
@@ -310,7 +313,7 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 	// we're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
 	// what IP is actually reachable (when there're v4/v6 addresses).
-	rawConn, err := getDialHandler(doq.r, doq.proxyAdapter)(ctx, "udp", doq.addr)
+	rawConn, err := getDialHandler(doq.r, doq.proxyAdapter, doq.proxyName)(ctx, "udp", doq.addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open a QUIC connection: %w", err)
 	}
@@ -325,7 +328,7 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 
 	p, err := strconv.Atoi(port)
 	udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: p}
-	udp, err := listenPacket(ctx, doq.proxyAdapter, "udp", addr, doq.r)
+	udp, err := listenPacket(ctx, doq.proxyAdapter, doq.proxyName, "udp", addr, doq.r)
 	if err != nil {
 		return nil, err
 	}

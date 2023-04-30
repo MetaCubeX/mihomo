@@ -5,10 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/Dreamacro/clash/log"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Dreamacro/clash/log"
 )
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
@@ -201,7 +202,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["servername"] = sni
 			}
 
-			network := strings.ToLower(values["net"].(string))
+			network, _ := values["net"].(string)
+			network = strings.ToLower(network)
 			if values["type"] == "http" {
 				network = "http"
 			} else if network == "http" {
@@ -209,9 +211,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			vmess["network"] = network
 
-			tls := strings.ToLower(values["tls"].(string))
-			if strings.HasSuffix(tls, "tls") {
-				vmess["tls"] = true
+			tls, ok := values["tls"].(string)
+			if ok {
+				tls = strings.ToLower(tls)
+				if strings.HasSuffix(tls, "tls") {
+					vmess["tls"] = true
+				}
 			}
 
 			switch network {

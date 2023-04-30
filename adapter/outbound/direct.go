@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -26,7 +27,14 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 
 // ListenPacketContext implements C.ProxyAdapter
 func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	opts = append(opts, dialer.WithResolver(resolver.DefaultResolver))
+	// net.UDPConn.WriteTo only working with *net.UDPAddr, so we need a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, resolver.DefaultResolver)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
 	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", metadata.DstIP), "", d.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err

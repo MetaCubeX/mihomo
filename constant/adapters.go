@@ -2,12 +2,14 @@ package constant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"sync"
 	"time"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 )
 
@@ -43,6 +45,8 @@ const (
 	DefaultTLSTimeout = DefaultTCPTimeout
 )
 
+var ErrNotSupport = errors.New("no support")
+
 type Connection interface {
 	Chains() Chain
 	AppendToChains(adapter ProxyAdapter)
@@ -72,7 +76,7 @@ func (c Chain) Last() string {
 }
 
 type Conn interface {
-	net.Conn
+	N.ExtendedConn
 	Connection
 }
 
@@ -116,9 +120,12 @@ type ProxyAdapter interface {
 	// SupportUOT return UDP over TCP support
 	SupportUOT() bool
 
-	SupportWithDialer() bool
+	SupportWithDialer() NetWork
 	DialContextWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (Conn, error)
 	ListenPacketWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (PacketConn, error)
+
+	// IsL3Protocol return ProxyAdapter working in L3 (tell dns module not pass the domain to avoid loopback)
+	IsL3Protocol(metadata *Metadata) bool
 
 	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
 	Unwrap(metadata *Metadata, touch bool) Proxy

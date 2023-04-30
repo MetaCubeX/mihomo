@@ -14,6 +14,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/convert"
 	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
@@ -168,7 +169,35 @@ func (v *Vless) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 		return nil, err
 	}
 
-	return v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+	return v.streamConn(c, metadata)
+}
+
+func (v *Vless) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
+	if metadata.NetWork == C.UDP {
+		if v.option.PacketAddr {
+			metadata = &C.Metadata{
+				NetWork: C.UDP,
+				Host:    packetaddr.SeqPacketMagicAddress,
+				DstPort: "443",
+			}
+		} else {
+			metadata = &C.Metadata{ // a clear metadata only contains ip
+				NetWork: C.UDP,
+				DstIP:   metadata.DstIP,
+				DstPort: metadata.DstPort,
+			}
+		}
+		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
+		if v.option.PacketAddr {
+			conn = packetaddr.NewBindConn(conn)
+		}
+	} else {
+		conn, err = v.client.StreamConn(c, parseVlessAddr(metadata, false))
+	}
+	if err != nil {
+		conn = nil
+	}
+	return
 }
 
 func (v *Vless) streamTLSOrXTLSConn(conn net.Conn, isH2 bool) (net.Conn, error) {
@@ -238,6 +267,12 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(v.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(v.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
@@ -264,7 +299,6 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 		}
 		metadata.DstIP = ip
 	}
-
 	var c net.Conn
 	// gun transport
 	if v.transport != nil && len(opts) == 0 {
@@ -276,27 +310,25 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata, o
 			safeConnClose(c, err)
 		}(c)
 
-		if v.option.PacketAddr {
-			packetAddrMetadata := *metadata // make a copy
-			packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
-			packetAddrMetadata.DstPort = "443"
-
-			c, err = v.client.StreamConn(c, parseVlessAddr(&packetAddrMetadata, false))
-		} else {
-			c, err = v.client.StreamConn(c, parseVlessAddr(metadata, v.option.XUDP))
-		}
-
+		c, err = v.streamConn(c, metadata)
 		if err != nil {
 			return nil, fmt.Errorf("new vless client error: %v", err)
 		}
 
-		return v.ListenPacketOnStreamConn(c, metadata)
+		return v.ListenPacketOnStreamConn(ctx, c, metadata)
 	}
 	return v.ListenPacketWithDialer(ctx, dialer.NewDialer(v.Base.DialOptions(opts...)...), metadata)
 }
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if len(v.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(v.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(ctx, metadata.Host)
@@ -305,6 +337,7 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		}
 		metadata.DstIP = ip
 	}
+
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
@@ -314,39 +347,39 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	if v.option.PacketAddr {
-		packetAddrMetadata := *metadata // make a copy
-		packetAddrMetadata.Host = packetaddr.SeqPacketMagicAddress
-		packetAddrMetadata.DstPort = "443"
-
-		c, err = v.StreamConn(c, &packetAddrMetadata)
-	} else {
-		c, err = v.StreamConn(c, metadata)
-	}
-
+	c, err = v.StreamConn(c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("new vless client error: %v", err)
 	}
 
-	return v.ListenPacketOnStreamConn(c, metadata)
+	return v.ListenPacketOnStreamConn(ctx, c, metadata)
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (v *Vless) SupportWithDialer() bool {
-	return true
+func (v *Vless) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
-func (v *Vless) ListenPacketOnStreamConn(c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	// vless use stream-oriented udp with a special address, so we need a net.UDPAddr
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+		if err != nil {
+			return nil, errors.New("can't resolve ip")
+		}
+		metadata.DstIP = ip
+	}
+
 	if v.option.XUDP {
 		return newPacketConn(&threadSafePacketConn{
-			PacketConn: vmessSing.NewXUDPConn(c, M.ParseSocksaddr(metadata.RemoteAddress())),
+			PacketConn: vmessSing.NewXUDPConn(c, M.SocksaddrFromNet(metadata.UDPAddr())),
 		}, v), nil
 	} else if v.option.PacketAddr {
 		return newPacketConn(&threadSafePacketConn{
 			PacketConn: packetaddr.NewConn(&vlessPacketConn{
 				Conn: c, rAddr: metadata.UDPAddr(),
-			}, M.ParseSocksaddr(metadata.RemoteAddress())),
+			}, M.SocksaddrFromNet(metadata.UDPAddr())),
 		}, v), nil
 	}
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
@@ -504,6 +537,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 			option.XUDP = true
 		}
 	}
+	if option.XUDP {
+		option.PacketAddr = false
+	}
 
 	client, err := vless.NewClient(option.UUID, addons, option.FlowShow)
 	if err != nil {
@@ -538,7 +574,15 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 	case "grpc":
 		dialFn := func(network, addr string) (net.Conn, error) {
-			c, err := dialer.DialContext(context.Background(), "tcp", v.addr, v.Base.DialOptions()...)
+			var err error
+			var cDialer C.Dialer = dialer.NewDialer(v.Base.DialOptions()...)
+			if len(v.option.DialerProxy) > 0 {
+				cDialer, err = proxydialer.NewByName(v.option.DialerProxy, cDialer)
+				if err != nil {
+					return nil, err
+				}
+			}
+			c, err := cDialer.DialContext(context.Background(), "tcp", v.addr)
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}

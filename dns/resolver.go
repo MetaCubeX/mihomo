@@ -3,23 +3,21 @@ package dns
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/netip"
 	"strings"
 	"time"
 
-	"go.uber.org/atomic"
-
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata/router"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
-	"github.com/zhangyunhao116/fastrand"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -40,6 +38,11 @@ type geositePolicyRecord struct {
 	inversedMatching bool
 }
 
+type domainSetPolicyRecord struct {
+	domainSetProvider provider.RuleProvider
+	policy            *Policy
+}
+
 type Resolver struct {
 	ipv6                  bool
 	ipv6Timeout           time.Duration
@@ -51,6 +54,7 @@ type Resolver struct {
 	group                 singleflight.Group
 	lruCache              *cache.LruCache[string, *D.Msg]
 	policy                *trie.DomainTrie[*Policy]
+	domainSetPolicy       []domainSetPolicyRecord
 	geositePolicy         []geositePolicyRecord
 	proxyServer           []dnsClient
 }
@@ -93,7 +97,7 @@ func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr,
 
 	ips, err = r.lookupIP(ctx, host, D.TypeA)
 	var waitIPv6 *time.Timer
-	if r != nil {
+	if r != nil && r.ipv6Timeout > 0 {
 		waitIPv6 = time.NewTimer(r.ipv6Timeout)
 	} else {
 		waitIPv6 = time.NewTimer(100 * time.Millisecond)
@@ -112,47 +116,14 @@ func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr,
 	return ips, nil
 }
 
-// ResolveIP request with TypeA and TypeAAAA, priority return TypeA
-func (r *Resolver) ResolveIP(ctx context.Context, host string) (ip netip.Addr, err error) {
-	ips, err := r.LookupIPPrimaryIPv4(ctx, host)
-	if err != nil {
-		return netip.Addr{}, err
-	} else if len(ips) == 0 {
-		return netip.Addr{}, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, host)
-	}
-	return ips[fastrand.Intn(len(ips))], nil
-}
-
 // LookupIPv4 request with TypeA
 func (r *Resolver) LookupIPv4(ctx context.Context, host string) ([]netip.Addr, error) {
 	return r.lookupIP(ctx, host, D.TypeA)
 }
 
-// ResolveIPv4 request with TypeA
-func (r *Resolver) ResolveIPv4(ctx context.Context, host string) (ip netip.Addr, err error) {
-	ips, err := r.lookupIP(ctx, host, D.TypeA)
-	if err != nil {
-		return netip.Addr{}, err
-	} else if len(ips) == 0 {
-		return netip.Addr{}, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, host)
-	}
-	return ips[fastrand.Intn(len(ips))], nil
-}
-
 // LookupIPv6 request with TypeAAAA
 func (r *Resolver) LookupIPv6(ctx context.Context, host string) ([]netip.Addr, error) {
 	return r.lookupIP(ctx, host, D.TypeAAAA)
-}
-
-// ResolveIPv6 request with TypeAAAA
-func (r *Resolver) ResolveIPv6(ctx context.Context, host string) (ip netip.Addr, err error) {
-	ips, err := r.lookupIP(ctx, host, D.TypeAAAA)
-	if err != nil {
-		return netip.Addr{}, err
-	} else if len(ips) == 0 {
-		return netip.Addr{}, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, host)
-	}
-	return ips[fastrand.Intn(len(ips))], nil
 }
 
 func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
@@ -301,6 +272,12 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 			return geositeRecord.policy.GetData()
 		}
 	}
+	metadata := &C.Metadata{Host: domain}
+	for _, domainSetRecord := range r.domainSetPolicy {
+		if ok := domainSetRecord.domainSetProvider.Match(metadata); ok {
+			return domainSetRecord.policy.GetData()
+		}
+	}
 	return nil
 }
 
@@ -399,16 +376,20 @@ func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D
 	return ch
 }
 
-// HasProxyServer has proxy server dns client
-func (r *Resolver) HasProxyServer() bool {
+// Invalid return this resolver can or can't be used
+func (r *Resolver) Invalid() bool {
+	if r == nil {
+		return false
+	}
 	return len(r.main) > 0
 }
 
 type NameServer struct {
 	Net          string
 	Addr         string
-	Interface    *atomic.String
-	ProxyAdapter string
+	Interface    *atomic.TypedValue[string]
+	ProxyAdapter C.ProxyAdapter
+	ProxyName    string
 	Params       map[string]string
 	PreferH3     bool
 }
@@ -422,16 +403,18 @@ type FallbackFilter struct {
 }
 
 type Config struct {
-	Main, Fallback []NameServer
-	Default        []NameServer
-	ProxyServer    []NameServer
-	IPv6           bool
-	IPv6Timeout    uint
-	EnhancedMode   C.DNSMode
-	FallbackFilter FallbackFilter
-	Pool           *fakeip.Pool
-	Hosts          *trie.DomainTrie[resolver.HostValue]
-	Policy         map[string][]NameServer
+	Main, Fallback  []NameServer
+	Default         []NameServer
+	ProxyServer     []NameServer
+	IPv6            bool
+	IPv6Timeout     uint
+	EnhancedMode    C.DNSMode
+	FallbackFilter  FallbackFilter
+	Pool            *fakeip.Pool
+	Hosts           *trie.DomainTrie[resolver.HostValue]
+	Policy          map[string][]NameServer
+	DomainSetPolicy map[provider.RuleProvider][]NameServer
+	GeositePolicy   map[router.DomainMatcher][]NameServer
 }
 
 func NewResolver(config Config) *Resolver {
@@ -483,6 +466,14 @@ func NewResolver(config Config) *Resolver {
 		}
 		r.policy.Optimize()
 	}
+	if len(config.DomainSetPolicy) > 0 {
+		for p, n := range config.DomainSetPolicy {
+			r.domainSetPolicy = append(r.domainSetPolicy, domainSetPolicyRecord{
+				domainSetProvider: p,
+				policy:            NewPolicy(transform(n, defaultResolver)),
+			})
+		}
+	}
 
 	fallbackIPFilters := []fallbackIPFilter{}
 	if config.FallbackFilter.GeoIP {
@@ -521,3 +512,5 @@ func NewProxyServerHostResolver(old *Resolver) *Resolver {
 	}
 	return r
 }
+
+var ParseNameServer func(servers []string) ([]NameServer, error) // define in config/config.go

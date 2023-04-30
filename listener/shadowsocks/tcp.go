@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/transport/shadowsocks/core"
@@ -100,6 +101,7 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 
 func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	conn = l.pickCipher.StreamConn(conn)
+	conn = N.NewDeadlineConn(conn) // embed ss can't handle readDeadline correctly
 
 	target, err := socks5.ReadAddr(conn, make([]byte, socks5.MaxAddrLen))
 	if err != nil {

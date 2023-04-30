@@ -4,13 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/batch"
 	"github.com/Dreamacro/clash/common/singledo"
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-
-	"go.uber.org/atomic"
 )
 
 const (

@@ -95,16 +95,13 @@ func (lb *LoadBalance) DialContext(ctx context.Context, metadata *C.Metadata, op
 	}
 
 	if N.NeedHandshake(c) {
-		c = &callback.FirstWriteCallBackConn{
-			Conn: c,
-			Callback: func(err error) {
-				if err == nil {
-					lb.onDialSuccess()
-				} else {
-					lb.onDialFailed(proxy.Type(), err)
-				}
-			},
-		}
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				lb.onDialSuccess()
+			} else {
+				lb.onDialFailed(proxy.Type(), err)
+			}
+		})
 	}
 
 	return
@@ -125,6 +122,11 @@ func (lb *LoadBalance) ListenPacketContext(ctx context.Context, metadata *C.Meta
 // SupportUDP implements C.ProxyAdapter
 func (lb *LoadBalance) SupportUDP() bool {
 	return !lb.disableUDP
+}
+
+// IsL3Protocol implements C.ProxyAdapter
+func (lb *LoadBalance) IsL3Protocol(metadata *C.Metadata) bool {
+	return lb.Unwrap(metadata, false).IsL3Protocol(metadata)
 }
 
 func strategyRoundRobin() strategyFn {
