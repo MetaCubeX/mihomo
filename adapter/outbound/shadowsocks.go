@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"time"
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/structure"
@@ -21,8 +20,7 @@ import (
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	restlsC "github.com/3andne/restls-client-go"
-	shadowsocks "github.com/metacubex/sing-shadowsocks"
-	"github.com/metacubex/sing-shadowsocks/shadowimpl"
+	"github.com/sagernet/sing-shadowsocks2"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
@@ -234,7 +232,9 @@ func (ss *ShadowSocks) SupportUOT() bool {
 
 func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	method, err := shadowimpl.FetchMethod(option.Cipher, option.Password, time.Now)
+	method, err := shadowsocks.CreateMethod(context.Background(), option.Cipher, shadowsocks.MethodOptions{
+		Password: option.Password,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("ss %s initialize error: %w", addr, err)
 	}
