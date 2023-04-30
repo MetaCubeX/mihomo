@@ -177,6 +177,7 @@ dns:
     - 8.8.8.8
     - tls://1.12.12.12:853
     - tls://223.5.5.5:853
+    - system://  # get DNS server from system's configuration
   enhanced-mode: fake-ip # or redir-host
   
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
