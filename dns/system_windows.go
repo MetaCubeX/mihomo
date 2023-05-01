@@ -12,10 +12,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var (
-	defaultNS = []string{"114.114.114.114:53"}
-)
-
 type dnsConfig struct {
 	servers []string // server addresses (in host:port form) to use
 }
@@ -27,7 +23,6 @@ func loadSystemResolver() (clients []dnsClient, err error) {
 	}
 	nameservers := content.servers
 	if len(nameservers) == 0 {
-		err = fmt.Errorf("no nameserver found in windows system")
 		return
 	}
 	servers := make([]NameServer, 0, len(nameservers))
@@ -42,11 +37,6 @@ func loadSystemResolver() (clients []dnsClient, err error) {
 
 func dnsReadConfig() (conf *dnsConfig, err error) {
 	conf = &dnsConfig{}
-	defer func() {
-		if len(conf.servers) == 0 {
-			conf.servers = defaultNS
-		}
-	}()
 	aas, err := adapterAddresses()
 	if err != nil {
 		return conf, err
