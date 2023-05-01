@@ -82,7 +82,11 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 		case "system":
 			clients, err := loadSystemResolver()
 			if err != nil {
-				log.Warnln("[DNS:system] load system resolver failed: %s", err.Error())
+				log.Errorln("[DNS:system] load system resolver failed: %s", err.Error())
+				continue
+			}
+			if len(clients) == 0 {
+				log.Errorln("[DNS:system] no nameserver found in system")
 				continue
 			}
 			ret = append(ret, clients...)
