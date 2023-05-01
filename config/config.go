@@ -974,6 +974,10 @@ func parsePureDNSServer(server string) string {
 		return "udp://" + server
 	}
 
+	if server == "system" {
+		return "system://"
+	}
+
 	if ip, err := netip.ParseAddr(server); err != nil {
 		if strings.Contains(server, "://") {
 			return server
