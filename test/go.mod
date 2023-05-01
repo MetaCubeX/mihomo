@@ -75,9 +75,9 @@ require (
 	github.com/quic-go/qtls-go1-20 v0.1.1 // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
-	github.com/sagernet/sing v0.2.5-0.20230425211221-a23ffbaeb5b9 // indirect
+	github.com/sagernet/sing v0.2.5-0.20230501044132-8365dd48a17a // indirect
 	github.com/sagernet/sing-mux v0.0.0-20230427141602-9836fc9b052e // indirect
-	github.com/sagernet/sing-shadowsocks2 v0.0.0-20230430083720-38321e1355cc // indirect
+	github.com/sagernet/sing-shadowsocks2 v0.0.0-20230501032827-681c9c4ee0e9 // indirect
 	github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b // indirect
 	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3 // indirect
 	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37 // indirect
@@ -85,7 +85,7 @@ require (
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2 // indirect
 	github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77 // indirect
 	github.com/samber/lo v1.38.1 // indirect
-	github.com/shirou/gopsutil/v3 v3.23.3 // indirect
+	github.com/shirou/gopsutil/v3 v3.23.4 // indirect
 	github.com/shoenig/go-m1cpu v0.1.5 // indirect
 	github.com/sina-ghaderi/poly1305 v0.0.0-20220724002748-c5926b03988b // indirect
 	github.com/sina-ghaderi/rabaead v0.0.0-20220730151906-ab6e06b96e8c // indirect

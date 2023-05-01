@@ -28,16 +28,16 @@ require (
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.5-0.20230425211221-a23ffbaeb5b9
+	github.com/sagernet/sing v0.2.5-0.20230501044132-8365dd48a17a
 	github.com/sagernet/sing-mux v0.0.0-20230427141602-9836fc9b052e
-	github.com/sagernet/sing-shadowsocks2 v0.0.0-20230430083720-38321e1355cc
+	github.com/sagernet/sing-shadowsocks2 v0.0.0-20230501032827-681c9c4ee0e9
 	github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b
 	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
 	github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77
 	github.com/samber/lo v1.38.1
-	github.com/shirou/gopsutil/v3 v3.23.3
+	github.com/shirou/gopsutil/v3 v3.23.4
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.2
 	github.com/xtls/go v0.0.0-20220914232946-0441cf4cf837
