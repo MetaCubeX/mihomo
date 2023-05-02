@@ -246,11 +246,8 @@ jobs:
           Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
-          ### release version
-          `default(not specified in file name)`: compiled with GOAMD64=v3
-          `cgo`: support lwip tun stack, compiled with GOAMD64=v1
-          `compatible`: compiled with GOAMD64=v1
-          Check details between different architectural levels [here](https://github.com/golang/go/wiki/MinimumRequirements#amd64).
+          [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/Clash.Meta/wiki/FAQ)
+          [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 
       - name: Upload Prerelease
