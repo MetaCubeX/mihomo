@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 
 	"github.com/Dreamacro/clash/component/dialer"
@@ -98,34 +97,36 @@ func (h *Http) SupportWithDialer() C.NetWork {
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	addr := metadata.RemoteAddress()
-	req := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Host: addr,
-		},
-		Host: addr,
-		Header: http.Header{
-			"Proxy-Connection": []string{"Keep-Alive"},
-		},
+	HeaderString := "CONNECT " + addr + " HTTP/1.1\r\n"
+	tempHeaders := map[string]string{
+		"Host":             addr,
+		"User-Agent":       "Go-http-client/1.1",
+		"Proxy-Connection": "Keep-Alive",
 	}
 
-	//增加headers
-	if len(h.option.Headers) != 0 {
-		for key, value := range h.option.Headers {
-			req.Header.Add(key, value)
-		}
+	for key, value := range h.option.Headers {
+		tempHeaders[key] = value
 	}
 
 	if h.user != "" && h.pass != "" {
 		auth := h.user + ":" + h.pass
-		req.Header.Add("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
+		tempHeaders["Proxy-Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 	}
 
-	if err := req.Write(rw); err != nil {
+	for key, value := range tempHeaders {
+		HeaderString += key + ": " + value + "\r\n"
+	}
+
+	HeaderString += "\r\n"
+
+	_, err := rw.Write([]byte(HeaderString))
+
+	if err != nil {
 		return err
 	}
 
-	resp, err := http.ReadResponse(bufio.NewReader(rw), req)
+	resp, err := http.ReadResponse(bufio.NewReader(rw), nil)
+
 	if err != nil {
 		return err
 	}
