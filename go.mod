@@ -30,7 +30,7 @@ require (
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.2.5-0.20230501044132-8365dd48a17a
 	github.com/sagernet/sing-mux v0.0.0-20230427141602-9836fc9b052e
-	github.com/sagernet/sing-shadowsocks2 v0.0.0-20230501032827-681c9c4ee0e9
+	github.com/sagernet/sing-shadowsocks2 v0.0.0-20230503144228-9896afb7d1ba
 	github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b
 	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
