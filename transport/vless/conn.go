@@ -474,34 +474,34 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 			c.writeFilterApplicationData = true
 			c.addons = client.Addons
 			var t reflect.Type
-			var p uintptr
+			var p unsafe.Pointer
 			switch underlying := conn.(type) {
 			case *gotls.Conn:
 				//log.Debugln("type tls")
 				c.Conn = underlying.NetConn()
 				c.tlsConn = underlying
 				t = reflect.TypeOf(underlying).Elem()
-				p = uintptr(unsafe.Pointer(underlying))
+				p = unsafe.Pointer(underlying)
 			case *utls.UConn:
 				//log.Debugln("type *utls.UConn")
 				c.Conn = underlying.NetConn()
 				c.tlsConn = underlying
 				t = reflect.TypeOf(underlying.Conn).Elem()
-				p = uintptr(unsafe.Pointer(underlying.Conn))
+				p = unsafe.Pointer(underlying.Conn)
 			case *tlsC.UConn:
 				//log.Debugln("type *tlsC.UConn")
 				c.Conn = underlying.NetConn()
 				c.tlsConn = underlying.UConn
 				t = reflect.TypeOf(underlying.Conn).Elem()
 				//log.Debugln("t:%v", t)
-				p = uintptr(unsafe.Pointer(underlying.Conn))
+				p = unsafe.Pointer(underlying.Conn)
 			default:
 				return nil, fmt.Errorf(`failed to use %s, maybe "security" is not "tls" or "utls"`, client.Addons.Flow)
 			}
 			i, _ := t.FieldByName("input")
 			r, _ := t.FieldByName("rawInput")
-			c.input = (*bytes.Reader)(unsafe.Pointer(p + i.Offset))
-			c.rawInput = (*bytes.Buffer)(unsafe.Pointer(p + r.Offset))
+			c.input = (*bytes.Reader)(unsafe.Add(p, i.Offset))
+			c.rawInput = (*bytes.Buffer)(unsafe.Add(p, r.Offset))
 			//if _, ok := c.Conn.(*net.TCPConn); !ok {
 			//	log.Debugln("XTLS underlying conn is not *net.TCPConn, got %T", c.Conn)
 			//}
