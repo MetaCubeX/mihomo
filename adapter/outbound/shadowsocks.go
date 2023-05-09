@@ -20,7 +20,7 @@ import (
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	restlsC "github.com/3andne/restls-client-go"
-	"github.com/sagernet/sing-shadowsocks2"
+	"github.com/metacubex/sing-shadowsocks2"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
