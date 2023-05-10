@@ -143,8 +143,8 @@ github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 h1:iL5gZI3uFp0X6E
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
 github.com/sagernet/sing v0.0.0-20220817130738-ce854cda8522/go.mod h1:QVsS5L/ZA2Q5UhQwLrn0Trw+msNd/NPGEhBKR/ioWiY=
 github.com/sagernet/sing v0.1.8/go.mod h1:jt1w2u7lJQFFSGLiRrRIs5YWmx4kAPfWuOejuDW9qMk=
-github.com/sagernet/sing v0.2.5-0.20230509045155-f60c80c56f21 h1:voT2nOCvukNfRLn9KxQYEYSu9/OZsCqEmD6tEFJAnBw=
-github.com/sagernet/sing v0.2.5-0.20230509045155-f60c80c56f21/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
+github.com/sagernet/sing v0.2.5-0.20230510160026-237a991b46d0 h1:NS4U+yQ4ToyRqFvCS91BM1D6fQbriW1qvioxSj5PvI4=
+github.com/sagernet/sing v0.2.5-0.20230510160026-237a991b46d0/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/sagernet/sing-mux v0.0.0-20230427141602-9836fc9b052e h1:t8nuY9plpHEzlnPxOpuv64jhjz3teIvccu3YMFX4fJI=
 github.com/sagernet/sing-mux v0.0.0-20230427141602-9836fc9b052e/go.mod h1:pF+RnLvCAOhECrvauy6LYOpBakJ/vuaF1Wm4lPsWryI=
 github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b h1:ouW/6IDCrxkBe19YSbdCd7buHix7b+UZ6BM4Zz74XF4=
