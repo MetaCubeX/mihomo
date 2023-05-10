@@ -17,6 +17,7 @@ import (
 	D "github.com/miekg/dns"
 
 	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
 )
@@ -108,14 +109,29 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			defer mutex.Unlock()
 			conn2 = nil
 		}()
+		readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 		for {
-			// safe size which is 1232 from https://dnsflagday.net/2020/.
-			// so 2048 is enough
-			buff := buf.NewSize(2 * 1024)
+			var (
+				buff *buf.Buffer
+				dest M.Socksaddr
+				err  error
+			)
+			newBuffer := func() *buf.Buffer {
+				// safe size which is 1232 from https://dnsflagday.net/2020/.
+				// so 2048 is enough
+				buff = buf.NewSize(2 * 1024)
+				return buff
+			}
 			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
-			dest, err := conn.ReadPacket(buff)
+			if isReadWaiter {
+				dest, err = readWaiter.WaitReadPacket(newBuffer)
+			} else {
+				dest, err = conn.ReadPacket(newBuffer())
+			}
 			if err != nil {
-				buff.Release()
+				if buff != nil {
+					buff.Release()
+				}
 				if sing.ShouldIgnorePacketError(err) {
 					break
 				}

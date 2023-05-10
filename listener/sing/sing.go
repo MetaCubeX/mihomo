@@ -116,11 +116,26 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		defer mutex.Unlock()
 		conn2 = nil
 	}()
+	readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 	for {
-		buff := buf.NewPacket() // do not use stack buffer
-		dest, err := conn.ReadPacket(buff)
+		var (
+			buff *buf.Buffer
+			dest M.Socksaddr
+			err  error
+		)
+		newBuffer := func() *buf.Buffer {
+			buff = buf.NewPacket() // do not use stack buffer
+			return buff
+		}
+		if isReadWaiter {
+			dest, err = readWaiter.WaitReadPacket(newBuffer)
+		} else {
+			dest, err = conn.ReadPacket(newBuffer())
+		}
 		if err != nil {
-			buff.Release()
+			if buff != nil {
+				buff.Release()
+			}
 			if ShouldIgnorePacketError(err) {
 				break
 			}

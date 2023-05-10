@@ -32,7 +32,7 @@ func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UD
 	conn := pickCipher.PacketConn(l)
 	go func() {
 		for {
-			buf := pool.Get(pool.RelayBufferSize)
+			buf := pool.Get(pool.UDPBufferSize)
 			n, remoteAddr, err := conn.ReadFrom(buf)
 			if err != nil {
 				pool.Put(buf)
