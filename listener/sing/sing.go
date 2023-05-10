@@ -18,6 +18,7 @@ import (
 	mux "github.com/sagernet/sing-mux"
 	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio"
 	"github.com/sagernet/sing/common/bufio/deadline"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -103,6 +104,9 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
 		additions = slices.Clone(additions)
 		additions = append(additions, ctxAdditions...)
+	}
+	if deadline.NeedAdditionalReadDeadline(conn) {
+		conn = N.NewDeadlinePacketConn(bufio.NewNetPacketConn(conn)) // conn from sing should check NeedAdditionalReadDeadline
 	}
 	defer func() { _ = conn.Close() }()
 	mutex := sync.Mutex{}
