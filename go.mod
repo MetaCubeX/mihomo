@@ -19,7 +19,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
-	github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594
+	github.com/metacubex/quic-go v0.33.3-0.20230510010206-687b537b6a58
 	github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c
 	github.com/metacubex/sing-shadowsocks2 v0.0.0-20230510002911-25e95d677383
 	github.com/metacubex/sing-tun v0.1.5-0.20230509224930-30065d4b6376
