@@ -23,7 +23,7 @@ func NewDeadlineConn(conn net.Conn) ExtendedConn {
 	return deadline.NewFallbackConn(conn)
 }
 
-func NewDeadlinePacketConn(pc net.PacketConn) net.PacketConn {
+func NewDeadlinePacketConn(pc net.PacketConn) network.NetPacketConn {
 	return deadline.NewFallbackPacketConn(bufio.NewPacketConn(pc))
 }
 
