@@ -94,8 +94,8 @@ github.com/mdlayher/socket v0.4.1 h1:eM9y2/jlbs1M615oshPQOHZzj6R6wMT7bX5NPiQvn2U
 github.com/mdlayher/socket v0.4.1/go.mod h1:cAqeGjoufqdxWkD7DkpyS+wcefOtmu5OQ8KuoJGIReA=
 github.com/metacubex/gvisor v0.0.0-20230417114019-3c3ee672d60c h1:D62872jiuzC6b+3aI8tqfeyc6YgbfarYKywTnnvXwEM=
 github.com/metacubex/gvisor v0.0.0-20230417114019-3c3ee672d60c/go.mod h1:wqEuzdImyqD2MCGE8CYRJXbB77oSEJeoSSXXdwKjnsE=
-github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594 h1:KD96JPdTIayTGGgRl6PuVqo2Bpo6+x3LqDDyqrYDDXw=
-github.com/metacubex/quic-go v0.33.3-0.20230322045857-901b636b4594/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
+github.com/metacubex/quic-go v0.33.3-0.20230510010206-687b537b6a58 h1:E/sNW9tugFjoBjAkth89MHlKHRaMdo43tGQ3MOPVayQ=
+github.com/metacubex/quic-go v0.33.3-0.20230510010206-687b537b6a58/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c h1:LpVNvlW/xE+mR8z76xJeYZlYznZXEmU4TeWeuygYdJg=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c/go.mod h1:4uQQReKMTU7KTfOykVBe/oGJ00pl38d+BYJ99+mx26s=
 github.com/metacubex/sing-shadowsocks2 v0.0.0-20230510002911-25e95d677383 h1:YdLeRuENJZ9QL58Kf/qtMp1wZv9VGQJYMqZ2WEF6/FM=
