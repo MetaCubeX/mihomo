@@ -44,10 +44,13 @@ func handleUDPToLocal(packet C.UDPPacket, pc N.EnhancePacketConn, key string, oA
 		_fromUDPAddr := *fromUDPAddr
 		fromUDPAddr = &_fromUDPAddr // make a copy
 		if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
-			if fAddr.IsValid() && (oAddr.Unmap() == fromAddr.Unmap()) {
-				fromUDPAddr.IP = fAddr.Unmap().AsSlice()
-			} else {
-				fromUDPAddr.IP = fromAddr.Unmap().AsSlice()
+			fromAddr = fromAddr.Unmap()
+			if fAddr.IsValid() && (oAddr.Unmap() == fromAddr) {
+				fromAddr = fAddr.Unmap()
+			}
+			fromUDPAddr.IP = fromAddr.AsSlice()
+			if fromAddr.Is4() {
+				fromUDPAddr.Zone = "" // only ipv6 can have the zone
 			}
 		}
 
