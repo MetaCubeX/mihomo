@@ -128,6 +128,10 @@ type EnhancePacketConn struct {
 	enhancePacketConn packet.EnhancePacketConn
 }
 
+func NewEnhancePacketConn(pc packet.EnhancePacketConn) packet.EnhancePacketConn {
+	return NewPacketConn(pc).(packet.EnhancePacketConn)
+}
+
 func (c *EnhancePacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
 	select {
 	case result := <-c.resultCh:
