@@ -23,10 +23,6 @@ func NewDeadlineConn(conn net.Conn) ExtendedConn {
 	return deadline.NewFallbackConn(conn)
 }
 
-func NewDeadlinePacketConn(pc net.PacketConn) network.NetPacketConn {
-	return deadline.NewFallbackPacketConn(bufio.NewPacketConn(pc))
-}
-
 func NeedHandshake(conn any) bool {
 	if earlyConn, isEarlyConn := common.Cast[network.EarlyConn](conn); isEarlyConn && earlyConn.NeedHandshake() {
 		return true

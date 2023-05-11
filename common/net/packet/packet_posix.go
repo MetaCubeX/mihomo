@@ -1,6 +1,6 @@
 //go:build !windows
 
-package net
+package packet
 
 import (
 	"io"
