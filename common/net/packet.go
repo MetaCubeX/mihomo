@@ -12,6 +12,7 @@ type EnhancePacketConn = packet.EnhancePacketConn
 
 var NewEnhancePacketConn = packet.NewEnhancePacketConn
 var NewDeadlinePacketConn = deadline.NewPacketConn
+var NewDeadlineEnhancePacketConn = deadline.NewEnhancePacketConn
 
 type threadSafePacketConn struct {
 	net.PacketConn
