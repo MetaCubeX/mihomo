@@ -379,7 +379,7 @@ func (v *Vmess) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 	}
 
 	if pc, ok := c.(net.PacketConn); ok {
-		return newPacketConn(&threadSafePacketConn{PacketConn: pc}, v), nil
+		return newPacketConn(N.NewThreadSafePacketConn(pc), v), nil
 	}
 	return newPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }
@@ -487,17 +487,6 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	}
 
 	return v, nil
-}
-
-type threadSafePacketConn struct {
-	net.PacketConn
-	access sync.Mutex
-}
-
-func (c *threadSafePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	c.access.Lock()
-	defer c.access.Unlock()
-	return c.PacketConn.WriteTo(b, addr)
 }
 
 type vmessPacketConn struct {
