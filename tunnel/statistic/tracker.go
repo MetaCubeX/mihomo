@@ -186,6 +186,16 @@ func (ut *udpTracker) ReadFrom(b []byte) (int, net.Addr, error) {
 	return n, addr, err
 }
 
+func (ut *udpTracker) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	data, put, addr, err = ut.PacketConn.WaitReadFrom()
+	download := int64(len(data))
+	if ut.pushToManager {
+		ut.manager.PushDownloaded(download)
+	}
+	ut.DownloadTotal.Add(download)
+	return
+}
+
 func (ut *udpTracker) WriteTo(b []byte, addr net.Addr) (int, error) {
 	n, err := ut.PacketConn.WriteTo(b, addr)
 	upload := int64(n)

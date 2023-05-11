@@ -220,7 +220,7 @@ func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 }
 
 type packetConn struct {
-	net.PacketConn
+	N.EnhancePacketConn
 	chain                   C.Chain
 	adapterName             string
 	connID                  string
@@ -242,15 +242,27 @@ func (c *packetConn) AppendToChains(a C.ProxyAdapter) {
 }
 
 func (c *packetConn) LocalAddr() net.Addr {
-	lAddr := c.PacketConn.LocalAddr()
+	lAddr := c.EnhancePacketConn.LocalAddr()
 	return N.NewCustomAddr(c.adapterName, c.connID, lAddr) // make quic-go's connMultiplexer happy
+}
+
+func (c *packetConn) Upstream() any {
+	return c.EnhancePacketConn
+}
+
+func (c *packetConn) WriterReplaceable() bool {
+	return true
+}
+
+func (c *packetConn) ReaderReplaceable() bool {
+	return true
 }
 
 func newPacketConn(pc net.PacketConn, a C.ProxyAdapter) C.PacketConn {
 	if _, ok := pc.(syscall.Conn); !ok { // exclusion system conn like *net.UDPConn
 		pc = N.NewDeadlinePacketConn(pc) // most conn from outbound can't handle readDeadline correctly
 	}
-	return &packetConn{pc, []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
+	return &packetConn{N.NewEnhancePacketConn(pc), []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), parseRemoteDestination(a.Addr())}
 }
 
 func parseRemoteDestination(addr string) string {
