@@ -106,7 +106,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		additions = append(additions, ctxAdditions...)
 	}
 	if deadline.NeedAdditionalReadDeadline(conn) {
-		conn = N.NewDeadlinePacketConn(bufio.NewNetPacketConn(conn)) // conn from sing should check NeedAdditionalReadDeadline
+		conn = deadline.NewFallbackPacketConn(bufio.NewNetPacketConn(conn)) // conn from sing should check NeedAdditionalReadDeadline
 	}
 	defer func() { _ = conn.Close() }()
 	mutex := sync.Mutex{}
