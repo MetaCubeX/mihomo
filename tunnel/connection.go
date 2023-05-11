@@ -7,7 +7,6 @@ import (
 	"time"
 
 	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -27,18 +26,16 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	return nil
 }
 
-func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, fAddr netip.Addr) {
-	buf := pool.Get(pool.UDPBufferSize)
+func handleUDPToLocal(packet C.UDPPacket, pc N.EnhancePacketConn, key string, oAddr, fAddr netip.Addr) {
 	defer func() {
 		_ = pc.Close()
 		closeAllLocalCoon(key)
 		natTable.Delete(key)
-		_ = pool.Put(buf)
 	}()
 
 	for {
 		_ = pc.SetReadDeadline(time.Now().Add(udpTimeout))
-		n, from, err := pc.ReadFrom(buf)
+		data, put, from, err := pc.WaitReadFrom()
 		if err != nil {
 			return
 		}
@@ -54,7 +51,8 @@ func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, 
 			}
 		}
 
-		_, err = packet.WriteBack(buf[:n], fromUDPAddr)
+		_, err = packet.WriteBack(data, fromUDPAddr)
+		put()
 		if err != nil {
 			return
 		}
