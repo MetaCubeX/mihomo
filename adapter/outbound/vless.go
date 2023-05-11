@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/Dreamacro/clash/common/convert"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -372,15 +373,15 @@ func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 	}
 
 	if v.option.XUDP {
-		return newPacketConn(&threadSafePacketConn{
-			PacketConn: vmessSing.NewXUDPConn(c, M.SocksaddrFromNet(metadata.UDPAddr())),
-		}, v), nil
+		return newPacketConn(N.NewThreadSafePacketConn(
+			vmessSing.NewXUDPConn(c, M.SocksaddrFromNet(metadata.UDPAddr())),
+		), v), nil
 	} else if v.option.PacketAddr {
-		return newPacketConn(&threadSafePacketConn{
-			PacketConn: packetaddr.NewConn(&vlessPacketConn{
+		return newPacketConn(N.NewThreadSafePacketConn(
+			packetaddr.NewConn(&vlessPacketConn{
 				Conn: c, rAddr: metadata.UDPAddr(),
 			}, M.SocksaddrFromNet(metadata.UDPAddr())),
-		}, v), nil
+		), v), nil
 	}
 	return newPacketConn(&vlessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }

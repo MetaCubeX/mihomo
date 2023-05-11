@@ -2,6 +2,7 @@ package net
 
 import (
 	"net"
+	"sync"
 
 	"github.com/Dreamacro/clash/common/pool"
 )
@@ -65,4 +66,23 @@ func waitReadFrom(pc net.PacketConn) (data []byte, put func(), addr net.Addr, er
 		put = nil
 	}
 	return
+}
+
+type threadSafePacketConn struct {
+	net.PacketConn
+	access sync.Mutex
+}
+
+func (c *threadSafePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	c.access.Lock()
+	defer c.access.Unlock()
+	return c.PacketConn.WriteTo(b, addr)
+}
+
+func (c *threadSafePacketConn) Upstream() any {
+	return c.PacketConn
+}
+
+func NewThreadSafePacketConn(pc net.PacketConn) net.PacketConn {
+	return &threadSafePacketConn{PacketConn: pc}
 }
