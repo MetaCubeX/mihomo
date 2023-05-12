@@ -109,7 +109,8 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			defer mutex.Unlock()
 			conn2 = nil
 		}()
-		readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+
+		connReader := network.UnwrapPacketReader(conn) // decrease runtime cost for bufio.CreatePacketReadWaiter
 		for {
 			var (
 				buff *buf.Buffer
@@ -123,7 +124,9 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				return buff
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
-			if isReadWaiter {
+			// syscallPacketReadWaiter.WaitReadPacket will cache newBuffer function
+			// so create new PacketReadWaiter in each loop
+			if readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(connReader); isReadWaiter {
 				dest, err = readWaiter.WaitReadPacket(newBuffer)
 			} else {
 				dest, err = conn.ReadPacket(newBuffer())

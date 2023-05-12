@@ -58,6 +58,14 @@ func (c *waitCloseConn) Upstream() any {
 	return c.ExtendedConn
 }
 
+func (c *waitCloseConn) ReaderReplaceable() bool {
+	return true
+}
+
+func (c *waitCloseConn) WriterReplaceable() bool {
+	return true
+}
+
 func UpstreamMetadata(metadata M.Metadata) M.Metadata {
 	return M.Metadata{
 		Source:      metadata.Source,
@@ -116,7 +124,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		defer mutex.Unlock()
 		conn2 = nil
 	}()
-	readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+	connReader := network.UnwrapPacketReader(conn) // decrease runtime cost for bufio.CreatePacketReadWaiter
 	for {
 		var (
 			buff *buf.Buffer
@@ -127,7 +135,9 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			buff = buf.NewPacket() // do not use stack buffer
 			return buff
 		}
-		if isReadWaiter {
+		// syscallPacketReadWaiter.WaitReadPacket will cache newBuffer function
+		// so create new PacketReadWaiter in each loop
+		if readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(connReader); isReadWaiter {
 			dest, err = readWaiter.WaitReadPacket(newBuffer)
 		} else {
 			dest, err = conn.ReadPacket(newBuffer())

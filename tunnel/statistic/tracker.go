@@ -211,6 +211,10 @@ func (ut *udpTracker) Close() error {
 	return ut.PacketConn.Close()
 }
 
+func (ut *udpTracker) Upstream() any {
+	return ut.PacketConn
+}
+
 func NewUDPTracker(conn C.PacketConn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *udpTracker {
 	metadata.RemoteDst = parseRemoteDestination(nil, conn)
 

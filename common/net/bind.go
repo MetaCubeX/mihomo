@@ -37,9 +37,9 @@ func (c *bindPacketConn) Upstream() any {
 	return c.EnhancePacketConn
 }
 
-func NewBindPacketConn(pc EnhancePacketConn, rAddr net.Addr) net.Conn {
+func NewBindPacketConn(pc net.PacketConn, rAddr net.Addr) net.Conn {
 	return &bindPacketConn{
-		EnhancePacketConn: pc,
+		EnhancePacketConn: NewEnhancePacketConn(pc),
 		rAddr:             rAddr,
 	}
 }

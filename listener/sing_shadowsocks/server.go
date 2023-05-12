@@ -22,6 +22,7 @@ import (
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/network"
 )
 
 type Listener struct {
@@ -92,7 +93,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 
 			go func() {
 				conn := bufio.NewPacketConn(ul)
-				readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+				connReader := network.UnwrapPacketReader(conn) // decrease runtime cost for bufio.CreatePacketReadWaiter
 				for {
 					var (
 						buff *buf.Buffer
@@ -103,7 +104,9 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 						buff = buf.NewPacket() // do not use stack buffer
 						return buff
 					}
-					if isReadWaiter {
+					// syscallPacketReadWaiter.WaitReadPacket will cache newBuffer function
+					// so create new PacketReadWaiter in each loop
+					if readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(connReader); isReadWaiter {
 						dest, err = readWaiter.WaitReadPacket(newBuffer)
 					} else {
 						dest, err = conn.ReadPacket(newBuffer())
