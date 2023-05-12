@@ -124,21 +124,23 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		defer mutex.Unlock()
 		conn2 = nil
 	}()
-	connReader := network.UnwrapPacketReader(conn) // decrease runtime cost for bufio.CreatePacketReadWaiter
+	var buff *buf.Buffer
+	newBuffer := func() *buf.Buffer {
+		buff = buf.NewPacket() // do not use stack buffer
+		return buff
+	}
+	readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+	if isReadWaiter {
+		readWaiter.InitializeReadWaiter(newBuffer)
+	}
 	for {
 		var (
-			buff *buf.Buffer
 			dest M.Socksaddr
 			err  error
 		)
-		newBuffer := func() *buf.Buffer {
-			buff = buf.NewPacket() // do not use stack buffer
-			return buff
-		}
-		// syscallPacketReadWaiter.WaitReadPacket will cache newBuffer function
-		// so create new PacketReadWaiter in each loop
-		if readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(connReader); isReadWaiter {
-			dest, err = readWaiter.WaitReadPacket(newBuffer)
+		buff = nil // clear last loop status, avoid repeat release
+		if isReadWaiter {
+			dest, err = readWaiter.WaitReadPacket()
 		} else {
 			dest, err = conn.ReadPacket(newBuffer())
 		}
