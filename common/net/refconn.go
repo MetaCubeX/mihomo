@@ -82,8 +82,13 @@ func NewRefConn(conn net.Conn, ref any) net.Conn {
 }
 
 type refPacketConn struct {
-	pc  net.PacketConn
+	pc  EnhancePacketConn
 	ref any
+}
+
+func (pc *refPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	defer runtime.KeepAlive(pc.ref)
+	return pc.pc.WaitReadFrom()
 }
 
 func (pc *refPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
@@ -121,6 +126,18 @@ func (pc *refPacketConn) SetWriteDeadline(t time.Time) error {
 	return pc.pc.SetWriteDeadline(t)
 }
 
+func (pc *refPacketConn) Upstream() any {
+	return pc.pc
+}
+
+func (pc *refPacketConn) ReaderReplaceable() bool { // Relay() will handle reference
+	return true
+}
+
+func (pc *refPacketConn) WriterReplaceable() bool { // Relay() will handle reference
+	return true
+}
+
 func NewRefPacketConn(pc net.PacketConn, ref any) net.PacketConn {
-	return &refPacketConn{pc: pc, ref: ref}
+	return &refPacketConn{pc: NewEnhancePacketConn(pc), ref: ref}
 }
