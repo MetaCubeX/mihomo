@@ -199,8 +199,11 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string, re
 		if err != nil {
 			return nil, err
 		}
-
 		wrap.remoteAddr = pconn.RemoteAddr()
+
+		if tlsConfig == nil {
+			return pconn, nil
+		}
 
 		if len(Fingerprint) != 0 {
 			if realityConfig == nil {
