@@ -413,13 +413,6 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		option.PacketAddr = false
 	}
 
-	switch option.Network {
-	case "h2", "grpc":
-		if !option.TLS {
-			option.TLS = true
-		}
-	}
-
 	v := &Vmess{
 		Base: &Base{
 			name:   option.Name,
@@ -464,15 +457,19 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			Host:              v.option.ServerName,
 			ClientFingerprint: v.option.ClientFingerprint,
 		}
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: v.option.SkipCertVerify,
-			ServerName:         v.option.ServerName,
+		if option.ServerName == "" {
+			gunConfig.Host = v.addr
 		}
-
-		if v.option.ServerName == "" {
-			host, _, _ := net.SplitHostPort(v.addr)
-			tlsConfig.ServerName = host
-			gunConfig.Host = host
+		var tlsConfig *tls.Config
+		if option.TLS {
+			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
+				InsecureSkipVerify: v.option.SkipCertVerify,
+				ServerName:         v.option.ServerName,
+			})
+			if option.ServerName == "" {
+				host, _, _ := net.SplitHostPort(v.addr)
+				tlsConfig.ServerName = host
+			}
 		}
 
 		v.gunTLSConfig = tlsConfig
