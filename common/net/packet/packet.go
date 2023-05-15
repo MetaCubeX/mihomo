@@ -18,6 +18,9 @@ func NewEnhancePacketConn(pc net.PacketConn) EnhancePacketConn {
 	if enhancePC, isEnhancePC := pc.(EnhancePacketConn); isEnhancePC {
 		return enhancePC
 	}
+	if singPC, isSingPC := pc.(SingPacketConn); isSingPC {
+		return newEnhanceSingPacketConn(singPC)
+	}
 	return &enhancePacketConn{PacketConn: pc}
 }
 
