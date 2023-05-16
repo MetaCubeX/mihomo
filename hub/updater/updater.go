@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -74,7 +75,7 @@ func Update(execPath string) (err error) {
 	log.Infoln("current version %s, latest version %s", constant.Version, latestVersion)
 
 	if latestVersion == constant.Version {
-		err := &updateError{Message: "Already using latest version"}
+		err := &updateError{Message: "already using latest version"}
 		return err
 	}
 
@@ -433,8 +434,12 @@ func getLatestVersion() (version string, err error) {
 func updateDownloadURL() {
 	var middle string
 
-	if runtime.GOARCH == "arm" && goarm != "" {
-		middle = fmt.Sprintf("-%s-%sv%s-%s", runtime.GOOS, runtime.GOARCH, goarm, latestVersion)
+	if runtime.GOARCH == "arm" && probeGoARM() {
+		//-linux-armv7-alpha-e552b54.gz
+		middle = fmt.Sprintf("-%s-%s%s-%s", runtime.GOOS, runtime.GOARCH, goarm, latestVersion)
+	} else if runtime.GOARCH == "arm64" {
+		//-linux-arm64-alpha-e552b54.gz
+		middle = fmt.Sprintf("-%s-%s-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
 	} else if isMIPS(runtime.GOARCH) && gomips != "" {
 		middle = fmt.Sprintf("-%s-%s-%s-%s", runtime.GOOS, runtime.GOARCH, gomips, latestVersion)
 	} else {
@@ -462,4 +467,23 @@ func isMIPS(arch string) (ok bool) {
 	default:
 		return false
 	}
+}
+
+// linux only
+func probeGoARM() (ok bool) {
+	cmd := exec.Command("cat", "/proc/cpuinfo")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Errorln("probe goarm error:%s", err)
+		return false
+	}
+	cpuInfo := string(output)
+	if strings.Contains(cpuInfo, "vfpv3") || strings.Contains(cpuInfo, "vfpv4") {
+		goarm = "v7"
+	} else if strings.Contains(cpuInfo, "vfp") {
+		goarm = "v6"
+	} else {
+		goarm = "v5"
+	}
+	return true
 }
