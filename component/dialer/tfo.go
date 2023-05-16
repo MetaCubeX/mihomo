@@ -18,10 +18,11 @@ type tfoConn struct {
 }
 
 func (c *tfoConn) Dial(earlyData []byte) (err error) {
-	c.Conn, err = c.dialFn(c.ctx, earlyData)
+	conn, err := c.dialFn(c.ctx, earlyData)
 	if err != nil {
 		return
 	}
+	c.Conn = conn
 	c.dialed <- true
 	return err
 }
