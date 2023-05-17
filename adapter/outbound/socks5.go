@@ -88,6 +88,9 @@ func (ss *Socks5) DialContextWithDialer(ctx context.Context, dialer C.Dialer, me
 		safeConnClose(c, err)
 	}(c)
 
+	release := enforceContextToConn(ctx, c)
+	defer release()
+
 	c, err = ss.StreamConn(c, metadata)
 	if err != nil {
 		return nil, err

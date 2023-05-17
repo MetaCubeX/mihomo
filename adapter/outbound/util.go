@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	xtls "github.com/xtls/go"
 	"net"
 	"net/netip"
 	"strconv"
 	"sync"
 	"time"
+
+	xtls "github.com/xtls/go"
 
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -137,4 +138,19 @@ func safeConnClose(c net.Conn, err error) {
 	if err != nil && c != nil {
 		_ = c.Close()
 	}
+}
+
+// enforceContextToConn enforce context to a a connection
+func enforceContextToConn(ctx context.Context, conn net.Conn) (release func()) {
+	release = func() {}
+	deadline, ok := ctx.Deadline()
+	if ok {
+		// explicitly set deadline to conn
+		conn.SetDeadline(deadline)
+		return func() {
+			// set deadline to zero
+			conn.SetDeadline(time.Time{})
+		}
+	}
+	return release
 }
