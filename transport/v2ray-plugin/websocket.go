@@ -1,6 +1,7 @@
 package obfs
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
@@ -22,7 +23,7 @@ type Option struct {
 }
 
 // NewV2rayObfs return a HTTPObfs
-func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
+func NewV2rayObfs(ctx context.Context, conn net.Conn, option *Option) (net.Conn, error) {
 	header := http.Header{}
 	for k, v := range option.Headers {
 		header.Add(k, v)
@@ -57,7 +58,7 @@ func NewV2rayObfs(conn net.Conn, option *Option) (net.Conn, error) {
 	}
 
 	var err error
-	conn, err = vmess.StreamWebsocketConn(conn, config)
+	conn, err = vmess.StreamWebsocketConn(ctx, conn, config)
 	if err != nil {
 		return nil, err
 	}

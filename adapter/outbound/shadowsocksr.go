@@ -38,8 +38,8 @@ type ShadowSocksROption struct {
 	UDP           bool   `proxy:"udp,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (ssr *ShadowSocksR) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (ssr *ShadowSocksR) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	c = ssr.obfs.StreamConn(c)
 	c = ssr.cipher.StreamConn(c)
 	var (
@@ -83,7 +83,7 @@ func (ssr *ShadowSocksR) DialContextWithDialer(ctx context.Context, dialer C.Dia
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = ssr.StreamConn(c, metadata)
+	c, err = ssr.StreamConnContext(ctx, c, metadata)
 	return NewConn(c, ssr), err
 }
 

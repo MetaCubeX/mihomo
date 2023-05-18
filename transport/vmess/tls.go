@@ -7,7 +7,6 @@ import (
 	"net"
 
 	tlsC "github.com/Dreamacro/clash/component/tls"
-	C "github.com/Dreamacro/clash/constant"
 )
 
 type TLSConfig struct {
@@ -19,7 +18,7 @@ type TLSConfig struct {
 	Reality           *tlsC.RealityConfig
 }
 
-func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
+func StreamTLSConn(ctx context.Context, conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 	tlsConfig := &tls.Config{
 		ServerName:         cfg.Host,
 		InsecureSkipVerify: cfg.SkipCertVerify,
@@ -39,15 +38,10 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 		if cfg.Reality == nil {
 			utlsConn, valid := GetUTLSConn(conn, cfg.ClientFingerprint, tlsConfig)
 			if valid {
-				ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-				defer cancel()
-
 				err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
 				return utlsConn, err
 			}
 		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-			defer cancel()
 			return tlsC.GetRealityConn(ctx, conn, cfg.ClientFingerprint, tlsConfig, cfg.Reality)
 		}
 	}
@@ -56,9 +50,6 @@ func StreamTLSConn(conn net.Conn, cfg *TLSConfig) (net.Conn, error) {
 	}
 
 	tlsConn := tls.Client(conn, tlsConfig)
-
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-	defer cancel()
 
 	err := tlsConn.HandshakeContext(ctx)
 	return tlsConn, err
