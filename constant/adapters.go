@@ -106,11 +106,11 @@ type ProxyAdapter interface {
 	//
 	// Examples:
 	//	conn, _ := net.DialContext(context.Background(), "tcp", "host:port")
-	//	conn, _ = adapter.StreamConn(conn, metadata)
+	//	conn, _ = adapter.StreamConnContext(context.Background(), conn, metadata)
 	//
 	// It returns a C.Conn with protocol which start with
 	// a new session (if any)
-	StreamConn(c net.Conn, metadata *Metadata) (net.Conn, error)
+	StreamConnContext(ctx context.Context, c net.Conn, metadata *Metadata) (net.Conn, error)
 
 	// DialContext return a C.Conn with protocol which
 	// contains multiplexing-related reuse logic (if any)

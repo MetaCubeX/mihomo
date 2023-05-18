@@ -52,8 +52,8 @@ func streamConn(c net.Conn, option streamOption) *snell.Snell {
 	return snell.StreamConn(c, option.psk, option.version)
 }
 
-// StreamConn implements C.ProxyAdapter
-func (s *Snell) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (s *Snell) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 	if metadata.NetWork == C.UDP {
 		err := snell.WriteUDPHeader(c, s.version)
@@ -101,7 +101,7 @@ func (s *Snell) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = s.StreamConn(c, metadata)
+	c, err = s.StreamConnContext(ctx, c, metadata)
 	return NewConn(c, s), err
 }
 

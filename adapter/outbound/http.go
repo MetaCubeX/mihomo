@@ -40,12 +40,10 @@ type HttpOption struct {
 	Headers        map[string]string `proxy:"headers,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (h *Http) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (h *Http) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if h.tlsConfig != nil {
 		cc := tls.Client(c, h.tlsConfig)
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-		defer cancel()
 		err := cc.HandshakeContext(ctx)
 		c = cc
 		if err != nil {
@@ -82,7 +80,7 @@ func (h *Http) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metad
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = h.StreamConn(c, metadata)
+	c, err = h.StreamConnContext(ctx, c, metadata)
 	if err != nil {
 		return nil, err
 	}
