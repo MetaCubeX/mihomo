@@ -45,8 +45,8 @@ func (b *Base) Type() C.AdapterType {
 	return b.tp
 }
 
-// StreamConn implements C.ProxyAdapter
-func (b *Base) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (b *Base) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	return c, C.ErrNotSupport
 }
 

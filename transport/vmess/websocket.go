@@ -194,17 +194,17 @@ func (wsedc *websocketWithEarlyDataConn) Dial(earlyData []byte) error {
 
 	earlyDataBuf := bytes.NewBuffer(earlyData)
 	if _, err := base64EarlyDataEncoder.Write(earlyDataBuf.Next(wsedc.config.MaxEarlyData)); err != nil {
-		return errors.New("failed to encode early data: " + err.Error())
+		return fmt.Errorf("failed to encode early data: %w", err)
 	}
 
 	if errc := base64EarlyDataEncoder.Close(); errc != nil {
-		return errors.New("failed to encode early data tail: " + errc.Error())
+		return fmt.Errorf("failed to encode early data tail: %w", errc)
 	}
 
 	var err error
-	if wsedc.Conn, err = streamWebsocketConn(wsedc.underlay, wsedc.config, base64DataBuf); err != nil {
+	if wsedc.Conn, err = streamWebsocketConn(wsedc.ctx, wsedc.underlay, wsedc.config, base64DataBuf); err != nil {
 		wsedc.Close()
-		return errors.New("failed to dial WebSocket: " + err.Error())
+		return fmt.Errorf("failed to dial WebSocket: %w", err)
 	}
 
 	wsedc.dialed <- true
@@ -340,7 +340,7 @@ func streamWebsocketWithEarlyDataConn(conn net.Conn, c *WebsocketConfig) (net.Co
 	return N.NewDeadlineConn(conn), nil
 }
 
-func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
+func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buffer) (net.Conn, error) {
 
 	dialer := &websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
@@ -396,13 +396,13 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 		}
 	}
 
-	wsConn, resp, err := dialer.Dial(uri.String(), headers)
+	wsConn, resp, err := dialer.DialContext(ctx, uri.String(), headers)
 	if err != nil {
-		reason := err.Error()
+		reason := err
 		if resp != nil {
-			reason = resp.Status
+			reason = errors.New(resp.Status)
 		}
-		return nil, fmt.Errorf("dial %s error: %s", uri.Host, reason)
+		return nil, fmt.Errorf("dial %s error: %w", uri.Host, reason)
 	}
 
 	conn = &websocketConn{
@@ -417,7 +417,7 @@ func streamWebsocketConn(conn net.Conn, c *WebsocketConfig, earlyData *bytes.Buf
 	return N.NewDeadlineConn(conn), nil
 }
 
-func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
+func StreamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 	if u, err := url.Parse(c.Path); err == nil {
 		if q := u.Query(); q.Get("ed") != "" {
 			if ed, err := strconv.Atoi(q.Get("ed")); err == nil {
@@ -434,5 +434,5 @@ func StreamWebsocketConn(conn net.Conn, c *WebsocketConfig) (net.Conn, error) {
 		return streamWebsocketWithEarlyDataConn(conn, c)
 	}
 
-	return streamWebsocketConn(conn, c, nil)
+	return streamWebsocketConn(ctx, conn, c, nil)
 }

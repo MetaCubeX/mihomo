@@ -70,7 +70,7 @@ type Trojan struct {
 	hexPassword []byte
 }
 
-func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
+func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
 	alpn := defaultALPN
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
@@ -149,7 +149,7 @@ func (t *Trojan) StreamConn(conn net.Conn) (net.Conn, error) {
 	}
 }
 
-func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
+func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
 	alpn := defaultWebsocketALPN
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
@@ -162,7 +162,7 @@ func (t *Trojan) StreamWebsocketConn(conn net.Conn, wsOptions *WebsocketOption) 
 		ServerName:         t.option.ServerName,
 	}
 
-	return vmess.StreamWebsocketConn(conn, &vmess.WebsocketConfig{
+	return vmess.StreamWebsocketConn(ctx, conn, &vmess.WebsocketConfig{
 		Host:              wsOptions.Host,
 		Port:              wsOptions.Port,
 		Path:              wsOptions.Path,

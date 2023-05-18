@@ -39,12 +39,10 @@ type Socks5Option struct {
 	Fingerprint    string `proxy:"fingerprint,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (ss *Socks5) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (ss *Socks5) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if ss.tls {
 		cc := tls.Client(c, ss.tlsConfig)
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-		defer cancel()
 		err := cc.HandshakeContext(ctx)
 		c = cc
 		if err != nil {
@@ -88,7 +86,7 @@ func (ss *Socks5) DialContextWithDialer(ctx context.Context, dialer C.Dialer, me
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = ss.StreamConn(c, metadata)
+	c, err = ss.StreamConnContext(ctx, c, metadata)
 	if err != nil {
 		return nil, err
 	}

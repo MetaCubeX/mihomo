@@ -84,14 +84,7 @@ type restlsOption struct {
 	RestlsScript string `obfs:"restls-script,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (ss *ShadowSocks) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	// fix tls handshake not timeout
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-	defer cancel()
-	return ss.StreamConnContext(ctx, c, metadata)
-}
-
+// StreamConnContext implements C.ProxyAdapter
 func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	useEarly := false
 	switch ss.obfsMode {
@@ -102,7 +95,7 @@ func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metada
 		c = obfs.NewHTTPObfs(c, ss.obfsOption.Host, port)
 	case "websocket":
 		var err error
-		c, err = v2rayObfs.NewV2rayObfs(c, ss.v2rayOption)
+		c, err = v2rayObfs.NewV2rayObfs(ctx, c, ss.v2rayOption)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
