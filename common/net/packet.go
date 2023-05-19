@@ -11,8 +11,10 @@ import (
 type EnhancePacketConn = packet.EnhancePacketConn
 
 var NewEnhancePacketConn = packet.NewEnhancePacketConn
-var NewDeadlinePacketConn = deadline.NewPacketConn
+var NewDeadlineNetPacketConn = deadline.NewNetPacketConn
 var NewDeadlineEnhancePacketConn = deadline.NewEnhancePacketConn
+var NewDeadlineSingPacketConn = deadline.NewSingPacketConn
+var NewDeadlineEnhanceSingPacketConn = deadline.NewEnhanceSingPacketConn
 
 type threadSafePacketConn struct {
 	EnhancePacketConn
