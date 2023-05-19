@@ -6,9 +6,13 @@ import (
 	"github.com/Dreamacro/clash/common/pool"
 )
 
+type WaitReadFrom interface {
+	WaitReadFrom() (data []byte, put func(), addr net.Addr, err error)
+}
+
 type EnhancePacketConn interface {
 	net.PacketConn
-	WaitReadFrom() (data []byte, put func(), addr net.Addr, err error)
+	WaitReadFrom
 }
 
 func NewEnhancePacketConn(pc net.PacketConn) EnhancePacketConn {

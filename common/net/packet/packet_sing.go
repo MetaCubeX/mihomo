@@ -11,6 +11,11 @@ import (
 
 type SingPacketConn = N.NetPacketConn
 
+type EnhanceSingPacketConn interface {
+	N.NetPacketConn
+	EnhancePacketConn
+}
+
 type enhanceSingPacketConn struct {
 	N.NetPacketConn
 	readWaiter N.PacketReadWaiter
