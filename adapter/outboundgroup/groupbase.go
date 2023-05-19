@@ -130,10 +130,6 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		}
 	}
 
-	if len(proxies) == 0 {
-		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
-	}
-
 	if len(gb.providers) > 1 && len(gb.filterRegs) > 1 {
 		var newProxies []C.Proxy
 		proxiesSet := map[string]struct{}{}
@@ -187,6 +183,10 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 			newProxies = append(newProxies, p)
 		}
 		proxies = newProxies
+	}
+
+	if len(proxies) == 0 {
+		return append(proxies, tunnel.Proxies()["COMPATIBLE"])
 	}
 
 	return proxies
