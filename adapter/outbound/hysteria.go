@@ -71,7 +71,7 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 
 func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.PacketDialer {
 	return &hyDialerWithContext{
-		ctx: context.Background(),
+		ctx: ctx,
 		hyDialer: func(network string) (net.PacketConn, error) {
 			var err error
 			var cDialer C.Dialer = dialer.NewDialer(h.Base.DialOptions(opts...)...)

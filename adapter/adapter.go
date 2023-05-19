@@ -14,6 +14,7 @@ import (
 	"github.com/Dreamacro/clash/common/queue"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
@@ -125,6 +126,13 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 		return
 	}
 	defer func() {
+		if d, ok := ctx.Deadline(); ok {
+			actualElapsed := time.Since(start)
+			expectTimeout := d.Sub(start)
+			if actualElapsed > expectTimeout+time.Millisecond*100 {
+				log.Infoln("[URLTest]  %s(%s) timeout, expect: %s, actual: %s", p.Name(), p.Type(), expectTimeout, actualElapsed)
+			}
+		}
 		_ = instance.Close()
 	}()
 
