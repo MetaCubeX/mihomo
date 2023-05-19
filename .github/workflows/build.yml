@@ -223,7 +223,7 @@ jobs:
         working-directory: bin
 
       - name: Delete current release assets
-        uses: andreaswilli/delete-release-assets-action@v2.0.0
+        uses: 8Mi-Tech/delete-release-assets-action@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: Prerelease-${{ github.ref_name }}
