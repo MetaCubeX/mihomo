@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sync"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
@@ -20,6 +21,7 @@ import (
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
 
+	M "github.com/sagernet/sing/common/metadata"
 	xtls "github.com/xtls/go"
 )
 
@@ -303,6 +305,8 @@ func New(option *Option) *Trojan {
 	return &Trojan{option, hexSha224([]byte(option.Password))}
 }
 
+var _ N.EnhancePacketConn = (*PacketConn)(nil)
+
 type PacketConn struct {
 	net.Conn
 	remain int
@@ -348,6 +352,43 @@ func (pc *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 
 	return n, addr, nil
+}
+
+func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	pc.mux.Lock()
+	defer pc.mux.Unlock()
+
+	destination, err := M.SocksaddrSerializer.ReadAddrPort(pc.Conn)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	addr = destination.UDPAddr()
+
+	data = pool.Get(pool.UDPBufferSize)
+	put = func() {
+		_ = pool.Put(data)
+	}
+
+	_, err = io.ReadFull(pc.Conn, data[:2+2]) // u16be length + CR LF
+	if err != nil {
+		put()
+		return nil, nil, nil, err
+	}
+	length := binary.BigEndian.Uint16(data)
+
+	if length > 0 {
+		data = data[:length]
+		_, err = io.ReadFull(pc.Conn, data)
+		if err != nil {
+			put()
+			return nil, nil, nil, err
+		}
+	} else {
+		put()
+		return nil, nil, addr, nil
+	}
+
+	return
 }
 
 func hexSha224(data []byte) []byte {

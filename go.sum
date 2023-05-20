@@ -65,6 +65,8 @@ github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38/go.mod h1:kpwsk12EmLe
 github.com/google/tink/go v1.6.1 h1:t7JHqO8Ath2w2ig5vjwQYJzhGEZymedQc90lQXUBa4I=
 github.com/gorilla/websocket v1.5.0 h1:PPwGk2jz7EePpoHN/+ClbZu8SPxiqlu12wZP/3sWmnc=
 github.com/gorilla/websocket v1.5.0/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
+github.com/h1jk/sing v0.0.0-20230519121640-6db84f45244d h1:ih6tNzl1uxuuX+Naz2qAPqSS20E6jfXFmcvyDRAy8rY=
+github.com/h1jk/sing v0.0.0-20230519121640-6db84f45244d/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/hashicorp/golang-lru v0.5.4 h1:YDjusn29QI/Das2iO9M0BHnIbxPeyuCHsjMW+lJfyTc=
 github.com/hashicorp/golang-lru v0.5.4/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
 github.com/hashicorp/yamux v0.1.1 h1:yrQxtgseBDrq9Y652vSRDvsKCJKOUD+GzTS4Y0Y8pvE=
@@ -102,6 +104,8 @@ github.com/metacubex/sing-shadowsocks2 v0.0.0-20230519030442-556ef530768f h1:aWg
 github.com/metacubex/sing-shadowsocks2 v0.0.0-20230519030442-556ef530768f/go.mod h1:jVDD4N22bDPPKA73NvB7aqdlLWiAwv8D+jx7HwhcWak=
 github.com/metacubex/sing-tun v0.1.5-0.20230509224930-30065d4b6376 h1:zKNsbFQyleMFAP7NJYRew9sEMJuniuODH3V0FdWnEtk=
 github.com/metacubex/sing-tun v0.1.5-0.20230509224930-30065d4b6376/go.mod h1:BMfG00enVf90/CzcdX9PK3Dymgl7BZqHXJfexEyB7Cc=
+github.com/metacubex/sing-vmess v0.1.5-0.20230520082358-78b126617899 h1:iRfcuztp7REfmOyasSlCL/pqNWfUDMTJ2CwbGpxpeks=
+github.com/metacubex/sing-vmess v0.1.5-0.20230520082358-78b126617899/go.mod h1:RSt9rxGHllLdc5JUebkQwaqyWLx09Lqya37DlBe8CP8=
 github.com/metacubex/sing-wireguard v0.0.0-20230426030325-41db09ae771a h1:cWKym33Qvl6HA3hj4/YuYD8hHyqQPb47wT5cJRAPgco=
 github.com/metacubex/sing-wireguard v0.0.0-20230426030325-41db09ae771a/go.mod h1:Bsw2BvKMMMY0FhZPseDI50ZOalvoUPMKYyGpyqvIIqY=
 github.com/miekg/dns v1.1.54 h1:5jon9mWcb0sFJGpnI99tOMhCPyJ+RPVz5b63MQG0VWI=
@@ -141,16 +145,10 @@ github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 h1:5+m7c
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h1:QUQ4RRHD6hGGHdFMEtR8T2P6GS6R3D/CXKdaYHKKXms=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 h1:iL5gZI3uFp0X6EslacyapiRz7LLSJyr4RajF/BhMVyE=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
-github.com/sagernet/sing v0.0.0-20220817130738-ce854cda8522/go.mod h1:QVsS5L/ZA2Q5UhQwLrn0Trw+msNd/NPGEhBKR/ioWiY=
-github.com/sagernet/sing v0.1.8/go.mod h1:jt1w2u7lJQFFSGLiRrRIs5YWmx4kAPfWuOejuDW9qMk=
-github.com/sagernet/sing v0.2.5-0.20230519030052-49166ac42700 h1:NTiK4CtFIzD+OZkjR2/jP8IZJ/S8gKhiOoeU2ycXKDg=
-github.com/sagernet/sing v0.2.5-0.20230519030052-49166ac42700/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/sagernet/sing-mux v0.0.0-20230517134606-1ebe6bb26646 h1:X3ADfMqeGns1Q1FlXc9kaL9FwW1UM6D6tEQo8jFstpc=
 github.com/sagernet/sing-mux v0.0.0-20230517134606-1ebe6bb26646/go.mod h1:pF+RnLvCAOhECrvauy6LYOpBakJ/vuaF1Wm4lPsWryI=
 github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b h1:ouW/6IDCrxkBe19YSbdCd7buHix7b+UZ6BM4Zz74XF4=
 github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b/go.mod h1:oG8bPerYI6cZ74KquY3DvA7ynECyrILPBnce6wtBqeI=
-github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3 h1:BHOnxrbC929JonuKqFdJ7ZbDp7zs4oTlH5KFvKtWu9U=
-github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3/go.mod h1:yKrAr+dqZd64DxBXCHWrYicp+n4qbqO73mtwv3dck8U=
 github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37 h1:HuE6xSwco/Xed8ajZ+coeYLmioq0Qp1/Z2zczFaV8as=
 github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37/go.mod h1:3skNSftZDJWTGVtVaM2jfbce8qHnmH/AGDRe62iNOg0=
 github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9 h1:2ItpW1nMNkPzmBTxV0/eClCklHrFSQMnUGcpUmJxVeE=
@@ -239,10 +237,8 @@ golang.org/x/sys v0.0.0-20210330210617-4fbd30eecc44/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210510120138-977fb7262007/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220622161953-175b2fd9d664/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.0.0-20220731174439-a90be440212d/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220908164124-27713097b956/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.2.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.7.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.8.0 h1:EBmGv8NaZBZTWvrbjNoL6HVt+IVy3QDQpJs7VRIw3tU=
 golang.org/x/sys v0.8.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

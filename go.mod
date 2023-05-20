@@ -104,3 +104,7 @@ require (
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 )
+
+replace github.com/sagernet/sing => github.com/h1jk/sing v0.0.0-20230519121640-6db84f45244d
+
+replace github.com/sagernet/sing-vmess => github.com/metacubex/sing-vmess v0.1.5-0.20230520082358-78b126617899
