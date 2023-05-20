@@ -12,13 +12,13 @@ import (
 type SingPacketConn = N.NetPacketConn
 
 type EnhanceSingPacketConn interface {
-	N.NetPacketConn
+	SingPacketConn
 	EnhancePacketConn
 }
 
 type enhanceSingPacketConn struct {
-	N.NetPacketConn
-	readWaiter N.PacketReadWaiter
+	SingPacketConn
+	packetReadWaiter N.PacketReadWaiter
 }
 
 func (c *enhanceSingPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
@@ -28,12 +28,12 @@ func (c *enhanceSingPacketConn) WaitReadFrom() (data []byte, put func(), addr ne
 		buff = buf.NewPacket() // do not use stack buffer
 		return buff
 	}
-	if c.readWaiter != nil {
-		c.readWaiter.InitializeReadWaiter(newBuffer)
-		defer c.readWaiter.InitializeReadWaiter(nil)
-		dest, err = c.readWaiter.WaitReadPacket()
+	if c.packetReadWaiter != nil {
+		c.packetReadWaiter.InitializeReadWaiter(newBuffer)
+		defer c.packetReadWaiter.InitializeReadWaiter(nil)
+		dest, err = c.packetReadWaiter.WaitReadPacket()
 	} else {
-		dest, err = c.NetPacketConn.ReadPacket(newBuffer())
+		dest, err = c.SingPacketConn.ReadPacket(newBuffer())
 	}
 	if dest.IsFqdn() {
 		addr = dest
@@ -59,7 +59,7 @@ func (c *enhanceSingPacketConn) WaitReadFrom() (data []byte, put func(), addr ne
 }
 
 func (c *enhanceSingPacketConn) Upstream() any {
-	return c.NetPacketConn
+	return c.SingPacketConn
 }
 
 func (c *enhanceSingPacketConn) WriterReplaceable() bool {
@@ -70,10 +70,10 @@ func (c *enhanceSingPacketConn) ReaderReplaceable() bool {
 	return true
 }
 
-func newEnhanceSingPacketConn(conn N.NetPacketConn) *enhanceSingPacketConn {
-	epc := &enhanceSingPacketConn{NetPacketConn: conn}
+func newEnhanceSingPacketConn(conn SingPacketConn) *enhanceSingPacketConn {
+	epc := &enhanceSingPacketConn{SingPacketConn: conn}
 	if readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn); isReadWaiter {
-		epc.readWaiter = readWaiter
+		epc.packetReadWaiter = readWaiter
 	}
 	return epc
 }
