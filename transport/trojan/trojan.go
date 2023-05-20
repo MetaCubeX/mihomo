@@ -21,7 +21,6 @@ import (
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
 
-	M "github.com/sagernet/sing/common/metadata"
 	xtls "github.com/xtls/go"
 )
 
@@ -358,7 +357,7 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 	pc.mux.Lock()
 	defer pc.mux.Unlock()
 
-	destination, err := M.SocksaddrSerializer.ReadAddrPort(pc.Conn)
+	destination, err := socks5.ReadAddr0(pc.Conn)
 	if err != nil {
 		return nil, nil, nil, err
 	}
