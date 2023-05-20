@@ -3,6 +3,7 @@ package deadline
 import (
 	"net"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/Dreamacro/clash/common/atomic"
@@ -13,8 +14,6 @@ type readResult struct {
 	data []byte
 	addr net.Addr
 	err  error
-	enhanceReadResult
-	singReadResult
 }
 
 type NetPacketConn struct {
@@ -23,14 +22,14 @@ type NetPacketConn struct {
 	pipeDeadline pipeDeadline
 	disablePipe  atomic.Bool
 	inRead       atomic.Bool
-	resultCh     chan *readResult
+	resultCh     chan any
 }
 
 func NewNetPacketConn(pc net.PacketConn) net.PacketConn {
 	npc := &NetPacketConn{
 		PacketConn:   pc,
 		pipeDeadline: makePipeDeadline(),
-		resultCh:     make(chan *readResult, 1),
+		resultCh:     make(chan any, 1),
 	}
 	npc.resultCh <- nil
 	if enhancePC, isEnhance := pc.(packet.EnhancePacketConn); isEnhance {
@@ -65,20 +64,28 @@ func NewNetPacketConn(pc net.PacketConn) net.PacketConn {
 }
 
 func (c *NetPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	select {
-	case result := <-c.resultCh:
-		if result != nil {
-			n = copy(p, result.data)
-			addr = result.addr
-			err = result.err
-			c.resultCh <- nil // finish cache read
-			return
-		} else {
-			c.resultCh <- nil
-			break
+FOR:
+	for {
+		select {
+		case result := <-c.resultCh:
+			if result != nil {
+				if result, ok := result.(*readResult); ok {
+					n = copy(p, result.data)
+					addr = result.addr
+					err = result.err
+					c.resultCh <- nil // finish cache read
+					return
+				}
+				c.resultCh <- result // another type of read
+				runtime.Gosched()    // allowing other goroutines to run
+				continue FOR
+			} else {
+				c.resultCh <- nil
+				break FOR
+			}
+		case <-c.pipeDeadline.wait():
+			return 0, nil, os.ErrDeadlineExceeded
 		}
-	case <-c.pipeDeadline.wait():
-		return 0, nil, os.ErrDeadlineExceeded
 	}
 
 	if c.disablePipe.Load() {
@@ -100,11 +107,11 @@ func (c *NetPacketConn) pipeReadFrom(size int) {
 	buffer := make([]byte, size)
 	n, addr, err := c.PacketConn.ReadFrom(buffer)
 	buffer = buffer[:n]
-	c.resultCh <- &readResult{
-		data: buffer,
-		addr: addr,
-		err:  err,
-	}
+	result := &readResult{}
+	result.data = buffer
+	result.addr = addr
+	result.err = err
+	c.resultCh <- result
 }
 
 func (c *NetPacketConn) SetReadDeadline(t time.Time) error {
