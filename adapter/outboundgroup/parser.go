@@ -3,7 +3,6 @@ package outboundgroup
 import (
 	"errors"
 	"fmt"
-
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/structure"
@@ -32,6 +31,7 @@ type GroupCommonOption struct {
 	Filter        string   `group:"filter,omitempty"`
 	ExcludeFilter string   `group:"exclude-filter,omitempty"`
 	ExcludeType   string   `group:"exclude-type,omitempty"`
+	StatusPattern string   `group:"status-pattern,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
@@ -68,7 +68,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 		// select don't need health check
 		if groupOption.Type == "select" || groupOption.Type == "relay" {
-			hc := provider.NewHealthCheck(ps, "", 0, true)
+			hc := provider.NewHealthCheck(ps, "", 0, true, "")
 			pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 			if err != nil {
 				return nil, err
@@ -85,7 +85,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.Interval = 300
 			}
 
-			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy)
+			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, groupOption.StatusPattern)
 			pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 			if err != nil {
 				return nil, err
@@ -101,7 +101,14 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		if err != nil {
 			return nil, err
 		}
-		providers = append(providers, list...)
+		for _, pp := range list {
+			pd, _ := pp.(*provider.ProxySetProvider)
+			ppName := fmt.Sprintf("%s-%s", groupName, pp.Name())
+			hc := provider.NewHealthCheck([]C.Proxy{}, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, groupOption.StatusPattern)
+			ppNew, _ := provider.NewProxySetProvider(ppName, pd.Fetcher.Interval(), "", "", "", "", pd.Vehicle(), hc)
+			providers = append(providers, ppNew)
+			providersMap[ppName] = ppNew
+		}
 	} else {
 		groupOption.Filter = ""
 	}

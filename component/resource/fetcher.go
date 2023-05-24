@@ -35,6 +35,10 @@ func (f *Fetcher[V]) Name() string {
 	return f.name
 }
 
+func (f *Fetcher[V]) Interval() time.Duration {
+	return f.interval
+}
+
 func (f *Fetcher[V]) Vehicle() types.Vehicle {
 	return f.vehicle
 }

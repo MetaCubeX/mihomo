@@ -655,7 +655,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 		ps = append(ps, proxies[v])
 	}
-	hc := provider.NewHealthCheck(ps, "", 0, true)
+	hc := provider.NewHealthCheck(ps, "", 0, true, "")
 	pd, _ := provider.NewCompatibleProvider(provider.ReservedName, ps, hc)
 	providersMap[provider.ReservedName] = pd
 
@@ -841,7 +841,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {
-						if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback()&&!ipnet.IP.IsLinkLocalUnicast() {
+						if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && !ipnet.IP.IsLinkLocalUnicast() {
 							if ip, err := netip.ParseAddr(ipnet.IP.String()); err == nil {
 								ips = append(ips, ip)
 							}

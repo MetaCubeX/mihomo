@@ -16,9 +16,10 @@ import (
 
 type Fallback struct {
 	*GroupBase
-	disableUDP bool
-	testUrl    string
-	selected   string
+	disableUDP    bool
+	testUrl       string
+	selected      string
+	statusPattern string
 }
 
 func (f *Fallback) Now() string {
@@ -132,7 +133,7 @@ func (f *Fallback) Set(name string) error {
 	if !p.Alive() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		_, _ = p.URLTest(ctx, f.testUrl)
+		_, _ = p.URLTest(ctx, f.testUrl, f.statusPattern)
 	}
 
 	return nil
@@ -156,7 +157,8 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.ExcludeType,
 			providers,
 		}),
-		disableUDP: option.DisableUDP,
-		testUrl:    option.URL,
+		disableUDP:    option.DisableUDP,
+		testUrl:       option.URL,
+		statusPattern: option.StatusPattern,
 	}
 }

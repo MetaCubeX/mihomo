@@ -14,10 +14,11 @@ import (
 var errVehicleType = errors.New("unsupport vehicle type")
 
 type healthCheckSchema struct {
-	Enable   bool   `provider:"enable"`
-	URL      string `provider:"url"`
-	Interval int    `provider:"interval"`
-	Lazy     bool   `provider:"lazy,omitempty"`
+	Enable        bool   `provider:"enable"`
+	URL           string `provider:"url"`
+	Interval      int    `provider:"interval"`
+	Lazy          bool   `provider:"lazy,omitempty"`
+	StatusPattern string `provider:"status-pattern,omitempty"`
 }
 
 type proxyProviderSchema struct {
@@ -37,7 +38,8 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 
 	schema := &proxyProviderSchema{
 		HealthCheck: healthCheckSchema{
-			Lazy: true,
+			Lazy:          true,
+			StatusPattern: "",
 		},
 	}
 	if err := decoder.Decode(mapping, schema); err != nil {
@@ -48,7 +50,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	if schema.HealthCheck.Enable {
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy)
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, schema.HealthCheck.StatusPattern)
 
 	path := C.Path.Resolve(schema.Path)
 

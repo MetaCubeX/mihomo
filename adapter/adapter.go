@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"time"
 
 	"github.com/Dreamacro/clash/common/atomic"
@@ -99,7 +100,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, statusPattern string) (t uint16, err error) {
 	defer func() {
 		p.alive.Store(err == nil)
 		record := C.DelayHistory{Time: time.Now()}
@@ -162,6 +163,13 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 	}
 
 	_ = resp.Body.Close()
+
+	if statusPattern != "" && statusPattern != ".*" {
+		matched, _ := regexp.MatchString(statusPattern, resp.Status)
+		if !matched {
+			return
+		}
+	}
 
 	if unifiedDelay {
 		second := time.Now()
