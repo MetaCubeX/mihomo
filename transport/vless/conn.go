@@ -1,25 +1,18 @@
 package vless
 
 import (
-	"bytes"
-	"crypto/subtle"
-	gotls "crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"reflect"
 	"sync"
-	"unsafe"
 
 	"github.com/Dreamacro/clash/common/buf"
 	N "github.com/Dreamacro/clash/common/net"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/transport/vless/vision"
 
 	"github.com/gofrs/uuid/v5"
-	utls "github.com/sagernet/utls"
 	xtls "github.com/xtls/go"
 	"google.golang.org/protobuf/proto"
 )
@@ -36,33 +29,10 @@ type Conn struct {
 	handshakeMutex sync.Mutex
 	needHandshake  bool
 	err            error
-
-	tlsConn  net.Conn
-	input    *bytes.Reader
-	rawInput *bytes.Buffer
-
-	packetsToFilter            int
-	isTLS                      bool
-	isTLS12orAbove             bool
-	enableXTLS                 bool
-	cipher                     uint16
-	remainingServerHello       uint16
-	readRemainingContent       int
-	readRemainingPadding       int
-	readProcess                bool
-	readFilterUUID             bool
-	readLastCommand            byte
-	writeFilterApplicationData bool
-	writeDirect                bool
 }
 
 func (vc *Conn) Read(b []byte) (int, error) {
 	if vc.received {
-		if vc.readProcess {
-			buffer := buf.With(b)
-			err := vc.ReadBuffer(buffer)
-			return buffer.Len(), err
-		}
 		return vc.ExtendedReader.Read(b)
 	}
 
@@ -70,106 +40,11 @@ func (vc *Conn) Read(b []byte) (int, error) {
 		return 0, err
 	}
 	vc.received = true
-	return vc.Read(b)
+	return vc.ExtendedReader.Read(b)
 }
 
 func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 	if vc.received {
-		toRead := buffer.FreeBytes()
-		if vc.readRemainingContent > 0 {
-			if vc.readRemainingContent < buffer.FreeLen() {
-				toRead = toRead[:vc.readRemainingContent]
-			}
-			n, err := vc.ExtendedReader.Read(toRead)
-			buffer.Truncate(n)
-			vc.readRemainingContent -= n
-			vc.FilterTLS(toRead)
-			return err
-		}
-		if vc.readRemainingPadding > 0 {
-			_, err := io.CopyN(io.Discard, vc.ExtendedReader, int64(vc.readRemainingPadding))
-			if err != nil {
-				return err
-			}
-			vc.readRemainingPadding = 0
-		}
-		if vc.readProcess {
-			switch vc.readLastCommand {
-			case commandPaddingContinue:
-				//if vc.isTLS || vc.packetsToFilter > 0 {
-				headerUUIDLen := 0
-				if vc.readFilterUUID {
-					headerUUIDLen = uuid.Size
-				}
-				var header []byte
-				if need := headerUUIDLen + paddingHeaderLen; buffer.FreeLen() < need {
-					header = make([]byte, need)
-				} else {
-					header = buffer.FreeBytes()[:need]
-				}
-				_, err := io.ReadFull(vc.ExtendedReader, header)
-				if err != nil {
-					return err
-				}
-				pos := 0
-				if vc.readFilterUUID {
-					vc.readFilterUUID = false
-					pos = uuid.Size
-					if subtle.ConstantTimeCompare(vc.id.Bytes(), header[:uuid.Size]) != 1 {
-						err = fmt.Errorf("XTLS Vision server responded unknown UUID: %s",
-							uuid.FromBytesOrNil(header[:uuid.Size]).String())
-						log.Errorln(err.Error())
-						return err
-					}
-				}
-				vc.readLastCommand = header[pos]
-				vc.readRemainingContent = int(binary.BigEndian.Uint16(header[pos+1:]))
-				vc.readRemainingPadding = int(binary.BigEndian.Uint16(header[pos+3:]))
-				log.Debugln("XTLS Vision read padding: command=%d, payloadLen=%d, paddingLen=%d",
-					vc.readLastCommand, vc.readRemainingContent, vc.readRemainingPadding)
-				return vc.ReadBuffer(buffer)
-				//}
-			case commandPaddingEnd:
-				vc.readProcess = false
-				return vc.ReadBuffer(buffer)
-			case commandPaddingDirect:
-				needReturn := false
-				if vc.input != nil {
-					_, err := buffer.ReadFrom(vc.input)
-					if err != nil {
-						return err
-					}
-					if vc.input.Len() == 0 {
-						needReturn = true
-						vc.input = nil
-					} else { // buffer is full
-						return nil
-					}
-				}
-				if vc.rawInput != nil {
-					_, err := buffer.ReadFrom(vc.rawInput)
-					if err != nil {
-						return err
-					}
-					needReturn = true
-					if vc.rawInput.Len() == 0 {
-						vc.rawInput = nil
-					}
-				}
-				if vc.input == nil && vc.rawInput == nil {
-					vc.readProcess = false
-					vc.ExtendedReader = N.NewExtendedReader(vc.Conn)
-					log.Debugln("XTLS Vision direct read start")
-				}
-				if needReturn {
-					return nil
-				}
-			default:
-				err := fmt.Errorf("XTLS Vision read unknown command: %d", vc.readLastCommand)
-				log.Debugln(err.Error())
-				return err
-			}
-		}
 		return vc.ExtendedReader.ReadBuffer(buffer)
 	}
 
@@ -177,7 +52,7 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 		return err
 	}
 	vc.received = true
-	return vc.ReadBuffer(buffer)
+	return vc.ExtendedReader.ReadBuffer(buffer)
 }
 
 func (vc *Conn) Write(p []byte) (int, error) {
@@ -200,18 +75,6 @@ func (vc *Conn) Write(p []byte) (int, error) {
 		vc.handshakeMutex.Unlock()
 	}
 
-	if vc.writeFilterApplicationData {
-		_buffer := buf.StackNew()
-		defer buf.KeepAlive(_buffer)
-		buffer := buf.Dup(_buffer)
-		defer buffer.Release()
-		buffer.Write(p)
-		err := vc.WriteBuffer(buffer)
-		if err != nil {
-			return 0, err
-		}
-		return len(p), nil
-	}
 	return vc.ExtendedWriter.Write(p)
 }
 
@@ -232,63 +95,6 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) error {
 		vc.handshakeMutex.Unlock()
 	}
 
-	if vc.writeFilterApplicationData {
-		buffer2 := ReshapeBuffer(buffer)
-		defer buffer2.Release()
-		vc.FilterTLS(buffer.Bytes())
-		command := commandPaddingContinue
-		if !vc.isTLS {
-			command = commandPaddingEnd
-
-			// disable XTLS
-			//vc.readProcess = false
-			vc.writeFilterApplicationData = false
-			vc.packetsToFilter = 0
-		} else if buffer.Len() > 6 && bytes.Equal(buffer.To(3), tlsApplicationDataStart) || vc.packetsToFilter <= 0 {
-			command = commandPaddingEnd
-			if vc.enableXTLS {
-				command = commandPaddingDirect
-				vc.writeDirect = true
-			}
-			vc.writeFilterApplicationData = false
-		}
-		ApplyPadding(buffer, command, nil, vc.isTLS)
-		err := vc.ExtendedWriter.WriteBuffer(buffer)
-		if err != nil {
-			return err
-		}
-		if vc.writeDirect {
-			vc.ExtendedWriter = N.NewExtendedWriter(vc.Conn)
-			log.Debugln("XTLS Vision direct write start")
-			//time.Sleep(5 * time.Millisecond)
-		}
-		if buffer2 != nil {
-			if vc.writeDirect || !vc.isTLS {
-				return vc.ExtendedWriter.WriteBuffer(buffer2)
-			}
-			vc.FilterTLS(buffer2.Bytes())
-			command = commandPaddingContinue
-			if buffer2.Len() > 6 && bytes.Equal(buffer2.To(3), tlsApplicationDataStart) || vc.packetsToFilter <= 0 {
-				command = commandPaddingEnd
-				if vc.enableXTLS {
-					command = commandPaddingDirect
-					vc.writeDirect = true
-				}
-				vc.writeFilterApplicationData = false
-			}
-			ApplyPadding(buffer2, command, nil, vc.isTLS)
-			err = vc.ExtendedWriter.WriteBuffer(buffer2)
-			if vc.writeDirect {
-				vc.ExtendedWriter = N.NewExtendedWriter(vc.Conn)
-				log.Debugln("XTLS Vision direct write start")
-				//time.Sleep(10 * time.Millisecond)
-			}
-		}
-		return err
-	}
-	/*if vc.writeDirect {
-		log.Debugln("XTLS Vision Direct write, payloadLen=%d", buffer.Len())
-	}*/
 	return vc.ExtendedWriter.WriteBuffer(buffer)
 }
 
@@ -300,10 +106,9 @@ func (vc *Conn) sendRequest(p []byte) bool {
 			return true
 		}
 	}
-	isVision := vc.IsXTLSVisionEnabled()
 
 	var buffer *buf.Buffer
-	if isVision {
+	if vc.IsXTLSVisionEnabled() {
 		_buffer := buf.StackNew()
 		defer buf.KeepAlive(_buffer)
 		buffer = buf.Dup(_buffer)
@@ -350,50 +155,14 @@ func (vc *Conn) sendRequest(p []byte) bool {
 		)
 	}
 
-	if isVision && !vc.dst.UDP && !vc.dst.Mux {
-		if len(p) == 0 {
-			WriteWithPadding(buffer, nil, commandPaddingContinue, vc.id, vc.isTLS)
-		} else {
-			vc.FilterTLS(p)
-			//if vc.isTLS {
-			WriteWithPadding(buffer, p, commandPaddingContinue, vc.id, vc.isTLS)
-			//} else {
-			//	buf.Must(buf.Error(buffer.Write(p)))
-			//
-			//	// disable XTLS
-			//	vc.readProcess = false
-			//	vc.writeFilterApplicationData = false
-			//	vc.packetsToFilter = 0
-			//}
-		}
-	} else {
-		buf.Must(buf.Error(buffer.Write(p)))
-	}
+	buf.Must(buf.Error(buffer.Write(p)))
 
 	_, vc.err = vc.ExtendedWriter.Write(buffer.Bytes())
-	if vc.err != nil {
-		return true
-	}
-	if isVision {
-		switch underlying := vc.tlsConn.(type) {
-		case *gotls.Conn:
-			if underlying.ConnectionState().Version != gotls.VersionTLS13 {
-				vc.err = ErrNotTLS13
-			}
-		case *utls.UConn:
-			if underlying.ConnectionState().Version != utls.VersionTLS13 {
-				vc.err = ErrNotTLS13
-			}
-		default:
-			vc.err = fmt.Errorf(`failed to use %s, maybe "security" is not "tls" or "utls"`, vc.addons.Flow)
-		}
-		vc.tlsConn = nil
-	}
 	return true
 }
 
 func (vc *Conn) recvResponse() error {
-	var buffer [1]byte
+	var buffer [2]byte
 	_, vc.err = io.ReadFull(vc.ExtendedReader, buffer[:])
 	if vc.err != nil {
 		return vc.err
@@ -403,12 +172,7 @@ func (vc *Conn) recvResponse() error {
 		return errors.New("unexpected response version")
 	}
 
-	_, vc.err = io.ReadFull(vc.ExtendedReader, buffer[:])
-	if vc.err != nil {
-		return vc.err
-	}
-
-	length := int64(buffer[0])
+	length := int64(buffer[1])
 	if length != 0 { // addon data length > 0
 		io.CopyN(io.Discard, vc.ExtendedReader, length) // just discard
 	}
@@ -416,18 +180,8 @@ func (vc *Conn) recvResponse() error {
 	return nil
 }
 
-func (vc *Conn) FrontHeadroom() int {
-	if vc.IsXTLSVisionEnabled() {
-		return paddingHeaderLen
-	}
-	return 0
-}
-
 func (vc *Conn) Upstream() any {
-	if vc.tlsConn == nil {
-		return vc.Conn
-	}
-	return vc.tlsConn
+	return vc.Conn
 }
 
 func (vc *Conn) NeedHandshake() bool {
@@ -439,7 +193,7 @@ func (vc *Conn) IsXTLSVisionEnabled() bool {
 }
 
 // newConn return a Conn instance
-func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
+func newConn(conn net.Conn, client *Client, dst *DstAddr) (net.Conn, error) {
 	c := &Conn{
 		ExtendedReader: N.NewExtendedReader(conn),
 		ExtendedWriter: N.NewExtendedWriter(conn),
@@ -468,43 +222,12 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (*Conn, error) {
 				return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", client.Addons.Flow)
 			}
 		case XRV:
-			c.packetsToFilter = 6
-			c.readProcess = true
-			c.readFilterUUID = true
-			c.writeFilterApplicationData = true
-			c.addons = client.Addons
-			var t reflect.Type
-			var p unsafe.Pointer
-			switch underlying := conn.(type) {
-			case *gotls.Conn:
-				//log.Debugln("type tls")
-				c.Conn = underlying.NetConn()
-				c.tlsConn = underlying
-				t = reflect.TypeOf(underlying).Elem()
-				p = unsafe.Pointer(underlying)
-			case *utls.UConn:
-				//log.Debugln("type *utls.UConn")
-				c.Conn = underlying.NetConn()
-				c.tlsConn = underlying
-				t = reflect.TypeOf(underlying.Conn).Elem()
-				p = unsafe.Pointer(underlying.Conn)
-			case *tlsC.UConn:
-				//log.Debugln("type *tlsC.UConn")
-				c.Conn = underlying.NetConn()
-				c.tlsConn = underlying.UConn
-				t = reflect.TypeOf(underlying.Conn).Elem()
-				//log.Debugln("t:%v", t)
-				p = unsafe.Pointer(underlying.Conn)
-			default:
-				return nil, fmt.Errorf(`failed to use %s, maybe "security" is not "tls" or "utls"`, client.Addons.Flow)
+			visionConn, err := vision.NewConn(c, c.id)
+			if err != nil {
+				return nil, err
 			}
-			i, _ := t.FieldByName("input")
-			r, _ := t.FieldByName("rawInput")
-			c.input = (*bytes.Reader)(unsafe.Add(p, i.Offset))
-			c.rawInput = (*bytes.Buffer)(unsafe.Add(p, r.Offset))
-			//if _, ok := c.Conn.(*net.TCPConn); !ok {
-			//	log.Debugln("XTLS underlying conn is not *net.TCPConn, got %T", c.Conn)
-			//}
+			c.addons = client.Addons
+			return visionConn, nil
 		}
 	}
 
