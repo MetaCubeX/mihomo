@@ -11,7 +11,7 @@ import (
 )
 
 func ParseCert(certificate, privateKey string) (tls.Certificate, error) {
-	if certificate == "" || privateKey == "" {
+	if certificate == "" && privateKey == "" {
 		return newRandomTLSKeyPair()
 	}
 	cert, painTextErr := tls.X509KeyPair([]byte(certificate), []byte(privateKey))
