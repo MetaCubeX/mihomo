@@ -105,6 +105,6 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/h1jk/sing v0.0.0-20230519121640-6db84f45244d
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230526162852-6afe73474070
 
 replace github.com/sagernet/sing-vmess => github.com/metacubex/sing-vmess v0.1.5-0.20230520082358-78b126617899

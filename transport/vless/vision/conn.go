@@ -262,7 +262,10 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) (err error) {
 }
 
 func (vc *Conn) FrontHeadroom() int {
-	return PaddingHeaderLen
+	if vc.readFilterUUID {
+		return PaddingHeaderLen
+	}
+	return PaddingHeaderLen - uuid.Size
 }
 
 func (vc *Conn) NeedHandshake() bool {
@@ -270,5 +273,32 @@ func (vc *Conn) NeedHandshake() bool {
 }
 
 func (vc *Conn) Upstream() any {
+	if vc.writeDirect ||
+		vc.readLastCommand == commandPaddingDirect {
+		return vc.Conn
+	}
 	return vc.upstream
+}
+
+func (vc *Conn) ReaderPossiblyReplaceable() bool {
+	return vc.readProcess
+}
+
+func (vc *Conn) ReaderReplaceable() bool {
+	if !vc.readProcess &&
+		vc.readLastCommand == commandPaddingDirect {
+		return true
+	}
+	return false
+}
+
+func (vc *Conn) WriterPossiblyReplaceable() bool {
+	return vc.writeFilterApplicationData
+}
+
+func (vc *Conn) WriterReplaceable() bool {
+	if vc.writeDirect {
+		return true
+	}
+	return false
 }
