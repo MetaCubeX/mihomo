@@ -26,7 +26,7 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	return nil
 }
 
-func handleUDPToLocal(packet C.UDPPacket, pc N.EnhancePacketConn, key string, oAddr, fAddr netip.Addr) {
+func handleUDPToLocal(packet C.UDPPacket, pc N.EnhancePacketConn, key string, oAddrPort netip.AddrPort, fAddr netip.Addr) {
 	defer func() {
 		_ = pc.Close()
 		closeAllLocalCoon(key)
@@ -40,18 +40,23 @@ func handleUDPToLocal(packet C.UDPPacket, pc N.EnhancePacketConn, key string, oA
 			return
 		}
 
-		fromUDPAddr := from.(*net.UDPAddr)
-		_fromUDPAddr := *fromUDPAddr
-		fromUDPAddr = &_fromUDPAddr // make a copy
-		if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
-			fromAddr = fromAddr.Unmap()
-			if fAddr.IsValid() && (oAddr.Unmap() == fromAddr) {
-				fromAddr = fAddr.Unmap()
+		fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
+		if isUDPAddr {
+			_fromUDPAddr := *fromUDPAddr
+			fromUDPAddr = &_fromUDPAddr // make a copy
+			if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
+				fromAddr = fromAddr.Unmap()
+				if fAddr.IsValid() && (oAddrPort.Addr() == fromAddr) { // oAddrPort was Unmapped
+					fromAddr = fAddr.Unmap()
+				}
+				fromUDPAddr.IP = fromAddr.AsSlice()
+				if fromAddr.Is4() {
+					fromUDPAddr.Zone = "" // only ipv6 can have the zone
+				}
 			}
-			fromUDPAddr.IP = fromAddr.AsSlice()
-			if fromAddr.Is4() {
-				fromUDPAddr.Zone = "" // only ipv6 can have the zone
-			}
+		} else {
+			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
+			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
 		}
 
 		_, err = packet.WriteBack(data, fromUDPAddr)
