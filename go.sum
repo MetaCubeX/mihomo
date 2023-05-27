@@ -65,8 +65,6 @@ github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38/go.mod h1:kpwsk12EmLe
 github.com/google/tink/go v1.6.1 h1:t7JHqO8Ath2w2ig5vjwQYJzhGEZymedQc90lQXUBa4I=
 github.com/gorilla/websocket v1.5.0 h1:PPwGk2jz7EePpoHN/+ClbZu8SPxiqlu12wZP/3sWmnc=
 github.com/gorilla/websocket v1.5.0/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
-github.com/h1jk/sing v0.0.0-20230519121640-6db84f45244d h1:ih6tNzl1uxuuX+Naz2qAPqSS20E6jfXFmcvyDRAy8rY=
-github.com/h1jk/sing v0.0.0-20230519121640-6db84f45244d/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/hashicorp/golang-lru v0.5.4 h1:YDjusn29QI/Das2iO9M0BHnIbxPeyuCHsjMW+lJfyTc=
 github.com/hashicorp/golang-lru v0.5.4/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
 github.com/hashicorp/yamux v0.1.1 h1:yrQxtgseBDrq9Y652vSRDvsKCJKOUD+GzTS4Y0Y8pvE=
@@ -98,6 +96,8 @@ github.com/metacubex/gvisor v0.0.0-20230417114019-3c3ee672d60c h1:D62872jiuzC6b+
 github.com/metacubex/gvisor v0.0.0-20230417114019-3c3ee672d60c/go.mod h1:wqEuzdImyqD2MCGE8CYRJXbB77oSEJeoSSXXdwKjnsE=
 github.com/metacubex/quic-go v0.33.3-0.20230510010206-687b537b6a58 h1:E/sNW9tugFjoBjAkth89MHlKHRaMdo43tGQ3MOPVayQ=
 github.com/metacubex/quic-go v0.33.3-0.20230510010206-687b537b6a58/go.mod h1:9nOiGX6kqV3+ZbkDKdTNzdFD726QQHPH6WDb36jUSpA=
+github.com/metacubex/sing v0.0.0-20230526162852-6afe73474070 h1:AT/Qfe9MvCxyrI9uybcXcVDLDEqR6+9ZK7a7pgis9xQ=
+github.com/metacubex/sing v0.0.0-20230526162852-6afe73474070/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c h1:LpVNvlW/xE+mR8z76xJeYZlYznZXEmU4TeWeuygYdJg=
 github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c/go.mod h1:4uQQReKMTU7KTfOykVBe/oGJ00pl38d+BYJ99+mx26s=
 github.com/metacubex/sing-shadowsocks2 v0.0.0-20230519030442-556ef530768f h1:aWgVMoAm5V2Ur9key6L//mUSBrVMl/zw/4GDG4ZjyZI=
