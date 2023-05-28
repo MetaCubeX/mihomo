@@ -19,6 +19,7 @@ import (
 	"github.com/metacubex/quic-go/congestion"
 	M "github.com/sagernet/sing/common/metadata"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
@@ -324,7 +325,7 @@ func (c *hyPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, e
 		return
 	}
 	data = b
-	put = func() {}
+	put = N.NilPut
 	addr = M.ParseSocksaddr(addrStr).UDPAddr()
 	return
 }

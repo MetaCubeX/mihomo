@@ -10,6 +10,8 @@ type WaitReadFrom interface {
 	WaitReadFrom() (data []byte, put func(), addr net.Addr, err error)
 }
 
+func NilPut() {}
+
 type EnhancePacketConn interface {
 	net.PacketConn
 	WaitReadFrom
