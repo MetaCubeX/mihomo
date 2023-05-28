@@ -1,0 +1,5 @@
+__pycache__
+venv
+build
+mihomo.egg-info
+*.ipynb

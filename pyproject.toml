@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mihomo"
+version = "0.0.1"
+authors = [
+  { name="KT", email="xns77477@gmail.com" },
+]
+description = "A simple Python Pydantic model for Honkai: Star Rail parsed data from the Mihomo API."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "aiohttp",
+  "pydantic",
+]
