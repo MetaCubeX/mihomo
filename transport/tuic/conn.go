@@ -197,6 +197,22 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 	return
 }
 
+func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	if q.inputConn != nil {
+		var packet Packet
+		packet, err = ReadPacket(q.inputConn)
+		if err != nil {
+			return
+		}
+		data = packet.DATA
+		put = N.NilPut
+		addr = packet.ADDR.UDPAddr()
+	} else {
+		err = net.ErrClosed
+	}
+	return
+}
+
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if q.udpRelayMode != "quic" && len(p) > q.maxUdpRelayPacketSize {
 		return 0, quic.ErrMessageTooLarge(q.maxUdpRelayPacketSize)
