@@ -22,13 +22,14 @@ type HealthCheckOption struct {
 }
 
 type HealthCheck struct {
-	url       string
-	proxies   []C.Proxy
-	interval  uint
-	lazy      bool
-	lastTouch *atomic.Int64
-	done      chan struct{}
-	singleDo  *singledo.Single[struct{}]
+	url            string
+	proxies        []C.Proxy
+	interval       uint
+	lazy           bool
+	lastTouch      *atomic.Int64
+	done           chan struct{}
+	singleDo       *singledo.Single[struct{}]
+	expectedStatus C.ExpectedStatus
 }
 
 func (hc *HealthCheck) process() {
@@ -72,7 +73,7 @@ func (hc *HealthCheck) check() {
 				ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
 				defer cancel()
 				log.Debugln("Health Checking %s {%s}", p.Name(), id)
-				_, _ = p.URLTest(ctx, hc.url)
+				_, _ = p.URLTest(ctx, hc.url, hc.expectedStatus)
 				log.Debugln("Health Checked %s : %t %d ms {%s}", p.Name(), p.Alive(), p.LastDelay(), id)
 				return false, nil
 			})
@@ -88,14 +89,15 @@ func (hc *HealthCheck) close() {
 	hc.done <- struct{}{}
 }
 
-func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool) *HealthCheck {
+func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool, expectedStatus C.ExpectedStatus) *HealthCheck {
 	return &HealthCheck{
-		proxies:   proxies,
-		url:       url,
-		interval:  interval,
-		lazy:      lazy,
-		lastTouch: atomic.NewInt64(0),
-		done:      make(chan struct{}, 1),
-		singleDo:  singledo.NewSingle[struct{}](time.Second),
+		proxies:        proxies,
+		url:            url,
+		interval:       interval,
+		lazy:           lazy,
+		lastTouch:      atomic.NewInt64(0),
+		done:           make(chan struct{}, 1),
+		singleDo:       singledo.NewSingle[struct{}](time.Second),
+		expectedStatus: expectedStatus,
 	}
 }

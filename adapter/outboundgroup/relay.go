@@ -155,6 +155,7 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 			"",
 			"",
 			"",
+			option.Expected,
 			providers,
 		}),
 	}

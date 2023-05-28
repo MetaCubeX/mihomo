@@ -132,7 +132,7 @@ func (f *Fallback) Set(name string) error {
 	if !p.Alive() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		_, _ = p.URLTest(ctx, f.testUrl)
+		_, _ = p.URLTest(ctx, f.testUrl, f.expectedStatus)
 	}
 
 	return nil
@@ -154,6 +154,7 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.Filter,
 			option.ExcludeFilter,
 			option.ExcludeType,
+			option.Expected,
 			providers,
 		}),
 		disableUDP: option.DisableUDP,

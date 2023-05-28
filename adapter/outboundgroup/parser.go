@@ -32,6 +32,7 @@ type GroupCommonOption struct {
 	Filter        string   `group:"filter,omitempty"`
 	ExcludeFilter string   `group:"exclude-filter,omitempty"`
 	ExcludeType   string   `group:"exclude-type,omitempty"`
+	Expected      string   `group:"expected,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
@@ -68,7 +69,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 		// select don't need health check
 		if groupOption.Type == "select" || groupOption.Type == "relay" {
-			hc := provider.NewHealthCheck(ps, "", 0, true)
+			hc := provider.NewHealthCheck(ps, "", 0, true, nil)
 			pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 			if err != nil {
 				return nil, err
@@ -85,7 +86,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.Interval = 300
 			}
 
-			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy)
+			expectedStatus, err := C.NewExpectedStatus(groupOption.Expected)
+			if err != nil {
+				return nil, err
+			}
+
+			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
 			pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 			if err != nil {
 				return nil, err

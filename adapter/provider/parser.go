@@ -18,6 +18,7 @@ type healthCheckSchema struct {
 	URL      string `provider:"url"`
 	Interval int    `provider:"interval"`
 	Lazy     bool   `provider:"lazy,omitempty"`
+	Expected string `provider:"expected,omitempty"`
 }
 
 type proxyProviderSchema struct {
@@ -48,7 +49,13 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	if schema.HealthCheck.Enable {
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy)
+
+	expectedStatus, err := C.NewExpectedStatus(schema.HealthCheck.Expected)
+	if err != nil {
+		return nil, err
+	}
+
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
 	path := C.Path.Resolve(schema.Path)
 

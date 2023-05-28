@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -99,7 +100,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus C.ExpectedStatus) (t uint16, err error) {
 	defer func() {
 		p.alive.Store(err == nil)
 		record := C.DelayHistory{Time: time.Now()}
@@ -170,6 +171,11 @@ func (p *Proxy) URLTest(ctx context.Context, url string) (t uint16, err error) {
 			_ = resp.Body.Close()
 			start = second
 		}
+	}
+
+	if !C.CheckStatus(expectedStatus, resp.StatusCode) {
+		// maybe another value should be returned for differentiation
+		err = errors.New("response status is inconsistent with the expected status")
 	}
 
 	t = uint16(time.Since(start) / time.Millisecond)

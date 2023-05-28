@@ -110,6 +110,7 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.Filter,
 			option.ExcludeFilter,
 			option.ExcludeType,
+			option.Expected,
 			providers,
 		}),
 		selected:   "COMPATIBLE",
