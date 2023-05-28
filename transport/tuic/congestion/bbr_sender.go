@@ -17,17 +17,12 @@ const (
 	InitialMaxDatagramSize        = 1252
 	InitialPacketSizeIPv4         = 1252
 	InitialPacketSizeIPv6         = 1232
-	InitialCongestionWindow       = 10
+	InitialCongestionWindow       = 32
 	DefaultBBRMaxCongestionWindow = 10000
 )
 
-const (
-	initialMinCongestionWindow = 4
-	minInitialPacketSize       = 1200
-)
-
 func GetInitialPacketSize(addr net.Addr) congestion.ByteCount {
-	maxSize := congestion.ByteCount(minInitialPacketSize)
+	maxSize := congestion.ByteCount(1200)
 	// If this is not a UDP address, we don't know anything about the MTU.
 	// Use the minimum size of an Initial packet as the max packet size.
 	if udpAddr, ok := addr.(*net.UDPAddr); ok {
@@ -37,7 +32,7 @@ func GetInitialPacketSize(addr net.Addr) congestion.ByteCount {
 			maxSize = InitialPacketSizeIPv6
 		}
 	}
-	return maxSize
+	return congestion.ByteCount(maxSize)
 }
 
 var (
@@ -45,8 +40,8 @@ var (
 	// Default initial rtt used before any samples are received.
 	InitialRtt = 100 * time.Millisecond
 
-	// The gain used for the STARTUP, equal to 2/ln(2).
-	DefaultHighGain = 2.89
+	// The gain used for the STARTUP, equal to  4*ln(2).
+	DefaultHighGain = 2.77
 
 	// The gain used in STARTUP after loss has been detected.
 	// 1.5 is enough to allow for 25% exogenous loss and still observe a 25% growth
@@ -281,7 +276,7 @@ func (b *bbrSender) maxCongestionWindow() congestion.ByteCount {
 }
 
 func (b *bbrSender) minCongestionWindow() congestion.ByteCount {
-	return b.maxDatagramSize * initialMinCongestionWindow
+	return b.maxDatagramSize * b.initialCongestionWindow
 }
 
 func (b *bbrSender) SetRTTStatsProvider(provider congestion.RTTStatsProvider) {
