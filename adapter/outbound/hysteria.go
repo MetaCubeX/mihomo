@@ -318,6 +318,17 @@ func (c *hyPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	return
 }
 
+func (c *hyPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	b, addrStr, err := c.UDPConn.ReadFrom()
+	if err != nil {
+		return
+	}
+	data = b
+	put = func() {}
+	addr = M.ParseSocksaddr(addrStr).UDPAddr()
+	return
+}
+
 func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	err = c.UDPConn.WriteTo(p, M.SocksaddrFromNet(addr).String())
 	if err != nil {
