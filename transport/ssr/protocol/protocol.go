@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 
+	N "github.com/Dreamacro/clash/common/net"
+
 	"github.com/zhangyunhao116/fastrand"
 )
 
@@ -22,7 +24,7 @@ var (
 
 type Protocol interface {
 	StreamConn(net.Conn, []byte) net.Conn
-	PacketConn(net.PacketConn) net.PacketConn
+	PacketConn(N.EnhancePacketConn) N.EnhancePacketConn
 	Decode(dst, src *bytes.Buffer) error
 	Encode(buf *bytes.Buffer, b []byte) error
 	DecodePacket([]byte) ([]byte, error)

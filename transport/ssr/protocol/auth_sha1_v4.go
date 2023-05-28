@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"net"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/transport/ssr/tools"
 
@@ -35,7 +36,7 @@ func (a *authSHA1V4) StreamConn(c net.Conn, iv []byte) net.Conn {
 	return &Conn{Conn: c, Protocol: p}
 }
 
-func (a *authSHA1V4) PacketConn(c net.PacketConn) net.PacketConn {
+func (a *authSHA1V4) PacketConn(c N.EnhancePacketConn) N.EnhancePacketConn {
 	return c
 }
 

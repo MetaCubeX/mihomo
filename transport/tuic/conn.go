@@ -205,7 +205,6 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 			return
 		}
 		data = packet.DATA
-		put = N.NilPut
 		addr = packet.ADDR.UDPAddr()
 	} else {
 		err = net.ErrClosed
