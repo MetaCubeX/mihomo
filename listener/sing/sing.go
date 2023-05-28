@@ -3,7 +3,6 @@ package sing
 import (
 	"context"
 	"errors"
-	"golang.org/x/exp/slices"
 	"net"
 	"net/netip"
 	"sync"
@@ -74,11 +73,6 @@ func UpstreamMetadata(metadata M.Metadata) M.Metadata {
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
-	additions := h.Additions
-	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
-		additions = slices.Clone(additions)
-		additions = append(additions, ctxAdditions...)
-	}
 	switch metadata.Destination.Fqdn {
 	case mux.Destination.Fqdn:
 		return mux.HandleConnection(ctx, h, log.SingLogger, conn, UpstreamMetadata(metadata))
@@ -103,16 +97,11 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	if deadline.NeedAdditionalReadDeadline(conn) {
 		conn = N.NewDeadlineConn(conn) // conn from sing should check NeedAdditionalReadDeadline
 	}
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, additions...)
+	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, combineAdditions(ctx, h.Additions)...)
 	return nil
 }
 
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
-	additions := h.Additions
-	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
-		additions = slices.Clone(additions)
-		additions = append(additions, ctxAdditions...)
-	}
 	if deadline.NeedAdditionalReadDeadline(conn) {
 		conn = deadline.NewFallbackPacketConn(bufio.NewNetPacketConn(conn)) // conn from sing should check NeedAdditionalReadDeadline
 	}
@@ -162,7 +151,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			buff:  buff,
 		}
 		select {
-		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type, additions...):
+		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type, combineAdditions(ctx, h.Additions)...):
 		default:
 		}
 	}

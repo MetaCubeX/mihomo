@@ -23,7 +23,7 @@ func (u *InType) Match(metadata *C.Metadata) (bool, string) {
 }
 
 func (u *InType) RuleType() C.RuleType {
-	return C.INTYPE
+	return C.InType
 }
 
 func (u *InType) Adapter() string {
@@ -37,7 +37,7 @@ func (u *InType) Payload() string {
 func NewInType(iTypes, adapter string) (*InType, error) {
 	types := strings.Split(iTypes, "/")
 	if len(types) == 0 {
-		return nil, fmt.Errorf("in type could be empty")
+		return nil, fmt.Errorf("in type couldn't be empty")
 	}
 
 	tps, err := parseInTypes(types)

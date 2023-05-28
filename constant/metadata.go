@@ -133,6 +133,7 @@ type Metadata struct {
 	InIP         netip.Addr `json:"inboundIP"`
 	InPort       string     `json:"inboundPort"`
 	InName       string     `json:"inboundName"`
+	InUser       string     `json:"inboundUser"`
 	Host         string     `json:"host"`
 	DNSMode      DNSMode    `json:"dnsMode"`
 	Uid          uint32     `json:"uid"`
