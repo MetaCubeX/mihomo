@@ -16,7 +16,6 @@ import (
 	"github.com/Dreamacro/clash/transport/restls"
 	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
 	shadowtls "github.com/Dreamacro/clash/transport/sing-shadowtls"
-	"github.com/Dreamacro/clash/transport/socks5"
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	restlsC "github.com/3andne/restls-client-go"
@@ -329,37 +328,4 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		shadowTLSOption: shadowTLSOpt,
 		restlsConfig:    restlsConfig,
 	}, nil
-}
-
-type ssPacketConn struct {
-	net.PacketConn
-	rAddr net.Addr
-}
-
-func (spc *ssPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
-	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddrToSocksAddr(addr), b)
-	if err != nil {
-		return
-	}
-	return spc.PacketConn.WriteTo(packet[3:], spc.rAddr)
-}
-
-func (spc *ssPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, _, e := spc.PacketConn.ReadFrom(b)
-	if e != nil {
-		return 0, nil, e
-	}
-
-	addr := socks5.SplitAddr(b[:n])
-	if addr == nil {
-		return 0, nil, errors.New("parse addr error")
-	}
-
-	udpAddr := addr.UDPAddr()
-	if udpAddr == nil {
-		return 0, nil, errors.New("parse addr error")
-	}
-
-	copy(b, b[len(addr):])
-	return n - len(addr), udpAddr, e
 }
