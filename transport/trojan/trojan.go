@@ -370,7 +370,9 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 
 	_, err = io.ReadFull(pc.Conn, data[:2+2]) // u16be length + CR LF
 	if err != nil {
-		put()
+		if put != nil {
+			put()
+		}
 		return nil, nil, nil, err
 	}
 	length := binary.BigEndian.Uint16(data)
@@ -379,11 +381,15 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 		data = data[:length]
 		_, err = io.ReadFull(pc.Conn, data)
 		if err != nil {
-			put()
+			if put != nil {
+				put()
+			}
 			return nil, nil, nil, err
 		}
 	} else {
-		put()
+		if put != nil {
+			put()
+		}
 		return nil, nil, addr, nil
 	}
 

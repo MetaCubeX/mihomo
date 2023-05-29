@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/pool"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -29,19 +29,20 @@ func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UD
 	}
 
 	sl := &UDPListener{l, false}
-	conn := pickCipher.PacketConn(l)
+	conn := pickCipher.PacketConn(N.NewEnhancePacketConn(l))
 	go func() {
 		for {
-			buf := pool.Get(pool.UDPBufferSize)
-			n, remoteAddr, err := conn.ReadFrom(buf)
+			data, put, remoteAddr, err := conn.WaitReadFrom()
 			if err != nil {
-				pool.Put(buf)
+				if put != nil {
+					put()
+				}
 				if sl.closed {
 					break
 				}
 				continue
 			}
-			handleSocksUDP(conn, in, buf[:n], remoteAddr)
+			handleSocksUDP(conn, in, data, put, remoteAddr)
 		}
 	}()
 
@@ -57,11 +58,13 @@ func (l *UDPListener) LocalAddr() net.Addr {
 	return l.packetConn.LocalAddr()
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr) {
 	tgtAddr := socks5.SplitAddr(buf)
 	if tgtAddr == nil {
 		// Unresolved UDP packet, return buffer to the pool
-		pool.Put(buf)
+		if put != nil {
+			put()
+		}
 		return
 	}
 	target := socks5.ParseAddr(tgtAddr.String())
@@ -71,7 +74,7 @@ func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, ad
 		pc:      pc,
 		rAddr:   addr,
 		payload: payload,
-		bufRef:  buf,
+		put:     put,
 	}
 	select {
 	case in <- inbound.NewPacket(target, packet, C.SHADOWSOCKS):

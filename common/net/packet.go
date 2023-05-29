@@ -6,6 +6,7 @@ import (
 )
 
 type EnhancePacketConn = packet.EnhancePacketConn
+type WaitReadFrom = packet.WaitReadFrom
 
 var NewEnhancePacketConn = packet.NewEnhancePacketConn
 var NewThreadSafePacketConn = packet.NewThreadSafePacketConn

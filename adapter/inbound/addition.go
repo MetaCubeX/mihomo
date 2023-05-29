@@ -16,6 +16,12 @@ func WithInName(name string) Addition {
 	}
 }
 
+func WithInUser(user string) Addition {
+	return func(metadata *C.Metadata) {
+		metadata.InUser = user
+	}
+}
+
 func WithSpecialRules(specialRules string) Addition {
 	return func(metadata *C.Metadata) {
 		metadata.SpecialRules = specialRules
