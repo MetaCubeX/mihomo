@@ -53,9 +53,7 @@ FOR:
 				if result, ok := result.(*singReadResult); ok {
 					destination = result.destination
 					err = result.err
-					buffer.Resize(result.buffer.Start(), 0)
-					n := copy(buffer.FreeBytes(), result.buffer.Bytes())
-					buffer.Truncate(n)
+					n, _ := buffer.Write(result.buffer.Bytes())
 					result.buffer.Advance(n)
 					if result.buffer.IsEmpty() {
 						result.buffer.Release()
@@ -85,14 +83,13 @@ FOR:
 	}
 
 	<-c.netPacketConn.resultCh
-	go c.pipeReadPacket(buffer.Cap(), buffer.Start())
+	go c.pipeReadPacket(buffer.FreeLen())
 
 	return c.ReadPacket(buffer)
 }
 
-func (c *singPacketConn) pipeReadPacket(bufLen int, bufStart int) {
-	buffer := buf.NewSize(bufLen)
-	buffer.Advance(bufStart)
+func (c *singPacketConn) pipeReadPacket(pLen int) {
+	buffer := buf.NewSize(pLen)
 	destination, err := c.singPacketConn.ReadPacket(buffer)
 	result := &singReadResult{}
 	result.destination = destination
