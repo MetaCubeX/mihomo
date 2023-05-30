@@ -30,7 +30,7 @@ require (
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.5-0.20230519030052-49166ac42700
+	github.com/sagernet/sing v0.2.5-0.20230530114415-221f066dba7c
 	github.com/sagernet/sing-mux v0.0.0-20230517134606-1ebe6bb26646
 	github.com/sagernet/sing-shadowtls v0.1.2-0.20230417103049-4f682e05f19b
 	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3
@@ -105,6 +105,6 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230526162852-6afe73474070
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230530121223-b768faae5c6b
 
 replace github.com/sagernet/sing-vmess => github.com/metacubex/sing-vmess v0.1.5-0.20230520082358-78b126617899
