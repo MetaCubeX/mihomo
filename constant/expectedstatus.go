@@ -8,13 +8,14 @@ import (
 	"strings"
 )
 
-type ExpectedStatus = []utils.Range[int]
+type ExpectedStatusRange = []utils.Range[uint16]
 
 var errExpectedStatus = errors.New("expectedStatus error")
 
-func NewExpectedStatus(expected string) (ExpectedStatus, error) {
+func NewExpectedStatus(expected string) (ExpectedStatusRange, error) {
+	// example: 200 or 200/302 or 200-400 or 200/204/401-429/501-503
 	expected = strings.TrimSpace(expected)
-	if len(expected) == 0 {
+	if len(expected) == 0 || expected == "*" {
 		return nil, nil
 	}
 
@@ -23,7 +24,7 @@ func NewExpectedStatus(expected string) (ExpectedStatus, error) {
 		return nil, fmt.Errorf("%s, too many status to use, maximum support 28 status", errExpectedStatus.Error())
 	}
 
-	var statusRanges ExpectedStatus
+	var statusRanges ExpectedStatusRange
 	for _, s := range statusList {
 		if s == "" {
 			continue
@@ -42,14 +43,14 @@ func NewExpectedStatus(expected string) (ExpectedStatus, error) {
 
 		switch statusLen {
 		case 1:
-			statusRanges = append(statusRanges, *utils.NewRange(int(statusStart), int(statusStart)))
+			statusRanges = append(statusRanges, *utils.NewRange(uint16(statusStart), uint16(statusStart)))
 		case 2:
 			statusEnd, err := strconv.ParseUint(strings.Trim(status[1], "[ ]"), 10, 32)
 			if err != nil {
 				return nil, errExpectedStatus
 			}
 
-			statusRanges = append(statusRanges, *utils.NewRange(int(statusStart), int(statusEnd)))
+			statusRanges = append(statusRanges, *utils.NewRange(uint16(statusStart), uint16(statusEnd)))
 		}
 	}
 
@@ -60,7 +61,7 @@ func NewExpectedStatus(expected string) (ExpectedStatus, error) {
 	return statusRanges, nil
 }
 
-func CheckStatus(expectedStatus ExpectedStatus, status int) bool {
+func CheckStatus(expectedStatus ExpectedStatusRange, status uint16) bool {
 	if expectedStatus == nil || len(expectedStatus) == 0 {
 		return true
 	}

@@ -50,6 +50,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		"type":             pp.Type().String(),
 		"vehicleType":      pp.VehicleType().String(),
 		"proxies":          pp.Proxies(),
+		"testUrl":          pp.healthCheck.url,
 		"updatedAt":        pp.UpdatedAt,
 		"subscriptionInfo": pp.subscriptionInfo,
 	})
@@ -96,6 +97,10 @@ func (pp *proxySetProvider) Proxies() []C.Proxy {
 
 func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
+}
+
+func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus C.ExpectedStatusRange, filter string, interval uint) {
+	pp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
 
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
@@ -210,6 +215,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 		"type":        cp.Type().String(),
 		"vehicleType": cp.VehicleType().String(),
 		"proxies":     cp.Proxies(),
+		"testUrl":     cp.healthCheck.url,
 	})
 }
 
@@ -247,6 +253,10 @@ func (cp *compatibleProvider) Proxies() []C.Proxy {
 
 func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
+}
+
+func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus C.ExpectedStatusRange, filter string, interval uint) {
+	cp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
 
 func stopCompatibleProvider(pd *CompatibleProvider) {

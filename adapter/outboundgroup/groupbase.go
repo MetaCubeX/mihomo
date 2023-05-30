@@ -23,7 +23,6 @@ type GroupBase struct {
 	filterRegs       []*regexp2.Regexp
 	excludeFilterReg *regexp2.Regexp
 	excludeTypeArray []string
-	expectedStatus   C.ExpectedStatus
 	providers        []provider.ProxyProvider
 	failedTestMux    sync.Mutex
 	failedTimes      int
@@ -38,7 +37,6 @@ type GroupBaseOption struct {
 	filter        string
 	excludeFilter string
 	excludeType   string
-	expected      string
 	providers     []provider.ProxyProvider
 }
 
@@ -60,21 +58,11 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		}
 	}
 
-	var expectedStatus C.ExpectedStatus
-	status, err := C.NewExpectedStatus(opt.expected)
-	if err != nil {
-		// format: 200 or 200/302 or 200-400 or 200/401-429
-		log.Warnln("ignore expected status: %s due to %s, only supports number, number/number or start-end or number/start-end", opt.expected, err.Error())
-	} else {
-		expectedStatus = status
-	}
-
 	gb := &GroupBase{
 		Base:             outbound.NewBase(opt.BaseOption),
 		filterRegs:       filterRegs,
 		excludeFilterReg: excludeFilterReg,
 		excludeTypeArray: excludeTypeArray,
-		expectedStatus:   expectedStatus,
 		providers:        opt.providers,
 		failedTesting:    atomic.NewBool(false),
 	}
@@ -204,7 +192,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	return proxies
 }
 
-func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16, error) {
+func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus C.ExpectedStatusRange) (map[string]uint16, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	mp := map[string]uint16{}
@@ -213,7 +201,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string) (map[string]uint16
 		proxy := proxy
 		wg.Add(1)
 		go func() {
-			delay, err := proxy.URLTest(ctx, url, gb.expectedStatus)
+			delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DROP)
 			if err == nil {
 				lock.Lock()
 				mp[proxy.Name()] = delay

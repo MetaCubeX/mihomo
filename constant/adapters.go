@@ -132,7 +132,7 @@ type ProxyAdapter interface {
 }
 
 type Group interface {
-	URLTest(ctx context.Context, url string) (mp map[string]uint16, err error)
+	URLTest(ctx context.Context, url string, expectedStatus ExpectedStatusRange) (mp map[string]uint16, err error)
 	GetProxies(touch bool) []Proxy
 	Touch()
 }
@@ -142,12 +142,23 @@ type DelayHistory struct {
 	Delay uint16    `json:"delay"`
 }
 
+type DelayHistoryStoreType int
+
+const (
+	ORIGINAL DelayHistoryStoreType = iota
+	EXTRA
+	DROP
+)
+
 type Proxy interface {
 	ProxyAdapter
 	Alive() bool
+	AliveForTestUrl(url string) bool
 	DelayHistory() []DelayHistory
+	ExtraDelayHistory() map[string][]DelayHistory
 	LastDelay() uint16
-	URLTest(ctx context.Context, url string, expectedStatus ExpectedStatus) (uint16, error)
+	LastDelayForTestUrl(url string) uint16
+	URLTest(ctx context.Context, url string, expectedStatus ExpectedStatusRange, store DelayHistoryStoreType) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)

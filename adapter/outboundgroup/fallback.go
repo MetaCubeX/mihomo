@@ -16,9 +16,10 @@ import (
 
 type Fallback struct {
 	*GroupBase
-	disableUDP bool
-	testUrl    string
-	selected   string
+	disableUDP     bool
+	testUrl        string
+	selected       string
+	expectedStatus string
 }
 
 func (f *Fallback) Now() string {
@@ -82,9 +83,11 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": f.Type().String(),
-		"now":  f.Now(),
-		"all":  all,
+		"type":     f.Type().String(),
+		"now":      f.Now(),
+		"all":      all,
+		"testUrl":  f.testUrl,
+		"expected": f.expectedStatus,
 	})
 }
 
@@ -98,12 +101,14 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			if proxy.Alive() {
+			// if proxy.Alive() {
+			if proxy.AliveForTestUrl(f.testUrl) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.Alive() {
+				// if proxy.Alive() {
+				if proxy.AliveForTestUrl(f.testUrl) {
 					return proxy
 				} else {
 					f.selected = ""
@@ -129,10 +134,12 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
-	if !p.Alive() {
+	// if !p.Alive() {
+	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		_, _ = p.URLTest(ctx, f.testUrl, f.expectedStatus)
+		expectedStatus, _ := C.NewExpectedStatus(f.expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, C.EXTRA)
 	}
 
 	return nil
@@ -154,10 +161,10 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.Filter,
 			option.ExcludeFilter,
 			option.ExcludeType,
-			option.Expected,
 			providers,
 		}),
-		disableUDP: option.DisableUDP,
-		testUrl:    option.URL,
+		disableUDP:     option.DisableUDP,
+		testUrl:        option.URL,
+		expectedStatus: option.ExpectedStatus,
 	}
 }
