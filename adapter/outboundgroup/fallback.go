@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/callback"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -16,10 +18,10 @@ import (
 
 type Fallback struct {
 	*GroupBase
-	disableUDP    bool
-	testUrl       string
-	selected      string
-	statusPattern string
+	disableUDP      bool
+	testUrl         string
+	selected        string
+	statusCodeRange []utils.Range[uint16]
 }
 
 func (f *Fallback) Now() string {
@@ -133,7 +135,7 @@ func (f *Fallback) Set(name string) error {
 	if !p.Alive() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		_, _ = p.URLTest(ctx, f.testUrl, f.statusPattern)
+		_, _ = p.URLTest(ctx, f.testUrl, f.statusCodeRange)
 	}
 
 	return nil
@@ -144,6 +146,10 @@ func (f *Fallback) ForceSet(name string) {
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
+	var parsedStatusCodeRange, err = utils.NewIntRangeList(strings.Split(option.StatusCodeRange, "/"), errors.New("parse status code range error"))
+	if err != nil {
+		parsedStatusCodeRange = *new([]utils.Range[uint16])
+	}
 	return &Fallback{
 		GroupBase: NewGroupBase(GroupBaseOption{
 			outbound.BaseOption{
@@ -157,8 +163,8 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.ExcludeType,
 			providers,
 		}),
-		disableUDP:    option.DisableUDP,
-		testUrl:       option.URL,
-		statusPattern: option.StatusPattern,
+		disableUDP:      option.DisableUDP,
+		testUrl:         option.URL,
+		statusCodeRange: parsedStatusCodeRange,
 	}
 }

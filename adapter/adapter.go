@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"regexp"
 	"time"
 
 	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/queue"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 )
@@ -100,7 +100,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, statusPattern string) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, statusCodeRange []utils.Range[uint16]) (t uint16, err error) {
 	defer func() {
 		p.alive.Store(err == nil)
 		record := C.DelayHistory{Time: time.Now()}
@@ -164,8 +164,14 @@ func (p *Proxy) URLTest(ctx context.Context, url string, statusPattern string) (
 
 	_ = resp.Body.Close()
 
-	if statusPattern != "" && statusPattern != ".*" {
-		matched, _ := regexp.MatchString(statusPattern, resp.Status)
+	if statusCodeRange != nil && len(statusCodeRange) > 0 {
+		var matched = false
+		for _, pr := range statusCodeRange {
+			if pr.Contains(uint16(resp.StatusCode)) {
+				matched = true
+				break
+			}
+		}
 		if !matched {
 			return
 		}

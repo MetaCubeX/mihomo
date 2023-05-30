@@ -2,6 +2,8 @@ package utils
 
 import (
 	"golang.org/x/exp/constraints"
+	"strconv"
+	"strings"
 )
 
 type Range[T constraints.Ordered] struct {
@@ -41,4 +43,37 @@ func (r *Range[T]) Start() T {
 
 func (r *Range[T]) End() T {
 	return r.end
+}
+
+func NewIntRangeList(ranges []string, errPayload error) ([]Range[uint16], error) {
+	var rangeList []Range[uint16]
+	for _, p := range ranges {
+		if p == "" {
+			continue
+		}
+
+		endpoints := strings.Split(p, "-")
+		endpointsLen := len(endpoints)
+		if endpointsLen > 2 {
+			return nil, errPayload
+		}
+
+		portStart, err := strconv.ParseUint(strings.Trim(endpoints[0], "[ ]"), 10, 16)
+		if err != nil {
+			return nil, errPayload
+		}
+
+		switch endpointsLen {
+		case 1:
+			rangeList = append(rangeList, *NewRange(uint16(portStart), uint16(portStart)))
+		case 2:
+			portEnd, err := strconv.ParseUint(strings.Trim(endpoints[1], "[ ]"), 10, 16)
+			if err != nil {
+				return nil, errPayload
+			}
+
+			rangeList = append(rangeList, *NewRange(uint16(portStart), uint16(portEnd)))
+		}
+	}
+	return rangeList, nil
 }

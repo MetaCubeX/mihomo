@@ -2,13 +2,16 @@ package route
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
@@ -105,7 +108,7 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	url := query.Get("url")
-	statusPattern := query.Get("statusPattern")
+	statusCodeRange := query.Get("statusCodeRange")
 	timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 16)
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
@@ -118,7 +121,11 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url, statusPattern)
+	parsedStatusCodeRange, err := utils.NewIntRangeList(strings.Split(statusCodeRange, "/"), errors.New("parse status code range error"))
+	if err != nil {
+		parsedStatusCodeRange = *new([]utils.Range[uint16])
+	}
+	delay, err := proxy.URLTest(ctx, url, parsedStatusCodeRange)
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)

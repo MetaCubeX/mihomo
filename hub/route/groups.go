@@ -2,13 +2,16 @@ package route
 
 import (
 	"context"
+	"errors"
 	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -56,7 +59,7 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	statusPattern := query.Get("statusPattern")
+	statusCodeRange := query.Get("statusCodeRange")
 	url := query.Get("url")
 	timeout, err := strconv.ParseInt(query.Get("timeout"), 10, 32)
 	if err != nil {
@@ -68,7 +71,11 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	dm, err := group.URLTest(ctx, url, statusPattern)
+	parsedStatusCodeRange, err := utils.NewIntRangeList(strings.Split(statusCodeRange, "/"), errors.New("parse status code range error"))
+	if err != nil {
+		parsedStatusCodeRange = *new([]utils.Range[uint16])
+	}
+	dm, err := group.URLTest(ctx, url, parsedStatusCodeRange)
 
 	if err != nil {
 		render.Status(r, http.StatusGatewayTimeout)

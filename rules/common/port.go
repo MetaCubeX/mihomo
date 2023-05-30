@@ -58,34 +58,10 @@ func NewPort(port string, adapter string, ruleType C.RuleType) (*Port, error) {
 		return nil, fmt.Errorf("%s, too many ports to use, maximum support 28 ports", errPayload.Error())
 	}
 
-	var portRange []utils.Range[uint16]
-	for _, p := range ports {
-		if p == "" {
-			continue
-		}
+	var portRange, err = utils.NewIntRangeList(ports, errPayload)
 
-		subPorts := strings.Split(p, "-")
-		subPortsLen := len(subPorts)
-		if subPortsLen > 2 {
-			return nil, errPayload
-		}
-
-		portStart, err := strconv.ParseUint(strings.Trim(subPorts[0], "[ ]"), 10, 16)
-		if err != nil {
-			return nil, errPayload
-		}
-
-		switch subPortsLen {
-		case 1:
-			portRange = append(portRange, *utils.NewRange(uint16(portStart), uint16(portStart)))
-		case 2:
-			portEnd, err := strconv.ParseUint(strings.Trim(subPorts[1], "[ ]"), 10, 16)
-			if err != nil {
-				return nil, errPayload
-			}
-
-			portRange = append(portRange, *utils.NewRange(uint16(portStart), uint16(portEnd)))
-		}
+	if err != nil {
+		return nil, err
 	}
 
 	if len(portRange) == 0 {

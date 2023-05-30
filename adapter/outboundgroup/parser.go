@@ -20,18 +20,18 @@ var (
 
 type GroupCommonOption struct {
 	outbound.BasicOption
-	Name          string   `group:"name"`
-	Type          string   `group:"type"`
-	Proxies       []string `group:"proxies,omitempty"`
-	Use           []string `group:"use,omitempty"`
-	URL           string   `group:"url,omitempty"`
-	Interval      int      `group:"interval,omitempty"`
-	Lazy          bool     `group:"lazy,omitempty"`
-	DisableUDP    bool     `group:"disable-udp,omitempty"`
-	Filter        string   `group:"filter,omitempty"`
-	ExcludeFilter string   `group:"exclude-filter,omitempty"`
-	ExcludeType   string   `group:"exclude-type,omitempty"`
-	StatusPattern string   `group:"status-pattern,omitempty"`
+	Name            string   `group:"name"`
+	Type            string   `group:"type"`
+	Proxies         []string `group:"proxies,omitempty"`
+	Use             []string `group:"use,omitempty"`
+	URL             string   `group:"url,omitempty"`
+	Interval        int      `group:"interval,omitempty"`
+	Lazy            bool     `group:"lazy,omitempty"`
+	DisableUDP      bool     `group:"disable-udp,omitempty"`
+	Filter          string   `group:"filter,omitempty"`
+	ExcludeFilter   string   `group:"exclude-filter,omitempty"`
+	ExcludeType     string   `group:"exclude-type,omitempty"`
+	StatusCodeRange string   `group:"status-code-range,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
@@ -85,7 +85,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.Interval = 300
 			}
 
-			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, groupOption.StatusPattern)
+			hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, groupOption.StatusCodeRange)
 			pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 			if err != nil {
 				return nil, err
@@ -104,7 +104,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		for _, pp := range list {
 			pd, _ := pp.(*provider.ProxySetProvider)
 			ppName := fmt.Sprintf("%s-%s", groupName, pp.Name())
-			hc := provider.NewHealthCheck([]C.Proxy{}, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, groupOption.StatusPattern)
+			hc := provider.NewHealthCheck([]C.Proxy{}, groupOption.URL, uint(groupOption.Interval), groupOption.Lazy, groupOption.StatusCodeRange)
 			ppNew, _ := provider.NewProxySetProvider(ppName, pd.Fetcher.Interval(), "", "", "", "", pd.Vehicle(), hc)
 			providers = append(providers, ppNew)
 			providersMap[ppName] = ppNew
