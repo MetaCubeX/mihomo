@@ -67,7 +67,7 @@ type WireGuardPeerOption struct {
 	PublicKey    string   `proxy:"public-key,omitempty"`
 	PreSharedKey string   `proxy:"pre-shared-key,omitempty"`
 	Reserved     []uint8  `proxy:"reserved,omitempty"`
-	AllowedIPs   []string `proxy:"allowed_ips,omitempty"`
+	AllowedIPs   []string `proxy:"allowed-ips,omitempty"`
 }
 
 type wgSingDialer struct {
