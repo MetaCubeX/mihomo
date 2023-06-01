@@ -93,7 +93,7 @@ func (s *serverHandler) handle() {
 		_ = s.handleMessage()
 	}()
 
-	<-s.quicConn.HandshakeComplete().Done()
+	<-s.quicConn.HandshakeComplete()
 	time.AfterFunc(s.AuthenticationTimeout, func() {
 		s.authOnce.Do(func() {
 			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
