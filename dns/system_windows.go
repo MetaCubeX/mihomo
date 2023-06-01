@@ -3,7 +3,6 @@
 package dns
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -12,34 +11,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-type dnsConfig struct {
-	servers []string // server addresses (in host:port form) to use
-}
-
-func loadSystemResolver() (clients []dnsClient, err error) {
-	content, err := dnsReadConfig()
-	if err != nil {
-		err = fmt.Errorf("failed to read system DNS: %w", err)
-	}
-	nameservers := content.servers
-	if len(nameservers) == 0 {
-		return
-	}
-	servers := make([]NameServer, 0, len(nameservers))
-	for _, addr := range nameservers {
-		servers = append(servers, NameServer{
-			Addr: addr,
-			Net:  "udp",
-		})
-	}
-	return transform(servers, nil), nil
-}
-
-func dnsReadConfig() (conf *dnsConfig, err error) {
-	conf = &dnsConfig{}
+func dnsReadConfig() (servers []string, err error) {
 	aas, err := adapterAddresses()
 	if err != nil {
-		return conf, err
+		return
 	}
 	for _, aa := range aas {
 		for dns := aa.FirstDnsServerAddress; dns != nil; dns = dns.Next {
@@ -52,23 +27,23 @@ func dnsReadConfig() (conf *dnsConfig, err error) {
 			case *syscall.SockaddrInet4:
 				ip = net.IPv4(sa.Addr[0], sa.Addr[1], sa.Addr[2], sa.Addr[3])
 			case *syscall.SockaddrInet6:
-				//ip = make(net.IP, net.IPv6len)
-				//copy(ip, sa.Addr[:])
-				//if ip[0] == 0xfe && ip[1] == 0xc0 {
-				//	// Ignore these fec0/10 ones. Windows seems to
-				//	// populate them as defaults on its misc rando
-				//	// interfaces.
-				//	continue
-				//}
-				continue
+				ip = make(net.IP, net.IPv6len)
+				copy(ip, sa.Addr[:])
+				if ip[0] == 0xfe && ip[1] == 0xc0 {
+					// Ignore these fec0/10 ones. Windows seems to
+					// populate them as defaults on its misc rando
+					// interfaces.
+					continue
+				}
+				//continue
 			default:
 				// Unexpected type.
 				continue
 			}
-			conf.servers = append(conf.servers, net.JoinHostPort(ip.String(), "53"))
+			servers = append(servers, ip.String())
 		}
 	}
-	return conf, nil
+	return
 }
 
 // adapterAddresses returns a list of IP adapter and address
