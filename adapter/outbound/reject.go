@@ -78,8 +78,11 @@ type nopPacketConn struct{}
 
 func (npc nopPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) { return len(b), nil }
 func (npc nopPacketConn) ReadFrom(b []byte) (int, net.Addr, error)           { return 0, nil, io.EOF }
-func (npc nopPacketConn) Close() error                                       { return nil }
-func (npc nopPacketConn) LocalAddr() net.Addr                                { return udpAddrIPv4Unspecified }
-func (npc nopPacketConn) SetDeadline(time.Time) error                        { return nil }
-func (npc nopPacketConn) SetReadDeadline(time.Time) error                    { return nil }
-func (npc nopPacketConn) SetWriteDeadline(time.Time) error                   { return nil }
+func (npc nopPacketConn) WaitReadFrom() ([]byte, func(), net.Addr, error) {
+	return nil, nil, nil, io.EOF
+}
+func (npc nopPacketConn) Close() error                     { return nil }
+func (npc nopPacketConn) LocalAddr() net.Addr              { return udpAddrIPv4Unspecified }
+func (npc nopPacketConn) SetDeadline(time.Time) error      { return nil }
+func (npc nopPacketConn) SetReadDeadline(time.Time) error  { return nil }
+func (npc nopPacketConn) SetWriteDeadline(time.Time) error { return nil }
