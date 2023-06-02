@@ -33,9 +33,9 @@ proxy-groups:
     server: https://cloudflare.com
 ```
 
-## 测试
+## 开发/测试
 
-For debugging:
+### for debugging:
 
 ```bash
 #!/bin/bash
@@ -51,4 +51,11 @@ tc qdisc add dev $interface parent 1:1 handle 2: netem delay $delay
 
 # remove tc rules
 tc qdisc del dev $interface root
+```
+
+### cherrypick from old `http2ping` branch after 2023 Clash holocaust:
+
+```bash
+git diff 8d1251f1287846daf42db4151b707d9f677be5a1 ':(exclude)go.mod' ':(exclude)go.sum' > /tmp/1.patch
+git apply /tmp/1.patch
 ```
