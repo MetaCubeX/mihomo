@@ -67,7 +67,7 @@ type WireGuardPeerOption struct {
 	PublicKey    string   `proxy:"public-key,omitempty"`
 	PreSharedKey string   `proxy:"pre-shared-key,omitempty"`
 	Reserved     []uint8  `proxy:"reserved,omitempty"`
-	AllowedIPs   []string `proxy:"allowed_ips,omitempty"`
+	AllowedIPs   []string `proxy:"allowed-ips,omitempty"`
 }
 
 type wgSingDialer struct {
@@ -499,9 +499,9 @@ func (r *refProxyAdapter) MarshalJSON() ([]byte, error) {
 	return nil, C.ErrNotSupport
 }
 
-func (r *refProxyAdapter) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+func (r *refProxyAdapter) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	if r.proxyAdapter != nil {
-		return r.proxyAdapter.StreamConn(c, metadata)
+		return r.proxyAdapter.StreamConnContext(ctx, c, metadata)
 	}
 	return nil, C.ErrNotSupport
 }

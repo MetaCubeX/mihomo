@@ -3,11 +3,12 @@ package protocol
 import (
 	"net"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 )
 
 type PacketConn struct {
-	net.PacketConn
+	N.EnhancePacketConn
 	Protocol
 }
 
@@ -18,12 +19,12 @@ func (c *PacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	_, err = c.PacketConn.WriteTo(buf.Bytes(), addr)
+	_, err = c.EnhancePacketConn.WriteTo(buf.Bytes(), addr)
 	return len(b), err
 }
 
 func (c *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, addr, err := c.PacketConn.ReadFrom(b)
+	n, addr, err := c.EnhancePacketConn.ReadFrom(b)
 	if err != nil {
 		return n, addr, err
 	}
@@ -33,4 +34,21 @@ func (c *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 	copy(b, decoded)
 	return len(decoded), addr, nil
+}
+
+func (c *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	data, put, addr, err = c.EnhancePacketConn.WaitReadFrom()
+	if err != nil {
+		return
+	}
+	data, err = c.DecodePacket(data)
+	if err != nil {
+		if put != nil {
+			put()
+		}
+		data = nil
+		put = nil
+		return
+	}
+	return
 }

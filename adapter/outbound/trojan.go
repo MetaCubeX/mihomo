@@ -50,7 +50,7 @@ type TrojanOption struct {
 	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
 
-func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
+func (t *Trojan) plainStream(ctx context.Context, c net.Conn) (net.Conn, error) {
 	if t.option.Network == "ws" {
 		host, port, _ := net.SplitHostPort(t.addr)
 		wsOpts := &trojan.WebsocketOption{
@@ -71,14 +71,14 @@ func (t *Trojan) plainStream(c net.Conn) (net.Conn, error) {
 			wsOpts.Headers = header
 		}
 
-		return t.instance.StreamWebsocketConn(c, wsOpts)
+		return t.instance.StreamWebsocketConn(ctx, c, wsOpts)
 	}
 
-	return t.instance.StreamConn(c)
+	return t.instance.StreamConn(ctx, c)
 }
 
-// StreamConn implements C.ProxyAdapter
-func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 
 	if tlsC.HaveGlobalFingerprint() && len(t.option.ClientFingerprint) == 0 {
@@ -88,7 +88,7 @@ func (t *Trojan) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) 
 	if t.transport != nil {
 		c, err = gun.StreamGunWithConn(c, t.gunTLSConfig, t.gunConfig, t.realityConfig)
 	} else {
-		c, err = t.plainStream(c)
+		c, err = t.plainStream(ctx, c)
 	}
 
 	if err != nil {
@@ -151,7 +151,7 @@ func (t *Trojan) DialContextWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = t.StreamConn(c, metadata)
+	c, err = t.StreamConnContext(ctx, c, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (t *Trojan) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, me
 		safeConnClose(c, err)
 	}(c)
 	tcpKeepAlive(c)
-	c, err = t.plainStream(c)
+	c, err = t.plainStream(ctx, c)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}

@@ -92,7 +92,7 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return newPacketConn(CN.NewRefPacketConn(pc, s), s.ProxyAdapter), nil
+	return newPacketConn(CN.NewRefPacketConn(CN.NewThreadSafePacketConn(pc), s), s.ProxyAdapter), nil
 }
 
 func (s *SingMux) SupportUDP() bool {

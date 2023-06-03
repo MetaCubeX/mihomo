@@ -299,6 +299,50 @@ func ReadAddr(r io.Reader, b []byte) (Addr, error) {
 	return nil, ErrAddressNotSupported
 }
 
+func ReadAddr0(r io.Reader) (Addr, error) {
+	aType, err := ReadByte(r) // read 1st byte for address type
+	if err != nil {
+		return nil, err
+	}
+
+	switch aType {
+	case AtypDomainName:
+		var domainLength byte
+		domainLength, err = ReadByte(r) // read 2nd byte for domain length
+		if err != nil {
+			return nil, err
+		}
+		b := make([]byte, 1+1+uint16(domainLength)+2)
+		_, err = io.ReadFull(r, b[2:])
+		b[0] = aType
+		b[1] = domainLength
+		return b, err
+	case AtypIPv4:
+		var b [1 + net.IPv4len + 2]byte
+		_, err = io.ReadFull(r, b[1:])
+		b[0] = aType
+		return b[:], err
+	case AtypIPv6:
+		var b [1 + net.IPv6len + 2]byte
+		_, err = io.ReadFull(r, b[1:])
+		b[0] = aType
+		return b[:], err
+	}
+
+	return nil, ErrAddressNotSupported
+}
+
+func ReadByte(reader io.Reader) (byte, error) {
+	if br, isBr := reader.(io.ByteReader); isBr {
+		return br.ReadByte()
+	}
+	var b [1]byte
+	if _, err := io.ReadFull(reader, b[:]); err != nil {
+		return 0, err
+	}
+	return b[0], nil
+}
+
 // SplitAddr slices a SOCKS address from beginning of b. Returns nil if failed.
 func SplitAddr(b []byte) Addr {
 	addrLen := 1

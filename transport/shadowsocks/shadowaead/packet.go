@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 )
 
@@ -57,15 +58,15 @@ func Unpack(dst, pkt []byte, ciph Cipher) ([]byte, error) {
 }
 
 type PacketConn struct {
-	net.PacketConn
+	N.EnhancePacketConn
 	Cipher
 }
 
 const maxPacketSize = 64 * 1024
 
-// NewPacketConn wraps a net.PacketConn with cipher
-func NewPacketConn(c net.PacketConn, ciph Cipher) *PacketConn {
-	return &PacketConn{PacketConn: c, Cipher: ciph}
+// NewPacketConn wraps an N.EnhancePacketConn with cipher
+func NewPacketConn(c N.EnhancePacketConn, ciph Cipher) *PacketConn {
+	return &PacketConn{EnhancePacketConn: c, Cipher: ciph}
 }
 
 // WriteTo encrypts b and write to addr using the embedded PacketConn.
@@ -76,13 +77,13 @@ func (c *PacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	_, err = c.PacketConn.WriteTo(buf, addr)
+	_, err = c.EnhancePacketConn.WriteTo(buf, addr)
 	return len(b), err
 }
 
 // ReadFrom reads from the embedded PacketConn and decrypts into b.
 func (c *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, addr, err := c.PacketConn.ReadFrom(b)
+	n, addr, err := c.EnhancePacketConn.ReadFrom(b)
 	if err != nil {
 		return n, addr, err
 	}
@@ -92,4 +93,21 @@ func (c *PacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 	copy(b, bb)
 	return len(bb), addr, err
+}
+
+func (c *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	data, put, addr, err = c.EnhancePacketConn.WaitReadFrom()
+	if err != nil {
+		return
+	}
+	data, err = Unpack(data[c.Cipher.SaltSize():], data, c)
+	if err != nil {
+		if put != nil {
+			put()
+		}
+		data = nil
+		put = nil
+		return
+	}
+	return
 }

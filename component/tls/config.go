@@ -33,10 +33,22 @@ func AddCertificate(certificate string) error {
 	}
 }
 
+func initializeCertPool() {
+	var err error
+	certPool, err = x509.SystemCertPool()
+	if err != nil {
+		certPool = x509.NewCertPool()
+	}
+	for _, cert := range trustCerts {
+		certPool.AddCert(cert)
+	}
+}
+
 func ResetCertificate() {
 	mutex.Lock()
 	defer mutex.Unlock()
 	trustCerts = nil
+	initializeCertPool()
 }
 
 func getCertPool() *x509.CertPool {
@@ -49,12 +61,7 @@ func getCertPool() *x509.CertPool {
 		if certPool != nil {
 			return certPool
 		}
-		certPool, err := x509.SystemCertPool()
-		if err == nil {
-			for _, cert := range trustCerts {
-				certPool.AddCert(cert)
-			}
-		}
+		initializeCertPool()
 	}
 	return certPool
 }

@@ -30,8 +30,9 @@ func upgrade(w http.ResponseWriter, r *http.Request) {
 
 	err = updater.Update(execPath)
 	if err != nil {
+		log.Warnln("%s", err)
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, newError(fmt.Sprintf("Upgrade: %s", err)))
+		render.JSON(w, r, newError(fmt.Sprintf("%s", err)))
 		return
 	}
 

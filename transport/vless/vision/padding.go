@@ -1,4 +1,4 @@
-package vless
+package vision
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	paddingHeaderLen = 1 + 2 + 2 // =5
+	PaddingHeaderLen = uuid.Size + 1 + 2 + 2 // =21
 
 	commandPaddingContinue byte = 0x00
 	commandPaddingEnd      byte = 0x01
@@ -67,7 +67,7 @@ func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, padding
 }
 
 func ReshapeBuffer(buffer *buf.Buffer) *buf.Buffer {
-	if buffer.Len() <= buf.BufferSize-paddingHeaderLen {
+	if buffer.Len() <= buf.BufferSize-PaddingHeaderLen {
 		return nil
 	}
 	cutAt := bytes.LastIndex(buffer.Bytes(), tlsApplicationDataStart)

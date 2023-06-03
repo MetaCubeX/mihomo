@@ -62,7 +62,7 @@ func (c *BufferedConn) Buffered() int {
 }
 
 func (c *BufferedConn) ReadBuffer(buffer *buf.Buffer) (err error) {
-	if c.r.Buffered() > 0 {
+	if c.r != nil && c.r.Buffered() > 0 {
 		_, err = buffer.ReadOnceFrom(c.r)
 		return
 	}
@@ -70,10 +70,11 @@ func (c *BufferedConn) ReadBuffer(buffer *buf.Buffer) (err error) {
 }
 
 func (c *BufferedConn) ReadCached() *buf.Buffer { // call in sing/common/bufio.Copy
-	if c.r.Buffered() > 0 {
+	if c.r != nil && c.r.Buffered() > 0 {
 		length := c.r.Buffered()
 		b, _ := c.r.Peek(length)
 		_, _ = c.r.Discard(length)
+		c.r = nil // drop bufio.Reader to let gc can clean up its internal buf
 		return buf.As(b)
 	}
 	return nil
@@ -84,7 +85,7 @@ func (c *BufferedConn) Upstream() any {
 }
 
 func (c *BufferedConn) ReaderReplaceable() bool {
-	if c.r.Buffered() > 0 {
+	if c.r != nil && c.r.Buffered() > 0 {
 		return false
 	}
 	return true

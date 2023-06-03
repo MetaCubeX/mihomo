@@ -383,10 +383,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 			log.Infoln("[UDP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
 		}
 
-		oAddr := metadata.DstIP
+		oAddrPort := metadata.AddrPort()
 		natTable.Set(key, pc)
 
-		go handleUDPToLocal(packet, pc, key, oAddr, fAddr)
+		go handleUDPToLocal(packet, pc, key, oAddrPort, fAddr)
 
 		handle()
 	}()

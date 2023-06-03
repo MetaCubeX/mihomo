@@ -841,7 +841,7 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {
-						if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback()&&!ipnet.IP.IsLinkLocalUnicast() {
+						if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && !ipnet.IP.IsLinkLocalUnicast() {
 							if ip, err := netip.ParseAddr(ipnet.IP.String()); err == nil {
 								ips = append(ips, ip)
 							}
@@ -938,6 +938,8 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 		case "quic":
 			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "quic" // DNS over QUIC
+		case "system":
+			dnsNetType = "system" // System DNS
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}
@@ -970,6 +972,10 @@ func init() {
 func parsePureDNSServer(server string) string {
 	addPre := func(server string) string {
 		return "udp://" + server
+	}
+
+	if server == "system" {
+		return "system://"
 	}
 
 	if ip, err := netip.ParseAddr(server); err != nil {
@@ -1142,6 +1148,9 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 	}
 	// check default nameserver is pure ip addr
 	for _, ns := range dnsCfg.DefaultNameserver {
+		if ns.Net == "system" {
+			continue
+		}
 		host, _, err := net.SplitHostPort(ns.Addr)
 		if err != nil || net.ParseIP(host) == nil {
 			u, err := url.Parse(ns.Addr)

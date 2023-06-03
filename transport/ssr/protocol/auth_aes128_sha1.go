@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/ssr/tools"
@@ -82,13 +83,13 @@ func (a *authAES128) StreamConn(c net.Conn, iv []byte) net.Conn {
 	return &Conn{Conn: c, Protocol: p}
 }
 
-func (a *authAES128) PacketConn(c net.PacketConn) net.PacketConn {
+func (a *authAES128) PacketConn(c N.EnhancePacketConn) N.EnhancePacketConn {
 	p := &authAES128{
 		Base:               a.Base,
 		authAES128Function: a.authAES128Function,
 		userData:           a.userData,
 	}
-	return &PacketConn{PacketConn: c, Protocol: p}
+	return &PacketConn{EnhancePacketConn: c, Protocol: p}
 }
 
 func (a *authAES128) Decode(dst, src *bytes.Buffer) error {

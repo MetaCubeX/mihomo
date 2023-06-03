@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,15 +18,16 @@ import (
 	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/klauspost/cpuid/v2"
 )
 
 // modify from https://github.com/AdguardTeam/AdGuardHome/blob/595484e0b3fb4c457f9bb727a6b94faa78a66c5f/internal/updater/updater.go
 // Updater is the Clash.Meta updater.
 var (
-	goarch string
-	goos   string
-	goarm  string
-	gomips string
+	goarm           string
+	gomips          string
+	amd64Compatible string
 
 	workDir string
 
@@ -45,6 +47,12 @@ var (
 	latestVersion string
 )
 
+func init() {
+	if runtime.GOARCH == "amd64" && cpuid.CPU.X64Level() < 3 {
+		amd64Compatible = "-compatible"
+	}
+}
+
 type updateError struct {
 	Message string
 }
@@ -59,8 +67,6 @@ func Update(execPath string) (err error) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	goos = runtime.GOOS
-	goarch = runtime.GOARCH
 	latestVersion, err = getLatestVersion()
 	if err != nil {
 		return err
@@ -69,7 +75,7 @@ func Update(execPath string) (err error) {
 	log.Infoln("current version %s, latest version %s", constant.Version, latestVersion)
 
 	if latestVersion == constant.Version {
-		err := &updateError{Message: "Already using latest version"}
+		err := &updateError{Message: "already using latest version"}
 		return err
 	}
 
@@ -128,12 +134,10 @@ func prepare(exePath string) (err error) {
 	//log.Infoln(packageName)
 	backupDir = filepath.Join(workDir, "meta-backup")
 
-	if goos == "windows" && goarch == "amd64" {
-		updateExeName = "clash.meta" + "-" + goos + "-" + goarch + "-compatible.exe"
-	} else if goos == "linux" && goarch == "amd64" {
-		updateExeName = "clash.meta" + "-" + goos + "-" + goarch + "-compatible"
+	if runtime.GOOS == "windows" {
+		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
 	} else {
-		updateExeName = "clash.meta" + "-" + goos + "-" + goarch
+		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
@@ -198,7 +202,7 @@ func replace() error {
 	var err error
 
 	log.Infoln("replacing: %s to %s", updateExeName, currentExeName)
-	if goos == "windows" {
+	if runtime.GOOS == "windows" {
 		// rename fails with "File in use" error
 		err = copyFile(updateExeName, currentExeName)
 	} else {
@@ -430,17 +434,19 @@ func getLatestVersion() (version string, err error) {
 func updateDownloadURL() {
 	var middle string
 
-	if goarch == "arm" && goarm != "" {
-		middle = fmt.Sprintf("-%s-%sv%s-%s", goos, goarch, goarm, latestVersion)
-	} else if isMIPS(goarch) && gomips != "" {
-		middle = fmt.Sprintf("-%s-%s-%s-%s", goos, goarch, gomips, latestVersion)
-	} else if goarch == "amd64" && (goos == "windows" || goos == "linux") {
-		middle = fmt.Sprintf("-%s-%s-compatible-%s", goos, goarch, latestVersion)
+	if runtime.GOARCH == "arm" && probeGoARM() {
+		//-linux-armv7-alpha-e552b54.gz
+		middle = fmt.Sprintf("-%s-%s%s-%s", runtime.GOOS, runtime.GOARCH, goarm, latestVersion)
+	} else if runtime.GOARCH == "arm64" {
+		//-linux-arm64-alpha-e552b54.gz
+		middle = fmt.Sprintf("-%s-%s-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+	} else if isMIPS(runtime.GOARCH) && gomips != "" {
+		middle = fmt.Sprintf("-%s-%s-%s-%s", runtime.GOOS, runtime.GOARCH, gomips, latestVersion)
 	} else {
-		middle = fmt.Sprintf("-%s-%s-%s", goos, goarch, latestVersion)
+		middle = fmt.Sprintf("-%s-%s%s-%s", runtime.GOOS, runtime.GOARCH, amd64Compatible, latestVersion)
 	}
 
-	if goos == "windows" {
+	if runtime.GOOS == "windows" {
 		middle += ".zip"
 	} else {
 		middle += ".gz"
@@ -461,4 +467,23 @@ func isMIPS(arch string) (ok bool) {
 	default:
 		return false
 	}
+}
+
+// linux only
+func probeGoARM() (ok bool) {
+	cmd := exec.Command("cat", "/proc/cpuinfo")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Errorln("probe goarm error:%s", err)
+		return false
+	}
+	cpuInfo := string(output)
+	if strings.Contains(cpuInfo, "vfpv3") || strings.Contains(cpuInfo, "vfpv4") {
+		goarm = "v7"
+	} else if strings.Contains(cpuInfo, "vfp") {
+		goarm = "v6"
+	} else {
+		goarm = "v5"
+	}
+	return true
 }

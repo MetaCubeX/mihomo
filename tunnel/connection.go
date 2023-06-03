@@ -7,7 +7,6 @@ import (
 	"time"
 
 	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 )
@@ -27,34 +26,43 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	return nil
 }
 
-func handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key string, oAddr, fAddr netip.Addr) {
-	buf := pool.Get(pool.UDPBufferSize)
+func handleUDPToLocal(packet C.UDPPacket, pc N.EnhancePacketConn, key string, oAddrPort netip.AddrPort, fAddr netip.Addr) {
 	defer func() {
 		_ = pc.Close()
 		closeAllLocalCoon(key)
 		natTable.Delete(key)
-		_ = pool.Put(buf)
 	}()
 
 	for {
 		_ = pc.SetReadDeadline(time.Now().Add(udpTimeout))
-		n, from, err := pc.ReadFrom(buf)
+		data, put, from, err := pc.WaitReadFrom()
 		if err != nil {
 			return
 		}
 
-		fromUDPAddr := from.(*net.UDPAddr)
-		_fromUDPAddr := *fromUDPAddr
-		fromUDPAddr = &_fromUDPAddr // make a copy
-		if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
-			if fAddr.IsValid() && (oAddr.Unmap() == fromAddr.Unmap()) {
-				fromUDPAddr.IP = fAddr.Unmap().AsSlice()
-			} else {
-				fromUDPAddr.IP = fromAddr.Unmap().AsSlice()
+		fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
+		if isUDPAddr {
+			_fromUDPAddr := *fromUDPAddr
+			fromUDPAddr = &_fromUDPAddr // make a copy
+			if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
+				fromAddr = fromAddr.Unmap()
+				if fAddr.IsValid() && (oAddrPort.Addr() == fromAddr) { // oAddrPort was Unmapped
+					fromAddr = fAddr.Unmap()
+				}
+				fromUDPAddr.IP = fromAddr.AsSlice()
+				if fromAddr.Is4() {
+					fromUDPAddr.Zone = "" // only ipv6 can have the zone
+				}
 			}
+		} else {
+			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
+			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
 		}
 
-		_, err = packet.WriteBack(buf[:n], fromUDPAddr)
+		_, err = packet.WriteBack(data, fromUDPAddr)
+		if put != nil {
+			put()
+		}
 		if err != nil {
 			return
 		}

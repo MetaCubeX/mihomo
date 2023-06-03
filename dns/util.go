@@ -79,6 +79,18 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 		case "dhcp":
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
+		case "system":
+			clients, err := loadSystemResolver()
+			if err != nil {
+				log.Errorln("[DNS:system] load system resolver failed: %s", err.Error())
+				continue
+			}
+			if len(clients) == 0 {
+				log.Errorln("[DNS:system] no nameserver found in system")
+				continue
+			}
+			ret = append(ret, clients...)
+			continue
 		case "quic":
 			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter, s.ProxyName); err == nil {
 				ret = append(ret, doq)

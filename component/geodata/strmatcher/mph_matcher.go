@@ -234,26 +234,26 @@ tail:
 	case s == 0:
 	case s < 4:
 		h ^= uint64(*(*byte)(p))
-		h ^= uint64(*(*byte)(add(p, s>>1))) << 8
-		h ^= uint64(*(*byte)(add(p, s-1))) << 16
+		h ^= uint64(*(*byte)(unsafe.Add(p, s>>1))) << 8
+		h ^= uint64(*(*byte)(unsafe.Add(p, s-1))) << 16
 		h = rotl31(h*m1) * m2
 	case s <= 8:
 		h ^= uint64(readUnaligned32(p))
-		h ^= uint64(readUnaligned32(add(p, s-4))) << 32
+		h ^= uint64(readUnaligned32(unsafe.Add(p, s-4))) << 32
 		h = rotl31(h*m1) * m2
 	case s <= 16:
 		h ^= readUnaligned64(p)
 		h = rotl31(h*m1) * m2
-		h ^= readUnaligned64(add(p, s-8))
+		h ^= readUnaligned64(unsafe.Add(p, s-8))
 		h = rotl31(h*m1) * m2
 	case s <= 32:
 		h ^= readUnaligned64(p)
 		h = rotl31(h*m1) * m2
-		h ^= readUnaligned64(add(p, 8))
+		h ^= readUnaligned64(unsafe.Add(p, 8))
 		h = rotl31(h*m1) * m2
-		h ^= readUnaligned64(add(p, s-16))
+		h ^= readUnaligned64(unsafe.Add(p, s-16))
 		h = rotl31(h*m1) * m2
-		h ^= readUnaligned64(add(p, s-8))
+		h ^= readUnaligned64(unsafe.Add(p, s-8))
 		h = rotl31(h*m1) * m2
 	default:
 		v1 := h
@@ -263,16 +263,16 @@ tail:
 		for s >= 32 {
 			v1 ^= readUnaligned64(p)
 			v1 = rotl31(v1*m1) * m2
-			p = add(p, 8)
+			p = unsafe.Add(p, 8)
 			v2 ^= readUnaligned64(p)
 			v2 = rotl31(v2*m2) * m3
-			p = add(p, 8)
+			p = unsafe.Add(p, 8)
 			v3 ^= readUnaligned64(p)
 			v3 = rotl31(v3*m3) * m4
-			p = add(p, 8)
+			p = unsafe.Add(p, 8)
 			v4 ^= readUnaligned64(p)
 			v4 = rotl31(v4*m4) * m1
-			p = add(p, 8)
+			p = unsafe.Add(p, 8)
 			s -= 32
 		}
 		h = v1 ^ v2 ^ v3 ^ v4
@@ -283,10 +283,6 @@ tail:
 	h *= m3
 	h ^= h >> 32
 	return uintptr(h)
-}
-
-func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(p) + x)
 }
 
 func readUnaligned32(p unsafe.Pointer) uint32 {

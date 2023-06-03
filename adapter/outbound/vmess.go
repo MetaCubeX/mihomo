@@ -89,8 +89,8 @@ type WSOptions struct {
 	EarlyDataHeaderName string            `proxy:"early-data-header-name,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	var err error
 
 	if tlsC.HaveGlobalFingerprint() && (len(v.option.ClientFingerprint) == 0) {
@@ -138,7 +138,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				wsOpts.TLSConfig.ServerName = host
 			}
 		}
-		c, err = clashVMess.StreamWebsocketConn(c, wsOpts)
+		c, err = clashVMess.StreamWebsocketConn(ctx, c, wsOpts)
 	case "http":
 		// readability first, so just copy default TLS logic
 		if v.option.TLS {
@@ -153,7 +153,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			if v.option.ServerName != "" {
 				tlsOpts.Host = v.option.ServerName
 			}
-			c, err = clashVMess.StreamTLSConn(c, tlsOpts)
+			c, err = clashVMess.StreamTLSConn(ctx, c, tlsOpts)
 			if err != nil {
 				return nil, err
 			}
@@ -182,7 +182,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 			tlsOpts.Host = v.option.ServerName
 		}
 
-		c, err = clashVMess.StreamTLSConn(c, &tlsOpts)
+		c, err = clashVMess.StreamTLSConn(ctx, c, &tlsOpts)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +210,7 @@ func (v *Vmess) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 				tlsOpts.Host = v.option.ServerName
 			}
 
-			c, err = clashVMess.StreamTLSConn(c, tlsOpts)
+			c, err = clashVMess.StreamTLSConn(ctx, c, tlsOpts)
 		}
 	}
 
@@ -294,7 +294,7 @@ func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = v.StreamConn(c, metadata)
+	c, err = v.StreamConnContext(ctx, c, metadata)
 	return NewConn(c, v), err
 }
 
@@ -355,7 +355,7 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = v.StreamConn(c, metadata)
+	c, err = v.StreamConnContext(ctx, c, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("new vmess client error: %v", err)
 	}
@@ -379,7 +379,7 @@ func (v *Vmess) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 	}
 
 	if pc, ok := c.(net.PacketConn); ok {
-		return newPacketConn(&threadSafePacketConn{PacketConn: pc}, v), nil
+		return newPacketConn(N.NewThreadSafePacketConn(pc), v), nil
 	}
 	return newPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }
@@ -411,13 +411,6 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	}
 	if option.XUDP {
 		option.PacketAddr = false
-	}
-
-	switch option.Network {
-	case "h2", "grpc":
-		if !option.TLS {
-			option.TLS = true
-		}
 	}
 
 	v := &Vmess{
@@ -464,15 +457,19 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			Host:              v.option.ServerName,
 			ClientFingerprint: v.option.ClientFingerprint,
 		}
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: v.option.SkipCertVerify,
-			ServerName:         v.option.ServerName,
+		if option.ServerName == "" {
+			gunConfig.Host = v.addr
 		}
-
-		if v.option.ServerName == "" {
-			host, _, _ := net.SplitHostPort(v.addr)
-			tlsConfig.ServerName = host
-			gunConfig.Host = host
+		var tlsConfig *tls.Config
+		if option.TLS {
+			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
+				InsecureSkipVerify: v.option.SkipCertVerify,
+				ServerName:         v.option.ServerName,
+			})
+			if option.ServerName == "" {
+				host, _, _ := net.SplitHostPort(v.addr)
+				tlsConfig.ServerName = host
+			}
 		}
 
 		v.gunTLSConfig = tlsConfig
@@ -487,17 +484,6 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	}
 
 	return v, nil
-}
-
-type threadSafePacketConn struct {
-	net.PacketConn
-	access sync.Mutex
-}
-
-func (c *threadSafePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	c.access.Lock()
-	defer c.access.Unlock()
-	return c.PacketConn.WriteTo(b, addr)
 }
 
 type vmessPacketConn struct {

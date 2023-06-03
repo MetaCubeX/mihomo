@@ -2,16 +2,10 @@ package vless
 
 import (
 	"context"
-	"errors"
 	"net"
 
 	tlsC "github.com/Dreamacro/clash/component/tls"
-	C "github.com/Dreamacro/clash/constant"
 	xtls "github.com/xtls/go"
-)
-
-var (
-	ErrNotTLS13 = errors.New("XTLS Vision based on TLS 1.3 outer connection")
 )
 
 type XTLSConfig struct {
@@ -21,7 +15,7 @@ type XTLSConfig struct {
 	NextProtos     []string
 }
 
-func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
+func StreamXTLSConn(ctx context.Context, conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 	xtlsConfig := &xtls.Config{
 		ServerName:         cfg.Host,
 		InsecureSkipVerify: cfg.SkipCertVerify,
@@ -38,9 +32,6 @@ func StreamXTLSConn(conn net.Conn, cfg *XTLSConfig) (net.Conn, error) {
 
 	xtlsConn := xtls.Client(conn, xtlsConfig)
 
-	// fix xtls handshake not timeout
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-	defer cancel()
 	err := xtlsConn.HandshakeContext(ctx)
 	return xtlsConn, err
 }

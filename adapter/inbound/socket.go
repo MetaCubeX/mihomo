@@ -30,21 +30,18 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Ad
 	return context.NewConnContext(conn, metadata)
 }
 
-func NewInner(conn net.Conn, dst string, host string) *context.ConnContext {
+func NewInner(conn net.Conn, address string) *context.ConnContext {
 	metadata := &C.Metadata{}
 	metadata.NetWork = C.TCP
 	metadata.Type = C.INNER
 	metadata.DNSMode = C.DNSNormal
-	metadata.Host = host
 	metadata.Process = C.ClashName
-	if h, port, err := net.SplitHostPort(dst); err == nil {
+	if h, port, err := net.SplitHostPort(address); err == nil {
 		metadata.DstPort = port
-		if host == "" {
-			if ip, err := netip.ParseAddr(h); err == nil {
-				metadata.DstIP = ip
-			} else {
-				metadata.Host = h
-			}
+		if ip, err := netip.ParseAddr(h); err == nil {
+			metadata.DstIP = ip
+		} else {
+			metadata.Host = h
 		}
 	}
 

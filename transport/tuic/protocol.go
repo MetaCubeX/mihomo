@@ -465,6 +465,11 @@ func NewAddress(metadata *C.Metadata) Address {
 }
 
 func NewAddressNetAddr(addr net.Addr) (Address, error) {
+	if addr, ok := addr.(interface{ AddrPort() netip.AddrPort }); ok {
+		if addrPort := addr.AddrPort(); addrPort.IsValid() { // sing's M.Socksaddr maybe return an invalid AddrPort if it's a DomainName
+			return NewAddressAddrPort(addrPort), nil
+		}
+	}
 	addrStr := addr.String()
 	if addrPort, err := netip.ParseAddrPort(addrStr); err == nil {
 		return NewAddressAddrPort(addrPort), nil

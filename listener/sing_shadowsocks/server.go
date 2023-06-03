@@ -21,7 +21,7 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/metadata"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 type Listener struct {
@@ -92,19 +92,38 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 
 			go func() {
 				conn := bufio.NewPacketConn(ul)
+				var buff *buf.Buffer
+				newBuffer := func() *buf.Buffer {
+					buff = buf.NewPacket() // do not use stack buffer
+					return buff
+				}
+				readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+				if isReadWaiter {
+					readWaiter.InitializeReadWaiter(newBuffer)
+				}
 				for {
-					buff := buf.NewPacket()
-					remoteAddr, err := conn.ReadPacket(buff)
+					var (
+						dest M.Socksaddr
+						err  error
+					)
+					buff = nil // clear last loop status, avoid repeat release
+					if isReadWaiter {
+						dest, err = readWaiter.WaitReadPacket()
+					} else {
+						dest, err = conn.ReadPacket(newBuffer())
+					}
 					if err != nil {
-						buff.Release()
+						if buff != nil {
+							buff.Release()
+						}
 						if sl.closed {
 							break
 						}
 						continue
 					}
-					_ = sl.service.NewPacket(context.TODO(), conn, buff, metadata.Metadata{
+					_ = sl.service.NewPacket(context.TODO(), conn, buff, M.Metadata{
 						Protocol: "shadowsocks",
-						Source:   remoteAddr,
+						Source:   dest,
 					})
 				}
 			}()
@@ -170,9 +189,9 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 
 func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
 	ctx := sing.WithAdditions(context.TODO(), additions...)
-	err := l.service.NewConnection(ctx, conn, metadata.Metadata{
+	err := l.service.NewConnection(ctx, conn, M.Metadata{
 		Protocol: "shadowsocks",
-		Source:   metadata.ParseSocksaddr(conn.RemoteAddr().String()),
+		Source:   M.ParseSocksaddr(conn.RemoteAddr().String()),
 	})
 	if err != nil {
 		_ = conn.Close()

@@ -17,6 +17,7 @@ import (
 	D "github.com/miekg/dns"
 
 	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
 )
@@ -108,20 +109,40 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			defer mutex.Unlock()
 			conn2 = nil
 		}()
-		for {
+
+		var buff *buf.Buffer
+		newBuffer := func() *buf.Buffer {
 			// safe size which is 1232 from https://dnsflagday.net/2020/.
 			// so 2048 is enough
-			buff := buf.NewSize(2 * 1024)
+			buff = buf.NewSize(2 * 1024)
+			return buff
+		}
+		readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
+		if isReadWaiter {
+			readWaiter.InitializeReadWaiter(newBuffer)
+		}
+		for {
+			var (
+				dest M.Socksaddr
+				err  error
+			)
 			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
-			dest, err := conn.ReadPacket(buff)
+			buff = nil // clear last loop status, avoid repeat release
+			if isReadWaiter {
+				dest, err = readWaiter.WaitReadPacket()
+			} else {
+				dest, err = conn.ReadPacket(newBuffer())
+			}
 			if err != nil {
-				buff.Release()
+				if buff != nil {
+					buff.Release()
+				}
 				if sing.ShouldIgnorePacketError(err) {
 					break
 				}
 				return err
 			}
-			go func() {
+			go func(buff *buf.Buffer) {
 				ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
 				defer cancel()
 				inData := buff.Bytes()
@@ -146,7 +167,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				if err != nil {
 					return
 				}
-			}()
+			}(buff) // catch buff at goroutine create, avoid next loop change buff
 		}
 		return nil
 	}
