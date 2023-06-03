@@ -288,6 +288,23 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get tags
+        run: |
+          echo "CURRENTVERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          git fetch --tags
+          echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD^)" >> $GITHUB_ENV
+
+      - name: Generate release notes
+        run: |
+          cp ./.github/genReleaseNote.sh ./
+          bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
+          rm ./genReleaseNote.sh
+
       - uses: actions/download-artifact@v3
         with:
           name: artifact
@@ -304,6 +321,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: bin/*
           generate_release_notes: true
+          body_path: release.md
 
   Docker:
     if: ${{ !startsWith(github.event_name, 'pull_request') }}
