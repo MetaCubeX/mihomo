@@ -13,22 +13,24 @@ type Table struct {
 
 type Entry struct {
 	PacketConn      C.PacketConn
+	WriteBackProxy  C.WriteBackProxy
 	LocalUDPConnMap sync.Map
 }
 
-func (t *Table) Set(key string, e C.PacketConn) {
+func (t *Table) Set(key string, e C.PacketConn, w C.WriteBackProxy) {
 	t.mapping.Store(key, &Entry{
 		PacketConn:      e,
+		WriteBackProxy:  w,
 		LocalUDPConnMap: sync.Map{},
 	})
 }
 
-func (t *Table) Get(key string) C.PacketConn {
+func (t *Table) Get(key string) (C.PacketConn, C.WriteBackProxy) {
 	entry, exist := t.getEntry(key)
 	if !exist {
-		return nil
+		return nil, nil
 	}
-	return entry.PacketConn
+	return entry.PacketConn, entry.WriteBackProxy
 }
 
 func (t *Table) GetOrCreateLock(key string) (*sync.Cond, bool) {

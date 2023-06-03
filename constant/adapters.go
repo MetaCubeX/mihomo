@@ -217,7 +217,7 @@ type UDPPacket interface {
 	// - variable source IP/Port is important to STUN
 	// - if addr is not provided, WriteBack will write out UDP packet with SourceIP/Port equals to original Target,
 	//   this is important when using Fake-IP.
-	WriteBack(b []byte, addr net.Addr) (n int, err error)
+	WriteBack
 
 	// Drop call after packet is used, could recycle buffer in this function.
 	Drop()
@@ -236,10 +236,19 @@ type PacketAdapter interface {
 	Metadata() *Metadata
 }
 
-type NatTable interface {
-	Set(key string, e PacketConn)
+type WriteBack interface {
+	WriteBack(b []byte, addr net.Addr) (n int, err error)
+}
 
-	Get(key string) PacketConn
+type WriteBackProxy interface {
+	WriteBack
+	UpdateWriteBack(wb WriteBack)
+}
+
+type NatTable interface {
+	Set(key string, e PacketConn, w WriteBackProxy)
+
+	Get(key string) (PacketConn, WriteBackProxy)
 
 	GetOrCreateLock(key string) (*sync.Cond, bool)
 
