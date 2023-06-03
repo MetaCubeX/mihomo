@@ -38,7 +38,9 @@ func (c *packet) LocalAddr() net.Addr {
 func (c *packet) Drop() {
 	if c.put != nil {
 		c.put()
+		c.put = nil
 	}
+	c.payload = nil
 }
 
 func (c *packet) InAddr() net.Addr {
