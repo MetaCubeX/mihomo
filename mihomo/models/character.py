@@ -142,8 +142,9 @@ class Character(BaseModel):
     @root_validator(pre=True)
     def dict_to_list(cls, data: dict[str, Any]):
         # The keys of the original dict is not necessary, so remove them here.
-        if data.get("relic") is not None:
-            data["relic"] = list(data["relic"].values())
+        if isinstance(data, dict) and data.get("relic") is not None:
+            if isinstance(data["relic"], dict):
+                data["relic"] = list(data["relic"].values())
         return data
 
     @property
