@@ -35,7 +35,7 @@ type ServerOption struct {
 
 type Server struct {
 	*ServerOption
-	listener quic.EarlyListener
+	listener *quic.EarlyListener
 }
 
 func NewServer(option *ServerOption, pc net.PacketConn) (*Server, error) {
