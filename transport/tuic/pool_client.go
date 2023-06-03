@@ -12,12 +12,14 @@ import (
 	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/metacubex/quic-go"
 )
 
 type dialResult struct {
-	pc   net.PacketConn
-	addr net.Addr
-	err  error
+	transport *quic.Transport
+	addr      net.Addr
+	err       error
 }
 
 type PoolClient struct {
@@ -33,9 +35,12 @@ type PoolClient struct {
 }
 
 func (t *PoolClient) DialContextWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.Conn, error) {
-	conn, err := t.getClient(false, dialer).DialContextWithDialer(ctx, metadata, dialer, dialFn)
+	newDialFn := func(ctx context.Context, dialer C.Dialer) (transport *quic.Transport, addr net.Addr, err error) {
+		return t.dial(ctx, dialer, dialFn)
+	}
+	conn, err := t.getClient(false, dialer).DialContextWithDialer(ctx, metadata, dialer, newDialFn)
 	if errors.Is(err, TooManyOpenStreams) {
-		conn, err = t.newClient(false, dialer).DialContextWithDialer(ctx, metadata, dialer, dialFn)
+		conn, err = t.newClient(false, dialer).DialContextWithDialer(ctx, metadata, dialer, newDialFn)
 	}
 	if err != nil {
 		return nil, err
@@ -44,9 +49,12 @@ func (t *PoolClient) DialContextWithDialer(ctx context.Context, metadata *C.Meta
 }
 
 func (t *PoolClient) ListenPacketWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.PacketConn, error) {
-	pc, err := t.getClient(true, dialer).ListenPacketWithDialer(ctx, metadata, dialer, dialFn)
+	newDialFn := func(ctx context.Context, dialer C.Dialer) (transport *quic.Transport, addr net.Addr, err error) {
+		return t.dial(ctx, dialer, dialFn)
+	}
+	pc, err := t.getClient(true, dialer).ListenPacketWithDialer(ctx, metadata, dialer, newDialFn)
 	if errors.Is(err, TooManyOpenStreams) {
-		pc, err = t.newClient(true, dialer).ListenPacketWithDialer(ctx, metadata, dialer, dialFn)
+		pc, err = t.newClient(true, dialer).ListenPacketWithDialer(ctx, metadata, dialer, newDialFn)
 	}
 	if err != nil {
 		return nil, err
@@ -54,37 +62,38 @@ func (t *PoolClient) ListenPacketWithDialer(ctx context.Context, metadata *C.Met
 	return N.NewRefPacketConn(pc, t), nil
 }
 
-func (t *PoolClient) dial(ctx context.Context, dialer C.Dialer, dialFn DialFunc) (pc net.PacketConn, addr net.Addr, err error) {
+func (t *PoolClient) dial(ctx context.Context, dialer C.Dialer, dialFn DialFunc) (transport *quic.Transport, addr net.Addr, err error) {
 	t.dialResultMutex.Lock()
 	dr, ok := t.dialResultMap[dialer]
 	t.dialResultMutex.Unlock()
 	if ok {
-		return dr.pc, dr.addr, dr.err
+		return dr.transport, dr.addr, dr.err
 	}
 
-	pc, addr, err = dialFn(ctx, dialer)
+	transport, addr, err = dialFn(ctx, dialer)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if _, ok := pc.(*net.UDPConn); ok { // only cache the system's UDPConn
-		dr.pc, dr.addr, dr.err = pc, addr, err
+	if _, ok := transport.Conn.(*net.UDPConn); ok { // only cache the system's UDPConn
+		transport.SetSingleUse(false) // don't close transport in each dial
+		dr.transport, dr.addr, dr.err = transport, addr, err
 
 		t.dialResultMutex.Lock()
 		t.dialResultMap[dialer] = dr
 		t.dialResultMutex.Unlock()
 	}
 
-	return pc, addr, err
+	return transport, addr, err
 }
 
 func (t *PoolClient) forceClose() {
 	t.dialResultMutex.Lock()
 	defer t.dialResultMutex.Unlock()
 	for key := range t.dialResultMap {
-		pc := t.dialResultMap[key].pc
-		if pc != nil {
-			_ = pc.Close()
+		transport := t.dialResultMap[key].transport
+		if transport != nil {
+			_ = transport.Close()
 		}
 		delete(t.dialResultMap, key)
 	}
