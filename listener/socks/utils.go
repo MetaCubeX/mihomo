@@ -3,7 +3,6 @@ package socks
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
@@ -11,7 +10,7 @@ type packet struct {
 	pc      net.PacketConn
 	rAddr   net.Addr
 	payload []byte
-	bufRef  []byte
+	put     func()
 }
 
 func (c *packet) Data() []byte {
@@ -33,7 +32,11 @@ func (c *packet) LocalAddr() net.Addr {
 }
 
 func (c *packet) Drop() {
-	pool.Put(c.bufRef)
+	if c.put != nil {
+		c.put()
+		c.put = nil
+	}
+	c.payload = nil
 }
 
 func (c *packet) InAddr() net.Addr {

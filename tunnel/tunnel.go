@@ -303,8 +303,11 @@ func handleUDPConn(packet C.PacketAdapter) {
 	key := packet.LocalAddr().String()
 
 	handle := func() bool {
-		pc := natTable.Get(key)
+		pc, proxy := natTable.Get(key)
 		if pc != nil {
+			if proxy != nil {
+				proxy.UpdateWriteBack(packet)
+			}
 			_ = handleUDPToRemote(packet, pc, metadata)
 			return true
 		}
@@ -384,9 +387,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 
 		oAddrPort := metadata.AddrPort()
-		natTable.Set(key, pc)
+		writeBackProxy := nat.NewWriteBackProxy(packet)
+		natTable.Set(key, pc, writeBackProxy)
 
-		go handleUDPToLocal(packet, pc, key, oAddrPort, fAddr)
+		go handleUDPToLocal(writeBackProxy, pc, key, oAddrPort, fAddr)
 
 		handle()
 	}()
