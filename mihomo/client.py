@@ -10,6 +10,7 @@ from .tools import remove_empty_dict, replace_trailblazer_name
 
 class Language(Enum):
     CHT = "cht"
+    CHS = "chs"
     DE = "de"
     EN = "en"
     ES = "es"
@@ -63,7 +64,9 @@ class MihomoAPI:
 
         """
         url = self.BASE_URL + "/" + str(uid)
-        params = {"lang": language.value}
+        params = {}
+        if language != Language.CHS:
+            params.update({"lang": language.value})
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as response:
                 if response.status == 200:

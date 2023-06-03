@@ -9,6 +9,8 @@ pip install -U git+https://github.com/KT-Yeh/mihomo.git
 ```
 
 ## Usage
+
+### Basic 
 An example for https://api.mihomo.me/sr_info_parsed/800333171?lang=en
 
 ```py
@@ -30,11 +32,53 @@ async def main():
     for character in data.characters:
         print("-----------")
         print(f"Name: {character.name}")
-        print(f"rarity: {character.rarity}")
+        print(f"Rarity: {character.rarity}")
         print(f"Level: {character.level}")
         print(f"Avatar url: {client.get_icon_url(character.icon)}")
         print(f"Preview url: {client.get_icon_url(character.preview)}")
-        print(f"portrait url: {client.get_icon_url(character.portrait)}")
+        print(f"Portrait url: {client.get_icon_url(character.portrait)}")
 
 asyncio.run(main())
+```
+
+### Tools
+`from mihomo import tools`
+#### Remove Duplicate Character
+```py
+    data = await client.fetch_user(800333171)
+    data = tools.remove_duplicate_character(data)
+```
+
+#### Merge Character Data
+```py
+    old_data = await client.fetch_user(800333171)
+
+    # Change characters in game and wait for the API to refresh
+    # ...
+
+    new_data = await client.fetch_user(800333171)
+    data = tools.merge_character_data(new_data, old_data)
+```
+
+### Data Persistence
+Take pickle and json as an example
+```py
+import pickle
+import zlib
+from mihomo import MihomoAPI, Language, StarrailInfoParsed
+
+client = MihomoAPI(language=Language.EN)
+data = await client.fetch_user(800333171)
+
+# Save
+pickle_data = zlib.compress(pickle.dumps(data))
+print(len(pickle_data))
+json_data = data.json(by_alias=True, ensure_ascii=False)
+print(len(json_data))
+
+# Load
+data_from_pickle = pickle.loads(zlib.decompress(pickle_data))
+data_from_json = StarrailInfoParsed.parse_raw(json_data)
+print(type(data_from_pickle))
+print(type(data_from_json))
 ```
