@@ -19,6 +19,8 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+
+	"github.com/Dreamacro/clash/component/dialer"
 )
 
 var (
@@ -398,15 +400,27 @@ func Dial(network, address string) (*TCPConn, error) {
 		return nil, err
 	}
 
+	var lTcpAddr *net.TCPAddr
+	var lIpAddr *net.IPAddr
+	if ifaceName := dialer.DefaultInterface.Load(); len(ifaceName) > 0 {
+		rAddrPort := raddr.AddrPort()
+		addr, err := dialer.LookupLocalAddrFromIfaceName(ifaceName, network, rAddrPort.Addr(), int(rAddrPort.Port()))
+		if err != nil {
+			return nil, err
+		}
+		lTcpAddr = addr.(*net.TCPAddr)
+		lIpAddr = &net.IPAddr{IP: lTcpAddr.IP}
+	}
+
 	// AF_INET
-	handle, err := net.DialIP("ip:tcp", nil, &net.IPAddr{IP: raddr.IP})
+	handle, err := net.DialIP("ip:tcp", lIpAddr, &net.IPAddr{IP: raddr.IP})
 	if err != nil {
 		return nil, err
 	}
 
 	// create an established tcp connection
 	// will hack this tcp connection for packet transmission
-	tcpconn, err := net.DialTCP(network, nil, raddr)
+	tcpconn, err := net.DialTCP(network, lTcpAddr, raddr)
 	if err != nil {
 		return nil, err
 	}
