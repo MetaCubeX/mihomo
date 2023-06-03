@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -398,15 +399,36 @@ func Dial(network, address string) (*TCPConn, error) {
 		return nil, err
 	}
 
+	//choose local address, not clash-meta
+	var laddr net.TCPAddr
+	inters, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, inter := range inters {
+		if (inter.Flags&net.FlagBroadcast != 0) && !strings.HasPrefix(inter.Name, "lo") {
+			addrs, err := inter.Addrs()
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+					laddr = net.TCPAddr{IP: ipnet.IP, Port: 0, Zone: inter.Name}
+				}
+			}
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+
 	// AF_INET
-	handle, err := net.DialIP("ip:tcp", nil, &net.IPAddr{IP: raddr.IP})
+	handle, err := net.DialIP("ip:tcp", &net.IPAddr{IP: laddr.IP}, &net.IPAddr{IP: raddr.IP})
 	if err != nil {
 		return nil, err
 	}
 
 	// create an established tcp connection
 	// will hack this tcp connection for packet transmission
-	tcpconn, err := net.DialTCP(network, nil, raddr)
+	tcpconn, err := net.DialTCP(network, &laddr, raddr)
 	if err != nil {
 		return nil, err
 	}
