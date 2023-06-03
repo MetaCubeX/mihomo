@@ -28,12 +28,11 @@ var (
 	TooManyOpenStreams = errors.New("tuic: too many open streams")
 )
 
-type DialFunc func(ctx context.Context, dialer C.Dialer) (pc net.PacketConn, addr net.Addr, err error)
+type DialFunc func(ctx context.Context, dialer C.Dialer) (transport *quic.Transport, addr net.Addr, err error)
 
 type ClientOption struct {
 	TlsConfig             *tls.Config
 	QuicConfig            *quic.Config
-	Host                  string
 	Token                 [32]byte
 	UdpRelayMode          string
 	CongestionController  string
@@ -67,15 +66,15 @@ func (t *clientImpl) getQuicConn(ctx context.Context, dialer C.Dialer, dialFn Di
 	if t.quicConn != nil {
 		return t.quicConn, nil
 	}
-	pc, addr, err := dialFn(ctx, dialer)
+	transport, addr, err := dialFn(ctx, dialer)
 	if err != nil {
 		return nil, err
 	}
 	var quicConn quic.Connection
 	if t.ReduceRtt {
-		quicConn, err = quic.DialEarlyContext(ctx, pc, addr, t.Host, t.TlsConfig, t.QuicConfig)
+		quicConn, err = transport.DialEarly(ctx, addr, t.TlsConfig, t.QuicConfig)
 	} else {
-		quicConn, err = quic.DialContext(ctx, pc, addr, t.Host, t.TlsConfig, t.QuicConfig)
+		quicConn, err = transport.Dial(ctx, addr, t.TlsConfig, t.QuicConfig)
 	}
 	if err != nil {
 		return nil, err

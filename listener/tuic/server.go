@@ -52,9 +52,7 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 		MaxIncomingStreams:    ServerMaxIncomingStreams,
 		MaxIncomingUniStreams: ServerMaxIncomingStreams,
 		EnableDatagrams:       true,
-		Allow0RTT: func(addr net.Addr) bool {
-			return true
-		},
+		Allow0RTT:             true,
 	}
 	quicConfig.InitialStreamReceiveWindow = tuic.DefaultStreamReceiveWindow / 10
 	quicConfig.MaxStreamReceiveWindow = tuic.DefaultStreamReceiveWindow
