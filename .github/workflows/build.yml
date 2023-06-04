@@ -285,6 +285,7 @@ jobs:
           generate_release_notes: true
 
   Docker:
+    if: ${{ github.event_name != 'pull_request'  }}
     permissions: write-all
     needs: [Build]
     runs-on: ubuntu-latest
