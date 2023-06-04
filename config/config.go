@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1304,7 +1303,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	if len(snifferRaw.Sniff) != 0 {
 		for sniffType, sniffConfig := range snifferRaw.Sniff {
 			find := false
-			ports, err := parsePortRange(sniffConfig.Ports)
+			ports, err := utils.NewIntRangesFromList[uint16](sniffConfig.Ports)
 			if err != nil {
 				return nil, err
 			}
@@ -1331,7 +1330,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			// Deprecated: Use Sniff instead
 			log.Warnln("Deprecated: Use Sniff instead")
 		}
-		globalPorts, err := parsePortRange(snifferRaw.Ports)
+		globalPorts, err := utils.NewIntRangesFromList[uint16](snifferRaw.Ports)
 		if err != nil {
 			return nil, err
 		}
@@ -1375,29 +1374,4 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer.SkipDomain = skipDomainTrie.NewDomainSet()
 
 	return sniffer, nil
-}
-
-func parsePortRange(portRanges []string) ([]utils.Range[uint16], error) {
-	ports := make([]utils.Range[uint16], 0)
-	for _, portRange := range portRanges {
-		portRaws := strings.Split(portRange, "-")
-		p, err := strconv.ParseUint(portRaws[0], 10, 16)
-		if err != nil {
-			return nil, fmt.Errorf("%s format error", portRange)
-		}
-
-		start := uint16(p)
-		if len(portRaws) > 1 {
-			p, err = strconv.ParseUint(portRaws[1], 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("%s format error", portRange)
-			}
-
-			end := uint16(p)
-			ports = append(ports, *utils.NewRange(start, end))
-		} else {
-			ports = append(ports, *utils.NewRange(start, start))
-		}
-	}
-	return ports, nil
 }

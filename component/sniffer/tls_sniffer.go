@@ -22,11 +22,9 @@ type TLSSniffer struct {
 }
 
 func NewTLSSniffer(snifferConfig SnifferConfig) (*TLSSniffer, error) {
-	ports := make([]utils.Range[uint16], 0)
-	if len(snifferConfig.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](443, 443))
-	} else {
-		ports = append(ports, snifferConfig.Ports...)
+	ports := snifferConfig.Ports
+	if len(ports) == 0 {
+		ports = utils.IntRanges[uint16]{utils.NewRange[uint16](443, 443)}
 	}
 	return &TLSSniffer{
 		BaseSniffer: NewBaseSniffer(ports, C.TCP),
