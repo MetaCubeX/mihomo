@@ -3,10 +3,10 @@ package provider
 import (
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/utils"
 	"time"
 
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
