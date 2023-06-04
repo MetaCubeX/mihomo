@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/Dreamacro/clash/common/singledo"
@@ -34,7 +35,8 @@ func ResolveInterface(name string) (*Interface, error) {
 
 		for _, iface := range ifaces {
 			addrs, err := iface.Addrs()
-			if err != nil {
+			//if err or not available device like Meta, dummy0, docker0, etc.
+			if (iface.Flags&net.FlagMulticast == 0) || (err != nil) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
 				continue
 			}
 
@@ -42,6 +44,11 @@ func ResolveInterface(name string) (*Interface, error) {
 			for _, addr := range addrs {
 				ipNet := addr.(*net.IPNet)
 				ip, _ := netip.AddrFromSlice(ipNet.IP)
+
+				//unavailable IPv6 Address
+				if ip.Is6() && strings.HasPrefix(ip.String(), "fe80") {
+					continue
+				}
 
 				ones, bits := ipNet.Mask.Size()
 				if bits == 32 {
