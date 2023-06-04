@@ -34,11 +34,9 @@ type HTTPSniffer struct {
 var _ sniffer.Sniffer = (*HTTPSniffer)(nil)
 
 func NewHTTPSniffer(snifferConfig SnifferConfig) (*HTTPSniffer, error) {
-	ports := make([]utils.Range[uint16], 0)
-	if len(snifferConfig.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](80, 80))
-	} else {
-		ports = append(ports, snifferConfig.Ports...)
+	ports := snifferConfig.Ports
+	if len(ports) == 0 {
+		ports = utils.IntRanges[uint16]{utils.NewRange[uint16](80, 80)}
 	}
 	return &HTTPSniffer{
 		BaseSniffer: NewBaseSniffer(ports, C.TCP),

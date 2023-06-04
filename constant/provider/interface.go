@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/constant"
 )
 
@@ -71,6 +72,7 @@ type ProxyProvider interface {
 	Touch()
 	HealthCheck()
 	Version() uint32
+	RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint)
 }
 
 // RuleProvider interface
