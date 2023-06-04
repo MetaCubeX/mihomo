@@ -58,7 +58,7 @@ func (l *UDPListener) LocalAddr() net.Addr {
 	return l.packetConn.LocalAddr()
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
 	tgtAddr := socks5.SplitAddr(buf)
 	if tgtAddr == nil {
 		// Unresolved UDP packet, return buffer to the pool
@@ -77,7 +77,7 @@ func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, pu
 		put:     put,
 	}
 	select {
-	case in <- inbound.NewPacket(target, packet, C.SHADOWSOCKS):
+	case in <- inbound.NewPacket(target, packet, C.SHADOWSOCKS, additions...):
 	default:
 	}
 }

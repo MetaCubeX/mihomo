@@ -302,14 +302,6 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn quic.Connection) (q
 
 // openConnection opens a new QUIC connection.
 func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connection, err error) {
-	tlsConfig := tlsC.GetGlobalTLSConfig(
-		&tls.Config{
-			InsecureSkipVerify: false,
-			NextProtos: []string{
-				NextProtoDQ,
-			},
-			SessionTicketsDisabled: false,
-		})
 	// we're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
 	// what IP is actually reachable (when there're v4/v6 addresses).
@@ -338,7 +330,20 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 		return nil, err
 	}
 
-	conn, err = quic.DialContext(ctx, udp, &udpAddr, host, tlsConfig, doq.getQUICConfig())
+	tlsConfig := tlsC.GetGlobalTLSConfig(
+		&tls.Config{
+			ServerName:         host,
+			InsecureSkipVerify: false,
+			NextProtos: []string{
+				NextProtoDQ,
+			},
+			SessionTicketsDisabled: false,
+		})
+
+	transport := quic.Transport{Conn: udp}
+	transport.SetCreatedConn(true) // auto close conn
+	transport.SetSingleUse(true)   // auto close transport
+	conn, err = transport.Dial(ctx, &udpAddr, tlsConfig, doq.getQUICConfig())
 	if err != nil {
 		return nil, fmt.Errorf("opening quic connection to %s: %w", doq.addr, err)
 	}

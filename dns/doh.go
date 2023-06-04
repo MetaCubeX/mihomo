@@ -543,7 +543,17 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 	if err != nil {
 		return nil, err
 	}
-	return quic.DialEarlyContext(ctx, conn, &udpAddr, doh.url.Host, tlsCfg, cfg)
+	transport := quic.Transport{Conn: conn}
+	transport.SetCreatedConn(true) // auto close conn
+	transport.SetSingleUse(true)   // auto close transport
+	tlsCfg = tlsCfg.Clone()
+	if host, _, err := net.SplitHostPort(doh.url.Host); err == nil {
+		tlsCfg.ServerName = host
+	} else {
+		// It's ok if net.SplitHostPort returns an error - it could be a hostname/IP address without a port.
+		tlsCfg.ServerName = doh.url.Host
+	}
+	return transport.DialEarly(ctx, &udpAddr, tlsCfg, cfg)
 }
 
 // probeH3 runs a test to check whether QUIC is faster than TLS for this

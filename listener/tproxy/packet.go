@@ -41,7 +41,8 @@ func (c *packet) LocalAddr() net.Addr {
 }
 
 func (c *packet) Drop() {
-	pool.Put(c.buf)
+	_ = pool.Put(c.buf)
+	c.buf = nil
 }
 
 func (c *packet) InAddr() net.Addr {
