@@ -9,6 +9,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/callback"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -138,8 +139,8 @@ func (f *Fallback) Set(name string) error {
 	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		expectedStatus, _ := C.NewExpectedStatus(f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, C.EXTRA)
+		expectedStatus, _ := utils.NewIntRanges[uint16](f.expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, C.ExtraHistory)
 	}
 
 	return nil

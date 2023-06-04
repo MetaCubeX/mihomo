@@ -9,6 +9,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/tunnel"
@@ -112,7 +113,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expectedStatus, err := C.NewExpectedStatus(query.Get("expected"))
+	expectedStatus, err := utils.NewIntRanges[uint16](query.Get("expected"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
@@ -124,7 +125,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DROP)
+	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DropHistory)
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)

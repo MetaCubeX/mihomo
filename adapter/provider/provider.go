@@ -12,6 +12,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/common/convert"
+	"github.com/Dreamacro/clash/common/utils"
 	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
@@ -99,7 +100,7 @@ func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
 }
 
-func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus C.ExpectedStatusRange, filter string, interval uint) {
+func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	pp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
 
@@ -255,7 +256,7 @@ func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
 }
 
-func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus C.ExpectedStatusRange, filter string, interval uint) {
+func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	cp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
 

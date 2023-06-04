@@ -8,6 +8,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/provider"
 	"github.com/Dreamacro/clash/common/structure"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	types "github.com/Dreamacro/clash/constant/provider"
 )
@@ -58,7 +59,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		return nil, errMissProxy
 	}
 
-	expectedStatus, err := C.NewExpectedStatus(groupOption.ExpectedStatus)
+	expectedStatus, err := utils.NewIntRanges[uint16](groupOption.ExpectedStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +167,7 @@ func getProviders(mapping map[string]types.ProxyProvider, list []string) ([]type
 	return ps, nil
 }
 
-func addTestUrlToProviders(providers []types.ProxyProvider, url string, expectedStatus C.ExpectedStatusRange, filter string, interval uint) {
+func addTestUrlToProviders(providers []types.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	if len(providers) == 0 || len(url) == 0 {
 		return
 	}

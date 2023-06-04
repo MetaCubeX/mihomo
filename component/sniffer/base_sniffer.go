@@ -10,11 +10,11 @@ import (
 
 type SnifferConfig struct {
 	OverrideDest bool
-	Ports        []utils.Range[uint16]
+	Ports        utils.IntRanges[uint16]
 }
 
 type BaseSniffer struct {
-	ports              []utils.Range[uint16]
+	ports              utils.IntRanges[uint16]
 	supportNetworkType constant.NetWork
 }
 
@@ -35,15 +35,10 @@ func (bs *BaseSniffer) SupportNetwork() constant.NetWork {
 
 // SupportPort implements sniffer.Sniffer
 func (bs *BaseSniffer) SupportPort(port uint16) bool {
-	for _, portRange := range bs.ports {
-		if portRange.Contains(port) {
-			return true
-		}
-	}
-	return false
+	return bs.ports.Check(port)
 }
 
-func NewBaseSniffer(ports []utils.Range[uint16], networkType constant.NetWork) *BaseSniffer {
+func NewBaseSniffer(ports utils.IntRanges[uint16], networkType constant.NetWork) *BaseSniffer {
 	return &BaseSniffer{
 		ports:              ports,
 		supportNetworkType: networkType,

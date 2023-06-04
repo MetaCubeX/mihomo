@@ -10,6 +10,7 @@ import (
 	"time"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 )
 
@@ -132,7 +133,7 @@ type ProxyAdapter interface {
 }
 
 type Group interface {
-	URLTest(ctx context.Context, url string, expectedStatus ExpectedStatusRange) (mp map[string]uint16, err error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
 	GetProxies(touch bool) []Proxy
 	Touch()
 }
@@ -145,9 +146,9 @@ type DelayHistory struct {
 type DelayHistoryStoreType int
 
 const (
-	ORIGINAL DelayHistoryStoreType = iota
-	EXTRA
-	DROP
+	OriginalHistory DelayHistoryStoreType = iota
+	ExtraHistory
+	DropHistory
 )
 
 type Proxy interface {
@@ -158,7 +159,7 @@ type Proxy interface {
 	ExtraDelayHistory() map[string][]DelayHistory
 	LastDelay() uint16
 	LastDelayForTestUrl(url string) uint16
-	URLTest(ctx context.Context, url string, expectedStatus ExpectedStatusRange, store DelayHistoryStoreType) (uint16, error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store DelayHistoryStoreType) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)

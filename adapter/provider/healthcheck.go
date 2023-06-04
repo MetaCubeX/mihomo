@@ -27,7 +27,7 @@ type HealthCheckOption struct {
 }
 
 type extraOption struct {
-	expectedStatus C.ExpectedStatusRange
+	expectedStatus utils.IntRanges[uint16]
 	filters        map[string]struct{}
 }
 
@@ -73,7 +73,7 @@ func (hc *HealthCheck) setProxy(proxies []C.Proxy) {
 	hc.proxies = proxies
 }
 
-func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus C.ExpectedStatusRange, filter string, interval uint) {
+func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	url = strings.TrimSpace(url)
 	if len(url) == 0 || url == hc.url {
 		log.Debugln("ignore invalid health check url: %s", url)
@@ -175,10 +175,10 @@ func (hc *HealthCheck) execute(b *batch.Batch[bool], url, uid string, option *ex
 	}
 
 	var filterReg *regexp2.Regexp
-	var store = C.ORIGINAL
-	var expectedStatus C.ExpectedStatusRange
+	var store = C.OriginalHistory
+	var expectedStatus utils.IntRanges[uint16]
 	if option != nil {
-		store = C.EXTRA
+		store = C.ExtraHistory
 		expectedStatus = option.expectedStatus
 		if len(option.filters) != 0 {
 			filters := make([]string, 0, len(option.filters))

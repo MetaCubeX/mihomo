@@ -13,6 +13,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/queue"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -183,11 +184,11 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus C.ExpectedStatusRange, store C.DelayHistoryStoreType) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store C.DelayHistoryStoreType) (t uint16, err error) {
 	defer func() {
 		alive := err == nil
 		switch store {
-		case C.ORIGINAL:
+		case C.OriginalHistory:
 			p.alive.Store(alive)
 			record := C.DelayHistory{Time: time.Now()}
 			if alive {
@@ -197,7 +198,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus C.Expect
 			if p.history.Len() > defaultHistoriesNum {
 				p.history.Pop()
 			}
-		case C.EXTRA:
+		case C.ExtraHistory:
 			record := C.DelayHistory{Time: time.Now()}
 			if alive {
 				record.Delay = t
@@ -286,7 +287,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus C.Expect
 		}
 	}
 
-	if !C.CheckStatus(expectedStatus, uint16(resp.StatusCode)) {
+	if !expectedStatus.Check(uint16(resp.StatusCode)) {
 		// maybe another value should be returned for differentiation
 		err = errors.New("response status is inconsistent with the expected status")
 	}

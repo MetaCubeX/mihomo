@@ -2,14 +2,16 @@ package route
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/adapter"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/tunnel"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Dreamacro/clash/adapter"
+	"github.com/Dreamacro/clash/common/utils"
+	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/tunnel"
 )
 
 func GroupRouter() http.Handler {
@@ -64,7 +66,7 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expectedStatus, err := C.NewExpectedStatus(query.Get("expected"))
+	expectedStatus, err := utils.NewIntRanges[uint16](query.Get("expected"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
