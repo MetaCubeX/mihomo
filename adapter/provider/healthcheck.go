@@ -32,16 +32,17 @@ type extraOption struct {
 }
 
 type HealthCheck struct {
-	url       string
-	extra     map[string]*extraOption
-	mu        sync.Mutex
-	started   *atomic.Bool
-	proxies   []C.Proxy
-	interval  uint
-	lazy      bool
-	lastTouch *atomic.Int64
-	done      chan struct{}
-	singleDo  *singledo.Single[struct{}]
+	url            string
+	extra          map[string]*extraOption
+	mu             sync.Mutex
+	started        *atomic.Bool
+	proxies        []C.Proxy
+	interval       uint
+	lazy           bool
+	expectedStatus utils.IntRanges[uint16]
+	lastTouch      *atomic.Int64
+	done           chan struct{}
+	singleDo       *singledo.Single[struct{}]
 }
 
 func (hc *HealthCheck) process() {
@@ -153,7 +154,8 @@ func (hc *HealthCheck) check() {
 		b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
 
 		// execute default health check
-		hc.execute(b, hc.url, id, nil)
+		option := &extraOption{filters: nil, expectedStatus: hc.expectedStatus}
+		hc.execute(b, hc.url, id, option)
 
 		// execute extra health check
 		if len(hc.extra) != 0 {
@@ -178,7 +180,10 @@ func (hc *HealthCheck) execute(b *batch.Batch[bool], url, uid string, option *ex
 	var store = C.OriginalHistory
 	var expectedStatus utils.IntRanges[uint16]
 	if option != nil {
-		store = C.ExtraHistory
+		if url != hc.url {
+			store = C.ExtraHistory
+		}
+
 		expectedStatus = option.expectedStatus
 		if len(option.filters) != 0 {
 			filters := make([]string, 0, len(option.filters))
@@ -214,16 +219,17 @@ func (hc *HealthCheck) close() {
 	hc.done <- struct{}{}
 }
 
-func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool) *HealthCheck {
+func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
 	return &HealthCheck{
-		proxies:   proxies,
-		url:       url,
-		extra:     map[string]*extraOption{},
-		started:   atomic.NewBool(false),
-		interval:  interval,
-		lazy:      lazy,
-		lastTouch: atomic.NewInt64(0),
-		done:      make(chan struct{}, 1),
-		singleDo:  singledo.NewSingle[struct{}](time.Second),
+		proxies:        proxies,
+		url:            url,
+		extra:          map[string]*extraOption{},
+		started:        atomic.NewBool(false),
+		interval:       interval,
+		lazy:           lazy,
+		expectedStatus: expectedStatus,
+		lastTouch:      atomic.NewInt64(0),
+		done:           make(chan struct{}, 1),
+		singleDo:       singledo.NewSingle[struct{}](time.Second),
 	}
 }

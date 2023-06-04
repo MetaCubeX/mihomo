@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"github.com/Dreamacro/clash/common/utils"
 	"time"
 
 	"github.com/Dreamacro/clash/common/structure"
@@ -14,10 +15,11 @@ import (
 var errVehicleType = errors.New("unsupport vehicle type")
 
 type healthCheckSchema struct {
-	Enable   bool   `provider:"enable"`
-	URL      string `provider:"url"`
-	Interval int    `provider:"interval"`
-	Lazy     bool   `provider:"lazy,omitempty"`
+	Enable         bool   `provider:"enable"`
+	URL            string `provider:"url"`
+	Interval       int    `provider:"interval"`
+	Lazy           bool   `provider:"lazy,omitempty"`
+	ExpectedStatus string `provider:"expected-status,omitempty"`
 }
 
 type proxyProviderSchema struct {
@@ -44,11 +46,16 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		return nil, err
 	}
 
+	expectedStatus, err := utils.NewIntRanges[uint16](schema.HealthCheck.ExpectedStatus)
+	if err != nil {
+		return nil, err
+	}
+
 	var hcInterval uint
 	if schema.HealthCheck.Enable {
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy)
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
 	path := C.Path.Resolve(schema.Path)
 
