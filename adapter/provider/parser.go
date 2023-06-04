@@ -48,7 +48,6 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	if schema.HealthCheck.Enable {
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-
 	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy)
 
 	path := C.Path.Resolve(schema.Path)

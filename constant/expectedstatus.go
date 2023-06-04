@@ -3,9 +3,10 @@ package constant
 import (
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/utils"
 	"strconv"
 	"strings"
+
+	"github.com/Dreamacro/clash/common/utils"
 )
 
 type ExpectedStatusRange = []utils.Range[uint16]

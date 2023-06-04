@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"github.com/dlclark/regexp2"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +12,8 @@ import (
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/dlclark/regexp2"
 )
 
 const (

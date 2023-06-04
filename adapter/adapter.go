@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -16,6 +15,7 @@ import (
 	"github.com/Dreamacro/clash/common/queue"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/log"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
