@@ -35,8 +35,11 @@ func ResolveInterface(name string) (*Interface, error) {
 
 		for _, iface := range ifaces {
 			addrs, err := iface.Addrs()
-			//if err or not available device like Meta, dummy0, docker0, etc.
-			if (iface.Flags&net.FlagMulticast == 0) || (err != nil) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
+			if err != nil {
+				continue
+			}
+			// if not available device like Meta, dummy0, docker0, etc.
+			if (iface.Flags&net.FlagMulticast == 0) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
 				continue
 			}
 
