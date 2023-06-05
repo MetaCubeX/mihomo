@@ -2,12 +2,14 @@ package route
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	CN "github.com/Dreamacro/clash/common/net"
@@ -149,6 +151,12 @@ func Start(addr string, tlsAddr string, secret string,
 
 }
 
+func safeEuqal(a, b string) bool {
+	aBuf := unsafe.Slice(unsafe.StringData(a), len(a))
+	bBuf := unsafe.Slice(unsafe.StringData(b), len(b))
+	return subtle.ConstantTimeCompare(aBuf, bBuf) == 1
+}
+
 func authentication(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		if serverSecret == "" {
@@ -159,7 +167,7 @@ func authentication(next http.Handler) http.Handler {
 		// Browser websocket not support custom header
 		if websocket.IsWebSocketUpgrade(r) && r.URL.Query().Get("token") != "" {
 			token := r.URL.Query().Get("token")
-			if token != serverSecret {
+			if !safeEuqal(token, serverSecret) {
 				render.Status(r, http.StatusUnauthorized)
 				render.JSON(w, r, ErrUnauthorized)
 				return
@@ -172,7 +180,7 @@ func authentication(next http.Handler) http.Handler {
 		bearer, token, found := strings.Cut(header, " ")
 
 		hasInvalidHeader := bearer != "Bearer"
-		hasInvalidSecret := !found || token != serverSecret
+		hasInvalidSecret := !found || !safeEuqal(token, serverSecret)
 		if hasInvalidHeader || hasInvalidSecret {
 			render.Status(r, http.StatusUnauthorized)
 			render.JSON(w, r, ErrUnauthorized)
