@@ -913,7 +913,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			addr, err = hostWithDefaultPort(u.Host, "443")
 			if err == nil {
 				proxyName = ""
-				clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path}
+				clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path, User: u.User}
 				addr = clearURL.String()
 				dnsNetType = "https" // DNS over HTTPS
 				if len(u.Fragment) != 0 {
