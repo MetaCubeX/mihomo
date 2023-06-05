@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.19
+go 1.20
 
 require (
 	github.com/3andne/restls-client-go v0.1.4
