@@ -287,7 +287,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		}
 	}
 
-	if !expectedStatus.Check(uint16(resp.StatusCode)) {
+	if expectedStatus != nil && !expectedStatus.Check(uint16(resp.StatusCode)) {
 		// maybe another value should be returned for differentiation
 		err = errors.New("response status is inconsistent with the expected status")
 	}
