@@ -1,10 +1,16 @@
 linters:
   disable-all: true
   enable:
-    - gofumpt
-    - staticcheck
-    - govet
     - gci
+    - gofumpt
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+    - unused
+    - usestdlibvars
 
 linters-settings:
   gci:
