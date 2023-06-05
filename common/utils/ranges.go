@@ -63,7 +63,7 @@ func NewIntRangesFromList[T constraints.Integer](list []string) (IntRanges[T], e
 }
 
 func (ranges IntRanges[T]) Check(status T) bool {
-	if ranges == nil || len(ranges) == 0 {
+	if len(ranges) == 0 {
 		return true
 	}
 
