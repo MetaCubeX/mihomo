@@ -9,13 +9,14 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
 	CN "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/tunnel/statistic"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -152,8 +153,8 @@ func Start(addr string, tlsAddr string, secret string,
 }
 
 func safeEuqal(a, b string) bool {
-	aBuf := unsafe.Slice(unsafe.StringData(a), len(a))
-	bBuf := unsafe.Slice(unsafe.StringData(b), len(b))
+	aBuf := utils.ImmutableBytesFromString(a)
+	bBuf := utils.ImmutableBytesFromString(b)
 	return subtle.ConstantTimeCompare(aBuf, bBuf) == 1
 }
 
