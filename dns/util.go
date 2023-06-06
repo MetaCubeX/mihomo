@@ -21,11 +21,28 @@ import (
 	"github.com/Dreamacro/clash/tunnel"
 
 	D "github.com/miekg/dns"
+	"github.com/samber/lo"
 )
 
 const (
 	MaxMsgSize = 65535
 )
+
+func minimalTTL(records []D.RR) uint32 {
+	return lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
+		return r1.Header().Ttl < r2.Header().Ttl
+	}).Header().Ttl
+}
+
+func updateTTL(records []D.RR, ttl uint32) {
+	if len(records) == 0 {
+		return
+	}
+	delta := minimalTTL(records) - ttl
+	for i := range records {
+		records[i].Header().Ttl = lo.Clamp(records[i].Header().Ttl-delta, 1, records[i].Header().Ttl)
+	}
+}
 
 func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
 	// skip dns cache for acme challenge
@@ -38,11 +55,11 @@ func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
 	var ttl uint32
 	switch {
 	case len(msg.Answer) != 0:
-		ttl = msg.Answer[0].Header().Ttl
+		ttl = minimalTTL(msg.Answer)
 	case len(msg.Ns) != 0:
-		ttl = msg.Ns[0].Header().Ttl
+		ttl = minimalTTL(msg.Ns)
 	case len(msg.Extra) != 0:
-		ttl = msg.Extra[0].Header().Ttl
+		ttl = minimalTTL(msg.Extra)
 	default:
 		log.Debugln("[DNS] response msg empty: %#v", msg)
 		return
@@ -63,6 +80,12 @@ func setMsgTTL(msg *D.Msg, ttl uint32) {
 	for _, extra := range msg.Extra {
 		extra.Header().Ttl = ttl
 	}
+}
+
+func updateMsgTTL(msg *D.Msg, ttl uint32) {
+	updateTTL(msg.Answer, ttl)
+	updateTTL(msg.Ns, ttl)
+	updateTTL(msg.Extra, ttl)
 }
 
 func isIPRequest(q D.Question) bool {
