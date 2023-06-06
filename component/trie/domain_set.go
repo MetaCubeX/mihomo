@@ -23,6 +23,8 @@ type DomainSet struct {
 	ranks, selects      []int32
 }
 
+type qElt struct{ s, e, col int }
+
 // NewDomainSet creates a new *DomainSet struct, from a DomainTrie.
 func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 	reserveDomains := make([]string, 0)
@@ -39,7 +41,6 @@ func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 	ss := &DomainSet{}
 	lIdx := 0
 
-	type qElt struct{ s, e, col int }
 	queue := []qElt{{0, len(keys), 0}}
 	for i := 0; i < len(queue); i++ {
 		elt := queue[i]
