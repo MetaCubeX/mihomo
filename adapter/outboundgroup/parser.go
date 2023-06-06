@@ -56,12 +56,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	providers := []types.ProxyProvider{}
 
 	if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
-		return nil, errMissProxy
+		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
 	expectedStatus, err := utils.NewIntRanges[uint16](groupOption.ExpectedStatus)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", groupName, err)
 	}
 
 	status := strings.TrimSpace(groupOption.ExpectedStatus)
@@ -74,17 +74,17 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	if len(groupOption.Proxies) != 0 {
 		ps, err := getProxies(proxyMap, groupOption.Proxies)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
 		if _, ok := providersMap[groupName]; ok {
-			return nil, errDuplicateProvider
+			return nil, fmt.Errorf("%s: %w", groupName, errDuplicateProvider)
 		}
 
 		hc := provider.NewHealthCheck(ps, "", 0, true, nil)
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
 		// select don't need health check
@@ -107,7 +107,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	if len(groupOption.Use) != 0 {
 		list, err := getProviders(providersMap, groupOption.Use)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
 		// different proxy groups use different test URL
