@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -224,29 +225,39 @@ func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
 			if N.NeedHandshake(c) {
-				conn = v.client.DialEarlyXUDPPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
+				conn = v.client.DialEarlyXUDPPacketConn(c,
+					utils.GlobalID(metadata.SourceAddress()),
+					M.SocksaddrFromNet(metadata.UDPAddr()))
 			} else {
-				conn, err = v.client.DialXUDPPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
+				conn, err = v.client.DialXUDPPacketConn(c,
+					utils.GlobalID(metadata.SourceAddress()),
+					M.SocksaddrFromNet(metadata.UDPAddr()))
 			}
 		} else if v.option.PacketAddr {
 			if N.NeedHandshake(c) {
-				conn = v.client.DialEarlyPacketConn(c, M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
+				conn = v.client.DialEarlyPacketConn(c,
+					M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
 			} else {
-				conn, err = v.client.DialPacketConn(c, M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
+				conn, err = v.client.DialPacketConn(c,
+					M.ParseSocksaddrHostPort(packetaddr.SeqPacketMagicAddress, 443))
 			}
 			conn = packetaddr.NewBindConn(conn)
 		} else {
 			if N.NeedHandshake(c) {
-				conn = v.client.DialEarlyPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
+				conn = v.client.DialEarlyPacketConn(c,
+					M.SocksaddrFromNet(metadata.UDPAddr()))
 			} else {
-				conn, err = v.client.DialPacketConn(c, M.SocksaddrFromNet(metadata.UDPAddr()))
+				conn, err = v.client.DialPacketConn(c,
+					M.SocksaddrFromNet(metadata.UDPAddr()))
 			}
 		}
 	} else {
 		if N.NeedHandshake(c) {
-			conn = v.client.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			conn = v.client.DialEarlyConn(c,
+				M.ParseSocksaddr(metadata.RemoteAddress()))
 		} else {
-			conn, err = v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+			conn, err = v.client.DialConn(c,
+				M.ParseSocksaddr(metadata.RemoteAddress()))
 		}
 	}
 	if err != nil {

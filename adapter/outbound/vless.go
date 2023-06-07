@@ -14,6 +14,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/convert"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -374,7 +375,9 @@ func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 
 	if v.option.XUDP {
 		return newPacketConn(N.NewThreadSafePacketConn(
-			vmessSing.NewXUDPConn(c, M.SocksaddrFromNet(metadata.UDPAddr())),
+			vmessSing.NewXUDPConn(c,
+				utils.GlobalID(metadata.SourceAddress()),
+				M.SocksaddrFromNet(metadata.UDPAddr())),
 		), v), nil
 	} else if v.option.PacketAddr {
 		return newPacketConn(N.NewThreadSafePacketConn(
