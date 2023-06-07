@@ -17,7 +17,6 @@ var (
 	errFormat            = errors.New("format error")
 	errType              = errors.New("unsupported type")
 	errMissProxy         = errors.New("`use` or `proxies` missing")
-	errMissHealthCheck   = errors.New("`url` or `interval` missing")
 	errDuplicateProvider = errors.New("duplicate provider name")
 )
 
@@ -81,11 +80,8 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, errDuplicateProvider)
 		}
 
-		hc := provider.NewHealthCheck(ps, "", 0, true, nil)
-		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", groupName, err)
-		}
+		var url string
+		var interval uint
 
 		// select don't need health check
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
@@ -97,7 +93,14 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.Interval = 300
 			}
 
-			pd.RegisterHealthCheckTask(groupOption.URL, expectedStatus, "", uint(groupOption.Interval))
+			url = groupOption.URL
+			interval = uint(groupOption.Interval)
+		}
+
+		hc := provider.NewHealthCheck(ps, url, interval, true, expectedStatus)
+		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
 		providers = append(providers, pd)

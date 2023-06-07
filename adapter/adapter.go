@@ -34,6 +34,7 @@ type Proxy struct {
 	C.ProxyAdapter
 	history *queue.Queue[C.DelayHistory]
 	alive   *atomic.Bool
+	url     string
 	extra   map[string]*extraProxyState
 }
 
@@ -112,14 +113,14 @@ func (p *Proxy) DelayHistoryForTestUrl(url string) []C.DelayHistory {
 func (p *Proxy) ExtraDelayHistory() map[string][]C.DelayHistory {
 	extra := map[string][]C.DelayHistory{}
 	if p.extra != nil && len(p.extra) != 0 {
-		for url, option := range p.extra {
+		for testUrl, option := range p.extra {
 			histories := []C.DelayHistory{}
 			queueM := option.history.Copy()
 			for _, item := range queueM {
 				histories = append(histories, item)
 			}
 
-			extra[url] = histories
+			extra[testUrl] = histories
 		}
 	}
 	return extra
@@ -187,6 +188,8 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store C.DelayHistoryStoreType) (t uint16, err error) {
 	defer func() {
 		alive := err == nil
+		store = p.determineFinalStoreType(store, url)
+
 		switch store {
 		case C.OriginalHistory:
 			p.alive.Store(alive)
@@ -197,6 +200,11 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 			p.history.Put(record)
 			if p.history.Len() > defaultHistoriesNum {
 				p.history.Pop()
+			}
+
+			// test URL configured by the proxy provider
+			if len(p.url) == 0 {
+				p.url = url
 			}
 		case C.ExtraHistory:
 			record := C.DelayHistory{Time: time.Now()}
@@ -297,7 +305,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 }
 
 func NewProxy(adapter C.ProxyAdapter) *Proxy {
-	return &Proxy{adapter, queue.New[C.DelayHistory](defaultHistoriesNum), atomic.NewBool(true), map[string]*extraProxyState{}}
+	return &Proxy{adapter, queue.New[C.DelayHistory](defaultHistoriesNum), atomic.NewBool(true), "", map[string]*extraProxyState{}}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
@@ -325,4 +333,25 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 		DstPort: port,
 	}
 	return
+}
+
+func (p *Proxy) determineFinalStoreType(store C.DelayHistoryStoreType, url string) C.DelayHistoryStoreType {
+	if store != C.DropHistory {
+		return store
+	}
+
+	if len(p.url) == 0 || url == p.url {
+		return C.OriginalHistory
+	}
+
+	if p.extra == nil {
+		store = C.ExtraHistory
+	} else {
+		if _, ok := p.extra[url]; ok {
+			store = C.ExtraHistory
+		} else if len(p.extra) < 2*C.DefaultMaxHealthCheckUrlNum {
+			store = C.ExtraHistory
+		}
+	}
+	return store
 }
