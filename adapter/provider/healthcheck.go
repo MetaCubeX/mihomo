@@ -18,7 +18,6 @@ import (
 
 const (
 	defaultURLTestTimeout = time.Second * 5
-	defaultMaxTestUrlNum  = 6
 )
 
 type HealthCheckOption struct {
@@ -105,8 +104,8 @@ func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.
 	}
 
 	// due to the time-consuming nature of health checks, a maximum of defaultMaxTestURLNum URLs can be set for testing
-	if len(hc.extra) > defaultMaxTestUrlNum {
-		log.Debugln("skip add url: %s to health check because it has reached the maximum limit: %d", url, defaultMaxTestUrlNum)
+	if len(hc.extra) > C.DefaultMaxHealthCheckUrlNum {
+		log.Debugln("skip add url: %s to health check because it has reached the maximum limit: %d", url, C.DefaultMaxHealthCheckUrlNum)
 		return
 	}
 
@@ -220,6 +219,11 @@ func (hc *HealthCheck) close() {
 }
 
 func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
+	if len(url) == 0 {
+		interval = 0
+		expectedStatus = nil
+	}
+
 	return &HealthCheck{
 		proxies:        proxies,
 		url:            url,
