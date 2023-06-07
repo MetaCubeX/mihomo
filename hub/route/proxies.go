@@ -125,7 +125,7 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DropHistory)
+	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.ExtraHistory)
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)
