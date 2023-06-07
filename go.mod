@@ -108,4 +108,4 @@ require (
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230530121223-b768faae5c6b
 
-replace github.com/sagernet/sing-vmess => github.com/metacubex/sing-vmess v0.1.5-0.20230520082358-78b126617899
+replace github.com/sagernet/sing-vmess => github.com/metacubex/sing-vmess v0.1.5-0.20230607134851-17f84aec22a1
