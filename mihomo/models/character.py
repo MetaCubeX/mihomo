@@ -2,22 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, root_validator
 
+from .combat import Attribute, Element, Path, Property
 from .equipment import LightCone, Relic, RelicSet
-
-
-class EidolonIcon(BaseModel):
-    """
-    Represents an Eidolon icon.
-
-    Attributes:
-        - icon (`str`): The eidolon icon.
-        - unlock (`bool`): Indicates if the eidolon is unlocked.
-    """
-
-    icon: str
-    """The eidolon icon"""
-    unlock: bool
-    """Indicates if the eidolon is unlocked"""
 
 
 class Trace(BaseModel):
@@ -25,41 +11,44 @@ class Trace(BaseModel):
     Represents a character's skill trace.
 
     Attributes:
+        - id (`int`): The ID of the trace.
         - name (`str`): The name of the trace.
-        - level (`int`): The level of the trace.
+        - level (`int`): The current level of the trace.
+        - max_level (`int`): The maximum level of the trace.
+        - element (`Element` | None): The element of the trace, or None if not applicable.
         - type (`str`): The type of the trace.
+        - type_text (`str`): The type text of the trace.
+        - effect (`str`): The effect of the trace.
+        - effect_text (`str`): The effect text of the trace.
+        - simple_desc (`str`): The simple description of the trace.
+        - desc (`str`): The detailed description of the trace.
         - icon (`str`): The trace icon.
     """
 
+    id: int
+    """The ID of the trace"""
     name: str
     """The name of the trace"""
     level: int
-    """The level of the trace"""
+    """The current level of the trace"""
+    max_level: int
+    """The maximum level of the trace"""
+    element: Element | None = None
+    """The element of the trace"""
     type: str
     """The type of the trace"""
+    type_text: str
+    """The type text of the trace"""
+    effect: str
+    """The effect of the trace"""
+    effect_text: str
+    """The effect text of the trace"""
+    simple_desc: str
+    """The simple description of the trace"""
+    desc: str
+    """The detailed description of the trace"""
     icon: str
     """The trace icon"""
-
-
-class Stat(BaseModel):
-    """
-    Represents a character's stat.
-
-    Attributes:
-        - name (`str`): The name of the stat.
-        - base (`str`): The base value of the stat.
-        - addition (`str` | `None`): The additional value of the stat, or None if not applicable.
-        - icon (`str`): The stat icon.
-    """
-
-    name: str
-    """The name of the stat"""
-    base: str
-    """The base value of the stat"""
-    addition: str | None = None
-    """The additional value of the stat"""
-    icon: str
-    """The stat icon"""
 
 
 class Character(BaseModel):
@@ -72,26 +61,25 @@ class Character(BaseModel):
         - name (`str`): The character's name.
         - rarity (`int`): The character's rarity.
         - level (`int`): The character's level.
-    - Eidolon
+        - ascension (`int`): Ascension level.
         - eidolon (`int`): The character's eidolon rank.
-        - eidolon_text (`str`): The text representation of the eidolon.
-        - eidolon_icons (list[`EidolonIcon`]): The list of eidolon icons.
     - Image
         - icon (`str`): The character avatar image
         - preview (`str`): The character's preview image.
         - portrait (`str`): The character's portrait image.
-    - Combat type
-        - path (`str`): The character's path.
-        - path_icon (`str`): The character's path icon.
-        - element (`str`): The character's element.
-        - element_icon (`str`): The character's element icon.
-        - color (`str`): The character's element color.
+    - Combat
+        - path (`Path`): The character's path.
+        - element (`Element`): The character's element.
     - Equipment
         - traces (list[`Trace`]): The list of character's skill traces.
         - light_cone (`LightCone` | `None`): The character's light cone (weapon), or None if not applicable.
         - relics (list[`Relic`] | `None`): The list of character's relics, or None if not applicable.
         - relic_set (list[`RelicSet`] | `None`): The list of character's relic sets, or None if not applicable.
         - stats (list[`Stat`]): The list of character's stats.
+    - Stats
+        - attributes (list[`Attribute`]): The list of character's attributes.
+        - additions (list[`Attribute`]): The list of character's additional attributes.
+        - properties (list[`Property`]): The list of character's properties.
     """
 
     id: str
@@ -102,52 +90,35 @@ class Character(BaseModel):
     """Character's rarity"""
     level: int
     """Character's level"""
-
+    ascension: int = Field(..., alias="promotion")
+    """Ascension Level"""
     eidolon: int = Field(..., alias="rank")
     """Character's eidolon rank"""
-    eidolon_text: str = Field(..., alias="rank_text")
-    """The text representation of the eidolon"""
-    eidolon_icons: list[EidolonIcon] = Field(..., alias="rank_icons")
-    """The list of eidolon icons"""
 
+    icon: str
+    """Character avatar image"""
     preview: str
     """Character preview image"""
     portrait: str
     """Character portrait image"""
 
-    path: str
+    path: Path
     """Character's path"""
-    path_icon: str
-    """Character's path icon"""
-
-    element: str
+    element: Element
     """Character's element"""
-    element_icon: str
-    """Character's element icon"""
 
-    color: str
-    """Character's element color"""
-
-    traces: list[Trace] = Field(..., alias="skill")
+    traces: list[Trace] = Field(..., alias="skills")
     """The list of character's skill traces"""
     light_cone: LightCone | None = None
     """Character's light cone (weapon)"""
-    relics: list[Relic] | None = Field(None, alias="relic")
+    relics: list[Relic] = []
     """The list of character's relics"""
-    relic_set: list[RelicSet] | None = None
+    relic_sets: list[RelicSet] = []
     """The list of character's relic sets"""
-    stats: list[Stat] = Field(..., alias="property")
-    """The list of character's stats"""
 
-    @root_validator(pre=True)
-    def dict_to_list(cls, data: dict[str, Any]):
-        # The keys of the original dict is not necessary, so remove them here.
-        if isinstance(data, dict) and data.get("relic") is not None:
-            if isinstance(data["relic"], dict):
-                data["relic"] = list(data["relic"].values())
-        return data
-
-    @property
-    def icon(self) -> str:
-        """Character avatar image"""
-        return f"icon/character/{self.id}.png"
+    attributes: list[Attribute]
+    """The list of character's attributes"""
+    additions: list[Attribute]
+    """The list of character's additional attributes"""
+    properties: list[Property]
+    """The list of character's properties"""

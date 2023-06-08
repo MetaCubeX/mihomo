@@ -3,8 +3,9 @@ from enum import Enum
 
 import aiohttp
 
-from .errors import HttpRequestError
+from .errors import HttpRequestError, InvalidParams, UserNotFound
 from .models import StarrailInfoParsed
+from .models.v1 import StarrailInfoParsedV1
 from .tools import remove_empty_dict, replace_trailblazer_name
 
 
@@ -48,6 +49,8 @@ class MihomoAPI:
         self,
         uid: int | str,
         language: Language,
+        *,
+        params: dict[str, str] = {},
     ) -> typing.Any:
         """
         Makes an HTTP request to the API.
@@ -61,18 +64,32 @@ class MihomoAPI:
 
         Raises:
             HttpRequestError: If the HTTP request fails.
+            InvalidParams: If the API request contains invalid parameters.
+            UserNotFound: If the requested user is not found.
 
         """
         url = self.BASE_URL + "/" + str(uid)
-        params = {}
         if language != Language.CHS:
             params.update({"lang": language.value})
+
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    return await response.json(encoding="utf-8")
-                else:
-                    raise HttpRequestError(response.status, str(response.reason))
+                match response.status:
+                    case 200:
+                        return await response.json(encoding="utf-8")
+                    case 400:
+                        try:
+                            data = await response.json(encoding="utf-8")
+                        except:
+                            raise InvalidParams()
+                        else:
+                            if isinstance(data, dict) and (detail := data.get("detail")):
+                                raise InvalidParams(detail)
+                            raise InvalidParams()
+                    case 404:
+                        raise UserNotFound()
+                    case _:
+                        raise HttpRequestError(response.status, str(response.reason))
 
     async def fetch_user(self, uid: int) -> StarrailInfoParsed:
         """
@@ -86,8 +103,23 @@ class MihomoAPI:
 
         """
         data = await self.request(uid, self.lang)
-        data = remove_empty_dict(data)
         data = StarrailInfoParsed.parse_obj(data)
+        return data
+
+    async def fetch_user_v1(self, uid: int) -> StarrailInfoParsedV1:
+        """
+        Fetches user data from the API using version 1.
+
+        Args:
+            uid (int): The user ID.
+
+        Returns:
+            StarrailInfoParsedV1: The parsed user data from the Mihomo API (version 1).
+
+        """
+        data = await self.request(uid, self.lang, params={"version": "v1"})
+        data = remove_empty_dict(data)
+        data = StarrailInfoParsedV1.parse_obj(data)
         data = replace_trailblazer_name(data)
         return data
 

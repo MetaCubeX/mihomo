@@ -1,8 +1,10 @@
 from typing import TypeVar
 
 from .models import Character, StarrailInfoParsed
+from .models.v1 import Character, StarrailInfoParsedV1
 
 T = TypeVar("T")
+ParsedData = TypeVar("ParsedData", StarrailInfoParsed, StarrailInfoParsedV1)
 
 
 def remove_empty_dict(data: T) -> T:
@@ -24,7 +26,7 @@ def remove_empty_dict(data: T) -> T:
     return data
 
 
-def replace_trailblazer_name(data: StarrailInfoParsed) -> StarrailInfoParsed:
+def replace_trailblazer_name(data: StarrailInfoParsedV1) -> StarrailInfoParsedV1:
     """
     Replaces the trailblazer name with the player's name.
 
@@ -40,17 +42,17 @@ def replace_trailblazer_name(data: StarrailInfoParsed) -> StarrailInfoParsed:
     return data
 
 
-def remove_duplicate_character(data: StarrailInfoParsed) -> StarrailInfoParsed:
+def remove_duplicate_character(data: ParsedData) -> ParsedData:
     """
     Removes duplicate characters from the given StarrailInfoParsed data.
 
     Args:
-        - data (`StarrailInfoParsed`): The input StarrailInfoParsed data.
+        - data (`ParsedData`): The input StarrailInfoParsed data.
 
     Returns:
-        - `StarrailInfoParsed`: The updated StarrailInfoParsed data without duplicate characters.
+        - `ParsedData`: The updated StarrailInfoParsed data without duplicate characters.
     """
-    new_characters: list[Character] = []
+    new_characters = []
     characters_ids: set[str] = set()
     for character in data.characters:
         if character.id not in characters_ids:
@@ -60,19 +62,17 @@ def remove_duplicate_character(data: StarrailInfoParsed) -> StarrailInfoParsed:
     return data
 
 
-def merge_character_data(
-    new_data: StarrailInfoParsed, old_data: StarrailInfoParsed
-) -> StarrailInfoParsed:
+def merge_character_data(new_data: ParsedData, old_data: ParsedData) -> ParsedData:
     """
     Append the old data characters to the list of new data characters.
     The player's info from the old data will be omitted/discarded.
 
     Args:
-        - new_data (`StarrailInfoParsed`): The new data to be merged.
-        - old_data (`StarrailInfoParsed`): The old data to merge into.
+        - new_data (`ParsedData`): The new data to be merged.
+        - old_data (`ParsedData`): The old data to merge into.
 
     Returns:
-        - `StarrailInfoParsed`: The merged new data.
+        - `ParsedData`: The merged new data.
     """
     for character in old_data.characters:
         new_data.characters.append(character)
