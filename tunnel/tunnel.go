@@ -539,8 +539,8 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
 	var (
-		resolved     bool
-		processFound bool
+		resolved             bool
+		attemptProcessLookup = true
 	)
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
@@ -564,8 +564,9 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}()
 		}
 
-		if !findProcessMode.Off() && !processFound && (findProcessMode.Always() || rule.ShouldFindProcess()) {
-			srcPort, err := strconv.ParseUint(metadata.SrcPort, 10, 16)
+		if attemptProcessLookup && !findProcessMode.Off() && (findProcessMode.Always() || rule.ShouldFindProcess()) {
+			attemptProcessLookup = false
+			srcPort, _ := strconv.ParseUint(metadata.SrcPort, 10, 16)
 			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(srcPort))
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
@@ -573,7 +574,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
 				metadata.Uid = uid
-				processFound = true
 			}
 		}
 
