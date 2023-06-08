@@ -374,9 +374,13 @@ func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 	}
 
 	if v.option.XUDP {
+		var globalID [8]byte
+		if metadata.SourceValid() {
+			globalID = utils.GlobalID(metadata.SourceAddress())
+		}
 		return newPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
-				utils.GlobalID(metadata.SourceAddress()),
+				globalID,
 				M.SocksaddrFromNet(metadata.UDPAddr())),
 		), v), nil
 	} else if v.option.PacketAddr {
