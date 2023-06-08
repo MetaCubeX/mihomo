@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-iptables/iptables"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/metacubex/gopacket"
+	"github.com/metacubex/gopacket/layers"
 
 	"github.com/Dreamacro/clash/component/dialer"
 )
@@ -394,6 +394,8 @@ func (conn *TCPConn) SyscallConn() (syscall.RawConn, error) {
 // Dial connects to the remote TCP port,
 // and returns a single packet-oriented connection
 func Dial(network, address string) (*TCPConn, error) {
+	// init gopacket.layers
+	layers.Init()
 	// remote address resolve
 	raddr, err := net.ResolveTCPAddr(network, address)
 	if err != nil {
@@ -478,6 +480,8 @@ func Dial(network, address string) (*TCPConn, error) {
 // Listen acts like net.ListenTCP,
 // and returns a single packet-oriented connection
 func Listen(network, address string) (*TCPConn, error) {
+	// init gopacket.layers
+	layers.Init()
 	// fields
 	conn := new(TCPConn)
 	conn.flowTable = make(map[string]*tcpFlow)
