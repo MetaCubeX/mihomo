@@ -12,7 +12,6 @@ require (
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.2
 	github.com/gofrs/uuid/v5 v5.0.0
-	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/insomniacslk/dhcp v0.0.0-20230516061539-49801966e6cb
@@ -20,6 +19,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.5
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
+	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.35.2-0.20230603072621-ea2663348ebb
 	github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c
 	github.com/metacubex/sing-shadowsocks2 v0.0.0-20230529235701-a238874242ca
