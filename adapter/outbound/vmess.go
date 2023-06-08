@@ -224,13 +224,17 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
 	if metadata.NetWork == C.UDP {
 		if v.option.XUDP {
+			var globalID [8]byte
+			if metadata.SourceValid() {
+				globalID = utils.GlobalID(metadata.SourceAddress())
+			}
 			if N.NeedHandshake(c) {
 				conn = v.client.DialEarlyXUDPPacketConn(c,
-					utils.GlobalID(metadata.SourceAddress()),
+					globalID,
 					M.SocksaddrFromNet(metadata.UDPAddr()))
 			} else {
 				conn, err = v.client.DialXUDPPacketConn(c,
-					utils.GlobalID(metadata.SourceAddress()),
+					globalID,
 					M.SocksaddrFromNet(metadata.UDPAddr()))
 			}
 		} else if v.option.PacketAddr {
