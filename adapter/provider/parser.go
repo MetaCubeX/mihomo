@@ -1,8 +1,12 @@
 package provider
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"time"
 
 	"github.com/Dreamacro/clash/common/structure"
@@ -27,7 +31,7 @@ type healthCheckSchema struct {
 
 type proxyProviderSchema struct {
 	Type          string            `provider:"type"`
-	Path          string            `provider:"path"`
+	Path          string            `provider:"path,omitempty"`
 	URL           string            `provider:"url,omitempty"`
 	Interval      int               `provider:"interval,omitempty"`
 	Filter        string            `provider:"filter,omitempty"`
@@ -60,17 +64,30 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	}
 	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
-	path := C.Path.Resolve(schema.Path)
-
 	var vehicle types.Vehicle
 	switch schema.Type {
 	case "file":
+		path := C.Path.Resolve(schema.Path)
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		if !C.Path.IsSubPath(path) {
-			return nil, fmt.Errorf("%w: %s", errSubPath, path)
+		if schema.Path != "" {
+			path := C.Path.Resolve(schema.Path)
+			if !C.Path.IsSubPath(path) {
+				return nil, fmt.Errorf("%w: %s", errSubPath, path)
+			}
+			vehicle = resource.NewHTTPVehicle(schema.URL, path)
+		} else {
+			u, err := url.Parse(schema.URL)
+			if err != nil {
+				return nil, err
+			}
+			hash := md5.Sum([]byte(schema.URL))
+			filename := filepath.Base(u.Path)
+			ext := filepath.Ext(filename)
+			newFilename := hex.EncodeToString(hash[:]) + ext
+			path := filepath.Join(C.Path.HomeDir(), newFilename)
+			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
