@@ -97,6 +97,8 @@ class RelicSet(BaseModel):
     Attributes:
         - id (`int`): The ID of the relic set.
         - name (`str`): The name of the relic set.
+        - icon (`str`): The icon of the relic set.
+        - num (`int`): The number of relics in the set.
         - desc (`str`): The description of the relic set.
         - properties (list[`Property`]): The list of properties of the relic set.
     """
@@ -105,6 +107,10 @@ class RelicSet(BaseModel):
     """The ID of the relic set"""
     name: str
     """The name of the relic set"""
+    icon: str
+    """The icon of the relic set"""
+    num: int
+    """The number of relics in the set"""
     desc: str
     """The description of the relic set"""
     properties: list[Property]

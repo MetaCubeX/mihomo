@@ -51,6 +51,24 @@ class Trace(BaseModel):
     """The trace icon"""
 
 
+class TraceTreeNode(BaseModel):
+    """
+    Represents a node in the trace skill tree of a character.
+
+    Attributes:
+    - id (`int`): The ID of the trace.
+    - level (`int`): The level of the trace.
+    - icon (`str`): The icon of the trace.
+    """
+
+    id: int
+    """The ID of the trace"""
+    level: int
+    """The level of the trace"""
+    icon: str
+    """The icon of the trace"""
+
+
 class Character(BaseModel):
     """
     Represents a character.
@@ -64,6 +82,7 @@ class Character(BaseModel):
         - max_level (`int`): The maximum character level according to the current ascension phase.
         - ascension (`int`): Ascension phase.
         - eidolon (`int`): The character's eidolon rank.
+        - eidolon_icons (list[`str`]): The list of character's eiodolon icons.
     - Image
         - icon (`str`): The character avatar image
         - preview (`str`): The character's preview image.
@@ -71,8 +90,9 @@ class Character(BaseModel):
     - Combat
         - path (`Path`): The character's path.
         - element (`Element`): The character's element.
-    - Equipment
         - traces (list[`Trace`]): The list of character's skill traces.
+        - trace_tree (list[`TraceTreeNode]): The list of the character's skill traces.
+    - Equipment
         - light_cone (`LightCone` | `None`): The character's light cone (weapon), or None if not applicable.
         - relics (list[`Relic`] | `None`): The list of character's relics, or None if not applicable.
         - relic_set (list[`RelicSet`] | `None`): The list of character's relic sets, or None if not applicable.
@@ -95,6 +115,8 @@ class Character(BaseModel):
     """Ascension phase"""
     eidolon: int = Field(..., alias="rank")
     """Character's eidolon rank"""
+    eidolon_icons: list[str] = Field([], alias="rank_icons")
+    """The list of character's eiodolon icons"""
 
     icon: str
     """Character avatar image"""
@@ -107,9 +129,11 @@ class Character(BaseModel):
     """Character's path"""
     element: Element
     """Character's element"""
-
     traces: list[Trace] = Field(..., alias="skills")
     """The list of character's skill traces"""
+    trace_tree: list[TraceTreeNode] = Field([], alias="skill_trees")
+    """The list of the character's skill traces"""
+
     light_cone: LightCone | None = None
     """Character's light cone (weapon)"""
     relics: list[Relic] = []
