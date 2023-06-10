@@ -3,10 +3,10 @@ from enum import Enum
 
 import aiohttp
 
+from . import tools
 from .errors import HttpRequestError, InvalidParams, UserNotFound
 from .models import StarrailInfoParsed
 from .models.v1 import StarrailInfoParsedV1
-from .tools import remove_empty_dict, replace_trailblazer_name
 
 
 class Language(Enum):
@@ -91,36 +91,52 @@ class MihomoAPI:
                     case _:
                         raise HttpRequestError(response.status, str(response.reason))
 
-    async def fetch_user(self, uid: int) -> StarrailInfoParsed:
+    async def fetch_user(
+        self,
+        uid: int,
+        *,
+        replace_icon_name_with_url: bool = False,
+    ) -> StarrailInfoParsed:
         """
         Fetches user data from the API.
 
         Args:
-            uid (int): The user ID.
+            - uid (`int`): The user ID.
+            - replace_icon_name_with_url (`bool`): Whether to replace icon names with asset URLs.
 
         Returns:
             StarrailInfoParsed: The parsed user data from mihomo API.
 
         """
         data = await self.request(uid, self.lang)
+        if replace_icon_name_with_url is True:
+            data = tools.replace_icon_name_with_url(data)
         data = StarrailInfoParsed.parse_obj(data)
         return data
 
-    async def fetch_user_v1(self, uid: int) -> StarrailInfoParsedV1:
+    async def fetch_user_v1(
+        self,
+        uid: int,
+        *,
+        replace_icon_name_with_url: bool = False,
+    ) -> StarrailInfoParsedV1:
         """
-        Fetches user data from the API using version 1.
+        Fetches user data from the API using version 1 format.
 
         Args:
-            uid (int): The user ID.
+            - uid (`int`): The user ID.
+            - replace_icon_name_with_url (`bool`): Whether to replace icon names with asset URLs.
 
         Returns:
             StarrailInfoParsedV1: The parsed user data from the Mihomo API (version 1).
 
         """
         data = await self.request(uid, self.lang, params={"version": "v1"})
-        data = remove_empty_dict(data)
+        data = tools.remove_empty_dict(data)
+        if replace_icon_name_with_url is True:
+            data = tools.replace_icon_name_with_url(data)
         data = StarrailInfoParsedV1.parse_obj(data)
-        data = replace_trailblazer_name(data)
+        data = tools.replace_trailblazer_name(data)
         return data
 
     def get_icon_url(self, icon: str) -> str:
