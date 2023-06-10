@@ -60,8 +60,9 @@ class Character(BaseModel):
         - id (`str`): The character's ID.
         - name (`str`): The character's name.
         - rarity (`int`): The character's rarity.
-        - level (`int`): The character's level.
-        - ascension (`int`): Ascension level.
+        - level (`int`): The character's current level.
+        - max_level (`int`): The maximum character level according to the current ascension phase.
+        - ascension (`int`): Ascension phase.
         - eidolon (`int`): The character's eidolon rank.
     - Image
         - icon (`str`): The character avatar image
@@ -91,7 +92,7 @@ class Character(BaseModel):
     level: int
     """Character's level"""
     ascension: int = Field(..., alias="promotion")
-    """Ascension Level"""
+    """Ascension phase"""
     eidolon: int = Field(..., alias="rank")
     """Character's eidolon rank"""
 
@@ -122,3 +123,8 @@ class Character(BaseModel):
     """The list of character's additional attributes"""
     properties: list[Property]
     """The list of character's properties"""
+
+    @property
+    def max_level(self) -> int:
+        """The maximum character level according to the current ascension phase"""
+        return 20 + 10 * self.ascension

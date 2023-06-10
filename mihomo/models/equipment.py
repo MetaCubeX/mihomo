@@ -12,8 +12,9 @@ class LightCone(BaseModel):
         - name (`str`): The name of the light cone.
         - rarity (`int`): The rarity of the light cone.
         - superimpose (`int`): The superimpose rank of the light cone.
-        - level (`int`): The level of the light cone.
-        - ascension (`int`): The ascension level of the light cone.
+        - level (`int`): The current level of the light cone.
+        - max_level (`int`): The maximum light cone level according to the current ascension phase.
+        - ascension (`int`): The ascension phase of the light cone.
         - icon (`str`): The light cone icon image.
         - preview (`str`): The light cone preview image.
         - portrait (`str`): The light cone portrait image.
@@ -33,7 +34,7 @@ class LightCone(BaseModel):
     level: int
     """The level of the light cone"""
     ascension: int = Field(..., alias="promotion")
-    """The ascension level of the light cone"""
+    """The ascension phase of the light cone"""
     icon: str
     """The light cone icon image"""
     preview: str
@@ -46,6 +47,11 @@ class LightCone(BaseModel):
     """The list of attributes of the light cone"""
     properties: list[Property]
     """The list of properties of the light cone"""
+
+    @property
+    def max_level(self) -> int:
+        """The maximum light cone level according to the current ascension phase"""
+        return 20 + 10 * self.ascension
 
 
 class Relic(BaseModel):
