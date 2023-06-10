@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release_archive:
+    runs-on: ubuntu-latest
+    if: github.repository == 'KT-Yeh/mihomo'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Archive Release
+        uses: thedoctor0/zip-release@0.7.1
+        with:
+          type: zip
+          filename: 'mihomo_${{ github.ref_name }}.zip'
+          exclusions: '*.git*'
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          files: 'mihomo_${{ github.ref_name }}.zip'
