@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 
-from .combat import Attribute, Path, Property
+from .combat import Path
+from .stat import Attribute, Property
 
 
 class LightCone(BaseModel):

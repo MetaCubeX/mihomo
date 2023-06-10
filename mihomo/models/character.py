@@ -2,71 +2,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field, root_validator
 
-from .combat import Attribute, Element, Path, Property
+from .combat import Element, Path, Trace, TraceTreeNode
 from .equipment import LightCone, Relic, RelicSet
-
-
-class Trace(BaseModel):
-    """
-    Represents a character's skill trace.
-
-    Attributes:
-        - id (`int`): The ID of the trace.
-        - name (`str`): The name of the trace.
-        - level (`int`): The current level of the trace.
-        - max_level (`int`): The maximum level of the trace.
-        - element (`Element` | None): The element of the trace, or None if not applicable.
-        - type (`str`): The type of the trace.
-        - type_text (`str`): The type text of the trace.
-        - effect (`str`): The effect of the trace.
-        - effect_text (`str`): The effect text of the trace.
-        - simple_desc (`str`): The simple description of the trace.
-        - desc (`str`): The detailed description of the trace.
-        - icon (`str`): The trace icon.
-    """
-
-    id: int
-    """The ID of the trace"""
-    name: str
-    """The name of the trace"""
-    level: int
-    """The current level of the trace"""
-    max_level: int
-    """The maximum level of the trace"""
-    element: Element | None = None
-    """The element of the trace"""
-    type: str
-    """The type of the trace"""
-    type_text: str
-    """The type text of the trace"""
-    effect: str
-    """The effect of the trace"""
-    effect_text: str
-    """The effect text of the trace"""
-    simple_desc: str
-    """The simple description of the trace"""
-    desc: str
-    """The detailed description of the trace"""
-    icon: str
-    """The trace icon"""
-
-
-class TraceTreeNode(BaseModel):
-    """
-    Represents a node in the trace skill tree of a character.
-
-    Attributes:
-    - id (`int`): The ID of the trace.
-    - level (`int`): The level of the trace.
-    - icon (`str`): The icon of the trace.
-    """
-
-    id: int
-    """The ID of the trace"""
-    level: int
-    """The level of the trace"""
-    icon: str
-    """The icon of the trace"""
+from .stat import Attribute, Property
 
 
 class Character(BaseModel):

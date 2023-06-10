@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Element(BaseModel):
@@ -40,58 +40,64 @@ class Path(BaseModel):
     """The path icon"""
 
 
-class Attribute(BaseModel):
+class Trace(BaseModel):
     """
-    Represents an attribute.
+    Represents a character's skill trace.
 
     Attributes:
-        - field (`str`): The field of the attribute.
-        - name (`str`): The name of the attribute.
-        - icon (`str`): The attribute icon image.
-        - value (`float`): The value of the attribute.
-        - displayed_value (`str`): The displayed value of the attribute.
-        - is_percent (`bool`): Indicates if the value is in percentage.
+        - id (`int`): The ID of the trace.
+        - name (`str`): The name of the trace.
+        - level (`int`): The current level of the trace.
+        - max_level (`int`): The maximum level of the trace.
+        - element (`Element` | None): The element of the trace, or None if not applicable.
+        - type (`str`): The type of the trace.
+        - type_text (`str`): The type text of the trace.
+        - effect (`str`): The effect of the trace.
+        - effect_text (`str`): The effect text of the trace.
+        - simple_desc (`str`): The simple description of the trace.
+        - desc (`str`): The detailed description of the trace.
+        - icon (`str`): The trace icon.
     """
 
-    field: str
-    """The field of the attribute"""
+    id: int
+    """The ID of the trace"""
     name: str
-    """The name of the attribute"""
-    icon: str
-    """The attribute icon image"""
-    value: float
-    """The value of the attribute"""
-    displayed_value: str = Field(..., alias="display")
-    """The displayed value of the attribute"""
-    is_percent: bool = Field(..., alias="percent")
-    """Indicates if the value is in percentage"""
-
-
-class Property(BaseModel):
-    """
-    Represents a property.
-
-    Attributes:
-        - type (`str`): The type of the property.
-        - field (`str`): The field of the property.
-        - name (`str`): The name of the property.
-        - icon (`str`): The property icon image.
-        - value (`float`): The value of the property.
-        - displayed_value (`str`): The displayed value of the property.
-        - is_percent (`bool`): Indicates if the value is in percentage.
-    """
-
+    """The name of the trace"""
+    level: int
+    """The current level of the trace"""
+    max_level: int
+    """The maximum level of the trace"""
+    element: Element | None = None
+    """The element of the trace"""
     type: str
-    """The type of the property"""
-    field: str
-    """The field of the property"""
-    name: str
-    """The name of the property"""
+    """The type of the trace"""
+    type_text: str
+    """The type text of the trace"""
+    effect: str
+    """The effect of the trace"""
+    effect_text: str
+    """The effect text of the trace"""
+    simple_desc: str
+    """The simple description of the trace"""
+    desc: str
+    """The detailed description of the trace"""
     icon: str
-    """The property icon image"""
-    value: float
-    """The value of the property"""
-    displayed_value: str = Field(..., alias="display")
-    """The displayed value of the property"""
-    is_percent: bool = Field(..., alias="percent")
-    """Indicates if the value is in percentage"""
+    """The trace icon"""
+
+
+class TraceTreeNode(BaseModel):
+    """
+    Represents a node in the trace skill tree of a character.
+
+    Attributes:
+    - id (`int`): The ID of the trace.
+    - level (`int`): The level of the trace.
+    - icon (`str`): The icon of the trace.
+    """
+
+    id: int
+    """The ID of the trace"""
+    level: int
+    """The level of the trace"""
+    icon: str
+    """The icon of the trace"""
