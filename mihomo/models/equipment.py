@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from .combat import Path
-from .stat import Attribute, Property
+from .stat import Attribute, MainAffix, Property, SubAffix
 
 
 class LightCone(BaseModel):
@@ -66,8 +66,8 @@ class Relic(BaseModel):
         - set_name (`str`): The name of the relic set.
         - rarity (`int`): The rarity of the relic.
         - level (`int`): The level of the relic.
-        - main_property (`RelicProperty`): The main property of the relic.
-        - sub_property (list[`RelicProperty`]): The list of sub properties of the relic.
+        - main_property (`MainAffix`): The main affix of the relic.
+        - sub_property (list[`SubAffix`]): The list of sub-affixes of the relic.
         - icon (`str`): The relic icon.
     """
 
@@ -83,10 +83,10 @@ class Relic(BaseModel):
     """The rarity of the relic"""
     level: int
     """The level of the relic"""
-    main_property: Property = Field(..., alias="main_affix")
-    """The main property of the relic"""
-    sub_properties: list[Property] = Field(..., alias="sub_affix")
-    """The list of sub properties of the relic"""
+    main_affix: MainAffix
+    """The main affix of the relic"""
+    sub_affixes: list[SubAffix] = Field([], alias="sub_affix")
+    """The list of sub-affixes of the relic"""
     icon: str
     """The relic icon"""
 

@@ -56,3 +56,42 @@ class Property(BaseModel):
     """The displayed value of the property"""
     is_percent: bool = Field(..., alias="percent")
     """Indicates if the value is in percentage"""
+
+
+class MainAffix(Property):
+    """
+    Represents a relic main affix.
+
+    Attributes:
+        - type (`str`): The type of the affix.
+        - field (`str`): The field of the affix.
+        - name (`str`): The name of the affix.
+        - icon (`str`): The affix icon image.
+        - value (`float`): The value of the affix.
+        - displayed_value (`str`): The displayed value of the affix.
+        - is_percent (`bool`): Indicates if the value is in percentage.
+    """
+
+    ...
+
+
+class SubAffix(MainAffix):
+    """
+    Represents a relic sub-affix.
+
+    Attributes:
+        - type (`str`): The type of the affix.
+        - field (`str`): The field of the affix.
+        - name (`str`): The name of the affix.
+        - icon (`str`): The affix icon image.
+        - value (`float`): The value of the affix.
+        - displayed_value (`str`): The displayed value of the affix.
+        - is_percent (`bool`): Indicates if the value is in percentage.
+        - count (`int`): The upgrade times of the affix.
+        - step (`int`): The additional value of the affix.
+    """
+
+    count: int
+    """The upgrade times of the affix"""
+    step: int
+    """The additional value of the affix"""
