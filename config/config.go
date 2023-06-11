@@ -939,6 +939,19 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			dnsNetType = "quic" // DNS over QUIC
 		case "system":
 			dnsNetType = "system" // System DNS
+		case "rcode":
+			dnsNetType = "rcode"
+			addr = u.Host
+			switch addr {
+			case "success",
+				"format_error",
+				"server_failure",
+				"name_error",
+				"not_implemented",
+				"refused":
+			default:
+				err = fmt.Errorf("unsupported RCode type: %s", addr)
+			}
 		default:
 			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
 		}

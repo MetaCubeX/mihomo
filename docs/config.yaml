@@ -238,6 +238,7 @@ dns:
     "geosite:cn,private,apple":
       - https://doh.pub/dns-query
       - https://dns.alidns.com/dns-query
+    "geosite:category-ads-all": rcode://success
     "www.baidu.com,+.google.cn": [223.5.5.5, https://dns.alidns.com/dns-query]
     ## global，dns 为 rule-providers 中的名为 global 和 dns 规则订阅，
     ## 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则 

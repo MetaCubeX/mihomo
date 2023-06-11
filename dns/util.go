@@ -93,7 +93,7 @@ func isIPRequest(q D.Question) bool {
 }
 
 func transform(servers []NameServer, resolver *Resolver) []dnsClient {
-	ret := []dnsClient{}
+	ret := make([]dnsClient, 0, len(servers))
 	for _, s := range servers {
 		switch s.Net {
 		case "https":
@@ -113,6 +113,9 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 				continue
 			}
 			ret = append(ret, clients...)
+			continue
+		case "rcode":
+			ret = append(ret, newRCodeClient(s.Addr))
 			continue
 		case "quic":
 			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter, s.ProxyName); err == nil {
@@ -288,16 +291,16 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
 	domain := msgToDomain(m)
 	for _, client := range clients {
-		r := client
+		_, ignoreRCodeError := client.(rcodeClient)
 		fast.Go(func() (*D.Msg, error) {
-			log.Debugln("[DNS] resolve %s from %s", domain, r.Address())
-			m, err := r.ExchangeContext(ctx, m)
+			log.Debugln("[DNS] resolve %s from %s", domain, client.Address())
+			m, err := client.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
-			} else if m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused {
+			} else if !ignoreRCodeError && (m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused) {
 				return nil, errors.New("server failure")
 			}
-			log.Debugln("[DNS] %s --> %s, from %s", domain, msgToIP(m), r.Address())
+			log.Debugln("[DNS] %s --> %s, from %s", domain, msgToIP(m), client.Address())
 			return m, nil
 		})
 	}
