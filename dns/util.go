@@ -287,17 +287,20 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 	return proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
 }
 
-func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
+func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
 	domain := msgToDomain(m)
 	for _, client := range clients {
-		_, ignoreRCodeError := client.(rcodeClient)
+		_, cache = client.(rcodeClient)
+		cache = !cache
 		fast.Go(func() (*D.Msg, error) {
 			log.Debugln("[DNS] resolve %s from %s", domain, client.Address())
 			m, err := client.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
-			} else if !ignoreRCodeError && (m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused) {
+			} else if cache && (m.Rcode == D.RcodeServerFailure || m.Rcode == D.RcodeRefused) {
+				// currently, cache indicates whether this msg was from a RCode client,
+				// so we would ignore RCode errors from RCode clients.
 				return nil, errors.New("server failure")
 			}
 			log.Debugln("[DNS] %s --> %s, from %s", domain, msgToIP(m), client.Address())
@@ -311,7 +314,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 		if fErr := fast.Error(); fErr != nil {
 			err = fmt.Errorf("%w, first error: %s", err, fErr.Error())
 		}
-		return nil, err
+		return nil, true, err
 	}
 	msg = elm
 	return
