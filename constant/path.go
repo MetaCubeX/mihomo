@@ -20,14 +20,15 @@ var Path = func() *path {
 	if err != nil {
 		homeDir, _ = os.Getwd()
 	}
-
+	allowUnsafePath := strings.TrimSpace(os.Getenv("SKIP_SAFE_PATH_CHECK")) == "1"
 	homeDir = P.Join(homeDir, ".config", Name)
-	return &path{homeDir: homeDir, configFile: "config.yaml"}
+	return &path{homeDir: homeDir, configFile: "config.yaml", allowUnsafePath: allowUnsafePath}
 }()
 
 type path struct {
-	homeDir    string
-	configFile string
+	homeDir         string
+	configFile      string
+	allowUnsafePath bool
 }
 
 // SetHomeDir is used to set the configuration path
@@ -56,8 +57,11 @@ func (p *path) Resolve(path string) string {
 	return path
 }
 
-// IsSubPath return true if path is a subpath of homedir
-func (p *path) IsSubPath(path string) bool {
+// IsSafePath return true if path is a subpath of homedir
+func (p *path) IsSafePath(path string) bool {
+	if p.allowUnsafePath {
+		return true
+	}
 	homedir := p.HomeDir()
 	path = p.Resolve(path)
 	rel, err := filepath.Rel(homedir, path)

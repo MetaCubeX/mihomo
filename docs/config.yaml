@@ -773,7 +773,7 @@ proxy-providers:
     type: http
     url: "url"
     interval: 3600
-    path: ./provider1.yaml
+    path: ./provider1.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1 
     health-check:
       enable: true
       interval: 600
@@ -790,7 +790,7 @@ rule-providers:
   rule1:
     behavior: classical # domain ipcidr
     interval: 259200
-    path: /path/to/save/file.yaml
+    path: /path/to/save/file.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1 
     type: http
     url: "url"
   rule2:

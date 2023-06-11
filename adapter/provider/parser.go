@@ -67,7 +67,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	case "file":
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		if !C.Path.IsSubPath(path) {
+		if !C.Path.IsSafePath(path) {
 			return nil, fmt.Errorf("%w: %s", errSubPath, path)
 		}
 		vehicle = resource.NewHTTPVehicle(schema.URL, path)
