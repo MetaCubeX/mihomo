@@ -182,6 +182,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	fn := func() (result any, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout) // reset timeout in singleflight
 		defer cancel()
+		cache := false
 
 		defer func() {
 			if err != nil {
@@ -192,7 +193,9 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 
 			msg := result.(*D.Msg)
 
-			putMsgToCache(r.lruCache, q.String(), msg)
+			if cache {
+				putMsgToCache(r.lruCache, q.String(), msg)
+			}
 		}()
 
 		isIPReq := isIPRequest(q)
@@ -201,9 +204,11 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		}
 
 		if matched := r.matchPolicy(m); len(matched) != 0 {
-			return r.batchExchange(ctx, matched, m)
+			result, cache, err = r.batchExchange(ctx, matched, m)
+			return
 		}
-		return r.batchExchange(ctx, r.main, m)
+		result, cache, err = r.batchExchange(ctx, r.main, m)
+		return
 	}
 
 	ch := r.group.DoChan(q.String(), fn)
@@ -244,7 +249,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	return
 }
 
-func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, err error) {
+func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
 	defer cancel()
 
@@ -371,7 +376,7 @@ func (r *Resolver) lookupIP(ctx context.Context, host string, dnsType uint16) (i
 func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D.Msg) <-chan *result {
 	ch := make(chan *result, 1)
 	go func() {
-		res, err := r.batchExchange(ctx, client, msg)
+		res, _, err := r.batchExchange(ctx, client, msg)
 		ch <- &result{Msg: res, Error: err}
 	}()
 	return ch
