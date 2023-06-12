@@ -661,7 +661,11 @@ proxies: # socks5
     server: www.example.com
     port: 10443
     type: tuic
+    # tuicV4必须填写token （不可同时填写uuid和password）
     token: TOKEN
+    # tuicV5必须填写uuid和password（不可同时填写token）
+    uuid: 00000000-0000-0000-0000-000000000001
+    password: PASSWORD_1
     # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
     # heartbeat-interval: 10000
     # alpn: [h3]
@@ -899,8 +903,11 @@ listeners:
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-    #  token:
-    #    - TOKEN
+    # token:    # tuicV4填写（不可同时填写users）
+    #   - TOKEN
+    # users:    # tuicV5填写（不可同时填写token）
+    #   00000000-0000-0000-0000-000000000000: PASSWORD_0
+    #   00000000-0000-0000-0000-000000000001: PASSWORD_1
     #  certificate: ./server.crt
     #  private-key: ./server.key
     #  congestion-controller: bbr
@@ -970,8 +977,11 @@ listeners:
 # tuic-server:
 #  enable: true
 #  listen: 127.0.0.1:10443
-#  token:
+#  token:    # tuicV4填写（不可同时填写users）
 #    - TOKEN
+#  users:    # tuicV5填写（不可同时填写token）
+#    00000000-0000-0000-0000-000000000000: PASSWORD_0
+#    00000000-0000-0000-0000-000000000001: PASSWORD_1
 #  certificate: ./server.crt
 #  private-key: ./server.key
 #  congestion-controller: bbr

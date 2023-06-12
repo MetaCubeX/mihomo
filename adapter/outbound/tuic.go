@@ -13,13 +13,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/quic-go"
-
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic"
+
+	"github.com/gofrs/uuid/v5"
+	"github.com/metacubex/quic-go"
 )
 
 type Tuic struct {
@@ -33,7 +34,9 @@ type TuicOption struct {
 	Name                  string   `proxy:"name"`
 	Server                string   `proxy:"server"`
 	Port                  int      `proxy:"port"`
-	Token                 string   `proxy:"token"`
+	Token                 string   `proxy:"token,omitempty"`
+	UUID                  string   `proxy:"uuid,omitempty"`
+	Password              string   `proxy:"password,omitempty"`
 	Ip                    string   `proxy:"ip,omitempty"`
 	HeartbeatInterval     int      `proxy:"heartbeat-interval,omitempty"`
 	ALPN                  []string `proxy:"alpn,omitempty"`
@@ -184,14 +187,19 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		option.MaxOpenStreams = 100
 	}
 
+	packetOverHead := tuic.PacketOverHeadV4
+	if len(option.Token) == 0 {
+		packetOverHead = tuic.PacketOverHeadV5
+	}
+
 	if option.MaxDatagramFrameSize == 0 {
-		option.MaxDatagramFrameSize = option.MaxUdpRelayPacketSize + tuic.PacketOverHead
+		option.MaxDatagramFrameSize = option.MaxUdpRelayPacketSize + packetOverHead
 	}
 
 	if option.MaxDatagramFrameSize > 1400 {
 		option.MaxDatagramFrameSize = 1400
 	}
-	option.MaxUdpRelayPacketSize = option.MaxDatagramFrameSize - tuic.PacketOverHead
+	option.MaxUdpRelayPacketSize = option.MaxDatagramFrameSize - packetOverHead
 
 	// ensure server's incoming stream can handle correctly, increase to 1.1x
 	quicMaxOpenStreams := int64(option.MaxOpenStreams)
@@ -222,8 +230,8 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	}
 	if option.DisableSni {
 		tlsConfig.ServerName = ""
+		tlsConfig.InsecureSkipVerify = true // tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config
 	}
-	tkn := tuic.GenTKN(option.Token)
 
 	t := &Tuic{
 		Base: &Base{
@@ -249,20 +257,38 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	if clientMaxOpenStreams < 1 {
 		clientMaxOpenStreams = 1
 	}
-	clientOption := &tuic.ClientOption{
-		TlsConfig:             tlsConfig,
-		QuicConfig:            quicConfig,
-		Token:                 tkn,
-		UdpRelayMode:          option.UdpRelayMode,
-		CongestionController:  option.CongestionController,
-		ReduceRtt:             option.ReduceRtt,
-		RequestTimeout:        time.Duration(option.RequestTimeout) * time.Millisecond,
-		MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
-		FastOpen:              option.FastOpen,
-		MaxOpenStreams:        clientMaxOpenStreams,
-	}
 
-	t.client = tuic.NewPoolClient(clientOption)
+	if len(option.Token) > 0 {
+		tkn := tuic.GenTKN(option.Token)
+		clientOption := &tuic.ClientOptionV4{
+			TlsConfig:             tlsConfig,
+			QuicConfig:            quicConfig,
+			Token:                 tkn,
+			UdpRelayMode:          option.UdpRelayMode,
+			CongestionController:  option.CongestionController,
+			ReduceRtt:             option.ReduceRtt,
+			RequestTimeout:        time.Duration(option.RequestTimeout) * time.Millisecond,
+			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			FastOpen:              option.FastOpen,
+			MaxOpenStreams:        clientMaxOpenStreams,
+		}
+
+		t.client = tuic.NewPoolClientV4(clientOption)
+	} else {
+		clientOption := &tuic.ClientOptionV5{
+			TlsConfig:             tlsConfig,
+			QuicConfig:            quicConfig,
+			Uuid:                  uuid.FromStringOrNil(option.UUID),
+			Password:              option.Password,
+			UdpRelayMode:          option.UdpRelayMode,
+			CongestionController:  option.CongestionController,
+			ReduceRtt:             option.ReduceRtt,
+			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			MaxOpenStreams:        clientMaxOpenStreams,
+		}
+
+		t.client = tuic.NewPoolClientV5(clientOption)
+	}
 
 	return t, nil
 }

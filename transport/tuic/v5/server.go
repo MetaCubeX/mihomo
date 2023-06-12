@@ -1,4 +1,4 @@
-package tuic
+package v5
 
 import (
 	"bufio"
@@ -11,23 +11,24 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/Dreamacro/clash/transport/tuic/common"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
 )
 
 type ServerOption struct {
-	HandleTcpFn func(conn net.Conn, addr socks5.Addr) error
-	HandleUdpFn func(addr socks5.Addr, packet C.UDPPacket) error
+	HandleTcpFn func(conn net.Conn, addr socks5.Addr, additions ...inbound.Addition) error
+	HandleUdpFn func(addr socks5.Addr, packet C.UDPPacket, additions ...inbound.Addition) error
 
 	TlsConfig             *tls.Config
 	QuicConfig            *quic.Config
-	Tokens                [][32]byte
+	Users                 map[[16]byte]string
 	CongestionController  string
 	AuthenticationTimeout time.Duration
 	MaxUdpRelayPacketSize int
@@ -55,7 +56,7 @@ func (s *Server) Serve() error {
 		if err != nil {
 			return err
 		}
-		SetCongestionController(conn, s.CongestionController)
+		common.SetCongestionController(conn, s.CongestionController)
 		h := &serverHandler{
 			Server:   s,
 			quicConn: conn,
@@ -77,6 +78,7 @@ type serverHandler struct {
 
 	authCh   chan struct{}
 	authOk   bool
+	authUUID string
 	authOnce sync.Once
 
 	udpInputMap sync.Map
@@ -126,14 +128,18 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 	if !s.authOk {
 		return
 	}
-	var assocId uint32
+	var assocId uint16
 
 	assocId = packet.ASSOC_ID
 
-	v, _ := s.udpInputMap.LoadOrStore(assocId, &atomic.Bool{})
-	writeClosed := v.(*atomic.Bool)
-	if writeClosed.Load() {
+	v, _ := s.udpInputMap.LoadOrStore(assocId, &serverUDPInput{})
+	input := v.(*serverUDPInput)
+	if input.writeClosed.Load() {
 		return nil
+	}
+	packetPtr := input.Feed(packet)
+	if packetPtr == nil {
+		return
 	}
 
 	pc := &quicStreamPacketConn{
@@ -144,14 +150,14 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err err
 		maxUdpRelayPacketSize: s.MaxUdpRelayPacketSize,
 		deferQuicConnFn:       nil,
 		closeDeferFn:          nil,
-		writeClosed:           writeClosed,
+		writeClosed:           &input.writeClosed,
 	}
 
-	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
+	return s.HandleUdpFn(packetPtr.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
-		packet: &packet,
+		packet: packetPtr,
 		rAddr:  N.NewCustomAddr("tuic", fmt.Sprintf("tuic-%s-%d", s.uuid, assocId), s.quicConn.RemoteAddr()), // for tunnel's handleUDPConn
-	})
+	}, inbound.WithInUser(s.authUUID))
 }
 
 func (s *serverHandler) handleStream() (err error) {
@@ -162,11 +168,12 @@ func (s *serverHandler) handleStream() (err error) {
 			return err
 		}
 		go func() (err error) {
-			stream := &quicStreamConn{
-				Stream: quicStream,
-				lAddr:  s.quicConn.LocalAddr(),
-				rAddr:  s.quicConn.RemoteAddr(),
-			}
+			stream := common.NewQuicStreamConn(
+				quicStream,
+				s.quicConn.LocalAddr(),
+				s.quicConn.RemoteAddr(),
+				nil,
+			)
 			conn := N.NewBufferedConn(stream)
 			connect, err := ReadConnect(conn)
 			if err != nil {
@@ -177,25 +184,11 @@ func (s *serverHandler) handleStream() (err error) {
 				return conn.Close()
 			}
 
-			buf := pool.GetBuffer()
-			defer pool.PutBuffer(buf)
-			err = s.HandleTcpFn(conn, connect.ADDR.SocksAddr())
-			if err != nil {
-				err = NewResponseFailed().WriteTo(buf)
-				defer conn.Close()
-			} else {
-				err = NewResponseSucceed().WriteTo(buf)
-			}
+			err = s.HandleTcpFn(conn, connect.ADDR.SocksAddr(), inbound.WithInUser(s.authUUID))
 			if err != nil {
 				_ = conn.Close()
 				return err
 			}
-			_, err = buf.WriteTo(stream)
-			if err != nil {
-				_ = conn.Close()
-				return err
-			}
-
 			return
 		}()
 	}
@@ -224,18 +217,25 @@ func (s *serverHandler) handleUniStream() (err error) {
 				if err != nil {
 					return
 				}
-				ok := false
-				for _, tkn := range s.Tokens {
-					if authenticate.TKN == tkn {
-						ok = true
-						break
+				authOk := false
+				var authUUID uuid.UUID
+				var token [32]byte
+				if password, ok := s.Users[authenticate.UUID]; ok {
+					token, err = GenToken(s.quicConn.ConnectionState(), authenticate.UUID, password)
+					if err != nil {
+						return
+					}
+					if token == authenticate.TOKEN {
+						authOk = true
+						authUUID = authenticate.UUID
 					}
 				}
 				s.authOnce.Do(func() {
-					if !ok {
+					if !authOk {
 						_ = s.quicConn.CloseWithError(AuthenticationFailed, "AuthenticationFailed")
 					}
-					s.authOk = ok
+					s.authOk = authOk
+					s.authUUID = authUUID.String()
 					close(s.authCh)
 				})
 			case PacketType:
@@ -252,8 +252,8 @@ func (s *serverHandler) handleUniStream() (err error) {
 					return
 				}
 				if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
-					writeClosed := v.(*atomic.Bool)
-					writeClosed.Store(true)
+					input := v.(*serverUDPInput)
+					input.writeClosed.Store(true)
 				}
 			case HeartbeatType:
 				var heartbeat Heartbeat
@@ -266,6 +266,11 @@ func (s *serverHandler) handleUniStream() (err error) {
 			return
 		}()
 	}
+}
+
+type serverUDPInput struct {
+	writeClosed atomic.Bool
+	deFragger
 }
 
 type serverUDPPacket struct {

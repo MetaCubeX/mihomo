@@ -1,111 +1,21 @@
-package tuic
+package v5
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/quic-go"
-
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/tuic/congestion"
+
+	"github.com/metacubex/quic-go"
+	"github.com/zhangyunhao116/fastrand"
 )
-
-const (
-	DefaultStreamReceiveWindow     = 15728640 // 15 MB/s
-	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
-)
-
-func SetCongestionController(quicConn quic.Connection, cc string) {
-	switch cc {
-	case "cubic":
-		quicConn.SetCongestionControl(
-			congestion.NewCubicSender(
-				congestion.DefaultClock{},
-				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
-				false,
-				nil,
-			),
-		)
-	case "new_reno":
-		quicConn.SetCongestionControl(
-			congestion.NewCubicSender(
-				congestion.DefaultClock{},
-				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
-				true,
-				nil,
-			),
-		)
-	case "bbr":
-		quicConn.SetCongestionControl(
-			congestion.NewBBRSender(
-				congestion.DefaultClock{},
-				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
-				congestion.InitialCongestionWindow*congestion.InitialMaxDatagramSize,
-				congestion.DefaultBBRMaxCongestionWindow*congestion.InitialMaxDatagramSize,
-			),
-		)
-	}
-}
-
-type quicStreamConn struct {
-	quic.Stream
-	lock  sync.Mutex
-	lAddr net.Addr
-	rAddr net.Addr
-
-	closeDeferFn func()
-
-	closeOnce sync.Once
-	closeErr  error
-}
-
-func (q *quicStreamConn) Write(p []byte) (n int, err error) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	return q.Stream.Write(p)
-}
-
-func (q *quicStreamConn) Close() error {
-	q.closeOnce.Do(func() {
-		q.closeErr = q.close()
-	})
-	return q.closeErr
-}
-
-func (q *quicStreamConn) close() error {
-	if q.closeDeferFn != nil {
-		defer q.closeDeferFn()
-	}
-
-	// https://github.com/cloudflare/cloudflared/commit/ed2bac026db46b239699ac5ce4fcf122d7cab2cd
-	// Make sure a possible writer does not block the lock forever. We need it, so we can close the writer
-	// side of the stream safely.
-	_ = q.Stream.SetWriteDeadline(time.Now())
-
-	// This lock is eventually acquired despite Write also acquiring it, because we set a deadline to writes.
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	// We have to clean up the receiving stream ourselves since the Close in the bottom does not handle that.
-	q.Stream.CancelRead(0)
-	return q.Stream.Close()
-}
-
-func (q *quicStreamConn) LocalAddr() net.Addr {
-	return q.lAddr
-}
-
-func (q *quicStreamConn) RemoteAddr() net.Addr {
-	return q.rAddr
-}
-
-var _ net.Conn = (*quicStreamConn)(nil)
 
 type quicStreamPacketConn struct {
-	connId    uint32
+	connId    uint16
 	quicConn  quic.Connection
 	inputConn *N.BufferedConn
 
@@ -119,6 +29,8 @@ type quicStreamPacketConn struct {
 	closeOnce sync.Once
 	closeErr  error
 	closed    bool
+
+	deFragger
 }
 
 func (q *quicStreamPacketConn) Close() error {
@@ -184,13 +96,18 @@ func (q *quicStreamPacketConn) SetWriteDeadline(t time.Time) error {
 
 func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	if q.inputConn != nil {
-		var packet Packet
-		packet, err = ReadPacket(q.inputConn)
-		if err != nil {
-			return
+		for {
+			var packet Packet
+			packet, err = ReadPacket(q.inputConn)
+			if err != nil {
+				return
+			}
+			if packetPtr := q.deFragger.Feed(packet); packetPtr != nil {
+				n = copy(p, packet.DATA)
+				addr = packetPtr.ADDR.UDPAddr()
+				return
+			}
 		}
-		n = copy(p, packet.DATA)
-		addr = packet.ADDR.UDPAddr()
 	} else {
 		err = net.ErrClosed
 	}
@@ -199,13 +116,18 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 
 func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
 	if q.inputConn != nil {
-		var packet Packet
-		packet, err = ReadPacket(q.inputConn)
-		if err != nil {
-			return
+		for {
+			var packet Packet
+			packet, err = ReadPacket(q.inputConn)
+			if err != nil {
+				return
+			}
+			if packetPtr := q.deFragger.Feed(packet); packetPtr != nil {
+				data = packetPtr.DATA
+				addr = packetPtr.ADDR.UDPAddr()
+				return
+			}
 		}
-		data = packet.DATA
-		addr = packet.ADDR.UDPAddr()
 	} else {
 		err = net.ErrClosed
 	}
@@ -213,8 +135,8 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 }
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	if q.udpRelayMode != "quic" && len(p) > q.maxUdpRelayPacketSize {
-		return 0, quic.ErrMessageTooLarge(q.maxUdpRelayPacketSize)
+	if len(p) > 0xffff { // uint16 max
+		return 0, quic.ErrMessageTooLarge(0xffff)
 	}
 	if q.closed {
 		return 0, net.ErrClosed
@@ -234,12 +156,14 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	if err != nil {
 		return
 	}
-	err = NewPacket(q.connId, uint16(len(p)), address, p).WriteTo(buf)
-	if err != nil {
-		return
-	}
+	pktId := uint16(fastrand.Uint32())
+	packet := NewPacket(q.connId, pktId, 1, 0, uint16(len(p)), address, p)
 	switch q.udpRelayMode {
 	case "quic":
+		err = packet.WriteTo(buf)
+		if err != nil {
+			return
+		}
 		var stream quic.SendStream
 		stream, err = q.quicConn.OpenUniStream()
 		if err != nil {
@@ -251,8 +175,23 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 			return
 		}
 	default: // native
+		if len(p) > q.maxUdpRelayPacketSize {
+			err = fragWriteNative(q.quicConn, packet, buf, q.maxUdpRelayPacketSize)
+			if err != nil {
+				return
+			}
+		}
+		err = packet.WriteTo(buf)
+		if err != nil {
+			return
+		}
 		data := buf.Bytes()
 		err = q.quicConn.SendMessage(data)
+
+		var tooLarge quic.ErrMessageTooLarge
+		if errors.As(err, &tooLarge) {
+			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge)-PacketOverHead)
+		}
 		if err != nil {
 			return
 		}

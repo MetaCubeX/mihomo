@@ -23,15 +23,14 @@ type dialResult struct {
 }
 
 type PoolClient struct {
-	*ClientOption
-
-	newClientOption *ClientOption
-	dialResultMap   map[C.Dialer]dialResult
-	dialResultMutex *sync.Mutex
-	tcpClients      *list.List[*Client]
-	tcpClientsMutex *sync.Mutex
-	udpClients      *list.List[*Client]
-	udpClientsMutex *sync.Mutex
+	newClientOptionV4 *ClientOptionV4
+	newClientOptionV5 *ClientOptionV5
+	dialResultMap     map[C.Dialer]dialResult
+	dialResultMutex   *sync.Mutex
+	tcpClients        *list.List[Client]
+	tcpClientsMutex   *sync.Mutex
+	udpClients        *list.List[Client]
+	udpClientsMutex   *sync.Mutex
 }
 
 func (t *PoolClient) DialContextWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.Conn, error) {
@@ -99,7 +98,7 @@ func (t *PoolClient) forceClose() {
 	}
 }
 
-func (t *PoolClient) newClient(udp bool, dialer C.Dialer) *Client {
+func (t *PoolClient) newClient(udp bool, dialer C.Dialer) (client Client) {
 	clients := t.tcpClients
 	clientsMutex := t.tcpClientsMutex
 	if udp {
@@ -110,22 +109,26 @@ func (t *PoolClient) newClient(udp bool, dialer C.Dialer) *Client {
 	clientsMutex.Lock()
 	defer clientsMutex.Unlock()
 
-	client := NewClient(t.newClientOption, udp)
-	client.dialerRef = dialer
-	client.lastVisited = time.Now()
+	if t.newClientOptionV4 != nil {
+		client = NewClientV4(t.newClientOptionV4, udp, dialer)
+	} else {
+		client = NewClientV5(t.newClientOptionV5, udp, dialer)
+	}
+
+	client.SetLastVisited(time.Now())
 
 	clients.PushFront(client)
 	return client
 }
 
-func (t *PoolClient) getClient(udp bool, dialer C.Dialer) *Client {
+func (t *PoolClient) getClient(udp bool, dialer C.Dialer) Client {
 	clients := t.tcpClients
 	clientsMutex := t.tcpClientsMutex
 	if udp {
 		clients = t.udpClients
 		clientsMutex = t.udpClientsMutex
 	}
-	var bestClient *Client
+	var bestClient Client
 
 	func() {
 		clientsMutex.Lock()
@@ -138,11 +141,11 @@ func (t *PoolClient) getClient(udp bool, dialer C.Dialer) *Client {
 				it = next
 				continue
 			}
-			if client.dialerRef == dialer {
+			if client.DialerRef() == dialer {
 				if bestClient == nil {
 					bestClient = client
 				} else {
-					if client.openStreams.Load() < bestClient.openStreams.Load() {
+					if client.OpenStreams() < bestClient.OpenStreams() {
 						bestClient = client
 					}
 				}
@@ -152,7 +155,7 @@ func (t *PoolClient) getClient(udp bool, dialer C.Dialer) *Client {
 	}()
 	for it := clients.Front(); it != nil; {
 		client := it.Value
-		if client != bestClient && client.openStreams.Load() == 0 && time.Now().Sub(client.lastVisited) > 30*time.Minute {
+		if client != bestClient && client.OpenStreams() == 0 && time.Now().Sub(client.LastVisited()) > 30*time.Minute {
 			client.Close()
 			next := it.Next()
 			clients.Remove(it)
@@ -165,25 +168,40 @@ func (t *PoolClient) getClient(udp bool, dialer C.Dialer) *Client {
 	if bestClient == nil {
 		return t.newClient(udp, dialer)
 	} else {
-		bestClient.lastVisited = time.Now()
+		bestClient.SetLastVisited(time.Now())
 		return bestClient
 	}
 }
 
-func NewPoolClient(clientOption *ClientOption) *PoolClient {
+func NewPoolClientV4(clientOption *ClientOptionV4) *PoolClient {
 	p := &PoolClient{
-		ClientOption:    clientOption,
 		dialResultMap:   make(map[C.Dialer]dialResult),
 		dialResultMutex: &sync.Mutex{},
-		tcpClients:      list.New[*Client](),
+		tcpClients:      list.New[Client](),
 		tcpClientsMutex: &sync.Mutex{},
-		udpClients:      list.New[*Client](),
+		udpClients:      list.New[Client](),
 		udpClientsMutex: &sync.Mutex{},
 	}
 	newClientOption := *clientOption
-	p.newClientOption = &newClientOption
+	p.newClientOptionV4 = &newClientOption
 	runtime.SetFinalizer(p, closeClientPool)
-	log.Debugln("New Tuic PoolClient at %p", p)
+	log.Debugln("New TuicV4 PoolClient at %p", p)
+	return p
+}
+
+func NewPoolClientV5(clientOption *ClientOptionV5) *PoolClient {
+	p := &PoolClient{
+		dialResultMap:   make(map[C.Dialer]dialResult),
+		dialResultMutex: &sync.Mutex{},
+		tcpClients:      list.New[Client](),
+		tcpClientsMutex: &sync.Mutex{},
+		udpClients:      list.New[Client](),
+		udpClientsMutex: &sync.Mutex{},
+	}
+	newClientOption := *clientOption
+	p.newClientOptionV5 = &newClientOption
+	runtime.SetFinalizer(p, closeClientPool)
+	log.Debugln("New TuicV5 PoolClient at %p", p)
 	return p
 }
 
