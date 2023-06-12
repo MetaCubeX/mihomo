@@ -219,16 +219,17 @@ type RawTun struct {
 }
 
 type RawTuicServer struct {
-	Enable                bool     `yaml:"enable" json:"enable"`
-	Listen                string   `yaml:"listen" json:"listen"`
-	Token                 []string `yaml:"token" json:"token"`
-	Certificate           string   `yaml:"certificate" json:"certificate"`
-	PrivateKey            string   `yaml:"private-key" json:"private-key"`
-	CongestionController  string   `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
-	MaxIdleTime           int      `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
-	AuthenticationTimeout int      `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
-	ALPN                  []string `yaml:"alpn" json:"alpn,omitempty"`
-	MaxUdpRelayPacketSize int      `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+	Enable                bool              `yaml:"enable" json:"enable"`
+	Listen                string            `yaml:"listen" json:"listen"`
+	Token                 []string          `yaml:"token" json:"token"`
+	Users                 map[string]string `yaml:"users" json:"users,omitempty"`
+	Certificate           string            `yaml:"certificate" json:"certificate"`
+	PrivateKey            string            `yaml:"private-key" json:"private-key"`
+	CongestionController  string            `yaml:"congestion-controller" json:"congestion-controller,omitempty"`
+	MaxIdleTime           int               `yaml:"max-idle-time" json:"max-idle-time,omitempty"`
+	AuthenticationTimeout int               `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
+	ALPN                  []string          `yaml:"alpn" json:"alpn,omitempty"`
+	MaxUdpRelayPacketSize int               `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
 }
 
 type RawConfig struct {
@@ -355,6 +356,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		TuicServer: RawTuicServer{
 			Enable:                false,
 			Token:                 nil,
+			Users:                 nil,
 			Certificate:           "",
 			PrivateKey:            "",
 			Listen:                "",
@@ -1294,6 +1296,7 @@ func parseTuicServer(rawTuic RawTuicServer, general *General) error {
 		Enable:                rawTuic.Enable,
 		Listen:                rawTuic.Listen,
 		Token:                 rawTuic.Token,
+		Users:                 rawTuic.Users,
 		Certificate:           rawTuic.Certificate,
 		PrivateKey:            rawTuic.PrivateKey,
 		CongestionController:  rawTuic.CongestionController,
