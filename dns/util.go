@@ -291,6 +291,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
 	domain := msgToDomain(m)
 	for _, client := range clients {
+		client := client // shadow define client to ensure the value captured by the closure will not be changed in the next loop
 		_, cache = client.(rcodeClient)
 		cache = !cache
 		fast.Go(func() (*D.Msg, error) {
