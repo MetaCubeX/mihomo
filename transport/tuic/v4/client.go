@@ -29,7 +29,7 @@ type ClientOption struct {
 	TlsConfig             *tls.Config
 	QuicConfig            *quic.Config
 	Token                 [32]byte
-	UdpRelayMode          string
+	UdpRelayMode          common.UdpRelayMode
 	CongestionController  string
 	ReduceRtt             bool
 	RequestTimeout        time.Duration
@@ -99,7 +99,12 @@ func (t *clientImpl) getQuicConn(ctx context.Context, dialer C.Dialer, dialFn co
 
 	if t.udp {
 		go func() {
-			_ = t.parseUDP(quicConn)
+			switch t.UdpRelayMode {
+			case common.QUIC:
+				_ = t.handleUniStream(quicConn)
+			default: // native
+				_ = t.handleMessage(quicConn)
+			}
 		}()
 	}
 
@@ -133,80 +138,102 @@ func (t *clientImpl) sendAuthentication(quicConn quic.Connection) (err error) {
 	return nil
 }
 
-func (t *clientImpl) parseUDP(quicConn quic.Connection) (err error) {
+func (t *clientImpl) handleUniStream(quicConn quic.Connection) (err error) {
 	defer func() {
 		t.deferQuicConn(quicConn, err)
 	}()
-	switch t.UdpRelayMode {
-	case "quic":
-		for {
-			var stream quic.ReceiveStream
-			stream, err = quicConn.AcceptUniStream(context.Background())
-			if err != nil {
-				return err
-			}
-			go func() (err error) {
-				var assocId uint32
-				defer func() {
-					t.deferQuicConn(quicConn, err)
-					if err != nil && assocId != 0 {
-						if val, ok := t.udpInputMap.LoadAndDelete(assocId); ok {
-							if conn, ok := val.(net.Conn); ok {
-								_ = conn.Close()
-							}
+	for {
+		var stream quic.ReceiveStream
+		stream, err = quicConn.AcceptUniStream(context.Background())
+		if err != nil {
+			return err
+		}
+		go func() (err error) {
+			var assocId uint32
+			defer func() {
+				t.deferQuicConn(quicConn, err)
+				if err != nil && assocId != 0 {
+					if val, ok := t.udpInputMap.LoadAndDelete(assocId); ok {
+						if conn, ok := val.(net.Conn); ok {
+							_ = conn.Close()
 						}
 					}
-					stream.CancelRead(0)
-				}()
-				reader := bufio.NewReader(stream)
-				packet, err := ReadPacket(reader)
+				}
+				stream.CancelRead(0)
+			}()
+			reader := bufio.NewReader(stream)
+			commandHead, err := ReadCommandHead(reader)
+			if err != nil {
+				return
+			}
+			switch commandHead.TYPE {
+			case PacketType:
+				var packet Packet
+				packet, err = ReadPacketWithHead(commandHead, reader)
 				if err != nil {
 					return
 				}
-				assocId = packet.ASSOC_ID
-				if val, ok := t.udpInputMap.Load(assocId); ok {
-					if conn, ok := val.(net.Conn); ok {
-						writer := bufio.NewWriterSize(conn, packet.BytesLen())
-						_ = packet.WriteTo(writer)
-						_ = writer.Flush()
-					}
-				}
-				return
-			}()
-		}
-	default: // native
-		for {
-			var message []byte
-			message, err = quicConn.ReceiveMessage()
-			if err != nil {
-				return err
-			}
-			go func() (err error) {
-				var assocId uint32
-				defer func() {
-					t.deferQuicConn(quicConn, err)
-					if err != nil && assocId != 0 {
-						if val, ok := t.udpInputMap.LoadAndDelete(assocId); ok {
-							if conn, ok := val.(net.Conn); ok {
-								_ = conn.Close()
-							}
+				if t.udp && t.UdpRelayMode == common.QUIC {
+					assocId = packet.ASSOC_ID
+					if val, ok := t.udpInputMap.Load(assocId); ok {
+						if conn, ok := val.(net.Conn); ok {
+							writer := bufio.NewWriterSize(conn, packet.BytesLen())
+							_ = packet.WriteTo(writer)
+							_ = writer.Flush()
 						}
 					}
-				}()
-				buffer := bytes.NewBuffer(message)
-				packet, err := ReadPacket(buffer)
+				}
+			}
+			return
+		}()
+	}
+}
+
+func (t *clientImpl) handleMessage(quicConn quic.Connection) (err error) {
+	defer func() {
+		t.deferQuicConn(quicConn, err)
+	}()
+	for {
+		var message []byte
+		message, err = quicConn.ReceiveMessage()
+		if err != nil {
+			return err
+		}
+		go func() (err error) {
+			var assocId uint32
+			defer func() {
+				t.deferQuicConn(quicConn, err)
+				if err != nil && assocId != 0 {
+					if val, ok := t.udpInputMap.LoadAndDelete(assocId); ok {
+						if conn, ok := val.(net.Conn); ok {
+							_ = conn.Close()
+						}
+					}
+				}
+			}()
+			reader := bytes.NewBuffer(message)
+			commandHead, err := ReadCommandHead(reader)
+			if err != nil {
+				return
+			}
+			switch commandHead.TYPE {
+			case PacketType:
+				var packet Packet
+				packet, err = ReadPacketWithHead(commandHead, reader)
 				if err != nil {
 					return
 				}
-				assocId = packet.ASSOC_ID
-				if val, ok := t.udpInputMap.Load(assocId); ok {
-					if conn, ok := val.(net.Conn); ok {
-						_, _ = conn.Write(message)
+				if t.udp && t.UdpRelayMode == common.NATIVE {
+					assocId = packet.ASSOC_ID
+					if val, ok := t.udpInputMap.Load(assocId); ok {
+						if conn, ok := val.(net.Conn); ok {
+							_, _ = conn.Write(message)
+						}
 					}
 				}
-				return
-			}()
-		}
+			}
+			return
+		}()
 	}
 }
 

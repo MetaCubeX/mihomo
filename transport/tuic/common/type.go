@@ -32,3 +32,10 @@ type Server interface {
 	Serve() error
 	Close() error
 }
+
+type UdpRelayMode uint8
+
+const (
+	QUIC UdpRelayMode = iota
+	NATIVE
+)
