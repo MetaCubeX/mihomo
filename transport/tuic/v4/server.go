@@ -118,12 +118,12 @@ func (s *serverHandler) handleMessage() (err error) {
 			if err != nil {
 				return
 			}
-			return s.parsePacket(packet, "native")
+			return s.parsePacket(packet, common.NATIVE)
 		}()
 	}
 }
 
-func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err error) {
+func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayMode) (err error) {
 	<-s.authCh
 	if !s.authOk {
 		return
@@ -247,7 +247,7 @@ func (s *serverHandler) handleUniStream() (err error) {
 				if err != nil {
 					return
 				}
-				return s.parsePacket(packet, "quic")
+				return s.parsePacket(packet, common.QUIC)
 			case DissociateType:
 				var disassociate Dissociate
 				disassociate, err = ReadDissociateWithHead(commandHead, reader)

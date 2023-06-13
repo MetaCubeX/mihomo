@@ -175,8 +175,9 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		option.HeartbeatInterval = 10000
 	}
 
+	udpRelayMode := tuic.QUIC
 	if option.UdpRelayMode != "quic" {
-		option.UdpRelayMode = "native"
+		udpRelayMode = tuic.NATIVE
 	}
 
 	if option.MaxUdpRelayPacketSize == 0 {
@@ -264,7 +265,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			TlsConfig:             tlsConfig,
 			QuicConfig:            quicConfig,
 			Token:                 tkn,
-			UdpRelayMode:          option.UdpRelayMode,
+			UdpRelayMode:          udpRelayMode,
 			CongestionController:  option.CongestionController,
 			ReduceRtt:             option.ReduceRtt,
 			RequestTimeout:        time.Duration(option.RequestTimeout) * time.Millisecond,
@@ -280,7 +281,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			QuicConfig:            quicConfig,
 			Uuid:                  uuid.FromStringOrNil(option.UUID),
 			Password:              option.Password,
-			UdpRelayMode:          option.UdpRelayMode,
+			UdpRelayMode:          udpRelayMode,
 			CongestionController:  option.CongestionController,
 			ReduceRtt:             option.ReduceRtt,
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,

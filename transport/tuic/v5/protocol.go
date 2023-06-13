@@ -33,7 +33,6 @@ const (
 	PacketType       = CommandType(0x02)
 	DissociateType   = CommandType(0x03)
 	HeartbeatType    = CommandType(0x04)
-	ResponseType     = CommandType(0xff)
 )
 
 func (c CommandType) String() string {
@@ -48,8 +47,6 @@ func (c CommandType) String() string {
 		return "Dissociate"
 	case HeartbeatType:
 		return "Heartbeat"
-	case ResponseType:
-		return "Response"
 	default:
 		return fmt.Sprintf("UnknowCommand: %#x", byte(c))
 	}
@@ -404,71 +401,6 @@ func ReadHeartbeat(reader BufferedReader) (c Heartbeat, err error) {
 		return
 	}
 	return ReadHeartbeatWithHead(head, reader)
-}
-
-type Response struct {
-	CommandHead
-	REP byte
-}
-
-func NewResponse(REP byte) Response {
-	return Response{
-		CommandHead: NewCommandHead(ResponseType),
-		REP:         REP,
-	}
-}
-
-func NewResponseSucceed() Response {
-	return NewResponse(0x00)
-}
-
-func NewResponseFailed() Response {
-	return NewResponse(0xff)
-}
-
-func ReadResponseWithHead(head CommandHead, reader BufferedReader) (c Response, err error) {
-	c.CommandHead = head
-	if c.CommandHead.TYPE != ResponseType {
-		err = fmt.Errorf("error command type: %s", c.CommandHead.TYPE)
-		return
-	}
-	c.REP, err = reader.ReadByte()
-	if err != nil {
-		return
-	}
-	return
-}
-
-func ReadResponse(reader BufferedReader) (c Response, err error) {
-	head, err := ReadCommandHead(reader)
-	if err != nil {
-		return
-	}
-	return ReadResponseWithHead(head, reader)
-}
-
-func (c Response) WriteTo(writer BufferedWriter) (err error) {
-	err = c.CommandHead.WriteTo(writer)
-	if err != nil {
-		return
-	}
-	err = writer.WriteByte(c.REP)
-	if err != nil {
-		return
-	}
-	return
-}
-
-func (c Response) IsSucceed() bool {
-	return c.REP == 0x00
-}
-
-func (c Response) IsFailed() bool {
-	return c.REP == 0xff
-}
-
-func (c Response) BytesLen() int {
-	return c.CommandHead.BytesLen() + 1
 }
 
 // Addr types

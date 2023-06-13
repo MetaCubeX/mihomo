@@ -113,17 +113,33 @@ func (s *serverHandler) handleMessage() (err error) {
 			return err
 		}
 		go func() (err error) {
-			buffer := bytes.NewBuffer(message)
-			packet, err := ReadPacket(buffer)
+			reader := bytes.NewBuffer(message)
+			commandHead, err := ReadCommandHead(reader)
 			if err != nil {
 				return
 			}
-			return s.parsePacket(packet, "native")
+			switch commandHead.TYPE {
+			case PacketType:
+				var packet Packet
+				packet, err = ReadPacketWithHead(commandHead, reader)
+				if err != nil {
+					return
+				}
+				return s.parsePacket(packet, common.NATIVE)
+			case HeartbeatType:
+				var heartbeat Heartbeat
+				heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
+				if err != nil {
+					return
+				}
+				heartbeat.BytesLen()
+			}
+			return
 		}()
 	}
 }
 
-func (s *serverHandler) parsePacket(packet Packet, udpRelayMode string) (err error) {
+func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayMode) (err error) {
 	<-s.authCh
 	if !s.authOk {
 		return
@@ -244,7 +260,7 @@ func (s *serverHandler) handleUniStream() (err error) {
 				if err != nil {
 					return
 				}
-				return s.parsePacket(packet, "quic")
+				return s.parsePacket(packet, common.QUIC)
 			case DissociateType:
 				var disassociate Dissociate
 				disassociate, err = ReadDissociateWithHead(commandHead, reader)
@@ -255,13 +271,6 @@ func (s *serverHandler) handleUniStream() (err error) {
 					input := v.(*serverUDPInput)
 					input.writeClosed.Store(true)
 				}
-			case HeartbeatType:
-				var heartbeat Heartbeat
-				heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
-				if err != nil {
-					return
-				}
-				heartbeat.BytesLen()
 			}
 			return
 		}()
