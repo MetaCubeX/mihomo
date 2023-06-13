@@ -9,6 +9,7 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
 	"github.com/zhangyunhao116/fastrand"
@@ -19,7 +20,7 @@ type quicStreamPacketConn struct {
 	quicConn  quic.Connection
 	inputConn *N.BufferedConn
 
-	udpRelayMode          string
+	udpRelayMode          common.UdpRelayMode
 	maxUdpRelayPacketSize int
 
 	deferQuicConnFn func(quicConn quic.Connection, err error)
@@ -159,7 +160,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	pktId := uint16(fastrand.Uint32())
 	packet := NewPacket(q.connId, pktId, 1, 0, uint16(len(p)), address, p)
 	switch q.udpRelayMode {
-	case "quic":
+	case common.QUIC:
 		err = packet.WriteTo(buf)
 		if err != nil {
 			return

@@ -45,3 +45,10 @@ const DefaultConnectionReceiveWindow = common.DefaultConnectionReceiveWindow
 var GenTKN = v4.GenTKN
 var PacketOverHeadV4 = v4.PacketOverHead
 var PacketOverHeadV5 = v5.PacketOverHead
+
+type UdpRelayMode = common.UdpRelayMode
+
+const (
+	QUIC   = common.QUIC
+	NATIVE = common.NATIVE
+)

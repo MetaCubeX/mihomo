@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/quic-go"
-
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/transport/tuic/common"
+
+	"github.com/metacubex/quic-go"
 )
 
 type quicStreamPacketConn struct {
@@ -17,7 +18,7 @@ type quicStreamPacketConn struct {
 	quicConn  quic.Connection
 	inputConn *N.BufferedConn
 
-	udpRelayMode          string
+	udpRelayMode          common.UdpRelayMode
 	maxUdpRelayPacketSize int
 
 	deferQuicConnFn func(quicConn quic.Connection, err error)
@@ -121,7 +122,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 }
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	if q.udpRelayMode != "quic" && len(p) > q.maxUdpRelayPacketSize {
+	if q.udpRelayMode != common.QUIC && len(p) > q.maxUdpRelayPacketSize {
 		return 0, quic.ErrMessageTooLarge(q.maxUdpRelayPacketSize)
 	}
 	if q.closed {
@@ -147,7 +148,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 		return
 	}
 	switch q.udpRelayMode {
-	case "quic":
+	case common.QUIC:
 		var stream quic.SendStream
 		stream, err = q.quicConn.OpenUniStream()
 		if err != nil {
