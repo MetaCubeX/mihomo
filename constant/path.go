@@ -1,6 +1,8 @@
 package constant
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"os"
 	P "path"
 	"path/filepath"
@@ -70,6 +72,12 @@ func (p *path) IsSafePath(path string) bool {
 	}
 
 	return !strings.Contains(rel, "..")
+}
+
+func (p *path) GetRandomPath(prefix, name string) string {
+	hash := md5.Sum([]byte(name))
+	filename := hex.EncodeToString(hash[:])
+	return filepath.Join(p.HomeDir(), prefix, filename)
 }
 
 func (p *path) MMDB() string {

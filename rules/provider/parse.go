@@ -1,17 +1,14 @@
 package provider
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
 	P "github.com/Dreamacro/clash/constant/provider"
-	"net/url"
-	"path/filepath"
-	"time"
 )
 
 var (
@@ -70,16 +67,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 			}
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		} else {
-			u, err := url.Parse(schema.URL)
-			if err != nil {
-				return nil, err
-			}
-			hash := md5.Sum([]byte(schema.URL))
-			filename := filepath.Base(u.Path)
-			ext := filepath.Ext(filename)
-			newFilename := hex.EncodeToString(hash[:]) + ext
-			providerpath := "providers"
-			path := filepath.Join(C.Path.HomeDir(), providerpath, newFilename)
+			path := C.Path.GetRandomPath("rules", schema.URL)
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
 

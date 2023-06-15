@@ -1,12 +1,8 @@
 package provider
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/url"
-	"path/filepath"
 	"time"
 
 	"github.com/Dreamacro/clash/common/structure"
@@ -77,16 +73,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 			}
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		} else {
-			u, err := url.Parse(schema.URL)
-			if err != nil {
-				return nil, err
-			}
-			hash := md5.Sum([]byte(schema.URL))
-			filename := filepath.Base(u.Path)
-			ext := filepath.Ext(filename)
-			newFilename := hex.EncodeToString(hash[:]) + ext
-			providerpath := "providers"
-			path := filepath.Join(C.Path.HomeDir(), providerpath, newFilename)
+			path := C.Path.GetRandomPath("proxies", schema.URL)
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
 	default:
