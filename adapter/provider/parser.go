@@ -27,7 +27,7 @@ type healthCheckSchema struct {
 
 type proxyProviderSchema struct {
 	Type          string            `provider:"type"`
-	Path          string            `provider:"path"`
+	Path          string            `provider:"path,omitempty"`
 	URL           string            `provider:"url,omitempty"`
 	Interval      int               `provider:"interval,omitempty"`
 	Filter        string            `provider:"filter,omitempty"`
@@ -60,17 +60,22 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	}
 	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
-	path := C.Path.Resolve(schema.Path)
-
 	var vehicle types.Vehicle
 	switch schema.Type {
 	case "file":
+		path := C.Path.Resolve(schema.Path)
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		if !C.Path.IsSafePath(path) {
-			return nil, fmt.Errorf("%w: %s", errSubPath, path)
+		if schema.Path != "" {
+			path := C.Path.Resolve(schema.Path)
+			if !C.Path.IsSafePath(path) {
+				return nil, fmt.Errorf("%w: %s", errSubPath, path)
+			}
+			vehicle = resource.NewHTTPVehicle(schema.URL, path)
+		} else {
+			path := C.Path.GetRandomPath("proxies", schema.URL)
+			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
