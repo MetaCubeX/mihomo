@@ -11,7 +11,7 @@ from .models.v1 import StarrailInfoParsedV1
 
 class Language(Enum):
     CHT = "cht"
-    CHS = "chs"
+    CHS = "cn"
     DE = "de"
     EN = "en"
     ES = "es"
@@ -40,7 +40,9 @@ class MihomoAPI:
     """
 
     BASE_URL: typing.Final[str] = "https://api.mihomo.me/sr_info_parsed"
-    ASSET_URL: typing.Final[str] = "https://raw.githubusercontent.com/Mar-7th/StarRailRes/master"
+    ASSET_URL: typing.Final[
+        str
+    ] = "https://raw.githubusercontent.com/Mar-7th/StarRailRes/master"
 
     def __init__(self, language: Language = Language.CHT):
         self.lang = language
@@ -69,8 +71,7 @@ class MihomoAPI:
 
         """
         url = self.BASE_URL + "/" + str(uid)
-        if language != Language.CHS:
-            params.update({"lang": language.value})
+        params.update({"lang": language.value})
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params) as response:
@@ -83,7 +84,9 @@ class MihomoAPI:
                         except:
                             raise InvalidParams()
                         else:
-                            if isinstance(data, dict) and (detail := data.get("detail")):
+                            if isinstance(data, dict) and (
+                                detail := data.get("detail")
+                            ):
                                 raise InvalidParams(detail)
                             raise InvalidParams()
                     case 404:
