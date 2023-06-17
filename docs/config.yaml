@@ -777,7 +777,7 @@ proxy-groups:
 # Clash 格式的节点或支持 *ray 的分享格式
 proxy-providers:
   provider1:
-    type: http
+    type: http # http 的 path 可空置,默认储存路径为 homedir的proxies文件夹,文件名为url的md5
     url: "url"
     interval: 3600
     path: ./provider1.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
@@ -798,7 +798,7 @@ rule-providers:
     behavior: classical # domain ipcidr
     interval: 259200
     path: /path/to/save/file.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
-    type: http
+    type: http # http 的 path 可空置,默认储存路径为 homedir的rules文件夹,文件名为url的md5
     url: "url"
   rule2:
     behavior: classical
