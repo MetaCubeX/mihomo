@@ -4,6 +4,7 @@ import (
 	"github.com/Dreamacro/clash/transport/tuic/congestion"
 
 	"github.com/metacubex/quic-go"
+	c "github.com/metacubex/quic-go/congestion"
 )
 
 const (
@@ -11,7 +12,8 @@ const (
 	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
 )
 
-func SetCongestionController(quicConn quic.Connection, cc string) {
+func SetCongestionController(quicConn quic.Connection, cc string, cwnd int) {
+	CWND := c.ByteCount(cwnd)
 	switch cc {
 	case "cubic":
 		quicConn.SetCongestionControl(
@@ -36,7 +38,7 @@ func SetCongestionController(quicConn quic.Connection, cc string) {
 			congestion.NewBBRSender(
 				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
-				congestion.InitialCongestionWindow*congestion.InitialMaxDatagramSize,
+				CWND*congestion.InitialMaxDatagramSize,
 				congestion.DefaultBBRMaxCongestionWindow*congestion.InitialMaxDatagramSize,
 			),
 		)

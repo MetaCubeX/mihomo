@@ -49,6 +49,7 @@ type TuicOption struct {
 
 	FastOpen             bool   `proxy:"fast-open,omitempty"`
 	MaxOpenStreams       int    `proxy:"max-open-streams,omitempty"`
+	CWND                 int    `proxy:"cwnd,omitempty"`
 	SkipCertVerify       bool   `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint          string `proxy:"fingerprint,omitempty"`
 	CustomCA             string `proxy:"ca,omitempty"`
@@ -188,6 +189,10 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		option.MaxOpenStreams = 100
 	}
 
+	if option.CWND == 0 {
+		option.CWND = 32
+	}
+
 	packetOverHead := tuic.PacketOverHeadV4
 	if len(option.Token) == 0 {
 		packetOverHead = tuic.PacketOverHeadV5
@@ -272,6 +277,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
 			FastOpen:              option.FastOpen,
 			MaxOpenStreams:        clientMaxOpenStreams,
+			CWND:                  option.CWND,
 		}
 
 		t.client = tuic.NewPoolClientV4(clientOption)
@@ -286,6 +292,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			ReduceRtt:             option.ReduceRtt,
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
 			MaxOpenStreams:        clientMaxOpenStreams,
+			CWND:                  option.CWND,
 		}
 
 		t.client = tuic.NewPoolClientV5(clientOption)
