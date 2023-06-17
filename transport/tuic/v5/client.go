@@ -33,6 +33,7 @@ type ClientOption struct {
 	ReduceRtt             bool
 	MaxUdpRelayPacketSize int
 	MaxOpenStreams        int64
+	CWND                  int
 }
 
 type clientImpl struct {
@@ -88,7 +89,7 @@ func (t *clientImpl) getQuicConn(ctx context.Context, dialer C.Dialer, dialFn co
 		return nil, err
 	}
 
-	common.SetCongestionController(quicConn, t.CongestionController)
+	common.SetCongestionController(quicConn, t.CongestionController, t.CWND)
 
 	go func() {
 		_ = t.sendAuthentication(quicConn)

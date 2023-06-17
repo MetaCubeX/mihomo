@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+
 	"net"
 	"sync"
 	"sync/atomic"
@@ -32,6 +33,7 @@ type ServerOption struct {
 	CongestionController  string
 	AuthenticationTimeout time.Duration
 	MaxUdpRelayPacketSize int
+	CWND                  int
 }
 
 type Server struct {
@@ -56,7 +58,7 @@ func (s *Server) Serve() error {
 		if err != nil {
 			return err
 		}
-		common.SetCongestionController(conn, s.CongestionController)
+		common.SetCongestionController(conn, s.CongestionController, s.CWND)
 		h := &serverHandler{
 			Server:   s,
 			quicConn: conn,
