@@ -182,7 +182,6 @@ func (at AdapterType) String() string {
 		return "Compatible"
 	case Pass:
 		return "Pass"
-
 	case Shadowsocks:
 		return "Shadowsocks"
 	case ShadowsocksR:
@@ -190,13 +189,13 @@ func (at AdapterType) String() string {
 	case Snell:
 		return "Snell"
 	case Socks5:
-		return "SOCKS5"
+		return "Socks5"
 	case Http:
-		return "HTTP"
+		return "Http"
 	case Vmess:
-		return "VMess"
+		return "Vmess"
 	case Vless:
-		return "VLESS"
+		return "Vless"
 	case Trojan:
 		return "Trojan"
 	case Hysteria:
@@ -204,7 +203,7 @@ func (at AdapterType) String() string {
 	case WireGuard:
 		return "WireGuard"
 	case Tuic:
-		return "TUIC"
+		return "Tuic"
 
 	case Relay:
 		return "Relay"
