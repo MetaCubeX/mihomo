@@ -21,8 +21,8 @@ import (
 	"github.com/Dreamacro/clash/transport/gun"
 	clashVMess "github.com/Dreamacro/clash/transport/vmess"
 
-	vmess "github.com/sagernet/sing-vmess"
-	"github.com/sagernet/sing-vmess/packetaddr"
+	vmess "github.com/metacubex/sing-vmess"
+	"github.com/metacubex/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 )
 

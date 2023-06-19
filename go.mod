@@ -21,19 +21,19 @@ require (
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.35.2-0.20230603072621-ea2663348ebb
-	github.com/metacubex/sing-shadowsocks v0.2.2-0.20230509230448-a5157cc00a1c
-	github.com/metacubex/sing-shadowsocks2 v0.0.0-20230529235701-a238874242ca
-	github.com/metacubex/sing-tun v0.1.5-0.20230611154506-9fe2c0dc331d
+	github.com/metacubex/sing-shadowsocks v0.2.2
+	github.com/metacubex/sing-shadowsocks2 v0.1.0
+	github.com/metacubex/sing-tun v0.1.5-0.20230618235243-65051e73b018
+	github.com/metacubex/sing-vmess v0.1.5
 	github.com/metacubex/sing-wireguard v0.0.0-20230611155257-1498ae315a28
 	github.com/miekg/dns v1.1.54
 	github.com/mroth/weightedrand/v2 v2.0.1
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.8.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.5-0.20230530114415-221f066dba7c
-	github.com/sagernet/sing-mux v0.0.0-20230517134606-1ebe6bb26646
-	github.com/sagernet/sing-shadowtls v0.1.2-0.20230531025805-ebadc7615da3
-	github.com/sagernet/sing-vmess v0.1.5-0.20230417103030-8c3070ae3fb3
+	github.com/sagernet/sing v0.2.5
+	github.com/sagernet/sing-mux v0.1.0
+	github.com/sagernet/sing-shadowtls v0.1.2
 	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
 	github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77
@@ -45,11 +45,11 @@ require (
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/automaxprocs v1.5.2
-	golang.org/x/crypto v0.9.0
+	golang.org/x/crypto v0.10.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
-	golang.org/x/net v0.10.0
+	golang.org/x/net v0.11.0
 	golang.org/x/sync v0.2.0
-	golang.org/x/sys v0.8.0
+	golang.org/x/sys v0.9.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.2.1
@@ -101,11 +101,9 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/text v0.10.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230530121223-b768faae5c6b
-
-replace github.com/sagernet/sing-vmess => github.com/metacubex/sing-vmess v0.1.5-0.20230607134851-17f84aec22a1
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b

@@ -26,8 +26,8 @@ import (
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
 
-	vmessSing "github.com/sagernet/sing-vmess"
-	"github.com/sagernet/sing-vmess/packetaddr"
+	vmessSing "github.com/metacubex/sing-vmess"
+	"github.com/metacubex/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 )
 
