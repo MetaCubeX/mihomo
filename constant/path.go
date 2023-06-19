@@ -74,7 +74,7 @@ func (p *path) IsSafePath(path string) bool {
 	return !strings.Contains(rel, "..")
 }
 
-func (p *path) GetRandomPath(prefix, name string) string {
+func (p *path) GetPathByHash(prefix, name string) string {
 	hash := md5.Sum([]byte(name))
 	filename := hex.EncodeToString(hash[:])
 	return filepath.Join(p.HomeDir(), prefix, filename)
