@@ -11,7 +11,7 @@ import (
 	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/sing"
 
-	vmess "github.com/sagernet/sing-vmess"
+	vmess "github.com/metacubex/sing-vmess"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/metadata"
 )
