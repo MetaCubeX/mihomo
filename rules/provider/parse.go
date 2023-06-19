@@ -67,7 +67,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 			}
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		} else {
-			path := C.Path.GetRandomPath("rules", schema.URL)
+			path := C.Path.GetPathByHash("rules", schema.URL)
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
 

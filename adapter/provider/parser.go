@@ -73,7 +73,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 			}
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		} else {
-			path := C.Path.GetRandomPath("proxies", schema.URL)
+			path := C.Path.GetPathByHash("proxies", schema.URL)
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
 	default:
