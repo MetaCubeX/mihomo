@@ -66,6 +66,10 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 		packetOverHead = tuic.PacketOverHeadV5
 	}
 
+	if config.CWND == 0 {
+		config.CWND = 32
+	}
+
 	if config.MaxUdpRelayPacketSize == 0 {
 		config.MaxUdpRelayPacketSize = 1500
 	}
@@ -115,6 +119,7 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 			CongestionController:  config.CongestionController,
 			AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,
 			MaxUdpRelayPacketSize: config.MaxUdpRelayPacketSize,
+			CWND:                  config.CWND,
 		}
 	} else {
 		users := make(map[[16]byte]string)
@@ -131,6 +136,7 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 			CongestionController:  config.CongestionController,
 			AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,
 			MaxUdpRelayPacketSize: config.MaxUdpRelayPacketSize,
+			CWND:                  config.CWND,
 		}
 	}
 
