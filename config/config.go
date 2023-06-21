@@ -230,6 +230,7 @@ type RawTuicServer struct {
 	AuthenticationTimeout int               `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
 	ALPN                  []string          `yaml:"alpn" json:"alpn,omitempty"`
 	MaxUdpRelayPacketSize int               `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
 }
 
 type RawConfig struct {
@@ -1304,6 +1305,7 @@ func parseTuicServer(rawTuic RawTuicServer, general *General) error {
 		AuthenticationTimeout: rawTuic.AuthenticationTimeout,
 		ALPN:                  rawTuic.ALPN,
 		MaxUdpRelayPacketSize: rawTuic.MaxUdpRelayPacketSize,
+		CWND:                  rawTuic.CWND,
 	}
 	return nil
 }
