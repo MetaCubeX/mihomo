@@ -3,18 +3,14 @@ package v4
 import (
 	"bufio"
 	"bytes"
-	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/Dreamacro/clash/common/atomic"
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/tuic/common"
@@ -27,106 +23,55 @@ type ServerOption struct {
 	HandleTcpFn func(conn net.Conn, addr socks5.Addr, additions ...inbound.Addition) error
 	HandleUdpFn func(addr socks5.Addr, packet C.UDPPacket, additions ...inbound.Addition) error
 
-	TlsConfig             *tls.Config
-	QuicConfig            *quic.Config
 	Tokens                [][32]byte
-	CongestionController  string
-	AuthenticationTimeout time.Duration
 	MaxUdpRelayPacketSize int
-	CWND                  int
 }
 
-type Server struct {
-	*ServerOption
-	listener *quic.EarlyListener
-}
-
-func NewServer(option *ServerOption, pc net.PacketConn) (*Server, error) {
-	listener, err := quic.ListenEarly(pc, option.TlsConfig, option.QuicConfig)
-	if err != nil {
-		return nil, err
-	}
-	return &Server{
+func NewServerHandler(option *ServerOption, quicConn quic.EarlyConnection, uuid uuid.UUID) common.ServerHandler {
+	return &serverHandler{
 		ServerOption: option,
-		listener:     listener,
-	}, err
-}
-
-func (s *Server) Serve() error {
-	for {
-		conn, err := s.listener.Accept(context.Background())
-		if err != nil {
-			return err
-		}
-		common.SetCongestionController(conn, s.CongestionController, s.CWND)
-		h := &serverHandler{
-			Server:   s,
-			quicConn: conn,
-			uuid:     utils.NewUUIDV4(),
-			authCh:   make(chan struct{}),
-		}
-		go h.handle()
+		quicConn:     quicConn,
+		uuid:         uuid,
+		authCh:       make(chan struct{}),
 	}
-}
-
-func (s *Server) Close() error {
-	return s.listener.Close()
 }
 
 type serverHandler struct {
-	*Server
+	*ServerOption
 	quicConn quic.EarlyConnection
 	uuid     uuid.UUID
 
 	authCh   chan struct{}
-	authOk   bool
+	authOk   atomic.Bool
 	authOnce sync.Once
 
 	udpInputMap sync.Map
 }
 
-func (s *serverHandler) handle() {
-	go func() {
-		_ = s.handleUniStream()
-	}()
-	go func() {
-		_ = s.handleStream()
-	}()
-	go func() {
-		_ = s.handleMessage()
-	}()
+func (s *serverHandler) AuthOk() bool {
+	return s.authOk.Load()
+}
 
-	<-s.quicConn.HandshakeComplete()
-	time.AfterFunc(s.AuthenticationTimeout, func() {
-		s.authOnce.Do(func() {
-			_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
-			s.authOk = false
-			close(s.authCh)
-		})
+func (s *serverHandler) HandleTimeout() {
+	s.authOnce.Do(func() {
+		_ = s.quicConn.CloseWithError(AuthenticationTimeout, "AuthenticationTimeout")
+		s.authOk.Store(false)
+		close(s.authCh)
 	})
 }
 
-func (s *serverHandler) handleMessage() (err error) {
-	for {
-		var message []byte
-		message, err = s.quicConn.ReceiveMessage()
-		if err != nil {
-			return err
-		}
-		go func() (err error) {
-			buffer := bytes.NewBuffer(message)
-			packet, err := ReadPacket(buffer)
-			if err != nil {
-				return
-			}
-			return s.parsePacket(packet, common.NATIVE)
-		}()
+func (s *serverHandler) HandleMessage(message []byte) (err error) {
+	buffer := bytes.NewBuffer(message)
+	packet, err := ReadPacket(buffer)
+	if err != nil {
+		return
 	}
+	return s.parsePacket(packet, common.NATIVE)
 }
 
 func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayMode) (err error) {
 	<-s.authCh
-	if !s.authOk {
+	if !s.authOk.Load() {
 		return
 	}
 	var assocId uint32
@@ -157,119 +102,90 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayM
 	})
 }
 
-func (s *serverHandler) handleStream() (err error) {
-	for {
-		var quicStream quic.Stream
-		quicStream, err = s.quicConn.AcceptStream(context.Background())
-		if err != nil {
-			return err
-		}
-		go func() (err error) {
-			stream := common.NewQuicStreamConn(
-				quicStream,
-				s.quicConn.LocalAddr(),
-				s.quicConn.RemoteAddr(),
-				nil,
-			)
-			conn := N.NewBufferedConn(stream)
-			connect, err := ReadConnect(conn)
-			if err != nil {
-				return err
-			}
-			<-s.authCh
-			if !s.authOk {
-				return conn.Close()
-			}
-
-			buf := pool.GetBuffer()
-			defer pool.PutBuffer(buf)
-			err = s.HandleTcpFn(conn, connect.ADDR.SocksAddr())
-			if err != nil {
-				err = NewResponseFailed().WriteTo(buf)
-				defer conn.Close()
-			} else {
-				err = NewResponseSucceed().WriteTo(buf)
-			}
-			if err != nil {
-				_ = conn.Close()
-				return err
-			}
-			_, err = buf.WriteTo(stream)
-			if err != nil {
-				_ = conn.Close()
-				return err
-			}
-
-			return
-		}()
+func (s *serverHandler) HandleStream(conn *N.BufferedConn) (err error) {
+	connect, err := ReadConnect(conn)
+	if err != nil {
+		return err
 	}
+	<-s.authCh
+	if !s.authOk.Load() {
+		return conn.Close()
+	}
+
+	buf := pool.GetBuffer()
+	defer pool.PutBuffer(buf)
+	err = s.HandleTcpFn(conn, connect.ADDR.SocksAddr())
+	if err != nil {
+		err = NewResponseFailed().WriteTo(buf)
+		defer conn.Close()
+	} else {
+		err = NewResponseSucceed().WriteTo(buf)
+	}
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	_, err = buf.WriteTo(conn)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+
+	return
 }
 
-func (s *serverHandler) handleUniStream() (err error) {
-	for {
-		var stream quic.ReceiveStream
-		stream, err = s.quicConn.AcceptUniStream(context.Background())
-		if err != nil {
-			return err
-		}
-		go func() (err error) {
-			defer func() {
-				stream.CancelRead(0)
-			}()
-			reader := bufio.NewReader(stream)
-			commandHead, err := ReadCommandHead(reader)
-			if err != nil {
-				return
-			}
-			switch commandHead.TYPE {
-			case AuthenticateType:
-				var authenticate Authenticate
-				authenticate, err = ReadAuthenticateWithHead(commandHead, reader)
-				if err != nil {
-					return
-				}
-				authOk := false
-				for _, tkn := range s.Tokens {
-					if authenticate.TKN == tkn {
-						authOk = true
-						break
-					}
-				}
-				s.authOnce.Do(func() {
-					if !authOk {
-						_ = s.quicConn.CloseWithError(AuthenticationFailed, "AuthenticationFailed")
-					}
-					s.authOk = authOk
-					close(s.authCh)
-				})
-			case PacketType:
-				var packet Packet
-				packet, err = ReadPacketWithHead(commandHead, reader)
-				if err != nil {
-					return
-				}
-				return s.parsePacket(packet, common.QUIC)
-			case DissociateType:
-				var disassociate Dissociate
-				disassociate, err = ReadDissociateWithHead(commandHead, reader)
-				if err != nil {
-					return
-				}
-				if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
-					writeClosed := v.(*atomic.Bool)
-					writeClosed.Store(true)
-				}
-			case HeartbeatType:
-				var heartbeat Heartbeat
-				heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
-				if err != nil {
-					return
-				}
-				heartbeat.BytesLen()
-			}
-			return
-		}()
+func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
+	commandHead, err := ReadCommandHead(reader)
+	if err != nil {
+		return
 	}
+	switch commandHead.TYPE {
+	case AuthenticateType:
+		var authenticate Authenticate
+		authenticate, err = ReadAuthenticateWithHead(commandHead, reader)
+		if err != nil {
+			return
+		}
+		authOk := false
+		for _, tkn := range s.Tokens {
+			if authenticate.TKN == tkn {
+				authOk = true
+				break
+			}
+		}
+		s.authOnce.Do(func() {
+			if !authOk {
+				_ = s.quicConn.CloseWithError(AuthenticationFailed, "AuthenticationFailed")
+			}
+			s.authOk.Store(authOk)
+			close(s.authCh)
+		})
+	case PacketType:
+		var packet Packet
+		packet, err = ReadPacketWithHead(commandHead, reader)
+		if err != nil {
+			return
+		}
+		return s.parsePacket(packet, common.QUIC)
+	case DissociateType:
+		var disassociate Dissociate
+		disassociate, err = ReadDissociateWithHead(commandHead, reader)
+		if err != nil {
+			return
+		}
+		if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
+			writeClosed := v.(*atomic.Bool)
+			writeClosed.Store(true)
+		}
+	case HeartbeatType:
+		var heartbeat Heartbeat
+		heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
+		if err != nil {
+			return
+		}
+		heartbeat.BytesLen()
+	}
+	return
 }
 
 type serverUDPPacket struct {

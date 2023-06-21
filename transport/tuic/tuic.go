@@ -1,8 +1,6 @@
 package tuic
 
 import (
-	"net"
-
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic/common"
 	v4 "github.com/Dreamacro/clash/transport/tuic/v4"
@@ -25,19 +23,6 @@ func NewClientV5(clientOption *ClientOptionV5, udp bool, dialerRef C.Dialer) Cli
 type DialFunc = common.DialFunc
 
 var TooManyOpenStreams = common.TooManyOpenStreams
-
-type ServerOptionV4 = v4.ServerOption
-type ServerOptionV5 = v5.ServerOption
-
-type Server = common.Server
-
-func NewServerV4(option *ServerOptionV4, pc net.PacketConn) (Server, error) {
-	return v4.NewServer(option, pc)
-}
-
-func NewServerV5(option *ServerOptionV5, pc net.PacketConn) (Server, error) {
-	return v5.NewServer(option, pc)
-}
 
 const DefaultStreamReceiveWindow = common.DefaultStreamReceiveWindow
 const DefaultConnectionReceiveWindow = common.DefaultConnectionReceiveWindow

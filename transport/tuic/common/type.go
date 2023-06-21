@@ -1,11 +1,13 @@
 package common
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"net"
 	"time"
 
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 
 	"github.com/metacubex/quic-go"
@@ -28,9 +30,12 @@ type Client interface {
 	Close()
 }
 
-type Server interface {
-	Serve() error
-	Close() error
+type ServerHandler interface {
+	AuthOk() bool
+	HandleTimeout()
+	HandleStream(conn *N.BufferedConn) (err error)
+	HandleMessage(message []byte) (err error)
+	HandleUniStream(reader *bufio.Reader) (err error)
 }
 
 type UdpRelayMode uint8
