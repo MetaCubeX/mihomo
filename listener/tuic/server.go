@@ -26,7 +26,7 @@ type Listener struct {
 	closed       bool
 	config       LC.TuicServer
 	udpListeners []net.PacketConn
-	servers      []tuic.Server
+	servers      []*tuic.Server
 }
 
 func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (*Listener, error) {
@@ -102,42 +102,29 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 		return nil
 	}
 
-	var optionV4 *tuic.ServerOptionV4
-	var optionV5 *tuic.ServerOptionV5
+	option := &tuic.ServerOption{
+		HandleTcpFn:           handleTcpFn,
+		HandleUdpFn:           handleUdpFn,
+		TlsConfig:             tlsConfig,
+		QuicConfig:            quicConfig,
+		CongestionController:  config.CongestionController,
+		AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,
+		MaxUdpRelayPacketSize: config.MaxUdpRelayPacketSize,
+		CWND:                  config.CWND,
+	}
 	if len(config.Token) > 0 {
 		tokens := make([][32]byte, len(config.Token))
 		for i, token := range config.Token {
 			tokens[i] = tuic.GenTKN(token)
 		}
-
-		optionV4 = &tuic.ServerOptionV4{
-			HandleTcpFn:           handleTcpFn,
-			HandleUdpFn:           handleUdpFn,
-			TlsConfig:             tlsConfig,
-			QuicConfig:            quicConfig,
-			Tokens:                tokens,
-			CongestionController:  config.CongestionController,
-			AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,
-			MaxUdpRelayPacketSize: config.MaxUdpRelayPacketSize,
-			CWND:                  config.CWND,
-		}
-	} else {
+		option.Tokens = tokens
+	}
+	if len(config.Users) > 0 {
 		users := make(map[[16]byte]string)
 		for _uuid, password := range config.Users {
 			users[uuid.FromStringOrNil(_uuid)] = password
 		}
-
-		optionV5 = &tuic.ServerOptionV5{
-			HandleTcpFn:           handleTcpFn,
-			HandleUdpFn:           handleUdpFn,
-			TlsConfig:             tlsConfig,
-			QuicConfig:            quicConfig,
-			Users:                 users,
-			CongestionController:  config.CongestionController,
-			AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,
-			MaxUdpRelayPacketSize: config.MaxUdpRelayPacketSize,
-			CWND:                  config.CWND,
-		}
+		option.Users = users
 	}
 
 	sl := &Listener{false, config, nil, nil}
@@ -157,12 +144,8 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 
 		sl.udpListeners = append(sl.udpListeners, ul)
 
-		var server tuic.Server
-		if optionV4 != nil {
-			server, err = tuic.NewServerV4(optionV4, ul)
-		} else {
-			server, err = tuic.NewServerV5(optionV5, ul)
-		}
+		var server *tuic.Server
+		server, err = tuic.NewServer(option, ul)
 		if err != nil {
 			return nil, err
 		}
