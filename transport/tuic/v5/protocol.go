@@ -35,6 +35,8 @@ const (
 	HeartbeatType    = CommandType(0x04)
 )
 
+const VER byte = 0x05
+
 func (c CommandType) String() string {
 	switch c {
 	case AuthenticateType:
@@ -63,7 +65,7 @@ type CommandHead struct {
 
 func NewCommandHead(TYPE CommandType) CommandHead {
 	return CommandHead{
-		VER:  0x05,
+		VER:  VER,
 		TYPE: TYPE,
 	}
 }

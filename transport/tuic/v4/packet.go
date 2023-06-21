@@ -3,9 +3,9 @@ package v4
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/Dreamacro/clash/common/atomic"
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/transport/tuic/common"

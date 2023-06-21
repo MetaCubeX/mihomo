@@ -905,9 +905,9 @@ listeners:
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-    # token:    # tuicV4填写（不可同时填写users）
+    # token:    # tuicV4填写（可以同时填写users）
     #   - TOKEN
-    # users:    # tuicV5填写（不可同时填写token）
+    # users:    # tuicV5填写（可以同时填写token）
     #   00000000-0000-0000-0000-000000000000: PASSWORD_0
     #   00000000-0000-0000-0000-000000000001: PASSWORD_1
     #  certificate: ./server.crt
@@ -978,9 +978,9 @@ listeners:
 # tuic-server:
 #  enable: true
 #  listen: 127.0.0.1:10443
-#  token:    # tuicV4填写（不可同时填写users）
+#  token:    # tuicV4填写（可以同时填写users）
 #    - TOKEN
-#  users:    # tuicV5填写（不可同时填写token）
+#  users:    # tuicV5填写（可以同时填写token）
 #    00000000-0000-0000-0000-000000000000: PASSWORD_0
 #    00000000-0000-0000-0000-000000000001: PASSWORD_1
 #  certificate: ./server.crt
