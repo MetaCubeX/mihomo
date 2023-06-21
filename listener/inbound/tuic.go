@@ -18,6 +18,7 @@ type TuicOption struct {
 	AuthenticationTimeout int               `inbound:"authentication-timeout,omitempty"`
 	ALPN                  []string          `inbound:"alpn,omitempty"`
 	MaxUdpRelayPacketSize int               `inbound:"max-udp-relay-packet-size,omitempty"`
+	CWND                  int               `inbound:"cwnd,omitempty"`
 }
 
 func (o TuicOption) Equal(config C.InboundConfig) bool {
@@ -51,6 +52,7 @@ func NewTuic(options *TuicOption) (*Tuic, error) {
 			AuthenticationTimeout: options.AuthenticationTimeout,
 			ALPN:                  options.ALPN,
 			MaxUdpRelayPacketSize: options.MaxUdpRelayPacketSize,
+			CWND:                  options.CWND,
 		},
 	}, nil
 }

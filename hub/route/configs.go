@@ -95,6 +95,7 @@ type tuicServerSchema struct {
 	AuthenticationTimeout *int               `yaml:"authentication-timeout" json:"authentication-timeout,omitempty"`
 	ALPN                  *[]string          `yaml:"alpn" json:"alpn,omitempty"`
 	MaxUdpRelayPacketSize *int               `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
+	CWND                  *int               `yaml:"cwnd" json:"cwnd,omitempty"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +211,9 @@ func pointerOrDefaultTuicServer(p *tuicServerSchema, def LC.TuicServer) LC.TuicS
 		}
 		if p.MaxUdpRelayPacketSize != nil {
 			def.MaxUdpRelayPacketSize = *p.MaxUdpRelayPacketSize
+		}
+		if p.CWND != nil {
+			def.CWND = *p.CWND
 		}
 	}
 	return def
