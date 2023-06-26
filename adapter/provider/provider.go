@@ -147,7 +147,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 }
 
 func (pp *proxySetProvider) closeAllConnections() {
-	statistic.DefaultManager.ConnectionsRange(func(c statistic.Tracker) bool {
+	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
 		for _, chain := range c.Chains() {
 			if chain == pp.Name() {
 				_ = c.Close()
