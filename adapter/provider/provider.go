@@ -147,15 +147,15 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 }
 
 func (pp *proxySetProvider) closeAllConnections() {
-	snapshot := statistic.DefaultManager.Snapshot()
-	for _, c := range snapshot.Connections {
+	statistic.DefaultManager.ConnectionsRange(func(c statistic.Tracker) bool {
 		for _, chain := range c.Chains() {
 			if chain == pp.Name() {
 				_ = c.Close()
 				break
 			}
 		}
-	}
+		return true
+	})
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
