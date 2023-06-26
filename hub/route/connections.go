@@ -73,18 +73,14 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 
 func closeConnection(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	statistic.DefaultManager.ConnectionsRange(func(c statistic.Tracker) bool {
-		if id == c.ID() {
-			_ = c.Close()
-			return false
-		}
-		return true
-	})
+	if c := statistic.DefaultManager.Get(id); c != nil {
+		_ = c.Close()
+	}
 	render.NoContent(w, r)
 }
 
 func closeAllConnections(w http.ResponseWriter, r *http.Request) {
-	statistic.DefaultManager.ConnectionsRange(func(c statistic.Tracker) bool {
+	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
 		_ = c.Close()
 		return true
 	})
