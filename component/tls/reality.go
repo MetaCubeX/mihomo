@@ -25,6 +25,7 @@ import (
 
 	utls "github.com/sagernet/utls"
 	"github.com/zhangyunhao116/fastrand"
+	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/net/http2"
@@ -36,6 +37,9 @@ type RealityConfig struct {
 	PublicKey [curve25519.ScalarSize]byte
 	ShortID   [RealityMaxShortIDLen]byte
 }
+
+//go:linkname aesgcmPreferred crypto/tls.aesgcmPreferred
+func aesgcmPreferred(ciphers []uint16) bool
 
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
 	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
@@ -61,17 +65,17 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 		}
 
 		hello := uConn.HandshakeState.Hello
-		for i := range hello.SessionId { // https://github.com/golang/go/issues/5373
-			hello.SessionId[i] = 0
+		rawSessionID := hello.Raw[39 : 39+32] // the location of session ID
+		for i := range rawSessionID {         // https://github.com/golang/go/issues/5373
+			rawSessionID[i] = 0
 		}
-		copy(hello.Raw[39:], hello.SessionId)
 
 		binary.BigEndian.PutUint64(hello.SessionId, uint64(time.Now().Unix()))
 
+		copy(hello.SessionId[8:], realityConfig.ShortID[:])
 		hello.SessionId[0] = 1
 		hello.SessionId[1] = 8
-		hello.SessionId[2] = 0
-		copy(hello.SessionId[8:], realityConfig.ShortID[:])
+		hello.SessionId[2] = 2
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
@@ -84,9 +88,14 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 		if err != nil {
 			return nil, err
 		}
-		aesBlock, _ := aes.NewCipher(authKey)
-		aesGcmCipher, _ := cipher.NewGCM(aesBlock)
-		aesGcmCipher.Seal(hello.SessionId[:0], hello.Random[20:], hello.SessionId[:16], hello.Raw)
+		var aeadCipher cipher.AEAD
+		if aesgcmPreferred(hello.CipherSuites) {
+			aesBlock, _ := aes.NewCipher(authKey)
+			aeadCipher, _ = cipher.NewGCM(aesBlock)
+		} else {
+			aeadCipher, _ = chacha20poly1305.New(authKey)
+		}
+		aeadCipher.Seal(hello.SessionId[:0], hello.Random[20:], hello.SessionId[:16], hello.Raw)
 		copy(hello.Raw[39:], hello.SessionId)
 		//log.Debugln("REALITY hello.sessionId: %v", hello.SessionId)
 		//log.Debugln("REALITY uConn.AuthKey: %v", authKey)
@@ -96,7 +105,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 			return nil, err
 		}
 
-		log.Debugln("REALITY Authentication: %v", verifier.verified)
+		log.Debugln("REALITY Authentication: %v, AEAD: %T", verifier.verified, aeadCipher)
 
 		if !verifier.verified {
 			go realityClientFallback(uConn, uConfig.ServerName, clientID)
@@ -137,7 +146,7 @@ type realityVerifier struct {
 	verified   bool
 }
 
-var pOffset = utils.MustOK(reflect.TypeOf((*utls.UConn)(nil)).Elem().FieldByName("peerCertificates")).Offset
+var pOffset = utils.MustOK(reflect.TypeOf((*utls.Conn)(nil)).Elem().FieldByName("peerCertificates")).Offset
 
 func (c *realityVerifier) VerifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	//p, _ := reflect.TypeOf(c.Conn).Elem().FieldByName("peerCertificates")

@@ -1,6 +1,8 @@
 package constant
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"os"
 	P "path"
 	"path/filepath"
@@ -20,14 +22,15 @@ var Path = func() *path {
 	if err != nil {
 		homeDir, _ = os.Getwd()
 	}
-
+	allowUnsafePath := strings.TrimSpace(os.Getenv("SKIP_SAFE_PATH_CHECK")) == "1"
 	homeDir = P.Join(homeDir, ".config", Name)
-	return &path{homeDir: homeDir, configFile: "config.yaml"}
+	return &path{homeDir: homeDir, configFile: "config.yaml", allowUnsafePath: allowUnsafePath}
 }()
 
 type path struct {
-	homeDir    string
-	configFile string
+	homeDir         string
+	configFile      string
+	allowUnsafePath bool
 }
 
 // SetHomeDir is used to set the configuration path
@@ -54,6 +57,27 @@ func (p *path) Resolve(path string) string {
 		return filepath.Join(p.HomeDir(), path)
 	}
 	return path
+}
+
+// IsSafePath return true if path is a subpath of homedir
+func (p *path) IsSafePath(path string) bool {
+	if p.allowUnsafePath {
+		return true
+	}
+	homedir := p.HomeDir()
+	path = p.Resolve(path)
+	rel, err := filepath.Rel(homedir, path)
+	if err != nil {
+		return false
+	}
+
+	return !strings.Contains(rel, "..")
+}
+
+func (p *path) GetPathByHash(prefix, name string) string {
+	hash := md5.Sum([]byte(name))
+	filename := hex.EncodeToString(hash[:])
+	return filepath.Join(p.HomeDir(), prefix, filename)
 }
 
 func (p *path) MMDB() string {

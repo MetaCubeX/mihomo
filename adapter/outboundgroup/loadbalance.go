@@ -12,8 +12,8 @@ import (
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/common/callback"
-	"github.com/Dreamacro/clash/common/murmur3"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/constant/provider"
@@ -25,8 +25,10 @@ type strategyFn = func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Pr
 
 type LoadBalance struct {
 	*GroupBase
-	disableUDP bool
-	strategyFn strategyFn
+	disableUDP     bool
+	strategyFn     strategyFn
+	testUrl        string
+	expectedStatus string
 }
 
 var errStrategy = errors.New("unsupported strategy")
@@ -129,7 +131,7 @@ func (lb *LoadBalance) IsL3Protocol(metadata *C.Metadata) bool {
 	return lb.Unwrap(metadata, false).IsL3Protocol(metadata)
 }
 
-func strategyRoundRobin() strategyFn {
+func strategyRoundRobin(url string) strategyFn {
 	idx := 0
 	idxMutex := sync.Mutex{}
 	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
@@ -148,7 +150,8 @@ func strategyRoundRobin() strategyFn {
 		for ; i < length; i++ {
 			id := (idx + i) % length
 			proxy := proxies[id]
-			if proxy.Alive() {
+			// if proxy.Alive() {
+			if proxy.AliveForTestUrl(url) {
 				i++
 				return proxy
 			}
@@ -158,22 +161,24 @@ func strategyRoundRobin() strategyFn {
 	}
 }
 
-func strategyConsistentHashing() strategyFn {
+func strategyConsistentHashing(url string) strategyFn {
 	maxRetry := 5
 	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
-		key := uint64(murmur3.Sum32([]byte(getKey(metadata))))
+		key := utils.MapHash(getKey(metadata))
 		buckets := int32(len(proxies))
 		for i := 0; i < maxRetry; i, key = i+1, key+1 {
 			idx := jumpHash(key, buckets)
 			proxy := proxies[idx]
-			if proxy.Alive() {
+			// if proxy.Alive() {
+			if proxy.AliveForTestUrl(url) {
 				return proxy
 			}
 		}
 
 		// when availability is poor, traverse the entire list to get the available nodes
 		for _, proxy := range proxies {
-			if proxy.Alive() {
+			// if proxy.Alive() {
+			if proxy.AliveForTestUrl(url) {
 				return proxy
 			}
 		}
@@ -182,14 +187,14 @@ func strategyConsistentHashing() strategyFn {
 	}
 }
 
-func strategyStickySessions() strategyFn {
+func strategyStickySessions(url string) strategyFn {
 	ttl := time.Minute * 10
 	maxRetry := 5
 	lruCache := cache.New[uint64, int](
 		cache.WithAge[uint64, int](int64(ttl.Seconds())),
 		cache.WithSize[uint64, int](1000))
 	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
-		key := uint64(murmur3.Sum32([]byte(getKeyWithSrcAndDst(metadata))))
+		key := utils.MapHash(getKeyWithSrcAndDst(metadata))
 		length := len(proxies)
 		idx, has := lruCache.Get(key)
 		if !has {
@@ -199,7 +204,8 @@ func strategyStickySessions() strategyFn {
 		nowIdx := idx
 		for i := 1; i < maxRetry; i++ {
 			proxy := proxies[nowIdx]
-			if proxy.Alive() {
+			// if proxy.Alive() {
+			if proxy.AliveForTestUrl(url) {
 				if nowIdx != idx {
 					lruCache.Delete(key)
 					lruCache.Set(key, nowIdx)
@@ -230,8 +236,10 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": lb.Type().String(),
-		"all":  all,
+		"type":           lb.Type().String(),
+		"all":            all,
+		"testUrl":        lb.testUrl,
+		"expectedStatus": lb.expectedStatus,
 	})
 }
 
@@ -239,11 +247,11 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 	var strategyFn strategyFn
 	switch strategy {
 	case "consistent-hashing":
-		strategyFn = strategyConsistentHashing()
+		strategyFn = strategyConsistentHashing(option.URL)
 	case "round-robin":
-		strategyFn = strategyRoundRobin()
+		strategyFn = strategyRoundRobin(option.URL)
 	case "sticky-sessions":
-		strategyFn = strategyStickySessions()
+		strategyFn = strategyStickySessions(option.URL)
 	default:
 		return nil, fmt.Errorf("%w: %s", errStrategy, strategy)
 	}
@@ -260,7 +268,9 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 			option.ExcludeType,
 			providers,
 		}),
-		strategyFn: strategyFn,
-		disableUDP: option.DisableUDP,
+		strategyFn:     strategyFn,
+		disableUDP:     option.DisableUDP,
+		testUrl:        option.URL,
+		expectedStatus: option.ExpectedStatus,
 	}, nil
 }

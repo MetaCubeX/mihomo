@@ -38,12 +38,25 @@ type Manager struct {
 	memory        uint64
 }
 
-func (m *Manager) Join(c tracker) {
+func (m *Manager) Join(c Tracker) {
 	m.connections.Store(c.ID(), c)
 }
 
-func (m *Manager) Leave(c tracker) {
+func (m *Manager) Leave(c Tracker) {
 	m.connections.Delete(c.ID())
+}
+
+func (m *Manager) Get(id string) (c Tracker) {
+	if value, ok := m.connections.Load(id); ok {
+		c = value.(Tracker)
+	}
+	return
+}
+
+func (m *Manager) Range(f func(c Tracker) bool) {
+	m.connections.Range(func(key, value any) bool {
+		return f(value.(Tracker))
+	})
 }
 
 func (m *Manager) PushUploaded(size int64) {
@@ -66,9 +79,9 @@ func (m *Manager) Memory() uint64 {
 }
 
 func (m *Manager) Snapshot() *Snapshot {
-	connections := []tracker{}
-	m.connections.Range(func(key, value any) bool {
-		connections = append(connections, value.(tracker))
+	var connections []*TrackerInfo
+	m.Range(func(c Tracker) bool {
+		connections = append(connections, c.Info())
 		return true
 	})
 	return &Snapshot{
@@ -108,8 +121,8 @@ func (m *Manager) handle() {
 }
 
 type Snapshot struct {
-	DownloadTotal int64     `json:"downloadTotal"`
-	UploadTotal   int64     `json:"uploadTotal"`
-	Connections   []tracker `json:"connections"`
-	Memory        uint64    `json:"memory"`
+	DownloadTotal int64          `json:"downloadTotal"`
+	UploadTotal   int64          `json:"uploadTotal"`
+	Connections   []*TrackerInfo `json:"connections"`
+	Memory        uint64         `json:"memory"`
 }

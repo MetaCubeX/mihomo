@@ -1,8 +1,9 @@
 package trie
 
 import (
-	"github.com/Dreamacro/clash/log"
 	"net"
+
+	"github.com/Dreamacro/clash/log"
 )
 
 type IPV6 bool
@@ -47,11 +48,10 @@ func (trie *IpCidrTrie) AddIpCidrForString(ipCidr string) error {
 }
 
 func (trie *IpCidrTrie) IsContain(ip net.IP) bool {
-	ip, isIpv4 := checkAndConverterIp(ip)
 	if ip == nil {
 		return false
 	}
-
+	isIpv4 := len(ip) == net.IPv4len
 	var groupValues []uint32
 	var ipCidrNode *IpCidrNode
 
@@ -71,7 +71,13 @@ func (trie *IpCidrTrie) IsContain(ip net.IP) bool {
 }
 
 func (trie *IpCidrTrie) IsContainForString(ipString string) bool {
-	return trie.IsContain(net.ParseIP(ipString))
+	ip := net.ParseIP(ipString)
+	// deal with 4in6
+	actualIp := ip.To4()
+	if actualIp == nil {
+		actualIp = ip
+	}
+	return trie.IsContain(actualIp)
 }
 
 func ipCidrToSubIpCidr(ipNet *net.IPNet) ([]net.IP, int, bool, error) {
@@ -82,9 +88,8 @@ func ipCidrToSubIpCidr(ipNet *net.IPNet) ([]net.IP, int, bool, error) {
 		isIpv4      bool
 		err         error
 	)
-
-	ip, isIpv4 := checkAndConverterIp(ipNet.IP)
-	ipList, newMaskSize, err = subIpCidr(ip, maskSize, isIpv4)
+	isIpv4 = len(ipNet.IP) == net.IPv4len
+	ipList, newMaskSize, err = subIpCidr(ipNet.IP, maskSize, isIpv4)
 
 	return ipList, newMaskSize, isIpv4, err
 }
@@ -237,19 +242,4 @@ func search(root *IpCidrNode, groupValues []uint32) *IpCidrNode {
 	}
 
 	return nil
-}
-
-// return net.IP To4 or To16 and is ipv4
-func checkAndConverterIp(ip net.IP) (net.IP, bool) {
-	ipResult := ip.To4()
-	if ipResult == nil {
-		ipResult = ip.To16()
-		if ipResult == nil {
-			return nil, false
-		}
-
-		return ipResult, false
-	}
-
-	return ipResult, true
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/common/convert"
+	"github.com/Dreamacro/clash/common/utils"
 	clashHttp "github.com/Dreamacro/clash/component/http"
 	"github.com/Dreamacro/clash/component/resource"
 	C "github.com/Dreamacro/clash/constant"
@@ -50,6 +51,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		"type":             pp.Type().String(),
 		"vehicleType":      pp.VehicleType().String(),
 		"proxies":          pp.Proxies(),
+		"testUrl":          pp.healthCheck.url,
 		"updatedAt":        pp.UpdatedAt,
 		"subscriptionInfo": pp.subscriptionInfo,
 	})
@@ -98,6 +100,10 @@ func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
 }
 
+func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+	pp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
+}
+
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
 	pp.healthCheck.setProxy(proxies)
@@ -141,15 +147,15 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 }
 
 func (pp *proxySetProvider) closeAllConnections() {
-	snapshot := statistic.DefaultManager.Snapshot()
-	for _, c := range snapshot.Connections {
+	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
 		for _, chain := range c.Chains() {
 			if chain == pp.Name() {
 				_ = c.Close()
 				break
 			}
 		}
-	}
+		return true
+	})
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {
@@ -210,6 +216,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 		"type":        cp.Type().String(),
 		"vehicleType": cp.VehicleType().String(),
 		"proxies":     cp.Proxies(),
+		"testUrl":     cp.healthCheck.url,
 	})
 }
 
@@ -247,6 +254,10 @@ func (cp *compatibleProvider) Proxies() []C.Proxy {
 
 func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
+}
+
+func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+	cp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
 
 func stopCompatibleProvider(pd *CompatibleProvider) {

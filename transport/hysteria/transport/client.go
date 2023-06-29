@@ -76,7 +76,10 @@ func (ct *ClientTransport) QUICDial(proto string, server string, serverPorts str
 		return nil, err
 	}
 
-	qs, err := quic.DialContext(dialer.Context(), pktConn, serverUDPAddr, server, tlsConfig, quicConfig)
+	transport := quic.Transport{Conn: pktConn}
+	transport.SetCreatedConn(true) // auto close conn
+	transport.SetSingleUse(true)   // auto close transport
+	qs, err := transport.Dial(dialer.Context(), serverUDPAddr, tlsConfig, quicConfig)
 	if err != nil {
 		_ = pktConn.Close()
 		return nil, err

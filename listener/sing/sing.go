@@ -14,8 +14,8 @@ import (
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 
+	vmess "github.com/metacubex/sing-vmess"
 	mux "github.com/sagernet/sing-mux"
-	vmess "github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	"github.com/sagernet/sing/common/bufio/deadline"

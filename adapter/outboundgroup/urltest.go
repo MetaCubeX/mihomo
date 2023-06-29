@@ -25,12 +25,13 @@ func urlTestWithTolerance(tolerance uint16) urlTestOption {
 
 type URLTest struct {
 	*GroupBase
-	selected   string
-	testUrl    string
-	tolerance  uint16
-	disableUDP bool
-	fastNode   C.Proxy
-	fastSingle *singledo.Single[C.Proxy]
+	selected       string
+	testUrl        string
+	expectedStatus string
+	tolerance      uint16
+	disableUDP     bool
+	fastNode       C.Proxy
+	fastSingle     *singledo.Single[C.Proxy]
 }
 
 func (u *URLTest) Now() string {
@@ -112,7 +113,8 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		fast := proxies[0]
-		min := fast.LastDelay()
+		// min := fast.LastDelay()
+		min := fast.LastDelayForTestUrl(u.testUrl)
 		fastNotExist := true
 
 		for _, proxy := range proxies[1:] {
@@ -120,11 +122,13 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 				fastNotExist = false
 			}
 
-			if !proxy.Alive() {
+			// if !proxy.Alive() {
+			if !proxy.AliveForTestUrl(u.testUrl) {
 				continue
 			}
 
-			delay := proxy.LastDelay()
+			// delay := proxy.LastDelay()
+			delay := proxy.LastDelayForTestUrl(u.testUrl)
 			if delay < min {
 				fast = proxy
 				min = delay
@@ -132,7 +136,8 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		}
 		// tolerance
-		if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
+		// if u.fastNode == nil || fastNotExist || !u.fastNode.Alive() || u.fastNode.LastDelay() > fast.LastDelay()+u.tolerance {
+		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
 			u.fastNode = fast
 		}
 		return u.fastNode, nil
@@ -164,9 +169,11 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": u.Type().String(),
-		"now":  u.Now(),
-		"all":  all,
+		"type":     u.Type().String(),
+		"now":      u.Now(),
+		"all":      all,
+		"testUrl":  u.testUrl,
+		"expected": u.expectedStatus,
 	})
 }
 
@@ -198,9 +205,10 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 			option.ExcludeType,
 			providers,
 		}),
-		fastSingle: singledo.NewSingle[C.Proxy](time.Second * 10),
-		disableUDP: option.DisableUDP,
-		testUrl:    option.URL,
+		fastSingle:     singledo.NewSingle[C.Proxy](time.Second * 10),
+		disableUDP:     option.DisableUDP,
+		testUrl:        option.URL,
+		expectedStatus: option.ExpectedStatus,
 	}
 
 	for _, option := range options {

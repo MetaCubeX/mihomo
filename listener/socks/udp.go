@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/pool"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
@@ -53,36 +53,40 @@ func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Additio
 		packetConn: l,
 		addr:       addr,
 	}
+	conn := N.NewEnhancePacketConn(l)
 	go func() {
 		for {
-			buf := pool.Get(pool.UDPBufferSize)
-			n, remoteAddr, err := l.ReadFrom(buf)
+			data, put, remoteAddr, err := conn.WaitReadFrom()
 			if err != nil {
-				pool.Put(buf)
+				if put != nil {
+					put()
+				}
 				if sl.closed {
 					break
 				}
 				continue
 			}
-			handleSocksUDP(l, in, buf[:n], remoteAddr, additions...)
+			handleSocksUDP(l, in, data, put, remoteAddr, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr, additions ...inbound.Addition) {
+func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
 	target, payload, err := socks5.DecodeUDPPacket(buf)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
-		pool.Put(buf)
+		if put != nil {
+			put()
+		}
 		return
 	}
 	packet := &packet{
 		pc:      pc,
 		rAddr:   addr,
 		payload: payload,
-		bufRef:  buf,
+		put:     put,
 	}
 	select {
 	case in <- inbound.NewPacket(target, packet, C.SOCKS5, additions...):

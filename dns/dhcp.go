@@ -59,7 +59,8 @@ func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg,
 		return nil, err
 	}
 
-	return batchExchange(ctx, clients, m)
+	msg, _, err = batchExchange(ctx, clients, m)
+	return
 }
 
 func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {

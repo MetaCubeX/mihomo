@@ -17,7 +17,7 @@ import (
 var trustCerts []*x509.Certificate
 var certPool *x509.CertPool
 var mutex sync.RWMutex
-var errNotMacth error = errors.New("certificate fingerprints do not match")
+var errNotMatch = errors.New("certificate fingerprints do not match")
 
 func AddCertificate(certificate string) error {
 	mutex.Lock()
@@ -79,7 +79,7 @@ func verifyFingerprint(fingerprint *[32]byte) func(rawCerts [][]byte, verifiedCh
 				}
 			}
 		}
-		return errNotMacth
+		return errNotMatch
 	}
 }
 

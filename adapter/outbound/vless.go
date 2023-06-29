@@ -14,6 +14,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/convert"
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -25,8 +26,8 @@ import (
 	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
 
-	vmessSing "github.com/sagernet/sing-vmess"
-	"github.com/sagernet/sing-vmess/packetaddr"
+	vmessSing "github.com/metacubex/sing-vmess"
+	"github.com/metacubex/sing-vmess/packetaddr"
 	M "github.com/sagernet/sing/common/metadata"
 )
 
@@ -373,8 +374,14 @@ func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 	}
 
 	if v.option.XUDP {
+		var globalID [8]byte
+		if metadata.SourceValid() {
+			globalID = utils.GlobalID(metadata.SourceAddress())
+		}
 		return newPacketConn(N.NewThreadSafePacketConn(
-			vmessSing.NewXUDPConn(c, M.SocksaddrFromNet(metadata.UDPAddr())),
+			vmessSing.NewXUDPConn(c,
+				globalID,
+				M.SocksaddrFromNet(metadata.UDPAddr())),
 		), v), nil
 	} else if v.option.PacketAddr {
 		return newPacketConn(N.NewThreadSafePacketConn(

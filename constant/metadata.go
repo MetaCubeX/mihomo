@@ -171,6 +171,10 @@ func (m *Metadata) SourceDetail() string {
 	}
 }
 
+func (m *Metadata) SourceValid() bool {
+	return m.SrcPort != "" && m.SrcIP.IsValid()
+}
+
 func (m *Metadata) AddrType() int {
 	switch true {
 	case m.Host != "" || !m.DstIP.IsValid():

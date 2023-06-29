@@ -203,24 +203,27 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (net.Conn, error) {
 		needHandshake:  true,
 	}
 
-	if !dst.UDP && client.Addons != nil {
+	if client.Addons != nil {
 		switch client.Addons.Flow {
 		case XRO, XRD, XRS:
-			if xtlsConn, ok := conn.(*xtls.Conn); ok {
-				xtlsConn.RPRX = true
-				xtlsConn.SHOW = client.XTLSShow
-				xtlsConn.MARK = "XTLS"
-				if client.Addons.Flow == XRS {
-					client.Addons.Flow = XRD
-				}
+			if !dst.UDP {
+				if xtlsConn, ok := conn.(*xtls.Conn); ok {
+					xtlsConn.RPRX = true
+					xtlsConn.SHOW = client.XTLSShow
+					xtlsConn.MARK = "XTLS"
+					if client.Addons.Flow == XRS {
+						client.Addons.Flow = XRD
+					}
 
-				if client.Addons.Flow == XRD {
-					xtlsConn.DirectMode = true
+					if client.Addons.Flow == XRD {
+						xtlsConn.DirectMode = true
+					}
+					c.addons = client.Addons
+				} else {
+					return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", client.Addons.Flow)
 				}
-				c.addons = client.Addons
-			} else {
-				return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", client.Addons.Flow)
 			}
+
 		case XRV:
 			visionConn, err := vision.NewConn(c, c.id)
 			if err != nil {
