@@ -293,8 +293,8 @@ func (b *bbrSender) TimeUntilSend(bytesInFlight congestion.ByteCount) time.Time 
 	return b.pacer.TimeUntilSend()
 }
 
-func (b *bbrSender) HasPacingBudget(now time.Time) bool {
-	return b.pacer.Budget(now) >= b.maxDatagramSize
+func (b *bbrSender) HasPacingBudget() bool {
+	return b.pacer.Budget(b.clock.Now()) >= b.maxDatagramSize
 }
 
 func (b *bbrSender) SetMaxDatagramSize(s congestion.ByteCount) {
