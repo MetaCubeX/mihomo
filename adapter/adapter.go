@@ -176,6 +176,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	_ = json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["extra"] = p.ExtraDelayHistory()
+	mapping["alive"] = p.Alive()
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
 	mapping["xudp"] = p.SupportXUDP()
