@@ -48,7 +48,7 @@ func (p *Port) matchPortReal(portRef string) bool {
 func NewPort(port string, adapter string, ruleType C.RuleType) (*Port, error) {
 	portRanges, err := utils.NewIntRanges[uint16](port)
 	if err != nil {
-		return nil, fmt.Errorf("%w, %s", errPayload, err.Error())
+		return nil, fmt.Errorf("%w, %w", errPayload, err)
 	}
 
 	if len(portRanges) == 0 {

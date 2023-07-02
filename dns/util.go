@@ -313,7 +313,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 	if elm == nil {
 		err := errors.New("all DNS requests failed")
 		if fErr := fast.Error(); fErr != nil {
-			err = fmt.Errorf("%w, first error: %s", err, fErr.Error())
+			err = fmt.Errorf("%w, first error: %w", err, fErr)
 		}
 		return nil, true, err
 	}

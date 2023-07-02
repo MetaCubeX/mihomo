@@ -135,7 +135,7 @@ func (c *Client) handleControlStream(qs quic.Connection, stream quic.Stream) (bo
 
 func (c *Client) handleMessage(qs quic.Connection) {
 	for {
-		msg, err := qs.ReceiveMessage()
+		msg, err := qs.ReceiveMessage(context.Background())
 		if err != nil {
 			break
 		}
