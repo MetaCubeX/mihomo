@@ -299,7 +299,7 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 		if err := yaml.Unmarshal(buf, schema); err != nil {
 			proxies, err1 := convert.ConvertsV2Ray(buf)
 			if err1 != nil {
-				return nil, fmt.Errorf("%s, %w", err.Error(), err1)
+				return nil, fmt.Errorf("%w, %w", err, err1)
 			}
 			schema.Proxies = proxies
 		}

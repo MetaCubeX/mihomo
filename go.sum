@@ -94,10 +94,10 @@ github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvO
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475 h1:qSEOvPPaMrWggFyFhFYGyMR8i1HKyhXjdi1QYUAa2ww=
 github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475/go.mod h1:wehEpqiogdeyncfhckJP5gD2LtBgJW0wnDC24mJ+8Jg=
-github.com/metacubex/quic-go v0.36.2-0.20230702005921-2ded1deb0eed h1:qciZMbuG8vlL6PIwBIayAiaiRPdcnr0SQOmd3/a0mto=
-github.com/metacubex/quic-go v0.36.2-0.20230702005921-2ded1deb0eed/go.mod h1:mnMWBbeYt+xTvFQrAWu9IJH0h++EjnAS2B/aj+VEXzQ=
-github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b h1:mVd3v+zMQq61rJe/pJJSh0/Iin9UnkQaZTH2NOg/2Vg=
-github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
+github.com/metacubex/quic-go v0.36.2-0.20230702012232-c341ad4d2d5d h1:LCMD4JnahhgImBdfsGe0PAQiYNx2UlqvrGpYbZ0CVHs=
+github.com/metacubex/quic-go v0.36.2-0.20230702012232-c341ad4d2d5d/go.mod h1:runF6UZHW4A/P/VU+PtfQKKD85YgaZgrgbvCTs5Nwbk=
+github.com/metacubex/sing v0.0.0-20230702015813-e4a7ce9ea42c h1:mdtRHbznkJGnjgJ/yLCRtX3oD9nfqTrJ/VkisTRbqNg=
+github.com/metacubex/sing v0.0.0-20230702015813-e4a7ce9ea42c/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/metacubex/sing-shadowsocks v0.2.2 h1:prciO78IwtR4Sp+/CnP+aZSzpBRfL7zKaYez1S4EOnI=
 github.com/metacubex/sing-shadowsocks v0.2.2/go.mod h1:haolI+8Yc8MhNDqNuoRP4X5vaquXWNYeL1YxrQZ5kCU=
 github.com/metacubex/sing-shadowsocks2 v0.1.0 h1:ZxPEToY1RaRtG6ljz2n13ASMVqyAM7Bh11TmWoExYu4=
@@ -136,10 +136,8 @@ github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c/go.mod h1:Om
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
 github.com/quic-go/qpack v0.4.0 h1:Cr9BXA1sQS2SmDUWjSofMPNKmvF6IiIfDRmgU0w1ZCo=
 github.com/quic-go/qpack v0.4.0/go.mod h1:UZVnYIfi5GRk+zI9UMaCPsmZ2xKJP7XBUvVyT1Knj9A=
-github.com/quic-go/qtls-go1-19 v0.3.2 h1:tFxjCFcTQzK+oMxG6Zcvp4Dq8dx4yD3dDiIiyc86Z5U=
-github.com/quic-go/qtls-go1-19 v0.3.2/go.mod h1:ySOI96ew8lnoKPtSqx2BlI5wCpUVPT05RMAlajtnyOI=
-github.com/quic-go/qtls-go1-20 v0.2.2 h1:WLOPx6OY/hxtTxKV1Zrq20FtXtDEkeY00CGQm8GEa3E=
-github.com/quic-go/qtls-go1-20 v0.2.2/go.mod h1:JKtK6mjbAVcUTN/9jZpvLbGxvdWIKS8uT7EiStoU1SM=
+github.com/quic-go/qtls-go1-20 v0.3.0 h1:NrCXmDl8BddZwO67vlvEpBTwT89bJfKYygxv4HQvuDk=
+github.com/quic-go/qtls-go1-20 v0.3.0/go.mod h1:X9Nh97ZL80Z+bX/gUXMbipO6OxdiDi58b/fMC9mAL+k=
 github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 h1:5+m7c6AkmAylhauulqN/c5dnh8/KssrE9c93TQrXldA=
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h1:QUQ4RRHD6hGGHdFMEtR8T2P6GS6R3D/CXKdaYHKKXms=

@@ -1,6 +1,6 @@
 module github.com/Dreamacro/clash
 
-go 1.19
+go 1.20
 
 require (
 	github.com/3andne/restls-client-go v0.1.4
@@ -20,7 +20,7 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/quic-go v0.36.2-0.20230702005921-2ded1deb0eed
+	github.com/metacubex/quic-go v0.36.2-0.20230702012232-c341ad4d2d5d
 	github.com/metacubex/sing-shadowsocks v0.2.2
 	github.com/metacubex/sing-shadowsocks2 v0.1.0
 	github.com/metacubex/sing-tun v0.1.5-0.20230618235243-65051e73b018
@@ -85,8 +85,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-19 v0.3.2 // indirect
-	github.com/quic-go/qtls-go1-20 v0.2.2 // indirect
+	github.com/quic-go/qtls-go1-20 v0.3.0 // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37 // indirect
 	github.com/scjalliance/comshim v0.0.0-20230315213746-5e51f40bd3b9 // indirect
@@ -106,4 +105,4 @@ require (
 	golang.org/x/tools v0.9.1 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230618234508-ce8816d0274b
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230702015813-e4a7ce9ea42c

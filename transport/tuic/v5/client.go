@@ -195,7 +195,7 @@ func (t *clientImpl) handleMessage(quicConn quic.Connection) (err error) {
 	}()
 	for {
 		var message []byte
-		message, err = quicConn.ReceiveMessage()
+		message, err = quicConn.ReceiveMessage(context.Background())
 		if err != nil {
 			return err
 		}
