@@ -132,7 +132,7 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		c, err = vmess.StreamWebsocketConn(ctx, c, wsOpts)
 	case "http":
 		// readability first, so just copy default TLS logic
-		c, err = v.streamTLSOrXTLSConn(ctx, c, false)
+		c, err = v.streamTLSConn(ctx, c, false)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 
 		c = vmess.StreamHTTPConn(c, httpOpts)
 	case "h2":
-		c, err = v.streamTLSOrXTLSConn(ctx, c, true)
+		c, err = v.streamTLSConn(ctx, c, true)
 		if err != nil {
 			return nil, err
 		}
@@ -162,8 +162,8 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.realityConfig)
 	default:
 		// default tcp network
-		// handle TLS And XTLS
-		c, err = v.streamTLSOrXTLSConn(ctx, c, false)
+		// handle TLS
+		c, err = v.streamTLSConn(ctx, c, false)
 	}
 
 	if err != nil {
@@ -201,10 +201,10 @@ func (v *Vless) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 	return
 }
 
-func (v *Vless) streamTLSOrXTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (net.Conn, error) {
-	host, _, _ := net.SplitHostPort(v.addr)
-
+func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (net.Conn, error) {
 	if v.option.TLS {
+		host, _, _ := net.SplitHostPort(v.addr)
+
 		tlsOpts := vmess.TLSConfig{
 			Host:              host,
 			SkipCertVerify:    v.option.SkipCertVerify,

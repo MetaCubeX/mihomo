@@ -114,7 +114,6 @@ func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error
 
 	err := tlsConn.HandshakeContext(ctx)
 	return tlsConn, err
-
 }
 
 func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
