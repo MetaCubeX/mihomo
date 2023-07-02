@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	xtls "github.com/xtls/go"
 )
 
 var trustCerts []*x509.Certificate
@@ -119,30 +117,6 @@ func GetGlobalTLSConfig(tlsConfig *tls.Config) *tls.Config {
 			RootCAs: certPool,
 		}
 	}
-	tlsConfig.RootCAs = certPool
-	return tlsConfig
-}
-
-// GetSpecifiedFingerprintXTLSConfig specified fingerprint
-func GetSpecifiedFingerprintXTLSConfig(tlsConfig *xtls.Config, fingerprint string) (*xtls.Config, error) {
-	if fingerprintBytes, err := convertFingerprint(fingerprint); err != nil {
-		return nil, err
-	} else {
-		tlsConfig = GetGlobalXTLSConfig(tlsConfig)
-		tlsConfig.VerifyPeerCertificate = verifyFingerprint(fingerprintBytes)
-		tlsConfig.InsecureSkipVerify = true
-		return tlsConfig, nil
-	}
-}
-
-func GetGlobalXTLSConfig(tlsConfig *xtls.Config) *xtls.Config {
-	certPool := getCertPool()
-	if tlsConfig == nil {
-		return &xtls.Config{
-			RootCAs: certPool,
-		}
-	}
-
 	tlsConfig.RootCAs = certPool
 	return tlsConfig
 }
