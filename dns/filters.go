@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net/netip"
+	"strings"
 
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -9,7 +10,6 @@ import (
 	"github.com/Dreamacro/clash/component/trie"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
-	"strings"
 )
 
 type fallbackIPFilter interface {
@@ -24,8 +24,8 @@ var geoIPMatcher *router.GeoIPMatcher
 
 func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	if !C.GeodataMode {
-		record, _ := mmdb.Instance().Country(ip.AsSlice())
-		return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
+		code := mmdb.Instance().LookupCode(ip.AsSlice())
+		return !strings.EqualFold(code, gf.code) && !ip.IsPrivate()
 	}
 
 	if geoIPMatcher == nil {
