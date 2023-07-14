@@ -109,9 +109,7 @@ func (vc *Conn) sendRequest(p []byte) bool {
 
 	var buffer *buf.Buffer
 	if vc.IsXTLSVisionEnabled() {
-		_buffer := buf.StackNew()
-		defer buf.KeepAlive(_buffer)
-		buffer = buf.Dup(_buffer)
+		buffer = buf.New()
 		defer buffer.Release()
 	} else {
 		requestLen := 1  // protocol version
@@ -126,9 +124,7 @@ func (vc *Conn) sendRequest(p []byte) bool {
 		}
 		requestLen += len(p)
 
-		_buffer := buf.StackNewSize(requestLen)
-		defer buf.KeepAlive(_buffer)
-		buffer = buf.Dup(_buffer)
+		buffer = buf.NewSize(requestLen)
 		defer buffer.Release()
 	}
 
