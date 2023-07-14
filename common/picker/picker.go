@@ -47,6 +47,7 @@ func (p *Picker[T]) Wait() T {
 	p.wg.Wait()
 	if p.cancel != nil {
 		p.cancel()
+		p.cancel = nil
 	}
 	return p.result
 }
@@ -69,6 +70,7 @@ func (p *Picker[T]) Go(f func() (T, error)) {
 				p.result = ret
 				if p.cancel != nil {
 					p.cancel()
+					p.cancel = nil
 				}
 			})
 		} else {
@@ -77,4 +79,14 @@ func (p *Picker[T]) Go(f func() (T, error)) {
 			})
 		}
 	}()
+}
+
+// Close cancels the picker context and releases resources associated with it.
+// If Wait has been called, then there is no need to call Close.
+func (p *Picker[T]) Close() error {
+	if p.cancel != nil {
+		p.cancel()
+		p.cancel = nil
+	}
+	return nil
 }
