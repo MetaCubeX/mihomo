@@ -157,9 +157,7 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 
 func (vc *Conn) Write(p []byte) (int, error) {
 	if vc.writeFilterApplicationData {
-		_buffer := buf.StackNew()
-		defer buf.KeepAlive(_buffer)
-		buffer := buf.Dup(_buffer)
+		buffer := buf.New()
 		defer buffer.Release()
 		buffer.Write(p)
 		err := vc.WriteBuffer(buffer)
