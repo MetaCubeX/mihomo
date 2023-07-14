@@ -40,8 +40,8 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 			resolver.IsFakeBroadcastIP(ip), g.adapter
 	}
 	if !C.GeodataMode {
-		record, _ := mmdb.Instance().Country(ip.AsSlice())
-		return strings.EqualFold(record.Country.IsoCode, g.country), g.adapter
+		code := mmdb.Instance().LookupCode(ip.AsSlice())
+		return strings.EqualFold(code, g.country), g.adapter
 	}
 	return g.geoIPMatcher.Match(ip.AsSlice()), g.adapter
 }

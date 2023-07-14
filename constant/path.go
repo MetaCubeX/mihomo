@@ -91,7 +91,8 @@ func (p *path) MMDB() string {
 			// 目录则直接跳过
 			continue
 		} else {
-			if strings.EqualFold(fi.Name(), "Country.mmdb") {
+			if strings.EqualFold(fi.Name(), "Country.mmdb") ||
+				strings.EqualFold(fi.Name(), "geoip.db") {
 				GeoipName = fi.Name()
 				return P.Join(p.homeDir, fi.Name())
 			}

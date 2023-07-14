@@ -14,7 +14,7 @@ import (
 	clashHttp "github.com/Dreamacro/clash/component/http"
 	C "github.com/Dreamacro/clash/constant"
 
-	"github.com/oschwald/geoip2-golang"
+	"github.com/oschwald/maxminddb-golang"
 )
 
 func UpdateGeoDatabases() error {
@@ -44,7 +44,7 @@ func UpdateGeoDatabases() error {
 			return fmt.Errorf("can't download MMDB database file: %w", err)
 		}
 
-		instance, err := geoip2.FromBytes(data)
+		instance, err := maxminddb.FromBytes(data)
 		if err != nil {
 			return fmt.Errorf("invalid MMDB database file: %s", err)
 		}

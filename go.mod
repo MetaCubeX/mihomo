@@ -30,6 +30,7 @@ require (
 	github.com/mroth/weightedrand/v2 v2.0.1
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/geoip2-golang v1.9.0
+	github.com/oschwald/maxminddb-golang v1.11.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.2.8-0.20230703002104-c68251b6d059
 	github.com/sagernet/sing-mux v0.1.1-0.20230703132253-2cedde0fbc90
@@ -80,7 +81,6 @@ require (
 	github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
-	github.com/oschwald/maxminddb-golang v1.11.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
