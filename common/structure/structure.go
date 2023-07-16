@@ -96,6 +96,11 @@ func (d *Decoder) decode(name string, data any, val reflect.Value) error {
 		return d.decodeFloat(name, data, val)
 	}
 	switch kind {
+	case reflect.Pointer:
+		if val.IsNil() {
+			val.Set(reflect.New(val.Type().Elem()))
+		}
+		return d.decode(name, data, val.Elem())
 	case reflect.String:
 		return d.decodeString(name, data, val)
 	case reflect.Bool:
