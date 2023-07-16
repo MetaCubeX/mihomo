@@ -712,6 +712,9 @@ func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.
 
 func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, err error) {
 	subRules = map[string][]C.Rule{}
+	for name := range cfg.SubRules {
+		subRules[name] = make([]C.Rule, 0)
+	}
 	for name, rawRules := range cfg.SubRules {
 		if len(name) == 0 {
 			return nil, fmt.Errorf("sub-rule name is empty")
