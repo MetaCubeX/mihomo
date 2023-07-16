@@ -41,7 +41,13 @@ func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, key string,
 		}
 
 		fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
-		if isUDPAddr {
+		if !isUDPAddr {
+			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
+			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
+		} else if fromUDPAddr == nil {
+			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
+			log.Warnln("server return a nil *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", oAddrPort)
+		} else {
 			_fromUDPAddr := *fromUDPAddr
 			fromUDPAddr = &_fromUDPAddr // make a copy
 			if fromAddr, ok := netip.AddrFromSlice(fromUDPAddr.IP); ok {
@@ -54,9 +60,6 @@ func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, key string,
 					fromUDPAddr.Zone = "" // only ipv6 can have the zone
 				}
 			}
-		} else {
-			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
-			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
 		}
 
 		_, err = writeBack.WriteBack(data, fromUDPAddr)
