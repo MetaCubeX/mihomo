@@ -20,6 +20,7 @@ type databaseType = uint8
 const (
 	typeMaxmind databaseType = iota
 	typeSing
+	typeMetaV0
 )
 
 var (
@@ -34,9 +35,12 @@ func LoadFromBytes(buffer []byte) {
 			log.Fatalln("Can't load mmdb: %s", err.Error())
 		}
 		reader = Reader{Reader: mmdb}
-		if mmdb.Metadata.DatabaseType == "sing-geoip" {
+		switch mmdb.Metadata.DatabaseType {
+		case "sing-geoip":
 			reader.databaseType = typeSing
-		} else {
+		case "Meta-geoip0":
+			reader.databaseType = typeMetaV0
+		default:
 			reader.databaseType = typeMaxmind
 		}
 	})
@@ -52,14 +56,19 @@ func Verify() bool {
 
 func Instance() Reader {
 	once.Do(func() {
-		mmdb, err := maxminddb.Open(C.Path.MMDB())
+		mmdbPath := C.Path.MMDB()
+		log.Debugln("Load MMDB file: %s", mmdbPath)
+		mmdb, err := maxminddb.Open(mmdbPath)
 		if err != nil {
-			log.Fatalln("Can't load mmdb: %s", err.Error())
+			log.Fatalln("Can't load MMDB: %s", err.Error())
 		}
 		reader = Reader{Reader: mmdb}
-		if mmdb.Metadata.DatabaseType == "sing-geoip" {
+		switch mmdb.Metadata.DatabaseType {
+		case "sing-geoip":
 			reader.databaseType = typeSing
-		} else {
+		case "Meta-geoip0":
+			reader.databaseType = typeMetaV0
+		default:
 			reader.databaseType = typeMaxmind
 		}
 	})

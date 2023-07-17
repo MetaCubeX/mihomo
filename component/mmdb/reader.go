@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/oschwald/maxminddb-golang"
+	"github.com/sagernet/sing/common"
 )
 
 type geoip2Country struct {
@@ -18,17 +19,36 @@ type Reader struct {
 	databaseType
 }
 
-func (r Reader) LookupCode(ipAddress net.IP) string {
+func (r Reader) LookupCode(ipAddress net.IP) []string {
 	switch r.databaseType {
 	case typeMaxmind:
 		var country geoip2Country
 		_ = r.Lookup(ipAddress, &country)
-		return country.Country.IsoCode
+		if country.Country.IsoCode == "" {
+			return []string{}
+		}
+		return []string{country.Country.IsoCode}
 
 	case typeSing:
 		var code string
 		_ = r.Lookup(ipAddress, &code)
-		return code
+		if code == "" {
+			return []string{}
+		}
+		return []string{code}
+
+	case typeMetaV0:
+		var record any
+		_ = r.Lookup(ipAddress, &record)
+		switch record := record.(type) {
+		case string:
+			return []string{record}
+		case []any: // lookup returned type of slice is []any
+			return common.Map(record, func(it any) string {
+				return it.(string)
+			})
+		}
+		return []string{}
 
 	default:
 		panic(fmt.Sprint("unknown geoip database type:", r.databaseType))
