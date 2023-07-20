@@ -99,7 +99,7 @@ func (p *path) MMDB() string {
 			}
 		}
 	}
-	return P.Join(p.homeDir, "Country.mmdb")
+	return P.Join(p.homeDir, "geoip.metadb")
 }
 
 func (p *path) OldCache() string {

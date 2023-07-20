@@ -419,7 +419,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			StoreSelected: true,
 		},
 		GeoXUrl: RawGeoXUrl{
-			Mmdb:    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
+			Mmdb:    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
 			GeoIp:   "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
 			GeoSite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		},
