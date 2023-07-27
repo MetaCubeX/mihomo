@@ -129,6 +129,10 @@ func withMapping(mapping *cache.LruCache[netip.Addr, string]) middleware {
 					continue
 				}
 
+				if ttl < 1 {
+					ttl = 1
+				}
+
 				mapping.SetWithExpire(ip, host, time.Now().Add(time.Second*time.Duration(ttl)))
 			}
 
