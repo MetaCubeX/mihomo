@@ -66,10 +66,10 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 	if err != nil {
 		return
 	}
-	return s.parsePacket(packet, common.NATIVE)
+	return s.parsePacket(&packet, common.NATIVE)
 }
 
-func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayMode) (err error) {
+func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode common.UdpRelayMode) (err error) {
 	<-s.authCh
 	if !s.authOk.Load() {
 		return
@@ -97,7 +97,7 @@ func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayM
 
 	return s.HandleUdpFn(packet.ADDR.SocksAddr(), &serverUDPPacket{
 		pc:     pc,
-		packet: &packet,
+		packet: packet,
 		rAddr:  N.NewCustomAddr("tuic", fmt.Sprintf("tuic-%s-%d", s.uuid, assocId), s.quicConn.RemoteAddr()), // for tunnel's handleUDPConn
 	})
 }
@@ -166,7 +166,7 @@ func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(packet, common.QUIC)
+		return s.parsePacket(&packet, common.QUIC)
 	case DissociateType:
 		var disassociate Dissociate
 		disassociate, err = ReadDissociateWithHead(commandHead, reader)
