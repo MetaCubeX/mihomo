@@ -92,8 +92,8 @@ github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvO
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475 h1:qSEOvPPaMrWggFyFhFYGyMR8i1HKyhXjdi1QYUAa2ww=
 github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475/go.mod h1:wehEpqiogdeyncfhckJP5gD2LtBgJW0wnDC24mJ+8Jg=
-github.com/metacubex/quic-go v0.37.2-0.20230801015013-c321217d291b h1:oVYQtX4v8yT5CYI8oc8G6ZTnh5lzwvMOkwyGwcuIoGc=
-github.com/metacubex/quic-go v0.37.2-0.20230801015013-c321217d291b/go.mod h1:runF6UZHW4A/P/VU+PtfQKKD85YgaZgrgbvCTs5Nwbk=
+github.com/metacubex/quic-go v0.37.3-0.20230805044943-1fefbff06fed h1:gfosK9auM2PsR+4gnXfJ+As/dcfS6j0brv0zGBuontc=
+github.com/metacubex/quic-go v0.37.3-0.20230805044943-1fefbff06fed/go.mod h1:HhHoyskMk4kzfLPKcm7EF7pGXF89KRVwjbGrEaN6lIU=
 github.com/metacubex/sing v0.0.0-20230714010500-e24664dc75a7 h1:XY3Y6nPL45XuN/k3rDXJ1TJknLo8rTo1SVuDOmOEf4E=
 github.com/metacubex/sing v0.0.0-20230714010500-e24664dc75a7/go.mod h1:Ta8nHnDLAwqySzKhGoKk4ZIB+vJ3GTKj7UPrWYvM+4w=
 github.com/metacubex/sing-shadowsocks v0.2.4 h1:Gc99Z17JVif1PKKq1pjqhSmc2kvHUgk+AqxOstCzhQ0=
@@ -132,8 +132,8 @@ github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c/go.mod h1:Om
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
 github.com/quic-go/qpack v0.4.0 h1:Cr9BXA1sQS2SmDUWjSofMPNKmvF6IiIfDRmgU0w1ZCo=
 github.com/quic-go/qpack v0.4.0/go.mod h1:UZVnYIfi5GRk+zI9UMaCPsmZ2xKJP7XBUvVyT1Knj9A=
-github.com/quic-go/qtls-go1-20 v0.3.0 h1:NrCXmDl8BddZwO67vlvEpBTwT89bJfKYygxv4HQvuDk=
-github.com/quic-go/qtls-go1-20 v0.3.0/go.mod h1:X9Nh97ZL80Z+bX/gUXMbipO6OxdiDi58b/fMC9mAL+k=
+github.com/quic-go/qtls-go1-20 v0.3.1 h1:O4BLOM3hwfVF3AcktIylQXyl7Yi2iBNVy5QsV+ySxbg=
+github.com/quic-go/qtls-go1-20 v0.3.1/go.mod h1:X9Nh97ZL80Z+bX/gUXMbipO6OxdiDi58b/fMC9mAL+k=
 github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 h1:5+m7c6AkmAylhauulqN/c5dnh8/KssrE9c93TQrXldA=
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h1:QUQ4RRHD6hGGHdFMEtR8T2P6GS6R3D/CXKdaYHKKXms=
