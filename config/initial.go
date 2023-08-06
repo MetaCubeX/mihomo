@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/component/geodata"
 	"os"
 
 	C "github.com/Dreamacro/clash/constant"
@@ -27,23 +26,6 @@ func Init(dir string) error {
 		}
 		f.Write([]byte(`mixed-port: 7890`))
 		f.Close()
-	}
-	buf, _ := os.ReadFile(C.Path.Config())
-	rawCfg, err := UnmarshalRawConfig(buf)
-	if err != nil {
-		log.Errorln(err.Error())
-		fmt.Printf("configuration file %s test failed\n", C.Path.Config())
-		os.Exit(1)
-	}
-	if !C.GeodataMode {
-		C.GeodataMode = rawCfg.GeodataMode
-	}
-	C.GeoIpUrl = rawCfg.GeoXUrl.GeoIp
-	C.GeoSiteUrl = rawCfg.GeoXUrl.GeoSite
-	C.MmdbUrl = rawCfg.GeoXUrl.Mmdb
-	// initial GeoIP
-	if err := geodata.InitGeoIP(); err != nil {
-		return fmt.Errorf("can't initial GeoIP: %w", err)
 	}
 
 	return nil
