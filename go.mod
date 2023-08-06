@@ -29,7 +29,6 @@ require (
 	github.com/miekg/dns v1.1.56
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
-	github.com/oschwald/geoip2-golang v1.9.0
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
