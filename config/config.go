@@ -536,6 +536,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	C.GeoIpUrl = cfg.GeoXUrl.GeoIp
 	C.GeoSiteUrl = cfg.GeoXUrl.GeoSite
 	C.MmdbUrl = cfg.GeoXUrl.Mmdb
+	C.GeodataMode = cfg.GeodataMode
 	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
