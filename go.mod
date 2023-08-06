@@ -19,7 +19,7 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/quic-go v0.37.3-0.20230805044943-1fefbff06fed
+	github.com/metacubex/quic-go v0.37.4-0.20230806014204-ef9b221eec12
 	github.com/metacubex/sing-shadowsocks v0.2.4
 	github.com/metacubex/sing-shadowsocks2 v0.1.3
 	github.com/metacubex/sing-tun v0.1.11
