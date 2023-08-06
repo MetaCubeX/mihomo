@@ -54,7 +54,7 @@ func Verify() bool {
 	return err == nil
 }
 
-func DefaultInstance() Reader {
+func Instance() Reader {
 	once.Do(func() {
 		mmdbPath := C.Path.MMDB()
 		log.Debugln("Load MMDB file: %s", mmdbPath)
