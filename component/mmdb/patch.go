@@ -1,10 +1,6 @@
 package mmdb
 
-import (
-	C "github.com/Dreamacro/clash/constant"
-
-	"github.com/oschwald/maxminddb-golang"
-)
+import "github.com/oschwald/maxminddb-golang"
 
 func InstallOverride(override *maxminddb.Reader) {
 	newReader := Reader{Reader: override}
