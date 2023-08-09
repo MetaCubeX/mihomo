@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -193,6 +194,10 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 			if err != nil {
 				return nil, err
 			}
+			uintPort, err := strconv.ParseUint(port, 10, 16)
+			if err != nil {
+				return nil, err
+			}
 			if proxyAdapter == nil {
 				var ok bool
 				proxyAdapter, ok = tunnel.Proxies()[proxyName]
@@ -206,7 +211,7 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 				metadata := &C.Metadata{
 					NetWork: C.TCP,
 					Host:    host,
-					DstPort: port,
+					DstPort: uint16(uintPort),
 				}
 				if proxyAdapter != nil {
 					if proxyAdapter.IsL3Protocol(metadata) { // L3 proxy should resolve domain before to avoid loopback
@@ -231,7 +236,7 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 					NetWork: C.UDP,
 					Host:    "",
 					DstIP:   dstIP,
-					DstPort: port,
+					DstPort: uint16(uintPort),
 				}
 				if proxyAdapter == nil {
 					return dialer.DialContext(ctx, network, addr, opts...)
@@ -257,6 +262,10 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 	if err != nil {
 		return nil, err
 	}
+	uintPort, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return nil, err
+	}
 	if proxyAdapter == nil {
 		var ok bool
 		proxyAdapter, ok = tunnel.Proxies()[proxyName]
@@ -274,7 +283,7 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 		NetWork: C.UDP,
 		Host:    "",
 		DstIP:   dstIP,
-		DstPort: port,
+		DstPort: uint16(uintPort),
 	}
 	if proxyAdapter == nil {
 		return dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
