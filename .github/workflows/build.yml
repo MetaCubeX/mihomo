@@ -128,7 +128,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21.0-rc.4"
+          go-version: "1.21"
           check-latest: true
 
       - name: Test
