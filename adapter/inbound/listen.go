@@ -17,6 +17,10 @@ func SetTfo(open bool) {
 	lc.DisableTFO = !open
 }
 
+func SetMPTCP(open bool) {
+	setMultiPathTCP(&lc.ListenConfig, open)
+}
+
 func ListenContext(ctx context.Context, network, address string) (net.Listener, error) {
 	return lc.Listen(ctx, network, address)
 }
