@@ -132,6 +132,9 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	if opt.routingMark != 0 {
 		bindMarkToDialer(opt.routingMark, dialer, network, destination)
 	}
+	if opt.mpTcp {
+		setMultiPathTCP(dialer)
+	}
 	if opt.tfo {
 		return dialTFO(ctx, *dialer, network, address)
 	}
