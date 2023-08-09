@@ -436,12 +436,10 @@ func NewAddress(metadata *C.Metadata) Address {
 		copy(addr[1:], metadata.Host)
 	}
 
-	port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
-
 	return Address{
 		TYPE: addrType,
 		ADDR: addr,
-		PORT: uint16(port),
+		PORT: metadata.DstPort,
 	}
 }
 

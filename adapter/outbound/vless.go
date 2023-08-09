@@ -179,7 +179,7 @@ func (v *Vless) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 			metadata = &C.Metadata{
 				NetWork: C.UDP,
 				Host:    packetaddr.SeqPacketMagicAddress,
-				DstPort: "443",
+				DstPort: 443,
 			}
 		} else {
 			metadata = &C.Metadata{ // a clear metadata only contains ip
@@ -399,12 +399,11 @@ func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 		copy(addr[1:], metadata.Host)
 	}
 
-	port, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
 	return &vless.DstAddr{
 		UDP:      metadata.NetWork == C.UDP,
 		AddrType: addrType,
 		Addr:     addr,
-		Port:     uint16(port),
+		Port:     metadata.DstPort,
 		Mux:      metadata.NetWork == C.UDP && xudp,
 	}
 }
