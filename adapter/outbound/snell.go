@@ -181,6 +181,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			tp:     C.Snell,
 			udp:    option.UDP,
 			tfo:    option.TFO,
+			mpTcp:  option.MPTCP,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
