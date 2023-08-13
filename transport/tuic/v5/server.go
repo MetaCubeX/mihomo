@@ -73,7 +73,7 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(packet, common.NATIVE)
+		return s.parsePacket(&packet, common.NATIVE)
 	case HeartbeatType:
 		var heartbeat Heartbeat
 		heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
@@ -85,7 +85,7 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 	return
 }
 
-func (s *serverHandler) parsePacket(packet Packet, udpRelayMode common.UdpRelayMode) (err error) {
+func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode common.UdpRelayMode) (err error) {
 	<-s.authCh
 	if !s.authOk.Load() {
 		return
@@ -179,7 +179,7 @@ func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(packet, common.QUIC)
+		return s.parsePacket(&packet, common.QUIC)
 	case DissociateType:
 		var disassociate Dissociate
 		disassociate, err = ReadDissociateWithHead(commandHead, reader)

@@ -42,9 +42,8 @@ type DstAddr struct {
 
 // Client is vless connection generator
 type Client struct {
-	uuid     *uuid.UUID
-	Addons   *Addons
-	XTLSShow bool
+	uuid   *uuid.UUID
+	Addons *Addons
 }
 
 // StreamConn return a Conn with net.Conn and DstAddr
@@ -53,15 +52,14 @@ func (c *Client) StreamConn(conn net.Conn, dst *DstAddr) (net.Conn, error) {
 }
 
 // NewClient return Client instance
-func NewClient(uuidStr string, addons *Addons, xtlsShow bool) (*Client, error) {
+func NewClient(uuidStr string, addons *Addons) (*Client, error) {
 	uid, err := utils.UUIDMap(uuidStr)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		uuid:     &uid,
-		Addons:   addons,
-		XTLSShow: xtlsShow,
+		uuid:   &uid,
+		Addons: addons,
 	}, nil
 }

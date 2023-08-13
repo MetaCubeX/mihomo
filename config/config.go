@@ -51,6 +51,7 @@ type General struct {
 	IPv6                    bool              `json:"ipv6"`
 	Interface               string            `json:"interface-name"`
 	RoutingMark             int               `json:"-"`
+	GeoXUrl                 GeoXUrl           `json:"geox-url"`
 	GeodataMode             bool              `json:"geodata-mode"`
 	GeodataLoader           string            `json:"geodata-loader"`
 	TCPConcurrent           bool              `json:"tcp-concurrent"`
@@ -75,6 +76,7 @@ type Inbound struct {
 	AllowLan          bool          `json:"allow-lan"`
 	BindAddress       string        `json:"bind-address"`
 	InboundTfo        bool          `json:"inbound-tfo"`
+	InboundMPTCP      bool          `json:"inbound-mptcp"`
 }
 
 // Controller config
@@ -242,6 +244,7 @@ type RawConfig struct {
 	ShadowSocksConfig       string            `yaml:"ss-config"`
 	VmessConfig             string            `yaml:"vmess-config"`
 	InboundTfo              bool              `yaml:"inbound-tfo"`
+	InboundMPTCP            bool              `yaml:"inbound-mptcp"`
 	Authentication          []string          `yaml:"authentication"`
 	AllowLan                bool              `yaml:"allow-lan"`
 	BindAddress             string            `yaml:"bind-address"`
@@ -273,7 +276,7 @@ type RawConfig struct {
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
-	GeoXUrl       RawGeoXUrl                `yaml:"geox-url"`
+	GeoXUrl       GeoXUrl                   `yaml:"geox-url"`
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
@@ -282,7 +285,7 @@ type RawConfig struct {
 	Listeners     []map[string]any          `yaml:"listeners"`
 }
 
-type RawGeoXUrl struct {
+type GeoXUrl struct {
 	GeoIp   string `yaml:"geoip" json:"geoip"`
 	Mmdb    string `yaml:"mmdb" json:"mmdb"`
 	GeoSite string `yaml:"geosite" json:"geosite"`
@@ -418,10 +421,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Profile: Profile{
 			StoreSelected: true,
 		},
-		GeoXUrl: RawGeoXUrl{
-			Mmdb:    "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
-			GeoIp:   "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
-			GeoSite: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
+		GeoXUrl: GeoXUrl{
+			Mmdb:    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
+			GeoIp:   "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+			GeoSite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		},
 	}
 
@@ -448,7 +451,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.General = general
 
 	if len(config.General.GlobalClientFingerprint) != 0 {
-		log.Debugln("GlobalClientFingerprint:%s", config.General.GlobalClientFingerprint)
+		log.Debugln("GlobalClientFingerprint: %s", config.General.GlobalClientFingerprint)
 		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
 	}
 
@@ -532,6 +535,10 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 func parseGeneral(cfg *RawConfig) (*General, error) {
 	externalUI := cfg.ExternalUI
 	geodata.SetLoader(cfg.GeodataLoader)
+	C.GeoIpUrl = cfg.GeoXUrl.GeoIp
+	C.GeoSiteUrl = cfg.GeoXUrl.GeoSite
+	C.MmdbUrl = cfg.GeoXUrl.Mmdb
+	C.GeodataMode = cfg.GeodataMode
 	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
@@ -552,6 +559,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			AllowLan:          cfg.AllowLan,
 			BindAddress:       cfg.BindAddress,
 			InboundTfo:        cfg.InboundTfo,
+			InboundMPTCP:      cfg.InboundMPTCP,
 		},
 		Controller: Controller{
 			ExternalController:    cfg.ExternalController,
@@ -565,6 +573,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		IPv6:                    cfg.IPv6,
 		Interface:               cfg.Interface,
 		RoutingMark:             cfg.RoutingMark,
+		GeoXUrl:                 cfg.GeoXUrl,
 		GeodataMode:             cfg.GeodataMode,
 		GeodataLoader:           cfg.GeodataLoader,
 		TCPConcurrent:           cfg.TCPConcurrent,
@@ -712,6 +721,9 @@ func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.
 
 func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, err error) {
 	subRules = map[string][]C.Rule{}
+	for name := range cfg.SubRules {
+		subRules[name] = make([]C.Rule, 0)
+	}
 	for name, rawRules := range cfg.SubRules {
 		if len(name) == 0 {
 			return nil, fmt.Errorf("sub-rule name is empty")

@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	xtls "github.com/xtls/go"
 	"net"
 	"net/netip"
-	"strconv"
 	"sync"
 	"time"
 
@@ -17,9 +15,8 @@ import (
 )
 
 var (
-	globalClientSessionCache  tls.ClientSessionCache
-	globalClientXSessionCache xtls.ClientSessionCache
-	once                      sync.Once
+	globalClientSessionCache tls.ClientSessionCache
+	once                     sync.Once
 )
 
 func tcpKeepAlive(c net.Conn) {
@@ -36,18 +33,11 @@ func getClientSessionCache() tls.ClientSessionCache {
 	return globalClientSessionCache
 }
 
-func getClientXSessionCache() xtls.ClientSessionCache {
-	once.Do(func() {
-		globalClientXSessionCache = xtls.NewLRUClientSessionCache(128)
-	})
-	return globalClientXSessionCache
-}
-
 func serializesSocksAddr(metadata *C.Metadata) []byte {
 	var buf [][]byte
 	addrType := metadata.AddrType()
 	aType := uint8(addrType)
-	p, _ := strconv.ParseUint(metadata.DstPort, 10, 16)
+	p := uint(metadata.DstPort)
 	port := []byte{uint8(p >> 8), uint8(p & 0xff)}
 	switch addrType {
 	case socks5.AtypDomainName:

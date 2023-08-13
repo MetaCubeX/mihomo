@@ -2,6 +2,7 @@ package dialer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -131,6 +132,9 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	if opt.routingMark != 0 {
 		bindMarkToDialer(opt.routingMark, dialer, network, destination)
 	}
+	if opt.mpTcp {
+		setMultiPathTCP(dialer)
+	}
 	if opt.tfo {
 		return dialTFO(ctx, *dialer, network, address)
 	}
@@ -207,7 +211,7 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 	if fallback.error == nil && fallback.Conn != nil {
 		return fallback.Conn, nil
 	}
-	return nil, errorsJoin(errs...)
+	return nil, errors.Join(errs...)
 }
 
 func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
@@ -244,7 +248,7 @@ func parallelDialContext(ctx context.Context, network string, ips []netip.Addr, 
 	}
 
 	if len(errs) > 0 {
-		return nil, errorsJoin(errs...)
+		return nil, errors.Join(errs...)
 	}
 	return nil, os.ErrDeadlineExceeded
 }
@@ -261,7 +265,7 @@ func serialDialContext(ctx context.Context, network string, ips []netip.Addr, po
 			errs = append(errs, err)
 		}
 	}
-	return nil, errorsJoin(errs...)
+	return nil, errors.Join(errs...)
 }
 
 type dialResult struct {

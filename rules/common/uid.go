@@ -23,7 +23,7 @@ func NewUid(oUid, adapter string) (*Uid, error) {
 
 	uidRange, err := utils.NewIntRanges[uint32](oUid)
 	if err != nil {
-		return nil, fmt.Errorf("%w, %s", errPayload, err.Error())
+		return nil, fmt.Errorf("%w, %w", errPayload, err)
 	}
 
 	if len(uidRange) == 0 {

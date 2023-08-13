@@ -12,42 +12,68 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 
-	"github.com/oschwald/geoip2-golang"
+	"github.com/oschwald/maxminddb-golang"
+)
+
+type databaseType = uint8
+
+const (
+	typeMaxmind databaseType = iota
+	typeSing
+	typeMetaV0
 )
 
 var (
-	mmdb *geoip2.Reader
-	once sync.Once
+	reader Reader
+	once   sync.Once
 )
 
 func LoadFromBytes(buffer []byte) {
 	once.Do(func() {
-		var err error
-		mmdb, err = geoip2.FromBytes(buffer)
+		mmdb, err := maxminddb.FromBytes(buffer)
 		if err != nil {
 			log.Fatalln("Can't load mmdb: %s", err.Error())
+		}
+		reader = Reader{Reader: mmdb}
+		switch mmdb.Metadata.DatabaseType {
+		case "sing-geoip":
+			reader.databaseType = typeSing
+		case "Meta-geoip0":
+			reader.databaseType = typeMetaV0
+		default:
+			reader.databaseType = typeMaxmind
 		}
 	})
 }
 
 func Verify() bool {
-	instance, err := geoip2.Open(C.Path.MMDB())
+	instance, err := maxminddb.Open(C.Path.MMDB())
 	if err == nil {
 		instance.Close()
 	}
 	return err == nil
 }
 
-func Instance() *geoip2.Reader {
+func Instance() Reader {
 	once.Do(func() {
-		var err error
-		mmdb, err = geoip2.Open(C.Path.MMDB())
+		mmdbPath := C.Path.MMDB()
+		log.Debugln("Load MMDB file: %s", mmdbPath)
+		mmdb, err := maxminddb.Open(mmdbPath)
 		if err != nil {
-			log.Fatalln("Can't load mmdb: %s", err.Error())
+			log.Fatalln("Can't load MMDB: %s", err.Error())
+		}
+		reader = Reader{Reader: mmdb}
+		switch mmdb.Metadata.DatabaseType {
+		case "sing-geoip":
+			reader.databaseType = typeSing
+		case "Meta-geoip0":
+			reader.databaseType = typeMetaV0
+		default:
+			reader.databaseType = typeMaxmind
 		}
 	})
 
-	return mmdb
+	return reader
 }
 
 func DownloadMMDB(path string) (err error) {

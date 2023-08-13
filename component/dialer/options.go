@@ -25,6 +25,7 @@ type option struct {
 	network       int
 	prefer        int
 	tfo           bool
+	mpTcp         bool
 	resolver      resolver.Resolver
 	netDialer     NetDialer
 }
@@ -80,6 +81,12 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 func WithTFO(tfo bool) Option {
 	return func(opt *option) {
 		opt.tfo = tfo
+	}
+}
+
+func WithMPTCP(mpTcp bool) Option {
+	return func(opt *option) {
+		opt.mpTcp = mpTcp
 	}
 }
 

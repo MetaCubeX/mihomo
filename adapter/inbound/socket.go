@@ -3,6 +3,7 @@ package inbound
 import (
 	"net"
 	"net/netip"
+	"strconv"
 
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/context"
@@ -37,7 +38,9 @@ func NewInner(conn net.Conn, address string) *context.ConnContext {
 	metadata.DNSMode = C.DNSNormal
 	metadata.Process = C.ClashName
 	if h, port, err := net.SplitHostPort(address); err == nil {
-		metadata.DstPort = port
+		if port, err := strconv.ParseUint(port, 10, 16); err == nil {
+			metadata.DstPort = uint16(port)
+		}
 		if ip, err := netip.ParseAddr(h); err == nil {
 			metadata.DstIP = ip
 		} else {

@@ -6,6 +6,7 @@ import (
 	"os"
 	P "path"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -22,7 +23,7 @@ var Path = func() *path {
 	if err != nil {
 		homeDir, _ = os.Getwd()
 	}
-	allowUnsafePath := strings.TrimSpace(os.Getenv("SKIP_SAFE_PATH_CHECK")) == "1"
+	allowUnsafePath, _ := strconv.ParseBool(os.Getenv("SKIP_SAFE_PATH_CHECK"))
 	homeDir = P.Join(homeDir, ".config", Name)
 	return &path{homeDir: homeDir, configFile: "config.yaml", allowUnsafePath: allowUnsafePath}
 }()
@@ -90,13 +91,15 @@ func (p *path) MMDB() string {
 			// 目录则直接跳过
 			continue
 		} else {
-			if strings.EqualFold(fi.Name(), "Country.mmdb") {
+			if strings.EqualFold(fi.Name(), "Country.mmdb") ||
+				strings.EqualFold(fi.Name(), "geoip.db") ||
+				strings.EqualFold(fi.Name(), "geoip.metadb") {
 				GeoipName = fi.Name()
 				return P.Join(p.homeDir, fi.Name())
 			}
 		}
 	}
-	return P.Join(p.homeDir, "Country.mmdb")
+	return P.Join(p.homeDir, "geoip.metadb")
 }
 
 func (p *path) OldCache() string {

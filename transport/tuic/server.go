@@ -114,7 +114,7 @@ func (s *serverHandler) handle() {
 func (s *serverHandler) handleMessage() (err error) {
 	for {
 		var message []byte
-		message, err = s.quicConn.ReceiveMessage()
+		message, err = s.quicConn.ReceiveMessage(context.Background())
 		if err != nil {
 			return err
 		}

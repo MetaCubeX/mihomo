@@ -360,6 +360,7 @@ func updateGeneral(general *config.General) {
 	}
 
 	inbound.SetTfo(general.InboundTfo)
+	inbound.SetMPTCP(general.InboundMPTCP)
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 

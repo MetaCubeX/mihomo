@@ -11,8 +11,6 @@ type Buffer = buf.Buffer
 
 var New = buf.New
 var NewSize = buf.NewSize
-var StackNew = buf.StackNew
-var StackNewSize = buf.StackNewSize
 var With = buf.With
 var As = buf.As
 

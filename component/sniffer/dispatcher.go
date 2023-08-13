@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strconv"
 	"sync"
 	"time"
 
@@ -26,29 +25,23 @@ var (
 var Dispatcher *SnifferDispatcher
 
 type SnifferDispatcher struct {
-	enable           bool
-	sniffers         map[sniffer.Sniffer]SnifferConfig
-	forceDomain      *trie.DomainSet
-	skipSNI          *trie.DomainSet
-	skipList         *cache.LruCache[string, uint8]
-	rwMux            sync.RWMutex
-	forceDnsMapping  bool
-	parsePureIp      bool
+	enable          bool
+	sniffers        map[sniffer.Sniffer]SnifferConfig
+	forceDomain     *trie.DomainSet
+	skipSNI         *trie.DomainSet
+	skipList        *cache.LruCache[string, uint8]
+	rwMux           sync.RWMutex
+	forceDnsMapping bool
+	parsePureIp     bool
 }
 
 func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) {
 	if (metadata.Host == "" && sd.parsePureIp) || sd.forceDomain.Has(metadata.Host) || (metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping) {
-		port, err := strconv.ParseUint(metadata.DstPort, 10, 16)
-		if err != nil {
-			log.Debugln("[Sniffer] Dst port is error")
-			return
-		}
-
 		inWhitelist := false
 		overrideDest := false
 		for sniffer, config := range sd.sniffers {
 			if sniffer.SupportNetwork() == C.TCP || sniffer.SupportNetwork() == C.ALLNet {
-				inWhitelist = sniffer.SupportPort(uint16(port))
+				inWhitelist = sniffer.SupportPort(metadata.DstPort)
 				if inWhitelist {
 					overrideDest = config.OverrideDest
 					break
@@ -61,7 +54,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 		}
 
 		sd.rwMux.RLock()
-		dst := fmt.Sprintf("%s:%s", metadata.DstIP, metadata.DstPort)
+		dst := fmt.Sprintf("%s:%d", metadata.DstIP, metadata.DstPort)
 		if count, ok := sd.skipList.Get(dst); ok && count > 5 {
 			log.Debugln("[Sniffer] Skip sniffing[%s] due to multiple failures", dst)
 			defer sd.rwMux.RUnlock()
@@ -71,7 +64,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 
 		if host, err := sd.sniffDomain(conn, metadata); err != nil {
 			sd.cacheSniffFailed(metadata)
-			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%s] to [%s:%s]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
+			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%d] to [%s:%d]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return
 		} else {
 			if sd.skipSNI.Has(host) {
@@ -149,7 +142,7 @@ func (sd *SnifferDispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metad
 
 func (sd *SnifferDispatcher) cacheSniffFailed(metadata *C.Metadata) {
 	sd.rwMux.Lock()
-	dst := fmt.Sprintf("%s:%s", metadata.DstIP, metadata.DstPort)
+	dst := fmt.Sprintf("%s:%d", metadata.DstIP, metadata.DstPort)
 	count, _ := sd.skipList.Get(dst)
 	if count <= 5 {
 		count++

@@ -20,14 +20,14 @@ func parseSocksAddr(target socks5.Addr) *C.Metadata {
 	case socks5.AtypDomainName:
 		// trim for FQDN
 		metadata.Host = strings.TrimRight(string(target[2:2+target[1]]), ".")
-		metadata.DstPort = strconv.Itoa((int(target[2+target[1]]) << 8) | int(target[2+target[1]+1]))
+		metadata.DstPort = uint16((int(target[2+target[1]]) << 8) | int(target[2+target[1]+1]))
 	case socks5.AtypIPv4:
 		metadata.DstIP = nnip.IpToAddr(net.IP(target[1 : 1+net.IPv4len]))
-		metadata.DstPort = strconv.Itoa((int(target[1+net.IPv4len]) << 8) | int(target[1+net.IPv4len+1]))
+		metadata.DstPort = uint16((int(target[1+net.IPv4len]) << 8) | int(target[1+net.IPv4len+1]))
 	case socks5.AtypIPv6:
 		ip6, _ := netip.AddrFromSlice(target[1 : 1+net.IPv6len])
 		metadata.DstIP = ip6.Unmap()
-		metadata.DstPort = strconv.Itoa((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
+		metadata.DstPort = uint16((int(target[1+net.IPv6len]) << 8) | int(target[1+net.IPv6len+1]))
 	}
 
 	return metadata
@@ -43,11 +43,16 @@ func parseHTTPAddr(request *http.Request) *C.Metadata {
 	// trim FQDN (#737)
 	host = strings.TrimRight(host, ".")
 
+	var uint16Port uint16
+	if port, err := strconv.ParseUint(port, 10, 16); err == nil {
+		uint16Port = uint16(port)
+	}
+
 	metadata := &C.Metadata{
 		NetWork: C.TCP,
 		Host:    host,
 		DstIP:   netip.Addr{},
-		DstPort: port,
+		DstPort: uint16Port,
 	}
 
 	ip, err := netip.ParseAddr(host)
@@ -58,10 +63,10 @@ func parseHTTPAddr(request *http.Request) *C.Metadata {
 	return metadata
 }
 
-func parseAddr(addr net.Addr) (netip.Addr, string, error) {
+func parseAddr(addr net.Addr) (netip.Addr, uint16, error) {
 	// Filter when net.Addr interface is nil
 	if addr == nil {
-		return netip.Addr{}, "", errors.New("nil addr")
+		return netip.Addr{}, 0, errors.New("nil addr")
 	}
 	if rawAddr, ok := addr.(interface{ RawAddr() net.Addr }); ok {
 		ip, port, err := parseAddr(rawAddr.RawAddr())
@@ -72,9 +77,14 @@ func parseAddr(addr net.Addr) (netip.Addr, string, error) {
 	addrStr := addr.String()
 	host, port, err := net.SplitHostPort(addrStr)
 	if err != nil {
-		return netip.Addr{}, "", err
+		return netip.Addr{}, 0, err
+	}
+
+	var uint16Port uint16
+	if port, err := strconv.ParseUint(port, 10, 16); err == nil {
+		uint16Port = uint16(port)
 	}
 
 	ip, err := netip.ParseAddr(host)
-	return ip, port, err
+	return ip, uint16Port, err
 }

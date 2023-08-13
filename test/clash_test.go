@@ -556,7 +556,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	assert.NoError(t, testPingPongWithConn(t, func() net.Conn {
 		conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 			Host:    localIP.String(),
-			DstPort: "10001",
+			DstPort: 10001,
 		})
 		require.NoError(t, err)
 		return conn
@@ -565,7 +565,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	assert.NoError(t, testLargeDataWithConn(t, func() net.Conn {
 		conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 			Host:    localIP.String(),
-			DstPort: "10001",
+			DstPort: 10001,
 		})
 		require.NoError(t, err)
 		return conn
@@ -578,7 +578,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	pc, err := proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork: C.UDP,
 		DstIP:   localIP,
-		DstPort: "10001",
+		DstPort: 10001,
 	})
 	require.NoError(t, err)
 	defer pc.Close()
@@ -588,7 +588,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	pc, err = proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork: C.UDP,
 		DstIP:   localIP,
-		DstPort: "10001",
+		DstPort: 10001,
 	})
 	require.NoError(t, err)
 	defer pc.Close()
@@ -598,7 +598,7 @@ func testSuit(t *testing.T, proxy C.ProxyAdapter) {
 	pc, err = proxy.ListenPacketContext(context.Background(), &C.Metadata{
 		NetWork: C.UDP,
 		DstIP:   localIP,
-		DstPort: "10001",
+		DstPort: 10001,
 	})
 	require.NoError(t, err)
 	defer pc.Close()
@@ -635,7 +635,7 @@ func benchmarkProxy(b *testing.B, proxy C.ProxyAdapter) {
 
 	conn, err := proxy.DialContext(context.Background(), &C.Metadata{
 		Host:    localIP.String(),
-		DstPort: "10001",
+		DstPort: 10001,
 	})
 	require.NoError(b, err)
 

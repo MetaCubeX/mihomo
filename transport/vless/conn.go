@@ -3,7 +3,6 @@ package vless
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -13,7 +12,6 @@ import (
 	"github.com/Dreamacro/clash/transport/vless/vision"
 
 	"github.com/gofrs/uuid/v5"
-	xtls "github.com/xtls/go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -109,9 +107,7 @@ func (vc *Conn) sendRequest(p []byte) bool {
 
 	var buffer *buf.Buffer
 	if vc.IsXTLSVisionEnabled() {
-		_buffer := buf.StackNew()
-		defer buf.KeepAlive(_buffer)
-		buffer = buf.Dup(_buffer)
+		buffer = buf.New()
 		defer buffer.Release()
 	} else {
 		requestLen := 1  // protocol version
@@ -126,9 +122,7 @@ func (vc *Conn) sendRequest(p []byte) bool {
 		}
 		requestLen += len(p)
 
-		_buffer := buf.StackNewSize(requestLen)
-		defer buf.KeepAlive(_buffer)
-		buffer = buf.Dup(_buffer)
+		buffer = buf.NewSize(requestLen)
 		defer buffer.Release()
 	}
 
@@ -205,25 +199,6 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (net.Conn, error) {
 
 	if client.Addons != nil {
 		switch client.Addons.Flow {
-		case XRO, XRD, XRS:
-			if !dst.UDP {
-				if xtlsConn, ok := conn.(*xtls.Conn); ok {
-					xtlsConn.RPRX = true
-					xtlsConn.SHOW = client.XTLSShow
-					xtlsConn.MARK = "XTLS"
-					if client.Addons.Flow == XRS {
-						client.Addons.Flow = XRD
-					}
-
-					if client.Addons.Flow == XRD {
-						xtlsConn.DirectMode = true
-					}
-					c.addons = client.Addons
-				} else {
-					return nil, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", client.Addons.Flow)
-				}
-			}
-
 		case XRV:
 			visionConn, err := vision.NewConn(c, c.id)
 			if err != nil {

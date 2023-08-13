@@ -14,7 +14,6 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/gun"
 	"github.com/Dreamacro/clash/transport/trojan"
-	"github.com/Dreamacro/clash/transport/vless"
 )
 
 type Trojan struct {
@@ -45,8 +44,6 @@ type TrojanOption struct {
 	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
 	GrpcOpts          GrpcOptions    `proxy:"grpc-opts,omitempty"`
 	WSOpts            WSOptions      `proxy:"ws-opts,omitempty"`
-	Flow              string         `proxy:"flow,omitempty"`
-	FlowShow          bool           `proxy:"flow-show,omitempty"`
 	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
 
@@ -95,11 +92,6 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		return nil, fmt.Errorf("%s connect error: %w", t.addr, err)
 	}
 
-	c, err = t.instance.PresetXTLSConn(c)
-	if err != nil {
-		return nil, err
-	}
-
 	if metadata.NetWork == C.UDP {
 		err = t.instance.WriteHeader(c, trojan.CommandUDP, serializesSocksAddr(metadata))
 		return c, err
@@ -114,12 +106,6 @@ func (t *Trojan) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	if t.transport != nil && len(opts) == 0 {
 		c, err := gun.StreamGunWithTransport(t.transport, t.gunConfig)
 		if err != nil {
-			return nil, err
-		}
-
-		c, err = t.instance.PresetXTLSConn(c)
-		if err != nil {
-			c.Close()
 			return nil, err
 		}
 
@@ -237,22 +223,8 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		ALPN:              option.ALPN,
 		ServerName:        option.Server,
 		SkipCertVerify:    option.SkipCertVerify,
-		FlowShow:          option.FlowShow,
 		Fingerprint:       option.Fingerprint,
 		ClientFingerprint: option.ClientFingerprint,
-	}
-
-	switch option.Network {
-	case "", "tcp":
-		if len(option.Flow) >= 16 {
-			option.Flow = option.Flow[:16]
-			switch option.Flow {
-			case vless.XRO, vless.XRD, vless.XRS:
-				tOption.Flow = option.Flow
-			default:
-				return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
-			}
-		}
 	}
 
 	if option.SNI != "" {
@@ -266,6 +238,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			tp:     C.Trojan,
 			udp:    option.UDP,
 			tfo:    option.TFO,
+			mpTcp:  option.MPTCP,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),

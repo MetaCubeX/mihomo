@@ -2,12 +2,14 @@ package resource
 
 import (
 	"context"
-	clashHttp "github.com/Dreamacro/clash/component/http"
-	types "github.com/Dreamacro/clash/constant/provider"
+	"errors"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	clashHttp "github.com/Dreamacro/clash/component/http"
+	types "github.com/Dreamacro/clash/constant/provider"
 )
 
 type FileVehicle struct {
@@ -54,8 +56,10 @@ func (h *HTTPVehicle) Read() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, errors.New(resp.Status)
+	}
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

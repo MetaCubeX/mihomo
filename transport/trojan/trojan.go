@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -18,10 +17,7 @@ import (
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/vless"
 	"github.com/Dreamacro/clash/transport/vmess"
-
-	xtls "github.com/xtls/go"
 )
 
 const (
@@ -42,7 +38,7 @@ const (
 	CommandTCP byte = 1
 	CommandUDP byte = 3
 
-	// for XTLS
+	// deprecated XTLS commands, as souvenirs
 	commandXRD byte = 0xf0 // XTLS direct mode
 	commandXRO byte = 0xf1 // XTLS origin mode
 )
@@ -53,8 +49,6 @@ type Option struct {
 	ServerName        string
 	SkipCertVerify    bool
 	Fingerprint       string
-	Flow              string
-	FlowShow          bool
 	ClientFingerprint string
 	Reality           *tlsC.RealityConfig
 }
@@ -76,78 +70,50 @@ func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error
 	if len(t.option.ALPN) != 0 {
 		alpn = t.option.ALPN
 	}
-	switch t.option.Flow {
-	case vless.XRO, vless.XRD, vless.XRS:
-		xtlsConfig := &xtls.Config{
-			NextProtos:         alpn,
-			MinVersion:         xtls.VersionTLS12,
-			InsecureSkipVerify: t.option.SkipCertVerify,
-			ServerName:         t.option.ServerName,
-		}
+	tlsConfig := &tls.Config{
+		NextProtos:         alpn,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: t.option.SkipCertVerify,
+		ServerName:         t.option.ServerName,
+	}
 
-		if len(t.option.Fingerprint) == 0 {
-			xtlsConfig = tlsC.GetGlobalXTLSConfig(xtlsConfig)
-		} else {
-			var err error
-			if xtlsConfig, err = tlsC.GetSpecifiedFingerprintXTLSConfig(xtlsConfig, t.option.Fingerprint); err != nil {
-				return nil, err
-			}
-		}
-
-		xtlsConn := xtls.Client(conn, xtlsConfig)
-
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-		defer cancel()
-		if err := xtlsConn.HandshakeContext(ctx); err != nil {
+	if len(t.option.Fingerprint) == 0 {
+		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
+	} else {
+		var err error
+		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint); err != nil {
 			return nil, err
 		}
-		return xtlsConn, nil
-	default:
-		tlsConfig := &tls.Config{
-			NextProtos:         alpn,
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: t.option.SkipCertVerify,
-			ServerName:         t.option.ServerName,
-		}
+	}
 
-		if len(t.option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-		} else {
-			var err error
-			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint); err != nil {
-				return nil, err
-			}
-		}
-
-		if len(t.option.ClientFingerprint) != 0 {
-			if t.option.Reality == nil {
-				utlsConn, valid := vmess.GetUTLSConn(conn, t.option.ClientFingerprint, tlsConfig)
-				if valid {
-					ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-					defer cancel()
-
-					err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
-					return utlsConn, err
-				}
-			} else {
+	if len(t.option.ClientFingerprint) != 0 {
+		if t.option.Reality == nil {
+			utlsConn, valid := vmess.GetUTLSConn(conn, t.option.ClientFingerprint, tlsConfig)
+			if valid {
 				ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 				defer cancel()
-				return tlsC.GetRealityConn(ctx, conn, t.option.ClientFingerprint, tlsConfig, t.option.Reality)
+
+				err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
+				return utlsConn, err
 			}
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+			defer cancel()
+			return tlsC.GetRealityConn(ctx, conn, t.option.ClientFingerprint, tlsConfig, t.option.Reality)
 		}
-		if t.option.Reality != nil {
-			return nil, errors.New("REALITY is based on uTLS, please set a client-fingerprint")
-		}
-
-		tlsConn := tls.Client(conn, tlsConfig)
-
-		// fix tls handshake not timeout
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
-		defer cancel()
-
-		err := tlsConn.HandshakeContext(ctx)
-		return tlsConn, err
 	}
+	if t.option.Reality != nil {
+		return nil, errors.New("REALITY is based on uTLS, please set a client-fingerprint")
+	}
+
+	tlsConn := tls.Client(conn, tlsConfig)
+
+	// fix tls handshake not timeout
+	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+	defer cancel()
+
+	err := tlsConn.HandshakeContext(ctx)
+	return tlsConn, err
 }
 
 func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptions *WebsocketOption) (net.Conn, error) {
@@ -174,37 +140,7 @@ func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptio
 	})
 }
 
-func (t *Trojan) PresetXTLSConn(conn net.Conn) (net.Conn, error) {
-	switch t.option.Flow {
-	case vless.XRO, vless.XRD, vless.XRS:
-		if xtlsConn, ok := conn.(*xtls.Conn); ok {
-			xtlsConn.RPRX = true
-			xtlsConn.SHOW = t.option.FlowShow
-			xtlsConn.MARK = "XTLS"
-			if t.option.Flow == vless.XRS {
-				t.option.Flow = vless.XRD
-			}
-
-			if t.option.Flow == vless.XRD {
-				xtlsConn.DirectMode = true
-			}
-		} else {
-			return conn, fmt.Errorf("failed to use %s, maybe \"security\" is not \"xtls\"", t.option.Flow)
-		}
-	}
-
-	return conn, nil
-}
-
 func (t *Trojan) WriteHeader(w io.Writer, command Command, socks5Addr []byte) error {
-	if command == CommandTCP {
-		if t.option.Flow == vless.XRD {
-			command = commandXRD
-		} else if t.option.Flow == vless.XRO {
-			command = commandXRO
-		}
-	}
-
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
 
@@ -398,8 +334,7 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 
 func hexSha224(data []byte) []byte {
 	buf := make([]byte, 56)
-	hash := sha256.New224()
-	hash.Write(data)
-	hex.Encode(buf, hash.Sum(nil))
+	hash := sha256.Sum224(data)
+	hex.Encode(buf, hash[:])
 	return buf
 }

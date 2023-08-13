@@ -24,8 +24,6 @@ var (
 
 var interfaces = singledo.NewSingle[map[string]*Interface](time.Second * 20)
 
-const FlagRunning = 32 // interface is in running state, compatibility with golang<1.20
-
 func ResolveInterface(name string) (*Interface, error) {
 	value, err, _ := interfaces.Do(func() (map[string]*Interface, error) {
 		ifaces, err := net.Interfaces()
@@ -41,7 +39,7 @@ func ResolveInterface(name string) (*Interface, error) {
 				continue
 			}
 			// if not available device like Meta, dummy0, docker0, etc.
-			if (iface.Flags&net.FlagMulticast == 0) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&FlagRunning == 0) {
+			if (iface.Flags&net.FlagMulticast == 0) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
 				continue
 			}
 
