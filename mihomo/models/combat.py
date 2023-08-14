@@ -92,12 +92,21 @@ class TraceTreeNode(BaseModel):
     Attributes:
     - id (`int`): The ID of the trace.
     - level (`int`): The level of the trace.
+    - max_level (`int`): The max level of the trace.
     - icon (`str`): The icon of the trace.
+    - anchor (`str`): The position of the trace tree node.
+    - parent (`int` | `None`): The preceding node id of trace.
     """
 
     id: int
     """The ID of the trace"""
     level: int
     """The level of the trace"""
+    max_level: int
+    """The max level of the trace"""
     icon: str
     """The icon of the trace"""
+    anchor: str
+    """The position of the trace tree node"""
+    parent: int | None = None
+    """The preceding node id of trace"""
