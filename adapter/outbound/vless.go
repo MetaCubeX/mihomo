@@ -57,6 +57,7 @@ type VlessOption struct {
 	UUID              string            `proxy:"uuid"`
 	Flow              string            `proxy:"flow,omitempty"`
 	TLS               bool              `proxy:"tls,omitempty"`
+	ALPN              []string          `proxy:"alpn,omitempty"`
 	UDP               bool              `proxy:"udp,omitempty"`
 	PacketAddr        bool              `proxy:"packet-addr,omitempty"`
 	XUDP              bool              `proxy:"xudp,omitempty"`
@@ -211,6 +212,7 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 			FingerPrint:       v.option.Fingerprint,
 			ClientFingerprint: v.option.ClientFingerprint,
 			Reality:           v.realityConfig,
+			NextProtos:        v.option.ALPN,
 		}
 
 		if isH2 {

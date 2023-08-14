@@ -50,7 +50,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["port"] = urlHysteria.Port()
 			hysteria["sni"] = query.Get("peer")
 			hysteria["obfs"] = query.Get("obfs")
-			hysteria["alpn"] = []string{query.Get("alpn")}
+			if alpn := query.Get("alpn"); alpn != "" {
+				hysteria["alpn"] = strings.Split(alpn, ",")
+			}
 			hysteria["auth_str"] = query.Get("auth")
 			hysteria["protocol"] = query.Get("protocol")
 			up := query.Get("up")
@@ -127,9 +129,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["udp"] = true
 			trojan["skip-cert-verify"], _ = strconv.ParseBool(query.Get("allowInsecure"))
 
-			sni := query.Get("sni")
-			if sni != "" {
+			if sni := query.Get("sni"); sni != "" {
 				trojan["sni"] = sni
+			}
+			if alpn := query.Get("alpn"); alpn != "" {
+				trojan["alpn"] = strings.Split(alpn, ",")
 			}
 
 			network := strings.ToLower(query.Get("type"))
@@ -258,6 +262,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				if strings.HasSuffix(tls, "tls") {
 					vmess["tls"] = true
 				}
+				if alpn, ok := values["alpn"].(string); ok {
+					vmess["alpn"] = strings.Split(alpn, ",")
+				}
 			}
 
 			switch network {
@@ -373,6 +380,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 			}
 			proxies = append(proxies, ss)
+
 		case "ssr":
 			dcBuf, err := encRaw.DecodeString(body)
 			if err != nil {
