@@ -36,8 +36,9 @@ class ForgottenHall(BaseModel):
 
     memory: int | None = Field(None, alias="PreMazeGroupIndex")
     """The progress of the memory"""
-    memory_of_chaos_id: int | None = Field(None, alias="MazeGroupID")
-    memory_of_chaos: int | None = Field(None, alias="MazeGroupIndex")
+    memory_of_chaos_id: int | None = Field(None, alias="MazeGroupIndex")
+    """The ID of the memory of chaos"""
+    memory_of_chaos: int | None = Field(None, alias="MazeGroupID")
     """The progress of the memory of chaos"""
 
 
