@@ -52,6 +52,7 @@ type VmessOption struct {
 	UDP                 bool           `proxy:"udp,omitempty"`
 	Network             string         `proxy:"network,omitempty"`
 	TLS                 bool           `proxy:"tls,omitempty"`
+	ALPN                []string       `proxy:"alpn,omitempty"`
 	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string         `proxy:"fingerprint,omitempty"`
 	ServerName          string         `proxy:"servername,omitempty"`
@@ -149,6 +150,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
 				Reality:           v.realityConfig,
+				NextProtos:        v.option.ALPN,
 			}
 
 			if v.option.ServerName != "" {
@@ -205,6 +207,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
 				Reality:           v.realityConfig,
+				NextProtos:        v.option.ALPN,
 			}
 
 			if v.option.ServerName != "" {

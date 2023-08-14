@@ -14,13 +14,6 @@ var NewSize = buf.NewSize
 var With = buf.With
 var As = buf.As
 
-var KeepAlive = common.KeepAlive
-
-//go:norace
-func Dup[T any](obj T) T {
-	return common.Dup(obj)
-}
-
 var (
 	Must  = common.Must
 	Error = common.Error
