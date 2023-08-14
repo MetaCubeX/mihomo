@@ -67,6 +67,47 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			proxies = append(proxies, hysteria)
 
+		case "tuic":
+			// A temporary unofficial TUIC share link standard
+			// Modified from https://github.com/daeuniverse/dae/discussions/182
+			// Changes:
+			//   1. Support TUICv4, just replace uuid:password with token
+			//   2. Remove `allow_insecure` field
+			urlTUIC, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			query := urlTUIC.Query()
+
+			tuic := make(map[string]any, 20)
+			tuic["name"] = uniqueName(names, urlTUIC.Fragment)
+			tuic["type"] = scheme
+			tuic["server"] = urlTUIC.Hostname()
+			tuic["port"] = urlTUIC.Port()
+			tuic["udp"] = true
+			password, v5 := urlTUIC.User.Password()
+			if v5 {
+				tuic["uuid"] = urlTUIC.User.Username()
+				tuic["password"] = password
+			} else {
+				tuic["token"] = urlTUIC.User.Username()
+			}
+			if cc := query.Get("congestion_control"); cc != "" {
+				tuic["congestion-controller"] = cc
+			}
+			if alpn := query.Get("alpn"); alpn != "" {
+				tuic["alpn"] = strings.Split(alpn, ",")
+			}
+			if sni := query.Get("sni"); sni != "" {
+				tuic["sni"] = sni
+			}
+			if query.Get("disable_sni") == "1" {
+				tuic["disable-sni"] = true
+			}
+			if udpRelayMode := query.Get("udp_relay_mode"); udpRelayMode != "" {
+				tuic["udp-relay-mode"] = udpRelayMode
+			}
+
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
 			if err != nil {
