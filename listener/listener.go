@@ -516,6 +516,7 @@ func ReCreateTun(tunConf LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.Pack
 	defer func() {
 		if err != nil {
 			log.Errorln("Start TUN listening error: %s", err.Error())
+			tunConf.Enable = false
 			Cleanup(false)
 		}
 	}()
