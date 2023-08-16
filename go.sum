@@ -1,5 +1,5 @@
-github.com/3andne/restls-client-go v0.1.5 h1:UPAm2LP65xzOODzhKcRFszPKQDgvn3grTqOSlEFOtRY=
-github.com/3andne/restls-client-go v0.1.5/go.mod h1:XtgofvB5Q6xMfH9UbszQiMajPBwfnR2j4rGWr45P/sc=
+github.com/3andne/restls-client-go v0.1.6 h1:tRx/YilqW7iHpgmEL4E1D8dAsuB0tFF3uvncS+B6I08=
+github.com/3andne/restls-client-go v0.1.6/go.mod h1:iEdTZNt9kzPIxjIGSMScUFSBrUH6bFRNg0BWlP4orEY=
 github.com/RyuaNerin/go-krypto v1.0.2 h1:9KiZrrBs+tDrQ66dNy4nrX6SzntKtSKdm0wKHhdB4WM=
 github.com/RyuaNerin/go-krypto v1.0.2/go.mod h1:17LzMeJCgzGTkPH3TmfzRnEJ/yA7ErhTPp9sxIqONtA=
 github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 h1:cDVUiFo+npB0ZASqnw4q90ylaVAbnYyx0JYqK4YcGok=
@@ -136,8 +136,6 @@ github.com/quic-go/qpack v0.4.0 h1:Cr9BXA1sQS2SmDUWjSofMPNKmvF6IiIfDRmgU0w1ZCo=
 github.com/quic-go/qpack v0.4.0/go.mod h1:UZVnYIfi5GRk+zI9UMaCPsmZ2xKJP7XBUvVyT1Knj9A=
 github.com/quic-go/qtls-go1-20 v0.3.1 h1:O4BLOM3hwfVF3AcktIylQXyl7Yi2iBNVy5QsV+ySxbg=
 github.com/quic-go/qtls-go1-20 v0.3.1/go.mod h1:X9Nh97ZL80Z+bX/gUXMbipO6OxdiDi58b/fMC9mAL+k=
-github.com/quic-go/quic-go v0.37.4 h1:ke8B73yMCWGq9MfrCCAw0Uzdm7GaViC3i39dsIdDlH4=
-github.com/quic-go/quic-go v0.37.4/go.mod h1:YsbH1r4mSHPJcLF4k4zruUkLBqctEMBDR6VPvcYjIsU=
 github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 h1:5+m7c6AkmAylhauulqN/c5dnh8/KssrE9c93TQrXldA=
 github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61/go.mod h1:QUQ4RRHD6hGGHdFMEtR8T2P6GS6R3D/CXKdaYHKKXms=
