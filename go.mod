@@ -26,16 +26,16 @@ require (
 	github.com/metacubex/sing-vmess v0.1.8-0.20230801054944-603005461ff8
 	github.com/metacubex/sing-wireguard v0.0.0-20230611155257-1498ae315a28
 	github.com/miekg/dns v1.1.55
-	github.com/mroth/weightedrand/v2 v2.0.2
+	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.9
-	github.com/sagernet/sing-mux v0.1.2
+	github.com/sagernet/sing v0.2.10-0.20230807080248-4db0062caa0a
+	github.com/sagernet/sing-mux v0.1.3-0.20230811111955-dc1639b5204c
 	github.com/sagernet/sing-shadowtls v0.1.4
-	github.com/sagernet/tfo-go v0.0.0-20230303015439-ffcfd8c41cf9
+	github.com/sagernet/tfo-go v0.0.0-20230816093905-5a5c285d44a6
 	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
-	github.com/sagernet/wireguard-go v0.0.0-20230420044414-a7bac1754e77
+	github.com/sagernet/wireguard-go v0.0.0-20230807125731-5d4a7ef2dc5f
 	github.com/samber/lo v1.38.1
 	github.com/shirou/gopsutil/v3 v3.23.7
 	github.com/sirupsen/logrus v1.9.3
@@ -44,7 +44,7 @@ require (
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/automaxprocs v1.5.3
 	golang.org/x/crypto v0.12.0
-	golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b
+	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb
 	golang.org/x/net v0.14.0
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.11.0
@@ -103,4 +103,4 @@ require (
 	golang.org/x/tools v0.9.1 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230714010500-e24664dc75a7
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230816132220-60e73ba2f50f
