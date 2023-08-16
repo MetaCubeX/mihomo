@@ -302,7 +302,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	if err != nil {
 		return nil, E.Cause(err, "create WireGuard device")
 	}
-	outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, &device.Logger{
+	outbound.device = device.NewDevice(context.Background(), outbound.tunDevice, outbound.bind, &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
 			log.SingLogger.Debug(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
 		},
