@@ -72,7 +72,27 @@ func UpstreamMetadata(metadata M.Metadata) M.Metadata {
 	}
 }
 
-func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
+func ConvertMetadata(metadata *C.Metadata) M.Metadata {
+	return M.Metadata{
+		Protocol:    metadata.Type.String(),
+		Source:      M.SocksaddrFrom(metadata.SrcIP, metadata.SrcPort),
+		Destination: M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort),
+	}
+}
+
+func (h *ListenerHandler) IsSpecialFqdn(fqdn string) bool {
+	switch fqdn {
+	case mux.Destination.Fqdn:
+	case vmess.MuxDestination.Fqdn:
+	case uot.MagicAddress:
+	case uot.LegacyMagicAddress:
+	default:
+		return false
+	}
+	return true
+}
+
+func (h *ListenerHandler) ParseSpecialFqdn(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
 	switch metadata.Destination.Fqdn {
 	case mux.Destination.Fqdn:
 		return mux.HandleConnection(ctx, h, log.SingLogger, conn, UpstreamMetadata(metadata))
@@ -88,6 +108,13 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	case uot.LegacyMagicAddress:
 		metadata.Destination = M.Socksaddr{Addr: netip.IPv4Unspecified()}
 		return h.NewPacketConnection(ctx, uot.NewConn(conn, uot.Request{}), metadata)
+	}
+	return errors.New("not special fqdn")
+}
+
+func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
+	if h.IsSpecialFqdn(metadata.Destination.Fqdn) {
+		return h.ParseSpecialFqdn(ctx, conn, metadata)
 	}
 	target := socks5.ParseAddr(metadata.Destination.String())
 	wg := &sync.WaitGroup{}

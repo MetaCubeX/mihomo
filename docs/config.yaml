@@ -681,6 +681,11 @@ proxies: # socks5
     # skip-cert-verify: true
     # max-open-streams: 20 # default 100, too many open streams may hurt performance
     # sni: example.com
+    #
+    # meta和sing-box私有扩展，将ss-uot用于udp中继，开启此选项后udp-relay-mode将失效
+    # 警告，与原版tuic不兼容！！！
+    # udp-over-stream: false
+    # udp-over-stream-version: 1
 
   # ShadowsocksR
   # The supported ciphers (encryption methods): all stream ciphers in ss

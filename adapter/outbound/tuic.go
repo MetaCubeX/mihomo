@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -15,12 +16,15 @@ import (
 
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
+	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
+	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/uot"
 )
 
 type Tuic struct {
@@ -59,6 +63,9 @@ type TuicOption struct {
 	DisableMTUDiscovery  bool   `proxy:"disable-mtu-discovery,omitempty"`
 	MaxDatagramFrameSize int    `proxy:"max-datagram-frame-size,omitempty"`
 	SNI                  string `proxy:"sni,omitempty"`
+
+	UDPOverStream        bool `proxy:"udp-over-stream,omitempty"`
+	UDPOverStreamVersion int  `proxy:"udp-over-stream-version,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -82,6 +89,32 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata, op
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (t *Tuic) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if t.option.UDPOverStream {
+		uotDestination := uot.RequestDestination(uint8(t.option.UDPOverStreamVersion))
+		uotMetadata := *metadata
+		uotMetadata.Host = uotDestination.Fqdn
+		uotMetadata.DstPort = uotDestination.Port
+		c, err := t.DialContextWithDialer(ctx, dialer, &uotMetadata)
+		if err != nil {
+			return nil, err
+		}
+
+		// tuic uos use stream-oriented udp with a special address, so we need a net.UDPAddr
+		if !metadata.Resolved() {
+			ip, err := resolver.ResolveIP(ctx, metadata.Host)
+			if err != nil {
+				return nil, errors.New("can't resolve ip")
+			}
+			metadata.DstIP = ip
+		}
+
+		destination := M.SocksaddrFromNet(metadata.UDPAddr())
+		if t.option.UDPOverStreamVersion == uot.LegacyVersion {
+			return newPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), t), nil
+		} else {
+			return newPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), t), nil
+		}
+	}
 	pc, err := t.client.ListenPacketWithDialer(ctx, metadata, dialer, t.dialWithDialer)
 	if err != nil {
 		return nil, err
@@ -237,6 +270,14 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	if option.DisableSni {
 		tlsConfig.ServerName = ""
 		tlsConfig.InsecureSkipVerify = true // tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config
+	}
+
+	switch option.UDPOverStreamVersion {
+	case uot.Version, uot.LegacyVersion:
+	case 0:
+		option.UDPOverStreamVersion = uot.LegacyVersion
+	default:
+		return nil, fmt.Errorf("tuic %s unknown udp over stream protocol version: %d", addr, option.UDPOverStreamVersion)
 	}
 
 	t := &Tuic{
