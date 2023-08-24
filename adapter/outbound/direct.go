@@ -12,6 +12,11 @@ type Direct struct {
 	*Base
 }
 
+type DirectOption struct {
+	BasicOption
+	Name string `proxy:"name"`
+}
+
 // DialContext implements C.ProxyAdapter
 func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	opts = append(opts, dialer.WithResolver(resolver.DefaultResolver))
@@ -38,6 +43,21 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		return nil, err
 	}
 	return newPacketConn(pc, d), nil
+}
+
+func NewDirectWithOption(option DirectOption) *Direct {
+	return &Direct{
+		Base: &Base{
+			name:   option.Name,
+			tp:     C.Direct,
+			udp:    true,
+			tfo:    option.TFO,
+			mpTcp:  option.MPTCP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
+		},
+	}
 }
 
 func NewDirect() *Direct {
