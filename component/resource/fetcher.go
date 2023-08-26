@@ -9,6 +9,8 @@ import (
 
 	types "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/samber/lo"
 )
 
 var (
@@ -65,7 +67,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 	}
 
 	if err != nil {
-		return getZero[V](), err
+		return lo.Empty[V](), err
 	}
 
 	var contents V
@@ -85,18 +87,18 @@ func (f *Fetcher[V]) Initial() (V, error) {
 
 	if err != nil {
 		if !isLocal {
-			return getZero[V](), err
+			return lo.Empty[V](), err
 		}
 
 		// parse local file error, fallback to remote
 		buf, err = f.vehicle.Read()
 		if err != nil {
-			return getZero[V](), err
+			return lo.Empty[V](), err
 		}
 
 		contents, err = f.parser(buf)
 		if err != nil {
-			return getZero[V](), err
+			return lo.Empty[V](), err
 		}
 
 		isLocal = false
@@ -104,7 +106,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 
 	if f.vehicle.Type() != types.File && !isLocal {
 		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
-			return getZero[V](), err
+			return lo.Empty[V](), err
 		}
 	}
 
@@ -121,7 +123,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 func (f *Fetcher[V]) Update() (V, bool, error) {
 	buf, err := f.vehicle.Read()
 	if err != nil {
-		return getZero[V](), false, err
+		return lo.Empty[V](), false, err
 	}
 
 	now := time.Now()
@@ -129,17 +131,17 @@ func (f *Fetcher[V]) Update() (V, bool, error) {
 	if bytes.Equal(f.hash[:], hash[:]) {
 		f.UpdatedAt = &now
 		_ = os.Chtimes(f.vehicle.Path(), now, now)
-		return getZero[V](), true, nil
+		return lo.Empty[V](), true, nil
 	}
 
 	contents, err := f.parser(buf)
 	if err != nil {
-		return getZero[V](), false, err
+		return lo.Empty[V](), false, err
 	}
 
 	if f.vehicle.Type() != types.File {
 		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
-			return getZero[V](), false, err
+			return lo.Empty[V](), false, err
 		}
 	}
 
@@ -209,9 +211,4 @@ func NewFetcher[V any](name string, interval time.Duration, vehicle types.Vehicl
 		OnUpdate: onUpdate,
 		interval: interval,
 	}
-}
-
-func getZero[V any]() V {
-	var result V
-	return result
 }
