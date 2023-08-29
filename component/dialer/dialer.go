@@ -162,8 +162,11 @@ func concurrentDualStackDialContext(ctx context.Context, network string, ips []n
 
 func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error) {
 	ipv4s, ipv6s := resolver.SortationAddr(ips)
-	preferIPVersion := opt.prefer
+	if len(ipv4s) == 0 && len(ipv6s) == 0 {
+		return nil, ErrorNoIpAddress
+	}
 
+	preferIPVersion := opt.prefer
 	fallbackTicker := time.NewTicker(fallbackTimeout)
 	defer fallbackTicker.Stop()
 	results := make(chan dialResult)
@@ -182,11 +185,21 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 		}()
 		result.Conn, result.error = dialFn(ctx, network, ips, port, opt)
 	}
-	go racer(ipv4s, preferIPVersion != 6)
-	go racer(ipv6s, preferIPVersion != 4)
+
+	var wait int
+	if len(ipv4s) != 0 {
+		wait++
+		go racer(ipv4s, preferIPVersion != 6)
+	}
+
+	if len(ipv6s) != 0 {
+		wait++
+		go racer(ipv6s, preferIPVersion != 4)
+	}
+
 	var fallback dialResult
 	var errs []error
-	for i := 0; i < 2; {
+	for i := 0; i < wait; {
 		select {
 		case <-fallbackTicker.C:
 			if fallback.error == nil && fallback.Conn != nil {
