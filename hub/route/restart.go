@@ -39,10 +39,10 @@ func restart(w http.ResponseWriter, r *http.Request) {
 	// The background context is used because the underlying functions wrap it
 	// with timeout and shut down the server, which handles current request.  It
 	// also should be done in a separate goroutine for the same reason.
-	go runRestart(execPath)
+	go restartExecutable(execPath)
 }
 
-func runRestart(execPath string) {
+func restartExecutable(execPath string) {
 	var err error
 	executor.Shutdown()
 	if runtime.GOOS == "windows" {
