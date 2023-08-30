@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/Dreamacro/clash/listener"
+	"github.com/Dreamacro/clash/hub/executor"
 	"github.com/Dreamacro/clash/log"
 
 	"github.com/go-chi/chi/v5"
@@ -44,7 +44,7 @@ func restart(w http.ResponseWriter, r *http.Request) {
 
 func runRestart(execPath string) {
 	var err error
-	listener.Cleanup(false)
+	executor.Shutdown()
 	if runtime.GOOS == "windows" {
 		cmd := exec.Command(execPath, os.Args[1:]...)
 		log.Infoln("restarting: %q %q", execPath, os.Args[1:])
