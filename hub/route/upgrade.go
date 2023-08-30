@@ -41,5 +41,5 @@ func upgrade(w http.ResponseWriter, r *http.Request) {
 		f.Flush()
 	}
 
-	go runRestart(execPath)
+	go restartExecutable(execPath)
 }
