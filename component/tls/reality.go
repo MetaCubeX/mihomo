@@ -22,6 +22,7 @@ import (
 
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/log"
+	"github.com/Dreamacro/clash/ntp"
 
 	utls "github.com/sagernet/utls"
 	"github.com/zhangyunhao116/fastrand"
@@ -70,7 +71,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 			rawSessionID[i] = 0
 		}
 
-		binary.BigEndian.PutUint64(hello.SessionId, uint64(time.Now().Unix()))
+		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
 
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
 		hello.SessionId[0] = 1

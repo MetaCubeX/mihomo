@@ -2,11 +2,15 @@ package executor
 
 import (
 	"fmt"
+	"github.com/Dreamacro/clash/ntp"
+	"net"
 	"net/netip"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -92,6 +96,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateGeneral(cfg.General)
+	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.RuleProviders, cfg.General.IPv6)
 	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
@@ -176,6 +181,13 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 }
 
 func updateExperimental(c *config.Config) {
+}
+
+func updateNTP(c *config.NTP) {
+	if c.Enable {
+		ntp.ReCreateNTPService(net.JoinHostPort(c.Server, strconv.Itoa(c.Port)),
+			time.Duration(c.Interval))
+	}
 }
 
 func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, generalIPv6 bool) {

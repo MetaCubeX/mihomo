@@ -18,6 +18,7 @@ import (
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/ntp"
 	"github.com/Dreamacro/clash/transport/gun"
 	clashVMess "github.com/Dreamacro/clash/transport/vmess"
 
@@ -416,6 +417,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	if option.AuthenticatedLength {
 		options = append(options, vmess.ClientWithAuthenticatedLength())
 	}
+	options = append(options, vmess.ClientWithTimeFunc(ntp.Now))
 	client, err := vmess.NewClient(option.UUID, security, option.AlterID, options...)
 	if err != nil {
 		return nil, err
