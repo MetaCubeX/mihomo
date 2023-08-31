@@ -87,6 +87,14 @@ type Controller struct {
 	Secret                string `json:"-"`
 }
 
+// NTP config
+type NTP struct {
+	Enable   bool   `yaml:"enable"`
+	Server   string `yaml:"server"`
+	Port     int    `yaml:"port"`
+	Interval int    `yaml:"interval"`
+}
+
 // DNS config
 type DNS struct {
 	Enable                bool             `yaml:"enable"`
@@ -151,6 +159,7 @@ type Experimental struct {
 type Config struct {
 	General       *General
 	IPTables      *IPTables
+	NTP           *NTP
 	DNS           *DNS
 	Experimental  *Experimental
 	Hosts         *trie.DomainTrie[resolver.HostValue]
@@ -165,6 +174,13 @@ type Config struct {
 	Tunnels       []LC.Tunnel
 	Sniffer       *Sniffer
 	TLS           *TLS
+}
+
+type RawNTP struct {
+	Enable     bool   `yaml:"enable"`
+	Server     string `yaml:"server"`
+	ServerPort int    `yaml:"server-port"`
+	Interval   int    `yaml:"interval"`
 }
 
 type RawDNS struct {
@@ -269,6 +285,7 @@ type RawConfig struct {
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
 	Hosts         map[string]any            `yaml:"hosts"`
+	NTP           RawNTP                    `yaml:"ntp"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
@@ -492,6 +509,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.Hosts = hosts
+
+	ntpCfg := paresNTP(rawCfg)
+	config.NTP = ntpCfg
 
 	dnsCfg, err := parseDNS(rawCfg, hosts, rules, ruleProviders)
 	if err != nil {
@@ -1130,6 +1150,29 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 		}
 	}
 	return sites, nil
+}
+
+func paresNTP(rawCfg *RawConfig) *NTP {
+	var server = "time.apple.com"
+	var port = 123
+	var interval = 30
+	cfg := rawCfg.NTP
+	if len(cfg.Server) != 0 {
+		server = cfg.Server
+	}
+	if cfg.ServerPort != 0 {
+		port = cfg.ServerPort
+	}
+	if cfg.Interval != 0 {
+		interval = cfg.Interval
+	}
+	ntpCfg := &NTP{
+		Enable:   cfg.Enable,
+		Server:   server,
+		Port:     port,
+		Interval: interval,
+	}
+	return ntpCfg
 }
 
 func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider) (*DNS, error) {
