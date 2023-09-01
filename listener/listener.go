@@ -84,9 +84,7 @@ type Ports struct {
 
 func GetTunConf() LC.Tun {
 	if tunLister == nil {
-		return LC.Tun{
-			Enable: false,
-		}
+		return LastTunConf
 	}
 	return tunLister.Config()
 }
