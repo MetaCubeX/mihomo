@@ -9,6 +9,7 @@ import (
 
 	types "github.com/Dreamacro/clash/constant/provider"
 	"github.com/Dreamacro/clash/log"
+
 	"github.com/samber/lo"
 )
 
