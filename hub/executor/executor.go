@@ -134,7 +134,7 @@ func GetGeneral() *config.General {
 			RedirPort:         ports.RedirPort,
 			TProxyPort:        ports.TProxyPort,
 			MixedPort:         ports.MixedPort,
-			Tun:               listener.LastTunConf,
+			Tun:               listener.GetTunConf(),
 			TuicServer:        listener.GetTuicConf(),
 			ShadowSocksConfig: ports.ShadowSocksConfig,
 			VmessConfig:       ports.VmessConfig,
