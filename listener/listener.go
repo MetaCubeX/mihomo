@@ -902,6 +902,6 @@ func closeTunListener() {
 	}
 }
 
-func Cleanup(wait bool) {
+func Cleanup() {
 	closeTunListener()
 }
