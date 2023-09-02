@@ -67,7 +67,7 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 }
 
 func handleSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
-	conn.(*net.TCPConn).SetKeepAlive(true)
+	N.TCPKeepAlive(conn)
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {

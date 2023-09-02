@@ -50,6 +50,8 @@ external-ui: /path/to/ui/folder # 配置 WEB UI 目录，使用 http://{{externa
 # Utls is currently support TLS transport in TCP/grpc/WS/HTTP for VLESS/Vmess and trojan.
 global-client-fingerprint: chrome
 
+keep-alive-interval: 30
+
 # routing-mark:6666 # 配置 fwmark 仅用于 Linux
 experimental:
 

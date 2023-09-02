@@ -3,6 +3,8 @@ package outbound
 import (
 	"context"
 	"errors"
+
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -24,7 +26,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	if err != nil {
 		return nil, err
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	return NewConn(c, d), nil
 }
 

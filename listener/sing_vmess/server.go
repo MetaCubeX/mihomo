@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/sing"
@@ -84,7 +85,7 @@ func New(config LC.VmessServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packe
 					}
 					continue
 				}
-				_ = c.(*net.TCPConn).SetKeepAlive(true)
+				N.TCPKeepAlive(c)
 
 				go sl.HandleConn(c, tcpIn)
 			}
