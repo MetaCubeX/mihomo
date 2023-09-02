@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"sync"
-	"time"
 
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -18,13 +17,6 @@ var (
 	globalClientSessionCache tls.ClientSessionCache
 	once                     sync.Once
 )
-
-func tcpKeepAlive(c net.Conn) {
-	if tcp, ok := c.(*net.TCPConn); ok {
-		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
-	}
-}
 
 func getClientSessionCache() tls.ClientSessionCache {
 	once.Do(func() {

@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
@@ -34,7 +35,7 @@ func (l *Listener) Close() error {
 }
 
 func (l *Listener) handleTCP(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
-	conn.(*net.TCPConn).SetKeepAlive(true)
+	N.TCPKeepAlive(conn)
 	ctx := inbound.NewSocket(l.target, conn, C.TUNNEL, additions...)
 	ctx.Metadata().SpecialProxy = l.proxy
 	in <- ctx
