@@ -318,8 +318,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
-	lockKey := key + "-lock"
-	cond, loaded := natTable.GetOrCreateLock(lockKey)
+	cond, loaded := natTable.GetOrCreateLock(key)
 
 	go func() {
 		defer packet.Drop()
@@ -333,7 +332,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 
 		defer func() {
-			natTable.Delete(lockKey)
+			natTable.DeleteLock(key)
 			cond.Broadcast()
 		}()
 

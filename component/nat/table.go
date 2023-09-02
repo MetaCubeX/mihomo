@@ -5,23 +5,28 @@ import (
 	"sync"
 
 	C "github.com/Dreamacro/clash/constant"
+
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 type Table struct {
-	mapping sync.Map
+	mapping *xsync.MapOf[string, *Entry]
+	lockMap *xsync.MapOf[string, *sync.Cond]
 }
 
 type Entry struct {
 	PacketConn      C.PacketConn
 	WriteBackProxy  C.WriteBackProxy
-	LocalUDPConnMap sync.Map
+	LocalUDPConnMap *xsync.MapOf[string, *net.UDPConn]
+	LocalLockMap    *xsync.MapOf[string, *sync.Cond]
 }
 
 func (t *Table) Set(key string, e C.PacketConn, w C.WriteBackProxy) {
 	t.mapping.Store(key, &Entry{
 		PacketConn:      e,
 		WriteBackProxy:  w,
-		LocalUDPConnMap: sync.Map{},
+		LocalUDPConnMap: xsync.NewMapOf[*net.UDPConn](),
+		LocalLockMap:    xsync.NewMapOf[*sync.Cond](),
 	})
 }
 
@@ -34,15 +39,19 @@ func (t *Table) Get(key string) (C.PacketConn, C.WriteBackProxy) {
 }
 
 func (t *Table) GetOrCreateLock(key string) (*sync.Cond, bool) {
-	item, loaded := t.mapping.LoadOrStore(key, sync.NewCond(&sync.Mutex{}))
-	return item.(*sync.Cond), loaded
+	item, loaded := t.lockMap.LoadOrCompute(key, makeLock)
+	return item, loaded
 }
 
 func (t *Table) Delete(key string) {
 	t.mapping.Delete(key)
 }
 
-func (t *Table) GetLocalConn(lAddr, rAddr string) *net.UDPConn {
+func (t *Table) DeleteLock(lockKey string) {
+	t.lockMap.Delete(lockKey)
+}
+
+func (t *Table) GetForLocalConn(lAddr, rAddr string) *net.UDPConn {
 	entry, exist := t.getEntry(lAddr)
 	if !exist {
 		return nil
@@ -51,10 +60,10 @@ func (t *Table) GetLocalConn(lAddr, rAddr string) *net.UDPConn {
 	if !exist {
 		return nil
 	}
-	return item.(*net.UDPConn)
+	return item
 }
 
-func (t *Table) AddLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool {
+func (t *Table) AddForLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool {
 	entry, exist := t.getEntry(lAddr)
 	if !exist {
 		return false
@@ -63,7 +72,7 @@ func (t *Table) AddLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool {
 	return true
 }
 
-func (t *Table) RangeLocalConn(lAddr string, f func(key, value any) bool) {
+func (t *Table) RangeForLocalConn(lAddr string, f func(key string, value *net.UDPConn) bool) {
 	entry, exist := t.getEntry(lAddr)
 	if !exist {
 		return
@@ -76,11 +85,11 @@ func (t *Table) GetOrCreateLockForLocalConn(lAddr, key string) (*sync.Cond, bool
 	if !loaded {
 		return nil, false
 	}
-	item, loaded := entry.LocalUDPConnMap.LoadOrStore(key, sync.NewCond(&sync.Mutex{}))
-	return item.(*sync.Cond), loaded
+	item, loaded := entry.LocalLockMap.LoadOrCompute(key, makeLock)
+	return item, loaded
 }
 
-func (t *Table) DeleteLocalConnMap(lAddr, key string) {
+func (t *Table) DeleteForLocalConn(lAddr, key string) {
 	entry, loaded := t.getEntry(lAddr)
 	if !loaded {
 		return
@@ -88,17 +97,26 @@ func (t *Table) DeleteLocalConnMap(lAddr, key string) {
 	entry.LocalUDPConnMap.Delete(key)
 }
 
-func (t *Table) getEntry(key string) (*Entry, bool) {
-	item, ok := t.mapping.Load(key)
-	// This should not happen usually since this function called after PacketConn created
-	if !ok {
-		return nil, false
+func (t *Table) DeleteLockForLocalConn(lAddr, key string) {
+	entry, loaded := t.getEntry(lAddr)
+	if !loaded {
+		return
 	}
-	entry, ok := item.(*Entry)
-	return entry, ok
+	entry.LocalLockMap.Delete(key)
+}
+
+func (t *Table) getEntry(key string) (*Entry, bool) {
+	return t.mapping.Load(key)
+}
+
+func makeLock() *sync.Cond {
+	return sync.NewCond(&sync.Mutex{})
 }
 
 // New return *Cache
 func New() *Table {
-	return &Table{}
+	return &Table{
+		mapping: xsync.NewMapOf[*Entry](),
+		lockMap: xsync.NewMapOf[*sync.Cond](),
+	}
 }

@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"sync"
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 type Authenticator interface {
@@ -15,7 +15,7 @@ type AuthUser struct {
 }
 
 type inMemoryAuthenticator struct {
-	storage   *sync.Map
+	storage   *xsync.MapOf[string, string]
 	usernames []string
 }
 
@@ -31,13 +31,13 @@ func NewAuthenticator(users []AuthUser) Authenticator {
 		return nil
 	}
 
-	au := &inMemoryAuthenticator{storage: &sync.Map{}}
+	au := &inMemoryAuthenticator{storage: xsync.NewMapOf[string]()}
 	for _, user := range users {
 		au.storage.Store(user.User, user.Pass)
 	}
 	usernames := make([]string, 0, len(users))
-	au.storage.Range(func(key, value any) bool {
-		usernames = append(usernames, key.(string))
+	au.storage.Range(func(key string, value string) bool {
+		usernames = append(usernames, key)
 		return true
 	})
 	au.usernames = usernames
