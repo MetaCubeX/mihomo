@@ -18,6 +18,7 @@ import (
 	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
+	"github.com/samber/lo"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -200,7 +201,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 
 		isIPReq := isIPRequest(q)
 		if isIPReq {
-			cache=true
+			cache = true
 			return r.ipExchange(ctx, m)
 		}
 
@@ -332,7 +333,10 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	res := <-msgCh
 	if res.Error == nil {
 		if ips := msgToIP(res.Msg); len(ips) != 0 {
-			if !r.shouldIPFallback(ips[0]) {
+			shouldNotFallback := lo.EveryBy(ips, func(ip netip.Addr) bool {
+				return !r.shouldIPFallback(ip)
+			})
+			if shouldNotFallback {
 				msg, err = res.Msg, res.Error // no need to wait for fallback result
 				return
 			}
