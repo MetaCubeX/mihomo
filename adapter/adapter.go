@@ -355,22 +355,12 @@ func (p *Proxy) determineFinalStoreType(store C.DelayHistoryStoreType, url strin
 		return C.OriginalHistory
 	}
 
-	length := 0
-	p.extra.Range(func(_ string, _ *extraProxyState) bool {
-		length++
-		return length < 2*C.DefaultMaxHealthCheckUrlNum
-	})
-
-	if length == 0 {
+	if p.extra.Size() < 2*C.DefaultMaxHealthCheckUrlNum {
 		return C.ExtraHistory
 	}
 
 	_, ok := p.extra.Load(url)
 	if ok {
-		return C.ExtraHistory
-	}
-
-	if length < 2*C.DefaultMaxHealthCheckUrlNum {
 		return C.ExtraHistory
 	}
 
