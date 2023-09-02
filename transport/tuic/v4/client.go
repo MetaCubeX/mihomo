@@ -22,6 +22,7 @@ import (
 	"github.com/Dreamacro/clash/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
+	"github.com/puzpuzpuz/xsync/v2"
 	"github.com/zhangyunhao116/fastrand"
 )
 
@@ -49,7 +50,7 @@ type clientImpl struct {
 	openStreams atomic.Int64
 	closed      atomic.Bool
 
-	udpInputMap sync.Map
+	udpInputMap *xsync.MapOf[uint32, net.Conn]
 
 	// only ready for PoolClient
 	dialerRef   C.Dialer
@@ -263,11 +264,10 @@ func (t *clientImpl) forceClose(quicConn quic.Connection, err error) {
 	if quicConn != nil {
 		_ = quicConn.CloseWithError(ProtocolError, errStr)
 	}
-	udpInputMap := &t.udpInputMap
-	udpInputMap.Range(func(key, value any) bool {
-		if conn, ok := value.(net.Conn); ok {
-			_ = conn.Close()
-		}
+	udpInputMap := t.udpInputMap
+	udpInputMap.Range(func(key uint32, value net.Conn) bool {
+		conn := value
+		_ = conn.Close()
 		udpInputMap.Delete(key)
 		return true
 	})
@@ -469,6 +469,7 @@ func NewClient(clientOption *ClientOption, udp bool, dialerRef C.Dialer) *Client
 		ClientOption: clientOption,
 		udp:          udp,
 		dialerRef:    dialerRef,
+		udpInputMap:  xsync.NewIntegerMapOf[uint32, net.Conn](),
 	}
 	c := &Client{ci}
 	runtime.SetFinalizer(c, closeClient)

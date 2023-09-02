@@ -73,12 +73,9 @@ func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, key string,
 }
 
 func closeAllLocalCoon(lAddr string) {
-	natTable.RangeLocalConn(lAddr, func(key, value any) bool {
-		conn, ok := value.(*net.UDPConn)
-		if !ok || conn == nil {
-			log.Debugln("Value %#v unknown value when closing TProxy local conn...", conn)
-			return true
-		}
+	natTable.RangeForLocalConn(lAddr, func(key string, value *net.UDPConn) bool {
+		conn := value
+
 		conn.Close()
 		log.Debugln("Closing TProxy local conn... lAddr=%s rAddr=%s", lAddr, key)
 		return true

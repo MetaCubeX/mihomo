@@ -10,7 +10,6 @@ import (
 	"net/netip"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/Dreamacro/clash/common/atomic"
@@ -19,6 +18,8 @@ import (
 	"github.com/Dreamacro/clash/component/dialer"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
+
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
@@ -37,7 +38,7 @@ type Proxy struct {
 	history *queue.Queue[C.DelayHistory]
 	alive   *atomic.Bool
 	url     string
-	extra   sync.Map
+	extra   *xsync.MapOf[string, *extraProxyState]
 }
 
 // Alive implements C.Proxy
@@ -48,7 +49,7 @@ func (p *Proxy) Alive() bool {
 // AliveForTestUrl implements C.Proxy
 func (p *Proxy) AliveForTestUrl(url string) bool {
 	if state, ok := p.extra.Load(url); ok {
-		return state.(*extraProxyState).alive.Load()
+		return state.alive.Load()
 	}
 
 	return p.alive.Load()
@@ -96,7 +97,7 @@ func (p *Proxy) DelayHistoryForTestUrl(url string) []C.DelayHistory {
 	var queueM []C.DelayHistory
 
 	if state, ok := p.extra.Load(url); ok {
-		queueM = state.(*extraProxyState).history.Copy()
+		queueM = state.history.Copy()
 	}
 
 	if queueM == nil {
@@ -113,10 +114,10 @@ func (p *Proxy) DelayHistoryForTestUrl(url string) []C.DelayHistory {
 func (p *Proxy) ExtraDelayHistory() map[string][]C.DelayHistory {
 	extraHistory := map[string][]C.DelayHistory{}
 
-	p.extra.Range(func(k, v interface{}) bool {
+	p.extra.Range(func(k string, v *extraProxyState) bool {
 
-		testUrl := k.(string)
-		state := v.(*extraProxyState)
+		testUrl := k
+		state := v
 
 		histories := []C.DelayHistory{}
 		queueM := state.history.Copy()
@@ -155,8 +156,8 @@ func (p *Proxy) LastDelayForTestUrl(url string) (delay uint16) {
 	history := p.history.Last()
 
 	if state, ok := p.extra.Load(url); ok {
-		alive = state.(*extraProxyState).alive.Load()
-		history = state.(*extraProxyState).history.Last()
+		alive = state.alive.Load()
+		history = state.history.Last()
 	}
 
 	if !alive {
@@ -226,10 +227,10 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 				p.extra.Store(url, state)
 			}
 
-			state.(*extraProxyState).alive.Store(alive)
-			state.(*extraProxyState).history.Put(record)
-			if state.(*extraProxyState).history.Len() > defaultHistoriesNum {
-				state.(*extraProxyState).history.Pop()
+			state.alive.Store(alive)
+			state.history.Put(record)
+			if state.history.Len() > defaultHistoriesNum {
+				state.history.Pop()
 			}
 		default:
 			log.Debugln("health check result will be discarded, url: %s alive: %t, delay: %d", url, alive, t)
@@ -311,7 +312,7 @@ func NewProxy(adapter C.ProxyAdapter) *Proxy {
 		history:      queue.New[C.DelayHistory](defaultHistoriesNum),
 		alive:        atomic.NewBool(true),
 		url:          "",
-		extra:        sync.Map{}}
+		extra:        xsync.NewMapOf[*extraProxyState]()}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
@@ -355,7 +356,7 @@ func (p *Proxy) determineFinalStoreType(store C.DelayHistoryStoreType, url strin
 	}
 
 	length := 0
-	p.extra.Range(func(_, _ interface{}) bool {
+	p.extra.Range(func(_ string, _ *extraProxyState) bool {
 		length++
 		return length < 2*C.DefaultMaxHealthCheckUrlNum
 	})

@@ -17,6 +17,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 type ServerOption struct {
@@ -33,6 +34,7 @@ func NewServerHandler(option *ServerOption, quicConn quic.EarlyConnection, uuid 
 		quicConn:     quicConn,
 		uuid:         uuid,
 		authCh:       make(chan struct{}),
+		udpInputMap:  xsync.NewIntegerMapOf[uint32, *atomic.Bool](),
 	}
 }
 
@@ -45,7 +47,7 @@ type serverHandler struct {
 	authOk   atomic.Bool
 	authOnce sync.Once
 
-	udpInputMap sync.Map
+	udpInputMap *xsync.MapOf[uint32, *atomic.Bool]
 }
 
 func (s *serverHandler) AuthOk() bool {
@@ -78,8 +80,7 @@ func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode common.UdpRelay
 
 	assocId = packet.ASSOC_ID
 
-	v, _ := s.udpInputMap.LoadOrStore(assocId, &atomic.Bool{})
-	writeClosed := v.(*atomic.Bool)
+	writeClosed, _ := s.udpInputMap.LoadOrCompute(assocId, func() *atomic.Bool { return &atomic.Bool{} })
 	if writeClosed.Load() {
 		return nil
 	}
@@ -173,8 +174,7 @@ func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
 		if err != nil {
 			return
 		}
-		if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
-			writeClosed := v.(*atomic.Bool)
+		if writeClosed, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
 			writeClosed.Store(true)
 		}
 	case HeartbeatType:
