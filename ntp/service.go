@@ -17,7 +17,7 @@ type Service struct {
 	ticker   *time.Ticker
 	ctx      context.Context
 	cancel   context.CancelFunc
-	mu       *sync.Mutex
+	mu       sync.Mutex
 	running  bool
 }
 
@@ -26,7 +26,7 @@ func ReCreateNTPService(addr string, interval time.Duration) {
 		service.Stop()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service = &Service{addr: addr, interval: interval, ctx: ctx, cancel: cancel, mu: &sync.Mutex{}}
+	service = &Service{addr: addr, interval: interval, ctx: ctx, cancel: cancel}
 	service.Start()
 }
 
@@ -40,7 +40,7 @@ func (srv *Service) Start() {
 		for {
 			err := srv.updateTime(srv.addr)
 			if err != nil {
-				log.Warnln("updateTime failed:", err)
+				log.Warnln("updateTime failed: %s", err)
 			}
 			select {
 			case <-srv.ticker.C:
@@ -54,9 +54,20 @@ func (srv *Service) Start() {
 func (srv *Service) Stop() {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
-	srv.ticker.Stop()
-	srv.cancel()
-	service.running = false
+	if service.running {
+		srv.ticker.Stop()
+		srv.cancel()
+		service.running = false
+	}
+}
+
+func (srv *Service) Running() bool {
+	if srv == nil {
+		return false
+	}
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	return srv.running
 }
 
 func (srv *Service) updateTime(addr string) error {
@@ -68,16 +79,16 @@ func (srv *Service) updateTime(addr string) error {
 	ntpTime := response.Time
 	offset = localTime.Sub(ntpTime)
 	if offset > time.Duration(0) {
-		log.Warnln("System clock is ahead of NTP time by", offset)
+		log.Warnln("System clock is ahead of NTP time by %s", offset)
 	} else if offset < time.Duration(0) {
-		log.Warnln("System clock is behind NTP time by", -offset)
+		log.Warnln("System clock is behind NTP time by %s", -offset)
 	}
 	return nil
 }
 
 func Now() time.Time {
 	now := time.Now()
-	if service.running && offset.Abs() > 0 {
+	if service.Running() && offset.Abs() > 0 {
 		now = now.Add(offset)
 	}
 	return now

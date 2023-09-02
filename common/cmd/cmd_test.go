@@ -21,7 +21,7 @@ func TestSplitArgs(t *testing.T) {
 
 func TestExecCmd(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		_, err := ExecCmd("dir")
+		_, err := ExecCmd("cmd -c 'dir'")
 		assert.Nil(t, err)
 		return
 	}
