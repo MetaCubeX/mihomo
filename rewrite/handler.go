@@ -181,16 +181,21 @@ func matchRewriteRule(url string, isRequest bool) (rr C.Rewrite, sub []string, f
 	rewrites := tunnel.Rewrites()
 	if isRequest {
 		found = rewrites.SearchInRequest(func(r C.Rewrite) bool {
-			sub = r.URLRegx().FindStringSubmatch(url)
-			if len(sub) != 0 {
-				rr = r
-				return true
+			sub, err := r.URLRegx().FindStringMatch(url)
+			if err != nil {
+				return false
 			}
-			return false
+
+			rr = r
+			var groups []string
+			for _, fg := range sub.Groups() {
+				groups = append(groups, fg.String())
+			}
+			return true
 		})
 	} else {
 		found = rewrites.SearchInResponse(func(r C.Rewrite) bool {
-			if r.URLRegx().FindString(url) != "" {
+			if b, err := r.URLRegx().MatchString(url); b && err == nil {
 				rr = r
 				return true
 			}

@@ -1,7 +1,7 @@
 package constant
 
 import (
-	"regexp"
+	regexp "github.com/dlclark/regexp2"
 )
 
 var RewriteTypeMapping = map[string]RewriteType{

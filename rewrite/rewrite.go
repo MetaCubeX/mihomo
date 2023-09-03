@@ -2,7 +2,7 @@ package rewrites
 
 import (
 	"errors"
-	"regexp"
+	regexp "github.com/dlclark/regexp2"
 	"strconv"
 	"strings"
 
@@ -61,18 +61,23 @@ func (r *RewriteRule) ReplaceSubPayload(oldData string) string {
 		return oldData
 	}
 
-	sub := r.ruleRegx.FindStringSubmatch(oldData)
-	l := len(sub)
-
-	if l == 0 {
+	sub, err := r.ruleRegx.FindStringMatch(oldData)
+	if err != nil {
 		return oldData
 	}
 
-	for i := 1; i < l; i++ {
-		payload = strings.ReplaceAll(payload, "$"+strconv.Itoa(i), sub[i])
+	var groups []string
+	for _, fg := range sub.Groups() {
+		groups = append(groups, fg.String())
 	}
 
-	return strings.ReplaceAll(oldData, sub[0], payload)
+	l := len(groups)
+
+	for i := 1; i < l; i++ {
+		payload = strings.ReplaceAll(payload, "$"+strconv.Itoa(i), groups[i])
+	}
+
+	return strings.ReplaceAll(oldData, groups[0], payload)
 }
 
 func NewRewriteRule(urlRegx *regexp.Regexp, ruleType C.RewriteType, ruleRegx *regexp.Regexp, rulePayload string) *RewriteRule {
