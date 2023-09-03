@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var KeepAliveInterval time.Duration
+var KeepAliveInterval = 15 * time.Second
 
 func SplitNetworkType(s string) (string, string, error) {
 	var (
