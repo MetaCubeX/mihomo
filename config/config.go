@@ -571,11 +571,11 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	C.GeoSiteUrl = cfg.GeoXUrl.GeoSite
 	C.MmdbUrl = cfg.GeoXUrl.Mmdb
 	C.GeodataMode = cfg.GeodataMode
-	if cfg.KeepAliveInterval == 0 {
-		cfg.KeepAliveInterval = 30
+	if cfg.KeepAliveInterval != 0 {
+		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
-	N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
-	log.Infoln("Keep Alive Interval set %+v", N.KeepAliveInterval)
+
+	log.Debugln("TCP Keep Alive Interval set %+v", N.KeepAliveInterval)
 	// checkout externalUI exist
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
