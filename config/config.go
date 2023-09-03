@@ -91,10 +91,11 @@ type Controller struct {
 
 // NTP config
 type NTP struct {
-	Enable   bool   `yaml:"enable"`
-	Server   string `yaml:"server"`
-	Port     int    `yaml:"port"`
-	Interval int    `yaml:"interval"`
+	Enable        bool   `yaml:"enable"`
+	WriteToSystem bool   `yaml:"write-to-system"`
+	Server        string `yaml:"server"`
+	Port          int    `yaml:"port"`
+	Interval      int    `yaml:"interval"`
 }
 
 // DNS config
@@ -179,10 +180,11 @@ type Config struct {
 }
 
 type RawNTP struct {
-	Enable     bool   `yaml:"enable"`
-	Server     string `yaml:"server"`
-	ServerPort int    `yaml:"server-port"`
-	Interval   int    `yaml:"interval"`
+	Enable        bool   `yaml:"enable"`
+	WriteToSystem bool   `yaml:"write-to-system"`
+	Server        string `yaml:"server"`
+	ServerPort    int    `yaml:"server-port"`
+	Interval      int    `yaml:"interval"`
 }
 
 type RawDNS struct {
@@ -398,6 +400,13 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:           false,
 			InboundInterface: "lo",
 			Bypass:           []string{},
+		},
+		NTP: RawNTP{
+			Enable:        false,
+			WriteToSystem: false,
+			Server:        "time.apple.com",
+			ServerPort:    123,
+			Interval:      30,
 		},
 		DNS: RawDNS{
 			Enable:       false,
@@ -1162,24 +1171,13 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 }
 
 func paresNTP(rawCfg *RawConfig) *NTP {
-	var server = "time.apple.com"
-	var port = 123
-	var interval = 30
 	cfg := rawCfg.NTP
-	if len(cfg.Server) != 0 {
-		server = cfg.Server
-	}
-	if cfg.ServerPort != 0 {
-		port = cfg.ServerPort
-	}
-	if cfg.Interval != 0 {
-		interval = cfg.Interval
-	}
 	ntpCfg := &NTP{
-		Enable:   cfg.Enable,
-		Server:   server,
-		Port:     port,
-		Interval: interval,
+		Enable:        cfg.Enable,
+		Server:        cfg.Server,
+		Port:          cfg.ServerPort,
+		Interval:      cfg.Interval,
+		WriteToSystem: cfg.WriteToSystem,
 	}
 	return ntpCfg
 }

@@ -186,7 +186,7 @@ func updateExperimental(c *config.Config) {
 func updateNTP(c *config.NTP) {
 	if c.Enable {
 		ntp.ReCreateNTPService(net.JoinHostPort(c.Server, strconv.Itoa(c.Port)),
-			time.Duration(c.Interval))
+			time.Duration(c.Interval), c.WriteToSystem)
 	}
 }
 
