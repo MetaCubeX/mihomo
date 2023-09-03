@@ -3,7 +3,9 @@ package ntp
 import (
 	"context"
 	"github.com/Dreamacro/clash/log"
-	"github.com/beevik/ntp"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing/common/ntp"
 	"sync"
 	"time"
 )
@@ -12,43 +14,37 @@ var offset time.Duration
 var service *Service
 
 type Service struct {
-	addr     string
-	interval time.Duration
-	ticker   *time.Ticker
-	ctx      context.Context
-	cancel   context.CancelFunc
-	mu       sync.Mutex
-	running  bool
+	server         M.Socksaddr
+	ticker         *time.Ticker
+	ctx            context.Context
+	cancel         context.CancelFunc
+	mu             sync.Mutex
+	syncSystemTime bool
+	running        bool
 }
 
-func ReCreateNTPService(addr string, interval time.Duration) {
+func ReCreateNTPService(server string, interval time.Duration, syncSystemTime bool) {
 	if service != nil {
 		service.Stop()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service = &Service{addr: addr, interval: interval, ctx: ctx, cancel: cancel}
+	service = &Service{
+		ctx:            ctx,
+		cancel:         cancel,
+		server:         M.ParseSocksaddr(server),
+		ticker:         time.NewTicker(interval * time.Minute),
+		syncSystemTime: syncSystemTime,
+	}
 	service.Start()
 }
 
 func (srv *Service) Start() {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
-	log.Infoln("NTP service start")
-	srv.ticker = time.NewTicker(srv.interval * time.Minute)
+	log.Infoln("NTP service start, sync system time is %t", srv.syncSystemTime)
 	service.running = true
-	go func() {
-		for {
-			err := srv.updateTime(srv.addr)
-			if err != nil {
-				log.Warnln("updateTime failed: %s", err)
-			}
-			select {
-			case <-srv.ticker.C:
-			case <-srv.ctx.Done():
-				return
-			}
-		}
-	}()
+	srv.update()
+	go srv.loopUpdate()
 }
 
 func (srv *Service) Stop() {
@@ -70,20 +66,38 @@ func (srv *Service) Running() bool {
 	return srv.running
 }
 
-func (srv *Service) updateTime(addr string) error {
-	response, err := ntp.Query(addr)
-	if err != nil {
-		return err
+func (srv *Service) update() {
+	response, err := ntp.Exchange(context.Background(), N.SystemDialer, srv.server)
+	if err != nil || response == nil {
+		log.Errorln("initialize time: %s", err)
 	}
-	localTime := time.Now()
-	ntpTime := response.Time
-	offset = localTime.Sub(ntpTime)
+	offset = response.ClockOffset
 	if offset > time.Duration(0) {
-		log.Warnln("System clock is ahead of NTP time by %s", offset)
+		log.Infoln("System clock is ahead of NTP time by %s", offset)
 	} else if offset < time.Duration(0) {
-		log.Warnln("System clock is behind NTP time by %s", -offset)
+		log.Infoln("System clock is behind NTP time by %s", -offset)
 	}
-	return nil
+	if srv.syncSystemTime {
+		timeNow := response.Time
+		err = setSystemTime(timeNow)
+		if err == nil {
+			log.Infoln("sync system time success: %s", timeNow.Local().Format(ntp.TimeLayout))
+		} else {
+			log.Errorln("write time to system: %s", err)
+			srv.syncSystemTime = false
+		}
+	}
+}
+
+func (srv *Service) loopUpdate() {
+	for {
+		select {
+		case <-srv.ctx.Done():
+			return
+		case <-srv.ticker.C:
+		}
+		srv.update()
+	}
 }
 
 func Now() time.Time {

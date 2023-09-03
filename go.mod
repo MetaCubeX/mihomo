@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/3andne/restls-client-go v0.1.6
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
-	github.com/beevik/ntp v1.3.0
 	github.com/cilium/ebpf v0.11.0
 	github.com/coreos/go-iptables v0.7.0
 	github.com/dlclark/regexp2 v1.10.0
