@@ -263,8 +263,8 @@ type RawTuicServer struct {
 }
 
 type RawMitm struct {
-	Port  int      `yaml:"port" json:"port"`
-	Rules []string `yaml:"rules" json:"rules"`
+	Port  int                    `yaml:"port" json:"port"`
+	Rules []rewrites.RawMitmRule `yaml:"rules" json:"rules"`
 }
 
 type RawConfig struct {
@@ -456,7 +456,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 		MITM: RawMitm{
 			Port:  0,
-			Rules: []string{},
+			Rules: []rewrites.RawMitmRule{},
 		},
 		Profile: Profile{
 			StoreSelected: true,

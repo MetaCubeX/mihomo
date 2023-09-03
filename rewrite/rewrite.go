@@ -1,7 +1,6 @@
 package rewrites
 
 import (
-	"errors"
 	regexp "github.com/dlclark/regexp2"
 	"strconv"
 	"strings"
@@ -11,7 +10,12 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-var errInvalid = errors.New("invalid rewrite rule")
+type RawMitmRule struct {
+	Url    string        `yaml:"url" json:"url"`
+	Action C.RewriteType `yaml:"action" json:"action"`
+	Old    *string       `yaml:"old" json:"old"`
+	New    string        `yaml:"new" json:"new"`
+}
 
 type RewriteRule struct {
 	id          string

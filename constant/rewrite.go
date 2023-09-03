@@ -1,6 +1,8 @@
 package constant
 
 import (
+	"encoding/json"
+	"errors"
 	regexp "github.com/dlclark/regexp2"
 )
 
@@ -36,6 +38,42 @@ const (
 )
 
 type RewriteType int
+
+// UnmarshalYAML unserialize RewriteType with yaml
+func (e *RewriteType) UnmarshalYAML(unmarshal func(any) error) error {
+	var tp string
+	if err := unmarshal(&tp); err != nil {
+		return err
+	}
+	mode, exist := RewriteTypeMapping[tp]
+	if !exist {
+		return errors.New("invalid MITM Action")
+	}
+	*e = mode
+	return nil
+}
+
+// MarshalYAML serialize RewriteType with yaml
+func (e RewriteType) MarshalYAML() (any, error) {
+	return e.String(), nil
+}
+
+// UnmarshalJSON unserialize RewriteType with json
+func (e *RewriteType) UnmarshalJSON(data []byte) error {
+	var tp string
+	json.Unmarshal(data, &tp)
+	mode, exist := RewriteTypeMapping[tp]
+	if !exist {
+		return errors.New("invalid MITM Action")
+	}
+	*e = mode
+	return nil
+}
+
+// MarshalJSON serialize RewriteType with json
+func (e RewriteType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.String())
+}
 
 func (rt RewriteType) String() string {
 	switch rt {

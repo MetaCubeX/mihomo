@@ -561,6 +561,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	for _, rule := range getRules(metadata) {
+		if metadata.Type == C.MITM && rule.Adapter() == "MITM" {
+			continue
+		}
+
 		if !resolved && shouldResolveIP(rule, metadata) {
 			func() {
 				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)

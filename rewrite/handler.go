@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -30,6 +31,8 @@ func (*RewriteHandler) HandleRequest(session *mitm.Session) (*http.Request, *htt
 	if !found {
 		return nil, nil
 	}
+
+	log.Infof("[MITM] %s <- request %s", rule.RuleType().String(), request.URL.String())
 
 	switch rule.RuleType() {
 	case C.MitmReject:
@@ -113,6 +116,8 @@ func (*RewriteHandler) HandleResponse(session *mitm.Session) *http.Response {
 		return nil
 	}
 
+	log.Infof("[MITM] %s <- response %s", rule.RuleType().String(), request.URL.String())
+
 	switch rule.RuleType() {
 	case C.MitmResponseHeader:
 		if len(response.Header) == 0 {
@@ -182,7 +187,7 @@ func matchRewriteRule(url string, isRequest bool) (rr C.Rewrite, sub []string, f
 	if isRequest {
 		found = rewrites.SearchInRequest(func(r C.Rewrite) bool {
 			sub, err := r.URLRegx().FindStringMatch(url)
-			if err != nil {
+			if err != nil || sub == nil {
 				return false
 			}
 
