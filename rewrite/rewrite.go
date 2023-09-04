@@ -61,27 +61,34 @@ func (r *RewriteRule) ReplaceURLPayload(matchSub []string) string {
 
 func (r *RewriteRule) ReplaceSubPayload(oldData string) string {
 	payload := r.rulePayload
+
 	if r.ruleRegx == nil {
 		return oldData
 	}
 
 	sub, err := r.ruleRegx.FindStringMatch(oldData)
-	if err != nil {
-		return oldData
+
+	for err == nil && sub != nil {
+		var (
+			groups   []string
+			sPayload = payload
+		)
+		for _, fg := range sub.Groups() {
+			groups = append(groups, fg.String())
+		}
+
+		l := len(groups)
+
+		for i := 1; i < l; i++ {
+			sPayload = strings.Replace(payload, "$"+strconv.Itoa(i), groups[i], 1)
+		}
+
+		oldData = strings.Replace(oldData, groups[0], sPayload, 1)
+
+		sub, err = r.ruleRegx.FindNextMatch(sub)
 	}
 
-	var groups []string
-	for _, fg := range sub.Groups() {
-		groups = append(groups, fg.String())
-	}
-
-	l := len(groups)
-
-	for i := 1; i < l; i++ {
-		payload = strings.ReplaceAll(payload, "$"+strconv.Itoa(i), groups[i])
-	}
-
-	return strings.ReplaceAll(oldData, groups[0], payload)
+	return oldData
 }
 
 func NewRewriteRule(urlRegx *regexp.Regexp, ruleType C.RewriteType, ruleRegx *regexp.Regexp, rulePayload string) *RewriteRule {

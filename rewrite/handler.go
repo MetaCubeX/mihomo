@@ -6,7 +6,6 @@ import (
 	"errors"
 	log "github.com/sirupsen/logrus"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/textproto"
 	"strconv"
@@ -150,19 +149,20 @@ func (*RewriteHandler) HandleResponse(session *mitm.Session) *http.Response {
 			return nil
 		}
 
-		body, err := mitm.DecodeLatin1(bytes.NewReader(b))
-		if err != nil {
-			return nil
-		}
+		//body, err := mitm.DecodeLatin1(bytes.NewReader(b))
+		//if err != nil {
+		//	return nil
+		//}
 
-		newBody := rule.ReplaceSubPayload(body)
+		newBody := rule.ReplaceSubPayload(string(b))
 
-		modifiedBody, err := mitm.EncodeLatin1(newBody)
-		if err != nil {
-			return nil
-		}
+		//modifiedBody, err := mitm.EncodeLatin1(newBody)
+		//if err != nil {
+		//	return nil
+		//}
+		modifiedBody := []byte(newBody)
 
-		response.Body = ioutil.NopCloser(bytes.NewReader(modifiedBody))
+		response.Body = io.NopCloser(bytes.NewReader(modifiedBody))
 		response.Header.Del("Content-Encoding")
 		response.ContentLength = int64(len(modifiedBody))
 	default:
