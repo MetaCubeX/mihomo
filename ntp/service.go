@@ -67,9 +67,19 @@ func (srv *Service) Running() bool {
 }
 
 func (srv *Service) update() {
-	response, err := ntp.Exchange(context.Background(), N.SystemDialer, srv.server)
-	if err != nil || response == nil {
-		log.Errorln("initialize time: %s", err)
+	var response *ntp.Response
+	var err error
+	for i := 0; i < 3; i++ {
+		response, err = ntp.Exchange(context.Background(), N.SystemDialer, srv.server)
+		if err != nil {
+			if i == 2 {
+				log.Errorln("Initialize NTP time failed: %s", err)
+				return
+			}
+			time.Sleep(time.Second * 2) // wait for 2 seconds before the next try
+			continue
+		}
+		break
 	}
 	offset = response.ClockOffset
 	if offset > time.Duration(0) {
@@ -81,9 +91,9 @@ func (srv *Service) update() {
 		timeNow := response.Time
 		err = setSystemTime(timeNow)
 		if err == nil {
-			log.Infoln("sync system time success: %s", timeNow.Local().Format(ntp.TimeLayout))
+			log.Infoln("Sync system time success: %s", timeNow.Local().Format(ntp.TimeLayout))
 		} else {
-			log.Errorln("write time to system: %s", err)
+			log.Errorln("Write time to system: %s", err)
 			srv.syncSystemTime = false
 		}
 	}
