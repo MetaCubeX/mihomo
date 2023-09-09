@@ -24,13 +24,22 @@
 - VMess, Shadowsocks, Trojan, Snell protocol support for remote connections
 - Built-in DNS server that aims to minimize DNS pollution attack impact, supports DoH/DoT upstream and fake IP.
 - Rules based off domains, GEOIP, IPCIDR or Process to forward packets to different nodes
-- Remote groups allow users to implement powerful rules. Supports automatic fallback, load balancing or auto select node based off latency
-- Remote providers, allowing users to get node lists remotely instead of hardcoding in config
+- Remote groups allow users to implement powerful rules. Supports automatic fallback, load balancing or auto select node
+  based off latency
+- Remote providers, allowing users to get node lists remotely instead of hard-coding in config
 - Netfilter TCP redirecting. Deploy Clash on your Internet gateway with `iptables`.
 - Comprehensive HTTP RESTful API controller
 
+## Dashboard
+
+We made an official web dashboard providing first class support for this project, check it out
+at [metacubexd](https://github.com/MetaCubeX/metacubexd)
+
 ## Wiki
-Configuration examples can be found at [/docs/config.yaml](https://github.com/MetaCubeX/Clash.Meta/blob/Alpha/docs/config.yaml), while documentation can be found [Clash.Meta Wiki](https://clash-meta.wiki).
+
+Configuration examples can be found
+at [/docs/config.yaml](https://github.com/MetaCubeX/Clash.Meta/blob/Alpha/docs/config.yaml), while documentation can be
+found [Clash.Meta Wiki](https://clash-meta.wiki).
 
 ## Build
 
@@ -43,7 +52,7 @@ git clone https://github.com/MetaCubeX/Clash.Meta.git
 cd Clash.Meta && go mod download
 ```
 
-If you can't visit github,you should set proxy first:
+If you can't visit GitHub, you should set proxy first:
 
 ```shell
 go env -w GOPROXY=https://goproxy.io,direct
@@ -324,36 +333,27 @@ ExecStart=/usr/local/bin/Clash-Meta -d /etc/Clash-Meta
 WantedBy=multi-user.target
 ```
 
-Launch clashd on system startup with:
+Launch clash-meta daemon on system startup with:
 
 ```shell
 $ systemctl enable Clash-Meta
 ```
 
-Launch clashd immediately with:
+Launch clash-meta daemon immediately with:
 
 ```shell
 $ systemctl start Clash-Meta
 ```
 
-### Display Process name
-
-Clash add field `Process` to `Metadata` and prepare to get process name for Restful API `GET /connections`.
-
-To display process name in GUI please use [Razord-meta](https://github.com/MetaCubeX/Razord-meta).
-
-### Dashboard
-
-We also made a custom fork of yacd provide better support for this project, check it out at [Yacd-meta](https://github.com/MetaCubeX/Yacd-meta)
-
 ## Development
 
-If you want to build an application that uses clash as a library, check out the
+If you want to build an application that uses clash as a library, check out
 the [GitHub Wiki](https://github.com/Dreamacro/clash/wiki/use-clash-as-a-library)
 
 ## Debugging
-Check [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki/How-to-use-debug-api) to get an instruction on using debug API.
 
+Check [wiki](https://github.com/MetaCubeX/Clash.Meta/wiki/How-to-use-debug-api) to get an instruction on using debug
+API.
 
 ## Credits
 
