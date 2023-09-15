@@ -49,6 +49,7 @@ type Memory struct {
 
 func SetUIPath(path string) {
 	uiPath = C.Path.Resolve(path)
+	C.UIPath = uiPath
 }
 
 func Start(addr string, tlsAddr string, secret string,
