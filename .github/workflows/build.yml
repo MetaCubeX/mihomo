@@ -13,13 +13,6 @@ on:
   pull_request_target:
     branches:
       - Alpha
-      
-concurrency:
-  group: ${{ github.ref }}-${{ github.workflow }}
-  cancel-in-progress: true
-  
-env:
-  REGISTRY: docker.io
 jobs:
   Build:
     permissions: write-all
@@ -48,7 +41,11 @@ jobs:
               target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
               id: "4",
             }
-          - { type: "WithoutCGO", target: "linux-386 linux-riscv64", id: "5" }
+          - {
+              type: "WithoutCGO",
+              target: "linux-386 linux-riscv64",
+              id: "5",
+            }
           - {
               type: "WithoutCGO",
               target: "freebsd-386 freebsd-amd64 freebsd-arm64",
@@ -95,46 +92,31 @@ jobs:
         shell: bash
 
       - name: Set variables
-        if: ${{github.ref_name=='Beta'}}
-        run: echo "VERSION=beta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
-        if: ${{github.ref_name=='Meta'}}
-        run: echo "VERSION=meta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
         if: ${{github.ref_name=='' || github.ref_type=='tag'}}
         run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
         run: |
-          sudo timedatectl set-timezone "Asia/Shanghai"
           echo "NAME=clash.meta" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
-          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
-          echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
+          echo "BUILDTIME=$(TZ=Asia/Jakarta date)" >> $GITHUB_ENV
+          echo "TAGS=with_gvisor,with_low_memory" >> $GITHUB_ENV
+          echo "LDFLAGS=-X 'github.com/Dreamacro/clash/constant.Version=${VERSION}' -X 'github.com/Dreamacro/clash/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
+        if: ${{ matrix.job.type=='WithCGO' }}
         run: |
-          echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
+          echo "TAGS=with_gvisor,with_low_memory,with_cgo" >> $GITHUB_ENV
           echo "LDFLAGS=-X 'github.com/Dreamacro/clash/constant.Version=${VERSION}' -X 'github.com/Dreamacro/clash/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21"
-          check-latest: true
-
-      - name: Test
-        if: ${{ matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
-        run: |
-          go test ./...
+          go-version: "stable"
 
       - name: Build WithoutCGO
         if: ${{ matrix.job.type=='WithoutCGO' }}
@@ -157,9 +139,12 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
-          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
-          CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
-
+          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin
+          CGO_ENABLED=1 CC=${CC}/armv7a-linux-androideabi33-clang GOARM=7 GOARCH=arm GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-armv7
+          CGO_ENABLED=1 CC=${CC}/aarch64-linux-android33-clang GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
+          CGO_ENABLED=1 CC=${CC}/i686-linux-android33-clang GOARCH=386 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-x86
+          CGO_ENABLED=1 CC=${CC}/x86_64-linux-android33-clang GOARCH=amd64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-x86_64
+      
       - name: Set up xgo
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
         run: |
@@ -172,9 +157,9 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           mkdir bin
-          xgo --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} ./
+          xgo --branch ${{ github.ref_name }} --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} github.com/${{ github.repository }}
 
-      - name: Rename
+      - name: Rename WithCGO
         if: ${{ matrix.job.type=='WithCGO' }}
         run: |
           cd bin
@@ -186,7 +171,7 @@ jobs:
           cd ..
 
       - name: Zip
-        if: ${{  success() }}
+        if: ${{ success() }}
         run: |
           cd bin
           ls -la
@@ -202,7 +187,7 @@ jobs:
         shell: bash
 
       - uses: actions/upload-artifact@v3
-        if: ${{  success() }}
+        if: ${{ success() }}
         with:
           name: artifact
           path: bin/
@@ -222,20 +207,21 @@ jobs:
         run: ls -R
         working-directory: bin
 
-      - name: Delete current release assets
-        uses: 8Mi-Tech/delete-release-assets-action@main
+      - name: Delete tag Prerelease-${{ github.ref_name }} if exists
+        uses: JeelsBoobz/delete-tag-and-release@master
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{ github.ref_name }}
-          deleteOnlyFromDrafts: false
+          delete_release: true
+          tag_name: Prerelease-${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set Env
         run: |
-          echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
+          echo "BUILDTIME=$(TZ=Asia/Jakarta date)" >> $GITHUB_ENV
         shell: bash
 
       - name: Tag Repo
-        uses: richardsimko/update-tag@v1.0.6
+        uses: richardsimko/update-tag@v1.0.7
         with:
           tag_name: Prerelease-${{ github.ref_name }}
         env:
@@ -251,15 +237,22 @@ jobs:
           EOF
 
       - name: Upload Prerelease
+        id: prerelease
         uses: softprops/action-gh-release@v1
-        if: ${{  success() }}
+        if: ${{ success() }}
         with:
           tag_name: Prerelease-${{ github.ref_name }}
-          files: |
-            bin/*
+          files: bin/*
           prerelease: true
-          generate_release_notes: true
           body_path: release.txt
+
+      - name: Publish release
+        if: ${{ success() }}
+        uses: StuYarrow/publish-release@v1.1.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          id: ${{ steps.prerelease.outputs.id }}
 
   Upload-Release:
     permissions: write-all
@@ -277,74 +270,18 @@ jobs:
         working-directory: bin
 
       - name: Upload Release
+        id: release
         uses: softprops/action-gh-release@v1
-        if: ${{  success() }}
+        if: ${{ success() }}
         with:
           tag_name: ${{ github.ref_name }}
           files: bin/*
           generate_release_notes: true
 
-  Docker:
-    if: ${{ github.event_name != 'pull_request'  }}
-    permissions: write-all
-    needs: [Build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Publish release
+        if: ${{ success() }}
+        uses: StuYarrow/publish-release@v1.1.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          fetch-depth: 0
-
-      - uses: actions/download-artifact@v3
-        with:
-          name: artifact
-          path: bin/
-
-      - name: Display structure of downloaded files
-        run: ls -R
-        working-directory: bin
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Setup Docker buildx
-        uses: docker/setup-buildx-action@v2
-        with:
-          version: latest
-
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_ACCOUNT }}/${{secrets.DOCKERHUB_REPO}}
-      - name: Show files
-        run: |
-          ls .
-          ls bin/
-      - name: Log into registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
-
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          platforms: |
-            linux/386
-            linux/amd64
-            linux/arm64/v8
-            linux/arm/v7
-          #            linux/riscv64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          id: ${{ steps.release.outputs.id }}
