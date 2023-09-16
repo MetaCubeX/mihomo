@@ -14,47 +14,47 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-const xdURL = "https://codeload.github.com/MetaCubeX/metacubexd/zip/refs/heads/gh-pages"
+const yacdURL = "https://codeload.github.com/MetaCubeX/Yacd-meta/zip/refs/heads/gh-pages"
 
-var xdMutex sync.Mutex
+var yacdMutex sync.Mutex
 
-func UpdateXD() error {
-	xdMutex.Lock()
-	defer xdMutex.Unlock()
+func UpdateYacd() error {
+	yacdMutex.Lock()
+	defer yacdMutex.Unlock()
 
 	err := cleanup(C.UIPath)
 	if err != nil {
 		return fmt.Errorf("cleanup exist file error: %w", err)
 	}
 
-	data, err := downloadForBytes(xdURL)
+	data, err := downloadForBytes(yacdURL)
 	if err != nil {
-		return fmt.Errorf("can't download XD file: %w", err)
+		return fmt.Errorf("can't download Yacd file: %w", err)
 	}
 
-	saved := path.Join(C.UIPath, "xd.zip")
+	saved := path.Join(C.UIPath, "yacd.zip")
 	if saveFile(data, saved) != nil {
-		return fmt.Errorf("can't save XD zip file: %w", err)
+		return fmt.Errorf("can't save Yacd zip file: %w", err)
 	}
 	defer os.Remove(saved)
 
 	err = unzip(saved, C.UIPath)
 	if err != nil {
-		return fmt.Errorf("can't extract XD zip file: %w", err)
+		return fmt.Errorf("can't extract Yacd zip file: %w", err)
 	}
 
-	files, err := ioutil.ReadDir(path.Join(C.UIPath, "metacubexd-gh-pages"))
+	files, err := ioutil.ReadDir(path.Join(C.UIPath, "Yacd-meta-gh-pages"))
 	if err != nil {
 		return fmt.Errorf("Error reading source folder: %w", err)
 	}
 
 	for _, file := range files {
-		err = os.Rename(filepath.Join(path.Join(C.UIPath, "metacubexd-gh-pages"), file.Name()), filepath.Join(C.UIPath, file.Name()))
+		err = os.Rename(filepath.Join(path.Join(C.UIPath, "Yacd-meta-gh-pages"), file.Name()), filepath.Join(C.UIPath, file.Name()))
 		if err != nil {
 			return fmt.Errorf("Error renaming file: %w", err)
 		}
 	}
-	defer os.Remove(path.Join(C.UIPath, "metacubexd-gh-pages"))
+	defer os.Remove(path.Join(C.UIPath, "Yacd-meta-gh-pages"))
 	return nil
 }
 
