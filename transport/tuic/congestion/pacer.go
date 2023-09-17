@@ -52,11 +52,11 @@ func (p *pacer) Budget(now time.Time) congestion.ByteCount {
 		return p.maxBurstSize()
 	}
 	budget := p.budgetAtLastSent + (congestion.ByteCount(p.getAdjustedBandwidth())*congestion.ByteCount(now.Sub(p.lastSentTime).Nanoseconds()))/1e9
-	return Min(p.maxBurstSize(), budget)
+	return min(p.maxBurstSize(), budget)
 }
 
 func (p *pacer) maxBurstSize() congestion.ByteCount {
-	return Max(
+	return max(
 		congestion.ByteCount(uint64((MinPacingDelay+TimerGranularity).Nanoseconds())*p.getAdjustedBandwidth())/1e9,
 		maxBurstSizePackets*p.maxDatagramSize,
 	)
@@ -68,7 +68,7 @@ func (p *pacer) TimeUntilSend() time.Time {
 	if p.budgetAtLastSent >= p.maxDatagramSize {
 		return time.Time{}
 	}
-	return p.lastSentTime.Add(Max(
+	return p.lastSentTime.Add(max(
 		MinPacingDelay,
 		time.Duration(math.Ceil(float64(p.maxDatagramSize-p.budgetAtLastSent)*1e9/float64(p.getAdjustedBandwidth())))*time.Nanosecond,
 	))

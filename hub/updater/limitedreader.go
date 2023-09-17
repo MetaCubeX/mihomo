@@ -3,8 +3,6 @@ package updater
 import (
 	"fmt"
 	"io"
-
-	"golang.org/x/exp/constraints"
 )
 
 // LimitReachedError records the limit and the operation that caused it.
@@ -35,7 +33,7 @@ func (lr *limitedReader) Read(p []byte) (n int, err error) {
 		}
 	}
 
-	p = p[:Min(lr.n, int64(len(p)))]
+	p = p[:min(lr.n, int64(len(p)))]
 
 	n, err = lr.r.Read(p)
 	lr.n -= int64(n)
@@ -55,13 +53,4 @@ func LimitReader(r io.Reader, n int64) (limited io.Reader, err error) {
 		limit: n,
 		n:     n,
 	}, nil
-}
-
-// Min returns the smaller of x or y.
-func Min[T constraints.Integer | ~string](x, y T) (res T) {
-	if x < y {
-		return x
-	}
-
-	return y
 }
