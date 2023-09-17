@@ -11,8 +11,8 @@ else
 VERSION=$(shell git rev-parse --short HEAD)
 endif
 
-BUILDTIME=$(shell date -u)
-GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
+BUILDTIME=$(shell TZ=Asia/Jakarta date)
+GOBUILD=CGO_ENABLED=0 go build -tags "with_gvisor,with_low_memory" -trimpath -ldflags '-X "github.com/Dreamacro/clash/constant.Version=$(VERSION)" \
 		-X "github.com/Dreamacro/clash/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 

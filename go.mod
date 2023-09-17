@@ -105,3 +105,5 @@ require (
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230817143035-28d23f152579
+
+replace github.com/gorilla/websocket v1.5.0 => github.com/jeelsboobz/websocket v0.0.0-20230822121751-9961021c15bf

@@ -52,7 +52,7 @@ func UpdateXD() error {
 	for _, file := range files {
 		err = os.Rename(filepath.Join(path.Join(C.UIPath, "metacubexd-gh-pages"), file.Name()), filepath.Join(C.UIPath, file.Name()))
 		if err != nil {
-			return fmt.Errorf("Error renaming file: %w", err)
+			return nil
 		}
 	}
 	defer os.Remove(path.Join(C.UIPath, "metacubexd-gh-pages"))
@@ -92,7 +92,7 @@ func UpdateYacd() error {
 	for _, file := range files {
 		err = os.Rename(filepath.Join(path.Join(C.UIPath, "Yacd-meta-gh-pages"), file.Name()), filepath.Join(C.UIPath, file.Name()))
 		if err != nil {
-			return fmt.Errorf("Error renaming file: %w", err)
+			return nil
 		}
 	}
 	defer os.Remove(path.Join(C.UIPath, "Yacd-meta-gh-pages"))
@@ -147,7 +147,7 @@ func unzip(src, dest string) error {
 func cleanup(root string) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return nil
 		}
 		if path == root {
 			// skip root itself
@@ -158,14 +158,14 @@ func cleanup(root string) error {
 				if os.IsNotExist(err) {
 					return nil
 				}
-				return err
+				return nil
 			}
 		} else {
 			if err := os.Remove(path); err != nil {
 				if os.IsNotExist(err) {
 					return nil
 				}
-				return err
+				return nil
 			}
 		}
 		return nil

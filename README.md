@@ -363,6 +363,7 @@ API.
 - [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
 - [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
 - [yaling888/clash-plus-pro](https://github.com/yaling888/clash)
+- [MetaCubeX/Clash.Meta](https://github.com/MetaCubeX/Clash.Meta)
 
 ## License
 
