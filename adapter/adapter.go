@@ -136,21 +136,21 @@ func (p *Proxy) ExtraDelayHistory() map[string][]C.DelayHistory {
 // LastDelay return last history record. if proxy is not alive, return the max value of uint16.
 // implements C.Proxy
 func (p *Proxy) LastDelay() (delay uint16) {
-	var max uint16 = 0xffff
+	var maxDelay uint16 = 0xffff
 	if !p.alive.Load() {
-		return max
+		return maxDelay
 	}
 
 	history := p.history.Last()
 	if history.Delay == 0 {
-		return max
+		return maxDelay
 	}
 	return history.Delay
 }
 
 // LastDelayForTestUrl implements C.Proxy
 func (p *Proxy) LastDelayForTestUrl(url string) (delay uint16) {
-	var max uint16 = 0xffff
+	var maxDelay uint16 = 0xffff
 
 	alive := p.alive.Load()
 	history := p.history.Last()
@@ -161,11 +161,11 @@ func (p *Proxy) LastDelayForTestUrl(url string) (delay uint16) {
 	}
 
 	if !alive {
-		return max
+		return maxDelay
 	}
 
 	if history.Delay == 0 {
-		return max
+		return maxDelay
 	}
 	return history.Delay
 }
