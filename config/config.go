@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -585,7 +586,12 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	if externalUI != "" {
 		externalUI = C.Path.Resolve(externalUI)
 		if _, err := os.Stat(externalUI); os.IsNotExist(err) {
-			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
+			defaultUIpath := path.Join(C.Path.HomeDir(), "ui")
+			log.Warnln("external-ui: %s does not exist, creating folder in %s", externalUI, defaultUIpath)
+			if err := os.MkdirAll(defaultUIpath, os.ModePerm); err != nil {
+				return nil, err
+			}
+			cfg.ExternalUI = defaultUIpath
 		}
 	}
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
