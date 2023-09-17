@@ -17,6 +17,7 @@ func upgradeRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/", upgrade)
 	r.Post("/xd", updateXD)
+	r.Post("/yacd", updateYacd)
 	return r
 }
 
@@ -48,6 +49,21 @@ func upgrade(w http.ResponseWriter, r *http.Request) {
 
 func updateXD(w http.ResponseWriter, r *http.Request) {
 	err := config.UpdateXD()
+	if err != nil {
+		log.Warnln("%s", err)
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError(fmt.Sprintf("%s", err)))
+		return
+	}
+
+	render.JSON(w, r, render.M{"status": "ok"})
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func updateYacd(w http.ResponseWriter, r *http.Request) {
+	err := config.UpdateYacd()
 	if err != nil {
 		log.Warnln("%s", err)
 		render.Status(r, http.StatusInternalServerError)
