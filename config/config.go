@@ -63,7 +63,6 @@ type General struct {
 	EBpf                    EBpf              `json:"-"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
-	KeepAliveInterval       int               `json:"keep-alive-interval"`
 }
 
 // Inbound config
@@ -646,7 +645,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		EBpf:                    cfg.EBpf,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
-		KeepAliveInterval:       cfg.KeepAliveInterval,
 	}, nil
 }
 
