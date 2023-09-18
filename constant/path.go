@@ -15,7 +15,6 @@ const Name = "clash"
 var (
 	GeositeName = "GeoSite.dat"
 	GeoipName   = "GeoIP.dat"
-	UIPath      = ""
 )
 
 // Path is used to get the configuration path

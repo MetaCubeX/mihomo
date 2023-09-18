@@ -9,112 +9,109 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	C "github.com/Dreamacro/clash/constant"
 )
 
-const xdURL = "https://codeload.github.com/MetaCubeX/metacubexd/zip/refs/heads/gh-pages"
+var (
+	ExternalUIURL    string
+	ExternalUIPath   string
+	ExternalUIFolder string
+	ExternalUIName   string
+)
 
 var xdMutex sync.Mutex
 
-func UpdateXD() error {
+func UpdateUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
 
-	err := cleanup(C.UIPath)
-	if err != nil {
-		return fmt.Errorf("cleanup exist file error: %w", err)
+	if ExternalUIPath == "" || ExternalUIFolder == "" || ExternalUIName == "" {
+		return fmt.Errorf("ExternalUI configure incomplete")
 	}
 
-	data, err := downloadForBytes(xdURL)
+	err := cleanup(ExternalUIFolder)
 	if err != nil {
-		return fmt.Errorf("can't download XD file: %w", err)
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("cleanup exist file error: %w", err)
+		}
 	}
 
-	saved := path.Join(C.UIPath, "xd.zip")
+	data, err := downloadForBytes(ExternalUIURL)
+	if err != nil {
+		return fmt.Errorf("can't download  file: %w", err)
+	}
+
+	saved := path.Join(ExternalUIPath, "download.zip")
 	if saveFile(data, saved) != nil {
-		return fmt.Errorf("can't save XD zip file: %w", err)
+		return fmt.Errorf("can't save zip file: %w", err)
 	}
 	defer os.Remove(saved)
 
-	err = unzip(saved, C.UIPath)
+	unzipFolder, err := unzip(saved, ExternalUIPath)
 	if err != nil {
-		return fmt.Errorf("can't extract XD zip file: %w", err)
+		return fmt.Errorf("can't extract zip file: %w", err)
 	}
 
-	err = os.Rename(path.Join(C.UIPath, "metacubexd-gh-pages"), path.Join(C.UIPath, "xd"))
+	err = os.Rename(unzipFolder, ExternalUIFolder)
 	if err != nil {
 		return fmt.Errorf("can't rename folder: %w", err)
 	}
 	return nil
 }
 
-func unzip(src, dest string) error {
+func unzip(src, dest string) (string, error) {
 	r, err := zip.OpenReader(src)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer r.Close()
-
+	var extractedFolder string
 	for _, f := range r.File {
 		fpath := filepath.Join(dest, f.Name)
-
 		if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
-			return fmt.Errorf("invalid file path: %s", fpath)
+			return "", fmt.Errorf("invalid file path: %s", fpath)
 		}
-
 		if f.FileInfo().IsDir() {
 			os.MkdirAll(fpath, os.ModePerm)
 			continue
 		}
-
 		if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
-			return err
+			return "", err
 		}
-
 		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 		if err != nil {
-			return err
+			return "", err
 		}
-
 		rc, err := f.Open()
 		if err != nil {
-			return err
+			return "", err
 		}
-
 		_, err = io.Copy(outFile, rc)
-
 		outFile.Close()
 		rc.Close()
-
 		if err != nil {
-			return err
+			return "", err
+		}
+		if extractedFolder == "" {
+			extractedFolder = filepath.Dir(fpath)
 		}
 	}
-	return nil
+	return extractedFolder, nil
 }
 
 func cleanup(root string) error {
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return nil
+	}
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if path == root {
-			// skip root itself
-			return nil
-		}
 		if info.IsDir() {
 			if err := os.RemoveAll(path); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
 				return err
 			}
 		} else {
 			if err := os.Remove(path); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
 				return err
 			}
 		}
