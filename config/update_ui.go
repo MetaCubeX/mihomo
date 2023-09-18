@@ -54,13 +54,13 @@ func UpdateUI(ui string) error {
 		return fmt.Errorf("can't extract zip file: %w", err)
 	}
 
-	files, err := ioutil.ReadDir(path.Join(C.UIPath, ui))
+	files, err := ioutil.ReadDir(unzipFolder)
 	if err != nil {
 		return fmt.Errorf("Error reading source folder: %w", err)
 	}
 
 	for _, file := range files {
-		err = os.Rename(filepath.Join(path.Join(C.UIPath, ui), file.Name()), filepath.Join(C.UIPath, file.Name()))
+		err = os.Rename(filepath.Join(unzipFolder, file.Name()), filepath.Join(C.UIPath, file.Name()))
 		if err != nil {
 			return nil
 		}
