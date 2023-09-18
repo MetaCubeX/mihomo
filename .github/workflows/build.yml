@@ -209,7 +209,7 @@ jobs:
 
   Upload-Prerelease:
     permissions: write-all
-    if: ${{ github.ref_type=='branch' }}
+    if: ${{ github.ref_type=='branch' && github.event_name != 'pull_request' }}
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
