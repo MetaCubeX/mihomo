@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,7 +29,7 @@ func UpdateUI() error {
 		return fmt.Errorf("ExternalUI configure incomplete")
 	}
 
-	err := cleanup(ExternalUIFolder)
+	err := cleanup(ExternalUIPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("cleanup exist file error: %w", err)
@@ -51,10 +52,18 @@ func UpdateUI() error {
 		return fmt.Errorf("can't extract zip file: %w", err)
 	}
 
-	err = os.Rename(unzipFolder, ExternalUIFolder)
+	files, err := ioutil.ReadDir(unzipFolder)
 	if err != nil {
-		return fmt.Errorf("can't rename folder: %w", err)
+		return fmt.Errorf("error reading source folder: %w", err)
 	}
+
+	for _, file := range files {
+		err = os.Rename(filepath.Join(unzipFolder, file.Name()), filepath.Join(ExternalUIPath, file.Name()))
+		if err != nil {
+			return nil
+		}
+	}
+	defer os.Remove(unzipFolder)
 	return nil
 }
 
@@ -105,6 +114,10 @@ func cleanup(root string) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if path == root {
+			// skip root itself
+			return nil
 		}
 		if info.IsDir() {
 			if err := os.RemoveAll(path); err != nil {
