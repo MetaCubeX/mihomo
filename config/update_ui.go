@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -53,11 +54,18 @@ func UpdateUI(ui string) error {
 		return fmt.Errorf("can't extract zip file: %w", err)
 	}
 
-	err = os.Rename(unzipFolder, path.Join(C.UIPath, ui))
+	files, err := ioutil.ReadDir(path.Join(C.UIPath, ui))
 	if err != nil {
-		return fmt.Errorf("can't rename folder: %w", err)
+		return fmt.Errorf("Error reading source folder: %w", err)
 	}
-	return nil
+
+	for _, file := range files {
+		err = os.Rename(filepath.Join(path.Join(C.UIPath, ui), file.Name()), filepath.Join(C.UIPath, file.Name()))
+		if err != nil {
+			return nil
+		}
+	}
+	defer os.Remove(path.Join(C.UIPath, ui)
 }
 
 func unzip(src, dest string) (string, error) {
