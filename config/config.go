@@ -608,6 +608,8 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 				return nil, err
 			}
 		}
+	} else {
+		ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath))
 	}
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
