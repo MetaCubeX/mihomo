@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	C "github.com/Dreamacro/clash/constant"
 )
 
 var (
@@ -24,15 +26,8 @@ func UpdateUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
 
-	if ExternalUIPath == "" || ExternalUIFolder == "" || ExternalUIName == "" {
+	if ExternalUIPath == "" || ExternalUIFolder == "" {
 		return fmt.Errorf("ExternalUI configure incomplete")
-	}
-
-	err := cleanup(ExternalUIFolder)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("cleanup exist file error: %w", err)
-		}
 	}
 
 	data, err := downloadForBytes(ExternalUIURL)
@@ -40,13 +35,20 @@ func UpdateUI() error {
 		return fmt.Errorf("can't download  file: %w", err)
 	}
 
-	saved := path.Join(ExternalUIPath, "download.zip")
+	saved := path.Join(C.Path.HomeDir(), "download.zip")
 	if saveFile(data, saved) != nil {
 		return fmt.Errorf("can't save zip file: %w", err)
 	}
 	defer os.Remove(saved)
 
-	unzipFolder, err := unzip(saved, ExternalUIPath)
+	err = cleanup(ExternalUIFolder)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("cleanup exist file error: %w", err)
+		}
+	}
+
+	unzipFolder, err := unzip(saved, C.Path.HomeDir())
 	if err != nil {
 		return fmt.Errorf("can't extract zip file: %w", err)
 	}
