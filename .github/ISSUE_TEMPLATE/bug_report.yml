@@ -1,0 +1,82 @@
+name: Bug report
+description: Create a report to help us improve
+title: "[Bug] "
+body:
+  - type: checkboxes
+    id: ensure
+    attributes:
+      label: Verify steps
+      description: "
+在提交之前，请确认
+Please verify that you've followed these steps
+"
+      options:
+        - label: "
+确保你使用的是**本仓库**最新的的 clash 或 clash Alpha 版本
+Ensure you are using the latest version of Clash or Clash Premium from **this repository**.
+"
+          required: true
+        - label: "
+如果你可以自己 debug 并解决的话，提交 PR 吧
+Is this something you can **debug and fix**? Send a pull request! Bug fixes and documentation fixes are welcome.
+"
+          required: false
+        - label: "
+我已经在 [Issue Tracker](……/) 中找过我要提出的问题
+I have searched on the [issue tracker](……/) for a related issue.
+"
+          required: true
+        - label: "
+我已经使用 Alpha 分支版本测试过，问题依旧存在
+I have tested using the dev branch, and the issue still exists.
+"
+          required: true
+        - label: "
+我已经仔细看过 [Documentation](https://wiki.metacubex.one/) 并无法自行解决问题
+I have read the [documentation](https://wiki.metacubex.one/) and was unable to solve the issue.
+"
+          required: true
+        - label: "
+这是 Clash 核心的问题，并非我所使用的 Clash 衍生版本（如 OpenClash、KoolClash 等）的特定问题
+This is an issue of the Clash core *per se*, not to the derivatives of Clash, like OpenClash or KoolClash.
+"
+          required: true
+  - type: input
+    attributes:
+      label: Clash version
+      description: "use `clash -v`"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: What OS are you seeing the problem on?
+      multiple: true
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - OpenBSD/FreeBSD
+  - type: textarea
+    attributes:
+      render: yaml
+      label: "Clash config"
+      description: "
+在下方附上 Clash core 配置文件，请确保配置文件中没有敏感信息（比如：服务器地址，密码，端口等）
+Paste the Clash core configuration file below, please make sure that there is no sensitive information in the configuration file (e.g., server address/url, password, port)
+"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      render: shell
+      label: Clash log
+      description: "
+在下方附上 Clash Core 的日志，log level 使用 DEBUG
+Paste the Clash core log below with the log level set to `DEBUG`.
+"
+  - type: textarea
+    attributes:
+      label: Description
+    validations:
+      required: true
