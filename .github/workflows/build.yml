@@ -147,7 +147,7 @@ jobs:
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
         id: setup-ndk
         with:
-          ndk-version: r25b
+          ndk-version: r26
           add-to-path: false
           local-cache: true
 
