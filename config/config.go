@@ -279,7 +279,6 @@ type RawConfig struct {
 	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
 	ExternalUI              string            `yaml:"external-ui"`
 	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
-	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
 	Secret                  string            `yaml:"secret"`
 	Interface               string            `yaml:"interface-name"`
 	RoutingMark             int               `yaml:"routing-mark"`
@@ -584,8 +583,11 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 
 	if cfg.ExternalUIURL != "" {
 		ExternalUIURL = cfg.ExternalUIURL
+	}else{
+		ExternalUIURL = "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
 	}
 	ExternalUIPath = cfg.ExternalUI
+	ExternalUIName := "ui"
 	// checkout externalUI exist
 	if ExternalUIPath != "" {
 		ExternalUIPath = C.Path.Resolve(ExternalUIPath)
@@ -599,18 +601,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			cfg.ExternalUI = defaultUIpath
 		}
 	}
-	// checkout UIpath/name exist
-	if cfg.ExternalUIName != "" {
-		ExternalUIName = cfg.ExternalUIName
-		ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath, cfg.ExternalUIName))
-		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(ExternalUIPath, os.ModePerm); err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		ExternalUIFolder = ExternalUIPath
-	}
+	ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath, ExternalUIName))
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
