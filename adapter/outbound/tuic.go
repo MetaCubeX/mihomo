@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/tuic"
+	"lukechampine.com/blake3"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
@@ -50,6 +52,7 @@ type TuicOption struct {
 	CongestionController  string   `proxy:"congestion-controller,omitempty"`
 	DisableSni            bool     `proxy:"disable-sni,omitempty"`
 	MaxUdpRelayPacketSize int      `proxy:"max-udp-relay-packet-size,omitempty"`
+	CertificateHash       string   `proxy:"certificate-hash,omitempty"`
 
 	FastOpen             bool   `proxy:"fast-open,omitempty"`
 	MaxOpenStreams       int    `proxy:"max-open-streams,omitempty"`
@@ -270,6 +273,22 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	if option.DisableSni {
 		tlsConfig.ServerName = ""
 		tlsConfig.InsecureSkipVerify = true // tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config
+	}
+
+	if len(option.CertificateHash) > 0 {
+		certificateHash, err := hex.DecodeString(option.CertificateHash)
+		if err != nil {
+			return nil, err
+		}
+
+		tlsConfig.InsecureSkipVerify = true
+		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			if blake3.Sum256(rawCerts[0]) == [32]byte(certificateHash) {
+				return nil
+			}
+
+			return x509.CertificateInvalidError{Reason: x509.Expired, Detail: "certificate hash does not match"}
+		}
 	}
 
 	switch option.UDPOverStreamVersion {
