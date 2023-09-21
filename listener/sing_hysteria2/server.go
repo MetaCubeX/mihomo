@@ -111,6 +111,7 @@ func New(config LC.Hysteria2Server, tcpIn chan<- C.ConnContext, udpIn chan<- C.P
 		IgnoreClientBandwidth: config.IgnoreClientBandwidth,
 		Handler:               h,
 		MasqueradeHandler:     masqueradeHandler,
+		CWND:                  config.CWND,
 	})
 	if err != nil {
 		return nil, err
