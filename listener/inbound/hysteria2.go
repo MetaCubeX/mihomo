@@ -20,6 +20,7 @@ type Hysteria2Option struct {
 	Down                  string            `inbound:"down,omitempty"`
 	IgnoreClientBandwidth bool              `inbound:"ignore-client-bandwidth,omitempty"`
 	Masquerade            string            `inbound:"masquerade,omitempty"`
+	CWND                  int               `inbound:"cwnd,omitempty"`
 }
 
 func (o Hysteria2Option) Equal(config C.InboundConfig) bool {
@@ -55,6 +56,7 @@ func NewHysteria2(options *Hysteria2Option) (*Hysteria2, error) {
 			Down:                  options.Down,
 			IgnoreClientBandwidth: options.IgnoreClientBandwidth,
 			Masquerade:            options.Masquerade,
+			CWND:                  options.CWND,
 		},
 	}, nil
 }

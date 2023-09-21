@@ -54,6 +54,7 @@ type Hysteria2Option struct {
 	ALPN           []string `proxy:"alpn,omitempty"`
 	CustomCA       string   `proxy:"ca,omitempty"`
 	CustomCAString string   `proxy:"ca-str,omitempty"`
+	CWND           int      `proxy:"cwnd,omitempty"`
 }
 
 type hy2SingDialer struct {
@@ -191,6 +192,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		Password:           option.Password,
 		TLSConfig:          tlsConfig,
 		UDPDisabled:        false,
+		CWND:               option.CWND,
 	}
 
 	client, err := hysteria2.NewClient(clientOptions)

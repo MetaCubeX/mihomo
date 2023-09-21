@@ -16,6 +16,7 @@ type Hysteria2Server struct {
 	Down                  string            `yaml:"down" json:"down,omitempty"`
 	IgnoreClientBandwidth bool              `yaml:"ignore-client-bandwidth" json:"ignore-client-bandwidth,omitempty"`
 	Masquerade            string            `yaml:"masquerade" json:"masquerade,omitempty"`
+	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
 }
 
 func (h Hysteria2Server) String() string {
