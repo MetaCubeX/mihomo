@@ -96,10 +96,10 @@ func (q *quicStreamPacketConn) SetWriteDeadline(t time.Time) error {
 }
 
 func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	if q.inputConn != nil {
+	if inputConn := q.inputConn; inputConn != nil { // copy inputConn avoid be nil in for loop
 		for {
 			var packet Packet
-			packet, err = ReadPacket(q.inputConn)
+			packet, err = ReadPacket(inputConn)
 			if err != nil {
 				return
 			}
@@ -116,10 +116,10 @@ func (q *quicStreamPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err err
 }
 
 func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
-	if q.inputConn != nil {
+	if inputConn := q.inputConn; inputConn != nil { // copy inputConn avoid be nil in for loop
 		for {
 			var packet Packet
-			packet, err = ReadPacket(q.inputConn)
+			packet, err = ReadPacket(inputConn)
 			if err != nil {
 				return
 			}
