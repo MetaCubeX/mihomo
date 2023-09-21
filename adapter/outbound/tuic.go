@@ -323,6 +323,10 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 
 		t.client = tuic.NewPoolClientV4(clientOption)
 	} else {
+		maxUdpRelayPacketSize := option.MaxUdpRelayPacketSize
+		if maxUdpRelayPacketSize > tuic.MaxFragSizeV5 {
+			maxUdpRelayPacketSize = tuic.MaxFragSizeV5
+		}
 		clientOption := &tuic.ClientOptionV5{
 			TlsConfig:             tlsConfig,
 			QuicConfig:            quicConfig,
@@ -331,7 +335,7 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			UdpRelayMode:          udpRelayMode,
 			CongestionController:  option.CongestionController,
 			ReduceRtt:             option.ReduceRtt,
-			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			MaxUdpRelayPacketSize: maxUdpRelayPacketSize,
 			MaxOpenStreams:        clientMaxOpenStreams,
 			CWND:                  option.CWND,
 		}
