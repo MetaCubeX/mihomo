@@ -117,12 +117,12 @@ type HysteriaOption struct {
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 	var up, down uint64
-	up = stringToBps(c.Up)
+	up = StringToBps(c.Up)
 	if up == 0 {
 		return 0, 0, fmt.Errorf("invaild upload speed: %s", c.Up)
 	}
 
-	down = stringToBps(c.Down)
+	down = StringToBps(c.Down)
 	if down == 0 {
 		return 0, 0, fmt.Errorf("invaild download speed: %s", c.Down)
 	}
