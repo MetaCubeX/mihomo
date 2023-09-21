@@ -20,7 +20,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.38.1-0.20230909013832-033f6a2115cf
-	github.com/metacubex/sing-quic v0.0.0-20230921153541-9d96dbf04c89
+	github.com/metacubex/sing-quic v0.0.0-20230921160948-82175eb07a81
 	github.com/metacubex/sing-shadowsocks v0.2.5
 	github.com/metacubex/sing-shadowsocks2 v0.1.4
 	github.com/metacubex/sing-tun v0.1.12
@@ -105,4 +105,4 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230921005553-6eacdd2c7a24
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230921160249-edb949c9c140
