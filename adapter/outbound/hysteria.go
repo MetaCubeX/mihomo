@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -42,8 +41,6 @@ const (
 	DefaultProtocol    = "udp"
 	DefaultHopInterval = 10
 )
-
-var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
 
 type Hysteria struct {
 	*Base
