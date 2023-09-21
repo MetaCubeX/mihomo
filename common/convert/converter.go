@@ -68,7 +68,39 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
 			proxies = append(proxies, hysteria)
+		case "hysteria2":
+			urlHysteria2, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
 
+			query := urlHysteria2.Query()
+			name := uniqueName(names, urlHysteria2.Fragment)
+			hysteria2 := make(map[string]any, 20)
+
+			hysteria2["name"] = name
+			hysteria2["type"] = scheme
+			hysteria2["server"] = urlHysteria2.Hostname()
+			if port := urlHysteria2.Port(); port != "" {
+				hysteria2["port"] = port
+			} else {
+				hysteria2["port"] = "443"
+			}
+			hysteria2["obfs"] = query.Get("obfs")
+			hysteria2["obfs-password"] = query.Get("obfs-password")
+			hysteria2["sni"] = query.Get("sni")
+			hysteria2["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
+			if alpn := query.Get("alpn"); alpn != "" {
+				hysteria2["alpn"] = strings.Split(alpn, ",")
+			}
+			if auth := urlHysteria2.User.String(); auth != "" {
+				hysteria2["password"] = auth
+			}
+			hysteria2["fingerprint"] = query.Get("pinSHA256")
+			hysteria2["down"] = query.Get("down")
+			hysteria2["up"] = query.Get("up")
+
+			proxies = append(proxies, hysteria2)
 		case "tuic":
 			// A temporary unofficial TUIC share link standard
 			// Modified from https://github.com/daeuniverse/dae/discussions/182
