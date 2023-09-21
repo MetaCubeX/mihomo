@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"regexp"
 	"strconv"
 	"sync"
 
@@ -122,6 +123,8 @@ func safeConnClose(c net.Conn, err error) {
 		_ = c.Close()
 	}
 }
+
+var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
 
 func stringToBps(s string) uint64 {
 	if s == "" {
