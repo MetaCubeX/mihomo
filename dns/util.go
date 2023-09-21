@@ -64,7 +64,9 @@ func putMsgToCacheWithExpire(c *cache.LruCache[string, *D.Msg], key string, msg 
 			return
 		}
 
-		sec = max(sec, 120) // at least 2 minutes to cache
+		if sec > 120 {
+			sec = 120 // at least 2 minutes to cache
+		}
 
 	}
 
