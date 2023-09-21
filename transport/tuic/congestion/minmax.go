@@ -16,7 +16,7 @@ func MinNonZeroDuration(a, b time.Duration) time.Duration {
 	if b == 0 {
 		return a
 	}
-	return min(a, b)
+	return Min(a, b)
 }
 
 // AbsDuration returns the absolute value of a time duration
