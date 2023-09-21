@@ -85,16 +85,16 @@ func TestObservable_UnSubscribeWithNotExistSubscription(t *testing.T) {
 func TestObservable_SubscribeGoroutineLeak(t *testing.T) {
 	iter := iterator[int]([]int{1, 2, 3, 4, 5})
 	src := NewObservable[int](iter)
-	total := 100
+	max := 100
 
 	var list []Subscription[int]
-	for i := 0; i < total; i++ {
+	for i := 0; i < max; i++ {
 		ch, _ := src.Subscribe()
 		list = append(list, ch)
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(total)
+	wg.Add(max)
 	waitCh := func(ch <-chan int) {
 		for range ch {
 		}
