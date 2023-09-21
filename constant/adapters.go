@@ -36,6 +36,7 @@ const (
 	Vless
 	Trojan
 	Hysteria
+	Hysteria2
 	WireGuard
 	Tuic
 )
@@ -200,6 +201,8 @@ func (at AdapterType) String() string {
 		return "Trojan"
 	case Hysteria:
 		return "Hysteria"
+	case Hysteria2:
+		return "Hysteria2"
 	case WireGuard:
 		return "WireGuard"
 	case Tuic:
