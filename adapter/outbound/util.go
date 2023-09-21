@@ -126,14 +126,14 @@ func safeConnClose(c net.Conn, err error) {
 
 var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
 
-func stringToBps(s string) uint64 {
+func StringToBps(s string) uint64 {
 	if s == "" {
 		return 0
 	}
 
 	// when have not unit, use Mbps
 	if v, err := strconv.Atoi(s); err == nil {
-		return stringToBps(fmt.Sprintf("%d Mbps", v))
+		return StringToBps(fmt.Sprintf("%d Mbps", v))
 	}
 
 	m := rateStringRegexp.FindStringSubmatch(s)
