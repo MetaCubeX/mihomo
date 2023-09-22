@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net"
 
+	"github.com/Dreamacro/clash/component/ca"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/log"
 
@@ -39,12 +40,9 @@ func NewShadowTLS(ctx context.Context, conn net.Conn, option *ShadowTLSOption) (
 	}
 
 	var err error
-	if len(option.Fingerprint) == 0 {
-		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-	} else {
-		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
-			return nil, err
-		}
+	tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
+	if err != nil {
+		return nil, err
 	}
 
 	tlsHandshake := shadowtls.DefaultTLSHandshakeFunc(option.Password, tlsConfig)

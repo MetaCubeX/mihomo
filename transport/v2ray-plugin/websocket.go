@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/transport/vmess"
 )
 
@@ -43,13 +43,10 @@ func NewV2rayObfs(ctx context.Context, conn net.Conn, option *Option) (net.Conn,
 			InsecureSkipVerify: option.SkipCertVerify,
 			NextProtos:         []string{"http/1.1"},
 		}
-		if len(option.Fingerprint) == 0 {
-			config.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-		} else {
-			var err error
-			if config.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
-				return nil, err
-			}
+		var err error
+		config.TLSConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
+		if err != nil {
+			return nil, err
 		}
 
 		if host := config.Headers.Get("Host"); host != "" {

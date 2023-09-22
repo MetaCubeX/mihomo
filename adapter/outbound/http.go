@@ -14,9 +14,9 @@ import (
 	"strconv"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -157,19 +157,13 @@ func NewHttp(option HttpOption) (*Http, error) {
 		if option.SNI != "" {
 			sni = option.SNI
 		}
-		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
-				InsecureSkipVerify: option.SkipCertVerify,
-				ServerName:         sni,
-			})
-		} else {
-			var err error
-			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(&tls.Config{
-				InsecureSkipVerify: option.SkipCertVerify,
-				ServerName:         sni,
-			}, option.Fingerprint); err != nil {
-				return nil, err
-			}
+		var err error
+		tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(&tls.Config{
+			InsecureSkipVerify: option.SkipCertVerify,
+			ServerName:         sni,
+		}, option.Fingerprint)
+		if err != nil {
+			return nil, err
 		}
 	}
 

@@ -14,6 +14,7 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/pool"
+	"github.com/Dreamacro/clash/component/ca"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -77,13 +78,10 @@ func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error
 		ServerName:         t.option.ServerName,
 	}
 
-	if len(t.option.Fingerprint) == 0 {
-		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-	} else {
-		var err error
-		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint); err != nil {
-			return nil, err
-		}
+	var err error
+	tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(t.option.ClientFingerprint) != 0 {
@@ -112,7 +110,7 @@ func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
 	defer cancel()
 
-	err := tlsConn.HandshakeContext(ctx)
+	err = tlsConn.HandshakeContext(ctx)
 	return tlsConn, err
 }
 

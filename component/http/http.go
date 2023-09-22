@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/component/ca"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/listener/inner"
 )
@@ -58,7 +59,7 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 				return d.DialContext(ctx, network, address)
 			}
 		},
-		TLSClientConfig: tls.GetDefaultTLSConfig(),
+		TLSClientConfig: ca.GetGlobalTLSConfig(&tls.Config{}),
 	}
 
 	client := http.Client{Transport: transport}
