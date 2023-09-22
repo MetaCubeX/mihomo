@@ -10,9 +10,9 @@ import (
 	"strconv"
 
 	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
@@ -180,13 +180,10 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 			ServerName:         option.Server,
 		}
 
-		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-		} else {
-			var err error
-			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint); err != nil {
-				return nil, err
-			}
+		var err error
+		tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
+		if err != nil {
+			return nil, err
 		}
 	}
 

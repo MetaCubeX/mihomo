@@ -13,6 +13,7 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -127,12 +128,9 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				NextProtos:         []string{"http/1.1"},
 			}
 
-			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-			} else {
-				if wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint); err != nil {
-					return nil, err
-				}
+			wsOpts.TLSConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
+			if err != nil {
+				return nil, err
 			}
 
 			if v.option.ServerName != "" {
@@ -483,7 +481,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		}
 		var tlsConfig *tls.Config
 		if option.TLS {
-			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
+			tlsConfig = ca.GetGlobalTLSConfig(&tls.Config{
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				ServerName:         v.option.ServerName,
 			})

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 
+	"github.com/Dreamacro/clash/component/ca"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 )
 
@@ -25,13 +26,10 @@ func StreamTLSConn(ctx context.Context, conn net.Conn, cfg *TLSConfig) (net.Conn
 		NextProtos:         cfg.NextProtos,
 	}
 
-	if len(cfg.FingerPrint) == 0 {
-		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-	} else {
-		var err error
-		if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, cfg.FingerPrint); err != nil {
-			return nil, err
-		}
+	var err error
+	tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, cfg.FingerPrint)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(cfg.ClientFingerprint) != 0 {
@@ -51,7 +49,7 @@ func StreamTLSConn(ctx context.Context, conn net.Conn, cfg *TLSConfig) (net.Conn
 
 	tlsConn := tls.Client(conn, tlsConfig)
 
-	err := tlsConn.HandshakeContext(ctx)
+	err = tlsConn.HandshakeContext(ctx)
 	return tlsConn, err
 }
 

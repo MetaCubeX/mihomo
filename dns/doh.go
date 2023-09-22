@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/component/ca"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/metacubex/quic-go"
@@ -382,7 +382,7 @@ func (doh *dnsOverHTTPS) createClient(ctx context.Context) (*http.Client, error)
 // HTTP3 is enabled in the upstream options).  If this attempt is successful,
 // it returns an HTTP3 transport, otherwise it returns the H1/H2 transport.
 func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripper, err error) {
-	tlsConfig := tlsC.GetGlobalTLSConfig(
+	tlsConfig := ca.GetGlobalTLSConfig(
 		&tls.Config{
 			InsecureSkipVerify:     false,
 			MinVersion:             tls.VersionTLS12,
