@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"errors"
+	"net/netip"
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -40,7 +41,7 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		}
 		metadata.DstIP = ip
 	}
-	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", metadata.DstIP), "", d.Base.DialOptions(opts...)...)
+	pc, err := dialer.NewDialer(d.Base.DialOptions(opts...)...).ListenPacket(ctx, "udp", "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}
