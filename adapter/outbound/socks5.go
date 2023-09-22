@@ -156,7 +156,7 @@ func (ss *Socks5) ListenPacketContext(ctx context.Context, metadata *C.Metadata,
 		bindUDPAddr.IP = serverAddr.IP
 	}
 
-	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", bindUDPAddr.AddrPort().Addr()), "", ss.Base.DialOptions(opts...)...)
+	pc, err := cDialer.ListenPacket(ctx, "udp", "", bindUDPAddr.AddrPort())
 	if err != nil {
 		return
 	}
