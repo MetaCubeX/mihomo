@@ -55,7 +55,7 @@ type Hysteria2Option struct {
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	options := h.Base.DialOptions(opts...)
 	h.dialer.SetDialer(dialer.NewDialer(options...))
-	c, err := h.client.DialConn(ctx, M.ParseSocksaddr(metadata.RemoteAddress()))
+	c, err := h.client.DialConn(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}
