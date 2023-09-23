@@ -2,6 +2,7 @@ package config
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,15 +20,18 @@ var (
 	ExternalUIFolder string
 	ExternalUIName   string
 )
-
+var (
+	ErrImcompleteConf = errors.New("ExternalUI configure incomplete")
+)
 var xdMutex sync.Mutex
 
 func UpdateUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
 
-	if ExternalUIPath == "" || ExternalUIFolder == "" {
-		return fmt.Errorf("ExternalUI configure incomplete")
+	err := prepare()
+	if err != nil {
+		return err
 	}
 
 	data, err := downloadForBytes(ExternalUIURL)
@@ -57,6 +61,25 @@ func UpdateUI() error {
 	if err != nil {
 		return fmt.Errorf("can't rename folder: %w", err)
 	}
+	return nil
+}
+
+func prepare() error {
+	if ExternalUIPath == "" || ExternalUIURL == "" {
+		return ErrImcompleteConf
+	}
+
+	if ExternalUIName != "" {
+		ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath, ExternalUIName))
+		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
+			if err := os.MkdirAll(ExternalUIPath, os.ModePerm); err != nil {
+				return err
+			}
+		}
+	} else {
+		ExternalUIFolder = ExternalUIPath
+	}
+
 	return nil
 }
 

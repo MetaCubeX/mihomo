@@ -2,7 +2,6 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Dreamacro/clash/ntp"
 	"net"
 	"net/netip"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/ntp"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/inbound"
@@ -142,6 +143,7 @@ func GetGeneral() *config.General {
 			AllowLan:          listener.AllowLan(),
 			BindAddress:       listener.BindAddress(),
 		},
+		Controller:    config.Controller{},
 		Mode:          tunnel.Mode(),
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
