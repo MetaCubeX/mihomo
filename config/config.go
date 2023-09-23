@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -582,9 +581,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
 
-	if cfg.ExternalUIURL != "" {
-		ExternalUIURL = cfg.ExternalUIURL
-	}
 	ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist
 	if ExternalUIPath != "" {
@@ -602,14 +598,11 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	// checkout UIpath/name exist
 	if cfg.ExternalUIName != "" {
 		ExternalUIName = cfg.ExternalUIName
-		ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath, cfg.ExternalUIName))
-		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(ExternalUIPath, os.ModePerm); err != nil {
-				return nil, err
-			}
-		}
 	} else {
 		ExternalUIFolder = ExternalUIPath
+	}
+	if cfg.ExternalUIURL != "" {
+		ExternalUIURL = cfg.ExternalUIURL
 	}
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
