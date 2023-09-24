@@ -50,7 +50,7 @@ func upgradeCore(w http.ResponseWriter, r *http.Request) {
 func updateUI(w http.ResponseWriter, r *http.Request) {
 	err := config.UpdateUI()
 	if err != nil {
-		if errors.Is(err, config.ErrImcompleteConf) {
+		if errors.Is(err, config.ErrIncompleteConf) {
 			log.Warnln("%s", err)
 			render.Status(r, http.StatusNotImplemented)
 			render.JSON(w, r, newError(fmt.Sprintf("%s", err)))

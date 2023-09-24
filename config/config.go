@@ -461,6 +461,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			GeoIp:   "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
 			GeoSite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		},
+		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
