@@ -603,6 +603,8 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	}
 	if cfg.ExternalUIURL != "" {
 		ExternalUIURL = cfg.ExternalUIURL
+	} else {
+		ExternalUIURL = "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
 	}
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
