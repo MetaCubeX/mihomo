@@ -35,7 +35,8 @@ type SnifferDispatcher struct {
 	parsePureIp     bool
 }
 
-func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) {
+// TCPSniff returns true if the connection is sniffed to have a domain
+func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool {
 	if (metadata.Host == "" && sd.parsePureIp) || sd.forceDomain.Has(metadata.Host) || (metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping) {
 		inWhitelist := false
 		overrideDest := false
@@ -50,7 +51,7 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 		}
 
 		if !inWhitelist {
-			return
+			return false
 		}
 
 		sd.rwMux.RLock()
@@ -58,18 +59,18 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 		if count, ok := sd.skipList.Get(dst); ok && count > 5 {
 			log.Debugln("[Sniffer] Skip sniffing[%s] due to multiple failures", dst)
 			defer sd.rwMux.RUnlock()
-			return
+			return false
 		}
 		sd.rwMux.RUnlock()
 
 		if host, err := sd.sniffDomain(conn, metadata); err != nil {
 			sd.cacheSniffFailed(metadata)
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%d] to [%s:%d]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
-			return
+			return false
 		} else {
 			if sd.skipSNI.Has(host) {
 				log.Debugln("[Sniffer] Skip sni[%s]", host)
-				return
+				return false
 			}
 
 			sd.rwMux.RLock()
@@ -77,20 +78,23 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 			sd.rwMux.RUnlock()
 
 			sd.replaceDomain(metadata, host, overrideDest)
+			return true
 		}
 	}
+	return false
 }
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
+	// show log early, since the following code may mutate `metadata.Host`
+	log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s] success, replace domain [%s]-->[%s]",
+		metadata.SourceDetail(),
+		metadata.RemoteAddress(),
+		metadata.Host, host)
 	metadata.SniffHost = host
 	if overrideDest {
 		metadata.Host = host
 	}
 	metadata.DNSMode = C.DNSNormal
-	log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s] success, replace domain [%s]-->[%s]",
-		metadata.SourceDetail(),
-		metadata.RemoteAddress(),
-		metadata.Host, host)
 }
 
 func (sd *SnifferDispatcher) Enable() bool {
