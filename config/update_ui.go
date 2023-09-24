@@ -21,7 +21,7 @@ var (
 	ExternalUIName   string
 )
 var (
-	ErrImcompleteConf = errors.New("ExternalUI configure incomplete")
+	ErrIncompleteConf = errors.New("ExternalUI configure incomplete")
 )
 var xdMutex sync.Mutex
 
@@ -66,7 +66,7 @@ func UpdateUI() error {
 
 func prepare() error {
 	if ExternalUIPath == "" || ExternalUIURL == "" {
-		return ErrImcompleteConf
+		return ErrIncompleteConf
 	}
 
 	if ExternalUIName != "" {
