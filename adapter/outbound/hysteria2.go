@@ -19,7 +19,6 @@ import (
 	"github.com/metacubex/sing-quic/hysteria2"
 
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 )
 
 func init() {
@@ -31,7 +30,7 @@ type Hysteria2 struct {
 
 	option *Hysteria2Option
 	client *hysteria2.Client
-	dialer *hy2SingDialer
+	dialer proxydialer.SingDialer
 }
 
 type Hysteria2Option struct {
@@ -53,40 +52,9 @@ type Hysteria2Option struct {
 	CWND           int      `proxy:"cwnd,omitempty"`
 }
 
-type hy2SingDialer struct {
-	dialer    dialer.Dialer
-	proxyName string
-}
-
-var _ N.Dialer = (*hy2SingDialer)(nil)
-
-func (d *hy2SingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	var cDialer C.Dialer = d.dialer
-	if len(d.proxyName) > 0 {
-		pd, err := proxydialer.NewByName(d.proxyName, d.dialer)
-		if err != nil {
-			return nil, err
-		}
-		cDialer = pd
-	}
-	return cDialer.DialContext(ctx, network, destination.String())
-}
-
-func (d *hy2SingDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	var cDialer C.Dialer = d.dialer
-	if len(d.proxyName) > 0 {
-		pd, err := proxydialer.NewByName(d.proxyName, d.dialer)
-		if err != nil {
-			return nil, err
-		}
-		cDialer = pd
-	}
-	return cDialer.ListenPacket(ctx, "udp", "", destination.AddrPort())
-}
-
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	options := h.Base.DialOptions(opts...)
-	h.dialer.dialer = dialer.NewDialer(options...)
+	h.dialer.SetDialer(dialer.NewDialer(options...))
 	c, err := h.client.DialConn(ctx, M.ParseSocksaddr(metadata.RemoteAddress()))
 	if err != nil {
 		return nil, err
@@ -96,7 +64,7 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 
 func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	options := h.Base.DialOptions(opts...)
-	h.dialer.dialer = dialer.NewDialer(options...)
+	h.dialer.SetDialer(dialer.NewDialer(options...))
 	pc, err := h.client.ListenPacket(ctx)
 	if err != nil {
 		return nil, err
@@ -149,7 +117,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		tlsConfig.NextProtos = option.ALPN
 	}
 
-	singDialer := &hy2SingDialer{dialer: dialer.NewDialer(), proxyName: option.DialerProxy}
+	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer())
 
 	clientOptions := hysteria2.ClientOptions{
 		Context:            context.TODO(),
