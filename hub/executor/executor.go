@@ -2,16 +2,22 @@ package executor
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/Dreamacro/clash/ntp"
 
 	"github.com/Dreamacro/clash/adapter"
 	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/component/auth"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	G "github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/iface"
@@ -19,7 +25,6 @@ import (
 	"github.com/Dreamacro/clash/component/profile/cachefile"
 	"github.com/Dreamacro/clash/component/resolver"
 	SNI "github.com/Dreamacro/clash/component/sniffer"
-	CTLS "github.com/Dreamacro/clash/component/tls"
 	"github.com/Dreamacro/clash/component/trie"
 	"github.com/Dreamacro/clash/config"
 	C "github.com/Dreamacro/clash/constant"
@@ -79,9 +84,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	tunnel.OnSuspend()
 
-	CTLS.ResetCertificate()
+	ca.ResetCertificate()
 	for _, c := range cfg.TLS.CustomTrustCert {
-		if err := CTLS.AddCertificate(c); err != nil {
+		if err := ca.AddCertificate(c); err != nil {
 			log.Warnln("%s\nadd error: %s", c, err.Error())
 		}
 	}
@@ -92,6 +97,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateGeneral(cfg.General)
+	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.RuleProviders, cfg.General.IPv6)
 	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
@@ -137,6 +143,7 @@ func GetGeneral() *config.General {
 			AllowLan:          listener.AllowLan(),
 			BindAddress:       listener.BindAddress(),
 		},
+		Controller:    config.Controller{},
 		Mode:          tunnel.Mode(),
 		LogLevel:      log.Level(),
 		IPv6:          !resolver.DisableIPv6,
@@ -176,6 +183,20 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 }
 
 func updateExperimental(c *config.Config) {
+	if c.Experimental.QUICGoDisableGSO {
+		_ = os.Setenv("QUIC_GO_DISABLE_GSO", "1")
+	}
+}
+
+func updateNTP(c *config.NTP) {
+	if c.Enable {
+		ntp.ReCreateNTPService(
+			net.JoinHostPort(c.Server, strconv.Itoa(c.Port)),
+			time.Duration(c.Interval),
+			c.DialerProxy,
+			c.WriteToSystem,
+		)
+	}
 }
 
 func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, generalIPv6 bool) {
@@ -479,7 +500,7 @@ func updateIPTables(cfg *config.Config) {
 }
 
 func Shutdown() {
-	listener.Cleanup(false)
+	listener.Cleanup()
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 

@@ -86,6 +86,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewVmess(vmessOption)
+	case "hysteria2":
+		hysteria2Option := &IN.Hysteria2Option{}
+		err = decoder.Decode(mapping, hysteria2Option)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewHysteria2(hysteria2Option)
 	case "tuic":
 		tuicOption := &IN.TuicOption{
 			MaxIdleTime:           15000,

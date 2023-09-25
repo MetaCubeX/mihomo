@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/Dreamacro/clash/common/generics/list"
+
+	"github.com/samber/lo"
 )
 
 // Option is part of Functional Options Pattern
@@ -87,7 +89,7 @@ func (c *LruCache[K, V]) Get(key K) (V, bool) {
 
 	el := c.get(key)
 	if el == nil {
-		return getZero[V](), false
+		return lo.Empty[V](), false
 	}
 	value := el.value
 
@@ -119,7 +121,7 @@ func (c *LruCache[K, V]) GetWithExpire(key K) (V, time.Time, bool) {
 
 	el := c.get(key)
 	if el == nil {
-		return getZero[V](), time.Time{}, false
+		return lo.Empty[V](), time.Time{}, false
 	}
 
 	return el.value, time.Unix(el.expires, 0), true
@@ -258,9 +260,4 @@ type entry[K comparable, V any] struct {
 	key     K
 	value   V
 	expires int64
-}
-
-func getZero[T any]() T {
-	var result T
-	return result
 }

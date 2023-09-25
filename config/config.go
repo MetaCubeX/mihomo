@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/adapter/outboundgroup"
 	"github.com/Dreamacro/clash/adapter/provider"
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/auth"
 	"github.com/Dreamacro/clash/component/dialer"
@@ -59,6 +61,7 @@ type General struct {
 	Sniffing                bool              `json:"sniffing"`
 	EBpf                    EBpf              `json:"-"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
+	GlobalUA                string            `json:"global-ua"`
 }
 
 // Inbound config
@@ -85,6 +88,16 @@ type Controller struct {
 	ExternalControllerTLS string `json:"-"`
 	ExternalUI            string `json:"-"`
 	Secret                string `json:"-"`
+}
+
+// NTP config
+type NTP struct {
+	Enable        bool   `yaml:"enable"`
+	Server        string `yaml:"server"`
+	Port          int    `yaml:"port"`
+	Interval      int    `yaml:"interval"`
+	DialerProxy   string `yaml:"dialer-proxy"`
+	WriteToSystem bool   `yaml:"write-to-system"`
 }
 
 // DNS config
@@ -144,13 +157,15 @@ type Sniffer struct {
 
 // Experimental config
 type Experimental struct {
-	Fingerprints []string `yaml:"fingerprints"`
+	Fingerprints     []string `yaml:"fingerprints"`
+	QUICGoDisableGSO bool     `yaml:"quic-go-disable-gso"`
 }
 
 // Config is clash config manager
 type Config struct {
 	General       *General
 	IPTables      *IPTables
+	NTP           *NTP
 	DNS           *DNS
 	Experimental  *Experimental
 	Hosts         *trie.DomainTrie[resolver.HostValue]
@@ -165,6 +180,15 @@ type Config struct {
 	Tunnels       []LC.Tunnel
 	Sniffer       *Sniffer
 	TLS           *TLS
+}
+
+type RawNTP struct {
+	Enable        bool   `yaml:"enable"`
+	Server        string `yaml:"server"`
+	ServerPort    int    `yaml:"server-port"`
+	Interval      int    `yaml:"interval"`
+	DialerProxy   string `yaml:"dialer-proxy"`
+	WriteToSystem bool   `yaml:"write-to-system"`
 }
 
 type RawDNS struct {
@@ -255,6 +279,8 @@ type RawConfig struct {
 	ExternalController      string            `yaml:"external-controller"`
 	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
 	ExternalUI              string            `yaml:"external-ui"`
+	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
+	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
 	Secret                  string            `yaml:"secret"`
 	Interface               string            `yaml:"interface-name"`
 	RoutingMark             int               `yaml:"routing-mark"`
@@ -264,11 +290,14 @@ type RawConfig struct {
 	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
+	GlobalUA                string            `yaml:"global-ua"`
+	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
 	Hosts         map[string]any            `yaml:"hosts"`
+	NTP           RawNTP                    `yaml:"ntp"`
 	DNS           RawDNS                    `yaml:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
@@ -348,6 +377,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:      []map[string]any{},
 		TCPConcurrent:   false,
 		FindProcessMode: P.FindProcessStrict,
+		GlobalUA:        "clash.meta",
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -378,6 +408,13 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:           false,
 			InboundInterface: "lo",
 			Bypass:           []string{},
+		},
+		NTP: RawNTP{
+			Enable:        false,
+			WriteToSystem: false,
+			Server:        "time.apple.com",
+			ServerPort:    123,
+			Interval:      30,
 		},
 		DNS: RawDNS{
 			Enable:       false,
@@ -426,6 +463,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			GeoIp:   "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
 			GeoSite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		},
+		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
@@ -493,6 +531,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Hosts = hosts
 
+	ntpCfg := paresNTP(rawCfg)
+	config.NTP = ntpCfg
+
 	dnsCfg, err := parseDNS(rawCfg, hosts, rules, ruleProviders)
 	if err != nil {
 		return nil, err
@@ -533,19 +574,40 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 }
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
-	externalUI := cfg.ExternalUI
 	geodata.SetLoader(cfg.GeodataLoader)
 	C.GeoIpUrl = cfg.GeoXUrl.GeoIp
 	C.GeoSiteUrl = cfg.GeoXUrl.GeoSite
 	C.MmdbUrl = cfg.GeoXUrl.Mmdb
 	C.GeodataMode = cfg.GeodataMode
+	C.UA = cfg.GlobalUA
+	if cfg.KeepAliveInterval != 0 {
+		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
+	}
+
+	ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist
-	if externalUI != "" {
-		externalUI = C.Path.Resolve(externalUI)
-		if _, err := os.Stat(externalUI); os.IsNotExist(err) {
-			return nil, fmt.Errorf("external-ui: %s not exist", externalUI)
+	if ExternalUIPath != "" {
+		ExternalUIPath = C.Path.Resolve(ExternalUIPath)
+		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
+			defaultUIpath := path.Join(C.Path.HomeDir(), "ui")
+			log.Warnln("external-ui: %s does not exist, creating folder in %s", ExternalUIPath, defaultUIpath)
+			if err := os.MkdirAll(defaultUIpath, os.ModePerm); err != nil {
+				return nil, err
+			}
+			ExternalUIPath = defaultUIpath
+			cfg.ExternalUI = defaultUIpath
 		}
 	}
+	// checkout UIpath/name exist
+	if cfg.ExternalUIName != "" {
+		ExternalUIName = cfg.ExternalUIName
+	} else {
+		ExternalUIFolder = ExternalUIPath
+	}
+	if cfg.ExternalUIURL != "" {
+		ExternalUIURL = cfg.ExternalUIURL
+	}
+
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
 		Inbound: Inbound{
@@ -580,6 +642,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		FindProcessMode:         cfg.FindProcessMode,
 		EBpf:                    cfg.EBpf,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
+		GlobalUA:                cfg.GlobalUA,
 	}, nil
 }
 
@@ -1130,6 +1193,19 @@ func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainM
 		}
 	}
 	return sites, nil
+}
+
+func paresNTP(rawCfg *RawConfig) *NTP {
+	cfg := rawCfg.NTP
+	ntpCfg := &NTP{
+		Enable:        cfg.Enable,
+		Server:        cfg.Server,
+		Port:          cfg.ServerPort,
+		Interval:      cfg.Interval,
+		DialerProxy:   cfg.DialerProxy,
+		WriteToSystem: cfg.WriteToSystem,
+	}
+	return ntpCfg
 }
 
 func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider) (*DNS, error) {

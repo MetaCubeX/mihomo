@@ -1,6 +1,7 @@
 package tuic
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/Dreamacro/clash/common/sockopt"
 	C "github.com/Dreamacro/clash/constant"
 	LC "github.com/Dreamacro/clash/listener/config"
+	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
 	"github.com/Dreamacro/clash/transport/tuic"
@@ -35,6 +37,12 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 			inbound.WithInName("DEFAULT-TUIC"),
 			inbound.WithSpecialRules(""),
 		}
+	}
+	h := &sing.ListenerHandler{
+		TcpIn:     tcpIn,
+		UdpIn:     udpIn,
+		Type:      C.TUIC,
+		Additions: additions,
 	}
 	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
 	if err != nil {
@@ -86,7 +94,19 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 			newAdditions = slices.Clone(additions)
 			newAdditions = append(newAdditions, _additions...)
 		}
-		tcpIn <- inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
+		connCtx := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
+		metadata := sing.ConvertMetadata(connCtx.Metadata())
+		if h.IsSpecialFqdn(metadata.Destination.Fqdn) {
+			go func() { // ParseSpecialFqdn will block, so open a new goroutine
+				_ = h.ParseSpecialFqdn(
+					sing.WithAdditions(context.Background(), newAdditions...),
+					conn,
+					metadata,
+				)
+			}()
+			return nil
+		}
+		tcpIn <- connCtx
 		return nil
 	}
 	handleUdpFn := func(addr socks5.Addr, packet C.UDPPacket, _additions ...inbound.Addition) error {

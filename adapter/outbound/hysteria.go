@@ -2,16 +2,11 @@ package outbound
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/hex"
-	"encoding/pem"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -19,9 +14,9 @@ import (
 	"github.com/metacubex/quic-go/congestion"
 	M "github.com/sagernet/sing/common/metadata"
 
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	hyCongestion "github.com/Dreamacro/clash/transport/hysteria/congestion"
@@ -42,8 +37,6 @@ const (
 	DefaultProtocol    = "udp"
 	DefaultHopInterval = 10
 )
-
-var rateStringRegexp = regexp.MustCompile(`^(\d+)\s*([KMGT]?)([Bb])ps$`)
 
 type Hysteria struct {
 	*Base
@@ -120,12 +113,12 @@ type HysteriaOption struct {
 
 func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 	var up, down uint64
-	up = stringToBps(c.Up)
+	up = StringToBps(c.Up)
 	if up == 0 {
 		return 0, 0, fmt.Errorf("invaild upload speed: %s", c.Up)
 	}
 
-	down = stringToBps(c.Down)
+	down = StringToBps(c.Down)
 	if down == 0 {
 		return 0, 0, fmt.Errorf("invaild download speed: %s", c.Down)
 	}
@@ -153,37 +146,10 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		MinVersion:         tls.VersionTLS13,
 	}
 
-	var bs []byte
 	var err error
-	if len(option.CustomCA) > 0 {
-		bs, err = os.ReadFile(option.CustomCA)
-		if err != nil {
-			return nil, fmt.Errorf("hysteria %s load ca error: %w", addr, err)
-		}
-	} else if option.CustomCAString != "" {
-		bs = []byte(option.CustomCAString)
-	}
-
-	if len(bs) > 0 {
-		block, _ := pem.Decode(bs)
-		if block == nil {
-			return nil, fmt.Errorf("CA cert is not PEM")
-		}
-
-		fpBytes := sha256.Sum256(block.Bytes)
-		if len(option.Fingerprint) == 0 {
-			option.Fingerprint = hex.EncodeToString(fpBytes[:])
-		}
-	}
-
-	if len(option.Fingerprint) != 0 {
-		var err error
-		tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, option.Fingerprint)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		tlsConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
+	tlsConfig, err = ca.GetTLSConfig(tlsConfig, option.Fingerprint, option.CustomCA, option.CustomCAString)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(option.ALPN) > 0 {
@@ -266,42 +232,6 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		option: &option,
 		client: client,
 	}, nil
-}
-
-func stringToBps(s string) uint64 {
-	if s == "" {
-		return 0
-	}
-
-	// when have not unit, use Mbps
-	if v, err := strconv.Atoi(s); err == nil {
-		return stringToBps(fmt.Sprintf("%d Mbps", v))
-	}
-
-	m := rateStringRegexp.FindStringSubmatch(s)
-	if m == nil {
-		return 0
-	}
-	var n uint64
-	switch m[2] {
-	case "K":
-		n = 1 << 10
-	case "M":
-		n = 1 << 20
-	case "G":
-		n = 1 << 30
-	case "T":
-		n = 1 << 40
-	default:
-		n = 1
-	}
-	v, _ := strconv.ParseUint(m[1], 10, 64)
-	n = v * n
-	if m[3] == "b" {
-		// Bits, need to convert to bytes
-		n = n >> 3
-	}
-	return n
 }
 
 type hyPacketConn struct {

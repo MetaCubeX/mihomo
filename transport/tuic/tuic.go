@@ -30,6 +30,7 @@ const DefaultConnectionReceiveWindow = common.DefaultConnectionReceiveWindow
 var GenTKN = v4.GenTKN
 var PacketOverHeadV4 = v4.PacketOverHead
 var PacketOverHeadV5 = v5.PacketOverHead
+var MaxFragSizeV5 = v5.MaxFragSize
 
 type UdpRelayMode = common.UdpRelayMode
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/netip"
 	"strings"
+	_ "unsafe"
 
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/trie"
@@ -20,28 +21,39 @@ func NewHosts(hosts *trie.DomainTrie[HostValue]) Hosts {
 	}
 }
 
+// lookupStaticHost looks up the addresses and the canonical name for the given host from /etc/hosts.
+//
+//go:linkname lookupStaticHost net.lookupStaticHost
+func lookupStaticHost(host string) ([]string, string)
+
 // Return the search result and whether to match the parameter `isDomain`
 func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
-	value := h.DomainTrie.Search(domain)
-	if value == nil {
-		return nil, false
-	}
-	hostValue := value.Data()
-	for {
-		if isDomain && hostValue.IsDomain {
-			return &hostValue, true
-		} else {
-			if node := h.DomainTrie.Search(hostValue.Domain); node != nil {
-				hostValue = node.Data()
+	if value := h.DomainTrie.Search(domain); value != nil {
+		hostValue := value.Data()
+		for {
+			if isDomain && hostValue.IsDomain {
+				return &hostValue, true
 			} else {
-				break
+				if node := h.DomainTrie.Search(hostValue.Domain); node != nil {
+					hostValue = node.Data()
+				} else {
+					break
+				}
 			}
 		}
+		if isDomain == hostValue.IsDomain {
+			return &hostValue, true
+		}
+
+		return &hostValue, false
 	}
-	if isDomain == hostValue.IsDomain {
-		return &hostValue, true
+	if !isDomain {
+		addr, _ := lookupStaticHost(domain)
+		if hostValue, err := NewHostValue(addr); err == nil {
+			return &hostValue, true
+		}
 	}
-	return &hostValue, false
+	return nil, false
 }
 
 type HostValue struct {

@@ -142,7 +142,7 @@ jobs:
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
         id: setup-ndk
         with:
-          ndk-version: r25b
+          ndk-version: r26
           add-to-path: false
           local-cache: true
 
@@ -204,7 +204,7 @@ jobs:
 
   Upload-Prerelease:
     permissions: write-all
-    if: ${{ github.ref_type=='branch' }}
+    if: ${{ github.ref_type=='branch' && github.event_name != 'pull_request' }}
     needs: [Build]
     runs-on: ubuntu-latest
     steps:

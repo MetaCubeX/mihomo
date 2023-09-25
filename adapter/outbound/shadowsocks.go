@@ -19,7 +19,7 @@ import (
 	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
 
 	restlsC "github.com/3andne/restls-client-go"
-	"github.com/metacubex/sing-shadowsocks2"
+	shadowsocks "github.com/metacubex/sing-shadowsocks2"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
 )
@@ -146,7 +146,7 @@ func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Diale
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
@@ -294,7 +294,6 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		}
 
 		restlsConfig, err = restlsC.NewRestlsConfig(restlsOpt.Host, restlsOpt.Password, restlsOpt.VersionHint, restlsOpt.RestlsScript, option.ClientFingerprint)
-		restlsConfig.SessionTicketsDisabled = true
 		if err != nil {
 			return nil, fmt.Errorf("ss %s initialize restls-plugin error: %w", addr, err)
 		}

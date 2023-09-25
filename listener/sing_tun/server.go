@@ -172,7 +172,7 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		}
 	}()
 
-	networkUpdateMonitor, err := tun.NewNetworkUpdateMonitor(handler)
+	networkUpdateMonitor, err := tun.NewNetworkUpdateMonitor(log.SingLogger)
 	if err != nil {
 		err = E.Cause(err, "create NetworkUpdateMonitor")
 		return
@@ -184,15 +184,14 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		return
 	}
 
-	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
+	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, log.SingLogger, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
 	if err != nil {
 		err = E.Cause(err, "create DefaultInterfaceMonitor")
 		return
 	}
 	l.defaultInterfaceMonitor = defaultInterfaceMonitor
-	defaultInterfaceMonitor.RegisterCallback(func(event int) error {
+	defaultInterfaceMonitor.RegisterCallback(func(event int) {
 		l.FlushDefaultInterface()
-		return nil
 	})
 	err = defaultInterfaceMonitor.Start()
 	if err != nil {

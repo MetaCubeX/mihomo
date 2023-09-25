@@ -36,6 +36,7 @@ const (
 	Vless
 	Trojan
 	Hysteria
+	Hysteria2
 	WireGuard
 	Tuic
 )
@@ -200,6 +201,8 @@ func (at AdapterType) String() string {
 		return "Trojan"
 	case Hysteria:
 		return "Hysteria"
+	case Hysteria2:
+		return "Hysteria2"
 	case WireGuard:
 		return "WireGuard"
 	case Tuic:
@@ -267,13 +270,17 @@ type NatTable interface {
 
 	Delete(key string)
 
-	GetLocalConn(lAddr, rAddr string) *net.UDPConn
+	DeleteLock(key string)
 
-	AddLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
+	GetForLocalConn(lAddr, rAddr string) *net.UDPConn
 
-	RangeLocalConn(lAddr string, f func(key, value any) bool)
+	AddForLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
 
-	GetOrCreateLockForLocalConn(lAddr, key string) (*sync.Cond, bool)
+	RangeForLocalConn(lAddr string, f func(key string, value *net.UDPConn) bool)
 
-	DeleteLocalConnMap(lAddr, key string)
+	GetOrCreateLockForLocalConn(lAddr string, key string) (*sync.Cond, bool)
+
+	DeleteForLocalConn(lAddr, key string)
+
+	DeleteLockForLocalConn(lAddr, key string)
 }

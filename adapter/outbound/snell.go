@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/structure"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
@@ -93,7 +94,7 @@ func (s *Snell) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
@@ -121,7 +122,7 @@ func (s *Snell) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 	if err != nil {
 		return nil, err
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	c = streamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 
 	err = snell.WriteUDPHeader(c, s.version)
@@ -207,7 +208,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 				return nil, err
 			}
 
-			tcpKeepAlive(c)
+			N.TCPKeepAlive(c)
 			return streamConn(c, streamOption{psk, option.Version, addr, obfsOption}), nil
 		})
 	}

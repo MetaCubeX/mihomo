@@ -7,14 +7,16 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+
 	"io"
 	"net"
 	"net/http"
 	"strconv"
 
+	N "github.com/Dreamacro/clash/common/net"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -74,7 +76,7 @@ func (h *Http) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metad
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
@@ -155,19 +157,13 @@ func NewHttp(option HttpOption) (*Http, error) {
 		if option.SNI != "" {
 			sni = option.SNI
 		}
-		if len(option.Fingerprint) == 0 {
-			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
-				InsecureSkipVerify: option.SkipCertVerify,
-				ServerName:         sni,
-			})
-		} else {
-			var err error
-			if tlsConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(&tls.Config{
-				InsecureSkipVerify: option.SkipCertVerify,
-				ServerName:         sni,
-			}, option.Fingerprint); err != nil {
-				return nil, err
-			}
+		var err error
+		tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(&tls.Config{
+			InsecureSkipVerify: option.SkipCertVerify,
+			ServerName:         sni,
+		}, option.Fingerprint)
+		if err != nil {
+			return nil, err
 		}
 	}
 

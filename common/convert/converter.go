@@ -50,7 +50,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["port"] = urlHysteria.Port()
 			hysteria["sni"] = query.Get("peer")
 			hysteria["obfs"] = query.Get("obfs")
-			hysteria["alpn"] = []string{query.Get("alpn")}
+			if alpn := query.Get("alpn"); alpn != "" {
+				hysteria["alpn"] = strings.Split(alpn, ",")
+			}
 			hysteria["auth_str"] = query.Get("auth")
 			hysteria["protocol"] = query.Get("protocol")
 			up := query.Get("up")
@@ -66,6 +68,79 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
 			proxies = append(proxies, hysteria)
+		case "hysteria2":
+			urlHysteria2, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+
+			query := urlHysteria2.Query()
+			name := uniqueName(names, urlHysteria2.Fragment)
+			hysteria2 := make(map[string]any, 20)
+
+			hysteria2["name"] = name
+			hysteria2["type"] = scheme
+			hysteria2["server"] = urlHysteria2.Hostname()
+			if port := urlHysteria2.Port(); port != "" {
+				hysteria2["port"] = port
+			} else {
+				hysteria2["port"] = "443"
+			}
+			hysteria2["obfs"] = query.Get("obfs")
+			hysteria2["obfs-password"] = query.Get("obfs-password")
+			hysteria2["sni"] = query.Get("sni")
+			hysteria2["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
+			if alpn := query.Get("alpn"); alpn != "" {
+				hysteria2["alpn"] = strings.Split(alpn, ",")
+			}
+			if auth := urlHysteria2.User.String(); auth != "" {
+				hysteria2["password"] = auth
+			}
+			hysteria2["fingerprint"] = query.Get("pinSHA256")
+			hysteria2["down"] = query.Get("down")
+			hysteria2["up"] = query.Get("up")
+
+			proxies = append(proxies, hysteria2)
+		case "tuic":
+			// A temporary unofficial TUIC share link standard
+			// Modified from https://github.com/daeuniverse/dae/discussions/182
+			// Changes:
+			//   1. Support TUICv4, just replace uuid:password with token
+			//   2. Remove `allow_insecure` field
+			urlTUIC, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			query := urlTUIC.Query()
+
+			tuic := make(map[string]any, 20)
+			tuic["name"] = uniqueName(names, urlTUIC.Fragment)
+			tuic["type"] = scheme
+			tuic["server"] = urlTUIC.Hostname()
+			tuic["port"] = urlTUIC.Port()
+			tuic["udp"] = true
+			password, v5 := urlTUIC.User.Password()
+			if v5 {
+				tuic["uuid"] = urlTUIC.User.Username()
+				tuic["password"] = password
+			} else {
+				tuic["token"] = urlTUIC.User.Username()
+			}
+			if cc := query.Get("congestion_control"); cc != "" {
+				tuic["congestion-controller"] = cc
+			}
+			if alpn := query.Get("alpn"); alpn != "" {
+				tuic["alpn"] = strings.Split(alpn, ",")
+			}
+			if sni := query.Get("sni"); sni != "" {
+				tuic["sni"] = sni
+			}
+			if query.Get("disable_sni") == "1" {
+				tuic["disable-sni"] = true
+			}
+			if udpRelayMode := query.Get("udp_relay_mode"); udpRelayMode != "" {
+				tuic["udp-relay-mode"] = udpRelayMode
+			}
 
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
@@ -86,9 +161,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			trojan["udp"] = true
 			trojan["skip-cert-verify"], _ = strconv.ParseBool(query.Get("allowInsecure"))
 
-			sni := query.Get("sni")
-			if sni != "" {
+			if sni := query.Get("sni"); sni != "" {
 				trojan["sni"] = sni
+			}
+			if alpn := query.Get("alpn"); alpn != "" {
+				trojan["alpn"] = strings.Split(alpn, ",")
 			}
 
 			network := strings.ToLower(query.Get("type"))
@@ -217,6 +294,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				if strings.HasSuffix(tls, "tls") {
 					vmess["tls"] = true
 				}
+				if alpn, ok := values["alpn"].(string); ok {
+					vmess["alpn"] = strings.Split(alpn, ",")
+				}
 			}
 
 			switch network {
@@ -332,6 +412,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				}
 			}
 			proxies = append(proxies, ss)
+
 		case "ssr":
 			dcBuf, err := encRaw.DecodeString(body)
 			if err != nil {

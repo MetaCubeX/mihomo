@@ -3,6 +3,9 @@ package outbound
 import (
 	"context"
 	"errors"
+	"net/netip"
+
+	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	C "github.com/Dreamacro/clash/constant"
@@ -12,6 +15,11 @@ type Direct struct {
 	*Base
 }
 
+type DirectOption struct {
+	BasicOption
+	Name string `proxy:"name"`
+}
+
 // DialContext implements C.ProxyAdapter
 func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	opts = append(opts, dialer.WithResolver(resolver.DefaultResolver))
@@ -19,7 +27,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	if err != nil {
 		return nil, err
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	return NewConn(c, d), nil
 }
 
@@ -33,11 +41,26 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		}
 		metadata.DstIP = ip
 	}
-	pc, err := dialer.ListenPacket(ctx, dialer.ParseNetwork("udp", metadata.DstIP), "", d.Base.DialOptions(opts...)...)
+	pc, err := dialer.NewDialer(d.Base.DialOptions(opts...)...).ListenPacket(ctx, "udp", "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}
 	return newPacketConn(pc, d), nil
+}
+
+func NewDirectWithOption(option DirectOption) *Direct {
+	return &Direct{
+		Base: &Base{
+			name:   option.Name,
+			tp:     C.Direct,
+			udp:    true,
+			tfo:    option.TFO,
+			mpTcp:  option.MPTCP,
+			iface:  option.Interface,
+			rmark:  option.RoutingMark,
+			prefer: C.NewDNSPrefer(option.IPVersion),
+		},
+	}
 }
 
 func NewDirect() *Direct {

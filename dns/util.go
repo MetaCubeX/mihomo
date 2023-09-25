@@ -30,9 +30,13 @@ const (
 )
 
 func minimalTTL(records []D.RR) uint32 {
-	return lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
+	minObj := lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
 		return r1.Header().Ttl < r2.Header().Ttl
-	}).Header().Ttl
+	})
+	if minObj != nil {
+		return minObj.Header().Ttl
+	}
+	return 0
 }
 
 func updateTTL(records []D.RR, ttl uint32) {
@@ -46,27 +50,27 @@ func updateTTL(records []D.RR, ttl uint32) {
 }
 
 func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
-	// skip dns cache for acme challenge
-	if len(msg.Question) != 0 {
-		if q := msg.Question[0]; q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge") {
-			log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)
+	putMsgToCacheWithExpire(c, key, msg, 0)
+}
+
+func putMsgToCacheWithExpire(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg, sec uint32) {
+	if sec == 0 {
+		if sec = minimalTTL(msg.Answer); sec == 0 {
+			if sec = minimalTTL(msg.Ns); sec == 0 {
+				sec = minimalTTL(msg.Extra)
+			}
+		}
+		if sec == 0 {
 			return
 		}
-	}
-	var ttl uint32
-	switch {
-	case len(msg.Answer) != 0:
-		ttl = minimalTTL(msg.Answer)
-	case len(msg.Ns) != 0:
-		ttl = minimalTTL(msg.Ns)
-	case len(msg.Extra) != 0:
-		ttl = minimalTTL(msg.Extra)
-	default:
-		log.Debugln("[DNS] response msg empty: %#v", msg)
-		return
+
+		if sec > 120 {
+			sec = 120 // at least 2 minutes to cache
+		}
+
 	}
 
-	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Second*time.Duration(ttl)))
+	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Duration(sec)*time.Second))
 }
 
 func setMsgTTL(msg *D.Msg, ttl uint32) {
@@ -286,7 +290,7 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 		DstPort: uint16(uintPort),
 	}
 	if proxyAdapter == nil {
-		return dialer.ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", opts...)
+		return dialer.NewDialer(opts...).ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
 	}
 
 	if !proxyAdapter.SupportUDP() {

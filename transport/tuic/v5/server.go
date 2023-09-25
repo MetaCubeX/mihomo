@@ -16,6 +16,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 type ServerOption struct {
@@ -32,6 +33,7 @@ func NewServerHandler(option *ServerOption, quicConn quic.EarlyConnection, uuid 
 		quicConn:     quicConn,
 		uuid:         uuid,
 		authCh:       make(chan struct{}),
+		udpInputMap:  xsync.NewIntegerMapOf[uint16, *serverUDPInput](),
 	}
 }
 
@@ -45,7 +47,7 @@ type serverHandler struct {
 	authUUID atomic.TypedValue[string]
 	authOnce sync.Once
 
-	udpInputMap sync.Map
+	udpInputMap *xsync.MapOf[uint16, *serverUDPInput]
 }
 
 func (s *serverHandler) AuthOk() bool {
@@ -94,8 +96,7 @@ func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode common.UdpRelay
 
 	assocId = packet.ASSOC_ID
 
-	v, _ := s.udpInputMap.LoadOrStore(assocId, &serverUDPInput{})
-	input := v.(*serverUDPInput)
+	input, _ := s.udpInputMap.LoadOrCompute(assocId, func() *serverUDPInput { return &serverUDPInput{} })
 	if input.writeClosed.Load() {
 		return nil
 	}
@@ -186,8 +187,7 @@ func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
 		if err != nil {
 			return
 		}
-		if v, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
-			input := v.(*serverUDPInput)
+		if input, loaded := s.udpInputMap.LoadAndDelete(disassociate.ASSOC_ID); loaded {
 			input.writeClosed.Store(true)
 		}
 	}

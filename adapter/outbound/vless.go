@@ -15,6 +15,7 @@ import (
 	"github.com/Dreamacro/clash/common/convert"
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
@@ -57,6 +58,7 @@ type VlessOption struct {
 	UUID              string            `proxy:"uuid"`
 	Flow              string            `proxy:"flow,omitempty"`
 	TLS               bool              `proxy:"tls,omitempty"`
+	ALPN              []string          `proxy:"alpn,omitempty"`
 	UDP               bool              `proxy:"udp,omitempty"`
 	PacketAddr        bool              `proxy:"packet-addr,omitempty"`
 	XUDP              bool              `proxy:"xudp,omitempty"`
@@ -109,13 +111,9 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				NextProtos:         []string{"http/1.1"},
 			}
 
-			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-			} else {
-				wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
-				if err != nil {
-					return nil, err
-				}
+			wsOpts.TLSConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
+			if err != nil {
+				return nil, err
 			}
 
 			if v.option.ServerName != "" {
@@ -211,6 +209,7 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 			FingerPrint:       v.option.Fingerprint,
 			ClientFingerprint: v.option.ClientFingerprint,
 			Reality:           v.realityConfig,
+			NextProtos:        v.option.ALPN,
 		}
 
 		if isH2 {
@@ -261,7 +260,7 @@ func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -326,7 +325,7 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -576,7 +575,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
-			tcpKeepAlive(c)
+			N.TCPKeepAlive(c)
 			return c, nil
 		}
 
@@ -590,7 +589,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		}
 		var tlsConfig *tls.Config
 		if option.TLS {
-			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
+			tlsConfig = ca.GetGlobalTLSConfig(&tls.Config{
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				ServerName:         v.option.ServerName,
 			})

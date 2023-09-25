@@ -127,6 +127,20 @@ func Proxies() map[string]C.Proxy {
 	return proxies
 }
 
+func ProxiesWithProviders() map[string]C.Proxy {
+	allProxies := make(map[string]C.Proxy)
+	for name, proxy := range proxies {
+		allProxies[name] = proxy
+	}
+	for _, p := range providers {
+		for _, proxy := range p.Proxies() {
+			name := proxy.Name()
+			allProxies[name] = proxy
+		}
+	}
+	return allProxies
+}
+
 // Providers return all compatible providers
 func Providers() map[string]provider.ProxyProvider {
 	return providers
@@ -318,8 +332,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
-	lockKey := key + "-lock"
-	cond, loaded := natTable.GetOrCreateLock(lockKey)
+	cond, loaded := natTable.GetOrCreateLock(key)
 
 	go func() {
 		defer packet.Drop()
@@ -333,7 +346,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 		}
 
 		defer func() {
-			natTable.Delete(lockKey)
+			natTable.DeleteLock(key)
 			cond.Broadcast()
 		}()
 
@@ -406,15 +419,28 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	preHandleFailed := false
 	if err := preHandleMetadata(metadata); err != nil {
 		log.Debugln("[Metadata PreHandle] error: %s", err)
-		return
+		preHandleFailed = true
 	}
 
 	conn := connCtx.Conn()
 	conn.ResetPeeked() // reset before sniffer
 	if sniffer.Dispatcher.Enable() && sniffingEnable {
-		sniffer.Dispatcher.TCPSniff(conn, metadata)
+		// Try to sniff a domain when `preHandleMetadata` failed, this is usually
+		// caused by a "Fake DNS record missing" error when enhanced-mode is fake-ip.
+		if sniffer.Dispatcher.TCPSniff(conn, metadata) {
+			// we now have a domain name
+			preHandleFailed = false
+		}
+	}
+
+	// If both trials have failed, we can do nothing but give up
+	if preHandleFailed {
+		log.Debugln("[Metadata PreHandle] failed to sniff a domain for connection %s --> %s, give up",
+			metadata.SourceDetail(), metadata.RemoteAddress())
+		return
 	}
 
 	peekMutex := sync.Mutex{}

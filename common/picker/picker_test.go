@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +16,7 @@ func sleepAndSend[T any](ctx context.Context, delay int, input T) func() (T, err
 		case <-timer.C:
 			return input, nil
 		case <-ctx.Done():
-			return getZero[T](), ctx.Err()
+			return lo.Empty[T](), ctx.Err()
 		}
 	}
 }
@@ -35,11 +36,6 @@ func TestPicker_Timeout(t *testing.T) {
 	picker.Go(sleepAndSend(ctx, 20, 1))
 
 	number := picker.Wait()
-	assert.Equal(t, number, getZero[int]())
+	assert.Equal(t, number, lo.Empty[int]())
 	assert.NotNil(t, picker.Error())
-}
-
-func getZero[T any]() T {
-	var result T
-	return result
 }

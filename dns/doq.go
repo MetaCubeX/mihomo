@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	"github.com/Dreamacro/clash/component/ca"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/metacubex/quic-go"
@@ -330,7 +330,7 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn quic.Connectio
 		return nil, err
 	}
 
-	tlsConfig := tlsC.GetGlobalTLSConfig(
+	tlsConfig := ca.GetGlobalTLSConfig(
 		&tls.Config{
 			ServerName:         host,
 			InsecureSkipVerify: false,

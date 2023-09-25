@@ -27,7 +27,6 @@ import (
 	"github.com/sagernet/sing/common/debug"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/wireguard-go/device"
 )
 
@@ -36,7 +35,7 @@ type WireGuard struct {
 	bind      *wireguard.ClientBind
 	device    *device.Device
 	tunDevice wireguard.Device
-	dialer    *wgSingDialer
+	dialer    proxydialer.SingDialer
 	startOnce sync.Once
 	startErr  error
 	resolver  *dns.Resolver
@@ -68,37 +67,6 @@ type WireGuardPeerOption struct {
 	PreSharedKey string   `proxy:"pre-shared-key,omitempty"`
 	Reserved     []uint8  `proxy:"reserved,omitempty"`
 	AllowedIPs   []string `proxy:"allowed-ips,omitempty"`
-}
-
-type wgSingDialer struct {
-	dialer    dialer.Dialer
-	proxyName string
-}
-
-var _ N.Dialer = (*wgSingDialer)(nil)
-
-func (d *wgSingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	var cDialer C.Dialer = d.dialer
-	if len(d.proxyName) > 0 {
-		pd, err := proxydialer.NewByName(d.proxyName, d.dialer)
-		if err != nil {
-			return nil, err
-		}
-		cDialer = pd
-	}
-	return cDialer.DialContext(ctx, network, destination.String())
-}
-
-func (d *wgSingDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	var cDialer C.Dialer = d.dialer
-	if len(d.proxyName) > 0 {
-		pd, err := proxydialer.NewByName(d.proxyName, d.dialer)
-		if err != nil {
-			return nil, err
-		}
-		cDialer = pd
-	}
-	return cDialer.ListenPacket(ctx, "udp", "", destination.AddrPort())
 }
 
 type wgSingErrorHandler struct {
@@ -168,7 +136,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		dialer: &wgSingDialer{dialer: dialer.NewDialer(), proxyName: option.DialerProxy},
+		dialer: proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer()),
 	}
 	runtime.SetFinalizer(outbound, closeWireGuard)
 
@@ -302,7 +270,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	if err != nil {
 		return nil, E.Cause(err, "create WireGuard device")
 	}
-	outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, &device.Logger{
+	outbound.device = device.NewDevice(context.Background(), outbound.tunDevice, outbound.bind, &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
 			log.SingLogger.Debug(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
 		},
@@ -355,7 +323,7 @@ func closeWireGuard(w *WireGuard) {
 
 func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	options := w.Base.DialOptions(opts...)
-	w.dialer.dialer = dialer.NewDialer(options...)
+	w.dialer.SetDialer(dialer.NewDialer(options...))
 	var conn net.Conn
 	w.startOnce.Do(func() {
 		w.startErr = w.tunDevice.Start()
@@ -387,7 +355,7 @@ func (w *WireGuard) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 
 func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
 	options := w.Base.DialOptions(opts...)
-	w.dialer.dialer = dialer.NewDialer(options...)
+	w.dialer.SetDialer(dialer.NewDialer(options...))
 	var pc net.PacketConn
 	w.startOnce.Do(func() {
 		w.startErr = w.tunDevice.Start()

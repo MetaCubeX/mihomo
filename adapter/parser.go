@@ -92,6 +92,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewHysteria(*hyOption)
+	case "hysteria2":
+		hyOption := &outbound.Hysteria2Option{}
+		err = decoder.Decode(mapping, hyOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewHysteria2(*hyOption)
 	case "wireguard":
 		wgOption := &outbound.WireGuardOption{}
 		err = decoder.Decode(mapping, wgOption)
@@ -106,6 +113,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewTuic(*tuicOption)
+	case "direct":
+		directOption := &outbound.DirectOption{}
+		err = decoder.Decode(mapping, directOption)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewDirectWithOption(*directOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}

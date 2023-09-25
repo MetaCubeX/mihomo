@@ -32,7 +32,7 @@ var (
 	workDir string
 
 	// mu protects all fields below.
-	mu sync.RWMutex
+	mu sync.Mutex
 
 	currentExeName string // 当前可执行文件
 	updateDir      string // 更新目录

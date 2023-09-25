@@ -5,6 +5,7 @@ import (
 	"net/netip"
 
 	"github.com/Dreamacro/clash/adapter/inbound"
+	N "github.com/Dreamacro/clash/common/net"
 	C "github.com/Dreamacro/clash/constant"
 	"github.com/Dreamacro/clash/log"
 	"github.com/Dreamacro/clash/transport/socks5"
@@ -55,7 +56,7 @@ func (l *Listener) handleRedir(conn net.Conn, in chan<- C.ConnContext) {
 		return
 	}
 
-	_ = conn.(*net.TCPConn).SetKeepAlive(true)
+	N.TCPKeepAlive(conn)
 
 	in <- inbound.NewSocket(target, conn, C.REDIR, l.additions...)
 }

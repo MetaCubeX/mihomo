@@ -13,11 +13,13 @@ import (
 
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
+	"github.com/Dreamacro/clash/component/ca"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	tlsC "github.com/Dreamacro/clash/component/tls"
 	C "github.com/Dreamacro/clash/constant"
+	"github.com/Dreamacro/clash/ntp"
 	"github.com/Dreamacro/clash/transport/gun"
 	clashVMess "github.com/Dreamacro/clash/transport/vmess"
 
@@ -52,6 +54,7 @@ type VmessOption struct {
 	UDP                 bool           `proxy:"udp,omitempty"`
 	Network             string         `proxy:"network,omitempty"`
 	TLS                 bool           `proxy:"tls,omitempty"`
+	ALPN                []string       `proxy:"alpn,omitempty"`
 	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint         string         `proxy:"fingerprint,omitempty"`
 	ServerName          string         `proxy:"servername,omitempty"`
@@ -125,12 +128,9 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				NextProtos:         []string{"http/1.1"},
 			}
 
-			if len(v.option.Fingerprint) == 0 {
-				wsOpts.TLSConfig = tlsC.GetGlobalTLSConfig(tlsConfig)
-			} else {
-				if wsOpts.TLSConfig, err = tlsC.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint); err != nil {
-					return nil, err
-				}
+			wsOpts.TLSConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, v.option.Fingerprint)
+			if err != nil {
+				return nil, err
 			}
 
 			if v.option.ServerName != "" {
@@ -149,6 +149,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
 				Reality:           v.realityConfig,
+				NextProtos:        v.option.ALPN,
 			}
 
 			if v.option.ServerName != "" {
@@ -205,6 +206,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
 				Reality:           v.realityConfig,
+				NextProtos:        v.option.ALPN,
 			}
 
 			if v.option.ServerName != "" {
@@ -304,7 +306,7 @@ func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -365,7 +367,7 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -413,6 +415,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 	if option.AuthenticatedLength {
 		options = append(options, vmess.ClientWithAuthenticatedLength())
 	}
+	options = append(options, vmess.ClientWithTimeFunc(ntp.Now))
 	client, err := vmess.NewClient(option.UUID, security, option.AlterID, options...)
 	if err != nil {
 		return nil, err
@@ -464,7 +467,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
-			tcpKeepAlive(c)
+			N.TCPKeepAlive(c)
 			return c, nil
 		}
 
@@ -478,7 +481,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		}
 		var tlsConfig *tls.Config
 		if option.TLS {
-			tlsConfig = tlsC.GetGlobalTLSConfig(&tls.Config{
+			tlsConfig = ca.GetGlobalTLSConfig(&tls.Config{
 				InsecureSkipVerify: v.option.SkipCertVerify,
 				ServerName:         v.option.ServerName,
 			})
