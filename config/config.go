@@ -93,10 +93,11 @@ type Controller struct {
 // NTP config
 type NTP struct {
 	Enable        bool   `yaml:"enable"`
-	WriteToSystem bool   `yaml:"write-to-system"`
 	Server        string `yaml:"server"`
 	Port          int    `yaml:"port"`
 	Interval      int    `yaml:"interval"`
+	DialerProxy   string `yaml:"dialer-proxy"`
+	WriteToSystem bool   `yaml:"write-to-system"`
 }
 
 // DNS config
@@ -183,10 +184,11 @@ type Config struct {
 
 type RawNTP struct {
 	Enable        bool   `yaml:"enable"`
-	WriteToSystem bool   `yaml:"write-to-system"`
 	Server        string `yaml:"server"`
 	ServerPort    int    `yaml:"server-port"`
 	Interval      int    `yaml:"interval"`
+	DialerProxy   string `yaml:"dialer-proxy"`
+	WriteToSystem bool   `yaml:"write-to-system"`
 }
 
 type RawDNS struct {
@@ -1200,6 +1202,7 @@ func paresNTP(rawCfg *RawConfig) *NTP {
 		Server:        cfg.Server,
 		Port:          cfg.ServerPort,
 		Interval:      cfg.Interval,
+		DialerProxy:   cfg.DialerProxy,
 		WriteToSystem: cfg.WriteToSystem,
 	}
 	return ntpCfg
