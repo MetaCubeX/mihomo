@@ -2,12 +2,15 @@ package ntp
 
 import (
 	"context"
-	"github.com/Dreamacro/clash/log"
-	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
-	"github.com/sagernet/sing/common/ntp"
 	"sync"
 	"time"
+
+	"github.com/Dreamacro/clash/component/dialer"
+	"github.com/Dreamacro/clash/component/proxydialer"
+	"github.com/Dreamacro/clash/log"
+
+	M "github.com/sagernet/sing/common/metadata"
+	"github.com/sagernet/sing/common/ntp"
 )
 
 var offset time.Duration
@@ -15,6 +18,7 @@ var service *Service
 
 type Service struct {
 	server         M.Socksaddr
+	dialer         proxydialer.SingDialer
 	ticker         *time.Ticker
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -23,16 +27,17 @@ type Service struct {
 	running        bool
 }
 
-func ReCreateNTPService(server string, interval time.Duration, syncSystemTime bool) {
+func ReCreateNTPService(server string, interval time.Duration, dialerProxy string, syncSystemTime bool) {
 	if service != nil {
 		service.Stop()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	service = &Service{
+		server:         M.ParseSocksaddr(server),
+		dialer:         proxydialer.NewByNameSingDialer(dialerProxy, dialer.NewDialer()),
+		ticker:         time.NewTicker(interval * time.Minute),
 		ctx:            ctx,
 		cancel:         cancel,
-		server:         M.ParseSocksaddr(server),
-		ticker:         time.NewTicker(interval * time.Minute),
 		syncSystemTime: syncSystemTime,
 	}
 	service.Start()
@@ -70,7 +75,7 @@ func (srv *Service) update() {
 	var response *ntp.Response
 	var err error
 	for i := 0; i < 3; i++ {
-		response, err = ntp.Exchange(context.Background(), N.SystemDialer, srv.server)
+		response, err = ntp.Exchange(context.Background(), srv.dialer, srv.server)
 		if err != nil {
 			if i == 2 {
 				log.Errorln("Initialize NTP time failed: %s", err)
