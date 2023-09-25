@@ -51,6 +51,6 @@ func SplitHostPort(s string) (host, port string, hasPort bool, err error) {
 func TCPKeepAlive(c net.Conn) {
 	if tcp, ok := c.(*net.TCPConn); ok {
 		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(KeepAliveInterval * time.Second)
+		_ = tcp.SetKeepAlivePeriod(KeepAliveInterval)
 	}
 }
