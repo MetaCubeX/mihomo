@@ -23,7 +23,7 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20230926004739-7c7c534c2255
 	github.com/metacubex/sing-shadowsocks v0.2.5
 	github.com/metacubex/sing-shadowsocks2 v0.1.4
-	github.com/metacubex/sing-tun v0.1.12
+	github.com/metacubex/sing-tun v0.1.13-0.20230926010214-4e9d1add2aee
 	github.com/metacubex/sing-vmess v0.1.9-0.20230921005247-a0488d7dac74
 	github.com/metacubex/sing-wireguard v0.0.0-20230611155257-1498ae315a28
 	github.com/miekg/dns v1.1.56
@@ -105,4 +105,4 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230921160249-edb949c9c140
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230926010351-b23b466642d1
