@@ -85,7 +85,7 @@ func (b *BrutalSender) OnPacketAcked(number congestion.PacketNumber, ackedBytes 
 	b.updateAckRate(currentTimestamp)
 }
 
-func (b *BrutalSender) OnPacketLost(number congestion.PacketNumber, lostBytes congestion.ByteCount,
+func (b *BrutalSender) OnCongestionEvent(number congestion.PacketNumber, lostBytes congestion.ByteCount,
 	priorInFlight congestion.ByteCount) {
 	currentTimestamp := time.Now().Unix()
 	slot := currentTimestamp % pktInfoSlotCount
