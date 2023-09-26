@@ -374,7 +374,7 @@ func (b *bbrSender) OnPacketAcked(number congestion.PacketNumber, ackedBytes con
 
 }
 
-func (b *bbrSender) OnPacketLost(number congestion.PacketNumber, lostBytes congestion.ByteCount, priorInFlight congestion.ByteCount) {
+func (b *bbrSender) OnCongestionEvent(number congestion.PacketNumber, lostBytes congestion.ByteCount, priorInFlight congestion.ByteCount) {
 	eventTime := time.Now()
 	totalBytesAckedBefore := b.sampler.totalBytesAcked
 	isRoundStart, minRttExpired := false, false
@@ -620,7 +620,7 @@ func (b *bbrSender) ShouldExtendMinRttExpiry() bool {
 }
 
 func (b *bbrSender) DiscardLostPackets(number congestion.PacketNumber, lostBytes congestion.ByteCount) {
-	b.sampler.OnPacketLost(number)
+	b.sampler.OnCongestionEvent(number)
 	if b.mode == STARTUP {
 		// if b.rttStats != nil {
 		// TODO: slow start.

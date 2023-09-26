@@ -23,7 +23,6 @@ func SetCongestionController(quicConn quic.Connection, cc string, cwnd int) {
 				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
 				false,
-				nil,
 			),
 		)
 	case "new_reno":
@@ -32,7 +31,6 @@ func SetCongestionController(quicConn quic.Connection, cc string, cwnd int) {
 				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
 				true,
-				nil,
 			),
 		)
 	case "bbr":
