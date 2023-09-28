@@ -73,9 +73,9 @@ func (t *Tuic) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Tuic) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *Tuic) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = tuic.New(t.ts, tcpIn, udpIn, t.Additions()...)
+	t.l, err = tuic.New(t.ts, tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

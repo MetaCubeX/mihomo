@@ -34,14 +34,14 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func (l *Listener) handleTCP(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func (l *Listener) handleTCP(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 	ctx := inbound.NewSocket(l.target, conn, C.TUNNEL, additions...)
 	ctx.Metadata().SpecialProxy = l.proxy
-	in <- ctx
+	tunnel.HandleTCPConn(ctx)
 }
 
-func New(addr, target, proxy string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+func New(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func New(addr, target, proxy string, in chan<- C.ConnContext, additions ...inbou
 				}
 				continue
 			}
-			go rl.handleTCP(c, in, additions...)
+			go rl.handleTCP(c, tunnel, additions...)
 		}
 	}()
 

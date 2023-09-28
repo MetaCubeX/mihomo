@@ -118,7 +118,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 }
 
 func initInnerTcp() {
-	inner.New(tunnel.TCPIn())
+	inner.New(tunnel.Tunnel)
 }
 
 func GetGeneral() *config.General {
@@ -157,11 +157,7 @@ func GetGeneral() *config.General {
 }
 
 func updateListeners(general *config.General, listeners map[string]C.InboundListener, force bool) {
-	tcpIn := tunnel.TCPIn()
-	udpIn := tunnel.UDPIn()
-	natTable := tunnel.NatTable()
-
-	listener.PatchInboundListeners(listeners, tcpIn, udpIn, natTable, true)
+	listener.PatchInboundListeners(listeners, tunnel.Tunnel, true)
 	if !force {
 		return
 	}
@@ -171,15 +167,15 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 
 	bindAddress := general.BindAddress
 	listener.SetBindAddress(bindAddress)
-	listener.ReCreateHTTP(general.Port, tcpIn)
-	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn, natTable)
-	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
-	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn, natTable)
-	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
-	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
-	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
+	listener.ReCreateHTTP(general.Port, tunnel.Tunnel)
+	listener.ReCreateSocks(general.SocksPort, tunnel.Tunnel)
+	listener.ReCreateRedir(general.RedirPort, tunnel.Tunnel)
+	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tunnel.Tunnel)
+	listener.ReCreateTProxy(general.TProxyPort, tunnel.Tunnel)
+	listener.ReCreateMixed(general.MixedPort, tunnel.Tunnel)
+	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
+	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
+	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
 }
 
 func updateExperimental(c *config.Config) {
@@ -339,7 +335,7 @@ func updateTun(general *config.General) {
 	if general == nil {
 		return
 	}
-	listener.ReCreateTun(LC.Tun(general.Tun), tunnel.TCPIn(), tunnel.UDPIn())
+	listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 	listener.ReCreateRedirToTun(general.Tun.RedirectToTun)
 }
 
@@ -367,7 +363,7 @@ func updateSniffer(sniffer *config.Sniffer) {
 }
 
 func updateTunnels(tunnels []LC.Tunnel) {
-	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
+	listener.PatchTunnel(tunnels, tunnel.Tunnel)
 }
 
 func updateGeneral(general *config.General) {

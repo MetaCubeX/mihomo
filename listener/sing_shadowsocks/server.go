@@ -35,7 +35,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (C.MultiAddrListener, error) {
+func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
 	var sl *Listener
 	var err error
 	if len(additions) == 0 {
@@ -51,8 +51,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 	udpTimeout := int64(sing.UDPTimeout.Seconds())
 
 	h := &sing.ListenerHandler{
-		TcpIn:     tcpIn,
-		UdpIn:     udpIn,
+		Tunnel:    tunnel,
 		Type:      C.SHADOWSOCKS,
 		Additions: additions,
 	}
@@ -68,7 +67,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h, ntp.Now)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", config.Cipher)
-		return embedSS.New(config, tcpIn, udpIn)
+		return embedSS.New(config, tunnel)
 	}
 	if err != nil {
 		return nil, err
@@ -148,7 +147,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 				}
 				N.TCPKeepAlive(c)
 
-				go sl.HandleConn(c, tcpIn)
+				go sl.HandleConn(c, tunnel)
 			}
 		}()
 	}
@@ -188,7 +187,7 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 	return
 }
 
-func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	ctx := sing.WithAdditions(context.TODO(), additions...)
 	err := l.service.NewConnection(ctx, conn, M.Metadata{
 		Protocol: "shadowsocks",
@@ -200,10 +199,10 @@ func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions 
 	}
 }
 
-func HandleShadowSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) bool {
+func HandleShadowSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) bool {
 	if _listener != nil && _listener.service != nil {
-		go _listener.HandleConn(conn, in, additions...)
+		go _listener.HandleConn(conn, tunnel, additions...)
 		return true
 	}
-	return embedSS.HandleShadowSocks(conn, in, additions...)
+	return embedSS.HandleShadowSocks(conn, tunnel, additions...)
 }

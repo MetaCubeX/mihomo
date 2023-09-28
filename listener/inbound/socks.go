@@ -68,13 +68,13 @@ func (s *Socks) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (s *Socks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (s *Socks) Listen(tunnel C.Tunnel) error {
 	var err error
-	if s.stl, err = socks.New(s.RawAddress(), tcpIn, s.Additions()...); err != nil {
+	if s.stl, err = socks.New(s.RawAddress(), tunnel, s.Additions()...); err != nil {
 		return err
 	}
 	if s.udp {
-		if s.sul, err = socks.NewUDP(s.RawAddress(), udpIn, s.Additions()...); err != nil {
+		if s.sul, err = socks.NewUDP(s.RawAddress(), tunnel, s.Additions()...); err != nil {
 			return err
 		}
 	}

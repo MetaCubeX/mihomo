@@ -32,7 +32,7 @@ type Listener struct {
 	services     []*hysteria2.Service[string]
 }
 
-func New(config LC.Hysteria2Server, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (*Listener, error) {
+func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	var sl *Listener
 	var err error
 	if len(additions) == 0 {
@@ -43,8 +43,7 @@ func New(config LC.Hysteria2Server, tcpIn chan<- C.ConnContext, udpIn chan<- C.P
 	}
 
 	h := &sing.ListenerHandler{
-		TcpIn:     tcpIn,
-		UdpIn:     udpIn,
+		Tunnel:    tunnel,
 		Type:      C.HYSTERIA2,
 		Additions: additions,
 	}

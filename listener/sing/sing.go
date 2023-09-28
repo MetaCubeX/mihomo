@@ -28,41 +28,10 @@ import (
 const UDPTimeout = 5 * time.Minute
 
 type ListenerHandler struct {
-	TcpIn      chan<- C.ConnContext
-	UdpIn      chan<- C.PacketAdapter
+	Tunnel     C.Tunnel
 	Type       C.Type
 	Additions  []inbound.Addition
 	UDPTimeout time.Duration
-}
-
-type waitCloseConn struct {
-	N.ExtendedConn
-	wg    *sync.WaitGroup
-	close sync.Once
-	rAddr net.Addr
-}
-
-func (c *waitCloseConn) Close() error { // call from handleTCPConn(connCtx C.ConnContext)
-	c.close.Do(func() {
-		c.wg.Done()
-	})
-	return c.ExtendedConn.Close()
-}
-
-func (c *waitCloseConn) RemoteAddr() net.Addr {
-	return c.rAddr
-}
-
-func (c *waitCloseConn) Upstream() any {
-	return c.ExtendedConn
-}
-
-func (c *waitCloseConn) ReaderReplaceable() bool {
-	return true
-}
-
-func (c *waitCloseConn) WriterReplaceable() bool {
-	return true
 }
 
 func UpstreamMetadata(metadata M.Metadata) M.Metadata {
@@ -117,14 +86,14 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 		return h.ParseSpecialFqdn(ctx, conn, metadata)
 	}
 	target := socks5.ParseAddr(metadata.Destination.String())
-	wg := &sync.WaitGroup{}
-	defer wg.Wait() // this goroutine must exit after conn.Close()
-	wg.Add(1)
 
 	if deadline.NeedAdditionalReadDeadline(conn) {
 		conn = N.NewDeadlineConn(conn) // conn from sing should check NeedAdditionalReadDeadline
 	}
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, combineAdditions(ctx, h.Additions)...)
+	connCtx := inbound.NewSocket(target, conn, h.Type, combineAdditions(ctx, h.Additions)...)
+	inbound.WithSrcAddr(metadata.Source.TCPAddr()).Apply(connCtx.Metadata()) // set srcAddr from sing's metadata
+
+	h.Tunnel.HandleTCPConn(connCtx) // this goroutine must exit after conn unused
 	return nil
 }
 
@@ -177,10 +146,8 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			lAddr: conn.LocalAddr(),
 			buff:  buff,
 		}
-		select {
-		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type, combineAdditions(ctx, h.Additions)...):
-		default:
-		}
+
+		h.Tunnel.HandleUDPPacket(inbound.NewPacket(target, packet, h.Type, combineAdditions(ctx, h.Additions)...))
 	}
 	return nil
 }

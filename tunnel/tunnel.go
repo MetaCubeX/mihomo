@@ -49,6 +49,25 @@ var (
 	fakeIPRange netip.Prefix
 )
 
+type tunnel struct{}
+
+var Tunnel C.Tunnel = tunnel{}
+
+func (t tunnel) HandleTCPConn(connCtx C.ConnContext) {
+	handleTCPConn(connCtx)
+}
+
+func (t tunnel) HandleUDPPacket(packet C.PacketAdapter) {
+	select {
+	case udpQueue <- packet:
+	default:
+	}
+}
+
+func (t tunnel) NatTable() C.NatTable {
+	return natTable
+}
+
 func OnSuspend() {
 	status.Store(Suspend)
 }
@@ -90,11 +109,13 @@ func init() {
 }
 
 // TCPIn return fan-in queue
+// Deprecated: using Tunnel instead
 func TCPIn() chan<- C.ConnContext {
 	return tcpQueue
 }
 
 // UDPIn return fan-in udp queue
+// Deprecated: using Tunnel instead
 func UDPIn() chan<- C.PacketAdapter {
 	return udpQueue
 }
@@ -197,10 +218,6 @@ func isHandle(t C.Type) bool {
 func processUDP() {
 	queue := udpQueue
 	for conn := range queue {
-		if !isHandle(conn.Metadata().Type) {
-			conn.Drop()
-			continue
-		}
 		handleUDPConn(conn)
 	}
 }
@@ -216,10 +233,6 @@ func process() {
 
 	queue := tcpQueue
 	for conn := range queue {
-		if !isHandle(conn.Metadata().Type) {
-			_ = conn.Conn().Close()
-			continue
-		}
 		go handleTCPConn(conn)
 	}
 }
@@ -284,6 +297,11 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 }
 
 func handleUDPConn(packet C.PacketAdapter) {
+	if !isHandle(packet.Metadata().Type) {
+		packet.Drop()
+		return
+	}
+
 	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		packet.Drop()
@@ -409,6 +427,11 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
+	if !isHandle(connCtx.Metadata().Type) {
+		_ = connCtx.Conn().Close()
+		return
+	}
+
 	defer func(conn net.Conn) {
 		_ = conn.Close()
 	}(connCtx.Conn())

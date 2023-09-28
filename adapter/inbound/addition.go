@@ -1,6 +1,8 @@
 package inbound
 
 import (
+	"net"
+
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -31,5 +33,14 @@ func WithSpecialRules(specialRules string) Addition {
 func WithSpecialProxy(specialProxy string) Addition {
 	return func(metadata *C.Metadata) {
 		metadata.SpecialProxy = specialProxy
+	}
+}
+
+func WithSrcAddr(addr net.Addr) Addition {
+	return func(metadata *C.Metadata) {
+		if ip, port, err := parseAddr(addr); err == nil {
+			metadata.SrcIP = ip
+			metadata.SrcPort = port
+		}
 	}
 }

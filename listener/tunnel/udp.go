@@ -34,7 +34,7 @@ func (l *PacketConn) Close() error {
 	return l.conn.Close()
 }
 
-func NewUDP(addr, target, proxy string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*PacketConn, error) {
+func NewUDP(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Addition) (*PacketConn, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -62,14 +62,14 @@ func NewUDP(addr, target, proxy string, in chan<- C.PacketAdapter, additions ...
 				}
 				continue
 			}
-			sl.handleUDP(l, in, buf[:n], remoteAddr, additions...)
+			sl.handleUDP(l, tunnel, buf[:n], remoteAddr, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func (l *PacketConn) handleUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr, additions ...inbound.Addition) {
+func (l *PacketConn) handleUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, addr net.Addr, additions ...inbound.Addition) {
 	packet := &packet{
 		pc:      pc,
 		rAddr:   addr,
@@ -78,8 +78,5 @@ func (l *PacketConn) handleUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf
 
 	ctx := inbound.NewPacket(l.target, packet, C.TUNNEL, additions...)
 	ctx.Metadata().SpecialProxy = l.proxy
-	select {
-	case in <- ctx:
-	default:
-	}
+	tunnel.HandleUDPPacket(ctx)
 }

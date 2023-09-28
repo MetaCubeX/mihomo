@@ -113,9 +113,9 @@ func (t *Tun) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Tun) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *Tun) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = sing_tun.New(t.tun, tcpIn, udpIn, t.Additions()...)
+	t.l, err = sing_tun.New(t.tun, tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

@@ -59,9 +59,9 @@ func (s *ShadowSocks) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (s *ShadowSocks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (s *ShadowSocks) Listen(tunnel C.Tunnel) error {
 	var err error
-	s.l, err = sing_shadowsocks.New(s.ss, tcpIn, udpIn, s.Additions()...)
+	s.l, err = sing_shadowsocks.New(s.ss, tunnel, s.Additions()...)
 	if err != nil {
 		return err
 	}

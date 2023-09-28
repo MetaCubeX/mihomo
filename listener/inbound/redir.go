@@ -42,9 +42,9 @@ func (r *Redir) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (r *Redir) Listen(tunnel C.Tunnel) error {
 	var err error
-	r.l, err = redir.New(r.RawAddress(), tcpIn, r.Additions()...)
+	r.l, err = redir.New(r.RawAddress(), tunnel, r.Additions()...)
 	if err != nil {
 		return err
 	}

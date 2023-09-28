@@ -49,14 +49,14 @@ func (t *TProxy) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *TProxy) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.lTCP, err = tproxy.New(t.RawAddress(), tcpIn, t.Additions()...)
+	t.lTCP, err = tproxy.New(t.RawAddress(), tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}
 	if t.udp {
-		t.lUDP, err = tproxy.NewUDP(t.RawAddress(), udpIn, natTable, t.Additions()...)
+		t.lUDP, err = tproxy.NewUDP(t.RawAddress(), tunnel, t.Additions()...)
 		if err != nil {
 			return err
 		}

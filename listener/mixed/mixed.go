@@ -36,7 +36,7 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-MIXED"),
@@ -62,14 +62,14 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 				}
 				continue
 			}
-			go handleConn(c, in, ml.cache, additions...)
+			go handleConn(c, tunnel, ml.cache, additions...)
 		}
 	}()
 
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
+func handleConn(conn net.Conn, tunnel C.Tunnel, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 
 	bufConn := N.NewBufferedConn(conn)
@@ -80,10 +80,10 @@ func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[st
 
 	switch head[0] {
 	case socks4.Version:
-		socks.HandleSocks4(bufConn, in, additions...)
+		socks.HandleSocks4(bufConn, tunnel, additions...)
 	case socks5.Version:
-		socks.HandleSocks5(bufConn, in, additions...)
+		socks.HandleSocks5(bufConn, tunnel, additions...)
 	default:
-		http.HandleConn(bufConn, in, cache, additions...)
+		http.HandleConn(bufConn, tunnel, cache, additions...)
 	}
 }

@@ -42,9 +42,9 @@ func (h *HTTP) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (h *HTTP) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (h *HTTP) Listen(tunnel C.Tunnel) error {
 	var err error
-	h.l, err = http.New(h.RawAddress(), tcpIn, h.Additions()...)
+	h.l, err = http.New(h.RawAddress(), tunnel, h.Additions()...)
 	if err != nil {
 		return err
 	}
