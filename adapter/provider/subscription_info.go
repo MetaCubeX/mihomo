@@ -17,20 +17,18 @@ func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo, err error) {
 	userinfo = strings.ReplaceAll(userinfo, " ", "")
 	si = new(SubscriptionInfo)
 	for _, field := range strings.Split(userinfo, ";") {
-		if name, value, found := strings.Cut(field, "="); found {
-			switch name {
-			case "upload":
-				si.Upload, err = strconv.ParseInt(value, 10, 64)
-			case "download":
-				si.Download, err = strconv.ParseInt(value, 10, 64)
-			case "total":
-				si.Total, err = strconv.ParseInt(value, 10, 64)
-			case "expire":
-				si.Expire, err = strconv.ParseInt(value, 10, 64)
-			}
-			if err != nil {
-				return
-			}
+		switch name, value, _ := strings.Cut(field, "="); name {
+		case "upload":
+			si.Upload, err = strconv.ParseInt(value, 10, 64)
+		case "download":
+			si.Download, err = strconv.ParseInt(value, 10, 64)
+		case "total":
+			si.Total, err = strconv.ParseInt(value, 10, 64)
+		case "expire":
+			si.Expire, err = strconv.ParseInt(value, 10, 64)
+		}
+		if err != nil {
+			return
 		}
 	}
 	return
