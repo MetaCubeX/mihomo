@@ -8,19 +8,19 @@ import (
 	C "github.com/Dreamacro/clash/constant"
 )
 
-var tcpIn chan<- C.ConnContext
+var tunnel C.Tunnel
 
-func New(in chan<- C.ConnContext) {
-	tcpIn = in
+func New(t C.Tunnel) {
+	tunnel = t
 }
 
 func HandleTcp(address string) (conn net.Conn, err error) {
-	if tcpIn == nil {
+	if tunnel == nil {
 		return nil, errors.New("tcp uninitialized")
 	}
 	// executor Parsed
 	conn1, conn2 := net.Pipe()
 	context := inbound.NewInner(conn2, address)
-	tcpIn <- context
+	go tunnel.HandleTCPConn(context)
 	return conn1, nil
 }

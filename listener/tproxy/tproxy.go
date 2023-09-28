@@ -31,13 +31,13 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func (l *Listener) handleTProxy(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func (l *Listener) handleTProxy(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	target := socks5.ParseAddrToSocksAddr(conn.LocalAddr())
 	N.TCPKeepAlive(conn)
-	in <- inbound.NewSocket(target, conn, C.TPROXY, additions...)
+	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.TPROXY, additions...))
 }
 
-func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TPROXY"),
@@ -74,7 +74,7 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 				}
 				continue
 			}
-			go rl.handleTProxy(c, in, additions...)
+			go rl.handleTProxy(c, tunnel, additions...)
 		}
 	}()
 

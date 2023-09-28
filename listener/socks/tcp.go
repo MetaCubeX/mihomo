@@ -34,7 +34,7 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-SOCKS"),
@@ -59,14 +59,14 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 				}
 				continue
 			}
-			go handleSocks(c, in, additions...)
+			go handleSocks(c, tunnel, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func handleSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
@@ -77,24 +77,24 @@ func handleSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Ad
 
 	switch head[0] {
 	case socks4.Version:
-		HandleSocks4(bufConn, in, additions...)
+		HandleSocks4(bufConn, tunnel, additions...)
 	case socks5.Version:
-		HandleSocks5(bufConn, in, additions...)
+		HandleSocks5(bufConn, tunnel, additions...)
 	default:
 		conn.Close()
 	}
 }
 
-func HandleSocks4(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	addr, _, err := socks4.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
 		return
 	}
-	in <- inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4, additions...)
+	tunnel.HandleTCPConn(inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4, additions...))
 }
 
-func HandleSocks5(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func HandleSocks5(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	target, command, err := socks5.ServerHandshake(conn, authStore.Authenticator())
 	if err != nil {
 		conn.Close()
@@ -105,5 +105,5 @@ func HandleSocks5(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.A
 		io.Copy(io.Discard, conn)
 		return
 	}
-	in <- inbound.NewSocket(target, conn, C.SOCKS5, additions...)
+	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.SOCKS5, additions...))
 }

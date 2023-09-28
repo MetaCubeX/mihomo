@@ -30,11 +30,11 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithAuthenticate(addr, in, true, additions...)
+func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+	return NewWithAuthenticate(addr, tunnel, true, additions...)
 }
 
-func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
+func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-HTTP"),
@@ -65,7 +65,7 @@ func NewWithAuthenticate(addr string, in chan<- C.ConnContext, authenticate bool
 				}
 				continue
 			}
-			go HandleConn(conn, in, c, additions...)
+			go HandleConn(conn, tunnel, c, additions...)
 		}
 	}()
 

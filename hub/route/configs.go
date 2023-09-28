@@ -249,19 +249,15 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	ports := P.GetPorts()
 
-	tcpIn := tunnel.TCPIn()
-	udpIn := tunnel.UDPIn()
-	natTable := tunnel.NatTable()
-
-	P.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port), tcpIn)
-	P.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort), tcpIn, udpIn)
-	P.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tcpIn, udpIn, natTable)
-	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tcpIn, udpIn, natTable)
-	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tcpIn, udpIn)
-	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tcpIn, udpIn)
-	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tcpIn, udpIn)
-	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tcpIn, udpIn)
-	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tcpIn, udpIn)
+	P.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port), tunnel.Tunnel)
+	P.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort), tunnel.Tunnel)
+	P.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tunnel.Tunnel)
+	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tunnel.Tunnel)
+	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tunnel.Tunnel)
+	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tunnel.Tunnel)
+	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tunnel.Tunnel)
+	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tunnel.Tunnel)
+	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tunnel.Tunnel)
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)

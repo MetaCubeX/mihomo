@@ -77,9 +77,9 @@ func (t *Hysteria2) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Hysteria2) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *Hysteria2) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = sing_hysteria2.New(t.ts, tcpIn, udpIn, t.Additions()...)
+	t.l, err = sing_hysteria2.New(t.ts, tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

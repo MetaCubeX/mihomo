@@ -17,7 +17,7 @@ type UDPListener struct {
 	closed     bool
 }
 
-func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, pickCipher core.Cipher, tunnel C.Tunnel) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UD
 				}
 				continue
 			}
-			handleSocksUDP(conn, in, data, put, remoteAddr)
+			handleSocksUDP(conn, tunnel, data, put, remoteAddr)
 		}
 	}()
 
@@ -58,7 +58,7 @@ func (l *UDPListener) LocalAddr() net.Addr {
 	return l.packetConn.LocalAddr()
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
+func handleSocksUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
 	tgtAddr := socks5.SplitAddr(buf)
 	if tgtAddr == nil {
 		// Unresolved UDP packet, return buffer to the pool
@@ -76,8 +76,5 @@ func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, pu
 		payload: payload,
 		put:     put,
 	}
-	select {
-	case in <- inbound.NewPacket(target, packet, C.SHADOWSOCKS, additions...):
-	default:
-	}
+	tunnel.HandleUDPPacket(inbound.NewPacket(target, packet, C.SHADOWSOCKS, additions...))
 }

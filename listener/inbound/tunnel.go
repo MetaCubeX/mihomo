@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/tunnel"
+	LT "github.com/Dreamacro/clash/listener/tunnel"
 	"github.com/Dreamacro/clash/log"
 )
 
@@ -21,8 +21,8 @@ func (o TunnelOption) Equal(config C.InboundConfig) bool {
 type Tunnel struct {
 	*Base
 	config *TunnelOption
-	ttl    *tunnel.Listener
-	tul    *tunnel.PacketConn
+	ttl    *LT.Listener
+	tul    *LT.PacketConn
 }
 
 func NewTunnel(options *TunnelOption) (*Tunnel, error) {
@@ -74,16 +74,16 @@ func (t *Tunnel) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Tunnel) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *Tunnel) Listen(tunnel C.Tunnel) error {
 	var err error
 	for _, network := range t.config.Network {
 		switch network {
 		case "tcp":
-			if t.ttl, err = tunnel.New(t.RawAddress(), t.config.Target, t.config.SpecialProxy, tcpIn, t.Additions()...); err != nil {
+			if t.ttl, err = LT.New(t.RawAddress(), t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...); err != nil {
 				return err
 			}
 		case "udp":
-			if t.tul, err = tunnel.NewUDP(t.RawAddress(), t.config.Target, t.config.SpecialProxy, udpIn, t.Additions()...); err != nil {
+			if t.tul, err = LT.NewUDP(t.RawAddress(), t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...); err != nil {
 				return err
 			}
 		default:
