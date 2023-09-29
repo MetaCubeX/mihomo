@@ -194,11 +194,7 @@ func (c *Client) openStreamWithReconnect(dialer utils.PacketDialer) (quic.Connec
 	return c.quicSession, &wrappedQUICStream{stream}, err
 }
 
-func (c *Client) DialTCP(addr string, dialer utils.PacketDialer) (net.Conn, error) {
-	host, port, err := utils.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) DialTCP(host string, port uint16, dialer utils.PacketDialer) (net.Conn, error) {
 	session, stream, err := c.openStreamWithReconnect(dialer)
 	if err != nil {
 		return nil, err

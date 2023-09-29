@@ -260,10 +260,10 @@ func (v *Vmess) streamConn(c net.Conn, metadata *C.Metadata) (conn net.Conn, err
 	} else {
 		if N.NeedHandshake(c) {
 			conn = v.client.DialEarlyConn(c,
-				M.ParseSocksaddr(metadata.RemoteAddress()))
+				M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 		} else {
 			conn, err = v.client.DialConn(c,
-				M.ParseSocksaddr(metadata.RemoteAddress()))
+				M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 		}
 	}
 	if err != nil {
@@ -284,7 +284,7 @@ func (v *Vmess) DialContext(ctx context.Context, metadata *C.Metadata, opts ...d
 			safeConnClose(c, err)
 		}(c)
 
-		c, err = v.client.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		c, err = v.client.DialConn(c, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 		if err != nil {
 			return nil, err
 		}
