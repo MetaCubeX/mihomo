@@ -115,7 +115,20 @@ func main() {
 
 	defer executor.Shutdown()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	termSign := make(chan os.Signal, 1)
+	hupSign := make(chan os.Signal, 1)
+	signal.Notify(termSign, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(hupSign, syscall.SIGHUP)
+	for {
+		select {
+		case <-termSign:
+			return
+		case <-hupSign:
+			if cfg, err := executor.ParseWithPath(C.Path.Config()); err == nil {
+				executor.ApplyConfig(cfg, true)
+			} else {
+				log.Errorln("Parse config error: %s", err.Error())
+			}
+		}
+	}
 }
