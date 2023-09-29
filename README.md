@@ -328,6 +328,7 @@ AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
 Restart=always
 ExecStartPre=/usr/bin/sleep 1s
 ExecStart=/usr/local/bin/Clash-Meta -d /etc/Clash-Meta
+ExecReload=/bin/kill -HUP $MAINPID
 
 [Install]
 WantedBy=multi-user.target
