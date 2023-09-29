@@ -42,7 +42,7 @@ type ProxyBase interface {
 func (s *SingMux) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	options := s.base.DialOptions(opts...)
 	s.dialer.SetDialer(dialer.NewDialer(options...))
-	c, err := s.client.DialContext(ctx, "tcp", M.ParseSocksaddr(metadata.RemoteAddress()))
+	c, err := s.client.DialContext(ctx, "tcp", M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}
