@@ -197,6 +197,10 @@ func (c *cubicSender) OnCongestionEvent(packetNumber congestion.PacketNumber, lo
 	c.numAckedPackets = 0
 }
 
+func (b *cubicSender) OnCongestionEventEx(priorInFlight congestion.ByteCount, eventTime time.Time, ackedPackets []congestion.AckedPacketInfo, lostPackets []congestion.LostPacketInfo) {
+	// Stub
+}
+
 // Called when we receive an ack. Normal TCP tracks how many packets one ack
 // represents, but quic has a separate ack for each packet.
 func (c *cubicSender) maybeIncreaseCwnd(

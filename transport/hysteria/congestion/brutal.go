@@ -100,6 +100,10 @@ func (b *BrutalSender) OnCongestionEvent(number congestion.PacketNumber, lostByt
 	b.updateAckRate(currentTimestamp)
 }
 
+func (b *BrutalSender) OnCongestionEventEx(priorInFlight congestion.ByteCount, eventTime time.Time, ackedPackets []congestion.AckedPacketInfo, lostPackets []congestion.LostPacketInfo) {
+	// Stub
+}
+
 func (b *BrutalSender) SetMaxDatagramSize(size congestion.ByteCount) {
 	b.maxDatagramSize = size
 	b.pacer.SetMaxDatagramSize(size)
