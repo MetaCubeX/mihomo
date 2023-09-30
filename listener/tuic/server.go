@@ -43,6 +43,10 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 		Type:      C.TUIC,
 		Additions: additions,
 	}
+
+	config.Certificate = C.Path.Resolve(config.Certificate)
+	config.PrivateKey = C.Path.Resolve(config.PrivateKey)
+
 	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
 	if err != nil {
 		return nil, err
