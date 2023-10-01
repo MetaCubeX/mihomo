@@ -159,6 +159,7 @@ type Sniffer struct {
 type Experimental struct {
 	Fingerprints     []string `yaml:"fingerprints"`
 	QUICGoDisableGSO bool     `yaml:"quic-go-disable-gso"`
+	QUICGoDisableECN bool     `yaml:"quic-go-disable-ecn"`
 }
 
 // Config is clash config manager
