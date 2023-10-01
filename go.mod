@@ -23,9 +23,9 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20230926004739-7c7c534c2255
 	github.com/metacubex/sing-shadowsocks v0.2.5
 	github.com/metacubex/sing-shadowsocks2 v0.1.4
-	github.com/metacubex/sing-tun v0.1.13-0.20230926010214-4e9d1add2aee
+	github.com/metacubex/sing-tun v0.1.14
 	github.com/metacubex/sing-vmess v0.1.9-0.20230921005247-a0488d7dac74
-	github.com/metacubex/sing-wireguard v0.0.0-20230611155257-1498ae315a28
+	github.com/metacubex/sing-wireguard v0.0.0-20231001110902-321836559170
 	github.com/miekg/dns v1.1.56
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
@@ -77,7 +77,7 @@ require (
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
-	github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475 // indirect
+	github.com/metacubex/gvisor v0.0.0-20231001104248-0f672c3fb8d8 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect
