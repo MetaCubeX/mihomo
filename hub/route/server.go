@@ -112,7 +112,7 @@ func Start(addr string, tlsAddr string, secret string,
 
 	if len(tlsAddr) > 0 {
 		go func() {
-			c, err := CN.ParseCert(certificat, privateKey)
+			c, err := CN.ParseCert(certificat, privateKey, C.Path)
 			if err != nil {
 				log.Errorln("External controller tls listen error: %s", err)
 				return
