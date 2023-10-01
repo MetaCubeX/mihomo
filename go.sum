@@ -91,8 +91,8 @@ github.com/mdlayher/socket v0.4.1 h1:eM9y2/jlbs1M615oshPQOHZzj6R6wMT7bX5NPiQvn2U
 github.com/mdlayher/socket v0.4.1/go.mod h1:cAqeGjoufqdxWkD7DkpyS+wcefOtmu5OQ8KuoJGIReA=
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvOzK9ubNCCkQ+ldc4YSH/rILn53l/xGBFHHI=
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
-github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475 h1:qSEOvPPaMrWggFyFhFYGyMR8i1HKyhXjdi1QYUAa2ww=
-github.com/metacubex/gvisor v0.0.0-20230611153922-78842f086475/go.mod h1:wehEpqiogdeyncfhckJP5gD2LtBgJW0wnDC24mJ+8Jg=
+github.com/metacubex/gvisor v0.0.0-20231001104248-0f672c3fb8d8 h1:npBvaPAT145UY8682AzpUMWpdIxJti/WPLjy7gCiYYs=
+github.com/metacubex/gvisor v0.0.0-20231001104248-0f672c3fb8d8/go.mod h1:ZR6Gas7P1GcADCVBc1uOrA0bLQqDDyp70+63fD/BE2c=
 github.com/metacubex/quic-go v0.39.1-0.20231001052253-5776efe31623 h1:lxXUXdS2GB4Ktn3ocnzQ53v1lqd6LYYfYIKICugTaJM=
 github.com/metacubex/quic-go v0.39.1-0.20231001052253-5776efe31623/go.mod h1:4pe6cY+nAMFU/Uxn1rfnxNIowsaJGDQ3uyy4VuiPkP4=
 github.com/metacubex/sing v0.0.0-20231001053806-1230641572b9 h1:F0+IuW0tZ96QHEmrebXAdYnz7ab7Gz4l5yYC4g6Cg8k=
@@ -103,12 +103,12 @@ github.com/metacubex/sing-shadowsocks v0.2.5 h1:O2RRSHlKGEpAVG/OHJQxyHqDy8uvvdCW
 github.com/metacubex/sing-shadowsocks v0.2.5/go.mod h1:Xz2uW9BEYGEoA8B4XEpoxt7ERHClFCwsMAvWaruoyMo=
 github.com/metacubex/sing-shadowsocks2 v0.1.4 h1:OOCf8lgsVcpTOJUeaFAMzyKVebaQOBnKirDdUdBoKIE=
 github.com/metacubex/sing-shadowsocks2 v0.1.4/go.mod h1:Qz028sLfdY3qxGRm9FDI+IM2Ae3ty2wR7HIzD/56h/k=
-github.com/metacubex/sing-tun v0.1.13-0.20230926010214-4e9d1add2aee h1:hbbq181N4ZaDbhk/iJ0iA+3xfI/6v+j3nWeN5Who1xQ=
-github.com/metacubex/sing-tun v0.1.13-0.20230926010214-4e9d1add2aee/go.mod h1:X2P/H1HqXwqGcguGXWDVDhSS1GmDxVi13OmbtDedZ2M=
+github.com/metacubex/sing-tun v0.1.14 h1:35ermQwWZkHDai9Eg7EXoCjBFaU7IxcgzFOSMIcTR24=
+github.com/metacubex/sing-tun v0.1.14/go.mod h1:vwmlad7eS1E+Hdv6ux0muC1FCM4UF23FHOMlrDtVARU=
 github.com/metacubex/sing-vmess v0.1.9-0.20230921005247-a0488d7dac74 h1:FtupiyFkaVjFvRa7B/uDtRWg5BNsoyPC9MTev3sDasY=
 github.com/metacubex/sing-vmess v0.1.9-0.20230921005247-a0488d7dac74/go.mod h1:8EWBZpc+qNvf5gmvjAtMHK1/DpcWqzfcBL842K00BsM=
-github.com/metacubex/sing-wireguard v0.0.0-20230611155257-1498ae315a28 h1:mXFpxfR/1nADh+GoT8maWEvc6LO6uatPsARD8WzUDMA=
-github.com/metacubex/sing-wireguard v0.0.0-20230611155257-1498ae315a28/go.mod h1:KrDPq/dE793jGIJw9kcIvjA/proAfU0IeU7WlMXW7rs=
+github.com/metacubex/sing-wireguard v0.0.0-20231001110902-321836559170 h1:DBGA0hmrP4pVIwLiXUONdphjcppED+plmVaKf1oqkwk=
+github.com/metacubex/sing-wireguard v0.0.0-20231001110902-321836559170/go.mod h1:/VbJfbdLnANE+SKXyMk/96sTRrD4GdFLh5mkegqqFcY=
 github.com/miekg/dns v1.1.56 h1:5imZaSeoRNvpM9SzWNhEcP9QliKiz20/dA2QabIGVnE=
 github.com/miekg/dns v1.1.56/go.mod h1:cRm6Oo2C8TY9ZS/TqsSrseAcncm74lfK5G+ikN2SWWY=
 github.com/mroth/weightedrand/v2 v2.1.0 h1:o1ascnB1CIVzsqlfArQQjeMy1U0NcIbBO5rfd5E/OeU=
