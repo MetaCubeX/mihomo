@@ -180,7 +180,10 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 
 func updateExperimental(c *config.Config) {
 	if c.Experimental.QUICGoDisableGSO {
-		_ = os.Setenv("QUIC_GO_DISABLE_GSO", "1")
+		_ = os.Setenv("QUIC_GO_DISABLE_GSO", strconv.FormatBool(true))
+	}
+	if c.Experimental.QUICGoDisableECN {
+		_ = os.Setenv("QUIC_GO_DISABLE_ECN", strconv.FormatBool(true))
 	}
 }
 
