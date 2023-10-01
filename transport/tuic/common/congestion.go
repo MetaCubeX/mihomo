@@ -18,6 +18,22 @@ func SetCongestionController(quicConn quic.Connection, cc string, cwnd int) {
 		cwnd = 32
 	}
 	switch cc {
+	case "cubic":
+		quicConn.SetCongestionControl(
+			congestion.NewCubicSender(
+				congestion.DefaultClock{},
+				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
+				false,
+			),
+		)
+	case "new_reno":
+		quicConn.SetCongestionControl(
+			congestion.NewCubicSender(
+				congestion.DefaultClock{},
+				congestion.GetInitialPacketSize(quicConn.RemoteAddr()),
+				true,
+			),
+		)
 	case "bbr_meta_v1":
 		quicConn.SetCongestionControl(
 			congestion.NewBBRSender(

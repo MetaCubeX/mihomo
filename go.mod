@@ -19,8 +19,8 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/quic-go v0.39.1-0.20230930051114-b486c7799a55
-	github.com/metacubex/sing-quic v0.0.0-20230930052455-ae588c275b9c
+	github.com/metacubex/quic-go v0.39.1-0.20231001052253-5776efe31623
+	github.com/metacubex/sing-quic v0.0.0-20230926004739-7c7c534c2255
 	github.com/metacubex/sing-shadowsocks v0.2.5
 	github.com/metacubex/sing-shadowsocks2 v0.1.4
 	github.com/metacubex/sing-tun v0.1.13-0.20230926010214-4e9d1add2aee
@@ -32,7 +32,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.11
+	github.com/sagernet/sing v0.2.12
 	github.com/sagernet/sing-mux v0.1.3
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20230816093905-5a5c285d44a6
@@ -105,4 +105,4 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20230926010351-b23b466642d1
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231001053806-1230641572b9
