@@ -99,10 +99,9 @@ func copyConfig(c *tls.Config) *utls.Config {
 	}
 }
 
-// WebsocketHandshake basically calls UConn.Handshake inside it but it will only send
-// http/1.1 in its ALPN.
+// BuildWebsocketHandshakeState it will only send http/1.1 in its ALPN.
 // Copy from https://github.com/XTLS/Xray-core/blob/main/transport/internet/tls/tls.go
-func (c *UConn) WebsocketHandshake() error {
+func (c *UConn) BuildWebsocketHandshakeState() error {
 	// Build the handshake state. This will apply every variable of the TLS of the
 	// fingerprint in the UConn
 	if err := c.BuildHandshakeState(); err != nil {
@@ -120,11 +119,11 @@ func (c *UConn) WebsocketHandshake() error {
 	if !hasALPNExtension { // Append extension if doesn't exists
 		c.Extensions = append(c.Extensions, &utls.ALPNExtension{AlpnProtocols: []string{"http/1.1"}})
 	}
-	// Rebuild the client hello and do the handshake
+	// Rebuild the client hello
 	if err := c.BuildHandshakeState(); err != nil {
 		return err
 	}
-	return c.Handshake()
+	return nil
 }
 
 func SetGlobalUtlsClient(Client string) {
