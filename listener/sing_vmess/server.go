@@ -3,6 +3,7 @@ package sing_vmess
 import (
 	"context"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	LC "github.com/Dreamacro/clash/listener/config"
 	"github.com/Dreamacro/clash/listener/sing"
 	"github.com/Dreamacro/clash/ntp"
+	clashVMess "github.com/Dreamacro/clash/transport/vmess"
 
 	vmess "github.com/metacubex/sing-vmess"
 	"github.com/sagernet/sing/common"
@@ -65,6 +67,20 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 	sl = &Listener{false, config, nil, service}
 
+	var httpMux *http.ServeMux
+
+	if config.WsPath != "" {
+		httpMux = http.NewServeMux()
+		httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
+			conn, err := clashVMess.StreamUpgradedWebsocketConn(w, r)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			sl.HandleConn(conn, tunnel)
+		})
+	}
+
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
 
@@ -76,6 +92,10 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		sl.listeners = append(sl.listeners, l)
 
 		go func() {
+			if httpMux != nil {
+				_ = http.Serve(l, httpMux)
+				return
+			}
 			for {
 				c, err := l.Accept()
 				if err != nil {

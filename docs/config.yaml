@@ -936,6 +936,7 @@ listeners:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
         alterId: 1
+    # ws-path: "/" # 如果不为空则开启websocket传输层
 
   - name: tuic-in-1
     type: tuic
