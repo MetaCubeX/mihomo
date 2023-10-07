@@ -11,10 +11,12 @@ type VmessUser struct {
 }
 
 type VmessServer struct {
-	Enable bool
-	Listen string
-	Users  []VmessUser
-	WsPath string
+	Enable      bool
+	Listen      string
+	Users       []VmessUser
+	WsPath      string
+	Certificate string
+	PrivateKey  string
 }
 
 func (t VmessServer) String() string {

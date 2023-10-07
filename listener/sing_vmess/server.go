@@ -2,6 +2,7 @@ package sing_vmess
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/url"
@@ -67,8 +68,16 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 	sl = &Listener{false, config, nil, service}
 
+	tlsConfig := &tls.Config{}
 	var httpMux *http.ServeMux
 
+	if config.Certificate != "" && config.PrivateKey != "" {
+		cert, err := N.ParseCert(config.Certificate, config.PrivateKey, C.Path)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
 	if config.WsPath != "" {
 		httpMux = http.NewServeMux()
 		httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +88,7 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			}
 			sl.HandleConn(conn, tunnel)
 		})
+		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
 	}
 
 	for _, addr := range strings.Split(config.Listen, ",") {
@@ -88,6 +98,9 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		l, err := inbound.Listen("tcp", addr)
 		if err != nil {
 			return nil, err
+		}
+		if len(tlsConfig.Certificates) > 0 {
+			l = tls.NewListener(l, tlsConfig)
 		}
 		sl.listeners = append(sl.listeners, l)
 
