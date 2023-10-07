@@ -22,6 +22,8 @@ import (
 //
 
 const (
+	minBps = 65536 // 64 kbps
+
 	invalidPacketNumber            = -1
 	initialCongestionWindowPackets = 32
 
@@ -285,10 +287,7 @@ func newBbrSender(
 		maxCongestionWindowWithNetworkParametersAdjusted: initialMaxCongestionWindow,
 		maxDatagramSize: initialMaxDatagramSize,
 	}
-	b.pacer = NewPacer(func() congestion.ByteCount {
-		// Pacer wants bytes per second, but Bandwidth is in bits per second.
-		return congestion.ByteCount(float64(b.bandwidthEstimate()) * b.congestionWindowGain / float64(BytesPerSecond))
-	})
+	b.pacer = NewPacer(b.bandwidthForPacer)
 
 	/*
 		if b.tracer != nil {
@@ -536,6 +535,17 @@ func (b *bbrSender) setDrainGain(drainGain float64) {
 // What's the current estimated bandwidth in bytes per second.
 func (b *bbrSender) bandwidthEstimate() Bandwidth {
 	return b.maxBandwidth.GetBest()
+}
+
+func (b *bbrSender) bandwidthForPacer() congestion.ByteCount {
+	bps := congestion.ByteCount(float64(b.bandwidthEstimate()) * b.congestionWindowGain / float64(BytesPerSecond))
+	if bps < minBps {
+		// We need to make sure that the bandwidth value for pacer is never zero,
+		// otherwise it will go into an edge case where HasPacingBudget = false
+		// but TimeUntilSend is before, causing the quic-go send loop to go crazy and get stuck.
+		return minBps
+	}
+	return bps
 }
 
 // Returns the current estimate of the RTT of the connection.  Outside of the

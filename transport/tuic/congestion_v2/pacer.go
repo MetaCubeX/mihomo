@@ -43,6 +43,9 @@ func (p *Pacer) Budget(now time.Time) congestion.ByteCount {
 		return p.maxBurstSize()
 	}
 	budget := p.budgetAtLastSent + (p.getBandwidth()*congestion.ByteCount(now.Sub(p.lastSentTime).Nanoseconds()))/1e9
+	if budget < 0 { // protect against overflows
+		budget = congestion.ByteCount(1<<62 - 1)
+	}
 	return Min(p.maxBurstSize(), budget)
 }
 
