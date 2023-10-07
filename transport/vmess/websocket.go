@@ -118,12 +118,17 @@ func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
 	var headerLen int
 	headerLen += 1 // FIN / RSV / OPCODE
 	headerLen += payloadBitLength
-	headerLen += 4 // MASK KEY
+	if wsc.state.ClientSide() {
+		headerLen += 4 // MASK KEY
+	}
 
 	header := buffer.ExtendHeader(headerLen)
-	_ = header[2] // bounds check hint to compiler
 	header[0] = byte(ws.OpBinary) | 0x80
-	header[1] = 1 << 7
+	if wsc.state.ClientSide() {
+		header[1] = 1 << 7
+	} else {
+		header[1] = 0
+	}
 
 	if dataLen < 126 {
 		header[1] |= byte(dataLen)
@@ -456,17 +461,15 @@ func decodeXray0rtt(requestHeader http.Header) ([]byte, http.Header) {
 
 func StreamUpgradedWebsocketConn(w http.ResponseWriter, r *http.Request) (net.Conn, error) {
 	edBuf, responseHeader := decodeXray0rtt(r.Header)
-	wsConn, rw, _, err := ws.HTTPUpgrader{
-		Header: responseHeader,
-	}.Upgrade(r, w)
+	wsConn, rw, _, err := ws.HTTPUpgrader{Header: responseHeader}.Upgrade(r, w)
 	if err != nil {
 		return nil, err
 	}
 	conn := newWebsocketConn(wsConn, rw.Reader, ws.StateServerSide)
 	if len(edBuf) > 0 {
-		return &websocketWithReaderConn{conn, io.MultiReader(bytes.NewReader(edBuf), conn)}, nil
+		return N.NewDeadlineConn(&websocketWithReaderConn{conn, io.MultiReader(bytes.NewReader(edBuf), conn)}), nil
 	}
-	return conn, nil
+	return N.NewDeadlineConn(conn), nil
 }
 
 type websocketWithReaderConn struct {

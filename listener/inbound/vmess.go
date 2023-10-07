@@ -9,7 +9,8 @@ import (
 
 type VmessOption struct {
 	BaseOption
-	Users []VmessUser `inbound:"users"`
+	Users  []VmessUser `inbound:"users"`
+	WsPath string      `inbound:"ws-path,omitempty"`
 }
 
 type VmessUser struct {
@@ -49,6 +50,7 @@ func NewVmess(options *VmessOption) (*Vmess, error) {
 			Enable: true,
 			Listen: base.RawAddress(),
 			Users:  users,
+			WsPath: options.WsPath,
 		},
 	}, nil
 }
