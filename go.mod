@@ -19,8 +19,8 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/quic-go v0.39.1-0.20231007092458-6d5373196838
-	github.com/metacubex/sing-quic v0.0.0-20230926004739-7c7c534c2255
+	github.com/metacubex/quic-go v0.39.1-0.20231008050334-3d067d335ce0
+	github.com/metacubex/sing-quic v0.0.0-20231008050747-a684db516966
 	github.com/metacubex/sing-shadowsocks v0.2.5
 	github.com/metacubex/sing-shadowsocks2 v0.1.4
 	github.com/metacubex/sing-tun v0.1.15-0.20231003075803-dffa0200e64c
@@ -32,7 +32,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.12
+	github.com/sagernet/sing v0.2.13
 	github.com/sagernet/sing-mux v0.1.3
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20230816093905-5a5c285d44a6
@@ -45,11 +45,11 @@ require (
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/automaxprocs v1.5.3
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	golang.org/x/net v0.15.0
 	golang.org/x/sync v0.3.0
-	golang.org/x/sys v0.12.0
+	golang.org/x/sys v0.13.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.2.1
