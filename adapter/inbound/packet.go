@@ -21,18 +21,12 @@ func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type, additions 
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.UDP
 	metadata.Type = source
+	additions = append(additions, WithSrcAddr(packet.LocalAddr()))
+	if p, ok := packet.(C.UDPPacketInAddr); ok {
+		additions = append(additions, WithInAddr(p.InAddr()))
+	}
 	for _, addition := range additions {
 		addition.Apply(metadata)
-	}
-	if ip, port, err := parseAddr(packet.LocalAddr()); err == nil {
-		metadata.SrcIP = ip
-		metadata.SrcPort = port
-	}
-	if p, ok := packet.(C.UDPPacketInAddr); ok {
-		if ip, port, err := parseAddr(p.InAddr()); err == nil {
-			metadata.InIP = ip
-			metadata.InPort = port
-		}
 	}
 
 	return &PacketAdapter{

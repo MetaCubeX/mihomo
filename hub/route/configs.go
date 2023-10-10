@@ -2,9 +2,11 @@ package route
 
 import (
 	"net/http"
+	"net/netip"
 	"path/filepath"
 	"sync"
 
+	"github.com/Dreamacro/clash/adapter/inbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/resolver"
 	"github.com/Dreamacro/clash/config"
@@ -47,6 +49,7 @@ type configSchema struct {
 	TcptunConfig      *string            `json:"tcptun-config"`
 	UdptunConfig      *string            `json:"udptun-config"`
 	AllowLan          *bool              `json:"allow-lan"`
+	SkipAuthPrefixes  *[]netip.Prefix    `json:"skip-auth-prefixes"`
 	BindAddress       *string            `json:"bind-address"`
 	Mode              *tunnel.TunnelMode `json:"mode"`
 	LogLevel          *log.LogLevel      `json:"log-level"`
@@ -229,6 +232,10 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if general.AllowLan != nil {
 		P.SetAllowLan(*general.AllowLan)
+	}
+
+	if general.SkipAuthPrefixes != nil {
+		inbound.SetSkipAuthPrefixes(*general.SkipAuthPrefixes)
 	}
 
 	if general.BindAddress != nil {

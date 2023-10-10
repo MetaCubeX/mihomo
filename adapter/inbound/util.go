@@ -63,21 +63,25 @@ func parseHTTPAddr(request *http.Request) *C.Metadata {
 	return metadata
 }
 
-func parseAddr(addr net.Addr) (netip.Addr, uint16, error) {
+func parseAddr(addr net.Addr) (netip.AddrPort, error) {
 	// Filter when net.Addr interface is nil
 	if addr == nil {
-		return netip.Addr{}, 0, errors.New("nil addr")
+		return netip.AddrPort{}, errors.New("nil addr")
 	}
 	if rawAddr, ok := addr.(interface{ RawAddr() net.Addr }); ok {
-		ip, port, err := parseAddr(rawAddr.RawAddr())
-		if err == nil {
-			return ip, port, err
+		if addrPort, err := parseAddr(rawAddr.RawAddr()); err == nil {
+			return addrPort, nil
+		}
+	}
+	if addr, ok := addr.(interface{ AddrPort() netip.AddrPort }); ok {
+		if addrPort := addr.AddrPort(); addrPort.IsValid() {
+			return addrPort, nil
 		}
 	}
 	addrStr := addr.String()
 	host, port, err := net.SplitHostPort(addrStr)
 	if err != nil {
-		return netip.Addr{}, 0, err
+		return netip.AddrPort{}, err
 	}
 
 	var uint16Port uint16
@@ -86,5 +90,5 @@ func parseAddr(addr net.Addr) (netip.Addr, uint16, error) {
 	}
 
 	ip, err := netip.ParseAddr(host)
-	return ip, uint16Port, err
+	return netip.AddrPortFrom(ip, uint16Port), err
 }

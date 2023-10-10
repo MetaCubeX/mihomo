@@ -66,20 +66,21 @@ type General struct {
 
 // Inbound config
 type Inbound struct {
-	Port              int           `json:"port"`
-	SocksPort         int           `json:"socks-port"`
-	RedirPort         int           `json:"redir-port"`
-	TProxyPort        int           `json:"tproxy-port"`
-	MixedPort         int           `json:"mixed-port"`
-	Tun               LC.Tun        `json:"tun"`
-	TuicServer        LC.TuicServer `json:"tuic-server"`
-	ShadowSocksConfig string        `json:"ss-config"`
-	VmessConfig       string        `json:"vmess-config"`
-	Authentication    []string      `json:"authentication"`
-	AllowLan          bool          `json:"allow-lan"`
-	BindAddress       string        `json:"bind-address"`
-	InboundTfo        bool          `json:"inbound-tfo"`
-	InboundMPTCP      bool          `json:"inbound-mptcp"`
+	Port              int            `json:"port"`
+	SocksPort         int            `json:"socks-port"`
+	RedirPort         int            `json:"redir-port"`
+	TProxyPort        int            `json:"tproxy-port"`
+	MixedPort         int            `json:"mixed-port"`
+	Tun               LC.Tun         `json:"tun"`
+	TuicServer        LC.TuicServer  `json:"tuic-server"`
+	ShadowSocksConfig string         `json:"ss-config"`
+	VmessConfig       string         `json:"vmess-config"`
+	Authentication    []string       `json:"authentication"`
+	SkipAuthPrefixes  []netip.Prefix `json:"skip-auth-prefixes"`
+	AllowLan          bool           `json:"allow-lan"`
+	BindAddress       string         `json:"bind-address"`
+	InboundTfo        bool           `json:"inbound-tfo"`
+	InboundMPTCP      bool           `json:"inbound-mptcp"`
 }
 
 // Controller config
@@ -271,6 +272,7 @@ type RawConfig struct {
 	InboundTfo              bool              `yaml:"inbound-tfo"`
 	InboundMPTCP            bool              `yaml:"inbound-mptcp"`
 	Authentication          []string          `yaml:"authentication"`
+	SkipAuthPrefixes        []netip.Prefix    `yaml:"skip-auth-prefixes"`
 	AllowLan                bool              `yaml:"allow-lan"`
 	BindAddress             string            `yaml:"bind-address"`
 	Mode                    T.TunnelMode      `yaml:"mode"`
@@ -620,6 +622,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			ShadowSocksConfig: cfg.ShadowSocksConfig,
 			VmessConfig:       cfg.VmessConfig,
 			AllowLan:          cfg.AllowLan,
+			SkipAuthPrefixes:  cfg.SkipAuthPrefixes,
 			BindAddress:       cfg.BindAddress,
 			InboundTfo:        cfg.InboundTfo,
 			InboundMPTCP:      cfg.InboundMPTCP,

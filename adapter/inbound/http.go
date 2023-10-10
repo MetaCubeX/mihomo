@@ -13,16 +13,9 @@ func NewHTTP(target socks5.Addr, source net.Addr, conn net.Conn, additions ...Ad
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = C.HTTP
+	additions = append(additions, WithSrcAddr(source), WithInAddr(conn.LocalAddr()))
 	for _, addition := range additions {
 		addition.Apply(metadata)
-	}
-	if ip, port, err := parseAddr(source); err == nil {
-		metadata.SrcIP = ip
-		metadata.SrcPort = port
-	}
-	if ip, port, err := parseAddr(conn.LocalAddr()); err == nil {
-		metadata.InIP = ip
-		metadata.InPort = port
 	}
 	return context.NewConnContext(conn, metadata)
 }
