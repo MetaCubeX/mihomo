@@ -38,9 +38,27 @@ func WithSpecialProxy(specialProxy string) Addition {
 
 func WithSrcAddr(addr net.Addr) Addition {
 	return func(metadata *C.Metadata) {
-		if ip, port, err := parseAddr(addr); err == nil {
-			metadata.SrcIP = ip
-			metadata.SrcPort = port
+		if addrPort, err := parseAddr(addr); err == nil {
+			metadata.SrcIP = addrPort.Addr()
+			metadata.SrcPort = addrPort.Port()
+		}
+	}
+}
+
+func WithDstAddr(addr net.Addr) Addition {
+	return func(metadata *C.Metadata) {
+		if addrPort, err := parseAddr(addr); err == nil {
+			metadata.DstIP = addrPort.Addr()
+			metadata.DstPort = addrPort.Port()
+		}
+	}
+}
+
+func WithInAddr(addr net.Addr) Addition {
+	return func(metadata *C.Metadata) {
+		if addrPort, err := parseAddr(addr); err == nil {
+			metadata.InIP = addrPort.Addr()
+			metadata.InPort = addrPort.Port()
 		}
 	}
 }

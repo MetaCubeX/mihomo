@@ -86,7 +86,11 @@ func handleSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) 
 }
 
 func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	addr, _, err := socks4.ServerHandshake(conn, authStore.Authenticator())
+	authenticator := authStore.Authenticator()
+	if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
+		authenticator = nil
+	}
+	addr, _, err := socks4.ServerHandshake(conn, authenticator)
 	if err != nil {
 		conn.Close()
 		return
@@ -95,7 +99,11 @@ func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition)
 }
 
 func HandleSocks5(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	target, command, err := socks5.ServerHandshake(conn, authStore.Authenticator())
+	authenticator := authStore.Authenticator()
+	if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
+		authenticator = nil
+	}
+	target, command, err := socks5.ServerHandshake(conn, authenticator)
 	if err != nil {
 		conn.Close()
 		return
