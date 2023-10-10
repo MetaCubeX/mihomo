@@ -43,7 +43,7 @@ type Conn struct {
 	transport *TransportWrap
 	writer    *io.PipeWriter
 	once      sync.Once
-	close     *atomic.Bool
+	close     atomic.Bool
 	err       error
 	remain    int
 	br        *bufio.Reader

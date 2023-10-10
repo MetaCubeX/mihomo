@@ -30,13 +30,13 @@ const (
 
 type extraProxyState struct {
 	history *queue.Queue[C.DelayHistory]
-	alive   *atomic.Bool
+	alive   atomic.Bool
 }
 
 type Proxy struct {
 	C.ProxyAdapter
 	history *queue.Queue[C.DelayHistory]
-	alive   *atomic.Bool
+	alive   atomic.Bool
 	url     string
 	extra   *xsync.MapOf[string, *extraProxyState]
 }

@@ -398,7 +398,7 @@ func (r *Resolver) Invalid() bool {
 type NameServer struct {
 	Net          string
 	Addr         string
-	Interface    *atomic.TypedValue[string]
+	Interface    atomic.TypedValue[string]
 	ProxyAdapter C.ProxyAdapter
 	ProxyName    string
 	Params       map[string]string

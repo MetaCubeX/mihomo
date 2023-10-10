@@ -23,7 +23,7 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        *atomic.TypedValue[string]
+	iface        atomic.TypedValue[string]
 	proxyAdapter C.ProxyAdapter
 	proxyName    string
 	addr         string
@@ -77,8 +77,8 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		network = "tcp"
 	}
 
-	options := []dialer.Option{}
-	if c.iface != nil && c.iface.Load() != "" {
+	var options []dialer.Option
+	if c.iface.Load() != "" {
 		options = append(options, dialer.WithInterface(c.iface.Load()))
 	}
 

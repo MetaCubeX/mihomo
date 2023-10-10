@@ -29,12 +29,12 @@ func init() {
 
 type Manager struct {
 	connections   *xsync.MapOf[string, Tracker]
-	uploadTemp    *atomic.Int64
-	downloadTemp  *atomic.Int64
-	uploadBlip    *atomic.Int64
-	downloadBlip  *atomic.Int64
-	uploadTotal   *atomic.Int64
-	downloadTotal *atomic.Int64
+	uploadTemp    atomic.Int64
+	downloadTemp  atomic.Int64
+	uploadBlip    atomic.Int64
+	downloadBlip  atomic.Int64
+	uploadTotal   atomic.Int64
+	downloadTotal atomic.Int64
 	process       *process.Process
 	memory        uint64
 }

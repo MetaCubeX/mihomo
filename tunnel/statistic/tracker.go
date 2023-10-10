@@ -23,14 +23,14 @@ type Tracker interface {
 }
 
 type TrackerInfo struct {
-	UUID          uuid.UUID     `json:"id"`
-	Metadata      *C.Metadata   `json:"metadata"`
-	UploadTotal   *atomic.Int64 `json:"upload"`
-	DownloadTotal *atomic.Int64 `json:"download"`
-	Start         time.Time     `json:"start"`
-	Chain         C.Chain       `json:"chains"`
-	Rule          string        `json:"rule"`
-	RulePayload   string        `json:"rulePayload"`
+	UUID          uuid.UUID    `json:"id"`
+	Metadata      *C.Metadata  `json:"metadata"`
+	UploadTotal   atomic.Int64 `json:"upload"`
+	DownloadTotal atomic.Int64 `json:"download"`
+	Start         time.Time    `json:"start"`
+	Chain         C.Chain      `json:"chains"`
+	Rule          string       `json:"rule"`
+	RulePayload   string       `json:"rulePayload"`
 }
 
 type tcpTracker struct {
