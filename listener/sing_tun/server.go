@@ -142,11 +142,11 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 	for _, a := range options.Inet4Address {
-		addrPort := netip.AddrPortFrom(a.Build().Addr().Next(), 53)
+		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 	for _, a := range options.Inet6Address {
-		addrPort := netip.AddrPortFrom(a.Build().Addr().Next(), 53)
+		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 
@@ -201,12 +201,12 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	tunOptions := tun.Options{
 		Name:               tunName,
 		MTU:                tunMTU,
-		Inet4Address:       common.Map(options.Inet4Address, LC.ListenPrefix.Build),
-		Inet6Address:       common.Map(options.Inet6Address, LC.ListenPrefix.Build),
+		Inet4Address:       options.Inet4Address,
+		Inet6Address:       options.Inet6Address,
 		AutoRoute:          options.AutoRoute,
 		StrictRoute:        options.StrictRoute,
-		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, LC.ListenPrefix.Build),
-		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, LC.ListenPrefix.Build),
+		Inet4RouteAddress:  options.Inet4RouteAddress,
+		Inet6RouteAddress:  options.Inet6RouteAddress,
 		IncludeUID:         includeUID,
 		ExcludeUID:         excludeUID,
 		IncludeAndroidUser: options.IncludeAndroidUser,

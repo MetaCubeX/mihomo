@@ -834,19 +834,19 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 	})
 
 	sort.Slice(tunConf.Inet4Address, func(i, j int) bool {
-		return tunConf.Inet4Address[i].Build().String() < tunConf.Inet4Address[j].Build().String()
+		return tunConf.Inet4Address[i].String() < tunConf.Inet4Address[j].String()
 	})
 
 	sort.Slice(tunConf.Inet6Address, func(i, j int) bool {
-		return tunConf.Inet6Address[i].Build().String() < tunConf.Inet6Address[j].Build().String()
+		return tunConf.Inet6Address[i].String() < tunConf.Inet6Address[j].String()
 	})
 
 	sort.Slice(tunConf.Inet4RouteAddress, func(i, j int) bool {
-		return tunConf.Inet4RouteAddress[i].Build().String() < tunConf.Inet4RouteAddress[j].Build().String()
+		return tunConf.Inet4RouteAddress[i].String() < tunConf.Inet4RouteAddress[j].String()
 	})
 
 	sort.Slice(tunConf.Inet6RouteAddress, func(i, j int) bool {
-		return tunConf.Inet6RouteAddress[i].Build().String() < tunConf.Inet6RouteAddress[j].Build().String()
+		return tunConf.Inet6RouteAddress[i].String() < tunConf.Inet6RouteAddress[j].String()
 	})
 
 	sort.Slice(tunConf.IncludeUID, func(i, j int) bool {
