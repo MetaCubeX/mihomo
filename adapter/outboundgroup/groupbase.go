@@ -28,7 +28,7 @@ type GroupBase struct {
 	failedTestMux    sync.Mutex
 	failedTimes      int
 	failedTime       time.Time
-	failedTesting    *atomic.Bool
+	failedTesting    atomic.Bool
 	proxies          [][]C.Proxy
 	versions         []atomic.Uint32
 }

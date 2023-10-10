@@ -51,8 +51,7 @@ func (t *TypedValue[T]) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func NewTypedValue[T any](t T) *TypedValue[T] {
-	v := &TypedValue[T]{}
+func NewTypedValue[T any](t T) (v TypedValue[T]) {
 	v.Store(t)
-	return v
+	return
 }

@@ -34,12 +34,12 @@ type HealthCheck struct {
 	url            string
 	extra          map[string]*extraOption
 	mu             sync.Mutex
-	started        *atomic.Bool
+	started        atomic.Bool
 	proxies        []C.Proxy
-	interval       uint
+	interval       time.Duration
 	lazy           bool
 	expectedStatus utils.IntRanges[uint16]
-	lastTouch      *atomic.Int64
+	lastTouch      atomic.TypedValue[time.Time]
 	done           chan struct{}
 	singleDo       *singledo.Single[struct{}]
 }
@@ -50,13 +50,14 @@ func (hc *HealthCheck) process() {
 		return
 	}
 
-	ticker := time.NewTicker(time.Duration(hc.interval) * time.Second)
+	ticker := time.NewTicker(hc.interval)
 	hc.start()
 	for {
 		select {
 		case <-ticker.C:
-			now := time.Now().Unix()
-			if !hc.lazy || now-hc.lastTouch.Load() < int64(hc.interval) {
+			lastTouch := hc.lastTouch.Load()
+			since := time.Since(lastTouch)
+			if !hc.lazy || since < hc.interval {
 				hc.check()
 			} else {
 				log.Debugln("Skip once health check because we are lazy")
@@ -85,7 +86,7 @@ func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.
 
 	// if the provider has not set up health checks, then modify it to be the same as the group's interval
 	if hc.interval == 0 {
-		hc.interval = interval
+		hc.interval = time.Duration(interval) * time.Second
 	}
 
 	if hc.extra == nil {
@@ -135,7 +136,7 @@ func (hc *HealthCheck) auto() bool {
 }
 
 func (hc *HealthCheck) touch() {
-	hc.lastTouch.Store(time.Now().Unix())
+	hc.lastTouch.Store(time.Now())
 }
 
 func (hc *HealthCheck) start() {
@@ -228,11 +229,9 @@ func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool, exp
 		proxies:        proxies,
 		url:            url,
 		extra:          map[string]*extraOption{},
-		started:        atomic.NewBool(false),
-		interval:       interval,
+		interval:       time.Duration(interval) * time.Second,
 		lazy:           lazy,
 		expectedStatus: expectedStatus,
-		lastTouch:      atomic.NewInt64(0),
 		done:           make(chan struct{}, 1),
 		singleDo:       singledo.NewSingle[struct{}](time.Second),
 	}
