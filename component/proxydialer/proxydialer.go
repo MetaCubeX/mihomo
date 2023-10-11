@@ -70,10 +70,7 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 }
 
 func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	currentMeta := &C.Metadata{Type: C.INNER}
-	if err := currentMeta.SetRemoteAddress(rAddrPort.String()); err != nil {
-		return nil, err
-	}
+	currentMeta := &C.Metadata{Type: C.INNER, DstIP: rAddrPort.Addr(), DstPort: rAddrPort.Port()}
 	return p.listenPacket(ctx, currentMeta)
 }
 

@@ -36,9 +36,7 @@ func (l *Listener) Close() error {
 
 func (l *Listener) handleTCP(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
-	conn, metadata := inbound.NewSocket(l.target, conn, C.TUNNEL, additions...)
-	metadata.SpecialProxy = l.proxy
-	tunnel.HandleTCPConn(conn, metadata)
+	tunnel.HandleTCPConn(inbound.NewSocket(l.target, conn, C.TUNNEL, additions...))
 }
 
 func New(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
@@ -57,6 +55,10 @@ func New(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Addit
 		target:   targetAddr,
 		proxy:    proxy,
 		addr:     addr,
+	}
+
+	if proxy != "" {
+		additions = append([]inbound.Addition{inbound.WithSpecialProxy(proxy)}, additions...)
 	}
 
 	go func() {
