@@ -484,10 +484,19 @@ func (b *bbrSender) OnCongestionEventEx(priorInFlight congestion.ByteCount, even
 	b.calculateRecoveryWindow(bytesAcked, bytesLost)
 
 	// Cleanup internal state.
-	if len(lostPackets) != 0 {
-		lastLostPacket := lostPackets[len(lostPackets)-1].PacketNumber
-		b.sampler.RemoveObsoletePackets(lastLostPacket)
+	// This is where we clean up obsolete (acked or lost) packets from the bandwidth sampler.
+	// The "least unacked" should actually be FirstOutstanding, but since we are not passing
+	// that through OnCongestionEventEx, we will only do an estimate using acked/lost packets
+	// for now. Because of fast retransmission, they should differ by no more than 2 packets.
+	// (this is controlled by packetThreshold in quic-go's sentPacketHandler)
+	var leastUnacked congestion.PacketNumber
+	if len(ackedPackets) != 0 {
+		leastUnacked = ackedPackets[len(ackedPackets)-1].PacketNumber - 2
+	} else {
+		leastUnacked = lostPackets[len(lostPackets)-1].PacketNumber + 1
 	}
+	b.sampler.RemoveObsoletePackets(leastUnacked)
+
 	if isRoundStart {
 		b.numLossEventsInRound = 0
 		b.bytesLostInRound = 0
