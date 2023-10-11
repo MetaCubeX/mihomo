@@ -20,7 +20,6 @@ func HandleTcp(address string) (conn net.Conn, err error) {
 	}
 	// executor Parsed
 	conn1, conn2 := net.Pipe()
-	context := inbound.NewInner(conn2, address)
-	go tunnel.HandleTCPConn(context)
+	go tunnel.HandleTCPConn(inbound.NewInner(conn2, address))
 	return conn1, nil
 }

@@ -67,7 +67,7 @@ func handleSocksUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, put func(), 
 		}
 		return
 	}
-	target := socks5.ParseAddr(tgtAddr.String())
+	target := tgtAddr
 	payload := buf[len(tgtAddr):]
 
 	packet := &packet{

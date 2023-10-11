@@ -252,6 +252,23 @@ type PacketAdapter interface {
 	Metadata() *Metadata
 }
 
+type packetAdapter struct {
+	UDPPacket
+	metadata *Metadata
+}
+
+// Metadata returns destination metadata
+func (s *packetAdapter) Metadata() *Metadata {
+	return s.metadata
+}
+
+func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
+	return &packetAdapter{
+		packet,
+		metadata,
+	}
+}
+
 type WriteBack interface {
 	WriteBack(b []byte, addr net.Addr) (n int, err error)
 }
