@@ -3,8 +3,9 @@ package inner
 import (
 	"errors"
 	"net"
+	"net/netip"
+	"strconv"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
 	C "github.com/Dreamacro/clash/constant"
 )
 
@@ -20,6 +21,23 @@ func HandleTcp(address string) (conn net.Conn, err error) {
 	}
 	// executor Parsed
 	conn1, conn2 := net.Pipe()
-	go tunnel.HandleTCPConn(inbound.NewInner(conn2, address))
+
+	metadata := &C.Metadata{}
+	metadata.NetWork = C.TCP
+	metadata.Type = C.INNER
+	metadata.DNSMode = C.DNSNormal
+	metadata.Process = C.ClashName
+	if h, port, err := net.SplitHostPort(address); err == nil {
+		if port, err := strconv.ParseUint(port, 10, 16); err == nil {
+			metadata.DstPort = uint16(port)
+		}
+		if ip, err := netip.ParseAddr(h); err == nil {
+			metadata.DstIP = ip
+		} else {
+			metadata.Host = h
+		}
+	}
+
+	go tunnel.HandleTCPConn(conn2, metadata)
 	return conn1, nil
 }
