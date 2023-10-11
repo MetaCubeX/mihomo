@@ -26,7 +26,7 @@ func getAdditions(ctx context.Context) []inbound.Addition {
 	return nil
 }
 
-func combineAdditions(ctx context.Context, additions []inbound.Addition) []inbound.Addition {
+func combineAdditions(ctx context.Context, additions []inbound.Addition, extraAdditions ...inbound.Addition) []inbound.Addition {
 	additionsCloned := false
 	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
 		additions = slices.Clone(additions)
@@ -39,6 +39,13 @@ func combineAdditions(ctx context.Context, additions []inbound.Addition) []inbou
 			additionsCloned = true
 		}
 		additions = append(additions, inbound.WithInUser(user))
+	}
+	if len(extraAdditions) > 0 {
+		if !additionsCloned {
+			additions = slices.Clone(additions)
+			additionsCloned = true
+		}
+		additions = append(additions, extraAdditions...)
 	}
 	return additions
 }

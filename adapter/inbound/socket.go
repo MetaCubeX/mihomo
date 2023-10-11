@@ -6,12 +6,11 @@ import (
 	"strconv"
 
 	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/context"
 	"github.com/Dreamacro/clash/transport/socks5"
 )
 
 // NewSocket receive TCP inbound and return ConnContext
-func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Addition) *context.ConnContext {
+func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Addition) (net.Conn, *C.Metadata) {
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
@@ -20,10 +19,10 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Ad
 		addition.Apply(metadata)
 	}
 
-	return context.NewConnContext(conn, metadata)
+	return conn, metadata
 }
 
-func NewInner(conn net.Conn, address string) *context.ConnContext {
+func NewInner(conn net.Conn, address string) (net.Conn, *C.Metadata) {
 	metadata := &C.Metadata{}
 	metadata.NetWork = C.TCP
 	metadata.Type = C.INNER
@@ -40,5 +39,5 @@ func NewInner(conn net.Conn, address string) *context.ConnContext {
 		}
 	}
 
-	return context.NewConnContext(conn, metadata)
+	return conn, metadata
 }

@@ -94,19 +94,18 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 			newAdditions = slices.Clone(additions)
 			newAdditions = append(newAdditions, _additions...)
 		}
-		connCtx := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
-		metadata := sing.ConvertMetadata(connCtx.Metadata())
-		if h.IsSpecialFqdn(metadata.Destination.Fqdn) {
+		conn, metadata := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
+		if h.IsSpecialFqdn(metadata.Host) {
 			go func() { // ParseSpecialFqdn will block, so open a new goroutine
 				_ = h.ParseSpecialFqdn(
 					sing.WithAdditions(context.Background(), newAdditions...),
 					conn,
-					metadata,
+					sing.ConvertMetadata(metadata),
 				)
 			}()
 			return nil
 		}
-		go tunnel.HandleTCPConn(connCtx)
+		go tunnel.HandleTCPConn(conn, metadata)
 		return nil
 	}
 	handleUdpFn := func(addr socks5.Addr, packet C.UDPPacket, _additions ...inbound.Addition) error {
