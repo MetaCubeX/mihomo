@@ -93,12 +93,8 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 		NetWork: C.TCP,
 		Type:    h.Type,
 		Host:    metadata.Destination.Fqdn,
-		DstIP:   metadata.Destination.Addr,
-		DstPort: metadata.Destination.Port,
-		SrcIP:   metadata.Source.Addr,
-		SrcPort: metadata.Source.Port,
 	}
-	additions := combineAdditions(ctx, h.Additions, inbound.WithInAddr(conn.LocalAddr()))
+	additions := combineAdditions(ctx, h.Additions, inbound.WithDstAddr(metadata.Destination), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
 	for _, addition := range additions {
 		addition.Apply(cMetadata)
 	}
@@ -160,12 +156,8 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			NetWork: C.UDP,
 			Type:    h.Type,
 			Host:    dest.Fqdn,
-			DstIP:   dest.Addr,
-			DstPort: dest.Port,
-			SrcIP:   metadata.Source.Addr,
-			SrcPort: metadata.Source.Port,
 		}
-		additions := combineAdditions(ctx, h.Additions, inbound.WithInAddr(conn.LocalAddr()))
+		additions := combineAdditions(ctx, h.Additions, inbound.WithDstAddr(dest), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
 		for _, addition := range additions {
 			addition.Apply(cMetadata)
 		}
