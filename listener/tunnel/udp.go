@@ -51,6 +51,11 @@ func NewUDP(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Ad
 		proxy:  proxy,
 		addr:   addr,
 	}
+
+	if proxy != "" {
+		additions = append([]inbound.Addition{inbound.WithSpecialProxy(proxy)}, additions...)
+	}
+
 	go func() {
 		for {
 			buf := pool.Get(pool.UDPBufferSize)
@@ -76,7 +81,5 @@ func (l *PacketConn) handleUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, a
 		payload: buf,
 	}
 
-	packet, metadata := inbound.NewPacket(l.target, cPacket, C.TUNNEL, additions...)
-	metadata.SpecialProxy = l.proxy
-	tunnel.HandleUDPPacket(packet, metadata)
+	tunnel.HandleUDPPacket(inbound.NewPacket(l.target, cPacket, C.TUNNEL, additions...))
 }

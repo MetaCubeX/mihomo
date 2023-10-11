@@ -12,10 +12,7 @@ func NewSocket(target socks5.Addr, conn net.Conn, source C.Type, additions ...Ad
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = source
-	additions = append(additions, WithSrcAddr(conn.RemoteAddr()), WithInAddr(conn.LocalAddr()))
-	for _, addition := range additions {
-		addition.Apply(metadata)
-	}
-
+	ApplyAdditions(metadata, WithSrcAddr(conn.RemoteAddr()), WithInAddr(conn.LocalAddr()))
+	ApplyAdditions(metadata, additions...)
 	return conn, metadata
 }

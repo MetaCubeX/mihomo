@@ -92,12 +92,10 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	cMetadata := &C.Metadata{
 		NetWork: C.TCP,
 		Type:    h.Type,
-		Host:    metadata.Destination.Fqdn,
 	}
-	additions := combineAdditions(ctx, h.Additions, inbound.WithDstAddr(metadata.Destination), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
-	for _, addition := range additions {
-		addition.Apply(cMetadata)
-	}
+	inbound.ApplyAdditions(cMetadata, inbound.WithDstAddr(metadata.Destination), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
+	inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
+	inbound.ApplyAdditions(cMetadata, h.Additions...)
 
 	h.Tunnel.HandleTCPConn(conn, cMetadata) // this goroutine must exit after conn unused
 	return nil
@@ -155,12 +153,10 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		cMetadata := &C.Metadata{
 			NetWork: C.UDP,
 			Type:    h.Type,
-			Host:    dest.Fqdn,
 		}
-		additions := combineAdditions(ctx, h.Additions, inbound.WithDstAddr(dest), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
-		for _, addition := range additions {
-			addition.Apply(cMetadata)
-		}
+		inbound.ApplyAdditions(cMetadata, inbound.WithDstAddr(dest), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
+		inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
+		inbound.ApplyAdditions(cMetadata, h.Additions...)
 
 		h.Tunnel.HandleUDPPacket(cPacket, cMetadata)
 	}

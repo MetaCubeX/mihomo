@@ -8,8 +8,10 @@ import (
 
 type Addition func(metadata *C.Metadata)
 
-func (a Addition) Apply(metadata *C.Metadata) {
-	a(metadata)
+func ApplyAdditions(metadata *C.Metadata, additions ...Addition) {
+	for _, addition := range additions {
+		addition(metadata)
+	}
 }
 
 func WithInName(name string) Addition {
@@ -36,26 +38,28 @@ func WithSpecialProxy(specialProxy string) Addition {
 	}
 }
 
-func WithSrcAddr(addr net.Addr) Addition {
+func WithDstAddr(addr net.Addr) Addition {
 	return func(metadata *C.Metadata) {
-		addrPort := parseAddr(addr)
-		metadata.SrcIP = addrPort.Addr().Unmap()
-		metadata.SrcPort = addrPort.Port()
+		_ = metadata.SetRemoteAddr(addr)
 	}
 }
 
-func WithDstAddr(addr net.Addr) Addition {
+func WithSrcAddr(addr net.Addr) Addition {
 	return func(metadata *C.Metadata) {
-		addrPort := parseAddr(addr)
-		metadata.DstIP = addrPort.Addr().Unmap()
-		metadata.DstPort = addrPort.Port()
+		m := C.Metadata{}
+		if err := m.SetRemoteAddr(addr);err ==nil{
+			metadata.SrcIP = m.DstIP
+			metadata.SrcPort = m.DstPort
+		}
 	}
 }
 
 func WithInAddr(addr net.Addr) Addition {
 	return func(metadata *C.Metadata) {
-		addrPort := parseAddr(addr)
-		metadata.InIP = addrPort.Addr().Unmap()
-		metadata.InPort = addrPort.Port()
+		m := C.Metadata{}
+		if err := m.SetRemoteAddr(addr);err ==nil{
+			metadata.InIP = m.DstIP
+			metadata.InPort = m.DstPort
+		}
 	}
 }

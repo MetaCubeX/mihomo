@@ -17,35 +17,15 @@ func WithAdditions(ctx context.Context, additions ...inbound.Addition) context.C
 	return context.WithValue(ctx, ctxKeyAdditions, additions)
 }
 
-func getAdditions(ctx context.Context) []inbound.Addition {
+func getAdditions(ctx context.Context) (additions []inbound.Addition) {
 	if v := ctx.Value(ctxKeyAdditions); v != nil {
 		if a, ok := v.([]inbound.Addition); ok {
-			return a
+			additions = a
 		}
-	}
-	return nil
-}
-
-func combineAdditions(ctx context.Context, additions []inbound.Addition, extraAdditions ...inbound.Addition) []inbound.Addition {
-	additionsCloned := false
-	if ctxAdditions := getAdditions(ctx); len(ctxAdditions) > 0 {
-		additions = slices.Clone(additions)
-		additionsCloned = true
-		additions = append(additions, ctxAdditions...)
 	}
 	if user, ok := auth.UserFromContext[string](ctx); ok {
-		if !additionsCloned {
-			additions = slices.Clone(additions)
-			additionsCloned = true
-		}
+		additions = slices.Clone(additions)
 		additions = append(additions, inbound.WithInUser(user))
 	}
-	if len(extraAdditions) > 0 {
-		if !additionsCloned {
-			additions = slices.Clone(additions)
-			additionsCloned = true
-		}
-		additions = append(additions, extraAdditions...)
-	}
-	return additions
+	return
 }

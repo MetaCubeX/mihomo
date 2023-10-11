@@ -11,9 +11,7 @@ import (
 func NewHTTPS(request *http.Request, conn net.Conn, additions ...Addition) (net.Conn, *C.Metadata) {
 	metadata := parseHTTPAddr(request)
 	metadata.Type = C.HTTPS
-	additions = append(additions, WithSrcAddr(conn.RemoteAddr()), WithInAddr(conn.LocalAddr()))
-	for _, addition := range additions {
-		addition.Apply(metadata)
-	}
+	ApplyAdditions(metadata, WithSrcAddr(conn.RemoteAddr()), WithInAddr(conn.LocalAddr()))
+	ApplyAdditions(metadata, additions...)
 	return conn, metadata
 }

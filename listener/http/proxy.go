@@ -100,7 +100,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *cache.LruCache[string, bool]
 
 func authenticate(request *http.Request, cache *cache.LruCache[string, bool]) *http.Response {
 	authenticator := authStore.Authenticator()
-	if inbound.SkipAuthRemoteAddr(N.NewCustomAddr("", request.RemoteAddr, nil)) {
+	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
 		authenticator = nil
 	}
 	if authenticator != nil {
