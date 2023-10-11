@@ -15,6 +15,10 @@ type Reject struct {
 	*Base
 }
 
+type RejectOption struct {
+	Name string `proxy:"name"`
+}
+
 // DialContext implements C.ProxyAdapter
 func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	return NewConn(nopConn{}, r), nil
@@ -23,6 +27,16 @@ func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 // ListenPacketContext implements C.ProxyAdapter
 func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	return newPacketConn(nopPacketConn{}, r), nil
+}
+
+func NewRejectWithOption(option RejectOption) *Reject {
+	return &Reject{
+		Base: &Base{
+			name: option.Name,
+			tp:   C.Direct,
+			udp:  true,
+		},
+	}
 }
 
 func NewReject() *Reject {
