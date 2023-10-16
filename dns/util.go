@@ -29,14 +29,16 @@ const (
 	MaxMsgSize = 65535
 )
 
+const serverFailureCacheTTL uint32 = 5
+
 func minimalTTL(records []D.RR) uint32 {
-	minObj := lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
+	rr := lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
 		return r1.Header().Ttl < r2.Header().Ttl
 	})
-	if minObj != nil {
-		return minObj.Header().Ttl
+	if rr == nil {
+		return 0
 	}
-	return 0
+	return rr.Header().Ttl
 }
 
 func updateTTL(records []D.RR, ttl uint32) {
@@ -49,28 +51,25 @@ func updateTTL(records []D.RR, ttl uint32) {
 	}
 }
 
-func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
-	putMsgToCacheWithExpire(c, key, msg, 0)
-}
-
-func putMsgToCacheWithExpire(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg, sec uint32) {
-	if sec == 0 {
-		if sec = minimalTTL(msg.Answer); sec == 0 {
-			if sec = minimalTTL(msg.Ns); sec == 0 {
-				sec = minimalTTL(msg.Extra)
-			}
-		}
-		if sec == 0 {
-			return
-		}
-
-		if sec > 120 {
-			sec = 120 // at least 2 minutes to cache
-		}
-
+func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, q D.Question, msg *D.Msg) {
+	// skip dns cache for acme challenge
+	if q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge.") {
+		log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)
+		return
 	}
 
-	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Duration(sec)*time.Second))
+	var ttl uint32
+	if msg.Rcode == D.RcodeServerFailure {
+		// [...] a resolver MAY cache a server failure response.
+		// If it does so it MUST NOT cache it for longer than five (5) minutes [...]
+		ttl = serverFailureCacheTTL
+	} else {
+		ttl = minimalTTL(append(append(msg.Answer, msg.Ns...), msg.Extra...))
+	}
+	if ttl == 0 {
+		return
+	}
+	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Duration(ttl)*time.Second))
 }
 
 func setMsgTTL(msg *D.Msg, ttl uint32) {
