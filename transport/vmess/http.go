@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/textproto"
 
+	"github.com/Dreamacro/clash/common/util"
+
 	"github.com/zhangyunhao116/fastrand"
 )
 
@@ -59,7 +61,7 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 	}
 
 	u := fmt.Sprintf("http://%s%s", host, path)
-	req, _ := http.NewRequest("GET", u, bytes.NewBuffer(b))
+	req, _ := http.NewRequest(util.EmptyOr(hc.cfg.Method, http.MethodGet), u, bytes.NewBuffer(b))
 	for key, list := range hc.cfg.Headers {
 		req.Header.Set(key, list[fastrand.Intn(len(list))])
 	}
