@@ -18,12 +18,12 @@ class ForgottenHall(BaseModel):
         - memory_of_chaos (`int`): The progress of the memory of chaos, or None if not applicable.
     """
 
-    memory: int = Field(..., alias="pre_maze_group_index")
-    """The progress of the memory (pre_maze_group_index)"""
-    memory_of_chaos_id: int = Field(..., alias="maze_group_id")
-    """The ID of the memory of chaos (maze_group_id)"""
-    memory_of_chaos: int = Field(..., alias="maze_group_index")
-    """The progress of the memory of chaos (maze_group_index)"""
+    memory: int = Field(..., alias="level")
+    """The progress of the memory (level)"""
+    memory_of_chaos_id: int = Field(..., alias="chaos_id")
+    """The ID of the memory of chaos (chaos_id)"""
+    memory_of_chaos: int = Field(..., alias="chaos_level")
+    """The progress of the memory of chaos (chaos_level)"""
 
 
 class Player(BaseModel):
@@ -64,10 +64,10 @@ class Player(BaseModel):
     is_display: bool
     """Is the player's profile display enabled."""
 
-    forgotten_hall: ForgottenHall | None = Field(None, alias="challenge_data")
-    """The progress of the Forgotten Hall (challenge_data)"""
-    simulated_universes: int = Field(0, alias="pass_area_progress")
-    """Number of simulated universes passed (pass_area_progress)"""
+    forgotten_hall: ForgottenHall | None = Field(None, alias="memory_data")
+    """The progress of the Forgotten Hall (memory_data)"""
+    simulated_universes: int = Field(0, alias="universe_level")
+    """Number of simulated universes passed (universe_level)"""
     light_cones: int = Field(0, alias="light_cone_count")
     """Number of light cones owned"""
     characters: int = Field(0, alias="avatar_count")
@@ -81,4 +81,17 @@ class Player(BaseModel):
             space_info = data.get("space_info")
             if isinstance(space_info, dict):
                 data.update(space_info)
+        return data
+
+    @root_validator(pre=True)
+    def transform_for_backward_compatibility(cls, data):
+        if isinstance(data, dict):
+            if "pass_area_progress" in data and "universe_level" not in data:
+                data["universe_level"] = data["pass_area_progress"]
+            if "challenge_data" in data and "memory_data" not in data:
+                c: dict[str, int] = data["challenge_data"]
+                data["memory_data"] = {}
+                data["memory_data"]["level"] = c.get("pre_maze_group_index")
+                data["memory_data"]["chaos_id"] = c.get("maze_group_id")
+                data["memory_data"]["chaos_level"] = c.get("maze_group_index")
         return data
