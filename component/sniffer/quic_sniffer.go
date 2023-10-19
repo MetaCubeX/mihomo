@@ -4,17 +4,16 @@ import (
 	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/tls"
-	_ "crypto/tls"
 	"encoding/binary"
 	"errors"
+	"io"
+
 	"github.com/Dreamacro/clash/common/buf"
 	"github.com/Dreamacro/clash/common/utils"
 	C "github.com/Dreamacro/clash/constant"
+
 	"github.com/metacubex/quic-go/quicvarint"
 	"golang.org/x/crypto/hkdf"
-	"io"
-	_ "unsafe"
 )
 
 // Modified from https://github.com/v2fly/v2ray-core/blob/master/common/protocol/quic/sniff.go
@@ -24,28 +23,9 @@ const (
 	version1       uint32 = 0x1
 )
 
-type cipherSuiteTLS13 struct {
-	ID     uint16
-	KeyLen int
-	AEAD   func(key, fixedNonce []byte) cipher.AEAD
-	Hash   crypto.Hash
-}
-
-// github.com/quic-go/quic-go/internal/handshake/cipher_suite.go describes these cipher suite implementations are copied from the standard library crypto/tls package.
-// So we can user go:linkname to implement the same feature.
-
-//go:linkname aeadAESGCMTLS13 crypto/tls.aeadAESGCMTLS13
-func aeadAESGCMTLS13(key, nonceMask []byte) cipher.AEAD
-
 var (
-	quicSaltOld  = []byte{0xaf, 0xbf, 0xec, 0x28, 0x99, 0x93, 0xd2, 0x4c, 0x9e, 0x97, 0x86, 0xf1, 0x9c, 0x61, 0x11, 0xe0, 0x43, 0x90, 0xa8, 0x99}
-	quicSalt     = []byte{0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a}
-	initialSuite = &cipherSuiteTLS13{
-		ID:     tls.TLS_AES_128_GCM_SHA256,
-		KeyLen: 16,
-		AEAD:   aeadAESGCMTLS13,
-		Hash:   crypto.SHA256,
-	}
+	quicSaltOld       = []byte{0xaf, 0xbf, 0xec, 0x28, 0x99, 0x93, 0xd2, 0x4c, 0x9e, 0x97, 0x86, 0xf1, 0x9c, 0x61, 0x11, 0xe0, 0x43, 0x90, 0xa8, 0x99}
+	quicSalt          = []byte{0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a}
 	errNotQuic        = errors.New("not QUIC")
 	errNotQuicInitial = errors.New("not QUIC initial packet")
 )
@@ -140,7 +120,7 @@ func (quic QuicSniffer) SniffData(b []byte) (string, error) {
 	}
 	initialSecret := hkdf.Extract(crypto.SHA256.New, destConnID, salt)
 	secret := hkdfExpandLabel(crypto.SHA256, initialSecret, []byte{}, "client in", crypto.SHA256.Size())
-	hpKey := hkdfExpandLabel(initialSuite.Hash, secret, []byte{}, "quic hp", initialSuite.KeyLen)
+	hpKey := hkdfExpandLabel(crypto.SHA256, secret, []byte{}, "quic hp", 16)
 	block, err := aes.NewCipher(hpKey)
 	if err != nil {
 		return "", err
@@ -175,10 +155,25 @@ func (quic QuicSniffer) SniffData(b []byte) (string, error) {
 
 	key := hkdfExpandLabel(crypto.SHA256, secret, []byte{}, "quic key", 16)
 	iv := hkdfExpandLabel(crypto.SHA256, secret, []byte{}, "quic iv", 12)
-	c := aeadAESGCMTLS13(key, iv)
-	nonce := cache.Extend(int(c.NonceSize()))
+	aesCipher, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(aesCipher)
+	if err != nil {
+		return "", err
+	}
+	nonce := cache.Extend(8) // 64-bit sequence number
 	binary.BigEndian.PutUint64(nonce[len(nonce)-8:], uint64(packetNumber))
-	decrypted, err := c.Open(b[extHdrLen:extHdrLen], nonce, data, b[:extHdrLen])
+	// copy from crypto/tls.aeadAESGCMTLS13
+	for i, b := range nonce {
+		iv[4+i] ^= b
+	}
+	decrypted, err := aead.Open(b[extHdrLen:extHdrLen], iv, data, b[:extHdrLen])
+	// We only decrypt once, so we do not need to XOR it back.
+	//for i, b := range nonce {
+	//	iv[4+i] ^= b
+	//}
 	if err != nil {
 		return "", err
 	}
