@@ -107,10 +107,7 @@ func (quic QuicSniffer) SniffData(b []byte) (string, error) {
 		return "", errNotQuic
 	}
 
-	hdrLen := len(b) - int(buffer.Len())
-
-	origPNBytes := make([]byte, 4)
-	copy(origPNBytes, b[hdrLen:hdrLen+4])
+	hdrLen := len(b) - buffer.Len()
 
 	var salt []byte
 	if versionNumber == version1 {
@@ -126,31 +123,40 @@ func (quic QuicSniffer) SniffData(b []byte) (string, error) {
 		return "", err
 	}
 
-	cache := buf.New()
+	cache := buf.NewPacket()
 	defer cache.Release()
 
-	mask := cache.Extend(int(block.BlockSize()))
+	mask := cache.Extend(block.BlockSize())
 	block.Encrypt(mask, b[hdrLen+4:hdrLen+4+16])
-	b[0] ^= mask[0] & 0xf
-	for i := range b[hdrLen : hdrLen+4] {
-		b[hdrLen+i] ^= mask[i+1]
+	firstByte := b[0]
+	// Encrypt/decrypt first byte.
+	if isLongHeader {
+		// Long header: 4 bits masked
+		// High 4 bits are not protected.
+		firstByte ^= mask[0] & 0x0f
+	} else {
+		// Short header: 5 bits masked
+		// High 3 bits are not protected.
+		firstByte ^= mask[0] & 0x1f
 	}
-	packetNumberLength := b[0]&0x3 + 1
-	var packetNumber uint32
-	{
-		n, err := buffer.ReadByte()
-		if err != nil {
-			return "", err
-		}
-		packetNumber = uint32(n)
+	packetNumberLength := int(firstByte&0x3 + 1) // max = 4 (64-bit sequence number)
+	extHdrLen := hdrLen + packetNumberLength
+
+	// copy to avoid modify origin data
+	extHdr := cache.Extend(extHdrLen)
+	copy(extHdr, b)
+	extHdr[0] = firstByte
+
+	packetNumber := extHdr[hdrLen:extHdrLen]
+	// Encrypt/decrypt packet number.
+	for i := range packetNumber {
+		packetNumber[i] ^= mask[1+i]
 	}
 
-	if packetNumber != 0 && packetNumber != 1 {
+	if packetNumber[0] != 0 && packetNumber[0] != 1 {
 		return "", errNotQuicInitial
 	}
 
-	extHdrLen := hdrLen + int(packetNumberLength)
-	copy(b[extHdrLen:hdrLen+4], origPNBytes[packetNumberLength:])
 	data := b[extHdrLen : int(packetLen)+hdrLen]
 
 	key := hkdfExpandLabel(crypto.SHA256, secret, []byte{}, "quic key", 16)
@@ -163,24 +169,20 @@ func (quic QuicSniffer) SniffData(b []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	nonce := cache.Extend(8) // 64-bit sequence number
-	binary.BigEndian.PutUint64(nonce[len(nonce)-8:], uint64(packetNumber))
-	// copy from crypto/tls.aeadAESGCMTLS13
-	for i, b := range nonce {
-		iv[4+i] ^= b
-	}
-	decrypted, err := aead.Open(b[extHdrLen:extHdrLen], iv, data, b[:extHdrLen])
 	// We only decrypt once, so we do not need to XOR it back.
-	//for i, b := range nonce {
-	//	iv[4+i] ^= b
-	//}
+	// https://github.com/quic-go/qtls-go1-20/blob/e132a0e6cb45e20ac0b705454849a11d09ba5a54/cipher_suites.go#L496
+	for i, b := range packetNumber {
+		iv[len(iv)-len(packetNumber)+i] ^= b
+	}
+	dst := cache.Extend(len(data))
+	decrypted, err := aead.Open(dst[:0], iv, data, extHdr)
 	if err != nil {
 		return "", err
 	}
 	buffer = buf.As(decrypted)
 
 	cryptoLen := uint(0)
-	cryptoData := make([]byte, buffer.Len())
+	cryptoData := cache.Extend(buffer.Len())
 	for i := 0; !buffer.IsEmpty(); i++ {
 		frameType := byte(0x0) // Default to PADDING frame
 		for frameType == 0x0 && !buffer.IsEmpty() {
