@@ -23,8 +23,8 @@ func (*BaseSniffer) Protocol() string {
 	return "unknown"
 }
 
-// SniffTCP implements sniffer.Sniffer
-func (*BaseSniffer) SniffTCP(bytes []byte) (string, error) {
+// SniffData implements sniffer.Sniffer
+func (*BaseSniffer) SniffData(bytes []byte) (string, error) {
 	return "", errors.New("TODO")
 }
 
