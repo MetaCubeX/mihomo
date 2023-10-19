@@ -39,7 +39,7 @@ func (tls *TLSSniffer) SupportNetwork() C.NetWork {
 	return C.TCP
 }
 
-func (tls *TLSSniffer) SniffTCP(bytes []byte) (string, error) {
+func (tls *TLSSniffer) SniffData(bytes []byte) (string, error) {
 	domain, err := SniffTLS(bytes)
 	if err == nil {
 		return *domain, nil

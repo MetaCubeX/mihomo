@@ -323,6 +323,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
+	if sniffer.Dispatcher.Enable() && sniffingEnable {
+		sniffer.Dispatcher.UDPSniff(packet)
+	}
+
 	// local resolve UDP dns
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
