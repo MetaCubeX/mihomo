@@ -1,6 +1,7 @@
 package sniffer
 
 import (
+	"bytes"
 	"encoding/hex"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -26,9 +27,11 @@ func TestQuicHeaders(t *testing.T) {
 	for _, test := range cases {
 		pkt, err := hex.DecodeString(test.input)
 		assert.NoError(t, err)
+		oriPkt := bytes.Clone(pkt)
 		domain, err := q.SniffData(pkt)
 		assert.NoError(t, err)
 		assert.Equal(t, test.domain, domain)
+		assert.Equal(t, oriPkt, pkt) // ensure input data not changed
 	}
 }
 
@@ -170,6 +173,7 @@ func TestTLSHeaders(t *testing.T) {
 	}
 
 	for _, test := range cases {
+		input := bytes.Clone(test.input)
 		domain, err := SniffTLS(test.input)
 		if test.err {
 			if err == nil {
@@ -183,5 +187,6 @@ func TestTLSHeaders(t *testing.T) {
 				t.Error("expect domain ", test.domain, " but got ", domain)
 			}
 		}
+		assert.Equal(t, input, test.input)
 	}
 }

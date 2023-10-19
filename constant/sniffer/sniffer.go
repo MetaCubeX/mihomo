@@ -4,6 +4,7 @@ import "github.com/Dreamacro/clash/constant"
 
 type Sniffer interface {
 	SupportNetwork() constant.NetWork
+	// SniffData must not change input bytes
 	SniffData(bytes []byte) (string, error)
 	Protocol() string
 	SupportPort(port uint16) bool

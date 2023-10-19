@@ -51,10 +51,7 @@ func (sd *SnifferDispatcher) UDPSniff(packet C.PacketAdapter) bool {
 				overrideDest := config.OverrideDest
 
 				if inWhitelist {
-					var copyBuf = make([]byte, len(packet.Data()))
-					copy(copyBuf, packet.Data())
-
-					host, err := sniffer.SniffData(copyBuf)
+					host, err := sniffer.SniffData(packet.Data())
 					if err != nil {
 						continue
 					}
