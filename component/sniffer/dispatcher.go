@@ -117,7 +117,8 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 
 func (sd *SnifferDispatcher) replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
 	// show log early, since the following code may mutate `metadata.Host`
-	log.Debugln("[Sniffer] Sniff TCP [%s]-->[%s] success, replace domain [%s]-->[%s]",
+	log.Debugln("[Sniffer] Sniff %s [%s]-->[%s] success, replace domain [%s]-->[%s]",
+		metadata.NetWork,
 		metadata.SourceDetail(),
 		metadata.RemoteAddress(),
 		metadata.Host, host)
