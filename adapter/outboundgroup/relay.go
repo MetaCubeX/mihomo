@@ -3,6 +3,7 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/Dreamacro/clash/adapter/outbound"
 	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/proxydialer"
@@ -90,7 +91,7 @@ func (r *Relay) SupportUDP() bool {
 			return true
 		}
 		switch proxy.SupportWithDialer() {
-		case C.ALLNet:
+		case C.ANY:
 		case C.UDP:
 		default: // C.TCP and C.InvalidNet
 			return false

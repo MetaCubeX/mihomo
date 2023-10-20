@@ -14,7 +14,7 @@ import (
 const (
 	TCP NetWork = iota
 	UDP
-	ALLNet
+	ANY
 	InvalidNet = 0xff
 )
 
@@ -39,11 +39,11 @@ type NetWork int
 func (n NetWork) String() string {
 	switch n {
 	case TCP:
-		return "tcp"
+		return "TCP"
 	case UDP:
-		return "udp"
-	case ALLNet:
-		return "all"
+		return "UDP"
+	case ANY:
+		return "any"
 	default:
 		return "invalid"
 	}

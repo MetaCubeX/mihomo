@@ -340,7 +340,7 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 
 // SupportWithDialer implements C.ProxyAdapter
 func (v *Vless) SupportWithDialer() C.NetWork {
-	return C.ALLNet
+	return C.ANY
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

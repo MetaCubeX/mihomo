@@ -120,7 +120,7 @@ func (ssr *ShadowSocksR) ListenPacketWithDialer(ctx context.Context, dialer C.Di
 
 // SupportWithDialer implements C.ProxyAdapter
 func (ssr *ShadowSocksR) SupportWithDialer() C.NetWork {
-	return C.ALLNet
+	return C.ANY
 }
 
 func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {

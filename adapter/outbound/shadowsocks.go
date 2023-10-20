@@ -191,7 +191,7 @@ func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dial
 
 // SupportWithDialer implements C.ProxyAdapter
 func (ss *ShadowSocks) SupportWithDialer() C.NetWork {
-	return C.ALLNet
+	return C.ANY
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

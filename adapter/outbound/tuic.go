@@ -120,7 +120,7 @@ func (t *Tuic) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, meta
 
 // SupportWithDialer implements C.ProxyAdapter
 func (t *Tuic) SupportWithDialer() C.NetWork {
-	return C.ALLNet
+	return C.ANY
 }
 
 func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (transport *quic.Transport, addr net.Addr, err error) {
