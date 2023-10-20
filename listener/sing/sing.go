@@ -193,12 +193,6 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		err = errors.New("address is invalid")
 		return
 	}
-	buff := buf.NewPacket()
-	defer buff.Release()
-	n, err = buff.Write(b)
-	if err != nil {
-		return
-	}
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -207,6 +201,14 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		err = errors.New("writeBack to closed connection")
 		return
 	}
+
+	buff := buf.NewPacket()
+	defer buff.Release()
+	n, err = buff.Write(b)
+	if err != nil {
+		return
+	}
+
 	err = conn.WritePacket(buff, M.SocksaddrFromNet(addr))
 	if err != nil {
 		return
