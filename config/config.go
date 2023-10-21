@@ -319,6 +319,8 @@ type RawConfig struct {
 	SubRules      map[string][]string       `yaml:"sub-rules"`
 	RawTLS        TLS                       `yaml:"tls"`
 	Listeners     []map[string]any          `yaml:"listeners"`
+
+	ClashForAndroid RawClashForAndroid      `yaml:"clash-for-android"`
 }
 
 type GeoXUrl struct {
