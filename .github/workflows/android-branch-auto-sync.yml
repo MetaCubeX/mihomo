@@ -34,7 +34,8 @@ jobs:
         run: |
           git fetch origin
           git checkout origin/Alpha -b android-real
-          git rebase origin/android-open
+          git merge --squash origin/android-open
+          git commit -m "Android: patch"
       
       - name: Check for conflicts
         run: |
