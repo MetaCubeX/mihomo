@@ -30,8 +30,8 @@ jobs:
       
       - name: Sync android-open with Alpha mainline
         run: |
-          git checkout android-open
-          git rebase Alpha
+          git checkout Alpha
+          git rebase android-open
           if [ "$(git status --porcelain)" != "" ]; then     # if there are any changes
             git push origin android-open --force-with-lease
           fi
