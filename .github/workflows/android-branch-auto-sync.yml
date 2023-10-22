@@ -8,11 +8,13 @@ on:
       - ".github/ISSUE_TEMPLATE/**"
     branches:
       - Alpha
+      - android-open
     tags:
       - "v*"
   pull_request_target:
     branches:
       - Alpha
+      - android-open
       
 jobs:
   update-dependencies:
@@ -28,9 +30,21 @@ jobs:
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
       
-      - name: Sync android-open with Alpha mainline
+      - name: Sync android-real with Alpha rebase android-open
         run: |
-          git checkout android-open
-          git checkout Alpha
-          git rebase android-open
-          git push origin android-open --force-with-lease
+          git fetch origin
+          git checkout origin/Alpha -b android-real
+          git rebase origin/android-open
+      
+      - name: Check for conflicts
+        run: |
+          CONFLICTS=$(git diff --name-only --diff-filter=U)
+          if [ ! -z "$CONFLICTS" ]; then
+            echo "There are conflicts in the following files:"
+            echo $CONFLICTS
+            exit 1
+          fi
+      
+      - name: Push changes
+        run: |
+          git push origin android-real --force
