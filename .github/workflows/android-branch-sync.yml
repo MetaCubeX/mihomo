@@ -32,7 +32,7 @@ jobs:
       - name: Sync android-open with Alpha mainline
         run: |
           git checkout android-open
-          git rebase Alpha
+          git merge Alpha
           if [ "$(git status --porcelain)" != "" ]; then     # if there are any changes
             git commit -am "Merge changes from Alpha mainline"
             git push origin android-open
