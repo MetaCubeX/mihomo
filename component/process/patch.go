@@ -10,6 +10,5 @@ func FindPackageName(metadata *constant.Metadata) (string, error) {
 	if resolver := DefaultPackageNameResolver; resolver != nil {
 		return resolver(metadata)
 	}
-
 	return "", ErrPlatformNotSupport
 }

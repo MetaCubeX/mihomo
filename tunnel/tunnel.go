@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -621,16 +620,14 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		}
 
 		if !findProcessMode.Off() && !processFound && (findProcessMode.Always() || rule.ShouldFindProcess()) {
-			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
+			pkg, err := P.FindPackageName(metadata)
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 			} else {
-				metadata.Process = filepath.Base(path)
-				metadata.ProcessPath = path
-				metadata.Uid = uid
+				metadata.Process = pkg
 				processFound = true
 				if procesCache != metadata.Process {
-					log.Debugln("[Process] %s from process %s", metadata.String(), path)
+					log.Debugln("[Process] %s from process %s", metadata.String(), metadata.Process)
 				}
 				procesCache = metadata.Process
 			}
