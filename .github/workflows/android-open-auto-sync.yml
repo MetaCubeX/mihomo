@@ -33,6 +33,4 @@ jobs:
           git checkout android-open
           git checkout Alpha
           git rebase android-open
-          if [ "$(git status --porcelain)" != "" ]; then     # if there are any changes
-            git push origin android-open --force-with-lease
-          fi
+          git push origin android-open --force-with-lease
