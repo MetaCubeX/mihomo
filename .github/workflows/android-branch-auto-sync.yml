@@ -1,0 +1,50 @@
+name: Android Branch Auto Sync
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - ".github/ISSUE_TEMPLATE/**"
+    branches:
+      - Alpha
+      - android-open
+    tags:
+      - "v*"
+  pull_request_target:
+    branches:
+      - Alpha
+      - android-open
+      
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+      
+      - name: Sync android-real with Alpha rebase android-open
+        run: |
+          git fetch origin
+          git checkout origin/Alpha -b android-real
+          git rebase origin/android-open
+      
+      - name: Check for conflicts
+        run: |
+          CONFLICTS=$(git diff --name-only --diff-filter=U)
+          if [ ! -z "$CONFLICTS" ]; then
+            echo "There are conflicts in the following files:"
+            echo $CONFLICTS
+            exit 1
+          fi
+      
+      - name: Push changes
+        run: |
+          git push origin android-real --force
