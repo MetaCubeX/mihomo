@@ -23,7 +23,7 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20231008050747-a684db516966
 	github.com/metacubex/sing-shadowsocks v0.2.5
 	github.com/metacubex/sing-shadowsocks2 v0.1.4
-	github.com/metacubex/sing-tun v0.1.15-0.20231003075803-dffa0200e64c
+	github.com/metacubex/sing-tun v0.1.15-0.20231022153326-92d6e97f0700
 	github.com/metacubex/sing-vmess v0.1.9-0.20230921005247-a0488d7dac74
 	github.com/metacubex/sing-wireguard v0.0.0-20231001110902-321836559170
 	github.com/miekg/dns v1.1.56
@@ -32,7 +32,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.13
+	github.com/sagernet/sing v0.2.14
 	github.com/sagernet/sing-mux v0.1.3
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20230816093905-5a5c285d44a6
@@ -65,7 +65,7 @@ require (
 	github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391 // indirect
 	github.com/ericlagergren/siv v0.0.0-20220507050439-0b757b3aa5f1 // indirect
 	github.com/ericlagergren/subtle v0.0.0-20220507045147-890d697da010 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gaukas/godicttls v0.0.4 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
