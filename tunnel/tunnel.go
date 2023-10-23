@@ -47,6 +47,8 @@ var (
 	findProcessMode P.FindProcessMode
 
 	fakeIPRange netip.Prefix
+
+	procesCache string
 )
 
 type tunnel struct{}
@@ -627,6 +629,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				metadata.Process = filepath.Base(path)
 				metadata.ProcessPath = path
 				metadata.Uid = uid
+				if procesCache != metadata.Process {
+					log.Debugln("[Process] %s from process %s", metadata.String(), path)
+				}
+				procesCache = metadata.Process
 			}
 		}
 

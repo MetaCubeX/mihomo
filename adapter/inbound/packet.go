@@ -12,7 +12,7 @@ func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type, additions 
 	metadata.Type = source
 	ApplyAdditions(metadata, WithSrcAddr(packet.LocalAddr()))
 	if p, ok := packet.(C.UDPPacketInAddr); ok {
-		ApplyAdditions(metadata, WithInAddr(p.InAddr()))
+		ApplyAdditions(metadata, WithInAddr(p.InAddr()), WithDstAddr(metadata.RawDstAddr))
 	}
 	ApplyAdditions(metadata, additions...)
 

@@ -70,6 +70,9 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
+	if DefaultSocketHook != nil {
+		return listenPacketHooked(ctx, network, address)
+	}
 	cfg := applyOptions(options...)
 
 	lc := &net.ListenConfig{}
@@ -110,6 +113,9 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
+	if DefaultSocketHook != nil {
+		return dialContextHooked(ctx, network, destination, port)
+	}
 	address := net.JoinHostPort(destination.String(), port)
 
 	netDialer := opt.netDialer
