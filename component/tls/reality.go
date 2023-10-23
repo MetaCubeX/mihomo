@@ -43,7 +43,8 @@ type RealityConfig struct {
 func aesgcmPreferred(ciphers []uint16) bool
 
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
-	if fingerprint, exists := GetFingerprint(ClientFingerprint); exists {
+	retry := 0
+	for fingerprint, exists := GetFingerprint(ClientFingerprint); exists; retry++ {
 		verifier := &realityVerifier{
 			serverName: tlsConfig.ServerName,
 		}
@@ -80,7 +81,15 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
-		authKey := uConn.HandshakeState.State13.EcdheParams.SharedKey(realityConfig.PublicKey[:])
+		ecdheParams := uConn.HandshakeState.State13.EcdheParams
+		if ecdheParams == nil {
+			// WTF???
+			if retry > 2 {
+				return nil, errors.New("nil ecdheParams")
+			}
+			continue // retry
+		}
+		authKey := ecdheParams.SharedKey(realityConfig.PublicKey[:])
 		if authKey == nil {
 			return nil, errors.New("nil auth_key")
 		}
