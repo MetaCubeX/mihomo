@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	URL "net/url"
+	"runtime"
 	"strings"
 	"time"
 
@@ -47,6 +48,7 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 
 	transport := &http.Transport{
 		// from http.DefaultTransport
+		DisableKeepAlives:     runtime.GOOS == "android",
 		MaxIdleConns:          100,
 		IdleConnTimeout:       30 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
