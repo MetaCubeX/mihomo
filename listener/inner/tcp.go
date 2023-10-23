@@ -27,6 +27,8 @@ func HandleTcp(address string) (conn net.Conn, err error) {
 	metadata.Type = C.INNER
 	metadata.DNSMode = C.DNSNormal
 	metadata.Process = C.ClashName
+	metadata.RawSrcAddr = conn1.RemoteAddr()
+	metadata.RawDstAddr = conn1.LocalAddr()
 	if h, port, err := net.SplitHostPort(address); err == nil {
 		if port, err := strconv.ParseUint(port, 10, 16); err == nil {
 			metadata.DstPort = uint16(port)
