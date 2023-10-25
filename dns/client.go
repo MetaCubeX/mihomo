@@ -48,10 +48,6 @@ func (c *client) Address() string {
 	return c.addr
 }
 
-func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
-	return c.ExchangeContext(context.Background(), m)
-}
-
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {
 	var (
 		ip  netip.Addr

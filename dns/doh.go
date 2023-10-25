@@ -157,11 +157,6 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 	return msg, err
 }
 
-// Exchange implements the Upstream interface for *dnsOverHTTPS.
-func (doh *dnsOverHTTPS) Exchange(m *D.Msg) (*D.Msg, error) {
-	return doh.ExchangeContext(context.Background(), m)
-}
-
 // Close implements the Upstream interface for *dnsOverHTTPS.
 func (doh *dnsOverHTTPS) Close() (err error) {
 	doh.clientMu.Lock()

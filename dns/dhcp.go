@@ -11,8 +11,6 @@ import (
 	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/component/dhcp"
 	"github.com/Dreamacro/clash/component/iface"
-	"github.com/Dreamacro/clash/component/resolver"
-
 	D "github.com/miekg/dns"
 )
 
@@ -44,13 +42,6 @@ func (d *dhcpClient) Address() string {
 		addrs = append(addrs, c.Address())
 	}
 	return strings.Join(addrs, ",")
-}
-
-func (d *dhcpClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
-	defer cancel()
-
-	return d.ExchangeContext(ctx, m)
 }
 
 func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
