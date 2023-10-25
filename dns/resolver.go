@@ -23,7 +23,6 @@ import (
 )
 
 type dnsClient interface {
-	Exchange(m *D.Msg) (msg *D.Msg, err error)
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
 	Address() string
 }
@@ -136,11 +135,6 @@ func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
 	return false
 }
 
-// Exchange a batch of dns request, and it use cache
-func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
-	return r.ExchangeContext(context.Background(), m)
-}
-
 // ExchangeContext a batch of dns request with context.Context, and it use cache
 func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	if len(m.Question) == 0 {
@@ -210,10 +204,10 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 		}
 
 		if matched := r.matchPolicy(m); len(matched) != 0 {
-			result, cache, err = r.batchExchange(ctx, matched, m)
+			result, cache, err = batchExchange(ctx, matched, m)
 			return
 		}
-		result, cache, err = r.batchExchange(ctx, r.main, m)
+		result, cache, err = batchExchange(ctx, r.main, m)
 		return
 	}
 
@@ -253,13 +247,6 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	}
 
 	return
-}
-
-func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
-	ctx, cancel := context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
-	defer cancel()
-
-	return batchExchange(ctx, clients, m)
 }
 
 func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
@@ -385,7 +372,7 @@ func (r *Resolver) lookupIP(ctx context.Context, host string, dnsType uint16) (i
 func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D.Msg) <-chan *result {
 	ch := make(chan *result, 1)
 	go func() {
-		res, _, err := r.batchExchange(ctx, client, msg)
+		res, _, err := batchExchange(ctx, client, msg)
 		ch <- &result{Msg: res, Error: err}
 	}()
 	return ch

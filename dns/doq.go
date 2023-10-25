@@ -134,11 +134,6 @@ func (doq *dnsOverQUIC) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.M
 	return msg, err
 }
 
-// Exchange implements the Upstream interface for *dnsOverQUIC.
-func (doq *dnsOverQUIC) Exchange(m *D.Msg) (msg *D.Msg, err error) {
-	return doq.ExchangeContext(context.Background(), m)
-}
-
 // Close implements the Upstream interface for *dnsOverQUIC.
 func (doq *dnsOverQUIC) Close() (err error) {
 	doq.connMu.Lock()
