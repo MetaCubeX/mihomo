@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/common/cache"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -389,7 +388,7 @@ func (r *Resolver) Invalid() bool {
 type NameServer struct {
 	Net          string
 	Addr         string
-	Interface    atomic.TypedValue[string]
+	Interface    string
 	ProxyAdapter C.ProxyAdapter
 	ProxyName    string
 	Params       map[string]string
