@@ -22,6 +22,11 @@ I have searched on the [issue tracker](……/) for a related feature request.
 I have read the [documentation](https://wiki.metacubex.one/) and was unable to solve the issue.
 "
           required: true
+        - label: "
+我将保持此issue的活跃状态，直到开发者接受此功能并列入计划
+I will keep this issue active, until the developers accept this feature and include it in the plan.
+"
+          required: true
   - type: textarea
     attributes:
       label: Description

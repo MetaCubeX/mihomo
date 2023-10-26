@@ -42,6 +42,11 @@ I have read the [documentation](https://wiki.metacubex.one/) and was unable to s
 This is an issue of the Clash core *per se*, not to the derivatives of Clash, like OpenClash or KoolClash.
 "
           required: true
+        - label: "
+我将保持此issue的活跃状态，直到开发者确认此问题的存在并列入计划
+I will keep this issue active, until the developers confirm the existance of bug and include it in the plan.
+"
+          required: true
   - type: input
     attributes:
       label: Clash version

@@ -16,7 +16,7 @@ jobs:
           days-before-issue-close: 14
           stale-issue-label: "stale"
           exempt-issue-labels: "pinned, security, priority: high, priority: normal, priority: low"
-          stale-issue-message: "This issue is stale because it has been open for 60 days with no activity. Remove stale label or comment or this will be closed in 14 days"
+          stale-issue-message: "This issue is stale because it has been open for 60 days with no activity. Remove stale label or comment, or this issue will be closed in 14 days"
           close-issue-message: "This issue was closed because it has been inactive for 14 days since being marked as stale."
           days-before-pr-stale: -1        # Do not stale PR
           days-before-pr-close: -1        # Do not stale PR
