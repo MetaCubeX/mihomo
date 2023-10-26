@@ -20,7 +20,6 @@ import (
 	N "github.com/Dreamacro/clash/common/net"
 	"github.com/Dreamacro/clash/common/utils"
 	"github.com/Dreamacro/clash/component/auth"
-	"github.com/Dreamacro/clash/component/dialer"
 	"github.com/Dreamacro/clash/component/fakeip"
 	"github.com/Dreamacro/clash/component/geodata"
 	"github.com/Dreamacro/clash/component/geodata/router"
@@ -1048,7 +1047,6 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 				Net:       dnsNetType,
 				Addr:      addr,
 				ProxyName: proxyName,
-				Interface: dialer.DefaultInterface,
 				Params:    params,
 				PreferH3:  preferH3,
 			},

@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
 	"github.com/Dreamacro/clash/component/dhcp"
 	"github.com/Dreamacro/clash/component/iface"
 	D "github.com/miekg/dns"
@@ -77,7 +76,7 @@ func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {
 				for _, item := range dns {
 					nameserver = append(nameserver, NameServer{
 						Addr:      net.JoinHostPort(item.String(), "53"),
-						Interface: atomic.NewTypedValue(d.ifaceName),
+						Interface: d.ifaceName,
 					})
 				}
 
