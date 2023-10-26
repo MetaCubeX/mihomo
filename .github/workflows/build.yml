@@ -69,6 +69,8 @@ jobs:
               target: "darwin-amd64 darwin-arm64 android-arm64",
               id: "9",
             }
+          # Go 1.21 requires at least Windows 10 or Windows Server 2016; support for previous versions has been discontinued.
+          - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "10" }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
           - { type: "WithCGO", target: "linux/amd64", id: "3" }
@@ -126,9 +128,17 @@ jobs:
         shell: bash
 
       - name: Setup Go
+        if: ${{ matrix.job.type!='WithoutCGO-GO120' }}
         uses: actions/setup-go@v4
         with:
           go-version: "1.21"
+          check-latest: true
+
+      - name: Setup Go
+        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
           check-latest: true
 
       - name: Test
@@ -137,7 +147,7 @@ jobs:
           go test ./...
 
       - name: Build WithoutCGO
-        if: ${{ matrix.job.type=='WithoutCGO' }}
+        if: ${{ matrix.job.type!='WithCGO' }}
         env:
           NAME: Clash.Meta
           BINDIR: bin
@@ -182,6 +192,17 @@ jobs:
           cp ../.github/rename-cgo.sh ./
           bash ./rename-cgo.sh
           rm ./rename-cgo.sh
+          ls -la
+          cd ..
+
+      - name: Rename
+        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
+        run: |
+          cd bin
+          ls -la
+          cp ../.github/rename-go120.sh ./
+          bash ./rename-go120.sh
+          rm ./rename-go120.sh
           ls -la
           cd ..
 
