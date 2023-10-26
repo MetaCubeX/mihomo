@@ -74,7 +74,11 @@ func ListenPacket(ctx context.Context, network, address string, options ...Optio
 
 	lc := &net.ListenConfig{}
 	if cfg.interfaceName != "" {
-		addr, err := bindIfaceToListenConfig(cfg.interfaceName, lc, network, address)
+		bind := bindIfaceToListenConfig
+		if cfg.fallbackBind {
+			bind = fallbackBindIfaceToListenConfig
+		}
+		addr, err := bind(cfg.interfaceName, lc, network, address)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +129,11 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 
 	dialer := netDialer.(*net.Dialer)
 	if opt.interfaceName != "" {
-		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
+		bind := bindIfaceToDialer
+		if opt.fallbackBind {
+			bind = fallbackBindIfaceToDialer
+		}
+		if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
 			return nil, err
 		}
 	}
