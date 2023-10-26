@@ -69,8 +69,12 @@ jobs:
               target: "darwin-amd64 darwin-arm64 android-arm64",
               id: "9",
             }
-          # Go 1.21 requires at least Windows 10 or Windows Server 2016; support for previous versions has been discontinued.
-          - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "10" }
+          # only for test
+          - { type: "WithoutCGO-GO120", target: "linux-amd64 linux-amd64-compatible",id: "1" }
+          # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
+          - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "2" }
+          # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
+          - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64 android-arm64",id: "3" }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
           - { type: "WithCGO", target: "linux/amd64", id: "3" }
@@ -142,7 +146,7 @@ jobs:
           check-latest: true
 
       - name: Test
-        if: ${{ matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
+        if: ${{ matrix.job.id=='1' && matrix.job.type!='WithCGO' }}
         run: |
           go test ./...
 
