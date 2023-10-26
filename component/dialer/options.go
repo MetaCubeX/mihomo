@@ -20,6 +20,7 @@ type NetDialer interface {
 
 type option struct {
 	interfaceName string
+	fallbackBind  bool
 	addrReuse     bool
 	routingMark   int
 	network       int
@@ -35,6 +36,12 @@ type Option func(opt *option)
 func WithInterface(name string) Option {
 	return func(opt *option) {
 		opt.interfaceName = name
+	}
+}
+
+func WithFallbackBind(fallback bool) Option {
+	return func(opt *option) {
+		opt.fallbackBind = fallback
 	}
 }
 

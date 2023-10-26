@@ -280,7 +280,7 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 		DstPort: uint16(uintPort),
 	}
 	if proxyAdapter == nil {
-		return dialer.NewDialer(opts...).ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
+		return dialer.NewDialer(opts...).ListenPacket(ctx, network, "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
 	}
 
 	if !proxyAdapter.SupportUDP() {
