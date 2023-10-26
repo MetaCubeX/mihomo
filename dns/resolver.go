@@ -398,7 +398,7 @@ type NameServer struct {
 type FallbackFilter struct {
 	GeoIP     bool
 	GeoIPCode string
-	IPCIDR    []*netip.Prefix
+	IPCIDR    []netip.Prefix
 	Domain    []string
 	GeoSite   []*router.DomainMatcher
 }

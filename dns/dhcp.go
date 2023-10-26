@@ -26,7 +26,7 @@ type dhcpClient struct {
 	ifaceInvalidate time.Time
 	dnsInvalidate   time.Time
 
-	ifaceAddr *netip.Prefix
+	ifaceAddr netip.Prefix
 	done      chan struct{}
 	clients   []dnsClient
 	err       error
