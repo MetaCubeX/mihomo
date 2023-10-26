@@ -15,7 +15,7 @@ func LookupLocalAddrFromIfaceName(ifaceName string, network string, destination 
 		return nil, err
 	}
 
-	var addr *netip.Prefix
+	var addr netip.Prefix
 	switch network {
 	case "udp4", "tcp4":
 		addr, err = ifaceObj.PickIPv4Addr(destination)

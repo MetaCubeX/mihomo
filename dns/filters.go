@@ -45,7 +45,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 }
 
 type ipnetFilter struct {
-	ipnet *netip.Prefix
+	ipnet netip.Prefix
 }
 
 func (inf *ipnetFilter) Match(ip netip.Addr) bool {
