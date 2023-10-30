@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - "*"
   pull_request_target:
     branches:
       - Alpha
