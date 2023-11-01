@@ -193,21 +193,21 @@ type RawNTP struct {
 }
 
 type RawDNS struct {
-	Enable                bool              `yaml:"enable"`
-	PreferH3              bool              `yaml:"prefer-h3"`
-	IPv6                  bool              `yaml:"ipv6"`
-	IPv6Timeout           uint              `yaml:"ipv6-timeout"`
-	UseHosts              bool              `yaml:"use-hosts"`
-	NameServer            []string          `yaml:"nameserver"`
-	Fallback              []string          `yaml:"fallback"`
-	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter"`
-	Listen                string            `yaml:"listen"`
-	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode"`
-	FakeIPRange           string            `yaml:"fake-ip-range"`
-	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
-	DefaultNameserver     []string          `yaml:"default-nameserver"`
-	NameServerPolicy      map[string]any    `yaml:"nameserver-policy"`
-	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
+	Enable                bool              `yaml:"enable" json:"enable"`
+	PreferH3              bool              `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                  bool              `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout           uint              `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts              bool              `yaml:"use-hosts" json:"use-hosts"`
+	NameServer            []string          `yaml:"nameserver" json:"nameserver"`
+	Fallback              []string          `yaml:"fallback" json:"fallback"`
+	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter" json:"fallback-filter"`
+	Listen                string            `yaml:"listen" json:"listen"`
+	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange           string            `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPFilter          []string          `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	DefaultNameserver     []string          `yaml:"default-nameserver" json:"default-nameserver"`
+	NameServerPolicy      map[string]any    `yaml:"nameserver-policy" json:"nameserver-policy"`
+	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
@@ -266,23 +266,23 @@ type RawTuicServer struct {
 }
 
 type RawConfig struct {
-	Port                    int               `yaml:"port"`
-	SocksPort               int               `yaml:"socks-port"`
-	RedirPort               int               `yaml:"redir-port"`
-	TProxyPort              int               `yaml:"tproxy-port"`
-	MixedPort               int               `yaml:"mixed-port"`
+	Port                    int               `yaml:"port" json:"port"`
+	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
+	RedirPort               int               `yaml:"redir-port" json:"redir-port"`
+	TProxyPort              int               `yaml:"tproxy-port" json:"tproxy-port"`
+	MixedPort               int               `yaml:"mixed-port" json:"mixed-port"`
 	ShadowSocksConfig       string            `yaml:"ss-config"`
 	VmessConfig             string            `yaml:"vmess-config"`
 	InboundTfo              bool              `yaml:"inbound-tfo"`
 	InboundMPTCP            bool              `yaml:"inbound-mptcp"`
-	Authentication          []string          `yaml:"authentication"`
+	Authentication          []string          `yaml:"authentication" json:"authentication"`
 	SkipAuthPrefixes        []netip.Prefix    `yaml:"skip-auth-prefixes"`
-	AllowLan                bool              `yaml:"allow-lan"`
-	BindAddress             string            `yaml:"bind-address"`
-	Mode                    T.TunnelMode      `yaml:"mode"`
-	UnifiedDelay            bool              `yaml:"unified-delay"`
-	LogLevel                log.LogLevel      `yaml:"log-level"`
-	IPv6                    bool              `yaml:"ipv6"`
+	AllowLan                bool              `yaml:"allow-lan" json:"allow-lan"`
+	BindAddress             string            `yaml:"bind-address" json:"bind-address"`
+	Mode                    T.TunnelMode      `yaml:"mode" json:"mode"`
+	UnifiedDelay            bool              `yaml:"unified-delay" json:"unified-delay"`
+	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
+	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
 	ExternalController      string            `yaml:"external-controller"`
 	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
 	ExternalUI              string            `yaml:"external-ui"`
@@ -292,20 +292,20 @@ type RawConfig struct {
 	Interface               string            `yaml:"interface-name"`
 	RoutingMark             int               `yaml:"routing-mark"`
 	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
-	GeodataMode             bool              `yaml:"geodata-mode"`
-	GeodataLoader           string            `yaml:"geodata-loader"`
+	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
+	GeodataLoader           string            `yaml:"geodata-loader" json:"geodata-loader"`
 	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 	GlobalUA                string            `yaml:"global-ua"`
 	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
 
-	Sniffer       RawSniffer                `yaml:"sniffer"`
+	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
-	Hosts         map[string]any            `yaml:"hosts"`
-	NTP           RawNTP                    `yaml:"ntp"`
-	DNS           RawDNS                    `yaml:"dns"`
+	Hosts         map[string]any            `yaml:"hosts" json:"hosts"`
+	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
+	DNS           RawDNS                    `yaml:"dns" json:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
 	EBpf          EBpf                      `yaml:"ebpf"`
@@ -320,7 +320,7 @@ type RawConfig struct {
 	RawTLS        TLS                       `yaml:"tls"`
 	Listeners     []map[string]any          `yaml:"listeners"`
 
-	ClashForAndroid RawClashForAndroid      `yaml:"clash-for-android"`
+	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
 
 type GeoXUrl struct {
