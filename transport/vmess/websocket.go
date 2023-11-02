@@ -55,6 +55,7 @@ type WebsocketConfig struct {
 	MaxEarlyData        int
 	EarlyDataHeaderName string
 	ClientFingerprint   string
+	V2rayHttpUpgrade    bool
 }
 
 // Read implements net.Conn.Read()
@@ -350,6 +351,39 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		Host:     net.JoinHostPort(c.Host, c.Port),
 		Path:     u.Path,
 		RawQuery: u.RawQuery,
+	}
+
+	if c.V2rayHttpUpgrade {
+		if c.TLS {
+			if dialer.TLSClient != nil {
+				conn = dialer.TLSClient(conn, uri.Host)
+			} else {
+				conn = tls.Client(conn, dialer.TLSConfig)
+			}
+		}
+		request := &http.Request{
+			Method: http.MethodGet,
+			URL:    &uri,
+			Header: c.Headers.Clone(),
+			Host:   c.Host,
+		}
+		request.Header.Set("Connection", "Upgrade")
+		request.Header.Set("Upgrade", "websocket")
+		err = request.Write(conn)
+		if err != nil {
+			return nil, err
+		}
+		bufferedConn := N.NewBufferedConn(conn)
+		response, err := http.ReadResponse(bufferedConn.Reader(), request)
+		if err != nil {
+			return nil, err
+		}
+		if response.StatusCode != 101 ||
+			!strings.EqualFold(response.Header.Get("Connection"), "upgrade") ||
+			!strings.EqualFold(response.Header.Get("Upgrade"), "websocket") {
+			return nil, fmt.Errorf("unexpected status: %s", response.Status)
+		}
+		return bufferedConn, nil
 	}
 
 	headers := http.Header{}

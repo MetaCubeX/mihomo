@@ -352,16 +352,17 @@ proxies: # socks5
     plugin: v2ray-plugin
     plugin-opts:
       mode: websocket # no QUIC now
-    # tls: true # wss
-    # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
-    # 配置指纹将实现 SSL Pining 效果
-    # fingerprint: xxxx
-    # skip-cert-verify: true
-    # host: bing.com
-    # path: "/"
-    # mux: true
-    # headers:
-    #   custom: value
+      # tls: true # wss
+      # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
+      # 配置指纹将实现 SSL Pining 效果
+      # fingerprint: xxxx
+      # skip-cert-verify: true
+      # host: bing.com
+      # path: "/"
+      # mux: true
+      # headers:
+      #   custom: value
+      # v2ray-http-upgrade: false
 
   - name: "ss4-shadow-tls"
     type: ss
@@ -434,11 +435,12 @@ proxies: # socks5
     # servername: example.com # priority over wss host
     # network: ws
     # ws-opts:
-    #   path: /path
-    #   headers:
-    #     Host: v2ray.com
-    #   max-early-data: 2048
-    #   early-data-header-name: Sec-WebSocket-Protocol
+      # path: /path
+      # headers:
+      #   Host: v2ray.com
+      # max-early-data: 2048
+      # early-data-header-name: Sec-WebSocket-Protocol
+      # v2ray-http-upgrade: false
 
   - name: "vmess-h2"
     type: vmess
@@ -566,6 +568,7 @@ proxies: # socks5
       path: "/"
       headers:
         Host: example.com
+      # v2ray-http-upgrade: false
 
   # Trojan
   - name: "trojan"
@@ -606,9 +609,10 @@ proxies: # socks5
     # fingerprint: xxxx
     udp: true
     # ws-opts:
-    # path: /path
-    # headers:
-    #   Host: example.com
+    #   path: /path
+    #   headers:
+    #     Host: example.com
+    #   v2ray-http-upgrade: false
 
   - name: "trojan-xtls"
     type: trojan

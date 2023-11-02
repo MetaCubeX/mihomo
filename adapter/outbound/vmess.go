@@ -91,6 +91,7 @@ type WSOptions struct {
 	Headers             map[string]string `proxy:"headers,omitempty"`
 	MaxEarlyData        int               `proxy:"max-early-data,omitempty"`
 	EarlyDataHeaderName string            `proxy:"early-data-header-name,omitempty"`
+	V2rayHttpUpgrade    bool              `proxy:"v2ray-http-upgrade,omitempty"`
 }
 
 // StreamConnContext implements C.ProxyAdapter
@@ -110,6 +111,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			V2rayHttpUpgrade:    v.option.WSOpts.V2rayHttpUpgrade,
 			ClientFingerprint:   v.option.ClientFingerprint,
 			Headers:             http.Header{},
 		}
