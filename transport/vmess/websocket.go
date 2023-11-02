@@ -330,7 +330,7 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 			if fingerprint, exists := tlsC.GetFingerprint(c.ClientFingerprint); exists {
 				utlsConn := tlsC.UClient(conn, c.TLSConfig, fingerprint)
 
-				if err := utlsConn.(*tlsC.UConn).BuildWebsocketHandshakeState(); err != nil {
+				if err := utlsConn.BuildWebsocketHandshakeState(); err != nil {
 					return nil, fmt.Errorf("parse url %s error: %w", c.Path, err)
 				}
 
@@ -359,6 +359,13 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 				conn = dialer.TLSClient(conn, uri.Host)
 			} else {
 				conn = tls.Client(conn, dialer.TLSConfig)
+			}
+			if tlsConn, ok := conn.(interface {
+				HandshakeContext(ctx context.Context) error
+			}); ok {
+				if err = tlsConn.HandshakeContext(ctx); err != nil {
+					return nil, err
+				}
 			}
 		}
 		request := &http.Request{

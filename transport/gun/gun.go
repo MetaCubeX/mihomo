@@ -209,11 +209,11 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string, re
 			if realityConfig == nil {
 				if fingerprint, exists := tlsC.GetFingerprint(Fingerprint); exists {
 					utlsConn := tlsC.UClient(pconn, cfg, fingerprint)
-					if err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx); err != nil {
+					if err := utlsConn.HandshakeContext(ctx); err != nil {
 						pconn.Close()
 						return nil, err
 					}
-					state := utlsConn.(*tlsC.UConn).ConnectionState()
+					state := utlsConn.ConnectionState()
 					if p := state.NegotiatedProtocol; p != http2.NextProtoTLS {
 						utlsConn.Close()
 						return nil, fmt.Errorf("http2: unexpected ALPN protocol %s, want %s", p, http2.NextProtoTLS)
