@@ -18,22 +18,24 @@ type TunOption struct {
 	AutoRoute           bool     `inbound:"auto-route,omitempty"`
 	AutoDetectInterface bool     `inbound:"auto-detect-interface,omitempty"`
 
-	MTU                    uint32   `inbound:"mtu,omitempty"`
-	Inet4Address           []string `inbound:"inet4_address,omitempty"`
-	Inet6Address           []string `inbound:"inet6_address,omitempty"`
-	StrictRoute            bool     `inbound:"strict_route,omitempty"`
-	Inet4RouteAddress      []string `inbound:"inet4_route_address,omitempty"`
-	Inet6RouteAddress      []string `inbound:"inet6_route_address,omitempty"`
-	IncludeUID             []uint32 `inbound:"include_uid,omitempty"`
-	IncludeUIDRange        []string `inbound:"include_uid_range,omitempty"`
-	ExcludeUID             []uint32 `inbound:"exclude_uid,omitempty"`
-	ExcludeUIDRange        []string `inbound:"exclude_uid_range,omitempty"`
-	IncludeAndroidUser     []int    `inbound:"include_android_user,omitempty"`
-	IncludePackage         []string `inbound:"include_package,omitempty"`
-	ExcludePackage         []string `inbound:"exclude_package,omitempty"`
-	EndpointIndependentNat bool     `inbound:"endpoint_independent_nat,omitempty"`
-	UDPTimeout             int64    `inbound:"udp_timeout,omitempty"`
-	FileDescriptor         int      `inbound:"file-descriptor,omitempty"`
+	MTU                      uint32   `inbound:"mtu,omitempty"`
+	Inet4Address             []string `inbound:"inet4_address,omitempty"`
+	Inet6Address             []string `inbound:"inet6_address,omitempty"`
+	StrictRoute              bool     `inbound:"strict_route,omitempty"`
+	Inet4RouteAddress        []string `inbound:"inet4_route_address,omitempty"`
+	Inet6RouteAddress        []string `inbound:"inet6_route_address,omitempty"`
+	Inet4RouteExcludeAddress []string `inbound:"inet4_route_exclude_address,omitempty"`
+	Inet6RouteExcludeAddress []string `inbound:"inet6_route_exclude_address,omitempty"`
+	IncludeUID               []uint32 `inbound:"include_uid,omitempty"`
+	IncludeUIDRange          []string `inbound:"include_uid_range,omitempty"`
+	ExcludeUID               []uint32 `inbound:"exclude_uid,omitempty"`
+	ExcludeUIDRange          []string `inbound:"exclude_uid_range,omitempty"`
+	IncludeAndroidUser       []int    `inbound:"include_android_user,omitempty"`
+	IncludePackage           []string `inbound:"include_package,omitempty"`
+	ExcludePackage           []string `inbound:"exclude_package,omitempty"`
+	EndpointIndependentNat   bool     `inbound:"endpoint_independent_nat,omitempty"`
+	UDPTimeout               int64    `inbound:"udp_timeout,omitempty"`
+	FileDescriptor           int      `inbound:"file-descriptor,omitempty"`
 }
 
 func (o TunOption) Equal(config C.InboundConfig) bool {
@@ -72,32 +74,42 @@ func NewTun(options *TunOption) (*Tun, error) {
 	if err != nil {
 		return nil, err
 	}
+	inet4RouteExcludeAddress, err := LC.StringSliceToNetipPrefixSlice(options.Inet4RouteExcludeAddress)
+	if err != nil {
+		return nil, err
+	}
+	inet6RouteExcludeAddress, err := LC.StringSliceToNetipPrefixSlice(options.Inet6RouteExcludeAddress)
+	if err != nil {
+		return nil, err
+	}
 	return &Tun{
 		Base:   base,
 		config: options,
 		tun: LC.Tun{
-			Enable:                 true,
-			Device:                 options.Device,
-			Stack:                  stack,
-			DNSHijack:              options.DNSHijack,
-			AutoRoute:              options.AutoRoute,
-			AutoDetectInterface:    options.AutoDetectInterface,
-			MTU:                    options.MTU,
-			Inet4Address:           inet4Address,
-			Inet6Address:           inet6Address,
-			StrictRoute:            options.StrictRoute,
-			Inet4RouteAddress:      inet4RouteAddress,
-			Inet6RouteAddress:      inet6RouteAddress,
-			IncludeUID:             options.IncludeUID,
-			IncludeUIDRange:        options.IncludeUIDRange,
-			ExcludeUID:             options.ExcludeUID,
-			ExcludeUIDRange:        options.ExcludeUIDRange,
-			IncludeAndroidUser:     options.IncludeAndroidUser,
-			IncludePackage:         options.IncludePackage,
-			ExcludePackage:         options.ExcludePackage,
-			EndpointIndependentNat: options.EndpointIndependentNat,
-			UDPTimeout:             options.UDPTimeout,
-			FileDescriptor:         options.FileDescriptor,
+			Enable:                   true,
+			Device:                   options.Device,
+			Stack:                    stack,
+			DNSHijack:                options.DNSHijack,
+			AutoRoute:                options.AutoRoute,
+			AutoDetectInterface:      options.AutoDetectInterface,
+			MTU:                      options.MTU,
+			Inet4Address:             inet4Address,
+			Inet6Address:             inet6Address,
+			StrictRoute:              options.StrictRoute,
+			Inet4RouteAddress:        inet4RouteAddress,
+			Inet6RouteAddress:        inet6RouteAddress,
+			Inet4RouteExcludeAddress: inet4RouteExcludeAddress,
+			Inet6RouteExcludeAddress: inet6RouteExcludeAddress,
+			IncludeUID:               options.IncludeUID,
+			IncludeUIDRange:          options.IncludeUIDRange,
+			ExcludeUID:               options.ExcludeUID,
+			ExcludeUIDRange:          options.ExcludeUIDRange,
+			IncludeAndroidUser:       options.IncludeAndroidUser,
+			IncludePackage:           options.IncludePackage,
+			ExcludePackage:           options.ExcludePackage,
+			EndpointIndependentNat:   options.EndpointIndependentNat,
+			UDPTimeout:               options.UDPTimeout,
+			FileDescriptor:           options.FileDescriptor,
 		},
 	}, nil
 }
