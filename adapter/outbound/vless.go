@@ -93,6 +93,7 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			Path:                v.option.WSOpts.Path,
 			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
 			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
+			V2rayHttpUpgrade:    v.option.WSOpts.V2rayHttpUpgrade,
 			ClientFingerprint:   v.option.ClientFingerprint,
 			Headers:             http.Header{},
 		}
