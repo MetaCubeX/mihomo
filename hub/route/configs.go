@@ -70,20 +70,22 @@ type tunSchema struct {
 
 	MTU *uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	//Inet4Address           *[]netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
-	Inet6Address           *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
-	StrictRoute            *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
-	Inet4RouteAddress      *[]netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
-	Inet6RouteAddress      *[]netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
-	IncludeUID             *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
-	IncludeUIDRange        *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
-	ExcludeUID             *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
-	ExcludeUIDRange        *[]string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
-	IncludeAndroidUser     *[]int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
-	IncludePackage         *[]string       `yaml:"include-package" json:"include-package,omitempty"`
-	ExcludePackage         *[]string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
-	EndpointIndependentNat *bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
-	UDPTimeout             *int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
-	FileDescriptor         *int            `yaml:"file-descriptor" json:"file-descriptor"`
+	Inet6Address             *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
+	StrictRoute              *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
+	Inet4RouteAddress        *[]netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+	Inet6RouteAddress        *[]netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
+	Inet4RouteExcludeAddress *[]netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
+	Inet6RouteExcludeAddress *[]netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
+	IncludeUID               *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
+	IncludeUIDRange          *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
+	ExcludeUID               *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
+	ExcludeUIDRange          *[]string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser       *[]int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
+	IncludePackage           *[]string       `yaml:"include-package" json:"include-package,omitempty"`
+	ExcludePackage           *[]string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
+	EndpointIndependentNat   *bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	UDPTimeout               *int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+	FileDescriptor           *int            `yaml:"file-descriptor" json:"file-descriptor"`
 }
 
 type tuicServerSchema struct {
@@ -147,6 +149,18 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		//}
 		if p.Inet6Address != nil {
 			def.Inet6Address = *p.Inet6Address
+		}
+		if p.Inet4RouteAddress != nil {
+			def.Inet4RouteAddress = *p.Inet4RouteAddress
+		}
+		if p.Inet6RouteAddress != nil {
+			def.Inet6RouteAddress = *p.Inet6RouteAddress
+		}
+		if p.Inet4RouteExcludeAddress != nil {
+			def.Inet4RouteExcludeAddress = *p.Inet4RouteExcludeAddress
+		}
+		if p.Inet6RouteExcludeAddress != nil {
+			def.Inet6RouteExcludeAddress = *p.Inet6RouteExcludeAddress
 		}
 		if p.IncludeUID != nil {
 			def.IncludeUID = *p.IncludeUID
