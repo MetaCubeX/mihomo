@@ -21,7 +21,7 @@ type UClientHelloID struct {
 var initRandomFingerprint UClientHelloID
 var initUtlsClient string
 
-func UClient(c net.Conn, config *tls.Config, fingerprint UClientHelloID) net.Conn {
+func UClient(c net.Conn, config *tls.Config, fingerprint UClientHelloID) *UConn {
 	utlsConn := utls.UClient(c, copyConfig(config), utls.ClientHelloID{
 		Client:  fingerprint.Client,
 		Version: fingerprint.Version,
