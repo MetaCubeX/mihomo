@@ -1,5 +1,5 @@
 #!/bin/sh
-os="clash.meta-linux-"
+os="mihomo-linux-"
 case $TARGETPLATFORM in
     "linux/amd64")
         arch="amd64-compatible"

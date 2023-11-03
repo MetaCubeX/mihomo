@@ -3,17 +3,17 @@
   <br>Meta Kernel<br>
 </h1>
 
-<h3 align="center">Another Clash Kernel.</h3>
+<h3 align="center">Another Mihomo Kernel.</h3>
 
 <p align="center">
-  <a href="https://goreportcard.com/report/github.com/Clash-Mini/Clash.Meta">
-    <img src="https://goreportcard.com/badge/github.com/Clash-Mini/Clash.Meta?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/MetaCubeX/mihomo">
+    <img src="https://goreportcard.com/badge/github.com/MetaCubeX/mihomo?style=flat-square">
   </a>
-  <img src="https://img.shields.io/github/go-mod/go-version/Dreamacro/clash?style=flat-square">
-  <a href="https://github.com/Clash-Mini/Clash.Meta/releases">
-    <img src="https://img.shields.io/github/release/Clash-Mini/Clash.Meta/all.svg?style=flat-square">
+  <img src="https://img.shields.io/github/go-mod/go-version/MetaCubeX/mihomo?style=flat-square">
+  <a href="https://github.com/MetaCubeX/mihomo/releases">
+    <img src="https://img.shields.io/github/release/MetaCubeX/mihomo/all.svg?style=flat-square">
   </a>
-  <a href="https://github.com/Clash-Mini/Clash.Meta">
+  <a href="https://github.com/MetaCubeX/mihomo">
     <img src="https://img.shields.io/badge/release-Meta-00b4f0?style=flat-square">
   </a>
 </p>
@@ -27,7 +27,7 @@
 - Remote groups allow users to implement powerful rules. Supports automatic fallback, load balancing or auto select node
   based off latency
 - Remote providers, allowing users to get node lists remotely instead of hard-coding in config
-- Netfilter TCP redirecting. Deploy Clash on your Internet gateway with `iptables`.
+- Netfilter TCP redirecting. Deploy Mihomo on your Internet gateway with `iptables`.
 - Comprehensive HTTP RESTful API controller
 
 ## Dashboard
@@ -36,22 +36,22 @@ A web dashboard with first-class support for this project has been created; it c
 
 ## Configration example
 
-Configuration example is located at [/docs/config.yaml](https://github.com/MetaCubeX/Clash.Meta/blob/Alpha/docs/config.yaml).
+Configuration example is located at [/docs/config.yaml](https://github.com/MetaCubeX/mihomo/blob/Alpha/docs/config.yaml).
 
 ## Docs
 
-Documentation can be found in [Clash.Meta Docs](https://clash-meta.wiki).
+Documentation can be found in [mihomo Docs](https://wiki.metacubex.one/).
 
 ## For development
 
 Requirements:
 [Go 1.20 or newer](https://go.dev/dl/)
 
-Build Clash.Meta:
+Build mihomo:
 
 ```shell
-git clone https://github.com/MetaCubeX/Clash.Meta.git
-cd Clash.Meta && go mod download
+git clone https://github.com/MetaCubeX/mihomo.git
+cd mihomo && go mod download
 go build
 ```
 
@@ -98,4 +98,4 @@ API.
 
 This software is released under the GPL-3.0 license.
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FDreamacro%2Fclash.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FDreamacro%2Fclash?ref=badge_large)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FMetaCubeX%2Fmihomo.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FMetaCubeX%2Fmihomo?ref=badge_large)

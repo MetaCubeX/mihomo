@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 var (

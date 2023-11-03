@@ -3,7 +3,7 @@ package socks
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type packet struct {

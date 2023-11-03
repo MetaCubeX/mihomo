@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/generics/list"
+	"github.com/metacubex/mihomo/common/generics/list"
 
 	"github.com/samber/lo"
 )

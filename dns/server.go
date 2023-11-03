@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net"
 
-	"github.com/Dreamacro/clash/common/sockopt"
-	"github.com/Dreamacro/clash/context"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/common/sockopt"
+	"github.com/metacubex/mihomo/context"
+	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
 )

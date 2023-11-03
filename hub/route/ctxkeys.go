@@ -10,5 +10,5 @@ var (
 type contextKey string
 
 func (c contextKey) String() string {
-	return "clash context key " + string(c)
+	return "mihomo context key " + string(c)
 }

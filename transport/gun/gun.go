@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	"github.com/Dreamacro/clash/common/buf"
-	"github.com/Dreamacro/clash/common/pool"
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/buf"
+	"github.com/metacubex/mihomo/common/pool"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 
 	"golang.org/x/net/http2"
 )

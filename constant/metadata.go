@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 // Socks addr type
@@ -161,7 +161,7 @@ func (m *Metadata) SourceAddress() string {
 
 func (m *Metadata) SourceDetail() string {
 	if m.Type == INNER {
-		return fmt.Sprintf("%s", ClashName)
+		return fmt.Sprintf("%s", MihomoName)
 	}
 
 	switch {

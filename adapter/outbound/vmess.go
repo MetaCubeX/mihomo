@@ -11,17 +11,17 @@ import (
 	"strings"
 	"sync"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/ca"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/proxydialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/ntp"
-	"github.com/Dreamacro/clash/transport/gun"
-	clashVMess "github.com/Dreamacro/clash/transport/vmess"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	tlsC "github.com/metacubex/mihomo/component/tls"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/ntp"
+	"github.com/metacubex/mihomo/transport/gun"
+	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
 	vmess "github.com/metacubex/sing-vmess"
 	"github.com/metacubex/sing-vmess/packetaddr"
@@ -105,7 +105,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	switch v.option.Network {
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
-		wsOpts := &clashVMess.WebsocketConfig{
+		wsOpts := &mihomoVMess.WebsocketConfig{
 			Host:                host,
 			Port:                port,
 			Path:                v.option.WSOpts.Path,
@@ -141,12 +141,12 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				wsOpts.TLSConfig.ServerName = host
 			}
 		}
-		c, err = clashVMess.StreamWebsocketConn(ctx, c, wsOpts)
+		c, err = mihomoVMess.StreamWebsocketConn(ctx, c, wsOpts)
 	case "http":
 		// readability first, so just copy default TLS logic
 		if v.option.TLS {
 			host, _, _ := net.SplitHostPort(v.addr)
-			tlsOpts := &clashVMess.TLSConfig{
+			tlsOpts := &mihomoVMess.TLSConfig{
 				Host:              host,
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
@@ -157,24 +157,24 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			if v.option.ServerName != "" {
 				tlsOpts.Host = v.option.ServerName
 			}
-			c, err = clashVMess.StreamTLSConn(ctx, c, tlsOpts)
+			c, err = mihomoVMess.StreamTLSConn(ctx, c, tlsOpts)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		host, _, _ := net.SplitHostPort(v.addr)
-		httpOpts := &clashVMess.HTTPConfig{
+		httpOpts := &mihomoVMess.HTTPConfig{
 			Host:    host,
 			Method:  v.option.HTTPOpts.Method,
 			Path:    v.option.HTTPOpts.Path,
 			Headers: v.option.HTTPOpts.Headers,
 		}
 
-		c = clashVMess.StreamHTTPConn(c, httpOpts)
+		c = mihomoVMess.StreamHTTPConn(c, httpOpts)
 	case "h2":
 		host, _, _ := net.SplitHostPort(v.addr)
-		tlsOpts := clashVMess.TLSConfig{
+		tlsOpts := mihomoVMess.TLSConfig{
 			Host:              host,
 			SkipCertVerify:    v.option.SkipCertVerify,
 			NextProtos:        []string{"h2"},
@@ -186,24 +186,24 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			tlsOpts.Host = v.option.ServerName
 		}
 
-		c, err = clashVMess.StreamTLSConn(ctx, c, &tlsOpts)
+		c, err = mihomoVMess.StreamTLSConn(ctx, c, &tlsOpts)
 		if err != nil {
 			return nil, err
 		}
 
-		h2Opts := &clashVMess.H2Config{
+		h2Opts := &mihomoVMess.H2Config{
 			Hosts: v.option.HTTP2Opts.Host,
 			Path:  v.option.HTTP2Opts.Path,
 		}
 
-		c, err = clashVMess.StreamH2Conn(c, h2Opts)
+		c, err = mihomoVMess.StreamH2Conn(c, h2Opts)
 	case "grpc":
 		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.realityConfig)
 	default:
 		// handle TLS
 		if v.option.TLS {
 			host, _, _ := net.SplitHostPort(v.addr)
-			tlsOpts := &clashVMess.TLSConfig{
+			tlsOpts := &mihomoVMess.TLSConfig{
 				Host:              host,
 				SkipCertVerify:    v.option.SkipCertVerify,
 				ClientFingerprint: v.option.ClientFingerprint,
@@ -215,7 +215,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				tlsOpts.Host = v.option.ServerName
 			}
 
-			c, err = clashVMess.StreamTLSConn(ctx, c, tlsOpts)
+			c, err = mihomoVMess.StreamTLSConn(ctx, c, tlsOpts)
 		}
 	}
 

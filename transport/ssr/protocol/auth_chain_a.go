@@ -12,11 +12,11 @@ import (
 	"strconv"
 	"strings"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/shadowsocks/core"
-	"github.com/Dreamacro/clash/transport/ssr/tools"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/shadowsocks/core"
+	"github.com/metacubex/mihomo/transport/ssr/tools"
 )
 
 func init() {
@@ -108,7 +108,7 @@ func (a *authChainA) Decode(dst, src *bytes.Buffer) error {
 		dataLength := int(binary.LittleEndian.Uint16(src.Bytes()[:2]) ^ binary.LittleEndian.Uint16(a.lastServerHash[14:16]))
 		randDataLength := a.randDataLength(dataLength, a.lastServerHash, &a.randomServer)
 		length := dataLength + randDataLength
-		// Temporary workaround for https://github.com/Dreamacro/clash/issues/1352
+		// Temporary workaround for https://github.com/metacubex/mihomo/issues/1352
 		if dataLength < 0 || randDataLength < 0 || length < 0 {
 			return errors.New("ssr crashing blocked")
 		}
@@ -135,7 +135,7 @@ func (a *authChainA) Decode(dst, src *bytes.Buffer) error {
 		if dataLength > 0 && randDataLength > 0 {
 			pos += getRandStartPos(randDataLength, &a.randomServer)
 		}
-		// Temporary workaround for https://github.com/Dreamacro/clash/issues/1352
+		// Temporary workaround for https://github.com/metacubex/mihomo/issues/1352
 		if pos < 0 || pos+dataLength < 0 || dataLength < 0 {
 			return errors.New("ssr crashing blocked")
 		}

@@ -20,9 +20,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/ntp"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/ntp"
 
 	utls "github.com/sagernet/utls"
 	"github.com/zhangyunhao116/fastrand"

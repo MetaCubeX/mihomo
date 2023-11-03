@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/Dreamacro/clash/component/trie"
+	"github.com/metacubex/mihomo/component/trie"
 	"github.com/stretchr/testify/assert"
 )
 

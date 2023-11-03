@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/cache"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/common/cache"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/sniffer"
+	"github.com/metacubex/mihomo/log"
 )
 
 var (

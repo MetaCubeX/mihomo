@@ -1,9 +1,9 @@
 package inbound
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/redir"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/redir"
+	"github.com/metacubex/mihomo/log"
 )
 
 type RedirOption struct {

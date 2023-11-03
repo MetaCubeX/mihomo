@@ -118,7 +118,7 @@ jobs:
       - name: Set ENV
         run: |
           sudo timedatectl set-timezone "Asia/Shanghai"
-          echo "NAME=clash.meta" >> $GITHUB_ENV
+          echo "NAME=mihomo" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
           echo "BUILDTIME=$(date)" >> $GITHUB_ENV
@@ -128,7 +128,7 @@ jobs:
       - name: Set ENV
         run: |
           echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
-          echo "LDFLAGS=-X 'github.com/Dreamacro/clash/constant.Version=${VERSION}' -X 'github.com/Dreamacro/clash/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
+          echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
@@ -153,7 +153,7 @@ jobs:
       - name: Build WithoutCGO
         if: ${{ matrix.job.type!='WithCGO' }}
         env:
-          NAME: Clash.Meta
+          NAME: mihomo
           BINDIR: bin
         run: make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
 
@@ -271,7 +271,7 @@ jobs:
           Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
-          [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/Clash.Meta/wiki/FAQ)
+          [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
           [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 

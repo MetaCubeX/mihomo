@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/common/convert"
-	"github.com/Dreamacro/clash/common/utils"
-	clashHttp "github.com/Dreamacro/clash/component/http"
-	"github.com/Dreamacro/clash/component/resource"
-	C "github.com/Dreamacro/clash/constant"
-	types "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/common/convert"
+	"github.com/metacubex/mihomo/common/utils"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/component/resource"
+	C "github.com/metacubex/mihomo/constant"
+	types "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/dlclark/regexp2"
 	"gopkg.in/yaml.v3"
@@ -119,8 +119,8 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 		defer cancel()
-		resp, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
-			http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+		resp, err := mihomoHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			http.MethodGet, http.Header{"User-Agent": {"mihomo"}}, nil)
 		if err != nil {
 			return
 		}
@@ -128,7 +128,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 
 		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
 		if userInfoStr == "" {
-			resp2, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			resp2, err := mihomoHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
 				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil)
 			if err != nil {
 				return

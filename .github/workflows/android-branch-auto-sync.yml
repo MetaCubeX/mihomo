@@ -50,8 +50,8 @@ jobs:
         run: |
           git push origin android-real --force
   
-  # Send "core-updated" to MetaCubeX/ClashMetaForAndroid to trigger update-dependencies
-  trigger-CMFA-update:
+  # Send "core-updated" to MetaCubeX/MihomoForAndroid to trigger update-dependencies
+  trigger-MFA-update:
     needs: update-dependencies
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +63,7 @@ jobs:
       
       - name: Trigger update-dependencies
         run: |
-          curl -X POST https://api.github.com/repos/MetaCubeX/ClashMetaForAndroid/dispatches \
+          curl -X POST https://api.github.com/repos/MetaCubeX/MihomoForAndroid/dispatches \
             -H "Accept: application/vnd.github.everest-preview+json" \
             -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
             -d '{"event_type": "core-updated"}'

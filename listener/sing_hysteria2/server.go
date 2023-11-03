@@ -11,14 +11,14 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/adapter/outbound"
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/sockopt"
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/sockopt"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/metacubex/sing-quic/hysteria2"
 

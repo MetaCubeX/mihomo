@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 
 	"golang.org/x/crypto/curve25519"
 )
