@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 )
+
+var KeepAliveInterval = 15 * time.Second
 
 func SplitNetworkType(s string) (string, string, error) {
 	var (
@@ -43,4 +46,11 @@ func SplitHostPort(s string) (host, port string, hasPort bool, err error) {
 
 	host, port, err = net.SplitHostPort(temp)
 	return
+}
+
+func TCPKeepAlive(c net.Conn) {
+	if tcp, ok := c.(*net.TCPConn); ok {
+		_ = tcp.SetKeepAlive(true)
+		_ = tcp.SetKeepAlivePeriod(KeepAliveInterval)
+	}
 }

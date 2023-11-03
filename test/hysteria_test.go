@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	C "github.com/Dreamacro/clash/constant"
 	"github.com/docker/docker/api/types/container"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestClash_Hysteria(t *testing.T) {
+func TestMihomo_Hysteria(t *testing.T) {
 	cfg := &container.Config{
 		Image:        ImageHysteria,
 		ExposedPorts: defaultExposedPorts,

@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
+
+	N "github.com/metacubex/mihomo/common/net"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 var (
@@ -21,7 +24,7 @@ var (
 
 type Protocol interface {
 	StreamConn(net.Conn, []byte) net.Conn
-	PacketConn(net.PacketConn) net.PacketConn
+	PacketConn(N.EnhancePacketConn) N.EnhancePacketConn
 	Decode(dst, src *bytes.Buffer) error
 	Encode(buf *bytes.Buffer, b []byte) error
 	DecodePacket([]byte) ([]byte, error)
@@ -68,7 +71,7 @@ func getHeadSize(b []byte, defaultValue int) int {
 
 func getDataLength(b []byte) int {
 	bLength := len(b)
-	dataLength := getHeadSize(b, 30) + rand.Intn(32)
+	dataLength := getHeadSize(b, 30) + fastrand.Intn(32)
 	if bLength < dataLength {
 		return bLength
 	}

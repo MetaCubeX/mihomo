@@ -3,9 +3,9 @@ package inbound
 import (
 	"fmt"
 
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/tproxy"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/tproxy"
+	"github.com/metacubex/mihomo/log"
 )
 
 type TProxyOption struct {
@@ -49,20 +49,17 @@ func (t *TProxy) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *TProxy) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *TProxy) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.lTCP, err = tproxy.New(t.RawAddress(), tcpIn, t.Additions()...)
+	t.lTCP, err = tproxy.New(t.RawAddress(), tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}
 	if t.udp {
-		if t.lUDP != nil {
-			t.lUDP, err = tproxy.NewUDP(t.RawAddress(), udpIn, natTable, t.Additions()...)
-			if err != nil {
-				return err
-			}
+		t.lUDP, err = tproxy.NewUDP(t.RawAddress(), tunnel, t.Additions()...)
+		if err != nil {
+			return err
 		}
-
 	}
 	log.Infoln("TProxy[%s] proxy listening at: %s", t.Name(), t.Address())
 	return nil

@@ -24,19 +24,26 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	proxy["port"] = url.Port()
 	proxy["uuid"] = url.User.Username()
 	proxy["udp"] = true
-	proxy["skip-cert-verify"] = false
-	proxy["tls"] = false
 	tls := strings.ToLower(query.Get("security"))
-	if strings.HasSuffix(tls, "tls") {
+	if strings.HasSuffix(tls, "tls") || tls == "reality" {
 		proxy["tls"] = true
 		if fingerprint := query.Get("fp"); fingerprint == "" {
 			proxy["client-fingerprint"] = "chrome"
 		} else {
 			proxy["client-fingerprint"] = fingerprint
 		}
+		if alpn := query.Get("alpn"); alpn != "" {
+			proxy["alpn"] = strings.Split(alpn, ",")
+		}
 	}
 	if sni := query.Get("sni"); sni != "" {
 		proxy["servername"] = sni
+	}
+	if realityPublicKey := query.Get("pbk"); realityPublicKey != "" {
+		proxy["reality-opts"] = map[string]any{
+			"public-key": realityPublicKey,
+			"short-id":   query.Get("sid"),
+		}
 	}
 
 	switch query.Get("packetEncoding") {

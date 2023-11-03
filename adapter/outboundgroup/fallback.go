@@ -6,17 +6,21 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/common/callback"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/dialer"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/provider"
 )
 
 type Fallback struct {
 	*GroupBase
-	disableUDP bool
-	testUrl    string
-	selected   string
+	disableUDP     bool
+	testUrl        string
+	selected       string
+	expectedStatus string
 }
 
 func (f *Fallback) Now() string {
@@ -30,9 +34,18 @@ func (f *Fallback) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 	c, err := proxy.DialContext(ctx, metadata, f.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(f)
-		f.onDialSuccess()
 	} else {
 		f.onDialFailed(proxy.Type(), err)
+	}
+
+	if N.NeedHandshake(c) {
+		c = callback.NewFirstWriteCallBackConn(c, func(err error) {
+			if err == nil {
+				f.onDialSuccess()
+			} else {
+				f.onDialFailed(proxy.Type(), err)
+			}
+		})
 	}
 
 	return c, err
@@ -59,6 +72,11 @@ func (f *Fallback) SupportUDP() bool {
 	return proxy.SupportUDP()
 }
 
+// IsL3Protocol implements C.ProxyAdapter
+func (f *Fallback) IsL3Protocol(metadata *C.Metadata) bool {
+	return f.findAliveProxy(false).IsL3Protocol(metadata)
+}
+
 // MarshalJSON implements C.ProxyAdapter
 func (f *Fallback) MarshalJSON() ([]byte, error) {
 	all := []string{}
@@ -66,9 +84,11 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": f.Type().String(),
-		"now":  f.Now(),
-		"all":  all,
+		"type":     f.Type().String(),
+		"now":      f.Now(),
+		"all":      all,
+		"testUrl":  f.testUrl,
+		"expected": f.expectedStatus,
 	})
 }
 
@@ -82,12 +102,14 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			if proxy.Alive() {
+			// if proxy.Alive() {
+			if proxy.AliveForTestUrl(f.testUrl) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.Alive() {
+				// if proxy.Alive() {
+				if proxy.AliveForTestUrl(f.testUrl) {
 					return proxy
 				} else {
 					f.selected = ""
@@ -113,13 +135,19 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
-	if !p.Alive() {
+	// if !p.Alive() {
+	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
-		_, _ = p.URLTest(ctx, f.testUrl)
+		expectedStatus, _ := utils.NewIntRanges[uint16](f.expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, C.ExtraHistory)
 	}
 
 	return nil
+}
+
+func (f *Fallback) ForceSet(name string) {
+	f.selected = name
 }
 
 func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) *Fallback {
@@ -136,7 +164,8 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 			option.ExcludeType,
 			providers,
 		}),
-		disableUDP: option.DisableUDP,
-		testUrl:    option.URL,
+		disableUDP:     option.DisableUDP,
+		testUrl:        option.URL,
+		expectedStatus: option.ExpectedStatus,
 	}
 }

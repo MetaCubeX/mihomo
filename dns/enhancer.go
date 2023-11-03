@@ -3,9 +3,9 @@ package dns
 import (
 	"net/netip"
 
-	"github.com/Dreamacro/clash/common/cache"
-	"github.com/Dreamacro/clash/component/fakeip"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/component/fakeip"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type ResolverEnhancer struct {
@@ -109,7 +109,7 @@ func NewEnhancer(cfg Config) *ResolverEnhancer {
 
 	if cfg.EnhancedMode != C.DNSNormal {
 		fakePool = cfg.Pool
-		mapping = cache.New(cache.WithSize[netip.Addr, string](4096), cache.WithStale[netip.Addr, string](true))
+		mapping = cache.New(cache.WithSize[netip.Addr, string](4096))
 	}
 
 	return &ResolverEnhancer{

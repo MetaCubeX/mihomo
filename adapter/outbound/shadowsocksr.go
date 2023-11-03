@@ -2,21 +2,26 @@ package outbound
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
 
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/shadowsocks/core"
-	"github.com/Dreamacro/clash/transport/shadowsocks/shadowaead"
-	"github.com/Dreamacro/clash/transport/shadowsocks/shadowstream"
-	"github.com/Dreamacro/clash/transport/ssr/obfs"
-	"github.com/Dreamacro/clash/transport/ssr/protocol"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/shadowsocks/core"
+	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
+	"github.com/metacubex/mihomo/transport/shadowsocks/shadowstream"
+	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/ssr/obfs"
+	"github.com/metacubex/mihomo/transport/ssr/protocol"
 )
 
 type ShadowSocksR struct {
 	*Base
+	option   *ShadowSocksROption
 	cipher   core.Cipher
 	obfs     obfs.Obfs
 	protocol protocol.Protocol
@@ -36,8 +41,8 @@ type ShadowSocksROption struct {
 	UDP           bool   `proxy:"udp,omitempty"`
 }
 
-// StreamConn implements C.ProxyAdapter
-func (ssr *ShadowSocksR) StreamConn(c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+// StreamConnContext implements C.ProxyAdapter
+func (ssr *ShadowSocksR) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
 	c = ssr.obfs.StreamConn(c)
 	c = ssr.cipher.StreamConn(c)
 	var (
@@ -65,17 +70,23 @@ func (ssr *ShadowSocksR) DialContext(ctx context.Context, metadata *C.Metadata, 
 
 // DialContextWithDialer implements C.ProxyAdapter
 func (ssr *ShadowSocksR) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
+	if len(ssr.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ssr.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	c, err := dialer.DialContext(ctx, "tcp", ssr.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ssr.addr, err)
 	}
-	tcpKeepAlive(c)
+	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
 
-	c, err = ssr.StreamConn(c, metadata)
+	c, err = ssr.StreamConnContext(ctx, c, metadata)
 	return NewConn(c, ssr), err
 }
 
@@ -86,6 +97,12 @@ func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Me
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (ssr *ShadowSocksR) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if len(ssr.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ssr.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
+	}
 	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ssr.addr, ssr.prefer)
 	if err != nil {
 		return nil, err
@@ -96,19 +113,19 @@ func (ssr *ShadowSocksR) ListenPacketWithDialer(ctx context.Context, dialer C.Di
 		return nil, err
 	}
 
-	pc = ssr.cipher.PacketConn(pc)
-	pc = ssr.protocol.PacketConn(pc)
-	return newPacketConn(&ssPacketConn{PacketConn: pc, rAddr: addr}, ssr), nil
+	epc := ssr.cipher.PacketConn(N.NewEnhancePacketConn(pc))
+	epc = ssr.protocol.PacketConn(epc)
+	return newPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr), nil
 }
 
 // SupportWithDialer implements C.ProxyAdapter
-func (ssr *ShadowSocksR) SupportWithDialer() bool {
-	return true
+func (ssr *ShadowSocksR) SupportWithDialer() C.NetWork {
+	return C.ALLNet
 }
 
 func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 	// SSR protocol compatibility
-	// https://github.com/Dreamacro/clash/pull/2056
+	// https://github.com/metacubex/mihomo/pull/2056
 	if option.Cipher == "none" {
 		option.Cipher = "dummy"
 	}
@@ -163,12 +180,74 @@ func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 			addr:   addr,
 			tp:     C.ShadowsocksR,
 			udp:    option.UDP,
+			tfo:    option.TFO,
+			mpTcp:  option.MPTCP,
 			iface:  option.Interface,
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+		option:   &option,
 		cipher:   coreCiph,
 		obfs:     obfs,
 		protocol: protocol,
 	}, nil
+}
+
+type ssrPacketConn struct {
+	N.EnhancePacketConn
+	rAddr net.Addr
+}
+
+func (spc *ssrPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+	packet, err := socks5.EncodeUDPPacket(socks5.ParseAddrToSocksAddr(addr), b)
+	if err != nil {
+		return
+	}
+	return spc.EnhancePacketConn.WriteTo(packet[3:], spc.rAddr)
+}
+
+func (spc *ssrPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, _, e := spc.EnhancePacketConn.ReadFrom(b)
+	if e != nil {
+		return 0, nil, e
+	}
+
+	addr := socks5.SplitAddr(b[:n])
+	if addr == nil {
+		return 0, nil, errors.New("parse addr error")
+	}
+
+	udpAddr := addr.UDPAddr()
+	if udpAddr == nil {
+		return 0, nil, errors.New("parse addr error")
+	}
+
+	copy(b, b[len(addr):])
+	return n - len(addr), udpAddr, e
+}
+
+func (spc *ssrPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
+	data, put, _, err = spc.EnhancePacketConn.WaitReadFrom()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	_addr := socks5.SplitAddr(data)
+	if _addr == nil {
+		if put != nil {
+			put()
+		}
+		return nil, nil, nil, errors.New("parse addr error")
+	}
+
+	addr = _addr.UDPAddr()
+	if addr == nil {
+		if put != nil {
+			put()
+		}
+		return nil, nil, nil, errors.New("parse addr error")
+	}
+
+	data = data[len(_addr):]
+	return
 }

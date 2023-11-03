@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/sniffer"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/sniffer"
 )
 
 var (
@@ -22,11 +22,9 @@ type TLSSniffer struct {
 }
 
 func NewTLSSniffer(snifferConfig SnifferConfig) (*TLSSniffer, error) {
-	ports := make([]utils.Range[uint16], 0)
-	if len(snifferConfig.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](443, 443))
-	} else {
-		ports = append(ports, snifferConfig.Ports...)
+	ports := snifferConfig.Ports
+	if len(ports) == 0 {
+		ports = utils.IntRanges[uint16]{utils.NewRange[uint16](443, 443)}
 	}
 	return &TLSSniffer{
 		BaseSniffer: NewBaseSniffer(ports, C.TCP),
@@ -41,7 +39,7 @@ func (tls *TLSSniffer) SupportNetwork() C.NetWork {
 	return C.TCP
 }
 
-func (tls *TLSSniffer) SniffTCP(bytes []byte) (string, error) {
+func (tls *TLSSniffer) SniffData(bytes []byte) (string, error) {
 	domain, err := SniffTLS(bytes)
 	if err == nil {
 		return *domain, nil

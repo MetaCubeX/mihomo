@@ -1,24 +1,34 @@
 package dialer
 
 import (
-	"github.com/Dreamacro/clash/component/resolver"
+	"context"
+	"net"
 
-	"go.uber.org/atomic"
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/component/resolver"
 )
 
 var (
 	DefaultOptions     []Option
-	DefaultInterface   = atomic.NewString("")
+	DefaultInterface   = atomic.NewTypedValue[string]("")
 	DefaultRoutingMark = atomic.NewInt32(0)
 )
 
+type NetDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
 type option struct {
 	interfaceName string
+	fallbackBind  bool
 	addrReuse     bool
 	routingMark   int
 	network       int
 	prefer        int
+	tfo           bool
+	mpTcp         bool
 	resolver      resolver.Resolver
+	netDialer     NetDialer
 }
 
 type Option func(opt *option)
@@ -26,6 +36,12 @@ type Option func(opt *option)
 func WithInterface(name string) Option {
 	return func(opt *option) {
 		opt.interfaceName = name
+	}
+}
+
+func WithFallbackBind(fallback bool) Option {
+	return func(opt *option) {
+		opt.fallbackBind = fallback
 	}
 }
 
@@ -66,6 +82,24 @@ func WithOnlySingleStack(isIPv4 bool) Option {
 		} else {
 			opt.network = 6
 		}
+	}
+}
+
+func WithTFO(tfo bool) Option {
+	return func(opt *option) {
+		opt.tfo = tfo
+	}
+}
+
+func WithMPTCP(mpTcp bool) Option {
+	return func(opt *option) {
+		opt.mpTcp = mpTcp
+	}
+}
+
+func WithNetDialer(netDialer NetDialer) Option {
+	return func(opt *option) {
+		opt.netDialer = netDialer
 	}
 }
 

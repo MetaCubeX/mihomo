@@ -2,8 +2,11 @@ package sing
 
 import (
 	"context"
+	"golang.org/x/exp/slices"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/inbound"
+
+	"github.com/sagernet/sing/common/auth"
 )
 
 type contextKey string
@@ -14,11 +17,15 @@ func WithAdditions(ctx context.Context, additions ...inbound.Addition) context.C
 	return context.WithValue(ctx, ctxKeyAdditions, additions)
 }
 
-func getAdditions(ctx context.Context) []inbound.Addition {
+func getAdditions(ctx context.Context) (additions []inbound.Addition) {
 	if v := ctx.Value(ctxKeyAdditions); v != nil {
 		if a, ok := v.([]inbound.Addition); ok {
-			return a
+			additions = a
 		}
 	}
-	return nil
+	if user, ok := auth.UserFromContext[string](ctx); ok {
+		additions = slices.Clone(additions)
+		additions = append(additions, inbound.WithInUser(user))
+	}
+	return
 }

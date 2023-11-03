@@ -3,13 +3,13 @@ package shadowsocks
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/common/sockopt"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/shadowsocks/core"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/sockopt"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/shadowsocks/core"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type UDPListener struct {
@@ -17,7 +17,7 @@ type UDPListener struct {
 	closed     bool
 }
 
-func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UDPListener, error) {
+func NewUDP(addr string, pickCipher core.Cipher, tunnel C.Tunnel) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -29,19 +29,20 @@ func NewUDP(addr string, pickCipher core.Cipher, in chan<- C.PacketAdapter) (*UD
 	}
 
 	sl := &UDPListener{l, false}
-	conn := pickCipher.PacketConn(l)
+	conn := pickCipher.PacketConn(N.NewEnhancePacketConn(l))
 	go func() {
 		for {
-			buf := pool.Get(pool.RelayBufferSize)
-			n, remoteAddr, err := conn.ReadFrom(buf)
+			data, put, remoteAddr, err := conn.WaitReadFrom()
 			if err != nil {
-				pool.Put(buf)
+				if put != nil {
+					put()
+				}
 				if sl.closed {
 					break
 				}
 				continue
 			}
-			handleSocksUDP(conn, in, buf[:n], remoteAddr)
+			handleSocksUDP(conn, tunnel, data, put, remoteAddr)
 		}
 	}()
 
@@ -57,24 +58,23 @@ func (l *UDPListener) LocalAddr() net.Addr {
 	return l.packetConn.LocalAddr()
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr) {
+func handleSocksUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
 	tgtAddr := socks5.SplitAddr(buf)
 	if tgtAddr == nil {
 		// Unresolved UDP packet, return buffer to the pool
-		pool.Put(buf)
+		if put != nil {
+			put()
+		}
 		return
 	}
-	target := socks5.ParseAddr(tgtAddr.String())
+	target := tgtAddr
 	payload := buf[len(tgtAddr):]
 
 	packet := &packet{
 		pc:      pc,
 		rAddr:   addr,
 		payload: payload,
-		bufRef:  buf,
+		put:     put,
 	}
-	select {
-	case in <- inbound.NewPacket(target, packet, C.SHADOWSOCKS):
-	default:
-	}
+	tunnel.HandleUDPPacket(inbound.NewPacket(target, packet, C.SHADOWSOCKS, additions...))
 }

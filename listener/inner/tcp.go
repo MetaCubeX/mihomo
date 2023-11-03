@@ -1,20 +1,43 @@
 package inner
 
 import (
-	"github.com/Dreamacro/clash/adapter/inbound"
-	C "github.com/Dreamacro/clash/constant"
+	"errors"
 	"net"
+	"net/netip"
+	"strconv"
+
+	C "github.com/metacubex/mihomo/constant"
 )
 
-var tcpIn chan<- C.ConnContext
+var tunnel C.Tunnel
 
-func New(in chan<- C.ConnContext) {
-	tcpIn = in
+func New(t C.Tunnel) {
+	tunnel = t
 }
 
-func HandleTcp(dst string, host string) net.Conn {
+func HandleTcp(address string) (conn net.Conn, err error) {
+	if tunnel == nil {
+		return nil, errors.New("tcp uninitialized")
+	}
+	// executor Parsed
 	conn1, conn2 := net.Pipe()
-	context := inbound.NewInner(conn2, dst, host)
-	tcpIn <- context
-	return conn1
+
+	metadata := &C.Metadata{}
+	metadata.NetWork = C.TCP
+	metadata.Type = C.INNER
+	metadata.DNSMode = C.DNSNormal
+	metadata.Process = C.MihomoName
+	if h, port, err := net.SplitHostPort(address); err == nil {
+		if port, err := strconv.ParseUint(port, 10, 16); err == nil {
+			metadata.DstPort = uint16(port)
+		}
+		if ip, err := netip.ParseAddr(h); err == nil {
+			metadata.DstIP = ip
+		} else {
+			metadata.Host = h
+		}
+	}
+
+	go tunnel.HandleTCPConn(conn2, metadata)
+	return conn1, nil
 }

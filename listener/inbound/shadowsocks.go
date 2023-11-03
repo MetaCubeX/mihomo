@@ -1,16 +1,17 @@
 package inbound
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing_shadowsocks"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing_shadowsocks"
+	"github.com/metacubex/mihomo/log"
 )
 
 type ShadowSocksOption struct {
 	BaseOption
 	Password string `inbound:"password"`
 	Cipher   string `inbound:"cipher"`
+	UDP      bool   `inbound:"udp,omitempty"`
 }
 
 func (o ShadowSocksOption) Equal(config C.InboundConfig) bool {
@@ -37,6 +38,7 @@ func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
 			Listen:   base.RawAddress(),
 			Password: options.Password,
 			Cipher:   options.Cipher,
+			Udp:      options.UDP,
 		},
 	}, nil
 }
@@ -57,9 +59,9 @@ func (s *ShadowSocks) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (s *ShadowSocks) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (s *ShadowSocks) Listen(tunnel C.Tunnel) error {
 	var err error
-	s.l, err = sing_shadowsocks.New(s.ss, tcpIn, udpIn, s.Additions()...)
+	s.l, err = sing_shadowsocks.New(s.ss, tunnel, s.Additions()...)
 	if err != nil {
 		return err
 	}

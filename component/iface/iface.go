@@ -4,15 +4,16 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/singledo"
+	"github.com/metacubex/mihomo/common/singledo"
 )
 
 type Interface struct {
 	Index        int
 	Name         string
-	Addrs        []*netip.Prefix
+	Addrs        []netip.Prefix
 	HardwareAddr net.HardwareAddr
 }
 
@@ -37,11 +38,20 @@ func ResolveInterface(name string) (*Interface, error) {
 			if err != nil {
 				continue
 			}
+			// if not available device like Meta, dummy0, docker0, etc.
+			if (iface.Flags&net.FlagMulticast == 0) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
+				continue
+			}
 
-			ipNets := make([]*netip.Prefix, 0, len(addrs))
+			ipNets := make([]netip.Prefix, 0, len(addrs))
 			for _, addr := range addrs {
 				ipNet := addr.(*net.IPNet)
 				ip, _ := netip.AddrFromSlice(ipNet.IP)
+
+				//unavailable IPv6 Address
+				if ip.Is6() && strings.HasPrefix(ip.String(), "fe80") {
+					continue
+				}
 
 				ones, bits := ipNet.Mask.Size()
 				if bits == 32 {
@@ -49,7 +59,7 @@ func ResolveInterface(name string) (*Interface, error) {
 				}
 
 				pf := netip.PrefixFrom(ip, ones)
-				ipNets = append(ipNets, &pf)
+				ipNets = append(ipNets, pf)
 			}
 
 			r[iface.Name] = &Interface{
@@ -79,27 +89,27 @@ func FlushCache() {
 	interfaces.Reset()
 }
 
-func (iface *Interface) PickIPv4Addr(destination netip.Addr) (*netip.Prefix, error) {
-	return iface.pickIPAddr(destination, func(addr *netip.Prefix) bool {
+func (iface *Interface) PickIPv4Addr(destination netip.Addr) (netip.Prefix, error) {
+	return iface.pickIPAddr(destination, func(addr netip.Prefix) bool {
 		return addr.Addr().Is4()
 	})
 }
 
-func (iface *Interface) PickIPv6Addr(destination netip.Addr) (*netip.Prefix, error) {
-	return iface.pickIPAddr(destination, func(addr *netip.Prefix) bool {
+func (iface *Interface) PickIPv6Addr(destination netip.Addr) (netip.Prefix, error) {
+	return iface.pickIPAddr(destination, func(addr netip.Prefix) bool {
 		return addr.Addr().Is6()
 	})
 }
 
-func (iface *Interface) pickIPAddr(destination netip.Addr, accept func(addr *netip.Prefix) bool) (*netip.Prefix, error) {
-	var fallback *netip.Prefix
+func (iface *Interface) pickIPAddr(destination netip.Addr, accept func(addr netip.Prefix) bool) (netip.Prefix, error) {
+	var fallback netip.Prefix
 
 	for _, addr := range iface.Addrs {
 		if !accept(addr) {
 			continue
 		}
 
-		if fallback == nil && !addr.Addr().IsLinkLocalUnicast() {
+		if !fallback.IsValid() && !addr.Addr().IsLinkLocalUnicast() {
 			fallback = addr
 
 			if !destination.IsValid() {
@@ -112,8 +122,8 @@ func (iface *Interface) pickIPAddr(destination netip.Addr, accept func(addr *net
 		}
 	}
 
-	if fallback == nil {
-		return nil, ErrAddrNotFound
+	if !fallback.IsValid() {
+		return netip.Prefix{}, ErrAddrNotFound
 	}
 
 	return fallback, nil

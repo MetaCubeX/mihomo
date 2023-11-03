@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"hash/adler32"
 	"hash/crc32"
-	"math/rand"
 	"net"
 
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/ssr/tools"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/transport/ssr/tools"
+
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
@@ -34,7 +36,7 @@ func (a *authSHA1V4) StreamConn(c net.Conn, iv []byte) net.Conn {
 	return &Conn{Conn: c, Protocol: p}
 }
 
-func (a *authSHA1V4) PacketConn(c net.PacketConn) net.PacketConn {
+func (a *authSHA1V4) PacketConn(c N.EnhancePacketConn) N.EnhancePacketConn {
 	return c
 }
 
@@ -176,7 +178,7 @@ func (a *authSHA1V4) getRandDataLength(size int) int {
 		return 0
 	}
 	if size > 400 {
-		return rand.Intn(256)
+		return fastrand.Intn(256)
 	}
-	return rand.Intn(512)
+	return fastrand.Intn(512)
 }

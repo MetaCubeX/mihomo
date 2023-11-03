@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package clash.component.geodata.router;
-option csharp_namespace = "Clash.Component.Geodata.Router";
-option go_package = "github.com/Dreamacro/clash/component/geodata/router";
-option java_package = "com.clash.component.geodata.router";
+package mihomo.component.geodata.router;
+option csharp_namespace = "Mihomo.Component.Geodata.Router";
+option go_package = "github.com/metacubex/mihomo/component/geodata/router";
+option java_package = "com.mihomo.component.geodata.router";
 option java_multiple_files = true;
 
 // Domain for routing decision.

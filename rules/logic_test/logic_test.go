@@ -2,10 +2,10 @@ package logic_test
 
 import (
 	// https://github.com/golang/go/wiki/CodeReviewComments#import-dot
-	. "github.com/Dreamacro/clash/rules/logic"
+	. "github.com/metacubex/mihomo/rules/logic"
 
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/rules"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/rules"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -20,7 +20,7 @@ func TestAND(t *testing.T) {
 	m, _ := and.Match(&C.Metadata{
 		Host:    "baidu.com",
 		NetWork: C.TCP,
-		DstPort: "20000",
+		DstPort: 20000,
 	})
 	assert.Equal(t, true, m)
 
@@ -35,7 +35,7 @@ func TestNOT(t *testing.T) {
 	not, err := NewNOT("((DST-PORT,6000-6500))", "REJECT", ParseRule)
 	assert.Equal(t, nil, err)
 	m, _ := not.Match(&C.Metadata{
-		DstPort: "6100",
+		DstPort: 6100,
 	})
 	assert.Equal(t, false, m)
 

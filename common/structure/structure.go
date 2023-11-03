@@ -96,6 +96,11 @@ func (d *Decoder) decode(name string, data any, val reflect.Value) error {
 		return d.decodeFloat(name, data, val)
 	}
 	switch kind {
+	case reflect.Pointer:
+		if val.IsNil() {
+			val.Set(reflect.New(val.Type().Elem()))
+		}
+		return d.decode(name, data, val.Elem())
 	case reflect.String:
 		return d.decodeString(name, data, val)
 	case reflect.Bool:
@@ -282,6 +287,9 @@ func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
 	}
 
 	valSlice := val
+	// make a new slice with cap(val)==cap(dataVal)
+	// the caller can determine whether the original configuration contains this item by judging whether the value is nil.
+	valSlice = reflect.MakeSlice(valType, 0, dataVal.Len())
 	for i := 0; i < dataVal.Len(); i++ {
 		currentData := dataVal.Index(i).Interface()
 		for valSlice.Len() <= i {

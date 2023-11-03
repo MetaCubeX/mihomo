@@ -4,18 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/netip"
 	"strings"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"go.uber.org/atomic"
-
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
 
 	D "github.com/miekg/dns"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 type client struct {
@@ -23,8 +22,9 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        *atomic.String
-	proxyAdapter string
+	iface        string
+	proxyAdapter C.ProxyAdapter
+	proxyName    string
 	addr         string
 }
 
@@ -47,10 +47,6 @@ func (c *client) Address() string {
 	return c.addr
 }
 
-func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
-	return c.ExchangeContext(context.Background(), m)
-}
-
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {
 	var (
 		ip  netip.Addr
@@ -68,7 +64,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		} else if len(ips) == 0 {
 			return nil, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, c.host)
 		}
-		ip = ips[rand.Intn(len(ips))]
+		ip = ips[fastrand.Intn(len(ips))]
 	}
 
 	network := "udp"
@@ -76,12 +72,12 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		network = "tcp"
 	}
 
-	options := []dialer.Option{}
-	if c.iface != nil && c.iface.Load() != "" {
-		options = append(options, dialer.WithInterface(c.iface.Load()))
+	var options []dialer.Option
+	if c.iface != "" {
+		options = append(options, dialer.WithInterface(c.iface))
 	}
 
-	conn, err := getDialHandler(c.r, c.proxyAdapter, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
+	conn, err := getDialHandler(c.r, c.proxyAdapter, c.proxyName, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +94,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 	ch := make(chan result, 1)
 	go func() {
 		if strings.HasSuffix(c.Client.Net, "tls") {
-			conn = tls.Client(conn, tlsC.GetGlobalTLSConfig(c.Client.TLSConfig))
+			conn = tls.Client(conn, ca.GetGlobalTLSConfig(c.Client.TLSConfig))
 		}
 
 		msg, _, err := c.Client.ExchangeWithConn(m, &D.Conn{

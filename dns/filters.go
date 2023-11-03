@@ -2,14 +2,14 @@ package dns
 
 import (
 	"net/netip"
-
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/mmdb"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
 	"strings"
+
+	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/geodata/router"
+	"github.com/metacubex/mihomo/component/mmdb"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 type fallbackIPFilter interface {
@@ -24,34 +24,20 @@ var geoIPMatcher *router.GeoIPMatcher
 
 func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	if !C.GeodataMode {
-		record, _ := mmdb.Instance().Country(ip.AsSlice())
-		return !strings.EqualFold(record.Country.IsoCode, gf.code) && !ip.IsPrivate()
+		codes := mmdb.Instance().LookupCode(ip.AsSlice())
+		for _, code := range codes {
+			if !strings.EqualFold(code, gf.code) && !ip.IsPrivate() {
+				return true
+			}
+		}
+		return false
 	}
 
 	if geoIPMatcher == nil {
-		countryCode := "cn"
-		geoLoader, err := geodata.GetGeoDataLoader(geodata.LoaderName())
+		var err error
+		geoIPMatcher, _, err = geodata.LoadGeoIPMatcher("CN")
 		if err != nil {
-			log.Errorln("[GeoIPFilter] GetGeoDataLoader error: %s", err.Error())
-			return false
-		}
-
-		records, err := geoLoader.LoadGeoIP(countryCode)
-		if err != nil {
-			log.Errorln("[GeoIPFilter] LoadGeoIP error: %s", err.Error())
-			return false
-		}
-
-		geoIP := &router.GeoIP{
-			CountryCode:  countryCode,
-			Cidr:         records,
-			ReverseMatch: false,
-		}
-
-		geoIPMatcher, err = router.NewGeoIPMatcher(geoIP)
-
-		if err != nil {
-			log.Errorln("[GeoIPFilter] NewGeoIPMatcher error: %s", err.Error())
+			log.Errorln("[GeoIPFilter] LoadGeoIPMatcher error: %s", err.Error())
 			return false
 		}
 	}
@@ -59,7 +45,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 }
 
 type ipnetFilter struct {
-	ipnet *netip.Prefix
+	ipnet netip.Prefix
 }
 
 func (inf *ipnetFilter) Match(ip netip.Addr) bool {
@@ -92,6 +78,10 @@ type geoSiteFilter struct {
 }
 
 func NewGeoSite(group string) (fallbackDomainFilter, error) {
+	if err := geodata.InitGeoSite(); err != nil {
+		log.Errorln("can't initial GeoSite: %s", err)
+		return nil, err
+	}
 	matcher, _, err := geodata.LoadGeoSiteMatcher(group)
 	if err != nil {
 		return nil, err

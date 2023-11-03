@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 func isUpgradeRequest(req *http.Request) bool {
@@ -25,7 +25,7 @@ func isUpgradeRequest(req *http.Request) bool {
 	return false
 }
 
-func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func handleUpgrade(conn net.Conn, request *http.Request, tunnel C.Tunnel, additions ...inbound.Addition) {
 	defer conn.Close()
 
 	removeProxyHeaders(request.Header)
@@ -43,7 +43,7 @@ func handleUpgrade(conn net.Conn, request *http.Request, in chan<- C.ConnContext
 
 	left, right := net.Pipe()
 
-	in <- inbound.NewHTTP(dstAddr, conn.RemoteAddr(), right, additions...)
+	go tunnel.HandleTCPConn(inbound.NewHTTP(dstAddr, conn, right, additions...))
 
 	var bufferedLeft *N.BufferedConn
 	if request.TLS != nil {

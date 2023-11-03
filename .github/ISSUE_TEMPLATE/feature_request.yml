@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an idea for this project
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: ensure
+    attributes:
+      label: Verify steps
+      description: "
+在提交之前，请确认
+Please verify that you've followed these steps
+"
+      options:
+        - label: "
+我已经在 [Issue Tracker](……/) 中找过我要提出的请求
+I have searched on the [issue tracker](……/) for a related feature request.
+"
+          required: true
+        - label: "
+我已经仔细看过 [Documentation](https://wiki.metacubex.one/) 并无法找到这个功能
+I have read the [documentation](https://wiki.metacubex.one/) and was unable to solve the issue.
+"
+          required: true
+  - type: textarea
+    attributes:
+      label: Description
+      description: 请详细、清晰地表达你要提出的论述，例如这个问题如何影响到你？你想实现什么功能？目前 Mihomo Core 的行为是什麽？
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Possible Solution
+      description: "
+此项非必须，但是如果你有想法的话欢迎提出。
+Not obligatory, but suggest a fix/reason for the bug, or ideas how to implement the addition or change
+"

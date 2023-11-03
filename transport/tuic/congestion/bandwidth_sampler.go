@@ -296,9 +296,9 @@ func (s *BandwidthSampler) onPacketAckedInner(ackTime time.Time, lastAckedPacket
 	return sample
 }
 
-// OnPacketLost Informs the sampler that a packet is considered lost and it should no
+// OnCongestionEvent Informs the sampler that a packet is considered lost and it should no
 // longer keep track of it.
-func (s *BandwidthSampler) OnPacketLost(packetNumber congestion.PacketNumber) SendTimeState {
+func (s *BandwidthSampler) OnCongestionEvent(packetNumber congestion.PacketNumber) SendTimeState {
 	ok, sentPacket := s.connectionStats.Remove(packetNumber)
 	sendTimeState := SendTimeState{
 		isValid: ok,

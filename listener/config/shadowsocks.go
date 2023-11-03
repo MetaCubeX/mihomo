@@ -9,6 +9,7 @@ type ShadowsocksServer struct {
 	Listen   string
 	Password string
 	Cipher   string
+	Udp      bool
 }
 
 func (t ShadowsocksServer) String() string {

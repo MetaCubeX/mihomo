@@ -8,12 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
-
-	"github.com/Dreamacro/clash/component/dhcp"
-	"github.com/Dreamacro/clash/component/iface"
-	"github.com/Dreamacro/clash/component/resolver"
-
+	"github.com/metacubex/mihomo/component/dhcp"
+	"github.com/metacubex/mihomo/component/iface"
 	D "github.com/miekg/dns"
 )
 
@@ -30,7 +26,7 @@ type dhcpClient struct {
 	ifaceInvalidate time.Time
 	dnsInvalidate   time.Time
 
-	ifaceAddr *netip.Prefix
+	ifaceAddr netip.Prefix
 	done      chan struct{}
 	clients   []dnsClient
 	err       error
@@ -47,20 +43,14 @@ func (d *dhcpClient) Address() string {
 	return strings.Join(addrs, ",")
 }
 
-func (d *dhcpClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
-	defer cancel()
-
-	return d.ExchangeContext(ctx, m)
-}
-
 func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	clients, err := d.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return batchExchange(ctx, clients, m)
+	msg, _, err = batchExchange(ctx, clients, m)
+	return
 }
 
 func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {
@@ -86,7 +76,7 @@ func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {
 				for _, item := range dns {
 					nameserver = append(nameserver, NameServer{
 						Addr:      net.JoinHostPort(item.String(), "53"),
-						Interface: atomic.NewString(d.ifaceName),
+						Interface: d.ifaceName,
 					})
 				}
 

@@ -6,6 +6,6 @@ import (
 	tun "github.com/metacubex/sing-tun"
 )
 
-func tunOpen(options tun.Options) (tun.Tun, error) {
-	return tun.Open(options)
+func tunNew(options tun.Options) (tun.Tun, error) {
+	return tun.New(options)
 }

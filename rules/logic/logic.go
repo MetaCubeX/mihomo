@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/collections"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/rules/common"
+	"github.com/metacubex/mihomo/common/collections"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/rules/common"
 )
 
 type Logic struct {

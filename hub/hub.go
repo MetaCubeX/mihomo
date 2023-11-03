@@ -1,9 +1,10 @@
 package hub
 
 import (
-	"github.com/Dreamacro/clash/config"
-	"github.com/Dreamacro/clash/hub/executor"
-	"github.com/Dreamacro/clash/hub/route"
+	"github.com/metacubex/mihomo/config"
+	"github.com/metacubex/mihomo/hub/executor"
+	"github.com/metacubex/mihomo/hub/route"
+	"github.com/metacubex/mihomo/log"
 )
 
 type Option func(*config.Config)
@@ -26,7 +27,7 @@ func WithSecret(secret string) Option {
 	}
 }
 
-// Parse call at the beginning of clash
+// Parse call at the beginning of mihomo
 func Parse(options ...Option) error {
 	cfg, err := executor.Parse()
 	if err != nil {
@@ -43,7 +44,7 @@ func Parse(options ...Option) error {
 
 	if cfg.General.ExternalController != "" {
 		go route.Start(cfg.General.ExternalController, cfg.General.ExternalControllerTLS,
-			cfg.General.Secret, cfg.TLS.Certificate, cfg.TLS.PrivateKey)
+			cfg.General.Secret, cfg.TLS.Certificate, cfg.TLS.PrivateKey, cfg.General.LogLevel == log.DEBUG)
 	}
 
 	executor.ApplyConfig(cfg, true)

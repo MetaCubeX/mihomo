@@ -1,15 +1,18 @@
 package inbound
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing_vmess"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing_vmess"
+	"github.com/metacubex/mihomo/log"
 )
 
 type VmessOption struct {
 	BaseOption
-	Users []VmessUser `inbound:"users"`
+	Users       []VmessUser `inbound:"users"`
+	WsPath      string      `inbound:"ws-path,omitempty"`
+	Certificate string      `inbound:"certificate,omitempty"`
+	PrivateKey  string      `inbound:"private-key,omitempty"`
 }
 
 type VmessUser struct {
@@ -46,9 +49,12 @@ func NewVmess(options *VmessOption) (*Vmess, error) {
 		Base:   base,
 		config: options,
 		vs: LC.VmessServer{
-			Enable: true,
-			Listen: base.RawAddress(),
-			Users:  users,
+			Enable:      true,
+			Listen:      base.RawAddress(),
+			Users:       users,
+			WsPath:      options.WsPath,
+			Certificate: options.Certificate,
+			PrivateKey:  options.PrivateKey,
 		},
 	}, nil
 }
@@ -69,7 +75,7 @@ func (v *Vmess) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (v *Vmess) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (v *Vmess) Listen(tunnel C.Tunnel) error {
 	var err error
 	users := make([]LC.VmessUser, len(v.config.Users))
 	for i, v := range v.config.Users {
@@ -79,7 +85,7 @@ func (v *Vmess) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter,
 			AlterID:  v.AlterID,
 		}
 	}
-	v.l, err = sing_vmess.New(v.vs, tcpIn, udpIn, v.Additions()...)
+	v.l, err = sing_vmess.New(v.vs, tunnel, v.Additions()...)
 	if err != nil {
 		return err
 	}

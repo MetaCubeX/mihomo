@@ -1,15 +1,15 @@
 package provider
 
 import (
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"golang.org/x/net/idna"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 type domainStrategy struct {
-	count       int
-	domainRules *trie.DomainTrie[struct{}]
+	count      int
+	domainTrie *trie.DomainTrie[struct{}]
+	domainSet  *trie.DomainSet
 }
 
 func (d *domainStrategy) ShouldFindProcess() bool {
@@ -17,7 +17,7 @@ func (d *domainStrategy) ShouldFindProcess() bool {
 }
 
 func (d *domainStrategy) Match(metadata *C.Metadata) bool {
-	return d.domainRules != nil && d.domainRules.Search(metadata.RuleHost()) != nil
+	return d.domainSet != nil && d.domainSet.Has(metadata.RuleHost())
 }
 
 func (d *domainStrategy) Count() int {
@@ -28,22 +28,24 @@ func (d *domainStrategy) ShouldResolveIP() bool {
 	return false
 }
 
-func (d *domainStrategy) OnUpdate(rules []string) {
-	domainTrie := trie.New[struct{}]()
-	count := 0
-	for _, rule := range rules {
-		actualDomain, _ := idna.ToASCII(rule)
-		err := domainTrie.Insert(actualDomain, struct{}{})
-		if err != nil {
-			log.Warnln("invalid domain:[%s]", rule)
-		} else {
-			count++
-		}
-	}
-	domainTrie.Optimize()
+func (d *domainStrategy) Reset() {
+	d.domainTrie = trie.New[struct{}]()
+	d.domainSet = nil
+	d.count = 0
+}
 
-	d.domainRules = domainTrie
-	d.count = count
+func (d *domainStrategy) Insert(rule string) {
+	err := d.domainTrie.Insert(rule, struct{}{})
+	if err != nil {
+		log.Warnln("invalid domain:[%s]", rule)
+	} else {
+		d.count++
+	}
+}
+
+func (d *domainStrategy) FinishInsert() {
+	d.domainSet = d.domainTrie.NewDomainSet()
+	d.domainTrie = nil
 }
 
 func NewDomainStrategy() *domainStrategy {

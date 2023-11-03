@@ -1,12 +1,13 @@
 package vmess
 
 import (
+	"context"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 
+	"github.com/zhangyunhao116/fastrand"
 	"golang.org/x/net/http2"
 )
 
@@ -26,7 +27,7 @@ type H2Config struct {
 func (hc *h2Conn) establishConn() error {
 	preader, pwriter := io.Pipe()
 
-	host := hc.cfg.Hosts[rand.Intn(len(hc.cfg.Hosts))]
+	host := hc.cfg.Hosts[fastrand.Intn(len(hc.cfg.Hosts))]
 	path := hc.cfg.Path
 	// TODO: connect use VMess Host instead of H2 Host
 	req := http.Request{
@@ -84,10 +85,16 @@ func (hc *h2Conn) Write(b []byte) (int, error) {
 }
 
 func (hc *h2Conn) Close() error {
-	if err := hc.pwriter.Close(); err != nil {
-		return err
+	if hc.pwriter != nil {
+		if err := hc.pwriter.Close(); err != nil {
+			return err
+		}
 	}
-	if err := hc.ClientConn.Shutdown(hc.res.Request.Context()); err != nil {
+	ctx := context.Background()
+	if hc.res != nil {
+		ctx = hc.res.Request.Context()
+	}
+	if err := hc.ClientConn.Shutdown(ctx); err != nil {
 		return err
 	}
 	return hc.Conn.Close()

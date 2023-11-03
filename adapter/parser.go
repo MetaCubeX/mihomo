@@ -3,11 +3,11 @@ package adapter
 import (
 	"fmt"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/structure"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/common/structure"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 func ParseProxy(mapping map[string]any) (C.Proxy, error) {
@@ -23,7 +23,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	)
 	switch proxyType {
 	case "ss":
-		ssOption := &outbound.ShadowSocksOption{}
+		ssOption := &outbound.ShadowSocksOption{ClientFingerprint: tlsC.GetGlobalFingerprint()}
 		err = decoder.Decode(mapping, ssOption)
 		if err != nil {
 			break
@@ -56,10 +56,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 				Method: "GET",
 				Path:   []string{"/"},
 			},
-		}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			vmessOption.ClientFingerprint = GlobalUtlsClient
+			ClientFingerprint: tlsC.GetGlobalFingerprint(),
 		}
 
 		err = decoder.Decode(mapping, vmessOption)
@@ -68,12 +65,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		}
 		proxy, err = outbound.NewVmess(*vmessOption)
 	case "vless":
-		vlessOption := &outbound.VlessOption{}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			vlessOption.ClientFingerprint = GlobalUtlsClient
-		}
-
+		vlessOption := &outbound.VlessOption{ClientFingerprint: tlsC.GetGlobalFingerprint()}
 		err = decoder.Decode(mapping, vlessOption)
 		if err != nil {
 			break
@@ -87,12 +79,7 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 		}
 		proxy, err = outbound.NewSnell(*snellOption)
 	case "trojan":
-		trojanOption := &outbound.TrojanOption{}
-
-		if GlobalUtlsClient := tlsC.GetGlobalFingerprint(); len(GlobalUtlsClient) != 0 {
-			trojanOption.ClientFingerprint = GlobalUtlsClient
-		}
-
+		trojanOption := &outbound.TrojanOption{ClientFingerprint: tlsC.GetGlobalFingerprint()}
 		err = decoder.Decode(mapping, trojanOption)
 		if err != nil {
 			break
@@ -105,6 +92,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewHysteria(*hyOption)
+	case "hysteria2":
+		hyOption := &outbound.Hysteria2Option{}
+		err = decoder.Decode(mapping, hyOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewHysteria2(*hyOption)
 	case "wireguard":
 		wgOption := &outbound.WireGuardOption{}
 		err = decoder.Decode(mapping, wgOption)
@@ -119,12 +113,40 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy, err = outbound.NewTuic(*tuicOption)
+	case "direct":
+		directOption := &outbound.DirectOption{}
+		err = decoder.Decode(mapping, directOption)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewDirectWithOption(*directOption)
+	case "reject":
+		rejectOption := &outbound.RejectOption{}
+		err = decoder.Decode(mapping, rejectOption)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewRejectWithOption(*rejectOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
 
 	if err != nil {
 		return nil, err
+	}
+
+	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {
+		muxOption := &outbound.SingMuxOption{}
+		err = decoder.Decode(muxMapping, muxOption)
+		if err != nil {
+			return nil, err
+		}
+		if muxOption.Enabled {
+			proxy, err = outbound.NewSingMux(*muxOption, proxy, proxy.(outbound.ProxyBase))
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return NewProxy(proxy), nil

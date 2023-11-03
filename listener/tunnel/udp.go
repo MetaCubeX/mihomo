@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/pool"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/pool"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type PacketConn struct {
@@ -34,7 +34,7 @@ func (l *PacketConn) Close() error {
 	return l.conn.Close()
 }
 
-func NewUDP(addr, target, proxy string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*PacketConn, error) {
+func NewUDP(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Addition) (*PacketConn, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -51,6 +51,11 @@ func NewUDP(addr, target, proxy string, in chan<- C.PacketAdapter, additions ...
 		proxy:  proxy,
 		addr:   addr,
 	}
+
+	if proxy != "" {
+		additions = append([]inbound.Addition{inbound.WithSpecialProxy(proxy)}, additions...)
+	}
+
 	go func() {
 		for {
 			buf := pool.Get(pool.UDPBufferSize)
@@ -62,24 +67,19 @@ func NewUDP(addr, target, proxy string, in chan<- C.PacketAdapter, additions ...
 				}
 				continue
 			}
-			sl.handleUDP(l, in, buf[:n], remoteAddr, additions...)
+			sl.handleUDP(l, tunnel, buf[:n], remoteAddr, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func (l *PacketConn) handleUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, addr net.Addr, additions ...inbound.Addition) {
-	packet := &packet{
+func (l *PacketConn) handleUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, addr net.Addr, additions ...inbound.Addition) {
+	cPacket := &packet{
 		pc:      pc,
 		rAddr:   addr,
 		payload: buf,
 	}
 
-	ctx := inbound.NewPacket(l.target, packet, C.TUNNEL, additions...)
-	ctx.Metadata().SpecialProxy = l.proxy
-	select {
-	case in <- ctx:
-	default:
-	}
+	tunnel.HandleUDPPacket(inbound.NewPacket(l.target, cPacket, C.TUNNEL, additions...))
 }

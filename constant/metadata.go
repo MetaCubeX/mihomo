@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 // Socks addr type
@@ -15,7 +15,10 @@ const (
 	TCP NetWork = iota
 	UDP
 	ALLNet
+	InvalidNet = 0xff
+)
 
+const (
 	HTTP Type = iota
 	HTTPS
 	SOCKS4
@@ -27,18 +30,23 @@ const (
 	TUNNEL
 	TUN
 	TUIC
+	HYSTERIA2
 	INNER
 )
 
 type NetWork int
 
 func (n NetWork) String() string {
-	if n == TCP {
+	switch n {
+	case TCP:
 		return "tcp"
-	} else if n == UDP {
+	case UDP:
 		return "udp"
+	case ALLNet:
+		return "all"
+	default:
+		return "invalid"
 	}
-	return "all"
 }
 
 func (n NetWork) MarshalJSON() ([]byte, error) {
@@ -71,6 +79,8 @@ func (t Type) String() string {
 		return "Tun"
 	case TUIC:
 		return "Tuic"
+	case HYSTERIA2:
+		return "Hysteria2"
 	case INNER:
 		return "Inner"
 	default:
@@ -103,6 +113,8 @@ func ParseType(t string) (*Type, error) {
 		res = TUN
 	case "TUIC":
 		res = TUIC
+	case "HYSTERIA2":
+		res = HYSTERIA2
 	case "INNER":
 		res = INNER
 	default:
@@ -121,11 +133,12 @@ type Metadata struct {
 	Type         Type       `json:"type"`
 	SrcIP        netip.Addr `json:"sourceIP"`
 	DstIP        netip.Addr `json:"destinationIP"`
-	SrcPort      string     `json:"sourcePort"`
-	DstPort      string     `json:"destinationPort"`
+	SrcPort      uint16     `json:"sourcePort,string"`      // `,string` is used to compatible with old version json output
+	DstPort      uint16     `json:"destinationPort,string"` // `,string` is used to compatible with old version json output
 	InIP         netip.Addr `json:"inboundIP"`
-	InPort       string     `json:"inboundPort"`
+	InPort       uint16     `json:"inboundPort,string"` // `,string` is used to compatible with old version json output
 	InName       string     `json:"inboundName"`
+	InUser       string     `json:"inboundUser"`
 	Host         string     `json:"host"`
 	DNSMode      DNSMode    `json:"dnsMode"`
 	Uid          uint32     `json:"uid"`
@@ -139,16 +152,16 @@ type Metadata struct {
 }
 
 func (m *Metadata) RemoteAddress() string {
-	return net.JoinHostPort(m.String(), m.DstPort)
+	return net.JoinHostPort(m.String(), strconv.FormatUint(uint64(m.DstPort), 10))
 }
 
 func (m *Metadata) SourceAddress() string {
-	return net.JoinHostPort(m.SrcIP.String(), m.SrcPort)
+	return net.JoinHostPort(m.SrcIP.String(), strconv.FormatUint(uint64(m.SrcPort), 10))
 }
 
 func (m *Metadata) SourceDetail() string {
 	if m.Type == INNER {
-		return fmt.Sprintf("%s", ClashName)
+		return fmt.Sprintf("%s", MihomoName)
 	}
 
 	switch {
@@ -161,6 +174,10 @@ func (m *Metadata) SourceDetail() string {
 	default:
 		return fmt.Sprintf("%s", m.SourceAddress())
 	}
+}
+
+func (m *Metadata) SourceValid() bool {
+	return m.SrcPort != 0 && m.SrcIP.IsValid()
 }
 
 func (m *Metadata) AddrType() int {
@@ -198,15 +215,15 @@ func (m *Metadata) Pure() *Metadata {
 	return m
 }
 
+func (m *Metadata) AddrPort() netip.AddrPort {
+	return netip.AddrPortFrom(m.DstIP.Unmap(), m.DstPort)
+}
+
 func (m *Metadata) UDPAddr() *net.UDPAddr {
 	if m.NetWork != UDP || !m.DstIP.IsValid() {
 		return nil
 	}
-	port, _ := strconv.ParseUint(m.DstPort, 10, 16)
-	return &net.UDPAddr{
-		IP:   m.DstIP.AsSlice(),
-		Port: int(port),
-	}
+	return net.UDPAddrFromAddrPort(m.AddrPort())
 }
 
 func (m *Metadata) String() string {
@@ -221,4 +238,55 @@ func (m *Metadata) String() string {
 
 func (m *Metadata) Valid() bool {
 	return m.Host != "" || m.DstIP.IsValid()
+}
+
+func (m *Metadata) SetRemoteAddr(addr net.Addr) error {
+	if addr == nil {
+		return nil
+	}
+	if rawAddr, ok := addr.(interface{ RawAddr() net.Addr }); ok {
+		if rawAddr := rawAddr.RawAddr(); rawAddr != nil {
+			if err := m.SetRemoteAddr(rawAddr); err == nil {
+				return nil
+			}
+		}
+	}
+	if addr, ok := addr.(interface{ AddrPort() netip.AddrPort }); ok { // *net.TCPAddr, *net.UDPAddr, M.Socksaddr
+		if addrPort := addr.AddrPort(); addrPort.Port() != 0 {
+			m.DstPort = addrPort.Port()
+			if addrPort.IsValid() { // sing's M.Socksaddr maybe return an invalid AddrPort if it's a DomainName
+				m.DstIP = addrPort.Addr().Unmap()
+				return nil
+			} else {
+				if addr, ok := addr.(interface{ AddrString() string }); ok { // must be sing's M.Socksaddr
+					m.Host = addr.AddrString() // actually is M.Socksaddr.Fqdn
+					return nil
+				}
+			}
+		}
+	}
+	return m.SetRemoteAddress(addr.String())
+}
+
+func (m *Metadata) SetRemoteAddress(rawAddress string) error {
+	host, port, err := net.SplitHostPort(rawAddress)
+	if err != nil {
+		return err
+	}
+
+	var uint16Port uint16
+	if port, err := strconv.ParseUint(port, 10, 16); err == nil {
+		uint16Port = uint16(port)
+	}
+
+	if ip, err := netip.ParseAddr(host); err != nil {
+		m.Host = host
+		m.DstIP = netip.Addr{}
+	} else {
+		m.Host = ""
+		m.DstIP = ip.Unmap()
+	}
+	m.DstPort = uint16Port
+
+	return nil
 }

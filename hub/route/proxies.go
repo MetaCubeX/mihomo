@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/component/profile/cachefile"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -45,7 +46,7 @@ func parseProxyName(next http.Handler) http.Handler {
 func findProxyByName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.Context().Value(CtxKeyProxyName).(string)
-		proxies := tunnel.Proxies()
+		proxies := tunnel.ProxiesWithProviders()
 		proxy, exist := proxies[name]
 		if !exist {
 			render.Status(r, http.StatusNotFound)
@@ -59,7 +60,7 @@ func findProxyByName(next http.Handler) http.Handler {
 }
 
 func getProxies(w http.ResponseWriter, r *http.Request) {
-	proxies := tunnel.Proxies()
+	proxies := tunnel.ProxiesWithProviders()
 	render.JSON(w, r, render.M{
 		"proxies": proxies,
 	})
@@ -112,12 +113,19 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expectedStatus, err := utils.NewIntRanges[uint16](query.Get("expected"))
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url)
+	delay, err := proxy.URLTest(ctx, url, expectedStatus, C.ExtraHistory)
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)
@@ -126,7 +134,11 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil || delay == 0 {
 		render.Status(r, http.StatusServiceUnavailable)
-		render.JSON(w, r, newError("An error occurred in the delay test"))
+		if err != nil && delay != 0 {
+			render.JSON(w, r, err)
+		} else {
+			render.JSON(w, r, newError("An error occurred in the delay test"))
+		}
 		return
 	}
 

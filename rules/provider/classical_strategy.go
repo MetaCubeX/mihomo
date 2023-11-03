@@ -2,8 +2,8 @@ package provider
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"strings"
 )
 
@@ -37,35 +37,37 @@ func (c *classicalStrategy) ShouldFindProcess() bool {
 	return c.shouldFindProcess
 }
 
-func (c *classicalStrategy) OnUpdate(rules []string) {
-	var classicalRules []C.Rule
-	shouldResolveIP := false
-	for _, rawRule := range rules {
-		ruleType, rule, params := ruleParse(rawRule)
+func (c *classicalStrategy) Reset() {
+	c.rules = nil
+	c.count = 0
+	c.shouldFindProcess = false
+	c.shouldResolveIP = false
+}
 
-		if ruleType == "PROCESS-NAME" {
+func (c *classicalStrategy) Insert(rule string) {
+	ruleType, rule, params := ruleParse(rule)
+
+	if ruleType == "PROCESS-NAME" {
+		c.shouldFindProcess = true
+	}
+
+	r, err := c.parse(ruleType, rule, "", params)
+	if err != nil {
+		log.Warnln("parse rule error:[%s]", err.Error())
+	} else {
+		if r.ShouldResolveIP() {
+			c.shouldResolveIP = true
+		}
+		if r.ShouldFindProcess() {
 			c.shouldFindProcess = true
 		}
 
-		r, err := c.parse(ruleType, rule, "", params)
-		if err != nil {
-			log.Warnln("parse rule error:[%s]", err.Error())
-		} else {
-			if !shouldResolveIP {
-				shouldResolveIP = r.ShouldResolveIP()
-			}
-
-			if !c.shouldFindProcess {
-				c.shouldFindProcess = r.ShouldFindProcess()
-			}
-
-			classicalRules = append(classicalRules, r)
-		}
+		c.rules = append(c.rules, r)
+		c.count++
 	}
-
-	c.rules = classicalRules
-	c.count = len(classicalRules)
 }
+
+func (c *classicalStrategy) FinishInsert() {}
 
 func ruleParse(ruleRaw string) (string, string, []string) {
 	item := strings.Split(ruleRaw, ",")
@@ -74,7 +76,11 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 	} else if len(item) == 2 {
 		return item[0], item[1], nil
 	} else if len(item) > 2 {
-		return item[0], item[1], item[2:]
+		if item[0] == "NOT" || item[0] == "OR" || item[0] == "AND" || item[0] == "SUB-RULE" {
+			return item[0], strings.Join(item[1:len(item)], ","), nil
+		} else {
+			return item[0], item[1], item[2:]
+		}
 	}
 
 	return "", "", nil
@@ -83,7 +89,7 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
-		case "MATCH", "SUB-RULE":
+		case "MATCH":
 			return nil, fmt.Errorf("unsupported rule type on rule-set")
 		default:
 			return parse(tp, payload, target, params, nil)

@@ -1,19 +1,26 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
-	"github.com/Dreamacro/clash/common/structure"
-	"github.com/Dreamacro/clash/component/resource"
-	C "github.com/Dreamacro/clash/constant"
-	P "github.com/Dreamacro/clash/constant/provider"
 	"time"
+
+	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/component/resource"
+	C "github.com/metacubex/mihomo/constant"
+	P "github.com/metacubex/mihomo/constant/provider"
+)
+
+var (
+	errSubPath = errors.New("path is not subpath of home directory")
 )
 
 type ruleProviderSchema struct {
 	Type     string `provider:"type"`
 	Behavior string `provider:"behavior"`
-	Path     string `provider:"path"`
+	Path     string `provider:"path,omitempty"`
 	URL      string `provider:"url,omitempty"`
+	Format   string `provider:"format,omitempty"`
 	Interval int    `provider:"interval,omitempty"`
 }
 
@@ -23,7 +30,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	if err := decoder.Decode(mapping, schema); err != nil {
 		return nil, err
 	}
-	var behavior P.RuleType
+	var behavior P.RuleBehavior
 
 	switch schema.Behavior {
 	case "domain":
@@ -36,16 +43,37 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 		return nil, fmt.Errorf("unsupported behavior type: %s", schema.Behavior)
 	}
 
-	path := C.Path.Resolve(schema.Path)
+	var format P.RuleFormat
+
+	switch schema.Format {
+	case "", "yaml":
+		format = P.YamlRule
+	case "text":
+		format = P.TextRule
+	default:
+		return nil, fmt.Errorf("unsupported format type: %s", schema.Format)
+	}
+
 	var vehicle P.Vehicle
 	switch schema.Type {
 	case "file":
+		path := C.Path.Resolve(schema.Path)
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
-		vehicle = resource.NewHTTPVehicle(schema.URL, path)
+		if schema.Path != "" {
+			path := C.Path.Resolve(schema.Path)
+			if !C.Path.IsSafePath(path) {
+				return nil, fmt.Errorf("%w: %s", errSubPath, path)
+			}
+			vehicle = resource.NewHTTPVehicle(schema.URL, path)
+		} else {
+			path := C.Path.GetPathByHash("rules", schema.URL)
+			vehicle = resource.NewHTTPVehicle(schema.URL, path)
+		}
+
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
 
-	return NewRuleSetProvider(name, behavior, time.Duration(uint(schema.Interval))*time.Second, vehicle, parse), nil
+	return NewRuleSetProvider(name, behavior, format, time.Duration(uint(schema.Interval))*time.Second, vehicle, parse), nil
 }

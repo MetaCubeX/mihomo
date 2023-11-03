@@ -7,9 +7,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/sniffer"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/sniffer"
 )
 
 var (
@@ -34,11 +34,9 @@ type HTTPSniffer struct {
 var _ sniffer.Sniffer = (*HTTPSniffer)(nil)
 
 func NewHTTPSniffer(snifferConfig SnifferConfig) (*HTTPSniffer, error) {
-	ports := make([]utils.Range[uint16], 0)
-	if len(snifferConfig.Ports) == 0 {
-		ports = append(ports, *utils.NewRange[uint16](80, 80))
-	} else {
-		ports = append(ports, snifferConfig.Ports...)
+	ports := snifferConfig.Ports
+	if len(ports) == 0 {
+		ports = utils.IntRanges[uint16]{utils.NewRange[uint16](80, 80)}
 	}
 	return &HTTPSniffer{
 		BaseSniffer: NewBaseSniffer(ports, C.TCP),
@@ -60,7 +58,7 @@ func (http *HTTPSniffer) SupportNetwork() C.NetWork {
 	return C.TCP
 }
 
-func (http *HTTPSniffer) SniffTCP(bytes []byte) (string, error) {
+func (http *HTTPSniffer) SniffData(bytes []byte) (string, error) {
 	domain, err := SniffHTTP(bytes)
 	if err == nil {
 		return *domain, nil

@@ -1,9 +1,5 @@
 package auth
 
-import (
-	"sync"
-)
-
 type Authenticator interface {
 	Verify(user string, pass string) bool
 	Users() []string
@@ -15,12 +11,12 @@ type AuthUser struct {
 }
 
 type inMemoryAuthenticator struct {
-	storage   *sync.Map
+	storage   map[string]string
 	usernames []string
 }
 
 func (au *inMemoryAuthenticator) Verify(user string, pass string) bool {
-	realPass, ok := au.storage.Load(user)
+	realPass, ok := au.storage[user]
 	return ok && realPass == pass
 }
 
@@ -30,17 +26,13 @@ func NewAuthenticator(users []AuthUser) Authenticator {
 	if len(users) == 0 {
 		return nil
 	}
-
-	au := &inMemoryAuthenticator{storage: &sync.Map{}}
-	for _, user := range users {
-		au.storage.Store(user.User, user.Pass)
+	au := &inMemoryAuthenticator{
+		storage:   make(map[string]string),
+		usernames: make([]string, 0, len(users)),
 	}
-	usernames := make([]string, 0, len(users))
-	au.storage.Range(func(key, value any) bool {
-		usernames = append(usernames, key.(string))
-		return true
-	})
-	au.usernames = usernames
-
+	for _, user := range users {
+		au.storage[user.User] = user.Pass
+		au.usernames = append(au.usernames, user.User)
+	}
 	return au
 }

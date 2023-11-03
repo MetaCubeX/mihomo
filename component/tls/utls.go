@@ -4,10 +4,10 @@ import (
 	"crypto/tls"
 	"net"
 
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/mroth/weightedrand/v2"
-	utls "github.com/refraction-networking/utls"
+	utls "github.com/sagernet/utls"
 )
 
 type UConn struct {
@@ -21,7 +21,7 @@ type UClientHelloID struct {
 var initRandomFingerprint UClientHelloID
 var initUtlsClient string
 
-func UClient(c net.Conn, config *tls.Config, fingerprint UClientHelloID) net.Conn {
+func UClient(c net.Conn, config *tls.Config, fingerprint UClientHelloID) *UConn {
 	utlsConn := utls.UClient(c, copyConfig(config), utls.ClientHelloID{
 		Client:  fingerprint.Client,
 		Version: fingerprint.Version,
@@ -45,8 +45,13 @@ func GetFingerprint(ClientFingerprint string) (UClientHelloID, bool) {
 	}
 
 	fingerprint, ok := Fingerprints[ClientFingerprint]
-	log.Debugln("use specified fingerprint:%s", fingerprint.Client)
-	return fingerprint, ok
+	if ok {
+		log.Debugln("use specified fingerprint:%s", fingerprint.Client)
+		return fingerprint, ok
+	} else {
+		log.Warnln("wrong ClientFingerprint:%s", ClientFingerprint)
+		return UClientHelloID{}, false
+	}
 }
 
 func RollFingerprint() (UClientHelloID, bool) {
@@ -67,7 +72,22 @@ var Fingerprints = map[string]UClientHelloID{
 	"firefox":    {&utls.HelloFirefox_Auto},
 	"safari":     {&utls.HelloSafari_Auto},
 	"ios":        {&utls.HelloIOS_Auto},
-	"randomized": {&utls.HelloRandomized},
+	"android":    {&utls.HelloAndroid_11_OkHttp},
+	"edge":       {&utls.HelloEdge_Auto},
+	"360":        {&utls.Hello360_Auto},
+	"qq":         {&utls.HelloQQ_Auto},
+	"random":     {nil},
+	"randomized": {nil},
+}
+
+func init() {
+	weights := utls.DefaultWeights
+	weights.TLSVersMax_Set_VersionTLS13 = 1
+	weights.FirstKeyShare_Set_CurveP256 = 0
+	randomized := utls.HelloRandomized
+	randomized.Seed, _ = utls.NewPRNGSeed()
+	randomized.Weights = &weights
+	Fingerprints["randomized"] = UClientHelloID{&randomized}
 }
 
 func copyConfig(c *tls.Config) *utls.Config {
@@ -79,10 +99,9 @@ func copyConfig(c *tls.Config) *utls.Config {
 	}
 }
 
-// WebsocketHandshake basically calls UConn.Handshake inside it but it will only send
-// http/1.1 in its ALPN.
+// BuildWebsocketHandshakeState it will only send http/1.1 in its ALPN.
 // Copy from https://github.com/XTLS/Xray-core/blob/main/transport/internet/tls/tls.go
-func (c *UConn) WebsocketHandshake() error {
+func (c *UConn) BuildWebsocketHandshakeState() error {
 	// Build the handshake state. This will apply every variable of the TLS of the
 	// fingerprint in the UConn
 	if err := c.BuildHandshakeState(); err != nil {
@@ -100,11 +119,11 @@ func (c *UConn) WebsocketHandshake() error {
 	if !hasALPNExtension { // Append extension if doesn't exists
 		c.Extensions = append(c.Extensions, &utls.ALPNExtension{AlpnProtocols: []string{"http/1.1"}})
 	}
-	// Rebuild the client hello and do the handshake
+	// Rebuild the client hello
 	if err := c.BuildHandshakeState(); err != nil {
 		return err
 	}
-	return c.Handshake()
+	return nil
 }
 
 func SetGlobalUtlsClient(Client string) {
@@ -112,10 +131,7 @@ func SetGlobalUtlsClient(Client string) {
 }
 
 func HaveGlobalFingerprint() bool {
-	if len(initUtlsClient) != 0 && initUtlsClient != "none" {
-		return true
-	}
-	return false
+	return len(initUtlsClient) != 0 && initUtlsClient != "none"
 }
 
 func GetGlobalFingerprint() string {

@@ -1,25 +1,24 @@
 package context
 
 import (
+	"github.com/metacubex/mihomo/common/utils"
 	"net"
 
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
 
-	"github.com/gofrs/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type ConnContext struct {
 	id       uuid.UUID
 	metadata *C.Metadata
-	conn     net.Conn
+	conn     *N.BufferedConn
 }
 
 func NewConnContext(conn net.Conn, metadata *C.Metadata) *ConnContext {
-	id, _ := uuid.NewV4()
-
 	return &ConnContext{
-		id:       id,
+		id:       utils.NewUUIDV4(),
 		metadata: metadata,
 		conn:     N.NewBufferedConn(conn),
 	}
@@ -36,6 +35,6 @@ func (c *ConnContext) Metadata() *C.Metadata {
 }
 
 // Conn implement C.ConnContext Conn
-func (c *ConnContext) Conn() net.Conn {
+func (c *ConnContext) Conn() *N.BufferedConn {
 	return c.conn
 }

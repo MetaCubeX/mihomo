@@ -1,13 +1,36 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/netip"
+	"os"
 	"strings"
+	"time"
 
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/common/structure"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/common/structure"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
 )
+
+func downloadForBytes(url string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {"mihomo"}}, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
+}
+
+func saveFile(bytes []byte, path string) error {
+	return os.WriteFile(path, bytes, 0o644)
+}
 
 func trimArr(arr []string) (r []string) {
 	for _, e := range arr {
@@ -149,20 +172,11 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 }
 
 func verifyIP6() bool {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return false
-	}
-	for _, addr := range addrs {
-		ipNet, isIpNet := addr.(*net.IPNet)
-		if isIpNet && !ipNet.IP.IsLoopback() {
-			if ipNet.IP.To16() != nil {
-				s := ipNet.IP.String()
-				for i := 0; i < len(s); i++ {
-					switch s[i] {
-					case ':':
-						return true
-					}
+	if iAddrs, err := net.InterfaceAddrs(); err == nil {
+		for _, addr := range iAddrs {
+			if prefix, err := netip.ParsePrefix(addr.String()); err == nil {
+				if addr := prefix.Addr().Unmap(); addr.Is6() && addr.IsGlobalUnicast() {
+					return true
 				}
 			}
 		}

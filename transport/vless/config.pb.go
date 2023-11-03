@@ -108,7 +108,7 @@ func file_transport_vless_config_proto_rawDescGZIP() []byte {
 
 var file_transport_vless_config_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_transport_vless_config_proto_goTypes = []interface{}{
-	(*Addons)(nil), // 0: clash.transport.vless.Addons
+	(*Addons)(nil), // 0: mihomo.transport.vless.Addons
 }
 var file_transport_vless_config_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type

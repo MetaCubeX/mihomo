@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
-func newClient(source net.Addr, in chan<- C.ConnContext, additions ...inbound.Addition) *http.Client {
+func newClient(srcConn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			// from http.DefaultTransport
@@ -32,7 +32,7 @@ func newClient(source net.Addr, in chan<- C.ConnContext, additions ...inbound.Ad
 
 				left, right := net.Pipe()
 
-				in <- inbound.NewHTTP(dstAddr, source, right, additions...)
+				go tunnel.HandleTCPConn(inbound.NewHTTP(dstAddr, srcConn, right, additions...))
 
 				return left, nil
 			},

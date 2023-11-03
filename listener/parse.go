@@ -3,9 +3,9 @@ package listener
 import (
 	"fmt"
 
-	"github.com/Dreamacro/clash/common/structure"
-	C "github.com/Dreamacro/clash/constant"
-	IN "github.com/Dreamacro/clash/listener/inbound"
+	"github.com/metacubex/mihomo/common/structure"
+	C "github.com/metacubex/mihomo/constant"
+	IN "github.com/metacubex/mihomo/listener/inbound"
 )
 
 func ParseListener(mapping map[string]any) (C.InboundListener, error) {
@@ -73,7 +73,7 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 		}
 		listener, err = IN.NewTun(tunOption)
 	case "shadowsocks":
-		shadowsocksOption := &IN.ShadowSocksOption{}
+		shadowsocksOption := &IN.ShadowSocksOption{UDP: true}
 		err = decoder.Decode(mapping, shadowsocksOption)
 		if err != nil {
 			return nil, err
@@ -86,6 +86,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewVmess(vmessOption)
+	case "hysteria2":
+		hysteria2Option := &IN.Hysteria2Option{}
+		err = decoder.Decode(mapping, hysteria2Option)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewHysteria2(hysteria2Option)
 	case "tuic":
 		tuicOption := &IN.TuicOption{
 			MaxIdleTime:           15000,
