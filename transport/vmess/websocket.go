@@ -376,6 +376,10 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		}
 		request.Header.Set("Connection", "Upgrade")
 		request.Header.Set("Upgrade", "websocket")
+		if host := request.Header.Get("Host"); host != "" {
+			request.Header.Del("Host")
+			request.Host = host
+		}
 		err = request.Write(conn)
 		if err != nil {
 			return nil, err
@@ -415,16 +419,16 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 	if secProtocol := headers.Get("Sec-WebSocket-Protocol"); len(secProtocol) > 0 {
 		// gobwas/ws will set "Sec-Websocket-Protocol" according dialer.Protocols
 		// to avoid send repeatedly don't set it to headers
-		headers.Del("Sec-WebSocket-Protocol")
 		dialer.Protocols = []string{secProtocol}
 	}
+	headers.Del("Sec-WebSocket-Protocol")
 
 	// gobwas/ws send "Host" directly in Upgrade() by `httpWriteHeader(bw, headerHost, u.Host)`
 	// if headers has "Host" will send repeatedly
 	if host := headers.Get("Host"); host != "" {
-		headers.Del("Host")
 		uri.Host = host
 	}
+	headers.Del("Host")
 
 	dialer.Header = ws.HandshakeHeaderHTTP(headers)
 
