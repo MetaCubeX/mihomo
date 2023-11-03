@@ -16,7 +16,7 @@ skip-auth-prefixes: # 设置跳过验证的IP段
 
 #  find-process-mode has 3 values:always, strict, off
 #  - always, 开启，强制匹配所有进程
-#  - strict, 默认，由 clash 判断是否开启
+#  - strict, 默认，由 mihomo 判断是否开启
 #  - off, 不匹配进程，推荐在路由器上使用此模式
 find-process-mode: strict
 
@@ -74,11 +74,11 @@ experimental:
 
 # 类似于 /etc/hosts, 仅支持配置单个 IP
 hosts:
-# '*.clash.dev': 127.0.0.1
+# '*.mihomo.dev': 127.0.0.1
 # '.dev': 127.0.0.1
-# 'alpha.clash.dev': '::1'
+# 'alpha.mihomo.dev': '::1'
 # test.com: [1.1.1.1, 2.2.2.2]
-# clash.lan: clash # clash 为特别字段，将加入本地所有网卡的地址
+# mihomo.lan: mihomo # mihomo 为特别字段，将加入本地所有网卡的地址
 # baidu.com: google.com # 只允许配置一个别名
 
 profile: # 存储 select 选择记录
@@ -754,7 +754,7 @@ proxies: # socks5
 proxy-groups:
   # 代理链，目前relay可以支持udp的只有vmess/vless/trojan/ss/ssr/tuic
   # wireguard目前不支持在relay中使用，请使用proxy中的dialer-proxy配置项
-  # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
+  # Traffic: mihomo <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
   - name: "relay"
     type: relay
     proxies:
@@ -823,13 +823,13 @@ proxy-groups:
       - Proxy
       - DIRECT
 
-# Clash 格式的节点或支持 *ray 的分享格式
+# Mihomo 格式的节点或支持 *ray 的分享格式
 proxy-providers:
   provider1:
     type: http # http 的 path 可空置,默认储存路径为 homedir的proxies文件夹,文件名为url的md5
     url: "url"
     interval: 3600
-    path: ./provider1.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
+    path: ./provider1.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
     health-check:
       enable: true
       interval: 600
@@ -846,7 +846,7 @@ rule-providers:
   rule1:
     behavior: classical # domain ipcidr
     interval: 259200
-    path: /path/to/save/file.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
+    path: /path/to/save/file.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
     type: http # http 的 path 可空置,默认储存路径为 homedir的rules文件夹,文件名为url的md5
     url: "url"
   rule2:

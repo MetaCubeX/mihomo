@@ -1,9 +1,9 @@
 package inbound
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/http"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/http"
+	"github.com/metacubex/mihomo/log"
 )
 
 type HTTPOption struct {

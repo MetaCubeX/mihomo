@@ -13,8 +13,8 @@ Please verify that you've followed these steps
 "
       options:
         - label: "
-确保你使用的是**本仓库**最新的的 clash 或 clash Alpha 版本
-Ensure you are using the latest version of Clash or Clash Premium from **this repository**.
+确保你使用的是**本仓库**最新的的 mihomo 或 mihomo Alpha 版本
+Ensure you are using the latest version of Mihomo or Mihomo Alpha from **this repository**.
 "
           required: true
         - label: "
@@ -38,14 +38,14 @@ I have read the [documentation](https://wiki.metacubex.one/) and was unable to s
 "
           required: true
         - label: "
-这是 Clash 核心的问题，并非我所使用的 Clash 衍生版本（如 OpenClash、KoolClash 等）的特定问题
-This is an issue of the Clash core *per se*, not to the derivatives of Clash, like OpenClash or KoolClash.
+这是 Mihomo 核心的问题，并非我所使用的 Mihomo 衍生版本（如 OpenMihomo、KoolMihomo 等）的特定问题
+This is an issue of the Mihomo core *per se*, not to the derivatives of Mihomo, like OpenMihomo or KoolMihomo.
 "
           required: true
   - type: input
     attributes:
-      label: Clash version
-      description: "use `clash -v`"
+      label: Mihomo version
+      description: "use `mihomo -v`"
     validations:
       required: true
   - type: dropdown
@@ -61,20 +61,20 @@ This is an issue of the Clash core *per se*, not to the derivatives of Clash, li
   - type: textarea
     attributes:
       render: yaml
-      label: "Clash config"
+      label: "Mihomo config"
       description: "
-在下方附上 Clash core 配置文件，请确保配置文件中没有敏感信息（比如：服务器地址，密码，端口等）
-Paste the Clash core configuration file below, please make sure that there is no sensitive information in the configuration file (e.g., server address/url, password, port)
+在下方附上 Mihomo core 配置文件，请确保配置文件中没有敏感信息（比如：服务器地址，密码，端口等）
+Paste the Mihomo core configuration file below, please make sure that there is no sensitive information in the configuration file (e.g., server address/url, password, port)
 "
     validations:
       required: true
   - type: textarea
     attributes:
       render: shell
-      label: Clash log
+      label: Mihomo log
       description: "
-在下方附上 Clash Core 的日志，log level 使用 DEBUG
-Paste the Clash core log below with the log level set to `DEBUG`.
+在下方附上 Mihomo Core 的日志，log level 使用 DEBUG
+Paste the Mihomo core log below with the log level set to `DEBUG`.
 "
   - type: textarea
     attributes:

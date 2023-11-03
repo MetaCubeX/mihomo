@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/textproto"
 
-	"github.com/Dreamacro/clash/common/util"
+	"github.com/metacubex/mihomo/common/util"
 
 	"github.com/zhangyunhao116/fastrand"
 )

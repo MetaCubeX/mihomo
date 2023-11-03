@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/cache"
+	"github.com/metacubex/mihomo/common/cache"
 
 	"github.com/metacubex/quic-go"
 )

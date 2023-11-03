@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"net"
 
-	"github.com/Dreamacro/clash/common/buf"
+	"github.com/metacubex/mihomo/common/buf"
 )
 
 var _ ExtendedConn = (*BufferedConn)(nil)

@@ -13,31 +13,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/adapter/provider"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/auth"
-	"github.com/Dreamacro/clash/component/fakeip"
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/geodata/router"
-	P "github.com/Dreamacro/clash/component/process"
-	"github.com/Dreamacro/clash/component/resolver"
-	SNIFF "github.com/Dreamacro/clash/component/sniffer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	providerTypes "github.com/Dreamacro/clash/constant/provider"
-	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/dns"
-	L "github.com/Dreamacro/clash/listener"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rules"
-	RP "github.com/Dreamacro/clash/rules/provider"
-	T "github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/adapter/provider"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/auth"
+	"github.com/metacubex/mihomo/component/fakeip"
+	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/geodata/router"
+	P "github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/component/resolver"
+	SNIFF "github.com/metacubex/mihomo/component/sniffer"
+	tlsC "github.com/metacubex/mihomo/component/tls"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	providerTypes "github.com/metacubex/mihomo/constant/provider"
+	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
+	"github.com/metacubex/mihomo/dns"
+	L "github.com/metacubex/mihomo/listener"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/log"
+	R "github.com/metacubex/mihomo/rules"
+	RP "github.com/metacubex/mihomo/rules/provider"
+	T "github.com/metacubex/mihomo/tunnel"
 
 	"gopkg.in/yaml.v3"
 )
@@ -162,7 +162,7 @@ type Experimental struct {
 	QUICGoDisableECN bool     `yaml:"quic-go-disable-ecn"`
 }
 
-// Config is clash config manager
+// Config is mihomo config manager
 type Config struct {
 	General       *General
 	IPTables      *IPTables
@@ -381,7 +381,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:      []map[string]any{},
 		TCPConcurrent:   false,
 		FindProcessMode: P.FindProcessStrict,
-		GlobalUA:        "clash.meta",
+		GlobalUA:        "mihomo",
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -917,9 +917,9 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 
 	if len(cfg.Hosts) != 0 {
 		for domain, anyValue := range cfg.Hosts {
-			if str, ok := anyValue.(string); ok && str == "clash" {
+			if str, ok := anyValue.(string); ok && str == "mihomo" {
 				if addrs, err := net.InterfaceAddrs(); err != nil {
-					log.Errorln("insert clash to host error: %s", err)
+					log.Errorln("insert mihomo to host error: %s", err)
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {

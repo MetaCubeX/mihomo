@@ -3,14 +3,14 @@ package constant
 import (
 	"net/netip"
 
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 const (
-	BpfFSPath = "/sys/fs/bpf/clash"
+	BpfFSPath = "/sys/fs/bpf/mihomo"
 
-	TcpAutoRedirPort = 't'<<8 | 'r'<<0
-	ClashTrafficMark = 'c'<<24 | 'l'<<16 | 't'<<8 | 'm'<<0
+	TcpAutoRedirPort  = 't'<<8 | 'r'<<0
+	MihomoTrafficMark = 'c'<<24 | 'l'<<16 | 't'<<8 | 'm'<<0
 )
 
 type EBpf interface {

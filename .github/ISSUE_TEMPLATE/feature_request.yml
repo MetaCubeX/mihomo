@@ -25,7 +25,7 @@ I have read the [documentation](https://wiki.metacubex.one/) and was unable to s
   - type: textarea
     attributes:
       label: Description
-      description: 请详细、清晰地表达你要提出的论述，例如这个问题如何影响到你？你想实现什么功能？目前 Clash Core 的行为是什麽？
+      description: 请详细、清晰地表达你要提出的论述，例如这个问题如何影响到你？你想实现什么功能？目前 Mihomo Core 的行为是什麽？
     validations:
       required: true
   - type: textarea

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/ca"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/component/ca"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/quic-go"
 
 	D "github.com/miekg/dns"

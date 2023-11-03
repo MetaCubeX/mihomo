@@ -1,7 +1,7 @@
 package profile
 
 import (
-	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/metacubex/mihomo/common/atomic"
 )
 
 // StoreSelected is a global switch for storing selected proxy to cache

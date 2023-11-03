@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/transport/hysteria/obfs"
-	"github.com/Dreamacro/clash/transport/hysteria/pmtud_fix"
-	"github.com/Dreamacro/clash/transport/hysteria/transport"
-	"github.com/Dreamacro/clash/transport/hysteria/utils"
+	"github.com/metacubex/mihomo/transport/hysteria/obfs"
+	"github.com/metacubex/mihomo/transport/hysteria/pmtud_fix"
+	"github.com/metacubex/mihomo/transport/hysteria/transport"
+	"github.com/metacubex/mihomo/transport/hysteria/utils"
 
 	"github.com/lunixbochs/struc"
 	"github.com/metacubex/quic-go"

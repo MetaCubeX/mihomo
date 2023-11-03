@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/component/ca"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/inner"
+	"github.com/metacubex/mihomo/component/ca"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/inner"
 )
 
 func HttpRequest(ctx context.Context, url, method string, header map[string][]string, body io.Reader) (*http.Response, error) {
