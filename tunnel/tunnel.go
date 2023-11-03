@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -47,6 +46,8 @@ var (
 	findProcessMode P.FindProcessMode
 
 	fakeIPRange netip.Prefix
+
+	procesCache string
 )
 
 type tunnel struct{}
@@ -593,8 +594,8 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
 	var (
-		resolved             bool
-		attemptProcessLookup = true
+		resolved     bool
+		processFound bool
 	)
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
@@ -618,15 +619,17 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}()
 		}
 
-		if attemptProcessLookup && !findProcessMode.Off() && (findProcessMode.Always() || rule.ShouldFindProcess()) {
-			attemptProcessLookup = false
-			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
+		if !findProcessMode.Off() && !processFound && (findProcessMode.Always() || rule.ShouldFindProcess()) {
+			pkg, err := P.FindPackageName(metadata)
 			if err != nil {
 				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
 			} else {
-				metadata.Process = filepath.Base(path)
-				metadata.ProcessPath = path
-				metadata.Uid = uid
+				metadata.Process = pkg
+				processFound = true
+				if procesCache != metadata.Process {
+					log.Debugln("[Process] %s from process %s", metadata.String(), metadata.Process)
+				}
+				procesCache = metadata.Process
 			}
 		}
 
