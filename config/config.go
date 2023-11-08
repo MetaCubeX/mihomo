@@ -114,7 +114,7 @@ type DNS struct {
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[resolver.HostValue]
-	NameServerPolicy      map[string][]dns.NameServer
+	NameServerPolicy      utils.StringMapSlice[[]dns.NameServer]
 	ProxyServerNameserver []dns.NameServer
 }
 
@@ -193,21 +193,21 @@ type RawNTP struct {
 }
 
 type RawDNS struct {
-	Enable                bool              `yaml:"enable"`
-	PreferH3              bool              `yaml:"prefer-h3"`
-	IPv6                  bool              `yaml:"ipv6"`
-	IPv6Timeout           uint              `yaml:"ipv6-timeout"`
-	UseHosts              bool              `yaml:"use-hosts"`
-	NameServer            []string          `yaml:"nameserver"`
-	Fallback              []string          `yaml:"fallback"`
-	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter"`
-	Listen                string            `yaml:"listen"`
-	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode"`
-	FakeIPRange           string            `yaml:"fake-ip-range"`
-	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
-	DefaultNameserver     []string          `yaml:"default-nameserver"`
-	NameServerPolicy      map[string]any    `yaml:"nameserver-policy"`
-	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
+	Enable                bool                      `yaml:"enable"`
+	PreferH3              bool                      `yaml:"prefer-h3"`
+	IPv6                  bool                      `yaml:"ipv6"`
+	IPv6Timeout           uint                      `yaml:"ipv6-timeout"`
+	UseHosts              bool                      `yaml:"use-hosts"`
+	NameServer            []string                  `yaml:"nameserver"`
+	Fallback              []string                  `yaml:"fallback"`
+	FallbackFilter        RawFallbackFilter         `yaml:"fallback-filter"`
+	Listen                string                    `yaml:"listen"`
+	EnhancedMode          C.DNSMode                 `yaml:"enhanced-mode"`
+	FakeIPRange           string                    `yaml:"fake-ip-range"`
+	FakeIPFilter          []string                  `yaml:"fake-ip-filter"`
+	DefaultNameserver     []string                  `yaml:"default-nameserver"`
+	NameServerPolicy      utils.StringMapSlice[any] `yaml:"nameserver-policy"`
+	ProxyServerNameserver []string                  `yaml:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
@@ -1085,12 +1085,13 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (map[string][]dns.NameServer, error) {
-	policy := map[string][]dns.NameServer{}
-	updatedPolicy := make(map[string]interface{})
+func parseNameServerPolicy(nsPolicy utils.StringMapSlice[any], ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (utils.StringMapSlice[[]dns.NameServer], error) {
+	policy := utils.StringMapSlice[[]dns.NameServer]{}
+	updatedPolicy := utils.StringMapSlice[any]{}
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
-	for k, v := range nsPolicy {
+	for _, p := range nsPolicy {
+		k, v := p.Extract()
 		if strings.Contains(k, ",") {
 			if strings.Contains(k, "geosite:") {
 				subkeys := strings.Split(k, ":")
@@ -1098,7 +1099,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
-					updatedPolicy[newKey] = v
+					updatedPolicy.Add(newKey, v)
 				}
 			} else if strings.Contains(k, "rule-set:") {
 				subkeys := strings.Split(k, ":")
@@ -1106,20 +1107,21 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "rule-set:" + subkey
-					updatedPolicy[newKey] = v
+					updatedPolicy.Add(newKey, v)
 				}
 			} else if re.MatchString(k) {
 				subkeys := strings.Split(k, ",")
 				for _, subkey := range subkeys {
-					updatedPolicy[subkey] = v
+					updatedPolicy.Add(subkey, v)
 				}
 			}
 		} else {
-			updatedPolicy[k] = v
+			updatedPolicy.Add(k, v)
 		}
 	}
 
-	for domain, server := range updatedPolicy {
+	for _, p := range updatedPolicy {
+		domain, server := p.Extract()
 		servers, err := utils.ToStringSlice(server)
 		if err != nil {
 			return nil, err
@@ -1144,7 +1146,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				}
 			}
 		}
-		policy[domain] = nameservers
+		policy.Add(domain, nameservers)
 	}
 
 	return policy, nil

@@ -1,30 +1,50 @@
 package dns
 
-type Policy struct {
-	data []dnsClient
+import (
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/provider"
+)
+
+type dnsPolicy interface {
+	Match(domain string) []dnsClient
 }
 
-func (p *Policy) GetData() []dnsClient {
-	return p.data
+type domainTriePolicy struct {
+	*trie.DomainTrie[[]dnsClient]
 }
 
-func (p *Policy) Compare(p2 *Policy) int {
-	if p2 == nil {
-		return 1
+func (p domainTriePolicy) Match(domain string) []dnsClient {
+	record := p.DomainTrie.Search(domain)
+	if record != nil {
+		return record.Data()
 	}
-	l1 := len(p.data)
-	l2 := len(p2.data)
-	if l1 == l2 {
-		return 0
-	}
-	if l1 > l2 {
-		return 1
-	}
-	return -1
+	return nil
 }
 
-func NewPolicy(data []dnsClient) *Policy {
-	return &Policy{
-		data: data,
+type geositePolicy struct {
+	matcher    fallbackDomainFilter
+	inverse    bool
+	dnsClients []dnsClient
+}
+
+func (p geositePolicy) Match(domain string) []dnsClient {
+	matched := p.matcher.Match(domain)
+	if matched != p.inverse {
+		return p.dnsClients
 	}
+	return nil
+}
+
+type domainSetPolicy struct {
+	domainSetProvider provider.RuleProvider
+	dnsClients        []dnsClient
+}
+
+func (p domainSetPolicy) Match(domain string) []dnsClient {
+	metadata := &C.Metadata{Host: domain}
+	if ok := p.domainSetProvider.Match(metadata); ok {
+		return p.dnsClients
+	}
+	return nil
 }
