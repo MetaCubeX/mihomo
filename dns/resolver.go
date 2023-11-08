@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -31,17 +32,6 @@ type result struct {
 	Error error
 }
 
-type geositePolicyRecord struct {
-	matcher          fallbackDomainFilter
-	policy           *Policy
-	inversedMatching bool
-}
-
-type domainSetPolicyRecord struct {
-	domainSetProvider provider.RuleProvider
-	policy            *Policy
-}
-
 type Resolver struct {
 	ipv6                  bool
 	ipv6Timeout           time.Duration
@@ -52,9 +42,7 @@ type Resolver struct {
 	fallbackIPFilters     []fallbackIPFilter
 	group                 singleflight.Group
 	lruCache              *cache.LruCache[string, *D.Msg]
-	policy                *trie.DomainTrie[*Policy]
-	domainSetPolicy       []domainSetPolicyRecord
-	geositePolicy         []geositePolicyRecord
+	policy                []dnsPolicy
 	proxyServer           []dnsClient
 }
 
@@ -258,22 +246,9 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 		return nil
 	}
 
-	record := r.policy.Search(domain)
-	if record != nil {
-		p := record.Data()
-		return p.GetData()
-	}
-
-	for _, geositeRecord := range r.geositePolicy {
-		matched := geositeRecord.matcher.Match(domain)
-		if matched != geositeRecord.inversedMatching {
-			return geositeRecord.policy.GetData()
-		}
-	}
-	metadata := &C.Metadata{Host: domain}
-	for _, domainSetRecord := range r.domainSetPolicy {
-		if ok := domainSetRecord.domainSetProvider.Match(metadata); ok {
-			return domainSetRecord.policy.GetData()
+	for _, policy := range r.policy {
+		if dnsClients := policy.Match(domain); len(dnsClients) > 0 {
+			return dnsClients
 		}
 	}
 	return nil
@@ -404,18 +379,17 @@ type FallbackFilter struct {
 }
 
 type Config struct {
-	Main, Fallback  []NameServer
-	Default         []NameServer
-	ProxyServer     []NameServer
-	IPv6            bool
-	IPv6Timeout     uint
-	EnhancedMode    C.DNSMode
-	FallbackFilter  FallbackFilter
-	Pool            *fakeip.Pool
-	Hosts           *trie.DomainTrie[resolver.HostValue]
-	Policy          map[string][]NameServer
-	DomainSetPolicy map[provider.RuleProvider][]NameServer
-	GeositePolicy   map[router.DomainMatcher][]NameServer
+	Main, Fallback []NameServer
+	Default        []NameServer
+	ProxyServer    []NameServer
+	IPv6           bool
+	IPv6Timeout    uint
+	EnhancedMode   C.DNSMode
+	FallbackFilter FallbackFilter
+	Pool           *fakeip.Pool
+	Hosts          *trie.DomainTrie[resolver.HostValue]
+	Policy         utils.StringMapSlice[[]NameServer]
+	RuleProviders  map[string]provider.RuleProvider
 }
 
 func NewResolver(config Config) *Resolver {
@@ -442,38 +416,59 @@ func NewResolver(config Config) *Resolver {
 	}
 
 	if len(config.Policy) != 0 {
-		r.policy = trie.New[*Policy]()
-		for domain, nameserver := range config.Policy {
-			if strings.HasPrefix(strings.ToLower(domain), "geosite:") {
-				groupname := domain[8:]
-				inverse := false
-				if strings.HasPrefix(groupname, "!") {
-					inverse = true
-					groupname = groupname[1:]
-				}
-				log.Debugln("adding geosite policy: %s inversed %t", groupname, inverse)
-				matcher, err := NewGeoSite(groupname)
-				if err != nil {
-					continue
-				}
-				r.geositePolicy = append(r.geositePolicy, geositePolicyRecord{
-					matcher:          matcher,
-					policy:           NewPolicy(transform(nameserver, defaultResolver)),
-					inversedMatching: inverse,
-				})
-			} else {
-				_ = r.policy.Insert(domain, NewPolicy(transform(nameserver, defaultResolver)))
+		r.policy = make([]dnsPolicy, 0)
+
+		var triePolicy *trie.DomainTrie[[]dnsClient]
+		insertTriePolicy := func() {
+			if triePolicy != nil {
+				triePolicy.Optimize()
+				r.policy = append(r.policy, domainTriePolicy{triePolicy})
+				triePolicy = nil
 			}
 		}
-		r.policy.Optimize()
-	}
-	if len(config.DomainSetPolicy) > 0 {
-		for p, n := range config.DomainSetPolicy {
-			r.domainSetPolicy = append(r.domainSetPolicy, domainSetPolicyRecord{
-				domainSetProvider: p,
-				policy:            NewPolicy(transform(n, defaultResolver)),
-			})
+		for _, p := range config.Policy {
+			domain, nameserver := p.Extract()
+			domain = strings.ToLower(domain)
+
+			if temp := strings.Split(domain, ":"); len(temp) == 2 {
+				prefix := temp[0]
+				key := temp[1]
+				switch strings.ToLower(prefix) {
+				case "rule-set":
+					if p, ok := config.RuleProviders[key]; ok {
+						insertTriePolicy()
+						r.policy = append(r.policy, domainSetPolicy{
+							domainSetProvider: p,
+							dnsClients:        transform(nameserver, defaultResolver),
+						})
+						continue
+					}
+				case "geosite":
+					inverse := false
+					if strings.HasPrefix(key, "!") {
+						inverse = true
+						key = key[1:]
+					}
+					log.Debugln("adding geosite policy: %s inversed %t", key, inverse)
+					matcher, err := NewGeoSite(key)
+					if err != nil {
+						continue
+					}
+					insertTriePolicy()
+					r.policy = append(r.policy, geositePolicy{
+						matcher:    matcher,
+						inverse:    inverse,
+						dnsClients: transform(nameserver, defaultResolver),
+					})
+					continue
+				}
+			}
+			if triePolicy == nil {
+				triePolicy = trie.New[[]dnsClient]()
+			}
+			_ = triePolicy.Insert(domain, transform(nameserver, defaultResolver))
 		}
+		insertTriePolicy()
 	}
 
 	fallbackIPFilters := []fallbackIPFilter{}
@@ -508,7 +503,6 @@ func NewProxyServerHostResolver(old *Resolver) *Resolver {
 		main:        old.proxyServer,
 		lruCache:    old.lruCache,
 		hosts:       old.hosts,
-		policy:      trie.New[*Policy](),
 		ipv6Timeout: old.ipv6Timeout,
 	}
 	return r

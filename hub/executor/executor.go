@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -208,25 +207,6 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 		dns.ReCreateServer("", nil, nil)
 		return
 	}
-	policy := make(map[string][]dns.NameServer)
-	domainSetPolicies := make(map[provider.RuleProvider][]dns.NameServer)
-	for key, nameservers := range c.NameServerPolicy {
-		temp := strings.Split(key, ":")
-		if len(temp) == 2 {
-			prefix := temp[0]
-			key := temp[1]
-			switch strings.ToLower(prefix) {
-			case "rule-set":
-				if p, ok := ruleProvider[key]; ok {
-					domainSetPolicies[p] = nameservers
-				}
-			case "geosite":
-				// TODO:
-			}
-		} else {
-			policy[key] = nameservers
-		}
-	}
 	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
@@ -242,10 +222,10 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 			Domain:    c.FallbackFilter.Domain,
 			GeoSite:   c.FallbackFilter.GeoSite,
 		},
-		Default:         c.DefaultNameserver,
-		Policy:          c.NameServerPolicy,
-		ProxyServer:     c.ProxyServerNameserver,
-		DomainSetPolicy: domainSetPolicies,
+		Default:       c.DefaultNameserver,
+		Policy:        c.NameServerPolicy,
+		ProxyServer:   c.ProxyServerNameserver,
+		RuleProviders: ruleProvider,
 	}
 
 	r := dns.NewResolver(cfg)
