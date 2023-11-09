@@ -6,8 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/generics/list"
-
+	list "github.com/bahlo/generic-list-go"
 	"github.com/samber/lo"
 )
 

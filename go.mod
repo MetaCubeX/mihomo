@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/3andne/restls-client-go v0.1.6
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
+	github.com/bahlo/generic-list-go v0.2.0
 	github.com/cilium/ebpf v0.12.0
 	github.com/coreos/go-iptables v0.7.0
 	github.com/dlclark/regexp2 v1.10.0
@@ -42,6 +43,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.9
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
+	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/automaxprocs v1.5.3
@@ -60,6 +62,7 @@ require (
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ericlagergren/aegis v0.0.0-20230312195928-b4ce538b56f9 // indirect
 	github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391 // indirect
@@ -78,6 +81,7 @@ require (
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/metacubex/gvisor v0.0.0-20231001104248-0f672c3fb8d8 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
