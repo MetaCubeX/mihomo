@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
   
 env:
-  REGISTRY: docker.io
+  REGISTRY: ghcr.io
 jobs:
   Build:
     permissions: write-all
@@ -342,24 +342,25 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_ACCOUNT }}/${{secrets.DOCKERHUB_REPO}}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+
       - name: Show files
         run: |
           ls .
           ls bin/
-      - name: Log into registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+
+      - name: login to ghcr.io
+        uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
@@ -367,8 +368,7 @@ jobs:
           platforms: |
             linux/386
             linux/amd64
-            linux/arm64/v8
+            linux/arm64
             linux/arm/v7
-          #            linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
