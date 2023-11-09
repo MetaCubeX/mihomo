@@ -84,9 +84,9 @@ func (c *BufferedConn) ReadCached() *buf.Buffer { // call in sing/common/bufio.C
 		length := c.r.Buffered()
 		b, _ := c.r.Peek(length)
 		_, _ = c.r.Discard(length)
-		c.r = nil // drop bufio.Reader to let gc can clean up its internal buf
 		return buf.As(b)
 	}
+	c.r = nil // drop bufio.Reader to let gc can clean up its internal buf
 	return nil
 }
 
