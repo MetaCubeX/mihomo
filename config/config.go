@@ -39,6 +39,7 @@ import (
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -114,7 +115,7 @@ type DNS struct {
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[resolver.HostValue]
-	NameServerPolicy      utils.StringMapSlice[[]dns.NameServer]
+	NameServerPolicy      *orderedmap.OrderedMap[string, []dns.NameServer]
 	ProxyServerNameserver []dns.NameServer
 }
 
@@ -193,21 +194,21 @@ type RawNTP struct {
 }
 
 type RawDNS struct {
-	Enable                bool                      `yaml:"enable"`
-	PreferH3              bool                      `yaml:"prefer-h3"`
-	IPv6                  bool                      `yaml:"ipv6"`
-	IPv6Timeout           uint                      `yaml:"ipv6-timeout"`
-	UseHosts              bool                      `yaml:"use-hosts"`
-	NameServer            []string                  `yaml:"nameserver"`
-	Fallback              []string                  `yaml:"fallback"`
-	FallbackFilter        RawFallbackFilter         `yaml:"fallback-filter"`
-	Listen                string                    `yaml:"listen"`
-	EnhancedMode          C.DNSMode                 `yaml:"enhanced-mode"`
-	FakeIPRange           string                    `yaml:"fake-ip-range"`
-	FakeIPFilter          []string                  `yaml:"fake-ip-filter"`
-	DefaultNameserver     []string                  `yaml:"default-nameserver"`
-	NameServerPolicy      utils.StringMapSlice[any] `yaml:"nameserver-policy"`
-	ProxyServerNameserver []string                  `yaml:"proxy-server-nameserver"`
+	Enable                bool                                `yaml:"enable"`
+	PreferH3              bool                                `yaml:"prefer-h3"`
+	IPv6                  bool                                `yaml:"ipv6"`
+	IPv6Timeout           uint                                `yaml:"ipv6-timeout"`
+	UseHosts              bool                                `yaml:"use-hosts"`
+	NameServer            []string                            `yaml:"nameserver"`
+	Fallback              []string                            `yaml:"fallback"`
+	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter"`
+	Listen                string                              `yaml:"listen"`
+	EnhancedMode          C.DNSMode                           `yaml:"enhanced-mode"`
+	FakeIPRange           string                              `yaml:"fake-ip-range"`
+	FakeIPFilter          []string                            `yaml:"fake-ip-filter"`
+	DefaultNameserver     []string                            `yaml:"default-nameserver"`
+	NameServerPolicy      *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy"`
+	ProxyServerNameserver []string                            `yaml:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
@@ -1085,13 +1086,13 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy utils.StringMapSlice[any], ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (utils.StringMapSlice[[]dns.NameServer], error) {
-	policy := utils.StringMapSlice[[]dns.NameServer]{}
-	updatedPolicy := utils.StringMapSlice[any]{}
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (*orderedmap.OrderedMap[string, []dns.NameServer], error) {
+	policy := orderedmap.New[string, []dns.NameServer]()
+	updatedPolicy := orderedmap.New[string, any]()
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
-	for _, p := range nsPolicy {
-		k, v := p.Extract()
+	for pair := nsPolicy.Oldest(); pair != nil; pair = pair.Next() {
+		k, v := pair.Key, pair.Value
 		if strings.Contains(k, ",") {
 			if strings.Contains(k, "geosite:") {
 				subkeys := strings.Split(k, ":")
@@ -1099,7 +1100,7 @@ func parseNameServerPolicy(nsPolicy utils.StringMapSlice[any], ruleProviders map
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
-					updatedPolicy.Add(newKey, v)
+					updatedPolicy.Store(newKey, v)
 				}
 			} else if strings.Contains(k, "rule-set:") {
 				subkeys := strings.Split(k, ":")
@@ -1107,21 +1108,21 @@ func parseNameServerPolicy(nsPolicy utils.StringMapSlice[any], ruleProviders map
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "rule-set:" + subkey
-					updatedPolicy.Add(newKey, v)
+					updatedPolicy.Store(newKey, v)
 				}
 			} else if re.MatchString(k) {
 				subkeys := strings.Split(k, ",")
 				for _, subkey := range subkeys {
-					updatedPolicy.Add(subkey, v)
+					updatedPolicy.Store(subkey, v)
 				}
 			}
 		} else {
-			updatedPolicy.Add(k, v)
+			updatedPolicy.Store(k, v)
 		}
 	}
 
-	for _, p := range updatedPolicy {
-		domain, server := p.Extract()
+	for pair := updatedPolicy.Oldest(); pair != nil; pair = pair.Next() {
+		domain, server := pair.Key, pair.Value
 		servers, err := utils.ToStringSlice(server)
 		if err != nil {
 			return nil, err
@@ -1146,7 +1147,7 @@ func parseNameServerPolicy(nsPolicy utils.StringMapSlice[any], ruleProviders map
 				}
 			}
 		}
-		policy.Add(domain, nameservers)
+		policy.Store(domain, nameservers)
 	}
 
 	return policy, nil

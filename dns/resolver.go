@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/cache"
-	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -19,6 +18,7 @@ import (
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/singleflight"
 )
@@ -406,7 +406,7 @@ type Config struct {
 	FallbackFilter FallbackFilter
 	Pool           *fakeip.Pool
 	Hosts          *trie.DomainTrie[resolver.HostValue]
-	Policy         utils.StringMapSlice[[]NameServer]
+	Policy         *orderedmap.OrderedMap[string, []NameServer]
 	RuleProviders  map[string]provider.RuleProvider
 }
 
@@ -460,7 +460,7 @@ func NewResolver(config Config) *Resolver {
 		r.proxyServer = cacheTransform(config.ProxyServer)
 	}
 
-	if len(config.Policy) != 0 {
+	if config.Policy.Len() != 0 {
 		r.policy = make([]dnsPolicy, 0)
 
 		var triePolicy *trie.DomainTrie[[]dnsClient]
@@ -472,8 +472,8 @@ func NewResolver(config Config) *Resolver {
 			}
 		}
 
-		for _, p := range config.Policy {
-			domain, nameserver := p.Extract()
+		for pair := config.Policy.Oldest(); pair != nil; pair = pair.Next() {
+			domain, nameserver := pair.Key, pair.Value
 			domain = strings.ToLower(domain)
 
 			if temp := strings.Split(domain, ":"); len(temp) == 2 {
