@@ -22,18 +22,19 @@ var (
 
 type GroupCommonOption struct {
 	outbound.BasicOption
-	Name           string   `group:"name"`
-	Type           string   `group:"type"`
-	Proxies        []string `group:"proxies,omitempty"`
-	Use            []string `group:"use,omitempty"`
-	URL            string   `group:"url,omitempty"`
-	Interval       int      `group:"interval,omitempty"`
-	Lazy           bool     `group:"lazy,omitempty"`
-	DisableUDP     bool     `group:"disable-udp,omitempty"`
-	Filter         string   `group:"filter,omitempty"`
-	ExcludeFilter  string   `group:"exclude-filter,omitempty"`
-	ExcludeType    string   `group:"exclude-type,omitempty"`
-	ExpectedStatus string   `group:"expected-status,omitempty"`
+	Name                string   `group:"name"`
+	Type                string   `group:"type"`
+	Proxies             []string `group:"proxies,omitempty"`
+	Use                 []string `group:"use,omitempty"`
+	URL                 string   `group:"url,omitempty"`
+	Interval            int      `group:"interval,omitempty"`
+	Lazy                bool     `group:"lazy,omitempty"`
+	DisableUDP          bool     `group:"disable-udp,omitempty"`
+	Filter              string   `group:"filter,omitempty"`
+	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
+	ExcludeType         string   `group:"exclude-type,omitempty"`
+	ExpectedStatus      string   `group:"expected-status,omitempty"`
+	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
@@ -54,7 +55,18 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 	providers := []types.ProxyProvider{}
 
-	if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
+	var GroupUse []string
+	visited := make(map[string]bool)
+	if groupOption.IncludeAllProviders {
+		for name := range provider.ProxyProviderName {
+			GroupUse = append(GroupUse, name)
+			visited[name] = true
+		}
+	} else {
+		GroupUse = groupOption.Use
+	}
+
+	if len(groupOption.Proxies) == 0 && len(GroupUse) == 0 {
 		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
@@ -107,8 +119,8 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		providersMap[groupName] = pd
 	}
 
-	if len(groupOption.Use) != 0 {
-		list, err := getProviders(providersMap, groupOption.Use)
+	if len(GroupUse) != 0 {
+		list, err := getProviders(providersMap, GroupUse)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
