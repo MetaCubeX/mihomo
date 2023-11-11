@@ -24,6 +24,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var ProxyProviderName = make(map[string]struct{})
+
 const (
 	ReservedName = "default"
 )
@@ -193,6 +195,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 
 	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
+	ProxyProviderName[name] = struct{}{}
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
 	return wrapper, nil
