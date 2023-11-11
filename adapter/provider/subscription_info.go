@@ -25,7 +25,11 @@ func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo, err error) {
 		case "total":
 			si.Total, err = strconv.ParseInt(value, 10, 64)
 		case "expire":
-			si.Expire, err = strconv.ParseInt(value, 10, 64)
+			if value == "" {
+				si.Expire = 0
+			} else {
+				si.Expire, err = strconv.ParseInt(value, 10, 64)
+			}
 		}
 		if err != nil {
 			return
