@@ -122,7 +122,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 		defer cancel()
 		resp, err := mihomoHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
-			http.MethodGet, http.Header{"User-Agent": {"mihomo"}}, nil)
+			http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 		if err != nil {
 			return
 		}

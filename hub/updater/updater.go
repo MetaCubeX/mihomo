@@ -17,6 +17,7 @@ import (
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/constant"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/klauspost/cpuid/v2"
@@ -231,7 +232,7 @@ const MaxPackageFileSize = 32 * 1024 * 1024
 func downloadPackageFile() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {"mihomo"}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
@@ -412,7 +413,7 @@ func copyFile(src, dst string) error {
 func getLatestVersion() (version string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {"mihomo"}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}
