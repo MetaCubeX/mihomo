@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/ntp"
-
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
@@ -35,6 +33,7 @@ import (
 	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/listener/tproxy"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/tunnel"
 )
 
@@ -310,7 +309,7 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 		go func() {
 			defer func() { <-ch; wg.Done() }()
 			loadProvider(proxyProvider)
-			if proxyProvider.VehicleType()==provider.Compatible{
+			if proxyProvider.VehicleType() == provider.Compatible {
 				go proxyProvider.HealthCheck()
 			}
 		}()

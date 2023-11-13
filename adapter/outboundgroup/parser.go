@@ -92,9 +92,6 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, errDuplicateProvider)
 		}
 
-		var url string
-		var interval uint
-
 		// select don't need health check
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
 			if groupOption.URL == "" {
@@ -104,12 +101,10 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			if groupOption.Interval == 0 {
 				groupOption.Interval = 300
 			}
-
-			url = groupOption.URL
-			interval = uint(groupOption.Interval)
 		}
 
-		hc := provider.NewHealthCheck(ps, url, interval, true, expectedStatus)
+		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), true, expectedStatus)
+
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
