@@ -59,7 +59,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 		f.UpdatedAt = &modTime
 		isLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
-			log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
+			log.Warnln("[Provider] %s not updated for %s, force update", f.Name(), time.Now().Sub(modTime))
 			forceUpdate = true
 		}
 	} else {
