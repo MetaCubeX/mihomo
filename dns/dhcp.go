@@ -1,3 +1,5 @@
+// +build !android
+
 package dns
 
 import (
