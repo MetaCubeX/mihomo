@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/common/sockopt"
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 
@@ -49,7 +50,9 @@ func (s *Server) SetHandler(handler handler) {
 }
 
 func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
-	UpdateIsolateHandler(resolver, mapper)
+	if features.Contains("cmfa") {
+		UpdateIsolateHandler(resolver, mapper)
+	}
 	
 	if addr == address && resolver != nil {
 		handler := NewHandler(resolver, mapper)

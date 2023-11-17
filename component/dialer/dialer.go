@@ -13,7 +13,6 @@ import (
 
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/constant/features"
-	"golang.org/x/exp/slices"
 )
 
 type dialFunc func(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error)
@@ -72,7 +71,7 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
-	if slices.Contains(features.TAGS, "cmfa") {
+	if features.Contains("cmfa") && DefaultSocketHook != nil{
 		return listenPacketHooked(ctx, network, address)
 	}
 	
@@ -120,7 +119,7 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
-	if slices.Contains(features.TAGS, "cmfa") {
+	if features.Contains("cmfa") && DefaultSocketHook != nil{
 		return dialContextHooked(ctx, network, destination, port)
 	}
 	

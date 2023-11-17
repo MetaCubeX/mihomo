@@ -1,4 +1,5 @@
 //go:build with_low_memory
+
 package features
 
 func init() {

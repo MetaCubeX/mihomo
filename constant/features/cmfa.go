@@ -1,4 +1,5 @@
 //go:build cmfa
+
 package features
 
 func init() {

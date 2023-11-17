@@ -36,7 +36,6 @@ import (
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/tunnel"
 	"github.com/metacubex/mihomo/constant/features"
-	"golang.org/x/exp/slices"
 )
 
 var mux sync.Mutex
@@ -172,7 +171,7 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	listener.ReCreateHTTP(general.Port, tunnel.Tunnel)
 	listener.ReCreateSocks(general.SocksPort, tunnel.Tunnel)
 	listener.ReCreateRedir(general.RedirPort, tunnel.Tunnel)
-	if !slices.Contains(features.TAGS, "cmfa") {
+	if !features.Contains("cmfa") {
 		listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tunnel.Tunnel)
 	}
 	listener.ReCreateTProxy(general.TProxyPort, tunnel.Tunnel)
