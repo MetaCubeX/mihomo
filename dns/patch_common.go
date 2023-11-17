@@ -1,4 +1,4 @@
-// +build !android
+// +build !cmfa
 
 package dns
 
