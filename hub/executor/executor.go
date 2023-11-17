@@ -25,6 +25,7 @@ import (
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/listener"
@@ -35,7 +36,6 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/tunnel"
-	"github.com/metacubex/mihomo/constant/features"
 )
 
 var mux sync.Mutex
@@ -171,7 +171,7 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	listener.ReCreateHTTP(general.Port, tunnel.Tunnel)
 	listener.ReCreateSocks(general.SocksPort, tunnel.Tunnel)
 	listener.ReCreateRedir(general.RedirPort, tunnel.Tunnel)
-	if !features.Contains("cmfa") {
+	if !features.CMFA {
 		listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tunnel.Tunnel)
 	}
 	listener.ReCreateTProxy(general.TProxyPort, tunnel.Tunnel)

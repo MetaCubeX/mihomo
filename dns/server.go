@@ -50,10 +50,10 @@ func (s *Server) SetHandler(handler handler) {
 }
 
 func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
-	if features.Contains("cmfa") {
+	if features.CMFA {
 		UpdateIsolateHandler(resolver, mapper)
 	}
-	
+
 	if addr == address && resolver != nil {
 		handler := NewHandler(resolver, mapper)
 		server.SetHandler(handler)
