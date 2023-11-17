@@ -621,7 +621,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 		if attemptProcessLookup && !findProcessMode.Off() && (findProcessMode.Always() || rule.ShouldFindProcess()) {
 			attemptProcessLookup = false
-			if !features.Contains("cmfa") {
+			if !features.CMFA {
 				// normal check for process
 				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 				if err != nil {

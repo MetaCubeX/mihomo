@@ -48,8 +48,8 @@ func main() {
 	if version {
 		fmt.Printf("Mihomo Meta %s %s %s with %s %s\n",
 			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
-		if len(features.TAGS) != 0 {
-			fmt.Printf("Use tags: %s\n", strings.Join(features.TAGS, ", "))
+		if tags := features.Tags(); len(tags) != 0 {
+			fmt.Printf("Use tags: %s\n", strings.Join(tags, ", "))
 		}
 
 		return

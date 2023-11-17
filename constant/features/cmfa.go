@@ -2,6 +2,4 @@
 
 package features
 
-func init() {
-	TAGS = append(TAGS, "cmfa")
-}
+const CMFA = true

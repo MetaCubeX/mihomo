@@ -1,4 +1,4 @@
-// +build !cmfa
+//go:build !(android && cmfa)
 
 package dialer
 

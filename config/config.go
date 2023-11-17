@@ -324,7 +324,7 @@ type RawConfig struct {
 	RawTLS        TLS                       `yaml:"tls"`
 	Listeners     []map[string]any          `yaml:"listeners"`
 
-	ClashForAndroid RawClashForAndroid 		`yaml:"clash-for-android" json:"clash-for-android"`
+	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
 
 type GeoXUrl struct {
@@ -554,7 +554,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.DNS = dnsCfg
 
 	err = parseTun(rawCfg.Tun, config.General)
-	if !features.Contains("cmfa") && err != nil {
+	if !features.CMFA && err != nil {
 		return nil, err
 	}
 

@@ -1,4 +1,4 @@
-// +build android,cmfa
+//go:build android && cmfa
 
 package outboundgroup
 

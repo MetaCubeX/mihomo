@@ -66,7 +66,7 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 				}
 				continue
 			}
-			if features.Contains("cmfa") {
+			if features.CMFA {
 				if t, ok := conn.(*net.TCPConn); ok {
 					t.SetKeepAlive(false)
 				}
