@@ -6,6 +6,8 @@ import (
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/common/cache"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	"golang.org/x/exp/slices"
 )
 
 type Listener struct {
@@ -64,6 +66,11 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 					break
 				}
 				continue
+			}
+			if slices.Contains(features.TAGS, "cmfa") {
+				if t, ok := conn.(*net.TCPConn); ok {
+					t.SetKeepAlive(false)
+				}
 			}
 			go HandleConn(conn, tunnel, c, additions...)
 		}
