@@ -1,0 +1,33 @@
+name: Trigger CMFA Update
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - ".github/ISSUE_TEMPLATE/**"
+    branches:
+      - Alpha
+    tags:
+      - "v*"
+  pull_request_target:
+    branches:
+      - Alpha
+      
+jobs:
+  # Send "core-updated" to MetaCubeX/MihomoForAndroid to trigger update-dependencies
+  trigger-CMFA-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tibdex/github-app-token@v1
+        id: generate-token
+        with:
+          app_id: ${{ secrets.MAINTAINER_APPID }}
+          private_key: ${{ secrets.MAINTAINER_APP_PRIVATE_KEY }}
+      
+      - name: Trigger update-dependencies
+        run: |
+          curl -X POST https://api.github.com/repos/MetaCubeX/MihomoForAndroid/dispatches \
+            -H "Accept: application/vnd.github.everest-preview+json" \
+            -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
+            -d '{"event_type": "core-updated"}'
