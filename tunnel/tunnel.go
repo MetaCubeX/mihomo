@@ -18,6 +18,7 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/sniffer"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/constant/provider"
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
@@ -620,13 +621,24 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 		if attemptProcessLookup && !findProcessMode.Off() && (findProcessMode.Always() || rule.ShouldFindProcess()) {
 			attemptProcessLookup = false
-			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
-			if err != nil {
-				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+			if !features.Contains("cmfa") {
+				// normal check for process
+				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
+				if err != nil {
+					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+				} else {
+					metadata.Process = filepath.Base(path)
+					metadata.ProcessPath = path
+					metadata.Uid = uid
+				}
 			} else {
-				metadata.Process = filepath.Base(path)
-				metadata.ProcessPath = path
-				metadata.Uid = uid
+				// check package names
+				pkg, err := P.FindPackageName(metadata)
+				if err != nil {
+					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+				} else {
+					metadata.Process = pkg
+				}
 			}
 		}
 
