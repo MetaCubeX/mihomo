@@ -47,6 +47,10 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		Type:      C.HYSTERIA2,
 		Additions: additions,
 	}
+	err = h.Initialize()
+	if err != nil {
+		return nil, err
+	}
 
 	sl = &Listener{false, config, nil, nil}
 

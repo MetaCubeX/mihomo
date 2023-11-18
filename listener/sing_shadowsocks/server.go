@@ -55,6 +55,10 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 		Type:      C.SHADOWSOCKS,
 		Additions: additions,
 	}
+	err = h.Initialize()
+	if err != nil {
+		return nil, err
+	}
 
 	sl = &Listener{false, config, nil, nil, nil}
 

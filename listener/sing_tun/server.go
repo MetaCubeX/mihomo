@@ -159,6 +159,10 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		},
 		DnsAdds: dnsAdds,
 	}
+	err = handler.Initialize()
+	if err != nil {
+		return nil, err
+	}
 	l = &Listener{
 		closed:  false,
 		options: options,
