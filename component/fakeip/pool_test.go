@@ -10,8 +10,8 @@ import (
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/trie"
 
+	"github.com/sagernet/bbolt"
 	"github.com/stretchr/testify/assert"
-	"go.etcd.io/bbolt"
 )
 
 func createPools(options Options) ([]*Pool, string, error) {
