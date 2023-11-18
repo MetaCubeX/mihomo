@@ -45,6 +45,10 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		Type:      C.VMESS,
 		Additions: additions,
 	}
+	err = h.Initialize()
+	if err != nil {
+		return nil, err
+	}
 
 	service := vmess.NewService[string](h, vmess.ServiceWithDisableHeaderProtection(), vmess.ServiceWithTimeFunc(ntp.Now))
 	err = service.UpdateUsers(

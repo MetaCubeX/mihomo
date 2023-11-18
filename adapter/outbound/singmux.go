@@ -10,6 +10,7 @@ import (
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	mux "github.com/sagernet/sing-mux"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -107,6 +108,7 @@ func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.P
 	singDialer := proxydialer.NewSingDialer(proxy, dialer.NewDialer(), option.Statistic)
 	client, err := mux.NewClient(mux.Options{
 		Dialer:         singDialer,
+		Logger:         log.SingLogger,
 		Protocol:       option.Protocol,
 		MaxConnections: option.MaxConnections,
 		MinStreams:     option.MinStreams,

@@ -31,7 +31,7 @@ type ListenerHandler struct {
 	Type       C.Type
 	Additions  []inbound.Addition
 	UDPTimeout time.Duration
-	MuxService *mux.Service
+	muxService *mux.Service
 }
 
 func UpstreamMetadata(metadata M.Metadata) M.Metadata {
@@ -49,8 +49,8 @@ func ConvertMetadata(metadata *C.Metadata) M.Metadata {
 	}
 }
 
-func (h *ListenerHandler) ConfigureSingMux() (err error) {
-	h.MuxService, err = mux.NewService(mux.ServiceOptions{
+func (h *ListenerHandler) Initialize() (err error) {
+	h.muxService, err = mux.NewService(mux.ServiceOptions{
 		NewStreamContext: func(ctx context.Context, conn net.Conn) context.Context {
 			return ctx
 		},
@@ -65,26 +65,20 @@ func (h *ListenerHandler) ConfigureSingMux() (err error) {
 
 func (h *ListenerHandler) IsSpecialFqdn(fqdn string) bool {
 	switch fqdn {
-	case mux.Destination.Fqdn:
-	case vmess.MuxDestination.Fqdn:
-	case uot.MagicAddress:
-	case uot.LegacyMagicAddress:
+	case mux.Destination.Fqdn,
+		vmess.MuxDestination.Fqdn,
+		uot.MagicAddress,
+		uot.LegacyMagicAddress:
+		return true
 	default:
 		return false
 	}
-	return true
 }
 
 func (h *ListenerHandler) ParseSpecialFqdn(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
 	switch metadata.Destination.Fqdn {
 	case mux.Destination.Fqdn:
-		if h.MuxService == nil {
-			err := h.ConfigureSingMux()
-			if err != nil {
-				return err
-			}
-		}
-		return h.MuxService.NewConnection(ctx, conn, UpstreamMetadata(metadata))
+		return h.muxService.NewConnection(ctx, conn, UpstreamMetadata(metadata))
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
 	case uot.MagicAddress:
