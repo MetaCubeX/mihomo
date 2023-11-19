@@ -390,7 +390,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:      []map[string]any{},
 		TCPConcurrent:   false,
 		FindProcessMode: P.FindProcessStrict,
-		GlobalUA:        "mihomo",
+		GlobalUA:        "clash.meta",
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
