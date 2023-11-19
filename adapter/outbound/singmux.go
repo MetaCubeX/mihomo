@@ -102,9 +102,9 @@ func closeSingMux(s *SingMux) {
 }
 
 func NewSingMux(option SingMuxOption, proxy C.ProxyAdapter, base ProxyBase) (C.ProxyAdapter, error) {
-	if !mux.BrutalAvailable && option.BrutalOpts.Enabled {
-		return nil, errors.New("TCP Brutal is only supported on Linux-based systems")
-	}
+	// TODO
+	// "TCP Brutal is only supported on Linux-based systems"
+
 	singDialer := proxydialer.NewSingDialer(proxy, dialer.NewDialer(), option.Statistic)
 	client, err := mux.NewClient(mux.Options{
 		Dialer:         singDialer,
