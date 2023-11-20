@@ -129,6 +129,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		conn2 = nil
 	}()
 	var buff *buf.Buffer
+	defer buff.Release()
 	newBuffer := func() *buf.Buffer {
 		buff = buf.NewPacket() // do not use stack buffer
 		return buff

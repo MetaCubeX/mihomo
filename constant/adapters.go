@@ -44,7 +44,7 @@ const (
 
 const (
 	DefaultTCPTimeout           = 5 * time.Second
-	DefaultDropTime             = 12 * DefaultTCPTimeout
+	DefaultDropTime             = 30 * time.Second
 	DefaultUDPTimeout           = DefaultTCPTimeout
 	DefaultTLSTimeout           = DefaultTCPTimeout
 	DefaultMaxHealthCheckUrlNum = 16
