@@ -23,9 +23,7 @@ type RejectOption struct {
 // DialContext implements C.ProxyAdapter
 func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
 	if r.drop {
-		c, _ := net.Pipe()
-		_ = c.SetDeadline(time.Now().Add(C.DefaultDropTime))
-		return NewConn(c, r), nil
+		return NewConn(dropConn{}, r), nil
 	}
 	return NewConn(nopConn{}, r), nil
 }
@@ -33,11 +31,7 @@ func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 // ListenPacketContext implements C.ProxyAdapter
 func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
 	if r.drop {
-		c, _ := net.Pipe()
-		_ = c.SetDeadline(time.Now().Add(C.DefaultDropTime))
-		pc := newDropPacketConnWrapper(c)
-		return newPacketConn(pc, r), nil
-
+		return newPacketConn(&dropPacketConn{}, r), nil
 	}
 	return newPacketConn(&nopPacketConn{}, r), nil
 }
@@ -105,8 +99,12 @@ var udpAddrIPv4Unspecified = &net.UDPAddr{IP: net.IPv4zero, Port: 0}
 
 type nopPacketConn struct{}
 
-func (npc nopPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) { return len(b), nil }
-func (npc nopPacketConn) ReadFrom(b []byte) (int, net.Addr, error)           { return 0, nil, io.EOF }
+func (npc nopPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+	return len(b), nil
+}
+func (npc nopPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	return 0, nil, io.EOF
+}
 func (npc nopPacketConn) WaitReadFrom() ([]byte, func(), net.Addr, error) {
 	return nil, nil, nil, io.EOF
 }
@@ -116,25 +114,37 @@ func (npc nopPacketConn) SetDeadline(time.Time) error      { return nil }
 func (npc nopPacketConn) SetReadDeadline(time.Time) error  { return nil }
 func (npc nopPacketConn) SetWriteDeadline(time.Time) error { return nil }
 
-type dropPacketConn struct {
-	conn net.Conn
-}
+type dropConn struct{}
 
-func newDropPacketConnWrapper(conn net.Conn) net.PacketConn {
-	return &dropPacketConn{conn}
+func (rw dropConn) Read(b []byte) (int, error) { return 0, io.EOF }
+func (rw dropConn) ReadBuffer(buffer *buf.Buffer) error {
+	time.Sleep(C.DefaultDropTime)
+	return io.EOF
 }
-func (dpc dropPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+func (rw dropConn) Write(b []byte) (int, error)          { return 0, io.EOF }
+func (rw dropConn) WriteBuffer(buffer *buf.Buffer) error { return io.EOF }
+func (rw dropConn) Close() error                         { return nil }
+func (rw dropConn) LocalAddr() net.Addr                  { return nil }
+func (rw dropConn) RemoteAddr() net.Addr                 { return nil }
+func (rw dropConn) SetDeadline(time.Time) error          { return nil }
+func (rw dropConn) SetReadDeadline(time.Time) error      { return nil }
+func (rw dropConn) SetWriteDeadline(time.Time) error     { return nil }
+
+type dropPacketConn struct{}
+
+func (npc dropPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+	time.Sleep(C.DefaultDropTime)
 	return len(b), nil
 }
-func (dpc dropPacketConn) ReadFrom(b []byte) (int, net.Addr, error) { return 0, nil, io.EOF }
-func (dpc dropPacketConn) WaitReadFrom() ([]byte, func(), net.Addr, error) {
+func (npc dropPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	time.Sleep(C.DefaultDropTime)
+	return 0, nil, io.EOF
+}
+func (npc dropPacketConn) WaitReadFrom() ([]byte, func(), net.Addr, error) {
 	return nil, nil, nil, io.EOF
 }
-func (dpc dropPacketConn) Close() error {
-	dpc.conn = nil
-	return nil
-}
-func (dpc dropPacketConn) LocalAddr() net.Addr              { return udpAddrIPv4Unspecified }
-func (dpc dropPacketConn) SetDeadline(time.Time) error      { return nil }
-func (dpc dropPacketConn) SetReadDeadline(time.Time) error  { return nil }
-func (dpc dropPacketConn) SetWriteDeadline(time.Time) error { return nil }
+func (npc dropPacketConn) Close() error                     { return nil }
+func (npc dropPacketConn) LocalAddr() net.Addr              { return udpAddrIPv4Unspecified }
+func (npc dropPacketConn) SetDeadline(time.Time) error      { return nil }
+func (npc dropPacketConn) SetReadDeadline(time.Time) error  { return nil }
+func (npc dropPacketConn) SetWriteDeadline(time.Time) error { return nil }
