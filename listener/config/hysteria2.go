@@ -1,6 +1,10 @@
 package config
 
-import "encoding/json"
+import (
+	"github.com/metacubex/mihomo/listener/sing"
+
+	"encoding/json"
+)
 
 type Hysteria2Server struct {
 	Enable                bool              `yaml:"enable" json:"enable"`
@@ -17,6 +21,7 @@ type Hysteria2Server struct {
 	IgnoreClientBandwidth bool              `yaml:"ignore-client-bandwidth" json:"ignore-client-bandwidth,omitempty"`
 	Masquerade            string            `yaml:"masquerade" json:"masquerade,omitempty"`
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
+	MuxOption             sing.MuxOption    `yaml:"mux-option" json:"mux-option,omitempty"`
 }
 
 func (h Hysteria2Server) String() string {

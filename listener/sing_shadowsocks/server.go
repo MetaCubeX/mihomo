@@ -50,12 +50,12 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 
 	udpTimeout := int64(sing.UDPTimeout.Seconds())
 
-	h := &sing.ListenerHandler{
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
 		Tunnel:    tunnel,
 		Type:      C.SHADOWSOCKS,
 		Additions: additions,
-	}
-	err = h.Initialize()
+		MuxOption: config.MuxOption,
+	})
 	if err != nil {
 		return nil, err
 	}
