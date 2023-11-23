@@ -40,12 +40,12 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			_listener = sl
 		}()
 	}
-	h := &sing.ListenerHandler{
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
 		Tunnel:    tunnel,
 		Type:      C.VMESS,
 		Additions: additions,
-	}
-	err = h.Initialize()
+		MuxOption: config.MuxOption,
+	})
 	if err != nil {
 		return nil, err
 	}

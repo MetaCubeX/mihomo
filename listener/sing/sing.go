@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/outbound"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -26,11 +27,27 @@ import (
 
 const UDPTimeout = 5 * time.Minute
 
-type ListenerHandler struct {
+type ListenerConfig struct {
 	Tunnel     C.Tunnel
 	Type       C.Type
 	Additions  []inbound.Addition
 	UDPTimeout time.Duration
+	MuxOption  MuxOption
+}
+
+type MuxOption struct {
+	Padding bool          `yaml:"padding" json:"padding,omitempty"`
+	Brutal  BrutalOptions `yaml:"brutal" json:"brutal,omitempty"`
+}
+
+type BrutalOptions struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Up      string `yaml:"up" json:"up,omitempty"`
+	Down    string `yaml:"down" json:"down,omitempty"`
+}
+
+type ListenerHandler struct {
+	ListenerConfig
 	muxService *mux.Service
 }
 
@@ -49,15 +66,19 @@ func ConvertMetadata(metadata *C.Metadata) M.Metadata {
 	}
 }
 
-func (h *ListenerHandler) Initialize() (err error) {
+func NewListenerHandler(lc ListenerConfig) (h *ListenerHandler, err error) {
+	h = &ListenerHandler{ListenerConfig: lc}
 	h.muxService, err = mux.NewService(mux.ServiceOptions{
 		NewStreamContext: func(ctx context.Context, conn net.Conn) context.Context {
 			return ctx
 		},
 		Logger:  log.SingLogger,
 		Handler: h,
-		Brutal:  mux.BrutalOptions{
-			// TODO: sing-mux tcp brutal inbound
+		Padding: lc.MuxOption.Padding,
+		Brutal: mux.BrutalOptions{
+			Enabled:    lc.MuxOption.Brutal.Enabled,
+			SendBPS:    outbound.StringToBps(lc.MuxOption.Brutal.Up),
+			ReceiveBPS: outbound.StringToBps(lc.MuxOption.Brutal.Down),
 		},
 	})
 	return

@@ -42,12 +42,12 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		}
 	}
 
-	h := &sing.ListenerHandler{
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
 		Tunnel:    tunnel,
 		Type:      C.HYSTERIA2,
 		Additions: additions,
-	}
-	err = h.Initialize()
+		MuxOption: config.MuxOption,
+	})
 	if err != nil {
 		return nil, err
 	}

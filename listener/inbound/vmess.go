@@ -13,6 +13,7 @@ type VmessOption struct {
 	WsPath      string      `inbound:"ws-path,omitempty"`
 	Certificate string      `inbound:"certificate,omitempty"`
 	PrivateKey  string      `inbound:"private-key,omitempty"`
+	MuxOption   MuxOption   `inbound:"mux-option,omitempty"`
 }
 
 type VmessUser struct {
@@ -55,6 +56,7 @@ func NewVmess(options *VmessOption) (*Vmess, error) {
 			WsPath:      options.WsPath,
 			Certificate: options.Certificate,
 			PrivateKey:  options.PrivateKey,
+			MuxOption:   options.MuxOption.Build(),
 		},
 	}, nil
 }
