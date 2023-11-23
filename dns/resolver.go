@@ -488,6 +488,8 @@ func NewResolver(config Config) *Resolver {
 							dnsClients:        cacheTransform(nameserver),
 						})
 						continue
+					} else {
+						log.Warnln("can't found ruleset policy: %s", key)
 					}
 				case "geosite":
 					inverse := false
@@ -498,6 +500,7 @@ func NewResolver(config Config) *Resolver {
 					log.Debugln("adding geosite policy: %s inversed %t", key, inverse)
 					matcher, err := NewGeoSite(key)
 					if err != nil {
+						log.Warnln("adding geosite policy %s error: %s", key)
 						continue
 					}
 					insertTriePolicy()
@@ -506,7 +509,7 @@ func NewResolver(config Config) *Resolver {
 						inverse:    inverse,
 						dnsClients: cacheTransform(nameserver),
 					})
-					continue
+					continue // skip triePolicy new
 				}
 			}
 			if triePolicy == nil {
