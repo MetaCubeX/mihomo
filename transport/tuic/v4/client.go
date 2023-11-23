@@ -22,7 +22,7 @@ import (
 	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/zhangyunhao116/fastrand"
 )
 
@@ -469,7 +469,7 @@ func NewClient(clientOption *ClientOption, udp bool, dialerRef C.Dialer) *Client
 		ClientOption: clientOption,
 		udp:          udp,
 		dialerRef:    dialerRef,
-		udpInputMap:  xsync.NewIntegerMapOf[uint32, net.Conn](),
+		udpInputMap:  xsync.NewMapOf[uint32, net.Conn](),
 	}
 	c := &Client{ci}
 	runtime.SetFinalizer(c, closeClient)

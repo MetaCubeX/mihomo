@@ -19,7 +19,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 var UnifiedDelay = atomic.NewBool(false)
@@ -316,7 +316,7 @@ func NewProxy(adapter C.ProxyAdapter) *Proxy {
 		history:      queue.New[C.DelayHistory](defaultHistoriesNum),
 		alive:        atomic.NewBool(true),
 		url:          "",
-		extra:        xsync.NewMapOf[*extraProxyState]()}
+		extra:        xsync.NewMapOf[string, *extraProxyState]()}
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {

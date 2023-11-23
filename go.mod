@@ -31,7 +31,7 @@ require (
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.12.0
-	github.com/puzpuzpuz/xsync/v2 v2.5.1
+	github.com/puzpuzpuz/xsync/v3 v3.0.2
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.2.18-0.20231108041402-4fbbd193203c

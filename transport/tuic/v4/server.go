@@ -17,7 +17,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type ServerOption struct {
@@ -34,7 +34,7 @@ func NewServerHandler(option *ServerOption, quicConn quic.EarlyConnection, uuid 
 		quicConn:     quicConn,
 		uuid:         uuid,
 		authCh:       make(chan struct{}),
-		udpInputMap:  xsync.NewIntegerMapOf[uint32, *atomic.Bool](),
+		udpInputMap:  xsync.NewMapOf[uint32, *atomic.Bool](),
 	}
 }
 
