@@ -11,8 +11,8 @@ func DefaultValue[T any]() T {
 }
 
 type TypedValue[T any] struct {
-	value atomic.Value
 	_     noCopy
+	value atomic.Value
 }
 
 func (t *TypedValue[T]) Load() T {
