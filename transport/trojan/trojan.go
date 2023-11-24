@@ -55,11 +55,12 @@ type Option struct {
 }
 
 type WebsocketOption struct {
-	Host             string
-	Port             string
-	Path             string
-	Headers          http.Header
-	V2rayHttpUpgrade bool
+	Host                     string
+	Port                     string
+	Path                     string
+	Headers                  http.Header
+	V2rayHttpUpgrade         bool
+	V2rayHttpUpgradeFastOpen bool
 }
 
 type Trojan struct {
@@ -129,14 +130,15 @@ func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptio
 	}
 
 	return vmess.StreamWebsocketConn(ctx, conn, &vmess.WebsocketConfig{
-		Host:              wsOptions.Host,
-		Port:              wsOptions.Port,
-		Path:              wsOptions.Path,
-		Headers:           wsOptions.Headers,
-		V2rayHttpUpgrade:  wsOptions.V2rayHttpUpgrade,
-		TLS:               true,
-		TLSConfig:         tlsConfig,
-		ClientFingerprint: t.option.ClientFingerprint,
+		Host:                     wsOptions.Host,
+		Port:                     wsOptions.Port,
+		Path:                     wsOptions.Path,
+		Headers:                  wsOptions.Headers,
+		V2rayHttpUpgrade:         wsOptions.V2rayHttpUpgrade,
+		V2rayHttpUpgradeFastOpen: wsOptions.V2rayHttpUpgradeFastOpen,
+		TLS:                      true,
+		TLSConfig:                tlsConfig,
+		ClientFingerprint:        t.option.ClientFingerprint,
 	})
 }
 

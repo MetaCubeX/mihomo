@@ -58,15 +58,16 @@ type simpleObfsOption struct {
 }
 
 type v2rayObfsOption struct {
-	Mode             string            `obfs:"mode"`
-	Host             string            `obfs:"host,omitempty"`
-	Path             string            `obfs:"path,omitempty"`
-	TLS              bool              `obfs:"tls,omitempty"`
-	Fingerprint      string            `obfs:"fingerprint,omitempty"`
-	Headers          map[string]string `obfs:"headers,omitempty"`
-	SkipCertVerify   bool              `obfs:"skip-cert-verify,omitempty"`
-	Mux              bool              `obfs:"mux,omitempty"`
-	V2rayHttpUpgrade bool              `obfs:"v2ray-http-upgrade,omitempty"`
+	Mode                     string            `obfs:"mode"`
+	Host                     string            `obfs:"host,omitempty"`
+	Path                     string            `obfs:"path,omitempty"`
+	TLS                      bool              `obfs:"tls,omitempty"`
+	Fingerprint              string            `obfs:"fingerprint,omitempty"`
+	Headers                  map[string]string `obfs:"headers,omitempty"`
+	SkipCertVerify           bool              `obfs:"skip-cert-verify,omitempty"`
+	Mux                      bool              `obfs:"mux,omitempty"`
+	V2rayHttpUpgrade         bool              `obfs:"v2ray-http-upgrade,omitempty"`
+	V2rayHttpUpgradeFastOpen bool              `obfs:"v2ray-http-upgrade-fast-open,omitempty"`
 }
 
 type shadowTLSOption struct {
@@ -260,11 +261,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		}
 		obfsMode = opts.Mode
 		v2rayOption = &v2rayObfs.Option{
-			Host:             opts.Host,
-			Path:             opts.Path,
-			Headers:          opts.Headers,
-			Mux:              opts.Mux,
-			V2rayHttpUpgrade: opts.V2rayHttpUpgrade,
+			Host:                     opts.Host,
+			Path:                     opts.Path,
+			Headers:                  opts.Headers,
+			Mux:                      opts.Mux,
+			V2rayHttpUpgrade:         opts.V2rayHttpUpgrade,
+			V2rayHttpUpgradeFastOpen: opts.V2rayHttpUpgradeFastOpen,
 		}
 
 		if opts.TLS {

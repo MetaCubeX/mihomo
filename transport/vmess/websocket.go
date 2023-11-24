@@ -49,16 +49,17 @@ type websocketWithEarlyDataConn struct {
 }
 
 type WebsocketConfig struct {
-	Host                string
-	Port                string
-	Path                string
-	Headers             http.Header
-	TLS                 bool
-	TLSConfig           *tls.Config
-	MaxEarlyData        int
-	EarlyDataHeaderName string
-	ClientFingerprint   string
-	V2rayHttpUpgrade    bool
+	Host                     string
+	Port                     string
+	Path                     string
+	Headers                  http.Header
+	TLS                      bool
+	TLSConfig                *tls.Config
+	MaxEarlyData             int
+	EarlyDataHeaderName      string
+	ClientFingerprint        string
+	V2rayHttpUpgrade         bool
+	V2rayHttpUpgradeFastOpen bool
 }
 
 // Read implements net.Conn.Read()
@@ -415,6 +416,13 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		return nil, err
 	}
 	bufferedConn := N.NewBufferedConn(conn)
+
+	if c.V2rayHttpUpgrade && c.V2rayHttpUpgradeFastOpen {
+		return &httpUpgradeEarlyConn{
+			BufferedConn: bufferedConn,
+		}, nil
+	}
+
 	response, err := http.ReadResponse(bufferedConn.Reader(), request)
 	if err != nil {
 		return nil, err
