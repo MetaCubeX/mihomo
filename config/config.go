@@ -927,9 +927,9 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 
 	if len(cfg.Hosts) != 0 {
 		for domain, anyValue := range cfg.Hosts {
-			if str, ok := anyValue.(string); ok && str == "mihomo" {
+			if str, ok := anyValue.(string); ok && str == "lan" {
 				if addrs, err := net.InterfaceAddrs(); err != nil {
-					log.Errorln("insert mihomo to host error: %s", err)
+					log.Errorln("insert lan to host error: %s", err)
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {
