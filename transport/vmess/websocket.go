@@ -418,9 +418,18 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 	bufferedConn := N.NewBufferedConn(conn)
 
 	if c.V2rayHttpUpgrade && c.V2rayHttpUpgradeFastOpen {
-		return &httpUpgradeEarlyConn{
-			BufferedConn: bufferedConn,
-		}, nil
+		return N.NewEarlyConn(bufferedConn, func() error {
+			response, err := http.ReadResponse(bufferedConn.Reader(), request)
+			if err != nil {
+				return err
+			}
+			if response.StatusCode != http.StatusSwitchingProtocols ||
+				!strings.EqualFold(response.Header.Get("Connection"), "upgrade") ||
+				!strings.EqualFold(response.Header.Get("Upgrade"), "websocket") {
+				return fmt.Errorf("unexpected status: %s", response.Status)
+			}
+			return nil
+		}), nil
 	}
 
 	response, err := http.ReadResponse(bufferedConn.Reader(), request)
