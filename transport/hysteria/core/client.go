@@ -135,7 +135,7 @@ func (c *Client) handleControlStream(qs quic.Connection, stream quic.Stream) (bo
 
 func (c *Client) handleMessage(qs quic.Connection) {
 	for {
-		msg, err := qs.ReceiveMessage(context.Background())
+		msg, err := qs.ReceiveDatagram(context.Background())
 		if err != nil {
 			break
 		}
@@ -400,7 +400,7 @@ func (c *quicPktConn) WriteTo(p []byte, addr string) error {
 	// try no frag first
 	var msgBuf bytes.Buffer
 	_ = struc.Pack(&msgBuf, &msg)
-	err = c.Session.SendMessage(msgBuf.Bytes())
+	err = c.Session.SendDatagram(msgBuf.Bytes())
 	if err != nil {
 		if errSize, ok := err.(quic.ErrMessageTooLarge); ok {
 			// need to frag
@@ -409,7 +409,7 @@ func (c *quicPktConn) WriteTo(p []byte, addr string) error {
 			for _, fragMsg := range fragMsgs {
 				msgBuf.Reset()
 				_ = struc.Pack(&msgBuf, &fragMsg)
-				err = c.Session.SendMessage(msgBuf.Bytes())
+				err = c.Session.SendDatagram(msgBuf.Bytes())
 				if err != nil {
 					return err
 				}

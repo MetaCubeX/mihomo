@@ -37,7 +37,7 @@ func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer,
 			return
 		}
 		data := buf.Bytes()
-		err = quicConn.SendMessage(data)
+		err = quicConn.SendDatagram(data)
 		if err != nil {
 			return
 		}

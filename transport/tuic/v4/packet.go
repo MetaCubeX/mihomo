@@ -161,7 +161,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 		}
 	default: // native
 		data := buf.Bytes()
-		err = q.quicConn.SendMessage(data)
+		err = q.quicConn.SendDatagram(data)
 		if err != nil {
 			return
 		}
