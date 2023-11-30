@@ -500,7 +500,7 @@ func NewResolver(config Config) *Resolver {
 					log.Debugln("adding geosite policy: %s inversed %t", key, inverse)
 					matcher, err := NewGeoSite(key)
 					if err != nil {
-						log.Warnln("adding geosite policy %s error: %s", key)
+						log.Warnln("adding geosite policy %s error: %s", key, err)
 						continue
 					}
 					insertTriePolicy()
