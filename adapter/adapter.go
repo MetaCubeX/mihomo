@@ -17,8 +17,6 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
-
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -39,11 +37,6 @@ type Proxy struct {
 	alive   atomic.Bool
 	url     string
 	extra   *xsync.MapOf[string, *extraProxyState]
-}
-
-// Alive implements C.Proxy
-func (p *Proxy) Alive() bool {
-	return p.alive.Load()
 }
 
 // AliveForTestUrl implements C.Proxy
@@ -181,7 +174,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 	_ = json.Unmarshal(inner, &mapping)
 	mapping["history"] = p.DelayHistory()
 	mapping["extra"] = p.ExtraDelayHistory()
-	mapping["alive"] = p.Alive()
+	mapping["alive"] = p.AliveForTestUrl(p.url)
 	mapping["name"] = p.Name()
 	mapping["udp"] = p.SupportUDP()
 	mapping["xudp"] = p.SupportXUDP()
@@ -191,13 +184,11 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store C.DelayHistoryStoreType) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, err error) {
 	defer func() {
 		alive := err == nil
-		store = p.determineFinalStoreType(store, url)
 
-		switch store {
-		case C.OriginalHistory:
+		if len(p.url) == 0 || url == p.url {
 			p.alive.Store(alive)
 			record := C.DelayHistory{Time: time.Now()}
 			if alive {
@@ -212,7 +203,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 			if len(p.url) == 0 {
 				p.url = url
 			}
-		case C.ExtraHistory:
+		} else {
 			record := C.DelayHistory{Time: time.Now()}
 			if alive {
 				record.Delay = t
@@ -236,8 +227,6 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 			if state.history.Len() > defaultHistoriesNum {
 				state.history.Pop()
 			}
-		default:
-			log.Debugln("health check result will be discarded, url: %s alive: %t, delay: %d", url, alive, t)
 		}
 	}()
 
@@ -348,25 +337,4 @@ func urlToMetadata(rawURL string) (addr C.Metadata, err error) {
 		DstPort: uint16(uintPort),
 	}
 	return
-}
-
-func (p *Proxy) determineFinalStoreType(store C.DelayHistoryStoreType, url string) C.DelayHistoryStoreType {
-	if store != C.DropHistory {
-		return store
-	}
-
-	if len(p.url) == 0 || url == p.url {
-		return C.OriginalHistory
-	}
-
-	if p.extra.Size() < 2*C.DefaultMaxHealthCheckUrlNum {
-		return C.ExtraHistory
-	}
-
-	_, ok := p.extra.Load(url)
-	if ok {
-		return C.ExtraHistory
-	}
-
-	return store
 }

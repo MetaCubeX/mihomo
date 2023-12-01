@@ -43,11 +43,11 @@ const (
 )
 
 const (
-	DefaultTCPTimeout           = 5 * time.Second
-	DefaultDropTime             = 12 * DefaultTCPTimeout
-	DefaultUDPTimeout           = DefaultTCPTimeout
-	DefaultTLSTimeout           = DefaultTCPTimeout
-	DefaultMaxHealthCheckUrlNum = 16
+	DefaultTCPTimeout = 5 * time.Second
+	DefaultDropTime   = 12 * DefaultTCPTimeout
+	DefaultUDPTimeout = DefaultTCPTimeout
+	DefaultTLSTimeout = DefaultTCPTimeout
+	DefaultTestURL    = "https://cp.cloudflare.com/generate_204"
 )
 
 var ErrNotSupport = errors.New("no support")
@@ -149,21 +149,13 @@ type DelayHistory struct {
 
 type DelayHistoryStoreType int
 
-const (
-	OriginalHistory DelayHistoryStoreType = iota
-	ExtraHistory
-	DropHistory
-)
-
 type Proxy interface {
 	ProxyAdapter
-	Alive() bool
 	AliveForTestUrl(url string) bool
 	DelayHistory() []DelayHistory
 	ExtraDelayHistory() map[string][]DelayHistory
-	LastDelay() uint16
 	LastDelayForTestUrl(url string) uint16
-	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store DelayHistoryStoreType) (uint16, error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)
