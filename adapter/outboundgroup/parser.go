@@ -95,7 +95,8 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		// select don't need health check
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
 			if groupOption.URL == "" {
-				groupOption.URL = "https://cp.cloudflare.com/generate_204"
+				groupOption.URL = C.DefaultTestURL
+				testUrl = groupOption.URL
 			}
 
 			if groupOption.Interval == 0 {
