@@ -96,6 +96,9 @@ func (alloc *Allocator) Put(buf []byte) error {
 	if cap(buf) != 1<<bits {
 		return errors.New("allocator Put() incorrect buffer size")
 	}
+	if cap(buf) < 1<<6 {
+		return nil
+	}
 	bits -= 6
 	buf = buf[:cap(buf)]
 
