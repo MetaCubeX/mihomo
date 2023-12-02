@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/arc"
+	"github.com/metacubex/mihomo/common/lru"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -28,6 +29,11 @@ type dnsClient interface {
 	Address() string
 }
 
+type dnsCache interface {
+	GetWithExpire(key string) (*D.Msg, time.Time, bool)
+	SetWithExpire(key string, value *D.Msg, expire time.Time)
+}
+
 type result struct {
 	Msg   *D.Msg
 	Error error
@@ -42,7 +48,7 @@ type Resolver struct {
 	fallbackDomainFilters []fallbackDomainFilter
 	fallbackIPFilters     []fallbackIPFilter
 	group                 singleflight.Group
-	lruCache              *cache.LruCache[string, *D.Msg]
+	cache                 dnsCache
 	policy                []dnsPolicy
 	proxyServer           []dnsClient
 }
@@ -140,8 +146,9 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	}()
 
 	q := m.Question[0]
-	cacheM, expireTime, hit := r.lruCache.GetWithExpire(q.String())
+	cacheM, expireTime, hit := r.cache.GetWithExpire(q.String())
 	if hit {
+		log.Debugln("[DNS] cache hit for %s, expire at %s", q.Name, expireTime.Format("2006-01-02 15:04:05"))
 		now := time.Now()
 		msg = cacheM.Copy()
 		if expireTime.Before(now) {
@@ -181,7 +188,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 				msg.Extra = lo.Filter(msg.Extra, func(rr D.RR, index int) bool {
 					return rr.Header().Rrtype != D.TypeOPT
 				})
-				putMsgToCache(r.lruCache, q.String(), q, msg)
+				putMsgToCache(r.cache, q.String(), q, msg)
 			}
 		}()
 
@@ -408,12 +415,19 @@ type Config struct {
 	Hosts          *trie.DomainTrie[resolver.HostValue]
 	Policy         *orderedmap.OrderedMap[string, []NameServer]
 	RuleProviders  map[string]provider.RuleProvider
+	CacheAlgorithm string
 }
 
 func NewResolver(config Config) *Resolver {
+	var cache dnsCache
+	if config.CacheAlgorithm == "lru" {
+		cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
+	} else {
+		cache = arc.New(arc.WithSize[string, *D.Msg](4096))
+	}
 	defaultResolver := &Resolver{
 		main:        transform(config.Default, nil),
-		lruCache:    cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		cache:       cache,
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
@@ -444,10 +458,15 @@ func NewResolver(config Config) *Resolver {
 		return
 	}
 
+	if config.CacheAlgorithm == "" || config.CacheAlgorithm == "lru" {
+		cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
+	} else {
+		cache = arc.New(arc.WithSize[string, *D.Msg](4096))
+	}
 	r := &Resolver{
 		ipv6:        config.IPv6,
 		main:        cacheTransform(config.Main),
-		lruCache:    cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		cache:       cache,
 		hosts:       config.Hosts,
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
@@ -550,7 +569,7 @@ func NewProxyServerHostResolver(old *Resolver) *Resolver {
 	r := &Resolver{
 		ipv6:        old.ipv6,
 		main:        old.proxyServer,
-		lruCache:    old.lruCache,
+		cache:       old.cache,
 		hosts:       old.hosts,
 		ipv6Timeout: old.ipv6Timeout,
 	}

@@ -114,6 +114,7 @@ type DNS struct {
 	Listen                string           `yaml:"listen"`
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
+	CacheAlgorithm        string           `yaml:"cache-algorithm"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[resolver.HostValue]
 	NameServerPolicy      *orderedmap.OrderedMap[string, []dns.NameServer]
@@ -208,6 +209,7 @@ type RawDNS struct {
 	FakeIPRange           string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
 	FakeIPFilter          []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
 	DefaultNameserver     []string                            `yaml:"default-nameserver" json:"default-nameserver"`
+	CacheAlgorithm        string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
 	NameServerPolicy      *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
 	ProxyServerNameserver []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
 }
@@ -1340,6 +1342,12 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 
 	if cfg.UseHosts {
 		dnsCfg.Hosts = hosts
+	}
+
+	if cfg.CacheAlgorithm == "" || cfg.CacheAlgorithm == "lru" {
+		dnsCfg.CacheAlgorithm = "lru"
+	} else {
+		dnsCfg.CacheAlgorithm = "arc"
 	}
 
 	return dnsCfg, nil

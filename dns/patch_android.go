@@ -7,7 +7,7 @@ import (
 
 	D "github.com/miekg/dns"
 
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 	"github.com/metacubex/mihomo/component/dhcp"
 	"github.com/metacubex/mihomo/component/resolver"
 )
@@ -49,7 +49,7 @@ func ServeDNSWithDefaultServer(msg *D.Msg) (*D.Msg, error) {
 
 func FlushCacheWithDefaultResolver() {
 	if r := resolver.DefaultResolver; r != nil {
-		r.(*Resolver).lruCache = cache.New[string, *D.Msg](cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true))
+		r.(*Resolver).lruCache = lru.New[string, *D.Msg](lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
 	}
 }
 

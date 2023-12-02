@@ -1,4 +1,4 @@
-package cache
+package lru
 
 // Modified by https://github.com/die-net/lrucache
 

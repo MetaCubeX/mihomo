@@ -1,4 +1,4 @@
-package cache
+package lru
 
 import (
 	"testing"

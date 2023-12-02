@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
 )
@@ -48,9 +48,9 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 		return nil, err
 	}
 
-	var c *cache.LruCache[string, bool]
+	var c *lru.LruCache[string, bool]
 	if authenticate {
-		c = cache.New[string, bool](cache.WithAge[string, bool](30))
+		c = lru.New[string, bool](lru.WithAge[string, bool](30))
 	}
 
 	hl := &Listener{

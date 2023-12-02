@@ -58,8 +58,8 @@ require (
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 // indirect
 	github.com/metacubex/gvisor v0.0.0-20231001104248-0f672c3fb8d8 // indirect
-	github.com/metacubex/quic-go v0.39.1-0.20231019030608-fd969d66f16b // indirect
-	github.com/metacubex/sing-quic v0.0.0-20231008050747-a684db516966 // indirect
+	github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394 // indirect
+	github.com/metacubex/sing-quic v0.0.0-20231130141855-0022295e524b // indirect
 	github.com/metacubex/sing-shadowsocks v0.2.5 // indirect
 	github.com/metacubex/sing-shadowsocks2 v0.1.4 // indirect
 	github.com/metacubex/sing-tun v0.1.15-0.20231103033938-170591e8d5bd // indirect
@@ -80,7 +80,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.0.2 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-20 v0.3.4 // indirect
+	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
@@ -109,11 +109,11 @@ require (
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	go.uber.org/mock v0.3.0 // indirect
 	go4.org/netipx v0.0.0-20230824141953-6213f710f925 // indirect
-	golang.org/x/crypto v0.15.0 // indirect
+	golang.org/x/crypto v0.16.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.14.1-0.20231108175955-e4099bfacb8c // indirect
+	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.15.0 // indirect

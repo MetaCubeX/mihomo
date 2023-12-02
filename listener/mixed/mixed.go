@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/http"
@@ -16,7 +16,7 @@ import (
 type Listener struct {
 	listener net.Listener
 	addr     string
-	cache    *cache.LruCache[string, bool]
+	cache    *lru.LruCache[string, bool]
 	closed   bool
 }
 
@@ -51,7 +51,7 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 	ml := &Listener{
 		listener: l,
 		addr:     addr,
-		cache:    cache.New[string, bool](cache.WithAge[string, bool](30)),
+		cache:    lru.New[string, bool](lru.WithAge[string, bool](30)),
 	}
 	go func() {
 		for {
@@ -69,7 +69,7 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, tunnel C.Tunnel, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
+func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 
 	bufConn := N.NewBufferedConn(conn)

@@ -224,10 +224,11 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 			Domain:    c.FallbackFilter.Domain,
 			GeoSite:   c.FallbackFilter.GeoSite,
 		},
-		Default:       c.DefaultNameserver,
-		Policy:        c.NameServerPolicy,
-		ProxyServer:   c.ProxyServerNameserver,
-		RuleProviders: ruleProvider,
+		Default:        c.DefaultNameserver,
+		Policy:         c.NameServerPolicy,
+		ProxyServer:    c.ProxyServerNameserver,
+		RuleProviders:  ruleProvider,
+		CacheAlgorithm: c.CacheAlgorithm,
 	}
 
 	r := dns.NewResolver(cfg)
