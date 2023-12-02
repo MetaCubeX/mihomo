@@ -142,6 +142,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				tuic["udp-relay-mode"] = udpRelayMode
 			}
 
+			proxies = append(proxies, tuic)
+			
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
 			if err != nil {
