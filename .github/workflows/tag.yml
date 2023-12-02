@@ -1,0 +1,29 @@
+name: Tag to Release 
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Enter the version number (e.g., v1.2.3)'
+        required: true
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: 'Meta'
+
+    - name: Set up Git
+      run: |
+        git config --global user.email "actions@github.com"
+        git config --global user.name "GitHub Actions"
+
+    - name: Create Tag
+      run: |
+        version=${{ github.event.inputs.version }}
+        git tag $version
+        git push origin $version
