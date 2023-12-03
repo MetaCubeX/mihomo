@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/tuic/common"
+	"github.com/metacubex/mihomo/common/atomic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
 	"github.com/zhangyunhao116/fastrand"
@@ -184,7 +184,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 				return
 			}
 			data := buf.Bytes()
-			err = q.quicConn.SendMessage(data)
+			err = q.quicConn.SendDatagram(data)
 		}
 
 		var tooLarge quic.ErrMessageTooLarge

@@ -6,13 +6,13 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/callback"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/dialer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/common/callback"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/dialer"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/provider"
 )
 
 type Fallback struct {
@@ -84,11 +84,11 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type":     f.Type().String(),
-		"now":      f.Now(),
-		"all":      all,
-		"testUrl":  f.testUrl,
-		"expected": f.expectedStatus,
+		"type":           f.Type().String(),
+		"now":            f.Now(),
+		"all":            all,
+		"testUrl":        f.testUrl,
+		"expectedStatus": f.expectedStatus,
 	})
 }
 
@@ -102,13 +102,11 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			// if proxy.Alive() {
 			if proxy.AliveForTestUrl(f.testUrl) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				// if proxy.Alive() {
 				if proxy.AliveForTestUrl(f.testUrl) {
 					return proxy
 				} else {
@@ -135,12 +133,11 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
-	// if !p.Alive() {
 	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
 		expectedStatus, _ := utils.NewIntRanges[uint16](f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, C.ExtraHistory)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus)
 	}
 
 	return nil

@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type Base struct {
@@ -61,7 +61,7 @@ func (b *Base) RawAddress() string {
 }
 
 // Listen implements constant.InboundListener
-func (*Base) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (*Base) Listen(tunnel C.Tunnel) error {
 	return nil
 }
 

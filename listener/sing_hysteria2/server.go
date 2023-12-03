@@ -11,14 +11,14 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/adapter/outbound"
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/sockopt"
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/sockopt"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/metacubex/sing-quic/hysteria2"
 
@@ -32,7 +32,7 @@ type Listener struct {
 	services     []*hysteria2.Service[string]
 }
 
-func New(config LC.Hysteria2Server, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (*Listener, error) {
+func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	var sl *Listener
 	var err error
 	if len(additions) == 0 {
@@ -42,16 +42,19 @@ func New(config LC.Hysteria2Server, tcpIn chan<- C.ConnContext, udpIn chan<- C.P
 		}
 	}
 
-	h := &sing.ListenerHandler{
-		TcpIn:     tcpIn,
-		UdpIn:     udpIn,
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
+		Tunnel:    tunnel,
 		Type:      C.HYSTERIA2,
 		Additions: additions,
+		MuxOption: config.MuxOption,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	sl = &Listener{false, config, nil, nil}
 
-	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
+	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey, C.Path)
 	if err != nil {
 		return nil, err
 	}

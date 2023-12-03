@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 
 	"github.com/metacubex/quic-go"
 )
@@ -37,7 +37,7 @@ func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer,
 			return
 		}
 		data := buf.Bytes()
-		err = quicConn.SendMessage(data)
+		err = quicConn.SendDatagram(data)
 		if err != nil {
 			return
 		}
@@ -47,7 +47,7 @@ func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer,
 }
 
 type deFragger struct {
-	lru  *cache.LruCache[uint16, *packetBag]
+	lru  *lru.LruCache[uint16, *packetBag]
 	once sync.Once
 }
 
@@ -63,9 +63,9 @@ func newPacketBag() *packetBag {
 
 func (d *deFragger) init() {
 	if d.lru == nil {
-		d.lru = cache.New(
-			cache.WithAge[uint16, *packetBag](10),
-			cache.WithUpdateAgeOnGet[uint16, *packetBag](),
+		d.lru = lru.New(
+			lru.WithAge[uint16, *packetBag](10),
+			lru.WithUpdateAgeOnGet[uint16, *packetBag](),
 		)
 	}
 }

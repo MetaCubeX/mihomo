@@ -8,15 +8,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/iface"
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/iface"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/metacubex/mihomo/log"
 
 	tun "github.com/metacubex/sing-tun"
 	"github.com/sagernet/sing/common"
@@ -88,7 +87,7 @@ func checkTunName(tunName string) (ok bool) {
 	return true
 }
 
-func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (l *Listener, err error) {
+func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Listener, err error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TUN"),
@@ -142,23 +141,26 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 	for _, a := range options.Inet4Address {
-		addrPort := netip.AddrPortFrom(a.Build().Addr().Next(), 53)
+		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 	for _, a := range options.Inet6Address {
-		addrPort := netip.AddrPortFrom(a.Build().Addr().Next(), 53)
+		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
+		Tunnel:    tunnel,
+		Type:      C.TUN,
+		Additions: additions,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	handler := &ListenerHandler{
-		ListenerHandler: sing.ListenerHandler{
-			TcpIn:      tcpIn,
-			UdpIn:      udpIn,
-			Type:       C.TUN,
-			Additions:  additions,
-			UDPTimeout: time.Second * time.Duration(udpTimeout),
-		},
-		DnsAdds: dnsAdds,
+		ListenerHandler: h,
+		DnsAdds:         dnsAdds,
 	}
 	l = &Listener{
 		closed:  false,
@@ -200,22 +202,24 @@ func New(options LC.Tun, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapte
 	}
 
 	tunOptions := tun.Options{
-		Name:               tunName,
-		MTU:                tunMTU,
-		Inet4Address:       common.Map(options.Inet4Address, LC.ListenPrefix.Build),
-		Inet6Address:       common.Map(options.Inet6Address, LC.ListenPrefix.Build),
-		AutoRoute:          options.AutoRoute,
-		StrictRoute:        options.StrictRoute,
-		Inet4RouteAddress:  common.Map(options.Inet4RouteAddress, LC.ListenPrefix.Build),
-		Inet6RouteAddress:  common.Map(options.Inet6RouteAddress, LC.ListenPrefix.Build),
-		IncludeUID:         includeUID,
-		ExcludeUID:         excludeUID,
-		IncludeAndroidUser: options.IncludeAndroidUser,
-		IncludePackage:     options.IncludePackage,
-		ExcludePackage:     options.ExcludePackage,
-		FileDescriptor:     options.FileDescriptor,
-		InterfaceMonitor:   defaultInterfaceMonitor,
-		TableIndex:         2022,
+		Name:                     tunName,
+		MTU:                      tunMTU,
+		Inet4Address:             options.Inet4Address,
+		Inet6Address:             options.Inet6Address,
+		AutoRoute:                options.AutoRoute,
+		StrictRoute:              options.StrictRoute,
+		Inet4RouteAddress:        options.Inet4RouteAddress,
+		Inet6RouteAddress:        options.Inet6RouteAddress,
+		Inet4RouteExcludeAddress: options.Inet4RouteExcludeAddress,
+		Inet6RouteExcludeAddress: options.Inet6RouteExcludeAddress,
+		IncludeUID:               includeUID,
+		ExcludeUID:               excludeUID,
+		IncludeAndroidUser:       options.IncludeAndroidUser,
+		IncludePackage:           options.IncludePackage,
+		ExcludePackage:           options.ExcludePackage,
+		FileDescriptor:           options.FileDescriptor,
+		InterfaceMonitor:         defaultInterfaceMonitor,
+		TableIndex:               2022,
 	}
 
 	err = l.buildAndroidRules(&tunOptions)

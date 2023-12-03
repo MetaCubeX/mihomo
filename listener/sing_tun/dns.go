@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/listener/sing"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
 
@@ -26,7 +26,7 @@ const DefaultDnsReadTimeout = time.Second * 10
 const DefaultDnsRelayTimeout = time.Second * 5
 
 type ListenerHandler struct {
-	sing.ListenerHandler
+	*sing.ListenerHandler
 	DnsAdds []netip.AddrPort
 }
 

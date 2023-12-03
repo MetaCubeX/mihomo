@@ -16,9 +16,9 @@ import (
 	"github.com/sagernet/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/Dreamacro/clash/component/ebpf/byteorder"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/component/ebpf/byteorder"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc $BPF_CLANG -cflags $BPF_CFLAGS bpf ../bpf/redir.c
@@ -131,7 +131,7 @@ func (e *EBpfRedirect) Start() error {
 	filter := &netlink.BpfFilter{
 		FilterAttrs:  filterAttrs,
 		Fd:           objs.bpfPrograms.TcRedirIngressFunc.FD(),
-		Name:         "clash-redir-ingress-" + e.ifName,
+		Name:         "mihomo-redir-ingress-" + e.ifName,
 		DirectAction: true,
 	}
 
@@ -153,7 +153,7 @@ func (e *EBpfRedirect) Start() error {
 	filterEgress := &netlink.BpfFilter{
 		FilterAttrs:  filterAttrsEgress,
 		Fd:           objs.bpfPrograms.TcRedirEgressFunc.FD(),
-		Name:         "clash-redir-egress-" + e.ifName,
+		Name:         "mihomo-redir-egress-" + e.ifName,
 		DirectAction: true,
 	}
 

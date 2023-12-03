@@ -2,10 +2,10 @@ package rules
 
 import (
 	"fmt"
-	C "github.com/Dreamacro/clash/constant"
-	RC "github.com/Dreamacro/clash/rules/common"
-	"github.com/Dreamacro/clash/rules/logic"
-	RP "github.com/Dreamacro/clash/rules/provider"
+	C "github.com/metacubex/mihomo/constant"
+	RC "github.com/metacubex/mihomo/rules/common"
+	"github.com/metacubex/mihomo/rules/logic"
+	RP "github.com/metacubex/mihomo/rules/provider"
 )
 
 func ParseRule(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error) {

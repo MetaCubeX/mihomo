@@ -9,12 +9,12 @@ import (
 	"runtime"
 	"strconv"
 
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/ca"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/proxydialer"
-	C "github.com/Dreamacro/clash/constant"
-	tuicCommon "github.com/Dreamacro/clash/transport/tuic/common"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	C "github.com/metacubex/mihomo/constant"
+	tuicCommon "github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/sing-quic/hysteria2"
 
@@ -55,7 +55,7 @@ type Hysteria2Option struct {
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
 	options := h.Base.DialOptions(opts...)
 	h.dialer.SetDialer(dialer.NewDialer(options...))
-	c, err := h.client.DialConn(ctx, M.ParseSocksaddr(metadata.RemoteAddress()))
+	c, err := h.client.DialConn(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}

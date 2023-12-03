@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/sniffer"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/sniffer"
 )
 
 var (
@@ -39,7 +39,7 @@ func (tls *TLSSniffer) SupportNetwork() C.NetWork {
 	return C.TCP
 }
 
-func (tls *TLSSniffer) SniffTCP(bytes []byte) (string, error) {
+func (tls *TLSSniffer) SniffData(bytes []byte) (string, error) {
 	domain, err := SniffTLS(bytes)
 	if err == nil {
 		return *domain, nil

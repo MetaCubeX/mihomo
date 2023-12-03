@@ -9,15 +9,16 @@ import (
 	"sync"
 	"time"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/dialer"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/dialer"
 )
 
 // Adapter Type
 const (
 	Direct AdapterType = iota
 	Reject
+	RejectDrop
 	Compatible
 	Pass
 
@@ -42,10 +43,11 @@ const (
 )
 
 const (
-	DefaultTCPTimeout           = 5 * time.Second
-	DefaultUDPTimeout           = DefaultTCPTimeout
-	DefaultTLSTimeout           = DefaultTCPTimeout
-	DefaultMaxHealthCheckUrlNum = 16
+	DefaultTCPTimeout = 5 * time.Second
+	DefaultDropTime   = 12 * DefaultTCPTimeout
+	DefaultUDPTimeout = DefaultTCPTimeout
+	DefaultTLSTimeout = DefaultTCPTimeout
+	DefaultTestURL    = "https://cp.cloudflare.com/generate_204"
 )
 
 var ErrNotSupport = errors.New("no support")
@@ -147,21 +149,13 @@ type DelayHistory struct {
 
 type DelayHistoryStoreType int
 
-const (
-	OriginalHistory DelayHistoryStoreType = iota
-	ExtraHistory
-	DropHistory
-)
-
 type Proxy interface {
 	ProxyAdapter
-	Alive() bool
 	AliveForTestUrl(url string) bool
 	DelayHistory() []DelayHistory
 	ExtraDelayHistory() map[string][]DelayHistory
-	LastDelay() uint16
 	LastDelayForTestUrl(url string) uint16
-	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], store DelayHistoryStoreType) (uint16, error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)
@@ -179,6 +173,8 @@ func (at AdapterType) String() string {
 		return "Direct"
 	case Reject:
 		return "Reject"
+	case RejectDrop:
+		return "RejectDrop"
 	case Compatible:
 		return "Compatible"
 	case Pass:
@@ -250,6 +246,23 @@ type UDPPacketInAddr interface {
 type PacketAdapter interface {
 	UDPPacket
 	Metadata() *Metadata
+}
+
+type packetAdapter struct {
+	UDPPacket
+	metadata *Metadata
+}
+
+// Metadata returns destination metadata
+func (s *packetAdapter) Metadata() *Metadata {
+	return s.metadata
+}
+
+func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
+	return &packetAdapter{
+		packet,
+		metadata,
+	}
 }
 
 type WriteBack interface {

@@ -1,5 +1,5 @@
 {
-  description = "Another Clash Kernel";
+  description = "Another Mihomo Kernel";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/master";
 
@@ -15,7 +15,7 @@
           };
         in
         rec {
-          packages.default = pkgs.clash-meta;
+          packages.default = pkgs.mihomo-meta;
         }
       ) //
     (
@@ -23,8 +23,8 @@
       {
         overlay = final: prev: {
 
-          clash-meta = final.buildGo119Module {
-            pname = "clash-meta";
+          mihomo-meta = final.buildGo119Module {
+            pname = "mihomo-meta";
             inherit version;
             src = ./.;
 
@@ -38,8 +38,8 @@
             ldflags = [
               "-s"
               "-w"
-              "-X github.com/Dreamacro/clash/constant.Version=dev-${version}"
-              "-X github.com/Dreamacro/clash/constant.BuildTime=${version}"
+              "-X github.com/metacubex/mihomo/constant.Version=dev-${version}"
+              "-X github.com/metacubex/mihomo/constant.BuildTime=${version}"
             ];
             
             tags = [
@@ -50,7 +50,7 @@
             doCheck = false;
 
             postInstall = ''
-              mv $out/bin/clash $out/bin/clash-meta
+              mv $out/bin/mihomo $out/bin/mihomo-meta
             '';
 
           };

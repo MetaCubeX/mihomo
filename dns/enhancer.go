@@ -3,15 +3,15 @@ package dns
 import (
 	"net/netip"
 
-	"github.com/Dreamacro/clash/common/cache"
-	"github.com/Dreamacro/clash/component/fakeip"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/common/lru"
+	"github.com/metacubex/mihomo/component/fakeip"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type ResolverEnhancer struct {
 	mode     C.DNSMode
 	fakePool *fakeip.Pool
-	mapping  *cache.LruCache[netip.Addr, string]
+	mapping  *lru.LruCache[netip.Addr, string]
 }
 
 func (h *ResolverEnhancer) FakeIPEnabled() bool {
@@ -105,11 +105,11 @@ func (h *ResolverEnhancer) StoreFakePoolState() {
 
 func NewEnhancer(cfg Config) *ResolverEnhancer {
 	var fakePool *fakeip.Pool
-	var mapping *cache.LruCache[netip.Addr, string]
+	var mapping *lru.LruCache[netip.Addr, string]
 
 	if cfg.EnhancedMode != C.DNSNormal {
 		fakePool = cfg.Pool
-		mapping = cache.New(cache.WithSize[netip.Addr, string](4096))
+		mapping = lru.New(lru.WithSize[netip.Addr, string](4096))
 	}
 
 	return &ResolverEnhancer{

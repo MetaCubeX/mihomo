@@ -11,7 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/resolver"
+	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/constant/features"
 )
 
 type dialFunc func(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error)
@@ -70,11 +71,19 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
+	if features.CMFA && DefaultSocketHook != nil {
+		return listenPacketHooked(ctx, network, address)
+	}
+
 	cfg := applyOptions(options...)
 
 	lc := &net.ListenConfig{}
 	if cfg.interfaceName != "" {
-		addr, err := bindIfaceToListenConfig(cfg.interfaceName, lc, network, address)
+		bind := bindIfaceToListenConfig
+		if cfg.fallbackBind {
+			bind = fallbackBindIfaceToListenConfig
+		}
+		addr, err := bind(cfg.interfaceName, lc, network, address)
 		if err != nil {
 			return nil, err
 		}
@@ -110,6 +119,10 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
+	if features.CMFA && DefaultSocketHook != nil {
+		return dialContextHooked(ctx, network, destination, port)
+	}
+
 	address := net.JoinHostPort(destination.String(), port)
 
 	netDialer := opt.netDialer
@@ -125,7 +138,11 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 
 	dialer := netDialer.(*net.Dialer)
 	if opt.interfaceName != "" {
-		if err := bindIfaceToDialer(opt.interfaceName, dialer, network, destination); err != nil {
+		bind := bindIfaceToDialer
+		if opt.fallbackBind {
+			bind = fallbackBindIfaceToDialer
+		}
+		if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
 			return nil, err
 		}
 	}

@@ -5,7 +5,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/Dreamacro/clash/common/net/packet"
+	"github.com/metacubex/mihomo/common/net/packet"
 )
 
 type EnhancePacketConn struct {

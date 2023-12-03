@@ -1,9 +1,9 @@
 package inbound
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/redir"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/redir"
+	"github.com/metacubex/mihomo/log"
 )
 
 type RedirOption struct {
@@ -42,9 +42,9 @@ func (r *Redir) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (r *Redir) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (r *Redir) Listen(tunnel C.Tunnel) error {
 	var err error
-	r.l, err = redir.New(r.RawAddress(), tcpIn, r.Additions()...)
+	r.l, err = redir.New(r.RawAddress(), tunnel, r.Additions()...)
 	if err != nil {
 		return err
 	}

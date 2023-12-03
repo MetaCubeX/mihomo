@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/component/profile/cachefile"
-	"github.com/Dreamacro/clash/component/trie"
+	"github.com/metacubex/mihomo/common/nnip"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
+	"github.com/metacubex/mihomo/component/trie"
 )
 
 const (
@@ -36,7 +36,7 @@ type Pool struct {
 	cycle   bool
 	mux     sync.Mutex
 	host    *trie.DomainTrie[struct{}]
-	ipnet   *netip.Prefix
+	ipnet   netip.Prefix
 	store   store
 }
 
@@ -91,7 +91,7 @@ func (p *Pool) Broadcast() netip.Addr {
 }
 
 // IPNet return raw ipnet
-func (p *Pool) IPNet() *netip.Prefix {
+func (p *Pool) IPNet() netip.Prefix {
 	return p.ipnet
 }
 
@@ -153,7 +153,7 @@ func (p *Pool) restoreState() {
 }
 
 type Options struct {
-	IPNet *netip.Prefix
+	IPNet netip.Prefix
 	Host  *trie.DomainTrie[struct{}]
 
 	// Size sets the maximum number of entries in memory
@@ -171,7 +171,7 @@ func New(options Options) (*Pool, error) {
 		hostAddr = options.IPNet.Masked().Addr()
 		gateway  = hostAddr.Next()
 		first    = gateway.Next().Next().Next() // default start with 198.18.0.4
-		last     = nnip.UnMasked(*options.IPNet)
+		last     = nnip.UnMasked(options.IPNet)
 	)
 
 	if !options.IPNet.IsValid() || !first.IsValid() || !first.Less(last) {

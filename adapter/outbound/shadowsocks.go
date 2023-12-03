@@ -7,16 +7,16 @@ import (
 	"net"
 	"strconv"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/structure"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/proxydialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/restls"
-	obfs "github.com/Dreamacro/clash/transport/simple-obfs"
-	shadowtls "github.com/Dreamacro/clash/transport/sing-shadowtls"
-	v2rayObfs "github.com/Dreamacro/clash/transport/v2ray-plugin"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/restls"
+	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
+	shadowtls "github.com/metacubex/mihomo/transport/sing-shadowtls"
+	v2rayObfs "github.com/metacubex/mihomo/transport/v2ray-plugin"
 
 	restlsC "github.com/3andne/restls-client-go"
 	shadowsocks "github.com/metacubex/sing-shadowsocks2"
@@ -58,14 +58,16 @@ type simpleObfsOption struct {
 }
 
 type v2rayObfsOption struct {
-	Mode           string            `obfs:"mode"`
-	Host           string            `obfs:"host,omitempty"`
-	Path           string            `obfs:"path,omitempty"`
-	TLS            bool              `obfs:"tls,omitempty"`
-	Fingerprint    string            `obfs:"fingerprint,omitempty"`
-	Headers        map[string]string `obfs:"headers,omitempty"`
-	SkipCertVerify bool              `obfs:"skip-cert-verify,omitempty"`
-	Mux            bool              `obfs:"mux,omitempty"`
+	Mode                     string            `obfs:"mode"`
+	Host                     string            `obfs:"host,omitempty"`
+	Path                     string            `obfs:"path,omitempty"`
+	TLS                      bool              `obfs:"tls,omitempty"`
+	Fingerprint              string            `obfs:"fingerprint,omitempty"`
+	Headers                  map[string]string `obfs:"headers,omitempty"`
+	SkipCertVerify           bool              `obfs:"skip-cert-verify,omitempty"`
+	Mux                      bool              `obfs:"mux,omitempty"`
+	V2rayHttpUpgrade         bool              `obfs:"v2ray-http-upgrade,omitempty"`
+	V2rayHttpUpgradeFastOpen bool              `obfs:"v2ray-http-upgrade-fast-open,omitempty"`
 }
 
 type shadowTLSOption struct {
@@ -123,9 +125,9 @@ func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metada
 		}
 	}
 	if useEarly {
-		return ss.method.DialEarlyConn(c, M.ParseSocksaddr(metadata.RemoteAddress())), nil
+		return ss.method.DialEarlyConn(c, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort)), nil
 	} else {
-		return ss.method.DialConn(c, M.ParseSocksaddr(metadata.RemoteAddress()))
+		return ss.method.DialConn(c, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	}
 }
 
@@ -259,10 +261,12 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		}
 		obfsMode = opts.Mode
 		v2rayOption = &v2rayObfs.Option{
-			Host:    opts.Host,
-			Path:    opts.Path,
-			Headers: opts.Headers,
-			Mux:     opts.Mux,
+			Host:                     opts.Host,
+			Path:                     opts.Path,
+			Headers:                  opts.Headers,
+			Mux:                      opts.Mux,
+			V2rayHttpUpgrade:         opts.V2rayHttpUpgrade,
+			V2rayHttpUpgradeFastOpen: opts.V2rayHttpUpgradeFastOpen,
 		}
 
 		if opts.TLS {

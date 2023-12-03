@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Dreamacro/clash/common/structure"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/resource"
-	C "github.com/Dreamacro/clash/constant"
-	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/resource"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	types "github.com/metacubex/mihomo/constant/provider"
 )
 
 var (
@@ -25,16 +26,26 @@ type healthCheckSchema struct {
 	ExpectedStatus string `provider:"expected-status,omitempty"`
 }
 
+type OverrideSchema struct {
+	UDP            *bool   `provider:"udp,omitempty"`
+	Up             *string `provider:"up,omitempty"`
+	Down           *string `provider:"down,omitempty"`
+	DialerProxy    *string `provider:"dialer-proxy,omitempty"`
+	SkipCertVerify *bool   `provider:"skip-cert-verify,omitempty"`
+}
+
 type proxyProviderSchema struct {
-	Type          string            `provider:"type"`
-	Path          string            `provider:"path,omitempty"`
-	URL           string            `provider:"url,omitempty"`
-	Interval      int               `provider:"interval,omitempty"`
-	Filter        string            `provider:"filter,omitempty"`
-	ExcludeFilter string            `provider:"exclude-filter,omitempty"`
-	ExcludeType   string            `provider:"exclude-type,omitempty"`
-	DialerProxy   string            `provider:"dialer-proxy,omitempty"`
-	HealthCheck   healthCheckSchema `provider:"health-check,omitempty"`
+	Type          string `provider:"type"`
+	Path          string `provider:"path,omitempty"`
+	URL           string `provider:"url,omitempty"`
+	Interval      int    `provider:"interval,omitempty"`
+	Filter        string `provider:"filter,omitempty"`
+	ExcludeFilter string `provider:"exclude-filter,omitempty"`
+	ExcludeType   string `provider:"exclude-type,omitempty"`
+	DialerProxy   string `provider:"dialer-proxy,omitempty"`
+
+	HealthCheck healthCheckSchema `provider:"health-check,omitempty"`
+	Override    OverrideSchema    `provider:"override,omitempty"`
 }
 
 func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvider, error) {
@@ -68,7 +79,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	case "http":
 		if schema.Path != "" {
 			path := C.Path.Resolve(schema.Path)
-			if !C.Path.IsSafePath(path) {
+			if !features.CMFA && !C.Path.IsSafePath(path) {
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
@@ -85,6 +96,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	excludeFilter := schema.ExcludeFilter
 	excludeType := schema.ExcludeType
 	dialerProxy := schema.DialerProxy
+	override := schema.Override
 
-	return NewProxySetProvider(name, interval, filter, excludeFilter, excludeType, dialerProxy, vehicle, hc)
+	return NewProxySetProvider(name, interval, filter, excludeFilter, excludeType, dialerProxy, override, vehicle, hc)
 }

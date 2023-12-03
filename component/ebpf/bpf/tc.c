@@ -38,7 +38,7 @@ static __always_inline bool is_lan_ip(__be32 addr) {
     return false;
 }
 
-SEC("tc_clash_redirect_to_tun")
+SEC("tc_mihomo_redirect_to_tun")
 int tc_tun_func(struct __sk_buff *skb) {
     void *data          = (void *)(long)skb->data;
     void *data_end      = (void *)(long)skb->data_end;
@@ -50,13 +50,13 @@ int tc_tun_func(struct __sk_buff *skb) {
     if (eth->h_proto == bpf_htons(ETH_P_ARP))
         return TC_ACT_OK;
 
-    __u32 key = 0, *clash_mark, *tun_ifindex;
+    __u32 key = 0, *mihomo_mark, *tun_ifindex;
 
-    clash_mark = bpf_map_lookup_elem(&tc_params_map, &key);
-    if (!clash_mark)
+    mihomo_mark = bpf_map_lookup_elem(&tc_params_map, &key);
+    if (!mihomo_mark)
         return TC_ACT_OK;
 
-    if (skb->mark == *clash_mark)
+    if (skb->mark == *mihomo_mark)
         return TC_ACT_OK;
 
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {

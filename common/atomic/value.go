@@ -11,6 +11,7 @@ func DefaultValue[T any]() T {
 }
 
 type TypedValue[T any] struct {
+	_     noCopy
 	value atomic.Value
 }
 
@@ -51,8 +52,13 @@ func (t *TypedValue[T]) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func NewTypedValue[T any](t T) *TypedValue[T] {
-	v := &TypedValue[T]{}
+func NewTypedValue[T any](t T) (v TypedValue[T]) {
 	v.Store(t)
-	return v
+	return
 }
+
+type noCopy struct{}
+
+// Lock is a no-op used by -copylocks checker from `go vet`.
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}

@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
   
 env:
-  REGISTRY: docker.io
+  REGISTRY: ghcr.io
 jobs:
   Build:
     permissions: write-all
@@ -69,6 +69,12 @@ jobs:
               target: "darwin-amd64 darwin-arm64 android-arm64",
               id: "9",
             }
+          # only for test
+          - { type: "WithoutCGO-GO120", target: "linux-amd64 linux-amd64-compatible",id: "1" }
+          # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
+          - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "2" }
+          # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
+          - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64 android-arm64",id: "3" }
           - { type: "WithCGO", target: "windows/*", id: "1" }
           - { type: "WithCGO", target: "linux/386", id: "2" }
           - { type: "WithCGO", target: "linux/amd64", id: "3" }
@@ -107,7 +113,7 @@ jobs:
       - name: Set ENV
         run: |
           sudo timedatectl set-timezone "Asia/Shanghai"
-          echo "NAME=clash.meta" >> $GITHUB_ENV
+          echo "NAME=mihomo" >> $GITHUB_ENV
           echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
           echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
           echo "BUILDTIME=$(date)" >> $GITHUB_ENV
@@ -117,24 +123,32 @@ jobs:
       - name: Set ENV
         run: |
           echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
-          echo "LDFLAGS=-X 'github.com/Dreamacro/clash/constant.Version=${VERSION}' -X 'github.com/Dreamacro/clash/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
+          echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
+        if: ${{ matrix.job.type!='WithoutCGO-GO120' }}
         uses: actions/setup-go@v4
         with:
           go-version: "1.21"
           check-latest: true
 
+      - name: Setup Go
+        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
+          check-latest: true
+
       - name: Test
-        if: ${{ matrix.job.id=='1' && matrix.job.type=='WithoutCGO' }}
+        if: ${{ matrix.job.id=='1' && matrix.job.type!='WithCGO' }}
         run: |
           go test ./...
 
       - name: Build WithoutCGO
-        if: ${{ matrix.job.type=='WithoutCGO' }}
+        if: ${{ matrix.job.type!='WithCGO' }}
         env:
-          NAME: Clash.Meta
+          NAME: mihomo
           BINDIR: bin
         run: make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
 
@@ -142,9 +156,8 @@ jobs:
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
         id: setup-ndk
         with:
-          ndk-version: r26
-          add-to-path: false
-          local-cache: true
+          ndk-version: r26b
+          add-to-path: true
 
       - name: Build Android
         if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
@@ -177,6 +190,17 @@ jobs:
           cp ../.github/rename-cgo.sh ./
           bash ./rename-cgo.sh
           rm ./rename-cgo.sh
+          ls -la
+          cd ..
+
+      - name: Rename
+        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
+        run: |
+          cd bin
+          ls -la
+          cp ../.github/rename-go120.sh ./
+          bash ./rename-go120.sh
+          rm ./rename-go120.sh
           ls -la
           cd ..
 
@@ -241,7 +265,7 @@ jobs:
           Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
-          [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/Clash.Meta/wiki/FAQ)
+          [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
           [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 
@@ -331,24 +355,25 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_ACCOUNT }}/${{secrets.DOCKERHUB_REPO}}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+
       - name: Show files
         run: |
           ls .
           ls bin/
-      - name: Log into registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+
+      - name: login to ghcr.io
+        uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
@@ -356,8 +381,7 @@ jobs:
           platforms: |
             linux/386
             linux/amd64
-            linux/arm64/v8
+            linux/arm64
             linux/arm/v7
-          #            linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

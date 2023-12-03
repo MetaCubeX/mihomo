@@ -1,8 +1,8 @@
 package provider
 
 import (
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/constant"
 )
 
 // Vehicle Type

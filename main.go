@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/Dreamacro/clash/constant/features"
+	"github.com/metacubex/mihomo/constant/features"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -11,17 +11,16 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Dreamacro/clash/config"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/hub"
-	"github.com/Dreamacro/clash/hub/executor"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/config"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/hub"
+	"github.com/metacubex/mihomo/hub/executor"
+	"github.com/metacubex/mihomo/log"
 
 	"go.uber.org/automaxprocs/maxprocs"
 )
 
 var (
-	flagset            map[string]bool
 	version            bool
 	testConfig         bool
 	geodataMode        bool
@@ -33,29 +32,24 @@ var (
 )
 
 func init() {
-	flag.StringVar(&homeDir, "d", "", "set configuration directory")
-	flag.StringVar(&configFile, "f", "", "specify configuration file")
-	flag.StringVar(&externalUI, "ext-ui", "", "override external ui directory")
-	flag.StringVar(&externalController, "ext-ctl", "", "override external controller address")
-	flag.StringVar(&secret, "secret", "", "override secret for RESTful API")
+	flag.StringVar(&homeDir, "d", os.Getenv("CLASH_HOME_DIR"), "set configuration directory")
+	flag.StringVar(&configFile, "f", os.Getenv("CLASH_CONFIG_FILE"), "specify configuration file")
+	flag.StringVar(&externalUI, "ext-ui", os.Getenv("CLASH_OVERRIDE_EXTERNAL_UI_DIR"), "override external ui directory")
+	flag.StringVar(&externalController, "ext-ctl", os.Getenv("CLASH_OVERRIDE_EXTERNAL_CONTROLLER"), "override external controller address")
+	flag.StringVar(&secret, "secret", os.Getenv("CLASH_OVERRIDE_SECRET"), "override secret for RESTful API")
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
-	flag.BoolVar(&version, "v", false, "show current version of clash")
+	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
 	flag.Parse()
-
-	flagset = map[string]bool{}
-	flag.Visit(func(f *flag.Flag) {
-		flagset[f.Name] = true
-	})
 }
 
 func main() {
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 	if version {
-		fmt.Printf("Clash Meta %s %s %s with %s %s\n",
+		fmt.Printf("Mihomo Meta %s %s %s with %s %s\n",
 			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
-		if len(features.TAGS) != 0 {
-			fmt.Printf("Use tags: %s\n", strings.Join(features.TAGS, ", "))
+		if tags := features.Tags(); len(tags) != 0 {
+			fmt.Printf("Use tags: %s\n", strings.Join(tags, ", "))
 		}
 
 		return
@@ -99,13 +93,13 @@ func main() {
 	}
 
 	var options []hub.Option
-	if flagset["ext-ui"] {
+	if externalUI != "" {
 		options = append(options, hub.WithExternalUI(externalUI))
 	}
-	if flagset["ext-ctl"] {
+	if externalController != "" {
 		options = append(options, hub.WithExternalController(externalController))
 	}
-	if flagset["secret"] {
+	if secret != "" {
 		options = append(options, hub.WithSecret(secret))
 	}
 
@@ -115,7 +109,20 @@ func main() {
 
 	defer executor.Shutdown()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	termSign := make(chan os.Signal, 1)
+	hupSign := make(chan os.Signal, 1)
+	signal.Notify(termSign, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(hupSign, syscall.SIGHUP)
+	for {
+		select {
+		case <-termSign:
+			return
+		case <-hupSign:
+			if cfg, err := executor.ParseWithPath(C.Path.Config()); err == nil {
+				executor.ApplyConfig(cfg, true)
+			} else {
+				log.Errorln("Parse config error: %s", err.Error())
+			}
+		}
+	}
 }

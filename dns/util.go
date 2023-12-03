@@ -11,15 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/cache"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/common/picker"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/nnip"
+	"github.com/metacubex/mihomo/common/picker"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel"
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
@@ -29,14 +28,16 @@ const (
 	MaxMsgSize = 65535
 )
 
+const serverFailureCacheTTL uint32 = 5
+
 func minimalTTL(records []D.RR) uint32 {
-	minObj := lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
+	rr := lo.MinBy(records, func(r1 D.RR, r2 D.RR) bool {
 		return r1.Header().Ttl < r2.Header().Ttl
 	})
-	if minObj != nil {
-		return minObj.Header().Ttl
+	if rr == nil {
+		return 0
 	}
-	return 0
+	return rr.Header().Ttl
 }
 
 func updateTTL(records []D.RR, ttl uint32) {
@@ -49,28 +50,25 @@ func updateTTL(records []D.RR, ttl uint32) {
 	}
 }
 
-func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg) {
-	putMsgToCacheWithExpire(c, key, msg, 0)
-}
-
-func putMsgToCacheWithExpire(c *cache.LruCache[string, *D.Msg], key string, msg *D.Msg, sec uint32) {
-	if sec == 0 {
-		if sec = minimalTTL(msg.Answer); sec == 0 {
-			if sec = minimalTTL(msg.Ns); sec == 0 {
-				sec = minimalTTL(msg.Extra)
-			}
-		}
-		if sec == 0 {
-			return
-		}
-
-		if sec > 120 {
-			sec = 120 // at least 2 minutes to cache
-		}
-
+func putMsgToCache(c dnsCache, key string, q D.Question, msg *D.Msg) {
+	// skip dns cache for acme challenge
+	if q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge.") {
+		log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)
+		return
 	}
 
-	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Duration(sec)*time.Second))
+	var ttl uint32
+	if msg.Rcode == D.RcodeServerFailure {
+		// [...] a resolver MAY cache a server failure response.
+		// If it does so it MUST NOT cache it for longer than five (5) minutes [...]
+		ttl = serverFailureCacheTTL
+	} else {
+		ttl = minimalTTL(append(append(msg.Answer, msg.Ns...), msg.Extra...))
+	}
+	if ttl == 0 {
+		return
+	}
+	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Duration(ttl)*time.Second))
 }
 
 func setMsgTTL(msg *D.Msg, ttl uint32) {
@@ -108,16 +106,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		case "system":
-			clients, err := loadSystemResolver()
-			if err != nil {
-				log.Errorln("[DNS:system] load system resolver failed: %s", err.Error())
-				continue
-			}
-			if len(clients) == 0 {
-				log.Errorln("[DNS:system] no nameserver found in system")
-				continue
-			}
-			ret = append(ret, clients...)
+			ret = append(ret, newSystemClient())
 			continue
 		case "rcode":
 			ret = append(ret, newRCodeClient(s.Addr))
@@ -290,7 +279,7 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 		DstPort: uint16(uintPort),
 	}
 	if proxyAdapter == nil {
-		return dialer.NewDialer(opts...).ListenPacket(ctx, dialer.ParseNetwork(network, dstIP), "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
+		return dialer.NewDialer(opts...).ListenPacket(ctx, network, "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
 	}
 
 	if !proxyAdapter.SupportUDP() {
@@ -300,14 +289,17 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 	return proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
 }
 
+var errIPNotFound = errors.New("couldn't find ip")
+
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
 	cache = true
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
 	defer fast.Close()
 	domain := msgToDomain(m)
+	var noIpMsg *D.Msg
 	for _, client := range clients {
 		if _, isRCodeClient := client.(rcodeClient); isRCodeClient {
-			msg, err = client.Exchange(m)
+			msg, err = client.ExchangeContext(ctx, m)
 			return msg, false, err
 		}
 		client := client // shadow define client to ensure the value captured by the closure will not be changed in the next loop
@@ -321,13 +313,31 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 				// so we would ignore RCode errors from RCode clients.
 				return nil, errors.New("server failure: " + D.RcodeToString[m.Rcode])
 			}
-			log.Debugln("[DNS] %s --> %s, from %s", domain, msgToIP(m), client.Address())
+			if ips := msgToIP(m); len(m.Question) > 0 {
+				qType := m.Question[0].Qtype
+				log.Debugln("[DNS] %s --> %s %s from %s", domain, ips, D.Type(qType), client.Address())
+				switch qType {
+				case D.TypeAAAA:
+					if len(ips) == 0 {
+						noIpMsg = m
+						return nil, errIPNotFound
+					}
+				case D.TypeA:
+					if len(ips) == 0 {
+						noIpMsg = m
+						return nil, errIPNotFound
+					}
+				}
+			}
 			return m, nil
 		})
 	}
 
 	msg = fast.Wait()
 	if msg == nil {
+		if noIpMsg != nil {
+			return noIpMsg, false, nil
+		}
 		err = errors.New("all DNS requests failed")
 		if fErr := fast.Error(); fErr != nil {
 			err = fmt.Errorf("%w, first error: %w", err, fErr)

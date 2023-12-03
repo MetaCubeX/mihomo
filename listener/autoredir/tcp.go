@@ -4,11 +4,11 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type Listener struct {
@@ -43,7 +43,7 @@ func (l *Listener) SetLookupFunc(lookupFunc func(netip.AddrPort) (socks5.Addr, e
 	l.lookupFunc = lookupFunc
 }
 
-func (l *Listener) handleRedir(conn net.Conn, in chan<- C.ConnContext) {
+func (l *Listener) handleRedir(conn net.Conn, tunnel C.Tunnel) {
 	if l.lookupFunc == nil {
 		log.Errorln("[Auto Redirect] lookup function is nil")
 		return
@@ -58,10 +58,10 @@ func (l *Listener) handleRedir(conn net.Conn, in chan<- C.ConnContext) {
 
 	N.TCPKeepAlive(conn)
 
-	in <- inbound.NewSocket(target, conn, C.REDIR, l.additions...)
+	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.REDIR, l.additions...))
 }
 
-func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-REDIR"),
@@ -87,7 +87,7 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 				}
 				continue
 			}
-			go rl.handleRedir(c, in)
+			go rl.handleRedir(c, tunnel)
 		}
 	}()
 

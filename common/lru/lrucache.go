@@ -1,4 +1,4 @@
-package cache
+package lru
 
 // Modified by https://github.com/die-net/lrucache
 
@@ -6,8 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/generics/list"
-
+	list "github.com/bahlo/generic-list-go"
 	"github.com/samber/lo"
 )
 

@@ -10,7 +10,11 @@ import (
 	"math/big"
 )
 
-func ParseCert(certificate, privateKey string) (tls.Certificate, error) {
+type Path interface {
+	Resolve(path string) string
+}
+
+func ParseCert(certificate, privateKey string, path Path) (tls.Certificate, error) {
 	if certificate == "" && privateKey == "" {
 		return newRandomTLSKeyPair()
 	}
@@ -19,6 +23,8 @@ func ParseCert(certificate, privateKey string) (tls.Certificate, error) {
 		return cert, nil
 	}
 
+	certificate = path.Resolve(certificate)
+	privateKey = path.Resolve(privateKey)
 	cert, loadErr := tls.LoadX509KeyPair(certificate, privateKey)
 	if loadErr != nil {
 		return tls.Certificate{}, fmt.Errorf("parse certificate failed, maybe format error:%s, or path error: %s", painTextErr.Error(), loadErr.Error())

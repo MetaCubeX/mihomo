@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/trie"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/trie"
 
 	"github.com/miekg/dns"
 	"github.com/zhangyunhao116/fastrand"

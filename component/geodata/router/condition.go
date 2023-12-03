@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/geodata/strmatcher"
+	"github.com/metacubex/mihomo/component/geodata/strmatcher"
 )
 
 var matcherTypeMap = map[Domain_Type]strmatcher.Type{

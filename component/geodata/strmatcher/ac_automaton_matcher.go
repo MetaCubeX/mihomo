@@ -1,7 +1,7 @@
 package strmatcher
 
 import (
-	"github.com/Dreamacro/clash/common/generics/list"
+	list "github.com/bahlo/generic-list-go"
 )
 
 const validCharCount = 53

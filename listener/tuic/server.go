@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/sockopt"
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/tuic"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/sockopt"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/tuic"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
@@ -31,20 +31,24 @@ type Listener struct {
 	servers      []*tuic.Server
 }
 
-func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, additions ...inbound.Addition) (*Listener, error) {
+func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TUIC"),
 			inbound.WithSpecialRules(""),
 		}
 	}
-	h := &sing.ListenerHandler{
-		TcpIn:     tcpIn,
-		UdpIn:     udpIn,
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
+		Tunnel:    tunnel,
 		Type:      C.TUIC,
 		Additions: additions,
+		MuxOption: config.MuxOption,
+	})
+	if err != nil {
+		return nil, err
 	}
-	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey)
+
+	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey, C.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -94,19 +98,18 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 			newAdditions = slices.Clone(additions)
 			newAdditions = append(newAdditions, _additions...)
 		}
-		connCtx := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
-		metadata := sing.ConvertMetadata(connCtx.Metadata())
-		if h.IsSpecialFqdn(metadata.Destination.Fqdn) {
+		conn, metadata := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
+		if h.IsSpecialFqdn(metadata.Host) {
 			go func() { // ParseSpecialFqdn will block, so open a new goroutine
 				_ = h.ParseSpecialFqdn(
 					sing.WithAdditions(context.Background(), newAdditions...),
 					conn,
-					metadata,
+					sing.ConvertMetadata(metadata),
 				)
 			}()
 			return nil
 		}
-		tcpIn <- connCtx
+		go tunnel.HandleTCPConn(conn, metadata)
 		return nil
 	}
 	handleUdpFn := func(addr socks5.Addr, packet C.UDPPacket, _additions ...inbound.Addition) error {
@@ -115,10 +118,7 @@ func New(config LC.TuicServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.Packet
 			newAdditions = slices.Clone(additions)
 			newAdditions = append(newAdditions, _additions...)
 		}
-		select {
-		case udpIn <- inbound.NewPacket(addr, packet, C.TUIC, newAdditions...):
-		default:
-		}
+		tunnel.HandleUDPPacket(inbound.NewPacket(addr, packet, C.TUIC, newAdditions...))
 		return nil
 	}
 

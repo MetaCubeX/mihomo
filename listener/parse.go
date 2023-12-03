@@ -3,9 +3,9 @@ package listener
 import (
 	"fmt"
 
-	"github.com/Dreamacro/clash/common/structure"
-	C "github.com/Dreamacro/clash/constant"
-	IN "github.com/Dreamacro/clash/listener/inbound"
+	"github.com/metacubex/mihomo/common/structure"
+	C "github.com/metacubex/mihomo/constant"
+	IN "github.com/metacubex/mihomo/listener/inbound"
 )
 
 func ParseListener(mapping map[string]any) (C.InboundListener, error) {

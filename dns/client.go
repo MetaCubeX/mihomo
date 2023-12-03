@@ -8,11 +8,10 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	"github.com/Dreamacro/clash/component/ca"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
 
 	D "github.com/miekg/dns"
 	"github.com/zhangyunhao116/fastrand"
@@ -23,7 +22,7 @@ type client struct {
 	r            *Resolver
 	port         string
 	host         string
-	iface        *atomic.TypedValue[string]
+	iface        string
 	proxyAdapter C.ProxyAdapter
 	proxyName    string
 	addr         string
@@ -46,10 +45,6 @@ func (c *client) Address() string {
 
 	c.addr = fmt.Sprintf("%s://%s", schema, net.JoinHostPort(c.host, c.port))
 	return c.addr
-}
-
-func (c *client) Exchange(m *D.Msg) (*D.Msg, error) {
-	return c.ExchangeContext(context.Background(), m)
 }
 
 func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {
@@ -77,9 +72,9 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		network = "tcp"
 	}
 
-	options := []dialer.Option{}
-	if c.iface != nil && c.iface.Load() != "" {
-		options = append(options, dialer.WithInterface(c.iface.Load()))
+	var options []dialer.Option
+	if c.iface != "" {
+		options = append(options, dialer.WithInterface(c.iface))
 	}
 
 	conn, err := getDialHandler(c.r, c.proxyAdapter, c.proxyName, options...)(ctx, network, net.JoinHostPort(ip.String(), c.port))

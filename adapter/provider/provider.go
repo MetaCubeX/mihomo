@@ -10,19 +10,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/common/convert"
-	"github.com/Dreamacro/clash/common/utils"
-	clashHttp "github.com/Dreamacro/clash/component/http"
-	"github.com/Dreamacro/clash/component/resource"
-	C "github.com/Dreamacro/clash/constant"
-	types "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/common/convert"
+	"github.com/metacubex/mihomo/common/utils"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/component/resource"
+	C "github.com/metacubex/mihomo/constant"
+	types "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/dlclark/regexp2"
 	"gopkg.in/yaml.v3"
 )
+
+var ProxyProviderName = make(map[string]struct{})
 
 const (
 	ReservedName = "default"
@@ -46,12 +48,18 @@ type proxySetProvider struct {
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
+	expectedStatus := "*"
+	if pp.healthCheck.expectedStatus != nil {
+		expectedStatus = pp.healthCheck.expectedStatus.ToString()
+	}
+
 	return json.Marshal(map[string]any{
 		"name":             pp.Name(),
 		"type":             pp.Type().String(),
 		"vehicleType":      pp.VehicleType().String(),
 		"proxies":          pp.Proxies(),
 		"testUrl":          pp.healthCheck.url,
+		"expectedStatus":   expectedStatus,
 		"updatedAt":        pp.UpdatedAt,
 		"subscriptionInfo": pp.subscriptionInfo,
 	})
@@ -119,8 +127,8 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 		defer cancel()
-		resp, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
-			http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+		resp, err := mihomoHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 		if err != nil {
 			return
 		}
@@ -128,7 +136,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 
 		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
 		if userInfoStr == "" {
-			resp2, err := clashHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			resp2, err := mihomoHttp.HttpRequest(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
 				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil)
 			if err != nil {
 				return
@@ -163,7 +171,7 @@ func stopProxyProvider(pd *ProxySetProvider) {
 	_ = pd.Fetcher.Destroy()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, dialerProxy string, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, dialerProxy string, override OverrideSchema, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
 	excludeFilterReg, err := regexp2.Compile(excludeFilter, 0)
 	if err != nil {
 		return nil, fmt.Errorf("invalid excludeFilter regex: %w", err)
@@ -191,8 +199,9 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 		healthCheck: hc,
 	}
 
-	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy), proxiesOnUpdate(pd))
+	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy, override), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
+	ProxyProviderName[name] = struct{}{}
 	wrapper := &ProxySetProvider{pd}
 	runtime.SetFinalizer(wrapper, stopProxyProvider)
 	return wrapper, nil
@@ -211,12 +220,18 @@ type compatibleProvider struct {
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
+	expectedStatus := "*"
+	if cp.healthCheck.expectedStatus != nil {
+		expectedStatus = cp.healthCheck.expectedStatus.ToString()
+	}
+
 	return json.Marshal(map[string]any{
-		"name":        cp.Name(),
-		"type":        cp.Type().String(),
-		"vehicleType": cp.VehicleType().String(),
-		"proxies":     cp.Proxies(),
-		"testUrl":     cp.healthCheck.url,
+		"name":           cp.Name(),
+		"type":           cp.Type().String(),
+		"vehicleType":    cp.VehicleType().String(),
+		"proxies":        cp.Proxies(),
+		"testUrl":        cp.healthCheck.url,
+		"expectedStatus": expectedStatus,
 	})
 }
 
@@ -292,7 +307,7 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	}
 }
 
-func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp, dialerProxy string) resource.Parser[[]C.Proxy] {
+func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray []string, filterRegs []*regexp2.Regexp, excludeFilterReg *regexp2.Regexp, dialerProxy string, override OverrideSchema) resource.Parser[[]C.Proxy] {
 	return func(buf []byte) ([]C.Proxy, error) {
 		schema := &ProxySchema{}
 
@@ -355,13 +370,32 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 				if _, ok := proxiesSet[name]; ok {
 					continue
 				}
+
 				if len(dialerProxy) > 0 {
 					mapping["dialer-proxy"] = dialerProxy
 				}
+
+				if override.UDP != nil {
+					mapping["udp"] = *override.UDP
+				}
+				if override.Up != nil {
+					mapping["up"] = *override.Up
+				}
+				if override.Down != nil {
+					mapping["down"] = *override.Down
+				}
+				if override.DialerProxy != nil {
+					mapping["dialer-proxy"] = *override.DialerProxy
+				}
+				if override.SkipCertVerify != nil {
+					mapping["skip-cert-verify"] = *override.SkipCertVerify
+				}
+
 				proxy, err := adapter.ParseProxy(mapping)
 				if err != nil {
 					return nil, fmt.Errorf("proxy %d error: %w", idx, err)
 				}
+
 				proxiesSet[name] = struct{}{}
 				proxies = append(proxies, proxy)
 			}

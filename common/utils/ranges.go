@@ -75,3 +75,26 @@ func (ranges IntRanges[T]) Check(status T) bool {
 
 	return false
 }
+
+func (ranges IntRanges[T]) ToString() string {
+	if len(ranges) == 0 {
+		return "*"
+	}
+
+	terms := make([]string, len(ranges))
+	for i, r := range ranges {
+		start := r.Start()
+		end := r.End()
+
+		var term string
+		if start == end {
+			term = strconv.Itoa(int(start))
+		} else {
+			term = strconv.Itoa(int(start)) + "-" + strconv.Itoa(int(end))
+		}
+
+		terms[i] = term
+	}
+
+	return strings.Join(terms, "/")
+}

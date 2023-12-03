@@ -12,13 +12,13 @@ import (
 	"net/http"
 	"sync"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/component/ca"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/vmess"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/component/ca"
+	tlsC "github.com/metacubex/mihomo/component/tls"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/vmess"
 )
 
 const (
@@ -55,10 +55,12 @@ type Option struct {
 }
 
 type WebsocketOption struct {
-	Host    string
-	Port    string
-	Path    string
-	Headers http.Header
+	Host                     string
+	Port                     string
+	Path                     string
+	Headers                  http.Header
+	V2rayHttpUpgrade         bool
+	V2rayHttpUpgradeFastOpen bool
 }
 
 type Trojan struct {
@@ -128,13 +130,15 @@ func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptio
 	}
 
 	return vmess.StreamWebsocketConn(ctx, conn, &vmess.WebsocketConfig{
-		Host:              wsOptions.Host,
-		Port:              wsOptions.Port,
-		Path:              wsOptions.Path,
-		Headers:           wsOptions.Headers,
-		TLS:               true,
-		TLSConfig:         tlsConfig,
-		ClientFingerprint: t.option.ClientFingerprint,
+		Host:                     wsOptions.Host,
+		Port:                     wsOptions.Port,
+		Path:                     wsOptions.Path,
+		Headers:                  wsOptions.Headers,
+		V2rayHttpUpgrade:         wsOptions.V2rayHttpUpgrade,
+		V2rayHttpUpgradeFastOpen: wsOptions.V2rayHttpUpgradeFastOpen,
+		TLS:                      true,
+		TLSConfig:                tlsConfig,
+		ClientFingerprint:        t.option.ClientFingerprint,
 	})
 }
 
