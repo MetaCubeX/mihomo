@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
-	"github.com/metacubex/mihomo/common/cache"
 	"github.com/metacubex/mihomo/common/callback"
+	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
@@ -190,9 +190,9 @@ func strategyConsistentHashing(url string) strategyFn {
 func strategyStickySessions(url string) strategyFn {
 	ttl := time.Minute * 10
 	maxRetry := 5
-	lruCache := cache.New[uint64, int](
-		cache.WithAge[uint64, int](int64(ttl.Seconds())),
-		cache.WithSize[uint64, int](1000))
+	lruCache := lru.New[uint64, int](
+		lru.WithAge[uint64, int](int64(ttl.Seconds())),
+		lru.WithSize[uint64, int](1000))
 	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
 		key := utils.MapHash(getKeyWithSrcAndDst(metadata))
 		length := len(proxies)

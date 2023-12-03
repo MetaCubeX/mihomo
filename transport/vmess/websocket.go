@@ -49,16 +49,17 @@ type websocketWithEarlyDataConn struct {
 }
 
 type WebsocketConfig struct {
-	Host                string
-	Port                string
-	Path                string
-	Headers             http.Header
-	TLS                 bool
-	TLSConfig           *tls.Config
-	MaxEarlyData        int
-	EarlyDataHeaderName string
-	ClientFingerprint   string
-	V2rayHttpUpgrade    bool
+	Host                     string
+	Port                     string
+	Path                     string
+	Headers                  http.Header
+	TLS                      bool
+	TLSConfig                *tls.Config
+	MaxEarlyData             int
+	EarlyDataHeaderName      string
+	ClientFingerprint        string
+	V2rayHttpUpgrade         bool
+	V2rayHttpUpgradeFastOpen bool
 }
 
 // Read implements net.Conn.Read()
@@ -415,6 +416,22 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		return nil, err
 	}
 	bufferedConn := N.NewBufferedConn(conn)
+
+	if c.V2rayHttpUpgrade && c.V2rayHttpUpgradeFastOpen {
+		return N.NewEarlyConn(bufferedConn, func() error {
+			response, err := http.ReadResponse(bufferedConn.Reader(), request)
+			if err != nil {
+				return err
+			}
+			if response.StatusCode != http.StatusSwitchingProtocols ||
+				!strings.EqualFold(response.Header.Get("Connection"), "upgrade") ||
+				!strings.EqualFold(response.Header.Get("Upgrade"), "websocket") {
+				return fmt.Errorf("unexpected status: %s", response.Status)
+			}
+			return nil
+		}), nil
+	}
+
 	response, err := http.ReadResponse(bufferedConn.Reader(), request)
 	if err != nil {
 		return nil, err
@@ -554,7 +571,14 @@ func StreamUpgradedWebsocketConn(w http.ResponseWriter, r *http.Request) (net.Co
 	}
 
 	if edBuf := decodeXray0rtt(r.Header); len(edBuf) > 0 {
-		conn = N.NewCachedConn(conn, edBuf)
+		appendOk := false
+		if bufConn, ok := conn.(*N.BufferedConn); ok {
+			appendOk = bufConn.AppendData(edBuf)
+		}
+		if !appendOk {
+			conn = N.NewCachedConn(conn, edBuf)
+		}
+
 	}
 
 	return conn, nil

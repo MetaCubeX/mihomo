@@ -1,6 +1,8 @@
 package config
 
 import (
+	"github.com/metacubex/mihomo/listener/sing"
+
 	"encoding/json"
 )
 
@@ -17,6 +19,7 @@ type VmessServer struct {
 	WsPath      string
 	Certificate string
 	PrivateKey  string
+	MuxOption   sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
 }
 
 func (t VmessServer) String() string {

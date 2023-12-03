@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
@@ -29,7 +29,7 @@ type SnifferDispatcher struct {
 	sniffers        map[sniffer.Sniffer]SnifferConfig
 	forceDomain     *trie.DomainSet
 	skipSNI         *trie.DomainSet
-	skipList        *cache.LruCache[string, uint8]
+	skipList        *lru.LruCache[string, uint8]
 	rwMux           sync.RWMutex
 	forceDnsMapping bool
 	parsePureIp     bool
@@ -202,7 +202,7 @@ func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig,
 		enable:          true,
 		forceDomain:     forceDomain,
 		skipSNI:         skipSNI,
-		skipList:        cache.New(cache.WithSize[string, uint8](128), cache.WithAge[string, uint8](600)),
+		skipList:        lru.New(lru.WithSize[string, uint8](128), lru.WithAge[string, uint8](600)),
 		forceDnsMapping: forceDnsMapping,
 		parsePureIp:     parsePureIp,
 		sniffers:        make(map[sniffer.Sniffer]SnifferConfig, 0),

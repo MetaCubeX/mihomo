@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/cache"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/common/picker"
@@ -51,7 +50,7 @@ func updateTTL(records []D.RR, ttl uint32) {
 	}
 }
 
-func putMsgToCache(c *cache.LruCache[string, *D.Msg], key string, q D.Question, msg *D.Msg) {
+func putMsgToCache(c dnsCache, key string, q D.Question, msg *D.Msg) {
 	// skip dns cache for acme challenge
 	if q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge.") {
 		log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)

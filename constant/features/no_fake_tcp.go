@@ -2,6 +2,4 @@
 
 package features
 
-func init() {
-	TAGS = append(TAGS, "no_fake_tcp")
-}
+const NoFakeTCP = true

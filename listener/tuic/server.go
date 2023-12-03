@@ -38,10 +38,14 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 			inbound.WithSpecialRules(""),
 		}
 	}
-	h := &sing.ListenerHandler{
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
 		Tunnel:    tunnel,
 		Type:      C.TUIC,
 		Additions: additions,
+		MuxOption: config.MuxOption,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	cert, err := CN.ParseCert(config.Certificate, config.PrivateKey, C.Path)

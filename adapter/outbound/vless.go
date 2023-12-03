@@ -88,14 +88,15 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
-			Host:                host,
-			Port:                port,
-			Path:                v.option.WSOpts.Path,
-			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
-			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
-			V2rayHttpUpgrade:    v.option.WSOpts.V2rayHttpUpgrade,
-			ClientFingerprint:   v.option.ClientFingerprint,
-			Headers:             http.Header{},
+			Host:                     host,
+			Port:                     port,
+			Path:                     v.option.WSOpts.Path,
+			MaxEarlyData:             v.option.WSOpts.MaxEarlyData,
+			EarlyDataHeaderName:      v.option.WSOpts.EarlyDataHeaderName,
+			V2rayHttpUpgrade:         v.option.WSOpts.V2rayHttpUpgrade,
+			V2rayHttpUpgradeFastOpen: v.option.WSOpts.V2rayHttpUpgradeFastOpen,
+			ClientFingerprint:        v.option.ClientFingerprint,
+			Headers:                  http.Header{},
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {

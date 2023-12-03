@@ -2,6 +2,4 @@
 
 package features
 
-func init() {
-	TAGS = append(TAGS, "with_gvisor")
-}
+const WithGVisor = true

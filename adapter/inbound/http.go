@@ -12,6 +12,8 @@ func NewHTTP(target socks5.Addr, srcConn net.Conn, conn net.Conn, additions ...A
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = C.TCP
 	metadata.Type = C.HTTP
+	metadata.RawSrcAddr = srcConn.RemoteAddr()
+	metadata.RawDstAddr = srcConn.LocalAddr()
 	ApplyAdditions(metadata, WithSrcAddr(srcConn.RemoteAddr()), WithInAddr(conn.LocalAddr()))
 	ApplyAdditions(metadata, additions...)
 	return conn, metadata

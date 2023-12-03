@@ -7,21 +7,21 @@ import (
 	"strings"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	authStore "github.com/metacubex/mihomo/listener/auth"
 	"github.com/metacubex/mihomo/log"
 )
 
-func HandleConn(c net.Conn, tunnel C.Tunnel, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
+func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
 	client := newClient(c, tunnel, additions...)
 	defer client.CloseIdleConnections()
 
 	conn := N.NewBufferedConn(c)
 
 	keepAlive := true
-	trusted := cache == nil // disable authenticate if cache is nil
+	trusted := cache == nil // disable authenticate if lru is nil
 
 	for keepAlive {
 		request, err := ReadRequest(conn.Reader())
@@ -98,7 +98,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *cache.LruCache[string, bool]
 	_ = conn.Close()
 }
 
-func authenticate(request *http.Request, cache *cache.LruCache[string, bool]) *http.Response {
+func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) *http.Response {
 	authenticator := authStore.Authenticator()
 	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
 		authenticator = nil

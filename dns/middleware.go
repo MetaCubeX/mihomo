@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/cache"
+	"github.com/metacubex/mihomo/common/lru"
 	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/component/fakeip"
 	R "github.com/metacubex/mihomo/component/resolver"
@@ -21,7 +21,7 @@ type (
 	middleware func(next handler) handler
 )
 
-func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middleware {
+func withHosts(hosts R.Hosts, mapping *lru.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
@@ -98,7 +98,7 @@ func withHosts(hosts R.Hosts, mapping *cache.LruCache[netip.Addr, string]) middl
 	}
 }
 
-func withMapping(mapping *cache.LruCache[netip.Addr, string]) middleware {
+func withMapping(mapping *lru.LruCache[netip.Addr, string]) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]

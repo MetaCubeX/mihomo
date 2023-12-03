@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/component/dialer"
@@ -150,14 +149,18 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		dnsAdds = append(dnsAdds, addrPort)
 	}
 
+	h, err := sing.NewListenerHandler(sing.ListenerConfig{
+		Tunnel:    tunnel,
+		Type:      C.TUN,
+		Additions: additions,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	handler := &ListenerHandler{
-		ListenerHandler: sing.ListenerHandler{
-			Tunnel:     tunnel,
-			Type:       C.TUN,
-			Additions:  additions,
-			UDPTimeout: time.Second * time.Duration(udpTimeout),
-		},
-		DnsAdds: dnsAdds,
+		ListenerHandler: h,
+		DnsAdds:         dnsAdds,
 	}
 	l = &Listener{
 		closed:  false,

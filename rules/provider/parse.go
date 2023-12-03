@@ -8,6 +8,7 @@ import (
 	"github.com/metacubex/mihomo/common/structure"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	P "github.com/metacubex/mihomo/constant/provider"
 )
 
@@ -62,7 +63,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	case "http":
 		if schema.Path != "" {
 			path := C.Path.Resolve(schema.Path)
-			if !C.Path.IsSafePath(path) {
+			if !features.CMFA && !C.Path.IsSafePath(path) {
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)

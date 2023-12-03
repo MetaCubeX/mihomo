@@ -53,10 +53,12 @@ func (t *Trojan) plainStream(ctx context.Context, c net.Conn) (net.Conn, error) 
 	if t.option.Network == "ws" {
 		host, port, _ := net.SplitHostPort(t.addr)
 		wsOpts := &trojan.WebsocketOption{
-			Host:             host,
-			Port:             port,
-			Path:             t.option.WSOpts.Path,
-			V2rayHttpUpgrade: t.option.WSOpts.V2rayHttpUpgrade,
+			Host:                     host,
+			Port:                     port,
+			Path:                     t.option.WSOpts.Path,
+			V2rayHttpUpgrade:         t.option.WSOpts.V2rayHttpUpgrade,
+			V2rayHttpUpgradeFastOpen: t.option.WSOpts.V2rayHttpUpgradeFastOpen,
+			Headers:                  http.Header{},
 		}
 
 		if t.option.SNI != "" {
@@ -64,11 +66,9 @@ func (t *Trojan) plainStream(ctx context.Context, c net.Conn) (net.Conn, error) 
 		}
 
 		if len(t.option.WSOpts.Headers) != 0 {
-			header := http.Header{}
 			for key, value := range t.option.WSOpts.Headers {
-				header.Add(key, value)
+				wsOpts.Headers.Add(key, value)
 			}
-			wsOpts.Headers = header
 		}
 
 		return t.instance.StreamWebsocketConn(ctx, c, wsOpts)

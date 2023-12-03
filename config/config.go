@@ -29,6 +29,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
 	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
 	"github.com/metacubex/mihomo/dns"
@@ -39,6 +40,7 @@ import (
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -112,9 +114,10 @@ type DNS struct {
 	Listen                string           `yaml:"listen"`
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
+	CacheAlgorithm        string           `yaml:"cache-algorithm"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[resolver.HostValue]
-	NameServerPolicy      map[string][]dns.NameServer
+	NameServerPolicy      *orderedmap.OrderedMap[string, []dns.NameServer]
 	ProxyServerNameserver []dns.NameServer
 }
 
@@ -193,29 +196,35 @@ type RawNTP struct {
 }
 
 type RawDNS struct {
-	Enable                bool              `yaml:"enable"`
-	PreferH3              bool              `yaml:"prefer-h3"`
-	IPv6                  bool              `yaml:"ipv6"`
-	IPv6Timeout           uint              `yaml:"ipv6-timeout"`
-	UseHosts              bool              `yaml:"use-hosts"`
-	NameServer            []string          `yaml:"nameserver"`
-	Fallback              []string          `yaml:"fallback"`
-	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter"`
-	Listen                string            `yaml:"listen"`
-	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode"`
-	FakeIPRange           string            `yaml:"fake-ip-range"`
-	FakeIPFilter          []string          `yaml:"fake-ip-filter"`
-	DefaultNameserver     []string          `yaml:"default-nameserver"`
-	NameServerPolicy      map[string]any    `yaml:"nameserver-policy"`
-	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver"`
+	Enable                bool                                `yaml:"enable" json:"enable"`
+	PreferH3              bool                                `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                  bool                                `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout           uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts              bool                                `yaml:"use-hosts" json:"use-hosts"`
+	NameServer            []string                            `yaml:"nameserver" json:"nameserver"`
+	Fallback              []string                            `yaml:"fallback" json:"fallback"`
+	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
+	Listen                string                              `yaml:"listen" json:"listen"`
+	EnhancedMode          C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange           string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPFilter          []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	DefaultNameserver     []string                            `yaml:"default-nameserver" json:"default-nameserver"`
+	CacheAlgorithm        string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
+	NameServerPolicy      *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
+	ProxyServerNameserver []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
-	GeoIP     bool     `yaml:"geoip"`
-	GeoIPCode string   `yaml:"geoip-code"`
-	IPCIDR    []string `yaml:"ipcidr"`
-	Domain    []string `yaml:"domain"`
-	GeoSite   []string `yaml:"geosite"`
+	GeoIP     bool     `yaml:"geoip" json:"geoip"`
+	GeoIPCode string   `yaml:"geoip-code" json:"geoip-code"`
+	IPCIDR    []string `yaml:"ipcidr" json:"ipcidr"`
+	Domain    []string `yaml:"domain" json:"domain"`
+	GeoSite   []string `yaml:"geosite" json:"geosite"`
+}
+
+type RawClashForAndroid struct {
+	AppendSystemDNS   bool   `yaml:"append-system-dns" json:"append-system-dns"`
+	UiSubtitlePattern string `yaml:"ui-subtitle-pattern" json:"ui-subtitle-pattern"`
 }
 
 type RawTun struct {
@@ -263,23 +272,23 @@ type RawTuicServer struct {
 }
 
 type RawConfig struct {
-	Port                    int               `yaml:"port"`
-	SocksPort               int               `yaml:"socks-port"`
-	RedirPort               int               `yaml:"redir-port"`
-	TProxyPort              int               `yaml:"tproxy-port"`
-	MixedPort               int               `yaml:"mixed-port"`
+	Port                    int               `yaml:"port" json:"port"`
+	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
+	RedirPort               int               `yaml:"redir-port" json:"redir-port"`
+	TProxyPort              int               `yaml:"tproxy-port" json:"tproxy-port"`
+	MixedPort               int               `yaml:"mixed-port" json:"mixed-port"`
 	ShadowSocksConfig       string            `yaml:"ss-config"`
 	VmessConfig             string            `yaml:"vmess-config"`
 	InboundTfo              bool              `yaml:"inbound-tfo"`
 	InboundMPTCP            bool              `yaml:"inbound-mptcp"`
-	Authentication          []string          `yaml:"authentication"`
+	Authentication          []string          `yaml:"authentication" json:"authentication"`
 	SkipAuthPrefixes        []netip.Prefix    `yaml:"skip-auth-prefixes"`
-	AllowLan                bool              `yaml:"allow-lan"`
-	BindAddress             string            `yaml:"bind-address"`
-	Mode                    T.TunnelMode      `yaml:"mode"`
-	UnifiedDelay            bool              `yaml:"unified-delay"`
-	LogLevel                log.LogLevel      `yaml:"log-level"`
-	IPv6                    bool              `yaml:"ipv6"`
+	AllowLan                bool              `yaml:"allow-lan" json:"allow-lan"`
+	BindAddress             string            `yaml:"bind-address" json:"bind-address"`
+	Mode                    T.TunnelMode      `yaml:"mode" json:"mode"`
+	UnifiedDelay            bool              `yaml:"unified-delay" json:"unified-delay"`
+	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
+	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
 	ExternalController      string            `yaml:"external-controller"`
 	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
 	ExternalUI              string            `yaml:"external-ui"`
@@ -289,20 +298,20 @@ type RawConfig struct {
 	Interface               string            `yaml:"interface-name"`
 	RoutingMark             int               `yaml:"routing-mark"`
 	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
-	GeodataMode             bool              `yaml:"geodata-mode"`
-	GeodataLoader           string            `yaml:"geodata-loader"`
+	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
+	GeodataLoader           string            `yaml:"geodata-loader" json:"geodata-loader"`
 	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 	GlobalUA                string            `yaml:"global-ua"`
 	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
 
-	Sniffer       RawSniffer                `yaml:"sniffer"`
+	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers"`
-	Hosts         map[string]any            `yaml:"hosts"`
-	NTP           RawNTP                    `yaml:"ntp"`
-	DNS           RawDNS                    `yaml:"dns"`
+	Hosts         map[string]any            `yaml:"hosts" json:"hosts"`
+	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
+	DNS           RawDNS                    `yaml:"dns" json:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
 	EBpf          EBpf                      `yaml:"ebpf"`
@@ -316,6 +325,8 @@ type RawConfig struct {
 	SubRules      map[string][]string       `yaml:"sub-rules"`
 	RawTLS        TLS                       `yaml:"tls"`
 	Listeners     []map[string]any          `yaml:"listeners"`
+
+	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
 
 type GeoXUrl struct {
@@ -381,7 +392,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		ProxyGroup:      []map[string]any{},
 		TCPConcurrent:   false,
 		FindProcessMode: P.FindProcessStrict,
-		GlobalUA:        "mihomo",
+		GlobalUA:        "clash.meta",
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -545,7 +556,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.DNS = dnsCfg
 
 	err = parseTun(rawCfg.Tun, config.General)
-	if err != nil {
+	if !features.CMFA && err != nil {
 		return nil, err
 	}
 
@@ -664,6 +675,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
+	proxies["REJECT-DROP"] = adapter.NewProxy(outbound.NewRejectDrop())
 	proxies["COMPATIBLE"] = adapter.NewProxy(outbound.NewCompatible())
 	proxies["PASS"] = adapter.NewProxy(outbound.NewPass())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
@@ -917,9 +929,9 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 
 	if len(cfg.Hosts) != 0 {
 		for domain, anyValue := range cfg.Hosts {
-			if str, ok := anyValue.(string); ok && str == "mihomo" {
+			if str, ok := anyValue.(string); ok && str == "lan" {
 				if addrs, err := net.InterfaceAddrs(); err != nil {
-					log.Errorln("insert mihomo to host error: %s", err)
+					log.Errorln("insert lan to host error: %s", err)
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {
@@ -1085,12 +1097,13 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (map[string][]dns.NameServer, error) {
-	policy := map[string][]dns.NameServer{}
-	updatedPolicy := make(map[string]interface{})
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (*orderedmap.OrderedMap[string, []dns.NameServer], error) {
+	policy := orderedmap.New[string, []dns.NameServer]()
+	updatedPolicy := orderedmap.New[string, any]()
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
-	for k, v := range nsPolicy {
+	for pair := nsPolicy.Oldest(); pair != nil; pair = pair.Next() {
+		k, v := pair.Key, pair.Value
 		if strings.Contains(k, ",") {
 			if strings.Contains(k, "geosite:") {
 				subkeys := strings.Split(k, ":")
@@ -1098,7 +1111,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
-					updatedPolicy[newKey] = v
+					updatedPolicy.Store(newKey, v)
 				}
 			} else if strings.Contains(k, "rule-set:") {
 				subkeys := strings.Split(k, ":")
@@ -1106,20 +1119,21 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "rule-set:" + subkey
-					updatedPolicy[newKey] = v
+					updatedPolicy.Store(newKey, v)
 				}
 			} else if re.MatchString(k) {
 				subkeys := strings.Split(k, ",")
 				for _, subkey := range subkeys {
-					updatedPolicy[subkey] = v
+					updatedPolicy.Store(subkey, v)
 				}
 			}
 		} else {
-			updatedPolicy[k] = v
+			updatedPolicy.Store(k, v)
 		}
 	}
 
-	for domain, server := range updatedPolicy {
+	for pair := updatedPolicy.Oldest(); pair != nil; pair = pair.Next() {
+		domain, server := pair.Key, pair.Value
 		servers, err := utils.ToStringSlice(server)
 		if err != nil {
 			return nil, err
@@ -1144,7 +1158,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				}
 			}
 		}
-		policy[domain] = nameservers
+		policy.Store(domain, nameservers)
 	}
 
 	return policy, nil
@@ -1328,6 +1342,12 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 
 	if cfg.UseHosts {
 		dnsCfg.Hosts = hosts
+	}
+
+	if cfg.CacheAlgorithm == "" || cfg.CacheAlgorithm == "lru" {
+		dnsCfg.CacheAlgorithm = "lru"
+	} else {
+		dnsCfg.CacheAlgorithm = "arc"
 	}
 
 	return dnsCfg, nil

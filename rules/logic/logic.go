@@ -2,10 +2,10 @@ package logic
 
 import (
 	"fmt"
+	list "github.com/bahlo/generic-list-go"
 	"regexp"
 	"strings"
 
-	"github.com/metacubex/mihomo/common/collections"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/rules/common"
 )
@@ -133,7 +133,7 @@ func (logic *Logic) payloadToRule(subPayload string, parseRule ParseRuleFunc) (C
 }
 
 func (logic *Logic) format(payload string) ([]Range, error) {
-	stack := collections.NewStack()
+	stack := list.New[Range]()
 	num := 0
 	subRanges := make([]Range, 0)
 	for i, c := range payload {
@@ -144,15 +144,16 @@ func (logic *Logic) format(payload string) ([]Range, error) {
 			}
 
 			num++
-			stack.Push(sr)
+			stack.PushBack(sr)
 		} else if c == ')' {
 			if stack.Len() == 0 {
 				return nil, fmt.Errorf("missing '('")
 			}
 
-			sr := stack.Pop().(Range)
-			sr.end = i
-			subRanges = append(subRanges, sr)
+			sr := stack.Back()
+			stack.Remove(sr)
+			sr.Value.end = i
+			subRanges = append(subRanges, sr.Value)
 		}
 	}
 

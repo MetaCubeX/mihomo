@@ -9,9 +9,10 @@ import (
 
 type ShadowSocksOption struct {
 	BaseOption
-	Password string `inbound:"password"`
-	Cipher   string `inbound:"cipher"`
-	UDP      bool   `inbound:"udp,omitempty"`
+	Password  string    `inbound:"password"`
+	Cipher    string    `inbound:"cipher"`
+	UDP       bool      `inbound:"udp,omitempty"`
+	MuxOption MuxOption `inbound:"mux-option,omitempty"`
 }
 
 func (o ShadowSocksOption) Equal(config C.InboundConfig) bool {
@@ -34,11 +35,12 @@ func NewShadowSocks(options *ShadowSocksOption) (*ShadowSocks, error) {
 		Base:   base,
 		config: options,
 		ss: LC.ShadowsocksServer{
-			Enable:   true,
-			Listen:   base.RawAddress(),
-			Password: options.Password,
-			Cipher:   options.Cipher,
-			Udp:      options.UDP,
+			Enable:    true,
+			Listen:    base.RawAddress(),
+			Password:  options.Password,
+			Cipher:    options.Cipher,
+			Udp:       options.UDP,
+			MuxOption: options.MuxOption.Build(),
 		},
 	}, nil
 }

@@ -202,7 +202,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 		proxy := proxy
 		wg.Add(1)
 		go func() {
-			delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DropHistory)
+			delay, err := proxy.URLTest(ctx, url, expectedStatus)
 			if err == nil {
 				lock.Lock()
 				mp[proxy.Name()] = delay
@@ -222,7 +222,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 }
 
 func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error) {
-	if adapterType == C.Direct || adapterType == C.Compatible || adapterType == C.Reject || adapterType == C.Pass {
+	if adapterType == C.Direct || adapterType == C.Compatible || adapterType == C.Reject || adapterType == C.Pass || adapterType == C.RejectDrop {
 		return
 	}
 

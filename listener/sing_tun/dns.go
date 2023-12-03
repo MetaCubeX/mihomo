@@ -26,7 +26,7 @@ const DefaultDnsReadTimeout = time.Second * 10
 const DefaultDnsRelayTimeout = time.Second * 5
 
 type ListenerHandler struct {
-	sing.ListenerHandler
+	*sing.ListenerHandler
 	DnsAdds []netip.AddrPort
 }
 

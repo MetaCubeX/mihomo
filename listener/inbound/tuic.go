@@ -19,6 +19,7 @@ type TuicOption struct {
 	ALPN                  []string          `inbound:"alpn,omitempty"`
 	MaxUdpRelayPacketSize int               `inbound:"max-udp-relay-packet-size,omitempty"`
 	CWND                  int               `inbound:"cwnd,omitempty"`
+	MuxOption             MuxOption         `inbound:"mux-option,omitempty"`
 }
 
 func (o TuicOption) Equal(config C.InboundConfig) bool {
@@ -53,6 +54,7 @@ func NewTuic(options *TuicOption) (*Tuic, error) {
 			ALPN:                  options.ALPN,
 			MaxUdpRelayPacketSize: options.MaxUdpRelayPacketSize,
 			CWND:                  options.CWND,
+			MuxOption:             options.MuxOption.Build(),
 		},
 	}, nil
 }
