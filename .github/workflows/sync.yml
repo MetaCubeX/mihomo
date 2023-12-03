@@ -1,0 +1,40 @@
+name: Upstream Sync
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 每天执行一次
+  workflow_dispatch:
+
+jobs:
+  sync_latest_from_upstream:
+    name: Sync latest commits from upstream repo
+    runs-on: ubuntu-latest
+    if: ${{ github.event.repository.fork }}
+
+    steps:
+      # Step 1: run a standard checkout action
+      - name: Checkout target repo
+        uses: actions/checkout@v3
+
+      # Step 2: run the sync action
+      - name: Sync upstream changes
+        id: sync
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
+        with:
+          upstream_sync_repo: MetaCubeX/mihomo  # 修改为你想要同步的目标仓库
+          upstream_sync_branch: Meta  # 修改为你想要同步的上游仓库分支
+          target_sync_branch: Meta  # 修改为你想要同步到的目标仓库分支
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+
+          # 设置 test_mode 为 true 可以只运行测试而不实际执行同步操作
+          test_mode: false
+
+      - name: Sync check
+        if: failure()
+        run: |
+          echo "[Error] 由于上游仓库的 workflow 文件变更，导致 GitHub 自动暂停了本次自动更新，你需要手动 Sync Fork 一次，详细教程请查看：https://github.com/gaotianliuyun/gao/blob/main/README_CN.md#%E6%89%93%E5%BC%80%E8%87%AA%E5%8A%A8%E6%9B%B4%E6%96%B0"
+          echo "[Error] Due to a change in the workflow file of the upstream repository, GitHub has automatically suspended the scheduled automatic update. You need to manually sync your fork. Please refer to the detailed tutorial for instructions: https://github.com/gaotianliuyun/gao#enable-automatic-updates"
+          exit 1
