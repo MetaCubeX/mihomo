@@ -3,16 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/metacubex/mihomo/constant/features"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/hub"
 	"github.com/metacubex/mihomo/hub/executor"
 	"github.com/metacubex/mihomo/log"
@@ -29,6 +31,8 @@ var (
 	externalUI         string
 	externalController string
 	secret             string
+	updateGeoMux       sync.Mutex
+	updatingGeo        = false
 )
 
 func init() {
@@ -107,6 +111,17 @@ func main() {
 		log.Fatalln("Parse config error: %s", err.Error())
 	}
 
+	if C.GeoAutoUpdate {
+		ticker := time.NewTicker(time.Duration(C.GeoUpdateInterval) * time.Hour)
+
+		log.Infoln("[GEO] Start update GEO database every %d hours", C.GeoUpdateInterval)
+		go func() {
+			for range ticker.C {
+				updateGeoDatabases()
+			}
+		}()
+	}
+
 	defer executor.Shutdown()
 
 	termSign := make(chan os.Signal, 1)
@@ -125,4 +140,40 @@ func main() {
 			}
 		}
 	}
+}
+
+func updateGeoDatabases() {
+	log.Infoln("[GEO] Start updating GEO database")
+	updateGeoMux.Lock()
+
+	if updatingGeo {
+		updateGeoMux.Unlock()
+		log.Infoln("[GEO] GEO database is updating, skip")
+		return
+	}
+
+	updatingGeo = true
+	updateGeoMux.Unlock()
+
+	go func() {
+		defer func() {
+			updatingGeo = false
+		}()
+
+		log.Infoln("[GEO] Updating GEO database")
+
+		if err := config.UpdateGeoDatabases(); err != nil {
+			log.Errorln("[GEO] update GEO database error: %s", err.Error())
+			return
+		}
+
+		cfg, err := executor.ParseWithPath(C.Path.Config())
+		if err != nil {
+			log.Errorln("[GEO] update GEO database failed: %s", err.Error())
+			return
+		}
+
+		log.Infoln("[GEO] Update GEO database success, apply new config")
+		executor.ApplyConfig(cfg, false)
+	}()
 }

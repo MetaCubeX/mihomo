@@ -40,7 +40,7 @@ func UpdateUI() error {
 	}
 
 	saved := path.Join(C.Path.HomeDir(), "download.zip")
-	if saveFile(data, saved) != nil {
+	if err = saveFile(data, saved); err != nil {
 		return fmt.Errorf("can't save zip file: %w", err)
 	}
 	defer os.Remove(saved)

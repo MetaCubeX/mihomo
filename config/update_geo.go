@@ -28,7 +28,7 @@ func UpdateGeoDatabases() error {
 			return fmt.Errorf("invalid GeoIP database file: %s", err)
 		}
 
-		if saveFile(data, C.Path.GeoIP()) != nil {
+		if err = saveFile(data, C.Path.GeoIP()); err != nil {
 			return fmt.Errorf("can't save GeoIP database file: %w", err)
 		}
 
@@ -43,8 +43,7 @@ func UpdateGeoDatabases() error {
 			return fmt.Errorf("invalid MMDB database file: %s", err)
 		}
 		_ = instance.Close()
-
-		if saveFile(data, C.Path.MMDB()) != nil {
+		if err = saveFile(data, C.Path.MMDB()); err != nil {
 			return fmt.Errorf("can't save MMDB database file: %w", err)
 		}
 	}
@@ -58,7 +57,7 @@ func UpdateGeoDatabases() error {
 		return fmt.Errorf("invalid GeoSite database file: %s", err)
 	}
 
-	if saveFile(data, C.Path.GeoSite()) != nil {
+	if err = saveFile(data, C.Path.GeoSite()); err != nil {
 		return fmt.Errorf("can't save GeoSite database file: %w", err)
 	}
 
