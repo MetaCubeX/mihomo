@@ -1,8 +1,10 @@
 package constant
 
 var (
-	GeodataMode bool
-	GeoIpUrl    string
-	MmdbUrl     string
-	GeoSiteUrl  string
+	GeodataMode       bool
+	GeoAutoUpdate     bool
+	GeoUpdateInterval int
+	GeoIpUrl          string
+	MmdbUrl           string
+	GeoSiteUrl        string
 )
