@@ -155,6 +155,7 @@ type Proxy interface {
 	DelayHistory() []DelayHistory
 	ExtraDelayHistory() map[string][]DelayHistory
 	LastDelayForTestUrl(url string) uint16
+	OriginalHealthCheckUrl(url string)
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 
 	// Deprecated: use DialContext instead.

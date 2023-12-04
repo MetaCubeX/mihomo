@@ -114,6 +114,10 @@ func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus u
 
 func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	pp.proxies = proxies
+	for _, proxy := range pp.proxies {
+		proxy.OriginalHealthCheckUrl(pp.healthCheck.url)
+	}
+
 	pp.healthCheck.setProxy(proxies)
 	if pp.healthCheck.auto() {
 		go pp.healthCheck.check()

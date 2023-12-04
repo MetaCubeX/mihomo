@@ -48,6 +48,10 @@ func (p *Proxy) AliveForTestUrl(url string) bool {
 	return p.alive.Load()
 }
 
+func (p *Proxy) OriginalHealthCheckUrl(url string) {
+	p.url = url
+}
+
 // Dial implements C.Proxy
 func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
