@@ -100,6 +100,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) *http.Response {
 	authenticator := authStore.Authenticator()
+	if !inbound.IsRemoteAddressAllowed(request.RemoteAddr) {
+		log.Infoln("Remote address %s is not allowed", request.RemoteAddr)
+		return responseWith(request, http.StatusForbidden)
+	}
 	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
 		authenticator = nil
 	}

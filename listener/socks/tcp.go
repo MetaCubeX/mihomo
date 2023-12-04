@@ -87,6 +87,10 @@ func handleSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	authenticator := authStore.Authenticator()
+	if inbound.IsRemoteAddrAllowed(conn.RemoteAddr()) {
+		conn.Close()
+		return
+	}
 	if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
 		authenticator = nil
 	}
@@ -100,6 +104,10 @@ func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition)
 
 func HandleSocks5(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	authenticator := authStore.Authenticator()
+	if !inbound.IsRemoteAddrAllowed(conn.RemoteAddr()) {
+		conn.Close()
+		return
+	}
 	if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
 		authenticator = nil
 	}
