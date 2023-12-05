@@ -1114,7 +1114,7 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 
 	for pair := nsPolicy.Oldest(); pair != nil; pair = pair.Next() {
 		k, v := pair.Key, pair.Value
-		if strings.Contains(k, ",") {
+		if strings.Contains(strings.ToLower(k), ",") {
 			if strings.Contains(k, "geosite:") {
 				subkeys := strings.Split(k, ":")
 				subkeys = subkeys[1:]
@@ -1123,7 +1123,7 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 					newKey := "geosite:" + subkey
 					updatedPolicy.Store(newKey, v)
 				}
-			} else if strings.Contains(k, "rule-set:") {
+			} else if strings.Contains(strings.ToLower(k), "rule-set:") {
 				subkeys := strings.Split(k, ":")
 				subkeys = subkeys[1:]
 				subkeys = strings.Split(subkeys[0], ",")
@@ -1138,6 +1138,11 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 				}
 			}
 		} else {
+			if strings.Contains(strings.ToLower(k), "geosite:") {
+				updatedPolicy.Store("geosite:"+k[8:], v)
+			} else if strings.Contains(strings.ToLower(k), "rule-set:") {
+				updatedPolicy.Store("rule-set:"+k[9:], v)
+			}
 			updatedPolicy.Store(k, v)
 		}
 	}
