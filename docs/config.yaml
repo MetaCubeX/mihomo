@@ -740,7 +740,7 @@ proxies: # socks5
   # The supported obfses:
   #   plain http_simple http_post
   #   random_head tls1.2_ticket_auth tls1.2_ticket_fastauth
-  # The supported supported protocols:
+  # The supported protocols:
   #   origin auth_sha1_v4 auth_aes128_md5
   #   auth_aes128_sha1 auth_chain_a auth_chain_b
   - name: "ssr"
