@@ -210,9 +210,9 @@ func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn,
 
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
-			return newPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), ss), nil
+			return newPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
 		} else {
-			return newPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), ss), nil
+			return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
 		}
 	}
 	return nil, C.ErrNotSupport
