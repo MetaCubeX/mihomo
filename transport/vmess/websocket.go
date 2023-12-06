@@ -65,6 +65,11 @@ type WebsocketConfig struct {
 // Read implements net.Conn.Read()
 // modify from gobwas/ws/wsutil.readData
 func (wsc *websocketConn) Read(b []byte) (n int, err error) {
+	defer func() { // avoid gobwas/ws pbytes.GetLen panic
+		if value := recover(); value != nil {
+			err = fmt.Errorf("websocket error: %s", value)
+		}
+	}()
 	var header ws.Header
 	for {
 		n, err = wsc.reader.Read(b)
