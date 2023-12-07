@@ -157,14 +157,7 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 
 func (vc *Conn) Write(p []byte) (int, error) {
 	if vc.writeFilterApplicationData {
-		buffer := buf.New()
-		defer buffer.Release()
-		buffer.Write(p)
-		err := vc.WriteBuffer(buffer)
-		if err != nil {
-			return 0, err
-		}
-		return len(p), nil
+		return N.WriteBuffer(vc, buf.As(p))
 	}
 	return vc.ExtendedWriter.Write(p)
 }
@@ -264,6 +257,10 @@ func (vc *Conn) FrontHeadroom() int {
 		return PaddingHeaderLen
 	}
 	return PaddingHeaderLen - uuid.Size
+}
+
+func (vc *Conn) RearHeadroom() int {
+	return 500 + 900
 }
 
 func (vc *Conn) NeedHandshake() bool {

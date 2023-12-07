@@ -109,29 +109,29 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			defer mutex.Unlock()
 			conn2 = nil
 		}()
-
-		var buff *buf.Buffer
-		newBuffer := func() *buf.Buffer {
-			// safe size which is 1232 from https://dnsflagday.net/2020/.
-			// so 2048 is enough
-			buff = buf.NewSize(2 * 1024)
-			return buff
+		rwOptions := network.ReadWaitOptions{
+			MTU: 2 * 1024, // safe size which is 1232 from https://dnsflagday.net/2020/, so 2048 is enough
 		}
 		readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 		if isReadWaiter {
-			readWaiter.InitializeReadWaiter(newBuffer)
+			readWaiter.InitializeReadWaiter(rwOptions)
 		}
 		for {
 			var (
+				buff *buf.Buffer
 				dest M.Socksaddr
 				err  error
 			)
 			_ = conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout))
 			buff = nil // clear last loop status, avoid repeat release
 			if isReadWaiter {
-				dest, err = readWaiter.WaitReadPacket()
+				buff, dest, err = readWaiter.WaitReadPacket()
 			} else {
-				dest, err = conn.ReadPacket(newBuffer())
+				buff = rwOptions.NewPacketBuffer()
+				dest, err = conn.ReadPacket(buff)
+				if buff != nil {
+					rwOptions.PostReturn(buff)
+				}
 			}
 			if err != nil {
 				if buff != nil {
@@ -142,7 +142,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				}
 				return err
 			}
-			go func(buff *buf.Buffer) {
+			go func() {
 				ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
 				defer cancel()
 				inData := buff.Bytes()
@@ -167,7 +167,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				if err != nil {
 					return
 				}
-			}(buff) // catch buff at goroutine create, avoid next loop change buff
+			}()
 		}
 		return nil
 	}

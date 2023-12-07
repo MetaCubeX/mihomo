@@ -138,41 +138,36 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 }
 
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
-	if deadline.NeedAdditionalReadDeadline(conn) {
-		conn = deadline.NewFallbackPacketConn(bufio.NewNetPacketConn(conn)) // conn from sing should check NeedAdditionalReadDeadline
-	}
 	defer func() { _ = conn.Close() }()
 	mutex := sync.Mutex{}
-	conn2 := conn // a new interface to set nil in defer
+	conn2 := bufio.NewNetPacketConn(conn) // a new interface to set nil in defer
 	defer func() {
 		mutex.Lock() // this goroutine must exit after all conn.WritePacket() is not running
 		defer mutex.Unlock()
 		conn2 = nil
 	}()
-	var buff *buf.Buffer
-	newBuffer := func() *buf.Buffer {
-		buff = buf.NewPacket() // do not use stack buffer
-		return buff
-	}
+	rwOptions := network.ReadWaitOptions{}
 	readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 	if isReadWaiter {
-		readWaiter.InitializeReadWaiter(newBuffer)
+		readWaiter.InitializeReadWaiter(rwOptions)
 	}
 	for {
 		var (
+			buff *buf.Buffer
 			dest M.Socksaddr
 			err  error
 		)
-		buff = nil // clear last loop status, avoid repeat release
 		if isReadWaiter {
-			dest, err = readWaiter.WaitReadPacket()
+			buff, dest, err = readWaiter.WaitReadPacket()
 		} else {
-			dest, err = conn.ReadPacket(newBuffer())
+			buff = rwOptions.NewPacketBuffer()
+			dest, err = conn.ReadPacket(buff)
+			if buff != nil {
+				rwOptions.PostReturn(buff)
+			}
 		}
 		if err != nil {
-			if buff != nil {
-				buff.Release()
-			}
+			buff.Release()
 			if ShouldIgnorePacketError(err) {
 				break
 			}
@@ -212,7 +207,7 @@ func ShouldIgnorePacketError(err error) bool {
 }
 
 type packet struct {
-	conn  *network.PacketConn
+	conn  *network.NetPacketConn
 	mutex *sync.Mutex
 	rAddr net.Addr
 	lAddr net.Addr
@@ -238,18 +233,7 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		return
 	}
 
-	buff := buf.NewPacket()
-	defer buff.Release()
-	n, err = buff.Write(b)
-	if err != nil {
-		return
-	}
-
-	err = conn.WritePacket(buff, M.SocksaddrFromNet(addr))
-	if err != nil {
-		return
-	}
-	return
+	return conn.WriteTo(b, addr)
 }
 
 // LocalAddr returns the source IP/Port of UDP Packet
