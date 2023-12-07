@@ -1,9 +1,12 @@
 package route
 
 import (
+	"github.com/metacubex/mihomo/component/auth"
+	authStore "github.com/metacubex/mihomo/listener/auth"
 	"net/http"
 	"net/netip"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -49,6 +52,7 @@ type configSchema struct {
 	TcptunConfig      *string            `json:"tcptun-config"`
 	UdptunConfig      *string            `json:"udptun-config"`
 	AllowLan          *bool              `json:"allow-lan"`
+	Authentication    *[]string          `json:"authentication"`
 	SkipAuthPrefixes  *[]netip.Prefix    `json:"skip-auth-prefixes"`
 	BindAddress       *string            `json:"bind-address"`
 	Mode              *tunnel.TunnelMode `json:"mode"`
@@ -242,6 +246,17 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)
 		return
+	}
+
+	if general.Authentication != nil {
+		var users []auth.AuthUser
+		for _, line := range *general.Authentication {
+			if user, pass, found := strings.Cut(line, ":"); found {
+				users = append(users, auth.AuthUser{User: user, Pass: pass})
+			}
+		}
+		authenticator := auth.NewAuthenticator(users)
+		authStore.SetAuthenticator(authenticator)
 	}
 
 	if general.AllowLan != nil {
