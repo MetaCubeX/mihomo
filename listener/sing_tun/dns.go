@@ -149,6 +149,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				defer cancel()
 				inData := readBuff.Bytes()
 				writeBuff := readBuff
+				writeBuff.Resize(writeBuff.Start(), 0)
 				if writeBuff.Cap() < rwOptions.MTU { // only create a new buffer when space don't enough
 					writeBuff = rwOptions.NewPacketBuffer()
 				}
