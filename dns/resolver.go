@@ -483,11 +483,14 @@ func NewResolver(config Config) *Resolver {
 		r.policy = make([]dnsPolicy, 0)
 
 		var triePolicy *trie.DomainTrie[[]dnsClient]
-		insertTriePolicy := func() {
+		insertPolicy := func(policy dnsPolicy) {
 			if triePolicy != nil {
 				triePolicy.Optimize()
 				r.policy = append(r.policy, domainTriePolicy{triePolicy})
 				triePolicy = nil
+			}
+			if policy != nil {
+				r.policy = append(r.policy, policy)
 			}
 		}
 
@@ -501,8 +504,7 @@ func NewResolver(config Config) *Resolver {
 				case "rule-set":
 					if p, ok := config.RuleProviders[key]; ok {
 						log.Debugln("Adding rule-set policy: %s ", key)
-						insertTriePolicy()
-						r.policy = append(r.policy, domainSetPolicy{
+						insertPolicy(domainSetPolicy{
 							domainSetProvider: p,
 							dnsClients:        cacheTransform(nameserver),
 						})
@@ -522,8 +524,7 @@ func NewResolver(config Config) *Resolver {
 						log.Warnln("adding geosite policy %s error: %s", key, err)
 						continue
 					}
-					insertTriePolicy()
-					r.policy = append(r.policy, geositePolicy{
+					insertPolicy(geositePolicy{
 						matcher:    matcher,
 						inverse:    inverse,
 						dnsClients: cacheTransform(nameserver),
@@ -536,7 +537,7 @@ func NewResolver(config Config) *Resolver {
 			}
 			_ = triePolicy.Insert(domain, cacheTransform(nameserver))
 		}
-		insertTriePolicy()
+		insertPolicy(nil)
 	}
 
 	fallbackIPFilters := []fallbackIPFilter{}
