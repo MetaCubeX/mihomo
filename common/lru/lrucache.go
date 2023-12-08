@@ -66,6 +66,8 @@ type LruCache[K comparable, V any] struct {
 	onEvict        EvictCallback[K, V]
 }
 
+var NeedClear chan bool
+
 // New creates an LruCache
 func New[K comparable, V any](options ...Option[K, V]) *LruCache[K, V] {
 	lc := &LruCache[K, V]{
@@ -77,6 +79,7 @@ func New[K comparable, V any](options ...Option[K, V]) *LruCache[K, V] {
 		option(lc)
 	}
 
+	NeedClear = make(chan bool, 1)
 	return lc
 }
 

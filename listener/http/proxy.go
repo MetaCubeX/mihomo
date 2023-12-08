@@ -111,6 +111,14 @@ func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) *htt
 			return resp
 		}
 
+		go func(*lru.LruCache[string, bool]) {
+			for {
+				_, ok := <-lru.NeedClear
+				if ok {
+					_ = cache.Clear()
+				}
+			}
+		}(cache)
 		authed, exist := cache.Get(credential)
 		if !exist {
 			user, pass, err := decodeBasicProxyAuthorization(credential)

@@ -1,6 +1,7 @@
 package route
 
 import (
+	"github.com/metacubex/mihomo/common/lru"
 	"github.com/metacubex/mihomo/component/auth"
 	authStore "github.com/metacubex/mihomo/listener/auth"
 	"net/http"
@@ -257,6 +258,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		}
 		authenticator := auth.NewAuthenticator(users)
 		authStore.SetAuthenticator(authenticator)
+		lru.NeedClear <- true
 	}
 
 	if general.AllowLan != nil {
