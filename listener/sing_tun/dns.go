@@ -98,6 +98,8 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	return h.ListenerHandler.NewConnection(ctx, conn, metadata)
 }
 
+const SafeDnsPacketSize = 2 * 1024 // safe size which is 1232 from https://dnsflagday.net/2020/, so 2048 is enough
+
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
 	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
 		log.Debugln("[DNS] hijack udp:%s from %s", metadata.Destination.String(), metadata.Source.String())
@@ -112,7 +114,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		rwOptions := network.ReadWaitOptions{
 			FrontHeadroom: network.CalculateFrontHeadroom(conn),
 			RearHeadroom:  network.CalculateRearHeadroom(conn),
-			MTU:           2 * 1024, // safe size which is 1232 from https://dnsflagday.net/2020/, so 2048 is enough
+			MTU:           SafeDnsPacketSize,
 		}
 		readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 		if isReadWaiter {
@@ -150,7 +152,7 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 				inData := readBuff.Bytes()
 				writeBuff := readBuff
 				writeBuff.Resize(writeBuff.Start(), 0)
-				if writeBuff.Cap() < rwOptions.MTU { // only create a new buffer when space don't enough
+				if len(writeBuff.FreeBytes()) < SafeDnsPacketSize { // only create a new buffer when space don't enough
 					writeBuff = rwOptions.NewPacketBuffer()
 				}
 				msg, err := RelayDnsPacket(ctx, inData, writeBuff.FreeBytes())

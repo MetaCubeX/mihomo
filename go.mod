@@ -22,7 +22,7 @@ require (
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394
 	github.com/metacubex/sing-quic v0.0.0-20231207122758-cc17b154daa8
-	github.com/metacubex/sing-shadowsocks v0.2.5
+	github.com/metacubex/sing-shadowsocks v0.2.6
 	github.com/metacubex/sing-shadowsocks2 v0.1.5-0.20231207115048-3abf19378f0d
 	github.com/metacubex/sing-tun v0.1.15-0.20231207115657-1aa1d8cadd9a
 	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
@@ -58,7 +58,7 @@ require (
 )
 
 require (
-	github.com/RyuaNerin/go-krypto v1.0.2 // indirect
+	github.com/RyuaNerin/go-krypto v1.2.4 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
@@ -112,4 +112,4 @@ require (
 	golang.org/x/tools v0.15.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231208051255-e793d03637a2
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231208104608-1d45b24eb8fa
