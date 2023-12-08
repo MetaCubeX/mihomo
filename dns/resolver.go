@@ -501,6 +501,7 @@ func NewResolver(config Config) *Resolver {
 				case "rule-set":
 					if p, ok := config.RuleProviders[key]; ok {
 						log.Debugln("Adding rule-set policy: %s ", key)
+						insertTriePolicy()
 						r.policy = append(r.policy, domainSetPolicy{
 							domainSetProvider: p,
 							dnsClients:        cacheTransform(nameserver),
