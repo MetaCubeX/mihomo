@@ -129,6 +129,7 @@ jobs:
         run: |
           echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
           echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
+          echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
