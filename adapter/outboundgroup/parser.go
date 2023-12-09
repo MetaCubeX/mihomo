@@ -104,7 +104,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), true, expectedStatus)
+		hc := provider.NewHealthCheck(ps, testUrl, uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {

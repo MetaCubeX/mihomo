@@ -112,6 +112,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadRuleProvider(cfg.RuleProviders)
 	runtime.GC()
 	tunnel.OnRunning()
+	hcCompatibleProvider(cfg.Providers)
 
 	log.SetLevel(cfg.General.LogLevel)
 }
@@ -265,7 +266,7 @@ func updateRules(rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map
 
 func loadProvider(pv provider.Provider) {
 	if pv.VehicleType() == provider.Compatible {
-		log.Infoln("Start initial compatible provider %s", pv.Name())
+		return
 	} else {
 		log.Infoln("Start initial provider %s", (pv).Name())
 	}
@@ -318,7 +319,27 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 
 	wg.Wait()
 }
+func hcCompatibleProvider(proxyProviders map[string]provider.ProxyProvider) {
+	// limit concurrent size
+	wg := sync.WaitGroup{}
+	ch := make(chan struct{}, concurrentCount)
+	for _, proxyProvider := range proxyProviders {
+		proxyProvider := proxyProvider
+		if proxyProvider.VehicleType() == provider.Compatible {
+			log.Infoln("Start initial Compatible provider %s", proxyProvider.Name())
+			wg.Add(1)
+			ch <- struct{}{}
+			go func() {
+				defer func() { <-ch; wg.Done() }()
+				if err := proxyProvider.Initial(); err != nil {
+					log.Errorln("initial Compatible provider %s error: %v", proxyProvider.Name(), err)
+				}
+			}()
+		}
 
+	}
+
+}
 func updateTun(general *config.General) {
 	if general == nil {
 		return
