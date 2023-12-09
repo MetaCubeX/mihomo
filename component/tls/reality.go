@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -81,15 +82,22 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
-		ecdheParams := uConn.HandshakeState.State13.EcdheParams
-		if ecdheParams == nil {
+		publicKey, err := ecdh.X25519().NewPublicKey(realityConfig.PublicKey[:])
+		if err != nil {
+			return nil, err
+		}
+		ecdheKey := uConn.HandshakeState.State13.EcdheKey
+		if ecdheKey == nil {
 			// WTF???
 			if retry > 2 {
-				return nil, errors.New("nil ecdheParams")
+				return nil, errors.New("nil ecdheKey")
 			}
 			continue // retry
 		}
-		authKey := ecdheParams.SharedKey(realityConfig.PublicKey[:])
+		authKey, err := ecdheKey.ECDH(publicKey)
+		if err != nil {
+			return nil, err
+		}
 		if authKey == nil {
 			return nil, errors.New("nil auth_key")
 		}
