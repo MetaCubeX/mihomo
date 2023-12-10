@@ -19,6 +19,8 @@ type TunOption struct {
 	AutoDetectInterface bool     `inbound:"auto-detect-interface,omitempty"`
 
 	MTU                      uint32   `inbound:"mtu,omitempty"`
+	GSO                      bool     `inbound:"gso,omitempty"`
+	GSOMaxSize               uint32   `inbound:"gso-max-size,omitempty"`
 	Inet4Address             []string `inbound:"inet4_address,omitempty"`
 	Inet6Address             []string `inbound:"inet6_address,omitempty"`
 	StrictRoute              bool     `inbound:"strict_route,omitempty"`
@@ -26,6 +28,8 @@ type TunOption struct {
 	Inet6RouteAddress        []string `inbound:"inet6_route_address,omitempty"`
 	Inet4RouteExcludeAddress []string `inbound:"inet4_route_exclude_address,omitempty"`
 	Inet6RouteExcludeAddress []string `inbound:"inet6_route_exclude_address,omitempty"`
+	IncludeInterface         []string `inbound:"include-interface,omitempty"`
+	ExcludeInterface         []string `inbound:"exclude-interface" json:"exclude-interface,omitempty"`
 	IncludeUID               []uint32 `inbound:"include_uid,omitempty"`
 	IncludeUIDRange          []string `inbound:"include_uid_range,omitempty"`
 	ExcludeUID               []uint32 `inbound:"exclude_uid,omitempty"`
@@ -93,6 +97,8 @@ func NewTun(options *TunOption) (*Tun, error) {
 			AutoRoute:                options.AutoRoute,
 			AutoDetectInterface:      options.AutoDetectInterface,
 			MTU:                      options.MTU,
+			GSO:                      options.GSO,
+			GSOMaxSize:               options.GSOMaxSize,
 			Inet4Address:             inet4Address,
 			Inet6Address:             inet6Address,
 			StrictRoute:              options.StrictRoute,
@@ -100,6 +106,8 @@ func NewTun(options *TunOption) (*Tun, error) {
 			Inet6RouteAddress:        inet6RouteAddress,
 			Inet4RouteExcludeAddress: inet4RouteExcludeAddress,
 			Inet6RouteExcludeAddress: inet6RouteExcludeAddress,
+			IncludeInterface:         options.IncludeInterface,
+			ExcludeInterface:         options.ExcludeInterface,
 			IncludeUID:               options.IncludeUID,
 			IncludeUIDRange:          options.IncludeUIDRange,
 			ExcludeUID:               options.ExcludeUID,

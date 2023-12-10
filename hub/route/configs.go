@@ -68,7 +68,9 @@ type tunSchema struct {
 	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	//RedirectToTun       []string   		  `yaml:"-" json:"-"`
 
-	MTU *uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	MTU        *uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	GSO        *bool   `yaml:"gso" json:"gso,omitempty"`
+	GSOMaxSize *uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
 	//Inet4Address           *[]netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
 	Inet6Address             *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
 	StrictRoute              *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
@@ -76,6 +78,8 @@ type tunSchema struct {
 	Inet6RouteAddress        *[]netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
 	Inet4RouteExcludeAddress *[]netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
 	Inet6RouteExcludeAddress *[]netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
+	IncludeInterface         *[]string       `yaml:"include-interface" json:"include-interface,omitempty"`
+	ExcludeInterface         *[]string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
 	IncludeUID               *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
 	IncludeUIDRange          *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
 	ExcludeUID               *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
@@ -144,6 +148,12 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		if p.MTU != nil {
 			def.MTU = *p.MTU
 		}
+		if p.GSO != nil {
+			def.GSO = *p.GSO
+		}
+		if p.GSOMaxSize != nil {
+			def.GSOMaxSize = *p.GSOMaxSize
+		}
 		//if p.Inet4Address != nil {
 		//	def.Inet4Address = *p.Inet4Address
 		//}
@@ -161,6 +171,12 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		}
 		if p.Inet6RouteExcludeAddress != nil {
 			def.Inet6RouteExcludeAddress = *p.Inet6RouteExcludeAddress
+		}
+		if p.IncludeInterface != nil {
+			def.IncludeInterface = *p.IncludeInterface
+		}
+		if p.ExcludeInterface != nil {
+			def.ExcludeInterface = *p.ExcludeInterface
 		}
 		if p.IncludeUID != nil {
 			def.IncludeUID = *p.IncludeUID

@@ -238,7 +238,9 @@ type RawTun struct {
 	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
 	RedirectToTun       []string   `yaml:"-" json:"-"`
 
-	MTU uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
+	GSOMaxSize uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
 	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
 	Inet6Address             []netip.Prefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
 	StrictRoute              bool           `yaml:"strict-route" json:"strict_route,omitempty"`
@@ -246,6 +248,8 @@ type RawTun struct {
 	Inet6RouteAddress        []netip.Prefix `yaml:"inet6-route-address" json:"inet6_route_address,omitempty"`
 	Inet4RouteExcludeAddress []netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4_route_exclude_address,omitempty"`
 	Inet6RouteExcludeAddress []netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6_route_exclude_address,omitempty"`
+	IncludeInterface         []string       `yaml:"include-interface" json:"include-interface,omitempty"`
+	ExcludeInterface         []string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
 	IncludeUID               []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
 	IncludeUIDRange          []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
 	ExcludeUID               []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
@@ -1399,6 +1403,8 @@ func parseTun(rawTun RawTun, general *General) error {
 		RedirectToTun:       rawTun.RedirectToTun,
 
 		MTU:                      rawTun.MTU,
+		GSO:                      rawTun.GSO,
+		GSOMaxSize:               rawTun.GSOMaxSize,
 		Inet4Address:             []netip.Prefix{tunAddressPrefix},
 		Inet6Address:             rawTun.Inet6Address,
 		StrictRoute:              rawTun.StrictRoute,
@@ -1406,6 +1412,8 @@ func parseTun(rawTun RawTun, general *General) error {
 		Inet6RouteAddress:        rawTun.Inet6RouteAddress,
 		Inet4RouteExcludeAddress: rawTun.Inet4RouteExcludeAddress,
 		Inet6RouteExcludeAddress: rawTun.Inet6RouteExcludeAddress,
+		IncludeInterface:         rawTun.IncludeInterface,
+		ExcludeInterface:         rawTun.ExcludeInterface,
 		IncludeUID:               rawTun.IncludeUID,
 		IncludeUIDRange:          rawTun.IncludeUIDRange,
 		ExcludeUID:               rawTun.ExcludeUID,
