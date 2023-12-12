@@ -141,6 +141,8 @@ func GetGeneral() *config.General {
 			VmessConfig:       ports.VmessConfig,
 			Authentication:    authenticator,
 			SkipAuthPrefixes:  inbound.SkipAuthPrefixes(),
+			LanAllowedIPs:     inbound.AllowedIPs(),
+			LanDisAllowedIPs:  inbound.DisAllowedIPs(),
 			AllowLan:          listener.AllowLan(),
 			BindAddress:       listener.BindAddress(),
 		},
@@ -166,6 +168,8 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	allowLan := general.AllowLan
 	listener.SetAllowLan(allowLan)
 	inbound.SetSkipAuthPrefixes(general.SkipAuthPrefixes)
+	inbound.SetAllowedIPs(general.LanAllowedIPs)
+	inbound.SetDisAllowedIPs(general.LanDisAllowedIPs)
 
 	bindAddress := general.BindAddress
 	listener.SetBindAddress(bindAddress)

@@ -13,6 +13,11 @@ authentication: # http,socks入口的验证用户名，密码
 skip-auth-prefixes: # 设置跳过验证的IP段
   - 127.0.0.1/8
   - ::1/128
+lan-allowed-ips: # 允许连接的 IP 地址段，仅作用于 allow-lan 为 true, 默认值为0.0.0.0/0和::/0
+  - 0.0.0.0/0
+  - ::/0
+lan-disallowed-ips: # 禁止连接的 IP 地址段, 黑名单优先级高于白名单, 默认值为空
+  - 192.168.0.3/32
 
 #  find-process-mode has 3 values:always, strict, off
 #  - always, 开启，强制匹配所有进程

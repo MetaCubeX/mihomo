@@ -10,7 +10,6 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/config"
-	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/hub/executor"
 	P "github.com/metacubex/mihomo/listener"
@@ -50,6 +49,8 @@ type configSchema struct {
 	UdptunConfig      *string            `json:"udptun-config"`
 	AllowLan          *bool              `json:"allow-lan"`
 	SkipAuthPrefixes  *[]netip.Prefix    `json:"skip-auth-prefixes"`
+	LanAllowedIPs     *[]netip.Prefix    `json:"lan-allowed-ips"`
+	LanDisAllowedIPs  *[]netip.Prefix    `json:"lan-disallowed-ips"`
 	BindAddress       *string            `json:"bind-address"`
 	Mode              *tunnel.TunnelMode `json:"mode"`
 	LogLevel          *log.LogLevel      `json:"log-level"`
@@ -268,6 +269,14 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		inbound.SetSkipAuthPrefixes(*general.SkipAuthPrefixes)
 	}
 
+	if general.LanAllowedIPs != nil {
+		inbound.SetAllowedIPs(*general.LanAllowedIPs)
+	}
+
+	if general.LanDisAllowedIPs != nil {
+		inbound.SetDisAllowedIPs(*general.LanDisAllowedIPs)
+	}
+
 	if general.BindAddress != nil {
 		P.SetBindAddress(*general.BindAddress)
 	}
@@ -335,7 +344,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if req.Path == "" {
-			req.Path = constant.Path.Config()
+			req.Path = C.Path.Config()
 		}
 		if !filepath.IsAbs(req.Path) {
 			render.Status(r, http.StatusBadRequest)
@@ -380,7 +389,7 @@ func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cfg, err := executor.ParseWithPath(constant.Path.Config())
+		cfg, err := executor.ParseWithPath(C.Path.Config())
 		if err != nil {
 			log.Errorln("[REST-API] update GEO databases failed: %v", err)
 			return
