@@ -9,6 +9,8 @@ import (
 	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 const (
@@ -29,15 +31,16 @@ type store interface {
 
 // Pool is an implementation about fake ip generator without storage
 type Pool struct {
-	gateway netip.Addr
-	first   netip.Addr
-	last    netip.Addr
-	offset  netip.Addr
-	cycle   bool
-	mux     sync.Mutex
-	host    *trie.DomainTrie[struct{}]
-	ipnet   netip.Prefix
-	store   store
+	gateway     netip.Addr
+	first       netip.Addr
+	last        netip.Addr
+	offset      netip.Addr
+	cycle       bool
+	mux         sync.Mutex
+	host        *trie.DomainTrie[struct{}]
+	ipnet       netip.Prefix
+	store       store
+	FakeipRules []C.Rule
 }
 
 // Lookup return a fake ip with host
@@ -66,10 +69,20 @@ func (p *Pool) LookBack(ip netip.Addr) (string, bool) {
 
 // ShouldSkipped return if domain should be skipped
 func (p *Pool) ShouldSkipped(domain string) bool {
-	if p.host == nil {
-		return false
+
+	if p.host != nil && p.host.Search(domain) != nil {
+		return true
 	}
-	return p.host.Search(domain) != nil
+
+	metadata := C.Metadata{Host: domain}
+	for _, rule := range p.FakeipRules {
+		if matched, ada := rule.Match(&metadata); matched {
+			log.Debugln("`%s` matched fakeip-rules %s", domain, ada)
+			return ada == "DIRECT"
+		}
+	}
+
+	return false
 }
 
 // Exist returns if given ip exists in fake-ip pool
