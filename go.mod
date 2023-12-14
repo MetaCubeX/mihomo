@@ -24,7 +24,7 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20231207122758-cc17b154daa8
 	github.com/metacubex/sing-shadowsocks v0.2.6
 	github.com/metacubex/sing-shadowsocks2 v0.1.5-0.20231207115048-3abf19378f0d
-	github.com/metacubex/sing-tun v0.1.15-0.20231211084005-e7b0b6c7c698
+	github.com/metacubex/sing-tun v0.2.0-beta.1
 	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
 	github.com/metacubex/sing-wireguard v0.0.0-20231209125515-0594297f7232
 	github.com/miekg/dns v1.1.57
@@ -34,7 +34,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.0.2
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.19-0.20231209022445-766839c00099
+	github.com/sagernet/sing v0.3.0-beta.2
 	github.com/sagernet/sing-mux v0.1.6-0.20231208180947-9053c29513a2
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6
@@ -112,4 +112,4 @@ require (
 	golang.org/x/tools v0.16.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231210002924-c2e1b943c79e
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231214230700-65d7fba9e147
