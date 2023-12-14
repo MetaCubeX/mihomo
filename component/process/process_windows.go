@@ -3,8 +3,6 @@ package process
 import (
 	"fmt"
 	"net/netip"
-	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -103,10 +101,6 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 		return 0, "", err
 	}
 	pp, err := getExecPathFromPID(pid)
-	if err != nil {
-		return 0, "", err
-	}
-	pp, err = convertDOSPath(pp)
 	return 0, pp, err
 }
 
@@ -224,7 +218,7 @@ func getExecPathFromPID(pid uint32) (string, error) {
 	r1, _, err := syscall.SyscallN(
 		queryProcName,
 		uintptr(h),
-		uintptr(1),
+		uintptr(0),
 		uintptr(unsafe.Pointer(&buf[0])),
 		uintptr(unsafe.Pointer(&size)),
 	)
@@ -232,30 +226,4 @@ func getExecPathFromPID(pid uint32) (string, error) {
 		return "", err
 	}
 	return syscall.UTF16ToString(buf[:size]), nil
-}
-
-// modify from https://github.com/shirou/gopsutil/blob/9deadc99147d80f732af3a59e624af73d0143891/internal/common/common_windows.go#L220-L241
-// Convert paths using native DOS format like:
-//
-//	"\Device\HarddiskVolume1\Windows\systemew\file.txt"
-//
-// into:
-//
-//	"C:\Windows\systemew\file.txt"
-func convertDOSPath(p string) (string, error) {
-	rawDrive := strings.Join(strings.Split(p, `\`)[:3], `\`)
-
-	for d := 'A'; d <= 'Z'; d++ {
-		szDeviceName := string(d) + ":"
-		deviceName, err := syscall.UTF16PtrFromString(szDeviceName)
-		if err != nil {
-			return "", err
-		}
-		szTarget := make([]uint16, 512)
-		n, err := windows.QueryDosDevice(deviceName, &szTarget[0], uint32(len(szTarget)))
-		if err == nil && windows.UTF16ToString(szTarget[:n]) == rawDrive {
-			return filepath.Join(szDeviceName, p[len(rawDrive):]), nil
-		}
-	}
-	return p, nil
 }
