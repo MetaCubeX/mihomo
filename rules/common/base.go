@@ -4,10 +4,8 @@ import (
 	"errors"
 )
 
-var (
-	errPayload = errors.New("payloadRule error")
-	noResolve  = "no-resolve"
-)
+var errPayload = errors.New("payloadRule error")
+var NoResolve = "no-resolve"
 
 type Base struct {
 }
@@ -22,7 +20,7 @@ func (b *Base) ShouldResolveIP() bool {
 
 func HasNoResolve(params []string) bool {
 	for _, p := range params {
-		if p == noResolve {
+		if p == NoResolve {
 			return true
 		}
 	}

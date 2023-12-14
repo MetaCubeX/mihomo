@@ -37,6 +37,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/log"
 	R "github.com/metacubex/mihomo/rules"
+	RC "github.com/metacubex/mihomo/rules/common"
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 
@@ -65,6 +66,7 @@ type General struct {
 	EBpf                    EBpf              `json:"-"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
+	NoResolveAll            bool              `json:"no-resolve-all"`
 }
 
 // Inbound config
@@ -317,6 +319,7 @@ type RawConfig struct {
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 	GlobalUA                string            `yaml:"global-ua"`
 	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
+	NoResolveAll            bool              `yaml:"no-resolve-all"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -408,6 +411,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		TCPConcurrent:     false,
 		FindProcessMode:   P.FindProcessStrict,
 		GlobalUA:          "clash.meta",
+		NoResolveAll:      false,
 		Tun: RawTun{
 			Enable:              false,
 			Device:              "",
@@ -543,13 +547,13 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.RuleProviders = ruleProviders
 
-	subRules, err := parseSubRules(rawCfg, proxies)
+	subRules, err := parseSubRules(rawCfg, proxies, general.NoResolveAll)
 	if err != nil {
 		return nil, err
 	}
 	config.SubRules = subRules
 
-	rules, err := parseRules(rawCfg.Rule, proxies, subRules, "rules")
+	rules, err := parseRules(rawCfg.Rule, proxies, subRules, "rules", general.NoResolveAll)
 	if err != nil {
 		return nil, err
 	}
@@ -680,6 +684,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		EBpf:                    cfg.EBpf,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
+		NoResolveAll:            cfg.NoResolveAll,
 	}, nil
 }
 
@@ -820,7 +825,7 @@ func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.
 	return
 }
 
-func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, err error) {
+func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy, noResolveAll bool) (subRules map[string][]C.Rule, err error) {
 	subRules = map[string][]C.Rule{}
 	for name := range cfg.SubRules {
 		subRules[name] = make([]C.Rule, 0)
@@ -830,7 +835,7 @@ func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[str
 			return nil, fmt.Errorf("sub-rule name is empty")
 		}
 		var rules []C.Rule
-		rules, err = parseRules(rawRules, proxies, subRules, fmt.Sprintf("sub-rules[%s]", name))
+		rules, err = parseRules(rawRules, proxies, subRules, fmt.Sprintf("sub-rules[%s]", name), noResolveAll)
 		if err != nil {
 			return nil, err
 		}
@@ -883,7 +888,7 @@ func verifySubRuleCircularReferences(n string, subRules map[string][]C.Rule, arr
 	return nil
 }
 
-func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[string][]C.Rule, format string) ([]C.Rule, error) {
+func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[string][]C.Rule, format string, noResolveAll bool) ([]C.Rule, error) {
 	var rules []C.Rule
 
 	// parse rules
@@ -927,6 +932,10 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 		}
 
 		params = trimArr(params)
+
+		if noResolveAll {
+			params = append(params, RC.NoResolve)
+		}
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params, subRules)
 		if parseErr != nil {
 			return nil, fmt.Errorf("%s[%d] [%s] error: %s", format, idx, line, parseErr.Error())
