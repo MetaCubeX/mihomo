@@ -328,16 +328,6 @@ func handleUDPConn(packet C.PacketAdapter) {
 		sniffer.Dispatcher.UDPSniff(packet)
 	}
 
-	// local resolve UDP dns
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
-		if err != nil {
-			packet.Drop()
-			return
-		}
-		metadata.DstIP = ip
-	}
-
 	key := packet.LocalAddr().String()
 
 	handle := func() bool {
@@ -379,6 +369,16 @@ func handleUDPConn(packet C.PacketAdapter) {
 		if err != nil {
 			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 			return
+		}
+
+		// local resolve UDP dns
+		if !metadata.Resolved() && proxy.Type() != C.Reject && proxy.Type() != C.RejectDrop {
+			ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
+			if err != nil {
+				packet.Drop()
+				return
+			}
+			metadata.DstIP = ip
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
