@@ -1,59 +1,105 @@
 package arc
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestBasic(t *testing.T) {
+func TestInsertion(t *testing.T) {
 	cache := New[string, string](WithSize[string, string](3))
-	if cache.Len() != 0 {
-		t.Error("Empty cache should have length 0")
+	if got, want := cache.Len(), 0; got != want {
+		t.Errorf("empty cache.Len(): got %d want %d", cache.Len(), want)
 	}
 
-	cache.Set("Hello", "World")
-	if cache.Len() != 1 {
-		t.Error("Cache should have length 1")
+	const (
+		k1 = "Hello"
+		k2 = "Hallo"
+		k3 = "Ciao"
+		k4 = "Salut"
+
+		v1 = "World"
+		v2 = "Worlds"
+		v3 = "Welt"
+	)
+
+	// Insert the first value
+	cache.Set(k1, v1)
+	if got, want := cache.Len(), 1; got != want {
+		t.Errorf("insertion of key #%d: cache.Len(): got %d want %d", want, cache.Len(), want)
+	}
+	if got, ok := cache.Get(k1); !ok || got != v1 {
+		t.Errorf("cache.Get(%v): got (%v,%t) want (%v,true)", k1, got, ok, v1)
 	}
 
-	var val interface{}
-	var ok bool
-
-	if val, ok = cache.Get("Hello"); val != "World" || ok != true {
-		t.Error("Didn't set \"Hello\" to \"World\"")
+	// Replace existing value for a given key
+	cache.Set(k1, v2)
+	if got, want := cache.Len(), 1; got != want {
+		t.Errorf("re-insertion: cache.Len(): got %d want %d", cache.Len(), want)
+	}
+	if got, ok := cache.Get(k1); !ok || got != v2 {
+		t.Errorf("re-insertion: cache.Get(%v): got (%v,%t) want (%v,true)", k1, got, ok, v2)
 	}
 
-	cache.Set("Hello", "World1")
-	if cache.Len() != 1 {
-		t.Error("Inserting the same entry multiple times shouldn't increase cache size")
+	// Add a second different key
+	cache.Set(k2, v3)
+	if got, want := cache.Len(), 2; got != want {
+		t.Errorf("insertion of key #%d: cache.Len(): got %d want %d", want, cache.Len(), want)
+	}
+	if got, ok := cache.Get(k1); !ok || got != v2 {
+		t.Errorf("cache.Get(%v): got (%v,%t) want (%v,true)", k1, got, ok, v2)
+	}
+	if got, ok := cache.Get(k2); !ok || got != v3 {
+		t.Errorf("cache.Get(%v): got (%v,%t) want (%v,true)", k2, got, ok, v3)
 	}
 
-	if val, ok = cache.Get("Hello"); val != "World1" || ok != true {
-		t.Error("Didn't update \"Hello\" to \"World1\"")
+	// Fill cache
+	cache.Set(k3, v1)
+	if got, want := cache.Len(), 3; got != want {
+		t.Errorf("insertion of key #%d: cache.Len(): got %d want %d", want, cache.Len(), want)
 	}
 
-	cache.Set("Hallo", "Welt")
-	if cache.Len() != 2 {
-		t.Error("Inserting two different entries should result into lenght=2")
-	}
-
-	if val, ok = cache.Get("Hallo"); val != "Welt" || ok != true {
-		t.Error("Didn't set \"Hallo\" to \"Welt\"")
+	// Exceed size, this should not exceed size:
+	cache.Set(k4, v1)
+	if got, want := cache.Len(), 3; got != want {
+		t.Errorf("insertion of key out of size: cache.Len(): got %d want %d", cache.Len(), want)
 	}
 }
 
-func TestBasicReplace(t *testing.T) {
-	cache := New[string, string](WithSize[string, string](3))
-
-	cache.Set("Hello", "Hallo")
-	cache.Set("World", "Welt")
-	cache.Get("World")
-	cache.Set("Cache", "Cache")
-	cache.Set("Replace", "Ersetzen")
-
-	value, ok := cache.Get("World")
-	if !ok || value != "Welt" {
-		t.Error("ARC should have replaced \"Hello\"")
+func TestEviction(t *testing.T) {
+	size := 3
+	cache := New[string, string](WithSize[string, string](size))
+	if got, want := cache.Len(), 0; got != want {
+		t.Errorf("empty cache.Len(): got %d want %d", cache.Len(), want)
 	}
 
-	if cache.Len() != 3 {
-		t.Error("ARC should have a maximum size of 3")
+	tests := []struct {
+		k, v string
+	}{
+		{"k1", "v1"},
+		{"k2", "v2"},
+		{"k3", "v3"},
+		{"k4", "v4"},
+	}
+	for i, tt := range tests[:size] {
+		cache.Set(tt.k, tt.v)
+		if got, want := cache.Len(), i+1; got != want {
+			t.Errorf("insertion of key #%d: cache.Len(): got %d want %d", want, cache.Len(), want)
+		}
+	}
+
+	// Exceed size and check we don't outgrow it:
+	cache.Set(tests[size].k, tests[size].v)
+	if got := cache.Len(); got != size {
+		t.Errorf("insertion of overflow key #%d: cache.Len(): got %d want %d", 4, cache.Len(), size)
+	}
+
+	// Check that LRU got evicted:
+	if got, ok := cache.Get(tests[0].k); ok || got != "" {
+		t.Errorf("cache.Get(%v): got (%v,%t) want (<nil>,true)", tests[0].k, got, ok)
+	}
+
+	for _, tt := range tests[1:] {
+		if got, ok := cache.Get(tt.k); !ok || got != tt.v {
+			t.Errorf("cache.Get(%v): got (%v,%t) want (%v,true)", tt.k, got, ok, tt.v)
+		}
 	}
 }
