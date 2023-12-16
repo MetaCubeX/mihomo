@@ -146,14 +146,15 @@ func GetGeneral() *config.General {
 			AllowLan:          listener.AllowLan(),
 			BindAddress:       listener.BindAddress(),
 		},
-		Controller:    config.Controller{},
-		Mode:          tunnel.Mode(),
-		LogLevel:      log.Level(),
-		IPv6:          !resolver.DisableIPv6,
-		GeodataLoader: G.LoaderName(),
-		Interface:     dialer.DefaultInterface.Load(),
-		Sniffing:      tunnel.IsSniffing(),
-		TCPConcurrent: dialer.GetTcpConcurrent(),
+		Controller:     config.Controller{},
+		Mode:           tunnel.Mode(),
+		LogLevel:       log.Level(),
+		IPv6:           !resolver.DisableIPv6,
+		GeodataLoader:  G.LoaderName(),
+		GeositeMatcher: G.SiteMatcherName(),
+		Interface:      dialer.DefaultInterface.Load(),
+		Sniffing:       tunnel.IsSniffing(),
+		TCPConcurrent:  dialer.GetTcpConcurrent(),
 	}
 
 	return general
@@ -401,8 +402,8 @@ func updateGeneral(general *config.General) {
 	}
 
 	iface.FlushCache()
-	geodataLoader := general.GeodataLoader
-	G.SetLoader(geodataLoader)
+	G.SetLoader(general.GeodataLoader)
+	G.SetSiteMatcher(general.GeositeMatcher)
 }
 
 func updateUsers(users []auth.AuthUser) {

@@ -15,7 +15,7 @@ type GEOSITE struct {
 	*Base
 	country    string
 	adapter    string
-	matcher    *router.DomainMatcher
+	matcher    router.DomainMatcher
 	recodeSize int
 }
 
@@ -39,7 +39,7 @@ func (gs *GEOSITE) Payload() string {
 	return gs.country
 }
 
-func (gs *GEOSITE) GetDomainMatcher() *router.DomainMatcher {
+func (gs *GEOSITE) GetDomainMatcher() router.DomainMatcher {
 	return gs.matcher
 }
 

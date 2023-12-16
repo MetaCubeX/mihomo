@@ -59,6 +59,7 @@ type General struct {
 	GeoUpdateInterval       int               `json:"geo-update-interval"`
 	GeodataMode             bool              `json:"geodata-mode"`
 	GeodataLoader           string            `json:"geodata-loader"`
+	GeositeMatcher          string            `json:"geosite-matcher"`
 	TCPConcurrent           bool              `json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `json:"find-process-mode"`
 	Sniffing                bool              `json:"sniffing"`
@@ -127,11 +128,11 @@ type DNS struct {
 
 // FallbackFilter config
 type FallbackFilter struct {
-	GeoIP     bool                    `yaml:"geoip"`
-	GeoIPCode string                  `yaml:"geoip-code"`
-	IPCIDR    []netip.Prefix          `yaml:"ipcidr"`
-	Domain    []string                `yaml:"domain"`
-	GeoSite   []*router.DomainMatcher `yaml:"geosite"`
+	GeoIP     bool                   `yaml:"geoip"`
+	GeoIPCode string                 `yaml:"geoip-code"`
+	IPCIDR    []netip.Prefix         `yaml:"ipcidr"`
+	Domain    []string               `yaml:"domain"`
+	GeoSite   []router.DomainMatcher `yaml:"geosite"`
 }
 
 // Profile config
@@ -312,6 +313,7 @@ type RawConfig struct {
 	GeoUpdateInterval       int               `yaml:"geo-update-interval" json:"geo-update-interval"`
 	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
 	GeodataLoader           string            `yaml:"geodata-loader" json:"geodata-loader"`
+	GeositeMatcher          string            `yaml:"geosite-matcher" json:"geosite-matcher"`
 	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
@@ -537,6 +539,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.Listeners = listener
 
 	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
+	log.Infoln("Geosite Matcher implementation: %s", geodata.SiteMatcherName())
 	ruleProviders, err := parseRuleProviders(rawCfg)
 	if err != nil {
 		return nil, err
@@ -605,6 +608,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
 	geodata.SetLoader(cfg.GeodataLoader)
+	geodata.SetSiteMatcher(cfg.GeositeMatcher)
 	C.GeoAutoUpdate = cfg.GeoAutoUpdate
 	C.GeoUpdateInterval = cfg.GeoUpdateInterval
 	C.GeoIpUrl = cfg.GeoXUrl.GeoIp
@@ -1204,8 +1208,8 @@ func parseFallbackIPCIDR(ips []string) ([]netip.Prefix, error) {
 	return ipNets, nil
 }
 
-func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]*router.DomainMatcher, error) {
-	var sites []*router.DomainMatcher
+func parseFallbackGeoSite(countries []string, rules []C.Rule) ([]router.DomainMatcher, error) {
+	var sites []router.DomainMatcher
 	if len(countries) > 0 {
 		if err := geodata.InitGeoSite(); err != nil {
 			return nil, fmt.Errorf("can't initial GeoSite: %s", err)
@@ -1267,7 +1271,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		EnhancedMode: cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
 			IPCIDR:  []netip.Prefix{},
-			GeoSite: []*router.DomainMatcher{},
+			GeoSite: []router.DomainMatcher{},
 		},
 	}
 	var err error

@@ -400,7 +400,7 @@ type FallbackFilter struct {
 	GeoIPCode string
 	IPCIDR    []netip.Prefix
 	Domain    []string
-	GeoSite   []*router.DomainMatcher
+	GeoSite   []router.DomainMatcher
 }
 
 type Config struct {
