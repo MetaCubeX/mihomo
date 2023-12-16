@@ -151,8 +151,7 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 				return next(ctx, r)
 			}
 
-			switch q.Qtype {
-			case D.TypeAAAA, D.TypeSVCB, D.TypeHTTPS:
+			if q.Qtype == D.TypeAAAA {
 				return handleMsgWithEmptyAnswer(r), nil
 			}
 
