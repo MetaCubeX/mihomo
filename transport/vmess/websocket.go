@@ -338,6 +338,10 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		RawQuery: u.RawQuery,
 	}
 
+	if !strings.HasPrefix(uri.Path, "/") {
+		uri.Path = "/" + uri.Path
+	}
+
 	if c.TLS {
 		uri.Scheme = "wss"
 		config := c.TLSConfig
