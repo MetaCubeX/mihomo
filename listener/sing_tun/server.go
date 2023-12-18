@@ -208,7 +208,6 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		Name:                     tunName,
 		MTU:                      tunMTU,
 		GSO:                      options.GSO,
-		GSOMaxSize:               options.GSOMaxSize,
 		Inet4Address:             options.Inet4Address,
 		Inet6Address:             options.Inet6Address,
 		AutoRoute:                options.AutoRoute,
