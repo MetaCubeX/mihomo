@@ -342,28 +342,8 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return false
 	}
 
-	if handle() {
-		packet.Drop()
-		return
-	}
-
-	cond, loaded := natTable.GetOrCreateLock(key)
-
 	go func() {
 		defer packet.Drop()
-
-		if loaded {
-			cond.L.Lock()
-			cond.Wait()
-			handle()
-			cond.L.Unlock()
-			return
-		}
-
-		defer func() {
-			natTable.DeleteLock(key)
-			cond.Broadcast()
-		}()
 
 		proxy, rule, err := resolveMetadata(metadata)
 		if err != nil {
@@ -380,6 +360,25 @@ func handleUDPConn(packet C.PacketAdapter) {
 			}
 			metadata.DstIP = ip
 		}
+
+		if handle() {
+			return
+		}
+
+		cond, loaded := natTable.GetOrCreateLock(key)
+
+		if loaded {
+			cond.L.Lock()
+			cond.Wait()
+			handle()
+			cond.L.Unlock()
+			return
+		}
+
+		defer func() {
+			natTable.DeleteLock(key)
+			cond.Broadcast()
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
