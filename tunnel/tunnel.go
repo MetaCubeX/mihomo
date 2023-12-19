@@ -355,7 +355,6 @@ func handleUDPConn(packet C.PacketAdapter) {
 		if !metadata.Resolved() && proxy.Type() != C.Reject && proxy.Type() != C.RejectDrop {
 			ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
 			if err != nil {
-				packet.Drop()
 				return
 			}
 			metadata.DstIP = ip
@@ -409,6 +408,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 		case rule != nil:
 			if rule.Payload() != "" {
 				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), rawPc.Chains().String())
+				if rawPc.Chains().Last() == "REJECT-DROP" {
+					pc.Close()
+					return
+				}
 			} else {
 				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.Payload(), rawPc.Chains().String())
 			}

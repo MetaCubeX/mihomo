@@ -30,9 +30,6 @@ func (r *Reject) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 
 // ListenPacketContext implements C.ProxyAdapter
 func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
-	if r.drop {
-		return newPacketConn(&dropPacketConn{}, r), nil
-	}
 	return newPacketConn(&nopPacketConn{}, r), nil
 }
 
@@ -129,22 +126,3 @@ func (rw dropConn) RemoteAddr() net.Addr                 { return nil }
 func (rw dropConn) SetDeadline(time.Time) error          { return nil }
 func (rw dropConn) SetReadDeadline(time.Time) error      { return nil }
 func (rw dropConn) SetWriteDeadline(time.Time) error     { return nil }
-
-type dropPacketConn struct{}
-
-func (npc dropPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
-	time.Sleep(C.DefaultDropTime)
-	return len(b), nil
-}
-func (npc dropPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	time.Sleep(C.DefaultDropTime)
-	return 0, nil, io.EOF
-}
-func (npc dropPacketConn) WaitReadFrom() ([]byte, func(), net.Addr, error) {
-	return nil, nil, nil, io.EOF
-}
-func (npc dropPacketConn) Close() error                     { return nil }
-func (npc dropPacketConn) LocalAddr() net.Addr              { return udpAddrIPv4Unspecified }
-func (npc dropPacketConn) SetDeadline(time.Time) error      { return nil }
-func (npc dropPacketConn) SetReadDeadline(time.Time) error  { return nil }
-func (npc dropPacketConn) SetWriteDeadline(time.Time) error { return nil }
