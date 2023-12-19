@@ -48,7 +48,7 @@ jobs:
               target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
               id: "4",
             }
-          - { type: "WithoutCGO", target: "linux-386 linux-riscv64", id: "5" }
+          - { type: "WithoutCGO", target: "linux-386 linux-riscv64 linux-loong64", id: "5" }
           - {
               type: "WithoutCGO",
               target: "freebsd-386 freebsd-amd64 freebsd-arm64",
@@ -118,11 +118,7 @@ jobs:
       - name: Set ENV
         run: |
           sudo timedatectl set-timezone "Asia/Shanghai"
-          echo "NAME=mihomo" >> $GITHUB_ENV
-          echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
-          echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
           echo "BUILDTIME=$(date)" >> $GITHUB_ENV
-          echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
