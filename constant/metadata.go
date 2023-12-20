@@ -148,8 +148,8 @@ type Metadata struct {
 	SpecialRules string     `json:"specialRules"`
 	RemoteDst    string     `json:"remoteDestination"`
 
-	RawSrcAddr net.Addr 	`json:"-"`
-	RawDstAddr net.Addr 	`json:"-"`
+	RawSrcAddr net.Addr `json:"-"`
+	RawDstAddr net.Addr `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
 }
@@ -160,6 +160,10 @@ func (m *Metadata) RemoteAddress() string {
 
 func (m *Metadata) SourceAddress() string {
 	return net.JoinHostPort(m.SrcIP.String(), strconv.FormatUint(uint64(m.SrcPort), 10))
+}
+
+func (m *Metadata) SourceAddrPort() netip.AddrPort {
+	return netip.AddrPortFrom(m.SrcIP.Unmap(), m.SrcPort)
 }
 
 func (m *Metadata) SourceDetail() string {
