@@ -34,7 +34,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.0.2
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.3.0-beta.6
+	github.com/sagernet/sing v0.3.0-rc.3
 	github.com/sagernet/sing-mux v0.1.6-beta.1
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6
@@ -112,4 +112,4 @@ require (
 	golang.org/x/tools v0.16.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231218144940-fc8dd41d68e8
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231221131356-d73c21c7ea3f
