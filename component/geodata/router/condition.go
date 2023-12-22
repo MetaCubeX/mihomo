@@ -42,7 +42,7 @@ type succinctDomainMatcher struct {
 	not           bool
 }
 
-func (m succinctDomainMatcher) ApplyDomain(domain string) bool {
+func (m *succinctDomainMatcher) ApplyDomain(domain string) bool {
 	isMatched := m.set.Has(domain)
 	if !isMatched {
 		for _, matcher := range m.otherMatchers {
@@ -107,22 +107,6 @@ func NewMphMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error) {
 		}
 	}
 	g.Build()
-	return &v2rayDomainMatcher{
-		matchers: g,
-		not:      not,
-	}, nil
-}
-
-func NewDomainMatcher(domains []*Domain, not bool) (DomainMatcher, error) {
-	g := new(strmatcher.MatcherGroup)
-	for _, d := range domains {
-		m, err := domainToMatcher(d)
-		if err != nil {
-			return nil, err
-		}
-		g.Add(m)
-	}
-
 	return &v2rayDomainMatcher{
 		matchers: g,
 		not:      not,

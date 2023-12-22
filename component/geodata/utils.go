@@ -33,12 +33,11 @@ func SetLoader(newLoader string) {
 
 func SetSiteMatcher(newMatcher string) {
 	switch newMatcher {
-	case "hybrid":
-		newMatcher = "mph"
+	case "mph", "hybrid":
+		geoSiteMatcher = "mph"
 	default:
-		newMatcher = "succinct"
+		geoSiteMatcher = "succinct"
 	}
-	geoSiteMatcher = newMatcher
 }
 
 func Verify(name string) error {
