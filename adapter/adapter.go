@@ -33,13 +33,13 @@ type internalProxyState struct {
 
 type Proxy struct {
 	C.ProxyAdapter
-	history *queue.Queue[C.DelayHistory]
 	alive   atomic.Bool
+	history *queue.Queue[C.DelayHistory]
 	extra   *xsync.MapOf[string, *internalProxyState]
 }
 
-// Alive implements C.Proxy
-func (p *Proxy) Alive(url string) bool {
+// AliveForTestUrl implements C.Proxy
+func (p *Proxy) AliveForTestUrl(url string) bool {
 	if state, ok := p.extra.Load(url); ok {
 		return state.alive.Load()
 	}
@@ -127,7 +127,7 @@ func (p *Proxy) ExtraDelayHistories() map[string]C.ProxyState {
 // LastDelayForTestUrl return last history record of the specified URL. if proxy is not alive, return the max value of uint16.
 // implements C.Proxy
 func (p *Proxy) LastDelayForTestUrl(url string) (delay uint16) {
-	var max uint16 = 0xffff
+	var maxDelay uint16 = 0xffff
 
 	alive := false
 	var history C.DelayHistory
@@ -138,7 +138,7 @@ func (p *Proxy) LastDelayForTestUrl(url string) (delay uint16) {
 	}
 
 	if !alive || history.Delay == 0 {
-		return max
+		return maxDelay
 	}
 	return history.Delay
 }
