@@ -102,12 +102,12 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			if proxy.AliveForTestUrl(f.testUrl) {
+			if proxy.Alive(f.testUrl) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.AliveForTestUrl(f.testUrl) {
+				if proxy.Alive(f.testUrl) {
 					return proxy
 				} else {
 					f.selected = ""
@@ -133,7 +133,7 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
-	if !p.AliveForTestUrl(f.testUrl) {
+	if !p.Alive(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
 		expectedStatus, _ := utils.NewIntRanges[uint16](f.expectedStatus)

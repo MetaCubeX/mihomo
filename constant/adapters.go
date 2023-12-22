@@ -147,13 +147,18 @@ type DelayHistory struct {
 	Delay uint16    `json:"delay"`
 }
 
+type ProxyState struct {
+	Alive   bool           `json:"alive"`
+	History []DelayHistory `json:"history"`
+}
+
 type DelayHistoryStoreType int
 
 type Proxy interface {
 	ProxyAdapter
-	AliveForTestUrl(url string) bool
+	Alive(url string) bool
 	DelayHistory() []DelayHistory
-	ExtraDelayHistory() map[string][]DelayHistory
+	ExtraDelayHistories() map[string]ProxyState
 	LastDelayForTestUrl(url string) uint16
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
 
