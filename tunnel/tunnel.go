@@ -328,6 +328,15 @@ func handleUDPConn(packet C.PacketAdapter) {
 		sniffer.Dispatcher.UDPSniff(packet)
 	}
 
+	// local resolve UDP dns
+	if !metadata.Resolved() {
+		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
+		if err != nil {
+			return
+		}
+		metadata.DstIP = ip
+	}
+
 	key := packet.LocalAddr().String()
 
 	handle := func() bool {
@@ -342,29 +351,15 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return false
 	}
 
+	if handle() {
+		packet.Drop()
+		return
+	}
+
+	cond, loaded := natTable.GetOrCreateLock(key)
+
 	go func() {
 		defer packet.Drop()
-
-		proxy, rule, err := resolveMetadata(metadata)
-		if err != nil {
-			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
-			return
-		}
-
-		// local resolve UDP dns
-		if !metadata.Resolved() && proxy.Type() != C.Reject && proxy.Type() != C.RejectDrop {
-			ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
-			if err != nil {
-				return
-			}
-			metadata.DstIP = ip
-		}
-
-		if handle() {
-			return
-		}
-
-		cond, loaded := natTable.GetOrCreateLock(key)
 
 		if loaded {
 			cond.L.Lock()
@@ -378,6 +373,12 @@ func handleUDPConn(packet C.PacketAdapter) {
 			natTable.DeleteLock(key)
 			cond.Broadcast()
 		}()
+
+		proxy, rule, err := resolveMetadata(metadata)
+		if err != nil {
+			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
 		defer cancel()
