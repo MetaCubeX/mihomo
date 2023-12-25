@@ -170,6 +170,7 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        u.testUrl,
 		"expectedStatus": u.expectedStatus,
+		"fixed":          u.selected,
 	})
 }
 
