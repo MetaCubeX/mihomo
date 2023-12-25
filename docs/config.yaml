@@ -855,6 +855,15 @@ proxy-providers:
       interval: 600
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
+    override: # 覆写节点加载时的一些配置项
+      skip-cert-verify: true
+      udp: true
+      # down: "50 Mbps"
+      # up: "10 Mbps"
+      # dialer-proxy: proxy
+      # interface-name: tailscale0
+      # routing-mark: 233
+      # ip-version: ipv4-prefer
   test:
     type: file
     path: /test.yaml

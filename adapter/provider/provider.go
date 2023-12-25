@@ -393,6 +393,15 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 				if override.SkipCertVerify != nil {
 					mapping["skip-cert-verify"] = *override.SkipCertVerify
 				}
+				if override.Interface != nil {
+					mapping["interface-name"] = *override.Interface
+				}
+				if override.RoutingMark != nil {
+					mapping["routing-mark"] = *override.RoutingMark
+				}
+				if override.IPVersion != nil {
+					mapping["ip-version"] = *override.IPVersion
+				}
 
 				proxy, err := adapter.ParseProxy(mapping)
 				if err != nil {
