@@ -37,6 +37,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/log"
 	R "github.com/metacubex/mihomo/rules"
+	RC "github.com/metacubex/mihomo/rules/common"
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 
@@ -180,6 +181,7 @@ type Config struct {
 	Hosts         *trie.DomainTrie[resolver.HostValue]
 	Profile       *Profile
 	Rules         []C.Rule
+	FakeipRules   []C.Rule
 	SubRules      map[string][]C.Rule
 	Users         []auth.AuthUser
 	Proxies       map[string]C.Proxy
@@ -336,6 +338,7 @@ type RawConfig struct {
 	Proxy         []map[string]any          `yaml:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups"`
 	Rule          []string                  `yaml:"rules"`
+	FakeipRules   []string                  `yaml:"fakeip-rules"`
 	SubRules      map[string][]string       `yaml:"sub-rules"`
 	RawTLS        TLS                       `yaml:"tls"`
 	Listeners     []map[string]any          `yaml:"listeners"`
@@ -557,6 +560,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.Rules = rules
+
+	fakeip_rules, err := parseFakeipRules(rawCfg.FakeipRules)
+	if err != nil {
+		return nil, err
+	}
+	config.FakeipRules = fakeip_rules
 
 	hosts, err := parseHosts(rawCfg)
 	if err != nil {
@@ -934,6 +943,66 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params, subRules)
 		if parseErr != nil {
 			return nil, fmt.Errorf("%s[%d] [%s] error: %s", format, idx, line, parseErr.Error())
+		}
+
+		rules = append(rules, parsed)
+	}
+
+	return rules, nil
+}
+
+func parseFakeipRules(rulesConfig []string) ([]C.Rule, error) {
+	var rules []C.Rule
+	var parsed C.Rule
+	var parsedErr error
+
+	for _, line := range rulesConfig {
+		rule := trimArr(strings.Split(line, ","))
+		var (
+			payload  string
+			target   string
+			ruleName = strings.ToUpper(rule[0])
+			l        = len(rule)
+		)
+
+		if l == 2 {
+			if ruleName == "MATCH" {
+				target = rule[1]
+			} else {
+				target = "DIRECT"
+				payload = rule[1]
+			}
+		} else if l == 3 {
+			if ruleName == "MATCH" {
+				return nil, fmt.Errorf("rule `%s` error: MATCH only accept 1 parameter", line)
+			} else {
+				target = rule[2]
+				payload = rule[1]
+			}
+		} else {
+			return nil, fmt.Errorf("rule `%s` formate error", line)
+		}
+
+		switch ruleName {
+		case "DOMAIN":
+			parsed = RC.NewDomain(payload, target)
+		case "DOMAIN-SUFFIX":
+			parsed = RC.NewDomainSuffix(payload, target)
+		case "DOMAIN-KEYWORD":
+			parsed = RC.NewDomainKeyword(payload, target)
+		case "RULE-SET":
+			parsed, parsedErr = RP.NewRuleSet(payload, target, true)
+		case "GEOSITE":
+			parsed, parsedErr = RC.NewGEOSITE(payload, target)
+		case "MATCH":
+			parsed = RC.NewMatch(target)
+			parsedErr = nil
+		default:
+			parsedErr = fmt.Errorf("unsupported rule type %s", ruleName)
+		}
+
+		if parsedErr != nil {
+			return nil, parsedErr
 		}
 
 		rules = append(rules, parsed)

@@ -98,6 +98,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateGeneral(cfg.General)
 	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.RuleProviders, cfg.General.IPv6)
+	cfg.DNS.FakeIPRange.FakeipRules = cfg.FakeipRules
 	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
