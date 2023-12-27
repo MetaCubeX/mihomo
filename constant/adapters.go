@@ -47,7 +47,7 @@ const (
 	DefaultDropTime   = 12 * DefaultTCPTimeout
 	DefaultUDPTimeout = DefaultTCPTimeout
 	DefaultTLSTimeout = DefaultTCPTimeout
-	DefaultTestURL    = "https://cp.cloudflare.com/generate_204"
+	DefaultTestURL    = "https://www.gstatic.com/generate_204"
 )
 
 var ErrNotSupport = errors.New("no support")
