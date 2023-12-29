@@ -93,6 +93,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/restart", restartRouter())
+		r.Mount("/shutdown", shutdownRouter())
 		r.Mount("/upgrade", upgradeRouter())
 		addExternalRouters(r)
 
