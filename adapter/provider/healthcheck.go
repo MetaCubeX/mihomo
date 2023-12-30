@@ -213,9 +213,8 @@ func (hc *HealthCheck) close() {
 }
 
 func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
-	if len(url) == 0 {
-		interval = 0
-		expectedStatus = nil
+	if url == "" {
+		// expectedStatus = nil
 		url = C.DefaultTestURL
 	}
 
