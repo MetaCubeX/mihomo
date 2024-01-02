@@ -1,10 +1,13 @@
 package http
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
+	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/common/lru"
@@ -14,9 +17,17 @@ import (
 	"github.com/metacubex/mihomo/log"
 )
 
+//go:linkname registerOnHitEOF net/http.registerOnHitEOF
+func registerOnHitEOF(rc io.ReadCloser, fn func())
+
+//go:linkname requestBodyRemains net/http.requestBodyRemains
+func requestBodyRemains(rc io.ReadCloser) bool
+
 func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
 	client := newClient(c, tunnel, additions...)
 	defer client.CloseIdleConnections()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	conn := N.NewBufferedConn(c)
 
@@ -72,6 +83,21 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 			if request.URL.Scheme == "" || request.URL.Host == "" {
 				resp = responseWith(request, http.StatusBadRequest)
 			} else {
+				request = request.WithContext(ctx)
+
+				startBackgroundRead := func() {
+					go func() {
+						_, err := conn.Peek(1)
+						if err != nil {
+							cancel()
+						}
+					}()
+				}
+				if requestBodyRemains(request.Body) {
+					registerOnHitEOF(request.Body, startBackgroundRead)
+				} else {
+					startBackgroundRead()
+				}
 				resp, err = client.Do(request)
 				if err != nil {
 					resp = responseWith(request, http.StatusBadGateway)
