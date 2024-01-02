@@ -268,6 +268,7 @@ jobs:
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
           [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
+          [二进制文件筛选 / Binary file selector] (https://metacubex.github.io/Meta-Docs/startup/#_1)
           [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 
