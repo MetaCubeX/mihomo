@@ -584,7 +584,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
-	handleSocket(connCtx, remoteConn)
+	handleSocket(conn, remoteConn)
 }
 
 func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {

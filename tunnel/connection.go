@@ -82,6 +82,6 @@ func closeAllLocalCoon(lAddr string) {
 	})
 }
 
-func handleSocket(ctx C.ConnContext, outbound net.Conn) {
-	N.Relay(ctx.Conn(), outbound)
+func handleSocket(inbound, outbound net.Conn) {
+	N.Relay(inbound, outbound)
 }
