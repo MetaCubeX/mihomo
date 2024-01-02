@@ -41,6 +41,14 @@ func NewSubRule(payload, adapter string, subRules map[string][]C.Rule, parseRule
 			logic.needProcess = true
 		}
 	}
+	for _, rule := range logic.rules {
+		if rule.ShouldResolveIP() {
+			logic.needIP = true
+		}
+		if rule.ShouldFindProcess() {
+			logic.needProcess = true
+		}
+	}
 	logic.subRules = subRules
 	return logic, nil
 }
