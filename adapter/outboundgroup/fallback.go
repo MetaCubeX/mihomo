@@ -89,6 +89,7 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        f.testUrl,
 		"expectedStatus": f.expectedStatus,
+		"fixed":          f.selected,
 	})
 }
 

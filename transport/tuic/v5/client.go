@@ -47,7 +47,7 @@ type clientImpl struct {
 	openStreams atomic.Int64
 	closed      atomic.Bool
 
-	udpInputMap xsync.MapOf[uint16, net.Conn]
+	udpInputMap *xsync.MapOf[uint16, net.Conn]
 
 	// only ready for PoolClient
 	dialerRef   C.Dialer
@@ -270,7 +270,7 @@ func (t *clientImpl) forceClose(quicConn quic.Connection, err error) {
 	if quicConn != nil {
 		_ = quicConn.CloseWithError(ProtocolError, errStr)
 	}
-	udpInputMap := &t.udpInputMap
+	udpInputMap := t.udpInputMap
 	udpInputMap.Range(func(key uint16, value net.Conn) bool {
 		conn := value
 		_ = conn.Close()
@@ -406,7 +406,7 @@ func NewClient(clientOption *ClientOption, udp bool, dialerRef C.Dialer) *Client
 		ClientOption: clientOption,
 		udp:          udp,
 		dialerRef:    dialerRef,
-		udpInputMap:  *xsync.NewMapOf[uint16, net.Conn](),
+		udpInputMap:  xsync.NewMapOf[uint16, net.Conn](),
 	}
 	c := &Client{ci}
 	runtime.SetFinalizer(c, closeClient)

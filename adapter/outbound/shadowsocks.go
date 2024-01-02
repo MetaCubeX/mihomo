@@ -20,6 +20,7 @@ import (
 
 	restlsC "github.com/3andne/restls-client-go"
 	shadowsocks "github.com/metacubex/sing-shadowsocks2"
+	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
 )
@@ -187,7 +188,7 @@ func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dial
 	if err != nil {
 		return nil, err
 	}
-	pc = ss.method.DialPacketConn(N.NewBindPacketConn(pc, addr))
+	pc = ss.method.DialPacketConn(bufio.NewBindPacketConn(pc, addr))
 	return newPacketConn(pc, ss), nil
 }
 
@@ -210,9 +211,9 @@ func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn,
 
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
-			return newPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), ss), nil
+			return newPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
 		} else {
-			return newPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), ss), nil
+			return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
 		}
 	}
 	return nil, C.ErrNotSupport

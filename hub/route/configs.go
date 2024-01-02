@@ -10,7 +10,6 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/config"
-	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/hub/executor"
 	P "github.com/metacubex/mihomo/listener"
@@ -50,6 +49,8 @@ type configSchema struct {
 	UdptunConfig      *string            `json:"udptun-config"`
 	AllowLan          *bool              `json:"allow-lan"`
 	SkipAuthPrefixes  *[]netip.Prefix    `json:"skip-auth-prefixes"`
+	LanAllowedIPs     *[]netip.Prefix    `json:"lan-allowed-ips"`
+	LanDisAllowedIPs  *[]netip.Prefix    `json:"lan-disallowed-ips"`
 	BindAddress       *string            `json:"bind-address"`
 	Mode              *tunnel.TunnelMode `json:"mode"`
 	LogLevel          *log.LogLevel      `json:"log-level"`
@@ -68,7 +69,9 @@ type tunSchema struct {
 	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	//RedirectToTun       []string   		  `yaml:"-" json:"-"`
 
-	MTU *uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	MTU        *uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	GSO        *bool   `yaml:"gso" json:"gso,omitempty"`
+	GSOMaxSize *uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
 	//Inet4Address           *[]netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
 	Inet6Address             *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
 	StrictRoute              *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
@@ -76,6 +79,8 @@ type tunSchema struct {
 	Inet6RouteAddress        *[]netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
 	Inet4RouteExcludeAddress *[]netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
 	Inet6RouteExcludeAddress *[]netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
+	IncludeInterface         *[]string       `yaml:"include-interface" json:"include-interface,omitempty"`
+	ExcludeInterface         *[]string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
 	IncludeUID               *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
 	IncludeUIDRange          *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
 	ExcludeUID               *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
@@ -144,6 +149,12 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		if p.MTU != nil {
 			def.MTU = *p.MTU
 		}
+		if p.GSO != nil {
+			def.GSO = *p.GSO
+		}
+		if p.GSOMaxSize != nil {
+			def.GSOMaxSize = *p.GSOMaxSize
+		}
 		//if p.Inet4Address != nil {
 		//	def.Inet4Address = *p.Inet4Address
 		//}
@@ -161,6 +172,12 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		}
 		if p.Inet6RouteExcludeAddress != nil {
 			def.Inet6RouteExcludeAddress = *p.Inet6RouteExcludeAddress
+		}
+		if p.IncludeInterface != nil {
+			def.IncludeInterface = *p.IncludeInterface
+		}
+		if p.ExcludeInterface != nil {
+			def.ExcludeInterface = *p.ExcludeInterface
 		}
 		if p.IncludeUID != nil {
 			def.IncludeUID = *p.IncludeUID
@@ -252,6 +269,14 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		inbound.SetSkipAuthPrefixes(*general.SkipAuthPrefixes)
 	}
 
+	if general.LanAllowedIPs != nil {
+		inbound.SetAllowedIPs(*general.LanAllowedIPs)
+	}
+
+	if general.LanDisAllowedIPs != nil {
+		inbound.SetDisAllowedIPs(*general.LanDisAllowedIPs)
+	}
+
 	if general.BindAddress != nil {
 		P.SetBindAddress(*general.BindAddress)
 	}
@@ -319,7 +344,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if req.Path == "" {
-			req.Path = constant.Path.Config()
+			req.Path = C.Path.Config()
 		}
 		if !filepath.IsAbs(req.Path) {
 			render.Status(r, http.StatusBadRequest)
@@ -364,7 +389,7 @@ func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cfg, err := executor.ParseWithPath(constant.Path.Config())
+		cfg, err := executor.ParseWithPath(C.Path.Config())
 		if err != nil {
 			log.Errorln("[REST-API] update GEO databases failed: %v", err)
 			return

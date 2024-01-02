@@ -400,7 +400,7 @@ type FallbackFilter struct {
 	GeoIPCode string
 	IPCIDR    []netip.Prefix
 	Domain    []string
-	GeoSite   []*router.DomainMatcher
+	GeoSite   []router.DomainMatcher
 }
 
 type Config struct {
@@ -483,32 +483,34 @@ func NewResolver(config Config) *Resolver {
 		r.policy = make([]dnsPolicy, 0)
 
 		var triePolicy *trie.DomainTrie[[]dnsClient]
-		insertTriePolicy := func() {
+		insertPolicy := func(policy dnsPolicy) {
 			if triePolicy != nil {
 				triePolicy.Optimize()
 				r.policy = append(r.policy, domainTriePolicy{triePolicy})
 				triePolicy = nil
 			}
+			if policy != nil {
+				r.policy = append(r.policy, policy)
+			}
 		}
 
 		for pair := config.Policy.Oldest(); pair != nil; pair = pair.Next() {
 			domain, nameserver := pair.Key, pair.Value
-			domain = strings.ToLower(domain)
 
 			if temp := strings.Split(domain, ":"); len(temp) == 2 {
 				prefix := temp[0]
 				key := temp[1]
-				switch strings.ToLower(prefix) {
+				switch prefix {
 				case "rule-set":
 					if p, ok := config.RuleProviders[key]; ok {
-						insertTriePolicy()
-						r.policy = append(r.policy, domainSetPolicy{
+						log.Debugln("Adding rule-set policy: %s ", key)
+						insertPolicy(domainSetPolicy{
 							domainSetProvider: p,
 							dnsClients:        cacheTransform(nameserver),
 						})
 						continue
 					} else {
-						log.Warnln("can't found ruleset policy: %s", key)
+						log.Warnln("Can't found ruleset policy: %s", key)
 					}
 				case "geosite":
 					inverse := false
@@ -516,14 +518,13 @@ func NewResolver(config Config) *Resolver {
 						inverse = true
 						key = key[1:]
 					}
-					log.Debugln("adding geosite policy: %s inversed %t", key, inverse)
+					log.Debugln("Adding geosite policy: %s inversed %t", key, inverse)
 					matcher, err := NewGeoSite(key)
 					if err != nil {
 						log.Warnln("adding geosite policy %s error: %s", key, err)
 						continue
 					}
-					insertTriePolicy()
-					r.policy = append(r.policy, geositePolicy{
+					insertPolicy(geositePolicy{
 						matcher:    matcher,
 						inverse:    inverse,
 						dnsClients: cacheTransform(nameserver),
@@ -536,7 +537,7 @@ func NewResolver(config Config) *Resolver {
 			}
 			_ = triePolicy.Insert(domain, cacheTransform(nameserver))
 		}
-		insertTriePolicy()
+		insertPolicy(nil)
 	}
 
 	fallbackIPFilters := []fallbackIPFilter{}

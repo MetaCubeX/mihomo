@@ -39,7 +39,7 @@ func newNode() [validCharCount]Edge {
 	return s
 }
 
-var char2Index = []int{
+var char2Index = [...]int{
 	'A':  0,
 	'a':  0,
 	'B':  1,

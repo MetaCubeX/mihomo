@@ -14,19 +14,19 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.3.1
 	github.com/gofrs/uuid/v5 v5.0.0
-	github.com/insomniacslk/dhcp v0.0.0-20231016090811-6a2c8fbdcc1c
+	github.com/insomniacslk/dhcp v0.0.0-20231206064809-8c70d406f6d2
 	github.com/jpillora/backoff v1.0.0
 	github.com/klauspost/cpuid/v2 v2.2.6
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394
-	github.com/metacubex/sing-quic v0.0.0-20231130141855-0022295e524b
-	github.com/metacubex/sing-shadowsocks v0.2.5
-	github.com/metacubex/sing-shadowsocks2 v0.1.4
-	github.com/metacubex/sing-tun v0.1.15-0.20231103033938-170591e8d5bd
-	github.com/metacubex/sing-vmess v0.1.9-0.20230921005247-a0488d7dac74
-	github.com/metacubex/sing-wireguard v0.0.0-20231001110902-321836559170
+	github.com/metacubex/sing-quic v0.0.0-20231220152840-85620b446796
+	github.com/metacubex/sing-shadowsocks v0.2.6
+	github.com/metacubex/sing-shadowsocks2 v0.1.6-beta.1
+	github.com/metacubex/sing-tun v0.2.0-beta.4
+	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
+	github.com/metacubex/sing-wireguard v0.0.0-20231209125515-0594297f7232
 	github.com/miekg/dns v1.1.57
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
@@ -34,22 +34,22 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.0.2
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.2.18-0.20231108041402-4fbbd193203c
-	github.com/sagernet/sing-mux v0.1.5-0.20231109075101-6b086ed6bb07
+	github.com/sagernet/sing v0.3.0-rc.3
+	github.com/sagernet/sing-mux v0.1.6-beta.1
 	github.com/sagernet/sing-shadowtls v0.1.4
-	github.com/sagernet/tfo-go v0.0.0-20230816093905-5a5c285d44a6
-	github.com/sagernet/utls v0.0.0-20230309024959-6732c2ab36f2
-	github.com/sagernet/wireguard-go v0.0.0-20230807125731-5d4a7ef2dc5f
-	github.com/samber/lo v1.38.1
-	github.com/shirou/gopsutil/v3 v3.23.10
+	github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6
+	github.com/sagernet/utls v1.5.4
+	github.com/sagernet/wireguard-go v0.0.0-20231209092712-9a439356a62e
+	github.com/samber/lo v1.39.0
+	github.com/shirou/gopsutil/v3 v3.23.11
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.uber.org/automaxprocs v1.5.3
 	golang.org/x/crypto v0.16.0
-	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
-	golang.org/x/net v0.18.0
+	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb
+	golang.org/x/net v0.19.0
 	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.15.0
 	google.golang.org/protobuf v1.31.0
@@ -58,11 +58,12 @@ require (
 )
 
 require (
-	github.com/RyuaNerin/go-krypto v1.0.2 // indirect
+	github.com/RyuaNerin/go-krypto v1.2.4 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/ajg/form v1.5.1 // indirect
-	github.com/andybalholm/brotli v1.0.5 // indirect
+	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/cloudflare/circl v1.3.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ericlagergren/aegis v0.0.0-20230312195928-b4ce538b56f9 // indirect
 	github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391 // indirect
@@ -79,11 +80,11 @@ require (
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/josharian/native v1.1.0 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
-	github.com/metacubex/gvisor v0.0.0-20231001104248-0f672c3fb8d8 // indirect
+	github.com/metacubex/gvisor v0.0.0-20231209122014-3e43224c7bbc // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/pierrec/lz4/v4 v4.1.14 // indirect
@@ -91,8 +92,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
-	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
-	github.com/sagernet/smux v0.0.0-20230312102458-337ec2a5af37 // indirect
+	github.com/sagernet/smux v0.0.0-20231208180855-7041f6ea79e7 // indirect
 	github.com/scjalliance/comshim v0.0.0-20230315213746-5e51f40bd3b9 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sina-ghaderi/poly1305 v0.0.0-20220724002748-c5926b03988b // indirect
@@ -105,11 +105,11 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	go.uber.org/mock v0.3.0 // indirect
-	go4.org/netipx v0.0.0-20230824141953-6213f710f925 // indirect
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.15.0 // indirect
+	golang.org/x/time v0.5.0 // indirect
+	golang.org/x/tools v0.16.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231118023733-957d84f17d2c
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231221131356-d73c21c7ea3f

@@ -32,6 +32,9 @@ type OverrideSchema struct {
 	Down           *string `provider:"down,omitempty"`
 	DialerProxy    *string `provider:"dialer-proxy,omitempty"`
 	SkipCertVerify *bool   `provider:"skip-cert-verify,omitempty"`
+	Interface      *string `provider:"interface-name,omitempty"`
+	RoutingMark    *int    `provider:"routing-mark,omitempty"`
+	IPVersion      *string `provider:"ip-version,omitempty"`
 }
 
 type proxyProviderSchema struct {
@@ -67,6 +70,9 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 
 	var hcInterval uint
 	if schema.HealthCheck.Enable {
+		if schema.HealthCheck.Interval == 0 {
+			schema.HealthCheck.Interval = 300
+		}
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
 	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, expectedStatus)

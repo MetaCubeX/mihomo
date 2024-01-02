@@ -71,6 +71,12 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 					t.SetKeepAlive(false)
 				}
 			}
+			if len(additions) == 0 { // only apply on default listener
+				if inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
+					_ = conn.Close()
+					continue
+				}
+			}
 			go HandleConn(conn, tunnel, c, additions...)
 		}
 	}()

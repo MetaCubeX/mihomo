@@ -5,7 +5,7 @@ import (
 )
 
 type RuleGeoSite interface {
-	GetDomainMatcher() *router.DomainMatcher
+	GetDomainMatcher() router.DomainMatcher
 }
 
 type RuleGeoIP interface {

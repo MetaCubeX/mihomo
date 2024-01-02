@@ -140,24 +140,25 @@ func StringToBps(s string) uint64 {
 	if m == nil {
 		return 0
 	}
-	var n uint64
+	var n uint64 = 1
 	switch m[2] {
-	case "K":
-		n = 1 << 10
-	case "M":
-		n = 1 << 20
-	case "G":
-		n = 1 << 30
 	case "T":
-		n = 1 << 40
-	default:
-		n = 1
+		n *= 1000
+		fallthrough
+	case "G":
+		n *= 1000
+		fallthrough
+	case "M":
+		n *= 1000
+		fallthrough
+	case "K":
+		n *= 1000
 	}
 	v, _ := strconv.ParseUint(m[1], 10, 64)
-	n = v * n
+	n *= v
 	if m[3] == "b" {
 		// Bits, need to convert to bytes
-		n = n >> 3
+		n /= 8
 	}
 	return n
 }

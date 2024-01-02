@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/callback"
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/singledo"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
@@ -113,7 +116,7 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
 		fast := proxies[0]
-		min := fast.LastDelayForTestUrl(u.testUrl)
+		minDelay := fast.LastDelayForTestUrl(u.testUrl)
 		fastNotExist := true
 
 		for _, proxy := range proxies[1:] {
@@ -126,9 +129,9 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 			}
 
 			delay := proxy.LastDelayForTestUrl(u.testUrl)
-			if delay < min {
+			if delay < minDelay {
 				fast = proxy
-				min = delay
+				minDelay = delay
 			}
 
 		}
@@ -170,7 +173,36 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        u.testUrl,
 		"expectedStatus": u.expectedStatus,
+		"fixed":          u.selected,
 	})
+}
+
+func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (map[string]uint16, error) {
+	var wg sync.WaitGroup
+	var lock sync.Mutex
+	mp := map[string]uint16{}
+	proxies := u.GetProxies(false)
+	for _, proxy := range proxies {
+		proxy := proxy
+		wg.Add(1)
+		go func() {
+			delay, err := proxy.URLTest(ctx, u.testUrl, expectedStatus)
+			if err == nil {
+				lock.Lock()
+				mp[proxy.Name()] = delay
+				lock.Unlock()
+			}
+
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	if len(mp) == 0 {
+		return mp, fmt.Errorf("get delay: all proxies timeout")
+	} else {
+		return mp, nil
+	}
 }
 
 func parseURLTestOption(config map[string]any) []urlTestOption {

@@ -15,11 +15,11 @@ on:
       - Alpha
       
 concurrency:
-  group: ${{ github.ref }}-${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
   
 env:
-  REGISTRY: ghcr.io
+  REGISTRY: docker.io
 jobs:
   Build:
     permissions: write-all
@@ -48,7 +48,7 @@ jobs:
               target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
               id: "4",
             }
-          - { type: "WithoutCGO", target: "linux-386 linux-riscv64", id: "5" }
+          - { type: "WithoutCGO", target: "linux-386 linux-riscv64 linux-loong64", id: "5" }
           - {
               type: "WithoutCGO",
               target: "freebsd-386 freebsd-amd64 freebsd-arm64",
@@ -75,17 +75,17 @@ jobs:
           - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "2" }
           # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
           - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64 android-arm64",id: "3" }
-          - { type: "WithCGO", target: "windows/*", id: "1" }
-          - { type: "WithCGO", target: "linux/386", id: "2" }
-          - { type: "WithCGO", target: "linux/amd64", id: "3" }
-          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
-          - { type: "WithCGO", target: "linux/arm,", id: "5" }
-          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
-          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
-          - { type: "WithCGO", target: "linux/mips64", id: "8" }
-          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
-          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
-          - { type: "WithCGO", target: "android", id: "11" }
+#          - { type: "WithCGO", target: "windows/*", id: "1" }
+#          - { type: "WithCGO", target: "linux/386", id: "2" }
+#          - { type: "WithCGO", target: "linux/amd64", id: "3" }
+#          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
+#          - { type: "WithCGO", target: "linux/arm,", id: "5" }
+#          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
+#          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
+#          - { type: "WithCGO", target: "linux/mips64", id: "8" }
+#          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
+#          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
+#          - { type: "WithCGO", target: "android", id: "11" }
 
     steps:
       - name: Check out code into the Go module directory
@@ -118,17 +118,14 @@ jobs:
       - name: Set ENV
         run: |
           sudo timedatectl set-timezone "Asia/Shanghai"
-          echo "NAME=mihomo" >> $GITHUB_ENV
-          echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
-          echo "ShortSHA=$(git rev-parse --short ${{ github.sha }})" >> $GITHUB_ENV
           echo "BUILDTIME=$(date)" >> $GITHUB_ENV
-          echo "BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set ENV
         run: |
           echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
           echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
+          echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
@@ -233,7 +230,7 @@ jobs:
 
   Upload-Prerelease:
     permissions: write-all
-    if: ${{ github.ref_type=='branch' && github.event_name != 'pull_request' }}
+    if: ${{ github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
@@ -309,7 +306,7 @@ jobs:
           generate_release_notes: true
 
   Docker:
-    if: ${{ github.event_name != 'pull_request'  }}
+    if: ${{ !startsWith(github.event_name, 'pull_request') }}
     permissions: write-all
     needs: [Build]
     runs-on: ubuntu-latest
@@ -349,12 +346,12 @@ jobs:
           ls .
           ls bin/
 
-      - name: login to ghcr.io
+      - name: login to docker REGISTRY
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action

@@ -34,10 +34,12 @@ type GroupCommonOption struct {
 	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
 	ExcludeType         string   `group:"exclude-type,omitempty"`
 	ExpectedStatus      string   `group:"expected-status,omitempty"`
+	IncludeAll          bool     `group:"include-all,omitempty"`
+	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
 	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
 }
 
-func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
+func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider, AllProxies []string, AllProviders []string) (C.ProxyAdapter, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 
 	groupOption := &GroupCommonOption{
@@ -55,18 +57,24 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 	providers := []types.ProxyProvider{}
 
+	if groupOption.IncludeAll {
+		groupOption.IncludeAllProviders = true
+		groupOption.IncludeAllProxies = true
+	}
 	var GroupUse []string
-	visited := make(map[string]bool)
+	var GroupProxies []string
 	if groupOption.IncludeAllProviders {
-		for name := range provider.ProxyProviderName {
-			GroupUse = append(GroupUse, name)
-			visited[name] = true
-		}
+		GroupUse = append(GroupUse, AllProviders...)
 	} else {
 		GroupUse = groupOption.Use
 	}
+	if groupOption.IncludeAllProxies {
+		GroupProxies = append(groupOption.Proxies, AllProxies...)
+	} else {
+		GroupProxies = groupOption.Proxies
+	}
 
-	if len(groupOption.Proxies) == 0 && len(GroupUse) == 0 {
+	if len(GroupProxies) == 0 && len(GroupUse) == 0 {
 		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
@@ -82,8 +90,13 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	groupOption.ExpectedStatus = status
 	testUrl := groupOption.URL
 
-	if len(groupOption.Proxies) != 0 {
-		ps, err := getProxies(proxyMap, groupOption.Proxies)
+	if groupOption.URL == "" {
+		groupOption.URL = C.DefaultTestURL
+		testUrl = groupOption.URL
+	}
+
+	if len(GroupProxies) != 0 {
+		ps, err := getProxies(proxyMap, GroupProxies)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
@@ -94,17 +107,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 		// select don't need health check
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
-			if groupOption.URL == "" {
-				groupOption.URL = C.DefaultTestURL
-				testUrl = groupOption.URL
-			}
-
 			if groupOption.Interval == 0 {
 				groupOption.Interval = 300
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.Interval), true, expectedStatus)
+		hc := provider.NewHealthCheck(ps, testUrl, uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {

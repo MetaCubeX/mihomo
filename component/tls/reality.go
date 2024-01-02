@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -27,7 +28,6 @@ import (
 	utls "github.com/sagernet/utls"
 	"github.com/zhangyunhao116/fastrand"
 	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/net/http2"
 )
@@ -35,7 +35,7 @@ import (
 const RealityMaxShortIDLen = 8
 
 type RealityConfig struct {
-	PublicKey [curve25519.ScalarSize]byte
+	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
 }
 
@@ -81,15 +81,18 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
-		ecdheParams := uConn.HandshakeState.State13.EcdheParams
-		if ecdheParams == nil {
+		ecdheKey := uConn.HandshakeState.State13.EcdheKey
+		if ecdheKey == nil {
 			// WTF???
 			if retry > 2 {
-				return nil, errors.New("nil ecdheParams")
+				return nil, errors.New("nil ecdheKey")
 			}
 			continue // retry
 		}
-		authKey := ecdheParams.SharedKey(realityConfig.PublicKey[:])
+		authKey, err := ecdheKey.ECDH(realityConfig.PublicKey)
+		if err != nil {
+			return nil, err
+		}
 		if authKey == nil {
 			return nil, errors.New("nil auth_key")
 		}

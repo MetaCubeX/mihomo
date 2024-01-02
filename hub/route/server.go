@@ -63,6 +63,7 @@ func Start(addr string, tlsAddr string, secret string,
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
+	r.Use(setPrivateNetworkAccess)
 	r.Use(corsM.Handler)
 	if isDebug {
 		r.Mount("/debug", func() http.Handler {
@@ -89,10 +90,11 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
 		r.Mount("/providers/rules", ruleProviderRouter())
-		r.Mount("/lru", cacheRouter())
+		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/restart", restartRouter())
 		r.Mount("/upgrade", upgradeRouter())
+		addExternalRouters(r)
 
 	})
 
@@ -146,6 +148,15 @@ func Start(addr string, tlsAddr string, secret string,
 		log.Errorln("External controller serve error: %s", err)
 	}
 
+}
+
+func setPrivateNetworkAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+			w.Header().Add("Access-Control-Allow-Private-Network", "true")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func safeEuqal(a, b string) bool {

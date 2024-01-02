@@ -5,9 +5,10 @@ import (
 	"net"
 	"runtime"
 
+	"github.com/metacubex/mihomo/common/net/deadline"
+
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/bufio"
-	"github.com/sagernet/sing/common/bufio/deadline"
 	"github.com/sagernet/sing/common/network"
 )
 
@@ -19,8 +20,10 @@ type ExtendedConn = network.ExtendedConn
 type ExtendedWriter = network.ExtendedWriter
 type ExtendedReader = network.ExtendedReader
 
+var WriteBuffer = bufio.WriteBuffer
+
 func NewDeadlineConn(conn net.Conn) ExtendedConn {
-	return deadline.NewFallbackConn(conn)
+	return deadline.NewConn(conn)
 }
 
 func NeedHandshake(conn any) bool {
