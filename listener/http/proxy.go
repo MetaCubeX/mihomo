@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -28,6 +29,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 	defer client.CloseIdleConnections()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	peekMutex := sync.Mutex{}
 
 	conn := N.NewBufferedConn(c)
 
@@ -35,7 +37,9 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 	trusted := cache == nil // disable authenticate if lru is nil
 
 	for keepAlive {
+		peekMutex.Lock()
 		request, err := ReadRequest(conn.Reader())
+		peekMutex.Unlock()
 		if err != nil {
 			break
 		}
@@ -87,6 +91,8 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 				startBackgroundRead := func() {
 					go func() {
+						peekMutex.Lock()
+						defer peekMutex.Unlock()
 						_, err := conn.Peek(1)
 						if err != nil {
 							cancel()
