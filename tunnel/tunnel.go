@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -684,6 +685,19 @@ func getRules(metadata *C.Metadata) []C.Rule {
 	}
 }
 
+func shouldStopRetry(err error) bool {
+	if errors.Is(err, resolver.ErrIPNotFound) {
+		return true
+	}
+	if errors.Is(err, resolver.ErrIPVersion) {
+		return true
+	}
+	if errors.Is(err, resolver.ErrIPv6Disabled) {
+		return true
+	}
+	return false
+}
+
 func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe func(err error)) (t T, err error) {
 	b := &backoff.Backoff{
 		Min:    10 * time.Millisecond,
@@ -696,6 +710,9 @@ func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe f
 		if err != nil {
 			if fe != nil {
 				fe(err)
+			}
+			if shouldStopRetry(err) {
+				return
 			}
 			select {
 			case <-time.After(b.Duration()):
