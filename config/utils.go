@@ -11,15 +11,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/common/structure"
-	clashHttp "github.com/Dreamacro/clash/component/http"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/common/structure"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 func downloadForBytes(url string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := clashHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return nil, err
 	}

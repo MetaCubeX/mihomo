@@ -3,16 +3,18 @@ package outbound
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type Direct struct {
 	*Base
+	loopBack *loopBackDetector
 }
 
 type DirectOption struct {
@@ -22,17 +24,23 @@ type DirectOption struct {
 
 // DialContext implements C.ProxyAdapter
 func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
+	if d.loopBack.CheckConn(metadata.SourceAddrPort()) {
+		return nil, fmt.Errorf("reject loopback connection to: %s", metadata.RemoteAddress())
+	}
 	opts = append(opts, dialer.WithResolver(resolver.DefaultResolver))
 	c, err := dialer.DialContext(ctx, "tcp", metadata.RemoteAddress(), d.Base.DialOptions(opts...)...)
 	if err != nil {
 		return nil, err
 	}
 	N.TCPKeepAlive(c)
-	return NewConn(c, d), nil
+	return d.loopBack.NewConn(NewConn(c, d)), nil
 }
 
 // ListenPacketContext implements C.ProxyAdapter
 func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	if d.loopBack.CheckPacketConn(metadata.SourceAddrPort()) {
+		return nil, fmt.Errorf("reject loopback connection to: %s", metadata.RemoteAddress())
+	}
 	// net.UDPConn.WriteTo only working with *net.UDPAddr, so we need a net.UDPAddr
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, resolver.DefaultResolver)
@@ -45,7 +53,7 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 	if err != nil {
 		return nil, err
 	}
-	return newPacketConn(pc, d), nil
+	return d.loopBack.NewPacketConn(newPacketConn(pc, d)), nil
 }
 
 func NewDirectWithOption(option DirectOption) *Direct {
@@ -60,6 +68,7 @@ func NewDirectWithOption(option DirectOption) *Direct {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
+		loopBack: newLoopBackDetector(),
 	}
 }
 
@@ -71,6 +80,7 @@ func NewDirect() *Direct {
 			udp:    true,
 			prefer: C.DualStack,
 		},
+		loopBack: newLoopBackDetector(),
 	}
 }
 
@@ -82,5 +92,6 @@ func NewCompatible() *Direct {
 			udp:    true,
 			prefer: C.DualStack,
 		},
+		loopBack: newLoopBackDetector(),
 	}
 }

@@ -3,8 +3,8 @@ package protocol
 import (
 	"net"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 type PacketConn struct {

@@ -8,12 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/common/generics/list"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/metacubex/quic-go"
+
+	list "github.com/bahlo/generic-list-go"
 )
 
 type dialResult struct {

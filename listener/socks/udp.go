@@ -3,12 +3,12 @@ package socks
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/sockopt"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/sockopt"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type UDPListener struct {
@@ -33,7 +33,7 @@ func (l *UDPListener) Close() error {
 	return l.packetConn.Close()
 }
 
-func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Addition) (*UDPListener, error) {
+func NewUDP(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPListener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-SOCKS"),
@@ -66,14 +66,14 @@ func NewUDP(addr string, in chan<- C.PacketAdapter, additions ...inbound.Additio
 				}
 				continue
 			}
-			handleSocksUDP(l, in, data, put, remoteAddr, additions...)
+			handleSocksUDP(l, tunnel, data, put, remoteAddr, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
+func handleSocksUDP(pc net.PacketConn, tunnel C.Tunnel, buf []byte, put func(), addr net.Addr, additions ...inbound.Addition) {
 	target, payload, err := socks5.DecodeUDPPacket(buf)
 	if err != nil {
 		// Unresolved UDP packet, return buffer to the pool
@@ -88,8 +88,5 @@ func handleSocksUDP(pc net.PacketConn, in chan<- C.PacketAdapter, buf []byte, pu
 		payload: payload,
 		put:     put,
 	}
-	select {
-	case in <- inbound.NewPacket(target, packet, C.SOCKS5, additions...):
-	default:
-	}
+	tunnel.HandleUDPPacket(inbound.NewPacket(target, packet, C.SOCKS5, additions...))
 }

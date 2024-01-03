@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/common/atomic"
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
-	types "github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/provider"
+	types "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/dlclark/regexp2"
 )
@@ -28,7 +28,7 @@ type GroupBase struct {
 	failedTestMux    sync.Mutex
 	failedTimes      int
 	failedTime       time.Time
-	failedTesting    *atomic.Bool
+	failedTesting    atomic.Bool
 	proxies          [][]C.Proxy
 	versions         []atomic.Uint32
 }
@@ -202,7 +202,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 		proxy := proxy
 		wg.Add(1)
 		go func() {
-			delay, err := proxy.URLTest(ctx, url, expectedStatus, C.DropHistory)
+			delay, err := proxy.URLTest(ctx, url, expectedStatus)
 			if err == nil {
 				lock.Lock()
 				mp[proxy.Name()] = delay
@@ -222,7 +222,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 }
 
 func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error) {
-	if adapterType == C.Direct || adapterType == C.Compatible || adapterType == C.Reject || adapterType == C.Pass {
+	if adapterType == C.Direct || adapterType == C.Compatible || adapterType == C.Reject || adapterType == C.Pass || adapterType == C.RejectDrop {
 		return
 	}
 

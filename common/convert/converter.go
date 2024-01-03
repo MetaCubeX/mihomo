@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/log"
 )
 
-// ConvertsV2Ray convert V2Ray subscribe proxies data to clash proxies config
+// ConvertsV2Ray convert V2Ray subscribe proxies data to mihomo proxies config
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	data := DecodeBase64(buf)
 
@@ -142,6 +142,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				tuic["udp-relay-mode"] = udpRelayMode
 			}
 
+			proxies = append(proxies, tuic)
+			
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
 			if err != nil {

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"net"
 
-	"github.com/Dreamacro/clash/common/buf"
+	"github.com/metacubex/mihomo/common/buf"
 )
 
 var _ ExtendedConn = (*BufferedConn)(nil)
@@ -20,6 +20,16 @@ func NewBufferedConn(c net.Conn) *BufferedConn {
 		return bc
 	}
 	return &BufferedConn{bufio.NewReader(c), NewExtendedConn(c), false}
+}
+
+func WarpConnWithBioReader(c net.Conn, br *bufio.Reader) net.Conn {
+	if br != nil && br.Buffered() > 0 {
+		if bc, ok := c.(*BufferedConn); ok && bc.r == br {
+			return bc
+		}
+		return &BufferedConn{br, NewExtendedConn(c), true}
+	}
+	return c
 }
 
 // Reader returns the internal bufio.Reader.
@@ -74,9 +84,9 @@ func (c *BufferedConn) ReadCached() *buf.Buffer { // call in sing/common/bufio.C
 		length := c.r.Buffered()
 		b, _ := c.r.Peek(length)
 		_, _ = c.r.Discard(length)
-		c.r = nil // drop bufio.Reader to let gc can clean up its internal buf
 		return buf.As(b)
 	}
+	c.r = nil // drop bufio.Reader to let gc can clean up its internal buf
 	return nil
 }
 

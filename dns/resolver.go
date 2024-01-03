@@ -7,40 +7,36 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	"github.com/Dreamacro/clash/common/cache"
-	"github.com/Dreamacro/clash/component/fakeip"
-	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/common/arc"
+	"github.com/metacubex/mihomo/common/lru"
+	"github.com/metacubex/mihomo/component/fakeip"
+	"github.com/metacubex/mihomo/component/geodata/router"
+	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
+	"github.com/samber/lo"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/singleflight"
 )
 
 type dnsClient interface {
-	Exchange(m *D.Msg) (msg *D.Msg, err error)
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
 	Address() string
+}
+
+type dnsCache interface {
+	GetWithExpire(key string) (*D.Msg, time.Time, bool)
+	SetWithExpire(key string, value *D.Msg, expire time.Time)
 }
 
 type result struct {
 	Msg   *D.Msg
 	Error error
-}
-
-type geositePolicyRecord struct {
-	matcher          fallbackDomainFilter
-	policy           *Policy
-	inversedMatching bool
-}
-
-type domainSetPolicyRecord struct {
-	domainSetProvider provider.RuleProvider
-	policy            *Policy
 }
 
 type Resolver struct {
@@ -52,10 +48,8 @@ type Resolver struct {
 	fallbackDomainFilters []fallbackDomainFilter
 	fallbackIPFilters     []fallbackIPFilter
 	group                 singleflight.Group
-	lruCache              *cache.LruCache[string, *D.Msg]
-	policy                *trie.DomainTrie[*Policy]
-	domainSetPolicy       []domainSetPolicyRecord
-	geositePolicy         []geositePolicyRecord
+	cache                 dnsCache
+	policy                []dnsPolicy
 	proxyServer           []dnsClient
 }
 
@@ -135,11 +129,6 @@ func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
 	return false
 }
 
-// Exchange a batch of dns request, and it use cache
-func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
-	return r.ExchangeContext(context.Background(), m)
-}
-
 // ExchangeContext a batch of dns request with context.Context, and it use cache
 func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	if len(m.Question) == 0 {
@@ -157,8 +146,9 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	}()
 
 	q := m.Question[0]
-	cacheM, expireTime, hit := r.lruCache.GetWithExpire(q.String())
+	cacheM, expireTime, hit := r.cache.GetWithExpire(q.String())
 	if hit {
+		log.Debugln("[DNS] cache hit for %s, expire at %s", q.Name, expireTime.Format("2006-01-02 15:04:05"))
 		now := time.Now()
 		msg = cacheM.Copy()
 		if expireTime.Before(now) {
@@ -194,21 +184,25 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 			msg := result.(*D.Msg)
 
 			if cache {
-				putMsgToCache(r.lruCache, q.String(), msg)
+				// OPT RRs MUST NOT be cached, forwarded, or stored in or loaded from master files.
+				msg.Extra = lo.Filter(msg.Extra, func(rr D.RR, index int) bool {
+					return rr.Header().Rrtype != D.TypeOPT
+				})
+				putMsgToCache(r.cache, q.String(), q, msg)
 			}
 		}()
 
 		isIPReq := isIPRequest(q)
 		if isIPReq {
-			cache=true
+			cache = true
 			return r.ipExchange(ctx, m)
 		}
 
 		if matched := r.matchPolicy(m); len(matched) != 0 {
-			result, cache, err = r.batchExchange(ctx, matched, m)
+			result, cache, err = batchExchange(ctx, matched, m)
 			return
 		}
-		result, cache, err = r.batchExchange(ctx, r.main, m)
+		result, cache, err = batchExchange(ctx, r.main, m)
 		return
 	}
 
@@ -250,13 +244,6 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	return
 }
 
-func (r *Resolver) batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
-	ctx, cancel := context.WithTimeout(ctx, resolver.DefaultDNSTimeout)
-	defer cancel()
-
-	return batchExchange(ctx, clients, m)
-}
-
 func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 	if r.policy == nil {
 		return nil
@@ -267,22 +254,9 @@ func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
 		return nil
 	}
 
-	record := r.policy.Search(domain)
-	if record != nil {
-		p := record.Data()
-		return p.GetData()
-	}
-
-	for _, geositeRecord := range r.geositePolicy {
-		matched := geositeRecord.matcher.Match(domain)
-		if matched != geositeRecord.inversedMatching {
-			return geositeRecord.policy.GetData()
-		}
-	}
-	metadata := &C.Metadata{Host: domain}
-	for _, domainSetRecord := range r.domainSetPolicy {
-		if ok := domainSetRecord.domainSetProvider.Match(metadata); ok {
-			return domainSetRecord.policy.GetData()
+	for _, policy := range r.policy {
+		if dnsClients := policy.Match(domain); len(dnsClients) > 0 {
+			return dnsClients
 		}
 	}
 	return nil
@@ -332,7 +306,10 @@ func (r *Resolver) ipExchange(ctx context.Context, m *D.Msg) (msg *D.Msg, err er
 	res := <-msgCh
 	if res.Error == nil {
 		if ips := msgToIP(res.Msg); len(ips) != 0 {
-			if !r.shouldIPFallback(ips[0]) {
+			shouldNotFallback := lo.EveryBy(ips, func(ip netip.Addr) bool {
+				return !r.shouldIPFallback(ip)
+			})
+			if shouldNotFallback {
 				msg, err = res.Msg, res.Error // no need to wait for fallback result
 				return
 			}
@@ -377,7 +354,7 @@ func (r *Resolver) lookupIP(ctx context.Context, host string, dnsType uint16) (i
 func (r *Resolver) asyncExchange(ctx context.Context, client []dnsClient, msg *D.Msg) <-chan *result {
 	ch := make(chan *result, 1)
 	go func() {
-		res, _, err := r.batchExchange(ctx, client, msg)
+		res, _, err := batchExchange(ctx, client, msg)
 		ch <- &result{Msg: res, Error: err}
 	}()
 	return ch
@@ -394,92 +371,173 @@ func (r *Resolver) Invalid() bool {
 type NameServer struct {
 	Net          string
 	Addr         string
-	Interface    *atomic.TypedValue[string]
+	Interface    string
 	ProxyAdapter C.ProxyAdapter
 	ProxyName    string
 	Params       map[string]string
 	PreferH3     bool
 }
 
+func (ns NameServer) Equal(ns2 NameServer) bool {
+	defer func() {
+		// C.ProxyAdapter compare maybe panic, just ignore
+		recover()
+	}()
+	if ns.Net == ns2.Net &&
+		ns.Addr == ns2.Addr &&
+		ns.Interface == ns2.Interface &&
+		ns.ProxyAdapter == ns2.ProxyAdapter &&
+		ns.ProxyName == ns2.ProxyName &&
+		maps.Equal(ns.Params, ns2.Params) &&
+		ns.PreferH3 == ns2.PreferH3 {
+		return true
+	}
+	return false
+}
+
 type FallbackFilter struct {
 	GeoIP     bool
 	GeoIPCode string
-	IPCIDR    []*netip.Prefix
+	IPCIDR    []netip.Prefix
 	Domain    []string
-	GeoSite   []*router.DomainMatcher
+	GeoSite   []router.DomainMatcher
 }
 
 type Config struct {
-	Main, Fallback  []NameServer
-	Default         []NameServer
-	ProxyServer     []NameServer
-	IPv6            bool
-	IPv6Timeout     uint
-	EnhancedMode    C.DNSMode
-	FallbackFilter  FallbackFilter
-	Pool            *fakeip.Pool
-	Hosts           *trie.DomainTrie[resolver.HostValue]
-	Policy          map[string][]NameServer
-	DomainSetPolicy map[provider.RuleProvider][]NameServer
-	GeositePolicy   map[router.DomainMatcher][]NameServer
+	Main, Fallback []NameServer
+	Default        []NameServer
+	ProxyServer    []NameServer
+	IPv6           bool
+	IPv6Timeout    uint
+	EnhancedMode   C.DNSMode
+	FallbackFilter FallbackFilter
+	Pool           *fakeip.Pool
+	Hosts          *trie.DomainTrie[resolver.HostValue]
+	Policy         *orderedmap.OrderedMap[string, []NameServer]
+	RuleProviders  map[string]provider.RuleProvider
+	CacheAlgorithm string
 }
 
 func NewResolver(config Config) *Resolver {
+	var cache dnsCache
+	if config.CacheAlgorithm == "lru" {
+		cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
+	} else {
+		cache = arc.New(arc.WithSize[string, *D.Msg](4096))
+	}
 	defaultResolver := &Resolver{
 		main:        transform(config.Default, nil),
-		lruCache:    cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		cache:       cache,
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
+	var nameServerCache []struct {
+		NameServer
+		dnsClient
+	}
+	cacheTransform := func(nameserver []NameServer) (result []dnsClient) {
+	LOOP:
+		for _, ns := range nameserver {
+			for _, nsc := range nameServerCache {
+				if nsc.NameServer.Equal(ns) {
+					result = append(result, nsc.dnsClient)
+					continue LOOP
+				}
+			}
+			// not in cache
+			dc := transform([]NameServer{ns}, defaultResolver)
+			if len(dc) > 0 {
+				dc := dc[0]
+				nameServerCache = append(nameServerCache, struct {
+					NameServer
+					dnsClient
+				}{NameServer: ns, dnsClient: dc})
+				result = append(result, dc)
+			}
+		}
+		return
+	}
+
+	if config.CacheAlgorithm == "" || config.CacheAlgorithm == "lru" {
+		cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
+	} else {
+		cache = arc.New(arc.WithSize[string, *D.Msg](4096))
+	}
 	r := &Resolver{
 		ipv6:        config.IPv6,
-		main:        transform(config.Main, defaultResolver),
-		lruCache:    cache.New(cache.WithSize[string, *D.Msg](4096), cache.WithStale[string, *D.Msg](true)),
+		main:        cacheTransform(config.Main),
+		cache:       cache,
 		hosts:       config.Hosts,
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
 	if len(config.Fallback) != 0 {
-		r.fallback = transform(config.Fallback, defaultResolver)
+		r.fallback = cacheTransform(config.Fallback)
 	}
 
 	if len(config.ProxyServer) != 0 {
-		r.proxyServer = transform(config.ProxyServer, defaultResolver)
+		r.proxyServer = cacheTransform(config.ProxyServer)
 	}
 
-	if len(config.Policy) != 0 {
-		r.policy = trie.New[*Policy]()
-		for domain, nameserver := range config.Policy {
-			if strings.HasPrefix(strings.ToLower(domain), "geosite:") {
-				groupname := domain[8:]
-				inverse := false
-				if strings.HasPrefix(groupname, "!") {
-					inverse = true
-					groupname = groupname[1:]
-				}
-				log.Debugln("adding geosite policy: %s inversed %t", groupname, inverse)
-				matcher, err := NewGeoSite(groupname)
-				if err != nil {
-					continue
-				}
-				r.geositePolicy = append(r.geositePolicy, geositePolicyRecord{
-					matcher:          matcher,
-					policy:           NewPolicy(transform(nameserver, defaultResolver)),
-					inversedMatching: inverse,
-				})
-			} else {
-				_ = r.policy.Insert(domain, NewPolicy(transform(nameserver, defaultResolver)))
+	if config.Policy.Len() != 0 {
+		r.policy = make([]dnsPolicy, 0)
+
+		var triePolicy *trie.DomainTrie[[]dnsClient]
+		insertPolicy := func(policy dnsPolicy) {
+			if triePolicy != nil {
+				triePolicy.Optimize()
+				r.policy = append(r.policy, domainTriePolicy{triePolicy})
+				triePolicy = nil
+			}
+			if policy != nil {
+				r.policy = append(r.policy, policy)
 			}
 		}
-		r.policy.Optimize()
-	}
-	if len(config.DomainSetPolicy) > 0 {
-		for p, n := range config.DomainSetPolicy {
-			r.domainSetPolicy = append(r.domainSetPolicy, domainSetPolicyRecord{
-				domainSetProvider: p,
-				policy:            NewPolicy(transform(n, defaultResolver)),
-			})
+
+		for pair := config.Policy.Oldest(); pair != nil; pair = pair.Next() {
+			domain, nameserver := pair.Key, pair.Value
+
+			if temp := strings.Split(domain, ":"); len(temp) == 2 {
+				prefix := temp[0]
+				key := temp[1]
+				switch prefix {
+				case "rule-set":
+					if p, ok := config.RuleProviders[key]; ok {
+						log.Debugln("Adding rule-set policy: %s ", key)
+						insertPolicy(domainSetPolicy{
+							domainSetProvider: p,
+							dnsClients:        cacheTransform(nameserver),
+						})
+						continue
+					} else {
+						log.Warnln("Can't found ruleset policy: %s", key)
+					}
+				case "geosite":
+					inverse := false
+					if strings.HasPrefix(key, "!") {
+						inverse = true
+						key = key[1:]
+					}
+					log.Debugln("Adding geosite policy: %s inversed %t", key, inverse)
+					matcher, err := NewGeoSite(key)
+					if err != nil {
+						log.Warnln("adding geosite policy %s error: %s", key, err)
+						continue
+					}
+					insertPolicy(geositePolicy{
+						matcher:    matcher,
+						inverse:    inverse,
+						dnsClients: cacheTransform(nameserver),
+					})
+					continue // skip triePolicy new
+				}
+			}
+			if triePolicy == nil {
+				triePolicy = trie.New[[]dnsClient]()
+			}
+			_ = triePolicy.Insert(domain, cacheTransform(nameserver))
 		}
+		insertPolicy(nil)
 	}
 
 	fallbackIPFilters := []fallbackIPFilter{}
@@ -512,9 +570,8 @@ func NewProxyServerHostResolver(old *Resolver) *Resolver {
 	r := &Resolver{
 		ipv6:        old.ipv6,
 		main:        old.proxyServer,
-		lruCache:    old.lruCache,
+		cache:       old.cache,
 		hosts:       old.hosts,
-		policy:      trie.New[*Policy](),
 		ipv6Timeout: old.ipv6Timeout,
 	}
 	return r

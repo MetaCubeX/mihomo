@@ -84,7 +84,7 @@ type Domain struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Domain matching type.
-	Type Domain_Type `protobuf:"varint,1,opt,name=type,proto3,enum=clash.component.geodata.router.Domain_Type" json:"type,omitempty"`
+	Type Domain_Type `protobuf:"varint,1,opt,name=type,proto3,enum=mihomo.component.geodata.router.Domain_Type" json:"type,omitempty"`
 	// Domain value.
 	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// Attributes of this domain. May be used for filtering.
@@ -585,22 +585,22 @@ func file_component_geodata_router_config_proto_rawDescGZIP() []byte {
 var file_component_geodata_router_config_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_component_geodata_router_config_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_component_geodata_router_config_proto_goTypes = []interface{}{
-	(Domain_Type)(0),         // 0: clash.component.geodata.router.Domain.Type
-	(*Domain)(nil),           // 1: clash.component.geodata.router.Domain
-	(*CIDR)(nil),             // 2: clash.component.geodata.router.CIDR
-	(*GeoIP)(nil),            // 3: clash.component.geodata.router.GeoIP
-	(*GeoIPList)(nil),        // 4: clash.component.geodata.router.GeoIPList
-	(*GeoSite)(nil),          // 5: clash.component.geodata.router.GeoSite
-	(*GeoSiteList)(nil),      // 6: clash.component.geodata.router.GeoSiteList
-	(*Domain_Attribute)(nil), // 7: clash.component.geodata.router.Domain.Attribute
+	(Domain_Type)(0),         // 0: mihomo.component.geodata.router.Domain.Type
+	(*Domain)(nil),           // 1: mihomo.component.geodata.router.Domain
+	(*CIDR)(nil),             // 2: mihomo.component.geodata.router.CIDR
+	(*GeoIP)(nil),            // 3: mihomo.component.geodata.router.GeoIP
+	(*GeoIPList)(nil),        // 4: mihomo.component.geodata.router.GeoIPList
+	(*GeoSite)(nil),          // 5: mihomo.component.geodata.router.GeoSite
+	(*GeoSiteList)(nil),      // 6: mihomo.component.geodata.router.GeoSiteList
+	(*Domain_Attribute)(nil), // 7: mihomo.component.geodata.router.Domain.Attribute
 }
 var file_component_geodata_router_config_proto_depIdxs = []int32{
-	0, // 0: clash.component.geodata.router.Domain.type:type_name -> clash.component.geodata.router.Domain.Type
-	7, // 1: clash.component.geodata.router.Domain.attribute:type_name -> clash.component.geodata.router.Domain.Attribute
-	2, // 2: clash.component.geodata.router.GeoIP.cidr:type_name -> clash.component.geodata.router.CIDR
-	3, // 3: clash.component.geodata.router.GeoIPList.entry:type_name -> clash.component.geodata.router.GeoIP
-	1, // 4: clash.component.geodata.router.GeoSite.domain:type_name -> clash.component.geodata.router.Domain
-	5, // 5: clash.component.geodata.router.GeoSiteList.entry:type_name -> clash.component.geodata.router.GeoSite
+	0, // 0: mihomo.component.geodata.router.Domain.type:type_name -> mihomo.component.geodata.router.Domain.Type
+	7, // 1: mihomo.component.geodata.router.Domain.attribute:type_name -> mihomo.component.geodata.router.Domain.Attribute
+	2, // 2: mihomo.component.geodata.router.GeoIP.cidr:type_name -> mihomo.component.geodata.router.CIDR
+	3, // 3: mihomo.component.geodata.router.GeoIPList.entry:type_name -> mihomo.component.geodata.router.GeoIP
+	1, // 4: mihomo.component.geodata.router.GeoSite.domain:type_name -> mihomo.component.geodata.router.Domain
+	5, // 5: mihomo.component.geodata.router.GeoSiteList.entry:type_name -> mihomo.component.geodata.router.GeoSite
 	6, // [6:6] is the sub-list for method output_type
 	6, // [6:6] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name

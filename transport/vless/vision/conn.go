@@ -9,9 +9,9 @@ import (
 	"io"
 	"net"
 
-	"github.com/Dreamacro/clash/common/buf"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/common/buf"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/gofrs/uuid/v5"
 	utls "github.com/sagernet/utls"
@@ -157,14 +157,7 @@ func (vc *Conn) ReadBuffer(buffer *buf.Buffer) error {
 
 func (vc *Conn) Write(p []byte) (int, error) {
 	if vc.writeFilterApplicationData {
-		buffer := buf.New()
-		defer buffer.Release()
-		buffer.Write(p)
-		err := vc.WriteBuffer(buffer)
-		if err != nil {
-			return 0, err
-		}
-		return len(p), nil
+		return N.WriteBuffer(vc, buf.As(p))
 	}
 	return vc.ExtendedWriter.Write(p)
 }
@@ -264,6 +257,10 @@ func (vc *Conn) FrontHeadroom() int {
 		return PaddingHeaderLen
 	}
 	return PaddingHeaderLen - uuid.Size
+}
+
+func (vc *Conn) RearHeadroom() int {
+	return 500 + 900
 }
 
 func (vc *Conn) NeedHandshake() bool {

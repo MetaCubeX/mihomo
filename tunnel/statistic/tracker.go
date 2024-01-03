@@ -6,11 +6,11 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
-	"github.com/Dreamacro/clash/common/buf"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/buf"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -23,14 +23,14 @@ type Tracker interface {
 }
 
 type TrackerInfo struct {
-	UUID          uuid.UUID     `json:"id"`
-	Metadata      *C.Metadata   `json:"metadata"`
-	UploadTotal   *atomic.Int64 `json:"upload"`
-	DownloadTotal *atomic.Int64 `json:"download"`
-	Start         time.Time     `json:"start"`
-	Chain         C.Chain       `json:"chains"`
-	Rule          string        `json:"rule"`
-	RulePayload   string        `json:"rulePayload"`
+	UUID          uuid.UUID    `json:"id"`
+	Metadata      *C.Metadata  `json:"metadata"`
+	UploadTotal   atomic.Int64 `json:"upload"`
+	DownloadTotal atomic.Int64 `json:"download"`
+	Start         time.Time    `json:"start"`
+	Chain         C.Chain      `json:"chains"`
+	Rule          string       `json:"rule"`
+	RulePayload   string       `json:"rulePayload"`
 }
 
 type tcpTracker struct {

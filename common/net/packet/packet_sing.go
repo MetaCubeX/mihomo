@@ -24,16 +24,16 @@ type enhanceSingPacketConn struct {
 func (c *enhanceSingPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, err error) {
 	var buff *buf.Buffer
 	var dest M.Socksaddr
-	newBuffer := func() *buf.Buffer {
-		buff = buf.NewPacket() // do not use stack buffer
-		return buff
-	}
+	rwOptions := N.ReadWaitOptions{}
 	if c.packetReadWaiter != nil {
-		c.packetReadWaiter.InitializeReadWaiter(newBuffer)
-		defer c.packetReadWaiter.InitializeReadWaiter(nil)
-		dest, err = c.packetReadWaiter.WaitReadPacket()
+		c.packetReadWaiter.InitializeReadWaiter(rwOptions)
+		buff, dest, err = c.packetReadWaiter.WaitReadPacket()
 	} else {
-		dest, err = c.SingPacketConn.ReadPacket(newBuffer())
+		buff = rwOptions.NewPacketBuffer()
+		dest, err = c.SingPacketConn.ReadPacket(buff)
+		if buff != nil {
+			rwOptions.PostReturn(buff)
+		}
 	}
 	if dest.IsFqdn() {
 		addr = dest
@@ -41,9 +41,7 @@ func (c *enhanceSingPacketConn) WaitReadFrom() (data []byte, put func(), addr ne
 		addr = dest.UDPAddr()
 	}
 	if err != nil {
-		if buff != nil {
-			buff.Release()
-		}
+		buff.Release()
 		return
 	}
 	if buff == nil {

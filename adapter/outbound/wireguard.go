@@ -13,13 +13,13 @@ import (
 	"strings"
 	"sync"
 
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/proxydialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/dns"
-	"github.com/Dreamacro/clash/log"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/dns"
+	"github.com/metacubex/mihomo/log"
 
 	wireguard "github.com/metacubex/sing-wireguard"
 

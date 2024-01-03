@@ -1,7 +1,7 @@
 package strmatcher
 
 import (
-	"github.com/Dreamacro/clash/common/generics/list"
+	list "github.com/bahlo/generic-list-go"
 )
 
 const validCharCount = 53
@@ -39,7 +39,7 @@ func newNode() [validCharCount]Edge {
 	return s
 }
 
-var char2Index = []int{
+var char2Index = [...]int{
 	'A':  0,
 	'a':  0,
 	'B':  1,

@@ -4,12 +4,12 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/transport/shadowsocks/core"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/transport/shadowsocks/core"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type Listener struct {
@@ -22,7 +22,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter) (*Listener, error) {
+func New(config LC.ShadowsocksServer, tunnel C.Tunnel) (*Listener, error) {
 	pickCipher, err := core.PickCipher(config.Cipher, nil, config.Password)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 
 		if config.Udp {
 			//UDP
-			ul, err := NewUDP(addr, pickCipher, udpIn)
+			ul, err := NewUDP(addr, pickCipher, tunnel)
 			if err != nil {
 				return nil, err
 			}
@@ -60,7 +60,7 @@ func New(config LC.ShadowsocksServer, tcpIn chan<- C.ConnContext, udpIn chan<- C
 					continue
 				}
 				N.TCPKeepAlive(c)
-				go sl.HandleConn(c, tcpIn)
+				go sl.HandleConn(c, tunnel)
 			}
 		}()
 	}
@@ -99,7 +99,7 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 	return
 }
 
-func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) {
+func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	conn = l.pickCipher.StreamConn(conn)
 	conn = N.NewDeadlineConn(conn) // embed ss can't handle readDeadline correctly
 
@@ -108,12 +108,12 @@ func (l *Listener) HandleConn(conn net.Conn, in chan<- C.ConnContext, additions 
 		_ = conn.Close()
 		return
 	}
-	in <- inbound.NewSocket(target, conn, C.SHADOWSOCKS, additions...)
+	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.SHADOWSOCKS, additions...))
 }
 
-func HandleShadowSocks(conn net.Conn, in chan<- C.ConnContext, additions ...inbound.Addition) bool {
+func HandleShadowSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) bool {
 	if _listener != nil && _listener.pickCipher != nil {
-		go _listener.HandleConn(conn, in, additions...)
+		go _listener.HandleConn(conn, tunnel, additions...)
 		return true
 	}
 	return false

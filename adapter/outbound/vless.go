@@ -12,20 +12,20 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/Dreamacro/clash/common/convert"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/ca"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/proxydialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/gun"
-	"github.com/Dreamacro/clash/transport/socks5"
-	"github.com/Dreamacro/clash/transport/vless"
-	"github.com/Dreamacro/clash/transport/vmess"
+	"github.com/metacubex/mihomo/common/convert"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	tlsC "github.com/metacubex/mihomo/component/tls"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/gun"
+	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/vless"
+	"github.com/metacubex/mihomo/transport/vmess"
 
 	vmessSing "github.com/metacubex/sing-vmess"
 	"github.com/metacubex/sing-vmess/packetaddr"
@@ -88,13 +88,15 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
-			Host:                host,
-			Port:                port,
-			Path:                v.option.WSOpts.Path,
-			MaxEarlyData:        v.option.WSOpts.MaxEarlyData,
-			EarlyDataHeaderName: v.option.WSOpts.EarlyDataHeaderName,
-			ClientFingerprint:   v.option.ClientFingerprint,
-			Headers:             http.Header{},
+			Host:                     host,
+			Port:                     port,
+			Path:                     v.option.WSOpts.Path,
+			MaxEarlyData:             v.option.WSOpts.MaxEarlyData,
+			EarlyDataHeaderName:      v.option.WSOpts.EarlyDataHeaderName,
+			V2rayHttpUpgrade:         v.option.WSOpts.V2rayHttpUpgrade,
+			V2rayHttpUpgradeFastOpen: v.option.WSOpts.V2rayHttpUpgradeFastOpen,
+			ClientFingerprint:        v.option.ClientFingerprint,
+			Headers:                  http.Header{},
 		}
 
 		if len(v.option.WSOpts.Headers) != 0 {

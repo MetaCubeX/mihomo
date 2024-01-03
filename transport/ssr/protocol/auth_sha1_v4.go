@@ -7,9 +7,9 @@ import (
 	"hash/crc32"
 	"net"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/ssr/tools"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/transport/ssr/tools"
 
 	"github.com/zhangyunhao116/fastrand"
 )

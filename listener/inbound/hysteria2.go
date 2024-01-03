@@ -1,10 +1,10 @@
 package inbound
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/sing_hysteria2"
-	"github.com/Dreamacro/clash/log"
+	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/sing_hysteria2"
+	"github.com/metacubex/mihomo/log"
 )
 
 type Hysteria2Option struct {
@@ -21,6 +21,7 @@ type Hysteria2Option struct {
 	IgnoreClientBandwidth bool              `inbound:"ignore-client-bandwidth,omitempty"`
 	Masquerade            string            `inbound:"masquerade,omitempty"`
 	CWND                  int               `inbound:"cwnd,omitempty"`
+	MuxOption             MuxOption         `inbound:"mux-option,omitempty"`
 }
 
 func (o Hysteria2Option) Equal(config C.InboundConfig) bool {
@@ -57,6 +58,7 @@ func NewHysteria2(options *Hysteria2Option) (*Hysteria2, error) {
 			IgnoreClientBandwidth: options.IgnoreClientBandwidth,
 			Masquerade:            options.Masquerade,
 			CWND:                  options.CWND,
+			MuxOption:             options.MuxOption.Build(),
 		},
 	}, nil
 }
@@ -77,9 +79,9 @@ func (t *Hysteria2) Address() string {
 }
 
 // Listen implements constant.InboundListener
-func (t *Hysteria2) Listen(tcpIn chan<- C.ConnContext, udpIn chan<- C.PacketAdapter, natTable C.NatTable) error {
+func (t *Hysteria2) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = sing_hysteria2.New(t.ts, tcpIn, udpIn, t.Additions()...)
+	t.l, err = sing_hysteria2.New(t.ts, tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

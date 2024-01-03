@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	vmess "github.com/metacubex/sing-vmess"
 	mux "github.com/sagernet/sing-mux"
@@ -27,42 +27,28 @@ import (
 
 const UDPTimeout = 5 * time.Minute
 
-type ListenerHandler struct {
-	TcpIn      chan<- C.ConnContext
-	UdpIn      chan<- C.PacketAdapter
+type ListenerConfig struct {
+	Tunnel     C.Tunnel
 	Type       C.Type
 	Additions  []inbound.Addition
 	UDPTimeout time.Duration
+	MuxOption  MuxOption
 }
 
-type waitCloseConn struct {
-	N.ExtendedConn
-	wg    *sync.WaitGroup
-	close sync.Once
-	rAddr net.Addr
+type MuxOption struct {
+	Padding bool          `yaml:"padding" json:"padding,omitempty"`
+	Brutal  BrutalOptions `yaml:"brutal" json:"brutal,omitempty"`
 }
 
-func (c *waitCloseConn) Close() error { // call from handleTCPConn(connCtx C.ConnContext)
-	c.close.Do(func() {
-		c.wg.Done()
-	})
-	return c.ExtendedConn.Close()
+type BrutalOptions struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Up      string `yaml:"up" json:"up,omitempty"`
+	Down    string `yaml:"down" json:"down,omitempty"`
 }
 
-func (c *waitCloseConn) RemoteAddr() net.Addr {
-	return c.rAddr
-}
-
-func (c *waitCloseConn) Upstream() any {
-	return c.ExtendedConn
-}
-
-func (c *waitCloseConn) ReaderReplaceable() bool {
-	return true
-}
-
-func (c *waitCloseConn) WriterReplaceable() bool {
-	return true
+type ListenerHandler struct {
+	ListenerConfig
+	muxService *mux.Service
 }
 
 func UpstreamMetadata(metadata M.Metadata) M.Metadata {
@@ -80,22 +66,40 @@ func ConvertMetadata(metadata *C.Metadata) M.Metadata {
 	}
 }
 
+func NewListenerHandler(lc ListenerConfig) (h *ListenerHandler, err error) {
+	h = &ListenerHandler{ListenerConfig: lc}
+	h.muxService, err = mux.NewService(mux.ServiceOptions{
+		NewStreamContext: func(ctx context.Context, conn net.Conn) context.Context {
+			return ctx
+		},
+		Logger:  log.SingLogger,
+		Handler: h,
+		Padding: lc.MuxOption.Padding,
+		Brutal: mux.BrutalOptions{
+			Enabled:    lc.MuxOption.Brutal.Enabled,
+			SendBPS:    outbound.StringToBps(lc.MuxOption.Brutal.Up),
+			ReceiveBPS: outbound.StringToBps(lc.MuxOption.Brutal.Down),
+		},
+	})
+	return
+}
+
 func (h *ListenerHandler) IsSpecialFqdn(fqdn string) bool {
 	switch fqdn {
-	case mux.Destination.Fqdn:
-	case vmess.MuxDestination.Fqdn:
-	case uot.MagicAddress:
-	case uot.LegacyMagicAddress:
+	case mux.Destination.Fqdn,
+		vmess.MuxDestination.Fqdn,
+		uot.MagicAddress,
+		uot.LegacyMagicAddress:
+		return true
 	default:
 		return false
 	}
-	return true
 }
 
 func (h *ListenerHandler) ParseSpecialFqdn(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
 	switch metadata.Destination.Fqdn {
 	case mux.Destination.Fqdn:
-		return mux.HandleConnection(ctx, h, log.SingLogger, conn, UpstreamMetadata(metadata))
+		return h.muxService.NewConnection(ctx, conn, UpstreamMetadata(metadata))
 	case vmess.MuxDestination.Fqdn:
 		return vmess.HandleMuxConnection(ctx, conn, h)
 	case uot.MagicAddress:
@@ -116,71 +120,76 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 	if h.IsSpecialFqdn(metadata.Destination.Fqdn) {
 		return h.ParseSpecialFqdn(ctx, conn, metadata)
 	}
-	target := socks5.ParseAddr(metadata.Destination.String())
-	wg := &sync.WaitGroup{}
-	defer wg.Wait() // this goroutine must exit after conn.Close()
-	wg.Add(1)
 
 	if deadline.NeedAdditionalReadDeadline(conn) {
 		conn = N.NewDeadlineConn(conn) // conn from sing should check NeedAdditionalReadDeadline
 	}
-	h.TcpIn <- inbound.NewSocket(target, &waitCloseConn{ExtendedConn: N.NewExtendedConn(conn), wg: wg, rAddr: metadata.Source.TCPAddr()}, h.Type, combineAdditions(ctx, h.Additions)...)
+
+	cMetadata := &C.Metadata{
+		NetWork: C.TCP,
+		Type:    h.Type,
+	}
+	inbound.ApplyAdditions(cMetadata, inbound.WithDstAddr(metadata.Destination), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
+	inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
+	inbound.ApplyAdditions(cMetadata, h.Additions...)
+
+	h.Tunnel.HandleTCPConn(conn, cMetadata) // this goroutine must exit after conn unused
 	return nil
 }
 
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
-	if deadline.NeedAdditionalReadDeadline(conn) {
-		conn = deadline.NewFallbackPacketConn(bufio.NewNetPacketConn(conn)) // conn from sing should check NeedAdditionalReadDeadline
-	}
 	defer func() { _ = conn.Close() }()
 	mutex := sync.Mutex{}
-	conn2 := conn // a new interface to set nil in defer
+	conn2 := bufio.NewNetPacketConn(conn) // a new interface to set nil in defer
 	defer func() {
 		mutex.Lock() // this goroutine must exit after all conn.WritePacket() is not running
 		defer mutex.Unlock()
 		conn2 = nil
 	}()
-	var buff *buf.Buffer
-	newBuffer := func() *buf.Buffer {
-		buff = buf.NewPacket() // do not use stack buffer
-		return buff
-	}
+	rwOptions := network.ReadWaitOptions{}
 	readWaiter, isReadWaiter := bufio.CreatePacketReadWaiter(conn)
 	if isReadWaiter {
-		readWaiter.InitializeReadWaiter(newBuffer)
+		readWaiter.InitializeReadWaiter(rwOptions)
 	}
 	for {
 		var (
+			buff *buf.Buffer
 			dest M.Socksaddr
 			err  error
 		)
-		buff = nil // clear last loop status, avoid repeat release
 		if isReadWaiter {
-			dest, err = readWaiter.WaitReadPacket()
+			buff, dest, err = readWaiter.WaitReadPacket()
 		} else {
-			dest, err = conn.ReadPacket(newBuffer())
+			buff = rwOptions.NewPacketBuffer()
+			dest, err = conn.ReadPacket(buff)
+			if buff != nil {
+				rwOptions.PostReturn(buff)
+			}
 		}
 		if err != nil {
-			if buff != nil {
-				buff.Release()
-			}
+			buff.Release()
 			if ShouldIgnorePacketError(err) {
 				break
 			}
 			return err
 		}
-		target := socks5.ParseAddr(dest.String())
-		packet := &packet{
+		cPacket := &packet{
 			conn:  &conn2,
 			mutex: &mutex,
 			rAddr: metadata.Source.UDPAddr(),
 			lAddr: conn.LocalAddr(),
 			buff:  buff,
 		}
-		select {
-		case h.UdpIn <- inbound.NewPacket(target, packet, h.Type, combineAdditions(ctx, h.Additions)...):
-		default:
+
+		cMetadata := &C.Metadata{
+			NetWork: C.UDP,
+			Type:    h.Type,
 		}
+		inbound.ApplyAdditions(cMetadata, inbound.WithDstAddr(dest), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
+		inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
+		inbound.ApplyAdditions(cMetadata, h.Additions...)
+
+		h.Tunnel.HandleUDPPacket(cPacket, cMetadata)
 	}
 	return nil
 }
@@ -198,7 +207,7 @@ func ShouldIgnorePacketError(err error) bool {
 }
 
 type packet struct {
-	conn  *network.PacketConn
+	conn  *network.NetPacketConn
 	mutex *sync.Mutex
 	rAddr net.Addr
 	lAddr net.Addr
@@ -215,12 +224,6 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		err = errors.New("address is invalid")
 		return
 	}
-	buff := buf.NewPacket()
-	defer buff.Release()
-	n, err = buff.Write(b)
-	if err != nil {
-		return
-	}
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -229,11 +232,8 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 		err = errors.New("writeBack to closed connection")
 		return
 	}
-	err = conn.WritePacket(buff, M.SocksaddrFromNet(addr))
-	if err != nil {
-		return
-	}
-	return
+
+	return conn.WriteTo(b, addr)
 }
 
 // LocalAddr returns the source IP/Port of UDP Packet
@@ -247,12 +247,4 @@ func (c *packet) Drop() {
 
 func (c *packet) InAddr() net.Addr {
 	return c.lAddr
-}
-
-func (c *packet) SetNatTable(natTable C.NatTable) {
-	// no need
-}
-
-func (c *packet) SetUdpInChan(in chan<- C.PacketAdapter) {
-	// no need
 }

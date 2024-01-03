@@ -6,12 +6,13 @@ import (
 	"golang.org/x/sync/singleflight"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/geodata/router"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/component/geodata/router"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 var geoLoaderName = "memconservative"
+var geoSiteMatcher = "succinct"
 
 //  geoLoaderName = "standard"
 
@@ -19,11 +20,24 @@ func LoaderName() string {
 	return geoLoaderName
 }
 
+func SiteMatcherName() string {
+	return geoSiteMatcher
+}
+
 func SetLoader(newLoader string) {
 	if newLoader == "memc" {
 		newLoader = "memconservative"
 	}
 	geoLoaderName = newLoader
+}
+
+func SetSiteMatcher(newMatcher string) {
+	switch newMatcher {
+	case "mph", "hybrid":
+		geoSiteMatcher = "mph"
+	default:
+		geoSiteMatcher = "succinct"
+	}
 }
 
 func Verify(name string) error {
@@ -41,8 +55,8 @@ func Verify(name string) error {
 
 var loadGeoSiteMatcherSF = singleflight.Group{}
 
-func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) {
-	if len(countryCode) == 0 {
+func LoadGeoSiteMatcher(countryCode string) (router.DomainMatcher, int, error) {
+	if countryCode == "" {
 		return nil, 0, fmt.Errorf("country code could not be empty")
 	}
 
@@ -60,7 +74,7 @@ func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) 
 	listName := strings.TrimSpace(parts[0])
 	attrVal := parts[1:]
 
-	if len(listName) == 0 {
+	if listName == "" {
 		return nil, 0, fmt.Errorf("empty listname in rule: %s", countryCode)
 	}
 
@@ -104,7 +118,12 @@ func LoadGeoSiteMatcher(countryCode string) (*router.DomainMatcher, int, error) 
 	matcher, err := router.NewDomainMatcher(domains)
 	mph：minimal perfect hash algorithm
 	*/
-	matcher, err := router.NewMphMatcherGroup(domains, not)
+	var matcher router.DomainMatcher
+	if geoSiteMatcher == "mph" {
+		matcher, err = router.NewMphMatcherGroup(domains, not)
+	} else {
+		matcher, err = router.NewSuccinctMatcherGroup(domains, not)
+	}
 	if err != nil {
 		return nil, 0, err
 	}

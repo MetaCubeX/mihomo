@@ -7,9 +7,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/sniffer"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/sniffer"
 )
 
 var (
@@ -58,7 +58,7 @@ func (http *HTTPSniffer) SupportNetwork() C.NetWork {
 	return C.TCP
 }
 
-func (http *HTTPSniffer) SniffTCP(bytes []byte) (string, error) {
+func (http *HTTPSniffer) SniffData(bytes []byte) (string, error) {
 	domain, err := SniffHTTP(bytes)
 	if err == nil {
 		return *domain, nil

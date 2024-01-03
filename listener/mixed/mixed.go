@@ -3,20 +3,20 @@ package mixed
 import (
 	"net"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/common/cache"
-	N "github.com/Dreamacro/clash/common/net"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/listener/http"
-	"github.com/Dreamacro/clash/listener/socks"
-	"github.com/Dreamacro/clash/transport/socks4"
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/lru"
+	N "github.com/metacubex/mihomo/common/net"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/listener/http"
+	"github.com/metacubex/mihomo/listener/socks"
+	"github.com/metacubex/mihomo/transport/socks4"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 type Listener struct {
 	listener net.Listener
 	addr     string
-	cache    *cache.LruCache[string, bool]
+	cache    *lru.LruCache[string, bool]
 	closed   bool
 }
 
@@ -36,7 +36,7 @@ func (l *Listener) Close() error {
 	return l.listener.Close()
 }
 
-func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*Listener, error) {
+func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-MIXED"),
@@ -51,7 +51,7 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 	ml := &Listener{
 		listener: l,
 		addr:     addr,
-		cache:    cache.New[string, bool](cache.WithAge[string, bool](30)),
+		cache:    lru.New[string, bool](lru.WithAge[string, bool](30)),
 	}
 	go func() {
 		for {
@@ -62,14 +62,20 @@ func New(addr string, in chan<- C.ConnContext, additions ...inbound.Addition) (*
 				}
 				continue
 			}
-			go handleConn(c, in, ml.cache, additions...)
+			if len(additions) == 0 { // only apply on default listener
+				if inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
+					_ = c.Close()
+					continue
+				}
+			}
+			go handleConn(c, tunnel, ml.cache, additions...)
 		}
 	}()
 
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[string, bool], additions ...inbound.Addition) {
+func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 
 	bufConn := N.NewBufferedConn(conn)
@@ -80,10 +86,10 @@ func handleConn(conn net.Conn, in chan<- C.ConnContext, cache *cache.LruCache[st
 
 	switch head[0] {
 	case socks4.Version:
-		socks.HandleSocks4(bufConn, in, additions...)
+		socks.HandleSocks4(bufConn, tunnel, additions...)
 	case socks5.Version:
-		socks.HandleSocks5(bufConn, in, additions...)
+		socks.HandleSocks5(bufConn, tunnel, additions...)
 	default:
-		http.HandleConn(bufConn, in, cache, additions...)
+		http.HandleConn(bufConn, tunnel, cache, additions...)
 	}
 }

@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/Dreamacro/clash/common/nnip"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/common/nnip"
+	"github.com/metacubex/mihomo/log"
 
 	"golang.org/x/sys/windows"
 )
@@ -218,7 +218,7 @@ func getExecPathFromPID(pid uint32) (string, error) {
 	r1, _, err := syscall.SyscallN(
 		queryProcName,
 		uintptr(h),
-		uintptr(1),
+		uintptr(0),
 		uintptr(unsafe.Pointer(&buf[0])),
 		uintptr(unsafe.Pointer(&size)),
 	)

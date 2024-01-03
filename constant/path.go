@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const Name = "clash"
+const Name = "mihomo"
 
 var (
 	GeositeName = "GeoSite.dat"
@@ -18,6 +18,9 @@ var (
 )
 
 // Path is used to get the configuration path
+//
+// on Unix systems, `$HOME/.config/mihomo`.
+// on Windows, `%USERPROFILE%/.config/mihomo`.
 var Path = func() *path {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -25,6 +28,13 @@ var Path = func() *path {
 	}
 	allowUnsafePath, _ := strconv.ParseBool(os.Getenv("SKIP_SAFE_PATH_CHECK"))
 	homeDir = P.Join(homeDir, ".config", Name)
+
+	if _, err = os.Stat(homeDir); err != nil {
+		if configHome, ok := os.LookupEnv("XDG_CONFIG_HOME"); ok {
+			homeDir = P.Join(configHome, Name)
+		}
+	}
+
 	return &path{homeDir: homeDir, configFile: "config.yaml", allowUnsafePath: allowUnsafePath}
 }()
 
@@ -155,7 +165,7 @@ func (p *path) GetAssetLocation(file string) string {
 func (p *path) GetExecutableFullPath() string {
 	exePath, err := os.Executable()
 	if err != nil {
-		return "clash"
+		return "mihomo"
 	}
 	res, _ := filepath.EvalSymlinks(exePath)
 	return res

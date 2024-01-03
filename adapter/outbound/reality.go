@@ -1,13 +1,13 @@
 package outbound
 
 import (
+	"crypto/ecdh"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 
-	tlsC "github.com/Dreamacro/clash/component/tls"
-
-	"golang.org/x/crypto/curve25519"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 )
 
 type RealityOptions struct {
@@ -19,9 +19,15 @@ func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {
 	if o.PublicKey != "" {
 		config := new(tlsC.RealityConfig)
 
-		n, err := base64.RawURLEncoding.Decode(config.PublicKey[:], []byte(o.PublicKey))
-		if err != nil || n != curve25519.ScalarSize {
+		const x25519ScalarSize = 32
+		var publicKey [x25519ScalarSize]byte
+		n, err := base64.RawURLEncoding.Decode(publicKey[:], []byte(o.PublicKey))
+		if err != nil || n != x25519ScalarSize {
 			return nil, errors.New("invalid REALITY public key")
+		}
+		config.PublicKey, err = ecdh.X25519().NewPublicKey(publicKey[:])
+		if err != nil {
+			return nil, fmt.Errorf("fail to create REALITY public key: %w", err)
 		}
 
 		n, err = hex.Decode(config.ShortID[:], []byte(o.ShortID))

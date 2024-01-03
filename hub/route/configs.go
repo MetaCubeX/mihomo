@@ -2,19 +2,20 @@ package route
 
 import (
 	"net/http"
+	"net/netip"
 	"path/filepath"
 	"sync"
 
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/config"
-	"github.com/Dreamacro/clash/constant"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/hub/executor"
-	P "github.com/Dreamacro/clash/listener"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/config"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/hub/executor"
+	P "github.com/metacubex/mihomo/listener"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -47,6 +48,9 @@ type configSchema struct {
 	TcptunConfig      *string            `json:"tcptun-config"`
 	UdptunConfig      *string            `json:"udptun-config"`
 	AllowLan          *bool              `json:"allow-lan"`
+	SkipAuthPrefixes  *[]netip.Prefix    `json:"skip-auth-prefixes"`
+	LanAllowedIPs     *[]netip.Prefix    `json:"lan-allowed-ips"`
+	LanDisAllowedIPs  *[]netip.Prefix    `json:"lan-disallowed-ips"`
 	BindAddress       *string            `json:"bind-address"`
 	Mode              *tunnel.TunnelMode `json:"mode"`
 	LogLevel          *log.LogLevel      `json:"log-level"`
@@ -65,22 +69,28 @@ type tunSchema struct {
 	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 	//RedirectToTun       []string   		  `yaml:"-" json:"-"`
 
-	MTU *uint32 `yaml:"mtu" json:"mtu,omitempty"`
-	//Inet4Address           *[]config.ListenPrefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
-	Inet6Address           *[]LC.ListenPrefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
-	StrictRoute            *bool              `yaml:"strict-route" json:"strict-route,omitempty"`
-	Inet4RouteAddress      *[]LC.ListenPrefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
-	Inet6RouteAddress      *[]LC.ListenPrefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
-	IncludeUID             *[]uint32          `yaml:"include-uid" json:"include-uid,omitempty"`
-	IncludeUIDRange        *[]string          `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
-	ExcludeUID             *[]uint32          `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
-	ExcludeUIDRange        *[]string          `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
-	IncludeAndroidUser     *[]int             `yaml:"include-android-user" json:"include-android-user,omitempty"`
-	IncludePackage         *[]string          `yaml:"include-package" json:"include-package,omitempty"`
-	ExcludePackage         *[]string          `yaml:"exclude-package" json:"exclude-package,omitempty"`
-	EndpointIndependentNat *bool              `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
-	UDPTimeout             *int64             `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
-	FileDescriptor         *int               `yaml:"file-descriptor" json:"file-descriptor"`
+	MTU        *uint32 `yaml:"mtu" json:"mtu,omitempty"`
+	GSO        *bool   `yaml:"gso" json:"gso,omitempty"`
+	GSOMaxSize *uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
+	//Inet4Address           *[]netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	Inet6Address             *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
+	StrictRoute              *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
+	Inet4RouteAddress        *[]netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
+	Inet6RouteAddress        *[]netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
+	Inet4RouteExcludeAddress *[]netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
+	Inet6RouteExcludeAddress *[]netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
+	IncludeInterface         *[]string       `yaml:"include-interface" json:"include-interface,omitempty"`
+	ExcludeInterface         *[]string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
+	IncludeUID               *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
+	IncludeUIDRange          *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
+	ExcludeUID               *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
+	ExcludeUIDRange          *[]string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser       *[]int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
+	IncludePackage           *[]string       `yaml:"include-package" json:"include-package,omitempty"`
+	ExcludePackage           *[]string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
+	EndpointIndependentNat   *bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	UDPTimeout               *int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+	FileDescriptor           *int            `yaml:"file-descriptor" json:"file-descriptor"`
 }
 
 type tuicServerSchema struct {
@@ -139,11 +149,35 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		if p.MTU != nil {
 			def.MTU = *p.MTU
 		}
+		if p.GSO != nil {
+			def.GSO = *p.GSO
+		}
+		if p.GSOMaxSize != nil {
+			def.GSOMaxSize = *p.GSOMaxSize
+		}
 		//if p.Inet4Address != nil {
 		//	def.Inet4Address = *p.Inet4Address
 		//}
 		if p.Inet6Address != nil {
 			def.Inet6Address = *p.Inet6Address
+		}
+		if p.Inet4RouteAddress != nil {
+			def.Inet4RouteAddress = *p.Inet4RouteAddress
+		}
+		if p.Inet6RouteAddress != nil {
+			def.Inet6RouteAddress = *p.Inet6RouteAddress
+		}
+		if p.Inet4RouteExcludeAddress != nil {
+			def.Inet4RouteExcludeAddress = *p.Inet4RouteExcludeAddress
+		}
+		if p.Inet6RouteExcludeAddress != nil {
+			def.Inet6RouteExcludeAddress = *p.Inet6RouteExcludeAddress
+		}
+		if p.IncludeInterface != nil {
+			def.IncludeInterface = *p.IncludeInterface
+		}
+		if p.ExcludeInterface != nil {
+			def.ExcludeInterface = *p.ExcludeInterface
 		}
 		if p.IncludeUID != nil {
 			def.IncludeUID = *p.IncludeUID
@@ -231,6 +265,18 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		P.SetAllowLan(*general.AllowLan)
 	}
 
+	if general.SkipAuthPrefixes != nil {
+		inbound.SetSkipAuthPrefixes(*general.SkipAuthPrefixes)
+	}
+
+	if general.LanAllowedIPs != nil {
+		inbound.SetAllowedIPs(*general.LanAllowedIPs)
+	}
+
+	if general.LanDisAllowedIPs != nil {
+		inbound.SetDisAllowedIPs(*general.LanDisAllowedIPs)
+	}
+
 	if general.BindAddress != nil {
 		P.SetBindAddress(*general.BindAddress)
 	}
@@ -249,19 +295,15 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 
 	ports := P.GetPorts()
 
-	tcpIn := tunnel.TCPIn()
-	udpIn := tunnel.UDPIn()
-	natTable := tunnel.NatTable()
-
-	P.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port), tcpIn)
-	P.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort), tcpIn, udpIn)
-	P.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tcpIn, udpIn, natTable)
-	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tcpIn, udpIn, natTable)
-	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tcpIn, udpIn)
-	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tcpIn, udpIn)
-	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tcpIn, udpIn)
-	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tcpIn, udpIn)
-	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tcpIn, udpIn)
+	P.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port), tunnel.Tunnel)
+	P.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort), tunnel.Tunnel)
+	P.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tunnel.Tunnel)
+	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tunnel.Tunnel)
+	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tunnel.Tunnel)
+	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tunnel.Tunnel)
+	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tunnel.Tunnel)
+	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tunnel.Tunnel)
+	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tunnel.Tunnel)
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)
@@ -302,7 +344,7 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if req.Path == "" {
-			req.Path = constant.Path.Config()
+			req.Path = C.Path.Config()
 		}
 		if !filepath.IsAbs(req.Path) {
 			render.Status(r, http.StatusBadRequest)
@@ -347,7 +389,7 @@ func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cfg, err := executor.ParseWithPath(constant.Path.Config())
+		cfg, err := executor.ParseWithPath(C.Path.Config())
 		if err != nil {
 			log.Errorln("[REST-API] update GEO databases failed: %v", err)
 			return

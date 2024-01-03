@@ -4,9 +4,9 @@ import (
 	"net"
 	"sync"
 
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/metacubex/mihomo/constant"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type Table struct {
@@ -25,8 +25,8 @@ func (t *Table) Set(key string, e C.PacketConn, w C.WriteBackProxy) {
 	t.mapping.Store(key, &Entry{
 		PacketConn:      e,
 		WriteBackProxy:  w,
-		LocalUDPConnMap: xsync.NewMapOf[*net.UDPConn](),
-		LocalLockMap:    xsync.NewMapOf[*sync.Cond](),
+		LocalUDPConnMap: xsync.NewMapOf[string, *net.UDPConn](),
+		LocalLockMap:    xsync.NewMapOf[string, *sync.Cond](),
 	})
 }
 
@@ -116,7 +116,7 @@ func makeLock() *sync.Cond {
 // New return *Cache
 func New() *Table {
 	return &Table{
-		mapping: xsync.NewMapOf[*Entry](),
-		lockMap: xsync.NewMapOf[*sync.Cond](),
+		mapping: xsync.NewMapOf[string, *Entry](),
+		lockMap: xsync.NewMapOf[string, *sync.Cond](),
 	}
 }

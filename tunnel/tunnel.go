@@ -12,16 +12,17 @@ import (
 
 	"github.com/jpillora/backoff"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/nat"
-	P "github.com/Dreamacro/clash/component/process"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/component/sniffer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
-	icontext "github.com/Dreamacro/clash/context"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/nat"
+	P "github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/sniffer"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	"github.com/metacubex/mihomo/constant/provider"
+	icontext "github.com/metacubex/mihomo/context"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
 var (
@@ -48,6 +49,27 @@ var (
 
 	fakeIPRange netip.Prefix
 )
+
+type tunnel struct{}
+
+var Tunnel C.Tunnel = tunnel{}
+
+func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
+	connCtx := icontext.NewConnContext(conn, metadata)
+	handleTCPConn(connCtx)
+}
+
+func (t tunnel) HandleUDPPacket(packet C.UDPPacket, metadata *C.Metadata) {
+	packetAdapter := C.NewPacketAdapter(packet, metadata)
+	select {
+	case udpQueue <- packetAdapter:
+	default:
+	}
+}
+
+func (t tunnel) NatTable() C.NatTable {
+	return natTable
+}
 
 func OnSuspend() {
 	status.Store(Suspend)
@@ -90,11 +112,13 @@ func init() {
 }
 
 // TCPIn return fan-in queue
+// Deprecated: using Tunnel instead
 func TCPIn() chan<- C.ConnContext {
 	return tcpQueue
 }
 
 // UDPIn return fan-in udp queue
+// Deprecated: using Tunnel instead
 func UDPIn() chan<- C.PacketAdapter {
 	return udpQueue
 }
@@ -197,10 +221,6 @@ func isHandle(t C.Type) bool {
 func processUDP() {
 	queue := udpQueue
 	for conn := range queue {
-		if !isHandle(conn.Metadata().Type) {
-			conn.Drop()
-			continue
-		}
 		handleUDPConn(conn)
 	}
 }
@@ -216,10 +236,6 @@ func process() {
 
 	queue := tcpQueue
 	for conn := range queue {
-		if !isHandle(conn.Metadata().Type) {
-			_ = conn.Conn().Close()
-			continue
-		}
 		go handleTCPConn(conn)
 	}
 }
@@ -261,7 +277,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	if metadata.SpecialProxy != "" {
 		var exist bool
 		proxy, exist = proxies[metadata.SpecialProxy]
@@ -284,6 +300,11 @@ func resolveMetadata(ctx C.PlainContext, metadata *C.Metadata) (proxy C.Proxy, r
 }
 
 func handleUDPConn(packet C.PacketAdapter) {
+	if !isHandle(packet.Metadata().Type) {
+		packet.Drop()
+		return
+	}
+
 	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		packet.Drop()
@@ -303,11 +324,14 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
+	if sniffer.Dispatcher.Enable() && sniffingEnable {
+		sniffer.Dispatcher.UDPSniff(packet)
+	}
+
 	// local resolve UDP dns
 	if !metadata.Resolved() {
 		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
 		if err != nil {
-			packet.Drop()
 			return
 		}
 		metadata.DstIP = ip
@@ -350,8 +374,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 			cond.Broadcast()
 		}()
 
-		pCtx := icontext.NewPacketConnContext(metadata)
-		proxy, rule, err := resolveMetadata(pCtx, metadata)
+		proxy, rule, err := resolveMetadata(metadata)
 		if err != nil {
 			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 			return
@@ -377,7 +400,6 @@ func handleUDPConn(packet C.PacketAdapter) {
 		if err != nil {
 			return
 		}
-		pCtx.InjectPacketConn(rawPc)
 
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
 
@@ -387,6 +409,10 @@ func handleUDPConn(packet C.PacketAdapter) {
 		case rule != nil:
 			if rule.Payload() != "" {
 				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), rawPc.Chains().String())
+				if rawPc.Chains().Last() == "REJECT-DROP" {
+					pc.Close()
+					return
+				}
 			} else {
 				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.Payload(), rawPc.Chains().String())
 			}
@@ -409,6 +435,11 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
+	if !isHandle(connCtx.Metadata().Type) {
+		_ = connCtx.Conn().Close()
+		return
+	}
+
 	defer func(conn net.Conn) {
 		_ = conn.Close()
 	}(connCtx.Conn())
@@ -454,7 +485,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}()
 	}
 
-	proxy, rule, err := resolveMetadata(connCtx, metadata)
+	proxy, rule, err := resolveMetadata(metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -591,13 +622,24 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 
 		if attemptProcessLookup && !findProcessMode.Off() && (findProcessMode.Always() || rule.ShouldFindProcess()) {
 			attemptProcessLookup = false
-			uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
-			if err != nil {
-				log.Debugln("[Process] find process %s: %v", metadata.String(), err)
+			if !features.CMFA {
+				// normal check for process
+				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
+				if err != nil {
+					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+				} else {
+					metadata.Process = filepath.Base(path)
+					metadata.ProcessPath = path
+					metadata.Uid = uid
+				}
 			} else {
-				metadata.Process = filepath.Base(path)
-				metadata.ProcessPath = path
-				metadata.Uid = uid
+				// check package names
+				pkg, err := P.FindPackageName(metadata)
+				if err != nil {
+					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+				} else {
+					metadata.Process = pkg
+				}
 			}
 		}
 

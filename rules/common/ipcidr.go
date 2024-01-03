@@ -3,7 +3,7 @@ package common
 import (
 	"net/netip"
 
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type IPCIDROption func(*IPCIDR)
@@ -22,7 +22,7 @@ func WithIPCIDRNoResolve(noResolve bool) IPCIDROption {
 
 type IPCIDR struct {
 	*Base
-	ipnet       *netip.Prefix
+	ipnet       netip.Prefix
 	adapter     string
 	isSourceIP  bool
 	noResolveIP bool
@@ -63,7 +63,7 @@ func NewIPCIDR(s string, adapter string, opts ...IPCIDROption) (*IPCIDR, error) 
 
 	ipcidr := &IPCIDR{
 		Base:    &Base{},
-		ipnet:   &ipnet,
+		ipnet:   ipnet,
 		adapter: adapter,
 	}
 

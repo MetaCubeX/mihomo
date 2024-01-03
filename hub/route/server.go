@@ -5,23 +5,25 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
-	"github.com/gorilla/websocket"
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 )
 
 var (
@@ -29,12 +31,6 @@ var (
 	serverAddr   = ""
 
 	uiPath = ""
-
-	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
 )
 
 type Traffic struct {
@@ -67,6 +63,7 @@ func Start(addr string, tlsAddr string, secret string,
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 		MaxAge:         300,
 	})
+	r.Use(setPrivateNetworkAccess)
 	r.Use(corsM.Handler)
 	if isDebug {
 		r.Mount("/debug", func() http.Handler {
@@ -97,6 +94,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/restart", restartRouter())
 		r.Mount("/upgrade", upgradeRouter())
+		addExternalRouters(r)
 
 	})
 
@@ -112,7 +110,7 @@ func Start(addr string, tlsAddr string, secret string,
 
 	if len(tlsAddr) > 0 {
 		go func() {
-			c, err := CN.ParseCert(certificat, privateKey)
+			c, err := CN.ParseCert(certificat, privateKey, C.Path)
 			if err != nil {
 				log.Errorln("External controller tls listen error: %s", err)
 				return
@@ -152,6 +150,15 @@ func Start(addr string, tlsAddr string, secret string,
 
 }
 
+func setPrivateNetworkAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+			w.Header().Add("Access-Control-Allow-Private-Network", "true")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func safeEuqal(a, b string) bool {
 	aBuf := utils.ImmutableBytesFromString(a)
 	bBuf := utils.ImmutableBytesFromString(b)
@@ -166,7 +173,7 @@ func authentication(next http.Handler) http.Handler {
 		}
 
 		// Browser websocket not support custom header
-		if websocket.IsWebSocketUpgrade(r) && r.URL.Query().Get("token") != "" {
+		if r.Header.Get("Upgrade") == "websocket" && r.URL.Query().Get("token") != "" {
 			token := r.URL.Query().Get("token")
 			if !safeEuqal(token, serverSecret) {
 				render.Status(r, http.StatusUnauthorized)
@@ -193,14 +200,14 @@ func authentication(next http.Handler) http.Handler {
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"hello": "clash.meta"})
+	render.JSON(w, r, render.M{"hello": "mihomo"})
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {
-	var wsConn *websocket.Conn
-	if websocket.IsWebSocketUpgrade(r) {
+	var wsConn net.Conn
+	if r.Header.Get("Upgrade") == "websocket" {
 		var err error
-		wsConn, err = upgrader.Upgrade(w, r, nil)
+		wsConn, _, _, err = ws.UpgradeHTTP(r, w)
 		if err != nil {
 			return
 		}
@@ -230,7 +237,7 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()
 		} else {
-			err = wsConn.WriteMessage(websocket.TextMessage, buf.Bytes())
+			err = wsutil.WriteMessage(wsConn, ws.StateServerSide, ws.OpText, buf.Bytes())
 		}
 
 		if err != nil {
@@ -240,10 +247,10 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 }
 
 func memory(w http.ResponseWriter, r *http.Request) {
-	var wsConn *websocket.Conn
-	if websocket.IsWebSocketUpgrade(r) {
+	var wsConn net.Conn
+	if r.Header.Get("Upgrade") == "websocket" {
 		var err error
-		wsConn, err = upgrader.Upgrade(w, r, nil)
+		wsConn, _, _, err = ws.UpgradeHTTP(r, w)
 		if err != nil {
 			return
 		}
@@ -280,7 +287,7 @@ func memory(w http.ResponseWriter, r *http.Request) {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()
 		} else {
-			err = wsConn.WriteMessage(websocket.TextMessage, buf.Bytes())
+			err = wsutil.WriteMessage(wsConn, ws.StateServerSide, ws.OpText, buf.Bytes())
 		}
 
 		if err != nil {
@@ -293,11 +300,27 @@ type Log struct {
 	Type    string `json:"type"`
 	Payload string `json:"payload"`
 }
+type LogStructuredField struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+type LogStructured struct {
+	Time    string               `json:"time"`
+	Level   string               `json:"level"`
+	Message string               `json:"message"`
+	Fields  []LogStructuredField `json:"fields"`
+}
 
 func getLogs(w http.ResponseWriter, r *http.Request) {
 	levelText := r.URL.Query().Get("level")
 	if levelText == "" {
 		levelText = "info"
+	}
+
+	formatText := r.URL.Query().Get("format")
+	isStructured := false
+	if formatText == "structured" {
+		isStructured = true
 	}
 
 	level, ok := log.LogLevelMapping[levelText]
@@ -307,10 +330,10 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var wsConn *websocket.Conn
-	if websocket.IsWebSocketUpgrade(r) {
+	var wsConn net.Conn
+	if r.Header.Get("Upgrade") == "websocket" {
 		var err error
-		wsConn, err = upgrader.Upgrade(w, r, nil)
+		wsConn, _, _, err = ws.UpgradeHTTP(r, w)
 		if err != nil {
 			return
 		}
@@ -342,11 +365,26 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		buf.Reset()
 
-		if err := json.NewEncoder(buf).Encode(Log{
-			Type:    logM.Type(),
-			Payload: logM.Payload,
-		}); err != nil {
-			break
+		if !isStructured {
+			if err := json.NewEncoder(buf).Encode(Log{
+				Type:    logM.Type(),
+				Payload: logM.Payload,
+			}); err != nil {
+				break
+			}
+		} else {
+			newLevel := logM.Type()
+			if newLevel == "warning" {
+				newLevel = "warn"
+			}
+			if err := json.NewEncoder(buf).Encode(LogStructured{
+				Time:    time.Now().Format(time.TimeOnly),
+				Level:   newLevel,
+				Message: logM.Payload,
+				Fields:  []LogStructuredField{},
+			}); err != nil {
+				break
+			}
 		}
 
 		var err error
@@ -354,7 +392,7 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 			_, err = w.Write(buf.Bytes())
 			w.(http.Flusher).Flush()
 		} else {
-			err = wsConn.WriteMessage(websocket.TextMessage, buf.Bytes())
+			err = wsutil.WriteMessage(wsConn, ws.StateServerSide, ws.OpText, buf.Bytes())
 		}
 
 		if err != nil {

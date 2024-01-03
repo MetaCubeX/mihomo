@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/component/ca"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/component/ca"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/http3"
 	D "github.com/miekg/dns"
@@ -155,11 +155,6 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 	}
 
 	return msg, err
-}
-
-// Exchange implements the Upstream interface for *dnsOverHTTPS.
-func (doh *dnsOverHTTPS) Exchange(m *D.Msg) (*D.Msg, error) {
-	return doh.ExchangeContext(context.Background(), m)
 }
 
 // Close implements the Upstream interface for *dnsOverHTTPS.

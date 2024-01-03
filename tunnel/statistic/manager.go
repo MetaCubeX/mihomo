@@ -4,9 +4,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/Dreamacro/clash/common/atomic"
+	"github.com/metacubex/mihomo/common/atomic"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -14,7 +14,7 @@ var DefaultManager *Manager
 
 func init() {
 	DefaultManager = &Manager{
-		connections:   xsync.NewMapOf[Tracker](),
+		connections:   xsync.NewMapOf[string, Tracker](),
 		uploadTemp:    atomic.NewInt64(0),
 		downloadTemp:  atomic.NewInt64(0),
 		uploadBlip:    atomic.NewInt64(0),
@@ -29,12 +29,12 @@ func init() {
 
 type Manager struct {
 	connections   *xsync.MapOf[string, Tracker]
-	uploadTemp    *atomic.Int64
-	downloadTemp  *atomic.Int64
-	uploadBlip    *atomic.Int64
-	downloadBlip  *atomic.Int64
-	uploadTotal   *atomic.Int64
-	downloadTotal *atomic.Int64
+	uploadTemp    atomic.Int64
+	downloadTemp  atomic.Int64
+	uploadBlip    atomic.Int64
+	downloadBlip  atomic.Int64
+	uploadTotal   atomic.Int64
+	downloadTotal atomic.Int64
 	process       *process.Process
 	memory        uint64
 }

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/Dreamacro/clash/common/cmd"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/ebpf/redir"
-	"github.com/Dreamacro/clash/component/ebpf/tc"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/common/cmd"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/ebpf/redir"
+	"github.com/metacubex/mihomo/component/ebpf/tc"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/sagernet/netlink"
 )
 
@@ -47,7 +47,7 @@ func NewTcEBpfProgram(ifaceNames []string, tunName string) (*TcEBpfProgram, erro
 
 	tunIndex := uint32(tunIface.Attrs().Index)
 
-	dialer.DefaultRoutingMark.Store(C.ClashTrafficMark)
+	dialer.DefaultRoutingMark.Store(C.MihomoTrafficMark)
 
 	ifMark := uint32(dialer.DefaultRoutingMark.Load())
 

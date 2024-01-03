@@ -21,7 +21,7 @@ func exchange(address, domain string, tp uint16) ([]dns.RR, error) {
 	return r.Answer, nil
 }
 
-func TestClash_DNS(t *testing.T) {
+func TestMihomo_DNS(t *testing.T) {
 	basic := `
 log-level: silent
 dns:
@@ -49,11 +49,11 @@ dns:
 	assert.Empty(t, rr)
 }
 
-func TestClash_DNSHostAndFakeIP(t *testing.T) {
+func TestMihomo_DNSHostAndFakeIP(t *testing.T) {
 	basic := `
 log-level: silent
 hosts:
-  foo.clash.dev: 1.1.1.1
+  foo.mihomo.dev: 1.1.1.1
 dns:
   enable: true
   listen: 0.0.0.0:8553
@@ -81,7 +81,7 @@ dns:
 		{"foo.org", "198.18.0.4"},
 		{"bar.org", "198.18.0.5"},
 		{"foo.org", "198.18.0.4"},
-		{"foo.clash.dev", "1.1.1.1"},
+		{"foo.mihomo.dev", "1.1.1.1"},
 	}
 
 	for _, pair := range list {

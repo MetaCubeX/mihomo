@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/common/pool"
-	"github.com/Dreamacro/clash/transport/ssr/tools"
+	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/transport/ssr/tools"
 
 	"github.com/zhangyunhao116/fastrand"
 )

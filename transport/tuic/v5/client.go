@@ -12,15 +12,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	atomic2 "github.com/Dreamacro/clash/common/atomic"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/pool"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/transport/tuic/common"
+	atomic2 "github.com/metacubex/mihomo/common/atomic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/pool"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/zhangyunhao116/fastrand"
 )
 
@@ -47,7 +47,7 @@ type clientImpl struct {
 	openStreams atomic.Int64
 	closed      atomic.Bool
 
-	udpInputMap xsync.MapOf[uint16, net.Conn]
+	udpInputMap *xsync.MapOf[uint16, net.Conn]
 
 	// only ready for PoolClient
 	dialerRef   C.Dialer
@@ -196,7 +196,7 @@ func (t *clientImpl) handleMessage(quicConn quic.Connection) (err error) {
 	}()
 	for {
 		var message []byte
-		message, err = quicConn.ReceiveMessage(context.Background())
+		message, err = quicConn.ReceiveDatagram(context.Background())
 		if err != nil {
 			return err
 		}
@@ -270,7 +270,7 @@ func (t *clientImpl) forceClose(quicConn quic.Connection, err error) {
 	if quicConn != nil {
 		_ = quicConn.CloseWithError(ProtocolError, errStr)
 	}
-	udpInputMap := &t.udpInputMap
+	udpInputMap := t.udpInputMap
 	udpInputMap.Range(func(key uint16, value net.Conn) bool {
 		conn := value
 		_ = conn.Close()
@@ -406,7 +406,7 @@ func NewClient(clientOption *ClientOption, udp bool, dialerRef C.Dialer) *Client
 		ClientOption: clientOption,
 		udp:          udp,
 		dialerRef:    dialerRef,
-		udpInputMap:  *xsync.NewIntegerMapOf[uint16, net.Conn](),
+		udpInputMap:  xsync.NewMapOf[uint16, net.Conn](),
 	}
 	c := &Client{ci}
 	runtime.SetFinalizer(c, closeClient)

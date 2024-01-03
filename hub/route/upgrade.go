@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Dreamacro/clash/config"
-	"github.com/Dreamacro/clash/hub/updater"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/config"
+	"github.com/metacubex/mihomo/hub/updater"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"

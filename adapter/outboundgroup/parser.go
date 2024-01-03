@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/adapter/provider"
-	"github.com/Dreamacro/clash/common/structure"
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	types "github.com/Dreamacro/clash/constant/provider"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/adapter/provider"
+	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	types "github.com/metacubex/mihomo/constant/provider"
 )
 
 var (
@@ -22,21 +22,24 @@ var (
 
 type GroupCommonOption struct {
 	outbound.BasicOption
-	Name           string   `group:"name"`
-	Type           string   `group:"type"`
-	Proxies        []string `group:"proxies,omitempty"`
-	Use            []string `group:"use,omitempty"`
-	URL            string   `group:"url,omitempty"`
-	Interval       int      `group:"interval,omitempty"`
-	Lazy           bool     `group:"lazy,omitempty"`
-	DisableUDP     bool     `group:"disable-udp,omitempty"`
-	Filter         string   `group:"filter,omitempty"`
-	ExcludeFilter  string   `group:"exclude-filter,omitempty"`
-	ExcludeType    string   `group:"exclude-type,omitempty"`
-	ExpectedStatus string   `group:"expected-status,omitempty"`
+	Name                string   `group:"name"`
+	Type                string   `group:"type"`
+	Proxies             []string `group:"proxies,omitempty"`
+	Use                 []string `group:"use,omitempty"`
+	URL                 string   `group:"url,omitempty"`
+	Interval            int      `group:"interval,omitempty"`
+	Lazy                bool     `group:"lazy,omitempty"`
+	DisableUDP          bool     `group:"disable-udp,omitempty"`
+	Filter              string   `group:"filter,omitempty"`
+	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
+	ExcludeType         string   `group:"exclude-type,omitempty"`
+	ExpectedStatus      string   `group:"expected-status,omitempty"`
+	IncludeAll          bool     `group:"include-all,omitempty"`
+	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
+	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
 }
 
-func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider) (C.ProxyAdapter, error) {
+func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider, AllProxies []string, AllProviders []string) (C.ProxyAdapter, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 
 	groupOption := &GroupCommonOption{
@@ -54,7 +57,24 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 	providers := []types.ProxyProvider{}
 
-	if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
+	if groupOption.IncludeAll {
+		groupOption.IncludeAllProviders = true
+		groupOption.IncludeAllProxies = true
+	}
+	var GroupUse []string
+	var GroupProxies []string
+	if groupOption.IncludeAllProviders {
+		GroupUse = append(GroupUse, AllProviders...)
+	} else {
+		GroupUse = groupOption.Use
+	}
+	if groupOption.IncludeAllProxies {
+		GroupProxies = append(groupOption.Proxies, AllProxies...)
+	} else {
+		GroupProxies = groupOption.Proxies
+	}
+
+	if len(GroupProxies) == 0 && len(GroupUse) == 0 {
 		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
@@ -70,8 +90,13 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	groupOption.ExpectedStatus = status
 	testUrl := groupOption.URL
 
-	if len(groupOption.Proxies) != 0 {
-		ps, err := getProxies(proxyMap, groupOption.Proxies)
+	if groupOption.URL == "" {
+		groupOption.URL = C.DefaultTestURL
+		testUrl = groupOption.URL
+	}
+
+	if len(GroupProxies) != 0 {
+		ps, err := getProxies(proxyMap, GroupProxies)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
@@ -80,24 +105,15 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, errDuplicateProvider)
 		}
 
-		var url string
-		var interval uint
-
 		// select don't need health check
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
-			if groupOption.URL == "" {
-				groupOption.URL = "https://cp.cloudflare.com/generate_204"
-			}
-
 			if groupOption.Interval == 0 {
 				groupOption.Interval = 300
 			}
-
-			url = groupOption.URL
-			interval = uint(groupOption.Interval)
 		}
 
-		hc := provider.NewHealthCheck(ps, url, interval, true, expectedStatus)
+		hc := provider.NewHealthCheck(ps, testUrl, uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
@@ -107,8 +123,8 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		providersMap[groupName] = pd
 	}
 
-	if len(groupOption.Use) != 0 {
-		list, err := getProviders(providersMap, groupOption.Use)
+	if len(GroupUse) != 0 {
+		list, err := getProviders(providersMap, GroupUse)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}

@@ -8,12 +8,12 @@ import (
 	"net/netip"
 	"strings"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/resolver"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/tunnel"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/tunnel"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
 type proxyDialer struct {
@@ -70,10 +70,7 @@ func (p proxyDialer) DialContext(ctx context.Context, network, address string) (
 }
 
 func (p proxyDialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	currentMeta := &C.Metadata{Type: C.INNER}
-	if err := currentMeta.SetRemoteAddress(rAddrPort.String()); err != nil {
-		return nil, err
-	}
+	currentMeta := &C.Metadata{Type: C.INNER, DstIP: rAddrPort.Addr(), DstPort: rAddrPort.Port()}
 	return p.listenPacket(ctx, currentMeta)
 }
 

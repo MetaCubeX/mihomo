@@ -8,10 +8,20 @@ mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
 
 allow-lan: true # 允许局域网连接
 bind-address: "*" # 绑定 IP 地址，仅作用于 allow-lan 为 true，'*'表示所有地址
+authentication: # http,socks入口的验证用户名，密码
+  - "username:password"
+skip-auth-prefixes: # 设置跳过验证的IP段
+  - 127.0.0.1/8
+  - ::1/128
+lan-allowed-ips: # 允许连接的 IP 地址段，仅作用于 allow-lan 为 true, 默认值为0.0.0.0/0和::/0
+  - 0.0.0.0/0
+  - ::/0
+lan-disallowed-ips: # 禁止连接的 IP 地址段, 黑名单优先级高于白名单, 默认值为空
+  - 192.168.0.3/32
 
 #  find-process-mode has 3 values:always, strict, off
 #  - always, 开启，强制匹配所有进程
-#  - strict, 默认，由 clash 判断是否开启
+#  - strict, 默认，由 mihomo 判断是否开启
 #  - off, 不匹配进程，推荐在路由器上使用此模式
 find-process-mode: strict
 
@@ -22,6 +32,14 @@ geox-url:
   geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
   geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
   mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
+
+geo-auto-update: false # 是否自动更新 geodata
+geo-update-interval: 24 # 更新间隔，单位：小时
+
+# Matcher implementation used by GeoSite, available implementations:
+# - succinct (default, same as rule-set)
+# - mph (from V2Ray, also `hybrid` in Xray)
+# geosite-matcher: succinct
 
 log-level: debug # 日志等级 silent/error/warning/info/debug
 
@@ -69,11 +87,11 @@ experimental:
 
 # 类似于 /etc/hosts, 仅支持配置单个 IP
 hosts:
-# '*.clash.dev': 127.0.0.1
+# '*.mihomo.dev': 127.0.0.1
 # '.dev': 127.0.0.1
-# 'alpha.clash.dev': '::1'
+# 'alpha.mihomo.dev': '::1'
 # test.com: [1.1.1.1, 2.2.2.2]
-# clash.lan: clash # clash 为特别字段，将加入本地所有网卡的地址
+# home.lan: lan # lan 为特别字段，将加入本地所有网卡的地址
 # baidu.com: google.com # 只允许配置一个别名
 
 profile: # 存储 select 选择记录
@@ -85,28 +103,34 @@ profile: # 存储 select 选择记录
 # Tun 配置
 tun:
   enable: false
-  stack: system # gvisor / lwip
+  stack: system # gvisor/mixed
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
   # auto-detect-interface: true # 自动识别出口网卡
   # auto-route: true # 配置路由表
   # mtu: 9000 # 最大传输单元
+  # gso: false # 启用通用分段卸载, 仅支持 Linux
+  # gso-max-size: 65536 # 通用分段卸载包的最大大小
   # strict-route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
-  inet4-route-address: # 启用 auto_route 时使用自定义路由而不是默认路由
+  inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     - 0.0.0.0/1
     - 128.0.0.0/1
-  inet6-route-address: # 启用 auto_route 时使用自定义路由而不是默认路由
+  inet6-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     - "::/1"
     - "8000::/1"
   # endpoint-independent-nat: false # 启用独立于端点的 NAT
-  # include-uid: # UID 规则仅在 Linux 下被支持，并且需要 auto_route
+  # include-interface: # 限制被路由的接口。默认不限制, 与 `exclude-interface` 冲突
+  #   - "lan0"
+  # exclude-interface: # 排除路由的接口, 与 `include-interface` 冲突
+  #   - "lan1"
+  # include-uid: # UID 规则仅在 Linux 下被支持，并且需要 auto-route
   # - 0
   # include-uid-range: # 限制被路由的的用户范围
-  # - 1000-99999
+  # - 1000:9999
   # exclude-uid: # 排除路由的的用户
   #- 1000
   # exclude-uid-range: # 排除路由的的用户范围
-  # - 1000-99999
+  # - 1000:9999
 
   # Android 用户和应用规则仅在 Android 下被支持
   # 并且需要 auto-route
@@ -137,7 +161,9 @@ sniffer:
   # 是否使用嗅探结果作为实际访问，默认 true
   # 全局配置，优先级低于 sniffer.sniff 实际配置
   override-destination: false
-  sniff: # TLS 默认如果不配置 ports 默认嗅探 443
+  sniff: # TLS 和 QUIC 默认如果不配置 ports 默认嗅探 443
+    QUIC:
+    #  ports: [ 443 ]
     TLS:
     #  ports: [443, 8443]
 
@@ -176,6 +202,7 @@ tunnels: # one line config
 
 # DNS配置
 dns:
+  cache-algorithm: arc
   enable: false # 关闭将使用系统 DNS
   prefer-h3: true # 开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
@@ -345,16 +372,17 @@ proxies: # socks5
     plugin: v2ray-plugin
     plugin-opts:
       mode: websocket # no QUIC now
-    # tls: true # wss
-    # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
-    # 配置指纹将实现 SSL Pining 效果
-    # fingerprint: xxxx
-    # skip-cert-verify: true
-    # host: bing.com
-    # path: "/"
-    # mux: true
-    # headers:
-    #   custom: value
+      # tls: true # wss
+      # 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
+      # 配置指纹将实现 SSL Pining 效果
+      # fingerprint: xxxx
+      # skip-cert-verify: true
+      # host: bing.com
+      # path: "/"
+      # mux: true
+      # headers:
+      #   custom: value
+      # v2ray-http-upgrade: false
 
   - name: "ss4-shadow-tls"
     type: ss
@@ -427,11 +455,12 @@ proxies: # socks5
     # servername: example.com # priority over wss host
     # network: ws
     # ws-opts:
-    #   path: /path
-    #   headers:
-    #     Host: v2ray.com
-    #   max-early-data: 2048
-    #   early-data-header-name: Sec-WebSocket-Protocol
+      # path: /path
+      # headers:
+      #   Host: v2ray.com
+      # max-early-data: 2048
+      # early-data-header-name: Sec-WebSocket-Protocol
+      # v2ray-http-upgrade: false
 
   - name: "vmess-h2"
     type: vmess
@@ -559,6 +588,7 @@ proxies: # socks5
       path: "/"
       headers:
         Host: example.com
+      # v2ray-http-upgrade: false
 
   # Trojan
   - name: "trojan"
@@ -599,9 +629,10 @@ proxies: # socks5
     # fingerprint: xxxx
     udp: true
     # ws-opts:
-    # path: /path
-    # headers:
-    #   Host: example.com
+    #   path: /path
+    #   headers:
+    #     Host: example.com
+    #   v2ray-http-upgrade: false
 
   - name: "trojan-xtls"
     type: trojan
@@ -620,9 +651,8 @@ proxies: # socks5
     type: hysteria
     server: server.com
     port: 443
-    # ports: 1000,2000-3000,5000 # port 不可省略,
-    auth_str: yourpassword # 将会在未来某个时候删除
-    # auth-str: yourpassword
+    # ports: 1000,2000-3000,5000 # port 不可省略
+    auth-str: yourpassword
     # obfs: obfs_str
     # alpn:
     #   - h3
@@ -631,14 +661,11 @@ proxies: # socks5
     down: "200 Mbps" # 若不写单位，默认为 Mbps
     # sni: server.com
     # skip-cert-verify: false
-    # recv_window_conn: 12582912 # 将会在未来某个时候删除
     # recv-window-conn: 12582912
-    # recv_window: 52428800 # 将会在未来某个时候删除
     # recv-window: 52428800
     # ca: "./my.ca"
-    # ca_str: "xyz" # 将会在未来某个时候删除
     # ca-str: "xyz"
-    # disable_mtu_discovery: false
+    # disable-mtu-discovery: false
     # fingerprint: xxxx
     # fast-open: true # 支持 TCP 快速打开，默认为 false
 
@@ -679,7 +706,7 @@ proxies: # socks5
     # dialer-proxy: "ss1"
     # remote-dns-resolve: true # 强制dns远程解析，默认值为false
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在remote-dns-resolve为true时生效
-    # 如果peers不为空，该段落中的allowed_ips不可为空；前面段落的server,port,ip,ipv6,public-key,pre-shared-key均会被忽略，但private-key会被保留且只能在顶层指定
+    # 如果peers不为空，该段落中的allowed-ips不可为空；前面段落的server,port,ip,ipv6,public-key,pre-shared-key均会被忽略，但private-key会被保留且只能在顶层指定
     # peers:
     #   - server: 162.159.192.1
     #     port: 2480
@@ -687,7 +714,7 @@ proxies: # socks5
     #     ipv6: fd01:5ca1:ab1e:80fa:ab85:6eea:213f:f4a5
     #     public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
     #     # pre-shared-key: 31aIhAPwktDGpH4JDhA8GNvjFXEf/a6+UaQRyOAiyfM=
-    #     allowed_ips: ['0.0.0.0/0']
+    #     allowed-ips: ['0.0.0.0/0']
     #     reserved: [209,98,59]
 
   # tuic
@@ -725,7 +752,7 @@ proxies: # socks5
   # The supported obfses:
   #   plain http_simple http_post
   #   random_head tls1.2_ticket_auth tls1.2_ticket_fastauth
-  # The supported supported protocols:
+  # The supported protocols:
   #   origin auth_sha1_v4 auth_aes128_md5
   #   auth_aes128_sha1 auth_chain_a auth_chain_b
   - name: "ssr"
@@ -743,7 +770,7 @@ proxies: # socks5
 proxy-groups:
   # 代理链，目前relay可以支持udp的只有vmess/vless/trojan/ss/ssr/tuic
   # wireguard目前不支持在relay中使用，请使用proxy中的dialer-proxy配置项
-  # Traffic: clash <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
+  # Traffic: mihomo <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
   - name: "relay"
     type: relay
     proxies:
@@ -812,18 +839,27 @@ proxy-groups:
       - Proxy
       - DIRECT
 
-# Clash 格式的节点或支持 *ray 的分享格式
+# Mihomo 格式的节点或支持 *ray 的分享格式
 proxy-providers:
   provider1:
     type: http # http 的 path 可空置,默认储存路径为 homedir的proxies文件夹,文件名为url的md5
     url: "url"
     interval: 3600
-    path: ./provider1.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
+    path: ./provider1.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
     health-check:
       enable: true
       interval: 600
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
+    override: # 覆写节点加载时的一些配置项
+      skip-cert-verify: true
+      udp: true
+      # down: "50 Mbps"
+      # up: "10 Mbps"
+      # dialer-proxy: proxy
+      # interface-name: tailscale0
+      # routing-mark: 233
+      # ip-version: ipv4-prefer
   test:
     type: file
     path: /test.yaml
@@ -835,7 +871,7 @@ rule-providers:
   rule1:
     behavior: classical # domain ipcidr
     interval: 259200
-    path: /path/to/save/file.yaml # 默认只允许存储在 clash 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
+    path: /path/to/save/file.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
     type: http # http 的 path 可空置,默认储存路径为 homedir的rules文件夹,文件名为url的md5
     url: "url"
   rule2:
@@ -936,6 +972,10 @@ listeners:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
         alterId: 1
+    # ws-path: "/" # 如果不为空则开启websocket传输层
+    # 下面两项如果填写则开启tls（需要同时填写）
+    # certificate: ./server.crt
+    # private-key: ./server.key
 
   - name: tuic-in-1
     type: tuic
@@ -970,42 +1010,42 @@ listeners:
     type: tun
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-    stack: system # gvisor / lwip
+    stack: system # gvisor / mixed
     dns-hijack:
-      - 0.0.0.0:53 # 需要劫持的 DNS
+    - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
     # auto-route: false # 配置路由表
     # mtu: 9000 # 最大传输单元
     inet4-address: # 必须手动设置ipv4地址段
-      - 198.19.0.1/30
+    - 198.19.0.1/30
     inet6-address: # 必须手动设置ipv6地址段
-      - "fdfe:dcba:9877::1/126"
-    # strict_route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
-    #   inet4_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
-    #     - 0.0.0.0/1
-    #     - 128.0.0.0/1
-    #   inet6_route_address: # 启用 auto_route 时使用自定义路由而不是默认路由
-    #     - "::/1"
-    #     - "8000::/1"
-    # endpoint_independent_nat: false # 启用独立于端点的 NAT
-    # include_uid: # UID 规则仅在 Linux 下被支持，并且需要 auto_route
+    - "fdfe:dcba:9877::1/126"
+    # strict-route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
+    # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
+    # - 0.0.0.0/1
+    # - 128.0.0.0/1
+    # inet6-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
+    # - "::/1"
+    # - "8000::/1"
+    # endpoint-independent-nat: false # 启用独立于端点的 NAT
+    # include-uid: # UID 规则仅在 Linux 下被支持，并且需要 auto-route
     # - 0
-    # include_uid_range: # 限制被路由的的用户范围
-    # - 1000-99999
-    # exclude_uid: # 排除路由的的用户
+    # include-uid-range: # 限制被路由的的用户范围
+    # - 1000:99999
+    # exclude-uid: # 排除路由的的用户
     # - 1000
-    # exclude_uid_range: # 排除路由的的用户范围
-    # - 1000-99999
+    # exclude-uid-range: # 排除路由的的用户范围
+    # - 1000:99999
 
     # Android 用户和应用规则仅在 Android 下被支持
-    # 并且需要 auto_route
+    # 并且需要 auto-route
 
-    # include_android_user: # 限制被路由的 Android 用户
+    # include-android-user: # 限制被路由的 Android 用户
     # - 0
     # - 10
-    # include_package: # 限制被路由的 Android 应用包名
+    # include-package: # 限制被路由的 Android 应用包名
     # - com.android.chrome
-    # exclude_package: # 排除被路由的 Android 应用包名
+    # exclude-package: # 排除被路由的 Android 应用包名
     # - com.android.captiveportallogin
 # 入口配置与 Listener 等价，传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理
 # shadowsocks,vmess 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）

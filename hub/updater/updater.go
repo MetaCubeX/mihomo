@@ -15,15 +15,16 @@ import (
 	"sync"
 	"time"
 
-	clashHttp "github.com/Dreamacro/clash/component/http"
-	"github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/constant"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/klauspost/cpuid/v2"
 )
 
 // modify from https://github.com/AdguardTeam/AdGuardHome/blob/595484e0b3fb4c457f9bb727a6b94faa78a66c5f/internal/updater/updater.go
-// Updater is the Clash.Meta updater.
+// Updater is the mihomo updater.
 var (
 	goarm           string
 	gomips          string
@@ -41,8 +42,8 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL       string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/clash.meta"
-	versionURL    string = "https://github.com/MetaCubeX/Clash.Meta/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
+	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -135,9 +136,9 @@ func prepare(exePath string) (err error) {
 	backupDir = filepath.Join(workDir, "meta-backup")
 
 	if runtime.GOOS == "windows" {
-		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
 	} else {
-		updateExeName = "clash.meta" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
+		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
 
 	log.Infoln("updateExeName: %s ", updateExeName)
@@ -231,7 +232,7 @@ const MaxPackageFileSize = 32 * 1024 * 1024
 func downloadPackageFile() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := clashHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
@@ -412,7 +413,7 @@ func copyFile(src, dst string) error {
 func getLatestVersion() (version string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	resp, err := clashHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {"clash"}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}

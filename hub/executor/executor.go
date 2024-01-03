@@ -7,36 +7,35 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/Dreamacro/clash/ntp"
-
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/inbound"
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/component/auth"
-	"github.com/Dreamacro/clash/component/ca"
-	"github.com/Dreamacro/clash/component/dialer"
-	G "github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/iface"
-	"github.com/Dreamacro/clash/component/profile"
-	"github.com/Dreamacro/clash/component/profile/cachefile"
-	"github.com/Dreamacro/clash/component/resolver"
-	SNI "github.com/Dreamacro/clash/component/sniffer"
-	"github.com/Dreamacro/clash/component/trie"
-	"github.com/Dreamacro/clash/config"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
-	"github.com/Dreamacro/clash/dns"
-	"github.com/Dreamacro/clash/listener"
-	authStore "github.com/Dreamacro/clash/listener/auth"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/listener/inner"
-	"github.com/Dreamacro/clash/listener/tproxy"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/component/auth"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	G "github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/iface"
+	"github.com/metacubex/mihomo/component/profile"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
+	"github.com/metacubex/mihomo/component/resolver"
+	SNI "github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/trie"
+	"github.com/metacubex/mihomo/config"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	"github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/dns"
+	"github.com/metacubex/mihomo/listener"
+	authStore "github.com/metacubex/mihomo/listener/auth"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/inner"
+	"github.com/metacubex/mihomo/listener/tproxy"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/ntp"
+	"github.com/metacubex/mihomo/tunnel"
 )
 
 var mux sync.Mutex
@@ -113,12 +112,13 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadRuleProvider(cfg.RuleProviders)
 	runtime.GC()
 	tunnel.OnRunning()
+	hcCompatibleProvider(cfg.Providers)
 
 	log.SetLevel(cfg.General.LogLevel)
 }
 
 func initInnerTcp() {
-	inner.New(tunnel.TCPIn())
+	inner.New(tunnel.Tunnel)
 }
 
 func GetGeneral() *config.General {
@@ -140,51 +140,59 @@ func GetGeneral() *config.General {
 			ShadowSocksConfig: ports.ShadowSocksConfig,
 			VmessConfig:       ports.VmessConfig,
 			Authentication:    authenticator,
+			SkipAuthPrefixes:  inbound.SkipAuthPrefixes(),
+			LanAllowedIPs:     inbound.AllowedIPs(),
+			LanDisAllowedIPs:  inbound.DisAllowedIPs(),
 			AllowLan:          listener.AllowLan(),
 			BindAddress:       listener.BindAddress(),
 		},
-		Controller:    config.Controller{},
-		Mode:          tunnel.Mode(),
-		LogLevel:      log.Level(),
-		IPv6:          !resolver.DisableIPv6,
-		GeodataLoader: G.LoaderName(),
-		Interface:     dialer.DefaultInterface.Load(),
-		Sniffing:      tunnel.IsSniffing(),
-		TCPConcurrent: dialer.GetTcpConcurrent(),
+		Controller:     config.Controller{},
+		Mode:           tunnel.Mode(),
+		LogLevel:       log.Level(),
+		IPv6:           !resolver.DisableIPv6,
+		GeodataLoader:  G.LoaderName(),
+		GeositeMatcher: G.SiteMatcherName(),
+		Interface:      dialer.DefaultInterface.Load(),
+		Sniffing:       tunnel.IsSniffing(),
+		TCPConcurrent:  dialer.GetTcpConcurrent(),
 	}
 
 	return general
 }
 
 func updateListeners(general *config.General, listeners map[string]C.InboundListener, force bool) {
-	tcpIn := tunnel.TCPIn()
-	udpIn := tunnel.UDPIn()
-	natTable := tunnel.NatTable()
-
-	listener.PatchInboundListeners(listeners, tcpIn, udpIn, natTable, true)
+	listener.PatchInboundListeners(listeners, tunnel.Tunnel, true)
 	if !force {
 		return
 	}
 
 	allowLan := general.AllowLan
 	listener.SetAllowLan(allowLan)
+	inbound.SetSkipAuthPrefixes(general.SkipAuthPrefixes)
+	inbound.SetAllowedIPs(general.LanAllowedIPs)
+	inbound.SetDisAllowedIPs(general.LanDisAllowedIPs)
 
 	bindAddress := general.BindAddress
 	listener.SetBindAddress(bindAddress)
-	listener.ReCreateHTTP(general.Port, tcpIn)
-	listener.ReCreateSocks(general.SocksPort, tcpIn, udpIn)
-	listener.ReCreateRedir(general.RedirPort, tcpIn, udpIn, natTable)
-	listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tcpIn, udpIn)
-	listener.ReCreateTProxy(general.TProxyPort, tcpIn, udpIn, natTable)
-	listener.ReCreateMixed(general.MixedPort, tcpIn, udpIn)
-	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tcpIn, udpIn)
-	listener.ReCreateVmess(general.VmessConfig, tcpIn, udpIn)
-	listener.ReCreateTuic(LC.TuicServer(general.TuicServer), tcpIn, udpIn)
+	listener.ReCreateHTTP(general.Port, tunnel.Tunnel)
+	listener.ReCreateSocks(general.SocksPort, tunnel.Tunnel)
+	listener.ReCreateRedir(general.RedirPort, tunnel.Tunnel)
+	if !features.CMFA {
+		listener.ReCreateAutoRedir(general.EBpf.AutoRedir, tunnel.Tunnel)
+	}
+	listener.ReCreateTProxy(general.TProxyPort, tunnel.Tunnel)
+	listener.ReCreateMixed(general.MixedPort, tunnel.Tunnel)
+	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
+	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
+	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
 }
 
 func updateExperimental(c *config.Config) {
 	if c.Experimental.QUICGoDisableGSO {
-		_ = os.Setenv("QUIC_GO_DISABLE_GSO", "1")
+		_ = os.Setenv("QUIC_GO_DISABLE_GSO", strconv.FormatBool(true))
+	}
+	if c.Experimental.QUICGoDisableECN {
+		_ = os.Setenv("QUIC_GO_DISABLE_ECN", strconv.FormatBool(true))
 	}
 }
 
@@ -207,25 +215,6 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 		dns.ReCreateServer("", nil, nil)
 		return
 	}
-	policy := make(map[string][]dns.NameServer)
-	domainSetPolicies := make(map[provider.RuleProvider][]dns.NameServer)
-	for key, nameservers := range c.NameServerPolicy {
-		temp := strings.Split(key, ":")
-		if len(temp) == 2 {
-			prefix := temp[0]
-			key := temp[1]
-			switch strings.ToLower(prefix) {
-			case "rule-set":
-				if p, ok := ruleProvider[key]; ok {
-					domainSetPolicies[p] = nameservers
-				}
-			case "geosite":
-				// TODO:
-			}
-		} else {
-			policy[key] = nameservers
-		}
-	}
 	cfg := dns.Config{
 		Main:         c.NameServer,
 		Fallback:     c.Fallback,
@@ -241,10 +230,11 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 			Domain:    c.FallbackFilter.Domain,
 			GeoSite:   c.FallbackFilter.GeoSite,
 		},
-		Default:         c.DefaultNameserver,
-		Policy:          c.NameServerPolicy,
-		ProxyServer:     c.ProxyServerNameserver,
-		DomainSetPolicy: domainSetPolicies,
+		Default:        c.DefaultNameserver,
+		Policy:         c.NameServerPolicy,
+		ProxyServer:    c.ProxyServerNameserver,
+		RuleProviders:  ruleProvider,
+		CacheAlgorithm: c.CacheAlgorithm,
 	}
 
 	r := dns.NewResolver(cfg)
@@ -281,7 +271,7 @@ func updateRules(rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map
 
 func loadProvider(pv provider.Provider) {
 	if pv.VehicleType() == provider.Compatible {
-		log.Infoln("Start initial compatible provider %s", pv.Name())
+		return
 	} else {
 		log.Infoln("Start initial provider %s", (pv).Name())
 	}
@@ -334,12 +324,32 @@ func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
 
 	wg.Wait()
 }
+func hcCompatibleProvider(proxyProviders map[string]provider.ProxyProvider) {
+	// limit concurrent size
+	wg := sync.WaitGroup{}
+	ch := make(chan struct{}, concurrentCount)
+	for _, proxyProvider := range proxyProviders {
+		proxyProvider := proxyProvider
+		if proxyProvider.VehicleType() == provider.Compatible {
+			log.Infoln("Start initial Compatible provider %s", proxyProvider.Name())
+			wg.Add(1)
+			ch <- struct{}{}
+			go func() {
+				defer func() { <-ch; wg.Done() }()
+				if err := proxyProvider.Initial(); err != nil {
+					log.Errorln("initial Compatible provider %s error: %v", proxyProvider.Name(), err)
+				}
+			}()
+		}
 
+	}
+
+}
 func updateTun(general *config.General) {
 	if general == nil {
 		return
 	}
-	listener.ReCreateTun(LC.Tun(general.Tun), tunnel.TCPIn(), tunnel.UDPIn())
+	listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 	listener.ReCreateRedirToTun(general.Tun.RedirectToTun)
 }
 
@@ -367,7 +377,7 @@ func updateSniffer(sniffer *config.Sniffer) {
 }
 
 func updateTunnels(tunnels []LC.Tunnel) {
-	listener.PatchTunnel(tunnels, tunnel.TCPIn(), tunnel.UDPIn())
+	listener.PatchTunnel(tunnels, tunnel.Tunnel)
 }
 
 func updateGeneral(general *config.General) {
@@ -392,8 +402,8 @@ func updateGeneral(general *config.General) {
 	}
 
 	iface.FlushCache()
-	geodataLoader := general.GeodataLoader
-	G.SetLoader(geodataLoader)
+	G.SetLoader(general.GeodataLoader)
+	G.SetSiteMatcher(general.GeositeMatcher)
 }
 
 func updateUsers(users []auth.AuthUser) {
@@ -504,5 +514,5 @@ func Shutdown() {
 	tproxy.CleanupTProxyIPTables()
 	resolver.StoreFakePoolState()
 
-	log.Warnln("Clash shutting down")
+	log.Warnln("Mihomo shutting down")
 }

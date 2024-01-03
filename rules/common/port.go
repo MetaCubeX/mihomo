@@ -3,8 +3,8 @@ package common
 import (
 	"fmt"
 
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type Port struct {

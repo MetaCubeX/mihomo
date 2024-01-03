@@ -10,7 +10,7 @@ linters-settings:
   gci:
     sections:
       - standard
-      - prefix(github.com/Dreamacro/clash)
+      - prefix(github.com/metacubex/mihomo)
       - default
   staticcheck:
     go: '1.19'

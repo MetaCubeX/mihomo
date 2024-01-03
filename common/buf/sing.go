@@ -10,6 +10,7 @@ const BufferSize = buf.BufferSize
 type Buffer = buf.Buffer
 
 var New = buf.New
+var NewPacket = buf.NewPacket
 var NewSize = buf.NewSize
 var With = buf.With
 var As = buf.As

@@ -1,10 +1,10 @@
 package tuic
 
 import (
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/transport/tuic/common"
-	v4 "github.com/Dreamacro/clash/transport/tuic/v4"
-	v5 "github.com/Dreamacro/clash/transport/tuic/v5"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/transport/tuic/common"
+	v4 "github.com/metacubex/mihomo/transport/tuic/v4"
+	v5 "github.com/metacubex/mihomo/transport/tuic/v5"
 )
 
 type ClientOptionV4 = v4.ClientOption

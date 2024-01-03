@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/Dreamacro/clash/transport/socks5"
+	"github.com/metacubex/mihomo/transport/socks5"
 )
 
 // Socks addr type
@@ -147,6 +147,9 @@ type Metadata struct {
 	SpecialProxy string     `json:"specialProxy"`
 	SpecialRules string     `json:"specialRules"`
 	RemoteDst    string     `json:"remoteDestination"`
+
+	RawSrcAddr net.Addr `json:"-"`
+	RawDstAddr net.Addr `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
 }
@@ -159,9 +162,13 @@ func (m *Metadata) SourceAddress() string {
 	return net.JoinHostPort(m.SrcIP.String(), strconv.FormatUint(uint64(m.SrcPort), 10))
 }
 
+func (m *Metadata) SourceAddrPort() netip.AddrPort {
+	return netip.AddrPortFrom(m.SrcIP.Unmap(), m.SrcPort)
+}
+
 func (m *Metadata) SourceDetail() string {
 	if m.Type == INNER {
-		return fmt.Sprintf("%s", ClashName)
+		return fmt.Sprintf("%s", MihomoName)
 	}
 
 	switch {
@@ -238,6 +245,34 @@ func (m *Metadata) String() string {
 
 func (m *Metadata) Valid() bool {
 	return m.Host != "" || m.DstIP.IsValid()
+}
+
+func (m *Metadata) SetRemoteAddr(addr net.Addr) error {
+	if addr == nil {
+		return nil
+	}
+	if rawAddr, ok := addr.(interface{ RawAddr() net.Addr }); ok {
+		if rawAddr := rawAddr.RawAddr(); rawAddr != nil {
+			if err := m.SetRemoteAddr(rawAddr); err == nil {
+				return nil
+			}
+		}
+	}
+	if addr, ok := addr.(interface{ AddrPort() netip.AddrPort }); ok { // *net.TCPAddr, *net.UDPAddr, M.Socksaddr
+		if addrPort := addr.AddrPort(); addrPort.Port() != 0 {
+			m.DstPort = addrPort.Port()
+			if addrPort.IsValid() { // sing's M.Socksaddr maybe return an invalid AddrPort if it's a DomainName
+				m.DstIP = addrPort.Addr().Unmap()
+				return nil
+			} else {
+				if addr, ok := addr.(interface{ AddrString() string }); ok { // must be sing's M.Socksaddr
+					m.Host = addr.AddrString() // actually is M.Socksaddr.Fqdn
+					return nil
+				}
+			}
+		}
+	}
+	return m.SetRemoteAddress(addr.String())
 }
 
 func (m *Metadata) SetRemoteAddress(rawAddress string) error {

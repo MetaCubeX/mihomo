@@ -1,6 +1,8 @@
 package config
 
 import (
+	"github.com/metacubex/mihomo/listener/sing"
+
 	"encoding/json"
 )
 
@@ -18,6 +20,7 @@ type TuicServer struct {
 	MaxUdpRelayPacketSize int               `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
 	MaxDatagramFrameSize  int               `yaml:"max-datagram-frame-size" json:"max-datagram-frame-size,omitempty"`
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
+	MuxOption             sing.MuxOption    `yaml:"mux-option" json:"mux-option,omitempty"`
 }
 
 func (t TuicServer) String() string {

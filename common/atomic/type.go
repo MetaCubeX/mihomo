@@ -11,10 +11,9 @@ type Bool struct {
 	atomic.Bool
 }
 
-func NewBool(val bool) *Bool {
-	i := &Bool{}
+func NewBool(val bool) (i Bool) {
 	i.Store(val)
-	return i
+	return
 }
 
 func (i *Bool) MarshalJSON() ([]byte, error) {
@@ -39,12 +38,11 @@ type Pointer[T any] struct {
 	atomic.Pointer[T]
 }
 
-func NewPointer[T any](v *T) *Pointer[T] {
-	var p Pointer[T]
+func NewPointer[T any](v *T) (p Pointer[T]) {
 	if v != nil {
 		p.Store(v)
 	}
-	return &p
+	return
 }
 
 func (p *Pointer[T]) MarshalJSON() ([]byte, error) {
@@ -68,10 +66,9 @@ type Int32 struct {
 	atomic.Int32
 }
 
-func NewInt32(val int32) *Int32 {
-	i := &Int32{}
+func NewInt32(val int32) (i Int32) {
 	i.Store(val)
-	return i
+	return
 }
 
 func (i *Int32) MarshalJSON() ([]byte, error) {
@@ -96,10 +93,9 @@ type Int64 struct {
 	atomic.Int64
 }
 
-func NewInt64(val int64) *Int64 {
-	i := &Int64{}
+func NewInt64(val int64) (i Int64) {
 	i.Store(val)
-	return i
+	return
 }
 
 func (i *Int64) MarshalJSON() ([]byte, error) {
@@ -124,10 +120,9 @@ type Uint32 struct {
 	atomic.Uint32
 }
 
-func NewUint32(val uint32) *Uint32 {
-	i := &Uint32{}
+func NewUint32(val uint32) (i Uint32) {
 	i.Store(val)
-	return i
+	return
 }
 
 func (i *Uint32) MarshalJSON() ([]byte, error) {
@@ -152,10 +147,9 @@ type Uint64 struct {
 	atomic.Uint64
 }
 
-func NewUint64(val uint64) *Uint64 {
-	i := &Uint64{}
+func NewUint64(val uint64) (i Uint64) {
 	i.Store(val)
-	return i
+	return
 }
 
 func (i *Uint64) MarshalJSON() ([]byte, error) {
@@ -180,10 +174,9 @@ type Uintptr struct {
 	atomic.Uintptr
 }
 
-func NewUintptr(val uintptr) *Uintptr {
-	i := &Uintptr{}
+func NewUintptr(val uintptr) (i Uintptr) {
 	i.Store(val)
-	return i
+	return
 }
 
 func (i *Uintptr) MarshalJSON() ([]byte, error) {

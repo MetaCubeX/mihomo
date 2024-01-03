@@ -7,7 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/geodata/strmatcher"
+	"github.com/metacubex/mihomo/component/geodata/strmatcher"
+	"github.com/metacubex/mihomo/component/trie"
 )
 
 var matcherTypeMap = map[Domain_Type]strmatcher.Type{
@@ -31,12 +32,69 @@ func domainToMatcher(domain *Domain) (strmatcher.Matcher, error) {
 	return matcher, nil
 }
 
-type DomainMatcher struct {
+type DomainMatcher interface {
+	ApplyDomain(string) bool
+}
+
+type succinctDomainMatcher struct {
+	set           *trie.DomainSet
+	otherMatchers []strmatcher.Matcher
+	not           bool
+}
+
+func (m *succinctDomainMatcher) ApplyDomain(domain string) bool {
+	isMatched := m.set.Has(domain)
+	if !isMatched {
+		for _, matcher := range m.otherMatchers {
+			isMatched = matcher.Match(domain)
+			if isMatched {
+				break
+			}
+		}
+	}
+	if m.not {
+		isMatched = !isMatched
+	}
+	return isMatched
+}
+
+func NewSuccinctMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error) {
+	t := trie.New[struct{}]()
+	m := &succinctDomainMatcher{
+		not: not,
+	}
+	for _, d := range domains {
+		switch d.Type {
+		case Domain_Plain, Domain_Regex:
+			matcher, err := matcherTypeMap[d.Type].New(d.Value)
+			if err != nil {
+				return nil, err
+			}
+			m.otherMatchers = append(m.otherMatchers, matcher)
+
+		case Domain_Domain:
+			err := t.Insert("+."+d.Value, struct{}{})
+			if err != nil {
+				return nil, err
+			}
+
+		case Domain_Full:
+			err := t.Insert(d.Value, struct{}{})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	m.set = t.NewDomainSet()
+	return m, nil
+}
+
+type v2rayDomainMatcher struct {
 	matchers strmatcher.IndexMatcher
 	not      bool
 }
 
-func NewMphMatcherGroup(domains []*Domain, not bool) (*DomainMatcher, error) {
+func NewMphMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error) {
 	g := strmatcher.NewMphMatcherGroup()
 	for _, d := range domains {
 		matcherType, f := matcherTypeMap[d.Type]
@@ -49,30 +107,13 @@ func NewMphMatcherGroup(domains []*Domain, not bool) (*DomainMatcher, error) {
 		}
 	}
 	g.Build()
-	return &DomainMatcher{
+	return &v2rayDomainMatcher{
 		matchers: g,
 		not:      not,
 	}, nil
 }
 
-// NewDomainMatcher new domain matcher.
-func NewDomainMatcher(domains []*Domain, not bool) (*DomainMatcher, error) {
-	g := new(strmatcher.MatcherGroup)
-	for _, d := range domains {
-		m, err := domainToMatcher(d)
-		if err != nil {
-			return nil, err
-		}
-		g.Add(m)
-	}
-
-	return &DomainMatcher{
-		matchers: g,
-		not:      not,
-	}, nil
-}
-
-func (m *DomainMatcher) ApplyDomain(domain string) bool {
+func (m *v2rayDomainMatcher) ApplyDomain(domain string) bool {
 	isMatched := len(m.matchers.Match(strings.ToLower(domain))) > 0
 	if m.not {
 		isMatched = !isMatched

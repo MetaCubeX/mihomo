@@ -4,12 +4,12 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/geodata/router"
-	"github.com/Dreamacro/clash/component/mmdb"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
+	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/geodata/router"
+	"github.com/metacubex/mihomo/component/mmdb"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 type fallbackIPFilter interface {
@@ -45,7 +45,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 }
 
 type ipnetFilter struct {
-	ipnet *netip.Prefix
+	ipnet netip.Prefix
 }
 
 func (inf *ipnetFilter) Match(ip netip.Addr) bool {
@@ -74,7 +74,7 @@ func (df *domainFilter) Match(domain string) bool {
 }
 
 type geoSiteFilter struct {
-	matchers []*router.DomainMatcher
+	matchers []router.DomainMatcher
 }
 
 func NewGeoSite(group string) (fallbackDomainFilter, error) {
@@ -87,7 +87,7 @@ func NewGeoSite(group string) (fallbackDomainFilter, error) {
 		return nil, err
 	}
 	filter := &geoSiteFilter{
-		matchers: []*router.DomainMatcher{matcher},
+		matchers: []router.DomainMatcher{matcher},
 	}
 	return filter, nil
 }

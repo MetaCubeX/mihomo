@@ -3,9 +3,9 @@ package sniffer
 import (
 	"errors"
 
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/sniffer"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/sniffer"
 )
 
 type SnifferConfig struct {
@@ -23,8 +23,8 @@ func (*BaseSniffer) Protocol() string {
 	return "unknown"
 }
 
-// SniffTCP implements sniffer.Sniffer
-func (*BaseSniffer) SniffTCP(bytes []byte) (string, error) {
+// SniffData implements sniffer.Sniffer
+func (*BaseSniffer) SniffData(bytes []byte) (string, error) {
 	return "", errors.New("TODO")
 }
 
