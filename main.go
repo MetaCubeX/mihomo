@@ -72,11 +72,10 @@ func main() {
 			currentDir, _ := os.Getwd()
 			configFile = filepath.Join(currentDir, configFile)
 		}
-		C.SetConfig(configFile)
 	} else {
 		configFile = filepath.Join(C.Path.HomeDir(), C.Path.Config())
-		C.SetConfig(configFile)
 	}
+	C.SetConfig(configFile)
 
 	if geodataMode {
 		C.GeodataMode = true
