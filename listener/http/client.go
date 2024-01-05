@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/socks5"
 )
@@ -30,7 +31,7 @@ func newClient(srcConn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition)
 					return nil, socks5.ErrAddressNotSupported
 				}
 
-				left, right := net.Pipe()
+				left, right := N.Pipe()
 
 				go tunnel.HandleTCPConn(inbound.NewHTTP(dstAddr, srcConn, right, additions...))
 

@@ -35,6 +35,8 @@ func NeedHandshake(conn any) bool {
 
 type CountFunc = network.CountFunc
 
+var Pipe = deadline.Pipe
+
 // Relay copies between left and right bidirectionally.
 func Relay(leftConn, rightConn net.Conn) {
 	defer runtime.KeepAlive(leftConn)

@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"strconv"
 
+	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -20,7 +21,7 @@ func HandleTcp(address string) (conn net.Conn, err error) {
 		return nil, errors.New("tcp uninitialized")
 	}
 	// executor Parsed
-	conn1, conn2 := net.Pipe()
+	conn1, conn2 := N.Pipe()
 
 	metadata := &C.Metadata{}
 	metadata.NetWork = C.TCP

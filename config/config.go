@@ -695,6 +695,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	providersConfig := cfg.ProxyProvider
 
 	var proxyList []string
+	var AllProxies []string
 	proxiesList := list.New()
 	groupsList := list.New()
 
@@ -717,6 +718,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 		proxies[proxy.Name()] = proxy
 		proxyList = append(proxyList, proxy.Name())
+		AllProxies = append(AllProxies, proxy.Name())
 		proxiesList.PushBack(mapping)
 	}
 
@@ -735,6 +737,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		return nil, nil, err
 	}
 
+	var AllProviders []string
 	// parse and initial providers
 	for name, mapping := range providersConfig {
 		if name == provider.ReservedName {
@@ -747,11 +750,12 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 
 		providersMap[name] = pd
+		AllProviders = append(AllProviders, name)
 	}
 
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
-		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap)
+		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap, AllProxies, AllProviders)
 		if err != nil {
 			return nil, nil, fmt.Errorf("proxy group[%d]: %w", idx, err)
 		}
