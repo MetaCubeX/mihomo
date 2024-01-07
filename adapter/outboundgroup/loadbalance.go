@@ -29,6 +29,8 @@ type LoadBalance struct {
 	strategyFn     strategyFn
 	testUrl        string
 	expectedStatus string
+	Hidden         bool
+	Icon           string
 }
 
 var errStrategy = errors.New("unsupported strategy")
@@ -236,6 +238,8 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        lb.testUrl,
 		"expectedStatus": lb.expectedStatus,
+		"hidden":         lb.Hidden,
+		"icon":           lb.Icon,
 	})
 }
 
@@ -268,5 +272,7 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		Hidden:         option.Hidden,
+		Icon:           option.Icon,
 	}, nil
 }

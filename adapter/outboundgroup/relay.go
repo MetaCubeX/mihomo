@@ -3,6 +3,7 @@ package outboundgroup
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
@@ -12,6 +13,8 @@ import (
 
 type Relay struct {
 	*GroupBase
+	Hidden bool
+	Icon   string
 }
 
 // DialContext implements C.ProxyAdapter
@@ -106,8 +109,10 @@ func (r *Relay) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": r.Type().String(),
-		"all":  all,
+		"type":   r.Type().String(),
+		"all":    all,
+		"hidden": r.Hidden,
+		"icon":   r.Icon,
 	})
 }
 
@@ -157,5 +162,7 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 			"",
 			providers,
 		}),
+		Hidden: option.Hidden,
+		Icon:   option.Icon,
 	}
 }

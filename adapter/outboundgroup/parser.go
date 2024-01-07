@@ -37,6 +37,8 @@ type GroupCommonOption struct {
 	IncludeAll          bool     `group:"include-all,omitempty"`
 	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
 	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
+	Hidden              bool     `group:"hidden,omitempty"`
+	Icon                string   `group:"icon,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]types.ProxyProvider, AllProxies []string, AllProviders []string) (C.ProxyAdapter, error) {
