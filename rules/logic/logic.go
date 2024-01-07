@@ -217,6 +217,13 @@ func (logic *Logic) parsePayload(payload string, parseRule ParseRuleFunc) error 
 				return err
 			}
 
+			if rule.ShouldResolveIP() {
+				logic.needIP = true
+			}
+			if rule.ShouldFindProcess() {
+				logic.needProcess = true
+			}
+
 			rules = append(rules, rule)
 		}
 

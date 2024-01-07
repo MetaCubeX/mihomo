@@ -74,6 +74,14 @@ func TestIpv6AddFail(t *testing.T) {
 	assert.IsType(t, new(net.ParseError), err)
 }
 
+func TestIpv6SearchSub(t *testing.T) {
+	trie := NewIpCidrTrie()
+	assert.NoError(t, trie.AddIpCidrForString("240e::/18"))
+
+	assert.Equal(t, true, trie.IsContainForString("240e:964:ea02:100:1800::71"))
+
+}
+
 func TestIpv6Search(t *testing.T) {
 	trie := NewIpCidrTrie()
 
