@@ -2,7 +2,7 @@
 
 使用 HTTP2 Ping Frame 监测链路 rtt, 并从中选择 rtt 最优的链路
 
-## 为什么
+## 为什么/Intro
 
 相比于`url-test`, http2ping 针对每个 endpoint 建立一条 HTTP2 长连接,
 避免了频繁建立/断开连接,
@@ -14,7 +14,21 @@ ICMP packets 只能检测`用户->中转->落地`这条链路的第一部分而�
 相比于使用`http://www.gstatic.com/generate_204`这类常见的基于 HTTP 的 health check,
 如果使用 HTTP 协议, 部分鸡贼的网络接入供应商会在中转服务器进行 MITM 直接返回 HTTP 204 response, 以试图欺骗客户.
 
-## 配置
+## 功能/Features
+
+- 根据用户设定的 interval 对指定节点进行 HTTP2 Ping 探测并得到该节点的如下特性
+  - latest rtt
+  - smooth rtt
+  - mean deviation
+
+- 在创建 TCP 连接时, 选择当前最优节点(srtt 最低)
+
+- 域名去重
+  - 某些鸡贼的网络接入供应商为了让自己的接入点列表看上去更丰富会选择欺骗用户,
+  使用多个域名 endpoint[1-10].airport.com 但是解析到同一个 ip 地址,
+  为此我们将域名解析为 ip 并使用 `ip-port 对` 作为 key 去重
+
+## 配置/Config
 
 ```YAML
 # enable verbose logging for more infomation
@@ -27,13 +41,18 @@ proxy-groups:
       - airport_1
     # interval milliseconds for sending Ping frame, default value: 1000ms
     interval: 1000
+
     # tolerance for changing current best route, default value: 0ms
+    #
+    # You could increase this value if your network condition is volatile and
+    # you don't want to switch between endpoints rapidly
     tolerance: 0
-    # target server, default server: https://cloudflare.com
+
+    # target server for HTTP2 interaction, default server: https://cloudflare.com
     server: https://cloudflare.com
 ```
 
-## 开发/测试
+## 开发测试/Dev
 
 ### for debugging:
 

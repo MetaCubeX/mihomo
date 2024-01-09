@@ -40,6 +40,12 @@ func (g *http2PingGroup) SetProxies(proxies []constant.Proxy) {
 	newPingers := make(map[string]Pinger)
 	oldPingers := g.pingers
 	for _, proxy := range proxies {
+		// Some network service providers choose to deceive users by using multiple domain names like
+		// `endpoint[1-10].airport.com` to give the illusion of a more diverse list of access points,
+		// even though they all resolve to the same IP address.
+		//
+		// To tackle this issue, we resolve the domain names to their respective IP addresses and use
+		// the `ip-port` pair as a key for deduplication purposes.
 		key, err := g.resolver.DomainPortToIpPort(proxy.Addr())
 		if err != nil {
 			log.Errorln("[http2ping] resolve domain error for %s: %v", proxy.Addr(), err)

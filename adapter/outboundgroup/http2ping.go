@@ -35,7 +35,6 @@ func (hp *HTTP2Ping) DialContext(ctx context.Context, metadata *C.Metadata, opts
 	start := time.Now()
 	proxy := hp.getBestProxy()
 	if proxy == nil {
-		// TODO: fix this
 		log.Warnln("[htt2ping] no proxy available, dial direct to %v", metadata)
 		direct := outbound.NewDirect()
 		return direct.DialContext(ctx, metadata, hp.Base.DialOptions(opts...)...)
@@ -117,6 +116,7 @@ func (hp *HTTP2Ping) getBestProxy() C.Proxy {
 	return hp.g.GetMinRttProxy(context.TODO())
 }
 
+// poll for `ProxyProvider` proxies initilization and updates
 func (hp *HTTP2Ping) pollForProviderProxiesUpdate(providers []provider.ProxyProvider) {
 	// TODO: use dynamic fallback timer
 	ticker := time.NewTicker(time.Second)
