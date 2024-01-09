@@ -69,7 +69,11 @@ func (g *http2PingGroup) SetProxies(proxies []constant.Proxy) {
 	g.pingers = newPingers
 }
 
-func (g *http2PingGroup) getPingersCopy() map[string]Pinger {
+func (g *http2PingGroup) GetConfig() *Config {
+	return g.config
+}
+
+func (g *http2PingGroup) GetPingersCopy() map[string]Pinger {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -78,6 +82,7 @@ func (g *http2PingGroup) getPingersCopy() map[string]Pinger {
 
 func (g *http2PingGroup) loop(interval time.Duration) {
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-g.dieCh:
@@ -85,7 +90,7 @@ func (g *http2PingGroup) loop(interval time.Duration) {
 		case <-ticker.C:
 			var newBest Pinger
 			minRtt := uint32(1<<31 - 1)
-			for _, p := range g.getPingersCopy() {
+			for _, p := range g.GetPingersCopy() {
 				if rtt := p.GetSmoothRtt(); rtt > 0 && rtt < minRtt {
 					minRtt = rtt
 					newBest = p

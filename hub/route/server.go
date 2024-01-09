@@ -2,6 +2,7 @@ package route
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
@@ -11,11 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/adapter/outboundgroup/http2ping"
 	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/go-chi/chi/v5"
@@ -83,6 +88,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Get("/traffic", traffic)
 		r.Get("/memory", memory)
 		r.Get("/version", version)
+		r.Get("/http2ping", http2pingStatus)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
 		r.Mount("/group", GroupRouter())
@@ -197,6 +203,57 @@ func authentication(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	}
 	return http.HandlerFunc(fn)
+}
+
+func http2pingStatus(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var hp *outboundgroup.HTTP2Ping
+	for _, proxy := range tunnel.Proxies() {
+		if group, ok := proxy.(*adapter.Proxy).ProxyAdapter.(C.Group); ok {
+			if v, ok := group.(*outboundgroup.HTTP2Ping); ok {
+				hp = v
+				break
+			}
+		}
+	}
+	ch := make(chan *http2ping.GroupStatus, 1)
+	hp.SubscribeCurrentGroupStatus(ctx, ch)
+
+	var wsConn net.Conn
+	if r.Header.Get("Upgrade") == "websocket" {
+		var err error
+		wsConn, _, _, err = ws.UpgradeHTTP(r, w)
+		if err != nil {
+			return
+		}
+	}
+
+	if wsConn == nil {
+		w.Header().Set("Content-Type", "application/json")
+		render.Status(r, http.StatusOK)
+	}
+
+	buf := &bytes.Buffer{}
+	var err error
+	for status := range ch {
+		buf.Reset()
+		if err := json.NewEncoder(buf).Encode(status); err != nil {
+			break
+		}
+
+		if wsConn == nil {
+			_, err = w.Write(buf.Bytes())
+			w.(http.Flusher).Flush()
+		} else {
+			err = wsutil.WriteMessage(wsConn, ws.StateServerSide, ws.OpText, buf.Bytes())
+		}
+
+		if err != nil {
+			break
+		}
+	}
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {

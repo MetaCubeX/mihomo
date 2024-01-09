@@ -35,15 +35,12 @@ func updateMeanDeviation(meanDeviation, sRtt, rtt uint32) uint32 {
 	return uint32(float32(meanDeviation)*oneMinusBeta + float32(Abs(int32(sRtt)-int32(rtt)))*rttBeta)
 }
 
-type pingerSharedStatus struct {
+type http2Pinger struct {
 	statusCode    atomic.Uint32
 	latestRtt     atomic.Uint32
 	sRtt          atomic.Uint32
 	meanDeviation atomic.Uint32
-}
 
-type http2Pinger struct {
-	pingerSharedStatus
 	config *Config
 	proxy  constant.Proxy
 
@@ -182,4 +179,14 @@ func (p *http2Pinger) Close() error {
 
 func (p *http2Pinger) String() string {
 	return p.proxy.Name()
+}
+
+func (p *http2Pinger) GetStatus() *PingerStatus {
+	return &PingerStatus{
+		Name:          p.GetProxy().Name(),
+		StatusCode:    p.statusCode.Load(),
+		LatestRtt:     p.latestRtt.Load(),
+		SRtt:          p.GetSmoothRtt(),
+		MeanDeviation: p.meanDeviation.Load(),
+	}
 }

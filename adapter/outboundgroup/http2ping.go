@@ -92,7 +92,8 @@ func (hp *HTTP2Ping) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 	return json.Marshal(map[string]any{
-		"type": hp.Type().String(),
+		// "type": hp.Type().String(),
+		"type": "HTTP2Ping",
 		"now":  hp.Now(),
 		"all":  all,
 	})
@@ -191,4 +192,31 @@ func parseHTTP2PingOption(m map[string]any) *http2ping.Config {
 		config.HTTP2Server = u
 	}
 	return &config
+}
+
+func (hp *HTTP2Ping) SubscribeCurrentGroupStatus(ctx context.Context, ch chan<- *http2ping.GroupStatus) {
+	// TODO: cache the result?
+	getGroupStatus := func() *http2ping.GroupStatus {
+		groupStatus := &http2ping.GroupStatus{
+			Name:    hp.Name(),
+			Proxies: make([]*http2ping.PingerStatus, 0),
+		}
+		for _, p := range hp.g.GetPingersCopy() {
+			groupStatus.Proxies = append(groupStatus.Proxies, p.GetStatus())
+		}
+		return groupStatus
+	}
+
+	go func() {
+		// choose a slighter longer interval to wait for all proxies got updated
+		ticker := time.NewTicker(hp.g.GetConfig().Interval * 2)
+		defer ticker.Stop()
+		for range ticker.C {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- getGroupStatus():
+			}
+		}
+	}()
 }
