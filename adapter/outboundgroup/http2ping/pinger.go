@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -67,7 +68,7 @@ func NewHTTP2Pinger(config *Config, proxy constant.Proxy) *http2Pinger {
 }
 
 func (p *http2Pinger) doPing(tlsConn *tls.Conn, http2Conn *http2.ClientConn) (uint32, error) {
-	tlsConn.SetDeadline(time.Now().Add(p.config.Interval * 5))
+	tlsConn.SetDeadline(time.Now().Add(p.config.Interval))
 	defer tlsConn.SetDeadline(time.Time{})
 
 	start := time.Now()
@@ -158,7 +159,7 @@ func (p *http2Pinger) pingLoop() {
 func (p *http2Pinger) GetSmoothRtt() uint32 {
 	switch p.statusCode.Load() {
 	case PINGER_STATUS_DEAD:
-		return 0
+		return math.MaxUint32
 	case PINGER_STATUS_PINGING:
 		fallthrough
 	case PINGER_STATUS_IDLE:

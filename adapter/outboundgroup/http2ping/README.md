@@ -70,6 +70,12 @@ tc qdisc add dev $interface parent 1:1 handle 2: netem delay $delay
 
 # remove tc rules
 tc qdisc del dev $interface root
+
+# drop output packets to ip
+iptables -I OUTPUT -d $ip -j DROP
+
+# remove iptables rule
+iptables -D OUTPUT 1
 ```
 
 ### cherrypick from old `http2ping` branch after 2023 Clash holocaust:
