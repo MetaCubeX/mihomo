@@ -1,7 +1,9 @@
 package cidr
 
 import (
+	"go4.org/netipx"
 	"testing"
+	"unsafe"
 )
 
 func TestIpv4(t *testing.T) {
@@ -97,8 +99,10 @@ func TestMerge(t *testing.T) {
 			set.AddIpCidrForString(test.ipCidr2)
 			set.Merge()
 
-			if len(set.Ranges) != test.expectedLen {
-				t.Errorf("Expected len: %v, got: %v", test.expectedLen, len(set.Ranges))
+			rangesLen := len(*(*[]netipx.IPRange)(unsafe.Pointer(set.Ranges)))
+
+			if rangesLen != test.expectedLen {
+				t.Errorf("Expected len: %v, got: %v", test.expectedLen, rangesLen)
 			}
 		})
 	}

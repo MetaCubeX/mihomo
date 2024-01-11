@@ -19,7 +19,7 @@ func (i *ipcidrStrategy) ShouldFindProcess() bool {
 
 func (i *ipcidrStrategy) Match(metadata *C.Metadata) bool {
 	// return i.trie != nil && i.trie.IsContain(metadata.DstIP.AsSlice())
-	return i.cidrSet != nil && i.cidrSet.IsContain(metadata.DstIP.AsSlice())
+	return i.cidrSet != nil && i.cidrSet.IsContain(metadata.DstIP)
 }
 
 func (i *ipcidrStrategy) Count() int {
