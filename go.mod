@@ -9,10 +9,10 @@ require (
 	github.com/cilium/ebpf v0.12.3
 	github.com/coreos/go-iptables v0.7.0
 	github.com/dlclark/regexp2 v1.10.0
-	github.com/go-chi/chi/v5 v5.0.10
+	github.com/go-chi/chi/v5 v5.0.11
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.3
-	github.com/gobwas/ws v1.3.1
+	github.com/gobwas/ws v1.3.2
 	github.com/gofrs/uuid/v5 v5.0.0
 	github.com/insomniacslk/dhcp v0.0.0-20231206064809-8c70d406f6d2
 	github.com/jpillora/backoff v1.0.0
@@ -23,8 +23,8 @@ require (
 	github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394
 	github.com/metacubex/sing-quic v0.0.0-20231220152840-85620b446796
 	github.com/metacubex/sing-shadowsocks v0.2.6
-	github.com/metacubex/sing-shadowsocks2 v0.1.6-beta.1
-	github.com/metacubex/sing-tun v0.2.0-beta.4
+	github.com/metacubex/sing-shadowsocks2 v0.2.0
+	github.com/metacubex/sing-tun v0.2.0
 	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
 	github.com/metacubex/sing-wireguard v0.0.0-20231209125515-0594297f7232
 	github.com/miekg/dns v1.1.57
@@ -34,26 +34,26 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.0.2
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.3.0-rc.3
-	github.com/sagernet/sing-mux v0.1.6-beta.1
+	github.com/sagernet/sing v0.3.0
+	github.com/sagernet/sing-mux v0.2.0
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6
 	github.com/sagernet/utls v1.5.4
 	github.com/sagernet/wireguard-go v0.0.0-20231209092712-9a439356a62e
 	github.com/samber/lo v1.39.0
-	github.com/shirou/gopsutil/v3 v3.23.11
+	github.com/shirou/gopsutil/v3 v3.23.12
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.uber.org/automaxprocs v1.5.3
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
-	golang.org/x/crypto v0.16.0
-	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb
-	golang.org/x/net v0.19.0
-	golang.org/x/sync v0.5.0
-	golang.org/x/sys v0.15.0
-	google.golang.org/protobuf v1.31.0
+	golang.org/x/crypto v0.18.0
+	golang.org/x/exp v0.0.0-20240110193028-0dcbfd608b1e
+	golang.org/x/net v0.20.0
+	golang.org/x/sync v0.6.0
+	golang.org/x/sys v0.16.0
+	google.golang.org/protobuf v1.32.0
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.2.1
 )
@@ -112,4 +112,4 @@ require (
 	golang.org/x/tools v0.16.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20231221131356-d73c21c7ea3f
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240111014253-f1818b6a82b2
