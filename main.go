@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/metacubex/mihomo/service"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -23,9 +24,12 @@ import (
 )
 
 var (
-	version            bool
-	testConfig         bool
-	geodataMode        bool
+	version     bool
+	testConfig  bool
+	geodataMode bool
+
+	serviceMode string
+
 	homeDir            string
 	configFile         string
 	externalUI         string
@@ -44,11 +48,18 @@ func init() {
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
+	flag.StringVar(&serviceMode, "service", "run", "control mihomo service, available options: [run |install |uninstall | start | stop | restart | status]")
+
 	flag.Parse()
 }
 
 func main() {
+	service.Parser(serviceMode, RealMain)
+}
+
+func RealMain() {
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
+
 	if version {
 		fmt.Printf("Mihomo Meta %s %s %s with %s %s\n",
 			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)
@@ -56,7 +67,7 @@ func main() {
 			fmt.Printf("Use tags: %s\n", strings.Join(tags, ", "))
 		}
 
-		return
+		os.Exit(0)
 	}
 
 	if homeDir != "" {
@@ -85,6 +96,10 @@ func main() {
 		log.Fatalln("Initial configuration directory error: %s", err.Error())
 	}
 
+	if service.Noninteractive {
+		service.SetLogger(C.Path.HomeDir())
+	}
+
 	if testConfig {
 		if _, err := executor.Parse(); err != nil {
 			log.Errorln(err.Error())
@@ -92,7 +107,7 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("configuration file %s test is successful\n", C.Path.Config())
-		return
+		os.Exit(0)
 	}
 
 	var options []hub.Option
