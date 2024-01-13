@@ -68,7 +68,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
 			proxies = append(proxies, hysteria)
-		case "hysteria2":
+		case "hysteria2", "hy2":
 			urlHysteria2, err := url.Parse(line)
 			if err != nil {
 				continue
@@ -143,7 +143,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			proxies = append(proxies, tuic)
-			
+
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
 			if err != nil {
@@ -405,14 +405,26 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if query.Get("udp-over-tcp") == "true" || query.Get("uot") == "1" {
 				ss["udp-over-tcp"] = true
 			}
-			if strings.Contains(query.Get("plugin"), "obfs") {
-				obfsParams := strings.Split(query.Get("plugin"), ";")
-				ss["plugin"] = "obfs"
-				ss["plugin-opts"] = map[string]any{
-					"host": obfsParams[2][10:],
-					"mode": obfsParams[1][5:],
+			plugin := query.Get("plugin")
+			if strings.Contains(plugin, ";") {
+				pluginInfos, _ := url.ParseQuery(strings.ReplaceAll(plugin, ";", "&"))
+				if strings.Contains(plugin, "obfs") {
+					ss["plugin"] = "obfs"
+					ss["plugin-opts"] = map[string]any{
+						"mode": pluginInfos.Get("obfs"),
+						"host": pluginInfos.Get("obfs-host"),
+					}
+				} else if strings.Contains(plugin, "v2ray-plugin") {
+					ss["plugin"] = "v2ray-plugin"
+					ss["plugin-opts"] = map[string]any{
+						"mode": pluginInfos.Get("mode"),
+						"host": pluginInfos.Get("host"),
+						"path": pluginInfos.Get("path"),
+						"tls":  strings.Contains(plugin, "tls"),
+					}
 				}
 			}
+
 			proxies = append(proxies, ss)
 
 		case "ssr":
