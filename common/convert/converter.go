@@ -68,6 +68,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
 			proxies = append(proxies, hysteria)
+
 		case "hysteria2", "hy2":
 			urlHysteria2, err := url.Parse(line)
 			if err != nil {
@@ -101,6 +102,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria2["up"] = query.Get("up")
 
 			proxies = append(proxies, hysteria2)
+
 		case "tuic":
 			// A temporary unofficial TUIC share link standard
 			// Modified from https://github.com/daeuniverse/dae/discussions/182
@@ -407,19 +409,20 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			plugin := query.Get("plugin")
 			if strings.Contains(plugin, ";") {
-				pluginInfos, _ := url.ParseQuery(strings.ReplaceAll(plugin, ";", "&"))
-				if strings.Contains(plugin, "obfs") {
+				pluginInfo, _ := url.ParseQuery(strings.ReplaceAll(plugin, ";", "&"))
+				pluginName := pluginInfo.Get("plugin")
+				if strings.Contains(pluginName, "obfs") {
 					ss["plugin"] = "obfs"
 					ss["plugin-opts"] = map[string]any{
-						"mode": pluginInfos.Get("obfs"),
-						"host": pluginInfos.Get("obfs-host"),
+						"mode": pluginInfo.Get("obfs"),
+						"host": pluginInfo.Get("obfs-host"),
 					}
-				} else if strings.Contains(plugin, "v2ray-plugin") {
+				} else if strings.Contains(pluginName, "v2ray-plugin") {
 					ss["plugin"] = "v2ray-plugin"
 					ss["plugin-opts"] = map[string]any{
-						"mode": pluginInfos.Get("mode"),
-						"host": pluginInfos.Get("host"),
-						"path": pluginInfos.Get("path"),
+						"mode": pluginInfo.Get("mode"),
+						"host": pluginInfo.Get("host"),
+						"path": pluginInfo.Get("path"),
 						"tls":  strings.Contains(plugin, "tls"),
 					}
 				}
