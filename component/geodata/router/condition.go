@@ -137,9 +137,7 @@ func (m *GeoIPMatcher) Init(cidrs []*CIDR) error {
 			return fmt.Errorf("error when loading GeoIP: %w", err)
 		}
 	}
-	m.cidrSet.Merge()
-
-	return nil
+	return m.cidrSet.Merge()
 }
 
 func (m *GeoIPMatcher) SetReverseMatch(isReverseMatch bool) {
