@@ -80,7 +80,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria2 := make(map[string]any, 20)
 
 			hysteria2["name"] = name
-			hysteria2["type"] = scheme
+			hysteria2["type"] = "hysteria2"
 			hysteria2["server"] = urlHysteria2.Hostname()
 			if port := urlHysteria2.Port(); port != "" {
 				hysteria2["port"] = port
@@ -409,7 +409,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			plugin := query.Get("plugin")
 			if strings.Contains(plugin, ";") {
-			    	pluginInfo, _ := url.ParseQuery("pluginName=" + strings.ReplaceAll(plugin, ";", "&"))
+				pluginInfo, _ := url.ParseQuery("pluginName=" + strings.ReplaceAll(plugin, ";", "&"))
 				pluginName := pluginInfo.Get("pluginName")
 				if strings.Contains(pluginName, "obfs") {
 					ss["plugin"] = "obfs"
