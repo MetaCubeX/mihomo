@@ -409,8 +409,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			plugin := query.Get("plugin")
 			if strings.Contains(plugin, ";") {
-				pluginInfo, _ := url.ParseQuery(strings.ReplaceAll(plugin, ";", "&"))
-				pluginName := pluginInfo.Get("plugin")
+			    	pluginInfo, _ := url.ParseQuery("pluginName=" + strings.ReplaceAll(plugin, ";", "&"))
+				pluginName := pluginInfo.Get("pluginName")
 				if strings.Contains(pluginName, "obfs") {
 					ss["plugin"] = "obfs"
 					ss["plugin-opts"] = map[string]any{
