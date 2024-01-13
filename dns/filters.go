@@ -41,7 +41,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 			return false
 		}
 	}
-	return !geoIPMatcher.Match(ip.AsSlice())
+	return !geoIPMatcher.Match(ip)
 }
 
 type ipnetFilter struct {

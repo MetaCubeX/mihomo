@@ -48,7 +48,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 		}
 		return false, g.adapter
 	}
-	return g.geoIPMatcher.Match(ip.AsSlice()), g.adapter
+	return g.geoIPMatcher.Match(ip), g.adapter
 }
 
 func (g *GEOIP) Adapter() string {
