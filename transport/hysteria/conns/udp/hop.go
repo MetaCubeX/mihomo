@@ -3,14 +3,14 @@ package udp
 import (
 	"errors"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/metacubex/mihomo/transport/hysteria/obfs"
 	"github.com/metacubex/mihomo/transport/hysteria/utils"
+
+	cu "github.com/metacubex/mihomo/common/utils"
 
 	"github.com/zhangyunhao116/fastrand"
 )
@@ -60,7 +60,7 @@ type udpPacket struct {
 }
 
 func NewObfsUDPHopClientPacketConn(server string, serverPorts string, hopInterval time.Duration, obfs obfs.Obfuscator, dialer utils.PacketDialer) (net.PacketConn, error) {
-	ports, err := parsePorts(serverPorts)
+	ports, err := cu.ParsePorts(serverPorts)
 	if err != nil {
 		return nil, err
 	}
@@ -321,45 +321,4 @@ func (c *ObfsUDPHopClientPacketConnWithSyscall) SyscallConn() (syscall.RawConn, 
 		return nil, errors.New("not supported")
 	}
 	return sc.SyscallConn()
-}
-
-// parsePorts parses the multi-port server address and returns the host and ports.
-// Supports both comma-separated single ports and dash-separated port ranges.
-// Format: "host:port1,port2-port3,port4"
-func parsePorts(serverPorts string) (ports []uint16, err error) {
-	portStrs := strings.Split(serverPorts, ",")
-	for _, portStr := range portStrs {
-		if strings.Contains(portStr, "-") {
-			// Port range
-			portRange := strings.Split(portStr, "-")
-			if len(portRange) != 2 {
-				return nil, net.InvalidAddrError("invalid port range")
-			}
-			start, err := strconv.ParseUint(portRange[0], 10, 16)
-			if err != nil {
-				return nil, net.InvalidAddrError("invalid port range")
-			}
-			end, err := strconv.ParseUint(portRange[1], 10, 16)
-			if err != nil {
-				return nil, net.InvalidAddrError("invalid port range")
-			}
-			if start > end {
-				start, end = end, start
-			}
-			for i := start; i <= end; i++ {
-				ports = append(ports, uint16(i))
-			}
-		} else {
-			// Single port
-			port, err := strconv.ParseUint(portStr, 10, 16)
-			if err != nil {
-				return nil, net.InvalidAddrError("invalid port")
-			}
-			ports = append(ports, uint16(port))
-		}
-	}
-	if len(ports) == 0 {
-		return nil, net.InvalidAddrError("invalid port")
-	}
-	return ports, nil
 }
