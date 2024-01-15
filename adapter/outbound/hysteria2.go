@@ -109,12 +109,6 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	return newPacketConn(CN.NewRefPacketConn(CN.NewThreadSafePacketConn(pc), h), h), nil
 }
 
-func closeHysteria2(h *Hysteria2) {
-	if h.client != nil {
-		_ = h.client.CloseWithError(errors.New("proxy removed"))
-	}
-}
-
 func closeHysteria2Client(c *hysteria2.Client) {
 	if c != nil {
 		c.CloseWithError(closedForPortHopping)
@@ -190,6 +184,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	if err != nil {
 		return nil, err
 	}
+	runtime.SetFinalizer(client, closeHysteria2Client)
 
 	outbound := &Hysteria2{
 		Base: &Base{
@@ -208,7 +203,6 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		ports:         ports,
 		lastHopTime:   time.Now().UnixMilli(),
 	}
-	runtime.SetFinalizer(outbound, closeHysteria2)
 
 	return outbound, nil
 }
