@@ -77,7 +77,7 @@ func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts 
 
 			client, err := hysteria2.NewClient(*h.clientOptions)
 			if err == nil {
-				h.client.CloseWithError(closedForPortHopping)
+				runtime.SetFinalizer(client, closeHysteria2Client)
 				h.client = client
 				h.addr = net.JoinHostPort(h.option.Server, strconv.Itoa(int(h.option.Port)))
 				log.Infoln("[%s] hopped to port %d", h.name, h.option.Port)
@@ -112,6 +112,12 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 func closeHysteria2(h *Hysteria2) {
 	if h.client != nil {
 		_ = h.client.CloseWithError(errors.New("proxy removed"))
+	}
+}
+
+func closeHysteria2Client(c *hysteria2.Client) {
+	if c != nil {
+		c.CloseWithError(closedForPortHopping)
 	}
 }
 
