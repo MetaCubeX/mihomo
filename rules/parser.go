@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	
 	C "github.com/metacubex/mihomo/constant"
 	RC "github.com/metacubex/mihomo/rules/common"
 	"github.com/metacubex/mihomo/rules/logic"
