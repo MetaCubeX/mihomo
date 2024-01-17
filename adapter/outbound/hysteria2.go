@@ -2,137 +2,123 @@ package outbound
 
 import (
 	"context"
-	"crypto/tls"
-	"errors"
-	"fmt"
 	"net"
-	"runtime"
 	"strconv"
+	"time"
 
-	CN "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
-	tuicCommon "github.com/metacubex/mihomo/transport/tuic/common"
-
-	"github.com/metacubex/sing-quic/hysteria2"
-
-	M "github.com/sagernet/sing/common/metadata"
+	"github.com/metacubex/mihomo/transport/hysteria2/app/cmd"
+	hy2client "github.com/metacubex/mihomo/transport/hysteria2/core/client"
 )
 
-func init() {
-	hysteria2.SetCongestionController = tuicCommon.SetCongestionController
-}
+const minHopInterval = 5
+const defaultHopInterval = 30
 
 type Hysteria2 struct {
 	*Base
 
 	option *Hysteria2Option
-	client *hysteria2.Client
-	dialer proxydialer.SingDialer
+	client hy2client.Client
 }
 
 type Hysteria2Option struct {
 	BasicOption
-	Name           string   `proxy:"name"`
-	Server         string   `proxy:"server"`
-	Port           int      `proxy:"port"`
-	Up             string   `proxy:"up,omitempty"`
-	Down           string   `proxy:"down,omitempty"`
-	Password       string   `proxy:"password,omitempty"`
-	Obfs           string   `proxy:"obfs,omitempty"`
-	ObfsPassword   string   `proxy:"obfs-password,omitempty"`
-	SNI            string   `proxy:"sni,omitempty"`
-	SkipCertVerify bool     `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint    string   `proxy:"fingerprint,omitempty"`
-	ALPN           []string `proxy:"alpn,omitempty"`
-	CustomCA       string   `proxy:"ca,omitempty"`
-	CustomCAString string   `proxy:"ca-str,omitempty"`
-	CWND           int      `proxy:"cwnd,omitempty"`
+	Name           string        `proxy:"name"`
+	Server         string        `proxy:"server"`
+	Port           uint16        `proxy:"port,omitempty"`
+	Ports          string        `proxy:"ports,omitempty"`
+	HopInterval    time.Duration `proxy:"hop-interval,omitempty"`
+	Up             string        `proxy:"up"`
+	Down           string        `proxy:"down"`
+	Password       string        `proxy:"password,omitempty"`
+	Obfs           string        `proxy:"obfs,omitempty"`
+	ObfsPassword   string        `proxy:"obfs-password,omitempty"`
+	SNI            string        `proxy:"sni,omitempty"`
+	SkipCertVerify bool          `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string        `proxy:"fingerprint,omitempty"`
+	ALPN           []string      `proxy:"alpn,omitempty"`
+	CustomCA       string        `proxy:"ca,omitempty"`
+	CustomCAString string        `proxy:"ca-str,omitempty"`
+	CWND           int           `proxy:"cwnd,omitempty"`
+	FastOpen       bool          `proxy:"fast-open,omitempty"`
+	Lazy           bool          `proxy:"lazy,omitempty"`
 }
 
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	options := h.Base.DialOptions(opts...)
-	h.dialer.SetDialer(dialer.NewDialer(options...))
-	c, err := h.client.DialConn(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
+	tcpConn, err := h.client.TCP(net.JoinHostPort(metadata.String(), strconv.Itoa(int(metadata.DstPort))))
 	if err != nil {
 		return nil, err
 	}
-	return NewConn(CN.NewRefConn(c, h), h), nil
+
+	return NewConn(tcpConn, h), nil
 }
 
 func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
-	options := h.Base.DialOptions(opts...)
-	h.dialer.SetDialer(dialer.NewDialer(options...))
-	pc, err := h.client.ListenPacket(ctx)
+	udpConn, err := h.client.UDP()
 	if err != nil {
 		return nil, err
 	}
-	if pc == nil {
-		return nil, errors.New("packetConn is nil")
-	}
-	return newPacketConn(CN.NewRefPacketConn(CN.NewThreadSafePacketConn(pc), h), h), nil
-}
-
-func closeHysteria2(h *Hysteria2) {
-	if h.client != nil {
-		_ = h.client.CloseWithError(errors.New("proxy removed"))
-	}
+	return newPacketConn(udpConn, h), nil
 }
 
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
-	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
-	var salamanderPassword string
-	if len(option.Obfs) > 0 {
-		if option.ObfsPassword == "" {
-			return nil, errors.New("missing obfs password")
-		}
-		switch option.Obfs {
-		case hysteria2.ObfsTypeSalamander:
-			salamanderPassword = option.ObfsPassword
-		default:
-			return nil, fmt.Errorf("unknown obfs type: %s", option.Obfs)
-		}
+	var server string
+	if option.Ports != "" {
+		server = net.JoinHostPort(option.Server, option.Ports)
+	} else {
+		server = net.JoinHostPort(option.Server, strconv.Itoa(int(option.Port)))
 	}
 
-	serverName := option.Server
-	if option.SNI != "" {
-		serverName = option.SNI
+	if option.HopInterval == 0 {
+		option.HopInterval = defaultHopInterval
+	} else if option.HopInterval < minHopInterval {
+		option.HopInterval = minHopInterval
+	}
+	option.HopInterval *= time.Second
+
+	config := cmd.ClientConfig{
+		Server: server,
+		Auth:   option.Password,
+		Transport: cmd.ClientConfigTransport{
+			UDP: cmd.ClientConfigTransportUDP{
+				HopInterval: option.HopInterval,
+			},
+		},
+		TLS: cmd.ClientConfigTLS{
+			SNI:       option.SNI,
+			Insecure:  option.SkipCertVerify,
+			PinSHA256: option.Fingerprint,
+			CA:        option.CustomCA,
+			CAString:  option.CustomCAString,
+		},
+		FastOpen: option.FastOpen,
+		Lazy:     option.Lazy,
 	}
 
-	tlsConfig := &tls.Config{
-		ServerName:         serverName,
-		InsecureSkipVerify: option.SkipCertVerify,
-		MinVersion:         tls.VersionTLS13,
+	if option.ObfsPassword != "" {
+		config.Obfs.Type = "salamander"
+		config.Obfs.Salamander.Password = option.ObfsPassword
+	} else if option.Obfs != "" {
+		config.Obfs.Type = "salamander"
+		config.Obfs.Salamander.Password = option.Obfs
 	}
 
-	var err error
-	tlsConfig, err = ca.GetTLSConfig(tlsConfig, option.Fingerprint, option.CustomCA, option.CustomCAString)
-	if err != nil {
-		return nil, err
+	last := option.Up[len(option.Up)-1]
+	if '0' <= last && last <= '9' {
+		option.Up += "m"
 	}
-
-	if len(option.ALPN) > 0 {
-		tlsConfig.NextProtos = option.ALPN
+	config.Bandwidth.Up = option.Up
+	last = option.Down[len(option.Down)-1]
+	if '0' <= last && last <= '9' {
+		option.Down += "m"
 	}
+	config.Bandwidth.Down = option.Down
 
-	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer())
-
-	clientOptions := hysteria2.ClientOptions{
-		Context:            context.TODO(),
-		Dialer:             singDialer,
-		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(option.Port)),
-		SendBPS:            StringToBps(option.Up),
-		ReceiveBPS:         StringToBps(option.Down),
-		SalamanderPassword: salamanderPassword,
-		Password:           option.Password,
-		TLSConfig:          tlsConfig,
-		UDPDisabled:        false,
-		CWND:               option.CWND,
-	}
-
-	client, err := hysteria2.NewClient(clientOptions)
+	client, err := hy2client.NewReconnectableClient(
+		config.Config,
+		func(c hy2client.Client, info *hy2client.HandshakeInfo, count int) {},
+		option.Lazy)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +126,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	outbound := &Hysteria2{
 		Base: &Base{
 			name:   option.Name,
-			addr:   addr,
+			addr:   server,
 			tp:     C.Hysteria2,
 			udp:    true,
 			iface:  option.Interface,
@@ -149,9 +135,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		},
 		option: &option,
 		client: client,
-		dialer: singDialer,
 	}
-	runtime.SetFinalizer(outbound, closeHysteria2)
 
 	return outbound, nil
 }

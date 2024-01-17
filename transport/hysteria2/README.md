@@ -1,0 +1,1 @@
+Copied from [hysteria](https://github.com/apernet/hysteria) v2.2.3 with a little changes.
