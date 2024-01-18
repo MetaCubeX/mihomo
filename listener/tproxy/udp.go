@@ -74,7 +74,8 @@ func NewUDP(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPLi
 				continue
 			}
 
-			rAddr, err := getOrigDst(oob[:oobn])
+			rAddr, dscp, err := getOrigDstAndDSCP(oob[:oobn])
+			additions = append(additions, inbound.WithDSCP(dscp))
 			if err != nil {
 				continue
 			}

@@ -96,17 +96,23 @@ func udpAddrFamily(net string, lAddr, rAddr netip.AddrPort) int {
 	return syscall.AF_INET6
 }
 
-func getOrigDst(oob []byte) (netip.AddrPort, error) {
+func getOrigDstAndDSCP(oob []byte) (netip.AddrPort, uint8, error) {
 	// oob contains socket control messages which we need to parse.
 	scms, err := unix.ParseSocketControlMessage(oob)
 	if err != nil {
-		return netip.AddrPort{}, fmt.Errorf("parse control message: %w", err)
+		return netip.AddrPort{}, 0, fmt.Errorf("parse control message: %w", err)
 	}
 
 	// retrieve the destination address from the SCM.
-	sa, err := unix.ParseOrigDstAddr(&scms[0])
+	sa, err := unix.ParseOrigDstAddr(&scms[1])
 	if err != nil {
-		return netip.AddrPort{}, fmt.Errorf("retrieve destination: %w", err)
+		return netip.AddrPort{}, 0, fmt.Errorf("retrieve destination: %w", err)
+	}
+
+	// retrieve DSCP from the SCM
+	dscp, err := parseDSCP(&scms[0])
+	if err != nil {
+		return netip.AddrPort{}, 0, fmt.Errorf("retrieve DSCP: %w", err)
 	}
 
 	// encode the destination address into a cmsg.
@@ -117,8 +123,23 @@ func getOrigDst(oob []byte) (netip.AddrPort, error) {
 	case *unix.SockaddrInet6:
 		rAddr = netip.AddrPortFrom(netip.AddrFrom16(v.Addr), uint16(v.Port))
 	default:
-		return netip.AddrPort{}, fmt.Errorf("unsupported address type: %T", v)
+		return netip.AddrPort{}, 0, fmt.Errorf("unsupported address type: %T", v)
 	}
 
-	return rAddr, nil
+	return rAddr, dscp, nil
+}
+
+func parseDSCP(m *unix.SocketControlMessage) (uint8, error) {
+	switch {
+	case m.Header.Level == unix.SOL_IP && m.Header.Type == unix.IP_TOS:
+		dscp := uint8(m.Data[0] >> 2)
+		return dscp, nil
+
+	case m.Header.Level == unix.SOL_IPV6 && m.Header.Type == unix.IPV6_TCLASS:
+		dscp := uint8(m.Data[0] >> 2)
+		return dscp, nil
+
+	default:
+		return 0, nil
+	}
 }
