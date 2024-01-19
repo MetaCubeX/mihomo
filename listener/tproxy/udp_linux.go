@@ -105,13 +105,8 @@ func getOrigDst(oob []byte) (netip.AddrPort, error) {
 
 	// retrieve the destination address from the SCM.
 	sa, err := unix.ParseOrigDstAddr(&scms[1])
-
 	if err != nil {
 		return netip.AddrPort{}, fmt.Errorf("retrieve destination: %w", err)
-	}
-
-	if err != nil {
-		return netip.AddrPort{}, fmt.Errorf("retrieve DSCP: %w", err)
 	}
 
 	// encode the destination address into a cmsg.
