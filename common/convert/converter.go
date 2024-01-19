@@ -68,7 +68,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria["skip-cert-verify"], _ = strconv.ParseBool(query.Get("insecure"))
 
 			proxies = append(proxies, hysteria)
-		case "hysteria2":
+
+		case "hysteria2", "hy2":
 			urlHysteria2, err := url.Parse(line)
 			if err != nil {
 				continue
@@ -79,7 +80,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria2 := make(map[string]any, 20)
 
 			hysteria2["name"] = name
-			hysteria2["type"] = scheme
+			hysteria2["type"] = "hysteria2"
 			hysteria2["server"] = urlHysteria2.Hostname()
 			if port := urlHysteria2.Port(); port != "" {
 				hysteria2["port"] = port
@@ -101,6 +102,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			hysteria2["up"] = query.Get("up")
 
 			proxies = append(proxies, hysteria2)
+
 		case "tuic":
 			// A temporary unofficial TUIC share link standard
 			// Modified from https://github.com/daeuniverse/dae/discussions/182
@@ -143,7 +145,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			proxies = append(proxies, tuic)
-			
+
 		case "trojan":
 			urlTrojan, err := url.Parse(line)
 			if err != nil {
@@ -405,14 +407,27 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if query.Get("udp-over-tcp") == "true" || query.Get("uot") == "1" {
 				ss["udp-over-tcp"] = true
 			}
-			if strings.Contains(query.Get("plugin"), "obfs") {
-				obfsParams := strings.Split(query.Get("plugin"), ";")
-				ss["plugin"] = "obfs"
-				ss["plugin-opts"] = map[string]any{
-					"host": obfsParams[2][10:],
-					"mode": obfsParams[1][5:],
+			plugin := query.Get("plugin")
+			if strings.Contains(plugin, ";") {
+				pluginInfo, _ := url.ParseQuery("pluginName=" + strings.ReplaceAll(plugin, ";", "&"))
+				pluginName := pluginInfo.Get("pluginName")
+				if strings.Contains(pluginName, "obfs") {
+					ss["plugin"] = "obfs"
+					ss["plugin-opts"] = map[string]any{
+						"mode": pluginInfo.Get("obfs"),
+						"host": pluginInfo.Get("obfs-host"),
+					}
+				} else if strings.Contains(pluginName, "v2ray-plugin") {
+					ss["plugin"] = "v2ray-plugin"
+					ss["plugin-opts"] = map[string]any{
+						"mode": pluginInfo.Get("mode"),
+						"host": pluginInfo.Get("host"),
+						"path": pluginInfo.Get("path"),
+						"tls":  strings.Contains(plugin, "tls"),
+					}
 				}
 			}
+
 			proxies = append(proxies, ss)
 
 		case "ssr":
