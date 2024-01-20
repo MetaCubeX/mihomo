@@ -2,14 +2,14 @@ package common
 
 import (
 	"fmt"
-	"strconv"
 
+	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 )
 
 type DSCP struct {
 	*Base
-	dscp    uint8
+	ranges  utils.IntRanges[uint8]
 	payload string
 	adapter string
 }
@@ -19,7 +19,7 @@ func (d *DSCP) RuleType() C.RuleType {
 }
 
 func (d *DSCP) Match(metadata *C.Metadata) (bool, string) {
-	return metadata.DSCP == d.dscp, d.adapter
+	return d.ranges.Check(metadata.DSCP), d.adapter
 }
 
 func (d *DSCP) Adapter() string {
@@ -31,17 +31,19 @@ func (d *DSCP) Payload() string {
 }
 
 func NewDSCP(dscp string, adapter string) (*DSCP, error) {
-	dscpi, err := strconv.Atoi(dscp)
+	ranges, err := utils.NewUnsignedRanges[uint8](dscp)
 	if err != nil {
 		return nil, fmt.Errorf("parse DSCP rule fail: %w", err)
 	}
-	if dscpi < 0 || dscpi > 63 {
-		return nil, fmt.Errorf("DSCP couldn't be negative or exceed 63")
+	for _, r := range ranges {
+		if r.End() > 63 {
+			return nil, fmt.Errorf("DSCP couldn't be negative or exceed 63")
+		}
 	}
 	return &DSCP{
 		Base:    &Base{},
 		payload: dscp,
-		dscp:    uint8(dscpi),
+		ranges:  ranges,
 		adapter: adapter,
 	}, nil
 }
