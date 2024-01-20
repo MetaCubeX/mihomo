@@ -21,7 +21,7 @@ func NewUid(oUid, adapter string) (*Uid, error) {
 		return nil, fmt.Errorf("uid rule not support this platform")
 	}
 
-	uidRange, err := utils.NewIntRanges[uint32](oUid)
+	uidRange, err := utils.NewUnsignedRanges[uint32](oUid)
 	if err != nil {
 		return nil, fmt.Errorf("%w, %w", errPayload, err)
 	}

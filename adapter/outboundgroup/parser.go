@@ -80,7 +80,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
-	expectedStatus, err := utils.NewIntRanges[uint16](groupOption.ExpectedStatus)
+	expectedStatus, err := utils.NewUnsignedRanges[uint16](groupOption.ExpectedStatus)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", groupName, err)
 	}
