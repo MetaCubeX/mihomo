@@ -137,7 +137,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if len(p) > 0xffff { // uint16 max
-		return 0, quic.ErrMessageTooLarge(0xffff)
+		return 0, &quic.DatagramTooLargeError{PeerMaxDatagramFrameSize: 0xffff}
 	}
 	if q.closed {
 		return 0, net.ErrClosed
@@ -187,9 +187,9 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 			err = q.quicConn.SendDatagram(data)
 		}
 
-		var tooLarge quic.ErrMessageTooLarge
+		var tooLarge *quic.DatagramTooLargeError
 		if errors.As(err, &tooLarge) {
-			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge)-PacketOverHead)
+			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge.PeerMaxDatagramFrameSize)-PacketOverHead)
 		}
 		if err != nil {
 			return
