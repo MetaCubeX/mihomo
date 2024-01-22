@@ -104,6 +104,12 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		}
 	}
 
+	if config.UdpMTU == 0 {
+		// "1200" from quic-go's MaxDatagramSize
+		// "-3" from quic-go's DatagramFrame.MaxDataLen
+		config.UdpMTU = 1200 - 3
+	}
+
 	service, err := hysteria2.NewService[string](hysteria2.ServiceOptions{
 		Context:               context.Background(),
 		Logger:                log.SingLogger,
@@ -115,6 +121,7 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		Handler:               h,
 		MasqueradeHandler:     masqueradeHandler,
 		CWND:                  config.CWND,
+		UdpMTU:                config.UdpMTU,
 	})
 	if err != nil {
 		return nil, err
