@@ -15,6 +15,11 @@ import (
 	"github.com/metacubex/mihomo/constant/features"
 )
 
+const (
+	DefaultTCPTimeout = 5 * time.Second
+	DefaultUDPTimeout = DefaultTCPTimeout
+)
+
 type dialFunc func(ctx context.Context, network string, ips []netip.Addr, port string, opt *option) (net.Conn, error)
 
 var (
