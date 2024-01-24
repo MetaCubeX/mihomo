@@ -39,7 +39,7 @@ func (p *Port) Payload() string {
 }
 
 func NewPort(port string, adapter string, ruleType C.RuleType) (*Port, error) {
-	portRanges, err := utils.NewIntRanges[uint16](port)
+	portRanges, err := utils.NewUnsignedRanges[uint16](port)
 	if err != nil {
 		return nil, fmt.Errorf("%w, %w", errPayload, err)
 	}

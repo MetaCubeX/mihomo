@@ -20,8 +20,8 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394
-	github.com/metacubex/sing-quic v0.0.0-20231220152840-85620b446796
+	github.com/metacubex/quic-go v0.41.1-0.20240120014142-a02f4a533d4a
+	github.com/metacubex/sing-quic v0.0.0-20240122125415-d6eb83bc6ec4
 	github.com/metacubex/sing-shadowsocks v0.2.6
 	github.com/metacubex/sing-shadowsocks2 v0.2.0
 	github.com/metacubex/sing-tun v0.2.0
@@ -35,7 +35,7 @@ require (
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.3.0
-	github.com/sagernet/sing-mux v0.2.0
+	github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6
 	github.com/sagernet/utls v1.5.4

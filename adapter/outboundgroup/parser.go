@@ -28,6 +28,7 @@ type GroupCommonOption struct {
 	Use                 []string `group:"use,omitempty"`
 	URL                 string   `group:"url,omitempty"`
 	Interval            int      `group:"interval,omitempty"`
+	TestTimeout         int      `group:"timeout,omitempty"`
 	Lazy                bool     `group:"lazy,omitempty"`
 	DisableUDP          bool     `group:"disable-udp,omitempty"`
 	Filter              string   `group:"filter,omitempty"`
@@ -80,7 +81,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
-	expectedStatus, err := utils.NewIntRanges[uint16](groupOption.ExpectedStatus)
+	expectedStatus, err := utils.NewUnsignedRanges[uint16](groupOption.ExpectedStatus)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", groupName, err)
 	}
@@ -92,9 +93,11 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	groupOption.ExpectedStatus = status
 	testUrl := groupOption.URL
 
-	if groupOption.URL == "" {
-		groupOption.URL = C.DefaultTestURL
-		testUrl = groupOption.URL
+	if groupOption.Type != "select" && groupOption.Type != "relay" {
+		if groupOption.URL == "" {
+			groupOption.URL = C.DefaultTestURL
+			testUrl = groupOption.URL
+		}
 	}
 
 	if len(GroupProxies) != 0 {
@@ -114,7 +117,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, testUrl, uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		hc := provider.NewHealthCheck(ps, testUrl, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {

@@ -78,7 +78,7 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expectedStatus, err := utils.NewIntRanges[uint16](query.Get("expected"))
+	expectedStatus, err := utils.NewUnsignedRanges[uint16](query.Get("expected"))
 	if err != nil {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, ErrBadRequest)

@@ -16,10 +16,6 @@ import (
 	"github.com/dlclark/regexp2"
 )
 
-const (
-	defaultURLTestTimeout = time.Second * 5
-)
-
 type HealthCheckOption struct {
 	URL      string
 	Interval uint
@@ -42,6 +38,7 @@ type HealthCheck struct {
 	lastTouch      atomic.TypedValue[time.Time]
 	done           chan struct{}
 	singleDo       *singledo.Single[struct{}]
+	timeout        time.Duration
 }
 
 func (hc *HealthCheck) process() {
@@ -198,7 +195,7 @@ func (hc *HealthCheck) execute(b *batch.Batch[bool], url, uid string, option *ex
 
 		p := proxy
 		b.Go(p.Name(), func() (bool, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultURLTestTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), hc.timeout)
 			defer cancel()
 			log.Debugln("Health Checking, proxy: %s, url: %s, id: {%s}", p.Name(), url, uid)
 			_, _ = p.URLTest(ctx, url, expectedStatus)
@@ -212,15 +209,19 @@ func (hc *HealthCheck) close() {
 	hc.done <- struct{}{}
 }
 
-func NewHealthCheck(proxies []C.Proxy, url string, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
+func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
 	if url == "" {
 		// expectedStatus = nil
 		url = C.DefaultTestURL
+	}
+	if timeout == 0 {
+		timeout = 5000
 	}
 
 	return &HealthCheck{
 		proxies:        proxies,
 		url:            url,
+		timeout:        time.Duration(timeout) * time.Millisecond,
 		extra:          map[string]*extraOption{},
 		interval:       time.Duration(interval) * time.Second,
 		lazy:           lazy,

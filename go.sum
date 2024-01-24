@@ -37,6 +37,7 @@ github.com/ericlagergren/aegis v0.0.0-20230312195928-b4ce538b56f9/go.mod h1:hkIF
 github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391 h1:8j2RH289RJplhA6WfdaPqzg1MjH2K8wX5e0uhAxrw2g=
 github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391/go.mod h1:K2R7GhgxrlJzHw2qiPWsCZXf/kXEJN9PLnQK73Ll0po=
 github.com/ericlagergren/saferand v0.0.0-20220206064634-960a4dd2bc5c h1:RUzBDdZ+e/HEe2Nh8lYsduiPAZygUfVXJn0Ncj5sHMg=
+github.com/ericlagergren/saferand v0.0.0-20220206064634-960a4dd2bc5c/go.mod h1:ETASDWf/FmEb6Ysrtd1QhjNedUU/ZQxBCRLh60bQ/UI=
 github.com/ericlagergren/siv v0.0.0-20220507050439-0b757b3aa5f1 h1:tlDMEdcPRQKBEz5nGDMvswiajqh7k8ogWRlhRwKy5mY=
 github.com/ericlagergren/siv v0.0.0-20220507050439-0b757b3aa5f1/go.mod h1:4RfsapbGx2j/vU5xC/5/9qB3kn9Awp1YDiEnN43QrJ4=
 github.com/ericlagergren/subtle v0.0.0-20220507045147-890d697da010 h1:fuGucgPk5dN6wzfnxl3D0D3rVLw4v2SbBT9jb4VnxzA=
@@ -54,6 +55,7 @@ github.com/go-chi/cors v1.2.1/go.mod h1:sSbTewc+6wYHBBCW7ytsFSn836hqM7JxpglAy2Vz
 github.com/go-chi/render v1.0.3 h1:AsXqd2a1/INaIfUSKq3G5uA8weYx20FOsM7uSoCyyt4=
 github.com/go-chi/render v1.0.3/go.mod h1:/gr3hVkmYR0YlEy3LxCuVRFzEu9Ruok+gFqbIofjao0=
 github.com/go-logr/logr v1.2.4 h1:g01GSCwiDw2xSZfjJ2/T9M+S6pFdcNtFYsp+Y43HYDQ=
+github.com/go-logr/logr v1.2.4/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/go-ole/go-ole v1.2.6/go.mod h1:pprOEPIfldk/42T2oK7lQ4v4JSDwmV0As9GaiUsvbm0=
 github.com/go-ole/go-ole v1.3.0 h1:Dt6ye7+vXGIKZ7Xtk4s6/xVdGDQynvom7xCFEdWr6uE=
 github.com/go-ole/go-ole v1.3.0/go.mod h1:5LS6F96DhAwUc7C+1HLexzMXY1xGRSryjyPPKW6zv78=
@@ -69,6 +71,7 @@ github.com/gofrs/uuid/v5 v5.0.0 h1:p544++a97kEL+svbcFbCQVM9KFu0Yo25UoISXGNNH9M=
 github.com/gofrs/uuid/v5 v5.0.0/go.mod h1:CDOjlDMVAtN56jqyRUZh58JT31Tiw7/oQyEXZV+9bD8=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.5.3 h1:KhyjKVUg7Usr/dYsdSqoFveMYd5ko72D+zANwlG1mmg=
+github.com/golang/protobuf v1.5.3/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiuN0vRsmY=
 github.com/google/btree v1.1.2 h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=
 github.com/google/btree v1.1.2/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
 github.com/google/go-cmp v0.5.6/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
@@ -78,6 +81,7 @@ github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeN
 github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 h1:yAJXTCF9TqKcTiHJAE8dj7HMvPfh66eeA2JYW7eFpSE=
 github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38/go.mod h1:kpwsk12EmLew5upagYY7GY0pfYCcupk39gWOCRROcvE=
 github.com/google/tink/go v1.6.1 h1:t7JHqO8Ath2w2ig5vjwQYJzhGEZymedQc90lQXUBa4I=
+github.com/google/tink/go v1.6.1/go.mod h1:IGW53kTgag+st5yPhKKwJ6u2l+SSp5/v9XF7spovjlY=
 github.com/hashicorp/yamux v0.1.1 h1:yrQxtgseBDrq9Y652vSRDvsKCJKOUD+GzTS4Y0Y8pvE=
 github.com/hashicorp/yamux v0.1.1/go.mod h1:CtWFDAQgb7dxtzFs4tWbplKIe2jSi3+5vKbgIO0SLnQ=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
@@ -111,12 +115,12 @@ github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvO
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20231209122014-3e43224c7bbc h1:+yTZ6q2EeQCAJNpKNEu5j32Pm23ShD38ElIa635wTrk=
 github.com/metacubex/gvisor v0.0.0-20231209122014-3e43224c7bbc/go.mod h1:rhBU9tD5ktoGPBtXUquhWuGJ4u+8ZZzBMi2cAdv9q8Y=
-github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394 h1:dIT+KB2hknBCrwVAXPeY9tpzzkOZP5m40yqUteRT6/Y=
-github.com/metacubex/quic-go v0.40.1-0.20231130135418-0c1b47cf9394/go.mod h1:F/t8VnA47xoia8ABlNA4InkZjssvFJ5p6E6jKdbkgAs=
+github.com/metacubex/quic-go v0.41.1-0.20240120014142-a02f4a533d4a h1:IMr75VdMnDUhkANZemUWqmOPLfwnemiIaCHRnGCdAsY=
+github.com/metacubex/quic-go v0.41.1-0.20240120014142-a02f4a533d4a/go.mod h1:F/t8VnA47xoia8ABlNA4InkZjssvFJ5p6E6jKdbkgAs=
 github.com/metacubex/sing v0.0.0-20240111014253-f1818b6a82b2 h1:upEO8dt9WDBavhgcgkXB3hRcwVNbkTbnd+xyzy6ZQZo=
 github.com/metacubex/sing v0.0.0-20240111014253-f1818b6a82b2/go.mod h1:9pfuAH6mZfgnz/YjP6xu5sxx882rfyjpcrTdUpd6w3g=
-github.com/metacubex/sing-quic v0.0.0-20231220152840-85620b446796 h1:xiCPttMGAaIh4Ad6t85VxUoUv+Sg88eXzzUvYN8gT5w=
-github.com/metacubex/sing-quic v0.0.0-20231220152840-85620b446796/go.mod h1:E1e1Uu6YaJddD+c0DtJlSOkfMI0NLdOVhM60KAlcssY=
+github.com/metacubex/sing-quic v0.0.0-20240122125415-d6eb83bc6ec4 h1:4EukI/UdbuaXov7VDDZf4vaP0ZmkUu827DOeQqzVysw=
+github.com/metacubex/sing-quic v0.0.0-20240122125415-d6eb83bc6ec4/go.mod h1:bdHqEysJclB9BzIa5jcKKSZ1qua+YEPjR8fOzzE3vZU=
 github.com/metacubex/sing-shadowsocks v0.2.6 h1:6oEB3QcsFYnNiFeoevcXrCwJ3sAablwVSgtE9R3QeFQ=
 github.com/metacubex/sing-shadowsocks v0.2.6/go.mod h1:zIkMeSnb8Mbf4hdqhw0pjzkn1d99YJ3JQm/VBg5WMTg=
 github.com/metacubex/sing-shadowsocks2 v0.2.0 h1:hqwT/AfI5d5UdPefIzR6onGHJfDXs5zgOM5QSgaM/9A=
@@ -136,6 +140,7 @@ github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7/go.mod h1:U
 github.com/onsi/ginkgo/v2 v2.9.5 h1:+6Hr4uxzP4XIUyAkg61dWBw8lb/gc4/X5luuxN/EC+Q=
 github.com/onsi/ginkgo/v2 v2.9.5/go.mod h1:tvAoo1QUJwNEU2ITftXTpR7R1RbCzoZUOs3RonqW57k=
 github.com/onsi/gomega v1.27.6 h1:ENqfyGeS5AX/rlXDd/ETokDz93u0YufY1Pgxuy/PvWE=
+github.com/onsi/gomega v1.27.6/go.mod h1:PIQNjfQwkP3aQAH7lf7j87O/5FiNr+ZR8+ipb+qQlhg=
 github.com/openacid/errors v0.8.1/go.mod h1:GUQEJJOJE3W9skHm8E8Y4phdl2LLEN8iD7c5gcGgdx0=
 github.com/openacid/low v0.1.21 h1:Tr2GNu4N/+rGRYdOsEHOE89cxUIaDViZbVmKz29uKGo=
 github.com/openacid/low v0.1.21/go.mod h1:q+MsKI6Pz2xsCkzV4BLj7NR5M4EX0sGz5AqotpZDVh0=
@@ -153,6 +158,7 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH
 github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c h1:ncq/mPwQF4JjgDlrVEn3C11VoGHZN7m8qihwgMEtzYw=
 github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c/go.mod h1:OmDBASR4679mdNQnz2pUhc2G8CO2JrUAVFDRBDP/hJE=
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
+github.com/prashantv/gostub v1.1.0/go.mod h1:A5zLQHz7ieHGG7is6LLXLz7I8+3LZzsrV0P1IAHhP5U=
 github.com/puzpuzpuz/xsync/v3 v3.0.2 h1:3yESHrRFYr6xzkz61LLkvNiPFXxJEAABanTQpKbAaew=
 github.com/puzpuzpuz/xsync/v3 v3.0.2/go.mod h1:VjzYrABPabuM4KyBh1Ftq6u8nhwY5tBPKP9jpmh0nnA=
 github.com/quic-go/qpack v0.4.0 h1:Cr9BXA1sQS2SmDUWjSofMPNKmvF6IiIfDRmgU0w1ZCo=
@@ -165,8 +171,8 @@ github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a h1:+NkI2670SQpQWvkk
 github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a/go.mod h1:63s7jpZqcDAIpj8oI/1v4Izok+npJOHACFCU6+huCkM=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 h1:iL5gZI3uFp0X6EslacyapiRz7LLSJyr4RajF/BhMVyE=
 github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
-github.com/sagernet/sing-mux v0.2.0 h1:4C+vd8HztJCWNYfufvgL49xaOoOHXty2+EAjnzN3IYo=
-github.com/sagernet/sing-mux v0.2.0/go.mod h1:khzr9AOPocLa+g53dBplwNDz4gdsyx/YM3swtAhlkHQ=
+github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6 h1:5bCAkvDDzSMITiHFjolBwpdqYsvycdTu71FsMEFXQ14=
+github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6/go.mod h1:khzr9AOPocLa+g53dBplwNDz4gdsyx/YM3swtAhlkHQ=
 github.com/sagernet/sing-shadowtls v0.1.4 h1:aTgBSJEgnumzFenPvc+kbD9/W0PywzWevnVpEx6Tw3k=
 github.com/sagernet/sing-shadowtls v0.1.4/go.mod h1:F8NBgsY5YN2beQavdgdm1DPlhaKQlaL6lpDdcBglGK4=
 github.com/sagernet/smux v0.0.0-20231208180855-7041f6ea79e7 h1:DImB4lELfQhplLTxeq2z31Fpv8CQqqrUwTbrIRumZqQ=

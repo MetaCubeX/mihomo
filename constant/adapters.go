@@ -43,9 +43,9 @@ const (
 )
 
 const (
-	DefaultTCPTimeout = 5 * time.Second
+	DefaultTCPTimeout = dialer.DefaultTCPTimeout
+	DefaultUDPTimeout = dialer.DefaultUDPTimeout
 	DefaultDropTime   = 12 * DefaultTCPTimeout
-	DefaultUDPTimeout = DefaultTCPTimeout
 	DefaultTLSTimeout = DefaultTCPTimeout
 	DefaultTestURL    = "https://www.gstatic.com/generate_204"
 )
