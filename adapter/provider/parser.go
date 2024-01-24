@@ -22,6 +22,7 @@ type healthCheckSchema struct {
 	Enable         bool   `provider:"enable"`
 	URL            string `provider:"url"`
 	Interval       int    `provider:"interval"`
+	TestTimeout    int    `provider:"timeout,omitempty"`
 	Lazy           bool   `provider:"lazy,omitempty"`
 	ExpectedStatus string `provider:"expected-status,omitempty"`
 }
@@ -75,7 +76,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		}
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, hcInterval, schema.HealthCheck.Lazy, expectedStatus)
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
 	var vehicle types.Vehicle
 	switch schema.Type {
