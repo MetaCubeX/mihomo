@@ -69,11 +69,11 @@ func (u *udpConn) Send(data []byte, addr string) error {
 		Data:      data,
 	}
 	err := u.SendFunc(u.SendBuf, msg)
-	var errTooLarge quic.ErrMessageTooLarge
+	var errTooLarge *quic.DatagramTooLargeError
 	if errors.As(err, &errTooLarge) {
 		// Message too large, try fragmentation
 		msg.PacketID = uint16(rand.Intn(0xFFFF)) + 1
-		fMsgs := frag.FragUDPMessage(msg, int(errTooLarge))
+		fMsgs := frag.FragUDPMessage(msg, int(errTooLarge.PeerMaxDatagramFrameSize))
 		for _, fMsg := range fMsgs {
 			err := u.SendFunc(u.SendBuf, &fMsg)
 			if err != nil {
