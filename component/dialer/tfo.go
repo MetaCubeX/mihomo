@@ -2,11 +2,11 @@ package dialer
 
 import (
 	"context"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/sagernet/tfo-go"
 	"io"
 	"net"
 	"time"
+
+	"github.com/sagernet/tfo-go"
 )
 
 type tfoConn struct {
