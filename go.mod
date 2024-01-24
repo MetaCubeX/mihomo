@@ -35,7 +35,7 @@ require (
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
 	github.com/sagernet/sing v0.3.0
-	github.com/sagernet/sing-mux v0.2.0
+	github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6
 	github.com/sagernet/utls v1.5.4
