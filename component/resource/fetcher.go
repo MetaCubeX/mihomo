@@ -13,10 +13,6 @@ import (
 	"github.com/samber/lo"
 )
 
-const (
-	minInterval = time.Minute * 5
-)
-
 var (
 	fileMode os.FileMode = 0o666
 	dirMode  os.FileMode = 0o755
@@ -164,8 +160,8 @@ func (f *Fetcher[V]) Destroy() error {
 
 func (f *Fetcher[V]) pullLoop() {
 	initialInterval := f.interval - time.Since(f.UpdatedAt)
-	if initialInterval < minInterval {
-		initialInterval = minInterval
+	if initialInterval > f.interval {
+		initialInterval = f.interval
 	}
 
 	timer := time.NewTimer(initialInterval)
