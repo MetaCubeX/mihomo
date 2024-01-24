@@ -50,6 +50,7 @@ func NewUDPHopPacketConn(addr *UDPHopAddr, hopInterval time.Duration) (net.Packe
 		HopInterval: hopInterval,
 		conn:        conn,
 		addrIndex:   index,
+		closeChan:   make(chan struct{}),
 	}
 	go hConn.hopLoop()
 	return hConn, nil
