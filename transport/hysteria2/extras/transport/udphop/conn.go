@@ -19,8 +19,7 @@ type udpHopPacketConn struct {
 	conn      net.PacketConn
 	addrIndex int
 
-	closeChan chan struct{}
-	closed    bool
+	closed bool
 }
 
 type udpPacket struct {
@@ -50,7 +49,6 @@ func NewUDPHopPacketConn(addr *UDPHopAddr, hopInterval time.Duration) (net.Packe
 		HopInterval: hopInterval,
 		conn:        conn,
 		addrIndex:   index,
-		closeChan:   make(chan struct{}),
 	}
 	go hConn.hopLoop()
 	return hConn, nil
@@ -62,19 +60,20 @@ func (u *udpHopPacketConn) hopLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			u.hop()
-		case <-u.closeChan:
-			return
+			if u.hop() {
+				return
+			}
 		}
 	}
 }
 
-func (u *udpHopPacketConn) hop() {
+func (u *udpHopPacketConn) hop() bool {
 	if u.closed {
-		return
+		return true
 	}
 	u.addrIndex = rand.Intn(len(u.Addrs))
 	log.Infoln("hopped to %s", u.Addrs[u.addrIndex])
+	return false
 }
 
 func (u *udpHopPacketConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
@@ -93,7 +92,6 @@ func (u *udpHopPacketConn) Close() error {
 		return nil
 	}
 	err := u.conn.Close()
-	close(u.closeChan)
 	u.closed = true
 	u.Addrs = nil // For GC
 	return err
