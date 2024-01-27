@@ -29,8 +29,8 @@ type Hysteria2Option struct {
 	Port           uint16        `proxy:"port,omitempty"`
 	Ports          string        `proxy:"ports,omitempty"`
 	HopInterval    time.Duration `proxy:"hop-interval,omitempty"`
-	Up             string        `proxy:"up"`
-	Down           string        `proxy:"down"`
+	Up             string        `proxy:"up,omitempty"`
+	Down           string        `proxy:"down,omitempty"`
 	Password       string        `proxy:"password,omitempty"`
 	Obfs           string        `proxy:"obfs,omitempty"`
 	ObfsPassword   string        `proxy:"obfs-password,omitempty"`
@@ -104,16 +104,20 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		config.Obfs.Salamander.Password = option.Obfs
 	}
 
-	last := option.Up[len(option.Up)-1]
-	if '0' <= last && last <= '9' {
-		option.Up += "m"
+	if option.Up != "" {
+		last := option.Up[len(option.Up)-1]
+		if '0' <= last && last <= '9' {
+			option.Up += "m"
+		}
+		config.Bandwidth.Up = option.Up
 	}
-	config.Bandwidth.Up = option.Up
-	last = option.Down[len(option.Down)-1]
-	if '0' <= last && last <= '9' {
-		option.Down += "m"
+	if option.Down != "" {
+		last := option.Down[len(option.Down)-1]
+		if '0' <= last && last <= '9' {
+			option.Down += "m"
+		}
+		config.Bandwidth.Down = option.Down
 	}
-	config.Bandwidth.Down = option.Down
 
 	client, err := hy2client.NewReconnectableClient(
 		config.Config,
