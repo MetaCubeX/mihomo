@@ -15,7 +15,6 @@ require (
 	github.com/gobwas/ws v1.3.2
 	github.com/gofrs/uuid/v5 v5.0.0
 	github.com/insomniacslk/dhcp v0.0.0-20231206064809-8c70d406f6d2
-	github.com/jpillora/backoff v1.0.0
 	github.com/klauspost/cpuid/v2 v2.2.6
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2

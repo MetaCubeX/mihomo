@@ -12,20 +12,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
 	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/slowdown"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 
 	wireguard "github.com/metacubex/sing-wireguard"
-
-	"github.com/jpillora/backoff"
 
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/debug"
@@ -129,48 +126,6 @@ func (option WireGuardPeerOption) Prefixes() ([]netip.Prefix, error) {
 	return localPrefixes, nil
 }
 
-type wgSingDialer struct {
-	proxydialer.SingDialer
-	errTimes atomic.Int64
-	backoff  *backoff.Backoff
-}
-
-func (d *wgSingDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
-	if d.errTimes.Load() > 10 {
-		select {
-		case <-time.After(d.backoff.Duration()):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	c, err := d.SingDialer.DialContext(ctx, network, destination)
-	if err != nil {
-		d.errTimes.Add(1)
-		return nil, err
-	}
-	d.errTimes.Store(0)
-	d.backoff.Reset()
-	return c, nil
-}
-
-func (d *wgSingDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	if d.errTimes.Load() > 10 {
-		select {
-		case <-time.After(d.backoff.Duration()):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-	c, err := d.SingDialer.ListenPacket(ctx, destination)
-	if err != nil {
-		d.errTimes.Add(1)
-		return nil, err
-	}
-	d.errTimes.Store(0)
-	d.backoff.Reset()
-	return c, nil
-}
-
 func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	outbound := &WireGuard{
 		Base: &Base{
@@ -182,16 +137,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			rmark:  option.RoutingMark,
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
-		dialer: &wgSingDialer{
-			SingDialer: proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer()),
-			errTimes:   atomic.NewInt64(0),
-			backoff: &backoff.Backoff{
-				Min:    10 * time.Millisecond,
-				Max:    1 * time.Second,
-				Factor: 2,
-				Jitter: true,
-			},
-		},
+		dialer: proxydialer.NewSlowDownSingDialer(proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer()), slowdown.New()),
 	}
 	runtime.SetFinalizer(outbound, closeWireGuard)
 
