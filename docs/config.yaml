@@ -788,6 +788,7 @@ proxy-groups:
       - vmess1
     # tolerance: 150
     # lazy: true
+    # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 
@@ -851,6 +852,7 @@ proxy-providers:
       interval: 600
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
+      # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
     override: # 覆写节点加载时的一些配置项
       skip-cert-verify: true
       udp: true
