@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	
 	C "github.com/metacubex/mihomo/constant"
 	RC "github.com/metacubex/mihomo/rules/common"
 	"github.com/metacubex/mihomo/rules/logic"
@@ -37,6 +38,8 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = RC.NewPort(payload, target, C.DstPort)
 	case "IN-PORT":
 		parsed, parseErr = RC.NewPort(payload, target, C.InPort)
+	case "DSCP":
+		parsed, parseErr = RC.NewDSCP(payload, target)
 	case "PROCESS-NAME":
 		parsed, parseErr = RC.NewProcess(payload, target, true)
 	case "PROCESS-PATH":

@@ -12,7 +12,9 @@ import (
 // MaxFragSize is a safe udp relay packet size
 // because tuicv5 support udp fragment so we unneeded to do a magic modify for quic-go to increase MaxDatagramFrameSize
 // it may not work fine in some platform
-var MaxFragSize = 1200 - PacketOverHead
+// "1200" from quic-go's MaxDatagramSize
+// "-3" from quic-go's DatagramFrame.MaxDataLen
+var MaxFragSize = 1200 - PacketOverHead - 3
 
 func fragWriteNative(quicConn quic.Connection, packet Packet, buf *bytes.Buffer, fragSize int) (err error) {
 	fullPayload := packet.DATA

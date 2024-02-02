@@ -185,6 +185,10 @@ func addIpv6Cidr(trie *IpCidrTrie, ip net.IP, groupSize int) {
 	}
 
 	for i := 2; i < groupSize; i += 2 {
+		if ip[i] == 0 && ip[i+1] == 0 {
+			node.Mark = true
+		}
+
 		if node.Mark {
 			return
 		}

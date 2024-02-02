@@ -47,8 +47,12 @@ func (srv *Service) Start() {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	log.Infoln("NTP service start, sync system time is %t", srv.syncSystemTime)
+	err := srv.update()
+	if err != nil {
+		log.Errorln("Initialize NTP time failed: %s", err)
+		return
+	}
 	service.running = true
-	srv.update()
 	go srv.loopUpdate()
 }
 
@@ -71,20 +75,16 @@ func (srv *Service) Running() bool {
 	return srv.running
 }
 
-func (srv *Service) update() {
+func (srv *Service) update() error {
 	var response *ntp.Response
 	var err error
 	for i := 0; i < 3; i++ {
-		response, err = ntp.Exchange(context.Background(), srv.dialer, srv.server)
-		if err != nil {
-			if i == 2 {
-				log.Errorln("Initialize NTP time failed: %s", err)
-				return
-			}
-			time.Sleep(time.Second * 2) // wait for 2 seconds before the next try
-			continue
+		if response, err = ntp.Exchange(context.Background(), srv.dialer, srv.server); err == nil {
+			break
 		}
-		break
+		if i == 2 {
+			return err
+		}
 	}
 	offset = response.ClockOffset
 	if offset > time.Duration(0) {
@@ -94,14 +94,15 @@ func (srv *Service) update() {
 	}
 	if srv.syncSystemTime {
 		timeNow := response.Time
-		err = setSystemTime(timeNow)
-		if err == nil {
+		syncErr := setSystemTime(timeNow)
+		if syncErr == nil {
 			log.Infoln("Sync system time success: %s", timeNow.Local().Format(ntp.TimeLayout))
 		} else {
-			log.Errorln("Write time to system: %s", err)
+			log.Errorln("Write time to system: %s", syncErr)
 			srv.syncSystemTime = false
 		}
 	}
+	return nil
 }
 
 func (srv *Service) loopUpdate() {
@@ -111,7 +112,10 @@ func (srv *Service) loopUpdate() {
 			return
 		case <-srv.ticker.C:
 		}
-		srv.update()
+		err := srv.update()
+		if err != nil {
+			log.Warnln("Sync time failed: %s", err)
+		}
 	}
 }
 

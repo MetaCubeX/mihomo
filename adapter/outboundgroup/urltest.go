@@ -33,6 +33,8 @@ type URLTest struct {
 	expectedStatus string
 	tolerance      uint16
 	disableUDP     bool
+	Hidden         bool
+	Icon           string
 	fastNode       C.Proxy
 	fastSingle     *singledo.Single[C.Proxy]
 }
@@ -174,6 +176,8 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		"testUrl":        u.testUrl,
 		"expectedStatus": u.expectedStatus,
 		"fixed":          u.selected,
+		"hidden":         u.Hidden,
+		"icon":           u.Icon,
 	})
 }
 
@@ -237,6 +241,8 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		Hidden:         option.Hidden,
+		Icon:           option.Icon,
 	}
 
 	for _, option := range options {

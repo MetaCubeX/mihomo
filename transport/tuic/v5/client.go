@@ -348,7 +348,7 @@ func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Met
 		return nil, common.TooManyOpenStreams
 	}
 
-	pipe1, pipe2 := net.Pipe()
+	pipe1, pipe2 := N.Pipe()
 	var connId uint16
 	for {
 		connId = uint16(fastrand.Intn(0xFFFF))

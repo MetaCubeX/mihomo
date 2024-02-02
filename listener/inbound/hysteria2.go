@@ -21,6 +21,7 @@ type Hysteria2Option struct {
 	IgnoreClientBandwidth bool              `inbound:"ignore-client-bandwidth,omitempty"`
 	Masquerade            string            `inbound:"masquerade,omitempty"`
 	CWND                  int               `inbound:"cwnd,omitempty"`
+	UdpMTU                int               `inbound:"udp-mtu,omitempty"`
 	MuxOption             MuxOption         `inbound:"mux-option,omitempty"`
 }
 
@@ -58,6 +59,7 @@ func NewHysteria2(options *Hysteria2Option) (*Hysteria2, error) {
 			IgnoreClientBandwidth: options.IgnoreClientBandwidth,
 			Masquerade:            options.Masquerade,
 			CWND:                  options.CWND,
+			UdpMTU:                options.UdpMTU,
 			MuxOption:             options.MuxOption.Build(),
 		},
 	}, nil

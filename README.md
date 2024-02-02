@@ -9,7 +9,7 @@
   <a href="https://goreportcard.com/report/github.com/MetaCubeX/mihomo">
     <img src="https://goreportcard.com/badge/github.com/MetaCubeX/mihomo?style=flat-square">
   </a>
-  <img src="https://img.shields.io/github/go-mod/go-version/MetaCubeX/mihomo?style=flat-square">
+  <img src="https://img.shields.io/github/go-mod/go-version/MetaCubeX/mihomo/Alpha?style=flat-square">
   <a href="https://github.com/MetaCubeX/mihomo/releases">
     <img src="https://img.shields.io/github/release/MetaCubeX/mihomo/all.svg?style=flat-square">
   </a>

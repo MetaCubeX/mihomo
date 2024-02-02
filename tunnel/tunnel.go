@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -10,12 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jpillora/backoff"
-
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/nat"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/slowdown"
 	"github.com/metacubex/mihomo/component/sniffer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
@@ -584,7 +584,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
-	handleSocket(connCtx, remoteConn)
+	handleSocket(conn, remoteConn)
 }
 
 func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
@@ -684,23 +684,33 @@ func getRules(metadata *C.Metadata) []C.Rule {
 	}
 }
 
-func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe func(err error)) (t T, err error) {
-	b := &backoff.Backoff{
-		Min:    10 * time.Millisecond,
-		Max:    1 * time.Second,
-		Factor: 2,
-		Jitter: true,
+func shouldStopRetry(err error) bool {
+	if errors.Is(err, resolver.ErrIPNotFound) {
+		return true
 	}
+	if errors.Is(err, resolver.ErrIPVersion) {
+		return true
+	}
+	if errors.Is(err, resolver.ErrIPv6Disabled) {
+		return true
+	}
+	return false
+}
+
+func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe func(err error)) (t T, err error) {
+	s := slowdown.New()
 	for i := 0; i < 10; i++ {
 		t, err = ft(ctx)
 		if err != nil {
 			if fe != nil {
 				fe(err)
 			}
-			select {
-			case <-time.After(b.Duration()):
+			if shouldStopRetry(err) {
+				return
+			}
+			if s.Wait(ctx) == nil {
 				continue
-			case <-ctx.Done():
+			} else {
 				return
 			}
 		} else {

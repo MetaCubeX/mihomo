@@ -775,7 +775,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		}
 		ps = append(ps, proxies[v])
 	}
-	hc := provider.NewHealthCheck(ps, "", 0, true, nil)
+	hc := provider.NewHealthCheck(ps, "", 5000, 0, true, nil)
 	pd, _ := provider.NewCompatibleProvider(provider.ReservedName, ps, hc)
 	providersMap[provider.ReservedName] = pd
 
@@ -1473,7 +1473,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	if len(snifferRaw.Sniff) != 0 {
 		for sniffType, sniffConfig := range snifferRaw.Sniff {
 			find := false
-			ports, err := utils.NewIntRangesFromList[uint16](sniffConfig.Ports)
+			ports, err := utils.NewUnsignedRangesFromList[uint16](sniffConfig.Ports)
 			if err != nil {
 				return nil, err
 			}
@@ -1500,7 +1500,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			// Deprecated: Use Sniff instead
 			log.Warnln("Deprecated: Use Sniff instead")
 		}
-		globalPorts, err := utils.NewIntRangesFromList[uint16](snifferRaw.Ports)
+		globalPorts, err := utils.NewUnsignedRangesFromList[uint16](snifferRaw.Ports)
 		if err != nil {
 			return nil, err
 		}
