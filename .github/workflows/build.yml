@@ -66,15 +66,21 @@ jobs:
             }
           - {
               type: "WithoutCGO",
-              target: "darwin-amd64 darwin-arm64 android-arm64",
+              target: "darwin-amd64 darwin-arm64",
               id: "9",
+            }
+          - {
+            type: "WithoutCGO",
+            target: "darwin-amd64-compatible android-arm64",
+            id: "10",
             }
           # only for test
           - { type: "WithoutCGO-GO120", target: "linux-amd64 linux-amd64-compatible",id: "1" }
           # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
           - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "2" }
           # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
-          - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64 android-arm64",id: "3" }
+          - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64",id: "3" }
+          - { type: "WithoutCGO-GO120", target: "darwin-amd64-compatible android-arm64",id: "4" }
 #          - { type: "WithCGO", target: "windows/*", id: "1" }
 #          - { type: "WithCGO", target: "linux/386", id: "2" }
 #          - { type: "WithCGO", target: "linux/amd64", id: "3" }
@@ -89,7 +95,7 @@ jobs:
 
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set variables
         run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
@@ -98,11 +104,6 @@ jobs:
       - name: Set variables
         if: ${{github.ref_name=='Alpha'}}
         run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Set variables
-        if: ${{github.ref_name=='Beta'}}
-        run: echo "VERSION=beta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
         shell: bash
 
       - name: Set variables
@@ -123,21 +124,21 @@ jobs:
 
       - name: Set ENV
         run: |
-          echo "TAGS=with_gvisor,with_lwip" >> $GITHUB_ENV
+          echo "TAGS=with_gvisor" >> $GITHUB_ENV
           echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
           echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
         shell: bash
 
       - name: Setup Go
         if: ${{ matrix.job.type!='WithoutCGO-GO120' }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.21"
           check-latest: true
 
       - name: Setup Go
         if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: "1.20"
           check-latest: true
@@ -222,10 +223,10 @@ jobs:
         run: echo ${VERSION} > bin/version.txt
         shell: bash
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: ${{  success() }}
         with:
-          name: artifact
+          name: artifact-${{ matrix.job.type }}-${{ matrix.job.target }}
           path: bin/
 
   Upload-Prerelease:
@@ -234,10 +235,10 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R
@@ -261,14 +262,14 @@ jobs:
           tag_name: Prerelease-${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      
       - run: |
           cat > release.txt << 'EOF'
           Release created at  ${{ env.BUILDTIME }}
           Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
           <br>
           [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
-          [二进制文件筛选 / Binary file selector] (https://metacubex.github.io/Meta-Docs/startup/#_1)
+          [二进制文件筛选 / Binary file selector](https://metacubex.github.io/Meta-Docs/startup/#_1)
           [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
           EOF
 
@@ -290,7 +291,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -306,10 +307,10 @@ jobs:
           bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
           rm ./genReleaseNote.sh
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R
@@ -331,14 +332,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: artifact
           path: bin/
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R
