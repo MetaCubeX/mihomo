@@ -71,8 +71,8 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 					t.SetKeepAlive(false)
 				}
 			}
-			if len(additions) == 0 { // only apply on default listener
-				if inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
+			if len(additions) == 2 { // only apply on default listener
+				if !inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
 					_ = conn.Close()
 					continue
 				}

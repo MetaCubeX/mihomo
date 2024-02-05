@@ -62,8 +62,8 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 				}
 				continue
 			}
-			if len(additions) == 0 { // only apply on default listener
-				if inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
+			if len(additions) == 2 { // only apply on default listener
+				if !inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
 					_ = c.Close()
 					continue
 				}
