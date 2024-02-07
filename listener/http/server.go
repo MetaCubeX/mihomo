@@ -36,7 +36,9 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 }
 
 func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
+	isDefault := false
 	if len(additions) == 0 {
+		isDefault = true
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-HTTP"),
 			inbound.WithSpecialRules(""),
@@ -71,7 +73,7 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 					t.SetKeepAlive(false)
 				}
 			}
-			if len(additions) == 2 { // only apply on default listener
+			if isDefault { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
 					_ = conn.Close()
 					continue
