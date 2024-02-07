@@ -104,7 +104,14 @@ func getOrigDst(oob []byte) (netip.AddrPort, error) {
 	}
 
 	// retrieve the destination address from the SCM.
-	sa, err := unix.ParseOrigDstAddr(&scms[1])
+	var sa unix.Sockaddr
+	for i := range scms {
+		sa, err = unix.ParseOrigDstAddr(&scms[i])
+		if err == nil {
+			break
+		}
+	}
+
 	if err != nil {
 		return netip.AddrPort{}, fmt.Errorf("retrieve destination: %w", err)
 	}
@@ -123,12 +130,19 @@ func getOrigDst(oob []byte) (netip.AddrPort, error) {
 	return rAddr, nil
 }
 
-func getDSCP (oob []byte) (uint8, error) {
+func getDSCP(oob []byte) (uint8, error) {
 	scms, err := unix.ParseSocketControlMessage(oob)
 	if err != nil {
 		return 0, fmt.Errorf("parse control message: %w", err)
 	}
-	dscp, err := parseDSCP(&scms[0])
+	var dscp uint8
+	for i := range scms {
+		dscp, err = parseDSCP(&scms[i])
+		if err == nil {
+			break
+		}
+	}
+
 	if err != nil {
 		return 0, fmt.Errorf("retrieve DSCP: %w", err)
 	}
