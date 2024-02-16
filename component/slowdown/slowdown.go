@@ -12,8 +12,10 @@ type SlowDown struct {
 }
 
 func (s *SlowDown) Wait(ctx context.Context) (err error) {
+	timer := time.NewTimer(s.backoff.Duration())
+	defer timer.Stop()
 	select {
-	case <-time.After(s.backoff.Duration()):
+	case <-timer.C:
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
