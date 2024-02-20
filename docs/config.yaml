@@ -862,6 +862,8 @@ proxy-providers:
       # interface-name: tailscale0
       # routing-mark: 233
       # ip-version: ipv4-prefer
+      # additional-prefix: "[provider1]"
+      # additional-suffix: "test"
   test:
     type: file
     path: /test.yaml
