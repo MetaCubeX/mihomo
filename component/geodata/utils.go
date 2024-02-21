@@ -3,18 +3,36 @@ package geodata
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/sync/singleflight"
 	"strings"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/metacubex/mihomo/component/geodata/router"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 )
 
-var geoLoaderName = "memconservative"
-var geoSiteMatcher = "succinct"
+var (
+	geoMode        bool
+	AutoUpdate     bool
+	UpdateInterval int
+	geoLoaderName  = "memconservative"
+	geoSiteMatcher = "succinct"
+)
 
 //  geoLoaderName = "standard"
+
+func GeodataMode() bool {
+	return geoMode
+}
+
+func GeoAutoUpdate() bool {
+	return AutoUpdate
+}
+
+func GeoUpdateInterval() int {
+	return UpdateInterval
+}
 
 func LoaderName() string {
 	return geoLoaderName
@@ -22,6 +40,16 @@ func LoaderName() string {
 
 func SiteMatcherName() string {
 	return geoSiteMatcher
+}
+
+func SetGeodataMode(newGeodataMode bool) {
+	geoMode = newGeodataMode
+}
+func SetGeoAutoUpdate(newAutoUpdate bool) {
+	AutoUpdate = newAutoUpdate
+}
+func SetGeoUpdateInterval(newGeoUpdateInterval int) {
+	UpdateInterval = newGeoUpdateInterval
 }
 
 func SetLoader(newLoader string) {

@@ -607,6 +607,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 }
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
+	geodata.SetGeodataMode(cfg.GeodataMode)
+	geodata.SetGeoAutoUpdate(cfg.GeoAutoUpdate)
+	geodata.SetGeoUpdateInterval(cfg.GeoUpdateInterval)
 	geodata.SetLoader(cfg.GeodataLoader)
 	geodata.SetSiteMatcher(cfg.GeositeMatcher)
 	C.GeoAutoUpdate = cfg.GeoAutoUpdate
