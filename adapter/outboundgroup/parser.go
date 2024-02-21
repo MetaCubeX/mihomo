@@ -64,20 +64,15 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		groupOption.IncludeAllProviders = true
 		groupOption.IncludeAllProxies = true
 	}
-	var GroupUse []string
-	var GroupProxies []string
+
 	if groupOption.IncludeAllProviders {
-		GroupUse = append(GroupUse, AllProviders...)
-	} else {
-		GroupUse = groupOption.Use
+		groupOption.Use = append(groupOption.Use, AllProviders...)
 	}
 	if groupOption.IncludeAllProxies {
-		GroupProxies = append(groupOption.Proxies, AllProxies...)
-	} else {
-		GroupProxies = groupOption.Proxies
+		groupOption.Proxies = append(groupOption.Proxies, AllProxies...)
 	}
 
-	if len(GroupProxies) == 0 && len(GroupUse) == 0 {
+	if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
 		return nil, fmt.Errorf("%s: %w", groupName, errMissProxy)
 	}
 
@@ -91,17 +86,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		status = "*"
 	}
 	groupOption.ExpectedStatus = status
-	testUrl := groupOption.URL
 
-	if groupOption.Type != "select" && groupOption.Type != "relay" {
-		if groupOption.URL == "" {
-			groupOption.URL = C.DefaultTestURL
-			testUrl = groupOption.URL
-		}
-	}
-
-	if len(GroupProxies) != 0 {
-		ps, err := getProxies(proxyMap, GroupProxies)
+	if len(groupOption.Proxies) != 0 {
+		ps, err := getProxies(proxyMap, groupOption.Proxies)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
@@ -115,9 +102,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			if groupOption.Interval == 0 {
 				groupOption.Interval = 300
 			}
+			if groupOption.URL == "" {
+				groupOption.URL = C.DefaultTestURL
+			}
 		}
 
-		hc := provider.NewHealthCheck(ps, testUrl, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
@@ -128,14 +118,17 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		providersMap[groupName] = pd
 	}
 
-	if len(GroupUse) != 0 {
-		list, err := getProviders(providersMap, GroupUse)
+	if len(groupOption.Use) != 0 {
+		if groupOption.URL == "" {
+			groupOption.URL = C.DefaultTestURL
+		}
+		list, err := getProviders(providersMap, groupOption.Use)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
 		// different proxy groups use different test URL
-		addTestUrlToProviders(list, testUrl, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+		addTestUrlToProviders(list, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
 
 		providers = append(providers, list...)
 	} else {
