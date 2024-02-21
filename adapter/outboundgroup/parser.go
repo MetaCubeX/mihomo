@@ -93,13 +93,6 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	groupOption.ExpectedStatus = status
 	testUrl := groupOption.URL
 
-	if groupOption.Type != "select" && groupOption.Type != "relay" {
-		if groupOption.URL == "" {
-			groupOption.URL = C.DefaultTestURL
-			testUrl = groupOption.URL
-		}
-	}
-
 	if len(GroupProxies) != 0 {
 		ps, err := getProxies(proxyMap, GroupProxies)
 		if err != nil {
@@ -114,6 +107,10 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
 			if groupOption.Interval == 0 {
 				groupOption.Interval = 300
+			}
+			if groupOption.URL == "" {
+				groupOption.URL = C.DefaultTestURL
+				testUrl = groupOption.URL
 			}
 		}
 
