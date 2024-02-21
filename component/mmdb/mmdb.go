@@ -57,7 +57,7 @@ func Verify() bool {
 func Instance() Reader {
 	once.Do(func() {
 		mmdbPath := C.Path.MMDB()
-		log.Debugln("Load MMDB file: %s", mmdbPath)
+		log.Infoln("Load MMDB file: %s", mmdbPath)
 		mmdb, err := maxminddb.Open(mmdbPath)
 		if err != nil {
 			log.Fatalln("Can't load MMDB: %s", err.Error())
@@ -93,4 +93,8 @@ func DownloadMMDB(path string) (err error) {
 	_, err = io.Copy(f, resp.Body)
 
 	return err
+}
+
+func Reload() {
+	once = sync.Once{}
 }
