@@ -119,20 +119,27 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 
 	if len(groupOption.Use) != 0 {
-		if groupOption.URL == "" {
-			groupOption.URL = C.DefaultTestURL
-		}
 		list, err := getProviders(providersMap, groupOption.Use)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
+		if groupOption.URL == "" {
+			for _, p := range list {
+				if p.HealthCheckURL() != "" {
+					groupOption.URL = p.HealthCheckURL()
+				}
+				break
+			}
+
+			if groupOption.URL == "" {
+				groupOption.URL = C.DefaultTestURL
+			}
+		}
+
 		// different proxy groups use different test URL
 		addTestUrlToProviders(list, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
-
 		providers = append(providers, list...)
-	} else {
-		groupOption.Filter = ""
 	}
 
 	var group C.ProxyAdapter
