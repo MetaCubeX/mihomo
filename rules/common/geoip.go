@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/mmdb"
@@ -32,7 +33,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 	}
 
 	if strings.EqualFold(g.country, "LAN") {
-		return ip.IsPrivate() ||
+		return nnip.IsPrivateIP(ip) ||
 			ip.IsUnspecified() ||
 			ip.IsLoopback() ||
 			ip.IsMulticast() ||

@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/mmdb"
@@ -26,7 +27,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	if !C.GeodataMode {
 		codes := mmdb.Instance().LookupCode(ip.AsSlice())
 		for _, code := range codes {
-			if !strings.EqualFold(code, gf.code) && !ip.IsPrivate() {
+			if !strings.EqualFold(code, gf.code) && !nnip.IsPrivateIP(ip) {
 				return true
 			}
 		}
