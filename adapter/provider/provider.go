@@ -106,6 +106,10 @@ func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
 }
 
+func (pp *proxySetProvider) HealthCheckURL() string {
+	return pp.healthCheck.url
+}
+
 func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	pp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
@@ -269,6 +273,10 @@ func (cp *compatibleProvider) Proxies() []C.Proxy {
 
 func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
+}
+
+func (cp *compatibleProvider) HealthCheckURL() string {
+	return cp.healthCheck.url
 }
 
 func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {

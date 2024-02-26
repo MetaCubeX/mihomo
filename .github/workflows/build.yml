@@ -21,314 +21,288 @@ concurrency:
 env:
   REGISTRY: docker.io
 jobs:
-  Build:
-    permissions: write-all
+  build:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
-        job:
-          - {
-              type: "WithoutCGO",
-              target: "linux-amd64 linux-amd64-compatible",
-              id: "1",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "linux-armv5 linux-armv6 linux-armv7",
-              id: "2",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "linux-arm64 linux-mips64 linux-mips64le",
-              id: "3",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "linux-mips-softfloat linux-mips-hardfloat linux-mipsle-softfloat linux-mipsle-hardfloat",
-              id: "4",
-            }
-          - { type: "WithoutCGO", target: "linux-386 linux-riscv64 linux-loong64", id: "5" }
-          - {
-              type: "WithoutCGO",
-              target: "freebsd-386 freebsd-amd64 freebsd-arm64",
-              id: "6",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "windows-amd64-compatible windows-amd64 windows-386",
-              id: "7",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "windows-arm64 windows-arm32v7",
-              id: "8",
-            }
-          - {
-              type: "WithoutCGO",
-              target: "darwin-amd64 darwin-arm64",
-              id: "9",
-            }
-          - {
-            type: "WithoutCGO",
-            target: "darwin-amd64-compatible android-arm64",
-            id: "10",
-            }
-          # only for test
-          - { type: "WithoutCGO-GO120", target: "linux-amd64 linux-amd64-compatible",id: "1" }
-          # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
-          - { type: "WithoutCGO-GO120", target: "windows-amd64-compatible windows-amd64 windows-386",id: "2" }
-          # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
-          - { type: "WithoutCGO-GO120", target: "darwin-amd64 darwin-arm64",id: "3" }
-          - { type: "WithoutCGO-GO120", target: "darwin-amd64-compatible android-arm64",id: "4" }
-#          - { type: "WithCGO", target: "windows/*", id: "1" }
-#          - { type: "WithCGO", target: "linux/386", id: "2" }
-#          - { type: "WithCGO", target: "linux/amd64", id: "3" }
-#          - { type: "WithCGO", target: "linux/arm64,linux/riscv64", id: "4" }
-#          - { type: "WithCGO", target: "linux/arm,", id: "5" }
-#          - { type: "WithCGO", target: "linux/arm-6,linux/arm-7", id: "6" }
-#          - { type: "WithCGO", target: "linux/mips,linux/mipsle", id: "7" }
-#          - { type: "WithCGO", target: "linux/mips64", id: "8" }
-#          - { type: "WithCGO", target: "linux/mips64le", id: "9" }
-#          - { type: "WithCGO", target: "darwin-10.16/*", id: "10" }
-#          - { type: "WithCGO", target: "android", id: "11" }
+        jobs:
+          - { goos: darwin, goarch: arm64, output: arm64 }
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64 }
+
+          - { goos: linux, goarch: '386', output: '386' }
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: linux, goarch: arm64, output: arm64 }
+          - { goos: linux, goarch: arm, goarm: '7', output: armv7 }
+          - { goos: linux, goarch: mips, mips: hardfloat, output: mips-hardfloat }
+          - { goos: linux, goarch: mips, mips: softfloat, output: mips-softfloat }
+          - { goos: linux, goarch: mipsle, mips: hardfloat, output: mipsle-hardfloat }
+          - { goos: linux, goarch: mipsle, mips: softfloat, output: mipsle-softfloat }
+          - { goos: linux, goarch: mips64, output: mips64 }
+          - { goos: linux, goarch: mips64le, output: mips64le }
+          - { goos: linux, goarch: loong64, output: loong64 }
+          - { goos: linux, goarch: riscv64, output: riscv64 }
+          - { goos: linux, goarch: s390x, output: s390x }
+
+          - { goos: windows, goarch: '386', output: '386' }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: windows, goarch: arm, goarm: '7', output: armv7 }
+          - { goos: windows, goarch: arm64, output: arm64 }
+
+          - { goos: freebsd, goarch: '386', output: '386' }
+          - { goos: freebsd, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: freebsd, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: freebsd, goarch: arm64, output: arm64 }
+
+          - { goos: android, goarch: '386', ndk: i686-linux-android34, output: '386' }
+          - { goos: android, goarch: amd64, ndk: x86_64-linux-android34, output: amd64 }
+          - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
+          - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
+
+          - { goos: windows, goarch: '386', output: '386-go120', version: 20 }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, version: 20 }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go120, version: 20 }
+
+          - { goos: darwin, goarch: arm64, output: arm64-go120, version: 20 }
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, version: 20 }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-go120, version: 20 }
+
+          - { goos: linux, goarch: '386', output: '386-go120', version: 20 }
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, version: 20 }
+          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-go120, version: 20 }
 
     steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set variables
-        run: echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
+    - name: Set up Go1.22
+      if: ${{ matrix.jobs.version != '20' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ^1.22
 
-      - name: Set variables
-        if: ${{github.ref_name=='Alpha'}}
-        run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
+    - name: Set up Go1.20
+      if: ${{ matrix.jobs.version == '20' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ^1.20
 
-      - name: Set variables
-        if: ${{github.ref_name=='Meta'}}
-        run: echo "VERSION=meta-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-        shell: bash
+    - name: Set variables
+      if: ${{github.ref_name=='Alpha'}}
+      run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      shell: bash
 
-      - name: Set variables
-        if: ${{github.ref_name=='' || github.ref_type=='tag'}}
-        run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
-        shell: bash
+    - name: Set variables
+      if: ${{github.ref_name=='' || github.ref_type=='tag'}}
+      run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+      shell: bash
 
-      - name: Set ENV
-        run: |
-          sudo timedatectl set-timezone "Asia/Shanghai"
-          echo "BUILDTIME=$(date)" >> $GITHUB_ENV
-        shell: bash
+    - name: Set Time Variable
+      run: |
+        echo "BUILDTIME=$(date)" >> $GITHUB_ENV
+        echo "CGO_ENABLED=0" >> $GITHUB_ENV
+        echo "BUILDTAG=-extldflags --static" >> $GITHUB_ENV
 
-      - name: Set ENV
-        run: |
-          echo "TAGS=with_gvisor" >> $GITHUB_ENV
-          echo "LDFLAGS=-X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid=" >> $GITHUB_ENV
-          echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
-        shell: bash
+    - name: Setup NDK
+      if: ${{ matrix.jobs.goos == 'android' }}
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r26c
 
-      - name: Setup Go
-        if: ${{ matrix.job.type!='WithoutCGO-GO120' }}
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-          check-latest: true
+    - name: Set NDK path
+      if: ${{ matrix.jobs.goos == 'android' }}
+      run: |
+        echo "CC=${{steps.setup-ndk.outputs.ndk-path}}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{matrix.jobs.ndk}}-clang" >> $GITHUB_ENV
+        echo "CGO_ENABLED=1" >> $GITHUB_ENV
+        echo "BUILDTAG=" >> $GITHUB_ENV
 
-      - name: Setup Go
-        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.20"
-          check-latest: true
+    - name: build core
+      env:
+        GOOS: ${{matrix.jobs.goos}}
+        GOARCH: ${{matrix.jobs.goarch}}
+        GOAMD64: ${{matrix.jobs.goamd64}}
+        GOARM: ${{matrix.jobs.arm}}
+        GOMIPS: ${{matrix.jobs.mips}}
+      run: |
+        echo $CGO_ENABLED
+        go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
+        if [ "${{matrix.jobs.goos}}" = "windows" ]; then
+          cp mihomo.exe mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
+          zip -r mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.zip mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
+        else
+          cp mihomo mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}
+          gzip -c mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}} > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.gz
+          rm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}
+        fi
 
-      - name: Test
-        if: ${{ matrix.job.id=='1' && matrix.job.type!='WithCGO' }}
-        run: |
-          go test ./...
+    - name: Create DEB package
+      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
+      run: |
+        sudo apt-get install dpkg
 
-      - name: Build WithoutCGO
-        if: ${{ matrix.job.type!='WithCGO' }}
-        env:
-          NAME: mihomo
-          BINDIR: bin
-        run: make -j$(($(nproc) + 1)) ${{ matrix.job.target }}
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/systemd/system/
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/share/licenses/mihomo
 
-      - uses: nttld/setup-ndk@v1
-        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
-        id: setup-ndk
-        with:
-          ndk-version: r26b
-          add-to-path: true
+        cp mihomo mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin/mihomo
+        cp LICENSE mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/share/licenses/mihomo/
+        cp .github/mihomo.service mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/systemd/system/
 
-      - name: Build Android
-        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target=='android' }}
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          mkdir bin
-          CC=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
-          CGO_ENABLED=1 CC=${CC} GOARCH=arm64 GOOS=android go build -tags ${TAGS} -trimpath -ldflags "${LDFLAGS}" -o bin/${NAME}-android-arm64
+        cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo/config.yaml <<EOF
+        mixed-port: 7890
+        external-controller: 127.0.0.1:9090
+        EOF
 
-      - name: Set up xgo
-        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
-        run: |
-          docker pull techknowlogick/xgo:latest
-          go install src.techknowlogick.com/xgo@latest
+        cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN/control <<EOF
+        Package: mihomo
+        Version: 1.18.2-${VERSION}
+        Section:
+        Priority: extra
+        Architecture: ${{matrix.jobs.goarch}}
+        Maintainer: MetaCubeX <none@example.com>
+        Homepage: https://wiki.metacubex.one/
+        Description: The universal proxy platform.
+        EOF
 
-      - name: Build by xgo
-        if: ${{ matrix.job.type=='WithCGO' && matrix.job.target!='android' }}
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          mkdir bin
-          xgo --targets="${{ matrix.job.target }}" --tags="${TAGS}" -ldflags="${LDFLAGS}" --out bin/${NAME} ./
+        dpkg-deb -Z gzip --build mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}
 
-      - name: Rename
-        if: ${{ matrix.job.type=='WithCGO' }}
-        run: |
-          cd bin
-          ls -la
-          cp ../.github/rename-cgo.sh ./
-          bash ./rename-cgo.sh
-          rm ./rename-cgo.sh
-          ls -la
-          cd ..
+    - name: Convert DEB to RPM
+      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
+      run: |
+        sudo apt-get install -y alien
+        alien --to-rpm --scripts mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
+        mv mihomo*.rpm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.rpm
 
-      - name: Rename
-        if: ${{ matrix.job.type=='WithoutCGO-GO120' }}
-        run: |
-          cd bin
-          ls -la
-          cp ../.github/rename-go120.sh ./
-          bash ./rename-go120.sh
-          rm ./rename-go120.sh
-          ls -la
-          cd ..
+    - name: Convert DEB to PKG
+      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
+      run: |
+        docker pull archlinux
+        docker run --rm -v ./:/mnt archlinux bash -c "
+          pacman -Syu pkgfile base-devel --noconfirm
+          curl -L https://github.com/helixarch/debtap/raw/master/debtap > /usr/bin/debtap
+          chmod 755 /usr/bin/debtap
+          debtap -u 
+          debtap -Q /mnt/mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
+        "
+        mv mihomo*.pkg.tar.zst mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.pkg.tar.zst
 
-      - name: Zip
-        if: ${{  success() }}
-        run: |
-          cd bin
-          ls -la
-          chmod +x *
-          cp ../.github/release.sh ./
-          bash ./release.sh
-          rm ./release.sh
-          ls -la
-          cd ..
+    - name: Save version
+      run: |
+        echo ${VERSION} > version.txt
+      shell: bash
 
-      - name: Save version
-        run: echo ${VERSION} > bin/version.txt
-        shell: bash
-
-      - uses: actions/upload-artifact@v4
-        if: ${{  success() }}
-        with:
-          name: artifact-${{ matrix.job.type }}-${{ matrix.job.target }}
-          path: bin/
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}
+        path: |
+          mihomo*.gz
+          mihomo*.deb
+          mihomo*.rpm
+          mihomo*.pkg.tar.zst
+          mihomo*.zip
+          version.txt
 
   Upload-Prerelease:
     permissions: write-all
     if: ${{ github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
-    needs: [Build]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: bin/
-          merge-multiple: true
+    - name: Download all workflow run artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: bin/
+        merge-multiple: true
 
-      - name: Display structure of downloaded files
-        run: ls -R
-        working-directory: bin
+    - name: Delete current release assets
+      uses: 8Mi-Tech/delete-release-assets-action@main
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        tag: Prerelease-${{ github.ref_name }}
+        deleteOnlyFromDrafts: false
+    - name: Set Env
+      run: |
+        echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
+      shell: bash
 
-      - name: Delete current release assets
-        uses: 8Mi-Tech/delete-release-assets-action@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: Prerelease-${{ github.ref_name }}
-          deleteOnlyFromDrafts: false
-
-      - name: Set Env
-        run: |
-          echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Tag Repo
-        uses: richardsimko/update-tag@v1
-        with:
-          tag_name: Prerelease-${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Tag Repo
+      uses: richardsimko/update-tag@v1
+      with:
+        tag_name: Prerelease-${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - run: |
-          cat > release.txt << 'EOF'
-          Release created at  ${{ env.BUILDTIME }}
-          Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
-          <br>
-          [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
-          [二进制文件筛选 / Binary file selector](https://metacubex.github.io/Meta-Docs/startup/#_1)
-          [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
-          EOF
+    - run: |
+        cat > release.txt << 'EOF'
+        Release created at  ${{ env.BUILDTIME }}
+        Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
+        <br>
+        [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
+        [二进制文件筛选 / Binary file selector](https://metacubex.github.io/Meta-Docs/startup/#_1)
+        [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
+        EOF
 
-      - name: Upload Prerelease
-        uses: softprops/action-gh-release@v1
-        if: ${{  success() }}
-        with:
-          tag_name: Prerelease-${{ github.ref_name }}
-          files: |
-            bin/*
-          prerelease: true
-          generate_release_notes: true
-          body_path: release.txt
+    - name: Upload Prerelease
+      uses: softprops/action-gh-release@v1
+      if: ${{  success() }}
+      with:
+        tag_name: Prerelease-${{ github.ref_name }}
+        files: |
+          bin/*
+        prerelease: true
+        generate_release_notes: true
+        body_path: release.txt
 
   Upload-Release:
     permissions: write-all
     if: ${{ github.ref_type=='tag' }}
-    needs: [Build]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Get tags
-        run: |
-          echo "CURRENTVERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          git fetch --tags
-          echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD^)" >> $GITHUB_ENV
+    - name: Get tags
+      run: |
+        echo "CURRENTVERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+        git fetch --tags
+        echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD^)" >> $GITHUB_ENV
 
-      - name: Generate release notes
-        run: |
+    - name: Generate release notes
+      run: |
           cp ./.github/genReleaseNote.sh ./
           bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
           rm ./genReleaseNote.sh
 
-      - uses: actions/download-artifact@v4
-        with:
-          path: bin/
-          merge-multiple: true
+    - uses: actions/download-artifact@v4
+      with:
+        path: bin/
+        merge-multiple: true
 
-      - name: Display structure of downloaded files
-        run: ls -R
-        working-directory: bin
+    - name: Display structure of downloaded files
+      run: ls -R
+      working-directory: bin
 
-      - name: Upload Release
-        uses: softprops/action-gh-release@v1
-        if: ${{  success() }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: bin/*
-          generate_release_notes: true
-          body_path: release.md
+    - name: Upload Release
+      uses: softprops/action-gh-release@v1
+      if: ${{  success() }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        files: bin/*
+        generate_release_notes: true
+        body_path: release.md
 
   Docker:
     if: ${{ !startsWith(github.event_name, 'pull_request') }}
     permissions: write-all
-    needs: [Build]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
