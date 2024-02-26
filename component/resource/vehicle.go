@@ -9,6 +9,7 @@ import (
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	C "github.com/metacubex/mihomo/constant"
 	types "github.com/metacubex/mihomo/constant/provider"
 )
 
@@ -52,7 +53,7 @@ func (h *HTTPVehicle) Path() string {
 func (h *HTTPVehicle) Read() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, h.url, http.MethodGet, nil, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, h.url, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return nil, err
 	}
