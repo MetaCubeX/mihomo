@@ -41,7 +41,8 @@ jobs:
           - { goos: linux, goarch: mipsle, mips: softfloat, output: mipsle-softfloat }
           - { goos: linux, goarch: mips64, output: mips64 }
           - { goos: linux, goarch: mips64le, output: mips64le }
-          - { goos: linux, goarch: loong64, output: loong64 }
+          - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1' }
+          - { goos: linux, goarch: loong64, output: loong64-abi2, abi: '2' }
           - { goos: linux, goarch: riscv64, output: riscv64 }
           - { goos: linux, goarch: s390x, output: s390x }
 
@@ -77,16 +78,32 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Go1.22
-      if: ${{ matrix.jobs.version != '20' }}
+      if: ${{ matrix.jobs.version != '20' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
         go-version: ^1.22
 
     - name: Set up Go1.20
-      if: ${{ matrix.jobs.version == '20' }}
+      if: ${{ matrix.jobs.version == '20' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
         go-version: ^1.20
+
+    - name: Set up Go1.21 loongarch abi1
+      if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
+      run: |
+        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi1.tar.gz
+        sudo tar zxf go1.21.5.linux-amd64-abi1.tar.gz
+        sudo rm -rf /opt/hostedtoolcache/go/1.20.14/x64/*
+        sudo cp -r go/* /opt/hostedtoolcache/go/1.20.14/x64
+
+    - name: Set up Go1.21 loongarch abi2
+      if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
+      run: |
+        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi2.tar.gz
+        sudo tar zxf go1.21.5.linux-amd64-abi2.tar.gz
+        sudo rm -rf /opt/hostedtoolcache/go/1.20.14/x64/*
+        sudo cp -r go/* /opt/hostedtoolcache/go/1.20.14/x64
 
     - name: Set variables
       if: ${{github.ref_name=='Alpha'}}
@@ -141,7 +158,11 @@ jobs:
       if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
       run: |
         sudo apt-get install dpkg
-
+        if [ "${{matrix.jobs.goarch}}" = "loong64" ]; then
+          ARCH=loongarch64
+        else
+          ARCH=${{matrix.jobs.goarch}}
+        fi
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo
@@ -162,7 +183,7 @@ jobs:
         Version: 1.18.2-${VERSION}
         Section:
         Priority: extra
-        Architecture: ${{matrix.jobs.goarch}}
+        Architecture: ${ARCH}
         Maintainer: MetaCubeX <none@example.com>
         Homepage: https://wiki.metacubex.one/
         Description: The universal proxy platform.
@@ -178,7 +199,7 @@ jobs:
         mv mihomo*.rpm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.rpm
 
     - name: Convert DEB to PKG
-      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
+      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') && !contains(matrix.jobs.goarch, 'loong64') }}
       run: |
         docker pull archlinux
         docker run --rm -v ./:/mnt archlinux bash -c "
