@@ -28,14 +28,16 @@ type healthCheckSchema struct {
 }
 
 type OverrideSchema struct {
-	UDP            *bool   `provider:"udp,omitempty"`
-	Up             *string `provider:"up,omitempty"`
-	Down           *string `provider:"down,omitempty"`
-	DialerProxy    *string `provider:"dialer-proxy,omitempty"`
-	SkipCertVerify *bool   `provider:"skip-cert-verify,omitempty"`
-	Interface      *string `provider:"interface-name,omitempty"`
-	RoutingMark    *int    `provider:"routing-mark,omitempty"`
-	IPVersion      *string `provider:"ip-version,omitempty"`
+	UDP              *bool   `provider:"udp,omitempty"`
+	Up               *string `provider:"up,omitempty"`
+	Down             *string `provider:"down,omitempty"`
+	DialerProxy      *string `provider:"dialer-proxy,omitempty"`
+	SkipCertVerify   *bool   `provider:"skip-cert-verify,omitempty"`
+	Interface        *string `provider:"interface-name,omitempty"`
+	RoutingMark      *int    `provider:"routing-mark,omitempty"`
+	IPVersion        *string `provider:"ip-version,omitempty"`
+	AdditionalPrefix *string `provider:"additional-prefix,omitempty"`
+	AdditionalSuffix *string `provider:"additional-suffix,omitempty"`
 }
 
 type proxyProviderSchema struct {

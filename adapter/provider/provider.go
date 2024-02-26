@@ -106,6 +106,10 @@ func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
 }
 
+func (pp *proxySetProvider) HealthCheckURL() string {
+	return pp.healthCheck.url
+}
+
 func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	pp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
@@ -271,6 +275,10 @@ func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
 }
 
+func (cp *compatibleProvider) HealthCheckURL() string {
+	return cp.healthCheck.url
+}
+
 func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
 	cp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
@@ -398,6 +406,14 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 				}
 				if override.IPVersion != nil {
 					mapping["ip-version"] = *override.IPVersion
+				}
+				if override.AdditionalPrefix != nil {
+					name := mapping["name"].(string)
+					mapping["name"] = *override.AdditionalPrefix + name
+				}
+				if override.AdditionalSuffix != nil {
+					name := mapping["name"].(string)
+					mapping["name"] = name + *override.AdditionalSuffix
 				}
 
 				proxy, err := adapter.ParseProxy(mapping)

@@ -35,7 +35,9 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+	isDefault := false
 	if len(additions) == 0 {
+		isDefault = true
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-SOCKS"),
 			inbound.WithSpecialRules(""),
@@ -59,8 +61,8 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 				}
 				continue
 			}
-			if len(additions) == 0 { // only apply on default listener
-				if inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
+			if isDefault { // only apply on default listener
+				if !inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
 					_ = c.Close()
 					continue
 				}

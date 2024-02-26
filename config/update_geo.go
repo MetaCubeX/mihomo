@@ -6,6 +6,7 @@ import (
 
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/standard"
+	"github.com/metacubex/mihomo/component/mmdb"
 	C "github.com/metacubex/mihomo/constant"
 
 	"github.com/oschwald/maxminddb-golang"
@@ -33,6 +34,7 @@ func UpdateGeoDatabases() error {
 		}
 
 	} else {
+		defer mmdb.Reload()
 		data, err := downloadForBytes(C.MmdbUrl)
 		if err != nil {
 			return fmt.Errorf("can't download MMDB database file: %w", err)
@@ -43,6 +45,8 @@ func UpdateGeoDatabases() error {
 			return fmt.Errorf("invalid MMDB database file: %s", err)
 		}
 		_ = instance.Close()
+
+		mmdb.Instance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
 		if err = saveFile(data, C.Path.MMDB()); err != nil {
 			return fmt.Errorf("can't save MMDB database file: %w", err)
 		}
