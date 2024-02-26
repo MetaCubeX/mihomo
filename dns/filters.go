@@ -36,7 +36,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 
 	if geoIPMatcher == nil {
 		var err error
-		geoIPMatcher, _, err = geodata.LoadGeoIPMatcher("CN")
+		geoIPMatcher, _, err = geodata.LoadGeoIPMatcher(gf.code)
 		if err != nil {
 			log.Errorln("[GeoIPFilter] LoadGeoIPMatcher error: %s", err.Error())
 			return false
