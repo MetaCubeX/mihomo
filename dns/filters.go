@@ -42,7 +42,7 @@ func (gf *geoipFilter) Match(ip netip.Addr) bool {
 			return false
 		}
 	}
-	return !geoIPMatcher.Match(ip)
+	return !geoIPMatcher.Match(ip) && !nnip.IsPrivateIP(ip)
 }
 
 type ipnetFilter struct {
