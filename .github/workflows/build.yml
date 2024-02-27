@@ -81,13 +81,13 @@ jobs:
       if: ${{ matrix.jobs.version != '20' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
-        go-version: ^1.22
+        go-version: '1.22'
 
     - name: Set up Go1.20
       if: ${{ matrix.jobs.version == '20' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
-        go-version: ^1.20
+        go-version: '1.20'
 
     - name: Set up Go1.21 loongarch abi1
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
