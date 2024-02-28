@@ -120,6 +120,8 @@ github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f h1:QjXrHKbT
 github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f/go.mod h1:olVkD4FChQ5gKMHG4ZzuD7+fMkJY1G8vwOKpRehjrmY=
 github.com/metacubex/sing-wireguard v0.0.0-20231209125515-0594297f7232 h1:loWjR+k9dxqBSgruGyT5hE8UCRMmCEjxqZbryfY9no4=
 github.com/metacubex/sing-wireguard v0.0.0-20231209125515-0594297f7232/go.mod h1:NGCrBZ+fUmp81yaA1kVskcNWBnwl5z4UHxz47A01zm8=
+github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66 h1:as/aO/fM8nv4W4pOr9EETP6kV/Oaujk3fUNyQSJK61c=
+github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66/go.mod h1:c7bVFM9f5+VzeZ/6Kg77T/jrg1Xp8QpqlSHvG/aXVts=
 github.com/miekg/dns v1.1.57 h1:Jzi7ApEIzwEPLHWRcafCN9LZSBbqQpxjt/wpgvg7wcM=
 github.com/miekg/dns v1.1.57/go.mod h1:uqRjCRUuEAA6qsOiJvDd+CFo/vW+y5WR6SNmHE55hZk=
 github.com/mroth/weightedrand/v2 v2.1.0 h1:o1ascnB1CIVzsqlfArQQjeMy1U0NcIbBO5rfd5E/OeU=
@@ -161,8 +163,6 @@ github.com/sagernet/sing-shadowtls v0.1.4 h1:aTgBSJEgnumzFenPvc+kbD9/W0PywzWevnV
 github.com/sagernet/sing-shadowtls v0.1.4/go.mod h1:F8NBgsY5YN2beQavdgdm1DPlhaKQlaL6lpDdcBglGK4=
 github.com/sagernet/smux v0.0.0-20231208180855-7041f6ea79e7 h1:DImB4lELfQhplLTxeq2z31Fpv8CQqqrUwTbrIRumZqQ=
 github.com/sagernet/smux v0.0.0-20231208180855-7041f6ea79e7/go.mod h1:FP9X2xjT/Az1EsG/orYYoC+5MojWnuI7hrffz8fGwwo=
-github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6 h1:z3SJQhVyU63FT26Wn/UByW6b7q8QKB0ZkPqsyqcz2PI=
-github.com/sagernet/tfo-go v0.0.0-20231209031829-7b5343ac1dc6/go.mod h1:73xRZuxwkFk4aiLw28hG8W6o9cr2UPrGL9pdY2UTbvY=
 github.com/sagernet/utls v1.5.4 h1:KmsEGbB2dKUtCNC+44NwAdNAqnqQ6GA4pTO0Yik56co=
 github.com/sagernet/utls v1.5.4/go.mod h1:CTGxPWExIloRipK3XFpYv0OVyhO8kk3XCGW/ieyTh1s=
 github.com/sagernet/wireguard-go v0.0.0-20231209092712-9a439356a62e h1:iGH0RMv2FzELOFNFQtvsxH7NPmlo7X5JizEK51UCojo=
