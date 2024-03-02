@@ -133,6 +133,7 @@ type Metadata struct {
 	Type         Type       `json:"type"`
 	SrcIP        netip.Addr `json:"sourceIP"`
 	DstIP        netip.Addr `json:"destinationIP"`
+	DstGeoIP     []string   `json:"destinationGeoIP"`       // can be nil if never queried, empty slice if got no result
 	SrcPort      uint16     `json:"sourcePort,string"`      // `,string` is used to compatible with old version json output
 	DstPort      uint16     `json:"destinationPort,string"` // `,string` is used to compatible with old version json output
 	InIP         netip.Addr `json:"inboundIP"`
