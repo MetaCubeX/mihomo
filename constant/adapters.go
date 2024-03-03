@@ -21,6 +21,7 @@ const (
 	RejectDrop
 	Compatible
 	Pass
+	Dns
 
 	Relay
 	Selector
