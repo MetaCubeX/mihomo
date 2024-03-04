@@ -185,6 +185,8 @@ func (at AdapterType) String() string {
 		return "Compatible"
 	case Pass:
 		return "Pass"
+	case Dns:
+		return "Dns"
 	case Shadowsocks:
 		return "Shadowsocks"
 	case ShadowsocksR:
