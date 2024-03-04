@@ -120,6 +120,13 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 			break
 		}
 		proxy = outbound.NewDirectWithOption(*directOption)
+	case "dns":
+		dnsOptions := &outbound.DnsOption{}
+		err = decoder.Decode(mapping, dnsOptions)
+		if err != nil {
+			break
+		}
+		proxy = outbound.NewDnsWithOption(*dnsOptions)
 	case "reject":
 		rejectOption := &outbound.RejectOption{}
 		err = decoder.Decode(mapping, rejectOption)
