@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/netip"
 	"time"
 
 	"github.com/metacubex/mihomo/common/pool"
@@ -12,8 +11,6 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
-
-	D "github.com/miekg/dns"
 )
 
 type Dns struct {
@@ -79,12 +76,12 @@ func (d *dnsPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 }
 
 func (d *dnsPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	ctx, cancel := context.WithTimeout(d.ctx, time.Second*5)
+	ctx, cancel := context.WithTimeout(d.ctx, resolver.DefaultDnsRelayTimeout)
 	defer cancel()
 
-	buf := pool.Get(2048)
+	buf := pool.Get(resolver.SafeDnsPacketSize)
 	put := func() { _ = pool.Put(buf) }
-	buf, err = RelayDnsPacket(ctx, p, buf)
+	buf, err = resolver.RelayDnsPacket(ctx, p, buf)
 	if err != nil {
 		put()
 		return 0, err
@@ -110,7 +107,11 @@ func (d *dnsPacketConn) Close() error {
 }
 
 func (*dnsPacketConn) LocalAddr() net.Addr {
-	return net.UDPAddrFromAddrPort(netip.MustParseAddrPort("127.0.0.1:53"))
+	return &net.UDPAddr{
+		IP:   net.IPv4(127, 0, 0, 1),
+		Port: 53,
+		Zone: "",
+	}
 }
 
 func (*dnsPacketConn) SetDeadline(t time.Time) error {
@@ -138,23 +139,4 @@ func NewDnsWithOption(option DnsOption) *Dns {
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 	}
-}
-
-// copied from listener/sing_mux/dns.go
-func RelayDnsPacket(ctx context.Context, payload []byte, target []byte) ([]byte, error) {
-	msg := &D.Msg{}
-	if err := msg.Unpack(payload); err != nil {
-		return nil, err
-	}
-
-	r, err := resolver.ServeMsg(ctx, msg)
-	if err != nil {
-		m := new(D.Msg)
-		m.SetRcode(msg, D.RcodeServerFailure)
-		return m.PackBuffer(target)
-	}
-
-	r.SetRcode(msg, r.Rcode)
-	r.Compress = true
-	return r.PackBuffer(target)
 }
