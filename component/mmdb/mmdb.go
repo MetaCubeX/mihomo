@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	mihomoOnce "github.com/metacubex/mihomo/common/once"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -96,5 +97,5 @@ func DownloadMMDB(path string) (err error) {
 }
 
 func Reload() {
-	once = sync.Once{}
+	mihomoOnce.Reset(&once)
 }
