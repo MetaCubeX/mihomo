@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	Tvless "github.com/metacubex/mihomo/transport/vless"
 	"net/url"
 	"strconv"
 	"strings"
@@ -216,7 +217,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 			if flow := query.Get("flow"); flow != "" {
-				vless["flow"] = strings.ToLower(flow)
+				if strings.ToLower(flow) != Tvless.XRV {
+					continue
+				}
+				vless["flow"] = Tvless.XRV
 			}
 			proxies = append(proxies, vless)
 
