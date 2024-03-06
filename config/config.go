@@ -152,6 +152,7 @@ type IPTables struct {
 	Enable           bool     `yaml:"enable" json:"enable"`
 	InboundInterface string   `yaml:"inbound-interface" json:"inbound-interface"`
 	Bypass           []string `yaml:"bypass" json:"bypass"`
+	DnsRedirect      bool     `yaml:"dns-redirect" json:"dns-redirect"`
 }
 
 type Sniffer struct {
@@ -440,6 +441,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Enable:           false,
 			InboundInterface: "lo",
 			Bypass:           []string{},
+			DnsRedirect:      true,
 		},
 		NTP: RawNTP{
 			Enable:        false,

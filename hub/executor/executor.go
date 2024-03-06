@@ -478,6 +478,9 @@ func updateIPTables(cfg *config.Config) {
 		bypass           = iptables.Bypass
 		tProxyPort       = cfg.General.TProxyPort
 		dnsCfg           = cfg.DNS
+		DnsRedirect      = iptables.DnsRedirect
+
+		dnsPort netip.AddrPort
 	)
 
 	if tProxyPort == 0 {
@@ -485,15 +488,17 @@ func updateIPTables(cfg *config.Config) {
 		return
 	}
 
-	if !dnsCfg.Enable {
-		err = fmt.Errorf("DNS server must be enable")
-		return
-	}
+	if DnsRedirect {
+		if !dnsCfg.Enable {
+			err = fmt.Errorf("DNS server must be enable")
+			return
+		}
 
-	dnsPort, err := netip.ParseAddrPort(dnsCfg.Listen)
-	if err != nil {
-		err = fmt.Errorf("DNS server must be correct")
-		return
+		dnsPort, err = netip.ParseAddrPort(dnsCfg.Listen)
+		if err != nil {
+			err = fmt.Errorf("DNS server must be correct")
+			return
+		}
 	}
 
 	if iptables.InboundInterface != "" {
@@ -504,7 +509,7 @@ func updateIPTables(cfg *config.Config) {
 		dialer.DefaultRoutingMark.Store(2158)
 	}
 
-	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), dnsPort.Port())
+	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), DnsRedirect, dnsPort.Port())
 	if err != nil {
 		return
 	}
