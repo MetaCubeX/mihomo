@@ -29,6 +29,7 @@ type GroupCommonOption struct {
 	URL                 string   `group:"url,omitempty"`
 	Interval            int      `group:"interval,omitempty"`
 	TestTimeout         int      `group:"timeout,omitempty"`
+	MaxFailedTimes      int      `group:"max-failed-times,omitempty"`
 	Lazy                bool     `group:"lazy,omitempty"`
 	DisableUDP          bool     `group:"disable-udp,omitempty"`
 	Filter              string   `group:"filter,omitempty"`
