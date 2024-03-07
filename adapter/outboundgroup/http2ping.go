@@ -64,14 +64,18 @@ func (hp *HTTP2Ping) DialContext(ctx context.Context, metadata *C.Metadata, opts
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (hp *HTTP2Ping) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+func (hp *HTTP2Ping) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (pc C.PacketConn, err error) {
 	proxy := hp.getBestProxy()
-	pc, err := proxy.ListenPacketContext(ctx, metadata, hp.Base.DialOptions(opts...)...)
+	if proxy == nil {
+		d := outbound.NewDirect()
+		pc, err = d.ListenPacketContext(ctx, metadata, hp.Base.DialOptions(opts...)...)
+	} else {
+		pc, err = proxy.ListenPacketContext(ctx, metadata, hp.Base.DialOptions(opts...)...)
+	}
 	if err == nil {
 		pc.AppendToChains(hp)
 	}
-
-	return pc, err
+	return
 }
 
 // SupportUDP implements C.ProxyAdapter
