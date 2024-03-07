@@ -37,7 +37,7 @@ func (h *ListenerHandler) ShouldHijackDns(targetAddr netip.AddrPort) bool {
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
 	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
 		log.Debugln("[DNS] hijack tcp:%s", metadata.Destination.String())
-		return resolver.RelayDnsConn(ctx, conn)
+		return resolver.RelayDnsConn(ctx, conn, resolver.DefaultDnsReadTimeout)
 	}
 	return h.ListenerHandler.NewConnection(ctx, conn, metadata)
 }

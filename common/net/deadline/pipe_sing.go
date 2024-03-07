@@ -215,3 +215,8 @@ func (p *pipe) waitReadBuffer() (buffer *buf.Buffer, err error) {
 		return nil, os.ErrDeadlineExceeded
 	}
 }
+
+func IsPipe(conn any) bool {
+	_, ok := conn.(*pipe)
+	return ok
+}

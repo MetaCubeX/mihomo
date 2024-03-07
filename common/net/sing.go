@@ -23,6 +23,12 @@ type ExtendedReader = network.ExtendedReader
 var WriteBuffer = bufio.WriteBuffer
 
 func NewDeadlineConn(conn net.Conn) ExtendedConn {
+	if deadline.IsPipe(conn) || deadline.IsPipe(network.UnwrapReader(conn)) {
+		return NewExtendedConn(conn) // pipe always have correctly deadline implement
+	}
+	if deadline.IsConn(conn) || deadline.IsConn(network.UnwrapReader(conn)) {
+		return NewExtendedConn(conn) // was a *deadline.Conn
+	}
 	return deadline.NewConn(conn)
 }
 

@@ -2,10 +2,10 @@ package outbound
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"time"
 
+	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -24,7 +24,9 @@ type DnsOption struct {
 
 // DialContext implements C.ProxyAdapter
 func (d *Dns) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
-	return nil, fmt.Errorf("dns outbound does not support tcp")
+	left, right := N.Pipe()
+	go resolver.RelayDnsConn(context.Background(), right, 0)
+	return NewConn(left, d), nil
 }
 
 // ListenPacketContext implements C.ProxyAdapter
@@ -76,29 +78,44 @@ func (d *dnsPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 }
 
 func (d *dnsPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	select {
+	case <-d.ctx.Done():
+		return 0, net.ErrClosed
+	default:
+	}
+
+	if len(p) > resolver.SafeDnsPacketSize {
+		// wtf???
+		return len(p), nil
+	}
+
 	ctx, cancel := context.WithTimeout(d.ctx, resolver.DefaultDnsRelayTimeout)
 	defer cancel()
 
 	buf := pool.Get(resolver.SafeDnsPacketSize)
 	put := func() { _ = pool.Put(buf) }
-	buf, err = resolver.RelayDnsPacket(ctx, p, buf)
-	if err != nil {
-		put()
-		return 0, err
-	}
+	copy(buf, p) // avoid p be changed after WriteTo returned
 
-	packet := dnsPacket{
-		data: buf,
-		put:  put,
-		addr: addr,
-	}
-	select {
-	case d.response <- packet:
-		return len(p), nil
-	case <-d.ctx.Done():
-		put()
-		return 0, net.ErrClosed
-	}
+	go func() { // don't block the WriteTo function
+		buf, err = resolver.RelayDnsPacket(ctx, buf[:len(p)], buf)
+		if err != nil {
+			put()
+			return
+		}
+
+		packet := dnsPacket{
+			data: buf,
+			put:  put,
+			addr: addr,
+		}
+		select {
+		case d.response <- packet:
+			break
+		case <-d.ctx.Done():
+			put()
+		}
+	}()
+	return len(p), nil
 }
 
 func (d *dnsPacketConn) Close() error {
