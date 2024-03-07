@@ -156,6 +156,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		return NewLoadBalance(groupOption, providers, strategy)
 	case "relay":
 		group = NewRelay(groupOption, providers)
+	case "http2-ping":
+		cfg := parseHTTP2PingOption(config)
+		group = NewHTTP2Ping(groupOption, providers, cfg)
 	default:
 		return nil, fmt.Errorf("%w: %s", errType, groupOption.Type)
 	}
