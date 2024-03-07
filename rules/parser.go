@@ -2,7 +2,7 @@ package rules
 
 import (
 	"fmt"
-	
+
 	C "github.com/metacubex/mihomo/constant"
 	RC "github.com/metacubex/mihomo/rules/common"
 	"github.com/metacubex/mihomo/rules/logic"
@@ -17,6 +17,8 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed = RC.NewDomainSuffix(payload, target)
 	case "DOMAIN-KEYWORD":
 		parsed = RC.NewDomainKeyword(payload, target)
+	case "DOMAIN-REGEX":
+		parsed = RC.NewDomainRegex(payload, target)
 	case "GEOSITE":
 		parsed, parseErr = RC.NewGEOSITE(payload, target)
 	case "GEOIP":
