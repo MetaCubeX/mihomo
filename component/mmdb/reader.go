@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/oschwald/maxminddb-golang"
+	"github.com/sagernet/sing/common"
 )
 
 type geoip2Country struct {
@@ -43,11 +44,9 @@ func (r Reader) LookupCode(ipAddress net.IP) []string {
 		case string:
 			return []string{record}
 		case []any: // lookup returned type of slice is []any
-			result := make([]string, 0, len(record))
-			for _, item := range record {
-				result = append(result, item.(string))
-			}
-			return result
+			return common.Map(record, func(it any) string {
+				return it.(string)
+			})
 		}
 		return []string{}
 
