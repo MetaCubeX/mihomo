@@ -3,6 +3,7 @@ package mmdb
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/oschwald/maxminddb-golang"
 )
@@ -26,7 +27,7 @@ func (r Reader) LookupCode(ipAddress net.IP) []string {
 		if country.Country.IsoCode == "" {
 			return []string{}
 		}
-		return []string{country.Country.IsoCode}
+		return []string{strings.ToLower(country.Country.IsoCode)}
 
 	case typeSing:
 		var code string
