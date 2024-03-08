@@ -11,8 +11,6 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
 	"golang.org/x/crypto/ssh"
-
-	M "github.com/sagernet/sing/common/metadata"
 )
 
 type Ssh struct {
@@ -33,8 +31,7 @@ type SshOption struct {
 }
 
 func (h *Ssh) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
-	dstAddr := M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort).String()
-	c, err := h.client.Dial("tcp", dstAddr)
+	c, err := h.client.Dial("tcp", metadata.RemoteAddress())
 	if err != nil {
 		return nil, err
 	}
