@@ -18,7 +18,7 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 	case "DOMAIN-KEYWORD":
 		parsed = RC.NewDomainKeyword(payload, target)
 	case "DOMAIN-REGEX":
-		parsed = RC.NewDomainRegex(payload, target)
+		parsed, parseErr = RC.NewDomainRegex(payload, target)
 	case "GEOSITE":
 		parsed, parseErr = RC.NewGEOSITE(payload, target)
 	case "GEOIP":
