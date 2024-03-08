@@ -26,6 +26,11 @@ type Conn struct {
 	resultCh     chan *connReadResult
 }
 
+func IsConn(conn any) bool {
+	_, ok := conn.(*Conn)
+	return ok
+}
+
 func NewConn(conn net.Conn) *Conn {
 	c := &Conn{
 		ExtendedConn: bufio.NewExtendedConn(conn),

@@ -17,15 +17,15 @@ const DefaultDnsRelayTimeout = time.Second * 5
 
 const SafeDnsPacketSize = 2 * 1024 // safe size which is 1232 from https://dnsflagday.net/2020/, so 2048 is enough
 
-func RelayDnsConn(ctx context.Context, conn net.Conn) error {
+func RelayDnsConn(ctx context.Context, conn net.Conn, readTimeout time.Duration) error {
 	buff := pool.Get(pool.UDPBufferSize)
 	defer func() {
 		_ = pool.Put(buff)
 		_ = conn.Close()
 	}()
 	for {
-		if conn.SetReadDeadline(time.Now().Add(DefaultDnsReadTimeout)) != nil {
-			break
+		if readTimeout > 0 {
+			_ = conn.SetReadDeadline(time.Now().Add(readTimeout))
 		}
 
 		length := uint16(0)
