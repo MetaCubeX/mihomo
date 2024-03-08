@@ -204,18 +204,18 @@ jobs:
         alien --to-rpm --scripts mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
         mv mihomo*.rpm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.rpm
 
-    - name: Convert DEB to PKG
-      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') && !contains(matrix.jobs.goarch, 'loong64') }}
-      run: |
-        docker pull archlinux
-        docker run --rm -v ./:/mnt archlinux bash -c "
-          pacman -Syu pkgfile base-devel --noconfirm
-          curl -L https://github.com/helixarch/debtap/raw/master/debtap > /usr/bin/debtap
-          chmod 755 /usr/bin/debtap
-          debtap -u 
-          debtap -Q /mnt/mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
-        "
-        mv mihomo*.pkg.tar.zst mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.pkg.tar.zst
+    # - name: Convert DEB to PKG
+    #   if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') && !contains(matrix.jobs.goarch, 'loong64') }}
+    #   run: |
+    #     docker pull archlinux
+    #     docker run --rm -v ./:/mnt archlinux bash -c "
+    #       pacman -Syu pkgfile base-devel --noconfirm
+    #       curl -L https://github.com/helixarch/debtap/raw/master/debtap > /usr/bin/debtap
+    #       chmod 755 /usr/bin/debtap
+    #       debtap -u 
+    #       debtap -Q /mnt/mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
+    #     "
+    #     mv mihomo*.pkg.tar.zst mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.pkg.tar.zst
 
     - name: Save version
       run: |
@@ -230,7 +230,6 @@ jobs:
           mihomo*.gz
           mihomo*.deb
           mihomo*.rpm
-          mihomo*.pkg.tar.zst
           mihomo*.zip
           version.txt
 
