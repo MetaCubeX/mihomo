@@ -169,6 +169,7 @@ type Experimental struct {
 	Fingerprints     []string `yaml:"fingerprints"`
 	QUICGoDisableGSO bool     `yaml:"quic-go-disable-gso"`
 	QUICGoDisableECN bool     `yaml:"quic-go-disable-ecn"`
+	IP4PEnable       bool     `yaml:"dialer-ip4p-convert"`
 }
 
 // Config is mihomo config manager
