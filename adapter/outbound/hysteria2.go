@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"runtime"
 	"strconv"
@@ -23,6 +22,7 @@ import (
 	"github.com/metacubex/sing-quic/hysteria2"
 
 	M "github.com/sagernet/sing/common/metadata"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
@@ -174,7 +174,6 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		Context:            context.TODO(),
 		Dialer:             singDialer,
 		Logger:             log.SingLogger,
-		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(option.Port)),
 		SendBPS:            StringToBps(option.Up),
 		ReceiveBPS:         StringToBps(option.Down),
 		SalamanderPassword: salamanderPassword,
@@ -183,15 +182,21 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		UDPDisabled:        false,
 		CWND:               option.CWND,
 		UdpMTU:             option.UdpMTU,
+		ServerAddress: func(ctx context.Context) (*net.UDPAddr, error) {
+			return resolveUDPAddrWithPrefer(ctx, "udp", addr, C.NewDNSPrefer(option.IPVersion))
+		},
 	}
 
 	if option.Ports != "" {
 		ports := parsePorts(option.Ports)
 		if len(ports) > 0 {
-			for _, port := range ports {
-				clientOptions.ServerAddresses = append(clientOptions.ServerAddresses, M.ParseSocksaddrHostPort(option.Server, port))
+			serverAddress := make([]string, len(ports))
+			for i, port := range ports {
+				serverAddress[i] = net.JoinHostPort(option.Server, strconv.Itoa(int(port)))
 			}
-			clientOptions.ServerAddress = clientOptions.ServerAddresses[rand.Intn(len(clientOptions.ServerAddresses))]
+			clientOptions.ServerAddress = func(ctx context.Context) (*net.UDPAddr, error) {
+				return resolveUDPAddrWithPrefer(ctx, "udp", serverAddress[fastrand.Intn(len(serverAddress))], C.NewDNSPrefer(option.IPVersion))
+			}
 
 			if option.HopInterval == 0 {
 				option.HopInterval = defaultHopInterval
