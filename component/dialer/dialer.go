@@ -7,12 +7,14 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/constant/features"
+	"github.com/metacubex/mihomo/log"
 )
 
 const (
@@ -24,6 +26,7 @@ type dialFunc func(ctx context.Context, network string, ips []netip.Addr, port s
 
 var (
 	dialMux                      sync.Mutex
+	IP4PEnable                   bool
 	actualSingleStackDialContext = serialSingleStackDialContext
 	actualDualStackDialContext   = serialDualStackDialContext
 	tcpConcurrent                = false
@@ -128,7 +131,13 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 		return dialContextHooked(ctx, network, destination, port)
 	}
 
-	address := net.JoinHostPort(destination.String(), port)
+	var address string
+	if IP4PEnable {
+		NewDestination, NewPort := lookupIP4P(destination.String(), port)
+		address = net.JoinHostPort(NewDestination, NewPort)
+	} else {
+		address = net.JoinHostPort(destination.String(), port)
+	}
 
 	netDialer := opt.netDialer
 	switch netDialer.(type) {
@@ -382,4 +391,22 @@ func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddr
 func NewDialer(options ...Option) Dialer {
 	opt := applyOptions(options...)
 	return Dialer{Opt: *opt}
+}
+
+func GetIP4PEnable(enableIP4PConvert bool) {
+	IP4PEnable = enableIP4PConvert
+}
+
+// kanged from https://github.com/heiher/frp/blob/ip4p/client/ip4p.go
+
+func lookupIP4P(addr string, port string) (string, string) {
+	ip := net.ParseIP(addr)
+	if ip[0] == 0x20 && ip[1] == 0x01 &&
+		ip[2] == 0x00 && ip[3] == 0x00 {
+		addr = net.IPv4(ip[12], ip[13], ip[14], ip[15]).String()
+		port = strconv.Itoa(int(ip[10])<<8 + int(ip[11]))
+		log.Debugln("Convert IP4P address %s to %s", ip, net.JoinHostPort(addr, port))
+		return addr, port
+	}
+	return addr, port
 }

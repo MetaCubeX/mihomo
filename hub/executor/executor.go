@@ -197,6 +197,7 @@ func updateExperimental(c *config.Config) {
 	if c.Experimental.QUICGoDisableECN {
 		_ = os.Setenv("QUIC_GO_DISABLE_ECN", strconv.FormatBool(true))
 	}
+	dialer.GetIP4PEnable(c.Experimental.IP4PEnable)
 }
 
 func updateNTP(c *config.NTP) {
