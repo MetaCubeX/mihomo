@@ -52,7 +52,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 		if metadata.DstGeoIP != nil {
 			return false, g.adapter
 		}
-		metadata.DstGeoIP = mmdb.Instance().LookupCode(ip.AsSlice())
+		metadata.DstGeoIP = mmdb.IPInstance().LookupCode(ip.AsSlice())
 		for _, code := range metadata.DstGeoIP {
 			if g.country == code {
 				return true, g.adapter

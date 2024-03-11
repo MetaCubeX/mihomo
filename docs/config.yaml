@@ -674,6 +674,8 @@ proxies: # socks5
     type: hysteria2
     server: server.com
     port: 443
+    # ports: 1000,2000-3000,5000 # port 不可省略
+    # hop-interval: 15
     #  up和down均不写或为0则使用BBR流控
     # up: "30 Mbps" # 若不写单位，默认为 Mbps
     # down: "200 Mbps" # 若不写单位，默认为 Mbps
@@ -767,6 +769,18 @@ proxies: # socks5
     # protocol-param: "#"
     # udp: true
 
+  - name: "ssh-out"
+    type: ssh
+
+    server: 127.0.0.1
+    port: 22
+    username: root
+    password: password
+    privateKey: path
+
+# dns出站会将请求劫持到内部dns模块,所有请求均在内部处理
+  - name: "dns-out"
+    type: dns
 proxy-groups:
   # 代理链，目前relay可以支持udp的只有vmess/vless/trojan/ss/ssr/tuic
   # wireguard目前不支持在relay中使用，请使用proxy中的dialer-proxy配置项
@@ -885,6 +899,8 @@ rule-providers:
     type: file
 rules:
   - RULE-SET,rule1,REJECT
+  - IP-ASN,1,PROXY
+  - DOMAIN-REGEX,^abc,DIRECT
   - DOMAIN-SUFFIX,baidu.com,DIRECT
   - DOMAIN-KEYWORD,google,ss1
   - IP-CIDR,1.1.1.1/32,ss1
