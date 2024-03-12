@@ -110,7 +110,7 @@ func (ranges IntRanges[T]) Check(status T) bool {
 	return false
 }
 
-func (ranges IntRanges[T]) ToString() string {
+func (ranges IntRanges[T]) String() string {
 	if len(ranges) == 0 {
 		return "*"
 	}
@@ -134,6 +134,10 @@ func (ranges IntRanges[T]) ToString() string {
 }
 
 func (ranges IntRanges[T]) Range(f func(t T) bool) {
+	if len(ranges) == 0 {
+		return
+	}
+
 	for _, r := range ranges {
 		for i := r.Start(); i <= r.End(); i++ {
 			if !f(i) {

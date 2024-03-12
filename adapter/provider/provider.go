@@ -46,18 +46,13 @@ type proxySetProvider struct {
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
-	expectedStatus := "*"
-	if pp.healthCheck.expectedStatus != nil {
-		expectedStatus = pp.healthCheck.expectedStatus.ToString()
-	}
-
 	return json.Marshal(map[string]any{
 		"name":             pp.Name(),
 		"type":             pp.Type().String(),
 		"vehicleType":      pp.VehicleType().String(),
 		"proxies":          pp.Proxies(),
 		"testUrl":          pp.healthCheck.url,
-		"expectedStatus":   expectedStatus,
+		"expectedStatus":   pp.healthCheck.expectedStatus.String(),
 		"updatedAt":        pp.UpdatedAt,
 		"subscriptionInfo": pp.subscriptionInfo,
 	})
@@ -221,18 +216,13 @@ type compatibleProvider struct {
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
-	expectedStatus := "*"
-	if cp.healthCheck.expectedStatus != nil {
-		expectedStatus = cp.healthCheck.expectedStatus.ToString()
-	}
-
 	return json.Marshal(map[string]any{
 		"name":           cp.Name(),
 		"type":           cp.Type().String(),
 		"vehicleType":    cp.VehicleType().String(),
 		"proxies":        cp.Proxies(),
 		"testUrl":        cp.healthCheck.url,
-		"expectedStatus": expectedStatus,
+		"expectedStatus": cp.healthCheck.expectedStatus.String(),
 	})
 }
 
