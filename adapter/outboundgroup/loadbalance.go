@@ -266,6 +266,8 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 			option.Filter,
 			option.ExcludeFilter,
 			option.ExcludeType,
+			option.TestTimeout,
+			option.MaxFailedTimes,
 			providers,
 		}),
 		strategyFn:     strategyFn,

@@ -137,6 +137,8 @@ func prepare(exePath string) (err error) {
 
 	if runtime.GOOS == "windows" {
 		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible + ".exe"
+	} else if runtime.GOOS == "android" && runtime.GOARCH == "arm64" {
+		updateExeName = "mihomo-android-arm64-v8"
 	} else {
 		updateExeName = "mihomo" + "-" + runtime.GOOS + "-" + runtime.GOARCH + amd64Compatible
 	}
@@ -440,7 +442,11 @@ func updateDownloadURL() {
 		middle = fmt.Sprintf("-%s-%s%s-%s", runtime.GOOS, runtime.GOARCH, goarm, latestVersion)
 	} else if runtime.GOARCH == "arm64" {
 		//-linux-arm64-alpha-e552b54.gz
-		middle = fmt.Sprintf("-%s-%s-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+		if runtime.GOOS == "android" {
+			middle = fmt.Sprintf("-%s-%s-v8-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+		} else {
+			middle = fmt.Sprintf("-%s-%s-%s", runtime.GOOS, runtime.GOARCH, latestVersion)
+		}
 	} else if isMIPS(runtime.GOARCH) && gomips != "" {
 		middle = fmt.Sprintf("-%s-%s-%s-%s", runtime.GOOS, runtime.GOARCH, gomips, latestVersion)
 	} else {

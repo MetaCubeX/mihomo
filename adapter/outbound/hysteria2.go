@@ -8,22 +8,29 @@ import (
 	"net"
 	"runtime"
 	"strconv"
+	"time"
 
 	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	tuicCommon "github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/sing-quic/hysteria2"
 
 	M "github.com/sagernet/sing/common/metadata"
+	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
 	hysteria2.SetCongestionController = tuicCommon.SetCongestionController
 }
+
+const minHopInterval = 5
+const defaultHopInterval = 30
 
 type Hysteria2 struct {
 	*Base
@@ -37,7 +44,9 @@ type Hysteria2Option struct {
 	BasicOption
 	Name           string   `proxy:"name"`
 	Server         string   `proxy:"server"`
-	Port           int      `proxy:"port"`
+	Port           int      `proxy:"port,omitempty"`
+	Ports          string   `proxy:"ports,omitempty"`
+	HopInterval    int      `proxy:"hop-interval,omitempty"`
 	Up             string   `proxy:"up,omitempty"`
 	Down           string   `proxy:"down,omitempty"`
 	Password       string   `proxy:"password,omitempty"`
@@ -129,7 +138,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	clientOptions := hysteria2.ClientOptions{
 		Context:            context.TODO(),
 		Dialer:             singDialer,
-		ServerAddress:      M.ParseSocksaddrHostPort(option.Server, uint16(option.Port)),
+		Logger:             log.SingLogger,
 		SendBPS:            StringToBps(option.Up),
 		ReceiveBPS:         StringToBps(option.Down),
 		SalamanderPassword: salamanderPassword,
@@ -138,6 +147,37 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		UDPDisabled:        false,
 		CWND:               option.CWND,
 		UdpMTU:             option.UdpMTU,
+		ServerAddress: func(ctx context.Context) (*net.UDPAddr, error) {
+			return resolveUDPAddrWithPrefer(ctx, "udp", addr, C.NewDNSPrefer(option.IPVersion))
+		},
+	}
+
+	var ranges utils.IntRanges[uint16]
+	var serverAddress []string
+	if option.Ports != "" {
+		ranges, err = utils.NewUnsignedRanges[uint16](option.Ports)
+		if err != nil {
+			return nil, err
+		}
+		ranges.Range(func(port uint16) bool {
+			serverAddress = append(serverAddress, net.JoinHostPort(option.Server, strconv.Itoa(int(port))))
+			return true
+		})
+		if len(serverAddress) > 0 {
+			clientOptions.ServerAddress = func(ctx context.Context) (*net.UDPAddr, error) {
+				return resolveUDPAddrWithPrefer(ctx, "udp", serverAddress[fastrand.Intn(len(serverAddress))], C.NewDNSPrefer(option.IPVersion))
+			}
+
+			if option.HopInterval == 0 {
+				option.HopInterval = defaultHopInterval
+			} else if option.HopInterval < minHopInterval {
+				option.HopInterval = minHopInterval
+			}
+			clientOptions.HopInterval = time.Duration(option.HopInterval) * time.Second
+		}
+	}
+	if option.Port == 0 && len(serverAddress) == 0 {
+		return nil, errors.New("invalid port")
 	}
 
 	client, err := hysteria2.NewClient(clientOptions)

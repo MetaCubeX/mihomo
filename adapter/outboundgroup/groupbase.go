@@ -31,14 +31,18 @@ type GroupBase struct {
 	failedTesting    atomic.Bool
 	proxies          [][]C.Proxy
 	versions         []atomic.Uint32
+	TestTimeout      int
+	maxFailedTimes   int
 }
 
 type GroupBaseOption struct {
 	outbound.BaseOption
-	filter        string
-	excludeFilter string
-	excludeType   string
-	providers     []provider.ProxyProvider
+	filter         string
+	excludeFilter  string
+	excludeType    string
+	TestTimeout    int
+	maxFailedTimes int
+	providers      []provider.ProxyProvider
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
@@ -66,6 +70,15 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		excludeTypeArray: excludeTypeArray,
 		providers:        opt.providers,
 		failedTesting:    atomic.NewBool(false),
+		TestTimeout:      opt.TestTimeout,
+		maxFailedTimes:   opt.maxFailedTimes,
+	}
+
+	if gb.TestTimeout == 0 {
+		gb.TestTimeout = 5000
+	}
+	if gb.maxFailedTimes == 0 {
+		gb.maxFailedTimes = 5
 	}
 
 	gb.proxies = make([][]C.Proxy, len(opt.providers))
@@ -240,13 +253,13 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error) {
 			log.Debugln("ProxyGroup: %s first failed", gb.Name())
 			gb.failedTime = time.Now()
 		} else {
-			if time.Since(gb.failedTime) > gb.failedTimeoutInterval() {
+			if time.Since(gb.failedTime) > time.Duration(gb.TestTimeout)*time.Millisecond {
 				gb.failedTimes = 0
 				return
 			}
 
 			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
-			if gb.failedTimes >= gb.maxFailedTimes() {
+			if gb.failedTimes >= gb.maxFailedTimes {
 				log.Warnln("because %s failed multiple times, active health check", gb.Name())
 				gb.healthCheck()
 			}
@@ -275,20 +288,8 @@ func (gb *GroupBase) healthCheck() {
 	gb.failedTimes = 0
 }
 
-func (gb *GroupBase) failedIntervalTime() int64 {
-	return 5 * time.Second.Milliseconds()
-}
-
 func (gb *GroupBase) onDialSuccess() {
 	if !gb.failedTesting.Load() {
 		gb.failedTimes = 0
 	}
-}
-
-func (gb *GroupBase) maxFailedTimes() int {
-	return 5
-}
-
-func (gb *GroupBase) failedTimeoutInterval() time.Duration {
-	return 5 * time.Second
 }

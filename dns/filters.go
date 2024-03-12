@@ -25,7 +25,7 @@ var geoIPMatcher *router.GeoIPMatcher
 
 func (gf *geoipFilter) Match(ip netip.Addr) bool {
 	if !C.GeodataMode {
-		codes := mmdb.Instance().LookupCode(ip.AsSlice())
+		codes := mmdb.IPInstance().LookupCode(ip.AsSlice())
 		for _, code := range codes {
 			if !strings.EqualFold(code, gf.code) && !nnip.IsPrivateIP(ip) {
 				return true

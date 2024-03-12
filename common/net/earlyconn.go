@@ -3,10 +3,9 @@ package net
 import (
 	"net"
 	"sync"
-	"sync/atomic"
-	"unsafe"
 
 	"github.com/metacubex/mihomo/common/buf"
+	"github.com/metacubex/mihomo/common/once"
 )
 
 type earlyConn struct {
@@ -44,8 +43,7 @@ func (conn *earlyConn) Upstream() any {
 }
 
 func (conn *earlyConn) Success() bool {
-	// atomic visit sync.Once.done
-	return atomic.LoadUint32((*uint32)(unsafe.Pointer(&conn.resOnce))) == 1 && conn.resErr == nil
+	return once.Done(&conn.resOnce) && conn.resErr == nil
 }
 
 func (conn *earlyConn) ReaderReplaceable() bool {

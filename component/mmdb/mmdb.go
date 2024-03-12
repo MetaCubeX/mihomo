@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	mihomoOnce "github.com/metacubex/mihomo/common/once"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -24,56 +25,58 @@ const (
 )
 
 var (
-	reader Reader
-	once   sync.Once
+	IPreader  IPReader
+	ASNreader ASNReader
+	IPonce    sync.Once
+	ASNonce   sync.Once
 )
 
 func LoadFromBytes(buffer []byte) {
-	once.Do(func() {
+	IPonce.Do(func() {
 		mmdb, err := maxminddb.FromBytes(buffer)
 		if err != nil {
 			log.Fatalln("Can't load mmdb: %s", err.Error())
 		}
-		reader = Reader{Reader: mmdb}
+		IPreader = IPReader{Reader: mmdb}
 		switch mmdb.Metadata.DatabaseType {
 		case "sing-geoip":
-			reader.databaseType = typeSing
+			IPreader.databaseType = typeSing
 		case "Meta-geoip0":
-			reader.databaseType = typeMetaV0
+			IPreader.databaseType = typeMetaV0
 		default:
-			reader.databaseType = typeMaxmind
+			IPreader.databaseType = typeMaxmind
 		}
 	})
 }
 
-func Verify() bool {
-	instance, err := maxminddb.Open(C.Path.MMDB())
+func Verify(path string) bool {
+	instance, err := maxminddb.Open(path)
 	if err == nil {
 		instance.Close()
 	}
 	return err == nil
 }
 
-func Instance() Reader {
-	once.Do(func() {
+func IPInstance() IPReader {
+	IPonce.Do(func() {
 		mmdbPath := C.Path.MMDB()
 		log.Infoln("Load MMDB file: %s", mmdbPath)
 		mmdb, err := maxminddb.Open(mmdbPath)
 		if err != nil {
 			log.Fatalln("Can't load MMDB: %s", err.Error())
 		}
-		reader = Reader{Reader: mmdb}
+		IPreader = IPReader{Reader: mmdb}
 		switch mmdb.Metadata.DatabaseType {
 		case "sing-geoip":
-			reader.databaseType = typeSing
+			IPreader.databaseType = typeSing
 		case "Meta-geoip0":
-			reader.databaseType = typeMetaV0
+			IPreader.databaseType = typeMetaV0
 		default:
-			reader.databaseType = typeMaxmind
+			IPreader.databaseType = typeMaxmind
 		}
 	})
 
-	return reader
+	return IPreader
 }
 
 func DownloadMMDB(path string) (err error) {
@@ -95,6 +98,43 @@ func DownloadMMDB(path string) (err error) {
 	return err
 }
 
-func Reload() {
-	once = sync.Once{}
+func ASNInstance() ASNReader {
+	ASNonce.Do(func() {
+		ASNPath := C.Path.ASN()
+		log.Infoln("Load ASN file: %s", ASNPath)
+		asn, err := maxminddb.Open(ASNPath)
+		if err != nil {
+			log.Fatalln("Can't load ASN: %s", err.Error())
+		}
+		ASNreader = ASNReader{Reader: asn}
+	})
+
+	return ASNreader
+}
+
+func DownloadASN(path string) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := mihomoHttp.HttpRequest(ctx, C.ASNUrl, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+
+	return err
+}
+
+func ReloadIP() {
+	mihomoOnce.Reset(&IPonce)
+}
+
+func ReloadASN() {
+	mihomoOnce.Reset(&ASNonce)
 }

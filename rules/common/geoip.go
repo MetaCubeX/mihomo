@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/mmdb"
@@ -22,6 +21,8 @@ type GEOIP struct {
 	recodeSize   int
 }
 
+var _ C.Rule = (*GEOIP)(nil)
+
 func (g *GEOIP) RuleType() C.RuleType {
 	return C.GEOIP
 }
@@ -32,24 +33,39 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 		return false, ""
 	}
 
-	if strings.EqualFold(g.country, "LAN") {
-		return nnip.IsPrivateIP(ip) ||
+	if g.country == "lan" {
+		return ip.IsPrivate() ||
 			ip.IsUnspecified() ||
 			ip.IsLoopback() ||
 			ip.IsMulticast() ||
 			ip.IsLinkLocalUnicast() ||
 			resolver.IsFakeBroadcastIP(ip), g.adapter
 	}
+
+	for _, code := range metadata.DstGeoIP {
+		if g.country == code {
+			return true, g.adapter
+		}
+	}
+
 	if !C.GeodataMode {
-		codes := mmdb.Instance().LookupCode(ip.AsSlice())
-		for _, code := range codes {
-			if strings.EqualFold(code, g.country) {
+		if metadata.DstGeoIP != nil {
+			return false, g.adapter
+		}
+		metadata.DstGeoIP = mmdb.IPInstance().LookupCode(ip.AsSlice())
+		for _, code := range metadata.DstGeoIP {
+			if g.country == code {
 				return true, g.adapter
 			}
 		}
 		return false, g.adapter
 	}
-	return g.geoIPMatcher.Match(ip), g.adapter
+
+	match := g.geoIPMatcher.Match(ip)
+	if match {
+		metadata.DstGeoIP = append(metadata.DstGeoIP, g.country)
+	}
+	return match, g.adapter
 }
 
 func (g *GEOIP) Adapter() string {
@@ -81,8 +97,9 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) 
 		log.Errorln("can't initial GeoIP: %s", err)
 		return nil, err
 	}
+	country = strings.ToLower(country)
 
-	if !C.GeodataMode || strings.EqualFold(country, "LAN") {
+	if !C.GeodataMode || country == "lan" {
 		geoip := &GEOIP{
 			Base:        &Base{},
 			country:     country,
@@ -94,7 +111,7 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) 
 
 	geoIPMatcher, size, err := geodata.LoadGeoIPMatcher(country)
 	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %s", err.Error())
+		return nil, fmt.Errorf("[GeoIP] %w", err)
 	}
 
 	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, size)
@@ -108,5 +125,3 @@ func NewGEOIP(country string, adapter string, noResolveIP bool) (*GEOIP, error) 
 	}
 	return geoip, nil
 }
-
-//var _ C.Rule = (*GEOIP)(nil)

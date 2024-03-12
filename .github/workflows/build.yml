@@ -31,7 +31,7 @@ jobs:
           - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64 }
 
           - { goos: linux, goarch: '386', output: '386' }
-          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible }
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible, test: test }
           - { goos: linux, goarch: amd64, goamd64: v3, output: amd64 }
           - { goos: linux, goarch: arm64, output: arm64 }
           - { goos: linux, goarch: arm, goarm: '7', output: armv7 }
@@ -41,7 +41,8 @@ jobs:
           - { goos: linux, goarch: mipsle, mips: softfloat, output: mipsle-softfloat }
           - { goos: linux, goarch: mips64, output: mips64 }
           - { goos: linux, goarch: mips64le, output: mips64le }
-          - { goos: linux, goarch: loong64, output: loong64 }
+          - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1' }
+          - { goos: linux, goarch: loong64, output: loong64-abi2, abi: '2' }
           - { goos: linux, goarch: riscv64, output: riscv64 }
           - { goos: linux, goarch: s390x, output: s390x }
 
@@ -61,32 +62,49 @@ jobs:
           - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
           - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
 
-          - { goos: windows, goarch: '386', output: '386-go120', version: 20 }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, version: 20 }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go120, version: 20 }
+          # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
+          - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go120, goversion: '1.20' }
 
-          - { goos: darwin, goarch: arm64, output: arm64-go120, version: 20 }
-          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, version: 20 }
-          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-go120, version: 20 }
+          # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
+          - { goos: darwin, goarch: arm64, output: arm64-go120, goversion: '1.20' }
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-go120, goversion: '1.20' }
 
-          - { goos: linux, goarch: '386', output: '386-go120', version: 20 }
-          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, version: 20 }
-          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-go120, version: 20 }
+          # only for test
+          - { goos: linux, goarch: '386', output: '386-go120', goversion: '1.20' }
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20', test: test }
+          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-go120, goversion: '1.20' }
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Go1.22
-      if: ${{ matrix.jobs.version != '20' }}
+    - name: Set up Go
+      if: ${{ matrix.jobs.goversion == '' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
-        go-version: ^1.22
+        go-version: '1.22'
 
-    - name: Set up Go1.20
-      if: ${{ matrix.jobs.version == '20' }}
+    - name: Set up Go
+      if: ${{ matrix.jobs.goversion != '' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
-        go-version: ^1.20
+        go-version: ${{ matrix.jobs.goversion }}
+
+    - name: Set up Go1.21 loongarch abi1
+      if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
+      run: |
+        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi1.tar.gz
+        sudo tar zxf go1.21.5.linux-amd64-abi1.tar.gz -C /usr/local
+        echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+    - name: Set up Go1.21 loongarch abi2
+      if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
+      run: |
+        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi2.tar.gz
+        sudo tar zxf go1.21.5.linux-amd64-abi2.tar.gz -C /usr/local
+        echo "/usr/local/go/bin" >> $GITHUB_PATH
 
     - name: Set variables
       if: ${{github.ref_name=='Alpha'}}
@@ -118,7 +136,12 @@ jobs:
         echo "CGO_ENABLED=1" >> $GITHUB_ENV
         echo "BUILDTAG=" >> $GITHUB_ENV
 
-    - name: build core
+    - name: Test
+      if: ${{ matrix.jobs.test == 'test' }}
+      run: |
+        go test ./...
+
+    - name: Build core
       env:
         GOOS: ${{matrix.jobs.goos}}
         GOARCH: ${{matrix.jobs.goarch}}
@@ -141,7 +164,11 @@ jobs:
       if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
       run: |
         sudo apt-get install dpkg
-
+        if [ "${{matrix.jobs.abi}}" = "1" ]; then
+          ARCH=loongarch64
+        else
+          ARCH=${{matrix.jobs.goarch}}
+        fi
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo
@@ -162,7 +189,7 @@ jobs:
         Version: 1.18.2-${VERSION}
         Section:
         Priority: extra
-        Architecture: ${{matrix.jobs.goarch}}
+        Architecture: ${ARCH}
         Maintainer: MetaCubeX <none@example.com>
         Homepage: https://wiki.metacubex.one/
         Description: The universal proxy platform.
@@ -177,18 +204,18 @@ jobs:
         alien --to-rpm --scripts mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
         mv mihomo*.rpm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.rpm
 
-    - name: Convert DEB to PKG
-      if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') }}
-      run: |
-        docker pull archlinux
-        docker run --rm -v ./:/mnt archlinux bash -c "
-          pacman -Syu pkgfile base-devel --noconfirm
-          curl -L https://github.com/helixarch/debtap/raw/master/debtap > /usr/bin/debtap
-          chmod 755 /usr/bin/debtap
-          debtap -u 
-          debtap -Q /mnt/mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
-        "
-        mv mihomo*.pkg.tar.zst mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.pkg.tar.zst
+    # - name: Convert DEB to PKG
+    #   if: ${{ matrix.jobs.goos == 'linux' && !contains(matrix.jobs.goarch, 'mips') && !contains(matrix.jobs.goarch, 'loong64') }}
+    #   run: |
+    #     docker pull archlinux
+    #     docker run --rm -v ./:/mnt archlinux bash -c "
+    #       pacman -Syu pkgfile base-devel --noconfirm
+    #       curl -L https://github.com/helixarch/debtap/raw/master/debtap > /usr/bin/debtap
+    #       chmod 755 /usr/bin/debtap
+    #       debtap -u 
+    #       debtap -Q /mnt/mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.deb
+    #     "
+    #     mv mihomo*.pkg.tar.zst mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.pkg.tar.zst
 
     - name: Save version
       run: |
@@ -203,7 +230,6 @@ jobs:
           mihomo*.gz
           mihomo*.deb
           mihomo*.rpm
-          mihomo*.pkg.tar.zst
           mihomo*.zip
           version.txt
 
