@@ -111,4 +111,4 @@ require (
 	golang.org/x/tools v0.18.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240313005020-c77f32e55220
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240313064558-c197257f6542
