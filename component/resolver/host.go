@@ -3,6 +3,8 @@ package resolver
 import (
 	"errors"
 	"net/netip"
+	"os"
+	"strconv"
 	"strings"
 	_ "unsafe"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/zhangyunhao116/fastrand"
 )
+
+var DisableSystemHosts, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_HOSTS"))
 
 type Hosts struct {
 	*trie.DomainTrie[HostValue]
@@ -47,7 +51,7 @@ func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
 
 		return &hostValue, false
 	}
-	if !isDomain {
+	if !isDomain && !DisableSystemHosts {
 		addr, _ := lookupStaticHost(domain)
 		if hostValue, err := NewHostValue(addr); err == nil {
 			return &hostValue, true
