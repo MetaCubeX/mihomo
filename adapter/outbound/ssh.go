@@ -1,11 +1,15 @@
 package outbound
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 
 	N "github.com/metacubex/mihomo/common/net"
@@ -26,12 +30,15 @@ type Ssh struct {
 
 type SshOption struct {
 	BasicOption
-	Name       string `proxy:"name"`
-	Server     string `proxy:"server"`
-	Port       int    `proxy:"port"`
-	UserName   string `proxy:"username"`
-	Password   string `proxy:"password,omitempty"`
-	PrivateKey string `proxy:"privateKey,omitempty"`
+	Name                 string   `proxy:"name"`
+	Server               string   `proxy:"server"`
+	Port                 int      `proxy:"port"`
+	UserName             string   `proxy:"username"`
+	Password             string   `proxy:"password,omitempty"`
+	PrivateKey           string   `proxy:"private-key,omitempty"`
+	PrivateKeyPassphrase string   `proxy:"private-key-passphrase,omitempty"`
+	HostKey              []string `proxy:"host-key,omitempty"`
+	HostKeyAlgorithms    []string `proxy:"host-key-algorithms,omitempty"`
 }
 
 func (s *Ssh) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
@@ -119,28 +126,56 @@ func NewSsh(option SshOption) (*Ssh, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 
 	config := ssh.ClientConfig{
-		User: option.UserName,
-		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return nil
-		},
+		User:              option.UserName,
+		HostKeyCallback:   ssh.InsecureIgnoreHostKey(),
+		HostKeyAlgorithms: option.HostKeyAlgorithms,
 	}
 
-	if option.Password == "" {
-		b, err := os.ReadFile(option.PrivateKey)
-		if err != nil {
-			return nil, err
+	if option.PrivateKey != "" {
+		var b []byte
+		var err error
+		if strings.Contains(option.PrivateKey, "PRIVATE KEY") {
+			b = []byte(option.PrivateKey)
+		} else {
+			b, err = os.ReadFile(C.Path.Resolve(option.PrivateKey))
+			if err != nil {
+				return nil, err
+			}
 		}
-		pKey, err := ssh.ParsePrivateKey(b)
+		var pKey ssh.Signer
+		if option.PrivateKeyPassphrase != "" {
+			pKey, err = ssh.ParsePrivateKeyWithPassphrase(b, []byte(option.PrivateKeyPassphrase))
+		} else {
+			pKey, err = ssh.ParsePrivateKey(b)
+		}
 		if err != nil {
 			return nil, err
 		}
 
-		config.Auth = []ssh.AuthMethod{
-			ssh.PublicKeys(pKey),
+		config.Auth = append(config.Auth, ssh.PublicKeys(pKey))
+	}
+
+	if option.Password != "" {
+		config.Auth = append(config.Auth, ssh.Password(option.Password))
+	}
+
+	if len(option.HostKey) != 0 {
+		keys := make([]ssh.PublicKey, len(option.HostKey))
+		for i, hostKey := range option.HostKey {
+			key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(hostKey))
+			if err != nil {
+				return nil, fmt.Errorf("parse host key :%s", key)
+			}
+			keys[i] = key
 		}
-	} else {
-		config.Auth = []ssh.AuthMethod{
-			ssh.Password(option.Password),
+		config.HostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			serverKey := key.Marshal()
+			for _, hostKey := range keys {
+				if bytes.Equal(serverKey, hostKey.Marshal()) {
+					return nil
+				}
+			}
+			return fmt.Errorf("host key mismatch, server send :%s %s", key.Type(), base64.StdEncoding.EncodeToString(serverKey))
 		}
 	}
 
