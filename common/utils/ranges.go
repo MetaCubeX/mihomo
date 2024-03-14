@@ -20,6 +20,8 @@ func newIntRanges[T constraints.Integer](expected string, parseFn func(string) (
 		return nil, nil
 	}
 
+	// support: 200,302 or 200,204,401-429,501-503
+	expected = strings.ReplaceAll(expected, ",", "/")
 	list := strings.Split(expected, "/")
 	if len(list) > 28 {
 		return nil, fmt.Errorf("%w, too many ranges to use, maximum support 28 ranges", errIntRanges)
@@ -47,9 +49,9 @@ func newIntRangesFromList[T constraints.Integer](list []string, parseFn func(str
 		}
 
 		switch statusLen {
-		case 1:
+		case 1: // Port range
 			ranges = append(ranges, NewRange(T(start), T(start)))
-		case 2:
+		case 2: // Single port
 			end, err := parseFn(strings.Trim(status[1], "[ ]"))
 			if err != nil {
 				return nil, errIntRanges
@@ -108,7 +110,7 @@ func (ranges IntRanges[T]) Check(status T) bool {
 	return false
 }
 
-func (ranges IntRanges[T]) ToString() string {
+func (ranges IntRanges[T]) String() string {
 	if len(ranges) == 0 {
 		return "*"
 	}
@@ -129,4 +131,18 @@ func (ranges IntRanges[T]) ToString() string {
 	}
 
 	return strings.Join(terms, "/")
+}
+
+func (ranges IntRanges[T]) Range(f func(t T) bool) {
+	if len(ranges) == 0 {
+		return
+	}
+
+	for _, r := range ranges {
+		for i := r.Start(); i <= r.End(); i++ {
+			if !f(i) {
+				return
+			}
+		}
+	}
 }
