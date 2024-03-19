@@ -12,6 +12,7 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
 	"github.com/zhangyunhao116/fastrand"
@@ -97,12 +98,22 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 			conn = tls.Client(conn, ca.GetGlobalTLSConfig(c.Client.TLSConfig))
 		}
 
-		msg, _, err := c.Client.ExchangeWithConn(m, &D.Conn{
+		dConn := &D.Conn{
 			Conn:         conn,
 			UDPSize:      c.Client.UDPSize,
 			TsigSecret:   c.Client.TsigSecret,
 			TsigProvider: c.Client.TsigProvider,
-		})
+		}
+
+		msg, _, err := c.Client.ExchangeWithConn(m, dConn)
+
+		// Resolvers MUST resend queries over TCP if they receive a truncated UDP response (with TC=1 set)!
+		if msg != nil && msg.Truncated && c.Client.Net == "" {
+			tcpClient := *c.Client // copy a client
+			tcpClient.Net = "tcp"
+			log.Debugln("[DNS] Truncated reply from %s:%s for %s over UDP, retrying over TCP", c.host, c.port, m.Question[0].String())
+			msg, _, err = tcpClient.ExchangeWithConn(m, dConn)
+		}
 
 		ch <- result{msg, err}
 	}()
