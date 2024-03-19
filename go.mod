@@ -19,7 +19,7 @@ require (
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/quic-go v0.41.1-0.20240307164142-46c6f7cdf2d1
+	github.com/metacubex/quic-go v0.42.1-0.20240319071510-a251e5c66a5c
 	github.com/metacubex/sing-quic v0.0.0-20240310154810-47bca850fc01
 	github.com/metacubex/sing-shadowsocks v0.2.6
 	github.com/metacubex/sing-shadowsocks2 v0.2.0
@@ -104,7 +104,7 @@ require (
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
-	go.uber.org/mock v0.3.0 // indirect
+	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/mod v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
