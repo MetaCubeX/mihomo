@@ -104,8 +104,8 @@ github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvO
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20240214095142-666a73bcf165 h1:QIQI4gEm+gTwVNdiAyF4EIz5cHm7kSlfDGFpYlAa5dg=
 github.com/metacubex/gvisor v0.0.0-20240214095142-666a73bcf165/go.mod h1:SKY70wiF1UTSoyuDZyKPMsUC6MsMxh8Y3ZNkIa6J3fU=
-github.com/metacubex/quic-go v0.41.1-0.20240307164142-46c6f7cdf2d1 h1:63zKmEWU4MB5MjUSCmeDhm3OzilF7ypXWPq0gAA2GE8=
-github.com/metacubex/quic-go v0.41.1-0.20240307164142-46c6f7cdf2d1/go.mod h1:F/t8VnA47xoia8ABlNA4InkZjssvFJ5p6E6jKdbkgAs=
+github.com/metacubex/quic-go v0.42.1-0.20240319071510-a251e5c66a5c h1:AhaPKvVqF3N/jXFmlW51Cf1+KddslKAsZqcdgGhZjr0=
+github.com/metacubex/quic-go v0.42.1-0.20240319071510-a251e5c66a5c/go.mod h1:iGx3Y1zynls/FjFgykLSqDcM81U0IKePRTXEz5g3iiQ=
 github.com/metacubex/sing v0.0.0-20240313064558-c197257f6542 h1:e9nBnrJBv3HzZVeSzJN0G2SADjebd2ZLF1F5dmsjUTc=
 github.com/metacubex/sing v0.0.0-20240313064558-c197257f6542/go.mod h1:+60H3Cm91RnL9dpVGWDPHt0zTQImO9Vfqt9a4rSambI=
 github.com/metacubex/sing-quic v0.0.0-20240310154810-47bca850fc01 h1:5INHs85Gp1JZsdF7fQp1pXUjfJOX2dhwZjuUQWJVSt8=
@@ -218,8 +218,8 @@ gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec h1:FpfFs4EhNehiV
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec/go.mod h1:BZ1RAoRPbCxum9Grlv5aeksu2H8BiKehBYooU2LFiOQ=
 go.uber.org/automaxprocs v1.5.3 h1:kWazyxZUrS3Gs4qUpbwo5kEIMGe/DAvi5Z4tl2NW4j8=
 go.uber.org/automaxprocs v1.5.3/go.mod h1:eRbA25aqJrxAbsLO0xy5jVwPt7FQnRgjW+efnwa1WM0=
-go.uber.org/mock v0.3.0 h1:3mUxI1No2/60yUYax92Pt8eNOEecx2D3lcXZh2NEZJo=
-go.uber.org/mock v0.3.0/go.mod h1:a6FSlNadKUHUa9IP5Vyt1zh4fC7uAwxMutEAscFbkZc=
+go.uber.org/mock v0.4.0 h1:VcM4ZOtdbR4f6VXfiOpwpVJDL6lCReaZ6mw31wqh7KU=
+go.uber.org/mock v0.4.0/go.mod h1:a6FSlNadKUHUa9IP5Vyt1zh4fC7uAwxMutEAscFbkZc=
 go4.org/netipx v0.0.0-20231129151722-fdeea329fbba h1:0b9z3AuHCjxk0x/opv64kcgZLBseWJUpBw5I82+2U4M=
 go4.org/netipx v0.0.0-20231129151722-fdeea329fbba/go.mod h1:PLyyIXexvUFg3Owu6p/WfdlivPbZJsZdgWZlrGope/Y=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
