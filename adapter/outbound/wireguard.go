@@ -47,6 +47,8 @@ type WireGuardOption struct {
 	BasicOption
 	WireGuardPeerOption
 	Name                string `proxy:"name"`
+	Ip                  string `proxy:"ip,omitempty"`
+	Ipv6                string `proxy:"ipv6,omitempty"`
 	PrivateKey          string `proxy:"private-key"`
 	Workers             int    `proxy:"workers,omitempty"`
 	MTU                 int    `proxy:"mtu,omitempty"`
@@ -62,8 +64,6 @@ type WireGuardOption struct {
 type WireGuardPeerOption struct {
 	Server       string   `proxy:"server"`
 	Port         int      `proxy:"port"`
-	Ip           string   `proxy:"ip,omitempty"`
-	Ipv6         string   `proxy:"ipv6,omitempty"`
 	PublicKey    string   `proxy:"public-key,omitempty"`
 	PreSharedKey string   `proxy:"pre-shared-key,omitempty"`
 	Reserved     []uint8  `proxy:"reserved,omitempty"`
@@ -98,7 +98,7 @@ func (option WireGuardPeerOption) Addr() M.Socksaddr {
 	return M.ParseSocksaddrHostPort(option.Server, uint16(option.Port))
 }
 
-func (option WireGuardPeerOption) Prefixes() ([]netip.Prefix, error) {
+func (option WireGuardOption) Prefixes() ([]netip.Prefix, error) {
 	localPrefixes := make([]netip.Prefix, 0, 2)
 	if len(option.Ip) > 0 {
 		if !strings.Contains(option.Ip, "/") {
@@ -160,7 +160,10 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	outbound.bind = wireguard.NewClientBind(context.Background(), wgSingErrorHandler{outbound.Name()}, outbound.dialer, isConnect, connectAddr, reserved)
 
-	var localPrefixes []netip.Prefix
+	localPrefixes, err := option.Prefixes()
+	if err != nil {
+		return nil, err
+	}
 
 	var privateKey string
 	{
@@ -172,7 +175,6 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 	ipcConf := "private_key=" + privateKey
 	if peersLen := len(option.Peers); peersLen > 0 {
-		localPrefixes = make([]netip.Prefix, 0, peersLen*2)
 		for i, peer := range option.Peers {
 			var peerPublicKey, preSharedKey string
 			{
@@ -208,11 +210,6 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 				copy(reserved[:], option.Reserved)
 				outbound.bind.SetReservedForEndpoint(destination, reserved)
 			}
-			prefixes, err := peer.Prefixes()
-			if err != nil {
-				return nil, err
-			}
-			localPrefixes = append(localPrefixes, prefixes...)
 		}
 	} else {
 		var peerPublicKey, preSharedKey string
@@ -234,11 +231,6 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		ipcConf += "\nendpoint=" + connectAddr.String()
 		if preSharedKey != "" {
 			ipcConf += "\npreshared_key=" + preSharedKey
-		}
-		var err error
-		localPrefixes, err = option.Prefixes()
-		if err != nil {
-			return nil, err
 		}
 		var has4, has6 bool
 		for _, address := range localPrefixes {
@@ -266,7 +258,6 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	if len(localPrefixes) == 0 {
 		return nil, E.New("missing local address")
 	}
-	var err error
 	outbound.tunDevice, err = wireguard.NewStackDevice(localPrefixes, uint32(mtu))
 	if err != nil {
 		return nil, E.Cause(err, "create WireGuard device")
