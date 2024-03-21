@@ -146,7 +146,12 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			return address.AddrPort(), nil
 		}
 		udpAddr, err := resolveUDPAddrWithPrefer(ctx, "udp", address.String(), outbound.prefer)
-		return udpAddr.AddrPort(), err
+		if err != nil {
+			return netip.AddrPort{}, err
+		}
+		// net.ResolveUDPAddr maybe return 4in6 address, so unmap at here
+		addrPort := udpAddr.AddrPort()
+		return netip.AddrPortFrom(addrPort.Addr().Unmap(), addrPort.Port()), nil
 	}
 
 	var reserved [3]uint8
