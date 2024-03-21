@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/common/singledo"
@@ -38,20 +37,11 @@ func ResolveInterface(name string) (*Interface, error) {
 			if err != nil {
 				continue
 			}
-			// if not available device like Meta, dummy0, docker0, etc.
-			if (iface.Flags&net.FlagMulticast == 0) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
-				continue
-			}
 
 			ipNets := make([]netip.Prefix, 0, len(addrs))
 			for _, addr := range addrs {
 				ipNet := addr.(*net.IPNet)
 				ip, _ := netip.AddrFromSlice(ipNet.IP)
-
-				//unavailable IPv6 Address
-				if ip.Is6() && strings.HasPrefix(ip.String(), "fe80") {
-					continue
-				}
 
 				ones, bits := ipNet.Mask.Size()
 				if bits == 32 {

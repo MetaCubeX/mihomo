@@ -25,7 +25,7 @@ require (
 	github.com/metacubex/sing-shadowsocks2 v0.2.0
 	github.com/metacubex/sing-tun v0.2.1-0.20240320004934-5d2b35447bfd
 	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
-	github.com/metacubex/sing-wireguard v0.0.0-20240320043244-d6a8de454284
+	github.com/metacubex/sing-wireguard v0.0.0-20240321042214-224f96122a63
 	github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66
 	github.com/miekg/dns v1.1.58
 	github.com/mroth/weightedrand/v2 v2.1.0

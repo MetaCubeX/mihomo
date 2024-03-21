@@ -118,8 +118,8 @@ github.com/metacubex/sing-tun v0.2.1-0.20240320004934-5d2b35447bfd h1:NgLb6Lvr8Z
 github.com/metacubex/sing-tun v0.2.1-0.20240320004934-5d2b35447bfd/go.mod h1:GfLZG/QgGpW9+BPjltzONrL5vVms86TWqmZ23J68ISc=
 github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f h1:QjXrHKbTMBip/C+R79bvbfr42xH1gZl3uFb0RELdZiQ=
 github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f/go.mod h1:olVkD4FChQ5gKMHG4ZzuD7+fMkJY1G8vwOKpRehjrmY=
-github.com/metacubex/sing-wireguard v0.0.0-20240320043244-d6a8de454284 h1:aort+t6Hb+umsOFODT/P5fzTWr/4Bypp70jXUHhryR8=
-github.com/metacubex/sing-wireguard v0.0.0-20240320043244-d6a8de454284/go.mod h1:uY+BYb0UEknLrqvbGcwi9i++KgrKxsurysgI6G1Pveo=
+github.com/metacubex/sing-wireguard v0.0.0-20240321042214-224f96122a63 h1:AGyIB55UfQm/0ZH0HtQO9u3l//yjtHUpjeRjjPGfGRI=
+github.com/metacubex/sing-wireguard v0.0.0-20240321042214-224f96122a63/go.mod h1:uY+BYb0UEknLrqvbGcwi9i++KgrKxsurysgI6G1Pveo=
 github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66 h1:as/aO/fM8nv4W4pOr9EETP6kV/Oaujk3fUNyQSJK61c=
 github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66/go.mod h1:c7bVFM9f5+VzeZ/6Kg77T/jrg1Xp8QpqlSHvG/aXVts=
 github.com/miekg/dns v1.1.58 h1:ca2Hdkz+cDg/7eNF6V56jjzuZ4aCAE+DbVkILdQWG/4=
