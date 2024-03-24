@@ -40,16 +40,25 @@ func ResolveInterface(name string) (*Interface, error) {
 
 			ipNets := make([]netip.Prefix, 0, len(addrs))
 			for _, addr := range addrs {
-				ipNet := addr.(*net.IPNet)
-				ip, _ := netip.AddrFromSlice(ipNet.IP)
-
-				ones, bits := ipNet.Mask.Size()
-				if bits == 32 {
+				var pf netip.Prefix
+				switch addr.(type) {
+				case *net.IPNet:
+					ipNet := addr.(*net.IPNet)
+					ip, _ := netip.AddrFromSlice(ipNet.IP)
+					ones, bits := ipNet.Mask.Size()
+					if bits == 32 {
+						ip = ip.Unmap()
+					}
+					pf = netip.PrefixFrom(ip, ones)
+				case *net.IPAddr:
+					ipNet := addr.(*net.IPAddr)
+					ip, _ := netip.AddrFromSlice(ipNet.IP)
 					ip = ip.Unmap()
+					pf = netip.PrefixFrom(ip, ip.BitLen())
 				}
-
-				pf := netip.PrefixFrom(ip, ones)
-				ipNets = append(ipNets, pf)
+				if pf.IsValid() {
+					ipNets = append(ipNets, pf)
+				}
 			}
 
 			r[iface.Name] = &Interface{
