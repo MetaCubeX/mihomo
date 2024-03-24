@@ -823,7 +823,8 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 		LastTunConf.StrictRoute != tunConf.StrictRoute ||
 		LastTunConf.EndpointIndependentNat != tunConf.EndpointIndependentNat ||
 		LastTunConf.UDPTimeout != tunConf.UDPTimeout ||
-		LastTunConf.FileDescriptor != tunConf.FileDescriptor {
+		LastTunConf.FileDescriptor != tunConf.FileDescriptor ||
+		LastTunConf.TableIndex != tunConf.TableIndex {
 		return true
 	}
 

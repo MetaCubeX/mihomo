@@ -112,6 +112,10 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	} else {
 		udpTimeout = int64(sing.UDPTimeout.Seconds())
 	}
+	tableIndex := options.TableIndex
+	if tableIndex == 0 {
+		tableIndex = 2022
+	}
 	includeUID := uidToRange(options.IncludeUID)
 	if len(options.IncludeUIDRange) > 0 {
 		var err error
@@ -225,7 +229,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		ExcludePackage:           options.ExcludePackage,
 		FileDescriptor:           options.FileDescriptor,
 		InterfaceMonitor:         defaultInterfaceMonitor,
-		TableIndex:               2022,
+		TableIndex:               tableIndex,
 	}
 
 	err = l.buildAndroidRules(&tunOptions)

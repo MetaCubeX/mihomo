@@ -265,6 +265,7 @@ type RawTun struct {
 	EndpointIndependentNat   bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
 	UDPTimeout               int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
 	FileDescriptor           int            `yaml:"file-descriptor" json:"file-descriptor"`
+	TableIndex               int            `yaml:"table-index" json:"table-index"`
 }
 
 type RawTuicServer struct {
@@ -1448,6 +1449,7 @@ func parseTun(rawTun RawTun, general *General) error {
 		EndpointIndependentNat:   rawTun.EndpointIndependentNat,
 		UDPTimeout:               rawTun.UDPTimeout,
 		FileDescriptor:           rawTun.FileDescriptor,
+		TableIndex:               rawTun.TableIndex,
 	}
 
 	return nil

@@ -40,6 +40,7 @@ type TunOption struct {
 	EndpointIndependentNat   bool     `inbound:"endpoint_independent_nat,omitempty"`
 	UDPTimeout               int64    `inbound:"udp_timeout,omitempty"`
 	FileDescriptor           int      `inbound:"file-descriptor,omitempty"`
+	TableIndex               int      `inbound:"table-index,omitempty"`
 }
 
 func (o TunOption) Equal(config C.InboundConfig) bool {
@@ -118,6 +119,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 			EndpointIndependentNat:   options.EndpointIndependentNat,
 			UDPTimeout:               options.UDPTimeout,
 			FileDescriptor:           options.FileDescriptor,
+			TableIndex:               options.TableIndex,
 		},
 	}, nil
 }
