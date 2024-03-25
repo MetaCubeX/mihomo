@@ -3,6 +3,7 @@ package vmess
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -52,6 +53,10 @@ func (hc *httpConn) Read(b []byte) (int, error) {
 func (hc *httpConn) Write(b []byte) (int, error) {
 	if hc.whandshake {
 		return hc.Conn.Write(b)
+	}
+
+	if len(hc.cfg.Path) == 0 {
+		return -1, errors.New("path is empty")
 	}
 
 	path := hc.cfg.Path[fastrand.Intn(len(hc.cfg.Path))]
