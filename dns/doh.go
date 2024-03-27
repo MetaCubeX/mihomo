@@ -709,7 +709,8 @@ func (doh *dnsOverHTTPS) tlsDial(ctx context.Context, dialContext dialHandler, n
 	err = conn.SetDeadline(time.Now().Add(dialTimeout))
 	if err != nil {
 		// Must not happen in normal circumstances.
-		panic(fmt.Errorf("cannot set deadline: %w", err))
+		log.Errorln("cannot set deadline: %v", err)
+		return nil, err
 	}
 
 	err = conn.Handshake()

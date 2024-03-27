@@ -14,8 +14,11 @@ import (
 	"github.com/metacubex/mihomo/log"
 )
 
-var initGeoSite bool
-var initGeoIP int
+var (
+	initGeoSite bool
+	initGeoIP   int
+	initASN     bool
+)
 
 func InitGeoSite() error {
 	if _, err := os.Stat(C.Path.GeoSite()); os.IsNotExist(err) {
@@ -113,7 +116,7 @@ func InitGeoIP() error {
 	}
 
 	if initGeoIP != 2 {
-		if !mmdb.Verify() {
+		if !mmdb.Verify(C.Path.MMDB()) {
 			log.Warnln("MMDB invalid, remove and download")
 			if err := os.Remove(C.Path.MMDB()); err != nil {
 				return fmt.Errorf("can't remove invalid MMDB: %s", err.Error())
@@ -123,6 +126,30 @@ func InitGeoIP() error {
 			}
 		}
 		initGeoIP = 2
+	}
+	return nil
+}
+
+func InitASN() error {
+	if _, err := os.Stat(C.Path.ASN()); os.IsNotExist(err) {
+		log.Infoln("Can't find ASN.mmdb, start download")
+		if err := mmdb.DownloadASN(C.Path.ASN()); err != nil {
+			return fmt.Errorf("can't download ASN.mmdb: %s", err.Error())
+		}
+		log.Infoln("Download ASN.mmdb finish")
+		initASN = false
+	}
+	if !initASN {
+		if !mmdb.Verify(C.Path.ASN()) {
+			log.Warnln("ASN invalid, remove and download")
+			if err := os.Remove(C.Path.ASN()); err != nil {
+				return fmt.Errorf("can't remove invalid ASN: %s", err.Error())
+			}
+			if err := mmdb.DownloadASN(C.Path.ASN()); err != nil {
+				return fmt.Errorf("can't download ASN: %s", err.Error())
+			}
+		}
+		initASN = true
 	}
 	return nil
 }

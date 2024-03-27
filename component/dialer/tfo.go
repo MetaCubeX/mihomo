@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/sagernet/tfo-go"
+	"github.com/metacubex/tfo-go"
 )
 
 type tfoConn struct {

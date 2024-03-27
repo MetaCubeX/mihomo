@@ -5,14 +5,14 @@ package mmdb
 import "github.com/oschwald/maxminddb-golang"
 
 func InstallOverride(override *maxminddb.Reader) {
-	newReader := Reader{Reader: override}
+	newReader := IPReader{Reader: override}
 	switch override.Metadata.DatabaseType {
 	case "sing-geoip":
-		reader.databaseType = typeSing
+		IPreader.databaseType = typeSing
 	case "Meta-geoip0":
-		reader.databaseType = typeMetaV0
+		IPreader.databaseType = typeMetaV0
 	default:
-		reader.databaseType = typeMaxmind
+		IPreader.databaseType = typeMaxmind
 	}
-	reader = newReader
+	IPreader = newReader
 }

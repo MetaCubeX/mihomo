@@ -36,13 +36,21 @@ func setsockopt(rc syscall.RawConn, addr string) error {
 		}
 
 		if err == nil {
-			err = syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_RECVTOS, 1)
-		}
-
-		if err == nil {
-			err = syscall.SetsockoptInt(int(fd), syscall.SOL_IPV6, syscall.IPV6_RECVTCLASS, 1)
+			_ = setDSCPsockopt(fd, isIPv6)
 		}
 	})
 
 	return err
+}
+
+func setDSCPsockopt(fd uintptr, isIPv6 bool) (err error) {
+	if err == nil {
+		err = syscall.SetsockoptInt(int(fd), syscall.SOL_IP, syscall.IP_RECVTOS, 1)
+	}
+
+	if err == nil && isIPv6 {
+		err = syscall.SetsockoptInt(int(fd), syscall.SOL_IPV6, syscall.IPV6_RECVTCLASS, 1)
+	}
+
+	return
 }

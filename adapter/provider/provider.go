@@ -46,18 +46,13 @@ type proxySetProvider struct {
 }
 
 func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
-	expectedStatus := "*"
-	if pp.healthCheck.expectedStatus != nil {
-		expectedStatus = pp.healthCheck.expectedStatus.ToString()
-	}
-
 	return json.Marshal(map[string]any{
 		"name":             pp.Name(),
 		"type":             pp.Type().String(),
 		"vehicleType":      pp.VehicleType().String(),
 		"proxies":          pp.Proxies(),
 		"testUrl":          pp.healthCheck.url,
-		"expectedStatus":   expectedStatus,
+		"expectedStatus":   pp.healthCheck.expectedStatus.String(),
 		"updatedAt":        pp.UpdatedAt,
 		"subscriptionInfo": pp.subscriptionInfo,
 	})
@@ -104,6 +99,10 @@ func (pp *proxySetProvider) Proxies() []C.Proxy {
 
 func (pp *proxySetProvider) Touch() {
 	pp.healthCheck.touch()
+}
+
+func (pp *proxySetProvider) HealthCheckURL() string {
+	return pp.healthCheck.url
 }
 
 func (pp *proxySetProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
@@ -217,18 +216,13 @@ type compatibleProvider struct {
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
-	expectedStatus := "*"
-	if cp.healthCheck.expectedStatus != nil {
-		expectedStatus = cp.healthCheck.expectedStatus.ToString()
-	}
-
 	return json.Marshal(map[string]any{
 		"name":           cp.Name(),
 		"type":           cp.Type().String(),
 		"vehicleType":    cp.VehicleType().String(),
 		"proxies":        cp.Proxies(),
 		"testUrl":        cp.healthCheck.url,
-		"expectedStatus": expectedStatus,
+		"expectedStatus": cp.healthCheck.expectedStatus.String(),
 	})
 }
 
@@ -269,6 +263,10 @@ func (cp *compatibleProvider) Proxies() []C.Proxy {
 
 func (cp *compatibleProvider) Touch() {
 	cp.healthCheck.touch()
+}
+
+func (cp *compatibleProvider) HealthCheckURL() string {
+	return cp.healthCheck.url
 }
 
 func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
@@ -398,6 +396,14 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 				}
 				if override.IPVersion != nil {
 					mapping["ip-version"] = *override.IPVersion
+				}
+				if override.AdditionalPrefix != nil {
+					name := mapping["name"].(string)
+					mapping["name"] = *override.AdditionalPrefix + name
+				}
+				if override.AdditionalSuffix != nil {
+					name := mapping["name"].(string)
+					mapping["name"] = name + *override.AdditionalSuffix
 				}
 
 				proxy, err := adapter.ParseProxy(mapping)

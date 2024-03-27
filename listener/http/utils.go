@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 )
 
@@ -48,6 +49,11 @@ func removeExtraHTTPHostPort(req *http.Request) {
 
 	if pHost, port, err := net.SplitHostPort(host); err == nil && (port == "80" || port == "443") {
 		host = pHost
+		if ip, err := netip.ParseAddr(pHost); err == nil && ip.Is6() {
+			// RFC 2617 Sec 3.2.2, for IPv6 literal
+			// addresses the Host header needs to follow the RFC 2732 grammar for "host"
+			host = "[" + host + "]"
+		}
 	}
 
 	req.Host = host

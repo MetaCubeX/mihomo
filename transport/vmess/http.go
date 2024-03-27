@@ -3,6 +3,7 @@ package vmess
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -54,13 +55,17 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 		return hc.Conn.Write(b)
 	}
 
+	if len(hc.cfg.Path) == 0 {
+		return -1, errors.New("path is empty")
+	}
+
 	path := hc.cfg.Path[fastrand.Intn(len(hc.cfg.Path))]
 	host := hc.cfg.Host
 	if header := hc.cfg.Headers["Host"]; len(header) != 0 {
 		host = header[fastrand.Intn(len(header))]
 	}
 
-	u := fmt.Sprintf("http://%s%s", host, path)
+	u := fmt.Sprintf("http://%s%s", net.JoinHostPort(host, "80"), path)
 	req, _ := http.NewRequest(utils.EmptyOr(hc.cfg.Method, http.MethodGet), u, bytes.NewBuffer(b))
 	for key, list := range hc.cfg.Headers {
 		req.Header.Set(key, list[fastrand.Intn(len(list))])

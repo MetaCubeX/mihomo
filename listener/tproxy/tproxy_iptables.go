@@ -15,6 +15,7 @@ var (
 	dnsPort       uint16
 	tProxyPort    uint16
 	interfaceName string
+	DnsRedirect   bool
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 	PROXY_ROUTE_TABLE = "0x2d0"
 )
 
-func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint16) error {
+func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dnsredir bool, dport uint16) error {
 	if _, err := cmd.ExecCmd("iptables -V"); err != nil {
 		return fmt.Errorf("current operations system [%s] are not support iptables or command iptables does not exist", runtime.GOOS)
 	}
@@ -33,6 +34,7 @@ func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint1
 
 	interfaceName = ifname
 	tProxyPort = tport
+	DnsRedirect = dnsredir
 	dnsPort = dport
 
 	// add route
@@ -58,8 +60,10 @@ func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint1
 	execCmd("iptables -t mangle -N mihomo_prerouting")
 	execCmd("iptables -t mangle -F mihomo_prerouting")
 	execCmd("iptables -t mangle -A mihomo_prerouting -s 172.17.0.0/16 -j RETURN")
-	execCmd("iptables -t mangle -A mihomo_prerouting -p udp --dport 53 -j ACCEPT")
-	execCmd("iptables -t mangle -A mihomo_prerouting -p tcp --dport 53 -j ACCEPT")
+	if DnsRedirect {
+		execCmd("iptables -t mangle -A mihomo_prerouting -p udp --dport 53 -j ACCEPT")
+		execCmd("iptables -t mangle -A mihomo_prerouting -p tcp --dport 53 -j ACCEPT")
+	}
 	execCmd("iptables -t mangle -A mihomo_prerouting -m addrtype --dst-type LOCAL -j RETURN")
 	addLocalnetworkToChain("mihomo_prerouting", bypass)
 	execCmd("iptables -t mangle -A mihomo_prerouting -p tcp -m socket -j mihomo_divert")
@@ -68,8 +72,10 @@ func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint1
 	execCmd(fmt.Sprintf("iptables -t mangle -A mihomo_prerouting -p udp -j TPROXY --on-port %d --tproxy-mark %s/%s", tProxyPort, PROXY_FWMARK, PROXY_FWMARK))
 	execCmd("iptables -t mangle -A PREROUTING -j mihomo_prerouting")
 
-	execCmd(fmt.Sprintf("iptables -t nat -I PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p tcp --dport 53 -j REDIRECT --to %d", dnsPort))
-	execCmd(fmt.Sprintf("iptables -t nat -I PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p udp --dport 53 -j REDIRECT --to %d", dnsPort))
+	if DnsRedirect {
+		execCmd(fmt.Sprintf("iptables -t nat -I PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p tcp --dport 53 -j REDIRECT --to %d", dnsPort))
+		execCmd(fmt.Sprintf("iptables -t nat -I PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p udp --dport 53 -j REDIRECT --to %d", dnsPort))
+	}
 
 	// set post routing
 	if interfaceName != "lo" {
@@ -80,8 +86,10 @@ func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint1
 	execCmd("iptables -t mangle -N mihomo_output")
 	execCmd("iptables -t mangle -F mihomo_output")
 	execCmd(fmt.Sprintf("iptables -t mangle -A mihomo_output -m mark --mark %#x -j RETURN", dialer.DefaultRoutingMark.Load()))
-	execCmd("iptables -t mangle -A mihomo_output -p udp -m multiport --dports 53,123,137 -j ACCEPT")
-	execCmd("iptables -t mangle -A mihomo_output -p tcp --dport 53 -j ACCEPT")
+	if DnsRedirect {
+		execCmd("iptables -t mangle -A mihomo_output -p udp -m multiport --dports 53,123,137 -j ACCEPT")
+		execCmd("iptables -t mangle -A mihomo_output -p tcp --dport 53 -j ACCEPT")
+	}
 	execCmd("iptables -t mangle -A mihomo_output -m addrtype --dst-type LOCAL -j RETURN")
 	execCmd("iptables -t mangle -A mihomo_output -m addrtype --dst-type BROADCAST -j RETURN")
 	addLocalnetworkToChain("mihomo_output", bypass)
@@ -90,20 +98,22 @@ func SetTProxyIPTables(ifname string, bypass []string, tport uint16, dport uint1
 	execCmd(fmt.Sprintf("iptables -t mangle -I OUTPUT -o %s -j mihomo_output", interfaceName))
 
 	// set dns output
-	execCmd("iptables -t nat -N mihomo_dns_output")
-	execCmd("iptables -t nat -F mihomo_dns_output")
-	execCmd(fmt.Sprintf("iptables -t nat -A mihomo_dns_output -m mark --mark %#x -j RETURN", dialer.DefaultRoutingMark.Load()))
-	execCmd("iptables -t nat -A mihomo_dns_output -s 172.17.0.0/16 -j RETURN")
-	execCmd(fmt.Sprintf("iptables -t nat -A mihomo_dns_output -p udp -j REDIRECT --to-ports %d", dnsPort))
-	execCmd(fmt.Sprintf("iptables -t nat -A mihomo_dns_output -p tcp -j REDIRECT --to-ports %d", dnsPort))
-	execCmd("iptables -t nat -I OUTPUT -p tcp --dport 53 -j mihomo_dns_output")
-	execCmd("iptables -t nat -I OUTPUT -p udp --dport 53 -j mihomo_dns_output")
+	if DnsRedirect {
+		execCmd("iptables -t nat -N mihomo_dns_output")
+		execCmd("iptables -t nat -F mihomo_dns_output")
+		execCmd(fmt.Sprintf("iptables -t nat -A mihomo_dns_output -m mark --mark %#x -j RETURN", dialer.DefaultRoutingMark.Load()))
+		execCmd("iptables -t nat -A mihomo_dns_output -s 172.17.0.0/16 -j RETURN")
+		execCmd(fmt.Sprintf("iptables -t nat -A mihomo_dns_output -p udp -j REDIRECT --to-ports %d", dnsPort))
+		execCmd(fmt.Sprintf("iptables -t nat -A mihomo_dns_output -p tcp -j REDIRECT --to-ports %d", dnsPort))
+		execCmd("iptables -t nat -I OUTPUT -p tcp --dport 53 -j mihomo_dns_output")
+		execCmd("iptables -t nat -I OUTPUT -p udp --dport 53 -j mihomo_dns_output")
+	}
 
 	return nil
 }
 
 func CleanupTProxyIPTables() {
-	if runtime.GOOS != "linux" || interfaceName == "" || tProxyPort == 0 || dnsPort == 0 {
+	if runtime.GOOS != "linux" || interfaceName == "" || tProxyPort == 0 {
 		return
 	}
 
@@ -130,8 +140,10 @@ func CleanupTProxyIPTables() {
 	}
 
 	// clean PREROUTING
-	execCmd(fmt.Sprintf("iptables -t nat -D PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p tcp --dport 53 -j REDIRECT --to %d", dnsPort))
-	execCmd(fmt.Sprintf("iptables -t nat -D PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p udp --dport 53 -j REDIRECT --to %d", dnsPort))
+	if DnsRedirect {
+		execCmd(fmt.Sprintf("iptables -t nat -D PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p tcp --dport 53 -j REDIRECT --to %d", dnsPort))
+		execCmd(fmt.Sprintf("iptables -t nat -D PREROUTING ! -s 172.17.0.0/16 ! -d 127.0.0.0/8 -p udp --dport 53 -j REDIRECT --to %d", dnsPort))
+	}
 	execCmd("iptables -t mangle -D PREROUTING -j mihomo_prerouting")
 
 	// clean POSTROUTING
@@ -141,8 +153,10 @@ func CleanupTProxyIPTables() {
 
 	// clean OUTPUT
 	execCmd(fmt.Sprintf("iptables -t mangle -D OUTPUT -o %s -j mihomo_output", interfaceName))
-	execCmd("iptables -t nat -D OUTPUT -p tcp --dport 53 -j mihomo_dns_output")
-	execCmd("iptables -t nat -D OUTPUT -p udp --dport 53 -j mihomo_dns_output")
+	if DnsRedirect {
+		execCmd("iptables -t nat -D OUTPUT -p tcp --dport 53 -j mihomo_dns_output")
+		execCmd("iptables -t nat -D OUTPUT -p udp --dport 53 -j mihomo_dns_output")
+	}
 
 	// clean chain
 	execCmd("iptables -t mangle -F mihomo_prerouting")
@@ -151,9 +165,10 @@ func CleanupTProxyIPTables() {
 	execCmd("iptables -t mangle -X mihomo_divert")
 	execCmd("iptables -t mangle -F mihomo_output")
 	execCmd("iptables -t mangle -X mihomo_output")
-	execCmd("iptables -t nat -F mihomo_dns_output")
-	execCmd("iptables -t nat -X mihomo_dns_output")
-
+	if DnsRedirect {
+		execCmd("iptables -t nat -F mihomo_dns_output")
+		execCmd("iptables -t nat -X mihomo_dns_output")
+	}
 	interfaceName = ""
 	tProxyPort = 0
 	dnsPort = 0
