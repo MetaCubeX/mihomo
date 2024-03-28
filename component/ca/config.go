@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -17,6 +19,11 @@ var trustCerts []*x509.Certificate
 var globalCertPool *x509.CertPool
 var mutex sync.RWMutex
 var errNotMatch = errors.New("certificate fingerprints do not match")
+
+//go:embed ca-certificates.crt
+var _CaCertificates []byte
+var DisableEmbedCa, _ = strconv.ParseBool(os.Getenv("DISABLE_EMBED_CA"))
+var DisableSystemCa, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_CA"))
 
 func AddCertificate(certificate string) error {
 	mutex.Lock()
@@ -34,12 +41,19 @@ func AddCertificate(certificate string) error {
 
 func initializeCertPool() {
 	var err error
-	globalCertPool, err = x509.SystemCertPool()
-	if err != nil {
+	if DisableSystemCa {
 		globalCertPool = x509.NewCertPool()
+	} else {
+		globalCertPool, err = x509.SystemCertPool()
+		if err != nil {
+			globalCertPool = x509.NewCertPool()
+		}
 	}
 	for _, cert := range trustCerts {
 		globalCertPool.AddCert(cert)
+	}
+	if !DisableEmbedCa {
+		globalCertPool.AppendCertsFromPEM(_CaCertificates)
 	}
 }
 
