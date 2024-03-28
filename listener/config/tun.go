@@ -49,4 +49,5 @@ type Tun struct {
 	EndpointIndependentNat   bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
 	UDPTimeout               int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
 	FileDescriptor           int            `yaml:"file-descriptor" json:"file-descriptor"`
+	TableIndex               int            `yaml:"table-index" json:"table-index"`
 }
