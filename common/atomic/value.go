@@ -43,7 +43,7 @@ func (t *TypedValue[T]) Swap(new T) T {
 	if old == nil {
 		return DefaultValue[T]()
 	}
-	return old.(T)
+	return old.(tValue[T]).value
 }
 
 func (t *TypedValue[T]) CompareAndSwap(old, new T) bool {
