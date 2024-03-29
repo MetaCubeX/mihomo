@@ -482,6 +482,11 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 				"www.msftconnecttest.com",
 			},
 		},
+		Experimental: Experimental{
+			// https://github.com/quic-go/quic-go/issues/4178
+			// Quic-go currently cannot automatically fall back on platforms that do not support ecn, so this feature is turned off by default.
+			QUICGoDisableECN: true,
+		},
 		Sniffer: RawSniffer{
 			Enable:          false,
 			Sniffing:        []string{},
@@ -916,7 +921,7 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 
 		l := len(rule)
 
-		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" || ruleName == "SUB-RULE" {
+		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" || ruleName == "SUB-RULE" || ruleName == "DOMAIN-REGEX" {
 			target = rule[l-1]
 			payload = strings.Join(rule[1:l-1], ",")
 		} else {

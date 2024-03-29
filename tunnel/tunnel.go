@@ -596,7 +596,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	defer configMux.RUnlock()
 	var (
 		resolved             bool
-		attemptProcessLookup = true
+		attemptProcessLookup = metadata.Type != C.INNER
 	)
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {

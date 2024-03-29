@@ -213,11 +213,7 @@ func ResolveIP(ctx context.Context, host string) (netip.Addr, error) {
 // ResolveIPv4ProxyServerHost proxies server host only
 func ResolveIPv4ProxyServerHost(ctx context.Context, host string) (netip.Addr, error) {
 	if ProxyServerHostResolver != nil {
-		if ip, err := ResolveIPv4WithResolver(ctx, host, ProxyServerHostResolver); err != nil {
-			return ResolveIPv4(ctx, host)
-		} else {
-			return ip, nil
-		}
+		return ResolveIPv4WithResolver(ctx, host, ProxyServerHostResolver)
 	}
 	return ResolveIPv4(ctx, host)
 }
@@ -225,11 +221,7 @@ func ResolveIPv4ProxyServerHost(ctx context.Context, host string) (netip.Addr, e
 // ResolveIPv6ProxyServerHost proxies server host only
 func ResolveIPv6ProxyServerHost(ctx context.Context, host string) (netip.Addr, error) {
 	if ProxyServerHostResolver != nil {
-		if ip, err := ResolveIPv6WithResolver(ctx, host, ProxyServerHostResolver); err != nil {
-			return ResolveIPv6(ctx, host)
-		} else {
-			return ip, nil
-		}
+		return ResolveIPv6WithResolver(ctx, host, ProxyServerHostResolver)
 	}
 	return ResolveIPv6(ctx, host)
 }
@@ -237,11 +229,7 @@ func ResolveIPv6ProxyServerHost(ctx context.Context, host string) (netip.Addr, e
 // ResolveProxyServerHost proxies server host only
 func ResolveProxyServerHost(ctx context.Context, host string) (netip.Addr, error) {
 	if ProxyServerHostResolver != nil {
-		if ip, err := ResolveIPWithResolver(ctx, host, ProxyServerHostResolver); err != nil {
-			return ResolveIP(ctx, host)
-		} else {
-			return ip, err
-		}
+		return ResolveIPWithResolver(ctx, host, ProxyServerHostResolver)
 	}
 	return ResolveIP(ctx, host)
 }
