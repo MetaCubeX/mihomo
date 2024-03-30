@@ -34,6 +34,8 @@ jobs:
           - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible, test: test }
           - { goos: linux, goarch: amd64, goamd64: v3, output: amd64 }
           - { goos: linux, goarch: arm64, output: arm64 }
+          - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
+          - { goos: linux, goarch: arm, goarm: '6', output: armv6 }
           - { goos: linux, goarch: arm, goarm: '7', output: armv7 }
           - { goos: linux, goarch: mips, mips: hardfloat, output: mips-hardfloat }
           - { goos: linux, goarch: mips, mips: softfloat, output: mips-softfloat }
