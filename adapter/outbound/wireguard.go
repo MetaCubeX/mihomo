@@ -188,7 +188,8 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	}
 
 	if len(option.Peers) > 0 {
-		for i, peer := range option.Peers {
+		for i := range option.Peers {
+			peer := &option.Peers[i] // we need modify option here
 			bytes, err := base64.StdEncoding.DecodeString(peer.PublicKey)
 			if err != nil {
 				return nil, E.Cause(err, "decode public key for peer ", i)

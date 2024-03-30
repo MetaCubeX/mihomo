@@ -383,6 +383,7 @@ proxies: # socks5
       # headers:
       #   custom: value
       # v2ray-http-upgrade: false
+      # v2ray-http-upgrade-fast-open: false
 
   - name: "ss4-shadow-tls"
     type: ss
@@ -461,6 +462,7 @@ proxies: # socks5
       # max-early-data: 2048
       # early-data-header-name: Sec-WebSocket-Protocol
       # v2ray-http-upgrade: false
+      # v2ray-http-upgrade-fast-open: false
 
   - name: "vmess-h2"
     type: vmess
@@ -589,6 +591,7 @@ proxies: # socks5
       headers:
         Host: example.com
       # v2ray-http-upgrade: false
+      # v2ray-http-upgrade-fast-open: false
 
   # Trojan
   - name: "trojan"
@@ -633,6 +636,7 @@ proxies: # socks5
     #   headers:
     #     Host: example.com
     #   v2ray-http-upgrade: false
+    #   v2ray-http-upgrade-fast-open: false
 
   - name: "trojan-xtls"
     type: trojan
