@@ -330,7 +330,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 				vmess["h2-opts"] = h2Opts
 
-			case "ws":
+			case "ws", "httpupgrade":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 				wsOpts["path"] = []string{"/"}
@@ -338,7 +338,30 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 					headers["Host"] = host.(string)
 				}
 				if path, ok := values["path"]; ok && path != "" {
-					wsOpts["path"] = path.(string)
+					path := path.(string)
+					pathURL, err := url.Parse(path)
+					if err == nil {
+						query := pathURL.Query()
+						if earlyData := query.Get("ed"); earlyData != "" {
+							med, err := strconv.Atoi(earlyData)
+							if err == nil {
+								switch network {
+								case "ws":
+									wsOpts["max-early-data"] = med
+									wsOpts["early-data-header-name"] = "Sec-WebSocket-Protocol"
+								case "httpupgrade":
+									wsOpts["v2ray-http-upgrade-fast-open"] = true
+								}
+								query.Del("ed")
+								pathURL.RawQuery = query.Encode()
+								path = pathURL.String()
+							}
+						}
+						if earlyDataHeader := query.Get("eh"); earlyDataHeader != "" {
+							wsOpts["early-data-header-name"] = earlyDataHeader
+						}
+					}
+					wsOpts["path"] = path
 				}
 				wsOpts["headers"] = headers
 				vmess["ws-opts"] = wsOpts
