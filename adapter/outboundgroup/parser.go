@@ -98,14 +98,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, errDuplicateProvider)
 		}
 
-		// select don't need health check
-		if groupOption.Type != "select" && groupOption.Type != "relay" {
-			if groupOption.Interval == 0 {
-				groupOption.Interval = 300
-			}
-			if groupOption.URL == "" {
-				groupOption.URL = C.DefaultTestURL
-			}
+		if groupOption.Interval == 0 {
+			groupOption.Interval = 300
+		}
+
+		if groupOption.URL == "" {
+			groupOption.URL = C.DefaultTestURL
 		}
 
 		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
