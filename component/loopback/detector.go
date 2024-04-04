@@ -1,6 +1,8 @@
-package outbound
+package loopback
 
 import (
+	"errors"
+	"fmt"
 	"net/netip"
 
 	"github.com/metacubex/mihomo/common/callback"
@@ -9,19 +11,21 @@ import (
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
-type loopBackDetector struct {
+var ErrReject = errors.New("reject loopback connection")
+
+type Detector struct {
 	connMap       *xsync.MapOf[netip.AddrPort, struct{}]
 	packetConnMap *xsync.MapOf[netip.AddrPort, struct{}]
 }
 
-func newLoopBackDetector() *loopBackDetector {
-	return &loopBackDetector{
+func NewDetector() *Detector {
+	return &Detector{
 		connMap:       xsync.NewMapOf[netip.AddrPort, struct{}](),
 		packetConnMap: xsync.NewMapOf[netip.AddrPort, struct{}](),
 	}
 }
 
-func (l *loopBackDetector) NewConn(conn C.Conn) C.Conn {
+func (l *Detector) NewConn(conn C.Conn) C.Conn {
 	metadata := C.Metadata{}
 	if metadata.SetRemoteAddr(conn.LocalAddr()) != nil {
 		return conn
@@ -36,7 +40,7 @@ func (l *loopBackDetector) NewConn(conn C.Conn) C.Conn {
 	})
 }
 
-func (l *loopBackDetector) NewPacketConn(conn C.PacketConn) C.PacketConn {
+func (l *Detector) NewPacketConn(conn C.PacketConn) C.PacketConn {
 	metadata := C.Metadata{}
 	if metadata.SetRemoteAddr(conn.LocalAddr()) != nil {
 		return conn
@@ -51,18 +55,24 @@ func (l *loopBackDetector) NewPacketConn(conn C.PacketConn) C.PacketConn {
 	})
 }
 
-func (l *loopBackDetector) CheckConn(connAddr netip.AddrPort) bool {
+func (l *Detector) CheckConn(metadata *C.Metadata) error {
+	connAddr := metadata.SourceAddrPort()
 	if !connAddr.IsValid() {
-		return false
+		return nil
 	}
-	_, ok := l.connMap.Load(connAddr)
-	return ok
+	if _, ok := l.connMap.Load(connAddr); ok {
+		return fmt.Errorf("%w to: %s", ErrReject, metadata.RemoteAddress())
+	}
+	return nil
 }
 
-func (l *loopBackDetector) CheckPacketConn(connAddr netip.AddrPort) bool {
+func (l *Detector) CheckPacketConn(metadata *C.Metadata) error {
+	connAddr := metadata.SourceAddrPort()
 	if !connAddr.IsValid() {
-		return false
+		return nil
 	}
-	_, ok := l.packetConnMap.Load(connAddr)
-	return ok
+	if _, ok := l.packetConnMap.Load(connAddr); ok {
+		return fmt.Errorf("%w to: %s", ErrReject, metadata.RemoteAddress())
+	}
+	return nil
 }

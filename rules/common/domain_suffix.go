@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
+	"golang.org/x/net/idna"
 )
 
 type DomainSuffix struct {
@@ -30,9 +31,10 @@ func (ds *DomainSuffix) Payload() string {
 }
 
 func NewDomainSuffix(suffix string, adapter string) *DomainSuffix {
+	punycode, _ := idna.ToASCII(strings.ToLower(suffix))
 	return &DomainSuffix{
 		Base:    &Base{},
-		suffix:  strings.ToLower(suffix),
+		suffix:  punycode,
 		adapter: adapter,
 	}
 }

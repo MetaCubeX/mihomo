@@ -8,8 +8,10 @@ const (
 	DomainRegex
 	GEOSITE
 	GEOIP
-	IPCIDR
+	SrcGEOIP
 	IPASN
+	SrcIPASN
+	IPCIDR
 	SrcIPCIDR
 	IPSuffix
 	SrcIPSuffix
@@ -48,10 +50,14 @@ func (rt RuleType) String() string {
 		return "GeoSite"
 	case GEOIP:
 		return "GeoIP"
-	case IPCIDR:
-		return "IPCIDR"
+	case SrcGEOIP:
+		return "SrcGeoIP"
 	case IPASN:
 		return "IPASN"
+	case SrcIPASN:
+		return "SrcIPASN"
+	case IPCIDR:
+		return "IPCIDR"
 	case SrcIPCIDR:
 		return "SrcIPCIDR"
 	case IPSuffix:
