@@ -143,7 +143,7 @@ jobs:
       run: |
         go test ./...
 
-    - name: Update UA
+    - name: Update CA
       run: |
         sudo apt-get install ca-certificates
         sudo update-ca-certificates
