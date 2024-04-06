@@ -44,14 +44,16 @@ type proxyProviderSchema struct {
 	Type          string `provider:"type"`
 	Path          string `provider:"path,omitempty"`
 	URL           string `provider:"url,omitempty"`
+	Proxy         string `provider:"proxy,omitempty"`
 	Interval      int    `provider:"interval,omitempty"`
 	Filter        string `provider:"filter,omitempty"`
 	ExcludeFilter string `provider:"exclude-filter,omitempty"`
 	ExcludeType   string `provider:"exclude-type,omitempty"`
 	DialerProxy   string `provider:"dialer-proxy,omitempty"`
 
-	HealthCheck healthCheckSchema `provider:"health-check,omitempty"`
-	Override    OverrideSchema    `provider:"override,omitempty"`
+	HealthCheck healthCheckSchema   `provider:"health-check,omitempty"`
+	Override    OverrideSchema      `provider:"override,omitempty"`
+	Header      map[string][]string `provider:"header,omitempty"`
 }
 
 func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvider, error) {
@@ -86,16 +88,14 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		path := C.Path.Resolve(schema.Path)
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
+		path := C.Path.GetPathByHash("proxies", schema.URL)
 		if schema.Path != "" {
-			path := C.Path.Resolve(schema.Path)
+			path = C.Path.Resolve(schema.Path)
 			if !features.CMFA && !C.Path.IsSafePath(path) {
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
-			vehicle = resource.NewHTTPVehicle(schema.URL, path)
-		} else {
-			path := C.Path.GetPathByHash("proxies", schema.URL)
-			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
