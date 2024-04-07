@@ -12,7 +12,6 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
-	types "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
 
@@ -31,7 +30,7 @@ type GroupBase struct {
 	failedTesting    atomic.Bool
 	proxies          [][]C.Proxy
 	versions         []atomic.Uint32
-	TestTimeout      int
+	TestTimeout      string
 	maxFailedTimes   int
 }
 
@@ -40,7 +39,7 @@ type GroupBaseOption struct {
 	filter         string
 	excludeFilter  string
 	excludeType    string
-	TestTimeout    int
+	TestTimeout    string
 	maxFailedTimes int
 	providers      []provider.ProxyProvider
 }
@@ -74,8 +73,8 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		maxFailedTimes:   opt.maxFailedTimes,
 	}
 
-	if gb.TestTimeout == 0 {
-		gb.TestTimeout = 5000
+	if gb.TestTimeout == "" {
+		gb.TestTimeout = "5000"
 	}
 	if gb.maxFailedTimes == 0 {
 		gb.maxFailedTimes = 5
@@ -108,7 +107,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				pd.Touch()
 			}
 
-			if pd.VehicleType() == types.Compatible {
+			if pd.VehicleType() == provider.Compatible {
 				gb.versions[i].Store(pd.Version())
 				gb.proxies[i] = pd.Proxies()
 				continue
@@ -244,6 +243,11 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error) {
 		return
 	}
 
+	var timeout time.Duration
+	if gb.TestTimeout != "" {
+		timeout = utils.ParseDuration(gb.TestTimeout, "ms")
+	}
+
 	go func() {
 		gb.failedTestMux.Lock()
 		defer gb.failedTestMux.Unlock()
@@ -253,7 +257,7 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error) {
 			log.Debugln("ProxyGroup: %s first failed", gb.Name())
 			gb.failedTime = time.Now()
 		} else {
-			if time.Since(gb.failedTime) > time.Duration(gb.TestTimeout)*time.Millisecond {
+			if time.Since(gb.failedTime) > timeout {
 				gb.failedTimes = 0
 				return
 			}

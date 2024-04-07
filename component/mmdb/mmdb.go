@@ -82,7 +82,7 @@ func IPInstance() IPReader {
 func DownloadMMDB(path string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, C.MmdbUrl, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, C.MmdbUrl, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil, "")
 	if err != nil {
 		return
 	}
@@ -115,7 +115,7 @@ func ASNInstance() ASNReader {
 func DownloadASN(path string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, C.ASNUrl, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, C.ASNUrl, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil, "")
 	if err != nil {
 		return
 	}

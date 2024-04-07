@@ -4,7 +4,7 @@ var (
 	ASNEnable         bool
 	GeodataMode       bool
 	GeoAutoUpdate     bool
-	GeoUpdateInterval int
+	GeoUpdateInterval string
 	GeoIpUrl          string
 	MmdbUrl           string
 	GeoSiteUrl        string

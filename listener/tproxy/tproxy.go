@@ -34,6 +34,8 @@ func (l *Listener) Close() error {
 func (l *Listener) handleTProxy(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	target := socks5.ParseAddrToSocksAddr(conn.LocalAddr())
 	N.TCPKeepAlive(conn)
+	// TProxy's conn.LocalAddr() is target address, so we set from l.listener
+	additions = append([]inbound.Addition{inbound.WithInAddr(l.listener.Addr())}, additions...)
 	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.TPROXY, additions...))
 }
 

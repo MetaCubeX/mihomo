@@ -160,7 +160,7 @@ func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Re
 			"",
 			"",
 			"",
-			5000,
+			"5000",
 			5,
 			providers,
 		}),

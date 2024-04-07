@@ -15,7 +15,7 @@ import (
 var (
 	geoMode        bool
 	AutoUpdate     bool
-	UpdateInterval int
+	UpdateInterval string
 	geoLoaderName  = "memconservative"
 	geoSiteMatcher = "succinct"
 )
@@ -30,7 +30,7 @@ func GeoAutoUpdate() bool {
 	return AutoUpdate
 }
 
-func GeoUpdateInterval() int {
+func GeoUpdateInterval() string {
 	return UpdateInterval
 }
 
@@ -48,7 +48,7 @@ func SetGeodataMode(newGeodataMode bool) {
 func SetGeoAutoUpdate(newAutoUpdate bool) {
 	AutoUpdate = newAutoUpdate
 }
-func SetGeoUpdateInterval(newGeoUpdateInterval int) {
+func SetGeoUpdateInterval(newGeoUpdateInterval string) {
 	UpdateInterval = newGeoUpdateInterval
 }
 
@@ -144,7 +144,7 @@ func LoadGeoSiteMatcher(countryCode string) (router.DomainMatcher, int, error) {
 	/**
 	linear: linear algorithm
 	matcher, err := router.NewDomainMatcher(domains)
-	mph：minimal perfect hash algorithm
+	mph: minimal perfect hash algorithm
 	*/
 	var matcher router.DomainMatcher
 	if geoSiteMatcher == "mph" {

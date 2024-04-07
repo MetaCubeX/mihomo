@@ -27,8 +27,8 @@ type GroupCommonOption struct {
 	Proxies             []string `group:"proxies,omitempty"`
 	Use                 []string `group:"use,omitempty"`
 	URL                 string   `group:"url,omitempty"`
-	Interval            int      `group:"interval,omitempty"`
-	TestTimeout         int      `group:"timeout,omitempty"`
+	Interval            string   `group:"interval,omitempty"`
+	TestTimeout         string   `group:"timeout,omitempty"`
 	MaxFailedTimes      int      `group:"max-failed-times,omitempty"`
 	Lazy                bool     `group:"lazy,omitempty"`
 	DisableUDP          bool     `group:"disable-udp,omitempty"`
@@ -88,6 +88,40 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 	groupOption.ExpectedStatus = status
 
+	var (
+		interval uint
+		timeout  uint
+	)
+	if groupOption.Interval != "" {
+		interval = uint(utils.ParseDuration(groupOption.Interval, "s").Seconds())
+	}
+	if groupOption.TestTimeout != "" {
+		timeout = uint(utils.ParseDuration(groupOption.TestTimeout, "ms").Milliseconds())
+	}
+
+	if len(groupOption.Use) != 0 {
+		PDs, err := getProviders(providersMap, groupOption.Use)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", groupName, err)
+		}
+
+		// if test URL is empty, use the first health check URL of providers
+		if groupOption.URL == "" {
+			for _, pd := range PDs {
+				if pd.HealthCheckURL() != "" {
+					groupOption.URL = pd.HealthCheckURL()
+					break
+				}
+			}
+			if groupOption.URL == "" {
+				groupOption.URL = C.DefaultTestURL
+			}
+		} else {
+			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, interval)
+		}
+		providers = append(providers, PDs...)
+	}
+
 	if len(groupOption.Proxies) != 0 {
 		ps, err := getProxies(proxyMap, groupOption.Proxies)
 		if err != nil {
@@ -98,49 +132,26 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			return nil, fmt.Errorf("%s: %w", groupName, errDuplicateProvider)
 		}
 
-		// select don't need health check
+		if groupOption.URL == "" {
+			groupOption.URL = C.DefaultTestURL
+		}
+
+		// select don't need auto health check
 		if groupOption.Type != "select" && groupOption.Type != "relay" {
-			if groupOption.Interval == 0 {
-				groupOption.Interval = 300
-			}
-			if groupOption.URL == "" {
-				groupOption.URL = C.DefaultTestURL
+			if interval == 0 {
+				interval = 300
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		hc := provider.NewHealthCheck(ps, groupOption.URL, timeout, interval, groupOption.Lazy, expectedStatus)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", groupName, err)
 		}
 
-		providers = append(providers, pd)
+		providers = append([]types.ProxyProvider{pd}, providers...)
 		providersMap[groupName] = pd
-	}
-
-	if len(groupOption.Use) != 0 {
-		list, err := getProviders(providersMap, groupOption.Use)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", groupName, err)
-		}
-
-		if groupOption.URL == "" {
-			for _, p := range list {
-				if p.HealthCheckURL() != "" {
-					groupOption.URL = p.HealthCheckURL()
-				}
-				break
-			}
-
-			if groupOption.URL == "" {
-				groupOption.URL = C.DefaultTestURL
-			}
-		}
-
-		// different proxy groups use different test URL
-		addTestUrlToProviders(list, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
-		providers = append(providers, list...)
 	}
 
 	var group C.ProxyAdapter
