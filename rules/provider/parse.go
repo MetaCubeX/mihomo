@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/structure"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
@@ -23,7 +24,7 @@ type ruleProviderSchema struct {
 	URL      string `provider:"url,omitempty"`
 	Proxy    string `provider:"proxy,omitempty"`
 	Format   string `provider:"format,omitempty"`
-	Interval int    `provider:"interval,omitempty"`
+	Interval string `provider:"interval,omitempty"`
 }
 
 func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) (P.RuleProvider, error) {
@@ -56,6 +57,11 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 		return nil, fmt.Errorf("unsupported format type: %s", schema.Format)
 	}
 
+	var interval time.Duration
+	if schema.Interval != "" {
+		interval = utils.ParseDuration(schema.Interval, "s")
+	}
+
 	var vehicle P.Vehicle
 	switch schema.Type {
 	case "file":
@@ -74,5 +80,5 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
 
-	return NewRuleSetProvider(name, behavior, format, time.Duration(uint(schema.Interval))*time.Second, vehicle, parse), nil
+	return NewRuleSetProvider(name, behavior, format, interval, vehicle, parse), nil
 }

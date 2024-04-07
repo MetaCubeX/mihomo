@@ -56,7 +56,7 @@ type General struct {
 	RoutingMark             int               `json:"-"`
 	GeoXUrl                 GeoXUrl           `json:"geox-url"`
 	GeoAutoUpdate           bool              `json:"geo-auto-update"`
-	GeoUpdateInterval       int               `json:"geo-update-interval"`
+	GeoUpdateInterval       string            `json:"geo-update-interval"`
 	GeodataMode             bool              `json:"geodata-mode"`
 	GeodataLoader           string            `json:"geodata-loader"`
 	GeositeMatcher          string            `json:"geosite-matcher"`
@@ -313,7 +313,7 @@ type RawConfig struct {
 	RoutingMark             int               `yaml:"routing-mark"`
 	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
 	GeoAutoUpdate           bool              `yaml:"geo-auto-update" json:"geo-auto-update"`
-	GeoUpdateInterval       int               `yaml:"geo-update-interval" json:"geo-update-interval"`
+	GeoUpdateInterval       string            `yaml:"geo-update-interval" json:"geo-update-interval"`
 	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
 	GeodataLoader           string            `yaml:"geodata-loader" json:"geodata-loader"`
 	GeositeMatcher          string            `yaml:"geosite-matcher" json:"geosite-matcher"`
@@ -321,7 +321,7 @@ type RawConfig struct {
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 	GlobalUA                string            `yaml:"global-ua"`
-	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
+	KeepAliveInterval       string            `yaml:"keep-alive-interval"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -401,7 +401,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		IPv6:              true,
 		Mode:              T.Rule,
 		GeoAutoUpdate:     false,
-		GeoUpdateInterval: 24,
+		GeoUpdateInterval: "24h",
 		GeodataMode:       C.GeodataMode,
 		GeodataLoader:     "memconservative",
 		UnifiedDelay:      false,
@@ -631,8 +631,8 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	C.ASNUrl = cfg.GeoXUrl.ASN
 	C.GeodataMode = cfg.GeodataMode
 	C.UA = cfg.GlobalUA
-	if cfg.KeepAliveInterval != 0 {
-		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
+	if cfg.KeepAliveInterval != "" {
+		N.KeepAliveInterval = utils.ParseDuration(cfg.KeepAliveInterval, "s")
 	}
 
 	ExternalUIPath = cfg.ExternalUI

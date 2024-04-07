@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
@@ -111,9 +112,9 @@ func main() {
 	}
 
 	if C.GeoAutoUpdate {
-		ticker := time.NewTicker(time.Duration(C.GeoUpdateInterval) * time.Hour)
+		ticker := time.NewTicker(utils.ParseDuration(C.GeoUpdateInterval, "h"))
 
-		log.Infoln("[GEO] Start update GEO database every %d hours", C.GeoUpdateInterval)
+		log.Infoln("[GEO] Start update GEO database every %s", utils.ParseDuration(C.GeoUpdateInterval, "h"))
 		go func() {
 			for range ticker.C {
 				updateGeoDatabases()

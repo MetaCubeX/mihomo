@@ -21,8 +21,8 @@ var (
 type healthCheckSchema struct {
 	Enable         bool   `provider:"enable"`
 	URL            string `provider:"url"`
-	Interval       int    `provider:"interval"`
-	TestTimeout    int    `provider:"timeout,omitempty"`
+	Interval       string `provider:"interval"`
+	TestTimeout    string `provider:"timeout,omitempty"`
 	Lazy           bool   `provider:"lazy,omitempty"`
 	ExpectedStatus string `provider:"expected-status,omitempty"`
 }
@@ -45,7 +45,7 @@ type proxyProviderSchema struct {
 	Path          string `provider:"path,omitempty"`
 	URL           string `provider:"url,omitempty"`
 	Proxy         string `provider:"proxy,omitempty"`
-	Interval      int    `provider:"interval,omitempty"`
+	Interval      string `provider:"interval,omitempty"`
 	Filter        string `provider:"filter,omitempty"`
 	ExcludeFilter string `provider:"exclude-filter,omitempty"`
 	ExcludeType   string `provider:"exclude-type,omitempty"`
@@ -73,14 +73,27 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		return nil, err
 	}
 
-	var hcInterval uint
-	if schema.HealthCheck.Enable {
-		if schema.HealthCheck.Interval == 0 {
-			schema.HealthCheck.Interval = 300
-		}
-		hcInterval = uint(schema.HealthCheck.Interval)
+	var (
+		interval   time.Duration
+		hcInterval uint
+		timeout    uint
+	)
+	if schema.Interval != "" {
+		interval = utils.ParseDuration(schema.Interval, "s")
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus)
+	if schema.HealthCheck.Enable {
+		if schema.HealthCheck.Interval != "" {
+			hcInterval = uint(utils.ParseDuration(schema.HealthCheck.Interval, "s").Seconds())
+		}
+		if hcInterval == 0 {
+			hcInterval = 300
+		}
+	}
+	if schema.HealthCheck.TestTimeout != "" {
+		timeout = uint(utils.ParseDuration(schema.HealthCheck.TestTimeout, "ms").Milliseconds())
+	}
+
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, timeout, hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
 	var vehicle types.Vehicle
 	switch schema.Type {
@@ -100,7 +113,6 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
 
-	interval := time.Duration(uint(schema.Interval)) * time.Second
 	filter := schema.Filter
 	excludeFilter := schema.ExcludeFilter
 	excludeType := schema.ExcludeType
