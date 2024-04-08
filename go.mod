@@ -23,7 +23,7 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20240310154810-47bca850fc01
 	github.com/metacubex/sing-shadowsocks v0.2.6
 	github.com/metacubex/sing-shadowsocks2 v0.2.0
-	github.com/metacubex/sing-tun v0.2.1-0.20240405021556-f37a4aa3d060
+	github.com/metacubex/sing-tun v0.2.6
 	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
 	github.com/metacubex/sing-wireguard v0.0.0-20240321042214-224f96122a63
 	github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66
@@ -34,7 +34,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.1.0
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97
-	github.com/sagernet/sing v0.3.6
+	github.com/sagernet/sing v0.3.8
 	github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/utls v1.5.4
@@ -47,11 +47,11 @@ require (
 	github.com/zhangyunhao116/fastrand v0.3.0
 	go.uber.org/automaxprocs v1.5.3
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
-	golang.org/x/crypto v0.21.0
+	golang.org/x/crypto v0.22.0
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
-	golang.org/x/net v0.22.0
+	golang.org/x/net v0.24.0
 	golang.org/x/sync v0.6.0
-	golang.org/x/sys v0.18.0
+	golang.org/x/sys v0.19.0
 	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.2.1
@@ -110,4 +110,4 @@ require (
 	golang.org/x/tools v0.18.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240313064558-c197257f6542
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240408015159-aa61c96df764
