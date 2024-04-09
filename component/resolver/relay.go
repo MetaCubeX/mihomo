@@ -46,7 +46,7 @@ func RelayDnsConn(ctx context.Context, conn net.Conn, readTimeout time.Duration)
 			ctx, cancel := context.WithTimeout(ctx, DefaultDnsRelayTimeout)
 			defer cancel()
 			inData := buff[:n]
-			msg, err := RelayDnsPacket(ctx, inData, buff)
+			msg, err := relayDnsPacket(ctx, inData, buff, 0)
 			if err != nil {
 				return err
 			}
@@ -69,7 +69,7 @@ func RelayDnsConn(ctx context.Context, conn net.Conn, readTimeout time.Duration)
 	return nil
 }
 
-func RelayDnsPacket(ctx context.Context, payload []byte, target []byte) ([]byte, error) {
+func relayDnsPacket(ctx context.Context, payload []byte, target []byte, maxSize int) ([]byte, error) {
 	msg := &D.Msg{}
 	if err := msg.Unpack(payload); err != nil {
 		return nil, err
@@ -83,6 +83,14 @@ func RelayDnsPacket(ctx context.Context, payload []byte, target []byte) ([]byte,
 	}
 
 	r.SetRcode(msg, r.Rcode)
+	if maxSize > 0 {
+		r.Truncate(maxSize)
+	}
 	r.Compress = true
 	return r.PackBuffer(target)
+}
+
+// RelayDnsPacket will truncate udp message up to SafeDnsPacketSize
+func RelayDnsPacket(ctx context.Context, payload []byte, target []byte) ([]byte, error) {
+	return relayDnsPacket(ctx, payload, target, SafeDnsPacketSize)
 }
