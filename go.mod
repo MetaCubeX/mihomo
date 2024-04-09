@@ -20,7 +20,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.42.1-0.20240319071510-a251e5c66a5c
-	github.com/metacubex/sing-quic v0.0.0-20240310154810-47bca850fc01
+	github.com/metacubex/sing-quic v0.0.0-20240409064816-c16ac6b1f4b4
 	github.com/metacubex/sing-shadowsocks v0.2.6
 	github.com/metacubex/sing-shadowsocks2 v0.2.0
 	github.com/metacubex/sing-tun v0.2.6
