@@ -75,7 +75,7 @@ func fallbackBindIfaceToDialer(ifaceName string, dialer *net.Dialer, network str
 	return nil
 }
 
-func fallbackBindIfaceToListenConfig(ifaceName string, _ *net.ListenConfig, network, address string) (string, error) {
+func fallbackBindIfaceToListenConfig(ifaceName string, _ *net.ListenConfig, network, address string, rAddrPort netip.AddrPort) (string, error) {
 	_, port, err := net.SplitHostPort(address)
 	if err != nil {
 		port = "0"

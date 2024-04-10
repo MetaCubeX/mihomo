@@ -11,8 +11,8 @@ func bindIfaceToDialer(ifaceName string, dialer *net.Dialer, network string, des
 	return fallbackBindIfaceToDialer(ifaceName, dialer, network, destination)
 }
 
-func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, network, address string) (string, error) {
-	return fallbackBindIfaceToListenConfig(ifaceName, lc, network, address)
+func bindIfaceToListenConfig(ifaceName string, lc *net.ListenConfig, network, address string, rAddrPort netip.AddrPort) (string, error) {
+	return fallbackBindIfaceToListenConfig(ifaceName, lc, network, address, rAddrPort)
 }
 
 func ParseNetwork(network string, addr netip.Addr) string {
