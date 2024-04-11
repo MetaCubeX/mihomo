@@ -28,6 +28,10 @@ func (f *FileVehicle) Read() ([]byte, error) {
 	return os.ReadFile(f.path)
 }
 
+func (f *FileVehicle) Proxy() string {
+	return ""
+}
+
 func NewFileVehicle(path string) *FileVehicle {
 	return &FileVehicle{path: path}
 }
@@ -49,6 +53,10 @@ func (h *HTTPVehicle) Type() types.VehicleType {
 
 func (h *HTTPVehicle) Path() string {
 	return h.path
+}
+
+func (h *HTTPVehicle) Proxy() string {
+	return h.proxy
 }
 
 func (h *HTTPVehicle) Read() ([]byte, error) {
