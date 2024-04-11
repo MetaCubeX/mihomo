@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/metacubex/mihomo/common/callback"
+	"github.com/metacubex/mihomo/component/iface"
 	C "github.com/metacubex/mihomo/constant"
 
 	"github.com/puzpuzpuz/xsync/v3"
@@ -15,13 +16,13 @@ var ErrReject = errors.New("reject loopback connection")
 
 type Detector struct {
 	connMap       *xsync.MapOf[netip.AddrPort, struct{}]
-	packetConnMap *xsync.MapOf[netip.AddrPort, struct{}]
+	packetConnMap *xsync.MapOf[uint16, struct{}]
 }
 
 func NewDetector() *Detector {
 	return &Detector{
 		connMap:       xsync.NewMapOf[netip.AddrPort, struct{}](),
-		packetConnMap: xsync.NewMapOf[netip.AddrPort, struct{}](),
+		packetConnMap: xsync.NewMapOf[uint16, struct{}](),
 	}
 }
 
@@ -49,9 +50,10 @@ func (l *Detector) NewPacketConn(conn C.PacketConn) C.PacketConn {
 	if !connAddr.IsValid() {
 		return conn
 	}
-	l.packetConnMap.Store(connAddr, struct{}{})
+	port := connAddr.Port()
+	l.packetConnMap.Store(port, struct{}{})
 	return callback.NewCloseCallbackPacketConn(conn, func() {
-		l.packetConnMap.Delete(connAddr)
+		l.packetConnMap.Delete(port)
 	})
 }
 
@@ -71,7 +73,16 @@ func (l *Detector) CheckPacketConn(metadata *C.Metadata) error {
 	if !connAddr.IsValid() {
 		return nil
 	}
-	if _, ok := l.packetConnMap.Load(connAddr); ok {
+
+	isLocalIp, err := iface.IsLocalIp(connAddr.Addr())
+	if err != nil {
+		return err
+	}
+	if !isLocalIp && !connAddr.Addr().IsLoopback() {
+		return nil
+	}
+
+	if _, ok := l.packetConnMap.Load(connAddr.Port()); ok {
 		return fmt.Errorf("%w to: %s", ErrReject, metadata.RemoteAddress())
 	}
 	return nil

@@ -23,7 +23,7 @@ var (
 
 var interfaces = singledo.NewSingle[map[string]*Interface](time.Second * 20)
 
-func ResolveInterface(name string) (*Interface, error) {
+func Interfaces() (map[string]*Interface, error) {
 	value, err, _ := interfaces.Do(func() (map[string]*Interface, error) {
 		ifaces, err := net.Interfaces()
 		if err != nil {
@@ -69,17 +69,36 @@ func ResolveInterface(name string) (*Interface, error) {
 
 		return r, nil
 	})
+	return value, err
+}
+
+func ResolveInterface(name string) (*Interface, error) {
+	ifaces, err := Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	ifaces := value
 	iface, ok := ifaces[name]
 	if !ok {
 		return nil, ErrIfaceNotFound
 	}
 
 	return iface, nil
+}
+
+func IsLocalIp(ip netip.Addr) (bool, error) {
+	ifaces, err := Interfaces()
+	if err != nil {
+		return false, err
+	}
+	for _, iface := range ifaces {
+		for _, addr := range iface.Addrs {
+			if addr.Contains(ip) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func FlushCache() {
