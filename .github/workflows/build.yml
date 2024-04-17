@@ -194,7 +194,7 @@ jobs:
 
         cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN/control <<EOF
         Package: mihomo
-        Version: 1.18.2-${VERSION}
+        Version: 1.18.4-${VERSION}
         Section:
         Priority: extra
         Architecture: ${ARCH}
