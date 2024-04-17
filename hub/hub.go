@@ -47,6 +47,10 @@ func Parse(options ...Option) error {
 			cfg.General.Secret, cfg.TLS.Certificate, cfg.TLS.PrivateKey, cfg.General.LogLevel == log.DEBUG)
 	}
 
+	if cfg.General.ExternalControllerUnix != "" {
+		go route.StartUnix(cfg.General.ExternalControllerUnix, cfg.General.LogLevel == log.DEBUG)
+	}
+
 	executor.ApplyConfig(cfg, true)
 	return nil
 }
