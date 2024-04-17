@@ -21,6 +21,12 @@ func WithExternalController(externalController string) Option {
 	}
 }
 
+func WithExternalControllerUnix(externalControllerUnix string) Option {
+	return func(cfg *config.Config) {
+		cfg.General.ExternalControllerUnix = externalControllerUnix
+	}
+}
+
 func WithSecret(secret string) Option {
 	return func(cfg *config.Config) {
 		cfg.General.Secret = secret
