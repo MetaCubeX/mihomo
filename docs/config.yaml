@@ -254,7 +254,6 @@ dns:
   #   - 'tcp://1.1.1.1#ProxyGroupName' # 指定 DNS 过代理查询，ProxyGroupName 为策略组名或节点名，过代理配置优先于配置出口网卡，当找不到策略组或节点名则设置为出口网卡
 
   # 专用于节点域名解析的 DNS 服务器，非必要配置项
-  # 配置服务器若查询失败将使用 nameserver，非并发查询
   # proxy-server-nameserver:
   # - https://dns.google/dns-query
   # - tls://one.one.one.one
