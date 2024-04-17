@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -157,6 +159,14 @@ func Start(addr string, tlsAddr string, secret string,
 }
 
 func StartUnix(addr string, isDebug bool) {
+	dir := filepath.Dir(addr)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			log.Errorln("External controller unix listen error: %s", err)
+			return
+		}
+	}
+
 	// https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/
 	//
 	// Note: As mentioned above in the ‘security’ section, when a socket binds a socket to a valid pathname address,
