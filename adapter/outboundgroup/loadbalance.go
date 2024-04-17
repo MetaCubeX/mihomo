@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/metacubex/gvisor/pkg/sync"
+	"sync"
 	"net"
 	"time"
 
