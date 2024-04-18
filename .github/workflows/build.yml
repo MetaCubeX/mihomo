@@ -177,6 +177,11 @@ jobs:
         else
           ARCH=${{matrix.jobs.goarch}}
         fi
+        PackageVersion=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | grep -o '"tag_name": "[^"]*' | grep -o '[^"]*$' | sed 's/v//g' )
+        if [ $(git branch | awk -F ' ' '{print $2}') = "Alpha" ]; then
+          PackageVersion="$(echo "${PackageVersion}" | awk -F '.' '{$NF = $NF + 1; print}' OFS='.')-${VERSION}"
+        fi
+
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo
@@ -194,7 +199,7 @@ jobs:
 
         cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN/control <<EOF
         Package: mihomo
-        Version: 1.18.4-${VERSION}
+        Version: ${PackageVersion}
         Section:
         Priority: extra
         Architecture: ${ARCH}
