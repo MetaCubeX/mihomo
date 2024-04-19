@@ -159,6 +159,8 @@ func Start(addr string, tlsAddr string, secret string,
 }
 
 func StartUnix(addr string, isDebug bool) {
+	addr = C.Path.Resolve(addr)
+
 	dir := filepath.Dir(addr)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
