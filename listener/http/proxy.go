@@ -51,8 +51,8 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 		var resp *http.Response
 
 		if !trusted {
-			resp = authenticate(request, cache)
-
+			resp, user := authenticate(request, cache)
+			additions = append(additions, inbound.WithInUser(user))
 			trusted = resp == nil
 		}
 
@@ -130,7 +130,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 	_ = conn.Close()
 }
 
-func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) *http.Response {
+func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) (resp *http.Response, u string) {
 	authenticator := authStore.Authenticator()
 	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
 		authenticator = nil
@@ -140,23 +140,24 @@ func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) *htt
 		if credential == "" {
 			resp := responseWith(request, http.StatusProxyAuthRequired)
 			resp.Header.Set("Proxy-Authenticate", "Basic")
-			return resp
+			return resp, ""
 		}
 
 		authed, exist := cache.Get(credential)
 		if !exist {
 			user, pass, err := decodeBasicProxyAuthorization(credential)
 			authed = err == nil && authenticator.Verify(user, pass)
+			u = user
 			cache.Set(credential, authed)
 		}
 		if !authed {
 			log.Infoln("Auth failed from %s", request.RemoteAddr)
 
-			return responseWith(request, http.StatusForbidden)
+			return responseWith(request, http.StatusForbidden), u
 		}
 	}
 
-	return nil
+	return nil, u
 }
 
 func responseWith(request *http.Request, statusCode int) *http.Response {
