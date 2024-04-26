@@ -51,7 +51,8 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 		var resp *http.Response
 
 		if !trusted {
-			resp, user := authenticate(request, cache)
+			var user string
+			resp, user = authenticate(request, cache)
 			additions = append(additions, inbound.WithInUser(user))
 			trusted = resp == nil
 		}
