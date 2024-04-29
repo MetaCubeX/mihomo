@@ -14,24 +14,32 @@ type ASN struct {
 	asn         string
 	adapter     string
 	noResolveIP bool
+	isSourceIP  bool
 }
 
 func (a *ASN) Match(metadata *C.Metadata) (bool, string) {
 	ip := metadata.DstIP
+	if a.isSourceIP {
+		ip = metadata.SrcIP
+	}
 	if !ip.IsValid() {
 		return false, ""
 	}
 
 	result := mmdb.ASNInstance().LookupASN(ip.AsSlice())
-
 	asnNumber := strconv.FormatUint(uint64(result.AutonomousSystemNumber), 10)
-	metadata.DstIPASN = asnNumber + " " + result.AutonomousSystemOrganization
+	if !a.isSourceIP {
+		metadata.DstIPASN = asnNumber + " " + result.AutonomousSystemOrganization
+	}
 
 	match := a.asn == asnNumber
 	return match, a.adapter
 }
 
 func (a *ASN) RuleType() C.RuleType {
+	if a.isSourceIP {
+		return C.SrcIPASN
+	}
 	return C.IPASN
 }
 
@@ -51,7 +59,7 @@ func (a *ASN) GetASN() string {
 	return a.asn
 }
 
-func NewIPASN(asn string, adapter string, noResolveIP bool) (*ASN, error) {
+func NewIPASN(asn string, adapter string, isSrc, noResolveIP bool) (*ASN, error) {
 	C.ASNEnable = true
 	if err := geodata.InitASN(); err != nil {
 		log.Errorln("can't initial ASN: %s", err)
@@ -63,5 +71,6 @@ func NewIPASN(asn string, adapter string, noResolveIP bool) (*ASN, error) {
 		asn:         asn,
 		adapter:     adapter,
 		noResolveIP: noResolveIP,
+		isSourceIP:  isSrc,
 	}, nil
 }
