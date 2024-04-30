@@ -1,0 +1,76 @@
+name: 错误反馈
+description: "提交 Mihomo 漏洞"
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: checkboxes
+    id: ensure
+    attributes:
+      label: Verify steps
+      description: 在提交之前，请勾选以下所有选项以证明您已经阅读并理解了以下要求，否则该 issue 将被关闭。
+      options:
+        - label: 我已经阅读了 [文档](https://wiki.metacubex.one/)，了解所有我编写的配置文件项的含义，而不是大量堆砌看似有用的选项或默认值。
+          required: true
+        - label: 我未仔细看过 [文档](https://wiki.metacubex.one/) 并解决问题
+          required: false
+        - label: 我未在 [Issue Tracker](……/) 中寻找过我要提出的问题
+          required: false
+        - label: 我已经使用最新的 Alpha 分支版本测试过，问题依旧存在
+          required: true
+        - label: 我提供了可以在本地重现该问题的服务器、客户端配置文件与流程，而不是一个脱敏的复杂客户端配置文件。
+          required: true
+        - label: 我提供了可用于重现我报告的错误的最简配置，而不是依赖远程服务器、TUN、图形界面客户端或者其他闭源软件。
+          required: true
+        - label: 我提供了完整的配置文件与日志，而不是出于对自身智力的自信而仅提供了部分认为有用的部分。
+          required: true
+
+  - type: dropdown
+    attributes:
+      label: 操作系统
+      description: 请提供操作系统类型
+      multiple: true
+      options:
+        - MacOS
+        - Windows
+        - Linux
+        - OpenBSD/FreeBSD
+        - Android
+  - type: input
+    attributes:
+      label: 系统版本
+      description: 请提供出现问题的操作系统版本
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Mihomo 版本
+      description: 提供 `mihomo -v` 命令的输出
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      render: yaml
+      label: 配置文件
+      description: |-
+        在下方附上 Mihomo 配置文件
+        请确保配置文件中没有敏感信息（比如：服务器地址，密码，端口等）
+        以及确保可以在本地（如果是代理协议问题，请确保本地服务器可用于复现）使用 Mihomo 原始命令行程序重现错误的配置文件
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 描述
+      description: 请提供错误的详细描述。
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 重现方式
+      description: 请提供重现错误的步骤
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 日志
+      description: 在下方附上 Mihomo Core 的运行日志，`log-level` 使用 `DEBUG`
+      render: shell

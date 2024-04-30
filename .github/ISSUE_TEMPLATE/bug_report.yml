@@ -1,5 +1,5 @@
-name: Bug report
-description: Create a report to help us improve
+name: Bug Report
+description: "Report  Mihomo bug"
 title: "[Bug] "
 labels: ["bug"]
 body:
@@ -7,77 +7,70 @@ body:
     id: ensure
     attributes:
       label: Verify steps
-      description: "
-在提交之前，请确认
-Please verify that you've followed these steps
-"
+      description: "Before submitting, please check all the following options to demonstrate that you have read and understood the requirements below, otherwise this issue will be closed."
       options:
-        - label: "
-确保你使用的是**本仓库**最新的的 mihomo 或 mihomo Alpha 版本
-Ensure you are using the latest version of Mihomo or Mihomo Alpha from **this repository**.
-"
+        - label: "I have read the [documentation](https://wiki.metacubex.one/) and understand the meaning of all configuration items I have written, avoiding a large number of seemingly useful options or default values."
           required: true
-        - label: "
-如果你可以自己 debug 并解决的话，提交 PR 吧
-Is this something you can **debug and fix**? Send a pull request! Bug fixes and documentation fixes are welcome.
-"
+        - label: "I have not reviewed the [documentation](https://wiki.metacubex.one/) and resolve this issue."
           required: false
-        - label: "
-我已经在 [Issue Tracker](……/) 中找过我要提出的问题
-I have searched on the [issue tracker](……/) for a related issue.
-"
+        - label: "I have not searched the [Issue Tracker](……/)  for the problem I am going to raise."
+          required: false
+        - label: "I have tested with the latest Alpha branch version, and the issue still persists."
           required: true
-        - label: "
-我已经使用 Alpha 分支版本测试过，问题依旧存在
-I have tested using the dev branch, and the issue still exists.
-"
+        - label: "I have provided server and client configuration files and processes that can reproduce the issue locally, rather than a desensitized complex client configuration file."
           required: true
-        - label: "
-我已经仔细看过 [Documentation](https://wiki.metacubex.one/) 并无法自行解决问题
-I have read the [documentation](https://wiki.metacubex.one/) and was unable to solve the issue.
-"
+        - label: "I have provided the simplest configuration that can reproduce the error I reported, rather than relying on remote servers, TUN, graphical client interfaces, or other closed-source software."
           required: true
-        - label: "
-这是 Mihomo 核心的问题，并非我所使用的 Mihomo 衍生版本（如 OpenMihomo、KoolMihomo 等）的特定问题
-This is an issue of the Mihomo core *per se*, not to the derivatives of Mihomo, like OpenMihomo or KoolMihomo.
-"
+        - label:  "I have provided complete configuration files and logs, rather than providing only parts that I believe are useful due to confidence in my own intelligence."
           required: true
-  - type: input
-    attributes:
-      label: Mihomo version
-      description: "use `mihomo -v`"
-    validations:
-      required: true
+
   - type: dropdown
-    id: os
     attributes:
-      label: What OS are you seeing the problem on?
+      label: Operating System
+      description: "Please provide the type of operating system."
       multiple: true
       options:
-        - macOS
+        - MacOS
         - Windows
         - Linux
         - OpenBSD/FreeBSD
+        - Android
+  - type: input
+    attributes:
+      label: System Version
+      description: "Please provide the version of the operating system where the issue occurred."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Mihomo Version
+      description: "Provide the output of the `mihomo -v` command."
+    validations:
+      required: true
   - type: textarea
     attributes:
       render: yaml
-      label: "Mihomo config"
-      description: "
-在下方附上 Mihomo core 配置文件，请确保配置文件中没有敏感信息（比如：服务器地址，密码，端口等）
-Paste the Mihomo core configuration file below, please make sure that there is no sensitive information in the configuration file (e.g., server address/url, password, port)
-"
+      label: Configuration File
+      description: |-
+        Please attach the Mihomo configuration file below.
+        Make sure there is no sensitive information in the configuration file (such as server addresses, passwords, ports, etc.)
+        Also, ensure that the configuration file can reproduce the error using the Mihomo command-line program locally (if it's a proxy protocol issue, make sure the local server can be used for reproduction).
     validations:
       required: true
-  - type: textarea
-    attributes:
-      render: shell
-      label: Mihomo log
-      description: "
-在下方附上 Mihomo Core 的日志，log level 使用 DEBUG
-Paste the Mihomo core log below with the log level set to `DEBUG`.
-"
   - type: textarea
     attributes:
       label: Description
+      description: "Please provide a detailed description of the error."
     validations:
       required: true
+  - type: textarea
+    attributes:
+      label: Reproduction Steps
+      description: "Please provide the steps to reproduce the error."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Logs
+      description: "Attach the running logs of Mihomo Core below, with `log-level` set to `DEBUG`."
+      render: shell
