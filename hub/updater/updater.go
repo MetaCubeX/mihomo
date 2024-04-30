@@ -42,10 +42,14 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
-	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
-	packageURL    string
-	latestVersion string
+	baseURL           string
+	versionURL        string
+	releaseBaseURL    string = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
+	releaseVersionURL string = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
+	alphaBaseURL      string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
+	alphaVersionURL   string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
+	packageURL        string
+	latestVersion     string
 )
 
 func init() {
@@ -415,6 +419,11 @@ func copyFile(src, dst string) error {
 func getLatestVersion() (version string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
+	if strings.HasPrefix(constant.Version, "alpha") {
+		versionURL = alphaVersionURL
+	}else{
+		versionURL = releaseVersionURL
+	}
 	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
@@ -457,6 +466,11 @@ func updateDownloadURL() {
 		middle += ".zip"
 	} else {
 		middle += ".gz"
+	}
+	if strings.HasPrefix(constant.Version, "alpha") {
+		baseURL = alphaBaseURL
+	}else{
+		baseURL = releaseBaseURL
 	}
 	packageURL = baseURL + middle
 	//log.Infoln(packageURL)
