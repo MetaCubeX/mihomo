@@ -16,7 +16,6 @@ import (
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
@@ -42,19 +41,19 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL           string
-	versionURL        string
-	releaseBaseURL    string = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
-	releaseVersionURL string = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
-	alphaBaseURL      string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
-	alphaVersionURL   string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
-	packageURL        string
-	latestVersion     string
+	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
+	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
+	packageURL    string
+	latestVersion string
 )
 
 func init() {
 	if runtime.GOARCH == "amd64" && cpuid.CPU.X64Level() < 3 {
 		amd64Compatible = "-compatible"
+	}
+	if !strings.HasPrefix(C.Version, "alpha") {
+		baseURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
+		versionURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
 	}
 }
 
@@ -77,9 +76,9 @@ func Update(execPath string) (err error) {
 		return err
 	}
 
-	log.Infoln("current version %s, latest version %s", constant.Version, latestVersion)
+	log.Infoln("current version %s, latest version %s", C.Version, latestVersion)
 
-	if latestVersion == constant.Version {
+	if latestVersion == C.Version {
 		err := &updateError{Message: "already using latest version"}
 		return err
 	}
@@ -419,11 +418,6 @@ func copyFile(src, dst string) error {
 func getLatestVersion() (version string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	if strings.HasPrefix(constant.Version, "alpha") {
-		versionURL = alphaVersionURL
-	}else{
-		versionURL = releaseVersionURL
-	}
 	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
 	if err != nil {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
@@ -466,11 +460,6 @@ func updateDownloadURL() {
 		middle += ".zip"
 	} else {
 		middle += ".gz"
-	}
-	if strings.HasPrefix(constant.Version, "alpha") {
-		baseURL = alphaBaseURL
-	}else{
-		baseURL = releaseBaseURL
 	}
 	packageURL = baseURL + middle
 	//log.Infoln(packageURL)
