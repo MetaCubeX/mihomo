@@ -16,7 +16,6 @@ import (
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
@@ -52,6 +51,10 @@ func init() {
 	if runtime.GOARCH == "amd64" && cpuid.CPU.X64Level() < 3 {
 		amd64Compatible = "-compatible"
 	}
+	if !strings.HasPrefix(C.Version, "alpha") {
+		baseURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
+		versionURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
+	}
 }
 
 type updateError struct {
@@ -73,9 +76,9 @@ func Update(execPath string) (err error) {
 		return err
 	}
 
-	log.Infoln("current version %s, latest version %s", constant.Version, latestVersion)
+	log.Infoln("current version %s, latest version %s", C.Version, latestVersion)
 
-	if latestVersion == constant.Version {
+	if latestVersion == C.Version {
 		err := &updateError{Message: "already using latest version"}
 		return err
 	}
