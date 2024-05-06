@@ -13,7 +13,10 @@ import (
 	"github.com/zhangyunhao116/fastrand"
 )
 
-var DisableSystemHosts, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_HOSTS"))
+var (
+	DisableSystemHosts, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_HOSTS"))
+	UseSystemHosts        bool
+)
 
 type Hosts struct {
 	*trie.DomainTrie[HostValue]
@@ -51,7 +54,8 @@ func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
 
 		return &hostValue, false
 	}
-	if !isDomain && !DisableSystemHosts {
+
+	if !isDomain && !DisableSystemHosts && UseSystemHosts {
 		addr, _ := lookupStaticHost(domain)
 		if hostValue, err := NewHostValue(addr); err == nil {
 			return &hostValue, true
