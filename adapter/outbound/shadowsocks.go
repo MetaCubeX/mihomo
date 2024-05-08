@@ -166,18 +166,18 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if len(ss.option.DialerProxy) > 0 {
-		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
-		if err != nil {
-			return nil, err
-		}
-	}
 	if ss.option.UDPOverTCP {
 		tcpConn, err := ss.DialContextWithDialer(ctx, dialer, metadata)
 		if err != nil {
 			return nil, err
 		}
 		return ss.ListenPacketOnStreamConn(ctx, tcpConn, metadata)
+	}
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
 	}
 	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ss.addr, ss.prefer)
 	if err != nil {
