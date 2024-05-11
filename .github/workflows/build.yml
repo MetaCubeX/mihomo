@@ -64,6 +64,12 @@ jobs:
           - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
           - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
 
+          # Go 1.21 can revert commit `9e4385` to work on Windows 7
+          # https://github.com/golang/go/issues/64622#issuecomment-1847475161
+          - { goos: windows, goarch: '386', output: '386-go121', goversion: '1.21' }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go121, goversion: '1.21' }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go121, goversion: '1.21' }
+
           # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
           - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
           - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
@@ -107,6 +113,13 @@ jobs:
         wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi2.tar.gz
         sudo tar zxf go1.21.5.linux-amd64-abi2.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
+    - name: Set up Go1.21 for Windows
+      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.21' }}
+      run: |
+        cd $(go env GOROOT)
+        curl https://github.com/golang/go/commit/9e43850a3298a9b8b1162ba0033d4c53f8637571.diff | patch --verbose -R -p 1
 
     - name: Set variables
       if: ${{github.ref_name=='Alpha'}}
