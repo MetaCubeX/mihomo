@@ -91,6 +91,7 @@ func router(isDebug bool, withAuth bool) *chi.Mux {
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/restart", restartRouter())
 		r.Mount("/upgrade", upgradeRouter())
+		r.Mount("/quit", quitRouter())
 		addExternalRouters(r)
 
 	})
