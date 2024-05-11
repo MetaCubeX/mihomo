@@ -130,7 +130,7 @@ func main() {
 
 	termSign := make(chan os.Signal, 1)
 	hupSign := make(chan os.Signal, 1)
-	signal.Notify(termSign, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(termSign, syscall.SIGINT, syscall.SIGTERM)
 	signal.Notify(hupSign, syscall.SIGHUP)
 	for {
 		select {
