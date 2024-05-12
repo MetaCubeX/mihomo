@@ -164,7 +164,7 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	if opt.mpTcp {
 		setMultiPathTCP(dialer)
 	}
-	if opt.tfo {
+	if opt.tfo && !DisableTFO {
 		return dialTFO(ctx, *dialer, network, address)
 	}
 	return dialer.DialContext(ctx, network, address)
