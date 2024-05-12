@@ -20,12 +20,14 @@ import (
 
 	tun "github.com/metacubex/sing-tun"
 	"github.com/sagernet/sing/common"
+	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	"github.com/sagernet/sing/common/ranges"
 )
 
 var InterfaceName = "Meta"
+var EnforceBindInterface = false
 
 type Listener struct {
 	closed  bool
@@ -263,6 +265,8 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		UDPTimeout:             udpTimeout,
 		Handler:                handler,
 		Logger:                 log.SingLogger,
+		InterfaceFinder:        control.DefaultInterfaceFinder(),
+		EnforceBindInterface:   EnforceBindInterface,
 	}
 
 	if options.FileDescriptor > 0 {
