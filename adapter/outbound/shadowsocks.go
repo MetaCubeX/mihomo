@@ -273,6 +273,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		if opts.TLS {
 			v2rayOption.TLS = true
 			v2rayOption.SkipCertVerify = opts.SkipCertVerify
+			v2rayOption.Fingerprint = opts.Fingerprint
 		}
 	} else if option.Plugin == shadowtls.Mode {
 		obfsMode = shadowtls.Mode
