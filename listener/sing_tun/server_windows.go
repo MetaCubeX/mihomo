@@ -3,11 +3,10 @@ package sing_tun
 import (
 	"time"
 
+	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/log"
 
 	tun "github.com/metacubex/sing-tun"
-
-	"golang.org/x/sys/windows"
 )
 
 func tunNew(options tun.Options) (tunIf tun.Tun, err error) {
@@ -30,8 +29,7 @@ func tunNew(options tun.Options) (tunIf tun.Tun, err error) {
 func init() {
 	tun.TunnelType = InterfaceName
 
-	majorVersion, _, _ := windows.RtlGetNtVersionNumbers()
-	if majorVersion < 10 {
+	if features.WindowsMajorVersion < 10 {
 		// to resolve "bind: The requested address is not valid in its context"
 		EnforceBindInterface = true
 	}
