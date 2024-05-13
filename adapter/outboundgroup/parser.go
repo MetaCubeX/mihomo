@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dlclark/regexp2"
+
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/common/structure"
@@ -70,7 +72,22 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		groupOption.Use = append(groupOption.Use, AllProviders...)
 	}
 	if groupOption.IncludeAllProxies {
-		groupOption.Proxies = append(groupOption.Proxies, AllProxies...)
+		if groupOption.Filter != "" {
+			var filterRegs []*regexp2.Regexp
+			for _, filter := range strings.Split(groupOption.Filter, "`") {
+				filterReg := regexp2.MustCompile(filter, 0)
+				filterRegs = append(filterRegs, filterReg)
+			}
+			for _, p := range AllProxies {
+				for _, filterReg := range filterRegs {
+					if mat, _ := filterReg.FindStringMatch(p); mat != nil {
+						groupOption.Proxies = append(groupOption.Proxies, p)
+					}
+				}
+			}
+		} else {
+			groupOption.Proxies = append(groupOption.Proxies, AllProxies...)
+		}
 	}
 
 	if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
