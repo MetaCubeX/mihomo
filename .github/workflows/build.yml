@@ -64,6 +64,13 @@ jobs:
           - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
           - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
 
+          # Go 1.21 can revert commit `9e4385` to work on Windows 7
+          # https://github.com/golang/go/issues/64622#issuecomment-1847475161
+          # (OR we can just use golang1.21.4 which unneeded any patch)
+          - { goos: windows, goarch: '386', output: '386-go121', goversion: '1.21' }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go121, goversion: '1.21' }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go121, goversion: '1.21' }
+
           # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
           - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
           - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
@@ -111,11 +118,24 @@ jobs:
       # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
       # this patch file only works on golang1.22.x
       # that means after golang1.23 release it must be changed
+      # revert:
+      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
+      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
+      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
     - name: Revert Golang1.22 commit for Windows7/8
       if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '' }}
       run: |
         cd $(go env GOROOT)
-        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/693def151adff1af707d82d28f55dba81ceb08e1.diff
+        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/693def151adff1af707d82d28f55dba81ceb08e1.diff
+        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/7c1157f9544922e96945196b47b95664b1e39108.diff
+        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/48042aa09c2f878c4faa576948b07fe625c4707a.diff
+
+      # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
+    - name: Revert Golang1.21 commit for Windows7/8
+      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.21' }}
+      run: |
+        cd $(go env GOROOT)
+        curl https://github.com/golang/go/commit/9e43850a3298a9b8b1162ba0033d4c53f8637571.diff | patch --verbose -R -p 1
 
     - name: Set variables
       if: ${{github.ref_name=='Alpha'}}
