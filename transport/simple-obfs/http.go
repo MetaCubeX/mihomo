@@ -65,7 +65,10 @@ func (ho *HTTPObfs) Write(b []byte) (int, error) {
 	if ho.firstRequest {
 		randBytes := make([]byte, 16)
 		fastrand.Read(randBytes)
-		req, _ := http.NewRequest("GET", fmt.Sprintf("http://%s/", ho.host), bytes.NewBuffer(b[:]))
+		req, err := http.NewRequest("GET", fmt.Sprintf("http://%s/", ho.host), bytes.NewBuffer(b[:]))
+		if err != nil {
+			return 0, err
+		}
 		req.Header.Set("User-Agent", fmt.Sprintf("curl/7.%d.%d", fastrand.Int()%54, fastrand.Int()%2))
 		req.Header.Set("Upgrade", "websocket")
 		req.Header.Set("Connection", "Upgrade")
@@ -75,7 +78,7 @@ func (ho *HTTPObfs) Write(b []byte) (int, error) {
 		}
 		req.Header.Set("Sec-WebSocket-Key", base64.URLEncoding.EncodeToString(randBytes))
 		req.ContentLength = int64(len(b))
-		err := req.Write(ho.Conn)
+		err = req.Write(ho.Conn)
 		ho.firstRequest = false
 		return len(b), err
 	}

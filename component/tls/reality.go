@@ -139,7 +139,10 @@ func realityClientFallback(uConn net.Conn, serverName string, fingerprint utls.C
 			},
 		},
 	}
-	request, _ := http.NewRequest("GET", "https://"+serverName, nil)
+	request, err := http.NewRequest("GET", "https://"+serverName, nil)
+	if err != nil {
+		return
+	}
 	request.Header.Set("User-Agent", fingerprint.Client)
 	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", fastrand.Intn(32)+30)})
 	response, err := client.Do(request)
