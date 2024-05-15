@@ -75,12 +75,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		if groupOption.Filter != "" {
 			var filterRegs []*regexp2.Regexp
 			for _, filter := range strings.Split(groupOption.Filter, "`") {
-				filterReg := regexp2.MustCompile(filter, 0)
+				filterReg := regexp2.MustCompile(filter, regexp2.None)
 				filterRegs = append(filterRegs, filterReg)
 			}
 			for _, p := range AllProxies {
 				for _, filterReg := range filterRegs {
-					if mat, _ := filterReg.FindStringMatch(p); mat != nil {
+					if mat, _ := filterReg.MatchString(p); mat {
 						groupOption.Proxies = append(groupOption.Proxies, p)
 					}
 				}

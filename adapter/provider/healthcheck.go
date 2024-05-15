@@ -181,14 +181,14 @@ func (hc *HealthCheck) execute(b *batch.Batch[bool], url, uid string, option *ex
 				filters = append(filters, filter)
 			}
 
-			filterReg = regexp2.MustCompile(strings.Join(filters, "|"), 0)
+			filterReg = regexp2.MustCompile(strings.Join(filters, "|"), regexp2.None)
 		}
 	}
 
 	for _, proxy := range hc.proxies {
 		// skip proxies that do not require health check
 		if filterReg != nil {
-			if match, _ := filterReg.FindStringMatch(proxy.Name()); match == nil {
+			if match, _ := filterReg.MatchString(proxy.Name()); !match {
 				continue
 			}
 		}
