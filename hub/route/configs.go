@@ -4,11 +4,11 @@ import (
 	"net/http"
 	"net/netip"
 	"path/filepath"
-	"sync"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/hub/executor"
@@ -19,11 +19,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-)
-
-var (
-	updateGeoMux sync.Mutex
-	updatingGeo  = false
 )
 
 func configRouter() http.Handler {
@@ -369,30 +364,20 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
-	updateGeoMux.Lock()
-
-	if updatingGeo {
-		updateGeoMux.Unlock()
+	if updater.UpdatingGeo.Load() {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, newError("updating..."))
 		return
 	}
 
-	updatingGeo = true
-	updateGeoMux.Unlock()
+	err := updater.UpdateGeoDatabases()
+	if err != nil {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
 
 	go func() {
-		defer func() {
-			updatingGeo = false
-		}()
-
-		log.Warnln("[REST-API] updating GEO databases...")
-
-		if err := config.UpdateGeoDatabases(); err != nil {
-			log.Errorln("[REST-API] update GEO databases failed: %v", err)
-			return
-		}
-
 		cfg, err := executor.ParseWithPath(C.Path.Config())
 		if err != nil {
 			log.Errorln("[REST-API] update GEO databases failed: %v", err)

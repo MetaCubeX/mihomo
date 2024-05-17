@@ -6,8 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/metacubex/mihomo/config"
-	"github.com/metacubex/mihomo/hub/updater"
+	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +17,7 @@ func upgradeRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/", upgradeCore)
 	r.Post("/ui", updateUI)
+	r.Post("/geo", updateGeoDatabases)
 	return r
 }
 
@@ -31,7 +31,7 @@ func upgradeCore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = updater.Update(execPath)
+	err = updater.UpdateCore(execPath)
 	if err != nil {
 		log.Warnln("%s", err)
 		render.Status(r, http.StatusInternalServerError)
@@ -48,9 +48,9 @@ func upgradeCore(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateUI(w http.ResponseWriter, r *http.Request) {
-	err := config.UpdateUI()
+	err := updater.UpdateUI()
 	if err != nil {
-		if errors.Is(err, config.ErrIncompleteConf) {
+		if errors.Is(err, updater.ErrIncompleteConf) {
 			log.Warnln("%s", err)
 			render.Status(r, http.StatusNotImplemented)
 			render.JSON(w, r, newError(fmt.Sprintf("%s", err)))

@@ -67,7 +67,7 @@ func (e *updateError) Error() string {
 
 // Update performs the auto-updater.  It returns an error if the updater failed.
 // If firstRun is true, it assumes the configuration file doesn't exist.
-func Update(execPath string) (err error) {
+func UpdateCore(execPath string) (err error) {
 	mu.Lock()
 	defer mu.Unlock()
 

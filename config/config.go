@@ -28,6 +28,7 @@ import (
 	SNIFF "github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
+	"github.com/metacubex/mihomo/component/updater"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
@@ -640,28 +641,28 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
 
-	ExternalUIPath = cfg.ExternalUI
+	updater.ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist
-	if ExternalUIPath != "" {
-		ExternalUIPath = C.Path.Resolve(ExternalUIPath)
-		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
+	if updater.ExternalUIPath != "" {
+		updater.ExternalUIPath = C.Path.Resolve(updater.ExternalUIPath)
+		if _, err := os.Stat(updater.ExternalUIPath); os.IsNotExist(err) {
 			defaultUIpath := path.Join(C.Path.HomeDir(), "ui")
-			log.Warnln("external-ui: %s does not exist, creating folder in %s", ExternalUIPath, defaultUIpath)
+			log.Warnln("external-ui: %s does not exist, creating folder in %s", updater.ExternalUIPath, defaultUIpath)
 			if err := os.MkdirAll(defaultUIpath, os.ModePerm); err != nil {
 				return nil, err
 			}
-			ExternalUIPath = defaultUIpath
+			updater.ExternalUIPath = defaultUIpath
 			cfg.ExternalUI = defaultUIpath
 		}
 	}
 	// checkout UIpath/name exist
 	if cfg.ExternalUIName != "" {
-		ExternalUIName = cfg.ExternalUIName
+		updater.ExternalUIName = cfg.ExternalUIName
 	} else {
-		ExternalUIFolder = ExternalUIPath
+		updater.ExternalUIFolder = updater.ExternalUIPath
 	}
 	if cfg.ExternalUIURL != "" {
-		ExternalUIURL = cfg.ExternalUIURL
+		updater.ExternalUIURL = cfg.ExternalUIURL
 	}
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun

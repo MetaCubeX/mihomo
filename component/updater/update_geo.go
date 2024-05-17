@@ -1,18 +1,29 @@
-package config
+package updater
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"runtime"
+	"sync"
+	"time"
 
+	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/standard"
 	"github.com/metacubex/mihomo/component/mmdb"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/oschwald/maxminddb-golang"
 )
 
-func UpdateGeoDatabases() error {
+var (
+	updateGeoMux sync.Mutex
+	UpdatingGeo  atomic.Bool
+)
+
+func updateGeoDatabases() error {
 	defer runtime.GC()
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
 	if err != nil {
@@ -87,4 +98,83 @@ func UpdateGeoDatabases() error {
 	geodata.ClearCache()
 
 	return nil
+}
+
+func UpdateGeoDatabases() error {
+	log.Infoln("[GEO] Start updating GEO database")
+
+	updateGeoMux.Lock()
+
+	if UpdatingGeo.Load() {
+		updateGeoMux.Unlock()
+		return errors.New("GEO database is updating, skip")
+	}
+
+	UpdatingGeo.Store(true)
+	updateGeoMux.Unlock()
+
+	defer func() {
+		UpdatingGeo.Store(false)
+	}()
+
+	log.Infoln("[GEO] Updating GEO database")
+
+	if err := updateGeoDatabases(); err != nil {
+		log.Errorln("[GEO] update GEO database error: %s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func getUpdateTime() (err error, time time.Time) {
+	var fileInfo os.FileInfo
+	if C.GeodataMode {
+		fileInfo, err = os.Stat(C.Path.GeoIP())
+		if err != nil {
+			return err, time
+		}
+	} else {
+		fileInfo, err = os.Stat(C.Path.MMDB())
+		if err != nil {
+			return err, time
+		}
+	}
+
+	return nil, fileInfo.ModTime()
+}
+
+func RegisterGeoUpdater() {
+	if C.GeoUpdateInterval <= 0 {
+		log.Errorln("[GEO] Invalid update interval: %d", C.GeoUpdateInterval)
+		return
+	}
+
+	ticker := time.NewTicker(time.Duration(C.GeoUpdateInterval) * time.Hour)
+	defer ticker.Stop()
+
+	log.Infoln("[GEO] update GEO database every %d hours", C.GeoUpdateInterval)
+	go func() {
+		err, lastUpdate := getUpdateTime()
+		if err != nil {
+			log.Errorln("[GEO] Get GEO database update time error: %s", err.Error())
+			return
+		}
+
+		log.Infoln("[GEO] last update time %s", lastUpdate)
+		if lastUpdate.Add(time.Duration(C.GeoUpdateInterval) * time.Hour).Before(time.Now()) {
+			log.Infoln("[GEO] Database has not been updated for %v, update now", time.Duration(C.GeoUpdateInterval)*time.Hour)
+			if err := UpdateGeoDatabases(); err != nil {
+				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
+				return
+			}
+		}
+
+		for range ticker.C {
+			if err := UpdateGeoDatabases(); err != nil {
+				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
+				return
+			}
+		}
+	}()
 }
