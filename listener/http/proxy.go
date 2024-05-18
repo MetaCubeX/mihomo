@@ -19,13 +19,14 @@ import (
 
 type bodyWrapper struct {
 	io.ReadCloser
+	once     sync.Once
 	onHitEOF func()
 }
 
 func (b *bodyWrapper) Read(p []byte) (n int, err error) {
 	n, err = b.ReadCloser.Read(p)
 	if err == io.EOF && b.onHitEOF != nil {
-		b.onHitEOF()
+		b.once.Do(b.onHitEOF)
 	}
 	return n, err
 }
