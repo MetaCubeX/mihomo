@@ -416,6 +416,18 @@ jobs:
         with:
           version: latest
 
+      - name: Set Docker tags and labels based on trigger
+        id: set-meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tags=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "labels=org.opencontainers.image.version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "tags=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
+            echo "labels=${{ steps.meta.outputs.labels }}" >> $GITHUB_ENV
+          fi
+            
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
