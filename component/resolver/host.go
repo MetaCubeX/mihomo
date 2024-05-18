@@ -9,6 +9,7 @@ import (
 	_ "unsafe"
 
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/resolver/hosts"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/zhangyunhao116/fastrand"
 )
@@ -27,11 +28,6 @@ func NewHosts(hosts *trie.DomainTrie[HostValue]) Hosts {
 		hosts,
 	}
 }
-
-// lookupStaticHost looks up the addresses and the canonical name for the given host from /etc/hosts.
-//
-//go:linkname lookupStaticHost net.lookupStaticHost
-func lookupStaticHost(host string) ([]string, string)
 
 // Return the search result and whether to match the parameter `isDomain`
 func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
@@ -56,7 +52,7 @@ func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
 	}
 
 	if !isDomain && !DisableSystemHosts && UseSystemHosts {
-		addr, _ := lookupStaticHost(domain)
+		addr, _ := hosts.LookupStaticHost(domain)
 		if hostValue, err := NewHostValue(addr); err == nil {
 			return &hostValue, true
 		}
