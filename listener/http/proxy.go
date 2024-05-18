@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/common/lru"
@@ -18,11 +17,19 @@ import (
 	"github.com/metacubex/mihomo/log"
 )
 
-//go:linkname registerOnHitEOF net/http.registerOnHitEOF
-func registerOnHitEOF(rc io.ReadCloser, fn func())
+type bodyWrapper struct {
+	io.ReadCloser
+	once     sync.Once
+	onHitEOF func()
+}
 
-//go:linkname requestBodyRemains net/http.requestBodyRemains
-func requestBodyRemains(rc io.ReadCloser) bool
+func (b *bodyWrapper) Read(p []byte) (n int, err error) {
+	n, err = b.ReadCloser.Read(p)
+	if err == io.EOF && b.onHitEOF != nil {
+		b.once.Do(b.onHitEOF)
+	}
+	return n, err
+}
 
 func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
 	client := newClient(c, tunnel, additions...)
@@ -100,10 +107,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 						}
 					}()
 				}
-				if requestBodyRemains(request.Body) {
-					registerOnHitEOF(request.Body, startBackgroundRead)
-				} else {
+				if request.Body == nil || request.Body == http.NoBody {
 					startBackgroundRead()
+				} else {
+					request.Body = &bodyWrapper{ReadCloser: request.Body, onHitEOF: startBackgroundRead}
 				}
 				resp, err = client.Do(request)
 				if err != nil {
