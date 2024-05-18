@@ -1,6 +1,10 @@
 name: Build
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag version to release"
+        required: true
   push:
     paths-ignore:
       - "docs/**"
@@ -13,7 +17,6 @@ on:
   pull_request_target:
     branches:
       - Alpha
-      
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -138,13 +141,13 @@ jobs:
         curl https://github.com/golang/go/commit/9e43850a3298a9b8b1162ba0033d4c53f8637571.diff | patch --verbose -R -p 1
 
     - name: Set variables
-      if: ${{github.ref_name=='Alpha'}}
-      run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+      run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
       shell: bash
 
     - name: Set variables
-      if: ${{github.ref_name=='' || github.ref_type=='tag'}}
-      run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+      if: ${{ github.event_name != 'workflow_dispatch' && github.ref_name == 'Alpha' }}
+      run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       shell: bash
 
     - name: Set Time Variable
@@ -277,7 +280,7 @@ jobs:
 
   Upload-Prerelease:
     permissions: write-all
-    if: ${{ github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
+    if: ${{ github.event_name != 'workflow_dispatch' && github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
     needs: [build]
     runs-on: ubuntu-latest
     steps:
@@ -328,44 +331,62 @@ jobs:
 
   Upload-Release:
     permissions: write-all
-    if: ${{ github.ref_type=='tag' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: Meta
+          fetch-depth: '0'
+          fetch-tags: 'true'
 
-    - name: Get tags
-      run: |
-        echo "CURRENTVERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-        git fetch --tags
-        echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD^)" >> $GITHUB_ENV
+      - name: Get tags
+        run: |
+          echo "CURRENTVERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          git fetch --tags
+          echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD)" >> $GITHUB_ENV
 
-    - name: Generate release notes
-      run: |
-          cp ./.github/genReleaseNote.sh ./
-          bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
-          rm ./genReleaseNote.sh
+      - name: Merge Alpha branch into Meta
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git fetch origin Alpha:Alpha
+          git merge Alpha
+          git push origin Meta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: actions/download-artifact@v4
-      with:
-        path: bin/
-        merge-multiple: true
+      - name: Tag the commit
+        run: |
+          git tag ${{ github.event.inputs.version }}
+          git push origin ${{ github.event.inputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Display structure of downloaded files
-      run: ls -R
-      working-directory: bin
-
-    - name: Upload Release
-      uses: softprops/action-gh-release@v1
-      if: ${{  success() }}
-      with:
-        tag_name: ${{ github.ref_name }}
-        files: bin/*
-        generate_release_notes: true
-        body_path: release.md
+      - name: Generate release notes
+        run: |
+            cp ./.github/genReleaseNote.sh ./
+            bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
+            rm ./genReleaseNote.sh
+  
+      - uses: actions/download-artifact@v4
+        with:
+          path: bin/
+          merge-multiple: true
+  
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+  
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        if: ${{ success() }}
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          files: bin/*
+          body_path: release.md
 
   Docker:
     if: ${{ !startsWith(github.event_name, 'pull_request') }}
