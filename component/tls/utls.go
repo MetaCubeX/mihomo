@@ -6,8 +6,8 @@ import (
 
 	"github.com/metacubex/mihomo/log"
 
+	utls "github.com/metacubex/utls"
 	"github.com/mroth/weightedrand/v2"
-	utls "github.com/sagernet/utls"
 )
 
 type UConn struct {

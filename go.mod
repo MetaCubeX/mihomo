@@ -27,6 +27,7 @@ require (
 	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
 	github.com/metacubex/sing-wireguard v0.0.0-20240321042214-224f96122a63
 	github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66
+	github.com/metacubex/utls v1.6.6
 	github.com/miekg/dns v1.1.59
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
@@ -37,7 +38,6 @@ require (
 	github.com/sagernet/sing v0.3.8
 	github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6
 	github.com/sagernet/sing-shadowtls v0.1.4
-	github.com/sagernet/utls v1.5.4
 	github.com/sagernet/wireguard-go v0.0.0-20231209092712-9a439356a62e
 	github.com/samber/lo v1.39.0
 	github.com/shirou/gopsutil/v3 v3.24.4
@@ -63,7 +63,7 @@ require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/cloudflare/circl v1.3.6 // indirect
+	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ericlagergren/aegis v0.0.0-20230312195928-b4ce538b56f9 // indirect
 	github.com/ericlagergren/polyval v0.0.0-20220411101811-e25bc10ba391 // indirect
