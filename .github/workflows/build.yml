@@ -1,6 +1,10 @@
 name: Build
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag version to release"
+        required: true
   push:
     paths-ignore:
       - "docs/**"
@@ -13,7 +17,6 @@ on:
   pull_request_target:
     branches:
       - Alpha
-      
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -64,6 +67,13 @@ jobs:
           - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
           - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
 
+          # Go 1.21 can revert commit `9e4385` to work on Windows 7
+          # https://github.com/golang/go/issues/64622#issuecomment-1847475161
+          # (OR we can just use golang1.21.4 which unneeded any patch)
+          - { goos: windows, goarch: '386', output: '386-go121', goversion: '1.21' }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go121, goversion: '1.21' }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go121, goversion: '1.21' }
+
           # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
           - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
           - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
@@ -94,28 +104,50 @@ jobs:
       with:
         go-version: ${{ matrix.jobs.goversion }}
 
-    - name: Set up Go1.21 loongarch abi1
+    - name: Set up Go1.22 loongarch abi1
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
       run: |
-        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi1.tar.gz
-        sudo tar zxf go1.21.5.linux-amd64-abi1.tar.gz -C /usr/local
+        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.22.0/go1.22.0.linux-amd64-abi1.tar.gz
+        sudo tar zxf go1.22.0.linux-amd64-abi1.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
 
-    - name: Set up Go1.21 loongarch abi2
+    - name: Set up Go1.22 loongarch abi2
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
       run: |
-        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.21.5/go1.21.5.linux-amd64-abi2.tar.gz
-        sudo tar zxf go1.21.5.linux-amd64-abi2.tar.gz -C /usr/local
+        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.22.0/go1.22.0.linux-amd64-abi2.tar.gz
+        sudo tar zxf go1.22.0.linux-amd64-abi2.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
 
+      # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
+      # this patch file only works on golang1.22.x
+      # that means after golang1.23 release it must be changed
+      # revert:
+      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
+      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
+      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
+    - name: Revert Golang1.22 commit for Windows7/8
+      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '' }}
+      run: |
+        cd $(go env GOROOT)
+        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/693def151adff1af707d82d28f55dba81ceb08e1.diff
+        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/7c1157f9544922e96945196b47b95664b1e39108.diff
+        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/48042aa09c2f878c4faa576948b07fe625c4707a.diff
+
+      # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
+    - name: Revert Golang1.21 commit for Windows7/8
+      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.21' }}
+      run: |
+        cd $(go env GOROOT)
+        curl https://github.com/golang/go/commit/9e43850a3298a9b8b1162ba0033d4c53f8637571.diff | patch --verbose -R -p 1
+
     - name: Set variables
-      if: ${{github.ref_name=='Alpha'}}
-      run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+      run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
       shell: bash
 
     - name: Set variables
-      if: ${{github.ref_name=='' || github.ref_type=='tag'}}
-      run: echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+      if: ${{ github.event_name != 'workflow_dispatch' && github.ref_name == 'Alpha' }}
+      run: echo "VERSION=alpha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       shell: bash
 
     - name: Set Time Variable
@@ -248,7 +280,7 @@ jobs:
 
   Upload-Prerelease:
     permissions: write-all
-    if: ${{ github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
+    if: ${{ github.event_name != 'workflow_dispatch' && github.ref_type == 'branch' && !startsWith(github.event_name, 'pull_request') }}
     needs: [build]
     runs-on: ubuntu-latest
     steps:
@@ -299,44 +331,62 @@ jobs:
 
   Upload-Release:
     permissions: write-all
-    if: ${{ github.ref_type=='tag' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: Meta
+          fetch-depth: '0'
+          fetch-tags: 'true'
 
-    - name: Get tags
-      run: |
-        echo "CURRENTVERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-        git fetch --tags
-        echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD^)" >> $GITHUB_ENV
+      - name: Get tags
+        run: |
+          echo "CURRENTVERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          git fetch --tags
+          echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD)" >> $GITHUB_ENV
 
-    - name: Generate release notes
-      run: |
-          cp ./.github/genReleaseNote.sh ./
-          bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
-          rm ./genReleaseNote.sh
+      - name: Merge Alpha branch into Meta
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git fetch origin Alpha:Alpha
+          git merge Alpha
+          git push origin Meta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: actions/download-artifact@v4
-      with:
-        path: bin/
-        merge-multiple: true
+      - name: Tag the commit
+        run: |
+          git tag ${{ github.event.inputs.version }}
+          git push origin ${{ github.event.inputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Display structure of downloaded files
-      run: ls -R
-      working-directory: bin
-
-    - name: Upload Release
-      uses: softprops/action-gh-release@v1
-      if: ${{  success() }}
-      with:
-        tag_name: ${{ github.ref_name }}
-        files: bin/*
-        generate_release_notes: true
-        body_path: release.md
+      - name: Generate release notes
+        run: |
+            cp ./.github/genReleaseNote.sh ./
+            bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
+            rm ./genReleaseNote.sh
+  
+      - uses: actions/download-artifact@v4
+        with:
+          path: bin/
+          merge-multiple: true
+  
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: bin
+  
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        if: ${{ success() }}
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          files: bin/*
+          body_path: release.md
 
   Docker:
     if: ${{ !startsWith(github.event_name, 'pull_request') }}
@@ -366,6 +416,18 @@ jobs:
         with:
           version: latest
 
+      - name: Set Docker tags and labels based on trigger
+        id: set-meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tags=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "labels=org.opencontainers.image.version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "tags=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
+            echo "labels=${{ steps.meta.outputs.labels }}" >> $GITHUB_ENV
+          fi
+            
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
@@ -373,6 +435,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: ${{ env.tags }}
+          labels: ${{ env.labels }}
+
 
       - name: Show files
         run: |

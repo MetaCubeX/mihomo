@@ -50,9 +50,13 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 	case "DSCP":
 		parsed, parseErr = RC.NewDSCP(payload, target)
 	case "PROCESS-NAME":
-		parsed, parseErr = RC.NewProcess(payload, target, true)
+		parsed, parseErr = RC.NewProcess(payload, target, true, false)
 	case "PROCESS-PATH":
-		parsed, parseErr = RC.NewProcess(payload, target, false)
+		parsed, parseErr = RC.NewProcess(payload, target, false, false)
+	case "PROCESS-NAME-REGEX":
+		parsed, parseErr = RC.NewProcess(payload, target, true, true)
+	case "PROCESS-PATH-REGEX":
+		parsed, parseErr = RC.NewProcess(payload, target, false, true)
 	case "NETWORK":
 		parsed, parseErr = RC.NewNetworkType(payload, target)
 	case "UID":

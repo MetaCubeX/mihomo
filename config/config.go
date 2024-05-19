@@ -28,6 +28,7 @@ import (
 	SNIFF "github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
+	"github.com/metacubex/mihomo/component/updater"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
@@ -114,6 +115,7 @@ type DNS struct {
 	PreferH3              bool             `yaml:"prefer-h3"`
 	IPv6                  bool             `yaml:"ipv6"`
 	IPv6Timeout           uint             `yaml:"ipv6-timeout"`
+	UseSystemHosts        bool             `yaml:"use-system-hosts"`
 	NameServer            []dns.NameServer `yaml:"nameserver"`
 	Fallback              []dns.NameServer `yaml:"fallback"`
 	FallbackFilter        FallbackFilter   `yaml:"fallback-filter"`
@@ -209,6 +211,7 @@ type RawDNS struct {
 	IPv6                  bool                                `yaml:"ipv6" json:"ipv6"`
 	IPv6Timeout           uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
 	UseHosts              bool                                `yaml:"use-hosts" json:"use-hosts"`
+	UseSystemHosts        bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
 	NameServer            []string                            `yaml:"nameserver" json:"nameserver"`
 	Fallback              []string                            `yaml:"fallback" json:"fallback"`
 	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
@@ -456,12 +459,13 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			Interval:      30,
 		},
 		DNS: RawDNS{
-			Enable:       false,
-			IPv6:         false,
-			UseHosts:     true,
-			IPv6Timeout:  100,
-			EnhancedMode: C.DNSMapping,
-			FakeIPRange:  "198.18.0.1/16",
+			Enable:         false,
+			IPv6:           false,
+			UseHosts:       true,
+			UseSystemHosts: true,
+			IPv6Timeout:    100,
+			EnhancedMode:   C.DNSMapping,
+			FakeIPRange:    "198.18.0.1/16",
 			FallbackFilter: RawFallbackFilter{
 				GeoIP:     true,
 				GeoIPCode: "CN",
@@ -637,28 +641,28 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
 
-	ExternalUIPath = cfg.ExternalUI
+	updater.ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist
-	if ExternalUIPath != "" {
-		ExternalUIPath = C.Path.Resolve(ExternalUIPath)
-		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
+	if updater.ExternalUIPath != "" {
+		updater.ExternalUIPath = C.Path.Resolve(updater.ExternalUIPath)
+		if _, err := os.Stat(updater.ExternalUIPath); os.IsNotExist(err) {
 			defaultUIpath := path.Join(C.Path.HomeDir(), "ui")
-			log.Warnln("external-ui: %s does not exist, creating folder in %s", ExternalUIPath, defaultUIpath)
+			log.Warnln("external-ui: %s does not exist, creating folder in %s", updater.ExternalUIPath, defaultUIpath)
 			if err := os.MkdirAll(defaultUIpath, os.ModePerm); err != nil {
 				return nil, err
 			}
-			ExternalUIPath = defaultUIpath
+			updater.ExternalUIPath = defaultUIpath
 			cfg.ExternalUI = defaultUIpath
 		}
 	}
 	// checkout UIpath/name exist
 	if cfg.ExternalUIName != "" {
-		ExternalUIName = cfg.ExternalUIName
+		updater.ExternalUIName = cfg.ExternalUIName
 	} else {
-		ExternalUIFolder = ExternalUIPath
+		updater.ExternalUIFolder = updater.ExternalUIPath
 	}
 	if cfg.ExternalUIURL != "" {
-		ExternalUIURL = cfg.ExternalUIURL
+		updater.ExternalUIURL = cfg.ExternalUIURL
 	}
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
@@ -924,7 +928,7 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 
 		l := len(rule)
 
-		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" || ruleName == "SUB-RULE" || ruleName == "DOMAIN-REGEX" {
+		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" || ruleName == "SUB-RULE" || ruleName == "DOMAIN-REGEX" || ruleName == "PROCESS-NAME-REGEX" || ruleName == "PROCESS-PATH-REGEX" {
 			target = rule[l-1]
 			payload = strings.Join(rule[1:l-1], ",")
 		} else {
@@ -1285,12 +1289,13 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 	}
 
 	dnsCfg := &DNS{
-		Enable:       cfg.Enable,
-		Listen:       cfg.Listen,
-		PreferH3:     cfg.PreferH3,
-		IPv6Timeout:  cfg.IPv6Timeout,
-		IPv6:         cfg.IPv6,
-		EnhancedMode: cfg.EnhancedMode,
+		Enable:         cfg.Enable,
+		Listen:         cfg.Listen,
+		PreferH3:       cfg.PreferH3,
+		IPv6Timeout:    cfg.IPv6Timeout,
+		IPv6:           cfg.IPv6,
+		UseSystemHosts: cfg.UseSystemHosts,
+		EnhancedMode:   cfg.EnhancedMode,
 		FallbackFilter: FallbackFilter{
 			IPCIDR:  []netip.Prefix{},
 			GeoSite: []router.DomainMatcher{},

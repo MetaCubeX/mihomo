@@ -1,11 +1,34 @@
 package updater
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"os"
+	"time"
+
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	C "github.com/metacubex/mihomo/constant"
 
 	"golang.org/x/exp/constraints"
 )
+
+func downloadForBytes(url string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	defer cancel()
+	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
+}
+
+func saveFile(bytes []byte, path string) error {
+	return os.WriteFile(path, bytes, 0o644)
+}
 
 // LimitReachedError records the limit and the operation that caused it.
 type LimitReachedError struct {

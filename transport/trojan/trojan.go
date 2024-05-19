@@ -129,6 +129,12 @@ func (t *Trojan) StreamWebsocketConn(ctx context.Context, conn net.Conn, wsOptio
 		ServerName:         t.option.ServerName,
 	}
 
+	var err error
+	tlsConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint)
+	if err != nil {
+		return nil, err
+	}
+
 	return vmess.StreamWebsocketConn(ctx, conn, &vmess.WebsocketConfig{
 		Host:                     wsOptions.Host,
 		Port:                     wsOptions.Port,

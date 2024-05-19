@@ -1,0 +1,162 @@
+diff --git a/src/net/hook_windows.go b/src/net/hook_windows.go
+index ab8656cbbf343..28c49cc6de7e7 100644
+--- a/src/net/hook_windows.go
++++ b/src/net/hook_windows.go
+@@ -14,7 +14,6 @@ var (
+ 	testHookDialChannel = func() { time.Sleep(time.Millisecond) } // see golang.org/issue/5349
+ 
+ 	// Placeholders for socket system calls.
+-	socketFunc    func(int, int, int) (syscall.Handle, error)                                                 = syscall.Socket
+ 	wsaSocketFunc func(int32, int32, int32, *syscall.WSAProtocolInfo, uint32, uint32) (syscall.Handle, error) = windows.WSASocket
+ 	connectFunc   func(syscall.Handle, syscall.Sockaddr) error                                                = syscall.Connect
+ 	listenFunc    func(syscall.Handle, int) error                                                             = syscall.Listen
+diff --git a/src/net/internal/socktest/main_test.go b/src/net/internal/socktest/main_test.go
+index 0197feb3f199a..967ce6795aedb 100644
+--- a/src/net/internal/socktest/main_test.go
++++ b/src/net/internal/socktest/main_test.go
+@@ -2,7 +2,7 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+ 
+-//go:build !js && !plan9 && !wasip1
++//go:build !js && !plan9 && !wasip1 && !windows
+ 
+ package socktest_test
+ 
+diff --git a/src/net/internal/socktest/main_windows_test.go b/src/net/internal/socktest/main_windows_test.go
+deleted file mode 100644
+index df1cb97784b51..0000000000000
+--- a/src/net/internal/socktest/main_windows_test.go
++++ /dev/null
+@@ -1,22 +0,0 @@
+-// Copyright 2015 The Go Authors. All rights reserved.
+-// Use of this source code is governed by a BSD-style
+-// license that can be found in the LICENSE file.
+-
+-package socktest_test
+-
+-import "syscall"
+-
+-var (
+-	socketFunc func(int, int, int) (syscall.Handle, error)
+-	closeFunc  func(syscall.Handle) error
+-)
+-
+-func installTestHooks() {
+-	socketFunc = sw.Socket
+-	closeFunc = sw.Closesocket
+-}
+-
+-func uninstallTestHooks() {
+-	socketFunc = syscall.Socket
+-	closeFunc = syscall.Closesocket
+-}
+diff --git a/src/net/internal/socktest/sys_windows.go b/src/net/internal/socktest/sys_windows.go
+index 8c1c862f33c9b..1c42e5c7f34b7 100644
+--- a/src/net/internal/socktest/sys_windows.go
++++ b/src/net/internal/socktest/sys_windows.go
+@@ -9,38 +9,6 @@ import (
+ 	"syscall"
+ )
+ 
+-// Socket wraps syscall.Socket.
+-func (sw *Switch) Socket(family, sotype, proto int) (s syscall.Handle, err error) {
+-	sw.once.Do(sw.init)
+-
+-	so := &Status{Cookie: cookie(family, sotype, proto)}
+-	sw.fmu.RLock()
+-	f, _ := sw.fltab[FilterSocket]
+-	sw.fmu.RUnlock()
+-
+-	af, err := f.apply(so)
+-	if err != nil {
+-		return syscall.InvalidHandle, err
+-	}
+-	s, so.Err = syscall.Socket(family, sotype, proto)
+-	if err = af.apply(so); err != nil {
+-		if so.Err == nil {
+-			syscall.Closesocket(s)
+-		}
+-		return syscall.InvalidHandle, err
+-	}
+-
+-	sw.smu.Lock()
+-	defer sw.smu.Unlock()
+-	if so.Err != nil {
+-		sw.stats.getLocked(so.Cookie).OpenFailed++
+-		return syscall.InvalidHandle, so.Err
+-	}
+-	nso := sw.addLocked(s, family, sotype, proto)
+-	sw.stats.getLocked(nso.Cookie).Opened++
+-	return s, nil
+-}
+-
+ // WSASocket wraps [syscall.WSASocket].
+ func (sw *Switch) WSASocket(family, sotype, proto int32, protinfo *syscall.WSAProtocolInfo, group uint32, flags uint32) (s syscall.Handle, err error) {
+ 	sw.once.Do(sw.init)
+diff --git a/src/net/main_windows_test.go b/src/net/main_windows_test.go
+index 07f21b72eb1fc..bc024c0bbd82d 100644
+--- a/src/net/main_windows_test.go
++++ b/src/net/main_windows_test.go
+@@ -8,7 +8,6 @@ import "internal/poll"
+ 
+ var (
+ 	// Placeholders for saving original socket system calls.
+-	origSocket      = socketFunc
+ 	origWSASocket   = wsaSocketFunc
+ 	origClosesocket = poll.CloseFunc
+ 	origConnect     = connectFunc
+@@ -18,7 +17,6 @@ var (
+ )
+ 
+ func installTestHooks() {
+-	socketFunc = sw.Socket
+ 	wsaSocketFunc = sw.WSASocket
+ 	poll.CloseFunc = sw.Closesocket
+ 	connectFunc = sw.Connect
+@@ -28,7 +26,6 @@ func installTestHooks() {
+ }
+ 
+ func uninstallTestHooks() {
+-	socketFunc = origSocket
+ 	wsaSocketFunc = origWSASocket
+ 	poll.CloseFunc = origClosesocket
+ 	connectFunc = origConnect
+diff --git a/src/net/sock_windows.go b/src/net/sock_windows.go
+index fa11c7af2e727..5540135a2c43e 100644
+--- a/src/net/sock_windows.go
++++ b/src/net/sock_windows.go
+@@ -19,21 +19,6 @@ func maxListenerBacklog() int {
+ func sysSocket(family, sotype, proto int) (syscall.Handle, error) {
+ 	s, err := wsaSocketFunc(int32(family), int32(sotype), int32(proto),
+ 		nil, 0, windows.WSA_FLAG_OVERLAPPED|windows.WSA_FLAG_NO_HANDLE_INHERIT)
+-	if err == nil {
+-		return s, nil
+-	}
+-	// WSA_FLAG_NO_HANDLE_INHERIT flag is not supported on some
+-	// old versions of Windows, see
+-	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms742212(v=vs.85).aspx
+-	// for details. Just use syscall.Socket, if windows.WSASocket failed.
+-
+-	// See ../syscall/exec_unix.go for description of ForkLock.
+-	syscall.ForkLock.RLock()
+-	s, err = socketFunc(family, sotype, proto)
+-	if err == nil {
+-		syscall.CloseOnExec(s)
+-	}
+-	syscall.ForkLock.RUnlock()
+ 	if err != nil {
+ 		return syscall.InvalidHandle, os.NewSyscallError("socket", err)
+ 	}
+diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
+index 0a93bc0a80d4e..06e684c7116b4 100644
+--- a/src/syscall/exec_windows.go
++++ b/src/syscall/exec_windows.go
+@@ -14,6 +14,7 @@ import (
+ 	"unsafe"
+ )
+ 
++// ForkLock is not used on Windows.
+ var ForkLock sync.RWMutex
+ 
+ // EscapeArg rewrites command line argument s as prescribed

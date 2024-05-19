@@ -169,7 +169,7 @@ func stopProxyProvider(pd *ProxySetProvider) {
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, dialerProxy string, override OverrideSchema, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
-	excludeFilterReg, err := regexp2.Compile(excludeFilter, 0)
+	excludeFilterReg, err := regexp2.Compile(excludeFilter, regexp2.None)
 	if err != nil {
 		return nil, fmt.Errorf("invalid excludeFilter regex: %w", err)
 	}
@@ -180,7 +180,7 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 
 	var filterRegs []*regexp2.Regexp
 	for _, filter := range strings.Split(filter, "`") {
-		filterReg, err := regexp2.Compile(filter, 0)
+		filterReg, err := regexp2.Compile(filter, regexp2.None)
 		if err != nil {
 			return nil, fmt.Errorf("invalid filter regex: %w", err)
 		}
@@ -356,12 +356,12 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 					continue
 				}
 				if len(excludeFilter) > 0 {
-					if mat, _ := excludeFilterReg.FindStringMatch(name); mat != nil {
+					if mat, _ := excludeFilterReg.MatchString(name); mat {
 						continue
 					}
 				}
 				if len(filter) > 0 {
-					if mat, _ := filterReg.FindStringMatch(name); mat == nil {
+					if mat, _ := filterReg.MatchString(name); !mat {
 						continue
 					}
 				}

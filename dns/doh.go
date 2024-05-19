@@ -515,7 +515,7 @@ func (doh *dnsOverHTTPS) createTransportH3(
 		},
 		DisableCompression: true,
 		TLSClientConfig:    tlsConfig,
-		QuicConfig:         doh.getQUICConfig(),
+		QUICConfig:         doh.getQUICConfig(),
 	}
 
 	return &http3Transport{baseTransport: rt}, nil

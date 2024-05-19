@@ -179,6 +179,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		tlsOpts := mihomoVMess.TLSConfig{
 			Host:              host,
 			SkipCertVerify:    v.option.SkipCertVerify,
+			FingerPrint:       v.option.Fingerprint,
 			NextProtos:        []string{"h2"},
 			ClientFingerprint: v.option.ClientFingerprint,
 			Reality:           v.realityConfig,
@@ -208,6 +209,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			tlsOpts := &mihomoVMess.TLSConfig{
 				Host:              host,
 				SkipCertVerify:    v.option.SkipCertVerify,
+				FingerPrint:       v.option.Fingerprint,
 				ClientFingerprint: v.option.ClientFingerprint,
 				Reality:           v.realityConfig,
 				NextProtos:        v.option.ALPN,

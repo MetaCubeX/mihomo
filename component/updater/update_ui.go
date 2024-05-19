@@ -1,4 +1,4 @@
-package config
+package updater
 
 import (
 	"archive/zip"
@@ -29,7 +29,7 @@ func UpdateUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
 
-	err := prepare()
+	err := prepare_ui()
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func UpdateUI() error {
 	return nil
 }
 
-func prepare() error {
+func prepare_ui() error {
 	if ExternalUIPath == "" || ExternalUIURL == "" {
 		return ErrIncompleteConf
 	}

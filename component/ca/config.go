@@ -67,9 +67,6 @@ func ResetCertificate() {
 }
 
 func getCertPool() *x509.CertPool {
-	if len(trustCerts) == 0 {
-		return nil
-	}
 	if globalCertPool == nil {
 		mutex.Lock()
 		defer mutex.Unlock()
