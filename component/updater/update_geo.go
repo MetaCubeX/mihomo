@@ -98,11 +98,13 @@ func updateGeoDatabases() error {
 	return nil
 }
 
-func UpdateGeoDatabases(updateNotification chan struct{}) error {
+var ErrGetDatabaseUpdateSkip = errors.New("GEO database is updating, skip")
+
+func UpdateGeoDatabases() error {
 	log.Infoln("[GEO] Start updating GEO database")
 
 	if UpdatingGeo.Load() {
-		return errors.New("GEO database is updating, skip")
+		return ErrGetDatabaseUpdateSkip
 	}
 
 	UpdatingGeo.Store(true)
@@ -115,7 +117,6 @@ func UpdateGeoDatabases(updateNotification chan struct{}) error {
 		return err
 	}
 
-	updateNotification <- struct{}{}
 	return nil
 }
 
@@ -136,17 +137,16 @@ func getUpdateTime() (err error, time time.Time) {
 	return nil, fileInfo.ModTime()
 }
 
-func RegisterGeoUpdater(updateNotification chan struct{}) {
+func RegisterGeoUpdater(onSuccess func()) {
 	if C.GeoUpdateInterval <= 0 {
 		log.Errorln("[GEO] Invalid update interval: %d", C.GeoUpdateInterval)
 		return
 	}
 
-	ticker := time.NewTicker(time.Duration(C.GeoUpdateInterval) * time.Hour)
-	defer ticker.Stop()
-
-	log.Infoln("[GEO] update GEO database every %d hours", C.GeoUpdateInterval)
 	go func() {
+		ticker := time.NewTicker(time.Duration(C.GeoUpdateInterval) * time.Hour)
+		defer ticker.Stop()
+
 		err, lastUpdate := getUpdateTime()
 		if err != nil {
 			log.Errorln("[GEO] Get GEO database update time error: %s", err.Error())
@@ -156,15 +156,20 @@ func RegisterGeoUpdater(updateNotification chan struct{}) {
 		log.Infoln("[GEO] last update time %s", lastUpdate)
 		if lastUpdate.Add(time.Duration(C.GeoUpdateInterval) * time.Hour).Before(time.Now()) {
 			log.Infoln("[GEO] Database has not been updated for %v, update now", time.Duration(C.GeoUpdateInterval)*time.Hour)
-			if err := UpdateGeoDatabases(updateNotification); err != nil {
+			if err := UpdateGeoDatabases(); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
 				return
+			} else {
+				onSuccess()
 			}
 		}
 
 		for range ticker.C {
-			if err := UpdateGeoDatabases(updateNotification); err != nil {
+			log.Infoln("[GEO] updating database every %d hours", C.GeoUpdateInterval)
+			if err := UpdateGeoDatabases(); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
+			} else {
+				onSuccess()
 			}
 		}
 	}()
