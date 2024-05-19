@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
@@ -19,8 +18,7 @@ import (
 )
 
 var (
-	updateGeoMux sync.Mutex
-	UpdatingGeo  atomic.Bool
+	UpdatingGeo atomic.Bool
 )
 
 func updateGeoDatabases() error {
@@ -100,22 +98,15 @@ func updateGeoDatabases() error {
 	return nil
 }
 
-func UpdateGeoDatabases() error {
+func UpdateGeoDatabases(updateNotification chan struct{}) error {
 	log.Infoln("[GEO] Start updating GEO database")
 
-	updateGeoMux.Lock()
-
 	if UpdatingGeo.Load() {
-		updateGeoMux.Unlock()
 		return errors.New("GEO database is updating, skip")
 	}
 
 	UpdatingGeo.Store(true)
-	updateGeoMux.Unlock()
-
-	defer func() {
-		UpdatingGeo.Store(false)
-	}()
+	defer UpdatingGeo.Store(false)
 
 	log.Infoln("[GEO] Updating GEO database")
 
@@ -124,6 +115,7 @@ func UpdateGeoDatabases() error {
 		return err
 	}
 
+	updateNotification <- struct{}{}
 	return nil
 }
 
@@ -144,7 +136,7 @@ func getUpdateTime() (err error, time time.Time) {
 	return nil, fileInfo.ModTime()
 }
 
-func RegisterGeoUpdater() {
+func RegisterGeoUpdater(updateNotification chan struct{}) {
 	if C.GeoUpdateInterval <= 0 {
 		log.Errorln("[GEO] Invalid update interval: %d", C.GeoUpdateInterval)
 		return
@@ -164,16 +156,15 @@ func RegisterGeoUpdater() {
 		log.Infoln("[GEO] last update time %s", lastUpdate)
 		if lastUpdate.Add(time.Duration(C.GeoUpdateInterval) * time.Hour).Before(time.Now()) {
 			log.Infoln("[GEO] Database has not been updated for %v, update now", time.Duration(C.GeoUpdateInterval)*time.Hour)
-			if err := UpdateGeoDatabases(); err != nil {
+			if err := UpdateGeoDatabases(updateNotification); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
 				return
 			}
 		}
 
 		for range ticker.C {
-			if err := UpdateGeoDatabases(); err != nil {
+			if err := UpdateGeoDatabases(updateNotification); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
-				return
 			}
 		}
 	}()

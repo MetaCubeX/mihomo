@@ -364,30 +364,47 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
-	if updater.UpdatingGeo.Load() {
-		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, newError("updating..."))
-		return
-	}
-
-	err := updater.UpdateGeoDatabases()
-	if err != nil {
-		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, newError(err.Error()))
-		return
-	}
+	updateNotification := make(chan struct{})
+	errorChannel := make(chan error, 1)
+	done := make(chan struct{})
+	defer func() {
+		close(updateNotification)
+		close(errorChannel)
+	}()
 
 	go func() {
-		cfg, err := executor.ParseWithPath(C.Path.Config())
-		if err != nil {
-			log.Errorln("[REST-API] update GEO databases failed: %v", err)
-			return
+		defer close(done)
+		for {
+			select {
+			case <-updateNotification:
+				cfg, err := executor.ParseWithPath(C.Path.Config())
+				if err != nil {
+					log.Errorln("[REST-API] update GEO databases failed: %v", err)
+					render.Status(r, http.StatusInternalServerError)
+					render.JSON(w, r, newError("Error parsing configuration"))
+					return
+				}
+
+				log.Warnln("[REST-API] update GEO databases success, applying config")
+				executor.ApplyConfig(cfg, false)
+				return
+			case err := <-errorChannel:
+				log.Errorln("[REST-API] update GEO databases failed: %v", err)
+				render.Status(r, http.StatusInternalServerError)
+				render.JSON(w, r, err.Error())
+				return
+			}
 		}
-
-		log.Warnln("[REST-API] update GEO databases successful, apply config...")
-
-		executor.ApplyConfig(cfg, false)
 	}()
+
+	go func() {
+		err := updater.UpdateGeoDatabases(updateNotification)
+		if err != nil {
+			errorChannel <- err
+		}
+	}()
+
+	<-done
 
 	render.NoContent(w, r)
 }
