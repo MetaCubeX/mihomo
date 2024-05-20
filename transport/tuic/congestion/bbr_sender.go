@@ -5,34 +5,23 @@ package congestion
 import (
 	"fmt"
 	"math"
-	"net"
 	"time"
 
+	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/congestion"
 	"github.com/zhangyunhao116/fastrand"
 )
 
 const (
 	// InitialMaxDatagramSize is the default maximum packet size used in QUIC for congestion window computations in bytes.
-	InitialMaxDatagramSize        = 1252
-	InitialPacketSizeIPv4         = 1252
-	InitialPacketSizeIPv6         = 1232
+	InitialMaxDatagramSize        = 1280
+	InitialPacketSize             = 1280
 	InitialCongestionWindow       = 32
 	DefaultBBRMaxCongestionWindow = 10000
 )
 
-func GetInitialPacketSize(addr net.Addr) congestion.ByteCount {
-	maxSize := congestion.ByteCount(1200)
-	// If this is not a UDP address, we don't know anything about the MTU.
-	// Use the minimum size of an Initial packet as the max packet size.
-	if udpAddr, ok := addr.(*net.UDPAddr); ok {
-		if udpAddr.IP.To4() != nil {
-			maxSize = InitialPacketSizeIPv4
-		} else {
-			maxSize = InitialPacketSizeIPv6
-		}
-	}
-	return congestion.ByteCount(maxSize)
+func GetInitialPacketSize(quicConn quic.Connection) congestion.ByteCount {
+	return congestion.ByteCount(quicConn.Config().InitialPacketSize)
 }
 
 var (
