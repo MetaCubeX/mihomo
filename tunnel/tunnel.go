@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/metacubex/mihomo/component/loopback"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/nat"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -402,7 +402,18 @@ func handleUDPConn(packet C.PacketAdapter) {
 			return
 		}
 
-		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
+		channel := rawPc.Chains()[0]
+		manager, ok := statistic.ChannelManager[channel]
+		if !ok {
+			statistic.ChannelMutex.Lock()
+			manager, ok = statistic.ChannelManager[channel]
+			if !ok {
+				manager = statistic.NewManager(channel)
+			}
+			statistic.ChannelMutex.Unlock()
+		}
+
+		pc := statistic.NewUDPTracker(rawPc, manager, metadata, rule, 0, 0, true)
 
 		switch true {
 		case metadata.SpecialProxy != "":
@@ -555,7 +566,24 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, 0, int64(peekLen), true)
+	channel := remoteConn.Chains()[0]
+	manager, ok := statistic.ChannelManager[channel]
+	if !ok {
+		statistic.ChannelMutex.Lock()
+		manager, ok = statistic.ChannelManager[channel]
+		if !ok {
+			manager = statistic.NewManager(channel)
+		}
+		statistic.ChannelMutex.Unlock()
+	}
+
+	rulePayload := metadata.HitRule
+	if rule != nil && rulePayload == "" {
+		rulePayload = rule.Payload()
+	}
+	remoteConn = statistic.NewTCPTracker(remoteConn, manager, metadata, rule,
+		0, int64(peekLen), true, rulePayload)
+
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()
 	}(remoteConn)
@@ -564,11 +592,23 @@ func handleTCPConn(connCtx C.ConnContext) {
 	case metadata.SpecialProxy != "":
 		log.Infoln("[TCP] %s --> %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
 	case rule != nil:
-		if rule.Payload() != "" {
-			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
-		} else {
-			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.RuleType().String(), remoteConn.Chains().String())
-		}
+		//if rule.Payload() != "" {
+		//	log.Infoln("[TCP] %s --> %s match %s using %s",
+		//		metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)",
+		//			rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
+		//} else {
+		//	log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(),
+		//		metadata.RemoteAddress(), rule.RuleType().String(), remoteConn.Chains().String())
+		//}
+		log.Infoln(
+			"%6s(%7s) | %12s | %s -> %s  %s",
+			rule.RuleType().String(),
+			rulePayload,
+			remoteConn.Chains().String(),
+			metadata.SourceDetail(),
+			metadata.Type,
+			metadata.RemoteAddress(),
+		)
 	case mode == Global:
 		log.Infoln("[TCP] %s --> %s using GLOBAL", metadata.SourceDetail(), metadata.RemoteAddress())
 	case mode == Direct:

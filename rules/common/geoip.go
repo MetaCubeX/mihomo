@@ -65,7 +65,6 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 			}
 			return false, g.adapter
 		}
-
 		if metadata.DstGeoIP != nil {
 			return false, g.adapter
 		}

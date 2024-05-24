@@ -3,6 +3,7 @@ package constant
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"log"
 	"os"
 	P "path"
 	"path/filepath"
@@ -23,20 +24,16 @@ var (
 // on Unix systems, `$HOME/.config/mihomo`.
 // on Windows, `%USERPROFILE%/.config/mihomo`.
 var Path = func() *path {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir, _ = os.Getwd()
-	}
 	allowUnsafePath, _ := strconv.ParseBool(os.Getenv("SKIP_SAFE_PATH_CHECK"))
-	homeDir = P.Join(homeDir, ".config", Name)
-
-	if _, err = os.Stat(homeDir); err != nil {
-		if configHome, ok := os.LookupEnv("XDG_CONFIG_HOME"); ok {
-			homeDir = P.Join(configHome, Name)
-		}
+	ex, err := os.Executable()
+	if err != nil {
+		log.Panic(err)
 	}
+	homeDir := filepath.Dir(ex)
 
-	return &path{homeDir: homeDir, configFile: "config.yaml", allowUnsafePath: allowUnsafePath}
+	homeDir = P.Join(homeDir, "config")
+
+	return &path{homeDir: homeDir, configFile: P.Join(homeDir, "config.yaml"), allowUnsafePath: allowUnsafePath}
 }()
 
 type path struct {
@@ -112,7 +109,6 @@ func (p *path) MMDB() string {
 	}
 	return P.Join(p.homeDir, "geoip.metadb")
 }
-
 func (p *path) ASN() string {
 	files, err := os.ReadDir(p.homeDir)
 	if err != nil {
@@ -131,7 +127,6 @@ func (p *path) ASN() string {
 	}
 	return P.Join(p.homeDir, ASNName)
 }
-
 func (p *path) OldCache() string {
 	return P.Join(p.homeDir, ".cache")
 }
@@ -189,4 +184,8 @@ func (p *path) GetExecutableFullPath() string {
 	}
 	res, _ := filepath.EvalSymlinks(exePath)
 	return res
+}
+
+func (p *path) StatisticPath() string {
+	return P.Join(p.homeDir, "statistic")
 }

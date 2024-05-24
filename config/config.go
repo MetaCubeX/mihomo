@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"github.com/metacubex/mihomo/adapter/inbound"
 	"net"
 	"net/netip"
 	"net/url"
@@ -28,7 +29,6 @@ import (
 	SNIFF "github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
-	"github.com/metacubex/mihomo/component/updater"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
@@ -51,6 +51,7 @@ type General struct {
 	Controller
 	Mode                    T.TunnelMode `json:"mode"`
 	UnifiedDelay            bool
+	Log                     *Log              `json:"log"`
 	LogLevel                log.LogLevel      `json:"log-level"`
 	IPv6                    bool              `json:"ipv6"`
 	Interface               string            `json:"interface-name"`
@@ -194,6 +195,9 @@ type Config struct {
 	Tunnels       []LC.Tunnel
 	Sniffer       *Sniffer
 	TLS           *TLS
+
+	WanInput *inbound.WanInput
+	TlsUser  []auth.AuthUser
 }
 
 type RawNTP struct {
@@ -286,7 +290,14 @@ type RawTuicServer struct {
 	MaxUdpRelayPacketSize int               `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
 }
-
+type Log struct {
+	File       string       `yaml:"file"`
+	Level      log.LogLevel `yaml:"level"`
+	MaxSize    int          `json:"maxsize" yaml:"maxsize"`
+	MaxBackups int          `json:"maxbackups" yaml:"maxbackups"`
+	MaxAge     int          `json:"maxage" yaml:"maxage"`
+	Compress   bool         `json:"compress" yaml:"compress"`
+}
 type RawConfig struct {
 	Port                    int               `yaml:"port" json:"port"`
 	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
@@ -305,7 +316,7 @@ type RawConfig struct {
 	BindAddress             string            `yaml:"bind-address" json:"bind-address"`
 	Mode                    T.TunnelMode      `yaml:"mode" json:"mode"`
 	UnifiedDelay            bool              `yaml:"unified-delay" json:"unified-delay"`
-	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
+	Log                     Log               `yaml:"log"`
 	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
 	ExternalController      string            `yaml:"external-controller"`
 	ExternalControllerUnix  string            `yaml:"external-controller-unix"`
@@ -349,6 +360,8 @@ type RawConfig struct {
 	Listeners     []map[string]any          `yaml:"listeners"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
+
+	WanInput inbound.WanInput `yaml:"wan-input"`
 }
 
 type GeoXUrl struct {
@@ -394,6 +407,10 @@ func Parse(buf []byte) (*Config, error) {
 		return nil, err
 	}
 
+	log.SetLevel(rawCfg.Log.Level)
+	log.SetOutput(rawCfg.Log.File, rawCfg.Log.MaxSize,
+		rawCfg.Log.MaxBackups, rawCfg.Log.MaxAge, rawCfg.Log.Compress)
+
 	return ParseRawConfig(rawCfg)
 }
 
@@ -411,7 +428,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		GeodataLoader:     "memconservative",
 		UnifiedDelay:      false,
 		Authentication:    []string{},
-		LogLevel:          log.INFO,
+		Log:               Log{},
 		Hosts:             map[string]any{},
 		Rule:              []string{},
 		Proxy:             []map[string]any{},
@@ -513,6 +530,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			GeoSite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
 		},
 		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
+
+		WanInput: inbound.WanInput{
+			Port: 0,
+		},
 	}
 
 	if err := yaml.Unmarshal(buf, rawCfg); err != nil {
@@ -557,7 +578,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	log.Infoln("Geosite Matcher implementation: %s", geodata.SiteMatcherName())
-	ruleProviders, err := parseRuleProviders(rawCfg)
+	ruleProviders, err := parseRuleProviders(rawCfg, proxies)
 	if err != nil {
 		return nil, err
 	}
@@ -602,6 +623,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
+	if rawCfg.WanInput.Port != 0 {
+		config.TlsUser = parseAuthentication(rawCfg.WanInput.Authentication)
+	}
+	config.WanInput = &rawCfg.WanInput
+
 	config.Tunnels = rawCfg.Tunnels
 	// verify tunnels
 	for _, t := range config.Tunnels {
@@ -641,28 +667,28 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
 
-	updater.ExternalUIPath = cfg.ExternalUI
+	ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist
-	if updater.ExternalUIPath != "" {
-		updater.ExternalUIPath = C.Path.Resolve(updater.ExternalUIPath)
-		if _, err := os.Stat(updater.ExternalUIPath); os.IsNotExist(err) {
+	if ExternalUIPath != "" {
+		ExternalUIPath = C.Path.Resolve(ExternalUIPath)
+		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
 			defaultUIpath := path.Join(C.Path.HomeDir(), "ui")
-			log.Warnln("external-ui: %s does not exist, creating folder in %s", updater.ExternalUIPath, defaultUIpath)
+			log.Warnln("external-ui: %s does not exist, creating folder in %s", ExternalUIPath, defaultUIpath)
 			if err := os.MkdirAll(defaultUIpath, os.ModePerm); err != nil {
 				return nil, err
 			}
-			updater.ExternalUIPath = defaultUIpath
+			ExternalUIPath = defaultUIpath
 			cfg.ExternalUI = defaultUIpath
 		}
 	}
 	// checkout UIpath/name exist
 	if cfg.ExternalUIName != "" {
-		updater.ExternalUIName = cfg.ExternalUIName
+		ExternalUIName = cfg.ExternalUIName
 	} else {
-		updater.ExternalUIFolder = updater.ExternalUIPath
+		ExternalUIFolder = ExternalUIPath
 	}
 	if cfg.ExternalUIURL != "" {
-		updater.ExternalUIURL = cfg.ExternalUIURL
+		ExternalUIURL = cfg.ExternalUIURL
 	}
 
 	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
@@ -692,7 +718,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		},
 		UnifiedDelay:            cfg.UnifiedDelay,
 		Mode:                    cfg.Mode,
-		LogLevel:                cfg.LogLevel,
+		Log:                     &cfg.Log,
 		IPv6:                    cfg.IPv6,
 		Interface:               cfg.Interface,
 		RoutingMark:             cfg.RoutingMark,
@@ -835,7 +861,7 @@ func parseListeners(cfg *RawConfig) (listeners map[string]C.InboundListener, err
 	return
 }
 
-func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.RuleProvider, err error) {
+func parseRuleProviders(cfg *RawConfig, proxies map[string]C.Proxy) (ruleProviders map[string]providerTypes.RuleProvider, err error) {
 	ruleProviders = map[string]providerTypes.RuleProvider{}
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {

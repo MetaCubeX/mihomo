@@ -91,6 +91,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	}
 
 	updateUsers(cfg.Users)
+	updateUsersTls(cfg.TlsUser)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
@@ -98,7 +99,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateGeneral(cfg.General)
 	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.RuleProviders, cfg.General.IPv6)
-	updateListeners(cfg.General, cfg.Listeners, force)
+	updateListeners(cfg.General, cfg.Listeners, force, cfg.WanInput)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
 	updateExperimental(cfg)
@@ -114,7 +115,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	tunnel.OnRunning()
 	hcCompatibleProvider(cfg.Providers)
 
-	log.SetLevel(cfg.General.LogLevel)
+	log.SetLevel(cfg.General.Log.Level)
 }
 
 func initInnerTcp() {
@@ -163,7 +164,8 @@ func GetGeneral() *config.General {
 	return general
 }
 
-func updateListeners(general *config.General, listeners map[string]C.InboundListener, force bool) {
+func updateListeners(general *config.General, listeners map[string]C.InboundListener, force bool,
+	wanInput *inbound.WanInput) {
 	listener.PatchInboundListeners(listeners, tunnel.Tunnel, true)
 	if !force {
 		return
@@ -188,6 +190,10 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
 	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
 	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
+
+	if wanInput.Port != 0 {
+		listener.ReCreateMixedTls(wanInput, tunnel.Tunnel)
+	}
 }
 
 func updateExperimental(c *config.Config) {
@@ -416,6 +422,14 @@ func updateUsers(users []auth.AuthUser) {
 	authStore.SetAuthenticator(authenticator)
 	if authenticator != nil {
 		log.Infoln("Authentication of local server updated")
+	}
+}
+
+func updateUsersTls(users []auth.AuthUser) {
+	authenticator := auth.NewAuthenticator(users)
+	authStore.SetAuthenticatorTls(authenticator)
+	if authenticator != nil {
+		log.Infoln("Authentication tls of local server updated")
 	}
 }
 

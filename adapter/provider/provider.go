@@ -152,15 +152,17 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 }
 
 func (pp *proxySetProvider) closeAllConnections() {
-	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
-		for _, chain := range c.Chains() {
-			if chain == pp.Name() {
-				_ = c.Close()
-				break
+	for _, v := range statistic.ChannelManager {
+		v.Range(func(c statistic.Tracker) bool {
+			for _, chain := range c.Chains() {
+				if chain == pp.Name() {
+					_ = c.Close()
+					break
+				}
 			}
-		}
-		return true
-	})
+			return true
+		})
+	}
 }
 
 func stopProxyProvider(pd *ProxySetProvider) {

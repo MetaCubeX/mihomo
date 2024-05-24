@@ -81,6 +81,14 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 	case "MATCH":
 		parsed = RC.NewMatch(target)
 		parseErr = nil
+	case "FILEDI":
+		parsed = RC.NewFileDi(payload, target, params[0])
+	case "RECORD":
+		parsed = RC.NewFileDIRecord(payload, target, params)
+	case "MUSTRESOLVE":
+		parsed = RC.NewMustResolve(target)
+	case "ISOEMPTY":
+		parsed = RC.NewISOEmpty(target)
 	default:
 		parseErr = fmt.Errorf("unsupported rule type %s", tp)
 	}

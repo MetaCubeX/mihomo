@@ -32,6 +32,7 @@ const (
 	TUIC
 	HYSTERIA2
 	INNER
+	SSH
 )
 
 type NetWork int
@@ -83,6 +84,8 @@ func (t Type) String() string {
 		return "Hysteria2"
 	case INNER:
 		return "Inner"
+	case SSH:
+		return "SSH"
 	default:
 		return "Unknown"
 	}
@@ -117,6 +120,7 @@ func ParseType(t string) (*Type, error) {
 		res = HYSTERIA2
 	case "INNER":
 		res = INNER
+
 	default:
 		return nil, fmt.Errorf("unknown type: %s", t)
 	}
@@ -155,8 +159,13 @@ type Metadata struct {
 	RawDstAddr net.Addr `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
+
+	HitRule string `-`
 }
 
+func (m *Metadata) GeoedIp() bool {
+	return len(m.DstGeoIP) != 0
+}
 func (m *Metadata) RemoteAddress() string {
 	return net.JoinHostPort(m.String(), strconv.FormatUint(uint64(m.DstPort), 10))
 }

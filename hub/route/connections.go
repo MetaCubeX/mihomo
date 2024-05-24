@@ -25,8 +25,8 @@ func connectionRouter() http.Handler {
 
 func getConnections(w http.ResponseWriter, r *http.Request) {
 	if !(r.Header.Get("Upgrade") == "websocket") {
-		snapshot := statistic.DefaultManager.Snapshot()
-		render.JSON(w, r, snapshot)
+		snapshots := statistic.Snapshots()
+		render.JSON(w, r, snapshots)
 		return
 	}
 
@@ -51,8 +51,8 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 	buf := &bytes.Buffer{}
 	sendSnapshot := func() error {
 		buf.Reset()
-		snapshot := statistic.DefaultManager.Snapshot()
-		if err := json.NewEncoder(buf).Encode(snapshot); err != nil {
+		snapshots := statistic.Snapshots()
+		if err := json.NewEncoder(buf).Encode(snapshots); err != nil {
 			return err
 		}
 
@@ -74,16 +74,23 @@ func getConnections(w http.ResponseWriter, r *http.Request) {
 
 func closeConnection(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if c := statistic.DefaultManager.Get(id); c != nil {
-		_ = c.Close()
+here:
+	for _, manager := range statistic.ChannelManager {
+		if c := manager.Get(id); c != nil {
+			_ = c.Close()
+			break here
+		}
+
 	}
 	render.NoContent(w, r)
 }
 
 func closeAllConnections(w http.ResponseWriter, r *http.Request) {
-	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
-		_ = c.Close()
-		return true
-	})
+	for _, v := range statistic.ChannelManager {
+		v.Range(func(c statistic.Tracker) bool {
+			_ = c.Close()
+			return true
+		})
+	}
 	render.NoContent(w, r)
 }

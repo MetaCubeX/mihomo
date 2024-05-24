@@ -1,9 +1,8 @@
 package common
 
 import (
-	C "github.com/metacubex/mihomo/constant"
-
 	"github.com/dlclark/regexp2"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type DomainRegex struct {

@@ -131,7 +131,8 @@ func parseRemoteDestination(addr net.Addr, conn C.Connection) string {
 	}
 }
 
-func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *tcpTracker {
+func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule,
+	uploadTotal int64, downloadTotal int64, pushToManager bool, ruleadapter string) *tcpTracker {
 	if conn != nil {
 		metadata.RemoteDst = parseRemoteDestination(conn.RemoteAddr(), conn)
 	}
@@ -162,7 +163,8 @@ func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.R
 
 	if rule != nil {
 		t.TrackerInfo.Rule = rule.RuleType().String()
-		t.TrackerInfo.RulePayload = rule.Payload()
+		//t.TrackerInfo.RulePayload = rule.Payload()
+		t.TrackerInfo.RulePayload = ruleadapter
 	}
 
 	manager.Join(t)

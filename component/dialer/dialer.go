@@ -63,9 +63,20 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 		network = fmt.Sprintf("%s%d", network, opt.network)
 	}
 
-	ips, port, err := parseAddr(ctx, network, address, opt.resolver)
+	ips_, port, err := parseAddr(ctx, network, address, opt.resolver)
 	if err != nil {
 		return nil, err
+	}
+	var ips []netip.Addr
+	for _, v := range ips_ {
+		if !v.IsUnspecified() {
+			ips = append(ips, v)
+		}
+	}
+
+	if len(ips) == 0 {
+		log.Debugln("unresolved ip for %s, reject", address)
+		return NopConn{}, nil
 	}
 
 	switch network {

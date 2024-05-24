@@ -59,21 +59,13 @@ func CalculateInterfaceName(name string) (tunName string) {
 	if err != nil {
 		return
 	}
-	tunIndex := 0
-	indexSet := make(map[int]struct{})
+	var tunIndex int
 	for _, netInterface := range interfaces {
 		if strings.HasPrefix(netInterface.Name, tunName) {
 			index, parseErr := strconv.ParseInt(netInterface.Name[len(tunName):], 10, 16)
 			if parseErr == nil {
-				indexSet[int(index)] = struct{}{}
+				tunIndex = int(index) + 1
 			}
-		}
-	}
-	for index := range indexSet {
-		if index == tunIndex {
-			tunIndex += 1
-		} else { // indexSet already sorted and distinct, so this tunIndex nobody used
-			break
 		}
 	}
 	tunName = F.ToString(tunName, tunIndex)

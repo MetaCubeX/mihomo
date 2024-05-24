@@ -1,7 +1,9 @@
 package log
 
 import (
+	"bytes"
 	"fmt"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 
 	"github.com/metacubex/mihomo/common/observable"
@@ -15,14 +17,35 @@ var (
 	level  = INFO
 )
 
+type MylogFormatter struct {
+}
+
+func (f *MylogFormatter) Format(entry *log.Entry) ([]byte, error) {
+
+	var b *bytes.Buffer
+	if entry.Buffer != nil {
+		b = entry.Buffer
+	} else {
+		b = &bytes.Buffer{}
+	}
+
+	b.WriteString(entry.Time.Format("2006/01/02 15:04:05"))
+	b.WriteString(fmt.Sprintf(" |%.4s| ", entry.Level))
+
+	b.WriteString(entry.Message)
+
+	b.WriteByte('\n')
+	return b.Bytes(), nil
+}
 func init() {
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp:             true,
-		TimestampFormat:           "2006-01-02T15:04:05.999999999Z07:00",
-		EnvironmentOverrideColors: true,
-	})
+	//log.SetFormatter(&log.TextFormatter{
+	//	FullTimestamp:             true,
+	//	TimestampFormat:           "2006/01/02 15:04:05",
+	//	EnvironmentOverrideColors: true,
+	//})
+	log.SetFormatter(&MylogFormatter{})
 }
 
 type Event struct {
@@ -77,6 +100,18 @@ func Level() LogLevel {
 
 func SetLevel(newLevel LogLevel) {
 	level = newLevel
+}
+
+func SetOutput(file string, maxSize, maxBackups, maxAge int, compress bool) {
+	if file != "" {
+		log.SetOutput(&lumberjack.Logger{
+			Filename:   file,
+			MaxSize:    maxSize, // megabytes
+			MaxBackups: maxBackups,
+			MaxAge:     maxAge,   //days
+			Compress:   compress, // disabled by default
+		})
+	}
 }
 
 func print(data Event) {
