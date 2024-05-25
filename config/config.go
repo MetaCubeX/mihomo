@@ -742,8 +742,11 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	groupsConfig := cfg.ProxyGroup
 	providersConfig := cfg.ProxyProvider
 
-	var proxyList []string
-	var AllProxies []string
+	var (
+		proxyList  []string
+		AllProxies []string
+		hasGlobal  bool
+	)
 	proxiesList := list.New()
 	groupsList := list.New()
 
@@ -775,6 +778,9 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		groupName, existName := mapping["name"].(string)
 		if !existName {
 			return nil, nil, fmt.Errorf("proxy group %d: missing name", idx)
+		}
+		if groupName == "GLOBAL" {
+			hasGlobal = true
 		}
 		proxyList = append(proxyList, groupName)
 		groupsList.PushBack(mapping)
@@ -827,13 +833,15 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	pd, _ := provider.NewCompatibleProvider(provider.ReservedName, ps, hc)
 	providersMap[provider.ReservedName] = pd
 
-	global := outboundgroup.NewSelector(
-		&outboundgroup.GroupCommonOption{
-			Name: "GLOBAL",
-		},
-		[]providerTypes.ProxyProvider{pd},
-	)
-	proxies["GLOBAL"] = adapter.NewProxy(global)
+	if !hasGlobal {
+		global := outboundgroup.NewSelector(
+			&outboundgroup.GroupCommonOption{
+				Name: "GLOBAL",
+			},
+			[]providerTypes.ProxyProvider{pd},
+		)
+		proxies["GLOBAL"] = adapter.NewProxy(global)
+	}
 	ProxiesList = proxiesList
 	GroupsList = groupsList
 	if ParsingProxiesCallback != nil {
