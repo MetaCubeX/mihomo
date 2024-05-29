@@ -6,5 +6,5 @@ func init() {
 	version := windows.RtlGetVersion()
 	WindowsMajorVersion = version.MajorVersion
 	WindowsMinorVersion = version.MinorVersion
-	WindowsBuildNumber = version.MinorVersion
+	WindowsBuildNumber = version.BuildNumber
 }
