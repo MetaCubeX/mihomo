@@ -20,8 +20,8 @@ import (
 	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
+	"github.com/metacubex/randv2"
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/zhangyunhao116/fastrand"
 )
 
 type ClientOption struct {
@@ -351,7 +351,7 @@ func (t *clientImpl) ListenPacketWithDialer(ctx context.Context, metadata *C.Met
 	pipe1, pipe2 := N.Pipe()
 	var connId uint16
 	for {
-		connId = uint16(fastrand.Intn(0xFFFF))
+		connId = uint16(randv2.IntN(0xFFFF))
 		_, loaded := t.udpInputMap.LoadOrStore(connId, pipe1)
 		if !loaded {
 			break

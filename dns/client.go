@@ -14,8 +14,8 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
+	"github.com/metacubex/randv2"
 	D "github.com/miekg/dns"
-	"github.com/zhangyunhao116/fastrand"
 )
 
 type client struct {
@@ -65,7 +65,7 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		} else if len(ips) == 0 {
 			return nil, fmt.Errorf("%w: %s", resolver.ErrIPNotFound, c.host)
 		}
-		ip = ips[fastrand.Intn(len(ips))]
+		ip = ips[randv2.IntN(len(ips))]
 	}
 
 	network := "udp"

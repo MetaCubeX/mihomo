@@ -11,7 +11,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/utils"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 type httpConn struct {
@@ -59,10 +59,10 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 		return -1, errors.New("path is empty")
 	}
 
-	path := hc.cfg.Path[fastrand.Intn(len(hc.cfg.Path))]
+	path := hc.cfg.Path[randv2.IntN(len(hc.cfg.Path))]
 	host := hc.cfg.Host
 	if header := hc.cfg.Headers["Host"]; len(header) != 0 {
-		host = header[fastrand.Intn(len(header))]
+		host = header[randv2.IntN(len(header))]
 	}
 
 	u := fmt.Sprintf("http://%s%s", net.JoinHostPort(host, "80"), path)
@@ -71,7 +71,7 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 		return 0, err
 	}
 	for key, list := range hc.cfg.Headers {
-		req.Header.Set(key, list[fastrand.Intn(len(list))])
+		req.Header.Set(key, list[randv2.IntN(len(list))])
 	}
 	req.ContentLength = int64(len(b))
 	if err := req.Write(hc.Conn); err != nil {

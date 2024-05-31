@@ -12,7 +12,7 @@ import (
 	"github.com/metacubex/mihomo/transport/hysteria/obfs"
 	"github.com/metacubex/mihomo/transport/hysteria/utils"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 const (
@@ -86,7 +86,7 @@ func NewObfsUDPHopClientPacketConn(server string, serverPorts string, hopInterva
 		serverAddrs: serverAddrs,
 		hopInterval: hopInterval,
 		obfs:        obfs,
-		addrIndex:   fastrand.Intn(len(serverAddrs)),
+		addrIndex:   randv2.IntN(len(serverAddrs)),
 		recvQueue:   make(chan *udpPacket, packetQueueSize),
 		closeChan:   make(chan struct{}),
 		bufPool: sync.Pool{
@@ -177,7 +177,7 @@ func (c *ObfsUDPHopClientPacketConn) hop(dialer utils.PacketDialer, rAddr net.Ad
 		_ = trySetPacketConnWriteBuffer(c.currentConn, c.writeBufferSize)
 	}
 	go c.recvRoutine(c.currentConn)
-	c.addrIndex = fastrand.Intn(len(c.serverAddrs))
+	c.addrIndex = randv2.IntN(len(c.serverAddrs))
 }
 
 func (c *ObfsUDPHopClientPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
