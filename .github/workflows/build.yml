@@ -206,6 +206,10 @@ jobs:
         sudo apt-get install dpkg
         if [ "${{matrix.jobs.abi}}" = "1" ]; then
           ARCH=loongarch64
+        elif [ "${{matrix.jobs.goarm}}" = "7" ]; then
+          ARCH=armhf
+        elif [ "${{matrix.jobs.goarch}}" = "arm" ]; then
+          ARCH=armel
         else
           ARCH=${{matrix.jobs.goarch}}
         fi
