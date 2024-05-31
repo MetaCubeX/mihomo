@@ -11,7 +11,7 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/resolver/hosts"
 	"github.com/metacubex/mihomo/component/trie"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 var (
@@ -125,5 +125,5 @@ func (hv HostValue) RandIP() (netip.Addr, error) {
 	if hv.IsDomain {
 		return netip.Addr{}, errors.New("value type is error")
 	}
-	return hv.IPs[fastrand.Intn(len(hv.IPs))], nil
+	return hv.IPs[randv2.IntN(len(hv.IPs))], nil
 }

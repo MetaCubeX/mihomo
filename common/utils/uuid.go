@@ -2,19 +2,39 @@ package utils
 
 import (
 	"github.com/gofrs/uuid/v5"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
-type fastRandReader struct{}
+type unsafeRandReader struct{}
 
-func (r fastRandReader) Read(p []byte) (int, error) {
-	return fastrand.Read(p)
+func (r unsafeRandReader) Read(p []byte) (n int, err error) {
+	// modify from https://github.com/golang/go/blob/587c3847da81aa7cfc3b3db2677c8586c94df13a/src/runtime/rand.go#L70-L89
+	// Inspired by wyrand.
+	n = len(p)
+	v := randv2.Uint64()
+	for len(p) > 0 {
+		v ^= 0xa0761d6478bd642f
+		v *= 0xe7037ed1a0b428db
+		size := 8
+		if len(p) < 8 {
+			size = len(p)
+		}
+		for i := 0; i < size; i++ {
+			p[i] ^= byte(v >> (8 * i))
+		}
+		p = p[size:]
+		v = v>>32 | v<<32
+	}
+
+	return
 }
 
-var UnsafeUUIDGenerator = uuid.NewGenWithOptions(uuid.WithRandomReader(fastRandReader{}))
+var UnsafeRandReader = unsafeRandReader{}
+
+var UnsafeUUIDGenerator = uuid.NewGenWithOptions(uuid.WithRandomReader(UnsafeRandReader))
 
 func NewUUIDV1() uuid.UUID {
-	u, _ := UnsafeUUIDGenerator.NewV1() // fastrand.Read wouldn't cause error, so ignore err is safe
+	u, _ := UnsafeUUIDGenerator.NewV1() // unsafeRandReader wouldn't cause error, so ignore err is safe
 	return u
 }
 
@@ -23,7 +43,7 @@ func NewUUIDV3(ns uuid.UUID, name string) uuid.UUID {
 }
 
 func NewUUIDV4() uuid.UUID {
-	u, _ := UnsafeUUIDGenerator.NewV4() // fastrand.Read wouldn't cause error, so ignore err is safe
+	u, _ := UnsafeUUIDGenerator.NewV4() // unsafeRandReader wouldn't cause error, so ignore err is safe
 	return u
 }
 
@@ -32,12 +52,12 @@ func NewUUIDV5(ns uuid.UUID, name string) uuid.UUID {
 }
 
 func NewUUIDV6() uuid.UUID {
-	u, _ := UnsafeUUIDGenerator.NewV6() // fastrand.Read wouldn't cause error, so ignore err is safe
+	u, _ := UnsafeUUIDGenerator.NewV6() // unsafeRandReader wouldn't cause error, so ignore err is safe
 	return u
 }
 
 func NewUUIDV7() uuid.UUID {
-	u, _ := UnsafeUUIDGenerator.NewV7() // fastrand.Read wouldn't cause error, so ignore err is safe
+	u, _ := UnsafeUUIDGenerator.NewV7() // unsafeRandReader wouldn't cause error, so ignore err is safe
 	return u
 }
 

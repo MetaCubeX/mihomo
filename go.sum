@@ -106,6 +106,8 @@ github.com/metacubex/gvisor v0.0.0-20240320004321-933faba989ec h1:HxreOiFTUrJXJa
 github.com/metacubex/gvisor v0.0.0-20240320004321-933faba989ec/go.mod h1:8BVmQ+3cxjqzWElafm24rb2Ae4jRI6vAXNXWqWjfrXw=
 github.com/metacubex/quic-go v0.44.1-0.20240521004242-fcd70d587e22 h1:hsQ0b2A509b6ubnLtLOcUgZ8vOb+d/667zVEJ1T2fao=
 github.com/metacubex/quic-go v0.44.1-0.20240521004242-fcd70d587e22/go.mod h1:88wAATpevav4xdy5N8oejQ2cbbI6EcLYEklFeo+qywA=
+github.com/metacubex/randv2 v0.2.0 h1:uP38uBvV2SxYfLj53kuvAjbND4RUDfFJjwr4UigMiLs=
+github.com/metacubex/randv2 v0.2.0/go.mod h1:kFi2SzrQ5WuneuoLLCMkABtiBu6VRrMrWFqSPyj2cxY=
 github.com/metacubex/sing v0.0.0-20240518125217-e63d65a914d1 h1:7hDHLTmjgtRoAp59STwPQpe5Pinwi4cWex+FB3Ohvco=
 github.com/metacubex/sing v0.0.0-20240518125217-e63d65a914d1/go.mod h1:+60H3Cm91RnL9dpVGWDPHt0zTQImO9Vfqt9a4rSambI=
 github.com/metacubex/sing-quic v0.0.0-20240518034124-7696d3f7da72 h1:Wr4g1HCb5Z/QIFwFiVNjO2qL+dRu25+Mdn9xtAZZ+ew=
@@ -210,8 +212,6 @@ github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
-github.com/zhangyunhao116/fastrand v0.4.0 h1:86QB6Y+GGgLZRFRDCjMmAS28QULwspK9sgL5d1Bx3H4=
-github.com/zhangyunhao116/fastrand v0.4.0/go.mod h1:vIyo6EyBhjGKpZv6qVlkPl4JVAklpMM4DSKzbAkMguA=
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec h1:FpfFs4EhNehiVfzQttTuxanPIT43FtkkCFypIod8LHo=
 gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec/go.mod h1:BZ1RAoRPbCxum9Grlv5aeksu2H8BiKehBYooU2LFiOQ=
 go.uber.org/automaxprocs v1.5.3 h1:kWazyxZUrS3Gs4qUpbwo5kEIMGe/DAvi5Z4tl2NW4j8=

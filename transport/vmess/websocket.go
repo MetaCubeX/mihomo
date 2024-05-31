@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/tls"
 	"encoding/base64"
@@ -25,7 +26,7 @@ import (
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 type websocketConn struct {
@@ -150,7 +151,7 @@ func (wsc *websocketConn) WriteBuffer(buffer *buf.Buffer) error {
 	}
 
 	if wsc.state.ClientSide() {
-		maskKey := fastrand.Uint32()
+		maskKey := randv2.Uint32()
 		binary.LittleEndian.PutUint32(header[1+payloadBitLength:], maskKey)
 		N.MaskWebSocket(maskKey, data)
 	}
@@ -398,7 +399,7 @@ func streamWebsocketConn(ctx context.Context, conn net.Conn, c *WebsocketConfig,
 		const nonceKeySize = 16
 		// NOTE: bts does not escape.
 		bts := make([]byte, nonceKeySize)
-		if _, err = fastrand.Read(bts); err != nil {
+		if _, err = rand.Read(bts); err != nil {
 			return nil, fmt.Errorf("rand read error: %w", err)
 		}
 		secKey = base64.StdEncoding.EncodeToString(bts)

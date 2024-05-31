@@ -10,7 +10,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/pool"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 func init() {
@@ -82,7 +82,7 @@ func (c *httpConn) Write(b []byte) (int, error) {
 	bLength := len(b)
 	headDataLength := bLength
 	if bLength-headLength > 64 {
-		headDataLength = headLength + fastrand.Intn(65)
+		headDataLength = headLength + randv2.IntN(65)
 	}
 	headData := b[:headDataLength]
 	b = b[headDataLength:]
@@ -100,7 +100,7 @@ func (c *httpConn) Write(b []byte) (int, error) {
 		}
 	}
 	hosts := strings.Split(host, ",")
-	host = hosts[fastrand.Intn(len(hosts))]
+	host = hosts[randv2.IntN(len(hosts))]
 
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
@@ -119,7 +119,7 @@ func (c *httpConn) Write(b []byte) (int, error) {
 		buf.WriteString(body + "\r\n\r\n")
 	} else {
 		buf.WriteString("User-Agent: ")
-		buf.WriteString(userAgent[fastrand.Intn(len(userAgent))])
+		buf.WriteString(userAgent[randv2.IntN(len(userAgent))])
 		buf.WriteString("\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Language: en-US,en;q=0.8\r\nAccept-Encoding: gzip, deflate\r\n")
 		if c.post {
 			packBoundary(buf)
@@ -147,7 +147,7 @@ func packBoundary(buf *bytes.Buffer) {
 	buf.WriteString("Content-Type: multipart/form-data; boundary=")
 	set := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 	for i := 0; i < 32; i++ {
-		buf.WriteByte(set[fastrand.Intn(62)])
+		buf.WriteByte(set[randv2.IntN(62)])
 	}
 	buf.WriteString("\r\n")
 }

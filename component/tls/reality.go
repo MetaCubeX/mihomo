@@ -22,8 +22,8 @@ import (
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
 
+	"github.com/metacubex/randv2"
 	utls "github.com/metacubex/utls"
-	"github.com/zhangyunhao116/fastrand"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/net/http2"
@@ -138,13 +138,13 @@ func realityClientFallback(uConn net.Conn, serverName string, fingerprint utls.C
 		return
 	}
 	request.Header.Set("User-Agent", fingerprint.Client)
-	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", fastrand.Intn(32)+30)})
+	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", randv2.IntN(32)+30)})
 	response, err := client.Do(request)
 	if err != nil {
 		return
 	}
 	//_, _ = io.Copy(io.Discard, response.Body)
-	time.Sleep(time.Duration(5+fastrand.Int63n(10)) * time.Second)
+	time.Sleep(time.Duration(5+randv2.IntN(10)) * time.Second)
 	response.Body.Close()
 	client.CloseIdleConnections()
 }

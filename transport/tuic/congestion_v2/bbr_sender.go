@@ -9,7 +9,7 @@ import (
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/congestion"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 // BbrSender implements BBR congestion control algorithm.  BBR aims to estimate
@@ -620,7 +620,7 @@ func (b *bbrSender) enterProbeBandwidthMode(now time.Time) {
 	// Pick a random offset for the gain cycle out of {0, 2..7} range. 1 is
 	// excluded because in that case increased gain and decreased gain would not
 	// follow each other.
-	b.cycleCurrentOffset = int(fastrand.Int31n(congestion.PacketsPerConnectionID)) % (gainCycleLength - 1)
+	b.cycleCurrentOffset = int(randv2.Int32N(congestion.PacketsPerConnectionID)) % (gainCycleLength - 1)
 	if b.cycleCurrentOffset >= 1 {
 		b.cycleCurrentOffset += 1
 	}
