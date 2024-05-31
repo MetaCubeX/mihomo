@@ -49,6 +49,7 @@ func init() {
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
+	flag.StringVar(&service, "s", "", "Service control action: status, install (as a service), uninstall (as a service), start(in daemon), stop(daemon), restart(stop then start)")
 	flag.Parse()
 
 	flagset = map[string]bool{}

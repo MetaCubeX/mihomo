@@ -124,7 +124,7 @@ func handleConnTls(conn net.Conn, tlsProxy *inbound.TLSProxy, tunnel C.Tunnel) {
 		return
 	}
 	if head[0] == socks5.Version {
-		socks.HandleSocks5Tls(myConn, tunnel)
+		socks.HandleSocks5(myConn, tunnel)
 	} else {
 		defer myConn.Close()
 

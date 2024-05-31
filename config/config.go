@@ -197,7 +197,6 @@ type Config struct {
 	TLS           *TLS
 
 	WanInput *inbound.WanInput
-	TlsUser  []auth.AuthUser
 }
 
 type RawNTP struct {
@@ -623,9 +622,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
-	if rawCfg.WanInput.Port != 0 {
-		config.TlsUser = parseAuthentication(rawCfg.WanInput.Authentication)
-	}
 	config.WanInput = &rawCfg.WanInput
 
 	config.Tunnels = rawCfg.Tunnels

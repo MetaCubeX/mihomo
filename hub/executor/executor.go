@@ -91,7 +91,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	}
 
 	updateUsers(cfg.Users)
-	updateUsersTls(cfg.TlsUser)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
@@ -422,14 +421,6 @@ func updateUsers(users []auth.AuthUser) {
 	authStore.SetAuthenticator(authenticator)
 	if authenticator != nil {
 		log.Infoln("Authentication of local server updated")
-	}
-}
-
-func updateUsersTls(users []auth.AuthUser) {
-	authenticator := auth.NewAuthenticator(users)
-	authStore.SetAuthenticatorTls(authenticator)
-	if authenticator != nil {
-		log.Infoln("Authentication tls of local server updated")
 	}
 }
 

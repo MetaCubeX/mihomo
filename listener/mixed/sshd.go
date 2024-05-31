@@ -62,11 +62,13 @@ func InitSShServer(tunnel_ C.Tunnel) {
 }
 
 func passwordHandler(ctx ssh.Context, password string) bool {
-	author := authStore.AuthenticatorTls()
+	author := authStore.Authenticator()
+	if inbound.SkipAuthRemoteAddr(ctx.RemoteAddr()) {
+		author = nil
+	}
 	if author == nil {
 		return true
 	}
-
 	if author.Verify(ctx.User(), password) {
 		return true
 	}
