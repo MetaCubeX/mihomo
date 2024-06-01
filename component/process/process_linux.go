@@ -2,19 +2,23 @@ package process
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"net/netip"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unicode"
 	"unsafe"
 
+	"github.com/metacubex/mihomo/log"
+
 	"github.com/mdlayher/netlink"
+	tun "github.com/metacubex/sing-tun"
 	"golang.org/x/sys/unix"
 )
 
@@ -57,6 +61,19 @@ type inetDiagResponse struct {
 	WQueue  uint32
 	UID     uint32
 	INode   uint32
+}
+
+type MyCallback struct{}
+
+var (
+	packageManager tun.PackageManager
+	once           sync.Once
+)
+
+func (cb *MyCallback) OnPackagesUpdated(packageCount int, sharedCount int) {}
+
+func (cb *MyCallback) NewError(ctx context.Context, err error) {
+	log.Warnln("%s", err)
 }
 
 func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string, error) {
@@ -162,12 +179,7 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 			}
 			if runtime.GOOS == "android" {
 				if bytes.Equal(buffer[:n], socket) {
-					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
-					if err != nil {
-						return "", err
-					}
-
-					return splitCmdline(cmdline), nil
+					return findPackageName(uid), nil
 				}
 			} else {
 				if bytes.Equal(buffer[:n], socket) {
@@ -181,17 +193,29 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
 }
 
-func splitCmdline(cmdline []byte) string {
-	cmdline = bytes.Trim(cmdline, " ")
-
-	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r) || r == ':'
+func findPackageName(uid uint32) string {
+	once.Do(func() {
+		callback := &MyCallback{}
+		var err error
+		packageManager, err = tun.NewPackageManager(callback)
+		if err != nil {
+			log.Warnln("%s", err)
+		}
+		err = packageManager.Start()
+		if err != nil {
+			log.Warnln("%s", err)
+			return
+		}
 	})
 
-	if idx == -1 {
-		return filepath.Base(string(cmdline))
+	if sharedPackage, loaded := packageManager.SharedPackageByID(uid % 100000); loaded {
+		fmt.Println(loaded)
+		return sharedPackage
 	}
-	return filepath.Base(string(cmdline[:idx]))
+	if packageName, loaded := packageManager.PackageByID(uid % 100000); loaded {
+		return packageName
+	}
+	return ""
 }
 
 func isPid(s string) bool {
