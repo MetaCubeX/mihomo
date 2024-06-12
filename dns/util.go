@@ -18,6 +18,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
@@ -204,6 +205,7 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 				}
 			}
 
+			var rule C.Rule
 			if proxyAdapter == nil {
 				if proxyName == RespectRules {
 					if !metadata.Resolved() {
@@ -214,7 +216,7 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 						}
 						metadata.DstIP = dstIP
 					}
-					proxyAdapter, _, err = tunnel.ResolveMetadata(metadata)
+					proxyAdapter, rule, err = tunnel.ResolveMetadata(metadata)
 					if err != nil {
 						return nil, err
 					}
@@ -228,22 +230,30 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 			}
 
 			if strings.Contains(network, "tcp") {
-				if proxyAdapter != nil {
-					if proxyAdapter.IsL3Protocol(metadata) { // L3 proxy should resolve domain before to avoid loopback
-						if !metadata.Resolved() {
-							dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
-							if err != nil {
-								return nil, err
-							}
-							metadata.DstIP = dstIP
-						}
-						metadata.Host = "" // clear host to avoid double resolve in proxy
-					}
-					log.Debugln("%s", metadata.RemoteAddress())
-					return proxyAdapter.DialContext(ctx, metadata, opts...)
+				if proxyAdapter == nil {
+					opts = append(opts, dialer.WithResolver(r))
+					return dialer.DialContext(ctx, network, addr, opts...)
 				}
-				opts = append(opts, dialer.WithResolver(r))
-				return dialer.DialContext(ctx, network, addr, opts...)
+
+				if proxyAdapter.IsL3Protocol(metadata) { // L3 proxy should resolve domain before to avoid loopback
+					if !metadata.Resolved() {
+						dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+						if err != nil {
+							return nil, err
+						}
+						metadata.DstIP = dstIP
+					}
+					metadata.Host = "" // clear host to avoid double resolve in proxy
+				}
+
+				conn, err := proxyAdapter.DialContext(ctx, metadata, opts...)
+				if err != nil {
+					return nil, err
+				}
+
+				conn = statistic.NewTCPTracker(conn, statistic.DefaultManager, metadata, rule, 0, 0, false)
+
+				return conn, nil
 			} else {
 				if proxyAdapter == nil {
 					return dialer.DialContext(ctx, network, addr, opts...)
@@ -257,6 +267,8 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 				if err != nil {
 					return nil, err
 				}
+
+				packetConn = statistic.NewUDPTracker(packetConn, statistic.DefaultManager, metadata, rule, 0, 0, false)
 
 				return N.NewBindPacketConn(packetConn, metadata.UDPAddr()), nil
 			}
@@ -281,9 +293,10 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 		metadata.DstIP = dstIP
 	}
 
+	var rule C.Rule
 	if proxyAdapter == nil {
 		if proxyName == RespectRules {
-			proxyAdapter, _, err = tunnel.ResolveMetadata(metadata)
+			proxyAdapter, rule, err = tunnel.ResolveMetadata(metadata)
 			if err != nil {
 				return nil, err
 			}
@@ -304,7 +317,14 @@ func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName st
 		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
 	}
 
-	return proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
+	packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	packetConn = statistic.NewUDPTracker(packetConn, statistic.DefaultManager, metadata, rule, 0, 0, false)
+
+	return packetConn, nil
 }
 
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
