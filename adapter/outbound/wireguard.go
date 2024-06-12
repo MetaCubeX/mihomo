@@ -304,13 +304,16 @@ func (w *WireGuard) init(ctx context.Context) error {
 	ipcConf := "private_key=" + w.option.PrivateKey
 	if len(w.option.Peers) > 0 {
 		for i, peer := range w.option.Peers {
+			ipcConf += "\npublic_key=" + peer.PublicKey
 			destination, err := w.resolve(ctx, peer.Addr())
 			if err != nil {
 				// !!! do not set initErr here !!!
 				// let us can retry domain resolve in next time
 				return E.Cause(err, "resolve endpoint domain for peer ", i)
 			}
-			ipcConf += "\npublic_key=" + peer.PublicKey
+			if len(w.option.Peers) == 1 { // must call SetConnectAddr if isConnect == true
+				w.bind.SetConnectAddr(destination)
+			}
 			ipcConf += "\nendpoint=" + destination.String()
 			if peer.PreSharedKey != "" {
 				ipcConf += "\npreshared_key=" + peer.PreSharedKey
@@ -332,7 +335,7 @@ func (w *WireGuard) init(ctx context.Context) error {
 			// let us can retry domain resolve in next time
 			return E.Cause(err, "resolve endpoint domain")
 		}
-		w.bind.SetConnectAddr(destination)
+		w.bind.SetConnectAddr(destination) // must call SetConnectAddr if isConnect == true
 		ipcConf += "\nendpoint=" + destination.String()
 		if w.option.PreSharedKey != "" {
 			ipcConf += "\npreshared_key=" + w.option.PreSharedKey
