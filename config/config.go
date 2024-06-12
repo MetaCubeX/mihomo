@@ -212,6 +212,7 @@ type RawDNS struct {
 	IPv6Timeout           uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
 	UseHosts              bool                                `yaml:"use-hosts" json:"use-hosts"`
 	UseSystemHosts        bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
+	RespectRules          bool                                `yaml:"respect-rules" json:"respect-rules"`
 	NameServer            []string                            `yaml:"nameserver" json:"nameserver"`
 	Fallback              []string                            `yaml:"fallback" json:"fallback"`
 	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
@@ -1039,7 +1040,7 @@ func hostWithDefaultPort(host string, defPort string) (string, error) {
 	return net.JoinHostPort(hostname, port), nil
 }
 
-func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) {
+func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.NameServer, error) {
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
@@ -1114,6 +1115,10 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
 		}
 
+		if respectRules && len(proxyName) == 0 {
+			proxyName = dns.RespectRules
+		}
+
 		nameservers = append(
 			nameservers,
 			dns.NameServer{
@@ -1130,7 +1135,7 @@ func parseNameServer(servers []string, preferH3 bool) ([]dns.NameServer, error) 
 
 func init() {
 	dns.ParseNameServer = func(servers []string) ([]dns.NameServer, error) { // using by wireguard
-		return parseNameServer(servers, false)
+		return parseNameServer(servers, false, false)
 	}
 }
 
@@ -1156,7 +1161,7 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (*orderedmap.OrderedMap[string, []dns.NameServer], error) {
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, respectRules bool, preferH3 bool) (*orderedmap.OrderedMap[string, []dns.NameServer], error) {
 	policy := orderedmap.New[string, []dns.NameServer]()
 	updatedPolicy := orderedmap.New[string, any]()
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
@@ -1202,7 +1207,7 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 		if err != nil {
 			return nil, err
 		}
-		nameservers, err := parseNameServer(servers, preferH3)
+		nameservers, err := parseNameServer(servers, respectRules, preferH3)
 		if err != nil {
 			return nil, err
 		}
@@ -1296,6 +1301,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		return nil, fmt.Errorf("if DNS configuration is turned on, NameServer cannot be empty")
 	}
 
+	if cfg.RespectRules && len(cfg.ProxyServerNameserver) == 0 {
+		return nil, fmt.Errorf("if “respect-rules” is turned on, “proxy-server-nameserver” cannot be empty")
+	}
+
 	dnsCfg := &DNS{
 		Enable:         cfg.Enable,
 		Listen:         cfg.Listen,
@@ -1310,26 +1319,26 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		},
 	}
 	var err error
-	if dnsCfg.NameServer, err = parseNameServer(cfg.NameServer, cfg.PreferH3); err != nil {
+	if dnsCfg.NameServer, err = parseNameServer(cfg.NameServer, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
-	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback, cfg.PreferH3); err != nil {
+	if dnsCfg.Fallback, err = parseNameServer(cfg.Fallback, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
-	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.PreferH3); err != nil {
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
-	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver, cfg.PreferH3); err != nil {
+	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver, false, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 
 	if len(cfg.DefaultNameserver) == 0 {
 		return nil, errors.New("default nameserver should have at least one nameserver")
 	}
-	if dnsCfg.DefaultNameserver, err = parseNameServer(cfg.DefaultNameserver, cfg.PreferH3); err != nil {
+	if dnsCfg.DefaultNameserver, err = parseNameServer(cfg.DefaultNameserver, false, cfg.PreferH3); err != nil {
 		return nil, err
 	}
 	// check default nameserver is pure ip addr

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strconv"
 	"strings"
 	"time"
 
@@ -175,6 +174,8 @@ func msgToDomain(msg *D.Msg) string {
 	return ""
 }
 
+const RespectRules = "RULES"
+
 type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
 
 func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, opts ...dialer.Option) dialHandler {
@@ -183,54 +184,67 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 			opts = append(opts, dialer.WithResolver(r))
 			return dialer.DialContext(ctx, network, addr, opts...)
 		} else {
-			host, port, err := net.SplitHostPort(addr)
+			metadata := &C.Metadata{
+				NetWork: C.TCP,
+				Type:    C.INNER,
+			}
+			err := metadata.SetRemoteAddress(addr) // tcp can resolve host by remote
 			if err != nil {
 				return nil, err
 			}
-			uintPort, err := strconv.ParseUint(port, 10, 16)
-			if err != nil {
-				return nil, err
+			if !strings.Contains(network, "tcp") {
+				metadata.NetWork = C.UDP
+				if !metadata.Resolved() {
+					// udp must resolve host first
+					dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+					if err != nil {
+						return nil, err
+					}
+					metadata.DstIP = dstIP
+				}
 			}
+
 			if proxyAdapter == nil {
-				var ok bool
-				proxyAdapter, ok = tunnel.Proxies()[proxyName]
-				if !ok {
-					opts = append(opts, dialer.WithInterface(proxyName))
+				if proxyName == RespectRules {
+					if !metadata.Resolved() {
+						// resolve here before ResolveMetadata to avoid its inner resolver.ResolveIP
+						dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+						if err != nil {
+							return nil, err
+						}
+						metadata.DstIP = dstIP
+					}
+					proxyAdapter, _, err = tunnel.ResolveMetadata(metadata)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					var ok bool
+					proxyAdapter, ok = tunnel.Proxies()[proxyName]
+					if !ok {
+						opts = append(opts, dialer.WithInterface(proxyName))
+					}
 				}
 			}
 
 			if strings.Contains(network, "tcp") {
-				// tcp can resolve host by remote
-				metadata := &C.Metadata{
-					NetWork: C.TCP,
-					Host:    host,
-					DstPort: uint16(uintPort),
-				}
 				if proxyAdapter != nil {
 					if proxyAdapter.IsL3Protocol(metadata) { // L3 proxy should resolve domain before to avoid loopback
-						dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-						if err != nil {
-							return nil, err
+						if !metadata.Resolved() {
+							dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+							if err != nil {
+								return nil, err
+							}
+							metadata.DstIP = dstIP
 						}
-						metadata.Host = ""
-						metadata.DstIP = dstIP
+						metadata.Host = "" // clear host to avoid double resolve in proxy
 					}
+					log.Debugln("%s", metadata.RemoteAddress())
 					return proxyAdapter.DialContext(ctx, metadata, opts...)
 				}
 				opts = append(opts, dialer.WithResolver(r))
 				return dialer.DialContext(ctx, network, addr, opts...)
 			} else {
-				// udp must resolve host first
-				dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-				if err != nil {
-					return nil, err
-				}
-				metadata := &C.Metadata{
-					NetWork: C.UDP,
-					Host:    "",
-					DstIP:   dstIP,
-					DstPort: uint16(uintPort),
-				}
 				if proxyAdapter == nil {
 					return dialer.DialContext(ctx, network, addr, opts...)
 				}
@@ -251,33 +265,37 @@ func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, 
 }
 
 func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.PacketConn, error) {
-	host, port, err := net.SplitHostPort(addr)
+	metadata := &C.Metadata{
+		NetWork: C.UDP,
+	}
+	err := metadata.SetRemoteAddress(addr)
 	if err != nil {
 		return nil, err
 	}
-	uintPort, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return nil, err
+	if !metadata.Resolved() {
+		// udp must resolve host first
+		dstIP, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
+		if err != nil {
+			return nil, err
+		}
+		metadata.DstIP = dstIP
 	}
+
 	if proxyAdapter == nil {
-		var ok bool
-		proxyAdapter, ok = tunnel.Proxies()[proxyName]
-		if !ok {
-			opts = append(opts, dialer.WithInterface(proxyName))
+		if proxyName == RespectRules {
+			proxyAdapter, _, err = tunnel.ResolveMetadata(metadata)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			var ok bool
+			proxyAdapter, ok = tunnel.Proxies()[proxyName]
+			if !ok {
+				opts = append(opts, dialer.WithInterface(proxyName))
+			}
 		}
 	}
 
-	// udp must resolve host first
-	dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-	if err != nil {
-		return nil, err
-	}
-	metadata := &C.Metadata{
-		NetWork: C.UDP,
-		Host:    "",
-		DstIP:   dstIP,
-		DstPort: uint16(uintPort),
-	}
 	if proxyAdapter == nil {
 		return dialer.NewDialer(opts...).ListenPacket(ctx, network, "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
 	}
