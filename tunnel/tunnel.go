@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -278,7 +279,7 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func ResolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	if metadata.SpecialProxy != "" {
 		var exist bool
 		proxy, exist = proxies[metadata.SpecialProxy]
@@ -375,7 +376,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 			cond.Broadcast()
 		}()
 
-		proxy, rule, err := ResolveMetadata(metadata)
+		proxy, rule, err := resolveMetadata(metadata)
 		if err != nil {
 			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 			return
@@ -386,43 +387,18 @@ func handleUDPConn(packet C.PacketAdapter) {
 		rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
 			return proxy.ListenPacketContext(ctx, metadata.Pure())
 		}, func(err error) {
-			if rule == nil {
-				log.Warnln(
-					"[UDP] dial %s %s --> %s error: %s",
-					proxy.Name(),
-					metadata.SourceDetail(),
-					metadata.RemoteAddress(),
-					err.Error(),
-				)
-			} else {
-				log.Warnln("[UDP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
-			}
+			logMetadataErr(metadata, rule, proxy, err)
 		})
 		if err != nil {
 			return
 		}
+		logMetadata(metadata, rule, rawPc)
 
 		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
 
-		switch true {
-		case metadata.SpecialProxy != "":
-			log.Infoln("[UDP] %s --> %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
-		case rule != nil:
-			if rule.Payload() != "" {
-				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), rawPc.Chains().String())
-				if rawPc.Chains().Last() == "REJECT-DROP" {
-					pc.Close()
-					return
-				}
-			} else {
-				log.Infoln("[UDP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.Payload(), rawPc.Chains().String())
-			}
-		case mode == Global:
-			log.Infoln("[UDP] %s --> %s using GLOBAL", metadata.SourceDetail(), metadata.RemoteAddress())
-		case mode == Direct:
-			log.Infoln("[UDP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
-		default:
-			log.Infoln("[UDP] %s --> %s doesn't match any rule using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
+		if rawPc.Chains().Last() == "REJECT-DROP" {
+			pc.Close()
+			return
 		}
 
 		oAddrPort := metadata.AddrPort()
@@ -486,7 +462,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}()
 	}
 
-	proxy, rule, err := ResolveMetadata(metadata)
+	proxy, rule, err := resolveMetadata(metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -539,53 +515,50 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}
 		return
 	}, func(err error) {
-		if rule == nil {
-			log.Warnln(
-				"[TCP] dial %s %s --> %s error: %s",
-				proxy.Name(),
-				metadata.SourceDetail(),
-				metadata.RemoteAddress(),
-				err.Error(),
-			)
-		} else {
-			log.Warnln("[TCP] dial %s (match %s/%s) %s --> %s error: %s", proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
-		}
+		logMetadataErr(metadata, rule, proxy, err)
 	})
 	if err != nil {
 		return
 	}
+	logMetadata(metadata, rule, remoteConn)
 
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, 0, int64(peekLen), true)
 	defer func(remoteConn C.Conn) {
 		_ = remoteConn.Close()
 	}(remoteConn)
 
-	switch true {
-	case metadata.SpecialProxy != "":
-		log.Infoln("[TCP] %s --> %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
-	case rule != nil:
-		if rule.Payload() != "" {
-			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
-		} else {
-			log.Infoln("[TCP] %s --> %s match %s using %s", metadata.SourceDetail(), metadata.RemoteAddress(), rule.RuleType().String(), remoteConn.Chains().String())
-		}
-	case mode == Global:
-		log.Infoln("[TCP] %s --> %s using GLOBAL", metadata.SourceDetail(), metadata.RemoteAddress())
-	case mode == Direct:
-		log.Infoln("[TCP] %s --> %s using DIRECT", metadata.SourceDetail(), metadata.RemoteAddress())
-	default:
-		log.Infoln(
-			"[TCP] %s --> %s doesn't match any rule using DIRECT",
-			metadata.SourceDetail(),
-			metadata.RemoteAddress(),
-		)
-	}
-
 	_ = conn.SetReadDeadline(time.Now()) // stop unfinished peek
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
 	handleSocket(conn, remoteConn)
+}
+
+func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {
+	if rule == nil {
+		log.Warnln("[%s] dial %s %s --> %s error: %s", strings.ToUpper(metadata.NetWork.String()), proxy.Name(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
+	} else {
+		log.Warnln("[%s] dial %s (match %s/%s) %s --> %s error: %s", strings.ToUpper(metadata.NetWork.String()), proxy.Name(), rule.RuleType().String(), rule.Payload(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
+	}
+}
+
+func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
+	switch {
+	case metadata.SpecialProxy != "":
+		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
+	case rule != nil:
+		if rule.Payload() != "" {
+			log.Infoln("[%s] %s --> %s match %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
+		} else {
+			log.Infoln("[%s] %s --> %s match %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), rule.RuleType().String(), remoteConn.Chains().String())
+		}
+	case mode == Global:
+		log.Infoln("[%s] %s --> %s using GLOBAL", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress())
+	case mode == Direct:
+		log.Infoln("[%s] %s --> %s using DIRECT", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress())
+	default:
+		log.Infoln("[%s] %s --> %s doesn't match any rule using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().Last())
+	}
 }
 
 func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
