@@ -728,6 +728,7 @@ proxies: # socks5
     # dialer-proxy: "ss1"
     # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
+    # refresh-server-ip-interval: 60 # 重新解析server ip的间隔，单位为秒，默认值为0即仅第一次链接时解析server域名，仅应在server域名对应的IP会发生变化时启用该选项（如家宽ddns）
     # 如果 peers 不为空，该段落中的 allowed-ips 不可为空；前面段落的 server,port,public-key,pre-shared-key 均会被忽略，但 private-key 会被保留且只能在顶层指定
     # peers:
     #   - server: 162.159.192.1
