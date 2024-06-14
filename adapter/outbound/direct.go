@@ -3,7 +3,6 @@ package outbound
 import (
 	"context"
 	"errors"
-	"net/netip"
 	"os"
 	"strconv"
 
@@ -58,7 +57,7 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		}
 		metadata.DstIP = ip
 	}
-	pc, err := dialer.NewDialer(d.Base.DialOptions(opts...)...).ListenPacket(ctx, "udp", "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
+	pc, err := dialer.NewDialer(d.Base.DialOptions(opts...)...).ListenPacket(ctx, "udp", "", metadata.AddrPort())
 	if err != nil {
 		return nil, err
 	}

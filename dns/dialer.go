@@ -6,7 +6,6 @@ import "github.com/metacubex/mihomo/tunnel"
 
 const RespectRules = tunnel.DnsRespectRules
 
-type dialHandler = tunnel.DnsDialHandler
+type dnsDialer = tunnel.DNSDialer
 
-var getDialHandler = tunnel.GetDnsDialHandler
-var listenPacket = tunnel.DnsListenPacket
+var newDNSDialer = tunnel.NewDNSDialer
