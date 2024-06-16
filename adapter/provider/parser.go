@@ -28,7 +28,10 @@ type healthCheckSchema struct {
 }
 
 type OverrideSchema struct {
+	TFO              *bool   `provider:"tfo,omitempty"`
+	MPTcp            *bool   `provider:"mptcp,omitempty"`
 	UDP              *bool   `provider:"udp,omitempty"`
+	UDPOverTCP       *bool   `provider:"udp-over-tcp,omitempty"`
 	Up               *string `provider:"up,omitempty"`
 	Down             *string `provider:"down,omitempty"`
 	DialerProxy      *string `provider:"dialer-proxy,omitempty"`

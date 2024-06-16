@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -373,37 +374,23 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 					mapping["dialer-proxy"] = dialerProxy
 				}
 
-				if override.UDP != nil {
-					mapping["udp"] = *override.UDP
-				}
-				if override.Up != nil {
-					mapping["up"] = *override.Up
-				}
-				if override.Down != nil {
-					mapping["down"] = *override.Down
-				}
-				if override.DialerProxy != nil {
-					mapping["dialer-proxy"] = *override.DialerProxy
-				}
-				if override.SkipCertVerify != nil {
-					mapping["skip-cert-verify"] = *override.SkipCertVerify
-				}
-				if override.Interface != nil {
-					mapping["interface-name"] = *override.Interface
-				}
-				if override.RoutingMark != nil {
-					mapping["routing-mark"] = *override.RoutingMark
-				}
-				if override.IPVersion != nil {
-					mapping["ip-version"] = *override.IPVersion
-				}
-				if override.AdditionalPrefix != nil {
-					name := mapping["name"].(string)
-					mapping["name"] = *override.AdditionalPrefix + name
-				}
-				if override.AdditionalSuffix != nil {
-					name := mapping["name"].(string)
-					mapping["name"] = name + *override.AdditionalSuffix
+				val := reflect.ValueOf(override)
+				for i := 0; i < val.NumField(); i++ {
+					field := val.Field(i)
+					if field.IsNil() {
+						continue
+					}
+					fieldName := strings.Split(val.Type().Field(i).Tag.Get("provider"), ",")[0]
+					switch fieldName {
+					case "additional-prefix":
+						name := mapping["name"].(string)
+						mapping["name"] = *field.Interface().(*string) + name
+					case "additional-suffix":
+						name := mapping["name"].(string)
+						mapping["name"] = name + *field.Interface().(*string)
+					default:
+						mapping[fieldName] = field.Elem().Interface()
+					}
 				}
 
 				proxy, err := adapter.ParseProxy(mapping)
