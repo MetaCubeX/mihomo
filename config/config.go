@@ -246,31 +246,39 @@ type RawTun struct {
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface"`
-	RedirectToTun       []string   `yaml:"-" json:"-"`
 
 	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
 	GSOMaxSize uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
 	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4_address,omitempty"`
-	Inet6Address             []netip.Prefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
-	StrictRoute              bool           `yaml:"strict-route" json:"strict_route,omitempty"`
+	Inet6Address           []netip.Prefix `yaml:"inet6-address" json:"inet6_address,omitempty"`
+	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2_table_index,omitempty"`
+	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2_rule_index,omitempty"`
+	AutoRedirect           bool           `yaml:"auto-redirect" json:"auto_redirect,omitempty"`
+	AutoRedirectInputMark  uint32         `yaml:"auto-redirect-input-mark" json:"auto_redirect_input_mark,omitempty"`
+	AutoRedirectOutputMark uint32         `yaml:"auto-redirect-output-mark" json:"auto_redirect_output_mark,omitempty"`
+	StrictRoute            bool           `yaml:"strict-route" json:"strict_route,omitempty"`
+	RouteAddress           []netip.Prefix `yaml:"route-address" json:"route_address,omitempty"`
+	RouteAddressSet        []string       `yaml:"route-address-set" json:"route_address_set,omitempty"`
+	RouteExcludeAddress    []netip.Prefix `yaml:"route-exclude-address" json:"route_exclude_address,omitempty"`
+	RouteExcludeAddressSet []string       `yaml:"route-exclude-address-set" json:"route_exclude_address_set,omitempty"`
+	IncludeInterface       []string       `yaml:"include-interface" json:"include-interface,omitempty"`
+	ExcludeInterface       []string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
+	IncludeUID             []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
+	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
+	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
+	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
+	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
+	IncludePackage         []string       `yaml:"include-package" json:"include_package,omitempty"`
+	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
+	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
+	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
+	FileDescriptor         int            `yaml:"file-descriptor" json:"file-descriptor"`
+
 	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4_route_address,omitempty"`
 	Inet6RouteAddress        []netip.Prefix `yaml:"inet6-route-address" json:"inet6_route_address,omitempty"`
 	Inet4RouteExcludeAddress []netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4_route_exclude_address,omitempty"`
 	Inet6RouteExcludeAddress []netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6_route_exclude_address,omitempty"`
-	IncludeInterface         []string       `yaml:"include-interface" json:"include-interface,omitempty"`
-	ExcludeInterface         []string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
-	IncludeUID               []uint32       `yaml:"include-uid" json:"include_uid,omitempty"`
-	IncludeUIDRange          []string       `yaml:"include-uid-range" json:"include_uid_range,omitempty"`
-	ExcludeUID               []uint32       `yaml:"exclude-uid" json:"exclude_uid,omitempty"`
-	ExcludeUIDRange          []string       `yaml:"exclude-uid-range" json:"exclude_uid_range,omitempty"`
-	IncludeAndroidUser       []int          `yaml:"include-android-user" json:"include_android_user,omitempty"`
-	IncludePackage           []string       `yaml:"include-package" json:"include_package,omitempty"`
-	ExcludePackage           []string       `yaml:"exclude-package" json:"exclude_package,omitempty"`
-	EndpointIndependentNat   bool           `yaml:"endpoint-independent-nat" json:"endpoint_independent_nat,omitempty"`
-	UDPTimeout               int64          `yaml:"udp-timeout" json:"udp_timeout,omitempty"`
-	FileDescriptor           int            `yaml:"file-descriptor" json:"file-descriptor"`
-	TableIndex               int            `yaml:"table-index" json:"table-index"`
 }
 
 type RawTuicServer struct {
@@ -564,13 +572,13 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.RuleProviders = ruleProviders
 
-	subRules, err := parseSubRules(rawCfg, proxies)
+	subRules, err := parseSubRules(rawCfg, proxies, ruleProviders)
 	if err != nil {
 		return nil, err
 	}
 	config.SubRules = subRules
 
-	rules, err := parseRules(rawCfg.Rule, proxies, subRules, "rules")
+	rules, err := parseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
 	if err != nil {
 		return nil, err
 	}
@@ -666,7 +674,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		updater.ExternalUIURL = cfg.ExternalUIURL
 	}
 
-	cfg.Tun.RedirectToTun = cfg.EBpf.RedirectToTun
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,
@@ -845,6 +852,7 @@ func parseListeners(cfg *RawConfig) (listeners map[string]C.InboundListener, err
 }
 
 func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.RuleProvider, err error) {
+	RP.SetTunnel(T.Tunnel)
 	ruleProviders = map[string]providerTypes.RuleProvider{}
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
@@ -854,12 +862,11 @@ func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]providerTypes.
 		}
 
 		ruleProviders[name] = rp
-		RP.SetRuleProvider(rp)
 	}
 	return
 }
 
-func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[string][]C.Rule, err error) {
+func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy, ruleProviders map[string]providerTypes.RuleProvider) (subRules map[string][]C.Rule, err error) {
 	subRules = map[string][]C.Rule{}
 	for name := range cfg.SubRules {
 		subRules[name] = make([]C.Rule, 0)
@@ -869,7 +876,7 @@ func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy) (subRules map[str
 			return nil, fmt.Errorf("sub-rule name is empty")
 		}
 		var rules []C.Rule
-		rules, err = parseRules(rawRules, proxies, subRules, fmt.Sprintf("sub-rules[%s]", name))
+		rules, err = parseRules(rawRules, proxies, ruleProviders, subRules, fmt.Sprintf("sub-rules[%s]", name))
 		if err != nil {
 			return nil, err
 		}
@@ -922,7 +929,7 @@ func verifySubRuleCircularReferences(n string, subRules map[string][]C.Rule, arr
 	return nil
 }
 
-func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[string][]C.Rule, format string) ([]C.Rule, error) {
+func parseRules(rulesConfig []string, proxies map[string]C.Proxy, ruleProviders map[string]providerTypes.RuleProvider, subRules map[string][]C.Rule, format string) ([]C.Rule, error) {
 	var rules []C.Rule
 
 	// parse rules
@@ -969,6 +976,12 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, subRules map[s
 		parsed, parseErr := R.ParseRule(ruleName, payload, target, params, subRules)
 		if parseErr != nil {
 			return nil, fmt.Errorf("%s[%d] [%s] error: %s", format, idx, line, parseErr.Error())
+		}
+
+		for _, name := range parsed.ProviderNames() {
+			if _, ok := ruleProviders[name]; !ok {
+				return nil, fmt.Errorf("%s[%d] [%s] error: rule set [%s] not found", format, idx, line, name)
+			}
 		}
 
 		rules = append(rules, parsed)
@@ -1455,31 +1468,39 @@ func parseTun(rawTun RawTun, general *General) error {
 		DNSHijack:           rawTun.DNSHijack,
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
-		RedirectToTun:       rawTun.RedirectToTun,
 
-		MTU:                      rawTun.MTU,
-		GSO:                      rawTun.GSO,
-		GSOMaxSize:               rawTun.GSOMaxSize,
-		Inet4Address:             []netip.Prefix{tunAddressPrefix},
-		Inet6Address:             rawTun.Inet6Address,
-		StrictRoute:              rawTun.StrictRoute,
+		MTU:                    rawTun.MTU,
+		GSO:                    rawTun.GSO,
+		GSOMaxSize:             rawTun.GSOMaxSize,
+		Inet4Address:           []netip.Prefix{tunAddressPrefix},
+		Inet6Address:           rawTun.Inet6Address,
+		IPRoute2TableIndex:     rawTun.IPRoute2TableIndex,
+		IPRoute2RuleIndex:      rawTun.IPRoute2RuleIndex,
+		AutoRedirect:           rawTun.AutoRedirect,
+		AutoRedirectInputMark:  rawTun.AutoRedirectInputMark,
+		AutoRedirectOutputMark: rawTun.AutoRedirectOutputMark,
+		StrictRoute:            rawTun.StrictRoute,
+		RouteAddress:           rawTun.RouteAddress,
+		RouteAddressSet:        rawTun.RouteAddressSet,
+		RouteExcludeAddress:    rawTun.RouteExcludeAddress,
+		RouteExcludeAddressSet: rawTun.RouteExcludeAddressSet,
+		IncludeInterface:       rawTun.IncludeInterface,
+		ExcludeInterface:       rawTun.ExcludeInterface,
+		IncludeUID:             rawTun.IncludeUID,
+		IncludeUIDRange:        rawTun.IncludeUIDRange,
+		ExcludeUID:             rawTun.ExcludeUID,
+		ExcludeUIDRange:        rawTun.ExcludeUIDRange,
+		IncludeAndroidUser:     rawTun.IncludeAndroidUser,
+		IncludePackage:         rawTun.IncludePackage,
+		ExcludePackage:         rawTun.ExcludePackage,
+		EndpointIndependentNat: rawTun.EndpointIndependentNat,
+		UDPTimeout:             rawTun.UDPTimeout,
+		FileDescriptor:         rawTun.FileDescriptor,
+
 		Inet4RouteAddress:        rawTun.Inet4RouteAddress,
 		Inet6RouteAddress:        rawTun.Inet6RouteAddress,
 		Inet4RouteExcludeAddress: rawTun.Inet4RouteExcludeAddress,
 		Inet6RouteExcludeAddress: rawTun.Inet6RouteExcludeAddress,
-		IncludeInterface:         rawTun.IncludeInterface,
-		ExcludeInterface:         rawTun.ExcludeInterface,
-		IncludeUID:               rawTun.IncludeUID,
-		IncludeUIDRange:          rawTun.IncludeUIDRange,
-		ExcludeUID:               rawTun.ExcludeUID,
-		ExcludeUIDRange:          rawTun.ExcludeUIDRange,
-		IncludeAndroidUser:       rawTun.IncludeAndroidUser,
-		IncludePackage:           rawTun.IncludePackage,
-		ExcludePackage:           rawTun.ExcludePackage,
-		EndpointIndependentNat:   rawTun.EndpointIndependentNat,
-		UDPTimeout:               rawTun.UDPTimeout,
-		FileDescriptor:           rawTun.FileDescriptor,
-		TableIndex:               rawTun.TableIndex,
 	}
 
 	return nil

@@ -198,6 +198,12 @@ func (h *ListenerHandler) NewError(ctx context.Context, err error) {
 	log.Warnln("%s listener get error: %+v", h.Type.String(), err)
 }
 
+func (h *ListenerHandler) TypeMutation(typ C.Type) *ListenerHandler {
+	handler := *h
+	handler.Type = typ
+	return &handler
+}
+
 func ShouldIgnorePacketError(err error) bool {
 	// ignore simple error
 	if E.IsTimeout(err) || E.IsClosed(err) || E.IsCanceled(err) {

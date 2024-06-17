@@ -298,3 +298,10 @@ func (logic *Logic) ShouldResolveIP() bool {
 func (logic *Logic) ShouldFindProcess() bool {
 	return logic.needProcess
 }
+
+func (logic *Logic) ProviderNames() (names []string) {
+	for _, rule := range logic.rules {
+		names = append(names, rule.ProviderNames()...)
+	}
+	return
+}

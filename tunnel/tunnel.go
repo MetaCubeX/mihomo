@@ -13,6 +13,7 @@ import (
 	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/nat"
 	P "github.com/metacubex/mihomo/component/process"
@@ -50,11 +51,15 @@ var (
 	findProcessMode P.FindProcessMode
 
 	fakeIPRange netip.Prefix
+
+	ruleUpdateCallback = utils.NewCallback[provider.RuleProvider]()
 )
 
 type tunnel struct{}
 
-var Tunnel C.Tunnel = tunnel{}
+var Tunnel = tunnel{}
+var _ C.Tunnel = Tunnel
+var _ provider.Tunnel = Tunnel
 
 func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	connCtx := icontext.NewConnContext(conn, metadata)
@@ -71,6 +76,18 @@ func (t tunnel) HandleUDPPacket(packet C.UDPPacket, metadata *C.Metadata) {
 
 func (t tunnel) NatTable() C.NatTable {
 	return natTable
+}
+
+func (t tunnel) Providers() map[string]provider.ProxyProvider {
+	return providers
+}
+
+func (t tunnel) RuleProviders() map[string]provider.RuleProvider {
+	return ruleProviders
+}
+
+func (t tunnel) RuleUpdateCallback() *utils.Callback[provider.RuleProvider] {
+	return ruleUpdateCallback
 }
 
 func OnSuspend() {

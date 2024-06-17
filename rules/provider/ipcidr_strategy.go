@@ -4,6 +4,8 @@ import (
 	"github.com/metacubex/mihomo/component/cidr"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+
+	"go4.org/netipx"
 )
 
 type ipcidrStrategy struct {
@@ -50,6 +52,10 @@ func (i *ipcidrStrategy) Insert(rule string) {
 
 func (i *ipcidrStrategy) FinishInsert() {
 	i.cidrSet.Merge()
+}
+
+func (i *ipcidrStrategy) ToIpCidr() *netipx.IPSet {
+	return i.cidrSet.ToIPSet()
 }
 
 func NewIPCidrStrategy() *ipcidrStrategy {

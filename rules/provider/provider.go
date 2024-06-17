@@ -15,12 +15,14 @@ import (
 	P "github.com/metacubex/mihomo/constant/provider"
 )
 
-var (
-	ruleProviders = map[string]P.RuleProvider{}
-)
+var tunnel P.Tunnel
+
+func SetTunnel(t P.Tunnel) {
+	tunnel = t
+}
 
 type ruleSetProvider struct {
-	*resource.Fetcher[any]
+	*resource.Fetcher[ruleStrategy]
 	behavior P.RuleBehavior
 	format   P.RuleFormat
 	strategy ruleStrategy
@@ -47,16 +49,6 @@ type ruleStrategy interface {
 	Reset()
 	Insert(rule string)
 	FinishInsert()
-}
-
-func RuleProviders() map[string]P.RuleProvider {
-	return ruleProviders
-}
-
-func SetRuleProvider(ruleProvider P.RuleProvider) {
-	if ruleProvider != nil {
-		ruleProviders[(ruleProvider).Name()] = ruleProvider
-	}
 }
 
 func (rp *ruleSetProvider) Type() P.ProviderType {
@@ -99,8 +91,8 @@ func (rp *ruleSetProvider) ShouldFindProcess() bool {
 	return rp.strategy.ShouldFindProcess()
 }
 
-func (rp *ruleSetProvider) AsRule(adaptor string) C.Rule {
-	panic("implement me")
+func (rp *ruleSetProvider) Strategy() any {
+	return rp.strategy
 }
 
 func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
@@ -123,13 +115,15 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 		format:   format,
 	}
 
-	onUpdate := func(elm interface{}) {
-		strategy := elm.(ruleStrategy)
+	onUpdate := func(strategy ruleStrategy) {
 		rp.strategy = strategy
+		tunnel.RuleUpdateCallback().Emit(rp)
 	}
 
 	rp.strategy = newStrategy(behavior, parse)
-	rp.Fetcher = resource.NewFetcher(name, interval, vehicle, func(bytes []byte) (any, error) { return rulesParse(bytes, newStrategy(behavior, parse), format) }, onUpdate)
+	rp.Fetcher = resource.NewFetcher(name, interval, vehicle, func(bytes []byte) (ruleStrategy, error) {
+		return rulesParse(bytes, newStrategy(behavior, parse), format)
+	}, onUpdate)
 
 	wrapper := &RuleSetProvider{
 		rp,
@@ -158,7 +152,7 @@ func newStrategy(behavior P.RuleBehavior, parse func(tp, payload, target string,
 
 var ErrNoPayload = errors.New("file must have a `payload` field")
 
-func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (any, error) {
+func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStrategy, error) {
 	strategy.Reset()
 
 	schema := &RulePayload{}

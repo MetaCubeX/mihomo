@@ -20,6 +20,8 @@ func (b *Base) ShouldResolveIP() bool {
 	return false
 }
 
+func (b *Base) ProviderNames() []string { return nil }
+
 func HasNoResolve(params []string) bool {
 	for _, p := range params {
 		if p == noResolve {

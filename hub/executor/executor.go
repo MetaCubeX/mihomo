@@ -97,7 +97,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateHosts(cfg.Hosts)
 	updateGeneral(cfg.General)
 	updateNTP(cfg.NTP)
-	updateDNS(cfg.DNS, cfg.RuleProviders, cfg.General.IPv6)
+	updateDNS(cfg.DNS, cfg.General.IPv6)
 	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
 	updateTun(cfg.General)
@@ -211,7 +211,7 @@ func updateNTP(c *config.NTP) {
 	}
 }
 
-func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, generalIPv6 bool) {
+func updateDNS(c *config.DNS, generalIPv6 bool) {
 	if !c.Enable {
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
@@ -237,7 +237,7 @@ func updateDNS(c *config.DNS, ruleProvider map[string]provider.RuleProvider, gen
 		Default:        c.DefaultNameserver,
 		Policy:         c.NameServerPolicy,
 		ProxyServer:    c.ProxyServerNameserver,
-		RuleProviders:  ruleProvider,
+		Tunnel:         tunnel.Tunnel,
 		CacheAlgorithm: c.CacheAlgorithm,
 	}
 
@@ -355,7 +355,7 @@ func updateTun(general *config.General) {
 		return
 	}
 	listener.ReCreateTun(general.Tun, tunnel.Tunnel)
-	listener.ReCreateRedirToTun(general.Tun.RedirectToTun)
+	listener.ReCreateRedirToTun(general.EBpf.RedirectToTun)
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
@@ -507,9 +507,7 @@ func updateIPTables(cfg *config.Config) {
 		inboundInterface = iptables.InboundInterface
 	}
 
-	if dialer.DefaultRoutingMark.Load() == 0 {
-		dialer.DefaultRoutingMark.Store(2158)
-	}
+	dialer.DefaultRoutingMark.CompareAndSwap(0, 2158)
 
 	err = tproxy.SetTProxyIPTables(inboundInterface, bypass, uint16(tProxyPort), DnsRedirect, dnsPort.Port())
 	if err != nil {
