@@ -64,6 +64,10 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 	return d.loopBack.NewPacketConn(newPacketConn(pc, d)), nil
 }
 
+func (d *Direct) IsL3Protocol(metadata *C.Metadata) bool {
+	return true // tell DNSDialer don't send domain to DialContext, avoid lookback to DefaultResolver
+}
+
 func NewDirectWithOption(option DirectOption) *Direct {
 	return &Direct{
 		Base: &Base{
