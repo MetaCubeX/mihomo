@@ -50,9 +50,9 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 		return nil, err
 	}
 
-	var c *lru.LruCache[string, bool]
+	var c *lru.LruCache[string, AuthResult]
 	if authenticate {
-		c = lru.New[string, bool](lru.WithAge[string, bool](30))
+		c = lru.New[string, AuthResult](lru.WithAge[string, AuthResult](30))
 	}
 
 	hl := &Listener{

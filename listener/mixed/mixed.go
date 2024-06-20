@@ -16,7 +16,7 @@ import (
 type Listener struct {
 	listener net.Listener
 	addr     string
-	cache    *lru.LruCache[string, bool]
+	cache    *lru.LruCache[string, http.AuthResult]
 	closed   bool
 }
 
@@ -53,7 +53,7 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 	ml := &Listener{
 		listener: l,
 		addr:     addr,
-		cache:    lru.New[string, bool](lru.WithAge[string, bool](30)),
+		cache:    lru.New[string, http.AuthResult](lru.WithAge[string, http.AuthResult](30)),
 	}
 	go func() {
 		for {
@@ -77,7 +77,7 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
+func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, http.AuthResult], additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 
 	bufConn := N.NewBufferedConn(conn)
