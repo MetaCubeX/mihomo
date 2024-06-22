@@ -2,12 +2,13 @@ package logic
 
 import (
 	"fmt"
-	list "github.com/bahlo/generic-list-go"
 	"regexp"
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/rules/common"
+
+	list "github.com/bahlo/generic-list-go"
 )
 
 type Logic struct {
@@ -243,7 +244,7 @@ func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Ru
 	for _, rule := range subRules[name] {
 		if m, a := rule.Match(metadata); m {
 			if rule.RuleType() == C.SubRules {
-				matchSubRules(metadata, rule.Adapter(), subRules)
+				return matchSubRules(metadata, rule.Adapter(), subRules)
 			} else {
 				return m, a
 			}
