@@ -209,7 +209,6 @@ func findPackageName(uid uint32) string {
 	})
 
 	if sharedPackage, loaded := packageManager.SharedPackageByID(uid % 100000); loaded {
-		fmt.Println(loaded)
 		return sharedPackage
 	}
 	if packageName, loaded := packageManager.PackageByID(uid % 100000); loaded {
