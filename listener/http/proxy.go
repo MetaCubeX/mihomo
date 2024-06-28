@@ -31,9 +31,13 @@ func (b *bodyWrapper) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
-	client := newClient(c, tunnel, additions...)
-	defer client.CloseIdleConnections()
+func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, AuthResult], additions ...inbound.Addition) {
+	var client *http.Client // create the outbound client on-demand
+	defer func() {
+		if client != nil {
+			client.CloseIdleConnections()
+		}
+	}()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	peekMutex := sync.Mutex{}
@@ -42,6 +46,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 	keepAlive := true
 	trusted := cache == nil // disable authenticate if lru is nil
+	lastUser := ""
 
 	for keepAlive {
 		peekMutex.Lock()
@@ -57,12 +62,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 		var resp *http.Response
 
-		if !trusted {
-			var user string
-			resp, user = authenticate(request, cache)
-			additions = append(additions, inbound.WithInUser(user))
-			trusted = resp == nil
-		}
+		var user string
+		resp, user = authenticate(request, cache) // always call authenticate function to get user
+		trusted = trusted || resp == nil
+		additions = append(additions, inbound.WithInUser(user))
 
 		if trusted {
 			if request.Method == http.MethodConnect {
@@ -87,6 +90,15 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 				handleUpgrade(conn, request, tunnel, additions...)
 
 				return // hijack connection
+			}
+
+			// ensure there is a client with correct additions
+			// when the authenticated user changed, outbound client should also get rebuilt
+			if client == nil || user != lastUser {
+				if client != nil {
+					client.CloseIdleConnections()
+				}
+				client = newClient(c, tunnel, additions...)
 			}
 
 			removeHopByHopHeaders(request.Header)
@@ -138,32 +150,50 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 	_ = conn.Close()
 }
 
-func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) (resp *http.Response, u string) {
+type AuthResult struct {
+	user   string
+	authed bool
+}
+
+func authenticate(request *http.Request, cache *lru.LruCache[string, AuthResult]) (resp *http.Response, u string) {
 	authenticator := authStore.Authenticator()
 	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
 		authenticator = nil
 	}
-	if authenticator != nil {
-		credential := parseBasicProxyAuthorization(request)
-		if credential == "" {
-			resp := responseWith(request, http.StatusProxyAuthRequired)
-			resp.Header.Set("Proxy-Authenticate", "Basic")
-			return resp, ""
-		}
-
-		authed, exist := cache.Get(credential)
-		if !exist {
-			user, pass, err := decodeBasicProxyAuthorization(credential)
-			authed = err == nil && authenticator.Verify(user, pass)
-			u = user
-			cache.Set(credential, authed)
-		}
-		if !authed {
-			log.Infoln("Auth failed from %s", request.RemoteAddr)
-
-			return responseWith(request, http.StatusForbidden), u
-		}
+	credential := parseBasicProxyAuthorization(request)
+	if credential == "" && authenticator != nil {
+		resp := responseWith(request, http.StatusProxyAuthRequired)
+		resp.Header.Set("Proxy-Authenticate", "Basic")
+		return resp, ""
 	}
+
+	var authret AuthResult
+	exist := false
+	if cache != nil {
+		authret, exist = cache.Get(credential)
+	}
+	if !exist {
+		user, pass, err := decodeBasicProxyAuthorization(credential)
+		authed := false
+		if authenticator == nil {
+			// skipped authentication
+			authed = true
+		} else if err == nil && authenticator.Verify(user, pass) {
+			authed = true
+		}
+		authret = AuthResult{
+			user:   user,
+			authed: authed,
+		}
+		cache.Set(credential, authret)
+	}
+	u = authret.user
+	if !authret.authed {
+		log.Infoln("Auth failed from %s", request.RemoteAddr)
+
+		return responseWith(request, http.StatusForbidden), u
+	}
+	log.Infoln("Auth success from %s -> %s", request.RemoteAddr, u)
 
 	return nil, u
 }
