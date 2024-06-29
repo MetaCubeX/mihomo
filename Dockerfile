@@ -13,7 +13,7 @@ WORKDIR /mihomo
 COPY bin/ bin/
 RUN FILE_NAME=`sh file-name.sh` && echo $FILE_NAME && \
     FILE_NAME=`ls bin/ | egrep "$FILE_NAME.gz"|awk NR==1` && echo $FILE_NAME && \
-    mv bin/$FILE_NAME mihomo.gz && gzip -d mihomo.gz && echo "$FILE_NAME" > /mihomo-config/test
+    mv bin/$FILE_NAME mihomo.gz && gzip -d mihomo.gz && chmod +x mihomo && echo "$FILE_NAME" > /mihomo-config/test
 FROM alpine:latest
 LABEL org.opencontainers.image.source="https://github.com/MetaCubeX/mihomo"
 
@@ -23,5 +23,4 @@ VOLUME ["/root/.config/mihomo/"]
 
 COPY --from=builder /mihomo-config/ /root/.config/mihomo/
 COPY --from=builder /mihomo/mihomo /mihomo
-RUN chmod +x /mihomo
 ENTRYPOINT [ "/mihomo" ]
