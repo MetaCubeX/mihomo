@@ -97,10 +97,10 @@ func NewSchedule(schedule string, adapter string) (*Schedule, error) {
 		return nil, fmt.Errorf("could you initial Schedule rule %s, the time format is not correct!", punycode)
 	}
 	if startHour > endHour {
-		return nil, fmt.Errorf("could you initial Schedule rule %s, the end time should not be earlier than start time s!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the end time should not be earlier than start time!", punycode)
 	}
 	if startHour == endHour && startMinute > endMinute {
-		return nil, fmt.Errorf("could you initial Schedule rule %s, the end time should not be earlier than start time s!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the end time should not be earlier than start time!", punycode)
 	}
 	return &Schedule{
 		Base:        &Base{},
