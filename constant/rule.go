@@ -34,6 +34,8 @@ const (
 	AND
 	OR
 	NOT
+	SrcMAC
+	Schedule
 )
 
 type RuleType int
@@ -104,6 +106,10 @@ func (rt RuleType) String() string {
 		return "OR"
 	case NOT:
 		return "NOT"
+	case SrcMAC:
+		return "SrcMAC"
+	case Schedule:
+		return "Schedule"
 	default:
 		return "Unknown"
 	}
