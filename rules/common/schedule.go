@@ -57,7 +57,7 @@ func NewSchedule(schedule string, adapter string) (*Schedule, error) {
 	punycode, _ := idna.ToASCII(strings.ToUpper(schedule))
 	weekDayArr := [7]bool{false, false, false, false, false, false, false}
 	if len(punycode) != 19 {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the rule format is not correct!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the rule format is not correct!", punycode)
 	}
 	if punycode[0] == 'S' {
 		weekDayArr[0] = true
@@ -82,25 +82,25 @@ func NewSchedule(schedule string, adapter string) (*Schedule, error) {
 	}
 	startHour, err := strconv.Atoi(punycode[8:10])
 	if err != nil {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the time format is not correct!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the time format is not correct!", punycode)
 	}
 	startMinute, err := strconv.Atoi(punycode[11:13])
 	if err != nil {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the time format is not correct!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the time format is not correct!", punycode)
 	}
 	endHour, err := strconv.Atoi(punycode[14:16])
 	if err != nil {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the time format is not correct!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the time format is not correct!", punycode)
 	}
 	endMinute, err := strconv.Atoi(punycode[17:19])
 	if err != nil {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the time format is not correct!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the time format is not correct!", punycode)
 	}
 	if startHour > endHour {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the end time should not be earlier than start time s!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the end time should not be earlier than start time s!", punycode)
 	}
 	if startHour == endHour && startMinute > endMinute {
-		return nil, fmt.Errorf("could you initial Schedule rule %, the end time should not be earlier than start time s!", punycode)
+		return nil, fmt.Errorf("could you initial Schedule rule %s, the end time should not be earlier than start time s!", punycode)
 	}
 	return &Schedule{
 		Base:        &Base{},
