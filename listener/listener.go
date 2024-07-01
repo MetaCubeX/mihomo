@@ -820,11 +820,15 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 		LastTunConf.MTU != tunConf.MTU ||
 		LastTunConf.GSO != tunConf.GSO ||
 		LastTunConf.GSOMaxSize != tunConf.GSOMaxSize ||
+		LastTunConf.IPRoute2TableIndex != tunConf.IPRoute2TableIndex ||
+		LastTunConf.IPRoute2RuleIndex != tunConf.IPRoute2RuleIndex ||
+		LastTunConf.AutoRedirect != tunConf.AutoRedirect ||
+		LastTunConf.AutoRedirectInputMark != tunConf.AutoRedirectInputMark ||
+		LastTunConf.AutoRedirectOutputMark != tunConf.AutoRedirectOutputMark ||
 		LastTunConf.StrictRoute != tunConf.StrictRoute ||
 		LastTunConf.EndpointIndependentNat != tunConf.EndpointIndependentNat ||
 		LastTunConf.UDPTimeout != tunConf.UDPTimeout ||
-		LastTunConf.FileDescriptor != tunConf.FileDescriptor ||
-		LastTunConf.TableIndex != tunConf.TableIndex {
+		LastTunConf.FileDescriptor != tunConf.FileDescriptor {
 		return true
 	}
 
@@ -834,6 +838,22 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 
 	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
 		return tunConf.DNSHijack[i] < tunConf.DNSHijack[j]
+	})
+
+	sort.Slice(tunConf.RouteAddress, func(i, j int) bool {
+		return tunConf.RouteAddress[i].String() < tunConf.RouteAddress[j].String()
+	})
+
+	sort.Slice(tunConf.RouteAddressSet, func(i, j int) bool {
+		return tunConf.RouteAddressSet[i] < tunConf.RouteAddressSet[j]
+	})
+
+	sort.Slice(tunConf.RouteExcludeAddress, func(i, j int) bool {
+		return tunConf.RouteExcludeAddress[i].String() < tunConf.RouteExcludeAddress[j].String()
+	})
+
+	sort.Slice(tunConf.RouteExcludeAddressSet, func(i, j int) bool {
+		return tunConf.RouteExcludeAddressSet[i] < tunConf.RouteExcludeAddressSet[j]
 	})
 
 	sort.Slice(tunConf.Inet4Address, func(i, j int) bool {
@@ -897,6 +917,10 @@ func hasTunConfigChange(tunConf *LC.Tun) bool {
 	})
 
 	if !slices.Equal(tunConf.DNSHijack, LastTunConf.DNSHijack) ||
+		!slices.Equal(tunConf.RouteAddress, LastTunConf.RouteAddress) ||
+		!slices.Equal(tunConf.RouteAddressSet, LastTunConf.RouteAddressSet) ||
+		!slices.Equal(tunConf.RouteExcludeAddress, LastTunConf.RouteExcludeAddress) ||
+		!slices.Equal(tunConf.RouteExcludeAddressSet, LastTunConf.RouteExcludeAddressSet) ||
 		!slices.Equal(tunConf.Inet4Address, LastTunConf.Inet4Address) ||
 		!slices.Equal(tunConf.Inet6Address, LastTunConf.Inet6Address) ||
 		!slices.Equal(tunConf.Inet4RouteAddress, LastTunConf.Inet4RouteAddress) ||

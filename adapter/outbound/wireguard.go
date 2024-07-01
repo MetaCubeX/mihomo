@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
 	CN "github.com/metacubex/mihomo/common/net"
@@ -48,6 +49,10 @@ type WireGuard struct {
 	connectAddr   M.Socksaddr
 	localPrefixes []netip.Prefix
 
+	serverAddrMap   map[M.Socksaddr]netip.AddrPort
+	serverAddrTime  atomic.TypedValue[time.Time]
+	serverAddrMutex sync.Mutex
+
 	closeCh chan struct{} // for test
 }
 
@@ -67,6 +72,8 @@ type WireGuardOption struct {
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
+
+	RefreshServerIPInterval int `proxy:"refresh-server-ip-interval,omitempty"`
 }
 
 type WireGuardPeerOption struct {
@@ -287,6 +294,15 @@ func (w *WireGuard) resolve(ctx context.Context, address M.Socksaddr) (netip.Add
 }
 
 func (w *WireGuard) init(ctx context.Context) error {
+	err := w.init0(ctx)
+	if err != nil {
+		return err
+	}
+	w.updateServerAddr(ctx)
+	return nil
+}
+
+func (w *WireGuard) init0(ctx context.Context) error {
 	if w.initOk.Load() {
 		return nil
 	}
@@ -301,41 +317,118 @@ func (w *WireGuard) init(ctx context.Context) error {
 	}
 
 	w.bind.ResetReservedForEndpoint()
-	ipcConf := "private_key=" + w.option.PrivateKey
+	w.serverAddrMap = make(map[M.Socksaddr]netip.AddrPort)
+	ipcConf, err := w.genIpcConf(ctx, false)
+	if err != nil {
+		// !!! do not set initErr here !!!
+		// let us can retry domain resolve in next time
+		return err
+	}
+
+	if debug.Enabled {
+		log.SingLogger.Trace(fmt.Sprintf("[WG](%s) created wireguard ipc conf: \n %s", w.option.Name, ipcConf))
+	}
+	err = w.device.IpcSet(ipcConf)
+	if err != nil {
+		w.initErr = E.Cause(err, "setup wireguard")
+		return w.initErr
+	}
+	w.serverAddrTime.Store(time.Now())
+
+	err = w.tunDevice.Start()
+	if err != nil {
+		w.initErr = err
+		return w.initErr
+	}
+
+	w.initOk.Store(true)
+	return nil
+}
+
+func (w *WireGuard) updateServerAddr(ctx context.Context) {
+	if w.option.RefreshServerIPInterval != 0 && time.Since(w.serverAddrTime.Load()) > time.Second*time.Duration(w.option.RefreshServerIPInterval) {
+		if w.serverAddrMutex.TryLock() {
+			defer w.serverAddrMutex.Unlock()
+			ipcConf, err := w.genIpcConf(ctx, true)
+			if err != nil {
+				log.Warnln("[WG](%s)UpdateServerAddr failed to generate wireguard ipc conf: %s", w.option.Name, err)
+				return
+			}
+			err = w.device.IpcSet(ipcConf)
+			if err != nil {
+				log.Warnln("[WG](%s)UpdateServerAddr failed to update wireguard ipc conf: %s", w.option.Name, err)
+				return
+			}
+			w.serverAddrTime.Store(time.Now())
+		}
+	}
+}
+
+func (w *WireGuard) genIpcConf(ctx context.Context, updateOnly bool) (string, error) {
+	ipcConf := ""
+	if !updateOnly {
+		ipcConf += "private_key=" + w.option.PrivateKey + "\n"
+	}
 	if len(w.option.Peers) > 0 {
 		for i, peer := range w.option.Peers {
-			destination, err := w.resolve(ctx, peer.Addr())
+			peerAddr := peer.Addr()
+			destination, err := w.resolve(ctx, peerAddr)
 			if err != nil {
-				// !!! do not set initErr here !!!
-				// let us can retry domain resolve in next time
-				return E.Cause(err, "resolve endpoint domain for peer ", i)
+				return "", E.Cause(err, "resolve endpoint domain for peer ", i)
 			}
-			ipcConf += "\npublic_key=" + peer.PublicKey
-			ipcConf += "\nendpoint=" + destination.String()
-			if peer.PreSharedKey != "" {
-				ipcConf += "\npreshared_key=" + peer.PreSharedKey
+			if w.serverAddrMap[peerAddr] != destination {
+				w.serverAddrMap[peerAddr] = destination
+			} else if updateOnly {
+				continue
 			}
-			for _, allowedIP := range peer.AllowedIPs {
-				ipcConf += "\nallowed_ip=" + allowedIP
+
+			if len(w.option.Peers) == 1 { // must call SetConnectAddr if isConnect == true
+				w.bind.SetConnectAddr(destination)
 			}
+			ipcConf += "public_key=" + peer.PublicKey + "\n"
+			if updateOnly {
+				ipcConf += "update_only=true\n"
+			}
+			ipcConf += "endpoint=" + destination.String() + "\n"
 			if len(peer.Reserved) > 0 {
 				var reserved [3]uint8
 				copy(reserved[:], w.option.Reserved)
 				w.bind.SetReservedForEndpoint(destination, reserved)
 			}
+			if updateOnly {
+				continue
+			}
+			if peer.PreSharedKey != "" {
+				ipcConf += "preshared_key=" + peer.PreSharedKey + "\n"
+			}
+			for _, allowedIP := range peer.AllowedIPs {
+				ipcConf += "allowed_ip=" + allowedIP + "\n"
+			}
+			if w.option.PersistentKeepalive != 0 {
+				ipcConf += fmt.Sprintf("persistent_keepalive_interval=%d\n", w.option.PersistentKeepalive)
+			}
 		}
 	} else {
-		ipcConf += "\npublic_key=" + w.option.PublicKey
 		destination, err := w.resolve(ctx, w.connectAddr)
 		if err != nil {
-			// !!! do not set initErr here !!!
-			// let us can retry domain resolve in next time
-			return E.Cause(err, "resolve endpoint domain")
+			return "", E.Cause(err, "resolve endpoint domain")
 		}
-		w.bind.SetConnectAddr(destination)
-		ipcConf += "\nendpoint=" + destination.String()
+		if w.serverAddrMap[w.connectAddr] != destination {
+			w.serverAddrMap[w.connectAddr] = destination
+		} else if updateOnly {
+			return "", nil
+		}
+		w.bind.SetConnectAddr(destination) // must call SetConnectAddr if isConnect == true
+		ipcConf += "public_key=" + w.option.PublicKey + "\n"
+		if updateOnly {
+			ipcConf += "update_only=true\n"
+		}
+		ipcConf += "endpoint=" + destination.String() + "\n"
+		if updateOnly {
+			return ipcConf, nil
+		}
 		if w.option.PreSharedKey != "" {
-			ipcConf += "\npreshared_key=" + w.option.PreSharedKey
+			ipcConf += "preshared_key=" + w.option.PreSharedKey + "\n"
 		}
 		var has4, has6 bool
 		for _, address := range w.localPrefixes {
@@ -346,34 +439,17 @@ func (w *WireGuard) init(ctx context.Context) error {
 			}
 		}
 		if has4 {
-			ipcConf += "\nallowed_ip=0.0.0.0/0"
+			ipcConf += "allowed_ip=0.0.0.0/0\n"
 		}
 		if has6 {
-			ipcConf += "\nallowed_ip=::/0"
+			ipcConf += "allowed_ip=::/0\n"
+		}
+
+		if w.option.PersistentKeepalive != 0 {
+			ipcConf += fmt.Sprintf("persistent_keepalive_interval=%d\n", w.option.PersistentKeepalive)
 		}
 	}
-
-	if w.option.PersistentKeepalive != 0 {
-		ipcConf += fmt.Sprintf("\npersistent_keepalive_interval=%d", w.option.PersistentKeepalive)
-	}
-
-	if debug.Enabled {
-		log.SingLogger.Trace(fmt.Sprintf("[WG](%s) created wireguard ipc conf: \n %s", w.option.Name, ipcConf))
-	}
-	err := w.device.IpcSet(ipcConf)
-	if err != nil {
-		w.initErr = E.Cause(err, "setup wireguard")
-		return w.initErr
-	}
-
-	err = w.tunDevice.Start()
-	if err != nil {
-		w.initErr = err
-		return w.initErr
-	}
-
-	w.initOk.Store(true)
-	return nil
+	return ipcConf, nil
 }
 
 func closeWireGuard(w *WireGuard) {

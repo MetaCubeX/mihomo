@@ -9,6 +9,7 @@ import (
 	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/log"
 )
 
 type Relay struct {
@@ -149,6 +150,7 @@ func (r *Relay) Addr() string {
 }
 
 func NewRelay(option *GroupCommonOption, providers []provider.ProxyProvider) *Relay {
+	log.Warnln("The group [%s] with relay type is deprecated, please using dialer-proxy instead", option.Name)
 	return &Relay{
 		GroupBase: NewGroupBase(GroupBaseOption{
 			outbound.BaseOption{

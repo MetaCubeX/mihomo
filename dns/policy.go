@@ -37,14 +37,17 @@ func (p geositePolicy) Match(domain string) []dnsClient {
 }
 
 type domainSetPolicy struct {
-	domainSetProvider provider.RuleProvider
-	dnsClients        []dnsClient
+	tunnel     provider.Tunnel
+	name       string
+	dnsClients []dnsClient
 }
 
 func (p domainSetPolicy) Match(domain string) []dnsClient {
-	metadata := &C.Metadata{Host: domain}
-	if ok := p.domainSetProvider.Match(metadata); ok {
-		return p.dnsClients
+	if ruleProvider, ok := p.tunnel.RuleProviders()[p.name]; ok {
+		metadata := &C.Metadata{Host: domain}
+		if ok := ruleProvider.Match(metadata); ok {
+			return p.dnsClients
+		}
 	}
 	return nil
 }

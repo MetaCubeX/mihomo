@@ -119,9 +119,7 @@ func CleanupTProxyIPTables() {
 
 	log.Warnln("Cleanup tproxy linux iptables")
 
-	if int(dialer.DefaultRoutingMark.Load()) == 2158 {
-		dialer.DefaultRoutingMark.Store(0)
-	}
+	dialer.DefaultRoutingMark.CompareAndSwap(2158, 0)
 
 	if _, err := cmd.ExecCmd("iptables -t mangle -L mihomo_divert"); err != nil {
 		return

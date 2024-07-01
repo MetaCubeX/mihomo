@@ -21,8 +21,8 @@ import (
 
 	"github.com/metacubex/sing-quic/hysteria2"
 
+	"github.com/metacubex/randv2"
 	M "github.com/sagernet/sing/common/metadata"
-	"github.com/zhangyunhao116/fastrand"
 )
 
 func init() {
@@ -165,7 +165,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		})
 		if len(serverAddress) > 0 {
 			clientOptions.ServerAddress = func(ctx context.Context) (*net.UDPAddr, error) {
-				return resolveUDPAddrWithPrefer(ctx, "udp", serverAddress[fastrand.Intn(len(serverAddress))], C.NewDNSPrefer(option.IPVersion))
+				return resolveUDPAddrWithPrefer(ctx, "udp", serverAddress[randv2.IntN(len(serverAddress))], C.NewDNSPrefer(option.IPVersion))
 			}
 
 			if option.HopInterval == 0 {

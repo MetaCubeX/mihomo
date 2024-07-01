@@ -68,25 +68,34 @@ type tunSchema struct {
 	GSO        *bool   `yaml:"gso" json:"gso,omitempty"`
 	GSOMaxSize *uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
 	//Inet4Address           *[]netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
-	Inet6Address             *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
-	StrictRoute              *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
+	Inet6Address           *[]netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
+	IPRoute2TableIndex     *int            `yaml:"iproute2-table-index" json:"iproute2_table_index,omitempty"`
+	IPRoute2RuleIndex      *int            `yaml:"iproute2-rule-index" json:"iproute2_rule_index,omitempty"`
+	AutoRedirect           *bool           `yaml:"auto-redirect" json:"auto_redirect,omitempty"`
+	AutoRedirectInputMark  *uint32         `yaml:"auto-redirect-input-mark" json:"auto_redirect_input_mark,omitempty"`
+	AutoRedirectOutputMark *uint32         `yaml:"auto-redirect-output-mark" json:"auto_redirect_output_mark,omitempty"`
+	StrictRoute            *bool           `yaml:"strict-route" json:"strict-route,omitempty"`
+	RouteAddress           *[]netip.Prefix `yaml:"route-address" json:"route_address,omitempty"`
+	RouteAddressSet        *[]string       `yaml:"route-address-set" json:"route_address_set,omitempty"`
+	RouteExcludeAddress    *[]netip.Prefix `yaml:"route-exclude-address" json:"route_exclude_address,omitempty"`
+	RouteExcludeAddressSet *[]string       `yaml:"route-exclude-address-set" json:"route_exclude_address_set,omitempty"`
+	IncludeInterface       *[]string       `yaml:"include-interface" json:"include-interface,omitempty"`
+	ExcludeInterface       *[]string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
+	IncludeUID             *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
+	IncludeUIDRange        *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
+	ExcludeUID             *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
+	ExcludeUIDRange        *[]string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser     *[]int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
+	IncludePackage         *[]string       `yaml:"include-package" json:"include-package,omitempty"`
+	ExcludePackage         *[]string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
+	EndpointIndependentNat *bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
+	UDPTimeout             *int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+	FileDescriptor         *int            `yaml:"file-descriptor" json:"file-descriptor"`
+
 	Inet4RouteAddress        *[]netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
 	Inet6RouteAddress        *[]netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
 	Inet4RouteExcludeAddress *[]netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
 	Inet6RouteExcludeAddress *[]netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
-	IncludeInterface         *[]string       `yaml:"include-interface" json:"include-interface,omitempty"`
-	ExcludeInterface         *[]string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
-	IncludeUID               *[]uint32       `yaml:"include-uid" json:"include-uid,omitempty"`
-	IncludeUIDRange          *[]string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
-	ExcludeUID               *[]uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
-	ExcludeUIDRange          *[]string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
-	IncludeAndroidUser       *[]int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
-	IncludePackage           *[]string       `yaml:"include-package" json:"include-package,omitempty"`
-	ExcludePackage           *[]string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
-	EndpointIndependentNat   *bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
-	UDPTimeout               *int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
-	FileDescriptor           *int            `yaml:"file-descriptor" json:"file-descriptor"`
-	TableIndex               *int            `yaml:"table-index" json:"table-index"`
 }
 
 type tuicServerSchema struct {
@@ -157,6 +166,36 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		if p.Inet6Address != nil {
 			def.Inet6Address = *p.Inet6Address
 		}
+		if p.IPRoute2TableIndex != nil {
+			def.IPRoute2TableIndex = *p.IPRoute2TableIndex
+		}
+		if p.IPRoute2RuleIndex != nil {
+			def.IPRoute2RuleIndex = *p.IPRoute2RuleIndex
+		}
+		if p.AutoRedirect != nil {
+			def.AutoRedirect = *p.AutoRedirect
+		}
+		if p.AutoRedirectInputMark != nil {
+			def.AutoRedirectInputMark = *p.AutoRedirectInputMark
+		}
+		if p.AutoRedirectOutputMark != nil {
+			def.AutoRedirectOutputMark = *p.AutoRedirectOutputMark
+		}
+		if p.StrictRoute != nil {
+			def.StrictRoute = *p.StrictRoute
+		}
+		if p.RouteAddress != nil {
+			def.RouteAddress = *p.RouteAddress
+		}
+		if p.RouteAddressSet != nil {
+			def.RouteAddressSet = *p.RouteAddressSet
+		}
+		if p.RouteExcludeAddress != nil {
+			def.RouteExcludeAddress = *p.RouteExcludeAddress
+		}
+		if p.RouteExcludeAddressSet != nil {
+			def.RouteExcludeAddressSet = *p.RouteExcludeAddressSet
+		}
 		if p.Inet4RouteAddress != nil {
 			def.Inet4RouteAddress = *p.Inet4RouteAddress
 		}
@@ -204,9 +243,6 @@ func pointerOrDefaultTun(p *tunSchema, def LC.Tun) LC.Tun {
 		}
 		if p.FileDescriptor != nil {
 			def.FileDescriptor = *p.FileDescriptor
-		}
-		if p.TableIndex != nil {
-			def.TableIndex = *p.TableIndex
 		}
 	}
 	return def
@@ -364,47 +400,25 @@ func updateConfigs(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateGeoDatabases(w http.ResponseWriter, r *http.Request) {
-	updateNotification := make(chan struct{})
-	errorChannel := make(chan error, 1)
-	done := make(chan struct{})
-	defer func() {
-		close(updateNotification)
-		close(errorChannel)
-	}()
+	err := updater.UpdateGeoDatabases()
+	if err != nil {
+		log.Errorln("[REST-API] update GEO databases failed: %v", err)
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
 
-	go func() {
-		defer close(done)
-		for {
-			select {
-			case <-updateNotification:
-				cfg, err := executor.ParseWithPath(C.Path.Config())
-				if err != nil {
-					log.Errorln("[REST-API] update GEO databases failed: %v", err)
-					render.Status(r, http.StatusInternalServerError)
-					render.JSON(w, r, newError("Error parsing configuration"))
-					return
-				}
+	cfg, err := executor.ParseWithPath(C.Path.Config())
+	if err != nil {
+		log.Errorln("[REST-API] update GEO databases failed: %v", err)
+		render.Status(r, http.StatusInternalServerError)
+		render.JSON(w, r, newError("Error parsing configuration"))
+		return
+	}
 
-				log.Warnln("[REST-API] update GEO databases success, applying config")
-				executor.ApplyConfig(cfg, false)
-				return
-			case err := <-errorChannel:
-				log.Errorln("[REST-API] update GEO databases failed: %v", err)
-				render.Status(r, http.StatusInternalServerError)
-				render.JSON(w, r, err.Error())
-				return
-			}
-		}
-	}()
+	log.Warnln("[GEO] update GEO databases success, applying config")
 
-	go func() {
-		err := updater.UpdateGeoDatabases(updateNotification)
-		if err != nil {
-			errorChannel <- err
-		}
-	}()
-
-	<-done
+	executor.ApplyConfig(cfg, false)
 
 	render.NoContent(w, r)
 }

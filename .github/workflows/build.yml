@@ -18,7 +18,7 @@ on:
     branches:
       - Alpha
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
   
 env:
@@ -206,6 +206,10 @@ jobs:
         sudo apt-get install dpkg
         if [ "${{matrix.jobs.abi}}" = "1" ]; then
           ARCH=loongarch64
+        elif [ "${{matrix.jobs.goarm}}" = "7" ]; then
+          ARCH=armhf
+        elif [ "${{matrix.jobs.goarch}}" = "arm" ]; then
+          ARCH=armel
         else
           ARCH=${{matrix.jobs.goarch}}
         fi
@@ -270,7 +274,7 @@ jobs:
     - name: Archive production artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}
+        name: "${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}"
         path: |
           mihomo*.gz
           mihomo*.deb
@@ -415,35 +419,35 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           version: latest
-
-      - name: Set Docker tags and labels based on trigger
-        id: set-meta
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tags=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-            echo "labels=org.opencontainers.image.version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-          else
-            echo "tags=${{ steps.meta.outputs.tags }}" >> $GITHUB_ENV
-            echo "labels=${{ steps.meta.outputs.labels }}" >> $GITHUB_ENV
-          fi
-            
-
+      
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
-        id: meta
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        id: meta_alpha
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
-          tags: ${{ env.tags }}
-          labels: ${{ env.labels }}
-
-
+          images: '${{ env.REGISTRY }}/${{ github.repository }}'
+      
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+        id: meta_release
+        uses: docker/metadata-action@v5
+        with:
+          images: '${{ env.REGISTRY }}/${{ github.repository }}'
+          tags: |
+            ${{ github.event.inputs.version }}
+          flavor: |
+            latest=true
+          labels: org.opencontainers.image.version=${{ github.event.inputs.version }}
+      
       - name: Show files
         run: |
           ls .
           ls bin/
-
+      
       - name: login to docker REGISTRY
         uses: docker/login-action@v3
         with:
@@ -454,7 +458,7 @@ jobs:
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
-        id: build-and-push
+        if: ${{ github.event_name != 'workflow_dispatch' }}
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -465,5 +469,20 @@ jobs:
             linux/amd64
             linux/arm64
             linux/arm/v7
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta_alpha.outputs.tags }}
+          labels: ${{ steps.meta_alpha.outputs.labels }}
+      
+      - name: Build and push Docker image
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: |
+            linux/386
+            linux/amd64
+            linux/arm64
+            linux/arm/v7
+          tags: ${{ steps.meta_release.outputs.tags }}
+          labels: ${{ steps.meta_release.outputs.labels }}

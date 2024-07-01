@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/component/resolver"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
 
@@ -123,4 +124,10 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 		return nil
 	}
 	return h.ListenerHandler.NewPacketConnection(ctx, conn, metadata)
+}
+
+func (h *ListenerHandler) TypeMutation(typ C.Type) *ListenerHandler {
+	handle := *h
+	handle.ListenerHandler = h.ListenerHandler.TypeMutation(typ)
+	return &handle
 }

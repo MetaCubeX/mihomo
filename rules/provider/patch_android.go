@@ -12,8 +12,8 @@ type UpdatableProvider interface {
 	UpdatedAt() time.Time
 }
 
-func (f *ruleSetProvider) UpdatedAt() time.Time {
-	return f.Fetcher.UpdatedAt
+func (rp *ruleSetProvider) UpdatedAt() time.Time {
+	return rp.Fetcher.UpdatedAt
 }
 
 func (rp *ruleSetProvider) Close() error {

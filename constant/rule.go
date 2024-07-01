@@ -116,4 +116,5 @@ type Rule interface {
 	Payload() string
 	ShouldResolveIP() bool
 	ShouldFindProcess() bool
+	ProviderNames() []string
 }

@@ -333,7 +333,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "ws", "httpupgrade":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
-				wsOpts["path"] = []string{"/"}
+				wsOpts["path"] = "/"
 				if host, ok := values["host"]; ok && host != "" {
 					headers["Host"] = host.(string)
 				}

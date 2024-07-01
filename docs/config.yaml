@@ -116,13 +116,25 @@ tun:
   # mtu: 9000 # 最大传输单元
   # gso: false # 启用通用分段卸载，仅支持 Linux
   # gso-max-size: 65536 # 通用分段卸载包的最大大小
+  auto-redirect: false # 自动配置 iptables 以重定向 TCP 连接。仅支持 Linux。带有 auto-redirect 的 auto-route 现在可以在路由器上按预期工作，无需干预。
   # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
-  inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
+  route-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 不匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
+    - ruleset-1
+    - ruleset-2
+  route-exclude-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
+    - ruleset-3
+    - ruleset-4
+  route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     - 0.0.0.0/1
     - 128.0.0.0/1
-  inet6-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     - "::/1"
     - "8000::/1"
+  # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由（旧写法）
+  #   - 0.0.0.0/1
+  #   - 128.0.0.0/1
+  # inet6-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由（旧写法）
+  #   - "::/1"
+  #   - "8000::/1"
   # endpoint-independent-nat: false # 启用独立于端点的 NAT
   # include-interface: # 限制被路由的接口。默认不限制，与 `exclude-interface` 冲突
   #   - "lan0"
@@ -209,7 +221,7 @@ tunnels: # one line config
 dns:
   cache-algorithm: arc
   enable: false # 关闭将使用系统 DNS
-  prefer-h3: true # 开启 DoH 支持 HTTP/3，将并发尝试
+  prefer-h3: false # 是否开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
   # ipv6: false # false 将返回 AAAA 的空结果
   # ipv6-timeout: 300 # 单位：ms，内部双栈并发时，向上游查询 AAAA 时，等待 AAAA 的时间，默认 100ms
@@ -226,6 +238,13 @@ dns:
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
 
   # use-hosts: true # 查询 hosts
+
+  # 配置后面的nameserver、fallback和nameserver-policy向dns服务器的连接过程是否遵守遵守rules规则
+  # 如果为false（默认值）则这三部分的dns服务器在未特别指定的情况下会直连
+  # 如果为true，将会按照rules的规则匹配链接方式（走代理或直连），如果有特别指定则任然以指定值为准
+  # 仅当proxy-server-nameserver非空时可以开启此选项, 强烈不建议和prefer-h3一起使用
+  # 此外，这三者配置中的dns服务器如果出现域名会采用default-nameserver配置项解析，也请确保正确配置default-nameserver
+  respect-rules: false
 
   # 配置不使用 fake-ip 的域名
   # fake-ip-filter:
@@ -244,6 +263,7 @@ dns:
     - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
+    # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
     # - '8.8.8.8#en0' # 兼容指定 DNS 出口网卡
 
   # 当配置 fallback 时，会查询 nameserver 中返回的 IP 是否为 CN，非必要配置
@@ -611,6 +631,10 @@ proxies: # socks5
     #   - h2
     #   - http/1.1
     # skip-cert-verify: true
+    # ss-opts: # like trojan-go's `shadowsocks` config
+    #   enabled: false
+    #   method: aes-128-gcm # aes-128-gcm/aes-256-gcm/chacha20-ietf-poly1305
+    #   password: "example"
 
   - name: trojan-grpc
     server: server
@@ -716,6 +740,7 @@ proxies: # socks5
     # dialer-proxy: "ss1"
     # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
+    # refresh-server-ip-interval: 60 # 重新解析server ip的间隔，单位为秒，默认值为0即仅第一次链接时解析server域名，仅应在server域名对应的IP会发生变化时启用该选项（如家宽ddns）
     # 如果 peers 不为空，该段落中的 allowed-ips 不可为空；前面段落的 server,port,public-key,pre-shared-key 均会被忽略，但 private-key 会被保留且只能在顶层指定
     # peers:
     #   - server: 162.159.192.1

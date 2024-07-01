@@ -8,7 +8,7 @@ import (
 
 	N "github.com/metacubex/mihomo/common/net"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 var (
@@ -71,7 +71,7 @@ func getHeadSize(b []byte, defaultValue int) int {
 
 func getDataLength(b []byte) int {
 	bLength := len(b)
-	dataLength := getHeadSize(b, 30) + fastrand.Intn(32)
+	dataLength := getHeadSize(b, 30) + randv2.IntN(32)
 	if bLength < dataLength {
 		return bLength
 	}

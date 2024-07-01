@@ -7,18 +7,14 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strconv"
 	"strings"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/common/picker"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/tunnel"
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
@@ -120,6 +116,11 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			continue
 		}
 
+		var options []dialer.Option
+		if s.Interface != "" {
+			options = append(options, dialer.WithInterface(s.Interface))
+		}
+
 		host, port, _ := net.SplitHostPort(s.Addr)
 		ret = append(ret, &client{
 			Client: &D.Client{
@@ -130,12 +131,9 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 				UDPSize: 4096,
 				Timeout: 5 * time.Second,
 			},
-			port:         port,
-			host:         host,
-			iface:        s.Interface,
-			r:            resolver,
-			proxyAdapter: s.ProxyAdapter,
-			proxyName:    s.ProxyName,
+			port:   port,
+			host:   host,
+			dialer: newDNSDialer(resolver, s.ProxyAdapter, s.ProxyName, options...),
 		})
 	}
 	return ret
@@ -173,120 +171,6 @@ func msgToDomain(msg *D.Msg) string {
 	}
 
 	return ""
-}
-
-type dialHandler func(ctx context.Context, network, addr string) (net.Conn, error)
-
-func getDialHandler(r *Resolver, proxyAdapter C.ProxyAdapter, proxyName string, opts ...dialer.Option) dialHandler {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		if len(proxyName) == 0 && proxyAdapter == nil {
-			opts = append(opts, dialer.WithResolver(r))
-			return dialer.DialContext(ctx, network, addr, opts...)
-		} else {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-			uintPort, err := strconv.ParseUint(port, 10, 16)
-			if err != nil {
-				return nil, err
-			}
-			if proxyAdapter == nil {
-				var ok bool
-				proxyAdapter, ok = tunnel.Proxies()[proxyName]
-				if !ok {
-					opts = append(opts, dialer.WithInterface(proxyName))
-				}
-			}
-
-			if strings.Contains(network, "tcp") {
-				// tcp can resolve host by remote
-				metadata := &C.Metadata{
-					NetWork: C.TCP,
-					Host:    host,
-					DstPort: uint16(uintPort),
-				}
-				if proxyAdapter != nil {
-					if proxyAdapter.IsL3Protocol(metadata) { // L3 proxy should resolve domain before to avoid loopback
-						dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-						if err != nil {
-							return nil, err
-						}
-						metadata.Host = ""
-						metadata.DstIP = dstIP
-					}
-					return proxyAdapter.DialContext(ctx, metadata, opts...)
-				}
-				opts = append(opts, dialer.WithResolver(r))
-				return dialer.DialContext(ctx, network, addr, opts...)
-			} else {
-				// udp must resolve host first
-				dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-				if err != nil {
-					return nil, err
-				}
-				metadata := &C.Metadata{
-					NetWork: C.UDP,
-					Host:    "",
-					DstIP:   dstIP,
-					DstPort: uint16(uintPort),
-				}
-				if proxyAdapter == nil {
-					return dialer.DialContext(ctx, network, addr, opts...)
-				}
-
-				if !proxyAdapter.SupportUDP() {
-					return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
-				}
-
-				packetConn, err := proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
-				if err != nil {
-					return nil, err
-				}
-
-				return N.NewBindPacketConn(packetConn, metadata.UDPAddr()), nil
-			}
-		}
-	}
-}
-
-func listenPacket(ctx context.Context, proxyAdapter C.ProxyAdapter, proxyName string, network string, addr string, r *Resolver, opts ...dialer.Option) (net.PacketConn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	uintPort, err := strconv.ParseUint(port, 10, 16)
-	if err != nil {
-		return nil, err
-	}
-	if proxyAdapter == nil {
-		var ok bool
-		proxyAdapter, ok = tunnel.Proxies()[proxyName]
-		if !ok {
-			opts = append(opts, dialer.WithInterface(proxyName))
-		}
-	}
-
-	// udp must resolve host first
-	dstIP, err := resolver.ResolveIPWithResolver(ctx, host, r)
-	if err != nil {
-		return nil, err
-	}
-	metadata := &C.Metadata{
-		NetWork: C.UDP,
-		Host:    "",
-		DstIP:   dstIP,
-		DstPort: uint16(uintPort),
-	}
-	if proxyAdapter == nil {
-		return dialer.NewDialer(opts...).ListenPacket(ctx, network, "", netip.AddrPortFrom(metadata.DstIP, metadata.DstPort))
-	}
-
-	if !proxyAdapter.SupportUDP() {
-		return nil, fmt.Errorf("proxy adapter [%s] UDP is not supported", proxyAdapter)
-	}
-
-	return proxyAdapter.ListenPacketContext(ctx, metadata, opts...)
 }
 
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {

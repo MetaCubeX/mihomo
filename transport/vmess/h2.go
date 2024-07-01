@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 	"golang.org/x/net/http2"
 )
 
@@ -27,7 +27,7 @@ type H2Config struct {
 func (hc *h2Conn) establishConn() error {
 	preader, pwriter := io.Pipe()
 
-	host := hc.cfg.Hosts[fastrand.Intn(len(hc.cfg.Hosts))]
+	host := hc.cfg.Hosts[randv2.IntN(len(hc.cfg.Hosts))]
 	path := hc.cfg.Path
 	// TODO: connect use VMess Host instead of H2 Host
 	req := http.Request{

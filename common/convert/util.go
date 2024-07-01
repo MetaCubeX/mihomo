@@ -8,8 +8,8 @@ import (
 
 	"github.com/metacubex/mihomo/common/utils"
 
+	"github.com/metacubex/randv2"
 	"github.com/metacubex/sing-shadowsocks/shadowimpl"
-	"github.com/zhangyunhao116/fastrand"
 )
 
 var hostsSuffix = []string{
@@ -302,11 +302,11 @@ func RandHost() string {
 	prefix += string(buf[6:8]) + "-"
 	prefix += string(buf[len(buf)-8:])
 
-	return prefix + hostsSuffix[fastrand.Intn(hostsLen)]
+	return prefix + hostsSuffix[randv2.IntN(hostsLen)]
 }
 
 func RandUserAgent() string {
-	return userAgents[fastrand.Intn(uaLen)]
+	return userAgents[randv2.IntN(uaLen)]
 }
 
 func SetUserAgent(header http.Header) {
