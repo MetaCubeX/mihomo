@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"gopkg.in/yaml.v3"
 	"runtime"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/component/resource"
@@ -170,15 +171,14 @@ func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStr
 			line = buf[s : i+1]
 			s = i + 1
 		} else {
-			s = len(buf)              // stop loop in next step
-			if firstLineLength == 0 { // no head or only one line body
+			s = len(buf)                                      // stop loop in next step
+			if firstLineLength == 0 && format == P.YamlRule { // no head or only one line body
 				return nil, ErrNoPayload
 			}
 		}
 		var str string
 		switch format {
 		case P.TextRule:
-			firstLineLength = -1 // don't return ErrNoPayload when read last line
 			str = string(line)
 			str = strings.TrimSpace(str)
 			if len(str) == 0 {

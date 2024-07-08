@@ -1057,6 +1057,16 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
+		if strings.HasPrefix(server, "dhcp://") {
+			nameservers = append(
+				nameservers,
+				dns.NameServer{
+					Net:  "dhcp",
+					Addr: server[len("dhcp://"):],
+				},
+			)
+			continue
+		}
 		server = parsePureDNSServer(server)
 		u, err := url.Parse(server)
 		if err != nil {
@@ -1099,9 +1109,6 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 					}
 				}
 			}
-		case "dhcp":
-			addr = u.Host
-			dnsNetType = "dhcp" // UDP from DHCP
 		case "quic":
 			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "quic" // DNS over QUIC
@@ -1174,6 +1181,7 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
+
 func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, respectRules bool, preferH3 bool) (*orderedmap.OrderedMap[string, []dns.NameServer], error) {
 	policy := orderedmap.New[string, []dns.NameServer]()
 	updatedPolicy := orderedmap.New[string, any]()
