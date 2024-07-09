@@ -408,3 +408,7 @@ func lookupIP4P(addr netip.Addr, port string) (netip.Addr, string) {
 	}
 	return addr, port
 }
+
+func LookupIP4P(addr netip.Addr, port string) (netip.Addr, string) {
+	return lookupIP4P(addr, port)
+}
