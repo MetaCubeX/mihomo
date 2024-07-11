@@ -504,7 +504,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		},
 		Sniffer: RawSniffer{
 			Enable:          false,
-			Sniffing:        []string{},
+			Sniff:           map[string]RawSniffingConfig{},
 			ForceDomain:     []string{},
 			SkipDomain:      []string{},
 			Ports:           []string{},
@@ -1566,7 +1566,7 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 			}
 		}
 	} else {
-		if sniffer.Enable {
+		if sniffer.Enable && len(snifferRaw.Sniffing) != 0 {
 			// Deprecated: Use Sniff instead
 			log.Warnln("Deprecated: Use Sniff instead")
 		}
