@@ -86,6 +86,13 @@ func (k chacha8ietfkey) Encrypter(iv []byte) cipher.Stream {
 	return ciph
 }
 
+func Chacha8IETF(key []byte) (Cipher, error) {
+	if len(key) != chacha8.KeySize {
+		return nil, KeySizeError(chacha8.KeySize)
+	}
+	return chacha8ietfkey(key), nil
+}
+
 type xchacha20key []byte
 
 func (k xchacha20key) IVSize() int                       { return chacha20.NonceSizeX }
