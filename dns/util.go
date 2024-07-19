@@ -173,11 +173,20 @@ func msgToDomain(msg *D.Msg) string {
 	return ""
 }
 
+func msgToQtype(msg *D.Msg) (uint16, string) {
+	if len(msg.Question) > 0 {
+		qType := msg.Question[0].Qtype
+		return qType, D.Type(qType).String()
+	}
+	return 0, ""
+}
+
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
 	cache = true
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
 	defer fast.Close()
 	domain := msgToDomain(m)
+	qType, qTypeStr := msgToQtype(m)
 	var noIpMsg *D.Msg
 	for _, client := range clients {
 		if _, isRCodeClient := client.(rcodeClient); isRCodeClient {
@@ -186,7 +195,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 		}
 		client := client // shadow define client to ensure the value captured by the closure will not be changed in the next loop
 		fast.Go(func() (*D.Msg, error) {
-			log.Debugln("[DNS] resolve %s from %s", domain, client.Address())
+			log.Debugln("[DNS] resolve %s %s from %s", domain, qTypeStr, client.Address())
 			m, err := client.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
@@ -195,20 +204,18 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 				// so we would ignore RCode errors from RCode clients.
 				return nil, errors.New("server failure: " + D.RcodeToString[m.Rcode])
 			}
-			if ips := msgToIP(m); len(m.Question) > 0 {
-				qType := m.Question[0].Qtype
-				log.Debugln("[DNS] %s --> %s %s from %s", domain, ips, D.Type(qType), client.Address())
-				switch qType {
-				case D.TypeAAAA:
-					if len(ips) == 0 {
-						noIpMsg = m
-						return nil, resolver.ErrIPNotFound
-					}
-				case D.TypeA:
-					if len(ips) == 0 {
-						noIpMsg = m
-						return nil, resolver.ErrIPNotFound
-					}
+			ips := msgToIP(m)
+			log.Debugln("[DNS] %s --> %s %s from %s", domain, ips, qTypeStr, client.Address())
+			switch qType {
+			case D.TypeAAAA:
+				if len(ips) == 0 {
+					noIpMsg = m
+					return nil, resolver.ErrIPNotFound
+				}
+			case D.TypeA:
+				if len(ips) == 0 {
+					noIpMsg = m
+					return nil, resolver.ErrIPNotFound
 				}
 			}
 			return m, nil
