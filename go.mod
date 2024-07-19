@@ -6,6 +6,7 @@ require (
 	github.com/3andne/restls-client-go v0.1.6
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/bahlo/generic-list-go v0.2.0
+	github.com/chocolatkey/chacha8 v0.0.0-20200308092524-06a0ce7f6716
 	github.com/cilium/ebpf v0.12.3
 	github.com/coreos/go-iptables v0.7.0
 	github.com/dlclark/regexp2 v1.11.0
