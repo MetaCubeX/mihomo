@@ -7,6 +7,7 @@ import (
 	"crypto/rc4"
 	"strconv"
 
+	"github.com/chocolatkey/chacha8"
 	"golang.org/x/crypto/chacha20"
 )
 
@@ -71,6 +72,18 @@ func Chacha20IETF(key []byte) (Cipher, error) {
 		return nil, KeySizeError(chacha20.KeySize)
 	}
 	return chacha20ietfkey(key), nil
+}
+
+type chacha8ietfkey []byte
+
+func (k chacha8ietfkey) IVSize() int                       { return chacha8.NonceSize }
+func (k chacha8ietfkey) Decrypter(iv []byte) cipher.Stream { return k.Encrypter(iv) }
+func (k chacha8ietfkey) Encrypter(iv []byte) cipher.Stream {
+	ciph, err := chacha8.New(k, iv)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return ciph
 }
 
 type xchacha20key []byte
