@@ -34,6 +34,11 @@ const (
 	aeadAes256Gcm         = "AEAD_AES_256_GCM"
 	aeadChacha20Poly1305  = "AEAD_CHACHA20_POLY1305"
 	aeadXChacha20Poly1305 = "AEAD_XCHACHA20_POLY1305"
+	aeadChacha8Poly1305   = "AEAD_CHACHA8_POLY1305"
+	aeadXChacha8Poly1305  = "AEAD_XCHACHA8_POLY1305"
+	aeadAes128Ccm         = "AEAD_AES_128_CCM"
+	aeadAes192Ccm         = "AEAD_AES_192_CCM"
+	aeadAes256Ccm         = "AEAD_AES_256_CCM"
 )
 
 // List of AEAD ciphers: key size in bytes and constructor
@@ -46,6 +51,11 @@ var aeadList = map[string]struct {
 	aeadAes256Gcm:         {32, shadowaead.AESGCM},
 	aeadChacha20Poly1305:  {32, shadowaead.Chacha20Poly1305},
 	aeadXChacha20Poly1305: {32, shadowaead.XChacha20Poly1305},
+	aeadChacha8Poly1305:   {32, shadowaead.Chacha8Poly1305},
+	aeadXChacha8Poly1305:  {32, shadowaead.XChacha8Poly1305},
+	aeadAes128Ccm:         {16, shadowaead.AESCCM},
+	aeadAes192Ccm:         {24, shadowaead.AESCCM},
+	aeadAes256Ccm:         {32, shadowaead.AESCCM},
 }
 
 // List of stream ciphers: key size in bytes and constructor
@@ -95,6 +105,16 @@ func PickCipher(name string, key []byte, password string) (Cipher, error) {
 		name = aeadAes192Gcm
 	case "AES-256-GCM":
 		name = aeadAes256Gcm
+	case "CHACHA8-IETF-POLY1305":
+		name = aeadChacha8Poly1305
+	case "XCHACHA8-IETF-POLY1305":
+		name = aeadXChacha8Poly1305
+	case "AES-128-CCM":
+		name = aeadAes128Ccm
+	case "AES-192-CCM":
+		name = aeadAes192Ccm
+	case "AES-256-CCM":
+		name = aeadAes256Ccm
 	}
 
 	if choice, ok := aeadList[name]; ok {

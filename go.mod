@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/3andne/restls-client-go v0.1.6
-	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/cilium/ebpf v0.12.3
 	github.com/coreos/go-iptables v0.7.0
@@ -18,14 +17,15 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.8
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
+	github.com/metacubex/chacha v0.1.0
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.45.1-0.20240610004319-163fee60637e
 	github.com/metacubex/randv2 v0.2.0
 	github.com/metacubex/sing-quic v0.0.0-20240518034124-7696d3f7da72
-	github.com/metacubex/sing-shadowsocks v0.2.6
-	github.com/metacubex/sing-shadowsocks2 v0.2.0
+	github.com/metacubex/sing-shadowsocks v0.2.7
+	github.com/metacubex/sing-shadowsocks2 v0.2.1
 	github.com/metacubex/sing-tun v0.2.7-0.20240627012306-9d1f5fc0b45e
-	github.com/metacubex/sing-vmess v0.1.9-0.20231207122118-72303677451f
+	github.com/metacubex/sing-vmess v0.1.9-0.20240719134745-1df6fb20bbf9
 	github.com/metacubex/sing-wireguard v0.0.0-20240618022557-a6efaa37127a
 	github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66
 	github.com/metacubex/utls v1.6.6
@@ -45,13 +45,14 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/wk8/go-ordered-map/v2 v2.1.8
+	gitlab.com/go-extension/aes-ccm v0.0.0-20230221065045-e58665ef23c7
 	go.uber.org/automaxprocs v1.5.3
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.24.0
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	golang.org/x/net v0.26.0
 	golang.org/x/sync v0.7.0
-	golang.org/x/sys v0.21.0
+	golang.org/x/sys v0.22.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.3.0
