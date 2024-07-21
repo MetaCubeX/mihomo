@@ -204,24 +204,24 @@ func (doh *dnsOverHTTPS) exchangeHTTPSClient(
 		method = http3.MethodGet0RTT
 	}
 
-	url := doh.url
-	url.RawQuery = fmt.Sprintf("dns=%s", base64.RawURLEncoding.EncodeToString(buf))
-	httpReq, err := http.NewRequestWithContext(ctx, method, url.String(), nil)
+	requestUrl := *doh.url // don't modify origin url
+	requestUrl.RawQuery = fmt.Sprintf("dns=%s", base64.RawURLEncoding.EncodeToString(buf))
+	httpReq, err := http.NewRequestWithContext(ctx, method, requestUrl.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating http request to %s: %w", url, err)
+		return nil, fmt.Errorf("creating http request to %s: %w", doh.url, err)
 	}
 
 	httpReq.Header.Set("Accept", "application/dns-message")
 	httpReq.Header.Set("User-Agent", "")
 	httpResp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("requesting %s: %w", url, err)
+		return nil, fmt.Errorf("requesting %s: %w", doh.url, err)
 	}
 	defer httpResp.Body.Close()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", url, err)
+		return nil, fmt.Errorf("reading %s: %w", doh.url, err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
@@ -230,7 +230,7 @@ func (doh *dnsOverHTTPS) exchangeHTTPSClient(
 				"expected status %d, got %d from %s",
 				http.StatusOK,
 				httpResp.StatusCode,
-				url,
+				doh.url,
 			)
 	}
 
@@ -239,7 +239,7 @@ func (doh *dnsOverHTTPS) exchangeHTTPSClient(
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unpacking response from %s: body is %s: %w",
-			url,
+			doh.url,
 			body,
 			err,
 		)
