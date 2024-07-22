@@ -96,6 +96,7 @@ type Controller struct {
 	ExternalControllerTLS  string `json:"-"`
 	ExternalControllerUnix string `json:"-"`
 	ExternalUI             string `json:"-"`
+	ExternalDohServer      string `json:"-"`
 	Secret                 string `json:"-"`
 }
 
@@ -322,6 +323,7 @@ type RawConfig struct {
 	ExternalUI              string            `yaml:"external-ui"`
 	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
 	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
+	ExternalDohServer       string            `yaml:"external-doh-server"`
 	Secret                  string            `yaml:"secret"`
 	Interface               string            `yaml:"interface-name"`
 	RoutingMark             int               `yaml:"routing-mark"`
@@ -697,6 +699,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			Secret:                 cfg.Secret,
 			ExternalControllerUnix: cfg.ExternalControllerUnix,
 			ExternalControllerTLS:  cfg.ExternalControllerTLS,
+			ExternalDohServer:      cfg.ExternalDohServer,
 		},
 		UnifiedDelay:            cfg.UnifiedDelay,
 		Mode:                    cfg.Mode,
