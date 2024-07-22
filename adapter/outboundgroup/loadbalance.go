@@ -205,7 +205,6 @@ func strategyStickySessions(url string) strategyFn {
 			proxy := proxies[nowIdx]
 			if proxy.AliveForTestUrl(url) {
 				if nowIdx != idx {
-					lruCache.Delete(key)
 					lruCache.Set(key, nowIdx)
 				}
 
@@ -215,7 +214,6 @@ func strategyStickySessions(url string) strategyFn {
 			}
 		}
 
-		lruCache.Delete(key)
 		lruCache.Set(key, 0)
 		return proxies[0]
 	}
