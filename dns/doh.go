@@ -61,10 +61,12 @@ type dnsOverHTTPS struct {
 	// for this upstream.
 	quicConfig      *quic.Config
 	quicConfigGuard sync.Mutex
-	url             *url.URL
-	httpVersions    []C.HTTPVersion
-	dialer          *dnsDialer
-	addr            string
+
+	url            *url.URL
+	httpVersions   []C.HTTPVersion
+	dialer         *dnsDialer
+	addr           string
+	skipCertVerify bool
 }
 
 // type check
@@ -93,6 +95,10 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 		httpVersions: httpVersions,
 	}
 
+	if params["skip-cert-verify"] == "true" {
+		doh.skipCertVerify = true
+	}
+
 	runtime.SetFinalizer(doh, (*dnsOverHTTPS).Close)
 
 	return doh
@@ -102,6 +108,7 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 func (doh *dnsOverHTTPS) Address() string {
 	return doh.addr
 }
+
 func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	// Quote from https://www.rfc-editor.org/rfc/rfc8484.html:
 	// In order to maximize HTTP cache friendliness, DoH clients using media
@@ -178,19 +185,9 @@ func (doh *dnsOverHTTPS) closeClient(client *http.Client) (err error) {
 	return nil
 }
 
-// exchangeHTTPS logs the request and its result and calls exchangeHTTPSClient.
-func (doh *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, req *D.Msg) (resp *D.Msg, err error) {
-	resp, err = doh.exchangeHTTPSClient(ctx, client, req)
-	return resp, err
-}
-
-// exchangeHTTPSClient sends the DNS query to a DoH resolver using the specified
+// exchangeHTTPS sends the DNS query to a DoH resolver using the specified
 // http.Client instance.
-func (doh *dnsOverHTTPS) exchangeHTTPSClient(
-	ctx context.Context,
-	client *http.Client,
-	req *D.Msg,
-) (resp *D.Msg, err error) {
+func (doh *dnsOverHTTPS) exchangeHTTPS(ctx context.Context, client *http.Client, req *D.Msg) (resp *D.Msg, err error) {
 	buf, err := req.Pack()
 	if err != nil {
 		return nil, fmt.Errorf("packing message: %w", err)
@@ -373,9 +370,21 @@ func (doh *dnsOverHTTPS) createClient(ctx context.Context) (*http.Client, error)
 // HTTP3 is enabled in the upstream options).  If this attempt is successful,
 // it returns an HTTP3 transport, otherwise it returns the H1/H2 transport.
 func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripper, err error) {
+	transport := &http.Transport{
+		DisableCompression: true,
+		DialContext:        doh.dialer.DialContext,
+		IdleConnTimeout:    transportDefaultIdleConnTimeout,
+		MaxConnsPerHost:    dohMaxConnsPerHost,
+		MaxIdleConns:       dohMaxIdleConns,
+	}
+
+	if doh.url.Scheme == "http" {
+		return transport, nil
+	}
+
 	tlsConfig := ca.GetGlobalTLSConfig(
 		&tls.Config{
-			InsecureSkipVerify:     false,
+			InsecureSkipVerify:     doh.skipCertVerify,
 			MinVersion:             tls.VersionTLS12,
 			SessionTicketsDisabled: false,
 		})
@@ -384,6 +393,7 @@ func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripp
 		nextProtos = append(nextProtos, string(v))
 	}
 	tlsConfig.NextProtos = nextProtos
+	transport.TLSClientConfig = tlsConfig
 
 	if slices.Contains(doh.httpVersions, C.HTTPVersion3) {
 		// First, we attempt to create an HTTP3 transport.  If the probe QUIC
@@ -402,18 +412,10 @@ func (doh *dnsOverHTTPS) createTransport(ctx context.Context) (t http.RoundTripp
 		return nil, errors.New("HTTP1/1 and HTTP2 are not supported by this upstream")
 	}
 
-	transport := &http.Transport{
-		TLSClientConfig:    tlsConfig,
-		DisableCompression: true,
-		DialContext:        doh.dialer.DialContext,
-		IdleConnTimeout:    transportDefaultIdleConnTimeout,
-		MaxConnsPerHost:    dohMaxConnsPerHost,
-		MaxIdleConns:       dohMaxIdleConns,
-		// Since we have a custom DialContext, we need to use this field to
-		// make golang http.Client attempt to use HTTP/2. Otherwise, it would
-		// only be used when negotiated on the TLS level.
-		ForceAttemptHTTP2: true,
-	}
+	// Since we have a custom DialContext, we need to use this field to
+	// make golang http.Client attempt to use HTTP/2. Otherwise, it would
+	// only be used when negotiated on the TLS level.
+	transport.ForceAttemptHTTP2 = true
 
 	// Explicitly configure transport to use HTTP/2.
 	//

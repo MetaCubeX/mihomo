@@ -1090,13 +1090,16 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 		case "tls":
 			addr, err = hostWithDefaultPort(u.Host, "853")
 			dnsNetType = "tcp-tls" // DNS over TLS
-		case "https":
+		case "http", "https":
 			addr, err = hostWithDefaultPort(u.Host, "443")
+			dnsNetType = "https" // DNS over HTTPS
+			if u.Scheme == "http" {
+				addr, err = hostWithDefaultPort(u.Host, "80")
+			}
 			if err == nil {
 				proxyName = ""
-				clearURL := url.URL{Scheme: "https", Host: addr, Path: u.Path, User: u.User}
+				clearURL := url.URL{Scheme: u.Scheme, Host: addr, Path: u.Path, User: u.User}
 				addr = clearURL.String()
-				dnsNetType = "https" // DNS over HTTPS
 				if len(u.Fragment) != 0 {
 					for _, s := range strings.Split(u.Fragment, "&") {
 						arr := strings.Split(s, "=")
