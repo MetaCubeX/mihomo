@@ -18,13 +18,7 @@ func dohRouter() http.Handler {
 func dohHandler(w http.ResponseWriter, r *http.Request) {
 	if resolver.DefaultResolver == nil {
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, newError("DNS section is disabled"))
-		return
-	}
-
-	if r.Header.Get("Accept") != "application/dns-message" {
-		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, newError("invalid accept header"))
+		render.PlainText(w, r, "DNS section is disabled")
 		return
 	}
 
@@ -36,19 +30,20 @@ func dohHandler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		if r.Header.Get("Content-Type") != "application/dns-message" {
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, newError("invalid content-type"))
+			render.PlainText(w, r, "invalid content-type")
 			return
 		}
-		dnsData, err = io.ReadAll(r.Body)
+		reader := io.LimitReader(r.Body, 65535) // according to rfc8484, the maximum size of the DNS message is 65535 bytes
+		dnsData, err = io.ReadAll(reader)
 		_ = r.Body.Close()
 	default:
 		render.Status(r, http.StatusMethodNotAllowed)
-		render.JSON(w, r, newError("method not allowed"))
+		render.PlainText(w, r, "method not allowed")
 		return
 	}
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, newError(err.Error()))
+		render.PlainText(w, r, err.Error())
 		return
 	}
 
@@ -58,10 +53,11 @@ func dohHandler(w http.ResponseWriter, r *http.Request) {
 	dnsData, err = resolver.RelayDnsPacket(ctx, dnsData, dnsData)
 	if err != nil {
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, newError(err.Error()))
+		render.PlainText(w, r, err.Error())
 		return
 	}
 
-	render.Status(r, http.StatusOK)
-	render.Data(w, r, dnsData)
+	w.Header().Set("Content-Type", "application/dns-message")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(dnsData)
 }
