@@ -3,6 +3,8 @@ package process
 import (
 	"errors"
 	"net/netip"
+
+	C "github.com/metacubex/mihomo/constant"
 )
 
 var (
@@ -18,4 +20,19 @@ const (
 
 func FindProcessName(network string, srcIP netip.Addr, srcPort int) (uint32, string, error) {
 	return findProcessName(network, srcIP, srcPort)
+}
+
+// PackageNameResolver
+// never change type traits because it's used in CFMA
+type PackageNameResolver func(metadata *C.Metadata) (string, error)
+
+// DefaultPackageNameResolver
+// never change type traits because it's used in CFMA
+var DefaultPackageNameResolver PackageNameResolver
+
+func FindPackageName(metadata *C.Metadata) (string, error) {
+	if resolver := DefaultPackageNameResolver; resolver != nil {
+		return resolver(metadata)
+	}
+	return "", ErrPlatformNotSupport
 }

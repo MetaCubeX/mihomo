@@ -24,7 +24,7 @@ require (
 	github.com/metacubex/sing-quic v0.0.0-20240518034124-7696d3f7da72
 	github.com/metacubex/sing-shadowsocks v0.2.7
 	github.com/metacubex/sing-shadowsocks2 v0.2.1
-	github.com/metacubex/sing-tun v0.2.7-0.20240719141828-5710f5d19a55
+	github.com/metacubex/sing-tun v0.2.7-0.20240719141246-19c49ac9589d
 	github.com/metacubex/sing-vmess v0.1.9-0.20240719134745-1df6fb20bbf9
 	github.com/metacubex/sing-wireguard v0.0.0-20240618022557-a6efaa37127a
 	github.com/metacubex/tfo-go v0.0.0-20240228025757-be1269474a66
@@ -36,7 +36,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.2.0
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a
-	github.com/sagernet/sing v0.5.0-alpha.10
+	github.com/sagernet/sing v0.5.0-alpha.13
 	github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/wireguard-go v0.0.0-20231209092712-9a439356a62e
@@ -93,6 +93,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
+	github.com/sagernet/fswatch v0.1.1 // indirect
 	github.com/sagernet/nftables v0.3.0-beta.4 // indirect
 	github.com/sagernet/smux v0.0.0-20231208180855-7041f6ea79e7 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
@@ -112,4 +113,4 @@ require (
 	golang.org/x/tools v0.22.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240617013425-3e3bd9dab6a2
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240724044459-6f3cf5896297
