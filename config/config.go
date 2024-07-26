@@ -42,6 +42,7 @@ import (
 	T "github.com/metacubex/mihomo/tunnel"
 
 	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
 
@@ -791,6 +792,9 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		providersMap[name] = pd
 		AllProviders = append(AllProviders, name)
 	}
+
+	slices.Sort(AllProxies)
+	slices.Sort(AllProviders)
 
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
