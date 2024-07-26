@@ -1,6 +1,9 @@
 package provider
 
 import (
+	"errors"
+	"io"
+
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -47,6 +50,25 @@ func (d *domainStrategy) FinishInsert() {
 	d.domainSet = d.domainTrie.NewDomainSet()
 	d.domainTrie = nil
 }
+
+func (d *domainStrategy) FromMrs(r io.Reader) error {
+	domainSet, count, err := trie.ReadDomainSetBin(r)
+	if err != nil {
+		return err
+	}
+	d.count = int(count)
+	d.domainSet = domainSet
+	return nil
+}
+
+func (d *domainStrategy) WriteMrs(w io.Writer) error {
+	if d.domainSet == nil {
+		return errors.New("nil domainSet")
+	}
+	return d.domainSet.WriteBin(w, int64(d.count))
+}
+
+var _ mrsRuleStrategy = (*domainStrategy)(nil)
 
 func NewDomainStrategy() *domainStrategy {
 	return &domainStrategy{}

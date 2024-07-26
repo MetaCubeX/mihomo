@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"fmt"
+
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/constant"
 )
@@ -110,9 +112,24 @@ func (rt RuleBehavior) String() string {
 	}
 }
 
+func ParseBehavior(s string) (behavior RuleBehavior, err error) {
+	switch s {
+	case "domain":
+		behavior = Domain
+	case "ipcidr":
+		behavior = IPCIDR
+	case "classical":
+		behavior = Classical
+	default:
+		err = fmt.Errorf("unsupported behavior type: %s", s)
+	}
+	return
+}
+
 const (
 	YamlRule RuleFormat = iota
 	TextRule
+	MrsRule
 )
 
 type RuleFormat int
@@ -123,9 +140,25 @@ func (rf RuleFormat) String() string {
 		return "YamlRule"
 	case TextRule:
 		return "TextRule"
+	case MrsRule:
+		return "MrsRule"
 	default:
 		return "Unknown"
 	}
+}
+
+func ParseRuleFormat(s string) (format RuleFormat, err error) {
+	switch s {
+	case "", "yaml":
+		format = YamlRule
+	case "text":
+		format = TextRule
+	case "mrs":
+		format = MrsRule
+	default:
+		err = fmt.Errorf("unsupported format type: %s", s)
+	}
+	return
 }
 
 type Tunnel interface {

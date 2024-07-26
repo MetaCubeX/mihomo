@@ -942,6 +942,12 @@ rule-providers:
     interval: 259200
     path: /path/to/save/file.yaml
     type: file
+  rule3: # mrs类型ruleset，目前仅支持domain，可以通过“mihomo convert-ruleset domain yaml XXX.yaml XXX.mrs”转换得到
+    type: http
+    url: "url"
+    format: mrs
+    behavior: domain
+    path: /path/to/save/file.mrs
 rules:
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY

@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"runtime"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+
+	"github.com/klauspost/compress/zstd"
+	"gopkg.in/yaml.v3"
 )
 
 var tunnel P.Tunnel
@@ -50,6 +52,12 @@ type ruleStrategy interface {
 	Reset()
 	Insert(rule string)
 	FinishInsert()
+}
+
+type mrsRuleStrategy interface {
+	ruleStrategy
+	FromMrs(r io.Reader) error
+	WriteMrs(w io.Writer) error
 }
 
 func (rp *ruleSetProvider) Type() P.ProviderType {
@@ -152,9 +160,23 @@ func newStrategy(behavior P.RuleBehavior, parse func(tp, payload, target string,
 }
 
 var ErrNoPayload = errors.New("file must have a `payload` field")
+var ErrInvalidFormat = errors.New("invalid format")
 
 func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStrategy, error) {
 	strategy.Reset()
+	if format == P.MrsRule {
+		if _strategy, ok := strategy.(mrsRuleStrategy); ok {
+			reader, err := zstd.NewReader(bytes.NewReader(buf))
+			if err != nil {
+				return nil, err
+			}
+			defer reader.Close()
+			err = _strategy.FromMrs(reader)
+			return strategy, err
+		} else {
+			return nil, ErrInvalidFormat
+		}
+	}
 
 	schema := &RulePayload{}
 
@@ -228,6 +250,8 @@ func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStr
 			if len(schema.Payload) > 0 {
 				str = schema.Payload[0]
 			}
+		default:
+			return nil, ErrInvalidFormat
 		}
 
 		if str == "" {
