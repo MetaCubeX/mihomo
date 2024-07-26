@@ -33,10 +33,20 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithAuthenticate(addr, tunnel, authStore.Authenticator(), additions...)
+	return NewWithAuthenticator(addr, tunnel, authStore.Authenticator(), additions...)
 }
 
-func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticator auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
+// NewWithAuthenticate
+// never change type traits because it's used in CFMA
+func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
+	authenticator := authStore.Authenticator()
+	if !authenticate {
+		authenticator = nil
+	}
+	return NewWithAuthenticator(addr, tunnel, authenticator, additions...)
+}
+
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, authenticator auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
