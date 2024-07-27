@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"os"
 
@@ -15,6 +16,9 @@ func ConvertToMrs(buf []byte, behavior P.RuleBehavior, format P.RuleFormat, w io
 	strategy, err = rulesParse(buf, strategy, format)
 	if err != nil {
 		return err
+	}
+	if strategy.Count() == 0 {
+		return errors.New("empty rule")
 	}
 	if _strategy, ok := strategy.(mrsRuleStrategy); ok {
 		var encoder *zstd.Encoder

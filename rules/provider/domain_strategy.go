@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
@@ -43,6 +44,10 @@ func (d *domainStrategy) Reset() {
 }
 
 func (d *domainStrategy) Insert(rule string) {
+	if strings.ContainsRune(rule, '/') {
+		log.Warnln("invalid domain:[%s]", rule)
+		return
+	}
 	err := d.domainTrie.Insert(rule, struct{}{})
 	if err != nil {
 		log.Warnln("invalid domain:[%s]", rule)
