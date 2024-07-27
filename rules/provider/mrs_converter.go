@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding/binary"
 	"io"
 	"os"
 
@@ -27,6 +28,38 @@ func ConvertToMrs(buf []byte, behavior P.RuleBehavior, format P.RuleFormat, w io
 				err = zstdErr
 			}
 		}()
+
+		// header
+		_, err = encoder.Write(MrsMagicBytes[:])
+		if err != nil {
+			return err
+		}
+
+		// behavior
+		_behavior := []byte{behavior.Byte()}
+		_, err = encoder.Write(_behavior[:])
+		if err != nil {
+			return err
+		}
+
+		// count
+		count := int64(_strategy.Count())
+		err = binary.Write(encoder, binary.BigEndian, count)
+		if err != nil {
+			return err
+		}
+
+		// extra (reserved for future using)
+		var extra []byte
+		err = binary.Write(encoder, binary.BigEndian, int64(len(extra)))
+		if err != nil {
+			return err
+		}
+		_, err = encoder.Write(extra)
+		if err != nil {
+			return err
+		}
+
 		return _strategy.WriteMrs(encoder)
 	} else {
 		return ErrInvalidFormat

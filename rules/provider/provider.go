@@ -14,7 +14,6 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 
-	"github.com/klauspost/compress/zstd"
 	"gopkg.in/yaml.v3"
 )
 
@@ -45,6 +44,7 @@ type RulePayload struct {
 }
 
 type ruleStrategy interface {
+	Behavior() P.RuleBehavior
 	Match(metadata *C.Metadata) bool
 	Count() int
 	ShouldResolveIP() bool
@@ -56,7 +56,7 @@ type ruleStrategy interface {
 
 type mrsRuleStrategy interface {
 	ruleStrategy
-	FromMrs(r io.Reader) error
+	FromMrs(r io.Reader, count int) error
 	WriteMrs(w io.Writer) error
 }
 
@@ -165,17 +165,7 @@ var ErrInvalidFormat = errors.New("invalid format")
 func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStrategy, error) {
 	strategy.Reset()
 	if format == P.MrsRule {
-		if _strategy, ok := strategy.(mrsRuleStrategy); ok {
-			reader, err := zstd.NewReader(bytes.NewReader(buf))
-			if err != nil {
-				return nil, err
-			}
-			defer reader.Close()
-			err = _strategy.FromMrs(reader)
-			return strategy, err
-		} else {
-			return nil, ErrInvalidFormat
-		}
+		return rulesMrsParse(buf, strategy)
 	}
 
 	schema := &RulePayload{}

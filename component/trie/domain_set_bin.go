@@ -6,15 +6,9 @@ import (
 	"io"
 )
 
-func (ss *DomainSet) WriteBin(w io.Writer, count int64) (err error) {
+func (ss *DomainSet) WriteBin(w io.Writer) (err error) {
 	// version
 	_, err = w.Write([]byte{1})
-	if err != nil {
-		return err
-	}
-
-	// count
-	err = binary.Write(w, binary.BigEndian, count)
 	if err != nil {
 		return err
 	}
@@ -56,21 +50,15 @@ func (ss *DomainSet) WriteBin(w io.Writer, count int64) (err error) {
 	return nil
 }
 
-func ReadDomainSetBin(r io.Reader) (ds *DomainSet, count int64, err error) {
+func ReadDomainSetBin(r io.Reader) (ds *DomainSet, err error) {
 	// version
 	version := make([]byte, 1)
 	_, err = io.ReadFull(r, version)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if version[0] != 1 {
-		return nil, 0, errors.New("version is invalid")
-	}
-
-	// count
-	err = binary.Read(r, binary.BigEndian, &count)
-	if err != nil {
-		return nil, 0, err
+		return nil, errors.New("version is invalid")
 	}
 
 	ds = &DomainSet{}
@@ -79,49 +67,49 @@ func ReadDomainSetBin(r io.Reader) (ds *DomainSet, count int64, err error) {
 	// leaves
 	err = binary.Read(r, binary.BigEndian, &length)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if length < 1 {
-		return nil, 0, errors.New("length is invalid")
+		return nil, errors.New("length is invalid")
 	}
 	ds.leaves = make([]uint64, length)
 	for i := int64(0); i < length; i++ {
 		err = binary.Read(r, binary.BigEndian, &ds.leaves[i])
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 	}
 
 	// labelBitmap
 	err = binary.Read(r, binary.BigEndian, &length)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if length < 1 {
-		return nil, 0, errors.New("length is invalid")
+		return nil, errors.New("length is invalid")
 	}
 	ds.labelBitmap = make([]uint64, length)
 	for i := int64(0); i < length; i++ {
 		err = binary.Read(r, binary.BigEndian, &ds.labelBitmap[i])
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 	}
 
 	// labels
 	err = binary.Read(r, binary.BigEndian, &length)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if length < 1 {
-		return nil, 0, errors.New("length is invalid")
+		return nil, errors.New("length is invalid")
 	}
 	ds.labels = make([]byte, length)
 	_, err = io.ReadFull(r, ds.labels)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	ds.init()
-	return ds, count, nil
+	return ds, nil
 }

@@ -112,6 +112,19 @@ func (rt RuleBehavior) String() string {
 	}
 }
 
+func (rt RuleBehavior) Byte() byte {
+	switch rt {
+	case Domain:
+		return 0
+	case IPCIDR:
+		return 1
+	case Classical:
+		return 2
+	default:
+		return 255
+	}
+}
+
 func ParseBehavior(s string) (behavior RuleBehavior, err error) {
 	switch s {
 	case "domain":
