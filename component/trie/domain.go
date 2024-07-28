@@ -123,16 +123,18 @@ func (t *DomainTrie[T]) Optimize() {
 	t.root.optimize()
 }
 
-func (t *DomainTrie[T]) Foreach(print func(domain string, data T)) {
+func (t *DomainTrie[T]) Foreach(fn func(domain string, data T) bool) {
 	for key, data := range t.root.getChildren() {
-		recursion([]string{key}, data, print)
+		recursion([]string{key}, data, fn)
 		if data != nil && data.inited {
-			print(joinDomain([]string{key}), data.data)
+			if !fn(joinDomain([]string{key}), data.data) {
+				return
+			}
 		}
 	}
 }
 
-func recursion[T any](items []string, node *Node[T], fn func(domain string, data T)) {
+func recursion[T any](items []string, node *Node[T], fn func(domain string, data T) bool) bool {
 	for key, data := range node.getChildren() {
 		newItems := append([]string{key}, items...)
 		if data != nil && data.inited {
@@ -140,10 +142,15 @@ func recursion[T any](items []string, node *Node[T], fn func(domain string, data
 			if domain[0] == domainStepByte {
 				domain = complexWildcard + domain
 			}
-			fn(domain, data.Data())
+			if !fn(domain, data.Data()) {
+				return false
+			}
 		}
-		recursion(newItems, data, fn)
+		if !recursion(newItems, data, fn) {
+			return false
+		}
 	}
+	return true
 }
 
 func joinDomain(items []string) string {

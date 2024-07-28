@@ -1,11 +1,28 @@
 package trie_test
 
 import (
+	"golang.org/x/exp/slices"
 	"testing"
 
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/stretchr/testify/assert"
 )
+
+func testDump(t *testing.T, tree *trie.DomainTrie[struct{}], set *trie.DomainSet) {
+	var dataSrc []string
+	tree.Foreach(func(domain string, data struct{}) bool {
+		dataSrc = append(dataSrc, domain)
+		return true
+	})
+	slices.Sort(dataSrc)
+	var dataSet []string
+	set.Foreach(func(key string) bool {
+		dataSet = append(dataSet, key)
+		return true
+	})
+	slices.Sort(dataSet)
+	assert.Equal(t, dataSrc, dataSet)
+}
 
 func TestDomainSet(t *testing.T) {
 	tree := trie.New[struct{}]()
@@ -33,6 +50,7 @@ func TestDomainSet(t *testing.T) {
 	assert.True(t, set.Has("google.com"))
 	assert.False(t, set.Has("qq.com"))
 	assert.False(t, set.Has("www.baidu.com"))
+	testDump(t, tree, set)
 }
 
 func TestDomainSetComplexWildcard(t *testing.T) {
@@ -55,6 +73,7 @@ func TestDomainSetComplexWildcard(t *testing.T) {
 	assert.False(t, set.Has("google.com"))
 	assert.True(t, set.Has("www.baidu.com"))
 	assert.True(t, set.Has("test.test.baidu.com"))
+	testDump(t, tree, set)
 }
 
 func TestDomainSetWildcard(t *testing.T) {
@@ -82,4 +101,5 @@ func TestDomainSetWildcard(t *testing.T) {
 	assert.False(t, set.Has("a.www.google.com"))
 	assert.False(t, set.Has("test.qq.com"))
 	assert.False(t, set.Has("test.test.test.qq.com"))
+	testDump(t, tree, set)
 }

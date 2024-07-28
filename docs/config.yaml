@@ -944,10 +944,17 @@ rule-providers:
     type: file
   rule3:
     # mrs类型ruleset，目前仅支持domain和ipcidr(即不支持classical），
-    # behavior=domain,format=yaml 可以通过“mihomo convert-ruleset domain yaml XXX.yaml XXX.mrs”转换得到
-    # behavior=domain,format=text 可以通过“mihomo convert-ruleset domain text XXX.text XXX.mrs”转换得到
-    # behavior=ipcidr,format=yaml 可以通过“mihomo convert-ruleset ipcidr yaml XXX.yaml XXX.mrs”转换得到
-    # behavior=ipcidr,format=text 可以通过“mihomo convert-ruleset ipcidr text XXX.text XXX.mrs”转换得到
+    #
+    # 对于behavior=domain:
+    #  - format=yaml 可以通过“mihomo convert-ruleset domain yaml XXX.yaml XXX.mrs”转换到mrs格式
+    #  - format=text 可以通过“mihomo convert-ruleset domain text XXX.text XXX.mrs”转换到mrs格式
+    #  - XXX.mrs 可以通过"mihomo convert-ruleset domain mrs XXX.mrs XXX.text"转换回text格式（暂不支持转换回ymal格式）
+    #
+    # 对于behavior=ipcidr:
+    #  - format=yaml 可以通过“mihomo convert-ruleset ipcidr yaml XXX.yaml XXX.mrs”转换到mrs格式
+    #  - format=text 可以通过“mihomo convert-ruleset ipcidr text XXX.text XXX.mrs”转换到mrs格式
+    #  - XXX.mrs 可以通过"mihomo convert-ruleset ipcidr mrs XXX.mrs XXX.text"转换回text格式（暂不支持转换回ymal格式）
+    #
     type: http
     url: "url"
     format: mrs

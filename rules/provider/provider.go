@@ -58,6 +58,7 @@ type mrsRuleStrategy interface {
 	ruleStrategy
 	FromMrs(r io.Reader, count int) error
 	WriteMrs(w io.Writer) error
+	DumpMrs(f func(key string) bool)
 }
 
 func (rp *ruleSetProvider) Type() P.ProviderType {

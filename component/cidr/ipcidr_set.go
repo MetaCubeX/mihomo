@@ -57,6 +57,16 @@ func (set *IpCidrSet) Merge() error {
 	return nil
 }
 
+func (set *IpCidrSet) Foreach(f func(prefix netip.Prefix) bool) {
+	for _, r := range set.rr {
+		for _, prefix := range r.Prefixes() {
+			if !f(prefix) {
+				return
+			}
+		}
+	}
+}
+
 // ToIPSet not safe convert to *netipx.IPSet
 // be careful, must be used after Merge
 func (set *IpCidrSet) ToIPSet() *netipx.IPSet {

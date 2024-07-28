@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"io"
+	"net/netip"
 
 	"github.com/metacubex/mihomo/component/cidr"
 	C "github.com/metacubex/mihomo/constant"
@@ -80,6 +81,14 @@ func (i *ipcidrStrategy) WriteMrs(w io.Writer) error {
 		return errors.New("nil cidrSet")
 	}
 	return i.cidrSet.WriteBin(w)
+}
+
+func (i *ipcidrStrategy) DumpMrs(f func(key string) bool) {
+	if i.cidrSet != nil {
+		i.cidrSet.Foreach(func(prefix netip.Prefix) bool {
+			return f(prefix.String())
+		})
+	}
 }
 
 func (i *ipcidrStrategy) ToIpCidr() *netipx.IPSet {

@@ -9,6 +9,8 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
+
+	"golang.org/x/exp/slices"
 )
 
 type domainStrategy struct {
@@ -76,6 +78,26 @@ func (d *domainStrategy) WriteMrs(w io.Writer) error {
 		return errors.New("nil domainSet")
 	}
 	return d.domainSet.WriteBin(w)
+}
+
+func (d *domainStrategy) DumpMrs(f func(key string) bool) {
+	if d.domainSet != nil {
+		var keys []string
+		d.domainSet.Foreach(func(key string) bool {
+			keys = append(keys, key)
+			return true
+		})
+		slices.Sort(keys)
+
+		for _, key := range keys {
+			if _, ok := slices.BinarySearch(keys, "+."+key); ok {
+				continue // ignore the rules added by trie internal processing
+			}
+			if !f(key) {
+				return
+			}
+		}
+	}
 }
 
 var _ mrsRuleStrategy = (*domainStrategy)(nil)
