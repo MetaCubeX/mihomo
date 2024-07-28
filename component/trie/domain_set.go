@@ -28,8 +28,9 @@ type qElt struct{ s, e, col int }
 // NewDomainSet creates a new *DomainSet struct, from a DomainTrie.
 func (t *DomainTrie[T]) NewDomainSet() *DomainSet {
 	reserveDomains := make([]string, 0)
-	t.Foreach(func(domain string, data T) {
+	t.Foreach(func(domain string, data T) bool {
 		reserveDomains = append(reserveDomains, utils.Reverse(domain))
+		return true
 	})
 	// ensure that the same prefix is continuous
 	// and according to the ascending sequence of length
@@ -134,6 +135,41 @@ func (ss *DomainSet) Has(key string) bool {
 
 	return getBit(ss.leaves, nodeId) != 0
 
+}
+
+func (ss *DomainSet) keys(f func(key string) bool) {
+	var currentKey []byte
+	var traverse func(int, int) bool
+	traverse = func(nodeId, bmIdx int) bool {
+		if getBit(ss.leaves, nodeId) != 0 {
+			if !f(string(currentKey)) {
+				return false
+			}
+		}
+
+		for ; ; bmIdx++ {
+			if getBit(ss.labelBitmap, bmIdx) != 0 {
+				return true
+			}
+			nextLabel := ss.labels[bmIdx-nodeId]
+			currentKey = append(currentKey, nextLabel)
+			nextNodeId := countZeros(ss.labelBitmap, ss.ranks, bmIdx+1)
+			nextBmIdx := selectIthOne(ss.labelBitmap, ss.ranks, ss.selects, nextNodeId-1) + 1
+			if !traverse(nextNodeId, nextBmIdx) {
+				return false
+			}
+			currentKey = currentKey[:len(currentKey)-1]
+		}
+	}
+
+	traverse(0, 0)
+	return
+}
+
+func (ss *DomainSet) Foreach(f func(key string) bool) {
+	ss.keys(func(key string) bool {
+		return f(utils.Reverse(key))
+	})
 }
 
 func setBit(bm *[]uint64, i int, v int) {

@@ -223,6 +223,10 @@ func (c *LruCache[K, V]) Delete(key K) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.delete(key)
+}
+
+func (c *LruCache[K, V]) delete(key K) {
 	if le, ok := c.cache[key]; ok {
 		c.deleteElement(le)
 	}
@@ -253,6 +257,34 @@ func (c *LruCache[K, V]) Clear() error {
 	c.cache = make(map[K]*list.Element[*entry[K, V]])
 
 	return nil
+}
+
+// Compute either sets the computed new value for the key or deletes
+// the value for the key. When the delete result of the valueFn function
+// is set to true, the value will be deleted, if it exists. When delete
+// is set to false, the value is updated to the newValue.
+// The ok result indicates whether value was computed and stored, thus, is
+// present in the map. The actual result contains the new value in cases where
+// the value was computed and stored.
+func (c *LruCache[K, V]) Compute(
+	key K,
+	valueFn func(oldValue V, loaded bool) (newValue V, delete bool),
+) (actual V, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if el := c.get(key); el != nil {
+		actual, ok = el.value, true
+	}
+	if newValue, del := valueFn(actual, ok); del {
+		if ok { // data not in cache, so needn't delete
+			c.delete(key)
+		}
+		return lo.Empty[V](), false
+	} else {
+		c.set(key, newValue)
+		return newValue, true
+	}
 }
 
 type entry[K comparable, V any] struct {

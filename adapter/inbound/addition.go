@@ -69,3 +69,5 @@ func WithDSCP(dscp uint8) Addition {
 		metadata.DSCP = dscp
 	}
 }
+
+func Placeholder(metadata *C.Metadata) {}

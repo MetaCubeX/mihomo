@@ -46,12 +46,12 @@ func findProcessName(network string, ip netip.Addr, port int) (uint32, string, e
 
 	isIPv4 := ip.Is4()
 
-	value, err := syscall.Sysctl(spath)
+	value, err := unix.SysctlRaw(spath)
 	if err != nil {
 		return 0, "", err
 	}
 
-	buf := []byte(value)
+	buf := value
 	itemSize := structSize
 	if network == TCP {
 		// rup8(sizeof(xtcpcb_n))

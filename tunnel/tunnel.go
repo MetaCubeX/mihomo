@@ -622,6 +622,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 					metadata.Process = filepath.Base(path)
 					metadata.ProcessPath = path
 					metadata.Uid = uid
+
+					if pkg, err := P.FindPackageName(metadata); err == nil { // for android (not CMFA) package names
+						metadata.Process = pkg
+					}
 				}
 			} else {
 				// check package names

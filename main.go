@@ -17,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/hub"
 	"github.com/metacubex/mihomo/hub/executor"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/rules/provider"
 
 	"go.uber.org/automaxprocs/maxprocs"
 )
@@ -48,6 +49,12 @@ func init() {
 
 func main() {
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
+
+	if len(os.Args) > 1 && os.Args[1] == "convert-ruleset" {
+		provider.ConvertMain(os.Args[2:])
+		return
+	}
+
 	if version {
 		fmt.Printf("Mihomo Meta %s %s %s with %s %s\n",
 			C.Version, runtime.GOOS, runtime.GOARCH, runtime.Version(), C.BuildTime)

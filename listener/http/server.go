@@ -4,9 +4,10 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/lru"
+	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
+	authStore "github.com/metacubex/mihomo/listener/auth"
 )
 
 type Listener struct {
@@ -32,10 +33,20 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithAuthenticate(addr, tunnel, true, additions...)
+	return NewWithAuthenticator(addr, tunnel, authStore.Authenticator(), additions...)
 }
 
+// NewWithAuthenticate
+// never change type traits because it's used in CFMA
 func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
+	authenticator := authStore.Authenticator()
+	if !authenticate {
+		authenticator = nil
+	}
+	return NewWithAuthenticator(addr, tunnel, authenticator, additions...)
+}
+
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, authenticator auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -48,11 +59,6 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 
 	if err != nil {
 		return nil, err
-	}
-
-	var c *lru.LruCache[string, bool]
-	if authenticate {
-		c = lru.New[string, bool](lru.WithAge[string, bool](30))
 	}
 
 	hl := &Listener{
@@ -79,7 +85,7 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 					continue
 				}
 			}
-			go HandleConn(conn, tunnel, c, additions...)
+			go HandleConn(conn, tunnel, authenticator, additions...)
 		}
 	}()
 
