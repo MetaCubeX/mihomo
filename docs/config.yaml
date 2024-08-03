@@ -265,6 +265,7 @@ dns:
     - https://doh.pub/dns-query # DNS over HTTPS
     - https://dns.alidns.com/dns-query#h3=true # 强制 HTTP/3，与 perfer-h3 无关，强制开启 DoH 的 HTTP/3 支持，若不支持将无法使用
     - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
+    - https://1.1.1.1/dns-query#DNS&ipv6=false # 对于AAAA请求返回空响应
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
     # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
