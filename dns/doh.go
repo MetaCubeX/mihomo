@@ -95,7 +95,7 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 			TokenStore:      newQUICTokenStore(),
 		},
 		httpVersions: httpVersions,
-		ipv6:         resolver.DisableIPv6,
+		ipv6:         !resolver.DisableIPv6,
 	}
 
 	if params["skip-cert-verify"] == "true" {
