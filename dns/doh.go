@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/quic-go"
@@ -67,6 +68,7 @@ type dnsOverHTTPS struct {
 	dialer         *dnsDialer
 	addr           string
 	skipCertVerify bool
+	ipv6           bool
 }
 
 // type check
@@ -93,10 +95,14 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 			TokenStore:      newQUICTokenStore(),
 		},
 		httpVersions: httpVersions,
+		ipv6:         resolver.DisableIPv6,
 	}
 
 	if params["skip-cert-verify"] == "true" {
 		doh.skipCertVerify = true
+	}
+	if params["ipv6"] == "false" {
+		doh.ipv6 = false
 	}
 
 	runtime.SetFinalizer(doh, (*dnsOverHTTPS).Close)
@@ -110,6 +116,10 @@ func (doh *dnsOverHTTPS) Address() string {
 }
 
 func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
+	// check is ipv6 query
+	if m.Question[0].Qtype == D.TypeAAAA && !doh.ipv6 {
+		return handleMsgWithEmptyAnswer(m), nil
+	}
 	// Quote from https://www.rfc-editor.org/rfc/rfc8484.html:
 	// In order to maximize HTTP cache friendliness, DoH clients using media
 	// formats that include the ID field from the DNS message header, such
