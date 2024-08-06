@@ -40,10 +40,7 @@ func (rs *RuleSet) Adapter() string {
 }
 
 func (rs *RuleSet) Payload() string {
-	if provider, ok := rs.getProvider(); ok {
-		return provider.Name()
-	}
-	return ""
+	return rs.ruleProviderName
 }
 
 func (rs *RuleSet) ShouldResolveIP() bool {
