@@ -26,11 +26,13 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = RC.NewGEOIP(payload, target, false, noResolve)
 	case "SRC-GEOIP":
 		parsed, parseErr = RC.NewGEOIP(payload, target, true, true)
+	case "SRC-MAC":
+		parsed, parseErr = RC.NewMAC(payload, target, true)
+	case "DST-MAC":
+		parsed, parseErr = RC.NewMAC(payload, target, false)
 	case "IP-ASN":
 		noResolve := RC.HasNoResolve(params)
 		parsed, parseErr = RC.NewIPASN(payload, target, false, noResolve)
-	case "SRC-MAC":
-		parsed, parseErr = RC.NewMAC(payload, target)
 	case "SRC-IP-ASN":
 		parsed, parseErr = RC.NewIPASN(payload, target, true, true)
 	case "IP-CIDR", "IP-CIDR6":

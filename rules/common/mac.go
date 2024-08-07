@@ -19,21 +19,27 @@ var arpTable = make(map[string]string)
 const reloadInterval = 5 * time.Minute
 
 var startOnce sync.Once
+
 func init() {
 }
 
-type SrcMAC struct {
+type MacAddr struct {
 	*Base
-	mac     string
-	adapter string
+	mac        string
+	adapter    string
+	isSourceIP bool
 }
 
-func (d *SrcMAC) RuleType() C.RuleType {
-	return C.SrcMAC
+func (d *MacAddr) RuleType() C.RuleType {
+	if d.isSourceIP {
+		return C.SrcMAC
+	} else {
+		return C.DstMAC
+	}
 }
 
 func getLoadArpTableFunc() func() (string, error) {
-	const ipv6Error = "can't load ipv6 arp table, SRC-MAC rule can't match src ipv6 address"
+	const ipv6Error = "can't load ipv6 arp table, SRC-MAC/DST-MAC rule can't match src ipv6 address"
 
 	getIpv4Only := func() (string, error) {
 		return cmd.ExecCmd("arp -a")
@@ -95,39 +101,45 @@ func getLoadArpTableFunc() func() (string, error) {
 	}
 }
 
-func (d *SrcMAC) Match(metadata *C.Metadata) (bool, string) {
+func (d *MacAddr) Match(metadata *C.Metadata) (bool, string) {
 	table := getArpTable()
-	srcIP := metadata.SrcIP.String()
-	mac, exists := table[srcIP]
+	var ip string
+	if d.isSourceIP {
+		ip = metadata.SrcIP.String()
+	} else {
+		ip = metadata.DstIP.String()
+	}
+	mac, exists := table[ip]
 	if exists {
 		if mac == d.mac {
 			return true, d.adapter
 		}
 	} else {
-		log.Warnln("can't find the IP address in arp table: %s", srcIP)
+		log.Infoln("can't find the IP address in arp table: %s", ip)
 	}
 	return false, d.adapter
 }
 
-func (d *SrcMAC) Adapter() string {
+func (d *MacAddr) Adapter() string {
 	return d.adapter
 }
 
-func (d *SrcMAC) Payload() string {
+func (d *MacAddr) Payload() string {
 	return d.mac
 }
 
 var macRegex = regexp.MustCompile(`^([0-9a-f]{2}:){5}[0-9a-f]{2}$`)
 
-func NewMAC(mac string, adapter string) (*SrcMAC, error) {
+func NewMAC(mac string, adapter string, isSrc bool) (*MacAddr, error) {
 	macAddr := strings.ReplaceAll(strings.ToLower(mac), "-", ":")
 	if !macRegex.MatchString(macAddr) {
 		return nil, errors.New("mac address format error: " + mac)
 	}
-	return &SrcMAC{
-		Base:    &Base{},
-		mac:     macAddr,
-		adapter: adapter,
+	return &MacAddr{
+		Base:       &Base{},
+		mac:        macAddr,
+		adapter:    adapter,
+		isSourceIP: isSrc,
 	}, nil
 }
 
