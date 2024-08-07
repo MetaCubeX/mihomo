@@ -121,8 +121,9 @@ func TestTrie_Foreach(t *testing.T) {
 		assert.NoError(t, tree.Insert(domain, localIP))
 	}
 	count := 0
-	tree.Foreach(func(domain string, data netip.Addr) {
+	tree.Foreach(func(domain string, data netip.Addr) bool {
 		count++
+		return true
 	})
 	assert.Equal(t, 7, count)
 }

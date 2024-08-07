@@ -13,7 +13,7 @@ import (
 	"github.com/metacubex/mihomo/transport/socks5"
 )
 
-func newClient(srcConn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) *http.Client {
+func newClient(srcConn net.Conn, tunnel C.Tunnel, additions []inbound.Addition) *http.Client { // additions using slice let caller can change its value (without size) after newClient return
 	return &http.Client{
 		Transport: &http.Transport{
 			// from http.DefaultTransport

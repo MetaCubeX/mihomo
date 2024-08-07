@@ -32,28 +32,13 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	if err := decoder.Decode(mapping, schema); err != nil {
 		return nil, err
 	}
-	var behavior P.RuleBehavior
-
-	switch schema.Behavior {
-	case "domain":
-		behavior = P.Domain
-	case "ipcidr":
-		behavior = P.IPCIDR
-	case "classical":
-		behavior = P.Classical
-	default:
-		return nil, fmt.Errorf("unsupported behavior type: %s", schema.Behavior)
+	behavior, err := P.ParseBehavior(schema.Behavior)
+	if err != nil {
+		return nil, err
 	}
-
-	var format P.RuleFormat
-
-	switch schema.Format {
-	case "", "yaml":
-		format = P.YamlRule
-	case "text":
-		format = P.TextRule
-	default:
-		return nil, fmt.Errorf("unsupported format type: %s", schema.Format)
+	format, err := P.ParseRuleFormat(schema.Format)
+	if err != nil {
+		return nil, err
 	}
 
 	var vehicle P.Vehicle

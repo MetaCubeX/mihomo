@@ -155,6 +155,7 @@ jobs:
         echo "BUILDTIME=$(date)" >> $GITHUB_ENV
         echo "CGO_ENABLED=0" >> $GITHUB_ENV
         echo "BUILDTAG=-extldflags --static" >> $GITHUB_ENV
+        echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
 
     - name: Setup NDK
       if: ${{ matrix.jobs.goos == 'android' }}
