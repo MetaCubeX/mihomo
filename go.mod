@@ -23,8 +23,8 @@ require (
 	github.com/metacubex/quic-go v0.45.1-0.20240803003931-60a15f6efd94
 	github.com/metacubex/randv2 v0.2.0
 	github.com/metacubex/sing-quic v0.0.0-20240518034124-7696d3f7da72
-	github.com/metacubex/sing-shadowsocks v0.2.7
-	github.com/metacubex/sing-shadowsocks2 v0.2.1
+	github.com/metacubex/sing-shadowsocks v0.2.8
+	github.com/metacubex/sing-shadowsocks2 v0.2.2
 	github.com/metacubex/sing-tun v0.2.7-0.20240729131039-ed03f557dee1
 	github.com/metacubex/sing-vmess v0.1.9-0.20240719134745-1df6fb20bbf9
 	github.com/metacubex/sing-wireguard v0.0.0-20240618022557-a6efaa37127a
