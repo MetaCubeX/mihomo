@@ -23,6 +23,7 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	SNI "github.com/metacubex/mihomo/component/sniffer"
 	"github.com/metacubex/mihomo/component/trie"
+	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
@@ -113,6 +114,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	runtime.GC()
 	tunnel.OnRunning()
 	hcCompatibleProvider(cfg.Providers)
+	initExternalUI()
 
 	log.SetLevel(cfg.General.LogLevel)
 }
@@ -383,6 +385,18 @@ func updateSniffer(sniffer *config.Sniffer) {
 
 func updateTunnels(tunnels []LC.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.Tunnel)
+}
+
+func initExternalUI() {
+	if updater.ExternalUIFolder != "" {
+		dirEntries, _ := os.ReadDir(updater.ExternalUIFolder)
+		if len(dirEntries) > 0 {
+			log.Infoln("UI already exists")
+		} else {
+			log.Infoln("UI not exists, downloading")
+			updater.UpdateUI()
+		}
+	}
 }
 
 func updateGeneral(general *config.General) {

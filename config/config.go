@@ -677,6 +677,11 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		updater.ExternalUIURL = cfg.ExternalUIURL
 	}
 
+	err := updater.PrepareUIPath()
+	if err != nil {
+		log.Errorln("PrepareUIPath error: %s", err)
+	}
+
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,

@@ -29,11 +29,6 @@ func UpdateUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
 
-	err := prepare_ui()
-	if err != nil {
-		return err
-	}
-
 	data, err := downloadForBytes(ExternalUIURL)
 	if err != nil {
 		return fmt.Errorf("can't download  file: %w", err)
@@ -64,7 +59,7 @@ func UpdateUI() error {
 	return nil
 }
 
-func prepare_ui() error {
+func PrepareUIPath() error {
 	if ExternalUIPath == "" || ExternalUIURL == "" {
 		return ErrIncompleteConf
 	}
@@ -79,7 +74,6 @@ func prepare_ui() error {
 	} else {
 		ExternalUIFolder = ExternalUIPath
 	}
-
 	return nil
 }
 
