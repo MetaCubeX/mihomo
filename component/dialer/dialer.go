@@ -127,10 +127,6 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
-	if features.CMFA && DefaultSocketHook != nil {
-		return dialContextHooked(ctx, network, destination, port)
-	}
-
 	var address string
 	if IP4PEnable {
 		destination, port = lookupIP4P(destination, port)
@@ -149,6 +145,14 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	dialer := netDialer.(*net.Dialer)
+	if opt.mpTcp {
+		setMultiPathTCP(dialer)
+	}
+
+	if features.CMFA && DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo in CMFA
+		return dialContextHooked(ctx, dialer, network, address)
+	}
+
 	if opt.interfaceName != "" {
 		bind := bindIfaceToDialer
 		if opt.fallbackBind {
@@ -160,9 +164,6 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 	if opt.routingMark != 0 {
 		bindMarkToDialer(opt.routingMark, dialer, network, destination)
-	}
-	if opt.mpTcp {
-		setMultiPathTCP(dialer)
 	}
 	if opt.tfo && !DisableTFO {
 		return dialTFO(ctx, *dialer, network, address)

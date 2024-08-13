@@ -5,7 +5,6 @@ package dialer
 import (
 	"context"
 	"net"
-	"net/netip"
 	"syscall"
 )
 
@@ -13,12 +12,12 @@ type SocketControl func(network, address string, conn syscall.RawConn) error
 
 var DefaultSocketHook SocketControl
 
-func dialContextHooked(ctx context.Context, network string, destination netip.Addr, port string) (net.Conn, error) {
-	dialer := &net.Dialer{
-		Control: DefaultSocketHook,
-	}
+func dialContextHooked(ctx context.Context, dialer *net.Dialer, network string, address string) (net.Conn, error) {
+	addControlToDialer(dialer, func(ctx context.Context, network, address string, c syscall.RawConn) error {
+		return DefaultSocketHook(network, address, c)
+	})
 
-	conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(destination.String(), port))
+	conn, err := dialer.DialContext(ctx, network, address)
 	if err != nil {
 		return nil, err
 	}
