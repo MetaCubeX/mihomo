@@ -338,6 +338,7 @@ type RawConfig struct {
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
 	GlobalUA                string            `yaml:"global-ua"`
+	KeepAliveIdle           int               `yaml:"keep-alive-idle"`
 	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
@@ -649,6 +650,10 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	C.ASNUrl = cfg.GeoXUrl.ASN
 	C.GeodataMode = cfg.GeodataMode
 	C.UA = cfg.GlobalUA
+
+	if cfg.KeepAliveIdle != 0 {
+		N.KeepAliveIdle = time.Duration(cfg.KeepAliveIdle) * time.Second
+	}
 	if cfg.KeepAliveInterval != 0 {
 		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
