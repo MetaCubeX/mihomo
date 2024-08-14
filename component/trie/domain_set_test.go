@@ -40,6 +40,7 @@ func TestDomainSet(t *testing.T) {
 	for _, domain := range domainSet {
 		assert.NoError(t, tree.Insert(domain, struct{}{}))
 	}
+	assert.False(t, tree.IsEmpty())
 	set := tree.NewDomainSet()
 	assert.NotNil(t, set)
 	assert.True(t, set.Has("test.cn"))
@@ -68,6 +69,7 @@ func TestDomainSetComplexWildcard(t *testing.T) {
 	for _, domain := range domainSet {
 		assert.NoError(t, tree.Insert(domain, struct{}{}))
 	}
+	assert.False(t, tree.IsEmpty())
 	set := tree.NewDomainSet()
 	assert.NotNil(t, set)
 	assert.False(t, set.Has("google.com"))
@@ -90,6 +92,7 @@ func TestDomainSetWildcard(t *testing.T) {
 	for _, domain := range domainSet {
 		assert.NoError(t, tree.Insert(domain, struct{}{}))
 	}
+	assert.False(t, tree.IsEmpty())
 	set := tree.NewDomainSet()
 	assert.NotNil(t, set)
 	assert.True(t, set.Has("www.baidu.com"))
