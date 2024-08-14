@@ -340,6 +340,7 @@ type RawConfig struct {
 	GlobalUA                string            `yaml:"global-ua"`
 	KeepAliveIdle           int               `yaml:"keep-alive-idle"`
 	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
+	DisableKeepAlive        bool              `yaml:"disable-keep-alive"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
@@ -657,6 +658,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	if cfg.KeepAliveInterval != 0 {
 		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
 	}
+	N.DisableKeepAlive = cfg.DisableKeepAlive
 
 	updater.ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist

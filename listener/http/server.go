@@ -4,9 +4,9 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
 	authStore "github.com/metacubex/mihomo/listener/auth"
 )
 
@@ -74,11 +74,7 @@ func NewWithAuthenticator(addr string, tunnel C.Tunnel, authenticator auth.Authe
 				}
 				continue
 			}
-			if features.CMFA {
-				if t, ok := conn.(*net.TCPConn); ok {
-					t.SetKeepAlive(false)
-				}
-			}
+			N.TCPKeepAlive(conn)
 			if isDefault { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
 					_ = conn.Close()

@@ -4,12 +4,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
-)
-
-var (
-	KeepAliveIdle     = 0 * time.Second
-	KeepAliveInterval = 0 * time.Second
 )
 
 func SplitNetworkType(s string) (string, string, error) {

@@ -82,8 +82,9 @@ external-doh-server: /dns-query
 global-client-fingerprint: chrome
 
 #  TCP keep alive interval
-# keep-alive-idle: 7200
-# keep-alive-interval: 75
+# disable-keep-alive: false #目前在android端强制为true
+# keep-alive-idle: 15
+# keep-alive-interval: 15
 
 # routing-mark:6666 # 配置 fwmark 仅用于 Linux
 experimental:

@@ -4,9 +4,7 @@ package net
 
 import "net"
 
-func TCPKeepAlive(c net.Conn) {
-	if tcp, ok := c.(*net.TCPConn); ok {
-		_ = tcp.SetKeepAlive(true)
-		_ = tcp.SetKeepAlivePeriod(KeepAliveInterval)
-	}
+func tcpKeepAlive(tcp *net.TCPConn) {
+	_ = tcp.SetKeepAlive(true)
+	_ = tcp.SetKeepAlivePeriod(KeepAliveInterval)
 }

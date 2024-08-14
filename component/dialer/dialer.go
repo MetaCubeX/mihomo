@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/log"
 )
 
@@ -79,29 +78,29 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort, options ...Option) (net.PacketConn, error) {
-	if features.CMFA && DefaultSocketHook != nil {
-		return listenPacketHooked(ctx, network, address)
-	}
-
 	cfg := applyOptions(options...)
 
 	lc := &net.ListenConfig{}
-	if cfg.interfaceName != "" {
-		bind := bindIfaceToListenConfig
-		if cfg.fallbackBind {
-			bind = fallbackBindIfaceToListenConfig
-		}
-		addr, err := bind(cfg.interfaceName, lc, network, address, rAddrPort)
-		if err != nil {
-			return nil, err
-		}
-		address = addr
-	}
 	if cfg.addrReuse {
 		addrReuseToListenConfig(lc)
 	}
-	if cfg.routingMark != 0 {
-		bindMarkToListenConfig(cfg.routingMark, lc, network, address)
+	if DefaultSocketHook != nil { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CFMA)
+		socketHookToListenConfig(lc)
+	} else {
+		if cfg.interfaceName != "" {
+			bind := bindIfaceToListenConfig
+			if cfg.fallbackBind {
+				bind = fallbackBindIfaceToListenConfig
+			}
+			addr, err := bind(cfg.interfaceName, lc, network, address, rAddrPort)
+			if err != nil {
+				return nil, err
+			}
+			address = addr
+		}
+		if cfg.routingMark != 0 {
+			bindMarkToListenConfig(cfg.routingMark, lc, network, address)
+		}
 	}
 
 	return lc.ListenPacket(ctx, network, address)
@@ -149,25 +148,26 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 		setMultiPathTCP(dialer)
 	}
 
-	if features.CMFA && DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo in CMFA
-		return dialContextHooked(ctx, dialer, network, address)
+	if DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo when DefaultSocketHook not null (in CFMA)
+		socketHookToToDialer(dialer)
+	} else {
+		if opt.interfaceName != "" {
+			bind := bindIfaceToDialer
+			if opt.fallbackBind {
+				bind = fallbackBindIfaceToDialer
+			}
+			if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
+				return nil, err
+			}
+		}
+		if opt.routingMark != 0 {
+			bindMarkToDialer(opt.routingMark, dialer, network, destination)
+		}
+		if opt.tfo && !DisableTFO {
+			return dialTFO(ctx, *dialer, network, address)
+		}
 	}
 
-	if opt.interfaceName != "" {
-		bind := bindIfaceToDialer
-		if opt.fallbackBind {
-			bind = fallbackBindIfaceToDialer
-		}
-		if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
-			return nil, err
-		}
-	}
-	if opt.routingMark != 0 {
-		bindMarkToDialer(opt.routingMark, dialer, network, destination)
-	}
-	if opt.tfo && !DisableTFO {
-		return dialTFO(ctx, *dialer, network, address)
-	}
 	return dialer.DialContext(ctx, network, address)
 }
 
