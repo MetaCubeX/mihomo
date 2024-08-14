@@ -9,6 +9,8 @@ import (
 
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	RP "github.com/metacubex/mihomo/rules/provider"
 
 	"github.com/sagernet/bbolt"
 	"github.com/stretchr/testify/assert"
@@ -154,7 +156,7 @@ func TestPool_Skip(t *testing.T) {
 	pools, tempfile, err := createPools(Options{
 		IPNet: ipnet,
 		Size:  10,
-		Host:  tree,
+		Host:  []C.Rule{RP.NewDomainSet(tree.NewDomainSet(), "")},
 	})
 	assert.Nil(t, err)
 	defer os.Remove(tempfile)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/sniffer"
 	"github.com/metacubex/mihomo/log"
@@ -26,17 +25,26 @@ var Dispatcher *SnifferDispatcher
 type SnifferDispatcher struct {
 	enable          bool
 	sniffers        map[sniffer.Sniffer]SnifferConfig
-	forceDomain     *trie.DomainSet
-	skipSNI         *trie.DomainSet
+	forceDomain     []C.Rule
+	skipDomain      []C.Rule
 	skipList        *lru.LruCache[string, uint8]
 	forceDnsMapping bool
 	parsePureIp     bool
 }
 
 func (sd *SnifferDispatcher) shouldOverride(metadata *C.Metadata) bool {
-	return (metadata.Host == "" && sd.parsePureIp) ||
-		sd.forceDomain.Has(metadata.Host) ||
-		(metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping)
+	if metadata.Host == "" && sd.parsePureIp {
+		return true
+	}
+	if metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping {
+		return true
+	}
+	for _, rule := range sd.forceDomain {
+		if ok, _ := rule.Match(&C.Metadata{Host: metadata.Host}); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (sd *SnifferDispatcher) UDPSniff(packet C.PacketAdapter) bool {
@@ -94,9 +102,11 @@ func (sd *SnifferDispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%d] to [%s:%d]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return false
 		} else {
-			if sd.skipSNI.Has(host) {
-				log.Debugln("[Sniffer] Skip sni[%s]", host)
-				return false
+			for _, rule := range sd.skipDomain {
+				if ok, _ := rule.Match(&C.Metadata{Host: host}); ok {
+					log.Debugln("[Sniffer] Skip sni[%s]", host)
+					return false
+				}
 			}
 
 			sd.skipList.Delete(dst)
@@ -187,12 +197,12 @@ func NewCloseSnifferDispatcher() (*SnifferDispatcher, error) {
 }
 
 func NewSnifferDispatcher(snifferConfig map[sniffer.Type]SnifferConfig,
-	forceDomain *trie.DomainSet, skipSNI *trie.DomainSet,
+	forceDomain []C.Rule, skipDomain []C.Rule,
 	forceDnsMapping bool, parsePureIp bool) (*SnifferDispatcher, error) {
 	dispatcher := SnifferDispatcher{
 		enable:          true,
 		forceDomain:     forceDomain,
-		skipSNI:         skipSNI,
+		skipDomain:      skipDomain,
 		skipList:        lru.New(lru.WithSize[string, uint8](128), lru.WithAge[string, uint8](600)),
 		forceDnsMapping: forceDnsMapping,
 		parsePureIp:     parsePureIp,

@@ -8,7 +8,6 @@ import (
 
 	"github.com/metacubex/mihomo/common/nnip"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
-	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -36,8 +35,7 @@ type Pool struct {
 	offset  netip.Addr
 	cycle   bool
 	mux     sync.Mutex
-	host    *trie.DomainTrie[struct{}]
-	rules   []C.Rule
+	host    []C.Rule
 	ipnet   netip.Prefix
 	store   store
 }
@@ -68,14 +66,8 @@ func (p *Pool) LookBack(ip netip.Addr) (string, bool) {
 
 // ShouldSkipped return if domain should be skipped
 func (p *Pool) ShouldSkipped(domain string) bool {
-	if p.host != nil {
-		if p.host.Search(domain) != nil {
-			return true
-		}
-	}
-	for _, rule := range p.rules {
-		metadata := &C.Metadata{Host: domain}
-		if match, _ := rule.Match(metadata); match {
+	for _, rule := range p.host {
+		if match, _ := rule.Match(&C.Metadata{Host: domain}); match {
 			return true
 		}
 	}
@@ -164,9 +156,7 @@ func (p *Pool) restoreState() {
 
 type Options struct {
 	IPNet netip.Prefix
-	Host  *trie.DomainTrie[struct{}]
-
-	Rules []C.Rule
+	Host  []C.Rule
 
 	// Size sets the maximum number of entries in memory
 	// and does not work if Persistence is true
@@ -197,7 +187,6 @@ func New(options Options) (*Pool, error) {
 		offset:  first.Prev(),
 		cycle:   false,
 		host:    options.Host,
-		rules:   options.Rules,
 		ipnet:   options.IPNet,
 	}
 	if options.Persistence {

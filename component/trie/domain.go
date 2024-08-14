@@ -134,6 +134,13 @@ func (t *DomainTrie[T]) Foreach(fn func(domain string, data T) bool) {
 	}
 }
 
+func (t *DomainTrie[T]) IsEmpty() bool {
+	if t == nil {
+		return true
+	}
+	return t.root.isEmpty()
+}
+
 func recursion[T any](items []string, node *Node[T], fn func(domain string, data T) bool) bool {
 	for key, data := range node.getChildren() {
 		newItems := append([]string{key}, items...)
