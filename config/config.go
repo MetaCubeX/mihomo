@@ -38,6 +38,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/log"
 	R "github.com/metacubex/mihomo/rules"
+	RC "github.com/metacubex/mihomo/rules/common"
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 
@@ -1408,13 +1409,63 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		}
 
 		var host *trie.DomainTrie[struct{}]
+		var fakeIPRules []C.Rule
 		// fake ip skip host filter
 		if len(cfg.FakeIPFilter) != 0 {
 			host = trie.New[struct{}]()
 			for _, domain := range cfg.FakeIPFilter {
-				_ = host.Insert(domain, struct{}{})
+				if strings.Contains(strings.ToLower(domain), ",") {
+					if strings.Contains(domain, "geosite:") {
+						subkeys := strings.Split(domain, ":")
+						subkeys = subkeys[1:]
+						subkeys = strings.Split(subkeys[0], ",")
+						for _, country := range subkeys {
+							found := false
+							for _, rule := range rules {
+								if rule.RuleType() == C.GEOSITE {
+									if strings.EqualFold(country, rule.Payload()) {
+										found = true
+										fakeIPRules = append(fakeIPRules, rule)
+									}
+								}
+							}
+							if !found {
+								rule, err := RC.NewGEOSITE(country, "")
+								if err != nil {
+									return nil, err
+								}
+								fakeIPRules = append(fakeIPRules, rule)
+							}
+						}
+
+					}
+				} else if strings.Contains(strings.ToLower(domain), "rule-set:") {
+					subkeys := strings.Split(domain, ":")
+					subkeys = subkeys[1:]
+					subkeys = strings.Split(subkeys[0], ",")
+					for _, domainSetName := range subkeys {
+						if rp, ok := ruleProviders[domainSetName]; !ok {
+							return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
+						} else {
+							switch rp.Behavior() {
+							case providerTypes.IPCIDR:
+								return nil, fmt.Errorf("rule provider type error, except domain,actual %s", rp.Behavior())
+							case providerTypes.Classical:
+								log.Warnln("%s provider is %s, only matching it contain domain rule", rp.Name(), rp.Behavior())
+							default:
+							}
+						}
+						rule, err := RP.NewRuleSet(domainSetName, "", true)
+						if err != nil {
+							return nil, err
+						}
+
+						fakeIPRules = append(fakeIPRules, rule)
+					}
+				} else {
+					_ = host.Insert(domain, struct{}{})
+				}
 			}
-			host.Optimize()
 		}
 
 		if len(dnsCfg.Fallback) != 0 {
@@ -1427,6 +1478,9 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 				}
 				_ = host.Insert(fb.Addr, struct{}{})
 			}
+		}
+
+		if host != nil {
 			host.Optimize()
 		}
 
@@ -1434,6 +1488,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 			IPNet:       fakeIPRange,
 			Size:        1000,
 			Host:        host,
+			Rules:       fakeIPRules,
 			Persistence: rawCfg.Profile.StoreFakeIP,
 		})
 		if err != nil {

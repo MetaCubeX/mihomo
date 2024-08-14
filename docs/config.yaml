@@ -243,6 +243,16 @@ dns:
 
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
 
+  # 配置不使用 fake-ip 的域名
+  fake-ip-filter:
+    - '*.lan'
+    - localhost.ptlogin2.qq.com
+    # fakeip-filter 为 rule-providers 中的名为 fakeip-filter 规则订阅，
+    # 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
+    - rule-set:fakeip-filter
+    # fakeip-filter 为 geosite 中名为 fakeip-filter 的分类（需要自行保证该分类存在）
+    - geosite:fakeip-filter
+
   # use-hosts: true # 查询 hosts
 
   # 配置后面的nameserver、fallback和nameserver-policy向dns服务器的连接过程是否遵守遵守rules规则
@@ -251,11 +261,6 @@ dns:
   # 仅当proxy-server-nameserver非空时可以开启此选项, 强烈不建议和prefer-h3一起使用
   # 此外，这三者配置中的dns服务器如果出现域名会采用default-nameserver配置项解析，也请确保正确配置default-nameserver
   respect-rules: false
-
-  # 配置不使用 fake-ip 的域名
-  # fake-ip-filter:
-  #   - '*.lan'
-  #   - localhost.ptlogin2.qq.com
 
   # DNS 主要域名配置
   # 支持 UDP，TCP，DoT，DoH，DoQ
