@@ -222,25 +222,20 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		return
 	}
 	cfg := dns.Config{
-		Main:         c.NameServer,
-		Fallback:     c.Fallback,
-		IPv6:         c.IPv6 && generalIPv6,
-		IPv6Timeout:  c.IPv6Timeout,
-		EnhancedMode: c.EnhancedMode,
-		Pool:         c.FakeIPRange,
-		Hosts:        c.Hosts,
-		FallbackFilter: dns.FallbackFilter{
-			GeoIP:     c.FallbackFilter.GeoIP,
-			GeoIPCode: c.FallbackFilter.GeoIPCode,
-			IPCIDR:    c.FallbackFilter.IPCIDR,
-			Domain:    c.FallbackFilter.Domain,
-			GeoSite:   c.FallbackFilter.GeoSite,
-		},
-		Default:        c.DefaultNameserver,
-		Policy:         c.NameServerPolicy,
-		ProxyServer:    c.ProxyServerNameserver,
-		Tunnel:         tunnel.Tunnel,
-		CacheAlgorithm: c.CacheAlgorithm,
+		Main:                 c.NameServer,
+		Fallback:             c.Fallback,
+		IPv6:                 c.IPv6 && generalIPv6,
+		IPv6Timeout:          c.IPv6Timeout,
+		EnhancedMode:         c.EnhancedMode,
+		Pool:                 c.FakeIPRange,
+		Hosts:                c.Hosts,
+		FallbackIPFilter:     c.FallbackIPFilter,
+		FallbackDomainFilter: c.FallbackDomainFilter,
+		Default:              c.DefaultNameserver,
+		Policy:               c.NameServerPolicy,
+		ProxyServer:          c.ProxyServerNameserver,
+		Tunnel:               tunnel.Tunnel,
+		CacheAlgorithm:       c.CacheAlgorithm,
 	}
 
 	r := dns.NewResolver(cfg)

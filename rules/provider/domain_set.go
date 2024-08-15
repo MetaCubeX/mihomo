@@ -19,10 +19,7 @@ func (d *DomainSet) RuleType() C.RuleType {
 }
 
 func (d *DomainSet) Match(metadata *C.Metadata) (bool, string) {
-	if d.domainSet == nil {
-		return false, ""
-	}
-	return d.domainSet.Has(metadata.RuleHost()), d.adapter
+	return d.domainStrategy.Match(metadata), d.adapter
 }
 
 func (d *DomainSet) Adapter() string {

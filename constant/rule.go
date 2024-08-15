@@ -28,6 +28,7 @@ const (
 	ProcessPathRegex
 	RuleSet
 	DomainSet
+	IpCidrSet
 	Network
 	Uid
 	SubRules
@@ -93,6 +94,8 @@ func (rt RuleType) String() string {
 		return "RuleSet"
 	case DomainSet:
 		return "DomainSet"
+	case IpCidrSet:
+		return "IpCidrSet"
 	case Network:
 		return "Network"
 	case DSCP:
@@ -120,4 +123,9 @@ type Rule interface {
 	ShouldResolveIP() bool
 	ShouldFindProcess() bool
 	ProviderNames() []string
+}
+
+type RuleGroup interface {
+	Rule
+	GetRecodeSize() int
 }

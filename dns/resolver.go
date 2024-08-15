@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/netip"
-	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/common/arc"
 	"github.com/metacubex/mihomo/common/lru"
 	"github.com/metacubex/mihomo/component/fakeip"
-	"github.com/metacubex/mihomo/component/geodata/router"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
@@ -19,7 +17,6 @@ import (
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/singleflight"
 )
@@ -45,8 +42,8 @@ type Resolver struct {
 	hosts                 *trie.DomainTrie[resolver.HostValue]
 	main                  []dnsClient
 	fallback              []dnsClient
-	fallbackDomainFilters []fallbackDomainFilter
-	fallbackIPFilters     []fallbackIPFilter
+	fallbackDomainFilters []C.Rule
+	fallbackIPFilters     []C.Rule
 	group                 singleflight.Group
 	cache                 dnsCache
 	policy                []dnsPolicy
@@ -122,7 +119,7 @@ func (r *Resolver) LookupIPv6(ctx context.Context, host string) ([]netip.Addr, e
 
 func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
 	for _, filter := range r.fallbackIPFilters {
-		if filter.Match(ip) {
+		if ok, _ := filter.Match(&C.Metadata{DstIP: ip}); ok {
 			return true
 		}
 	}
@@ -277,7 +274,7 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 	}
 
 	for _, df := range r.fallbackDomainFilters {
-		if df.Match(domain) {
+		if ok, _ := df.Match(&C.Metadata{Host: domain}); ok {
 			return true
 		}
 	}
@@ -398,27 +395,26 @@ func (ns NameServer) Equal(ns2 NameServer) bool {
 	return false
 }
 
-type FallbackFilter struct {
-	GeoIP     bool
-	GeoIPCode string
-	IPCIDR    []netip.Prefix
-	Domain    []string
-	GeoSite   []router.DomainMatcher
+type Policy struct {
+	Domain      string
+	Rule        C.Rule
+	NameServers []NameServer
 }
 
 type Config struct {
-	Main, Fallback []NameServer
-	Default        []NameServer
-	ProxyServer    []NameServer
-	IPv6           bool
-	IPv6Timeout    uint
-	EnhancedMode   C.DNSMode
-	FallbackFilter FallbackFilter
-	Pool           *fakeip.Pool
-	Hosts          *trie.DomainTrie[resolver.HostValue]
-	Policy         *orderedmap.OrderedMap[string, []NameServer]
-	Tunnel         provider.Tunnel
-	CacheAlgorithm string
+	Main, Fallback       []NameServer
+	Default              []NameServer
+	ProxyServer          []NameServer
+	IPv6                 bool
+	IPv6Timeout          uint
+	EnhancedMode         C.DNSMode
+	FallbackIPFilter     []C.Rule
+	FallbackDomainFilter []C.Rule
+	Pool                 *fakeip.Pool
+	Hosts                *trie.DomainTrie[resolver.HostValue]
+	Policy               []Policy
+	Tunnel               provider.Tunnel
+	CacheAlgorithm       string
 }
 
 func NewResolver(config Config) *Resolver {
@@ -482,7 +478,7 @@ func NewResolver(config Config) *Resolver {
 		r.proxyServer = cacheTransform(config.ProxyServer)
 	}
 
-	if config.Policy.Len() != 0 {
+	if len(config.Policy) != 0 {
 		r.policy = make([]dnsPolicy, 0)
 
 		var triePolicy *trie.DomainTrie[[]dnsClient]
@@ -497,75 +493,20 @@ func NewResolver(config Config) *Resolver {
 			}
 		}
 
-		for pair := config.Policy.Oldest(); pair != nil; pair = pair.Next() {
-			domain, nameserver := pair.Key, pair.Value
-
-			if temp := strings.Split(domain, ":"); len(temp) == 2 {
-				prefix := temp[0]
-				key := temp[1]
-				switch prefix {
-				case "rule-set":
-					if _, ok := config.Tunnel.RuleProviders()[key]; ok {
-						log.Debugln("Adding rule-set policy: %s ", key)
-						insertPolicy(domainSetPolicy{
-							tunnel:     config.Tunnel,
-							name:       key,
-							dnsClients: cacheTransform(nameserver),
-						})
-						continue
-					} else {
-						log.Warnln("Can't found ruleset policy: %s", key)
-					}
-				case "geosite":
-					inverse := false
-					if strings.HasPrefix(key, "!") {
-						inverse = true
-						key = key[1:]
-					}
-					log.Debugln("Adding geosite policy: %s inversed %t", key, inverse)
-					matcher, err := NewGeoSite(key)
-					if err != nil {
-						log.Warnln("adding geosite policy %s error: %s", key, err)
-						continue
-					}
-					insertPolicy(geositePolicy{
-						matcher:    matcher,
-						inverse:    inverse,
-						dnsClients: cacheTransform(nameserver),
-					})
-					continue // skip triePolicy new
+		for _, policy := range config.Policy {
+			if policy.Rule != nil {
+				insertPolicy(domainRulePolicy{rule: policy.Rule, dnsClients: cacheTransform(policy.NameServers)})
+			} else {
+				if triePolicy == nil {
+					triePolicy = trie.New[[]dnsClient]()
 				}
+				_ = triePolicy.Insert(policy.Domain, cacheTransform(policy.NameServers))
 			}
-			if triePolicy == nil {
-				triePolicy = trie.New[[]dnsClient]()
-			}
-			_ = triePolicy.Insert(domain, cacheTransform(nameserver))
 		}
 		insertPolicy(nil)
 	}
-
-	fallbackIPFilters := []fallbackIPFilter{}
-	if config.FallbackFilter.GeoIP {
-		fallbackIPFilters = append(fallbackIPFilters, &geoipFilter{
-			code: config.FallbackFilter.GeoIPCode,
-		})
-	}
-	for _, ipnet := range config.FallbackFilter.IPCIDR {
-		fallbackIPFilters = append(fallbackIPFilters, &ipnetFilter{ipnet: ipnet})
-	}
-	r.fallbackIPFilters = fallbackIPFilters
-
-	fallbackDomainFilters := []fallbackDomainFilter{}
-	if len(config.FallbackFilter.Domain) != 0 {
-		fallbackDomainFilters = append(fallbackDomainFilters, NewDomainFilter(config.FallbackFilter.Domain))
-	}
-
-	if len(config.FallbackFilter.GeoSite) != 0 {
-		fallbackDomainFilters = append(fallbackDomainFilters, &geoSiteFilter{
-			matchers: config.FallbackFilter.GeoSite,
-		})
-	}
-	r.fallbackDomainFilters = fallbackDomainFilters
+	r.fallbackIPFilters = config.FallbackIPFilter
+	r.fallbackDomainFilters = config.FallbackDomainFilter
 
 	return r
 }

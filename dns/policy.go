@@ -3,7 +3,6 @@ package dns
 import (
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/provider"
 )
 
 type dnsPolicy interface {
@@ -22,32 +21,14 @@ func (p domainTriePolicy) Match(domain string) []dnsClient {
 	return nil
 }
 
-type geositePolicy struct {
-	matcher    fallbackDomainFilter
-	inverse    bool
+type domainRulePolicy struct {
+	rule       C.Rule
 	dnsClients []dnsClient
 }
 
-func (p geositePolicy) Match(domain string) []dnsClient {
-	matched := p.matcher.Match(domain)
-	if matched != p.inverse {
+func (p domainRulePolicy) Match(domain string) []dnsClient {
+	if ok, _ := p.rule.Match(&C.Metadata{Host: domain}); ok {
 		return p.dnsClients
-	}
-	return nil
-}
-
-type domainSetPolicy struct {
-	tunnel     provider.Tunnel
-	name       string
-	dnsClients []dnsClient
-}
-
-func (p domainSetPolicy) Match(domain string) []dnsClient {
-	if ruleProvider, ok := p.tunnel.RuleProviders()[p.name]; ok {
-		metadata := &C.Metadata{Host: domain}
-		if ok := ruleProvider.Match(metadata); ok {
-			return p.dnsClients
-		}
 	}
 	return nil
 }
