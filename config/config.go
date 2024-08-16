@@ -619,7 +619,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		}
 	}
 
-	config.Sniffer, err = parseSniffer(rawCfg.Sniffer, rules, ruleProviders)
+	config.Sniffer, err = parseSniffer(rawCfg.Sniffer, ruleProviders)
 	if err != nil {
 		return nil, err
 	}
@@ -1250,14 +1250,14 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rules [
 
 		if strings.HasPrefix(domain, "rule-set:") {
 			domainSetName := domain[9:]
-			rule, err := parseDomainRuleSet(domainSetName, ruleProviders)
+			rule, err := parseDomainRuleSet(domainSetName, "dns.nameserver-policy", ruleProviders)
 			if err != nil {
 				return nil, err
 			}
 			policy[idx] = dns.Policy{Rule: rule, NameServers: nameservers}
 		} else if strings.HasPrefix(domain, "geosite:") {
 			country := domain[8:]
-			rule, err := parseGEOSITE(country, rules)
+			rule, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
 			if err != nil {
 				return nil, err
 			}
@@ -1362,7 +1362,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		}
 
 		// fake ip skip host filter
-		host, err := parseDomain(cfg.FakeIPFilter, fakeIPTrie, rules, ruleProviders)
+		host, err := parseDomain(cfg.FakeIPFilter, fakeIPTrie, "dns.fake-ip-filter", ruleProviders)
 		if err != nil {
 			return nil, err
 		}
@@ -1401,7 +1401,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 			if err != nil {
 				return nil, err
 			}
-			rule = RP.NewIpCidrSet(cidrSet, "")
+			rule = RP.NewIpCidrSet(cidrSet, "dns.fallback-filter.ipcidr")
 			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
 		}
 		if len(cfg.FallbackFilter.Domain) > 0 {
@@ -1412,13 +1412,13 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 					return nil, fmt.Errorf("DNS FallbackDomain[%d] format error: %w", idx, err)
 				}
 			}
-			rule = RP.NewDomainSet(domainTrie.NewDomainSet(), "")
+			rule = RP.NewDomainSet(domainTrie.NewDomainSet(), "dns.fallback-filter.domain")
 			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
 		}
 		if len(cfg.FallbackFilter.GeoSite) > 0 {
 			log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
 			for idx, geoSite := range cfg.FallbackFilter.GeoSite {
-				rule, err = parseGEOSITE(geoSite, rules)
+				rule, err = RC.NewGEOSITE(geoSite, "dns.fallback-filter.geosite")
 				if err != nil {
 					return nil, fmt.Errorf("DNS FallbackGeosite[%d] format error: %w", idx, err)
 				}
@@ -1524,7 +1524,7 @@ func parseTuicServer(rawTuic RawTuicServer, general *General) error {
 	return nil
 }
 
-func parseSniffer(snifferRaw RawSniffer, rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider) (*Sniffer, error) {
+func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.RuleProvider) (*Sniffer, error) {
 	sniffer := &Sniffer{
 		Enable:          snifferRaw.Enable,
 		ForceDnsMapping: snifferRaw.ForceDnsMapping,
@@ -1587,13 +1587,13 @@ func parseSniffer(snifferRaw RawSniffer, rules []C.Rule, ruleProviders map[strin
 
 	sniffer.Sniffers = loadSniffer
 
-	forceDomain, err := parseDomain(snifferRaw.ForceDomain, nil, rules, ruleProviders)
+	forceDomain, err := parseDomain(snifferRaw.ForceDomain, nil, "sniffer.force-domain", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in force-domain, error:%w", err)
 	}
 	sniffer.ForceDomain = forceDomain
 
-	skipDomain, err := parseDomain(snifferRaw.SkipDomain, nil, rules, ruleProviders)
+	skipDomain, err := parseDomain(snifferRaw.SkipDomain, nil, "sniffer.skip-domain", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in skip-domain, error:%w", err)
 	}
@@ -1602,7 +1602,7 @@ func parseSniffer(snifferRaw RawSniffer, rules []C.Rule, ruleProviders map[strin
 	return sniffer, nil
 }
 
-func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], rules []C.Rule, ruleProviders map[string]providerTypes.RuleProvider) (domainRules []C.Rule, err error) {
+func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (domainRules []C.Rule, err error) {
 	var rule C.Rule
 	for _, domain := range domains {
 		domainLower := strings.ToLower(domain)
@@ -1611,7 +1611,7 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], rules 
 			subkeys = subkeys[1:]
 			subkeys = strings.Split(subkeys[0], ",")
 			for _, country := range subkeys {
-				rule, err = parseGEOSITE(country, rules)
+				rule, err = RC.NewGEOSITE(country, adapterName)
 				if err != nil {
 					return nil, err
 				}
@@ -1622,7 +1622,7 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], rules 
 			subkeys = subkeys[1:]
 			subkeys = strings.Split(subkeys[0], ",")
 			for _, domainSetName := range subkeys {
-				rule, err = parseDomainRuleSet(domainSetName, ruleProviders)
+				rule, err = parseDomainRuleSet(domainSetName, adapterName, ruleProviders)
 				if err != nil {
 					return nil, err
 				}
@@ -1639,13 +1639,13 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], rules 
 		}
 	}
 	if !domainTrie.IsEmpty() {
-		rule = RP.NewDomainSet(domainTrie.NewDomainSet(), "")
+		rule = RP.NewDomainSet(domainTrie.NewDomainSet(), adapterName)
 		domainRules = append(domainRules, rule)
 	}
 	return
 }
 
-func parseDomainRuleSet(domainSetName string, ruleProviders map[string]providerTypes.RuleProvider) (C.Rule, error) {
+func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.Rule, error) {
 	if rp, ok := ruleProviders[domainSetName]; !ok {
 		return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
 	} else {
@@ -1657,16 +1657,5 @@ func parseDomainRuleSet(domainSetName string, ruleProviders map[string]providerT
 		default:
 		}
 	}
-	return RP.NewRuleSet(domainSetName, "", true)
-}
-
-func parseGEOSITE(country string, rules []C.Rule) (C.Rule, error) {
-	for _, rule := range rules {
-		if rule.RuleType() == C.GEOSITE {
-			if strings.EqualFold(country, rule.Payload()) {
-				return rule, nil
-			}
-		}
-	}
-	return RC.NewGEOSITE(country, "")
+	return RP.NewRuleSet(domainSetName, adapterName, true)
 }
