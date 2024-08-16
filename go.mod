@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/3andne/restls-client-go v0.1.6
 	github.com/bahlo/generic-list-go v0.2.0
-	github.com/cilium/ebpf v0.12.3
 	github.com/coreos/go-iptables v0.7.0
 	github.com/dlclark/regexp2 v1.11.4
 	github.com/go-chi/chi/v5 v5.1.0
@@ -82,6 +81,7 @@ require (
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/josharian/native v1.1.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect

@@ -9,9 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/component/ebpf"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/autoredir"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/http"
 	"github.com/metacubex/mihomo/listener/mixed"
@@ -49,9 +47,6 @@ var (
 	shadowSocksListener C.MultiAddrListener
 	vmessListener       *sing_vmess.Listener
 	tuicListener        *tuic.Listener
-	autoRedirListener   *autoredir.Listener
-	autoRedirProgram    *ebpf.TcEBpfProgram
-	tcProgram           *ebpf.TcEBpfProgram
 
 	// lock for recreate function
 	socksMux     sync.Mutex
@@ -538,95 +533,6 @@ func ReCreateTun(tunConf LC.Tun, tunnel C.Tunnel) {
 	tunLister = lister
 
 	log.Infoln("[TUN] Tun adapter listening at: %s", tunLister.Address())
-}
-
-func ReCreateRedirToTun(ifaceNames []string) {
-	tcMux.Lock()
-	defer tcMux.Unlock()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if tcProgram != nil {
-		tcProgram.Close()
-		tcProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	tunConf := GetTunConf()
-
-	if !tunConf.Enable {
-		return
-	}
-
-	program, err := ebpf.NewTcEBpfProgram(nicArr, tunConf.Device)
-	if err != nil {
-		log.Errorln("Attached tc ebpf program error: %v", err)
-		return
-	}
-	tcProgram = program
-
-	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
-}
-
-func ReCreateAutoRedir(ifaceNames []string, tunnel C.Tunnel) {
-	autoRedirMux.Lock()
-	defer autoRedirMux.Unlock()
-
-	var err error
-	defer func() {
-		if err != nil {
-			if autoRedirListener != nil {
-				_ = autoRedirListener.Close()
-				autoRedirListener = nil
-			}
-			if autoRedirProgram != nil {
-				autoRedirProgram.Close()
-				autoRedirProgram = nil
-			}
-			log.Errorln("Start auto redirect server error: %s", err.Error())
-		}
-	}()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if autoRedirListener != nil && autoRedirProgram != nil {
-		_ = autoRedirListener.Close()
-		autoRedirProgram.Close()
-		autoRedirListener = nil
-		autoRedirProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	defaultRouteInterfaceName, err := ebpf.GetAutoDetectInterface()
-	if err != nil {
-		return
-	}
-
-	addr := genAddr("*", C.TcpAutoRedirPort, true)
-
-	autoRedirListener, err = autoredir.New(addr, tunnel)
-	if err != nil {
-		return
-	}
-
-	autoRedirProgram, err = ebpf.NewRedirEBpfProgram(nicArr, autoRedirListener.TCPAddr().Port(), defaultRouteInterfaceName)
-	if err != nil {
-		return
-	}
-
-	autoRedirListener.SetLookupFunc(autoRedirProgram.Lookup)
-
-	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
 func PatchTunnel(tunnels []LC.Tunnel, tunnel C.Tunnel) {

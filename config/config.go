@@ -66,7 +66,6 @@ type General struct {
 	TCPConcurrent           bool              `json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `json:"find-process-mode"`
 	Sniffing                bool              `json:"sniffing"`
-	EBpf                    EBpf              `json:"-"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
 }
@@ -343,7 +342,6 @@ type RawConfig struct {
 	DNS           RawDNS                    `yaml:"dns" json:"dns"`
 	Tun           RawTun                    `yaml:"tun"`
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
-	EBpf          EBpf                      `yaml:"ebpf"`
 	IPTables      IPTables                  `yaml:"iptables"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
@@ -380,12 +378,6 @@ type RawSniffer struct {
 type RawSniffingConfig struct {
 	Ports        []string `yaml:"ports" json:"ports"`
 	OverrideDest *bool    `yaml:"override-destination" json:"override-destination"`
-}
-
-// EBpf config
-type EBpf struct {
-	RedirectToTun []string `yaml:"redirect-to-tun" json:"redirect-to-tun"`
-	AutoRedir     []string `yaml:"auto-redir" json:"auto-redir"`
 }
 
 var (
@@ -447,10 +439,6 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			AuthenticationTimeout: 1000,
 			ALPN:                  []string{"h3"},
 			MaxUdpRelayPacketSize: 1500,
-		},
-		EBpf: EBpf{
-			RedirectToTun: []string{},
-			AutoRedir:     []string{},
 		},
 		IPTables: IPTables{
 			Enable:           false,
@@ -720,7 +708,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader:           cfg.GeodataLoader,
 		TCPConcurrent:           cfg.TCPConcurrent,
 		FindProcessMode:         cfg.FindProcessMode,
-		EBpf:                    cfg.EBpf,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
 	}, nil
