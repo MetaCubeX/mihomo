@@ -120,17 +120,7 @@ func main() {
 	}
 
 	if C.GeoAutoUpdate {
-		updater.RegisterGeoUpdater(func() {
-			cfg, err := executor.ParseWithPath(C.Path.Config())
-			if err != nil {
-				log.Errorln("[GEO] update GEO databases failed: %v", err)
-				return
-			}
-
-			log.Warnln("[GEO] update GEO databases success, applying config")
-
-			executor.ApplyConfig(cfg, false)
-		})
+		updater.RegisterGeoUpdater()
 	}
 
 	defer executor.Shutdown()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/arc"
 	"github.com/metacubex/mihomo/common/lru"
+	"github.com/metacubex/mihomo/common/singleflight"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/trie"
@@ -18,7 +19,6 @@ import (
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
 	"golang.org/x/exp/maps"
-	"golang.org/x/sync/singleflight"
 )
 
 type dnsClient interface {
@@ -44,7 +44,7 @@ type Resolver struct {
 	fallback              []dnsClient
 	fallbackDomainFilters []C.Rule
 	fallbackIPFilters     []C.Rule
-	group                 singleflight.Group
+	group                 singleflight.Group[*D.Msg]
 	cache                 dnsCache
 	policy                []dnsPolicy
 	proxyServer           []dnsClient
@@ -169,19 +169,20 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 
 	retryNum := 0
 	retryMax := 3
-	fn := func() (result any, err error) {
+	fn := func() (result *D.Msg, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout) // reset timeout in singleflight
 		defer cancel()
 		cache := false
 
 		defer func() {
 			if err != nil {
-				result = retryNum
+				result = &D.Msg{}
+				result.Opcode = retryNum
 				retryNum++
 				return
 			}
 
-			msg := result.(*D.Msg)
+			msg := result
 
 			if cache {
 				// OPT RRs MUST NOT be cached, forwarded, or stored in or loaded from master files.
@@ -208,7 +209,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 
 	ch := r.group.DoChan(q.String(), fn)
 
-	var result singleflight.Result
+	var result singleflight.Result[*D.Msg]
 
 	select {
 	case result = <-ch:
@@ -221,7 +222,7 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 			go func() { // start a retrying monitor in background
 				result := <-ch
 				ret, err, shared := result.Val, result.Err, result.Shared
-				if err != nil && !shared && ret.(int) < retryMax { // retry
+				if err != nil && !shared && ret.Opcode < retryMax { // retry
 					r.group.DoChan(q.String(), fn)
 				}
 			}()
@@ -230,12 +231,12 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	}
 
 	ret, err, shared := result.Val, result.Err, result.Shared
-	if err != nil && !shared && ret.(int) < retryMax { // retry
+	if err != nil && !shared && ret.Opcode < retryMax { // retry
 		r.group.DoChan(q.String(), fn)
 	}
 
 	if err == nil {
-		msg = ret.(*D.Msg)
+		msg = ret
 		if shared {
 			msg = msg.Copy()
 		}

@@ -33,12 +33,13 @@ func domainToMatcher(domain *Domain) (strmatcher.Matcher, error) {
 
 type DomainMatcher interface {
 	ApplyDomain(string) bool
+	Count() int
 }
 
 type succinctDomainMatcher struct {
 	set           *trie.DomainSet
 	otherMatchers []strmatcher.Matcher
-	not           bool
+	count         int
 }
 
 func (m *succinctDomainMatcher) ApplyDomain(domain string) bool {
@@ -51,16 +52,17 @@ func (m *succinctDomainMatcher) ApplyDomain(domain string) bool {
 			}
 		}
 	}
-	if m.not {
-		isMatched = !isMatched
-	}
 	return isMatched
 }
 
-func NewSuccinctMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error) {
+func (m *succinctDomainMatcher) Count() int {
+	return m.count
+}
+
+func NewSuccinctMatcherGroup(domains []*Domain) (DomainMatcher, error) {
 	t := trie.New[struct{}]()
 	m := &succinctDomainMatcher{
-		not: not,
+		count: len(domains),
 	}
 	for _, d := range domains {
 		switch d.Type {
@@ -90,10 +92,10 @@ func NewSuccinctMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error)
 
 type v2rayDomainMatcher struct {
 	matchers strmatcher.IndexMatcher
-	not      bool
+	count    int
 }
 
-func NewMphMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error) {
+func NewMphMatcherGroup(domains []*Domain) (DomainMatcher, error) {
 	g := strmatcher.NewMphMatcherGroup()
 	for _, d := range domains {
 		matcherType, f := matcherTypeMap[d.Type]
@@ -108,119 +110,80 @@ func NewMphMatcherGroup(domains []*Domain, not bool) (DomainMatcher, error) {
 	g.Build()
 	return &v2rayDomainMatcher{
 		matchers: g,
-		not:      not,
+		count:    len(domains),
 	}, nil
 }
 
 func (m *v2rayDomainMatcher) ApplyDomain(domain string) bool {
-	isMatched := len(m.matchers.Match(strings.ToLower(domain))) > 0
-	if m.not {
-		isMatched = !isMatched
-	}
-	return isMatched
+	return len(m.matchers.Match(strings.ToLower(domain))) > 0
 }
 
-type GeoIPMatcher struct {
-	countryCode  string
-	reverseMatch bool
-	cidrSet      *cidr.IpCidrSet
+func (m *v2rayDomainMatcher) Count() int {
+	return m.count
 }
 
-func (m *GeoIPMatcher) Init(cidrs []*CIDR) error {
-	for _, cidr := range cidrs {
-		addr, ok := netip.AddrFromSlice(cidr.Ip)
-		if !ok {
-			return fmt.Errorf("error when loading GeoIP: invalid IP: %s", cidr.Ip)
-		}
-		err := m.cidrSet.AddIpCidr(netip.PrefixFrom(addr, int(cidr.Prefix)))
-		if err != nil {
-			return fmt.Errorf("error when loading GeoIP: %w", err)
-		}
-	}
-	return m.cidrSet.Merge()
+type notDomainMatcher struct {
+	DomainMatcher
 }
 
-func (m *GeoIPMatcher) SetReverseMatch(isReverseMatch bool) {
-	m.reverseMatch = isReverseMatch
+func (m notDomainMatcher) ApplyDomain(domain string) bool {
+	return !m.DomainMatcher.ApplyDomain(domain)
+}
+
+func NewNotDomainMatcherGroup(matcher DomainMatcher) DomainMatcher {
+	return notDomainMatcher{matcher}
+}
+
+type IPMatcher interface {
+	Match(ip netip.Addr) bool
+	Count() int
+}
+
+type geoIPMatcher struct {
+	cidrSet *cidr.IpCidrSet
+	count   int
 }
 
 // Match returns true if the given ip is included by the GeoIP.
-func (m *GeoIPMatcher) Match(ip netip.Addr) bool {
-	match := m.cidrSet.IsContain(ip)
-	if m.reverseMatch {
-		return !match
+func (m *geoIPMatcher) Match(ip netip.Addr) bool {
+	return m.cidrSet.IsContain(ip)
+}
+
+func (m *geoIPMatcher) Count() int {
+	return m.count
+}
+
+func NewGeoIPMatcher(cidrList []*CIDR) (IPMatcher, error) {
+	m := &geoIPMatcher{
+		cidrSet: cidr.NewIpCidrSet(),
+		count:   len(cidrList),
 	}
-	return match
-}
-
-// GeoIPMatcherContainer is a container for GeoIPMatchers. It keeps unique copies of GeoIPMatcher by country code.
-type GeoIPMatcherContainer struct {
-	matchers []*GeoIPMatcher
-}
-
-// Add adds a new GeoIP set into the container.
-// If the country code of GeoIP is not empty, GeoIPMatcherContainer will try to find an existing one, instead of adding a new one.
-func (c *GeoIPMatcherContainer) Add(geoip *GeoIP) (*GeoIPMatcher, error) {
-	if len(geoip.CountryCode) > 0 {
-		for _, m := range c.matchers {
-			if m.countryCode == geoip.CountryCode && m.reverseMatch == geoip.ReverseMatch {
-				return m, nil
-			}
+	for _, cidr := range cidrList {
+		addr, ok := netip.AddrFromSlice(cidr.Ip)
+		if !ok {
+			return nil, fmt.Errorf("error when loading GeoIP: invalid IP: %s", cidr.Ip)
+		}
+		err := m.cidrSet.AddIpCidr(netip.PrefixFrom(addr, int(cidr.Prefix)))
+		if err != nil {
+			return nil, fmt.Errorf("error when loading GeoIP: %w", err)
 		}
 	}
-
-	m := &GeoIPMatcher{
-		countryCode:  geoip.CountryCode,
-		reverseMatch: geoip.ReverseMatch,
-		cidrSet:      cidr.NewIpCidrSet(),
-	}
-	if err := m.Init(geoip.Cidr); err != nil {
-		return nil, err
-	}
-	if len(geoip.CountryCode) > 0 {
-		c.matchers = append(c.matchers, m)
-	}
-	return m, nil
-}
-
-var globalGeoIPContainer GeoIPMatcherContainer
-
-type MultiGeoIPMatcher struct {
-	matchers []*GeoIPMatcher
-}
-
-func NewGeoIPMatcher(geoip *GeoIP) (*GeoIPMatcher, error) {
-	matcher, err := globalGeoIPContainer.Add(geoip)
+	err := m.cidrSet.Merge()
 	if err != nil {
 		return nil, err
 	}
 
-	return matcher, nil
+	return m, nil
 }
 
-func (m *MultiGeoIPMatcher) ApplyIp(ip netip.Addr) bool {
-	for _, matcher := range m.matchers {
-		if matcher.Match(ip) {
-			return true
-		}
-	}
-
-	return false
+type notIPMatcher struct {
+	IPMatcher
 }
 
-func NewMultiGeoIPMatcher(geoips []*GeoIP) (*MultiGeoIPMatcher, error) {
-	var matchers []*GeoIPMatcher
-	for _, geoip := range geoips {
-		matcher, err := globalGeoIPContainer.Add(geoip)
-		if err != nil {
-			return nil, err
-		}
-		matchers = append(matchers, matcher)
-	}
+func (m notIPMatcher) Match(ip netip.Addr) bool {
+	return !m.IPMatcher.Match(ip)
+}
 
-	matcher := &MultiGeoIPMatcher{
-		matchers: matchers,
-	}
-
-	return matcher, nil
+func NewNotIpMatcherGroup(matcher IPMatcher) IPMatcher {
+	return notIPMatcher{matcher}
 }

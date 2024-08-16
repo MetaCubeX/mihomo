@@ -137,7 +137,7 @@ func getUpdateTime() (err error, time time.Time) {
 	return nil, fileInfo.ModTime()
 }
 
-func RegisterGeoUpdater(onSuccess func()) {
+func RegisterGeoUpdater() {
 	if C.GeoUpdateInterval <= 0 {
 		log.Errorln("[GEO] Invalid update interval: %d", C.GeoUpdateInterval)
 		return
@@ -159,8 +159,6 @@ func RegisterGeoUpdater(onSuccess func()) {
 			if err := UpdateGeoDatabases(); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
 				return
-			} else {
-				onSuccess()
 			}
 		}
 
@@ -168,8 +166,6 @@ func RegisterGeoUpdater(onSuccess func()) {
 			log.Infoln("[GEO] updating database every %d hours", C.GeoUpdateInterval)
 			if err := UpdateGeoDatabases(); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
-			} else {
-				onSuccess()
 			}
 		}
 	}()

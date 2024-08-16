@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,12 +15,11 @@ import (
 
 type GEOIP struct {
 	*Base
-	country      string
-	adapter      string
-	noResolveIP  bool
-	isSourceIP   bool
-	geoIPMatcher *router.GeoIPMatcher
-	recodeSize   int
+	country     string
+	adapter     string
+	noResolveIP bool
+	isSourceIP  bool
+	geodata     bool
 }
 
 var _ C.Rule = (*GEOIP)(nil)
@@ -78,7 +78,11 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 		return false, g.adapter
 	}
 
-	match := g.geoIPMatcher.Match(ip)
+	matcher, err := g.GetIPMatcher()
+	if err != nil {
+		return false, ""
+	}
+	match := matcher.Match(ip)
 	if match && !g.isSourceIP {
 		metadata.DstGeoIP = append(metadata.DstGeoIP, g.country)
 	}
@@ -101,12 +105,22 @@ func (g *GEOIP) GetCountry() string {
 	return g.country
 }
 
-func (g *GEOIP) GetIPMatcher() *router.GeoIPMatcher {
-	return g.geoIPMatcher
+func (g *GEOIP) GetIPMatcher() (router.IPMatcher, error) {
+	if g.geodata {
+		geoIPMatcher, err := geodata.LoadGeoIPMatcher(g.country)
+		if err != nil {
+			return nil, fmt.Errorf("[GeoIP] %w", err)
+		}
+		return geoIPMatcher, nil
+	}
+	return nil, errors.New("geoip country not set")
 }
 
 func (g *GEOIP) GetRecodeSize() int {
-	return g.recodeSize
+	if matcher, err := g.GetIPMatcher(); err == nil {
+		return matcher.Count()
+	}
+	return 0
 }
 
 func NewGEOIP(country string, adapter string, isSrc, noResolveIP bool) (*GEOIP, error) {
@@ -116,31 +130,23 @@ func NewGEOIP(country string, adapter string, isSrc, noResolveIP bool) (*GEOIP, 
 	}
 	country = strings.ToLower(country)
 
+	geoip := &GEOIP{
+		Base:        &Base{},
+		country:     country,
+		adapter:     adapter,
+		noResolveIP: noResolveIP,
+		isSourceIP:  isSrc,
+	}
 	if !C.GeodataMode || country == "lan" {
-		geoip := &GEOIP{
-			Base:        &Base{},
-			country:     country,
-			adapter:     adapter,
-			noResolveIP: noResolveIP,
-			isSourceIP:  isSrc,
-		}
 		return geoip, nil
 	}
 
-	geoIPMatcher, size, err := geodata.LoadGeoIPMatcher(country)
+	geoip.geodata = true
+	geoIPMatcher, err := geoip.GetIPMatcher() // test load
 	if err != nil {
-		return nil, fmt.Errorf("[GeoIP] %w", err)
+		return nil, err
 	}
 
-	log.Infoln("Start initial GeoIP rule %s => %s, records: %d", country, adapter, size)
-	geoip := &GEOIP{
-		Base:         &Base{},
-		country:      country,
-		adapter:      adapter,
-		noResolveIP:  noResolveIP,
-		isSourceIP:   isSrc,
-		geoIPMatcher: geoIPMatcher,
-		recodeSize:   size,
-	}
+	log.Infoln("Finished initial GeoIP rule %s => %s, records: %d", country, adapter, geoIPMatcher.Count())
 	return geoip, nil
 }
