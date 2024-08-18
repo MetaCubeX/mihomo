@@ -17,7 +17,7 @@ func dnsReadConfig() (servers []string, err error) {
 		return
 	}
 
-	seenIPs := make(map[string]bool)
+	uniqueIPs := make(map[string]struct{})
 
 	for _, aa := range aas {
 		for dns := aa.FirstDnsServerAddress; dns != nil; dns = dns.Next {
@@ -44,13 +44,15 @@ func dnsReadConfig() (servers []string, err error) {
 				continue
 			}
 			
-			ipStr := ip.String()
-            if !seenIPs[ipStr] {
-                seenIPs[ipStr] = true
-                servers = append(servers, ipStr)
-            }
+			uniqueIPs[ip.String()] = struct{}{}
 		}
 	}
+	
+    servers = make([]string, 0, len(uniqueIPs))
+    for ip := range uniqueIPs {
+        servers = append(servers, ip)
+    }
+
 	return
 }
 
