@@ -16,6 +16,9 @@ func dnsReadConfig() (servers []string, err error) {
 	if err != nil {
 		return
 	}
+
+	seenIPs := make(map[string]bool)
+
 	for _, aa := range aas {
 		for dns := aa.FirstDnsServerAddress; dns != nil; dns = dns.Next {
 			sa, err := dns.Address.Sockaddr.Sockaddr()
@@ -40,7 +43,12 @@ func dnsReadConfig() (servers []string, err error) {
 				// Unexpected type.
 				continue
 			}
-			servers = append(servers, ip.String())
+			
+			ipStr := ip.String()
+            if !seenIPs[ipStr] {
+                seenIPs[ipStr] = true
+                servers = append(servers, ipStr)
+            }
 		}
 	}
 	return
