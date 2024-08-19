@@ -40,10 +40,10 @@ jobs:
           - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
           - { goos: linux, goarch: arm, goarm: '6', output: armv6 }
           - { goos: linux, goarch: arm, goarm: '7', output: armv7 }
-          - { goos: linux, goarch: mips, mips: hardfloat, output: mips-hardfloat }
-          - { goos: linux, goarch: mips, mips: softfloat, output: mips-softfloat }
-          - { goos: linux, goarch: mipsle, mips: hardfloat, output: mipsle-hardfloat }
-          - { goos: linux, goarch: mipsle, mips: softfloat, output: mipsle-softfloat }
+          - { goos: linux, goarch: mips, gomips: hardfloat, output: mips-hardfloat }
+          - { goos: linux, goarch: mips, gomips: softfloat, output: mips-softfloat }
+          - { goos: linux, goarch: mipsle, gomips: hardfloat, output: mipsle-hardfloat }
+          - { goos: linux, goarch: mipsle, gomips: softfloat, output: mipsle-softfloat }
           - { goos: linux, goarch: mips64, output: mips64 }
           - { goos: linux, goarch: mips64le, output: mips64le }
           - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1' }
@@ -219,8 +219,8 @@ jobs:
         GOOS: ${{matrix.jobs.goos}}
         GOARCH: ${{matrix.jobs.goarch}}
         GOAMD64: ${{matrix.jobs.goamd64}}
-        GOARM: ${{matrix.jobs.arm}}
-        GOMIPS: ${{matrix.jobs.mips}}
+        GOARM: ${{matrix.jobs.goarm}}
+        GOMIPS: ${{matrix.jobs.gomips}}
       run: |
         echo $CGO_ENABLED
         go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
