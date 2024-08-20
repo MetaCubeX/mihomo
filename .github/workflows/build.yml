@@ -222,7 +222,7 @@ jobs:
         GOARM: ${{matrix.jobs.goarm}}
         GOMIPS: ${{matrix.jobs.gomips}}
       run: |
-        echo $CGO_ENABLED
+        go env
         go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
         if [ "${{matrix.jobs.goos}}" = "windows" ]; then
           cp mihomo.exe mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
