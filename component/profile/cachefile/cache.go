@@ -9,7 +9,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
-	"github.com/sagernet/bbolt"
+	"github.com/metacubex/bbolt"
 )
 
 var (

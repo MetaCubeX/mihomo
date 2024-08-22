@@ -12,7 +12,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	RP "github.com/metacubex/mihomo/rules/provider"
 
-	"github.com/sagernet/bbolt"
+	"github.com/metacubex/bbolt"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -11,12 +11,13 @@ require (
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
-	github.com/gofrs/uuid/v5 v5.2.0
-	github.com/insomniacslk/dhcp v0.0.0-20240710054256-ddd8a41251c9
+	github.com/gofrs/uuid/v5 v5.3.0
+	github.com/insomniacslk/dhcp v0.0.0-20240812123929-b105c29bd1b5
 	github.com/klauspost/compress v1.17.9
 	github.com/klauspost/cpuid/v2 v2.2.8
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
 	github.com/mdlayher/netlink v1.7.2
+	github.com/metacubex/bbolt v0.0.0-20240822011022-aed6d4850399
 	github.com/metacubex/chacha v0.1.0
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.46.1-0.20240807232329-1c6cb2d67f58
@@ -29,19 +30,18 @@ require (
 	github.com/metacubex/sing-wireguard v0.0.0-20240618022557-a6efaa37127a
 	github.com/metacubex/tfo-go v0.0.0-20240821025650-e9be0afd5e7d
 	github.com/metacubex/utls v1.6.6
-	github.com/miekg/dns v1.1.61
+	github.com/miekg/dns v1.1.62
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.12.0
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
-	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
 	github.com/sagernet/fswatch v0.1.1
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a
 	github.com/sagernet/sing v0.5.0-alpha.13
 	github.com/sagernet/sing-mux v0.2.1-0.20240124034317-9bfb33698bb6
 	github.com/sagernet/sing-shadowtls v0.1.4
 	github.com/sagernet/wireguard-go v0.0.0-20231209092712-9a439356a62e
-	github.com/samber/lo v1.46.0
+	github.com/samber/lo v1.47.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
@@ -50,9 +50,9 @@ require (
 	go.uber.org/automaxprocs v1.5.3
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.26.0
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
+	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	golang.org/x/net v0.28.0
-	golang.org/x/sys v0.23.0
+	golang.org/x/sys v0.24.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v3 v3.0.1
 	lukechampine.com/blake3 v1.3.0
@@ -106,11 +106,11 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
 	go.uber.org/mock v0.4.0 // indirect
-	golang.org/x/mod v0.19.0 // indirect
+	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	golang.org/x/tools v0.23.0 // indirect
+	golang.org/x/tools v0.24.0 // indirect
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240724044459-6f3cf5896297
