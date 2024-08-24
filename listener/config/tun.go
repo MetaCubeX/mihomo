@@ -3,7 +3,10 @@ package config
 import (
 	"net/netip"
 
+	"github.com/metacubex/mihomo/common/nnip"
 	C "github.com/metacubex/mihomo/constant"
+
+	"golang.org/x/exp/slices"
 )
 
 func StringSliceToNetipPrefixSlice(ss []string) ([]netip.Prefix, error) {
@@ -25,7 +28,6 @@ type Tun struct {
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
-	RedirectToTun       []string   `yaml:"-" json:"-"`
 
 	MTU                    uint32         `yaml:"mtu" json:"mtu,omitempty"`
 	GSO                    bool           `yaml:"gso" json:"gso,omitempty"`
@@ -59,4 +61,147 @@ type Tun struct {
 	Inet6RouteAddress        []netip.Prefix `yaml:"inet6-route-address" json:"inet6-route-address,omitempty"`
 	Inet4RouteExcludeAddress []netip.Prefix `yaml:"inet4-route-exclude-address" json:"inet4-route-exclude-address,omitempty"`
 	Inet6RouteExcludeAddress []netip.Prefix `yaml:"inet6-route-exclude-address" json:"inet6-route-exclude-address,omitempty"`
+}
+
+func (t *Tun) Sort() {
+	slices.Sort(t.DNSHijack)
+
+	slices.SortFunc(t.Inet4Address, nnip.PrefixCompare)
+	slices.SortFunc(t.Inet6Address, nnip.PrefixCompare)
+	slices.SortFunc(t.RouteAddress, nnip.PrefixCompare)
+	slices.Sort(t.RouteAddressSet)
+	slices.SortFunc(t.RouteExcludeAddress, nnip.PrefixCompare)
+	slices.Sort(t.RouteExcludeAddressSet)
+	slices.Sort(t.IncludeInterface)
+	slices.Sort(t.ExcludeInterface)
+	slices.Sort(t.IncludeUID)
+	slices.Sort(t.IncludeUIDRange)
+	slices.Sort(t.ExcludeUID)
+	slices.Sort(t.ExcludeUIDRange)
+	slices.Sort(t.IncludeAndroidUser)
+	slices.Sort(t.IncludePackage)
+	slices.Sort(t.ExcludePackage)
+
+	slices.SortFunc(t.Inet4RouteAddress, nnip.PrefixCompare)
+	slices.SortFunc(t.Inet6RouteAddress, nnip.PrefixCompare)
+	slices.SortFunc(t.Inet4RouteExcludeAddress, nnip.PrefixCompare)
+	slices.SortFunc(t.Inet6RouteExcludeAddress, nnip.PrefixCompare)
+}
+
+func (t *Tun) Equal(other Tun) bool {
+	if t.Enable != other.Enable {
+		return false
+	}
+	if t.Device != other.Device {
+		return false
+	}
+	if t.Stack != other.Stack {
+		return false
+	}
+	if !slices.Equal(t.DNSHijack, other.DNSHijack) {
+		return false
+	}
+	if t.AutoRoute != other.AutoRoute {
+		return false
+	}
+	if t.AutoDetectInterface != other.AutoDetectInterface {
+		return false
+	}
+
+	if t.MTU != other.MTU {
+		return false
+	}
+	if t.GSO != other.GSO {
+		return false
+	}
+	if t.GSOMaxSize != other.GSOMaxSize {
+		return false
+	}
+	if !slices.Equal(t.Inet4Address, other.Inet4Address) {
+		return false
+	}
+	if !slices.Equal(t.Inet6Address, other.Inet6Address) {
+		return false
+	}
+	if t.IPRoute2TableIndex != other.IPRoute2TableIndex {
+		return false
+	}
+	if t.IPRoute2RuleIndex != other.IPRoute2RuleIndex {
+		return false
+	}
+	if t.AutoRedirect != other.AutoRedirect {
+		return false
+	}
+	if t.AutoRedirectInputMark != other.AutoRedirectInputMark {
+		return false
+	}
+	if t.AutoRedirectOutputMark != other.AutoRedirectOutputMark {
+		return false
+	}
+	if t.StrictRoute != other.StrictRoute {
+		return false
+	}
+	if !slices.Equal(t.RouteAddress, other.RouteAddress) {
+		return false
+	}
+	if !slices.Equal(t.RouteAddressSet, other.RouteAddressSet) {
+		return false
+	}
+	if !slices.Equal(t.RouteExcludeAddress, other.RouteExcludeAddress) {
+		return false
+	}
+	if !slices.Equal(t.RouteExcludeAddressSet, other.RouteExcludeAddressSet) {
+		return false
+	}
+	if !slices.Equal(t.IncludeInterface, other.IncludeInterface) {
+		return false
+	}
+	if !slices.Equal(t.ExcludeInterface, other.ExcludeInterface) {
+		return false
+	}
+	if !slices.Equal(t.IncludeUID, other.IncludeUID) {
+		return false
+	}
+	if !slices.Equal(t.IncludeUIDRange, other.IncludeUIDRange) {
+		return false
+	}
+	if !slices.Equal(t.ExcludeUID, other.ExcludeUID) {
+		return false
+	}
+	if !slices.Equal(t.ExcludeUIDRange, other.ExcludeUIDRange) {
+		return false
+	}
+	if !slices.Equal(t.IncludeAndroidUser, other.IncludeAndroidUser) {
+		return false
+	}
+	if !slices.Equal(t.IncludePackage, other.IncludePackage) {
+		return false
+	}
+	if !slices.Equal(t.ExcludePackage, other.ExcludePackage) {
+		return false
+	}
+	if t.EndpointIndependentNat != other.EndpointIndependentNat {
+		return false
+	}
+	if t.UDPTimeout != other.UDPTimeout {
+		return false
+	}
+	if t.FileDescriptor != other.FileDescriptor {
+		return false
+	}
+
+	if !slices.Equal(t.Inet4RouteAddress, other.Inet4RouteAddress) {
+		return false
+	}
+	if !slices.Equal(t.Inet6RouteAddress, other.Inet6RouteAddress) {
+		return false
+	}
+	if !slices.Equal(t.Inet4RouteExcludeAddress, other.Inet4RouteExcludeAddress) {
+		return false
+	}
+	if !slices.Equal(t.Inet6RouteExcludeAddress, other.Inet6RouteExcludeAddress) {
+		return false
+	}
+
+	return true
 }

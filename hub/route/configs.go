@@ -62,7 +62,6 @@ type tunSchema struct {
 	DNSHijack           *[]string   `yaml:"dns-hijack" json:"dns-hijack"`
 	AutoRoute           *bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface *bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
-	//RedirectToTun       []string   		  `yaml:"-" json:"-"`
 
 	MTU        *uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        *bool   `yaml:"gso" json:"gso,omitempty"`
@@ -118,18 +117,10 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, general)
 }
 
-func pointerOrDefault(p *int, def int) int {
+func pointerOrDefault[T any](p *T, def T) T {
 	if p != nil {
 		return *p
 	}
-	return def
-}
-
-func pointerOrDefaultString(p *string, def string) string {
-	if p != nil {
-		return *p
-	}
-
 	return def
 }
 
@@ -336,8 +327,8 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tunnel.Tunnel)
 	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tunnel.Tunnel)
 	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tunnel.Tunnel)
-	P.ReCreateShadowSocks(pointerOrDefaultString(general.ShadowSocksConfig, ports.ShadowSocksConfig), tunnel.Tunnel)
-	P.ReCreateVmess(pointerOrDefaultString(general.VmessConfig, ports.VmessConfig), tunnel.Tunnel)
+	P.ReCreateShadowSocks(pointerOrDefault(general.ShadowSocksConfig, ports.ShadowSocksConfig), tunnel.Tunnel)
+	P.ReCreateVmess(pointerOrDefault(general.VmessConfig, ports.VmessConfig), tunnel.Tunnel)
 	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tunnel.Tunnel)
 
 	if general.Mode != nil {

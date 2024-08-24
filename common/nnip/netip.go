@@ -51,3 +51,23 @@ func UnMasked(p netip.Prefix) netip.Addr {
 	}
 	return addr
 }
+
+// PrefixCompare returns an integer comparing two prefixes.
+// The result will be 0 if p == p2, -1 if p < p2, and +1 if p > p2.
+// modify from https://github.com/golang/go/issues/61642#issuecomment-1848587909
+func PrefixCompare(p, p2 netip.Prefix) int {
+	// compare by validity, address family and prefix base address
+	if c := p.Masked().Addr().Compare(p2.Masked().Addr()); c != 0 {
+		return c
+	}
+	// compare by prefix length
+	f1, f2 := p.Bits(), p2.Bits()
+	if f1 < f2 {
+		return -1
+	}
+	if f1 > f2 {
+		return 1
+	}
+	// compare by prefix address
+	return p.Addr().Compare(p2.Addr())
+}

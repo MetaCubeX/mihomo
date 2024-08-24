@@ -90,6 +90,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 		}
 	}
 
+	updateExperimental(cfg)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
@@ -100,8 +101,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateDNS(cfg.DNS, cfg.General.IPv6)
 	updateListeners(cfg.General, cfg.Listeners, force)
 	updateIPTables(cfg)
-	updateTun(cfg.General)
-	updateExperimental(cfg)
 	updateTunnels(cfg.Tunnels)
 
 	tunnel.OnInnerLoading()
@@ -186,6 +185,7 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
 	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
 	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
+	listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 }
 
 func updateExperimental(c *config.Config) {
@@ -342,12 +342,6 @@ func hcCompatibleProvider(proxyProviders map[string]provider.ProxyProvider) {
 
 	}
 
-}
-func updateTun(general *config.General) {
-	if general == nil {
-		return
-	}
-	listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 }
 
 func updateSniffer(sniffer *config.Sniffer) {
