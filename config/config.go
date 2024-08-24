@@ -296,10 +296,10 @@ type RawConfig struct {
 	RedirPort               int               `yaml:"redir-port" json:"redir-port"`
 	TProxyPort              int               `yaml:"tproxy-port" json:"tproxy-port"`
 	MixedPort               int               `yaml:"mixed-port" json:"mixed-port"`
-	ShadowSocksConfig       string            `yaml:"ss-config"`
-	VmessConfig             string            `yaml:"vmess-config"`
-	InboundTfo              bool              `yaml:"inbound-tfo"`
-	InboundMPTCP            bool              `yaml:"inbound-mptcp"`
+	ShadowSocksConfig       string            `yaml:"ss-config" json:"ss-config"`
+	VmessConfig             string            `yaml:"vmess-config" json:"vmess-config"`
+	InboundTfo              bool              `yaml:"inbound-tfo" json:"inbound-tfo"`
+	InboundMPTCP            bool              `yaml:"inbound-mptcp" json:"inbound-mptcp"`
 	Authentication          []string          `yaml:"authentication" json:"authentication"`
 	SkipAuthPrefixes        []netip.Prefix    `yaml:"skip-auth-prefixes"`
 	LanAllowedIPs           []netip.Prefix    `yaml:"lan-allowed-ips"`
@@ -310,17 +310,17 @@ type RawConfig struct {
 	UnifiedDelay            bool              `yaml:"unified-delay" json:"unified-delay"`
 	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
 	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
-	ExternalController      string            `yaml:"external-controller"`
-	ExternalControllerUnix  string            `yaml:"external-controller-unix"`
-	ExternalControllerTLS   string            `yaml:"external-controller-tls"`
-	ExternalUI              string            `yaml:"external-ui"`
+	ExternalController      string            `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerUnix  string            `yaml:"external-controller-unix" json:"external-controller-unix"`
+	ExternalControllerTLS   string            `yaml:"external-controller-tls" json:"external-controller-tls"`
+	ExternalUI              string            `yaml:"external-ui" json:"external-ui"`
 	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
 	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
-	ExternalDohServer       string            `yaml:"external-doh-server"`
-	Secret                  string            `yaml:"secret"`
-	Interface               string            `yaml:"interface-name"`
-	RoutingMark             int               `yaml:"routing-mark"`
-	Tunnels                 []LC.Tunnel       `yaml:"tunnels"`
+	ExternalDohServer       string            `yaml:"external-doh-server" json:"external-doh-server"`
+	Secret                  string            `yaml:"secret" json:"secret"`
+	Interface               string            `yaml:"interface-name" json:"interface-name"`
+	RoutingMark             int               `yaml:"routing-mark" json:"routing-mark"`
+	Tunnels                 []LC.Tunnel       `yaml:"tunnels" json:"tunnels"`
 	GeoAutoUpdate           bool              `yaml:"geo-auto-update" json:"geo-auto-update"`
 	GeoUpdateInterval       int               `yaml:"geo-update-interval" json:"geo-update-interval"`
 	GeodataMode             bool              `yaml:"geodata-mode" json:"geodata-mode"`
@@ -328,11 +328,11 @@ type RawConfig struct {
 	GeositeMatcher          string            `yaml:"geosite-matcher" json:"geosite-matcher"`
 	TCPConcurrent           bool              `yaml:"tcp-concurrent" json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
-	GlobalClientFingerprint string            `yaml:"global-client-fingerprint"`
-	GlobalUA                string            `yaml:"global-ua"`
-	KeepAliveIdle           int               `yaml:"keep-alive-idle"`
-	KeepAliveInterval       int               `yaml:"keep-alive-interval"`
-	DisableKeepAlive        bool              `yaml:"disable-keep-alive"`
+	GlobalClientFingerprint string            `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
+	GlobalUA                string            `yaml:"global-ua" json:"global-ua"`
+	KeepAliveIdle           int               `yaml:"keep-alive-idle" json:"keep-alive-idle"`
+	KeepAliveInterval       int               `yaml:"keep-alive-interval" json:"keep-alive-interval"`
+	DisableKeepAlive        bool              `yaml:"disable-keep-alive" json:"disable-keep-alive"`
 
 	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers"`
