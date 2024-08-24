@@ -11,25 +11,25 @@ type Option func(*config.Config)
 
 func WithExternalUI(externalUI string) Option {
 	return func(cfg *config.Config) {
-		cfg.General.ExternalUI = externalUI
+		cfg.Controller.ExternalUI = externalUI
 	}
 }
 
 func WithExternalController(externalController string) Option {
 	return func(cfg *config.Config) {
-		cfg.General.ExternalController = externalController
+		cfg.Controller.ExternalController = externalController
 	}
 }
 
 func WithExternalControllerUnix(externalControllerUnix string) Option {
 	return func(cfg *config.Config) {
-		cfg.General.ExternalControllerUnix = externalControllerUnix
+		cfg.Controller.ExternalControllerUnix = externalControllerUnix
 	}
 }
 
 func WithSecret(secret string) Option {
 	return func(cfg *config.Config) {
-		cfg.General.Secret = secret
+		cfg.Controller.Secret = secret
 	}
 }
 
@@ -44,18 +44,18 @@ func Parse(options ...Option) error {
 		option(cfg)
 	}
 
-	if cfg.General.ExternalUI != "" {
-		route.SetUIPath(cfg.General.ExternalUI)
+	if cfg.Controller.ExternalUI != "" {
+		route.SetUIPath(cfg.Controller.ExternalUI)
 	}
 
-	if cfg.General.ExternalController != "" {
-		go route.Start(cfg.General.ExternalController, cfg.General.ExternalControllerTLS,
-			cfg.General.Secret, cfg.TLS.Certificate, cfg.TLS.PrivateKey, cfg.General.ExternalDohServer,
+	if cfg.Controller.ExternalController != "" {
+		go route.Start(cfg.Controller.ExternalController, cfg.Controller.ExternalControllerTLS,
+			cfg.Controller.Secret, cfg.TLS.Certificate, cfg.TLS.PrivateKey, cfg.Controller.ExternalDohServer,
 			cfg.General.LogLevel == log.DEBUG)
 	}
 
-	if cfg.General.ExternalControllerUnix != "" {
-		go route.StartUnix(cfg.General.ExternalControllerUnix, cfg.General.ExternalDohServer, cfg.General.LogLevel == log.DEBUG)
+	if cfg.Controller.ExternalControllerUnix != "" {
+		go route.StartUnix(cfg.Controller.ExternalControllerUnix, cfg.Controller.ExternalDohServer, cfg.General.LogLevel == log.DEBUG)
 	}
 
 	executor.ApplyConfig(cfg, true)

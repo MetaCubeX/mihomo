@@ -225,6 +225,10 @@ func SetMode(m TunnelMode) {
 	mode = m
 }
 
+func FindProcessMode() P.FindProcessMode {
+	return findProcessMode
+}
+
 // SetFindProcessMode replace SetAlwaysFindProcess
 // always find process info if legacyAlways = true or mode.Always() = true, may be increase many memory
 func SetFindProcessMode(mode P.FindProcessMode) {

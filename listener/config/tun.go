@@ -34,16 +34,16 @@ type Tun struct {
 	GSOMaxSize             uint32         `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
 	Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
 	Inet6Address           []netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
-	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2_table_index,omitempty"`
-	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2_rule_index,omitempty"`
-	AutoRedirect           bool           `yaml:"auto-redirect" json:"auto_redirect,omitempty"`
-	AutoRedirectInputMark  uint32         `yaml:"auto-redirect-input-mark" json:"auto_redirect_input_mark,omitempty"`
-	AutoRedirectOutputMark uint32         `yaml:"auto-redirect-output-mark" json:"auto_redirect_output_mark,omitempty"`
+	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2-table-index,omitempty"`
+	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2-rule-index,omitempty"`
+	AutoRedirect           bool           `yaml:"auto-redirect" json:"auto-redirect,omitempty"`
+	AutoRedirectInputMark  uint32         `yaml:"auto-redirect-input-mark" json:"auto-redirect-input-mark,omitempty"`
+	AutoRedirectOutputMark uint32         `yaml:"auto-redirect-output-mark" json:"auto-redirect-output-mark,omitempty"`
 	StrictRoute            bool           `yaml:"strict-route" json:"strict-route,omitempty"`
-	RouteAddress           []netip.Prefix `yaml:"route-address" json:"route_address,omitempty"`
-	RouteAddressSet        []string       `yaml:"route-address-set" json:"route_address_set,omitempty"`
-	RouteExcludeAddress    []netip.Prefix `yaml:"route-exclude-address" json:"route_exclude_address,omitempty"`
-	RouteExcludeAddressSet []string       `yaml:"route-exclude-address-set" json:"route_exclude_address_set,omitempty"`
+	RouteAddress           []netip.Prefix `yaml:"route-address" json:"route-address,omitempty"`
+	RouteAddressSet        []string       `yaml:"route-address-set" json:"route-address-set,omitempty"`
+	RouteExcludeAddress    []netip.Prefix `yaml:"route-exclude-address" json:"route-exclude-address,omitempty"`
+	RouteExcludeAddressSet []string       `yaml:"route-exclude-address-set" json:"route-exclude-address-set,omitempty"`
 	IncludeInterface       []string       `yaml:"include-interface" json:"include-interface,omitempty"`
 	ExcludeInterface       []string       `yaml:"exclude-interface" json:"exclude-interface,omitempty"`
 	IncludeUID             []uint32       `yaml:"include-uid" json:"include-uid,omitempty"`

@@ -22,6 +22,7 @@ import (
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/resolver"
 	SNI "github.com/metacubex/mihomo/component/sniffer"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
@@ -90,7 +91,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 		}
 	}
 
-	updateExperimental(cfg)
+	updateExperimental(cfg.Experimental)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
@@ -145,19 +146,31 @@ func GetGeneral() *config.General {
 			LanDisAllowedIPs:  inbound.DisAllowedIPs(),
 			AllowLan:          listener.AllowLan(),
 			BindAddress:       listener.BindAddress(),
+			InboundTfo:        inbound.Tfo(),
+			InboundMPTCP:      inbound.MPTCP(),
 		},
-		Controller:        config.Controller{},
-		Mode:              tunnel.Mode(),
-		LogLevel:          log.Level(),
-		IPv6:              !resolver.DisableIPv6,
-		GeodataMode:       G.GeodataMode(),
-		GeoAutoUpdate:     G.GeoAutoUpdate(),
-		GeoUpdateInterval: G.GeoUpdateInterval(),
-		GeodataLoader:     G.LoaderName(),
-		GeositeMatcher:    G.SiteMatcherName(),
-		Interface:         dialer.DefaultInterface.Load(),
-		Sniffing:          tunnel.IsSniffing(),
-		TCPConcurrent:     dialer.GetTcpConcurrent(),
+		Mode:         tunnel.Mode(),
+		UnifiedDelay: adapter.UnifiedDelay.Load(),
+		LogLevel:     log.Level(),
+		IPv6:         !resolver.DisableIPv6,
+		Interface:    dialer.DefaultInterface.Load(),
+		RoutingMark:  int(dialer.DefaultRoutingMark.Load()),
+		GeoXUrl: config.GeoXUrl{
+			GeoIp:   C.GeoIpUrl,
+			Mmdb:    C.MmdbUrl,
+			ASN:     C.ASNUrl,
+			GeoSite: C.GeoSiteUrl,
+		},
+		GeoAutoUpdate:           G.GeoAutoUpdate(),
+		GeoUpdateInterval:       G.GeoUpdateInterval(),
+		GeodataMode:             G.GeodataMode(),
+		GeodataLoader:           G.LoaderName(),
+		GeositeMatcher:          G.SiteMatcherName(),
+		TCPConcurrent:           dialer.GetTcpConcurrent(),
+		FindProcessMode:         tunnel.FindProcessMode(),
+		Sniffing:                tunnel.IsSniffing(),
+		GlobalClientFingerprint: tlsC.GetGlobalFingerprint(),
+		GlobalUA:                C.UA,
 	}
 
 	return general
@@ -188,14 +201,14 @@ func updateListeners(general *config.General, listeners map[string]C.InboundList
 	listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 }
 
-func updateExperimental(c *config.Config) {
-	if c.Experimental.QUICGoDisableGSO {
+func updateExperimental(c *config.Experimental) {
+	if c.QUICGoDisableGSO {
 		_ = os.Setenv("QUIC_GO_DISABLE_GSO", strconv.FormatBool(true))
 	}
-	if c.Experimental.QUICGoDisableECN {
+	if c.QUICGoDisableECN {
 		_ = os.Setenv("QUIC_GO_DISABLE_ECN", strconv.FormatBool(true))
 	}
-	dialer.GetIP4PEnable(c.Experimental.IP4PEnable)
+	dialer.GetIP4PEnable(c.IP4PEnable)
 }
 
 func updateNTP(c *config.NTP) {
