@@ -12,7 +12,8 @@ import (
 
 type MixedOption struct {
 	BaseOption
-	UDP bool `inbound:"udp,omitempty"`
+	Users AuthUsers `inbound:"users,omitempty"`
+	UDP   bool      `inbound:"udp,omitempty"`
 }
 
 func (o MixedOption) Equal(config C.InboundConfig) bool {
@@ -52,7 +53,7 @@ func (m *Mixed) Address() string {
 // Listen implements constant.InboundListener
 func (m *Mixed) Listen(tunnel C.Tunnel) error {
 	var err error
-	m.l, err = mixed.New(m.RawAddress(), tunnel, m.Additions()...)
+	m.l, err = mixed.NewWithAuthenticator(m.RawAddress(), tunnel, m.config.Users.GetAuth(), m.Additions()...)
 	if err != nil {
 		return err
 	}

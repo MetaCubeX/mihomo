@@ -13,3 +13,5 @@ func Authenticator() auth.Authenticator {
 func SetAuthenticator(au auth.Authenticator) {
 	authenticator = au
 }
+
+func Nil() auth.Authenticator { return nil }

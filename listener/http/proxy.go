@@ -30,7 +30,7 @@ func (b *bodyWrapper) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func HandleConn(c net.Conn, tunnel C.Tunnel, authenticator auth.Authenticator, additions ...inbound.Addition) {
+func HandleConn(c net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
 	additions = append(additions, inbound.Placeholder) // Add a placeholder for InUser
 	inUserIdx := len(additions) - 1
 	client := newClient(c, tunnel, additions)
@@ -41,6 +41,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, authenticator auth.Authenticator, a
 
 	conn := N.NewBufferedConn(c)
 
+	authenticator := getAuth()
 	keepAlive := true
 	trusted := authenticator == nil // disable authenticate if lru is nil
 	lastUser := ""
@@ -146,9 +147,6 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, authenticator auth.Authenticator, a
 }
 
 func authenticate(request *http.Request, authenticator auth.Authenticator) (resp *http.Response, user string) {
-	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
-		authenticator = nil
-	}
 	credential := parseBasicProxyAuthorization(request)
 	if credential == "" && authenticator != nil {
 		resp = responseWith(request, http.StatusProxyAuthRequired)

@@ -8,6 +8,7 @@ import (
 
 type HTTPOption struct {
 	BaseOption
+	Users AuthUsers `inbound:"users,omitempty"`
 }
 
 func (o HTTPOption) Equal(config C.InboundConfig) bool {
@@ -44,7 +45,7 @@ func (h *HTTP) Address() string {
 // Listen implements constant.InboundListener
 func (h *HTTP) Listen(tunnel C.Tunnel) error {
 	var err error
-	h.l, err = http.New(h.RawAddress(), tunnel, h.Additions()...)
+	h.l, err = http.NewWithAuthenticator(h.RawAddress(), tunnel, h.config.Users.GetAuth(), h.Additions()...)
 	if err != nil {
 		return err
 	}

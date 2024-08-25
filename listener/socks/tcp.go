@@ -6,6 +6,7 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
 	authStore "github.com/metacubex/mihomo/listener/auth"
 	"github.com/metacubex/mihomo/transport/socks4"
@@ -35,6 +36,10 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+	return NewWithAuthenticator(addr, tunnel, authStore.Authenticator, additions...)
+}
+
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -61,20 +66,24 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 				}
 				continue
 			}
+			getAuth := getAuth
 			if isDefault { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
 					_ = c.Close()
 					continue
 				}
+				if inbound.SkipAuthRemoteAddr(c.RemoteAddr()) {
+					getAuth = authStore.Nil
+				}
 			}
-			go handleSocks(c, tunnel, additions...)
+			go handleSocks(c, tunnel, getAuth, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
+func handleSocks(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
@@ -85,19 +94,16 @@ func handleSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 	switch head[0] {
 	case socks4.Version:
-		HandleSocks4(bufConn, tunnel, additions...)
+		HandleSocks4(bufConn, tunnel, getAuth, additions...)
 	case socks5.Version:
-		HandleSocks5(bufConn, tunnel, additions...)
+		HandleSocks5(bufConn, tunnel, getAuth, additions...)
 	default:
 		conn.Close()
 	}
 }
 
-func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	authenticator := authStore.Authenticator()
-	if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
-		authenticator = nil
-	}
+func HandleSocks4(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
+	authenticator := getAuth()
 	addr, _, user, err := socks4.ServerHandshake(conn, authenticator)
 	if err != nil {
 		conn.Close()
@@ -107,11 +113,8 @@ func HandleSocks4(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition)
 	tunnel.HandleTCPConn(inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4, additions...))
 }
 
-func HandleSocks5(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	authenticator := authStore.Authenticator()
-	if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
-		authenticator = nil
-	}
+func HandleSocks5(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
+	authenticator := getAuth()
 	target, command, user, err := socks5.ServerHandshake(conn, authenticator)
 	if err != nil {
 		conn.Close()
