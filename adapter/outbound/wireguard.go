@@ -26,7 +26,6 @@ import (
 
 	wireguard "github.com/metacubex/sing-wireguard"
 
-	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/debug"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
@@ -456,7 +455,6 @@ func closeWireGuard(w *WireGuard) {
 	if w.device != nil {
 		w.device.Close()
 	}
-	_ = common.Close(w.tunDevice)
 	if w.closeCh != nil {
 		close(w.closeCh)
 	}
