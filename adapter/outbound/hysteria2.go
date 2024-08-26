@@ -38,6 +38,8 @@ type Hysteria2 struct {
 	option *Hysteria2Option
 	client *hysteria2.Client
 	dialer proxydialer.SingDialer
+
+	closeCh chan struct{} // for test
 }
 
 type Hysteria2Option struct {
@@ -88,6 +90,9 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 func closeHysteria2(h *Hysteria2) {
 	if h.client != nil {
 		_ = h.client.CloseWithError(errors.New("proxy removed"))
+	}
+	if h.closeCh != nil {
+		close(h.closeCh)
 	}
 }
 

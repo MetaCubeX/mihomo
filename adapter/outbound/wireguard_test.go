@@ -29,6 +29,7 @@ func TestWireGuardGC(t *testing.T) {
 	err = wg.init(ctx)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	// must do a small sleep before test GC
 	// because it maybe deadlocks if w.device.Close call too fast after w.device.Start

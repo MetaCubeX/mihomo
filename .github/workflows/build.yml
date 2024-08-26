@@ -207,6 +207,8 @@ jobs:
       if: ${{ matrix.jobs.test == 'test' }}
       run: |
         go test ./...
+        echo "---test with_gvisor---"
+        go test ./... -tags "with_gvisor" -count=1
 
     - name: Update CA
       run: |

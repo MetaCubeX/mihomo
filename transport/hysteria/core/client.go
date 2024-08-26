@@ -289,7 +289,10 @@ func (c *Client) DialUDP(dialer utils.PacketDialer) (UDPConn, error) {
 func (c *Client) Close() error {
 	c.reconnectMutex.Lock()
 	defer c.reconnectMutex.Unlock()
-	err := c.quicSession.CloseWithError(closeErrorCodeGeneric, "")
+	var err error
+	if c.quicSession != nil {
+		err = c.quicSession.CloseWithError(closeErrorCodeGeneric, "")
+	}
 	c.closed = true
 	return err
 }
