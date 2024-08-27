@@ -54,7 +54,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		"proxies":          pp.Proxies(),
 		"testUrl":          pp.healthCheck.url,
 		"expectedStatus":   pp.healthCheck.expectedStatus.String(),
-		"updatedAt":        pp.UpdatedAt,
+		"updatedAt":        pp.UpdatedAt(),
 		"subscriptionInfo": pp.subscriptionInfo,
 	})
 }
@@ -164,9 +164,9 @@ func (pp *proxySetProvider) closeAllConnections() {
 	})
 }
 
-func stopProxyProvider(pd *ProxySetProvider) {
-	pd.healthCheck.close()
-	_ = pd.Fetcher.Destroy()
+func (pp *proxySetProvider) Close() error {
+	pp.healthCheck.close()
+	return pp.Fetcher.Close()
 }
 
 func NewProxySetProvider(name string, interval time.Duration, filter string, excludeFilter string, excludeType string, dialerProxy string, override OverrideSchema, vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
@@ -200,8 +200,13 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy, override), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
 	wrapper := &ProxySetProvider{pd}
-	runtime.SetFinalizer(wrapper, stopProxyProvider)
+	runtime.SetFinalizer(wrapper, (*ProxySetProvider).Close)
 	return wrapper, nil
+}
+
+func (pp *ProxySetProvider) Close() error {
+	runtime.SetFinalizer(pp, nil)
+	return pp.proxySetProvider.Close()
 }
 
 // CompatibleProvider for auto gc
@@ -274,8 +279,9 @@ func (cp *compatibleProvider) RegisterHealthCheckTask(url string, expectedStatus
 	cp.healthCheck.registerHealthCheckTask(url, expectedStatus, filter, interval)
 }
 
-func stopCompatibleProvider(pd *CompatibleProvider) {
-	pd.healthCheck.close()
+func (cp *compatibleProvider) Close() error {
+	cp.healthCheck.close()
+	return nil
 }
 
 func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvider, error) {
@@ -294,8 +300,13 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 	}
 
 	wrapper := &CompatibleProvider{pd}
-	runtime.SetFinalizer(wrapper, stopCompatibleProvider)
+	runtime.SetFinalizer(wrapper, (*CompatibleProvider).Close)
 	return wrapper, nil
+}
+
+func (cp *CompatibleProvider) Close() error {
+	runtime.SetFinalizer(cp, nil)
+	return cp.compatibleProvider.Close()
 }
 
 func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {

@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/metacubex/mihomo/common/utils"
@@ -31,7 +32,7 @@ func (v VehicleType) String() string {
 }
 
 type Vehicle interface {
-	Read() ([]byte, error)
+	Read(ctx context.Context) ([]byte, error)
 	Path() string
 	Proxy() string
 	Type() VehicleType
@@ -83,6 +84,7 @@ type ProxyProvider interface {
 type RuleProvider interface {
 	Provider
 	Behavior() RuleBehavior
+	Count() int
 	Match(*constant.Metadata) bool
 	ShouldResolveIP() bool
 	ShouldFindProcess() bool

@@ -27,6 +27,8 @@ type extraOption struct {
 }
 
 type HealthCheck struct {
+	ctx            context.Context
+	ctxCancel      context.CancelFunc
 	url            string
 	extra          map[string]*extraOption
 	mu             sync.Mutex
@@ -36,7 +38,6 @@ type HealthCheck struct {
 	lazy           bool
 	expectedStatus utils.IntRanges[uint16]
 	lastTouch      atomic.TypedValue[time.Time]
-	done           chan struct{}
 	singleDo       *singledo.Single[struct{}]
 	timeout        time.Duration
 }
@@ -59,7 +60,7 @@ func (hc *HealthCheck) process() {
 			} else {
 				log.Debugln("Skip once health check because we are lazy")
 			}
-		case <-hc.done:
+		case <-hc.ctx.Done():
 			ticker.Stop()
 			hc.stop()
 			return
@@ -146,7 +147,7 @@ func (hc *HealthCheck) check() {
 	_, _, _ = hc.singleDo.Do(func() (struct{}, error) {
 		id := utils.NewUUIDV4().String()
 		log.Debugln("Start New Health Checking {%s}", id)
-		b, _ := batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](10))
+		b, _ := batch.New[bool](hc.ctx, batch.WithConcurrencyNum[bool](10))
 
 		// execute default health check
 		option := &extraOption{filters: nil, expectedStatus: hc.expectedStatus}
@@ -195,7 +196,7 @@ func (hc *HealthCheck) execute(b *batch.Batch[bool], url, uid string, option *ex
 
 		p := proxy
 		b.Go(p.Name(), func() (bool, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), hc.timeout)
+			ctx, cancel := context.WithTimeout(hc.ctx, hc.timeout)
 			defer cancel()
 			log.Debugln("Health Checking, proxy: %s, url: %s, id: {%s}", p.Name(), url, uid)
 			_, _ = p.URLTest(ctx, url, expectedStatus)
@@ -206,7 +207,7 @@ func (hc *HealthCheck) execute(b *batch.Batch[bool], url, uid string, option *ex
 }
 
 func (hc *HealthCheck) close() {
-	hc.done <- struct{}{}
+	hc.ctxCancel()
 }
 
 func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
@@ -217,8 +218,11 @@ func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, 
 	if timeout == 0 {
 		timeout = 5000
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return &HealthCheck{
+		ctx:            ctx,
+		ctxCancel:      cancel,
 		proxies:        proxies,
 		url:            url,
 		timeout:        time.Duration(timeout) * time.Millisecond,
@@ -226,7 +230,6 @@ func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, 
 		interval:       time.Duration(interval) * time.Second,
 		lazy:           lazy,
 		expectedStatus: expectedStatus,
-		done:           make(chan struct{}, 1),
 		singleDo:       singledo.NewSingle[struct{}](time.Second),
 	}
 }

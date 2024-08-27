@@ -89,6 +89,10 @@ func (rp *ruleSetProvider) Behavior() P.RuleBehavior {
 	return rp.behavior
 }
 
+func (rp *ruleSetProvider) Count() int {
+	return rp.strategy.Count()
+}
+
 func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
 	return rp.strategy != nil && rp.strategy.Match(metadata)
 }
@@ -113,9 +117,14 @@ func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
 			"name":        rp.Name(),
 			"ruleCount":   rp.strategy.Count(),
 			"type":        rp.Type().String(),
-			"updatedAt":   rp.UpdatedAt,
+			"updatedAt":   rp.UpdatedAt(),
 			"vehicleType": rp.VehicleType().String(),
 		})
+}
+
+func (rp *RuleSetProvider) Close() error {
+	runtime.SetFinalizer(rp, nil)
+	return rp.ruleSetProvider.Close()
 }
 
 func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle,
@@ -139,8 +148,7 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 		rp,
 	}
 
-	final := func(provider *RuleSetProvider) { _ = rp.Fetcher.Destroy() }
-	runtime.SetFinalizer(wrapper, final)
+	runtime.SetFinalizer(wrapper, (*RuleSetProvider).Close)
 	return wrapper
 }
 

@@ -24,7 +24,7 @@ func (f *FileVehicle) Path() string {
 	return f.path
 }
 
-func (f *FileVehicle) Read() ([]byte, error) {
+func (f *FileVehicle) Read(ctx context.Context) ([]byte, error) {
 	return os.ReadFile(f.path)
 }
 
@@ -59,8 +59,8 @@ func (h *HTTPVehicle) Proxy() string {
 	return h.proxy
 }
 
-func (h *HTTPVehicle) Read() ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+func (h *HTTPVehicle) Read(ctx context.Context) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*20)
 	defer cancel()
 	resp, err := mihomoHttp.HttpRequestWithProxy(ctx, h.url, http.MethodGet, h.header, nil, h.proxy)
 	if err != nil {

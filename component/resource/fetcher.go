@@ -2,6 +2,7 @@ package resource
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"os"
 	"path/filepath"
@@ -22,11 +23,12 @@ var (
 type Parser[V any] func([]byte) (V, error)
 
 type Fetcher[V any] struct {
+	ctx          context.Context
+	ctxCancel    context.CancelFunc
 	resourceType string
 	name         string
 	vehicle      types.Vehicle
-	UpdatedAt    time.Time
-	done         chan struct{}
+	updatedAt    time.Time
 	hash         [16]byte
 	parser       Parser[V]
 	interval     time.Duration
@@ -46,6 +48,10 @@ func (f *Fetcher[V]) VehicleType() types.VehicleType {
 	return f.vehicle.Type()
 }
 
+func (f *Fetcher[V]) UpdatedAt() time.Time {
+	return f.updatedAt
+}
+
 func (f *Fetcher[V]) Initial() (V, error) {
 	var (
 		buf         []byte
@@ -57,15 +63,15 @@ func (f *Fetcher[V]) Initial() (V, error) {
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
 		buf, err = os.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
-		f.UpdatedAt = modTime
+		f.updatedAt = modTime
 		isLocal = true
 		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
 			log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
 			forceUpdate = true
 		}
 	} else {
-		buf, err = f.vehicle.Read()
-		f.UpdatedAt = time.Now()
+		buf, err = f.vehicle.Read(f.ctx)
+		f.updatedAt = time.Now()
 	}
 
 	if err != nil {
@@ -75,7 +81,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 	var contents V
 	if forceUpdate {
 		var forceBuf []byte
-		if forceBuf, err = f.vehicle.Read(); err == nil {
+		if forceBuf, err = f.vehicle.Read(f.ctx); err == nil {
 			if contents, err = f.parser(forceBuf); err == nil {
 				isLocal = false
 				buf = forceBuf
@@ -93,7 +99,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 		}
 
 		// parse local file error, fallback to remote
-		buf, err = f.vehicle.Read()
+		buf, err = f.vehicle.Read(f.ctx)
 		if err != nil {
 			return lo.Empty[V](), err
 		}
@@ -136,15 +142,18 @@ func (f *Fetcher[V]) Initial() (V, error) {
 }
 
 func (f *Fetcher[V]) Update() (V, bool, error) {
-	buf, err := f.vehicle.Read()
+	buf, err := f.vehicle.Read(f.ctx)
 	if err != nil {
 		return lo.Empty[V](), false, err
 	}
+	return f.SideUpdate(buf)
+}
 
+func (f *Fetcher[V]) SideUpdate(buf []byte) (V, bool, error) {
 	now := time.Now()
 	hash := md5.Sum(buf)
 	if bytes.Equal(f.hash[:], hash[:]) {
-		f.UpdatedAt = now
+		f.updatedAt = now
 		_ = os.Chtimes(f.vehicle.Path(), now, now)
 		return lo.Empty[V](), true, nil
 	}
@@ -160,16 +169,14 @@ func (f *Fetcher[V]) Update() (V, bool, error) {
 		}
 	}
 
-	f.UpdatedAt = now
+	f.updatedAt = now
 	f.hash = hash
 
 	return contents, false, nil
 }
 
-func (f *Fetcher[V]) Destroy() error {
-	if f.interval > 0 {
-		f.done <- struct{}{}
-	}
+func (f *Fetcher[V]) Close() error {
+	f.ctxCancel()
 	if f.watcher != nil {
 		_ = f.watcher.Close()
 	}
@@ -177,7 +184,7 @@ func (f *Fetcher[V]) Destroy() error {
 }
 
 func (f *Fetcher[V]) pullLoop() {
-	initialInterval := f.interval - time.Since(f.UpdatedAt)
+	initialInterval := f.interval - time.Since(f.updatedAt)
 	if initialInterval > f.interval {
 		initialInterval = f.interval
 	}
@@ -189,7 +196,7 @@ func (f *Fetcher[V]) pullLoop() {
 		case <-timer.C:
 			timer.Reset(f.interval)
 			f.update(f.vehicle.Path())
-		case <-f.done:
+		case <-f.ctx.Done():
 			return
 		}
 	}
@@ -226,13 +233,14 @@ func safeWrite(path string, buf []byte) error {
 }
 
 func NewFetcher[V any](name string, interval time.Duration, vehicle types.Vehicle, parser Parser[V], onUpdate func(V)) *Fetcher[V] {
-
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Fetcher[V]{
-		name:     name,
-		vehicle:  vehicle,
-		parser:   parser,
-		done:     make(chan struct{}, 8),
-		OnUpdate: onUpdate,
-		interval: interval,
+		ctx:       ctx,
+		ctxCancel: cancel,
+		name:      name,
+		vehicle:   vehicle,
+		parser:    parser,
+		OnUpdate:  onUpdate,
+		interval:  interval,
 	}
 }
