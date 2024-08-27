@@ -57,6 +57,10 @@ func (set *IpCidrSet) Merge() error {
 	return nil
 }
 
+func (set *IpCidrSet) IsEmpty() bool {
+	return set == nil || len(set.rr) == 0
+}
+
 func (set *IpCidrSet) Foreach(f func(prefix netip.Prefix) bool) {
 	for _, r := range set.rr {
 		for _, prefix := range r.Prefixes() {

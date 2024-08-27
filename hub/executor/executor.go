@@ -21,7 +21,7 @@ import (
 	"github.com/metacubex/mihomo/component/profile"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/resolver"
-	SNI "github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
@@ -361,25 +361,17 @@ func hcCompatibleProvider(proxyProviders map[string]provider.ProxyProvider) {
 
 }
 
-func updateSniffer(sniffer *config.Sniffer) {
-	if sniffer.Enable {
-		dispatcher, err := SNI.NewSnifferDispatcher(
-			sniffer.Sniffers, sniffer.ForceDomain, sniffer.SkipDomain,
-			sniffer.ForceDnsMapping, sniffer.ParsePureIp,
-		)
-		if err != nil {
-			log.Warnln("initial sniffer failed, err:%v", err)
-		}
+func updateSniffer(snifferConfig *sniffer.Config) {
+	dispatcher, err := sniffer.NewDispatcher(snifferConfig)
+	if err != nil {
+		log.Warnln("initial sniffer failed, err:%v", err)
+	}
 
-		tunnel.UpdateSniffer(dispatcher)
+	tunnel.UpdateSniffer(dispatcher)
+
+	if snifferConfig.Enable {
 		log.Infoln("Sniffer is loaded and working")
 	} else {
-		dispatcher, err := SNI.NewCloseSnifferDispatcher()
-		if err != nil {
-			log.Warnln("initial sniffer failed, err:%v", err)
-		}
-
-		tunnel.UpdateSniffer(dispatcher)
 		log.Infoln("Sniffer is closed")
 	}
 }

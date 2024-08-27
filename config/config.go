@@ -25,7 +25,7 @@ import (
 	"github.com/metacubex/mihomo/component/geodata"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
-	SNIFF "github.com/metacubex/mihomo/component/sniffer"
+	"github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
@@ -161,16 +161,6 @@ type Profile struct {
 	StoreFakeIP   bool
 }
 
-// Sniffer config
-type Sniffer struct {
-	Enable          bool
-	Sniffers        map[snifferTypes.Type]SNIFF.SnifferConfig
-	ForceDomain     []C.Rule
-	SkipDomain      []C.Rule
-	ForceDnsMapping bool
-	ParsePureIp     bool
-}
-
 // TLS config
 type TLS struct {
 	Certificate     string
@@ -196,7 +186,7 @@ type Config struct {
 	Providers     map[string]providerTypes.ProxyProvider
 	RuleProviders map[string]providerTypes.RuleProvider
 	Tunnels       []LC.Tunnel
-	Sniffer       *Sniffer
+	Sniffer       *sniffer.Config
 	TLS           *TLS
 }
 
@@ -327,15 +317,18 @@ type RawGeoXUrl struct {
 }
 
 type RawSniffer struct {
-	Enable          bool                         `yaml:"enable" json:"enable"`
-	OverrideDest    bool                         `yaml:"override-destination" json:"override-destination"`
-	Sniffing        []string                     `yaml:"sniffing" json:"sniffing"`
-	ForceDomain     []string                     `yaml:"force-domain" json:"force-domain"`
-	SkipDomain      []string                     `yaml:"skip-domain" json:"skip-domain"`
-	Ports           []string                     `yaml:"port-whitelist" json:"port-whitelist"`
-	ForceDnsMapping bool                         `yaml:"force-dns-mapping" json:"force-dns-mapping"`
-	ParsePureIp     bool                         `yaml:"parse-pure-ip" json:"parse-pure-ip"`
-	Sniff           map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
+	Enable          bool     `yaml:"enable" json:"enable"`
+	OverrideDest    bool     `yaml:"override-destination" json:"override-destination"`
+	Sniffing        []string `yaml:"sniffing" json:"sniffing"`
+	ForceDomain     []string `yaml:"force-domain" json:"force-domain"`
+	SkipSrcAddress  []string `yaml:"skip-src-address" json:"skip-src-address"`
+	SkipDstAddress  []string `yaml:"skip-dst-address" json:"skip-dst-address"`
+	SkipDomain      []string `yaml:"skip-domain" json:"skip-domain"`
+	Ports           []string `yaml:"port-whitelist" json:"port-whitelist"`
+	ForceDnsMapping bool     `yaml:"force-dns-mapping" json:"force-dns-mapping"`
+	ParsePureIp     bool     `yaml:"parse-pure-ip" json:"parse-pure-ip"`
+
+	Sniff map[string]RawSniffingConfig `yaml:"sniff" json:"sniff"`
 }
 
 type RawSniffingConfig struct {
@@ -1477,7 +1470,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 	var rule C.Rule
 	if len(cfg.Fallback) != 0 {
 		if cfg.FallbackFilter.GeoIP {
-			rule, err = RC.NewGEOIP(cfg.FallbackFilter.GeoIPCode, "", false, true)
+			rule, err = RC.NewGEOIP(cfg.FallbackFilter.GeoIPCode, "dns.fallback-filter.geoip", false, true)
 			if err != nil {
 				return nil, fmt.Errorf("load GeoIP dns fallback filter error, %w", err)
 			}
@@ -1507,7 +1500,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 				}
 			}
 			rule = RP.NewDomainSet(domainTrie.NewDomainSet(), "dns.fallback-filter.domain")
-			dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
+			dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, rule)
 		}
 		if len(cfg.FallbackFilter.GeoSite) > 0 {
 			log.Warnln("replace fallback-filter.geosite with nameserver-policy, it will be removed in the future")
@@ -1516,7 +1509,7 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 				if err != nil {
 					return nil, fmt.Errorf("DNS FallbackGeosite[%d] format error: %w", idx, err)
 				}
-				dnsCfg.FallbackIPFilter = append(dnsCfg.FallbackIPFilter, rule)
+				dnsCfg.FallbackDomainFilter = append(dnsCfg.FallbackDomainFilter, rule)
 			}
 		}
 	}
@@ -1618,13 +1611,13 @@ func parseTuicServer(rawTuic RawTuicServer, general *General) error {
 	return nil
 }
 
-func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.RuleProvider) (*Sniffer, error) {
-	sniffer := &Sniffer{
+func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.RuleProvider) (*sniffer.Config, error) {
+	snifferConfig := &sniffer.Config{
 		Enable:          snifferRaw.Enable,
 		ForceDnsMapping: snifferRaw.ForceDnsMapping,
 		ParsePureIp:     snifferRaw.ParsePureIp,
 	}
-	loadSniffer := make(map[snifferTypes.Type]SNIFF.SnifferConfig)
+	loadSniffer := make(map[snifferTypes.Type]sniffer.SnifferConfig)
 
 	if len(snifferRaw.Sniff) != 0 {
 		for sniffType, sniffConfig := range snifferRaw.Sniff {
@@ -1640,7 +1633,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 			for _, snifferType := range snifferTypes.List {
 				if snifferType.String() == strings.ToUpper(sniffType) {
 					find = true
-					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+					loadSniffer[snifferType] = sniffer.SnifferConfig{
 						Ports:        ports,
 						OverrideDest: overrideDest,
 					}
@@ -1652,7 +1645,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 			}
 		}
 	} else {
-		if sniffer.Enable && len(snifferRaw.Sniffing) != 0 {
+		if snifferConfig.Enable && len(snifferRaw.Sniffing) != 0 {
 			// Deprecated: Use Sniff instead
 			log.Warnln("Deprecated: Use Sniff instead")
 		}
@@ -1666,7 +1659,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 			for _, snifferType := range snifferTypes.List {
 				if snifferType.String() == strings.ToUpper(snifferName) {
 					find = true
-					loadSniffer[snifferType] = SNIFF.SnifferConfig{
+					loadSniffer[snifferType] = sniffer.SnifferConfig{
 						Ports:        globalPorts,
 						OverrideDest: snifferRaw.OverrideDest,
 					}
@@ -1679,21 +1672,80 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]providerTypes.
 		}
 	}
 
-	sniffer.Sniffers = loadSniffer
+	snifferConfig.Sniffers = loadSniffer
 
 	forceDomain, err := parseDomain(snifferRaw.ForceDomain, nil, "sniffer.force-domain", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in force-domain, error:%w", err)
 	}
-	sniffer.ForceDomain = forceDomain
+	snifferConfig.ForceDomain = forceDomain
+
+	skipSrcAddress, err := parseIPCIDR(snifferRaw.SkipSrcAddress, nil, "sniffer.skip-src-address", ruleProviders)
+	if err != nil {
+		return nil, fmt.Errorf("error in skip-src-address, error:%w", err)
+	}
+	snifferConfig.SkipSrcAddress = skipSrcAddress
+
+	skipDstAddress, err := parseIPCIDR(snifferRaw.SkipDstAddress, nil, "sniffer.skip-src-address", ruleProviders)
+	if err != nil {
+		return nil, fmt.Errorf("error in skip-dst-address, error:%w", err)
+	}
+	snifferConfig.SkipDstAddress = skipDstAddress
 
 	skipDomain, err := parseDomain(snifferRaw.SkipDomain, nil, "sniffer.skip-domain", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in skip-domain, error:%w", err)
 	}
-	sniffer.SkipDomain = skipDomain
+	snifferConfig.SkipDomain = skipDomain
 
-	return sniffer, nil
+	return snifferConfig, nil
+}
+
+func parseIPCIDR(addresses []string, cidrSet *cidr.IpCidrSet, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (ipRules []C.Rule, err error) {
+	var rule C.Rule
+	for _, ipcidr := range addresses {
+		ipcidrLower := strings.ToLower(ipcidr)
+		if strings.Contains(ipcidrLower, "geoip:") {
+			subkeys := strings.Split(ipcidr, ":")
+			subkeys = subkeys[1:]
+			subkeys = strings.Split(subkeys[0], ",")
+			for _, country := range subkeys {
+				rule, err = RC.NewGEOIP(country, adapterName, false, false)
+				if err != nil {
+					return nil, err
+				}
+				ipRules = append(ipRules, rule)
+			}
+		} else if strings.Contains(ipcidrLower, "rule-set:") {
+			subkeys := strings.Split(ipcidr, ":")
+			subkeys = subkeys[1:]
+			subkeys = strings.Split(subkeys[0], ",")
+			for _, domainSetName := range subkeys {
+				rule, err = parseIPRuleSet(domainSetName, adapterName, ruleProviders)
+				if err != nil {
+					return nil, err
+				}
+				ipRules = append(ipRules, rule)
+			}
+		} else {
+			if cidrSet == nil {
+				cidrSet = cidr.NewIpCidrSet()
+			}
+			err = cidrSet.AddIpCidrForString(ipcidr)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if !cidrSet.IsEmpty() {
+		err = cidrSet.Merge()
+		if err != nil {
+			return nil, err
+		}
+		rule = RP.NewIpCidrSet(cidrSet, adapterName)
+		ipRules = append(ipRules, rule)
+	}
+	return
 }
 
 func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (domainRules []C.Rule, err error) {
@@ -1737,6 +1789,21 @@ func parseDomain(domains []string, domainTrie *trie.DomainTrie[struct{}], adapte
 		domainRules = append(domainRules, rule)
 	}
 	return
+}
+
+func parseIPRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.Rule, error) {
+	if rp, ok := ruleProviders[domainSetName]; !ok {
+		return nil, fmt.Errorf("not found rule-set: %s", domainSetName)
+	} else {
+		switch rp.Behavior() {
+		case providerTypes.Domain:
+			return nil, fmt.Errorf("rule provider type error, except ipcidr,actual %s", rp.Behavior())
+		case providerTypes.Classical:
+			log.Warnln("%s provider is %s, only matching it contain ip rule", rp.Name(), rp.Behavior())
+		default:
+		}
+	}
+	return RP.NewRuleSet(domainSetName, adapterName, true)
 }
 
 func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.Rule, error) {
