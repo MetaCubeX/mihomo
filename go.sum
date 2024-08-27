@@ -110,8 +110,8 @@ github.com/metacubex/randv2 v0.2.0 h1:uP38uBvV2SxYfLj53kuvAjbND4RUDfFJjwr4UigMiL
 github.com/metacubex/randv2 v0.2.0/go.mod h1:kFi2SzrQ5WuneuoLLCMkABtiBu6VRrMrWFqSPyj2cxY=
 github.com/metacubex/sing v0.0.0-20240724044459-6f3cf5896297 h1:YG/JkwGPbca5rUtEMHIu8ZuqzR7BSVm1iqY8hNoMeMA=
 github.com/metacubex/sing v0.0.0-20240724044459-6f3cf5896297/go.mod h1:ARkL0gM13/Iv5VCZmci/NuoOlePoIsW0m7BWfln/Hak=
-github.com/metacubex/sing-quic v0.0.0-20240518034124-7696d3f7da72 h1:Wr4g1HCb5Z/QIFwFiVNjO2qL+dRu25+Mdn9xtAZZ+ew=
-github.com/metacubex/sing-quic v0.0.0-20240518034124-7696d3f7da72/go.mod h1:g7Mxj7b7zm7YVqD975mk/hSmrb0A0G4bVvIMr2MMzn8=
+github.com/metacubex/sing-quic v0.0.0-20240827003841-cd97758ed8b4 h1:HobpULaPK6OoxrHMmgcwLkwwIduXVmwdcznwUfH1GQM=
+github.com/metacubex/sing-quic v0.0.0-20240827003841-cd97758ed8b4/go.mod h1:g7Mxj7b7zm7YVqD975mk/hSmrb0A0G4bVvIMr2MMzn8=
 github.com/metacubex/sing-shadowsocks v0.2.8 h1:wIhlaigswzjPw4hej75sEvWte3QR0+AJRafgwBHO5B4=
 github.com/metacubex/sing-shadowsocks v0.2.8/go.mod h1:X3x88XtJpBxG0W0/ECOJL6Ib0SJ3xdniAkU/6/RMWU0=
 github.com/metacubex/sing-shadowsocks2 v0.2.2 h1:eaf42uVx4Lr21S6MDYs0ZdTvGA0GEhDpb9no4+gdXPo=
