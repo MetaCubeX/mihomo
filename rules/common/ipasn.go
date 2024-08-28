@@ -28,8 +28,11 @@ func (a *ASN) Match(metadata *C.Metadata) (bool, string) {
 
 	result := mmdb.ASNInstance().LookupASN(ip.AsSlice())
 	asnNumber := strconv.FormatUint(uint64(result.AutonomousSystemNumber), 10)
-	if !a.isSourceIP {
-		metadata.DstIPASN = asnNumber + " " + result.AutonomousSystemOrganization
+	ipASN := asnNumber + " " + result.AutonomousSystemOrganization
+	if a.isSourceIP {
+		metadata.SrcIPASN = ipASN
+	} else {
+		metadata.DstIPASN = ipASN
 	}
 
 	match := a.asn == asnNumber

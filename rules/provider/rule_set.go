@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"net/netip"
+
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/rules/common"
@@ -33,6 +35,18 @@ func (rs *RuleSet) Match(metadata *C.Metadata) (bool, string) {
 		return provider.Match(metadata), rs.adapter
 	}
 	return false, ""
+}
+
+// MatchDomain implements C.DomainMatcher
+func (rs *RuleSet) MatchDomain(domain string) bool {
+	ok, _ := rs.Match(&C.Metadata{Host: domain})
+	return ok
+}
+
+// MatchIp implements C.IpMatcher
+func (rs *RuleSet) MatchIp(ip netip.Addr) bool {
+	ok, _ := rs.Match(&C.Metadata{DstIP: ip})
+	return ok
 }
 
 func (rs *RuleSet) Adapter() string {

@@ -22,23 +22,23 @@ var (
 type Dispatcher struct {
 	enable          bool
 	sniffers        map[sniffer.Sniffer]SnifferConfig
-	forceDomain     []C.Rule
-	skipSrcAddress  []C.Rule
-	skipDstAddress  []C.Rule
-	skipDomain      []C.Rule
+	forceDomain     []C.DomainMatcher
+	skipSrcAddress  []C.IpMatcher
+	skipDstAddress  []C.IpMatcher
+	skipDomain      []C.DomainMatcher
 	skipList        *lru.LruCache[netip.AddrPort, uint8]
 	forceDnsMapping bool
 	parsePureIp     bool
 }
 
 func (sd *Dispatcher) shouldOverride(metadata *C.Metadata) bool {
-	for _, rule := range sd.skipDstAddress {
-		if ok, _ := rule.Match(&C.Metadata{DstIP: metadata.DstIP}); ok {
+	for _, matcher := range sd.skipDstAddress {
+		if matcher.MatchIp(metadata.DstIP) {
 			return false
 		}
 	}
-	for _, rule := range sd.skipSrcAddress {
-		if ok, _ := rule.Match(&C.Metadata{DstIP: metadata.SrcIP}); ok {
+	for _, matcher := range sd.skipSrcAddress {
+		if matcher.MatchIp(metadata.SrcIP) {
 			return false
 		}
 	}
@@ -48,8 +48,8 @@ func (sd *Dispatcher) shouldOverride(metadata *C.Metadata) bool {
 	if metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping {
 		return true
 	}
-	for _, rule := range sd.forceDomain {
-		if ok, _ := rule.Match(&C.Metadata{Host: metadata.Host}); ok {
+	for _, matcher := range sd.forceDomain {
+		if matcher.MatchDomain(metadata.Host) {
 			return true
 		}
 	}
@@ -112,8 +112,8 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 			return false
 		}
 
-		for _, rule := range sd.skipDomain {
-			if ok, _ := rule.Match(&C.Metadata{Host: host}); ok {
+		for _, matcher := range sd.skipDomain {
+			if matcher.MatchDomain(host) {
 				log.Debugln("[Sniffer] Skip sni[%s]", host)
 				return false
 			}
@@ -200,10 +200,10 @@ func (sd *Dispatcher) cacheSniffFailed(metadata *C.Metadata) {
 type Config struct {
 	Enable          bool
 	Sniffers        map[sniffer.Type]SnifferConfig
-	ForceDomain     []C.Rule
-	SkipSrcAddress  []C.Rule
-	SkipDstAddress  []C.Rule
-	SkipDomain      []C.Rule
+	ForceDomain     []C.DomainMatcher
+	SkipSrcAddress  []C.IpMatcher
+	SkipDstAddress  []C.IpMatcher
+	SkipDomain      []C.DomainMatcher
 	ForceDnsMapping bool
 	ParsePureIp     bool
 }

@@ -42,8 +42,8 @@ type Resolver struct {
 	hosts                 *trie.DomainTrie[resolver.HostValue]
 	main                  []dnsClient
 	fallback              []dnsClient
-	fallbackDomainFilters []C.Rule
-	fallbackIPFilters     []C.Rule
+	fallbackDomainFilters []C.DomainMatcher
+	fallbackIPFilters     []C.IpMatcher
 	group                 singleflight.Group[*D.Msg]
 	cache                 dnsCache
 	policy                []dnsPolicy
@@ -119,7 +119,7 @@ func (r *Resolver) LookupIPv6(ctx context.Context, host string) ([]netip.Addr, e
 
 func (r *Resolver) shouldIPFallback(ip netip.Addr) bool {
 	for _, filter := range r.fallbackIPFilters {
-		if ok, _ := filter.Match(&C.Metadata{DstIP: ip}); ok {
+		if filter.MatchIp(ip) {
 			return true
 		}
 	}
@@ -275,7 +275,7 @@ func (r *Resolver) shouldOnlyQueryFallback(m *D.Msg) bool {
 	}
 
 	for _, df := range r.fallbackDomainFilters {
-		if ok, _ := df.Match(&C.Metadata{Host: domain}); ok {
+		if df.MatchDomain(domain) {
 			return true
 		}
 	}
@@ -398,7 +398,7 @@ func (ns NameServer) Equal(ns2 NameServer) bool {
 
 type Policy struct {
 	Domain      string
-	Rule        C.Rule
+	Matcher     C.DomainMatcher
 	NameServers []NameServer
 }
 
@@ -409,8 +409,8 @@ type Config struct {
 	IPv6                 bool
 	IPv6Timeout          uint
 	EnhancedMode         C.DNSMode
-	FallbackIPFilter     []C.Rule
-	FallbackDomainFilter []C.Rule
+	FallbackIPFilter     []C.IpMatcher
+	FallbackDomainFilter []C.DomainMatcher
 	Pool                 *fakeip.Pool
 	Hosts                *trie.DomainTrie[resolver.HostValue]
 	Policy               []Policy
@@ -495,8 +495,8 @@ func NewResolver(config Config) *Resolver {
 		}
 
 		for _, policy := range config.Policy {
-			if policy.Rule != nil {
-				insertPolicy(domainRulePolicy{rule: policy.Rule, dnsClients: cacheTransform(policy.NameServers)})
+			if policy.Matcher != nil {
+				insertPolicy(domainMatcherPolicy{matcher: policy.Matcher, dnsClients: cacheTransform(policy.NameServers)})
 			} else {
 				if triePolicy == nil {
 					triePolicy = trie.New[[]dnsClient]()

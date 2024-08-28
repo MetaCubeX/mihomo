@@ -23,15 +23,19 @@ func (gs *GEOSITE) RuleType() C.RuleType {
 }
 
 func (gs *GEOSITE) Match(metadata *C.Metadata) (bool, string) {
-	domain := metadata.RuleHost()
+	return gs.MatchDomain(metadata.RuleHost()), gs.adapter
+}
+
+// MatchDomain implements C.DomainMatcher
+func (gs *GEOSITE) MatchDomain(domain string) bool {
 	if len(domain) == 0 {
-		return false, ""
+		return false
 	}
 	matcher, err := gs.GetDomainMatcher()
 	if err != nil {
-		return false, ""
+		return false
 	}
-	return matcher.ApplyDomain(domain), gs.adapter
+	return matcher.ApplyDomain(domain)
 }
 
 func (gs *GEOSITE) Adapter() string {

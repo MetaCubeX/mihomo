@@ -3,6 +3,7 @@ package common
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 
 	"github.com/metacubex/mihomo/component/geodata"
@@ -11,6 +12,8 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+
+	"golang.org/x/exp/slices"
 )
 
 type GEOIP struct {
@@ -41,52 +44,84 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 	}
 
 	if g.country == "lan" {
-		return ip.IsPrivate() ||
-			ip.IsUnspecified() ||
-			ip.IsLoopback() ||
-			ip.IsMulticast() ||
-			ip.IsLinkLocalUnicast() ||
-			resolver.IsFakeBroadcastIP(ip), g.adapter
+		return g.isLan(ip), g.adapter
 	}
 
-	for _, code := range metadata.DstGeoIP {
-		if g.country == code {
-			return true, g.adapter
-		}
-	}
-
-	if !C.GeodataMode {
+	if C.GeodataMode {
 		if g.isSourceIP {
-			codes := mmdb.IPInstance().LookupCode(ip.AsSlice())
-			for _, code := range codes {
-				if g.country == code {
-					return true, g.adapter
-				}
+			if slices.Contains(metadata.SrcGeoIP, g.country) {
+				return true, g.adapter
 			}
-			return false, g.adapter
-		}
-
-		if metadata.DstGeoIP != nil {
-			return false, g.adapter
-		}
-		metadata.DstGeoIP = mmdb.IPInstance().LookupCode(ip.AsSlice())
-		for _, code := range metadata.DstGeoIP {
-			if g.country == code {
+		} else {
+			if slices.Contains(metadata.DstGeoIP, g.country) {
 				return true, g.adapter
 			}
 		}
-		return false, g.adapter
+		matcher, err := g.getIPMatcher()
+		if err != nil {
+			return false, ""
+		}
+		match := matcher.Match(ip)
+		if match {
+			if g.isSourceIP {
+				metadata.SrcGeoIP = append(metadata.SrcGeoIP, g.country)
+			} else {
+				metadata.DstGeoIP = append(metadata.DstGeoIP, g.country)
+			}
+		}
+		return match, g.adapter
 	}
 
-	matcher, err := g.GetIPMatcher()
-	if err != nil {
-		return false, ""
+	if g.isSourceIP {
+		if metadata.SrcGeoIP != nil {
+			return slices.Contains(metadata.SrcGeoIP, g.country), g.adapter
+		}
+	} else {
+		if metadata.DstGeoIP != nil {
+			return slices.Contains(metadata.DstGeoIP, g.country), g.adapter
+		}
 	}
-	match := matcher.Match(ip)
-	if match && !g.isSourceIP {
-		metadata.DstGeoIP = append(metadata.DstGeoIP, g.country)
+	codes := mmdb.IPInstance().LookupCode(ip.AsSlice())
+	if g.isSourceIP {
+		metadata.SrcGeoIP = codes
+	} else {
+		metadata.DstGeoIP = codes
 	}
-	return match, g.adapter
+	if slices.Contains(codes, g.country) {
+		return true, g.adapter
+	}
+	return false, ""
+}
+
+// MatchIp implements C.IpMatcher
+func (g *GEOIP) MatchIp(ip netip.Addr) bool {
+	if !ip.IsValid() {
+		return false
+	}
+
+	if g.country == "lan" {
+		return g.isLan(ip)
+	}
+
+	if C.GeodataMode {
+		matcher, err := g.getIPMatcher()
+		if err != nil {
+			return false
+		}
+		return matcher.Match(ip)
+	}
+
+	codes := mmdb.IPInstance().LookupCode(ip.AsSlice())
+	return slices.Contains(codes, g.country)
+}
+
+func (g *GEOIP) isLan(ip netip.Addr) bool {
+	return ip.IsPrivate() ||
+		ip.IsUnspecified() ||
+		ip.IsLoopback() ||
+		ip.IsMulticast() ||
+		ip.IsLinkLocalUnicast() ||
+		resolver.IsFakeBroadcastIP(ip)
 }
 
 func (g *GEOIP) Adapter() string {
@@ -106,14 +141,19 @@ func (g *GEOIP) GetCountry() string {
 }
 
 func (g *GEOIP) GetIPMatcher() (router.IPMatcher, error) {
-	if g.geodata {
-		geoIPMatcher, err := geodata.LoadGeoIPMatcher(g.country)
-		if err != nil {
-			return nil, fmt.Errorf("[GeoIP] %w", err)
-		}
-		return geoIPMatcher, nil
+	if C.GeodataMode {
+		return g.getIPMatcher()
 	}
-	return nil, errors.New("geoip country not set")
+	return nil, errors.New("not geodata mode")
+}
+
+func (g *GEOIP) getIPMatcher() (router.IPMatcher, error) {
+	geoIPMatcher, err := geodata.LoadGeoIPMatcher(g.country)
+	if err != nil {
+		return nil, fmt.Errorf("[GeoIP] %w", err)
+	}
+	return geoIPMatcher, nil
+
 }
 
 func (g *GEOIP) GetRecodeSize() int {
@@ -141,12 +181,13 @@ func NewGEOIP(country string, adapter string, isSrc, noResolveIP bool) (*GEOIP, 
 		return geoip, nil
 	}
 
-	geoip.geodata = true
-	geoIPMatcher, err := geoip.GetIPMatcher() // test load
-	if err != nil {
-		return nil, err
+	if C.GeodataMode {
+		geoIPMatcher, err := geoip.getIPMatcher() // test load
+		if err != nil {
+			return nil, err
+		}
+		log.Infoln("Finished initial GeoIP rule %s => %s, records: %d", country, adapter, geoIPMatcher.Count())
 	}
 
-	log.Infoln("Finished initial GeoIP rule %s => %s, records: %d", country, adapter, geoIPMatcher.Count())
 	return geoip, nil
 }

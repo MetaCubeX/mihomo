@@ -21,13 +21,13 @@ func (p domainTriePolicy) Match(domain string) []dnsClient {
 	return nil
 }
 
-type domainRulePolicy struct {
-	rule       C.Rule
+type domainMatcherPolicy struct {
+	matcher    C.DomainMatcher
 	dnsClients []dnsClient
 }
 
-func (p domainRulePolicy) Match(domain string) []dnsClient {
-	if ok, _ := p.rule.Match(&C.Metadata{Host: domain}); ok {
+func (p domainMatcherPolicy) Match(domain string) []dnsClient {
+	if p.matcher.MatchDomain(domain) {
 		return p.dnsClients
 	}
 	return nil

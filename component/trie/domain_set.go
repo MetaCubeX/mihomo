@@ -172,6 +172,11 @@ func (ss *DomainSet) Foreach(f func(key string) bool) {
 	})
 }
 
+// MatchDomain implements C.DomainMatcher
+func (ss *DomainSet) MatchDomain(domain string) bool {
+	return ss.Has(domain)
+}
+
 func setBit(bm *[]uint64, i int, v int) {
 	for i>>6 >= len(*bm) {
 		*bm = append(*bm, 0)
