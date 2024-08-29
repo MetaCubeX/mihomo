@@ -2,11 +2,14 @@ package common
 
 import (
 	"errors"
+
+	"golang.org/x/exp/slices"
 )
 
 var (
 	errPayload = errors.New("payloadRule error")
 	noResolve  = "no-resolve"
+	src        = "src"
 )
 
 type Base struct {
@@ -23,10 +26,9 @@ func (b *Base) ShouldResolveIP() bool {
 func (b *Base) ProviderNames() []string { return nil }
 
 func HasNoResolve(params []string) bool {
-	for _, p := range params {
-		if p == noResolve {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(params, noResolve)
+}
+
+func HasSrc(params []string) bool {
+	return slices.Contains(params, src)
 }

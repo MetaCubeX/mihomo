@@ -302,3 +302,10 @@ func (m *Metadata) SetRemoteAddress(rawAddress string) error {
 
 	return nil
 }
+
+func (m *Metadata) SwapSrcDst() {
+	m.SrcIP, m.DstIP = m.DstIP, m.SrcIP
+	m.SrcPort, m.DstPort = m.DstPort, m.SrcPort
+	m.SrcIPASN, m.DstIPASN = m.DstIPASN, m.SrcIPASN
+	m.SrcGeoIP, m.DstGeoIP = m.DstGeoIP, m.SrcGeoIP
+}

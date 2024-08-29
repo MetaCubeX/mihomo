@@ -12,6 +12,7 @@ type RuleSet struct {
 	*common.Base
 	ruleProviderName  string
 	adapter           string
+	isSrc             bool
 	noResolveIP       bool
 	shouldFindProcess bool
 }
@@ -32,6 +33,10 @@ func (rs *RuleSet) RuleType() C.RuleType {
 
 func (rs *RuleSet) Match(metadata *C.Metadata) (bool, string) {
 	if provider, ok := rs.getProvider(); ok {
+		if rs.isSrc {
+			metadata.SwapSrcDst()
+			defer metadata.SwapSrcDst()
+		}
 		return provider.Match(metadata), rs.adapter
 	}
 	return false, ""
@@ -76,11 +81,12 @@ func (rs *RuleSet) getProvider() (P.RuleProvider, bool) {
 	return pp, ok
 }
 
-func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, isSrc bool, noResolveIP bool) (*RuleSet, error) {
 	rs := &RuleSet{
 		Base:             &common.Base{},
 		ruleProviderName: ruleProviderName,
 		adapter:          adapter,
+		isSrc:            isSrc,
 		noResolveIP:      noResolveIP,
 	}
 	return rs, nil

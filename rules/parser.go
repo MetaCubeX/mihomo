@@ -77,7 +77,11 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = logic.NewNOT(payload, target, ParseRule)
 	case "RULE-SET":
 		noResolve := RC.HasNoResolve(params)
-		parsed, parseErr = RP.NewRuleSet(payload, target, noResolve)
+		isSrc := RC.HasSrc(params)
+		if isSrc {
+			noResolve = true
+		}
+		parsed, parseErr = RP.NewRuleSet(payload, target, isSrc, noResolve)
 	case "MATCH":
 		parsed = RC.NewMatch(target)
 		parseErr = nil

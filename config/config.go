@@ -1802,7 +1802,7 @@ func parseIPRuleSet(domainSetName string, adapterName string, ruleProviders map[
 		default:
 		}
 	}
-	return RP.NewRuleSet(domainSetName, adapterName, true)
+	return RP.NewRuleSet(domainSetName, adapterName, false, true)
 }
 
 func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders map[string]providerTypes.RuleProvider) (C.DomainMatcher, error) {
@@ -1817,5 +1817,5 @@ func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders 
 		default:
 		}
 	}
-	return RP.NewRuleSet(domainSetName, adapterName, true)
+	return RP.NewRuleSet(domainSetName, adapterName, false, true)
 }
