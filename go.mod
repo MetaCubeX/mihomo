@@ -28,7 +28,7 @@ require (
 	github.com/metacubex/sing-tun v0.2.7-0.20240729131039-ed03f557dee1
 	github.com/metacubex/sing-vmess v0.1.9-0.20240719134745-1df6fb20bbf9
 	github.com/metacubex/sing-wireguard v0.0.0-20240826061955-1e4e67afe5cd
-	github.com/metacubex/tfo-go v0.0.0-20240821025650-e9be0afd5e7d
+	github.com/metacubex/tfo-go v0.0.0-20240830120620-c5e019b67785
 	github.com/metacubex/utls v1.6.6
 	github.com/miekg/dns v1.1.62
 	github.com/mroth/weightedrand/v2 v2.1.0
