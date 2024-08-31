@@ -43,7 +43,9 @@ func (e DNSMode) MarshalYAML() (any, error) {
 // UnmarshalJSON unserialize EnhancedMode with json
 func (e *DNSMode) UnmarshalJSON(data []byte) error {
 	var tp string
-	json.Unmarshal(data, &tp)
+	if err := json.Unmarshal(data, &tp); err != nil {
+		return err
+	}
 	mode, exist := DNSModeMapping[tp]
 	if !exist {
 		return errors.New("invalid mode")
@@ -113,6 +115,64 @@ func NewDNSPrefer(prefer string) DNSPrefer {
 	} else {
 		return DualStack
 	}
+}
+
+// FilterModeMapping is a mapping for FilterMode enum
+var FilterModeMapping = map[string]FilterMode{
+	FilterBlackList.String(): FilterBlackList,
+	FilterWhiteList.String(): FilterWhiteList,
+}
+
+type FilterMode int
+
+const (
+	FilterBlackList FilterMode = iota
+	FilterWhiteList
+)
+
+func (e FilterMode) String() string {
+	switch e {
+	case FilterBlackList:
+		return "blacklist"
+	case FilterWhiteList:
+		return "whitelist"
+	default:
+		return "unknown"
+	}
+}
+
+func (e FilterMode) MarshalYAML() (interface{}, error) {
+	return e.String(), nil
+}
+
+func (e *FilterMode) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tp string
+	if err := unmarshal(&tp); err != nil {
+		return err
+	}
+	mode, exist := FilterModeMapping[tp]
+	if !exist {
+		return errors.New("invalid mode")
+	}
+	*e = mode
+	return nil
+}
+
+func (e FilterMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.String())
+}
+
+func (e *FilterMode) UnmarshalJSON(data []byte) error {
+	var tp string
+	if err := json.Unmarshal(data, &tp); err != nil {
+		return err
+	}
+	mode, exist := FilterModeMapping[tp]
+	if !exist {
+		return errors.New("invalid mode")
+	}
+	*e = mode
+	return nil
 }
 
 type HTTPVersion string

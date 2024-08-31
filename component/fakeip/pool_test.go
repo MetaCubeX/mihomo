@@ -164,6 +164,28 @@ func TestPool_Skip(t *testing.T) {
 	for _, pool := range pools {
 		assert.True(t, pool.ShouldSkipped("example.com"))
 		assert.False(t, pool.ShouldSkipped("foo.com"))
+		assert.False(t, pool.shouldSkipped("baz.com"))
+	}
+}
+
+func TestPool_SkipWhiteList(t *testing.T) {
+	ipnet := netip.MustParsePrefix("192.168.0.1/29")
+	tree := trie.New[struct{}]()
+	assert.NoError(t, tree.Insert("example.com", struct{}{}))
+	assert.False(t, tree.IsEmpty())
+	pools, tempfile, err := createPools(Options{
+		IPNet: ipnet,
+		Size:  10,
+		Host:  []C.DomainMatcher{tree.NewDomainSet()},
+		Mode:  C.FilterWhiteList,
+	})
+	assert.Nil(t, err)
+	defer os.Remove(tempfile)
+
+	for _, pool := range pools {
+		assert.False(t, pool.ShouldSkipped("example.com"))
+		assert.True(t, pool.ShouldSkipped("foo.com"))
+		assert.True(t, pool.ShouldSkipped("baz.com"))
 	}
 }
 
