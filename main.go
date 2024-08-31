@@ -135,7 +135,7 @@ func main() {
 			return
 		case <-hupSign:
 			if cfg, err := executor.ParseWithPath(C.Path.Config()); err == nil {
-				executor.ApplyConfig(cfg, true)
+				hub.ApplyConfig(cfg)
 			} else {
 				log.Errorln("Parse config error: %s", err.Error())
 			}

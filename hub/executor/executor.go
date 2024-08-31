@@ -77,7 +77,7 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 	return config.Parse(buf)
 }
 
-// ApplyConfig dispatch configure to all parts
+// ApplyConfig dispatch configure to all parts without ExternalController
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()

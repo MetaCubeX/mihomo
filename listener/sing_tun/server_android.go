@@ -1,3 +1,5 @@
+//go:build android && !cmfa
+
 package sing_tun
 
 import (
