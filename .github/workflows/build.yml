@@ -387,18 +387,18 @@ jobs:
           git fetch --tags
           echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD)" >> $GITHUB_ENV
 
-      - name: Merge Alpha branch into Meta
+      - name: Force push Alpha branch to Meta
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git fetch origin Alpha:Alpha
-          git merge Alpha
-          git push origin Meta
+          git push origin Alpha:Meta --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag the commit
+      - name: Tag the commit on Alpha
         run: |
+          git checkout Alpha 
           git tag ${{ github.event.inputs.version }}
           git push origin ${{ github.event.inputs.version }}
         env:
