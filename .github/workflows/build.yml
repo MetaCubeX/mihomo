@@ -1,9 +1,10 @@
-name: Release
-
+name: Build
 on:
-  push:
-    tags:
-      - "*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag version to release"
+        required: true
 
 permissions:
   contents: write
