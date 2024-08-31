@@ -27,6 +27,13 @@ type healthCheckSchema struct {
 	ExpectedStatus string `provider:"expected-status,omitempty"`
 }
 
+type OverrideProxyNameSchema struct {
+	// matching expression for regex replacement
+	Pattern string `provider:"pattern,omitempty"`
+	// the new content after regex matching
+	Target string `provider:"target,omitempty"`
+}
+
 type OverrideSchema struct {
 	TFO              *bool   `provider:"tfo,omitempty"`
 	MPTcp            *bool   `provider:"mptcp,omitempty"`
@@ -41,6 +48,8 @@ type OverrideSchema struct {
 	IPVersion        *string `provider:"ip-version,omitempty"`
 	AdditionalPrefix *string `provider:"additional-prefix,omitempty"`
 	AdditionalSuffix *string `provider:"additional-suffix,omitempty"`
+
+	ProxyName []*OverrideProxyNameSchema `provider:"proxy-name,omitempty"`
 }
 
 type proxyProviderSchema struct {
