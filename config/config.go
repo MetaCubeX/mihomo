@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -704,33 +703,23 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	}
 	N.DisableKeepAlive = cfg.DisableKeepAlive
 
-	updater.ExternalUIPath = cfg.ExternalUI
 	// checkout externalUI exist
-	if updater.ExternalUIPath != "" {
-		updater.ExternalUIPath = C.Path.Resolve(updater.ExternalUIPath)
-		if _, err := os.Stat(updater.ExternalUIPath); os.IsNotExist(err) {
-			defaultUIpath := path.Join(C.Path.HomeDir(), "ui")
-			log.Warnln("external-ui: %s does not exist, creating folder in %s", updater.ExternalUIPath, defaultUIpath)
-			if err := os.MkdirAll(defaultUIpath, os.ModePerm); err != nil {
-				return nil, err
-			}
-			updater.ExternalUIPath = defaultUIpath
-			cfg.ExternalUI = defaultUIpath
-		}
-	}
-	// checkout UIpath/name exist
-	if cfg.ExternalUIName != "" {
-		updater.ExternalUIName = cfg.ExternalUIName
+	if cfg.ExternalUI != "" {
+		updater.AutoUpdateUI = true
+		updater.ExternalUIPath = C.Path.Resolve(cfg.ExternalUI)
 	} else {
-		updater.ExternalUIFolder = updater.ExternalUIPath
-	}
-	if cfg.ExternalUIURL != "" {
-		updater.ExternalUIURL = cfg.ExternalUIURL
+		// default externalUI path
+		updater.ExternalUIPath = path.Join(C.Path.HomeDir(), "ui")
 	}
 
-	err := updater.PrepareUIPath()
-	if err != nil {
-		log.Errorln("PrepareUIPath error: %s", err)
+	// checkout UIpath/name exist
+	if cfg.ExternalUIName != "" {
+		updater.AutoUpdateUI = true
+		updater.ExternalUIPath = path.Join(updater.ExternalUIPath, cfg.ExternalUIName)
+	}
+
+	if cfg.ExternalUIURL != "" {
+		updater.ExternalUIURL = cfg.ExternalUIURL
 	}
 
 	return &General{

@@ -381,12 +381,12 @@ func updateTunnels(tunnels []LC.Tunnel) {
 }
 
 func initExternalUI() {
-	if updater.ExternalUIFolder != "" {
-		dirEntries, _ := os.ReadDir(updater.ExternalUIFolder)
+	if updater.AutoUpdateUI {
+		dirEntries, _ := os.ReadDir(updater.ExternalUIPath)
 		if len(dirEntries) > 0 {
-			log.Infoln("UI already exists")
+			log.Infoln("UI already exists, skip downloading")
 		} else {
-			log.Infoln("UI not exists, downloading")
+			log.Infoln("External UI downloading ...")
 			updater.UpdateUI()
 		}
 	}

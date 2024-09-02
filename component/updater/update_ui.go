@@ -2,7 +2,6 @@ package updater
 
 import (
 	"archive/zip"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,22 +11,25 @@ import (
 	"sync"
 
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 )
 
 var (
-	ExternalUIURL    string
-	ExternalUIPath   string
-	ExternalUIFolder string
-	ExternalUIName   string
+	ExternalUIURL  string
+	ExternalUIPath string
+	AutoUpdateUI   bool
 )
-var (
-	ErrIncompleteConf = errors.New("ExternalUI configure incomplete")
-)
+
 var xdMutex sync.Mutex
 
 func UpdateUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
+
+	err := prepareUIPath()
+	if err != nil {
+		return fmt.Errorf("prepare UI path failed: %w", err)
+	}
 
 	data, err := downloadForBytes(ExternalUIURL)
 	if err != nil {
@@ -40,7 +42,7 @@ func UpdateUI() error {
 	}
 	defer os.Remove(saved)
 
-	err = cleanup(ExternalUIFolder)
+	err = cleanup(ExternalUIPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("cleanup exist file error: %w", err)
@@ -52,27 +54,19 @@ func UpdateUI() error {
 		return fmt.Errorf("can't extract zip file: %w", err)
 	}
 
-	err = os.Rename(unzipFolder, ExternalUIFolder)
+	err = os.Rename(unzipFolder, ExternalUIPath)
 	if err != nil {
-		return fmt.Errorf("can't rename folder: %w", err)
+		return fmt.Errorf("rename UI folder failed: %w", err)
 	}
 	return nil
 }
 
-func PrepareUIPath() error {
-	if ExternalUIPath == "" || ExternalUIURL == "" {
-		return ErrIncompleteConf
-	}
-
-	if ExternalUIName != "" {
-		ExternalUIFolder = filepath.Clean(path.Join(ExternalUIPath, ExternalUIName))
-		if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(ExternalUIPath, os.ModePerm); err != nil {
-				return err
-			}
+func prepareUIPath() error {
+	if _, err := os.Stat(ExternalUIPath); os.IsNotExist(err) {
+		log.Infoln("dir %s does not exist, creating", ExternalUIPath)
+		if err := os.MkdirAll(ExternalUIPath, os.ModePerm); err != nil {
+			log.Warnln("create dir %s error: %s", ExternalUIPath, err)
 		}
-	} else {
-		ExternalUIFolder = ExternalUIPath
 	}
 	return nil
 }
