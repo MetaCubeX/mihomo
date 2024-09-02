@@ -60,9 +60,15 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if proxy.(*adapter.Proxy).Type() == C.URLTest {
-		URLTestGroup := proxy.(*adapter.Proxy).ProxyAdapter.(*outboundgroup.URLTest)
-		URLTestGroup.ForceSet("")
+	switch proxy.(*adapter.Proxy).Type() {
+	case C.URLTest:
+		if urlTestGroup, ok := proxy.(*adapter.Proxy).ProxyAdapter.(*outboundgroup.URLTest); ok {
+			urlTestGroup.ForceSet("")
+		}
+	case C.Fallback:
+		if fallbackGroup, ok := proxy.(*adapter.Proxy).ProxyAdapter.(*outboundgroup.Fallback); ok {
+			fallbackGroup.ForceSet("")
+		}
 	}
 
 	if proxy.(*adapter.Proxy).Type() != C.Selector {
