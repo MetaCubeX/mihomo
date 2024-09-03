@@ -64,8 +64,16 @@ func applyRoute(cfg *config.Config) {
 }
 
 // Parse call at the beginning of mihomo
-func Parse(options ...Option) error {
-	cfg, err := executor.Parse()
+func Parse(configBytes []byte, options ...Option) error {
+	var cfg *config.Config
+	var err error
+
+	if len(configBytes) != 0 {
+		cfg, err = executor.ParseWithBytes(configBytes)
+	} else {
+		cfg, err = executor.Parse()
+	}
+
 	if err != nil {
 		return err
 	}
