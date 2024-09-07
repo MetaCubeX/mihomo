@@ -34,7 +34,7 @@ func ConvertToMrs(buf []byte, behavior P.RuleBehavior, format P.RuleFormat, w io
 		}
 
 		var encoder *zstd.Encoder
-		encoder, err = zstd.NewWriter(w)
+		encoder, err = zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
 		if err != nil {
 			return err
 		}
