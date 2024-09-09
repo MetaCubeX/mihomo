@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errVehicleType = errors.New("unsupport vehicle type")
+	errVehicleType = errors.New("unsupported vehicle type")
 	errSubPath     = errors.New("path is not subpath of home directory")
 )
 

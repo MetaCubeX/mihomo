@@ -48,7 +48,7 @@ ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS
 tls:
   certificate: string # 证书 PEM 格式，或者 证书的路径
   private-key: string # 证书对应的私钥 PEM 格式，或者私钥路径
-  custom-certifactes:
+  custom-certificates:
     - |
       -----BEGIN CERTIFICATE-----
       format/pem...

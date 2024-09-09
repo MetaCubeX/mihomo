@@ -340,7 +340,7 @@ type RawSniffingConfig struct {
 type RawTLS struct {
 	Certificate     string   `yaml:"certificate" json:"certificate"`
 	PrivateKey      string   `yaml:"private-key" json:"private-key"`
-	CustomTrustCert []string `yaml:"custom-certifactes" json:"custom-certifactes"`
+	CustomTrustCert []string `yaml:"custom-certificates" json:"custom-certificates"`
 }
 
 type RawConfig struct {

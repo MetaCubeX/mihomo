@@ -109,7 +109,7 @@ func WriteHeader(conn net.Conn, host string, port uint, version int) error {
 
 func WriteUDPHeader(conn net.Conn, version int) error {
 	if version < Version3 {
-		return errors.New("unsupport UDP version")
+		return errors.New("unsupported UDP version")
 	}
 
 	// version, command, clientID length
