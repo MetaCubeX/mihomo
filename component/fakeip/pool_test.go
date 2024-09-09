@@ -63,13 +63,13 @@ func TestPool_Basic(t *testing.T) {
 		last := pool.Lookup("bar.com")
 		bar, exist := pool.LookBack(last)
 
-		assert.True(t, first == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
-		assert.True(t, pool.Lookup("foo.com") == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
-		assert.True(t, last == netip.AddrFrom4([4]byte{192, 168, 0, 5}))
+		assert.Equal(t, first, netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+		assert.Equal(t, pool.Lookup("foo.com"), netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+		assert.Equal(t, last, netip.AddrFrom4([4]byte{192, 168, 0, 5}))
 		assert.True(t, exist)
 		assert.Equal(t, bar, "bar.com")
-		assert.True(t, pool.Gateway() == netip.AddrFrom4([4]byte{192, 168, 0, 1}))
-		assert.True(t, pool.Broadcast() == netip.AddrFrom4([4]byte{192, 168, 0, 15}))
+		assert.Equal(t, pool.Gateway(), netip.AddrFrom4([4]byte{192, 168, 0, 1}))
+		assert.Equal(t, pool.Broadcast(), netip.AddrFrom4([4]byte{192, 168, 0, 15}))
 		assert.Equal(t, pool.IPNet().String(), ipnet.String())
 		assert.True(t, pool.Exist(netip.AddrFrom4([4]byte{192, 168, 0, 5})))
 		assert.False(t, pool.Exist(netip.AddrFrom4([4]byte{192, 168, 0, 6})))
@@ -91,13 +91,13 @@ func TestPool_BasicV6(t *testing.T) {
 		last := pool.Lookup("bar.com")
 		bar, exist := pool.LookBack(last)
 
-		assert.True(t, first == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
-		assert.True(t, pool.Lookup("foo.com") == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
-		assert.True(t, last == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8805"))
+		assert.Equal(t, first, netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
+		assert.Equal(t, pool.Lookup("foo.com"), netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8804"))
+		assert.Equal(t, last, netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8805"))
 		assert.True(t, exist)
 		assert.Equal(t, bar, "bar.com")
-		assert.True(t, pool.Gateway() == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8801"))
-		assert.True(t, pool.Broadcast() == netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8bff"))
+		assert.Equal(t, pool.Gateway(), netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8801"))
+		assert.Equal(t, pool.Broadcast(), netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8bff"))
 		assert.Equal(t, pool.IPNet().String(), ipnet.String())
 		assert.True(t, pool.Exist(netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8805")))
 		assert.False(t, pool.Exist(netip.MustParseAddr("2001:4860:4860:0000:0000:0000:0000:8806")))
@@ -143,8 +143,8 @@ func TestPool_CycleUsed(t *testing.T) {
 		}
 		baz := pool.Lookup("baz.com")
 		next := pool.Lookup("foo.com")
-		assert.True(t, foo == baz)
-		assert.True(t, next == bar)
+		assert.Equal(t, foo, baz)
+		assert.Equal(t, next, bar)
 	}
 }
 
@@ -201,7 +201,7 @@ func TestPool_MaxCacheSize(t *testing.T) {
 	pool.Lookup("baz.com")
 	next := pool.Lookup("foo.com")
 
-	assert.False(t, first == next)
+	assert.NotEqual(t, first, next)
 }
 
 func TestPool_DoubleMapping(t *testing.T) {
@@ -231,7 +231,7 @@ func TestPool_DoubleMapping(t *testing.T) {
 	assert.False(t, bazExist)
 	assert.True(t, barExist)
 
-	assert.False(t, bazIP == newBazIP)
+	assert.NotEqual(t, bazIP, newBazIP)
 }
 
 func TestPool_Clone(t *testing.T) {
@@ -243,8 +243,8 @@ func TestPool_Clone(t *testing.T) {
 
 	first := pool.Lookup("foo.com")
 	last := pool.Lookup("bar.com")
-	assert.True(t, first == netip.AddrFrom4([4]byte{192, 168, 0, 4}))
-	assert.True(t, last == netip.AddrFrom4([4]byte{192, 168, 0, 5}))
+	assert.Equal(t, first, netip.AddrFrom4([4]byte{192, 168, 0, 4}))
+	assert.Equal(t, last, netip.AddrFrom4([4]byte{192, 168, 0, 5}))
 
 	newPool, _ := New(Options{
 		IPNet: ipnet,
@@ -289,13 +289,13 @@ func TestPool_FlushFileCache(t *testing.T) {
 		baz := pool.Lookup("foo.com")
 		nero := pool.Lookup("foo.com")
 
-		assert.True(t, foo == fox)
-		assert.True(t, foo == next)
-		assert.False(t, foo == baz)
-		assert.True(t, bar == bax)
-		assert.True(t, bar == baz)
-		assert.False(t, bar == next)
-		assert.True(t, baz == nero)
+		assert.Equal(t, foo, fox)
+		assert.Equal(t, foo, next)
+		assert.NotEqual(t, foo, baz)
+		assert.Equal(t, bar, bax)
+		assert.Equal(t, bar, baz)
+		assert.NotEqual(t, bar, next)
+		assert.Equal(t, baz, nero)
 	}
 }
 
@@ -318,11 +318,11 @@ func TestPool_FlushMemoryCache(t *testing.T) {
 	baz := pool.Lookup("foo.com")
 	nero := pool.Lookup("foo.com")
 
-	assert.True(t, foo == fox)
-	assert.True(t, foo == next)
-	assert.False(t, foo == baz)
-	assert.True(t, bar == bax)
-	assert.True(t, bar == baz)
-	assert.False(t, bar == next)
-	assert.True(t, baz == nero)
+	assert.Equal(t, foo, fox)
+	assert.Equal(t, foo, next)
+	assert.NotEqual(t, foo, baz)
+	assert.Equal(t, bar, bax)
+	assert.Equal(t, bar, baz)
+	assert.NotEqual(t, bar, next)
+	assert.Equal(t, baz, nero)
 }
