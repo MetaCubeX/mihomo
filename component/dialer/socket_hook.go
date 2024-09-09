@@ -7,11 +7,11 @@ import (
 )
 
 // SocketControl
-// never change type traits because it's used in CFMA
+// never change type traits because it's used in CMFA
 type SocketControl func(network, address string, conn syscall.RawConn) error
 
 // DefaultSocketHook
-// never change type traits because it's used in CFMA
+// never change type traits because it's used in CMFA
 var DefaultSocketHook SocketControl
 
 func socketHookToToDialer(dialer *net.Dialer) {

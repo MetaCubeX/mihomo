@@ -37,7 +37,7 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 }
 
 // NewWithAuthenticate
-// never change type traits because it's used in CFMA
+// never change type traits because it's used in CMFA
 func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
 	getAuth := authStore.Authenticator
 	if !authenticate {

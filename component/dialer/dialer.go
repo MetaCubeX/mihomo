@@ -84,7 +84,7 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 	if cfg.addrReuse {
 		addrReuseToListenConfig(lc)
 	}
-	if DefaultSocketHook != nil { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CFMA)
+	if DefaultSocketHook != nil { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CMFA)
 		socketHookToListenConfig(lc)
 	} else {
 		if cfg.interfaceName != "" {
@@ -148,7 +148,7 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 		setMultiPathTCP(dialer)
 	}
 
-	if DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo when DefaultSocketHook not null (in CFMA)
+	if DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo when DefaultSocketHook not null (in CMFA)
 		socketHookToToDialer(dialer)
 	} else {
 		if opt.interfaceName != "" {
