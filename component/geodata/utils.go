@@ -209,8 +209,11 @@ func LoadGeoIPMatcher(country string) (router.IPMatcher, error) {
 	return matcher, nil
 }
 
-func ClearCache() {
+func ClearGeoSiteCache() {
 	loadGeoSiteMatcherListSF.Reset()
 	loadGeoSiteMatcherSF.Reset()
+}
+
+func ClearGeoIPCache() {
 	loadGeoIPMatcherSF.Reset()
 }

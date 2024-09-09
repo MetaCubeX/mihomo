@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/batch"
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/standard"
 	"github.com/metacubex/mihomo/component/mmdb"
@@ -18,68 +20,67 @@ import (
 )
 
 var (
-	UpdatingGeo atomic.Bool
+	updatingGeo atomic.Bool
 )
 
-func updateGeoDatabases() error {
-	defer runtime.GC()
-	geoLoader, err := geodata.GetGeoDataLoader("standard")
+func UpdateMMDB() (err error) {
+	defer mmdb.ReloadIP()
+	data, err := downloadForBytes(C.MmdbUrl)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't download MMDB database file: %w", err)
+	}
+	instance, err := maxminddb.FromBytes(data)
+	if err != nil {
+		return fmt.Errorf("invalid MMDB database file: %s", err)
+	}
+	_ = instance.Close()
+
+	mmdb.IPInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
+	if err = saveFile(data, C.Path.MMDB()); err != nil {
+		return fmt.Errorf("can't save MMDB database file: %w", err)
+	}
+	return nil
+}
+
+func UpdateASN() (err error) {
+	defer mmdb.ReloadASN()
+	data, err := downloadForBytes(C.ASNUrl)
+	if err != nil {
+		return fmt.Errorf("can't download ASN database file: %w", err)
 	}
 
-	if C.GeodataMode {
-		data, err := downloadForBytes(C.GeoIpUrl)
-		if err != nil {
-			return fmt.Errorf("can't download GeoIP database file: %w", err)
-		}
-
-		if _, err = geoLoader.LoadIPByBytes(data, "cn"); err != nil {
-			return fmt.Errorf("invalid GeoIP database file: %s", err)
-		}
-
-		if err = saveFile(data, C.Path.GeoIP()); err != nil {
-			return fmt.Errorf("can't save GeoIP database file: %w", err)
-		}
-
-	} else {
-		defer mmdb.ReloadIP()
-		data, err := downloadForBytes(C.MmdbUrl)
-		if err != nil {
-			return fmt.Errorf("can't download MMDB database file: %w", err)
-		}
-
-		instance, err := maxminddb.FromBytes(data)
-		if err != nil {
-			return fmt.Errorf("invalid MMDB database file: %s", err)
-		}
-		_ = instance.Close()
-
-		mmdb.IPInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
-		if err = saveFile(data, C.Path.MMDB()); err != nil {
-			return fmt.Errorf("can't save MMDB database file: %w", err)
-		}
+	instance, err := maxminddb.FromBytes(data)
+	if err != nil {
+		return fmt.Errorf("invalid ASN database file: %s", err)
 	}
+	_ = instance.Close()
 
-	if C.ASNEnable {
-		defer mmdb.ReloadASN()
-		data, err := downloadForBytes(C.ASNUrl)
-		if err != nil {
-			return fmt.Errorf("can't download ASN database file: %w", err)
-		}
-
-		instance, err := maxminddb.FromBytes(data)
-		if err != nil {
-			return fmt.Errorf("invalid ASN database file: %s", err)
-		}
-		_ = instance.Close()
-
-		mmdb.ASNInstance().Reader.Close()
-		if err = saveFile(data, C.Path.ASN()); err != nil {
-			return fmt.Errorf("can't save ASN database file: %w", err)
-		}
+	mmdb.ASNInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
+	if err = saveFile(data, C.Path.ASN()); err != nil {
+		return fmt.Errorf("can't save ASN database file: %w", err)
 	}
+	return nil
+}
 
+func UpdateGeoIp() (err error) {
+	defer geodata.ClearGeoIPCache()
+	geoLoader, err := geodata.GetGeoDataLoader("standard")
+	data, err := downloadForBytes(C.GeoIpUrl)
+	if err != nil {
+		return fmt.Errorf("can't download GeoIP database file: %w", err)
+	}
+	if _, err = geoLoader.LoadIPByBytes(data, "cn"); err != nil {
+		return fmt.Errorf("invalid GeoIP database file: %s", err)
+	}
+	if err = saveFile(data, C.Path.GeoIP()); err != nil {
+		return fmt.Errorf("can't save GeoIP database file: %w", err)
+	}
+	return nil
+}
+
+func UpdateGeoSite() (err error) {
+	defer geodata.ClearGeoSiteCache()
+	geoLoader, err := geodata.GetGeoDataLoader("standard")
 	data, err := downloadForBytes(C.GeoSiteUrl)
 	if err != nil {
 		return fmt.Errorf("can't download GeoSite database file: %w", err)
@@ -92,8 +93,41 @@ func updateGeoDatabases() error {
 	if err = saveFile(data, C.Path.GeoSite()); err != nil {
 		return fmt.Errorf("can't save GeoSite database file: %w", err)
 	}
+	return nil
+}
 
-	geodata.ClearCache()
+func updateGeoDatabases() error {
+	defer runtime.GC()
+
+	b, _ := batch.New[interface{}](context.Background())
+
+	if C.GeodataMode {
+		b.Go("UpdateGeoIp", func() (_ interface{}, err error) {
+			err = UpdateGeoIp()
+			return
+		})
+	} else {
+		b.Go("UpdateMMDB", func() (_ interface{}, err error) {
+			err = UpdateMMDB()
+			return
+		})
+	}
+
+	if C.ASNEnable {
+		b.Go("UpdateASN", func() (_ interface{}, err error) {
+			err = UpdateASN()
+			return
+		})
+	}
+
+	b.Go("UpdateGeoSite", func() (_ interface{}, err error) {
+		err = UpdateGeoSite()
+		return
+	})
+
+	if e := b.Wait(); e != nil {
+		return e.Err
+	}
 
 	return nil
 }
@@ -103,12 +137,12 @@ var ErrGetDatabaseUpdateSkip = errors.New("GEO database is updating, skip")
 func UpdateGeoDatabases() error {
 	log.Infoln("[GEO] Start updating GEO database")
 
-	if UpdatingGeo.Load() {
+	if updatingGeo.Load() {
 		return ErrGetDatabaseUpdateSkip
 	}
 
-	UpdatingGeo.Store(true)
-	defer UpdatingGeo.Store(false)
+	updatingGeo.Store(true)
+	defer updatingGeo.Store(false)
 
 	log.Infoln("[GEO] Updating GEO database")
 
