@@ -63,7 +63,6 @@ func (a *ASN) GetASN() string {
 }
 
 func NewIPASN(asn string, adapter string, isSrc, noResolveIP bool) (*ASN, error) {
-	C.ASNEnable = true
 	if err := geodata.InitASN(); err != nil {
 		log.Errorln("can't initial ASN: %s", err)
 		return nil, err

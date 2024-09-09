@@ -46,7 +46,7 @@ func (g *GEOIP) Match(metadata *C.Metadata) (bool, string) {
 		return g.isLan(ip), g.adapter
 	}
 
-	if C.GeodataMode {
+	if geodata.GeodataMode() {
 		if g.isSourceIP {
 			if slices.Contains(metadata.SrcGeoIP, g.country) {
 				return true, g.adapter
@@ -102,7 +102,7 @@ func (g *GEOIP) MatchIp(ip netip.Addr) bool {
 		return g.isLan(ip)
 	}
 
-	if C.GeodataMode {
+	if geodata.GeodataMode() {
 		matcher, err := g.getIPMatcher()
 		if err != nil {
 			return false
@@ -124,7 +124,7 @@ func (g dnsFallbackFilter) MatchIp(ip netip.Addr) bool {
 		return false
 	}
 
-	if C.GeodataMode {
+	if geodata.GeodataMode() {
 		matcher, err := g.getIPMatcher()
 		if err != nil {
 			return false
@@ -170,7 +170,7 @@ func (g *GEOIP) GetCountry() string {
 }
 
 func (g *GEOIP) GetIPMatcher() (router.IPMatcher, error) {
-	if C.GeodataMode {
+	if geodata.GeodataMode() {
 		return g.getIPMatcher()
 	}
 	return nil, errors.New("not geodata mode")
@@ -193,10 +193,6 @@ func (g *GEOIP) GetRecodeSize() int {
 }
 
 func NewGEOIP(country string, adapter string, isSrc, noResolveIP bool) (*GEOIP, error) {
-	if err := geodata.InitGeoIP(); err != nil {
-		log.Errorln("can't initial GeoIP: %s", err)
-		return nil, err
-	}
 	country = strings.ToLower(country)
 
 	geoip := &GEOIP{
@@ -206,11 +202,17 @@ func NewGEOIP(country string, adapter string, isSrc, noResolveIP bool) (*GEOIP, 
 		noResolveIP: noResolveIP,
 		isSourceIP:  isSrc,
 	}
-	if !C.GeodataMode || country == "lan" {
+
+	if country == "lan" {
 		return geoip, nil
 	}
 
-	if C.GeodataMode {
+	if err := geodata.InitGeoIP(); err != nil {
+		log.Errorln("can't initial GeoIP: %s", err)
+		return nil, err
+	}
+
+	if geodata.GeodataMode() {
 		geoIPMatcher, err := geoip.getIPMatcher() // test load
 		if err != nil {
 			return nil, err

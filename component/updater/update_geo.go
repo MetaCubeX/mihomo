@@ -20,12 +20,31 @@ import (
 )
 
 var (
+	autoUpdate     bool
+	updateInterval int
+
 	updatingGeo atomic.Bool
 )
 
+func GeoAutoUpdate() bool {
+	return autoUpdate
+}
+
+func GeoUpdateInterval() int {
+	return updateInterval
+}
+
+func SetGeoAutoUpdate(newAutoUpdate bool) {
+	autoUpdate = newAutoUpdate
+}
+
+func SetGeoUpdateInterval(newGeoUpdateInterval int) {
+	updateInterval = newGeoUpdateInterval
+}
+
 func UpdateMMDB() (err error) {
 	defer mmdb.ReloadIP()
-	data, err := downloadForBytes(C.MmdbUrl)
+	data, err := downloadForBytes(geodata.MmdbUrl())
 	if err != nil {
 		return fmt.Errorf("can't download MMDB database file: %w", err)
 	}
@@ -44,7 +63,7 @@ func UpdateMMDB() (err error) {
 
 func UpdateASN() (err error) {
 	defer mmdb.ReloadASN()
-	data, err := downloadForBytes(C.ASNUrl)
+	data, err := downloadForBytes(geodata.ASNUrl())
 	if err != nil {
 		return fmt.Errorf("can't download ASN database file: %w", err)
 	}
@@ -65,7 +84,7 @@ func UpdateASN() (err error) {
 func UpdateGeoIp() (err error) {
 	defer geodata.ClearGeoIPCache()
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
-	data, err := downloadForBytes(C.GeoIpUrl)
+	data, err := downloadForBytes(geodata.GeoIpUrl())
 	if err != nil {
 		return fmt.Errorf("can't download GeoIP database file: %w", err)
 	}
@@ -81,7 +100,7 @@ func UpdateGeoIp() (err error) {
 func UpdateGeoSite() (err error) {
 	defer geodata.ClearGeoSiteCache()
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
-	data, err := downloadForBytes(C.GeoSiteUrl)
+	data, err := downloadForBytes(geodata.GeoSiteUrl())
 	if err != nil {
 		return fmt.Errorf("can't download GeoSite database file: %w", err)
 	}
@@ -101,29 +120,33 @@ func updateGeoDatabases() error {
 
 	b, _ := batch.New[interface{}](context.Background())
 
-	if C.GeodataMode {
-		b.Go("UpdateGeoIp", func() (_ interface{}, err error) {
-			err = UpdateGeoIp()
-			return
-		})
-	} else {
-		b.Go("UpdateMMDB", func() (_ interface{}, err error) {
-			err = UpdateMMDB()
-			return
-		})
+	if geodata.GeoIpEnable() {
+		if geodata.GeodataMode() {
+			b.Go("UpdateGeoIp", func() (_ interface{}, err error) {
+				err = UpdateGeoIp()
+				return
+			})
+		} else {
+			b.Go("UpdateMMDB", func() (_ interface{}, err error) {
+				err = UpdateMMDB()
+				return
+			})
+		}
 	}
 
-	if C.ASNEnable {
+	if geodata.ASNEnable() {
 		b.Go("UpdateASN", func() (_ interface{}, err error) {
 			err = UpdateASN()
 			return
 		})
 	}
 
-	b.Go("UpdateGeoSite", func() (_ interface{}, err error) {
-		err = UpdateGeoSite()
-		return
-	})
+	if geodata.GeoSiteEnable() {
+		b.Go("UpdateGeoSite", func() (_ interface{}, err error) {
+			err = UpdateGeoSite()
+			return
+		})
+	}
 
 	if e := b.Wait(); e != nil {
 		return e.Err
@@ -156,7 +179,7 @@ func UpdateGeoDatabases() error {
 
 func getUpdateTime() (err error, time time.Time) {
 	var fileInfo os.FileInfo
-	if C.GeodataMode {
+	if geodata.GeodataMode() {
 		fileInfo, err = os.Stat(C.Path.GeoIP())
 		if err != nil {
 			return err, time
@@ -172,13 +195,13 @@ func getUpdateTime() (err error, time time.Time) {
 }
 
 func RegisterGeoUpdater() {
-	if C.GeoUpdateInterval <= 0 {
-		log.Errorln("[GEO] Invalid update interval: %d", C.GeoUpdateInterval)
+	if updateInterval <= 0 {
+		log.Errorln("[GEO] Invalid update interval: %d", updateInterval)
 		return
 	}
 
 	go func() {
-		ticker := time.NewTicker(time.Duration(C.GeoUpdateInterval) * time.Hour)
+		ticker := time.NewTicker(time.Duration(updateInterval) * time.Hour)
 		defer ticker.Stop()
 
 		err, lastUpdate := getUpdateTime()
@@ -188,8 +211,8 @@ func RegisterGeoUpdater() {
 		}
 
 		log.Infoln("[GEO] last update time %s", lastUpdate)
-		if lastUpdate.Add(time.Duration(C.GeoUpdateInterval) * time.Hour).Before(time.Now()) {
-			log.Infoln("[GEO] Database has not been updated for %v, update now", time.Duration(C.GeoUpdateInterval)*time.Hour)
+		if lastUpdate.Add(time.Duration(updateInterval) * time.Hour).Before(time.Now()) {
+			log.Infoln("[GEO] Database has not been updated for %v, update now", time.Duration(updateInterval)*time.Hour)
 			if err := UpdateGeoDatabases(); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
 				return
@@ -197,7 +220,7 @@ func RegisterGeoUpdater() {
 		}
 
 		for range ticker.C {
-			log.Infoln("[GEO] updating database every %d hours", C.GeoUpdateInterval)
+			log.Infoln("[GEO] updating database every %d hours", updateInterval)
 			if err := UpdateGeoDatabases(); err != nil {
 				log.Errorln("[GEO] Failed to update GEO database: %s", err.Error())
 			}

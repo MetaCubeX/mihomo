@@ -22,6 +22,7 @@ import (
 	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/sniffer"
@@ -433,7 +434,7 @@ func DefaultRawConfig() *RawConfig {
 		Mode:              T.Rule,
 		GeoAutoUpdate:     false,
 		GeoUpdateInterval: 24,
-		GeodataMode:       C.GeodataMode,
+		GeodataMode:       geodata.GeodataMode(),
 		GeodataLoader:     "memconservative",
 		UnifiedDelay:      false,
 		Authentication:    []string{},
@@ -681,19 +682,16 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 }
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
+	updater.SetGeoAutoUpdate(cfg.GeoAutoUpdate)
+	updater.SetGeoUpdateInterval(cfg.GeoUpdateInterval)
 	geodata.SetGeodataMode(cfg.GeodataMode)
-	geodata.SetGeoAutoUpdate(cfg.GeoAutoUpdate)
-	geodata.SetGeoUpdateInterval(cfg.GeoUpdateInterval)
 	geodata.SetLoader(cfg.GeodataLoader)
 	geodata.SetSiteMatcher(cfg.GeositeMatcher)
-	C.GeoAutoUpdate = cfg.GeoAutoUpdate
-	C.GeoUpdateInterval = cfg.GeoUpdateInterval
-	C.GeoIpUrl = cfg.GeoXUrl.GeoIp
-	C.GeoSiteUrl = cfg.GeoXUrl.GeoSite
-	C.MmdbUrl = cfg.GeoXUrl.Mmdb
-	C.ASNUrl = cfg.GeoXUrl.ASN
-	C.GeodataMode = cfg.GeodataMode
-	C.UA = cfg.GlobalUA
+	geodata.SetGeoIpUrl(cfg.GeoXUrl.GeoIp)
+	geodata.SetGeoSiteUrl(cfg.GeoXUrl.GeoSite)
+	geodata.SetMmdbUrl(cfg.GeoXUrl.Mmdb)
+	geodata.SetASNUrl(cfg.GeoXUrl.ASN)
+	mihomoHttp.SetUA(cfg.GlobalUA)
 
 	if cfg.KeepAliveIdle != 0 {
 		N.KeepAliveIdle = time.Duration(cfg.KeepAliveIdle) * time.Second

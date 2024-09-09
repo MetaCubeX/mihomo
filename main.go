@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
@@ -78,7 +79,7 @@ func main() {
 	}
 
 	if geodataMode {
-		C.GeodataMode = true
+		geodata.SetGeodataMode(true)
 	}
 
 	if configString != "" {
@@ -140,7 +141,7 @@ func main() {
 		log.Fatalln("Parse config error: %s", err.Error())
 	}
 
-	if C.GeoAutoUpdate {
+	if updater.GeoAutoUpdate() {
 		updater.RegisterGeoUpdater()
 	}
 

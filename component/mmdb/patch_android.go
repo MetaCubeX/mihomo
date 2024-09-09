@@ -8,11 +8,11 @@ func InstallOverride(override *maxminddb.Reader) {
 	newReader := IPReader{Reader: override}
 	switch override.Metadata.DatabaseType {
 	case "sing-geoip":
-		IPreader.databaseType = typeSing
+		ipReader.databaseType = typeSing
 	case "Meta-geoip0":
-		IPreader.databaseType = typeMetaV0
+		ipReader.databaseType = typeMetaV0
 	default:
-		IPreader.databaseType = typeMaxmind
+		ipReader.databaseType = typeMaxmind
 	}
-	IPreader = newReader
+	ipReader = newReader
 }

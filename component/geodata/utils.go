@@ -13,8 +13,6 @@ import (
 
 var (
 	geoMode        bool
-	AutoUpdate     bool
-	UpdateInterval int
 	geoLoaderName  = "memconservative"
 	geoSiteMatcher = "succinct"
 )
@@ -23,14 +21,6 @@ var (
 
 func GeodataMode() bool {
 	return geoMode
-}
-
-func GeoAutoUpdate() bool {
-	return AutoUpdate
-}
-
-func GeoUpdateInterval() int {
-	return UpdateInterval
 }
 
 func LoaderName() string {
@@ -43,12 +33,6 @@ func SiteMatcherName() string {
 
 func SetGeodataMode(newGeodataMode bool) {
 	geoMode = newGeodataMode
-}
-func SetGeoAutoUpdate(newAutoUpdate bool) {
-	AutoUpdate = newAutoUpdate
-}
-func SetGeoUpdateInterval(newGeoUpdateInterval int) {
-	UpdateInterval = newGeoUpdateInterval
 }
 
 func SetLoader(newLoader string) {

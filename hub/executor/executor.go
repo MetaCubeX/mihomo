@@ -17,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	G "github.com/metacubex/mihomo/component/geodata"
+	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/profile"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
@@ -81,6 +82,7 @@ func ParseWithBytes(buf []byte) (*config.Config, error) {
 func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
+	log.SetLevel(cfg.General.LogLevel)
 
 	tunnel.OnSuspend()
 
@@ -115,8 +117,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	tunnel.OnRunning()
 	hcCompatibleProvider(cfg.Providers)
 	initExternalUI()
-
-	log.SetLevel(cfg.General.LogLevel)
 }
 
 func initInnerTcp() {
@@ -157,13 +157,13 @@ func GetGeneral() *config.General {
 		Interface:    dialer.DefaultInterface.Load(),
 		RoutingMark:  int(dialer.DefaultRoutingMark.Load()),
 		GeoXUrl: config.GeoXUrl{
-			GeoIp:   C.GeoIpUrl,
-			Mmdb:    C.MmdbUrl,
-			ASN:     C.ASNUrl,
-			GeoSite: C.GeoSiteUrl,
+			GeoIp:   G.GeoIpUrl(),
+			Mmdb:    G.MmdbUrl(),
+			ASN:     G.ASNUrl(),
+			GeoSite: G.GeoSiteUrl(),
 		},
-		GeoAutoUpdate:           G.GeoAutoUpdate(),
-		GeoUpdateInterval:       G.GeoUpdateInterval(),
+		GeoAutoUpdate:           updater.GeoAutoUpdate(),
+		GeoUpdateInterval:       updater.GeoUpdateInterval(),
 		GeodataMode:             G.GeodataMode(),
 		GeodataLoader:           G.LoaderName(),
 		GeositeMatcher:          G.SiteMatcherName(),
@@ -171,7 +171,7 @@ func GetGeneral() *config.General {
 		FindProcessMode:         tunnel.FindProcessMode(),
 		Sniffing:                tunnel.IsSniffing(),
 		GlobalClientFingerprint: tlsC.GetGlobalFingerprint(),
-		GlobalUA:                C.UA,
+		GlobalUA:                mihomoHttp.UA(),
 	}
 
 	return general
