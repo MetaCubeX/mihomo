@@ -148,10 +148,10 @@ func start(cfg *Config) {
 		server := &http.Server{
 			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer),
 		}
+		httpServer = server
 		if err = server.Serve(l); err != nil {
 			log.Errorln("External controller serve error: %s", err)
 		}
-		httpServer = server
 	}
 }
 
@@ -183,10 +183,10 @@ func startTLS(cfg *Config) {
 				Certificates: []tls.Certificate{c},
 			},
 		}
+		tlsServer = server
 		if err = server.ServeTLS(l, "", ""); err != nil {
 			log.Errorln("External controller tls serve error: %s", err)
 		}
-		tlsServer = server
 	}
 }
 
@@ -228,10 +228,10 @@ func startUnix(cfg *Config) {
 		server := &http.Server{
 			Handler: router(cfg.IsDebug, "", cfg.DohServer),
 		}
+		unixServer = server
 		if err = server.Serve(l); err != nil {
 			log.Errorln("External controller unix serve error: %s", err)
 		}
-		unixServer = server
 	}
 
 }
