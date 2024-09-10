@@ -132,7 +132,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	if options.GSOMaxSize == 0 {
 		options.GSOMaxSize = 65536
 	}
-	if !supportRedirect {
+	if !supportRedirect || !options.AutoRoute {
 		options.AutoRedirect = false
 	}
 	tunName := options.Device
@@ -264,31 +264,35 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	interfaceFinder := DefaultInterfaceFinder
 
-	networkUpdateMonitor, err := tun.NewNetworkUpdateMonitor(log.SingLogger)
-	if err != nil {
-		err = E.Cause(err, "create NetworkUpdateMonitor")
-		return
-	}
-	l.networkUpdateMonitor = networkUpdateMonitor
-	err = networkUpdateMonitor.Start()
-	if err != nil {
-		err = E.Cause(err, "start NetworkUpdateMonitor")
-		return
-	}
+	var networkUpdateMonitor tun.NetworkUpdateMonitor
+	var defaultInterfaceMonitor tun.DefaultInterfaceMonitor
+	if options.AutoRoute { // don't start NetworkUpdateMonitor because netlink banned by google on Android14+
+		networkUpdateMonitor, err = tun.NewNetworkUpdateMonitor(log.SingLogger)
+		if err != nil {
+			err = E.Cause(err, "create NetworkUpdateMonitor")
+			return
+		}
+		l.networkUpdateMonitor = networkUpdateMonitor
+		err = networkUpdateMonitor.Start()
+		if err != nil {
+			err = E.Cause(err, "start NetworkUpdateMonitor")
+			return
+		}
 
-	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, log.SingLogger, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
-	if err != nil {
-		err = E.Cause(err, "create DefaultInterfaceMonitor")
-		return
-	}
-	l.defaultInterfaceMonitor = defaultInterfaceMonitor
-	defaultInterfaceMonitor.RegisterCallback(func(event int) {
-		l.FlushDefaultInterface()
-	})
-	err = defaultInterfaceMonitor.Start()
-	if err != nil {
-		err = E.Cause(err, "start DefaultInterfaceMonitor")
-		return
+		defaultInterfaceMonitor, err = tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, log.SingLogger, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
+		if err != nil {
+			err = E.Cause(err, "create DefaultInterfaceMonitor")
+			return
+		}
+		l.defaultInterfaceMonitor = defaultInterfaceMonitor
+		defaultInterfaceMonitor.RegisterCallback(func(event int) {
+			l.FlushDefaultInterface()
+		})
+		err = defaultInterfaceMonitor.Start()
+		if err != nil {
+			err = E.Cause(err, "start DefaultInterfaceMonitor")
+			return
+		}
 	}
 
 	tunOptions := tun.Options{
@@ -331,7 +335,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 			Context:                ctx,
 			Handler:                handler.TypeMutation(C.REDIR),
 			Logger:                 log.SingLogger,
-			NetworkMonitor:         networkUpdateMonitor,
+			NetworkMonitor:         l.networkUpdateMonitor,
 			InterfaceFinder:        interfaceFinder,
 			TableName:              "mihomo",
 			DisableNFTables:        dErr == nil && disableNFTables,
@@ -489,7 +493,7 @@ func (l *Listener) updateRule(ruleProvider provider.RuleProvider, exclude bool, 
 }
 
 func (l *Listener) FlushDefaultInterface() {
-	if l.options.AutoDetectInterface {
+	if l.options.AutoDetectInterface && l.defaultInterfaceMonitor != nil {
 		for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
 			autoDetectInterfaceName := l.defaultInterfaceMonitor.DefaultInterfaceName(destination)
 			if autoDetectInterfaceName == l.tunName {
