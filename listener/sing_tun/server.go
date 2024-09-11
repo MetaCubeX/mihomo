@@ -132,7 +132,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	if options.GSOMaxSize == 0 {
 		options.GSOMaxSize = 65536
 	}
-	if !supportRedirect || !options.AutoRoute {
+	if !supportRedirect {
 		options.AutoRedirect = false
 	}
 	tunName := options.Device
@@ -266,7 +266,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	var networkUpdateMonitor tun.NetworkUpdateMonitor
 	var defaultInterfaceMonitor tun.DefaultInterfaceMonitor
-	if options.AutoRoute { // don't start NetworkUpdateMonitor because netlink banned by google on Android14+
+	if options.AutoRoute || options.AutoDetectInterface { // don't start NetworkUpdateMonitor because netlink banned by google on Android14+
 		networkUpdateMonitor, err = tun.NewNetworkUpdateMonitor(log.SingLogger)
 		if err != nil {
 			err = E.Cause(err, "create NetworkUpdateMonitor")
