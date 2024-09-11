@@ -18,7 +18,6 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	types "github.com/metacubex/mihomo/constant/provider"
-	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/dlclark/regexp2"
@@ -149,10 +148,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 				return
 			}
 		}
-		pp.subscriptionInfo, err = NewSubscriptionInfo(userInfoStr)
-		if err != nil {
-			log.Warnln("[Provider] get subscription-userinfo: %e", err)
-		}
+		pp.subscriptionInfo = NewSubscriptionInfo(userInfoStr)
 	}()
 }
 
