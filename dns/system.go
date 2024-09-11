@@ -24,6 +24,15 @@ type systemClient struct {
 	mu         sync.Mutex
 	dnsClients map[string]*systemDnsClient
 	lastFlush  time.Time
+	subnet     *D.OPT
+}
+
+func (c *systemClient) SetSubnet(subnet *D.OPT) {
+	c.subnet = subnet
+}
+
+func (c *systemClient) GetSubnet() *D.OPT {
+	return c.subnet
 }
 
 func (c *systemClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {

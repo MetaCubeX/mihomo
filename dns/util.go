@@ -14,6 +14,7 @@ import (
 	"github.com/metacubex/mihomo/common/picker"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
@@ -194,12 +195,14 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 	var noIpMsg *D.Msg
 	for _, client := range clients {
 		if _, isRCodeClient := client.(rcodeClient); isRCodeClient {
+			useSubnetIfPresent(client, m)
 			msg, err = client.ExchangeContext(ctx, m)
 			return msg, false, err
 		}
 		client := client // shadow define client to ensure the value captured by the closure will not be changed in the next loop
 		fast.Go(func() (*D.Msg, error) {
-			log.Debugln("[DNS] resolve %s %s from %s", domain, qTypeStr, client.Address())
+			useSubnetIfPresent(client, m)
+			log.Debugln("[DNS] resolve %s %s from %s with subnet %s", domain, qTypeStr, client.Address(), m.Extra)
 			m, err := client.ExchangeContext(ctx, m)
 			if err != nil {
 				return nil, err
@@ -209,7 +212,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 				return nil, errors.New("server failure: " + D.RcodeToString[m.Rcode])
 			}
 			ips := msgToIP(m)
-			log.Debugln("[DNS] %s --> %s %s from %s", domain, ips, qTypeStr, client.Address())
+			log.Debugln("[DNS] %s --> %s %s from %s with subnet %s", domain, ips, qTypeStr, client.Address(), m.Extra)
 			switch qType {
 			case D.TypeAAAA:
 				if len(ips) == 0 {
@@ -237,4 +240,16 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 		}
 	}
 	return
+}
+
+func useSubnetIfPresent(client dnsClient, message *D.Msg) {
+
+	if client.GetSubnet() == nil {
+		if message.Extra == nil {
+			message.Extra = append(message.Extra, constant.DefaultECS)
+			return
+		}
+		return
+	}
+	message.Extra = append(message.Extra, client.GetSubnet())
 }

@@ -30,6 +30,15 @@ type dhcpClient struct {
 	done      chan struct{}
 	clients   []dnsClient
 	err       error
+	subnet    *D.OPT
+}
+
+func (d *dhcpClient) SetSubnet(subnet *D.OPT) {
+	d.subnet = subnet
+}
+
+func (d *dhcpClient) GetSubnet() *D.OPT {
+	return d.subnet
 }
 
 var _ dnsClient = (*dhcpClient)(nil)

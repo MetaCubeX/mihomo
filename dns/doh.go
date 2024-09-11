@@ -70,6 +70,15 @@ type dnsOverHTTPS struct {
 	skipCertVerify bool
 	ecsPrefix      netip.Prefix
 	ecsOverride    bool
+	subnet         *D.OPT
+}
+
+func (doh *dnsOverHTTPS) SetSubnet(subnet *D.OPT) {
+	doh.subnet = subnet
+}
+
+func (doh *dnsOverHTTPS) GetSubnet() *D.OPT {
+	return doh.subnet
 }
 
 // type check

@@ -24,6 +24,8 @@ import (
 type dnsClient interface {
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
 	Address() string
+	SetSubnet(subnet *D.OPT)
+	GetSubnet() *D.OPT
 }
 
 type dnsCache interface {
@@ -407,6 +409,7 @@ type Policy struct {
 	Domain      string
 	Matcher     C.DomainMatcher
 	NameServers []NameServer
+	Subnet      *D.OPT
 }
 
 type Config struct {
@@ -442,11 +445,12 @@ func NewResolver(config Config) *Resolver {
 		NameServer
 		dnsClient
 	}
-	cacheTransform := func(nameserver []NameServer) (result []dnsClient) {
+	cacheTransform := func(nameserver []NameServer, subnet *D.OPT) (result []dnsClient) {
 	LOOP:
 		for _, ns := range nameserver {
 			for _, nsc := range nameServerCache {
 				if nsc.NameServer.Equal(ns) {
+					nsc.dnsClient.SetSubnet(subnet)
 					result = append(result, nsc.dnsClient)
 					continue LOOP
 				}
@@ -455,6 +459,7 @@ func NewResolver(config Config) *Resolver {
 			dc := transform([]NameServer{ns}, defaultResolver)
 			if len(dc) > 0 {
 				dc := dc[0]
+				dc.SetSubnet(subnet)
 				nameServerCache = append(nameServerCache, struct {
 					NameServer
 					dnsClient
@@ -472,18 +477,18 @@ func NewResolver(config Config) *Resolver {
 	}
 	r := &Resolver{
 		ipv6:        config.IPv6,
-		main:        cacheTransform(config.Main),
+		main:        cacheTransform(config.Main, nil),
 		cache:       cache,
 		hosts:       config.Hosts,
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
 	if len(config.Fallback) != 0 {
-		r.fallback = cacheTransform(config.Fallback)
+		r.fallback = cacheTransform(config.Fallback, nil)
 	}
 
 	if len(config.ProxyServer) != 0 {
-		r.proxyServer = cacheTransform(config.ProxyServer)
+		r.proxyServer = cacheTransform(config.ProxyServer, nil)
 	}
 
 	if len(config.Policy) != 0 {
@@ -503,12 +508,12 @@ func NewResolver(config Config) *Resolver {
 
 		for _, policy := range config.Policy {
 			if policy.Matcher != nil {
-				insertPolicy(domainMatcherPolicy{matcher: policy.Matcher, dnsClients: cacheTransform(policy.NameServers)})
+				insertPolicy(domainMatcherPolicy{matcher: policy.Matcher, dnsClients: cacheTransform(policy.NameServers, policy.Subnet)})
 			} else {
 				if triePolicy == nil {
 					triePolicy = trie.New[[]dnsClient]()
 				}
-				_ = triePolicy.Insert(policy.Domain, cacheTransform(policy.NameServers))
+				_ = triePolicy.Insert(policy.Domain, cacheTransform(policy.NameServers, policy.Subnet))
 			}
 		}
 		insertPolicy(nil)

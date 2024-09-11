@@ -62,6 +62,15 @@ type dnsOverQUIC struct {
 
 	addr   string
 	dialer *dnsDialer
+	subnet *D.OPT
+}
+
+func (doq *dnsOverQUIC) SetSubnet(subnet *D.OPT) {
+	doq.subnet = subnet
+}
+
+func (doq *dnsOverQUIC) GetSubnet() *D.OPT {
+	return doq.subnet
 }
 
 // type check

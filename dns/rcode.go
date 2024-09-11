@@ -37,6 +37,14 @@ type rcodeClient struct {
 	addr  string
 }
 
+func (r rcodeClient) SetSubnet(subnet *D.OPT) {
+
+}
+
+func (r rcodeClient) GetSubnet() *D.OPT {
+	return nil
+}
+
 var _ dnsClient = rcodeClient{}
 
 func (r rcodeClient) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) {

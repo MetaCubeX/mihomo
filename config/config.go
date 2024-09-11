@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
+	"github.com/metacubex/mihomo/constant"
 	C "github.com/metacubex/mihomo/constant"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
 	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
@@ -41,6 +43,7 @@ import (
 	RP "github.com/metacubex/mihomo/rules/provider"
 	T "github.com/metacubex/mihomo/tunnel"
 
+	D "github.com/miekg/dns"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
@@ -190,25 +193,27 @@ type Config struct {
 }
 
 type RawDNS struct {
-	Enable                bool                                `yaml:"enable" json:"enable"`
-	PreferH3              bool                                `yaml:"prefer-h3" json:"prefer-h3"`
-	IPv6                  bool                                `yaml:"ipv6" json:"ipv6"`
-	IPv6Timeout           uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
-	UseHosts              bool                                `yaml:"use-hosts" json:"use-hosts"`
-	UseSystemHosts        bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
-	RespectRules          bool                                `yaml:"respect-rules" json:"respect-rules"`
-	NameServer            []string                            `yaml:"nameserver" json:"nameserver"`
-	Fallback              []string                            `yaml:"fallback" json:"fallback"`
-	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
-	Listen                string                              `yaml:"listen" json:"listen"`
-	EnhancedMode          C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
-	FakeIPRange           string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
-	FakeIPFilter          []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
-	FakeIPFilterMode      C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
-	DefaultNameserver     []string                            `yaml:"default-nameserver" json:"default-nameserver"`
-	CacheAlgorithm        string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
-	NameServerPolicy      *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
-	ProxyServerNameserver []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+	Enable                bool                                   `yaml:"enable" json:"enable"`
+	PreferH3              bool                                   `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                  bool                                   `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout           uint                                   `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts              bool                                   `yaml:"use-hosts" json:"use-hosts"`
+	UseSystemHosts        bool                                   `yaml:"use-system-hosts" json:"use-system-hosts"`
+	RespectRules          bool                                   `yaml:"respect-rules" json:"respect-rules"`
+	NameServer            []string                               `yaml:"nameserver" json:"nameserver"`
+	Fallback              []string                               `yaml:"fallback" json:"fallback"`
+	FallbackFilter        RawFallbackFilter                      `yaml:"fallback-filter" json:"fallback-filter"`
+	Listen                string                                 `yaml:"listen" json:"listen"`
+	EnhancedMode          C.DNSMode                              `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange           string                                 `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPFilter          []string                               `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	FakeIPFilterMode      C.FilterMode                           `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
+	DefaultNameserver     []string                               `yaml:"default-nameserver" json:"default-nameserver"`
+	CacheAlgorithm        string                                 `yaml:"cache-algorithm" json:"cache-algorithm"`
+	NameServerPolicy      *orderedmap.OrderedMap[string, any]    `yaml:"nameserver-policy" json:"nameserver-policy"`
+	DefaultECS            string                                 `yaml:"default-ecs" json:"default-ecs"`
+	DomainECSPolicy       *orderedmap.OrderedMap[string, string] `yaml:"domain-ecs-policy" json:"domain-ecs-policy"`
+	ProxyServerNameserver []string                               `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
 }
 
 type RawFallbackFilter struct {
@@ -1285,7 +1290,7 @@ func parsePureDNSServer(server string) string {
 	}
 }
 
-func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, respectRules bool, preferH3 bool) ([]dns.Policy, error) {
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, respectRules bool, preferH3 bool, ecsPolicy *orderedmap.OrderedMap[string, string]) ([]dns.Policy, error) {
 	var policy []dns.Policy
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
@@ -1306,7 +1311,7 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
+					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers, Subnet: parseECSIfPresent(k, ecsPolicy, "")})
 				}
 			} else if strings.Contains(strings.ToLower(k), "rule-set:") {
 				subkeys := strings.Split(k, ":")
@@ -1314,21 +1319,21 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "rule-set:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
+					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers, Subnet: parseECSIfPresent(k, ecsPolicy, "")})
 				}
 			} else if re.MatchString(k) {
 				subkeys := strings.Split(k, ",")
 				for _, subkey := range subkeys {
-					policy = append(policy, dns.Policy{Domain: subkey, NameServers: nameservers})
+					policy = append(policy, dns.Policy{Domain: subkey, NameServers: nameservers, Subnet: parseECSIfPresent(k, ecsPolicy, "")})
 				}
 			}
 		} else {
 			if strings.Contains(strings.ToLower(k), "geosite:") {
-				policy = append(policy, dns.Policy{Domain: "geosite:" + k[8:], NameServers: nameservers})
+				policy = append(policy, dns.Policy{Domain: "geosite:" + k[8:], NameServers: nameservers, Subnet: parseECSIfPresent(k, ecsPolicy, "")})
 			} else if strings.Contains(strings.ToLower(k), "rule-set:") {
-				policy = append(policy, dns.Policy{Domain: "rule-set:" + k[9:], NameServers: nameservers})
+				policy = append(policy, dns.Policy{Domain: "rule-set:" + k[9:], NameServers: nameservers, Subnet: parseECSIfPresent(k, ecsPolicy, "")})
 			} else {
-				policy = append(policy, dns.Policy{Domain: k, NameServers: nameservers})
+				policy = append(policy, dns.Policy{Domain: k, NameServers: nameservers, Subnet: parseECSIfPresent(k, ecsPolicy, "")})
 			}
 		}
 	}
@@ -1342,14 +1347,14 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 			if err != nil {
 				return nil, err
 			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
+			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers, Subnet: policy[idx].Subnet}
 		} else if strings.HasPrefix(domain, "geosite:") {
 			country := domain[8:]
 			matcher, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
 			if err != nil {
 				return nil, err
 			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
+			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers, Subnet: policy[idx].Subnet}
 		} else {
 			if _, valid := trie.ValidAndSplitDomain(domain); !valid {
 				return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
@@ -1358,6 +1363,54 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 	}
 
 	return policy, nil
+}
+
+// parseECSIfPresent defaultECS will be override by domain-ecs-policy
+func parseECSIfPresent(key string, ecsPolicy *orderedmap.OrderedMap[string, string], defaultECS string) (subnet *D.OPT) {
+	configECS, present := ecsPolicy.Get(key)
+	if !present {
+		if defaultECS == "" {
+			return nil
+		}
+		configECS = defaultECS
+	}
+	edns := strings.Split(configECS, "/")
+	if len(edns) < 1 || len(edns) > 2 {
+		log.Warnln("ecs is invalid ", configECS)
+		return nil
+	}
+
+	edns0 := new(D.OPT)
+	edns0.Hdr.Name = "."
+	edns0.Hdr.Rrtype = D.TypeOPT
+	//According to RFC 6891, the max UDP size should be 4096 bytes
+	const maxUdpSize = 4096
+	edns0.SetUDPSize(maxUdpSize)
+	edns0Subnet := new(D.EDNS0_SUBNET)
+	edns0Subnet.Code = D.EDNS0SUBNET
+	netMask, err := strconv.Atoi(edns[1])
+	//ipv4 Max Netmask 32, ipv6 Max Netmask 128
+	if err != nil || netMask < 0 || netMask > 128 {
+		log.Warnln("ecs netmask range is either invalid or cannot be converted", netMask)
+		return nil
+	}
+	edns0Subnet.SourceNetmask = uint8(netMask)
+	edns0Subnet.SourceScope = 0
+	ip := net.ParseIP(edns[0])
+
+	ecsIP := ip.To4()
+	if ecsIP == nil {
+		// ipv6 address,Family should be 2
+		edns0Subnet.Family = 2
+		edns0Subnet.Address = ip.To16()
+		edns0.Option = append(edns0.Option, edns0Subnet)
+		return edns0
+	}
+	// ipv4 address,Family should be 1
+	edns0Subnet.Family = 1
+	edns0Subnet.Address = ecsIP
+	edns0.Option = append(edns0.Option, edns0Subnet)
+	return edns0
 }
 
 func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], ruleProviders map[string]providerTypes.RuleProvider) (*DNS, error) {
@@ -1388,9 +1441,10 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		return nil, err
 	}
 
-	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.RespectRules, cfg.PreferH3); err != nil {
+	if dnsCfg.NameServerPolicy, err = parseNameServerPolicy(cfg.NameServerPolicy, ruleProviders, cfg.RespectRules, cfg.PreferH3, cfg.DomainECSPolicy); err != nil {
 		return nil, err
 	}
+	constant.DefaultECS = parseECSIfPresent("", cfg.DomainECSPolicy, cfg.DefaultECS)
 
 	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver, false, cfg.PreferH3); err != nil {
 		return nil, err

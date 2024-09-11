@@ -316,6 +316,16 @@ dns:
     ## global，dns 为 rule-providers 中的名为 global 和 dns 规则订阅，
     ## 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
     # "rule-set:global,dns": 8.8.8.8
+#默认的ecs
+  default-ecs:
+    "114.114.114.114/24"
+  domain-ecs-policy:
+    #配置指定域名要使用的ecs，必须和nameserver-policy保持一致，优先级大于默认ecs
+    #此处的域名需要和nameserver-policy配置的保持一致，即在nameserver-policy配置了多少个域名，此处也需要配置同样多个
+    "geosite:tiktok":
+      "8.8.8.8.8/24"
+    "geosite:apple":
+      "223.5.5.5/24"
 
 proxies: # socks5
   - name: "socks"

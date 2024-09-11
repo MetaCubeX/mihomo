@@ -19,6 +19,15 @@ type client struct {
 	host   string
 	dialer *dnsDialer
 	addr   string
+	subnet *D.OPT
+}
+
+func (c *client) SetSubnet(subnet *D.OPT) {
+	c.subnet = subnet
+}
+
+func (c *client) GetSubnet() *D.OPT {
+	return c.subnet
 }
 
 var _ dnsClient = (*client)(nil)
