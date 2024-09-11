@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"runtime"
 	"strconv"
@@ -67,6 +68,8 @@ type dnsOverHTTPS struct {
 	dialer         *dnsDialer
 	addr           string
 	skipCertVerify bool
+	ecsPrefix      netip.Prefix
+	ecsOverride    bool
 }
 
 // type check
@@ -99,6 +102,28 @@ func newDoHClient(urlString string, r *Resolver, preferH3 bool, params map[strin
 		doh.skipCertVerify = true
 	}
 
+	if ecs := params["ecs"]; ecs != "" {
+		prefix, err := netip.ParsePrefix(ecs)
+		if err != nil {
+			addr, err := netip.ParseAddr(ecs)
+			if err != nil {
+				log.Warnln("DOH [%s] config with invalid ecs: %s", doh.addr, ecs)
+			} else {
+				doh.ecsPrefix = netip.PrefixFrom(addr, addr.BitLen())
+			}
+		} else {
+			doh.ecsPrefix = prefix
+		}
+	}
+
+	if doh.ecsPrefix.IsValid() {
+		log.Debugln("DOH [%s] config with ecs: %s", doh.addr, doh.ecsPrefix)
+	}
+
+	if params["ecs-override"] == "true" {
+		doh.ecsOverride = true
+	}
+
 	runtime.SetFinalizer(doh, (*dnsOverHTTPS).Close)
 
 	return doh
@@ -125,6 +150,10 @@ func (doh *dnsOverHTTPS) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.
 			msg.Id = id
 		}
 	}()
+
+	if doh.ecsPrefix.IsValid() {
+		setEdns0Subnet(m, doh.ecsPrefix, doh.ecsOverride)
+	}
 
 	// Check if there was already an active client before sending the request.
 	// We'll only attempt to re-connect if there was one.
