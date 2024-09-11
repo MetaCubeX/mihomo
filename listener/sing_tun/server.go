@@ -136,9 +136,8 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		options.AutoRedirect = false
 	}
 	tunName := options.Device
-	if tunName == "" || !checkTunName(tunName) {
+	if options.FileDescriptor == 0 && (tunName == "" || !checkTunName(tunName)) {
 		tunName = CalculateInterfaceName(InterfaceName)
-		options.Device = tunName
 	}
 	routeAddress := options.RouteAddress
 	if len(options.Inet4RouteAddress) > 0 {
@@ -440,6 +439,9 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	//l.openAndroidHotspot(tunOptions)
 
+	if options.FileDescriptor != 0 {
+		tunName = fmt.Sprintf("%s(fd=%d)", tunName, options.FileDescriptor)
+	}
 	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, auto redir: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.AutoRedirect, options.Stack)
 	return
