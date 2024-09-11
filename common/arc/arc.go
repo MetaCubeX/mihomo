@@ -33,20 +33,26 @@ type ARC[K comparable, V any] struct {
 
 // New returns a new Adaptive Replacement Cache (ARC).
 func New[K comparable, V any](options ...Option[K, V]) *ARC[K, V] {
-	arc := &ARC[K, V]{
-		p:     0,
-		t1:    list.New[*entry[K, V]](),
-		b1:    list.New[*entry[K, V]](),
-		t2:    list.New[*entry[K, V]](),
-		b2:    list.New[*entry[K, V]](),
-		len:   0,
-		cache: make(map[K]*entry[K, V]),
-	}
+	arc := &ARC[K, V]{}
+	arc.Clear()
 
 	for _, option := range options {
 		option(arc)
 	}
 	return arc
+}
+
+func (a *ARC[K, V]) Clear() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	a.p = 0
+	a.t1 = list.New[*entry[K, V]]()
+	a.b1 = list.New[*entry[K, V]]()
+	a.t2 = list.New[*entry[K, V]]()
+	a.b2 = list.New[*entry[K, V]]()
+	a.len = 0
+	a.cache = make(map[K]*entry[K, V])
 }
 
 // Set inserts a new key-value pair into the cache.

@@ -99,6 +99,10 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			ret = append(ret, newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter, s.ProxyName))
 			continue
 		case "dhcp":
+			if s.Addr == "system" { // Compatible with old writing
+				ret = append(ret, newSystemClient())
+				continue
+			}
 			ret = append(ret, newDHCPClient(s.Addr))
 			continue
 		case "system":

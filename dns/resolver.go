@@ -29,6 +29,7 @@ type dnsClient interface {
 type dnsCache interface {
 	GetWithExpire(key string) (*D.Msg, time.Time, bool)
 	SetWithExpire(key string, value *D.Msg, expire time.Time)
+	Clear()
 }
 
 type result struct {
@@ -367,6 +368,12 @@ func (r *Resolver) Invalid() bool {
 		return false
 	}
 	return len(r.main) > 0
+}
+
+func (r *Resolver) ClearCache() {
+	if r != nil && r.cache != nil {
+		r.cache.Clear()
+	}
 }
 
 type NameServer struct {

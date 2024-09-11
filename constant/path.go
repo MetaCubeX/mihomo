@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/mihomo/constant/features"
 )
 
 const Name = "mihomo"
@@ -73,7 +75,7 @@ func (p *path) Resolve(path string) string {
 
 // IsSafePath return true if path is a subpath of homedir
 func (p *path) IsSafePath(path string) bool {
-	if p.allowUnsafePath {
+	if p.allowUnsafePath || features.CMFA {
 		return true
 	}
 	homedir := p.HomeDir()

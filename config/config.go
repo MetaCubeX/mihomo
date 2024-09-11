@@ -30,7 +30,6 @@ import (
 	"github.com/metacubex/mihomo/component/trie"
 	"github.com/metacubex/mihomo/component/updater"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
 	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
 	"github.com/metacubex/mihomo/dns"
@@ -649,7 +648,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.DNS = dnsCfg
 
 	err = parseTun(rawCfg.Tun, config.General)
-	if !features.CMFA && err != nil {
+	if err != nil {
 		return nil, err
 	}
 

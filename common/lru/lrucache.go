@@ -68,16 +68,22 @@ type LruCache[K comparable, V any] struct {
 
 // New creates an LruCache
 func New[K comparable, V any](options ...Option[K, V]) *LruCache[K, V] {
-	lc := &LruCache[K, V]{
-		lru:   list.New[*entry[K, V]](),
-		cache: make(map[K]*list.Element[*entry[K, V]]),
-	}
+	lc := &LruCache[K, V]{}
+	lc.Clear()
 
 	for _, option := range options {
 		option(lc)
 	}
 
 	return lc
+}
+
+func (c *LruCache[K, V]) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.lru = list.New[*entry[K, V]]()
+	c.cache = make(map[K]*list.Element[*entry[K, V]])
 }
 
 // Get returns any representation of a cached response and a bool
@@ -248,15 +254,6 @@ func (c *LruCache[K, V]) deleteElement(le *list.Element[*entry[K, V]]) {
 	if c.onEvict != nil {
 		c.onEvict(e.key, e.value)
 	}
-}
-
-func (c *LruCache[K, V]) Clear() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.cache = make(map[K]*list.Element[*entry[K, V]])
-
-	return nil
 }
 
 // Compute either sets the computed new value for the key or deletes

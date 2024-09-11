@@ -1,10 +1,7 @@
 package hub
 
 import (
-	"strings"
-
 	"github.com/metacubex/mihomo/config"
-	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/hub/executor"
 	"github.com/metacubex/mihomo/hub/route"
 	"github.com/metacubex/mihomo/log"
@@ -43,11 +40,6 @@ func ApplyConfig(cfg *config.Config) {
 }
 
 func applyRoute(cfg *config.Config) {
-	if features.CMFA && strings.HasSuffix(cfg.Controller.ExternalUI, ":0") {
-		// CMFA have set its default override value to end with ":0" for security.
-		// so we direct return at here
-		return
-	}
 	if cfg.Controller.ExternalUI != "" {
 		route.SetUIPath(cfg.Controller.ExternalUI)
 	}

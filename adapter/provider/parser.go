@@ -9,7 +9,6 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
 	types "github.com/metacubex/mihomo/constant/provider"
 )
 
@@ -94,7 +93,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		path := C.Path.GetPathByHash("proxies", schema.URL)
 		if schema.Path != "" {
 			path = C.Path.Resolve(schema.Path)
-			if !features.CMFA && !C.Path.IsSafePath(path) {
+			if !C.Path.IsSafePath(path) {
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 		}

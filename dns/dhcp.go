@@ -1,5 +1,3 @@
-//go:build !(android && cmfa)
-
 package dns
 
 import (
