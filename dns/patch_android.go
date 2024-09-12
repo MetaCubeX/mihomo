@@ -6,8 +6,6 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 )
 
-const SystemDNSPlaceholder = "system"
-
 var systemResolver []dnsClient
 
 func FlushCacheWithDefaultResolver() {
