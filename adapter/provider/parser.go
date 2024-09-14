@@ -29,9 +29,9 @@ type healthCheckSchema struct {
 
 type OverrideProxyNameSchema struct {
 	// matching expression for regex replacement
-	Pattern string `provider:"pattern,omitempty"`
+	Pattern string `provider:"pattern"`
 	// the new content after regex matching
-	Target string `provider:"target,omitempty"`
+	Target string `provider:"target"`
 }
 
 type OverrideSchema struct {
@@ -49,7 +49,7 @@ type OverrideSchema struct {
 	AdditionalPrefix *string `provider:"additional-prefix,omitempty"`
 	AdditionalSuffix *string `provider:"additional-suffix,omitempty"`
 
-	ProxyName []*OverrideProxyNameSchema `provider:"proxy-name,omitempty"`
+	ProxyName []OverrideProxyNameSchema `provider:"proxy-name,omitempty"`
 }
 
 type proxyProviderSchema struct {

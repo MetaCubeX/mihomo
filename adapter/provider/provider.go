@@ -400,9 +400,9 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 						name := mapping["name"].(string)
 						mapping["name"] = name + *field.Interface().(*string)
 					case "proxy-name":
-						exprList, ok := field.Interface().([]*OverrideProxyNameSchema)
+						exprList, ok := field.Interface().([]OverrideProxyNameSchema)
 						if !ok {
-							return nil, errors.New("file must have a `proxy-name` field")
+							return nil, fmt.Errorf("can't parse proxy-provider override proxy-name, please see the docs example config")
 						}
 						// Iterate through all naming replacement rules and perform the replacements.
 						for _, expr := range exprList {
@@ -413,7 +413,7 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 							}
 							newName, err := nameReg.Replace(name, expr.Target, 0, -1)
 							if err != nil {
-								return nil, errors.New("proxy name replace error")
+								return nil, fmt.Errorf("proxy name replace error: %w", err)
 							}
 							mapping["name"] = newName
 						}
