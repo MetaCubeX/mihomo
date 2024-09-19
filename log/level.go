@@ -3,6 +3,7 @@ package log
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // LogLevelMapping is a mapping for LogLevel enum
@@ -28,7 +29,7 @@ type LogLevel int
 func (l *LogLevel) UnmarshalYAML(unmarshal func(any) error) error {
 	var tp string
 	unmarshal(&tp)
-	level, exist := LogLevelMapping[tp]
+	level, exist := LogLevelMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid mode")
 	}
@@ -40,7 +41,7 @@ func (l *LogLevel) UnmarshalYAML(unmarshal func(any) error) error {
 func (l *LogLevel) UnmarshalJSON(data []byte) error {
 	var tp string
 	json.Unmarshal(data, &tp)
-	level, exist := LogLevelMapping[tp]
+	level, exist := LogLevelMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid mode")
 	}
@@ -48,14 +49,29 @@ func (l *LogLevel) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON serialize LogLevel with json
-func (l LogLevel) MarshalJSON() ([]byte, error) {
-	return json.Marshal(l.String())
+// UnmarshalText unserialize LogLevel
+func (l *LogLevel) UnmarshalText(data []byte) error {
+	level, exist := LogLevelMapping[strings.ToLower(string(data))]
+	if !exist {
+		return errors.New("invalid mode")
+	}
+	*l = level
+	return nil
 }
 
 // MarshalYAML serialize LogLevel with yaml
 func (l LogLevel) MarshalYAML() (any, error) {
 	return l.String(), nil
+}
+
+// MarshalJSON serialize LogLevel with json
+func (l LogLevel) MarshalJSON() ([]byte, error) {
+	return json.Marshal(l.String())
+}
+
+// MarshalText serialize LogLevel
+func (l LogLevel) MarshalText() ([]byte, error) {
+	return []byte(l.String()), nil
 }
 
 func (l LogLevel) String() string {

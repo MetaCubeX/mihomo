@@ -3,6 +3,7 @@ package constant
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // DNSModeMapping is a mapping for EnhancedMode enum
@@ -27,7 +28,7 @@ func (e *DNSMode) UnmarshalYAML(unmarshal func(any) error) error {
 	if err := unmarshal(&tp); err != nil {
 		return err
 	}
-	mode, exist := DNSModeMapping[tp]
+	mode, exist := DNSModeMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid mode")
 	}
@@ -46,7 +47,7 @@ func (e *DNSMode) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &tp); err != nil {
 		return err
 	}
-	mode, exist := DNSModeMapping[tp]
+	mode, exist := DNSModeMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid mode")
 	}
@@ -57,6 +58,21 @@ func (e *DNSMode) UnmarshalJSON(data []byte) error {
 // MarshalJSON serialize EnhancedMode with json
 func (e DNSMode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(e.String())
+}
+
+// UnmarshalText unserialize EnhancedMode
+func (e *DNSMode) UnmarshalText(data []byte) error {
+	mode, exist := DNSModeMapping[strings.ToLower(string(data))]
+	if !exist {
+		return errors.New("invalid mode")
+	}
+	*e = mode
+	return nil
+}
+
+// MarshalText serialize EnhancedMode
+func (e DNSMode) MarshalText() ([]byte, error) {
+	return []byte(e.String()), nil
 }
 
 func (e DNSMode) String() string {
@@ -150,7 +166,7 @@ func (e *FilterMode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&tp); err != nil {
 		return err
 	}
-	mode, exist := FilterModeMapping[tp]
+	mode, exist := FilterModeMapping[strings.ToLower(tp)]
 	if !exist {
 		return errors.New("invalid mode")
 	}
@@ -167,7 +183,20 @@ func (e *FilterMode) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &tp); err != nil {
 		return err
 	}
-	mode, exist := FilterModeMapping[tp]
+	mode, exist := FilterModeMapping[strings.ToLower(tp)]
+	if !exist {
+		return errors.New("invalid mode")
+	}
+	*e = mode
+	return nil
+}
+
+func (e FilterMode) MarshalText() ([]byte, error) {
+	return []byte(e.String()), nil
+}
+
+func (e *FilterMode) UnmarshalText(data []byte) error {
+	mode, exist := FilterModeMapping[strings.ToLower(string(data))]
 	if !exist {
 		return errors.New("invalid mode")
 	}
