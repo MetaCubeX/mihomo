@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding"
 	"errors"
 	"fmt"
 	"time"
@@ -10,6 +11,8 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	types "github.com/metacubex/mihomo/constant/provider"
+
+	"github.com/dlclark/regexp2"
 )
 
 var (
@@ -28,10 +31,12 @@ type healthCheckSchema struct {
 
 type OverrideProxyNameSchema struct {
 	// matching expression for regex replacement
-	Pattern string `provider:"pattern"`
+	Pattern *regexp2.Regexp `provider:"pattern"`
 	// the new content after regex matching
 	Target string `provider:"target"`
 }
+
+var _ encoding.TextUnmarshaler = (*regexp2.Regexp)(nil) // ensure *regexp2.Regexp can decode direct by structure package
 
 type OverrideSchema struct {
 	TFO              *bool   `provider:"tfo,omitempty"`

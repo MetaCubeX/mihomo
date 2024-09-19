@@ -404,18 +404,10 @@ func proxiesParseAndFilter(filter string, excludeFilter string, excludeTypeArray
 						name := mapping["name"].(string)
 						mapping["name"] = name + *field.Interface().(*string)
 					case "proxy-name":
-						exprList, ok := field.Interface().([]OverrideProxyNameSchema)
-						if !ok {
-							return nil, fmt.Errorf("can't parse proxy-provider override proxy-name, please see the docs example config")
-						}
 						// Iterate through all naming replacement rules and perform the replacements.
-						for _, expr := range exprList {
+						for _, expr := range override.ProxyName {
 							name := mapping["name"].(string)
-							nameReg, err := regexp2.Compile(expr.Pattern, regexp2.None)
-							if err != nil {
-								return nil, fmt.Errorf("parse proxy name regular expression %q error: %w", expr.Pattern, err)
-							}
-							newName, err := nameReg.Replace(name, expr.Target, 0, -1)
+							newName, err := expr.Pattern.Replace(name, expr.Target, 0, -1)
 							if err != nil {
 								return nil, fmt.Errorf("proxy name replace error: %w", err)
 							}
