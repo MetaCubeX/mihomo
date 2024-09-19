@@ -1,6 +1,7 @@
 package structure
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -178,4 +179,91 @@ func TestStructure_SliceNilValueComplex(t *testing.T) {
 
 	err = decoder.Decode(rawMap, ss)
 	assert.NotNil(t, err)
+}
+
+func TestStructure_SliceCap(t *testing.T) {
+	rawMap := map[string]any{
+		"foo": []string{},
+	}
+
+	s := &struct {
+		Foo []string `test:"foo,omitempty"`
+		Bar []string `test:"bar,omitempty"`
+	}{}
+
+	err := decoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.NotNil(t, s.Foo) // structure's Decode will ensure value not nil when input has value even it was set an empty array
+	assert.Nil(t, s.Bar)
+}
+
+func TestStructure_Base64(t *testing.T) {
+	rawMap := map[string]any{
+		"foo": "AQID",
+	}
+
+	s := &struct {
+		Foo []byte `test:"foo"`
+	}{}
+
+	err := decoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.Equal(t, []byte{1, 2, 3}, s.Foo)
+}
+
+func TestStructure_Pointer(t *testing.T) {
+	rawMap := map[string]any{
+		"foo": "foo",
+	}
+
+	s := &struct {
+		Foo *string `test:"foo,omitempty"`
+		Bar *string `test:"bar,omitempty"`
+	}{}
+
+	err := decoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.NotNil(t, s.Foo)
+	assert.Equal(t, "foo", *s.Foo)
+	assert.Nil(t, s.Bar)
+}
+
+type num struct {
+	a int
+}
+
+func (n *num) UnmarshalText(text []byte) (err error) {
+	n.a, err = strconv.Atoi(string(text))
+	return
+}
+
+func TestStructure_TextUnmarshaller(t *testing.T) {
+	rawMap := map[string]any{
+		"num":   "255",
+		"num_p": "127",
+	}
+
+	s := &struct {
+		Num  num  `test:"num"`
+		NumP *num `test:"num_p"`
+	}{}
+
+	err := decoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.Equal(t, 255, s.Num.a)
+	assert.NotNil(t, s.NumP)
+	assert.Equal(t, s.NumP.a, 127)
+
+	// test WeaklyTypedInput
+	rawMap["num"] = 256
+	err = decoder.Decode(rawMap, s)
+	assert.NotNilf(t, err, "should throw error: %#v", s)
+	err = weakTypeDecoder.Decode(rawMap, s)
+	assert.Nil(t, err)
+	assert.Equal(t, 256, s.Num.a)
+
+	// test invalid input
+	rawMap["num_p"] = "abc"
+	err = decoder.Decode(rawMap, s)
+	assert.NotNilf(t, err, "should throw error: %#v", s)
 }
