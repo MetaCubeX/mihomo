@@ -170,6 +170,8 @@ func (d *Decoder) decodeInt(name string, data any, val reflect.Value) (err error
 		} else {
 			err = fmt.Errorf("cannot parse '%s' as int: %s", name, err)
 		}
+	case data == nil:
+		val.SetInt(0)
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -197,6 +199,8 @@ func (d *Decoder) decodeUint(name string, data any, val reflect.Value) (err erro
 		} else {
 			err = fmt.Errorf("cannot parse '%s' as int: %s", name, err)
 		}
+	case data == nil:
+		val.SetUint(0)
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -224,6 +228,8 @@ func (d *Decoder) decodeFloat(name string, data any, val reflect.Value) (err err
 		} else {
 			err = fmt.Errorf("cannot parse '%s' as int: %s", name, err)
 		}
+	case data == nil:
+		val.SetFloat(0)
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -245,6 +251,8 @@ func (d *Decoder) decodeString(name string, data any, val reflect.Value) (err er
 		val.SetString(strconv.FormatUint(dataVal.Uint(), 10))
 	case isFloat(kind) && d.option.WeaklyTypedInput:
 		val.SetString(strconv.FormatFloat(dataVal.Float(), 'E', -1, dataVal.Type().Bits()))
+	case data == nil:
+		val.SetString("")
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
@@ -264,6 +272,8 @@ func (d *Decoder) decodeBool(name string, data any, val reflect.Value) (err erro
 		val.SetBool(dataVal.Int() != 0)
 	case isUint(kind) && d.option.WeaklyTypedInput:
 		val.SetString(strconv.FormatUint(dataVal.Uint(), 10))
+	case data == nil:
+		val.SetBool(false)
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
