@@ -128,7 +128,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 		defer cancel()
-		resp, err := mihomoHttp.HttpRequestWithProxy(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+		resp, err := mihomoHttp.HttpRequestWithProxy(ctx, pp.Vehicle().Url(),
 			http.MethodGet, nil, nil, pp.Vehicle().Proxy())
 		if err != nil {
 			return
@@ -137,7 +137,7 @@ func (pp *proxySetProvider) getSubscriptionInfo() {
 
 		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
 		if userInfoStr == "" {
-			resp2, err := mihomoHttp.HttpRequestWithProxy(ctx, pp.Vehicle().(*resource.HTTPVehicle).Url(),
+			resp2, err := mihomoHttp.HttpRequestWithProxy(ctx, pp.Vehicle().Url(),
 				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil, pp.Vehicle().Proxy())
 			if err != nil {
 				return

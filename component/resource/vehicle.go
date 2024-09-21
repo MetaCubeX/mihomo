@@ -24,6 +24,10 @@ func (f *FileVehicle) Path() string {
 	return f.path
 }
 
+func (f *FileVehicle) Url() string {
+	return "file://" + f.path
+}
+
 func (f *FileVehicle) Read(ctx context.Context) ([]byte, error) {
 	return os.ReadFile(f.path)
 }

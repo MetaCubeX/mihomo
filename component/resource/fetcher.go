@@ -65,8 +65,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 		modTime := stat.ModTime()
 		f.updatedAt = modTime
 		isLocal = true
-		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
-			log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
+		if time.Since(modTime) > f.interval {
 			forceUpdate = true
 		}
 	} else {
@@ -78,21 +77,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 		return lo.Empty[V](), err
 	}
 
-	var contents V
-	if forceUpdate {
-		var forceBuf []byte
-		if forceBuf, err = f.vehicle.Read(f.ctx); err == nil {
-			if contents, err = f.parser(forceBuf); err == nil {
-				isLocal = false
-				buf = forceBuf
-			}
-		}
-	}
-
-	if err != nil || !forceUpdate {
-		contents, err = f.parser(buf)
-	}
-
+	contents, err := f.parser(buf)
 	if err != nil {
 		if !isLocal {
 			return lo.Empty[V](), err
@@ -135,7 +120,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 			return lo.Empty[V](), err
 		}
 	} else if f.interval > 0 {
-		go f.pullLoop()
+		go f.pullLoop(forceUpdate)
 	}
 
 	return contents, nil
@@ -164,7 +149,7 @@ func (f *Fetcher[V]) SideUpdate(buf []byte) (V, bool, error) {
 	}
 
 	if f.vehicle.Type() != types.File {
-		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
+		if err = safeWrite(f.vehicle.Path(), buf); err != nil {
 			return lo.Empty[V](), false, err
 		}
 	}
@@ -183,10 +168,15 @@ func (f *Fetcher[V]) Close() error {
 	return nil
 }
 
-func (f *Fetcher[V]) pullLoop() {
+func (f *Fetcher[V]) pullLoop(forceUpdate bool) {
 	initialInterval := f.interval - time.Since(f.updatedAt)
 	if initialInterval > f.interval {
 		initialInterval = f.interval
+	}
+
+	if forceUpdate {
+		log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
+		f.update(f.vehicle.Path())
 	}
 
 	timer := time.NewTimer(initialInterval)
