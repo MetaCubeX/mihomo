@@ -3,6 +3,8 @@ package trie
 import (
 	"errors"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -24,6 +26,14 @@ type DomainTrie[T any] struct {
 func ValidAndSplitDomain(domain string) ([]string, bool) {
 	if domain != "" && domain[len(domain)-1] == '.' {
 		return nil, false
+	}
+	if domain != "" {
+		if r, _ := utf8.DecodeRuneInString(domain); unicode.IsSpace(r) {
+			return nil, false
+		}
+		if r, _ := utf8.DecodeLastRuneInString(domain); unicode.IsSpace(r) {
+			return nil, false
+		}
 	}
 	domain = strings.ToLower(domain)
 	parts := strings.Split(domain, domainStep)

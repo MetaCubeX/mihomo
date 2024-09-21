@@ -127,3 +127,14 @@ func TestTrie_Foreach(t *testing.T) {
 	})
 	assert.Equal(t, 7, count)
 }
+
+func TestTrie_Space(t *testing.T) {
+	validDomain := func(domain string) bool {
+		_, ok := trie.ValidAndSplitDomain(domain)
+		return ok
+	}
+	assert.True(t, validDomain("google.com"))
+	assert.False(t, validDomain(" google.com"))
+	assert.False(t, validDomain(" google.com "))
+	assert.True(t, validDomain("Mijia Cloud"))
+}
