@@ -267,3 +267,21 @@ func TestStructure_TextUnmarshaller(t *testing.T) {
 	err = decoder.Decode(rawMap, s)
 	assert.NotNilf(t, err, "should throw error: %#v", s)
 }
+
+func TestStructure_Null(t *testing.T) {
+	rawMap := map[string]any{
+		"opt": map[string]any{
+			"bar": nil,
+		},
+	}
+
+	s := struct {
+		Opt struct {
+			Bar string `test:"bar,optional"`
+		} `test:"opt,optional"`
+	}{}
+
+	err := decoder.Decode(rawMap, &s)
+	assert.Nil(t, err)
+	assert.Equal(t, s.Opt.Bar, "")
+}
