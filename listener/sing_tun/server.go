@@ -138,6 +138,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	tunName := options.Device
 	if options.FileDescriptor == 0 && (tunName == "" || !checkTunName(tunName)) {
 		tunName = CalculateInterfaceName(InterfaceName)
+		options.Device = tunName
 	}
 	routeAddress := options.RouteAddress
 	if len(options.Inet4RouteAddress) > 0 {
