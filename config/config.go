@@ -24,6 +24,7 @@ import (
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/resource"
 	"github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
@@ -65,6 +66,7 @@ type General struct {
 	Sniffing                bool              `json:"sniffing"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
+	ETagSupport             bool              `json:"etag-support"`
 }
 
 // Inbound config
@@ -381,6 +383,7 @@ type RawConfig struct {
 	FindProcessMode         P.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
 	GlobalClientFingerprint string            `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
 	GlobalUA                string            `yaml:"global-ua" json:"global-ua"`
+	ETagSupport             bool              `yaml:"etag-support" json:"etag-support"`
 	KeepAliveIdle           int               `yaml:"keep-alive-idle" json:"keep-alive-idle"`
 	KeepAliveInterval       int               `yaml:"keep-alive-interval" json:"keep-alive-interval"`
 	DisableKeepAlive        bool              `yaml:"disable-keep-alive" json:"disable-keep-alive"`
@@ -444,6 +447,7 @@ func DefaultRawConfig() *RawConfig {
 		TCPConcurrent:     false,
 		FindProcessMode:   P.FindProcessStrict,
 		GlobalUA:          "clash.meta/" + C.Version,
+		ETagSupport:       true,
 		DNS: RawDNS{
 			Enable:         false,
 			IPv6:           false,
@@ -690,6 +694,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	geodata.SetMmdbUrl(cfg.GeoXUrl.Mmdb)
 	geodata.SetASNUrl(cfg.GeoXUrl.ASN)
 	mihomoHttp.SetUA(cfg.GlobalUA)
+	resource.SetETag(cfg.ETagSupport)
 
 	if cfg.KeepAliveIdle != 0 {
 		N.KeepAliveIdle = time.Duration(cfg.KeepAliveIdle) * time.Second
@@ -755,6 +760,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		FindProcessMode:         cfg.FindProcessMode,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
+		ETagSupport:             cfg.ETagSupport,
 	}, nil
 }
 

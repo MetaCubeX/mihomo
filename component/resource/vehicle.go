@@ -21,6 +21,18 @@ const (
 	dirMode  os.FileMode = 0o755
 )
 
+var (
+	etag = false
+)
+
+func ETag() bool {
+	return etag
+}
+
+func SetETag(b bool) {
+	etag = b
+}
+
 func safeWrite(path string, buf []byte) error {
 	dir := filepath.Dir(path)
 
@@ -103,7 +115,7 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []b
 	defer cancel()
 	header := h.header
 	setIfNoneMatch := false
-	if oldHash.IsValid() {
+	if etag && oldHash.IsValid() {
 		hashBytes, etag := cachefile.Cache().GetETagWithHash(h.url)
 		if oldHash.EqualBytes(hashBytes) && etag != "" {
 			if header == nil {
@@ -132,7 +144,9 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []b
 		return
 	}
 	hash = types.MakeHash(buf)
-	cachefile.Cache().SetETagWithHash(h.url, hash.Bytes(), resp.Header.Get("ETag"))
+	if etag {
+		cachefile.Cache().SetETagWithHash(h.url, hash.Bytes(), resp.Header.Get("ETag"))
+	}
 	return
 }
 
