@@ -3,7 +3,6 @@ package resource
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"time"
 
 	types "github.com/metacubex/mihomo/constant/provider"
@@ -11,11 +10,6 @@ import (
 
 	"github.com/sagernet/fswatch"
 	"github.com/samber/lo"
-)
-
-var (
-	fileMode os.FileMode = 0o666
-	dirMode  os.FileMode = 0o755
 )
 
 type Parser[V any] func([]byte) (V, error)
@@ -118,7 +112,7 @@ func (f *Fetcher[V]) loadBuf(buf []byte, hash types.HashType, updateFile bool) (
 	}
 
 	if updateFile {
-		if err = safeWrite(f.vehicle.Path(), buf); err != nil {
+		if err = f.vehicle.Write(buf); err != nil {
 			return lo.Empty[V](), false, err
 		}
 	}
@@ -203,18 +197,6 @@ func (f *Fetcher[V]) updateWithLog() {
 
 	log.Infoln("[Provider] %s's content update", f.Name())
 	return
-}
-
-func safeWrite(path string, buf []byte) error {
-	dir := filepath.Dir(path)
-
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, dirMode); err != nil {
-			return err
-		}
-	}
-
-	return os.WriteFile(path, buf, fileMode)
 }
 
 func NewFetcher[V any](name string, interval time.Duration, vehicle types.Vehicle, parser Parser[V], onUpdate func(V)) *Fetcher[V] {

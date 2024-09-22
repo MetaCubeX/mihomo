@@ -13,7 +13,9 @@ import (
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/standard"
 	"github.com/metacubex/mihomo/component/mmdb"
+	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
+	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/oschwald/maxminddb-golang"
@@ -43,29 +45,51 @@ func SetGeoUpdateInterval(newGeoUpdateInterval int) {
 }
 
 func UpdateMMDB() (err error) {
-	defer mmdb.ReloadIP()
-	data, err := downloadForBytes(geodata.MmdbUrl())
+	vehicle := resource.NewHTTPVehicle(geodata.MmdbUrl(), C.Path.MMDB(), "", nil, defaultHttpTimeout)
+	var oldHash P.HashType
+	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
+		oldHash = P.MakeHash(buf)
+	}
+	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
 		return fmt.Errorf("can't download MMDB database file: %w", err)
 	}
+	if oldHash.Equal(hash) { // same hash, ignored
+		return nil
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("can't download MMDB database file: no data")
+	}
+
 	instance, err := maxminddb.FromBytes(data)
 	if err != nil {
 		return fmt.Errorf("invalid MMDB database file: %s", err)
 	}
 	_ = instance.Close()
 
+	defer mmdb.ReloadIP()
 	mmdb.IPInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
-	if err = saveFile(data, C.Path.MMDB()); err != nil {
+	if err = vehicle.Write(data); err != nil {
 		return fmt.Errorf("can't save MMDB database file: %w", err)
 	}
 	return nil
 }
 
 func UpdateASN() (err error) {
-	defer mmdb.ReloadASN()
-	data, err := downloadForBytes(geodata.ASNUrl())
+	vehicle := resource.NewHTTPVehicle(geodata.ASNUrl(), C.Path.ASN(), "", nil, defaultHttpTimeout)
+	var oldHash P.HashType
+	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
+		oldHash = P.MakeHash(buf)
+	}
+	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
 		return fmt.Errorf("can't download ASN database file: %w", err)
+	}
+	if oldHash.Equal(hash) { // same hash, ignored
+		return nil
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("can't download ASN database file: no data")
 	}
 
 	instance, err := maxminddb.FromBytes(data)
@@ -74,42 +98,69 @@ func UpdateASN() (err error) {
 	}
 	_ = instance.Close()
 
+	defer mmdb.ReloadASN()
 	mmdb.ASNInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
-	if err = saveFile(data, C.Path.ASN()); err != nil {
+	if err = vehicle.Write(data); err != nil {
 		return fmt.Errorf("can't save ASN database file: %w", err)
 	}
 	return nil
 }
 
 func UpdateGeoIp() (err error) {
-	defer geodata.ClearGeoIPCache()
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
-	data, err := downloadForBytes(geodata.GeoIpUrl())
+
+	vehicle := resource.NewHTTPVehicle(geodata.GeoIpUrl(), C.Path.GeoIP(), "", nil, defaultHttpTimeout)
+	var oldHash P.HashType
+	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
+		oldHash = P.MakeHash(buf)
+	}
+	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
 		return fmt.Errorf("can't download GeoIP database file: %w", err)
 	}
+	if oldHash.Equal(hash) { // same hash, ignored
+		return nil
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("can't download GeoIP database file: no data")
+	}
+
 	if _, err = geoLoader.LoadIPByBytes(data, "cn"); err != nil {
 		return fmt.Errorf("invalid GeoIP database file: %s", err)
 	}
-	if err = saveFile(data, C.Path.GeoIP()); err != nil {
+
+	defer geodata.ClearGeoIPCache()
+	if err = vehicle.Write(data); err != nil {
 		return fmt.Errorf("can't save GeoIP database file: %w", err)
 	}
 	return nil
 }
 
 func UpdateGeoSite() (err error) {
-	defer geodata.ClearGeoSiteCache()
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
-	data, err := downloadForBytes(geodata.GeoSiteUrl())
+
+	vehicle := resource.NewHTTPVehicle(geodata.GeoSiteUrl(), C.Path.GeoSite(), "", nil, defaultHttpTimeout)
+	var oldHash P.HashType
+	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
+		oldHash = P.MakeHash(buf)
+	}
+	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
 		return fmt.Errorf("can't download GeoSite database file: %w", err)
+	}
+	if oldHash.Equal(hash) { // same hash, ignored
+		return nil
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("can't download GeoSite database file: no data")
 	}
 
 	if _, err = geoLoader.LoadSiteByBytes(data, "cn"); err != nil {
 		return fmt.Errorf("invalid GeoSite database file: %s", err)
 	}
 
-	if err = saveFile(data, C.Path.GeoSite()); err != nil {
+	defer geodata.ClearGeoSiteCache()
+	if err = vehicle.Write(data); err != nil {
 		return fmt.Errorf("can't save GeoSite database file: %w", err)
 	}
 	return nil

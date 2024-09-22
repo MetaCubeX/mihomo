@@ -17,12 +17,12 @@ import (
 var (
 	ExternalUIURL  string
 	ExternalUIPath string
-	AutoUpdateUI   bool
+	AutoDownloadUI bool
 )
 
 var xdMutex sync.Mutex
 
-func UpdateUI() error {
+func DownloadUI() error {
 	xdMutex.Lock()
 	defer xdMutex.Unlock()
 

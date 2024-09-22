@@ -53,7 +53,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil, resource.DefaultHttpTimeout)
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}

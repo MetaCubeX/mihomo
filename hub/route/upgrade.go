@@ -47,7 +47,7 @@ func upgradeCore(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateUI(w http.ResponseWriter, r *http.Request) {
-	err := updater.UpdateUI()
+	err := updater.DownloadUI()
 	if err != nil {
 		log.Warnln("%s", err)
 		render.Status(r, http.StatusInternalServerError)

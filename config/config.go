@@ -701,7 +701,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 
 	// checkout externalUI exist
 	if cfg.ExternalUI != "" {
-		updater.AutoUpdateUI = true
+		updater.AutoDownloadUI = true
 		updater.ExternalUIPath = C.Path.Resolve(cfg.ExternalUI)
 	} else {
 		// default externalUI path
@@ -710,7 +710,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 
 	// checkout UIpath/name exist
 	if cfg.ExternalUIName != "" {
-		updater.AutoUpdateUI = true
+		updater.AutoDownloadUI = true
 		updater.ExternalUIPath = path.Join(updater.ExternalUIPath, cfg.ExternalUIName)
 	}
 

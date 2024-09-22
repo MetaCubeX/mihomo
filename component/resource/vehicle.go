@@ -6,12 +6,32 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	types "github.com/metacubex/mihomo/constant/provider"
 )
+
+const (
+	DefaultHttpTimeout = time.Second * 20
+
+	fileMode os.FileMode = 0o666
+	dirMode  os.FileMode = 0o755
+)
+
+func safeWrite(path string, buf []byte) error {
+	dir := filepath.Dir(path)
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
+			return err
+		}
+	}
+
+	return os.WriteFile(path, buf, fileMode)
+}
 
 type FileVehicle struct {
 	path string
@@ -42,15 +62,20 @@ func (f *FileVehicle) Proxy() string {
 	return ""
 }
 
+func (f *FileVehicle) Write(buf []byte) error {
+	return safeWrite(f.path, buf)
+}
+
 func NewFileVehicle(path string) *FileVehicle {
 	return &FileVehicle{path: path}
 }
 
 type HTTPVehicle struct {
-	url    string
-	path   string
-	proxy  string
-	header http.Header
+	url     string
+	path    string
+	proxy   string
+	header  http.Header
+	timeout time.Duration
 }
 
 func (h *HTTPVehicle) Url() string {
@@ -69,8 +94,12 @@ func (h *HTTPVehicle) Proxy() string {
 	return h.proxy
 }
 
+func (h *HTTPVehicle) Write(buf []byte) error {
+	return safeWrite(h.path, buf)
+}
+
 func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*20)
+	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 	header := h.header
 	setIfNoneMatch := false
@@ -107,11 +136,12 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []b
 	return
 }
 
-func NewHTTPVehicle(url string, path string, proxy string, header http.Header) *HTTPVehicle {
+func NewHTTPVehicle(url string, path string, proxy string, header http.Header, timeout time.Duration) *HTTPVehicle {
 	return &HTTPVehicle{
-		url:    url,
-		path:   path,
-		proxy:  proxy,
-		header: header,
+		url:     url,
+		path:    path,
+		proxy:   proxy,
+		header:  header,
+		timeout: timeout,
 	}
 }

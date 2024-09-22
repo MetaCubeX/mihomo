@@ -111,7 +111,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
