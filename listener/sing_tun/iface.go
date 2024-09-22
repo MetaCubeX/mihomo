@@ -13,6 +13,11 @@ type defaultInterfaceFinder struct{}
 
 var DefaultInterfaceFinder control.InterfaceFinder = (*defaultInterfaceFinder)(nil)
 
+func (f *defaultInterfaceFinder) Update() error {
+	iface.FlushCache()
+	return nil
+}
+
 func (f *defaultInterfaceFinder) Interfaces() []control.Interface {
 	ifaces, err := iface.Interfaces()
 	if err != nil {
