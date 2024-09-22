@@ -66,22 +66,12 @@ func (rp *ruleSetProvider) Type() P.ProviderType {
 }
 
 func (rp *ruleSetProvider) Initial() error {
-	elm, err := rp.Fetcher.Initial()
-	if err != nil {
-		return err
-	}
-
-	rp.OnUpdate(elm)
-	return nil
+	_, err := rp.Fetcher.Initial()
+	return err
 }
 
 func (rp *ruleSetProvider) Update() error {
-	elm, same, err := rp.Fetcher.Update()
-	if err == nil && !same {
-		rp.OnUpdate(elm)
-		return nil
-	}
-
+	_, _, err := rp.Fetcher.Update()
 	return err
 }
 

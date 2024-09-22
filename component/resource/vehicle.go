@@ -9,6 +9,7 @@ import (
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
 	types "github.com/metacubex/mihomo/constant/provider"
 )
 
@@ -28,8 +29,13 @@ func (f *FileVehicle) Url() string {
 	return "file://" + f.path
 }
 
-func (f *FileVehicle) Read(ctx context.Context) ([]byte, error) {
-	return os.ReadFile(f.path)
+func (f *FileVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
+	buf, err = os.ReadFile(f.path)
+	if err != nil {
+		return
+	}
+	hash = types.MakeHash(buf)
+	return
 }
 
 func (f *FileVehicle) Proxy() string {
@@ -63,24 +69,49 @@ func (h *HTTPVehicle) Proxy() string {
 	return h.proxy
 }
 
-func (h *HTTPVehicle) Read(ctx context.Context) ([]byte, error) {
+func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*20)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequestWithProxy(ctx, h.url, http.MethodGet, h.header, nil, h.proxy)
+	header := h.header
+	setIfNoneMatch := false
+	if oldHash.IsValid() {
+		hashBytes, etag := cachefile.Cache().GetETagWithHash(h.url)
+		if oldHash.EqualBytes(hashBytes) && etag != "" {
+			if header == nil {
+				header = http.Header{}
+			} else {
+				header = header.Clone()
+			}
+			header.Set("If-None-Match", etag)
+			setIfNoneMatch = true
+		}
+	}
+	resp, err := mihomoHttp.HttpRequestWithProxy(ctx, h.url, http.MethodGet, header, nil, h.proxy)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, errors.New(resp.Status)
+		if setIfNoneMatch && resp.StatusCode == http.StatusNotModified {
+			return nil, oldHash, nil
+		}
+		err = errors.New(resp.Status)
+		return
 	}
-	buf, err := io.ReadAll(resp.Body)
+	buf, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return buf, nil
+	hash = types.MakeHash(buf)
+	cachefile.Cache().SetETagWithHash(h.url, hash.Bytes(), resp.Header.Get("ETag"))
+	return
 }
 
 func NewHTTPVehicle(url string, path string, proxy string, header http.Header) *HTTPVehicle {
-	return &HTTPVehicle{url, path, proxy, header}
+	return &HTTPVehicle{
+		url:    url,
+		path:   path,
+		proxy:  proxy,
+		header: header,
+	}
 }

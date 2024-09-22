@@ -71,19 +71,15 @@ func (pp *proxySetProvider) HealthCheck() {
 }
 
 func (pp *proxySetProvider) Update() error {
-	elm, same, err := pp.Fetcher.Update()
-	if err == nil && !same {
-		pp.OnUpdate(elm)
-	}
+	_, _, err := pp.Fetcher.Update()
 	return err
 }
 
 func (pp *proxySetProvider) Initial() error {
-	elm, err := pp.Fetcher.Initial()
+	_, err := pp.Fetcher.Initial()
 	if err != nil {
 		return err
 	}
-	pp.OnUpdate(elm)
 	pp.getSubscriptionInfo()
 	pp.closeAllConnections()
 	return nil
