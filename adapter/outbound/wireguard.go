@@ -24,18 +24,24 @@ import (
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 
+	amnezia "github.com/metacubex/amneziawg-go/device"
 	wireguard "github.com/metacubex/sing-wireguard"
+	"github.com/metacubex/wireguard-go/device"
 
 	"github.com/sagernet/sing/common/debug"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
-	"github.com/sagernet/wireguard-go/device"
 )
+
+type wireguardGoDevice interface {
+	Close()
+	IpcSet(uapiConf string) error
+}
 
 type WireGuard struct {
 	*Base
 	bind      *wireguard.ClientBind
-	device    *device.Device
+	device    wireguardGoDevice
 	tunDevice wireguard.Device
 	dialer    proxydialer.SingDialer
 	resolver  *dns.Resolver
@@ -67,6 +73,8 @@ type WireGuardOption struct {
 	UDP                 bool   `proxy:"udp,omitempty"`
 	PersistentKeepalive int    `proxy:"persistent-keepalive,omitempty"`
 
+	AmneziaWGOption *AmneziaWGOption `proxy:"amnezia-wg-option,omitempty"`
+
 	Peers []WireGuardPeerOption `proxy:"peers,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
@@ -82,6 +90,18 @@ type WireGuardPeerOption struct {
 	PreSharedKey string   `proxy:"pre-shared-key,omitempty"`
 	Reserved     []uint8  `proxy:"reserved,omitempty"`
 	AllowedIPs   []string `proxy:"allowed-ips,omitempty"`
+}
+
+type AmneziaWGOption struct {
+	JC   int    `proxy:"jc"`
+	JMin int    `proxy:"jmin"`
+	JMax int    `proxy:"jmax"`
+	S1   int    `proxy:"s1"`
+	S2   int    `proxy:"s2"`
+	H1   uint32 `proxy:"h1"`
+	H2   uint32 `proxy:"h2"`
+	H3   uint32 `proxy:"h3"`
+	H4   uint32 `proxy:"h4"`
 }
 
 type wgSingErrorHandler struct {
@@ -243,14 +263,19 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	if err != nil {
 		return nil, E.Cause(err, "create WireGuard device")
 	}
-	outbound.device = device.NewDevice(context.Background(), outbound.tunDevice, outbound.bind, &device.Logger{
+	logger := &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
 			log.SingLogger.Debug(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
 		},
 		Errorf: func(format string, args ...interface{}) {
 			log.SingLogger.Error(fmt.Sprintf("[WG](%s) %s", option.Name, fmt.Sprintf(format, args...)))
 		},
-	}, option.Workers)
+	}
+	if option.AmneziaWGOption != nil {
+		outbound.device = amnezia.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
+	} else {
+		outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
+	}
 
 	var has6 bool
 	for _, address := range outbound.localPrefixes {
@@ -367,6 +392,17 @@ func (w *WireGuard) genIpcConf(ctx context.Context, updateOnly bool) (string, er
 	ipcConf := ""
 	if !updateOnly {
 		ipcConf += "private_key=" + w.option.PrivateKey + "\n"
+		if w.option.AmneziaWGOption != nil {
+			ipcConf += "jc=" + strconv.Itoa(w.option.AmneziaWGOption.JC) + "\n"
+			ipcConf += "jmin=" + strconv.Itoa(w.option.AmneziaWGOption.JMin) + "\n"
+			ipcConf += "jmax=" + strconv.Itoa(w.option.AmneziaWGOption.JMax) + "\n"
+			ipcConf += "s1=" + strconv.Itoa(w.option.AmneziaWGOption.S1) + "\n"
+			ipcConf += "s2=" + strconv.Itoa(w.option.AmneziaWGOption.S2) + "\n"
+			ipcConf += "h1=" + strconv.FormatUint(uint64(w.option.AmneziaWGOption.H1), 10) + "\n"
+			ipcConf += "h2=" + strconv.FormatUint(uint64(w.option.AmneziaWGOption.H2), 10) + "\n"
+			ipcConf += "h3=" + strconv.FormatUint(uint64(w.option.AmneziaWGOption.H3), 10) + "\n"
+			ipcConf += "h4=" + strconv.FormatUint(uint64(w.option.AmneziaWGOption.H4), 10) + "\n"
+		}
 	}
 	if len(w.option.Peers) > 0 {
 		for i, peer := range w.option.Peers {

@@ -760,6 +760,17 @@ proxies: # socks5
     #     # pre-shared-key: 31aIhAPwktDGpH4JDhA8GNvjFXEf/a6+UaQRyOAiyfM=
     #     allowed-ips: ['0.0.0.0/0']
     #     reserved: [209,98,59]
+    # 如果存在则开启AmneziaWG功能
+    # amnezia-wg-option:
+    #   jc: 5
+    #   jmin: 500
+    #   jmax: 501
+    #   s1: 30
+    #   s2: 40
+    #   h1: 123456
+    #   h2: 67543
+    #   h4: 32345
+    #   h3: 123123
 
   # tuic
   - name: tuic
