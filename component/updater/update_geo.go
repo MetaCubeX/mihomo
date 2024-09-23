@@ -10,12 +10,12 @@ import (
 
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/batch"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/standard"
 	"github.com/metacubex/mihomo/component/mmdb"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/oschwald/maxminddb-golang"
@@ -46,9 +46,9 @@ func SetGeoUpdateInterval(newGeoUpdateInterval int) {
 
 func UpdateMMDB() (err error) {
 	vehicle := resource.NewHTTPVehicle(geodata.MmdbUrl(), C.Path.MMDB(), "", nil, defaultHttpTimeout)
-	var oldHash P.HashType
+	var oldHash utils.HashType
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
-		oldHash = P.MakeHash(buf)
+		oldHash = utils.MakeHash(buf)
 	}
 	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
@@ -77,9 +77,9 @@ func UpdateMMDB() (err error) {
 
 func UpdateASN() (err error) {
 	vehicle := resource.NewHTTPVehicle(geodata.ASNUrl(), C.Path.ASN(), "", nil, defaultHttpTimeout)
-	var oldHash P.HashType
+	var oldHash utils.HashType
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
-		oldHash = P.MakeHash(buf)
+		oldHash = utils.MakeHash(buf)
 	}
 	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
@@ -110,9 +110,9 @@ func UpdateGeoIp() (err error) {
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
 
 	vehicle := resource.NewHTTPVehicle(geodata.GeoIpUrl(), C.Path.GeoIP(), "", nil, defaultHttpTimeout)
-	var oldHash P.HashType
+	var oldHash utils.HashType
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
-		oldHash = P.MakeHash(buf)
+		oldHash = utils.MakeHash(buf)
 	}
 	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {
@@ -140,9 +140,9 @@ func UpdateGeoSite() (err error) {
 	geoLoader, err := geodata.GetGeoDataLoader("standard")
 
 	vehicle := resource.NewHTTPVehicle(geodata.GeoSiteUrl(), C.Path.GeoSite(), "", nil, defaultHttpTimeout)
-	var oldHash P.HashType
+	var oldHash utils.HashType
 	if buf, err := os.ReadFile(vehicle.Path()); err == nil {
-		oldHash = P.MakeHash(buf)
+		oldHash = utils.MakeHash(buf)
 	}
 	data, hash, err := vehicle.Read(context.Background(), oldHash)
 	if err != nil {

@@ -201,9 +201,7 @@ func New(options Options) (*Pool, error) {
 		ipnet:   options.IPNet,
 	}
 	if options.Persistence {
-		pool.store = &cachefileStore{
-			cache: cachefile.Cache(),
-		}
+		pool.store = newCachefileStore(cachefile.Cache())
 	} else {
 		pool.store = newMemoryStore(options.Size)
 	}

@@ -32,7 +32,7 @@ func (v VehicleType) String() string {
 }
 
 type Vehicle interface {
-	Read(ctx context.Context, oldHash HashType) (buf []byte, hash HashType, err error)
+	Read(ctx context.Context, oldHash utils.HashType) (buf []byte, hash utils.HashType, err error)
 	Write(buf []byte) error
 	Path() string
 	Url() string

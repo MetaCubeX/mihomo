@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/profile"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -71,93 +72,19 @@ func (c *CacheFile) SelectedMap() map[string]string {
 	return mapping
 }
 
-func (c *CacheFile) PutFakeip(key, value []byte) error {
-	if c.DB == nil {
-		return nil
-	}
-
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
-		if err != nil {
-			return err
-		}
-		return bucket.Put(key, value)
-	})
-	if err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
-	}
-
-	return err
-}
-
-func (c *CacheFile) DelFakeipPair(ip, host []byte) error {
-	if c.DB == nil {
-		return nil
-	}
-
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
-		if err != nil {
-			return err
-		}
-		err = bucket.Delete(ip)
-		if len(host) > 0 {
-			if err := bucket.Delete(host); err != nil {
-				return err
-			}
-		}
-		return err
-	})
-	if err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
-	}
-
-	return err
-}
-
-func (c *CacheFile) GetFakeip(key []byte) []byte {
-	if c.DB == nil {
-		return nil
-	}
-
-	tx, err := c.DB.Begin(false)
-	if err != nil {
-		return nil
-	}
-	defer tx.Rollback()
-
-	bucket := tx.Bucket(bucketFakeip)
-	if bucket == nil {
-		return nil
-	}
-
-	return bucket.Get(key)
-}
-
-func (c *CacheFile) FlushFakeIP() error {
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket := t.Bucket(bucketFakeip)
-		if bucket == nil {
-			return nil
-		}
-		return t.DeleteBucket(bucketFakeip)
-	})
-	return err
-}
-
-func (c *CacheFile) SetETagWithHash(url string, hash []byte, etag string) {
+func (c *CacheFile) SetETagWithHash(url string, hash utils.HashType, etag string) {
 	if c.DB == nil {
 		return
 	}
 
-	lenHash := len(hash)
+	lenHash := hash.Len()
 	if lenHash > math.MaxUint8 {
 		return // maybe panic is better
 	}
 
 	data := make([]byte, 1, 1+lenHash+len(etag))
 	data[0] = uint8(lenHash)
-	data = append(data, hash...)
+	data = append(data, hash.Bytes()...)
 	data = append(data, etag...)
 
 	err := c.DB.Batch(func(t *bbolt.Tx) error {
@@ -173,28 +100,27 @@ func (c *CacheFile) SetETagWithHash(url string, hash []byte, etag string) {
 		return
 	}
 }
-func (c *CacheFile) GetETagWithHash(key string) (hash []byte, etag string) {
+func (c *CacheFile) GetETagWithHash(key string) (hash utils.HashType, etag string) {
 	if c.DB == nil {
 		return
 	}
-	var value []byte
 	c.DB.View(func(t *bbolt.Tx) error {
 		if bucket := t.Bucket(bucketETag); bucket != nil {
 			if v := bucket.Get([]byte(key)); v != nil {
-				value = v
+				if len(v) == 0 {
+					return nil
+				}
+				lenHash := int(v[0])
+				if len(v) < 1+lenHash {
+					return nil
+				}
+				hash = utils.MakeHashFromBytes(v[1 : 1+lenHash])
+				etag = string(v[1+lenHash:])
 			}
 		}
 		return nil
 	})
-	if len(value) == 0 {
-		return
-	}
-	lenHash := int(value[0])
-	if len(value) < 1+lenHash {
-		return
-	}
-	hash = value[1 : 1+lenHash]
-	etag = string(value[1+lenHash:])
+
 	return
 }
 

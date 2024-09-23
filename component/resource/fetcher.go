@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/metacubex/mihomo/common/utils"
 	types "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
@@ -21,7 +22,7 @@ type Fetcher[V any] struct {
 	name         string
 	vehicle      types.Vehicle
 	updatedAt    time.Time
-	hash         types.HashType
+	hash         utils.HashType
 	parser       Parser[V]
 	interval     time.Duration
 	onUpdate     func(V)
@@ -55,7 +56,7 @@ func (f *Fetcher[V]) Initial() (V, error) {
 		// local file exists, use it first
 		buf, err = os.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
-		contents, _, err = f.loadBuf(buf, types.MakeHash(buf), false)
+		contents, _, err = f.loadBuf(buf, utils.MakeHash(buf), false)
 		f.updatedAt = modTime // reset updatedAt to file's modTime
 
 		if err == nil {
@@ -89,10 +90,10 @@ func (f *Fetcher[V]) Update() (V, bool, error) {
 }
 
 func (f *Fetcher[V]) SideUpdate(buf []byte) (V, bool, error) {
-	return f.loadBuf(buf, types.MakeHash(buf), true)
+	return f.loadBuf(buf, utils.MakeHash(buf), true)
 }
 
-func (f *Fetcher[V]) loadBuf(buf []byte, hash types.HashType, updateFile bool) (V, bool, error) {
+func (f *Fetcher[V]) loadBuf(buf []byte, hash utils.HashType, updateFile bool) (V, bool, error) {
 	now := time.Now()
 	if f.hash.Equal(hash) {
 		if updateFile {

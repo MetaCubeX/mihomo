@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/metacubex/mihomo/common/utils"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	types "github.com/metacubex/mihomo/constant/provider"
@@ -61,12 +62,12 @@ func (f *FileVehicle) Url() string {
 	return "file://" + f.path
 }
 
-func (f *FileVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
+func (f *FileVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []byte, hash utils.HashType, err error) {
 	buf, err = os.ReadFile(f.path)
 	if err != nil {
 		return
 	}
-	hash = types.MakeHash(buf)
+	hash = utils.MakeHash(buf)
 	return
 }
 
@@ -110,14 +111,14 @@ func (h *HTTPVehicle) Write(buf []byte) error {
 	return safeWrite(h.path, buf)
 }
 
-func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
+func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []byte, hash utils.HashType, err error) {
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 	header := h.header
 	setIfNoneMatch := false
 	if etag && oldHash.IsValid() {
 		hashBytes, etag := cachefile.Cache().GetETagWithHash(h.url)
-		if oldHash.EqualBytes(hashBytes) && etag != "" {
+		if oldHash.Equal(hashBytes) && etag != "" {
 			if header == nil {
 				header = http.Header{}
 			} else {
@@ -143,9 +144,9 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []b
 	if err != nil {
 		return
 	}
-	hash = types.MakeHash(buf)
+	hash = utils.MakeHash(buf)
 	if etag {
-		cachefile.Cache().SetETagWithHash(h.url, hash.Bytes(), resp.Header.Get("ETag"))
+		cachefile.Cache().SetETagWithHash(h.url, hash, resp.Header.Get("ETag"))
 	}
 	return
 }

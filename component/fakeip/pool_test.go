@@ -43,9 +43,7 @@ func createCachefileStore(options Options) (*Pool, string, error) {
 		return nil, "", err
 	}
 
-	pool.store = &cachefileStore{
-		cache: &cachefile.CacheFile{DB: db},
-	}
+	pool.store = newCachefileStore(&cachefile.CacheFile{DB: db})
 	return pool, f.Name(), nil
 }
 
