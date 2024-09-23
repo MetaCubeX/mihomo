@@ -21,35 +21,35 @@ type TunOption struct {
 	MTU                    uint32   `inbound:"mtu,omitempty"`
 	GSO                    bool     `inbound:"gso,omitempty"`
 	GSOMaxSize             uint32   `inbound:"gso-max-size,omitempty"`
-	Inet4Address           []string `inbound:"inet4_address,omitempty"`
-	Inet6Address           []string `inbound:"inet6_address,omitempty"`
+	Inet4Address           []string `inbound:"inet4-address,omitempty"`
+	Inet6Address           []string `inbound:"inet6-address,omitempty"`
 	IPRoute2TableIndex     int      `inbound:"iproute2-table-index"`
 	IPRoute2RuleIndex      int      `inbound:"iproute2-rule-index"`
 	AutoRedirect           bool     `inbound:"auto-redirect"`
 	AutoRedirectInputMark  uint32   `inbound:"auto-redirect-input-mark"`
 	AutoRedirectOutputMark uint32   `inbound:"auto-redirect-output-mark"`
-	StrictRoute            bool     `inbound:"strict_route,omitempty"`
+	StrictRoute            bool     `inbound:"strict-route,omitempty"`
 	RouteAddress           []string `inbound:"route-address"`
 	RouteAddressSet        []string `inbound:"route-address-set"`
 	RouteExcludeAddress    []string `inbound:"route-exclude-address"`
 	RouteExcludeAddressSet []string `inbound:"route-exclude-address-set"`
 	IncludeInterface       []string `inbound:"include-interface,omitempty"`
 	ExcludeInterface       []string `inbound:"exclude-interface"`
-	IncludeUID             []uint32 `inbound:"include_uid,omitempty"`
-	IncludeUIDRange        []string `inbound:"include_uid_range,omitempty"`
-	ExcludeUID             []uint32 `inbound:"exclude_uid,omitempty"`
-	ExcludeUIDRange        []string `inbound:"exclude_uid_range,omitempty"`
-	IncludeAndroidUser     []int    `inbound:"include_android_user,omitempty"`
-	IncludePackage         []string `inbound:"include_package,omitempty"`
-	ExcludePackage         []string `inbound:"exclude_package,omitempty"`
-	EndpointIndependentNat bool     `inbound:"endpoint_independent_nat,omitempty"`
-	UDPTimeout             int64    `inbound:"udp_timeout,omitempty"`
+	IncludeUID             []uint32 `inbound:"include-uid,omitempty"`
+	IncludeUIDRange        []string `inbound:"include-uid-range,omitempty"`
+	ExcludeUID             []uint32 `inbound:"exclude-uid,omitempty"`
+	ExcludeUIDRange        []string `inbound:"exclude-uid-range,omitempty"`
+	IncludeAndroidUser     []int    `inbound:"include-android-user,omitempty"`
+	IncludePackage         []string `inbound:"include-package,omitempty"`
+	ExcludePackage         []string `inbound:"exclude-package,omitempty"`
+	EndpointIndependentNat bool     `inbound:"endpoint-independent-nat,omitempty"`
+	UDPTimeout             int64    `inbound:"udp-timeout,omitempty"`
 	FileDescriptor         int      `inbound:"file-descriptor,omitempty"`
 
-	Inet4RouteAddress        []string `inbound:"inet4_route_address,omitempty"`
-	Inet6RouteAddress        []string `inbound:"inet6_route_address,omitempty"`
-	Inet4RouteExcludeAddress []string `inbound:"inet4_route_exclude_address,omitempty"`
-	Inet6RouteExcludeAddress []string `inbound:"inet6_route_exclude_address,omitempty"`
+	Inet4RouteAddress        []string `inbound:"inet4-route-address,omitempty"`
+	Inet6RouteAddress        []string `inbound:"inet6-route-address,omitempty"`
+	Inet4RouteExcludeAddress []string `inbound:"inet4-route-exclude-address,omitempty"`
+	Inet6RouteExcludeAddress []string `inbound:"inet6-route-exclude-address,omitempty"`
 }
 
 func (o TunOption) Equal(config C.InboundConfig) bool {

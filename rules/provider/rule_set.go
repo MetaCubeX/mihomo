@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"net/netip"
+
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/rules/common"
@@ -10,6 +12,7 @@ type RuleSet struct {
 	*common.Base
 	ruleProviderName  string
 	adapter           string
+	isSrc             bool
 	noResolveIP       bool
 	shouldFindProcess bool
 }
@@ -30,9 +33,25 @@ func (rs *RuleSet) RuleType() C.RuleType {
 
 func (rs *RuleSet) Match(metadata *C.Metadata) (bool, string) {
 	if provider, ok := rs.getProvider(); ok {
+		if rs.isSrc {
+			metadata.SwapSrcDst()
+			defer metadata.SwapSrcDst()
+		}
 		return provider.Match(metadata), rs.adapter
 	}
 	return false, ""
+}
+
+// MatchDomain implements C.DomainMatcher
+func (rs *RuleSet) MatchDomain(domain string) bool {
+	ok, _ := rs.Match(&C.Metadata{Host: domain})
+	return ok
+}
+
+// MatchIp implements C.IpMatcher
+func (rs *RuleSet) MatchIp(ip netip.Addr) bool {
+	ok, _ := rs.Match(&C.Metadata{DstIP: ip})
+	return ok
 }
 
 func (rs *RuleSet) Adapter() string {
@@ -40,10 +59,7 @@ func (rs *RuleSet) Adapter() string {
 }
 
 func (rs *RuleSet) Payload() string {
-	if provider, ok := rs.getProvider(); ok {
-		return provider.Name()
-	}
-	return ""
+	return rs.ruleProviderName
 }
 
 func (rs *RuleSet) ShouldResolveIP() bool {
@@ -65,11 +81,12 @@ func (rs *RuleSet) getProvider() (P.RuleProvider, bool) {
 	return pp, ok
 }
 
-func NewRuleSet(ruleProviderName string, adapter string, noResolveIP bool) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, isSrc bool, noResolveIP bool) (*RuleSet, error) {
 	rs := &RuleSet{
 		Base:             &common.Base{},
 		ruleProviderName: ruleProviderName,
 		adapter:          adapter,
+		isSrc:            isSrc,
 		noResolveIP:      noResolveIP,
 	}
 	return rs, nil

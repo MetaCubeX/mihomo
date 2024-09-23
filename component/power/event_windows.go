@@ -55,6 +55,11 @@ func NewEventListener(cb func(Type)) (func(), error) {
 	}
 	handle := uintptr(0)
 
+	// DWORD PowerRegisterSuspendResumeNotification(
+	//  [in]  DWORD         Flags,
+	//  [in]  HANDLE        Recipient,
+	//  [out] PHPOWERNOTIFY RegistrationHandle
+	//);
 	_, _, err := powerRegisterSuspendResumeNotification.Call(
 		_DEVICE_NOTIFY_CALLBACK,
 		uintptr(unsafe.Pointer(&params)),
@@ -65,8 +70,11 @@ func NewEventListener(cb func(Type)) (func(), error) {
 	}
 
 	return func() {
+		// DWORD PowerUnregisterSuspendResumeNotification(
+		//  [in, out] HPOWERNOTIFY RegistrationHandle
+		//);
 		_, _, _ = powerUnregisterSuspendResumeNotification.Call(
-			uintptr(unsafe.Pointer(&handle)),
+			handle,
 		)
 		runtime.KeepAlive(params)
 		runtime.KeepAlive(handle)

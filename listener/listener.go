@@ -2,16 +2,12 @@ package listener
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/component/ebpf"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/autoredir"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/http"
 	"github.com/metacubex/mihomo/listener/mixed"
@@ -49,24 +45,19 @@ var (
 	shadowSocksListener C.MultiAddrListener
 	vmessListener       *sing_vmess.Listener
 	tuicListener        *tuic.Listener
-	autoRedirListener   *autoredir.Listener
-	autoRedirProgram    *ebpf.TcEBpfProgram
-	tcProgram           *ebpf.TcEBpfProgram
 
 	// lock for recreate function
-	socksMux     sync.Mutex
-	httpMux      sync.Mutex
-	redirMux     sync.Mutex
-	tproxyMux    sync.Mutex
-	mixedMux     sync.Mutex
-	tunnelMux    sync.Mutex
-	inboundMux   sync.Mutex
-	tunMux       sync.Mutex
-	ssMux        sync.Mutex
-	vmessMux     sync.Mutex
-	tuicMux      sync.Mutex
-	autoRedirMux sync.Mutex
-	tcMux        sync.Mutex
+	socksMux   sync.Mutex
+	httpMux    sync.Mutex
+	redirMux   sync.Mutex
+	tproxyMux  sync.Mutex
+	mixedMux   sync.Mutex
+	tunnelMux  sync.Mutex
+	inboundMux sync.Mutex
+	tunMux     sync.Mutex
+	ssMux      sync.Mutex
+	vmessMux   sync.Mutex
+	tuicMux    sync.Mutex
 
 	LastTunConf  LC.Tun
 	LastTuicConf LC.TuicServer
@@ -504,6 +495,8 @@ func ReCreateMixed(port int, tunnel C.Tunnel) {
 }
 
 func ReCreateTun(tunConf LC.Tun, tunnel C.Tunnel) {
+	tunConf.Sort()
+
 	tunMux.Lock()
 	defer func() {
 		LastTunConf = tunConf
@@ -518,7 +511,7 @@ func ReCreateTun(tunConf LC.Tun, tunnel C.Tunnel) {
 		}
 	}()
 
-	if !hasTunConfigChange(&tunConf) {
+	if tunConf.Equal(LastTunConf) {
 		if tunLister != nil {
 			tunLister.FlushDefaultInterface()
 		}
@@ -538,95 +531,6 @@ func ReCreateTun(tunConf LC.Tun, tunnel C.Tunnel) {
 	tunLister = lister
 
 	log.Infoln("[TUN] Tun adapter listening at: %s", tunLister.Address())
-}
-
-func ReCreateRedirToTun(ifaceNames []string) {
-	tcMux.Lock()
-	defer tcMux.Unlock()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if tcProgram != nil {
-		tcProgram.Close()
-		tcProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	tunConf := GetTunConf()
-
-	if !tunConf.Enable {
-		return
-	}
-
-	program, err := ebpf.NewTcEBpfProgram(nicArr, tunConf.Device)
-	if err != nil {
-		log.Errorln("Attached tc ebpf program error: %v", err)
-		return
-	}
-	tcProgram = program
-
-	log.Infoln("Attached tc ebpf program to interfaces %v", tcProgram.RawNICs())
-}
-
-func ReCreateAutoRedir(ifaceNames []string, tunnel C.Tunnel) {
-	autoRedirMux.Lock()
-	defer autoRedirMux.Unlock()
-
-	var err error
-	defer func() {
-		if err != nil {
-			if autoRedirListener != nil {
-				_ = autoRedirListener.Close()
-				autoRedirListener = nil
-			}
-			if autoRedirProgram != nil {
-				autoRedirProgram.Close()
-				autoRedirProgram = nil
-			}
-			log.Errorln("Start auto redirect server error: %s", err.Error())
-		}
-	}()
-
-	nicArr := ifaceNames
-	slices.Sort(nicArr)
-	nicArr = slices.Compact(nicArr)
-
-	if autoRedirListener != nil && autoRedirProgram != nil {
-		_ = autoRedirListener.Close()
-		autoRedirProgram.Close()
-		autoRedirListener = nil
-		autoRedirProgram = nil
-	}
-
-	if len(nicArr) == 0 {
-		return
-	}
-
-	defaultRouteInterfaceName, err := ebpf.GetAutoDetectInterface()
-	if err != nil {
-		return
-	}
-
-	addr := genAddr("*", C.TcpAutoRedirPort, true)
-
-	autoRedirListener, err = autoredir.New(addr, tunnel)
-	if err != nil {
-		return
-	}
-
-	autoRedirProgram, err = ebpf.NewRedirEBpfProgram(nicArr, autoRedirListener.TCPAddr().Port(), defaultRouteInterfaceName)
-	if err != nil {
-		return
-	}
-
-	autoRedirListener.SetLookupFunc(autoRedirProgram.Lookup)
-
-	log.Infoln("Auto redirect proxy listening at: %s, attached tc ebpf program to interfaces %v", autoRedirListener.Address(), autoRedirProgram.RawNICs())
 }
 
 func PatchTunnel(tunnels []LC.Tunnel, tunnel C.Tunnel) {
@@ -809,137 +713,6 @@ func genAddr(host string, port int, allowLan bool) string {
 	}
 
 	return fmt.Sprintf("127.0.0.1:%d", port)
-}
-
-func hasTunConfigChange(tunConf *LC.Tun) bool {
-	if LastTunConf.Enable != tunConf.Enable ||
-		LastTunConf.Device != tunConf.Device ||
-		LastTunConf.Stack != tunConf.Stack ||
-		LastTunConf.AutoRoute != tunConf.AutoRoute ||
-		LastTunConf.AutoDetectInterface != tunConf.AutoDetectInterface ||
-		LastTunConf.MTU != tunConf.MTU ||
-		LastTunConf.GSO != tunConf.GSO ||
-		LastTunConf.GSOMaxSize != tunConf.GSOMaxSize ||
-		LastTunConf.IPRoute2TableIndex != tunConf.IPRoute2TableIndex ||
-		LastTunConf.IPRoute2RuleIndex != tunConf.IPRoute2RuleIndex ||
-		LastTunConf.AutoRedirect != tunConf.AutoRedirect ||
-		LastTunConf.AutoRedirectInputMark != tunConf.AutoRedirectInputMark ||
-		LastTunConf.AutoRedirectOutputMark != tunConf.AutoRedirectOutputMark ||
-		LastTunConf.StrictRoute != tunConf.StrictRoute ||
-		LastTunConf.EndpointIndependentNat != tunConf.EndpointIndependentNat ||
-		LastTunConf.UDPTimeout != tunConf.UDPTimeout ||
-		LastTunConf.FileDescriptor != tunConf.FileDescriptor {
-		return true
-	}
-
-	if len(LastTunConf.DNSHijack) != len(tunConf.DNSHijack) {
-		return true
-	}
-
-	sort.Slice(tunConf.DNSHijack, func(i, j int) bool {
-		return tunConf.DNSHijack[i] < tunConf.DNSHijack[j]
-	})
-
-	sort.Slice(tunConf.RouteAddress, func(i, j int) bool {
-		return tunConf.RouteAddress[i].String() < tunConf.RouteAddress[j].String()
-	})
-
-	sort.Slice(tunConf.RouteAddressSet, func(i, j int) bool {
-		return tunConf.RouteAddressSet[i] < tunConf.RouteAddressSet[j]
-	})
-
-	sort.Slice(tunConf.RouteExcludeAddress, func(i, j int) bool {
-		return tunConf.RouteExcludeAddress[i].String() < tunConf.RouteExcludeAddress[j].String()
-	})
-
-	sort.Slice(tunConf.RouteExcludeAddressSet, func(i, j int) bool {
-		return tunConf.RouteExcludeAddressSet[i] < tunConf.RouteExcludeAddressSet[j]
-	})
-
-	sort.Slice(tunConf.Inet4Address, func(i, j int) bool {
-		return tunConf.Inet4Address[i].String() < tunConf.Inet4Address[j].String()
-	})
-
-	sort.Slice(tunConf.Inet6Address, func(i, j int) bool {
-		return tunConf.Inet6Address[i].String() < tunConf.Inet6Address[j].String()
-	})
-
-	sort.Slice(tunConf.Inet4RouteAddress, func(i, j int) bool {
-		return tunConf.Inet4RouteAddress[i].String() < tunConf.Inet4RouteAddress[j].String()
-	})
-
-	sort.Slice(tunConf.Inet6RouteAddress, func(i, j int) bool {
-		return tunConf.Inet6RouteAddress[i].String() < tunConf.Inet6RouteAddress[j].String()
-	})
-
-	sort.Slice(tunConf.Inet4RouteExcludeAddress, func(i, j int) bool {
-		return tunConf.Inet4RouteExcludeAddress[i].String() < tunConf.Inet4RouteExcludeAddress[j].String()
-	})
-
-	sort.Slice(tunConf.Inet6RouteExcludeAddress, func(i, j int) bool {
-		return tunConf.Inet6RouteExcludeAddress[i].String() < tunConf.Inet6RouteExcludeAddress[j].String()
-	})
-
-	sort.Slice(tunConf.IncludeInterface, func(i, j int) bool {
-		return tunConf.IncludeInterface[i] < tunConf.IncludeInterface[j]
-	})
-
-	sort.Slice(tunConf.ExcludeInterface, func(i, j int) bool {
-		return tunConf.ExcludeInterface[i] < tunConf.ExcludeInterface[j]
-	})
-
-	sort.Slice(tunConf.IncludeUID, func(i, j int) bool {
-		return tunConf.IncludeUID[i] < tunConf.IncludeUID[j]
-	})
-
-	sort.Slice(tunConf.IncludeUIDRange, func(i, j int) bool {
-		return tunConf.IncludeUIDRange[i] < tunConf.IncludeUIDRange[j]
-	})
-
-	sort.Slice(tunConf.ExcludeUID, func(i, j int) bool {
-		return tunConf.ExcludeUID[i] < tunConf.ExcludeUID[j]
-	})
-
-	sort.Slice(tunConf.ExcludeUIDRange, func(i, j int) bool {
-		return tunConf.ExcludeUIDRange[i] < tunConf.ExcludeUIDRange[j]
-	})
-
-	sort.Slice(tunConf.IncludeAndroidUser, func(i, j int) bool {
-		return tunConf.IncludeAndroidUser[i] < tunConf.IncludeAndroidUser[j]
-	})
-
-	sort.Slice(tunConf.IncludePackage, func(i, j int) bool {
-		return tunConf.IncludePackage[i] < tunConf.IncludePackage[j]
-	})
-
-	sort.Slice(tunConf.ExcludePackage, func(i, j int) bool {
-		return tunConf.ExcludePackage[i] < tunConf.ExcludePackage[j]
-	})
-
-	if !slices.Equal(tunConf.DNSHijack, LastTunConf.DNSHijack) ||
-		!slices.Equal(tunConf.RouteAddress, LastTunConf.RouteAddress) ||
-		!slices.Equal(tunConf.RouteAddressSet, LastTunConf.RouteAddressSet) ||
-		!slices.Equal(tunConf.RouteExcludeAddress, LastTunConf.RouteExcludeAddress) ||
-		!slices.Equal(tunConf.RouteExcludeAddressSet, LastTunConf.RouteExcludeAddressSet) ||
-		!slices.Equal(tunConf.Inet4Address, LastTunConf.Inet4Address) ||
-		!slices.Equal(tunConf.Inet6Address, LastTunConf.Inet6Address) ||
-		!slices.Equal(tunConf.Inet4RouteAddress, LastTunConf.Inet4RouteAddress) ||
-		!slices.Equal(tunConf.Inet6RouteAddress, LastTunConf.Inet6RouteAddress) ||
-		!slices.Equal(tunConf.Inet4RouteExcludeAddress, LastTunConf.Inet4RouteExcludeAddress) ||
-		!slices.Equal(tunConf.Inet6RouteExcludeAddress, LastTunConf.Inet6RouteExcludeAddress) ||
-		!slices.Equal(tunConf.IncludeInterface, LastTunConf.IncludeInterface) ||
-		!slices.Equal(tunConf.ExcludeInterface, LastTunConf.ExcludeInterface) ||
-		!slices.Equal(tunConf.IncludeUID, LastTunConf.IncludeUID) ||
-		!slices.Equal(tunConf.IncludeUIDRange, LastTunConf.IncludeUIDRange) ||
-		!slices.Equal(tunConf.ExcludeUID, LastTunConf.ExcludeUID) ||
-		!slices.Equal(tunConf.ExcludeUIDRange, LastTunConf.ExcludeUIDRange) ||
-		!slices.Equal(tunConf.IncludeAndroidUser, LastTunConf.IncludeAndroidUser) ||
-		!slices.Equal(tunConf.IncludePackage, LastTunConf.IncludePackage) ||
-		!slices.Equal(tunConf.ExcludePackage, LastTunConf.ExcludePackage) {
-		return true
-	}
-
-	return false
 }
 
 func closeTunListener() {

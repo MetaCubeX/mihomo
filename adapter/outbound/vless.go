@@ -505,16 +505,13 @@ func NewVless(option VlessOption) (*Vless, error) {
 	var addons *vless.Addons
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
-		switch option.Flow {
-		case vless.XRV:
-			log.Warnln("To use %s, ensure your server is upgrade to Xray-core v1.8.0+", vless.XRV)
-			addons = &vless.Addons{
-				Flow: option.Flow,
-			}
-		case vless.XRO, vless.XRD, vless.XRS:
-			log.Fatalln("Legacy XTLS protocol %s is deprecated and no longer supported", option.Flow)
-		default:
+		if option.Flow != vless.XRV {
 			return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
+		}
+
+		log.Warnln("To use %s, ensure your server is upgrade to Xray-core v1.8.0+", vless.XRV)
+		addons = &vless.Addons{
+			Flow: option.Flow,
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"golang.org/x/exp/slices"
 	"golang.org/x/sys/windows"
 )
 
@@ -38,6 +39,9 @@ func dnsReadConfig() (servers []string, err error) {
 				//continue
 			default:
 				// Unexpected type.
+				continue
+			}
+			if slices.Contains(servers, ip.String()) {
 				continue
 			}
 			servers = append(servers, ip.String())

@@ -2,23 +2,19 @@ package process
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"net/netip"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"unicode"
 	"unsafe"
 
-	"github.com/metacubex/mihomo/log"
-
 	"github.com/mdlayher/netlink"
-	tun "github.com/metacubex/sing-tun"
 	"golang.org/x/sys/unix"
 )
 
@@ -63,25 +59,11 @@ type inetDiagResponse struct {
 	INode   uint32
 }
 
-type MyCallback struct{}
-
-var (
-	packageManager tun.PackageManager
-	once           sync.Once
-)
-
-func (cb *MyCallback) OnPackagesUpdated(packageCount int, sharedCount int) {}
-
-func (cb *MyCallback) NewError(ctx context.Context, err error) {
-	log.Warnln("%s", err)
-}
-
 func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string, error) {
 	uid, inode, err := resolveSocketByNetlink(network, ip, srcPort)
 	if err != nil {
 		return 0, "", err
 	}
-
 	pp, err := resolveProcessNameByProcSearch(inode, uid)
 	return uid, pp, err
 }
@@ -177,44 +159,38 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 			if err != nil {
 				continue
 			}
+
 			if runtime.GOOS == "android" {
 				if bytes.Equal(buffer[:n], socket) {
-					return findPackageName(uid), nil
+					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
+					if err != nil {
+						return "", err
+					}
+
+					return splitCmdline(cmdline), nil
 				}
 			} else {
 				if bytes.Equal(buffer[:n], socket) {
 					return os.Readlink(filepath.Join(processPath, "exe"))
 				}
 			}
-
 		}
 	}
 
 	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
 }
 
-func findPackageName(uid uint32) string {
-	once.Do(func() {
-		callback := &MyCallback{}
-		var err error
-		packageManager, err = tun.NewPackageManager(callback)
-		if err != nil {
-			log.Warnln("%s", err)
-		}
-		err = packageManager.Start()
-		if err != nil {
-			log.Warnln("%s", err)
-			return
-		}
+func splitCmdline(cmdline []byte) string {
+	cmdline = bytes.Trim(cmdline, " ")
+
+	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
 	})
 
-	if sharedPackage, loaded := packageManager.SharedPackageByID(uid % 100000); loaded {
-		return sharedPackage
+	if idx == -1 {
+		return filepath.Base(string(cmdline))
 	}
-	if packageName, loaded := packageManager.PackageByID(uid % 100000); loaded {
-		return packageName
-	}
-	return ""
+	return filepath.Base(string(cmdline[:idx]))
 }
 
 func isPid(s string) bool {

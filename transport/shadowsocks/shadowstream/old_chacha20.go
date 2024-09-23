@@ -2,7 +2,8 @@ package shadowstream
 
 import (
 	"crypto/cipher"
-	"github.com/aead/chacha20/chacha"
+
+	"github.com/metacubex/chacha"
 )
 
 type chacha20key []byte
@@ -11,7 +12,7 @@ func (k chacha20key) IVSize() int {
 	return chacha.NonceSize
 }
 func (k chacha20key) Encrypter(iv []byte) cipher.Stream {
-	c, _ := chacha.NewCipher(iv, k, 20)
+	c, _ := chacha.NewChaCha20(iv, k)
 	return c
 }
 func (k chacha20key) Decrypter(iv []byte) cipher.Stream {

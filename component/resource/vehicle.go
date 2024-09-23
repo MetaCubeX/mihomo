@@ -6,11 +6,44 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
 	types "github.com/metacubex/mihomo/constant/provider"
 )
+
+const (
+	DefaultHttpTimeout = time.Second * 20
+
+	fileMode os.FileMode = 0o666
+	dirMode  os.FileMode = 0o755
+)
+
+var (
+	etag = false
+)
+
+func ETag() bool {
+	return etag
+}
+
+func SetETag(b bool) {
+	etag = b
+}
+
+func safeWrite(path string, buf []byte) error {
+	dir := filepath.Dir(path)
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
+			return err
+		}
+	}
+
+	return os.WriteFile(path, buf, fileMode)
+}
 
 type FileVehicle struct {
 	path string
@@ -24,12 +57,25 @@ func (f *FileVehicle) Path() string {
 	return f.path
 }
 
-func (f *FileVehicle) Read() ([]byte, error) {
-	return os.ReadFile(f.path)
+func (f *FileVehicle) Url() string {
+	return "file://" + f.path
+}
+
+func (f *FileVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
+	buf, err = os.ReadFile(f.path)
+	if err != nil {
+		return
+	}
+	hash = types.MakeHash(buf)
+	return
 }
 
 func (f *FileVehicle) Proxy() string {
 	return ""
+}
+
+func (f *FileVehicle) Write(buf []byte) error {
+	return safeWrite(f.path, buf)
 }
 
 func NewFileVehicle(path string) *FileVehicle {
@@ -37,10 +83,11 @@ func NewFileVehicle(path string) *FileVehicle {
 }
 
 type HTTPVehicle struct {
-	url    string
-	path   string
-	proxy  string
-	header http.Header
+	url     string
+	path    string
+	proxy   string
+	header  http.Header
+	timeout time.Duration
 }
 
 func (h *HTTPVehicle) Url() string {
@@ -59,24 +106,56 @@ func (h *HTTPVehicle) Proxy() string {
 	return h.proxy
 }
 
-func (h *HTTPVehicle) Read() ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+func (h *HTTPVehicle) Write(buf []byte) error {
+	return safeWrite(h.path, buf)
+}
+
+func (h *HTTPVehicle) Read(ctx context.Context, oldHash types.HashType) (buf []byte, hash types.HashType, err error) {
+	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequestWithProxy(ctx, h.url, http.MethodGet, h.header, nil, h.proxy)
+	header := h.header
+	setIfNoneMatch := false
+	if etag && oldHash.IsValid() {
+		hashBytes, etag := cachefile.Cache().GetETagWithHash(h.url)
+		if oldHash.EqualBytes(hashBytes) && etag != "" {
+			if header == nil {
+				header = http.Header{}
+			} else {
+				header = header.Clone()
+			}
+			header.Set("If-None-Match", etag)
+			setIfNoneMatch = true
+		}
+	}
+	resp, err := mihomoHttp.HttpRequestWithProxy(ctx, h.url, http.MethodGet, header, nil, h.proxy)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, errors.New(resp.Status)
+		if setIfNoneMatch && resp.StatusCode == http.StatusNotModified {
+			return nil, oldHash, nil
+		}
+		err = errors.New(resp.Status)
+		return
 	}
-	buf, err := io.ReadAll(resp.Body)
+	buf, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return buf, nil
+	hash = types.MakeHash(buf)
+	if etag {
+		cachefile.Cache().SetETagWithHash(h.url, hash.Bytes(), resp.Header.Get("ETag"))
+	}
+	return
 }
 
-func NewHTTPVehicle(url string, path string, proxy string, header http.Header) *HTTPVehicle {
-	return &HTTPVehicle{url, path, proxy, header}
+func NewHTTPVehicle(url string, path string, proxy string, header http.Header, timeout time.Duration) *HTTPVehicle {
+	return &HTTPVehicle{
+		url:     url,
+		path:    path,
+		proxy:   proxy,
+		header:  header,
+		timeout: timeout,
+	}
 }

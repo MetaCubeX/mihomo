@@ -10,10 +10,9 @@ import (
 	"sync"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
-	authStore "github.com/metacubex/mihomo/listener/auth"
 	"github.com/metacubex/mihomo/log"
 )
 
@@ -31,8 +30,10 @@ func (b *bodyWrapper) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
-	client := newClient(c, tunnel, additions...)
+func HandleConn(c net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
+	additions = append(additions, inbound.Placeholder) // Add a placeholder for InUser
+	inUserIdx := len(additions) - 1
+	client := newClient(c, tunnel, additions)
 	defer client.CloseIdleConnections()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -40,8 +41,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 	conn := N.NewBufferedConn(c)
 
+	authenticator := getAuth()
 	keepAlive := true
-	trusted := cache == nil // disable authenticate if lru is nil
+	trusted := authenticator == nil // disable authenticate if lru is nil
+	lastUser := ""
 
 	for keepAlive {
 		peekMutex.Lock()
@@ -57,12 +60,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 		var resp *http.Response
 
-		if !trusted {
-			var user string
-			resp, user = authenticate(request, cache)
-			additions = append(additions, inbound.WithInUser(user))
-			trusted = resp == nil
-		}
+		var user string
+		resp, user = authenticate(request, authenticator) // always call authenticate function to get user
+		trusted = trusted || resp == nil
+		additions[inUserIdx] = inbound.WithInUser(user)
 
 		if trusted {
 			if request.Method == http.MethodConnect {
@@ -87,6 +88,13 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 				handleUpgrade(conn, request, tunnel, additions...)
 
 				return // hijack connection
+			}
+
+			// ensure there is a client with correct additions
+			// when the authenticated user changed, outbound client should close idle connections
+			if user != lastUser {
+				client.CloseIdleConnections()
+				lastUser = user
 			}
 
 			removeHopByHopHeaders(request.Header)
@@ -138,34 +146,21 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 	_ = conn.Close()
 }
 
-func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) (resp *http.Response, u string) {
-	authenticator := authStore.Authenticator()
-	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
-		authenticator = nil
+func authenticate(request *http.Request, authenticator auth.Authenticator) (resp *http.Response, user string) {
+	credential := parseBasicProxyAuthorization(request)
+	if credential == "" && authenticator != nil {
+		resp = responseWith(request, http.StatusProxyAuthRequired)
+		resp.Header.Set("Proxy-Authenticate", "Basic")
+		return
 	}
-	if authenticator != nil {
-		credential := parseBasicProxyAuthorization(request)
-		if credential == "" {
-			resp := responseWith(request, http.StatusProxyAuthRequired)
-			resp.Header.Set("Proxy-Authenticate", "Basic")
-			return resp, ""
-		}
-
-		authed, exist := cache.Get(credential)
-		if !exist {
-			user, pass, err := decodeBasicProxyAuthorization(credential)
-			authed = err == nil && authenticator.Verify(user, pass)
-			u = user
-			cache.Set(credential, authed)
-		}
-		if !authed {
-			log.Infoln("Auth failed from %s", request.RemoteAddr)
-
-			return responseWith(request, http.StatusForbidden), u
-		}
+	user, pass, err := decodeBasicProxyAuthorization(credential)
+	authed := authenticator == nil || (err == nil && authenticator.Verify(user, pass))
+	if !authed {
+		log.Infoln("Auth failed from %s", request.RemoteAddr)
+		return responseWith(request, http.StatusForbidden), user
 	}
-
-	return nil, u
+	log.Debugln("Auth success from %s -> %s", request.RemoteAddr, user)
+	return
 }
 
 func responseWith(request *http.Request, statusCode int) *http.Response {

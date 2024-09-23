@@ -37,7 +37,7 @@ func NewRejectWithOption(option RejectOption) *Reject {
 	return &Reject{
 		Base: &Base{
 			name: option.Name,
-			tp:   C.Direct,
+			tp:   C.Reject,
 			udp:  true,
 		},
 	}

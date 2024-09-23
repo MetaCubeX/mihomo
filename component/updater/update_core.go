@@ -230,14 +230,14 @@ func clean() {
 
 // MaxPackageFileSize is a maximum package file length in bytes. The largest
 // package whose size is limited by this constant currently has the size of
-// approximately 9 MiB.
+// approximately 32 MiB.
 const MaxPackageFileSize = 32 * 1024 * 1024
 
 // Download package file and save it to disk
 func downloadPackageFile() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, packageURL, http.MethodGet, nil, nil)
 	if err != nil {
 		return fmt.Errorf("http request failed: %w", err)
 	}
@@ -418,7 +418,7 @@ func copyFile(src, dst string) error {
 func getLatestVersion() (version string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, versionURL, http.MethodGet, nil, nil)
 	if err != nil {
 		return "", fmt.Errorf("get Latest Version fail: %w", err)
 	}

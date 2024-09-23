@@ -22,7 +22,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config LC.ShadowsocksServer, tunnel C.Tunnel) (*Listener, error) {
+func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	pickCipher, err := core.PickCipher(config.Cipher, nil, config.Password)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel) (*Listener, error) {
 
 		if config.Udp {
 			//UDP
-			ul, err := NewUDP(addr, pickCipher, tunnel)
+			ul, err := NewUDP(addr, pickCipher, tunnel, additions...)
 			if err != nil {
 				return nil, err
 			}
@@ -60,7 +60,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel) (*Listener, error) {
 					continue
 				}
 				N.TCPKeepAlive(c)
-				go sl.HandleConn(c, tunnel)
+				go sl.HandleConn(c, tunnel, additions...)
 			}
 		}()
 	}

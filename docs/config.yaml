@@ -70,6 +70,10 @@ external-ui: /path/to/ui/folder/
 external-ui-name: xd
 external-ui-url: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
 
+# 在RESTful API端口上开启DOH服务器
+# ！！！该URL不会验证secret， 如果开启请自行保证安全问题 ！！！
+external-doh-server: /dns-query
+
 # interface-name: en0 # 设置出口网卡
 
 # 全局 TLS 指纹，优先低于 proxy 内的 client-fingerprint
@@ -78,7 +82,9 @@ external-ui-url: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-
 global-client-fingerprint: chrome
 
 #  TCP keep alive interval
-keep-alive-interval: 15
+# disable-keep-alive: false #目前在android端强制为true
+# keep-alive-idle: 15
+# keep-alive-interval: 15
 
 # routing-mark:6666 # 配置 fwmark 仅用于 Linux
 experimental:
@@ -160,13 +166,6 @@ tun:
   # exclude-package: # 排除被路由的 Android 应用包名
   # - com.android.captiveportallogin
 
-#ebpf 配置
-ebpf:
-  auto-redir: # redirect 模式，仅支持 TCP
-    - eth0
-  redirect-to-tun: # UDP+TCP 使用该功能请勿启用 auto-route
-    - eth0
-
 # 嗅探域名 可选配置
 sniffer:
   enable: false
@@ -191,6 +190,10 @@ sniffer:
       override-destination: true
   force-domain:
     - +.v2ex.com
+  # skip-src-address: # 对于来源ip跳过嗅探
+  #   - 192.168.0.3/32
+  # skip-dst-address: # 对于目标ip跳过嗅探
+  #   - 192.168.0.3/32
   ## 对嗅探结果进行跳过
   # skip-domain:
   #   - Mijia Cloud
@@ -237,6 +240,19 @@ dns:
 
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
 
+  # 配置不使用 fake-ip 的域名
+  fake-ip-filter:
+    - '*.lan'
+    - localhost.ptlogin2.qq.com
+    # fakeip-filter 为 rule-providers 中的名为 fakeip-filter 规则订阅，
+    # 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
+    - rule-set:fakeip-filter
+    # fakeip-filter 为 geosite 中名为 fakeip-filter 的分类（需要自行保证该分类存在）
+    - geosite:fakeip-filter
+  # 配置fake-ip-filter的匹配模式，默认为blacklist，即如果匹配成功不返回fake-ip
+  # 可设置为whitelist，即只有匹配成功才返回fake-ip
+  fake-ip-filter-mode: blacklist
+
   # use-hosts: true # 查询 hosts
 
   # 配置后面的nameserver、fallback和nameserver-policy向dns服务器的连接过程是否遵守遵守rules规则
@@ -245,11 +261,6 @@ dns:
   # 仅当proxy-server-nameserver非空时可以开启此选项, 强烈不建议和prefer-h3一起使用
   # 此外，这三者配置中的dns服务器如果出现域名会采用default-nameserver配置项解析，也请确保正确配置default-nameserver
   respect-rules: false
-
-  # 配置不使用 fake-ip 的域名
-  # fake-ip-filter:
-  #   - '*.lan'
-  #   - localhost.ptlogin2.qq.com
 
   # DNS 主要域名配置
   # 支持 UDP，TCP，DoT，DoH，DoQ
@@ -749,6 +760,17 @@ proxies: # socks5
     #     # pre-shared-key: 31aIhAPwktDGpH4JDhA8GNvjFXEf/a6+UaQRyOAiyfM=
     #     allowed-ips: ['0.0.0.0/0']
     #     reserved: [209,98,59]
+    # 如果存在则开启AmneziaWG功能
+    # amnezia-wg-option:
+    #   jc: 5
+    #   jmin: 500
+    #   jmax: 501
+    #   s1: 30
+    #   s2: 40
+    #   h1: 123456
+    #   h2: 67543
+    #   h4: 32345
+    #   h3: 123123
 
   # tuic
   - name: tuic
@@ -918,6 +940,13 @@ proxy-providers:
       # ip-version: ipv4-prefer
       # additional-prefix: "[provider1]"
       # additional-suffix: "test"
+      # # 名字替换，支持正则表达式
+      # proxy-name:
+      #   - pattern: "test"
+      #     target: "TEST"
+      #   - pattern: "IPLC-(.*?)倍"
+      #     target: "iplc x $1"
+
   test:
     type: file
     path: /test.yaml
@@ -938,6 +967,24 @@ rule-providers:
     interval: 259200
     path: /path/to/save/file.yaml
     type: file
+  rule3:
+    # mrs类型ruleset，目前仅支持domain和ipcidr(即不支持classical），
+    #
+    # 对于behavior=domain:
+    #  - format=yaml 可以通过“mihomo convert-ruleset domain yaml XXX.yaml XXX.mrs”转换到mrs格式
+    #  - format=text 可以通过“mihomo convert-ruleset domain text XXX.text XXX.mrs”转换到mrs格式
+    #  - XXX.mrs 可以通过"mihomo convert-ruleset domain mrs XXX.mrs XXX.text"转换回text格式（暂不支持转换回yaml格式）
+    #
+    # 对于behavior=ipcidr:
+    #  - format=yaml 可以通过“mihomo convert-ruleset ipcidr yaml XXX.yaml XXX.mrs”转换到mrs格式
+    #  - format=text 可以通过“mihomo convert-ruleset ipcidr text XXX.text XXX.mrs”转换到mrs格式
+    #  - XXX.mrs 可以通过"mihomo convert-ruleset ipcidr mrs XXX.mrs XXX.text"转换回text格式（暂不支持转换回yaml格式）
+    #
+    type: http
+    url: "url"
+    format: mrs
+    behavior: domain
+    path: /path/to/save/file.mrs
 rules:
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY
@@ -983,6 +1030,9 @@ listeners:
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理
     # udp: false # 默认 true
+    # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
+    #   - username: aaa
+    #     password: aaa
 
   - name: http-in-1
     type: http
@@ -990,6 +1040,9 @@ listeners:
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
+    #   - username: aaa
+    #     password: aaa
 
   - name: mixed-in-1
     type: mixed #  HTTP(S) 和 SOCKS 代理混合
@@ -998,6 +1051,9 @@ listeners:
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # udp: false # 默认 true
+    # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
+    #   - username: aaa
+    #     password: aaa
 
   - name: reidr-in-1
     type: redir

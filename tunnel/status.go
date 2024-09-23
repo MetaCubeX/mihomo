@@ -22,18 +22,6 @@ const (
 	Running
 )
 
-// UnmarshalJSON unserialize Status
-func (s *TunnelStatus) UnmarshalJSON(data []byte) error {
-	var tp string
-	json.Unmarshal(data, &tp)
-	status, exist := StatusMapping[strings.ToLower(tp)]
-	if !exist {
-		return errors.New("invalid mode")
-	}
-	*s = status
-	return nil
-}
-
 // UnmarshalYAML unserialize Status with yaml
 func (s *TunnelStatus) UnmarshalYAML(unmarshal func(any) error) error {
 	var tp string
@@ -46,14 +34,41 @@ func (s *TunnelStatus) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
-// MarshalJSON serialize Status
-func (s TunnelStatus) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.String())
+// UnmarshalJSON unserialize Status
+func (s *TunnelStatus) UnmarshalJSON(data []byte) error {
+	var tp string
+	json.Unmarshal(data, &tp)
+	status, exist := StatusMapping[strings.ToLower(tp)]
+	if !exist {
+		return errors.New("invalid status")
+	}
+	*s = status
+	return nil
+}
+
+// UnmarshalText unserialize Status
+func (s *TunnelStatus) UnmarshalText(data []byte) error {
+	status, exist := StatusMapping[strings.ToLower(string(data))]
+	if !exist {
+		return errors.New("invalid status")
+	}
+	*s = status
+	return nil
 }
 
 // MarshalYAML serialize TunnelMode with yaml
 func (s TunnelStatus) MarshalYAML() (any, error) {
 	return s.String(), nil
+}
+
+// MarshalJSON serialize Status
+func (s TunnelStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// MarshalText serialize Status
+func (s TunnelStatus) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
 }
 
 func (s TunnelStatus) String() string {

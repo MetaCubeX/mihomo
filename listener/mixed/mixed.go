@@ -4,9 +4,10 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
+	authStore "github.com/metacubex/mihomo/listener/auth"
 	"github.com/metacubex/mihomo/listener/http"
 	"github.com/metacubex/mihomo/listener/socks"
 	"github.com/metacubex/mihomo/transport/socks4"
@@ -16,7 +17,6 @@ import (
 type Listener struct {
 	listener net.Listener
 	addr     string
-	cache    *lru.LruCache[string, bool]
 	closed   bool
 }
 
@@ -37,6 +37,10 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+	return NewWithAuthenticator(addr, tunnel, authStore.Authenticator, additions...)
+}
+
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -53,7 +57,6 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 	ml := &Listener{
 		listener: l,
 		addr:     addr,
-		cache:    lru.New[string, bool](lru.WithAge[string, bool](30)),
 	}
 	go func() {
 		for {
@@ -64,20 +67,24 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 				}
 				continue
 			}
+			getAuth := getAuth
 			if isDefault { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
 					_ = c.Close()
 					continue
 				}
+				if inbound.SkipAuthRemoteAddr(c.RemoteAddr()) {
+					getAuth = authStore.Nil
+				}
 			}
-			go handleConn(c, tunnel, ml.cache, additions...)
+			go handleConn(c, tunnel, getAuth, additions...)
 		}
 	}()
 
 	return ml, nil
 }
 
-func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
+func handleConn(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
 	N.TCPKeepAlive(conn)
 
 	bufConn := N.NewBufferedConn(conn)
@@ -88,10 +95,10 @@ func handleConn(conn net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool
 
 	switch head[0] {
 	case socks4.Version:
-		socks.HandleSocks4(bufConn, tunnel, additions...)
+		socks.HandleSocks4(bufConn, tunnel, getAuth, additions...)
 	case socks5.Version:
-		socks.HandleSocks5(bufConn, tunnel, additions...)
+		socks.HandleSocks5(bufConn, tunnel, getAuth, additions...)
 	default:
-		http.HandleConn(bufConn, tunnel, cache, additions...)
+		http.HandleConn(bufConn, tunnel, getAuth, additions...)
 	}
 }

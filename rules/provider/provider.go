@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"runtime"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+
+	"gopkg.in/yaml.v3"
 )
 
 var tunnel P.Tunnel
@@ -43,6 +44,7 @@ type RulePayload struct {
 }
 
 type ruleStrategy interface {
+	Behavior() P.RuleBehavior
 	Match(metadata *C.Metadata) bool
 	Count() int
 	ShouldResolveIP() bool
@@ -52,32 +54,33 @@ type ruleStrategy interface {
 	FinishInsert()
 }
 
+type mrsRuleStrategy interface {
+	ruleStrategy
+	FromMrs(r io.Reader, count int) error
+	WriteMrs(w io.Writer) error
+	DumpMrs(f func(key string) bool)
+}
+
 func (rp *ruleSetProvider) Type() P.ProviderType {
 	return P.Rule
 }
 
 func (rp *ruleSetProvider) Initial() error {
-	elm, err := rp.Fetcher.Initial()
-	if err != nil {
-		return err
-	}
-
-	rp.OnUpdate(elm)
-	return nil
+	_, err := rp.Fetcher.Initial()
+	return err
 }
 
 func (rp *ruleSetProvider) Update() error {
-	elm, same, err := rp.Fetcher.Update()
-	if err == nil && !same {
-		rp.OnUpdate(elm)
-		return nil
-	}
-
+	_, _, err := rp.Fetcher.Update()
 	return err
 }
 
 func (rp *ruleSetProvider) Behavior() P.RuleBehavior {
 	return rp.behavior
+}
+
+func (rp *ruleSetProvider) Count() int {
+	return rp.strategy.Count()
 }
 
 func (rp *ruleSetProvider) Match(metadata *C.Metadata) bool {
@@ -104,9 +107,14 @@ func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
 			"name":        rp.Name(),
 			"ruleCount":   rp.strategy.Count(),
 			"type":        rp.Type().String(),
-			"updatedAt":   rp.UpdatedAt,
+			"updatedAt":   rp.UpdatedAt(),
 			"vehicleType": rp.VehicleType().String(),
 		})
+}
+
+func (rp *RuleSetProvider) Close() error {
+	runtime.SetFinalizer(rp, nil)
+	return rp.ruleSetProvider.Close()
 }
 
 func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle,
@@ -130,8 +138,7 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 		rp,
 	}
 
-	final := func(provider *RuleSetProvider) { _ = rp.Fetcher.Destroy() }
-	runtime.SetFinalizer(wrapper, final)
+	runtime.SetFinalizer(wrapper, (*RuleSetProvider).Close)
 	return wrapper
 }
 
@@ -152,9 +159,13 @@ func newStrategy(behavior P.RuleBehavior, parse func(tp, payload, target string,
 }
 
 var ErrNoPayload = errors.New("file must have a `payload` field")
+var ErrInvalidFormat = errors.New("invalid format")
 
 func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStrategy, error) {
 	strategy.Reset()
+	if format == P.MrsRule {
+		return rulesMrsParse(buf, strategy)
+	}
 
 	schema := &RulePayload{}
 
@@ -228,6 +239,8 @@ func rulesParse(buf []byte, strategy ruleStrategy, format P.RuleFormat) (ruleStr
 			if len(schema.Payload) > 0 {
 				str = schema.Payload[0]
 			}
+		default:
+			return nil, ErrInvalidFormat
 		}
 
 		if str == "" {

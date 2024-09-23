@@ -29,18 +29,17 @@ import (
 )
 
 var (
-	status         = newAtomicStatus(Suspend)
-	tcpQueue       = make(chan C.ConnContext, 200)
-	udpQueue       = make(chan C.PacketAdapter, 200)
-	natTable       = nat.New()
-	rules          []C.Rule
-	listeners      = make(map[string]C.InboundListener)
-	subRules       map[string][]C.Rule
-	proxies        = make(map[string]C.Proxy)
-	providers      map[string]provider.ProxyProvider
-	ruleProviders  map[string]provider.RuleProvider
-	sniffingEnable = false
-	configMux      sync.RWMutex
+	status        = newAtomicStatus(Suspend)
+	tcpQueue      = make(chan C.ConnContext, 200)
+	udpQueue      = make(chan C.PacketAdapter, 200)
+	natTable      = nat.New()
+	rules         []C.Rule
+	listeners     = make(map[string]C.InboundListener)
+	subRules      map[string][]C.Rule
+	proxies       = make(map[string]C.Proxy)
+	providers     map[string]provider.ProxyProvider
+	ruleProviders map[string]provider.RuleProvider
+	configMux     sync.RWMutex
 
 	// Outbound Rule
 	mode = Rule
@@ -51,6 +50,9 @@ var (
 	findProcessMode P.FindProcessMode
 
 	fakeIPRange netip.Prefix
+
+	snifferDispatcher *sniffer.Dispatcher
+	sniffingEnable    = false
 
 	ruleUpdateCallback = utils.NewCallback[provider.RuleProvider]()
 )
@@ -115,7 +117,7 @@ func FakeIPRange() netip.Prefix {
 }
 
 func SetSniffing(b bool) {
-	if sniffer.Dispatcher.Enable() {
+	if snifferDispatcher.Enable() {
 		configMux.Lock()
 		sniffingEnable = b
 		configMux.Unlock()
@@ -208,9 +210,9 @@ func UpdateListeners(newListeners map[string]C.InboundListener) {
 	listeners = newListeners
 }
 
-func UpdateSniffer(dispatcher *sniffer.SnifferDispatcher) {
+func UpdateSniffer(dispatcher *sniffer.Dispatcher) {
 	configMux.Lock()
-	sniffer.Dispatcher = dispatcher
+	snifferDispatcher = dispatcher
 	sniffingEnable = dispatcher.Enable()
 	configMux.Unlock()
 }
@@ -223,6 +225,10 @@ func Mode() TunnelMode {
 // SetMode change the mode of tunnel
 func SetMode(m TunnelMode) {
 	mode = m
+}
+
+func FindProcessMode() P.FindProcessMode {
+	return findProcessMode
 }
 
 // SetFindProcessMode replace SetAlwaysFindProcess
@@ -343,8 +349,8 @@ func handleUDPConn(packet C.PacketAdapter) {
 		return
 	}
 
-	if sniffer.Dispatcher.Enable() && sniffingEnable {
-		sniffer.Dispatcher.UDPSniff(packet)
+	if sniffingEnable && snifferDispatcher.Enable() {
+		snifferDispatcher.UDPSniff(packet)
 	}
 
 	// local resolve UDP dns
@@ -452,10 +458,10 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	conn := connCtx.Conn()
 	conn.ResetPeeked() // reset before sniffer
-	if sniffer.Dispatcher.Enable() && sniffingEnable {
+	if sniffingEnable && snifferDispatcher.Enable() {
 		// Try to sniff a domain when `preHandleMetadata` failed, this is usually
 		// caused by a "Fake DNS record missing" error when enhanced-mode is fake-ip.
-		if sniffer.Dispatcher.TCPSniff(conn, metadata) {
+		if snifferDispatcher.TCPSniff(conn, metadata) {
 			// we now have a domain name
 			preHandleFailed = false
 		}
@@ -622,6 +628,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 					metadata.Process = filepath.Base(path)
 					metadata.ProcessPath = path
 					metadata.Uid = uid
+
+					if pkg, err := P.FindPackageName(metadata); err == nil { // for android (not CMFA) package names
+						metadata.Process = pkg
+					}
 				}
 			} else {
 				// check package names

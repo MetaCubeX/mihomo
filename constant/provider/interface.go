@@ -1,6 +1,9 @@
 package provider
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/constant"
 )
@@ -29,8 +32,10 @@ func (v VehicleType) String() string {
 }
 
 type Vehicle interface {
-	Read() ([]byte, error)
+	Read(ctx context.Context, oldHash HashType) (buf []byte, hash HashType, err error)
+	Write(buf []byte) error
 	Path() string
+	Url() string
 	Proxy() string
 	Type() VehicleType
 }
@@ -68,6 +73,7 @@ type Provider interface {
 type ProxyProvider interface {
 	Provider
 	Proxies() []constant.Proxy
+	Count() int
 	// Touch is used to inform the provider that the proxy is actually being used while getting the list of proxies.
 	// Commonly used in DialContext and DialPacketConn
 	Touch()
@@ -81,6 +87,7 @@ type ProxyProvider interface {
 type RuleProvider interface {
 	Provider
 	Behavior() RuleBehavior
+	Count() int
 	Match(*constant.Metadata) bool
 	ShouldResolveIP() bool
 	ShouldFindProcess() bool
@@ -110,9 +117,37 @@ func (rt RuleBehavior) String() string {
 	}
 }
 
+func (rt RuleBehavior) Byte() byte {
+	switch rt {
+	case Domain:
+		return 0
+	case IPCIDR:
+		return 1
+	case Classical:
+		return 2
+	default:
+		return 255
+	}
+}
+
+func ParseBehavior(s string) (behavior RuleBehavior, err error) {
+	switch s {
+	case "domain":
+		behavior = Domain
+	case "ipcidr":
+		behavior = IPCIDR
+	case "classical":
+		behavior = Classical
+	default:
+		err = fmt.Errorf("unsupported behavior type: %s", s)
+	}
+	return
+}
+
 const (
 	YamlRule RuleFormat = iota
 	TextRule
+	MrsRule
 )
 
 type RuleFormat int
@@ -123,9 +158,25 @@ func (rf RuleFormat) String() string {
 		return "YamlRule"
 	case TextRule:
 		return "TextRule"
+	case MrsRule:
+		return "MrsRule"
 	default:
 		return "Unknown"
 	}
+}
+
+func ParseRuleFormat(s string) (format RuleFormat, err error) {
+	switch s {
+	case "", "yaml":
+		format = YamlRule
+	case "text":
+		format = TextRule
+	case "mrs":
+		format = MrsRule
+	default:
+		err = fmt.Errorf("unsupported format type: %s", s)
+	}
+	return
 }
 
 type Tunnel interface {

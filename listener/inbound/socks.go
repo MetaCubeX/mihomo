@@ -9,7 +9,8 @@ import (
 
 type SocksOption struct {
 	BaseOption
-	UDP bool `inbound:"udp,omitempty"`
+	Users AuthUsers `inbound:"users,omitempty"`
+	UDP   bool      `inbound:"udp,omitempty"`
 }
 
 func (o SocksOption) Equal(config C.InboundConfig) bool {
@@ -70,7 +71,7 @@ func (s *Socks) Address() string {
 // Listen implements constant.InboundListener
 func (s *Socks) Listen(tunnel C.Tunnel) error {
 	var err error
-	if s.stl, err = socks.New(s.RawAddress(), tunnel, s.Additions()...); err != nil {
+	if s.stl, err = socks.NewWithAuthenticator(s.RawAddress(), tunnel, s.config.Users.GetAuth(), s.Additions()...); err != nil {
 		return err
 	}
 	if s.udp {

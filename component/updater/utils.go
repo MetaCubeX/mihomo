@@ -9,15 +9,16 @@ import (
 	"time"
 
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	C "github.com/metacubex/mihomo/constant"
 
 	"golang.org/x/exp/constraints"
 )
 
+const defaultHttpTimeout = time.Second * 90
+
 func downloadForBytes(url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultHttpTimeout)
 	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
+	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, nil, nil)
 	if err != nil {
 		return nil, err
 	}

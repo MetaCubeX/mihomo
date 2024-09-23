@@ -40,10 +40,10 @@ jobs:
           - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
           - { goos: linux, goarch: arm, goarm: '6', output: armv6 }
           - { goos: linux, goarch: arm, goarm: '7', output: armv7 }
-          - { goos: linux, goarch: mips, mips: hardfloat, output: mips-hardfloat }
-          - { goos: linux, goarch: mips, mips: softfloat, output: mips-softfloat }
-          - { goos: linux, goarch: mipsle, mips: hardfloat, output: mipsle-hardfloat }
-          - { goos: linux, goarch: mipsle, mips: softfloat, output: mipsle-softfloat }
+          - { goos: linux, goarch: mips, gomips: hardfloat, output: mips-hardfloat }
+          - { goos: linux, goarch: mips, gomips: softfloat, output: mips-softfloat }
+          - { goos: linux, goarch: mipsle, gomips: hardfloat, output: mipsle-hardfloat }
+          - { goos: linux, goarch: mipsle, gomips: softfloat, output: mipsle-softfloat }
           - { goos: linux, goarch: mips64, output: mips64 }
           - { goos: linux, goarch: mips64le, output: mips64le }
           - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1' }
@@ -67,6 +67,12 @@ jobs:
           - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
           - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
 
+          # Go 1.22 with special patch can work on Windows 7
+          # https://github.com/MetaCubeX/go/commits/release-branch.go1.22/
+          - { goos: windows, goarch: '386', output: '386-go122', goversion: '1.22' }
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go122, goversion: '1.22' }
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go122, goversion: '1.22' }
+
           # Go 1.21 can revert commit `9e4385` to work on Windows 7
           # https://github.com/golang/go/issues/64622#issuecomment-1847475161
           # (OR we can just use golang1.21.4 which unneeded any patch)
@@ -78,6 +84,11 @@ jobs:
           - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
           - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible-go120, goversion: '1.20' }
           - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-go120, goversion: '1.20' }
+
+          # Go 1.22 is the last release that will run on macOS 10.15 Catalina. Go 1.23 will require macOS 11 Big Sur or later.
+          - { goos: darwin, goarch: arm64, output: arm64-go122, goversion: '1.22' }
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible-go122, goversion: '1.22' }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-go122, goversion: '1.22' }
 
           # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
           - { goos: darwin, goarch: arm64, output: arm64-go120, goversion: '1.20' }
@@ -96,7 +107,7 @@ jobs:
       if: ${{ matrix.jobs.goversion == '' && matrix.jobs.goarch != 'loong64' }}
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version: '1.23'
 
     - name: Set up Go
       if: ${{ matrix.jobs.goversion != '' && matrix.jobs.goarch != 'loong64' }}
@@ -107,31 +118,52 @@ jobs:
     - name: Set up Go1.22 loongarch abi1
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
       run: |
-        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.22.0/go1.22.0.linux-amd64-abi1.tar.gz
-        sudo tar zxf go1.22.0.linux-amd64-abi1.tar.gz -C /usr/local
+        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.22.4/go1.22.4.linux-amd64-abi1.tar.gz
+        sudo tar zxf go1.22.4.linux-amd64-abi1.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
 
     - name: Set up Go1.22 loongarch abi2
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
       run: |
-        wget -q https://github.com/xishang0128/loongarch64-golang/releases/download/1.22.0/go1.22.0.linux-amd64-abi2.tar.gz
-        sudo tar zxf go1.22.0.linux-amd64-abi2.tar.gz -C /usr/local
+        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.22.4/go1.22.4.linux-amd64-abi2.tar.gz
+        sudo tar zxf go1.22.4.linux-amd64-abi2.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
-      # this patch file only works on golang1.22.x
-      # that means after golang1.23 release it must be changed
+      # this patch file only works on golang1.23.x
+      # that means after golang1.24 release it must be changed
+      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.23/
       # revert:
       # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
       # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
       # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
-    - name: Revert Golang1.22 commit for Windows7/8
+      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
+    - name: Revert Golang1.23 commit for Windows7/8
       if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '' }}
       run: |
         cd $(go env GOROOT)
-        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/693def151adff1af707d82d28f55dba81ceb08e1.diff
-        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/7c1157f9544922e96945196b47b95664b1e39108.diff
-        patch --verbose -R -p 1 < $GITHUB_WORKSPACE/.github/patch_go122/48042aa09c2f878c4faa576948b07fe625c4707a.diff
+        curl https://github.com/MetaCubeX/go/commit/9ac42137ef6730e8b7daca016ece831297a1d75b.diff | patch --verbose -p 1
+        curl https://github.com/MetaCubeX/go/commit/21290de8a4c91408de7c2b5b68757b1e90af49dd.diff | patch --verbose -p 1
+        curl https://github.com/MetaCubeX/go/commit/6a31d3fa8e47ddabc10bd97bff10d9a85f4cfb76.diff | patch --verbose -p 1
+        curl https://github.com/MetaCubeX/go/commit/69e2eed6dd0f6d815ebf15797761c13f31213dd6.diff | patch --verbose -p 1
+
+      # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
+      # this patch file only works on golang1.22.x
+      # that means after golang1.23 release it must be changed
+      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.22/
+      # revert:
+      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
+      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
+      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
+      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
+    - name: Revert Golang1.22 commit for Windows7/8
+      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.22' }}
+      run: |
+        cd $(go env GOROOT)
+        curl https://github.com/MetaCubeX/go/commit/9779155f18b6556a034f7bb79fb7fb2aad1e26a9.diff | patch --verbose -p 1
+        curl https://github.com/MetaCubeX/go/commit/ef0606261340e608017860b423ffae5c1ce78239.diff | patch --verbose -p 1
+        curl https://github.com/MetaCubeX/go/commit/7f83badcb925a7e743188041cb6e561fc9b5b642.diff | patch --verbose -p 1
+        curl https://github.com/MetaCubeX/go/commit/83ff9782e024cb328b690cbf0da4e7848a327f4f.diff | patch --verbose -p 1
 
       # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
     - name: Revert Golang1.21 commit for Windows7/8
@@ -155,13 +187,14 @@ jobs:
         echo "BUILDTIME=$(date)" >> $GITHUB_ENV
         echo "CGO_ENABLED=0" >> $GITHUB_ENV
         echo "BUILDTAG=-extldflags --static" >> $GITHUB_ENV
+        echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
 
     - name: Setup NDK
       if: ${{ matrix.jobs.goos == 'android' }}
       uses: nttld/setup-ndk@v1
       id: setup-ndk
       with:
-        ndk-version: r26c
+        ndk-version: r27
 
     - name: Set NDK path
       if: ${{ matrix.jobs.goos == 'android' }}
@@ -174,6 +207,8 @@ jobs:
       if: ${{ matrix.jobs.test == 'test' }}
       run: |
         go test ./...
+        echo "---test with_gvisor---"
+        go test ./... -tags "with_gvisor" -count=1
 
     - name: Update CA
       run: |
@@ -186,10 +221,10 @@ jobs:
         GOOS: ${{matrix.jobs.goos}}
         GOARCH: ${{matrix.jobs.goarch}}
         GOAMD64: ${{matrix.jobs.goamd64}}
-        GOARM: ${{matrix.jobs.arm}}
-        GOMIPS: ${{matrix.jobs.mips}}
+        GOARM: ${{matrix.jobs.goarm}}
+        GOMIPS: ${{matrix.jobs.gomips}}
       run: |
-        echo $CGO_ENABLED
+        go env
         go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
         if [ "${{matrix.jobs.goos}}" = "windows" ]; then
           cp mihomo.exe mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
@@ -352,18 +387,18 @@ jobs:
           git fetch --tags
           echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD)" >> $GITHUB_ENV
 
-      - name: Merge Alpha branch into Meta
+      - name: Force push Alpha branch to Meta
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git fetch origin Alpha:Alpha
-          git merge Alpha
-          git push origin Meta
+          git push origin Alpha:Meta --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag the commit
+      - name: Tag the commit on Alpha
         run: |
+          git checkout Alpha 
           git tag ${{ github.event.inputs.version }}
           git push origin ${{ github.event.inputs.version }}
         env:

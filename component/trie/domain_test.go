@@ -121,8 +121,20 @@ func TestTrie_Foreach(t *testing.T) {
 		assert.NoError(t, tree.Insert(domain, localIP))
 	}
 	count := 0
-	tree.Foreach(func(domain string, data netip.Addr) {
+	tree.Foreach(func(domain string, data netip.Addr) bool {
 		count++
+		return true
 	})
 	assert.Equal(t, 7, count)
+}
+
+func TestTrie_Space(t *testing.T) {
+	validDomain := func(domain string) bool {
+		_, ok := trie.ValidAndSplitDomain(domain)
+		return ok
+	}
+	assert.True(t, validDomain("google.com"))
+	assert.False(t, validDomain(" google.com"))
+	assert.False(t, validDomain(" google.com "))
+	assert.True(t, validDomain("Mijia Cloud"))
 }

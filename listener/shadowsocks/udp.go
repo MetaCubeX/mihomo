@@ -17,7 +17,7 @@ type UDPListener struct {
 	closed     bool
 }
 
-func NewUDP(addr string, pickCipher core.Cipher, tunnel C.Tunnel) (*UDPListener, error) {
+func NewUDP(addr string, pickCipher core.Cipher, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPListener, error) {
 	l, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func NewUDP(addr string, pickCipher core.Cipher, tunnel C.Tunnel) (*UDPListener,
 				}
 				continue
 			}
-			handleSocksUDP(conn, tunnel, data, put, remoteAddr)
+			handleSocksUDP(conn, tunnel, data, put, remoteAddr, additions...)
 		}
 	}()
 

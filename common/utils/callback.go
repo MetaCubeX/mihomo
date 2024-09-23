@@ -17,8 +17,8 @@ func NewCallback[T any]() *Callback[T] {
 }
 
 func (c *Callback[T]) Register(item func(T)) io.Closer {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	element := c.list.PushBack(item)
 	return &callbackCloser[T]{
 		element:  element,

@@ -8,7 +8,6 @@ import (
 	"github.com/metacubex/mihomo/common/structure"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
 	P "github.com/metacubex/mihomo/constant/provider"
 )
 
@@ -32,28 +31,13 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	if err := decoder.Decode(mapping, schema); err != nil {
 		return nil, err
 	}
-	var behavior P.RuleBehavior
-
-	switch schema.Behavior {
-	case "domain":
-		behavior = P.Domain
-	case "ipcidr":
-		behavior = P.IPCIDR
-	case "classical":
-		behavior = P.Classical
-	default:
-		return nil, fmt.Errorf("unsupported behavior type: %s", schema.Behavior)
+	behavior, err := P.ParseBehavior(schema.Behavior)
+	if err != nil {
+		return nil, err
 	}
-
-	var format P.RuleFormat
-
-	switch schema.Format {
-	case "", "yaml":
-		format = P.YamlRule
-	case "text":
-		format = P.TextRule
-	default:
-		return nil, fmt.Errorf("unsupported format type: %s", schema.Format)
+	format, err := P.ParseRuleFormat(schema.Format)
+	if err != nil {
+		return nil, err
 	}
 
 	var vehicle P.Vehicle
@@ -65,11 +49,11 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 		path := C.Path.GetPathByHash("rules", schema.URL)
 		if schema.Path != "" {
 			path = C.Path.Resolve(schema.Path)
-			if !features.CMFA && !C.Path.IsSafePath(path) {
+			if !C.Path.IsSafePath(path) {
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil, resource.DefaultHttpTimeout)
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}

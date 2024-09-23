@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
+	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 )
 
@@ -14,6 +15,10 @@ type classicalStrategy struct {
 	shouldResolveIP   bool
 	shouldFindProcess bool
 	parse             func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
+}
+
+func (c *classicalStrategy) Behavior() P.RuleBehavior {
+	return P.Classical
 }
 
 func (c *classicalStrategy) Match(metadata *C.Metadata) bool {

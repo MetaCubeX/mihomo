@@ -1,8 +1,11 @@
 package provider
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/mihomo/log"
 )
 
 type SubscriptionInfo struct {
@@ -12,28 +15,46 @@ type SubscriptionInfo struct {
 	Expire   int64
 }
 
-func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo, err error) {
+func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo) {
 	userinfo = strings.ToLower(userinfo)
 	userinfo = strings.ReplaceAll(userinfo, " ", "")
 	si = new(SubscriptionInfo)
+
 	for _, field := range strings.Split(userinfo, ";") {
-		switch name, value, _ := strings.Cut(field, "="); name {
-		case "upload":
-			si.Upload, err = strconv.ParseInt(value, 10, 64)
-		case "download":
-			si.Download, err = strconv.ParseInt(value, 10, 64)
-		case "total":
-			si.Total, err = strconv.ParseInt(value, 10, 64)
-		case "expire":
-			if value == "" {
-				si.Expire = 0
-			} else {
-				si.Expire, err = strconv.ParseInt(value, 10, 64)
-			}
+		name, value, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
 		}
+
+		intValue, err := parseValue(value)
 		if err != nil {
-			return
+			log.Warnln("[Provider] get subscription-userinfo: %e", err)
+			continue
+		}
+
+		switch name {
+		case "upload":
+			si.Upload = intValue
+		case "download":
+			si.Download = intValue
+		case "total":
+			si.Total = intValue
+		case "expire":
+			si.Expire = intValue
 		}
 	}
-	return
+
+	return si
+}
+
+func parseValue(value string) (int64, error) {
+	if intValue, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return intValue, nil
+	}
+
+	if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+		return int64(floatValue), nil
+	}
+
+	return 0, fmt.Errorf("failed to parse value '%s'", value)
 }

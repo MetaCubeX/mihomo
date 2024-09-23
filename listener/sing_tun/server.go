@@ -136,7 +136,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		options.AutoRedirect = false
 	}
 	tunName := options.Device
-	if tunName == "" || !checkTunName(tunName) {
+	if options.FileDescriptor == 0 && (tunName == "" || !checkTunName(tunName)) {
 		tunName = CalculateInterfaceName(InterfaceName)
 		options.Device = tunName
 	}
@@ -264,31 +264,35 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	interfaceFinder := DefaultInterfaceFinder
 
-	networkUpdateMonitor, err := tun.NewNetworkUpdateMonitor(log.SingLogger)
-	if err != nil {
-		err = E.Cause(err, "create NetworkUpdateMonitor")
-		return
-	}
-	l.networkUpdateMonitor = networkUpdateMonitor
-	err = networkUpdateMonitor.Start()
-	if err != nil {
-		err = E.Cause(err, "start NetworkUpdateMonitor")
-		return
-	}
+	var networkUpdateMonitor tun.NetworkUpdateMonitor
+	var defaultInterfaceMonitor tun.DefaultInterfaceMonitor
+	if options.AutoRoute || options.AutoDetectInterface { // don't start NetworkUpdateMonitor because netlink banned by google on Android14+
+		networkUpdateMonitor, err = tun.NewNetworkUpdateMonitor(log.SingLogger)
+		if err != nil {
+			err = E.Cause(err, "create NetworkUpdateMonitor")
+			return
+		}
+		l.networkUpdateMonitor = networkUpdateMonitor
+		err = networkUpdateMonitor.Start()
+		if err != nil {
+			err = E.Cause(err, "start NetworkUpdateMonitor")
+			return
+		}
 
-	defaultInterfaceMonitor, err := tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, log.SingLogger, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
-	if err != nil {
-		err = E.Cause(err, "create DefaultInterfaceMonitor")
-		return
-	}
-	l.defaultInterfaceMonitor = defaultInterfaceMonitor
-	defaultInterfaceMonitor.RegisterCallback(func(event int) {
-		l.FlushDefaultInterface()
-	})
-	err = defaultInterfaceMonitor.Start()
-	if err != nil {
-		err = E.Cause(err, "start DefaultInterfaceMonitor")
-		return
+		defaultInterfaceMonitor, err = tun.NewDefaultInterfaceMonitor(networkUpdateMonitor, log.SingLogger, tun.DefaultInterfaceMonitorOptions{OverrideAndroidVPN: true})
+		if err != nil {
+			err = E.Cause(err, "create DefaultInterfaceMonitor")
+			return
+		}
+		l.defaultInterfaceMonitor = defaultInterfaceMonitor
+		defaultInterfaceMonitor.RegisterCallback(func(event int) {
+			l.FlushDefaultInterface()
+		})
+		err = defaultInterfaceMonitor.Start()
+		if err != nil {
+			err = E.Cause(err, "start DefaultInterfaceMonitor")
+			return
+		}
 	}
 
 	tunOptions := tun.Options{
@@ -331,7 +335,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 			Context:                ctx,
 			Handler:                handler.TypeMutation(C.REDIR),
 			Logger:                 log.SingLogger,
-			NetworkMonitor:         networkUpdateMonitor,
+			NetworkMonitor:         l.networkUpdateMonitor,
 			InterfaceFinder:        interfaceFinder,
 			TableName:              "mihomo",
 			DisableNFTables:        dErr == nil && disableNFTables,
@@ -436,6 +440,9 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	//l.openAndroidHotspot(tunOptions)
 
+	if options.FileDescriptor != 0 {
+		tunName = fmt.Sprintf("%s(fd=%d)", tunName, options.FileDescriptor)
+	}
 	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, auto redir: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.AutoRedirect, options.Stack)
 	return
@@ -489,7 +496,7 @@ func (l *Listener) updateRule(ruleProvider provider.RuleProvider, exclude bool, 
 }
 
 func (l *Listener) FlushDefaultInterface() {
-	if l.options.AutoDetectInterface {
+	if l.options.AutoDetectInterface && l.defaultInterfaceMonitor != nil {
 		for _, destination := range []netip.Addr{netip.IPv4Unspecified(), netip.IPv6Unspecified(), netip.MustParseAddr("1.1.1.1")} {
 			autoDetectInterfaceName := l.defaultInterfaceMonitor.DefaultInterfaceName(destination)
 			if autoDetectInterfaceName == l.tunName {

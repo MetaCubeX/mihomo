@@ -72,7 +72,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h, ntp.Now)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", config.Cipher)
-		return embedSS.New(config, tunnel)
+		return embedSS.New(config, tunnel, additions...)
 	}
 	if err != nil {
 		return nil, err

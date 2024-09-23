@@ -8,3 +8,7 @@ const multipathTCPAvailable = false
 
 func setMultiPathTCP(listenConfig *net.ListenConfig, open bool) {
 }
+
+func getMultiPathTCP(listenConfig *net.ListenConfig) bool {
+	return false
+}

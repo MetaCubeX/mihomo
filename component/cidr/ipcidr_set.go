@@ -46,6 +46,14 @@ func (set *IpCidrSet) IsContain(ip netip.Addr) bool {
 	return set.ToIPSet().Contains(ip.WithZone(""))
 }
 
+// MatchIp implements C.IpMatcher
+func (set *IpCidrSet) MatchIp(ip netip.Addr) bool {
+	if set.IsEmpty() {
+		return false
+	}
+	return set.IsContain(ip)
+}
+
 func (set *IpCidrSet) Merge() error {
 	var b netipx.IPSetBuilder
 	b.AddSet(set.ToIPSet())
@@ -55,6 +63,20 @@ func (set *IpCidrSet) Merge() error {
 	}
 	set.fromIPSet(i)
 	return nil
+}
+
+func (set *IpCidrSet) IsEmpty() bool {
+	return set == nil || len(set.rr) == 0
+}
+
+func (set *IpCidrSet) Foreach(f func(prefix netip.Prefix) bool) {
+	for _, r := range set.rr {
+		for _, prefix := range r.Prefixes() {
+			if !f(prefix) {
+				return
+			}
+		}
+	}
 }
 
 // ToIPSet not safe convert to *netipx.IPSet

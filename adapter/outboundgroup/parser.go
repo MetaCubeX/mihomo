@@ -69,7 +69,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 
 	if groupOption.IncludeAllProviders {
-		groupOption.Use = append(groupOption.Use, AllProviders...)
+		groupOption.Use = AllProviders
 	}
 	if groupOption.IncludeAllProxies {
 		if groupOption.Filter != "" {
@@ -87,6 +87,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		} else {
 			groupOption.Proxies = append(groupOption.Proxies, AllProxies...)
+		}
+		if len(groupOption.Proxies) == 0 && len(groupOption.Use) == 0 {
+			groupOption.Proxies = []string{"COMPATIBLE"}
 		}
 	}
 
