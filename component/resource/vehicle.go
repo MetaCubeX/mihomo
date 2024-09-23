@@ -117,14 +117,14 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []b
 	header := h.header
 	setIfNoneMatch := false
 	if etag && oldHash.IsValid() {
-		hashBytes, etag := cachefile.Cache().GetETagWithHash(h.url)
-		if oldHash.Equal(hashBytes) && etag != "" {
+		etagWithHash := cachefile.Cache().GetETagWithHash(h.url)
+		if oldHash.Equal(etagWithHash.Hash) && etagWithHash.ETag != "" {
 			if header == nil {
 				header = http.Header{}
 			} else {
 				header = header.Clone()
 			}
-			header.Set("If-None-Match", etag)
+			header.Set("If-None-Match", etagWithHash.ETag)
 			setIfNoneMatch = true
 		}
 	}
@@ -146,7 +146,11 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []b
 	}
 	hash = utils.MakeHash(buf)
 	if etag {
-		cachefile.Cache().SetETagWithHash(h.url, hash, resp.Header.Get("ETag"))
+		cachefile.Cache().SetETagWithHash(h.url, cachefile.EtagWithHash{
+			Hash: hash,
+			ETag: resp.Header.Get("ETag"),
+			Time: time.Now(),
+		})
 	}
 	return
 }

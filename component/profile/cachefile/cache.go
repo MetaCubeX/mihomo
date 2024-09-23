@@ -1,12 +1,10 @@
 package cachefile
 
 import (
-	"math"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/profile"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -70,58 +68,6 @@ func (c *CacheFile) SelectedMap() map[string]string {
 		return nil
 	})
 	return mapping
-}
-
-func (c *CacheFile) SetETagWithHash(url string, hash utils.HashType, etag string) {
-	if c.DB == nil {
-		return
-	}
-
-	lenHash := hash.Len()
-	if lenHash > math.MaxUint8 {
-		return // maybe panic is better
-	}
-
-	data := make([]byte, 1, 1+lenHash+len(etag))
-	data[0] = uint8(lenHash)
-	data = append(data, hash.Bytes()...)
-	data = append(data, etag...)
-
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketETag)
-		if err != nil {
-			return err
-		}
-
-		return bucket.Put([]byte(url), data)
-	})
-	if err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
-		return
-	}
-}
-func (c *CacheFile) GetETagWithHash(key string) (hash utils.HashType, etag string) {
-	if c.DB == nil {
-		return
-	}
-	c.DB.View(func(t *bbolt.Tx) error {
-		if bucket := t.Bucket(bucketETag); bucket != nil {
-			if v := bucket.Get([]byte(key)); v != nil {
-				if len(v) == 0 {
-					return nil
-				}
-				lenHash := int(v[0])
-				if len(v) < 1+lenHash {
-					return nil
-				}
-				hash = utils.MakeHashFromBytes(v[1 : 1+lenHash])
-				etag = string(v[1+lenHash:])
-			}
-		}
-		return nil
-	})
-
-	return
 }
 
 func (c *CacheFile) Close() error {

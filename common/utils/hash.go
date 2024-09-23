@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 )
 
 // HashType warps hash array inside struct
@@ -15,14 +16,6 @@ func MakeHash(data []byte) HashType {
 	return HashType{md5.Sum(data)}
 }
 
-func MakeHashFromBytes(hashBytes []byte) (h HashType) {
-	if len(hashBytes) != md5.Size {
-		return
-	}
-	copy(h.md5[:], hashBytes)
-	return
-}
-
 func (h HashType) Equal(hash HashType) bool {
 	return h.md5 == hash.md5
 }
@@ -33,6 +26,30 @@ func (h HashType) Bytes() []byte {
 
 func (h HashType) String() string {
 	return hex.EncodeToString(h.Bytes())
+}
+
+func (h HashType) MarshalText() ([]byte, error) {
+	return []byte(h.String()), nil
+}
+
+func (h *HashType) UnmarshalText(data []byte) error {
+	if hex.DecodedLen(len(data)) != md5.Size {
+		return errors.New("invalid hash length")
+	}
+	_, err := hex.Decode(h.md5[:], data)
+	return err
+}
+
+func (h HashType) MarshalBinary() ([]byte, error) {
+	return h.md5[:], nil
+}
+
+func (h *HashType) UnmarshalBinary(data []byte) error {
+	if len(data) != md5.Size {
+		return errors.New("invalid hash length")
+	}
+	copy(h.md5[:], data)
+	return nil
 }
 
 func (h HashType) Len() int {
