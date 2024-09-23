@@ -1162,16 +1162,6 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
-		if strings.HasPrefix(server, "dhcp://") {
-			nameservers = append(
-				nameservers,
-				dns.NameServer{
-					Net:  "dhcp",
-					Addr: server[len("dhcp://"):],
-				},
-			)
-			continue
-		}
 		server = parsePureDNSServer(server)
 		u, err := url.Parse(server)
 		if err != nil {
@@ -1222,6 +1212,13 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			dnsNetType = "quic" // DNS over QUIC
 		case "system":
 			dnsNetType = "system" // System DNS
+		case "dhcp":
+			addr = server[len("dhcp://"):] // some special notation cannot be parsed by url
+			dnsNetType = "dhcp"            // UDP from DHCP
+			if addr == "system" {          // Compatible with old writing "dhcp://system"
+				dnsNetType = "system"
+				addr = ""
+			}
 		case "rcode":
 			dnsNetType = "rcode"
 			addr = u.Host
@@ -1247,16 +1244,18 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			proxyName = dns.RespectRules
 		}
 
-		nameservers = append(
-			nameservers,
-			dns.NameServer{
-				Net:       dnsNetType,
-				Addr:      addr,
-				ProxyName: proxyName,
-				Params:    params,
-				PreferH3:  preferH3,
-			},
-		)
+		nameserver := dns.NameServer{
+			Net:       dnsNetType,
+			Addr:      addr,
+			ProxyName: proxyName,
+			Params:    params,
+			PreferH3:  preferH3,
+		}
+		if slices.ContainsFunc(nameservers, nameserver.Equal) {
+			continue // skip duplicates nameserver
+		}
+
+		nameservers = append(nameservers, nameserver)
 	}
 	return nameservers, nil
 }
