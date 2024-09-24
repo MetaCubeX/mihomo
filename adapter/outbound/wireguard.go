@@ -272,6 +272,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		},
 	}
 	if option.AmneziaWGOption != nil {
+		outbound.bind.SetParseReserved(false) // AmneziaWG don't need parse reserved
 		outbound.device = amnezia.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
 	} else {
 		outbound.device = device.NewDevice(outbound.tunDevice, outbound.bind, logger, option.Workers)
