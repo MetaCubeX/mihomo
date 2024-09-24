@@ -49,6 +49,7 @@ func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Auth
 			inbound.WithSpecialRules(""),
 		}
 	}
+
 	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -85,8 +86,6 @@ func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Auth
 }
 
 func handleConn(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
-	N.TCPKeepAlive(conn)
-
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {

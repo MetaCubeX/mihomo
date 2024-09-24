@@ -15,13 +15,13 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/adapter/provider"
-	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/auth"
 	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/component/keepalive"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/resource"
@@ -697,12 +697,12 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	resource.SetETag(cfg.ETagSupport)
 
 	if cfg.KeepAliveIdle != 0 {
-		N.KeepAliveIdle = time.Duration(cfg.KeepAliveIdle) * time.Second
+		keepalive.SetKeepAliveIdle(time.Duration(cfg.KeepAliveIdle) * time.Second)
 	}
 	if cfg.KeepAliveInterval != 0 {
-		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
+		keepalive.SetKeepAliveInterval(time.Duration(cfg.KeepAliveInterval) * time.Second)
 	}
-	N.DisableKeepAlive = cfg.DisableKeepAlive
+	keepalive.SetDisableKeepAlive(cfg.DisableKeepAlive)
 
 	// checkout externalUI exist
 	if cfg.ExternalUI != "" {

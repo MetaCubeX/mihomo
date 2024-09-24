@@ -77,7 +77,6 @@ func (s *sshClient) connect(ctx context.Context, cDialer C.Dialer, addr string) 
 	if err != nil {
 		return nil, err
 	}
-	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)

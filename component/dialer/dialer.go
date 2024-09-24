@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/log"
 )
@@ -144,6 +145,7 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	dialer := netDialer.(*net.Dialer)
+	keepalive.SetNetDialer(dialer)
 	if opt.mpTcp {
 		setMultiPathTCP(dialer)
 	}

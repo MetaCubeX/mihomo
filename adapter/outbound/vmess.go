@@ -312,7 +312,6 @@ func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -373,7 +372,6 @@ func (v *Vmess) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -473,7 +471,6 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
-			N.TCPKeepAlive(c)
 			return c, nil
 		}
 

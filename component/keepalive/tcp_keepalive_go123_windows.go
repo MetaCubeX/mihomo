@@ -2,7 +2,7 @@
 
 // copy and modify from golang1.23's internal/syscall/windows/version_windows.go
 
-package net
+package keepalive
 
 import (
 	"errors"
