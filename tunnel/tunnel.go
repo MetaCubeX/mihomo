@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/maphash"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -29,11 +28,12 @@ import (
 	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
+const queueSize = 200
+
 var (
 	status        = newAtomicStatus(Suspend)
-	tcpQueue      = make(chan C.ConnContext, 200)
+	tcpQueue      = make(chan C.ConnContext, queueSize)
 	udpQueues     []chan C.PacketAdapter
-	udpHashSeed   = maphash.MakeSeed()
 	natTable      = nat.New()
 	rules         []C.Rule
 	listeners     = make(map[string]C.InboundListener)
@@ -73,13 +73,8 @@ func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 func (t tunnel) HandleUDPPacket(packet C.UDPPacket, metadata *C.Metadata) {
 	packetAdapter := C.NewPacketAdapter(packet, metadata)
 
-	var h maphash.Hash
-
-	h.SetSeed(udpHashSeed)
-	h.WriteString(metadata.SourceAddress())
-	h.WriteString(metadata.RemoteAddress())
-
-	queueNo := uint(h.Sum64()) % uint(len(udpQueues))
+	hash := utils.MapHash(metadata.SourceAddress() + "-" + metadata.RemoteAddress())
+	queueNo := uint(hash) % uint(len(udpQueues))
 
 	select {
 	case udpQueues[queueNo] <- packetAdapter:
@@ -255,8 +250,7 @@ func isHandle(t C.Type) bool {
 }
 
 // processUDP starts a loop to handle udp packet
-func processUDP(queueNo int) {
-	queue := udpQueues[queueNo]
+func processUDP(queue chan C.PacketAdapter) {
 	for conn := range queue {
 		handleUDPConn(conn)
 	}
@@ -270,8 +264,9 @@ func process() {
 
 	udpQueues = make([]chan C.PacketAdapter, numUDPWorkers)
 	for i := 0; i < numUDPWorkers; i++ {
-		udpQueues[i] = make(chan C.PacketAdapter, 200)
-		go processUDP(i)
+		queue := make(chan C.PacketAdapter, queueSize)
+		udpQueues[i] = queue
+		go processUDP(queue)
 	}
 
 	queue := tcpQueue
