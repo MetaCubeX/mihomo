@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/netip"
@@ -11,7 +12,78 @@ import (
 	"github.com/metacubex/mihomo/log"
 )
 
+type packetSender struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	ch     chan C.PacketAdapter
+}
+
+// newPacketSender return a chan based C.PacketSender
+// It ensures that packets can be sent sequentially and without blocking
+func newPacketSender() C.PacketSender {
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan C.PacketAdapter, senderCapacity)
+	return &packetSender{
+		ctx:    ctx,
+		cancel: cancel,
+		ch:     ch,
+	}
+}
+
+func (s *packetSender) Process(pc C.PacketConn, proxy C.WriteBackProxy) {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return // sender closed
+		case packet := <-s.ch:
+			if proxy != nil {
+				proxy.UpdateWriteBack(packet)
+			}
+			_ = handleUDPToRemote(packet, pc, packet.Metadata())
+			packet.Drop()
+		}
+	}
+}
+
+func (s *packetSender) dropAll() {
+	for {
+		select {
+		case data := <-s.ch:
+			data.Drop() // drop all data still in chan
+		default:
+			return // no data, exit goroutine
+		}
+	}
+}
+
+func (s *packetSender) Send(packet C.PacketAdapter) {
+	select {
+	case <-s.ctx.Done():
+		packet.Drop() // sender closed before Send()
+		return
+	default:
+	}
+
+	select {
+	case s.ch <- packet:
+		// put ok, so don't drop packet, will process by other side of chan
+	case <-s.ctx.Done():
+		packet.Drop() // sender closed when putting data to chan
+	default:
+		packet.Drop() // chan is full
+	}
+}
+
+func (s *packetSender) Close() {
+	s.cancel()
+	s.dropAll()
+}
+
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
+	if err := resolveUDP(metadata); err != nil {
+		return err
+	}
+
 	addr := metadata.UDPAddr()
 	if addr == nil {
 		return errors.New("udp addr invalid")
@@ -26,8 +98,9 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	return nil
 }
 
-func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, key string, oAddrPort netip.AddrPort, fAddr netip.Addr) {
+func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, sender C.PacketSender, key string, oAddrPort netip.AddrPort, fAddr netip.Addr) {
 	defer func() {
+		sender.Close()
 		_ = pc.Close()
 		closeAllLocalCoon(key)
 		natTable.Delete(key)

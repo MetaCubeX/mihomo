@@ -255,12 +255,16 @@ type UDPPacketInAddr interface {
 // PacketAdapter is a UDP Packet adapter for socks/redir/tun
 type PacketAdapter interface {
 	UDPPacket
+	// Metadata returns destination metadata
 	Metadata() *Metadata
+	// Key is a SNAT key
+	Key() string
 }
 
 type packetAdapter struct {
 	UDPPacket
 	metadata *Metadata
+	key      string
 }
 
 // Metadata returns destination metadata
@@ -268,10 +272,16 @@ func (s *packetAdapter) Metadata() *Metadata {
 	return s.metadata
 }
 
+// Key is a SNAT key
+func (s *packetAdapter) Key() string {
+	return s.key
+}
+
 func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
 	return &packetAdapter{
 		packet,
 		metadata,
+		packet.LocalAddr().String(),
 	}
 }
 
@@ -284,16 +294,18 @@ type WriteBackProxy interface {
 	UpdateWriteBack(wb WriteBack)
 }
 
+type PacketSender interface {
+	// Send will send PacketAdapter nonblocking
+	// the implement must call UDPPacket.Drop() inside Send
+	Send(PacketAdapter)
+	Process(PacketConn, WriteBackProxy)
+	Close()
+}
+
 type NatTable interface {
-	Set(key string, e PacketConn, w WriteBackProxy)
-
-	Get(key string) (PacketConn, WriteBackProxy)
-
-	GetOrCreateLock(key string) (*sync.Cond, bool)
+	GetOrCreate(key string, maker func() PacketSender) (PacketSender, bool)
 
 	Delete(key string)
-
-	DeleteLock(key string)
 
 	GetForLocalConn(lAddr, rAddr string) *net.UDPConn
 
