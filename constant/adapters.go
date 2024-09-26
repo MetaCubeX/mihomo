@@ -298,7 +298,11 @@ type PacketSender interface {
 	// Send will send PacketAdapter nonblocking
 	// the implement must call UDPPacket.Drop() inside Send
 	Send(PacketAdapter)
+	// Process is a blocking loop to send PacketAdapter to PacketConn and update the WriteBackProxy
 	Process(PacketConn, WriteBackProxy)
+	// ResolveUDP do a local resolve UDP dns blocking if metadata is not resolved
+	ResolveUDP(*Metadata) error
+	// Close stop the Process loop
 	Close()
 }
 

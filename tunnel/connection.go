@@ -7,7 +7,9 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 )
@@ -16,6 +18,7 @@ type packetSender struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	ch     chan C.PacketAdapter
+	cache  *lru.LruCache[string, netip.Addr]
 }
 
 // newPacketSender return a chan based C.PacketSender
@@ -27,6 +30,7 @@ func newPacketSender() C.PacketSender {
 		ctx:    ctx,
 		cancel: cancel,
 		ch:     ch,
+		cache:  lru.New[string, netip.Addr](lru.WithSize[string, netip.Addr](senderCapacity)),
 	}
 }
 
@@ -39,7 +43,11 @@ func (s *packetSender) Process(pc C.PacketConn, proxy C.WriteBackProxy) {
 			if proxy != nil {
 				proxy.UpdateWriteBack(packet)
 			}
-			_ = handleUDPToRemote(packet, pc, packet.Metadata())
+			if err := s.ResolveUDP(packet.Metadata()); err != nil {
+				log.Warnln("[UDP] Resolve Ip error: %s", err)
+			} else {
+				_ = handleUDPToRemote(packet, pc, packet.Metadata())
+			}
 			packet.Drop()
 		}
 	}
@@ -79,11 +87,24 @@ func (s *packetSender) Close() {
 	s.dropAll()
 }
 
-func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
-	if err := resolveUDP(metadata); err != nil {
-		return err
-	}
+func (s *packetSender) ResolveUDP(metadata *C.Metadata) (err error) {
+	// local resolve UDP dns
+	if !metadata.Resolved() {
+		ip, ok := s.cache.Get(metadata.Host)
+		if !ok {
+			ip, err = resolver.ResolveIP(s.ctx, metadata.Host)
+			if err != nil {
+				return err
+			}
+			s.cache.Set(metadata.Host, ip)
+		}
 
+		metadata.DstIP = ip
+	}
+	return nil
+}
+
+func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
 	addr := metadata.UDPAddr()
 	if addr == nil {
 		return errors.New("udp addr invalid")

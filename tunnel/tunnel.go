@@ -346,18 +346,6 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	return
 }
 
-func resolveUDP(metadata *C.Metadata) error {
-	// local resolve UDP dns
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
-		if err != nil {
-			return err
-		}
-		metadata.DstIP = ip
-	}
-	return nil
-}
-
 // processUDP starts a loop to handle udp packet
 func processUDP(queue chan C.PacketAdapter) {
 	for conn := range queue {
@@ -398,7 +386,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 	sender, loaded := natTable.GetOrCreate(key, newPacketSender)
 	if !loaded {
 		dial := func() (C.PacketConn, C.WriteBackProxy, error) {
-			if err := resolveUDP(metadata); err != nil {
+			if err := sender.ResolveUDP(metadata); err != nil {
 				log.Warnln("[UDP] Resolve Ip error: %s", err)
 				return nil, nil, err
 			}
