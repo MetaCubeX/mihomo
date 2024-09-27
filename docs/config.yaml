@@ -257,6 +257,20 @@ dns:
   # 可设置为whitelist，即只有匹配成功才返回fake-ip
   fake-ip-filter-mode: blacklist
 
+  # fake-ip 白名单模式
+  # 当 fake-ip-filter 和 real-ip-filter 同时匹配时，fake-ip-filter 优先级更高。
+  # 如果都没有匹配到规则，则返回 fake-ip。
+  # 例如：
+  #     如果广告域名 (www.ad.com) 同时满足 fake-ip-filter:AD 和 real-ip-filter:cn，则返回 fake-ip。
+  #     如果被墙域名 (wiki.metacubex.one) 都没匹配到，默认返回 fake-ip。
+  #  fake-ip-filter-mode: whitelist
+  #  fake-ip-filter:
+  #    - rule-set:anti-AD
+  #    - geosite:gfw
+  #  real-ip-filter:
+  #    - geosite:cn
+  #    - rule-set:douyin
+
   # use-hosts: true # 查询 hosts
 
   # 配置后面的nameserver、fallback和nameserver-policy向dns服务器的连接过程是否遵守遵守rules规则

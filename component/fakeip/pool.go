@@ -29,16 +29,17 @@ type store interface {
 
 // Pool is an implementation about fake ip generator without storage
 type Pool struct {
-	gateway netip.Addr
-	first   netip.Addr
-	last    netip.Addr
-	offset  netip.Addr
-	cycle   bool
-	mux     sync.Mutex
-	host    []C.DomainMatcher
-	mode    C.FilterMode
-	ipnet   netip.Prefix
-	store   store
+	gateway  netip.Addr
+	first    netip.Addr
+	last     netip.Addr
+	offset   netip.Addr
+	cycle    bool
+	mux      sync.Mutex
+	host     []C.DomainMatcher
+	realhost []C.DomainMatcher
+	mode     C.FilterMode
+	ipnet    netip.Prefix
+	store    store
 }
 
 // Lookup return a fake ip with host
@@ -75,12 +76,22 @@ func (p *Pool) ShouldSkipped(domain string) bool {
 }
 
 func (p *Pool) shouldSkipped(domain string) bool {
+	// When both fake-ip-filter and real-ip-filter match, the fake-ip-filter takes precedence.
+	// If neither filter matches, fake-ip is returned.
+	// For example:
+	//     If an ad domain (www.ad.com) matches both fake-ip-filter:AD and real-ip-filter:cn, fake-ip will be returned.
+	//     If a blocked domain (wiki.metacubex.one) does not match either filter, fake-ip will be returned by default.
 	for _, matcher := range p.host {
 		if matcher.MatchDomain(domain) {
 			return true
 		}
 	}
-	return false
+	for _, matcher := range p.realhost {
+		if matcher.MatchDomain(domain) {
+			return false
+		}
+	}
+	return true
 }
 
 // Exist returns if given ip exists in fake-ip pool
@@ -164,9 +175,10 @@ func (p *Pool) restoreState() {
 }
 
 type Options struct {
-	IPNet netip.Prefix
-	Host  []C.DomainMatcher
-	Mode  C.FilterMode
+	IPNet    netip.Prefix
+	Host     []C.DomainMatcher
+	RealHost []C.DomainMatcher
+	Mode     C.FilterMode
 
 	// Size sets the maximum number of entries in memory
 	// and does not work if Persistence is true
@@ -191,14 +203,15 @@ func New(options Options) (*Pool, error) {
 	}
 
 	pool := &Pool{
-		gateway: gateway,
-		first:   first,
-		last:    last,
-		offset:  first.Prev(),
-		cycle:   false,
-		host:    options.Host,
-		mode:    options.Mode,
-		ipnet:   options.IPNet,
+		gateway:  gateway,
+		first:    first,
+		last:     last,
+		offset:   first.Prev(),
+		cycle:    false,
+		host:     options.Host,
+		realhost: options.RealHost,
+		mode:     options.Mode,
+		ipnet:    options.IPNet,
 	}
 	if options.Persistence {
 		pool.store = newCachefileStore(cachefile.Cache())

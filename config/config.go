@@ -206,6 +206,7 @@ type RawDNS struct {
 	EnhancedMode          C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
 	FakeIPRange           string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
 	FakeIPFilter          []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	RealIPFilter          []string                            `yaml:"real-ip-filter" json:"real-ip-filter"`
 	FakeIPFilterMode      C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
 	DefaultNameserver     []string                            `yaml:"default-nameserver" json:"default-nameserver"`
 	CacheAlgorithm        string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
@@ -1449,10 +1450,17 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 			return nil, err
 		}
 
+		// real ip via host rule
+		realHost, err := parseDomain(cfg.RealIPFilter, fakeIPTrie, "dns.real-ip-filter", ruleProviders)
+		if err != nil {
+			return nil, err
+		}
+
 		pool, err := fakeip.New(fakeip.Options{
 			IPNet:       fakeIPRange,
 			Size:        1000,
 			Host:        host,
+			RealHost:    realHost,
 			Mode:        cfg.FakeIPFilterMode,
 			Persistence: rawCfg.Profile.StoreFakeIP,
 		})
