@@ -36,10 +36,10 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithAuthenticator(addr, tunnel, authStore.Authenticator, additions...)
+	return NewWithAuthenticator(addr, tunnel, authStore.Default, additions...)
 }
 
-func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -67,24 +67,24 @@ func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Auth
 				}
 				continue
 			}
-			getAuth := getAuth
-			if isDefault { // only apply on default listener
+			store := store
+			if isDefault || store == authStore.Default { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(c.RemoteAddr()) {
 					_ = c.Close()
 					continue
 				}
 				if inbound.SkipAuthRemoteAddr(c.RemoteAddr()) {
-					getAuth = authStore.Nil
+					store = authStore.Nil
 				}
 			}
-			go handleSocks(c, tunnel, getAuth, additions...)
+			go handleSocks(c, tunnel, store, additions...)
 		}
 	}()
 
 	return sl, nil
 }
 
-func handleSocks(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
+func handleSocks(conn net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) {
 	bufConn := N.NewBufferedConn(conn)
 	head, err := bufConn.Peek(1)
 	if err != nil {
@@ -94,16 +94,16 @@ func handleSocks(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticat
 
 	switch head[0] {
 	case socks4.Version:
-		HandleSocks4(bufConn, tunnel, getAuth, additions...)
+		HandleSocks4(bufConn, tunnel, store, additions...)
 	case socks5.Version:
-		HandleSocks5(bufConn, tunnel, getAuth, additions...)
+		HandleSocks5(bufConn, tunnel, store, additions...)
 	default:
 		conn.Close()
 	}
 }
 
-func HandleSocks4(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
-	authenticator := getAuth()
+func HandleSocks4(conn net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) {
+	authenticator := store.Authenticator()
 	addr, _, user, err := socks4.ServerHandshake(conn, authenticator)
 	if err != nil {
 		conn.Close()
@@ -113,8 +113,8 @@ func HandleSocks4(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authentica
 	tunnel.HandleTCPConn(inbound.NewSocket(socks5.ParseAddr(addr), conn, C.SOCKS4, additions...))
 }
 
-func HandleSocks5(conn net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
-	authenticator := getAuth()
+func HandleSocks5(conn net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) {
+	authenticator := store.Authenticator()
 	target, command, user, err := socks5.ServerHandshake(conn, authenticator)
 	if err != nil {
 		conn.Close()

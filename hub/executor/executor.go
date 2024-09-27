@@ -127,7 +127,7 @@ func initInnerTcp() {
 func GetGeneral() *config.General {
 	ports := listener.GetPorts()
 	var authenticator []string
-	if auth := authStore.Authenticator(); auth != nil {
+	if auth := authStore.Default.Authenticator(); auth != nil {
 		authenticator = auth.Users()
 	}
 
@@ -422,7 +422,7 @@ func updateGeneral(general *config.General) {
 
 func updateUsers(users []auth.AuthUser) {
 	authenticator := auth.NewAuthenticator(users)
-	authStore.SetAuthenticator(authenticator)
+	authStore.Default.SetAuthenticator(authenticator)
 	if authenticator != nil {
 		log.Infoln("Authentication of local server updated")
 	}

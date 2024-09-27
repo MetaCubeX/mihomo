@@ -71,7 +71,7 @@ func (s *Socks) Address() string {
 // Listen implements constant.InboundListener
 func (s *Socks) Listen(tunnel C.Tunnel) error {
 	var err error
-	if s.stl, err = socks.NewWithAuthenticator(s.RawAddress(), tunnel, s.config.Users.GetAuth(), s.Additions()...); err != nil {
+	if s.stl, err = socks.NewWithAuthenticator(s.RawAddress(), tunnel, s.config.Users.GetAuthStore(), s.Additions()...); err != nil {
 		return err
 	}
 	if s.udp {

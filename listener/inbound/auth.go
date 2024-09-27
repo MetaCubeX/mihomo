@@ -12,7 +12,7 @@ type AuthUser struct {
 
 type AuthUsers []AuthUser
 
-func (a AuthUsers) GetAuth() func() auth.Authenticator {
+func (a AuthUsers) GetAuthStore() auth.AuthStore {
 	if a != nil { // structure's Decode will ensure value not nil when input has value even it was set an empty array
 		if len(a) == 0 {
 			return authStore.Nil
@@ -25,7 +25,7 @@ func (a AuthUsers) GetAuth() func() auth.Authenticator {
 			}
 		}
 		authenticator := auth.NewAuthenticator(users)
-		return func() auth.Authenticator { return authenticator }
+		return authStore.NewAuthStore(authenticator)
 	}
-	return authStore.Authenticator
+	return authStore.Default
 }

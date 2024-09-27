@@ -30,7 +30,7 @@ func (b *bodyWrapper) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func HandleConn(c net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) {
+func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) {
 	additions = append(additions, inbound.Placeholder) // Add a placeholder for InUser
 	inUserIdx := len(additions) - 1
 	client := newClient(c, tunnel, additions)
@@ -41,7 +41,7 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, getAuth func() auth.Authenticator, 
 
 	conn := N.NewBufferedConn(c)
 
-	authenticator := getAuth()
+	authenticator := store.Authenticator()
 	keepAlive := true
 	trusted := authenticator == nil // disable authenticate if lru is nil
 	lastUser := ""

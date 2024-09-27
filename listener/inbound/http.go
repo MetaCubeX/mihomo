@@ -45,7 +45,7 @@ func (h *HTTP) Address() string {
 // Listen implements constant.InboundListener
 func (h *HTTP) Listen(tunnel C.Tunnel) error {
 	var err error
-	h.l, err = http.NewWithAuthenticator(h.RawAddress(), tunnel, h.config.Users.GetAuth(), h.Additions()...)
+	h.l, err = http.NewWithAuthenticator(h.RawAddress(), tunnel, h.config.Users.GetAuthStore(), h.Additions()...)
 	if err != nil {
 		return err
 	}
