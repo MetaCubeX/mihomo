@@ -31,6 +31,7 @@ func proxyRouter() http.Handler {
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
 		r.Put("/", updateProxy)
+		r.Delete("/", unfixedProxy)
 	})
 	return r
 }
@@ -145,4 +146,28 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{
 		"delay": delay,
 	})
+}
+
+func unfixedProxy(w http.ResponseWriter, r *http.Request) {
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+	switch proxy.(*adapter.Proxy).Type() {
+	case C.URLTest:
+		if urlTestGroup, ok := proxy.(*adapter.Proxy).ProxyAdapter.(*outboundgroup.URLTest); ok {
+			urlTestGroup.ForceSet("")
+		}
+	case C.Fallback:
+		if fallbackGroup, ok := proxy.(*adapter.Proxy).ProxyAdapter.(*outboundgroup.Fallback); ok {
+			fallbackGroup.ForceSet("")
+		}
+	default:
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, ErrBadRequest)
+		return
+	}
+
+	if proxy.(*adapter.Proxy).Type() != C.Selector {
+		cachefile.Cache().SetSelected(proxy.Name(), "")
+	}
+
+	render.NoContent(w, r)
 }
