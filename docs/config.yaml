@@ -63,6 +63,10 @@ external-controller-tls: 0.0.0.0:9443 # RESTful API HTTPS 监听地址，需要�
 # 测试方法： curl -v --unix-socket "mihomo.sock" http://localhost/
 external-controller-unix: mihomo.sock
 
+# RESTful API Windows namedpipe 监听地址
+# ！！！注意： 从Windows namedpipe访问api接口不会验证secret， 如果开启请自行保证安全问题 ！！！
+external-controller-pipe: \\.\pipe\mihomo
+
 # tcp-concurrent: true # TCP 并发连接所有 IP, 将使用最快握手的 TCP
 
 # 配置 WEB UI 目录，使用 http://{{external-controller}}/ui 访问

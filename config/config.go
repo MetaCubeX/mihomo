@@ -103,6 +103,7 @@ type Controller struct {
 	ExternalController     string
 	ExternalControllerTLS  string
 	ExternalControllerUnix string
+	ExternalControllerPipe string
 	ExternalUI             string
 	ExternalDohServer      string
 	Secret                 string
@@ -364,6 +365,7 @@ type RawConfig struct {
 	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
 	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
 	ExternalController      string            `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerPipe  string            `yaml:"external-controller-pipe" json:"external-controller-pipe"`
 	ExternalControllerUnix  string            `yaml:"external-controller-unix" json:"external-controller-unix"`
 	ExternalControllerTLS   string            `yaml:"external-controller-tls" json:"external-controller-tls"`
 	ExternalUI              string            `yaml:"external-ui" json:"external-ui"`
@@ -769,6 +771,7 @@ func parseController(cfg *RawConfig) (*Controller, error) {
 		ExternalController:     cfg.ExternalController,
 		ExternalUI:             cfg.ExternalUI,
 		Secret:                 cfg.Secret,
+		ExternalControllerPipe: cfg.ExternalControllerPipe,
 		ExternalControllerUnix: cfg.ExternalControllerUnix,
 		ExternalControllerTLS:  cfg.ExternalControllerTLS,
 		ExternalDohServer:      cfg.ExternalDohServer,

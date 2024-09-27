@@ -27,6 +27,12 @@ func WithExternalControllerUnix(externalControllerUnix string) Option {
 	}
 }
 
+func WithExternalControllerPipe(externalControllerPipe string) Option {
+	return func(cfg *config.Config) {
+		cfg.Controller.ExternalControllerPipe = externalControllerPipe
+	}
+}
+
 func WithSecret(secret string) Option {
 	return func(cfg *config.Config) {
 		cfg.Controller.Secret = secret
@@ -47,6 +53,7 @@ func applyRoute(cfg *config.Config) {
 		Addr:        cfg.Controller.ExternalController,
 		TLSAddr:     cfg.Controller.ExternalControllerTLS,
 		UnixAddr:    cfg.Controller.ExternalControllerUnix,
+		PipeAddr:    cfg.Controller.ExternalControllerPipe,
 		Secret:      cfg.Controller.Secret,
 		Certificate: cfg.TLS.Certificate,
 		PrivateKey:  cfg.TLS.PrivateKey,

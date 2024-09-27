@@ -35,6 +35,7 @@ var (
 	httpServer *http.Server
 	tlsServer  *http.Server
 	unixServer *http.Server
+	pipeServer *http.Server
 )
 
 type Traffic struct {
@@ -51,6 +52,7 @@ type Config struct {
 	Addr        string
 	TLSAddr     string
 	UnixAddr    string
+	PipeAddr    string
 	Secret      string
 	Certificate string
 	PrivateKey  string
@@ -62,6 +64,9 @@ func ReCreateServer(cfg *Config) {
 	go start(cfg)
 	go startTLS(cfg)
 	go startUnix(cfg)
+	if inbound.SupportNamedPipe {
+		go startPipe(cfg)
+	}
 }
 
 func SetUIPath(path string) {
@@ -233,7 +238,37 @@ func startUnix(cfg *Config) {
 			log.Errorln("External controller unix serve error: %s", err)
 		}
 	}
+}
 
+func startPipe(cfg *Config) {
+	// first stop existing server
+	if pipeServer != nil {
+		_ = pipeServer.Close()
+		pipeServer = nil
+	}
+
+	// handle addr
+	if len(cfg.PipeAddr) > 0 {
+		if !strings.HasPrefix(cfg.PipeAddr, "\\\\.\\pipe\\") { // windows namedpipe must start with "\\.\pipe\"
+			log.Errorln("External controller pipe listen error: windows namedpipe must start with \"\\\\.\\pipe\\\"")
+			return
+		}
+
+		l, err := inbound.ListenNamedPipe(cfg.PipeAddr)
+		if err != nil {
+			log.Errorln("External controller pipe listen error: %s", err)
+			return
+		}
+		log.Infoln("RESTful API pipe listening at: %s", l.Addr().String())
+
+		server := &http.Server{
+			Handler: router(cfg.IsDebug, "", cfg.DohServer),
+		}
+		pipeServer = server
+		if err = server.Serve(l); err != nil {
+			log.Errorln("External controller pipe serve error: %s", err)
+		}
+	}
 }
 
 func setPrivateNetworkAccess(next http.Handler) http.Handler {
