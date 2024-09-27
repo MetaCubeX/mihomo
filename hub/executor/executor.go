@@ -445,12 +445,12 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 
 	for name, proxy := range proxies {
-		outbound, ok := proxy.(*adapter.Proxy)
+		outbound, ok := proxy.(C.Proxy)
 		if !ok {
 			continue
 		}
 
-		selector, ok := outbound.ProxyAdapter.(outboundgroup.SelectAble)
+		selector, ok := outbound.Adapter().(outboundgroup.SelectAble)
 		if !ok {
 			continue
 		}

@@ -39,6 +39,11 @@ type Proxy struct {
 	extra   *xsync.MapOf[string, *internalProxyState]
 }
 
+// Adapter implements C.Proxy
+func (p *Proxy) Adapter() C.ProxyAdapter {
+	return p.ProxyAdapter
+}
+
 // AliveForTestUrl implements C.Proxy
 func (p *Proxy) AliveForTestUrl(url string) bool {
 	if state, ok := p.extra.Load(url); ok {
