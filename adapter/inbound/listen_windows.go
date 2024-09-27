@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"net"
+	"os"
 
 	"github.com/metacubex/wireguard-go/ipc/namedpipe"
 	"golang.org/x/sys/windows"
@@ -14,7 +15,11 @@ const SupportNamedPipe = true
 const windowsSDDL = "D:PAI(A;OICI;GWGR;;;BU)(A;OICI;GWGR;;;SY)"
 
 func ListenNamedPipe(path string) (net.Listener, error) {
-	securityDescriptor, err := windows.SecurityDescriptorFromString(windowsSDDL)
+	sddl := os.Getenv("LISTEN_NAMEDPIPE_SDDL")
+	if sddl == "" {
+		sddl = windowsSDDL
+	}
+	securityDescriptor, err := windows.SecurityDescriptorFromString(sddl)
 	if err != nil {
 		return nil, err
 	}
