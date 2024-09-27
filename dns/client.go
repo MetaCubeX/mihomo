@@ -103,3 +103,5 @@ func (c *client) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, error) 
 		return ret.msg, ret.err
 	}
 }
+
+func (c *client) ResetConnection() {}

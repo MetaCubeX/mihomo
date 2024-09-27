@@ -47,6 +47,7 @@ type Resolver interface {
 	ExchangeContext(ctx context.Context, m *dns.Msg) (msg *dns.Msg, err error)
 	Invalid() bool
 	ClearCache()
+	ResetConnection()
 }
 
 // LookupIPv4WithResolver same as LookupIPv4, but with a resolver
@@ -254,6 +255,15 @@ func LookupIPProxyServerHost(ctx context.Context, host string) ([]netip.Addr, er
 		return LookupIPWithResolver(ctx, host, ProxyServerHostResolver)
 	}
 	return LookupIP(ctx, host)
+}
+
+func ResetConnection() {
+	if DefaultResolver != nil {
+		go DefaultResolver.ResetConnection()
+	}
+	if ProxyServerHostResolver != nil {
+		go ProxyServerHostResolver.ResetConnection()
+	}
 }
 
 func SortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {

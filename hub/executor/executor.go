@@ -118,6 +118,8 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	tunnel.OnRunning()
 	hcCompatibleProvider(cfg.Providers)
 	initExternalUI()
+
+	resolver.ResetConnection()
 }
 
 func initInnerTcp() {
@@ -253,8 +255,7 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		CacheAlgorithm:       c.CacheAlgorithm,
 	}
 
-	r := dns.NewResolver(cfg)
-	pr := dns.NewProxyServerHostResolver(r)
+	r, pr := dns.NewResolver(cfg)
 	m := dns.NewEnhancer(cfg)
 
 	// reuse cache of old host mapper

@@ -296,7 +296,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		for i := range nss {
 			nss[i].ProxyAdapter = refP
 		}
-		outbound.resolver = dns.NewResolver(dns.Config{
+		outbound.resolver, _ = dns.NewResolver(dns.Config{
 			Main: nss,
 			IPv6: has6,
 		})

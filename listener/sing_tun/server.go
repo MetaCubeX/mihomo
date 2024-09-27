@@ -440,6 +440,10 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 
 	//l.openAndroidHotspot(tunOptions)
 
+	if !l.options.AutoDetectInterface {
+		resolver.ResetConnection()
+	}
+
 	if options.FileDescriptor != 0 {
 		tunName = fmt.Sprintf("%s(fd=%d)", tunName, options.FileDescriptor)
 	}
@@ -507,6 +511,7 @@ func (l *Listener) FlushDefaultInterface() {
 				if old := dialer.DefaultInterface.Swap(autoDetectInterfaceName); old != autoDetectInterfaceName {
 					log.Warnln("[TUN] default interface changed by monitor, %s => %s", old, autoDetectInterfaceName)
 					iface.FlushCache()
+					resolver.ResetConnection() // reset resolver's connection after default interface changed
 				}
 				return
 			}

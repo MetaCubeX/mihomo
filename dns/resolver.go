@@ -24,6 +24,7 @@ import (
 type dnsClient interface {
 	ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error)
 	Address() string
+	ResetConnection()
 }
 
 type dnsCache interface {
@@ -48,7 +49,7 @@ type Resolver struct {
 	group                 singleflight.Group[*D.Msg]
 	cache                 dnsCache
 	policy                []dnsPolicy
-	proxyServer           []dnsClient
+	defaultResolver       *Resolver
 }
 
 func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
@@ -376,6 +377,20 @@ func (r *Resolver) ClearCache() {
 	}
 }
 
+func (r *Resolver) ResetConnection() {
+	if r != nil {
+		for _, c := range r.main {
+			c.ResetConnection()
+		}
+		for _, c := range r.fallback {
+			c.ResetConnection()
+		}
+		if dr := r.defaultResolver; dr != nil {
+			dr.ResetConnection()
+		}
+	}
+}
+
 type NameServer struct {
 	Net          string
 	Addr         string
@@ -425,16 +440,18 @@ type Config struct {
 	CacheAlgorithm       string
 }
 
-func NewResolver(config Config) *Resolver {
-	var cache dnsCache
-	if config.CacheAlgorithm == "lru" {
-		cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
+func (config Config) newCache() dnsCache {
+	if config.CacheAlgorithm == "" || config.CacheAlgorithm == "lru" {
+		return lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
 	} else {
-		cache = arc.New(arc.WithSize[string, *D.Msg](4096))
+		return arc.New(arc.WithSize[string, *D.Msg](4096))
 	}
+}
+
+func NewResolver(config Config) (r *Resolver, pr *Resolver) {
 	defaultResolver := &Resolver{
 		main:        transform(config.Default, nil),
-		cache:       cache,
+		cache:       config.newCache(),
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
 	}
 
@@ -465,25 +482,27 @@ func NewResolver(config Config) *Resolver {
 		return
 	}
 
-	if config.CacheAlgorithm == "" || config.CacheAlgorithm == "lru" {
-		cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
-	} else {
-		cache = arc.New(arc.WithSize[string, *D.Msg](4096))
-	}
-	r := &Resolver{
+	r = &Resolver{
 		ipv6:        config.IPv6,
 		main:        cacheTransform(config.Main),
-		cache:       cache,
+		cache:       config.newCache(),
 		hosts:       config.Hosts,
 		ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+	}
+	r.defaultResolver = defaultResolver
+
+	if len(config.ProxyServer) != 0 {
+		pr = &Resolver{
+			ipv6:        config.IPv6,
+			main:        cacheTransform(config.ProxyServer),
+			cache:       config.newCache(),
+			hosts:       config.Hosts,
+			ipv6Timeout: time.Duration(config.IPv6Timeout) * time.Millisecond,
+		}
 	}
 
 	if len(config.Fallback) != 0 {
 		r.fallback = cacheTransform(config.Fallback)
-	}
-
-	if len(config.ProxyServer) != 0 {
-		r.proxyServer = cacheTransform(config.ProxyServer)
 	}
 
 	if len(config.Policy) != 0 {
@@ -516,18 +535,7 @@ func NewResolver(config Config) *Resolver {
 	r.fallbackIPFilters = config.FallbackIPFilter
 	r.fallbackDomainFilters = config.FallbackDomainFilter
 
-	return r
-}
-
-func NewProxyServerHostResolver(old *Resolver) *Resolver {
-	r := &Resolver{
-		ipv6:        old.ipv6,
-		main:        old.proxyServer,
-		cache:       old.cache,
-		hosts:       old.hosts,
-		ipv6Timeout: old.ipv6Timeout,
-	}
-	return r
+	return
 }
 
 var ParseNameServer func(servers []string) ([]NameServer, error) // define in config/config.go

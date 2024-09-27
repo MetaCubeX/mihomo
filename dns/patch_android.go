@@ -12,6 +12,7 @@ func FlushCacheWithDefaultResolver() {
 	if r := resolver.DefaultResolver; r != nil {
 		r.ClearCache()
 	}
+	resolver.ResetConnection()
 }
 
 func UpdateSystemDNS(addr []string) {
@@ -29,4 +30,10 @@ func UpdateSystemDNS(addr []string) {
 
 func (c *systemClient) getDnsClients() ([]dnsClient, error) {
 	return systemResolver, nil
+}
+
+func (c *systemClient) ResetConnection() {
+	for _, r := range systemResolver {
+		r.ResetConnection()
+	}
 }
