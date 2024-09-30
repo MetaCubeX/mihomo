@@ -16,7 +16,7 @@ import (
 	"github.com/metacubex/mihomo/tunnel"
 )
 
-func GroupRouter() http.Handler {
+func groupRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getGroups)
 

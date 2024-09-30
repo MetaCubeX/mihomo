@@ -36,7 +36,13 @@ var (
 	tlsServer  *http.Server
 	unixServer *http.Server
 	pipeServer *http.Server
+
+	embedMode = false
 )
+
+func SetEmbedMode(embed bool) {
+	embedMode = embed
+}
 
 type Traffic struct {
 	Up   int64 `json:"up"`
@@ -114,15 +120,17 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		r.Get("/version", version)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
-		r.Mount("/group", GroupRouter())
+		r.Mount("/group", groupRouter())
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
 		r.Mount("/providers/rules", ruleProviderRouter())
 		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
-		r.Mount("/restart", restartRouter())
-		r.Mount("/upgrade", upgradeRouter())
+		if !embedMode { // disallow restart and upgrade in embed mode
+			r.Mount("/restart", restartRouter())
+			r.Mount("/upgrade", upgradeRouter())
+		}
 		addExternalRouters(r)
 
 	})
