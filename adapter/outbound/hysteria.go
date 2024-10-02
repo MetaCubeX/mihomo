@@ -69,7 +69,7 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.PacketDialer {
 	return &hyDialerWithContext{
 		ctx: context.Background(),
-		hyDialer: func(network string) (net.PacketConn, error) {
+		hyDialer: func(network string, rAddr net.Addr) (net.PacketConn, error) {
 			var err error
 			var cDialer C.Dialer = dialer.NewDialer(h.Base.DialOptions(opts...)...)
 			if len(h.option.DialerProxy) > 0 {
@@ -78,7 +78,7 @@ func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.Pack
 					return nil, err
 				}
 			}
-			rAddrPort, _ := netip.ParseAddrPort(h.Addr())
+			rAddrPort, _ := netip.ParseAddrPort(rAddr.String())
 			return cDialer.ListenPacket(ctx, network, "", rAddrPort)
 		},
 		remoteAddr: func(addr string) (net.Addr, error) {
@@ -284,7 +284,7 @@ func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 type hyDialerWithContext struct {
-	hyDialer   func(network string) (net.PacketConn, error)
+	hyDialer   func(network string, rAddr net.Addr) (net.PacketConn, error)
 	ctx        context.Context
 	remoteAddr func(host string) (net.Addr, error)
 }
@@ -294,7 +294,7 @@ func (h *hyDialerWithContext) ListenPacket(rAddr net.Addr) (net.PacketConn, erro
 	if addrPort, err := netip.ParseAddrPort(rAddr.String()); err == nil {
 		network = dialer.ParseNetwork(network, addrPort.Addr())
 	}
-	return h.hyDialer(network)
+	return h.hyDialer(network, rAddr)
 }
 
 func (h *hyDialerWithContext) Context() context.Context {

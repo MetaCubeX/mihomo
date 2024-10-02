@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -55,6 +57,12 @@ func init() {
 }
 
 func main() {
+	// Defensive programming: panic when code mistakenly calls net.DefaultResolver
+	net.DefaultResolver.PreferGo = true
+	net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		panic("should never be called")
+	}
+
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 
 	if len(os.Args) > 1 && os.Args[1] == "convert-ruleset" {

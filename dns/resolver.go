@@ -13,7 +13,6 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
@@ -436,7 +435,6 @@ type Config struct {
 	Pool                 *fakeip.Pool
 	Hosts                *trie.DomainTrie[resolver.HostValue]
 	Policy               []Policy
-	Tunnel               provider.Tunnel
 	CacheAlgorithm       string
 }
 

@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/component/resolver"
+
 	D "github.com/miekg/dns"
 )
 
@@ -24,12 +26,17 @@ type systemClient struct {
 	mu         sync.Mutex
 	dnsClients map[string]*systemDnsClient
 	lastFlush  time.Time
+	defaultNS  []dnsClient
 }
 
 func (c *systemClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	dnsClients, err := c.getDnsClients()
 	if err != nil {
-		return
+		if len(c.defaultNS) > 0 {
+			dnsClients = c.defaultNS
+		} else {
+			return
+		}
 	}
 	msg, _, err = batchExchange(ctx, dnsClients, m)
 	return
@@ -51,4 +58,12 @@ func newSystemClient() *systemClient {
 	return &systemClient{
 		dnsClients: map[string]*systemDnsClient{},
 	}
+}
+
+func init() {
+	r, _ := NewResolver(Config{})
+	c := newSystemClient()
+	c.defaultNS = transform([]NameServer{{Addr: "114.114.114.114:53"}, {Addr: "8.8.8.8:53"}}, nil)
+	r.main = []dnsClient{c}
+	resolver.SystemResolver = r
 }
