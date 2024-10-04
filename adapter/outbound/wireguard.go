@@ -44,7 +44,7 @@ type WireGuard struct {
 	device    wireguardGoDevice
 	tunDevice wireguard.Device
 	dialer    proxydialer.SingDialer
-	resolver  *dns.Resolver
+	resolver  resolver.Resolver
 	refP      *refProxyAdapter
 
 	initOk        atomic.Bool
@@ -296,7 +296,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 		for i := range nss {
 			nss[i].ProxyAdapter = refP
 		}
-		outbound.resolver, _ = dns.NewResolver(dns.Config{
+		outbound.resolver = dns.NewResolver(dns.Config{
 			Main: nss,
 			IPv6: has6,
 		})

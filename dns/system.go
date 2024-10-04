@@ -61,7 +61,7 @@ func newSystemClient() *systemClient {
 }
 
 func init() {
-	r, _ := NewResolver(Config{})
+	r := NewResolver(Config{})
 	c := newSystemClient()
 	c.defaultNS = transform([]NameServer{{Addr: "114.114.114.114:53"}, {Addr: "8.8.8.8:53"}}, nil)
 	r.main = []dnsClient{c}

@@ -19,8 +19,11 @@ var (
 	// DefaultResolver aim to resolve ip
 	DefaultResolver Resolver
 
-	// ProxyServerHostResolver resolve ip to proxies server host
+	// ProxyServerHostResolver resolve ip for proxies server host, only nil when DefaultResolver is nil
 	ProxyServerHostResolver Resolver
+
+	// DirectHostResolver resolve ip for direct outbound host, only nil when DefaultResolver is nil
+	DirectHostResolver Resolver
 
 	// SystemResolver always using system dns, and was init in dns module
 	SystemResolver Resolver
@@ -193,57 +196,9 @@ func ResolveIP(ctx context.Context, host string) (netip.Addr, error) {
 	return ResolveIPWithResolver(ctx, host, DefaultResolver)
 }
 
-// ResolveIPv4ProxyServerHost proxies server host only
-func ResolveIPv4ProxyServerHost(ctx context.Context, host string) (netip.Addr, error) {
-	if ProxyServerHostResolver != nil {
-		return ResolveIPv4WithResolver(ctx, host, ProxyServerHostResolver)
-	}
-	return ResolveIPv4(ctx, host)
-}
-
-// ResolveIPv6ProxyServerHost proxies server host only
-func ResolveIPv6ProxyServerHost(ctx context.Context, host string) (netip.Addr, error) {
-	if ProxyServerHostResolver != nil {
-		return ResolveIPv6WithResolver(ctx, host, ProxyServerHostResolver)
-	}
-	return ResolveIPv6(ctx, host)
-}
-
-// ResolveProxyServerHost proxies server host only
-func ResolveProxyServerHost(ctx context.Context, host string) (netip.Addr, error) {
-	if ProxyServerHostResolver != nil {
-		return ResolveIPWithResolver(ctx, host, ProxyServerHostResolver)
-	}
-	return ResolveIP(ctx, host)
-}
-
-func LookupIPv6ProxyServerHost(ctx context.Context, host string) ([]netip.Addr, error) {
-	if ProxyServerHostResolver != nil {
-		return LookupIPv6WithResolver(ctx, host, ProxyServerHostResolver)
-	}
-	return LookupIPv6(ctx, host)
-}
-
-func LookupIPv4ProxyServerHost(ctx context.Context, host string) ([]netip.Addr, error) {
-	if ProxyServerHostResolver != nil {
-		return LookupIPv4WithResolver(ctx, host, ProxyServerHostResolver)
-	}
-	return LookupIPv4(ctx, host)
-}
-
-func LookupIPProxyServerHost(ctx context.Context, host string) ([]netip.Addr, error) {
-	if ProxyServerHostResolver != nil {
-		return LookupIPWithResolver(ctx, host, ProxyServerHostResolver)
-	}
-	return LookupIP(ctx, host)
-}
-
 func ResetConnection() {
 	if DefaultResolver != nil {
 		go DefaultResolver.ResetConnection()
-	}
-	if ProxyServerHostResolver != nil {
-		go ProxyServerHostResolver.ResetConnection()
 	}
 }
 

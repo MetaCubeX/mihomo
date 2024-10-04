@@ -12,9 +12,6 @@ func FlushCacheWithDefaultResolver() {
 	if r := resolver.DefaultResolver; r != nil {
 		r.ClearCache()
 	}
-	if r := resolver.ProxyServerHostResolver; r != nil {
-		r.ClearCache()
-	}
 	if r := resolver.SystemResolver; r != nil {
 		r.ClearCache()
 	}
