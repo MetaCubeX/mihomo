@@ -20,14 +20,12 @@ import (
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	"github.com/metacubex/mihomo/component/keepalive"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/resource"
 	"github.com/metacubex/mihomo/component/sniffer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
-	"github.com/metacubex/mihomo/component/updater"
 	C "github.com/metacubex/mihomo/constant"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
 	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
@@ -66,6 +64,9 @@ type General struct {
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
 	ETagSupport             bool              `json:"etag-support"`
+	KeepAliveIdle           int               `json:"keep-alive-idle"`
+	KeepAliveInterval       int               `json:"keep-alive-interval"`
+	DisableKeepAlive        bool              `json:"disable-keep-alive"`
 }
 
 // Inbound config
@@ -707,8 +708,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 }
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
-	updater.SetGeoAutoUpdate(cfg.GeoAutoUpdate)
-	updater.SetGeoUpdateInterval(cfg.GeoUpdateInterval)
 	geodata.SetGeodataMode(cfg.GeodataMode)
 	geodata.SetLoader(cfg.GeodataLoader)
 	geodata.SetSiteMatcher(cfg.GeositeMatcher)
@@ -718,10 +717,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	geodata.SetASNUrl(cfg.GeoXUrl.ASN)
 	mihomoHttp.SetUA(cfg.GlobalUA)
 	resource.SetETag(cfg.ETagSupport)
-
-	keepalive.SetKeepAliveIdle(time.Duration(cfg.KeepAliveIdle) * time.Second)
-	keepalive.SetKeepAliveInterval(time.Duration(cfg.KeepAliveInterval) * time.Second)
-	keepalive.SetDisableKeepAlive(cfg.DisableKeepAlive)
 
 	return &General{
 		Inbound: Inbound{
@@ -761,6 +756,9 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
 		ETagSupport:             cfg.ETagSupport,
+		KeepAliveIdle:           cfg.KeepAliveIdle,
+		KeepAliveInterval:       cfg.KeepAliveInterval,
+		DisableKeepAlive:        cfg.DisableKeepAlive,
 	}, nil
 }
 
