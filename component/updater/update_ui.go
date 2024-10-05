@@ -58,7 +58,7 @@ func (u *UIUpdater) AutoDownloadUI() {
 			log.Infoln("External UI downloading ...")
 			err := u.downloadUI()
 			if err != nil {
-				log.Errorln("Error downloading UI:", err)
+				log.Errorln("Error downloading UI: %s", err)
 			}
 		}
 	}

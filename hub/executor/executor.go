@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -16,7 +17,7 @@ import (
 	"github.com/metacubex/mihomo/component/auth"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
-	G "github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/geodata"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/keepalive"
@@ -101,7 +102,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
-	updateGeneral(cfg.General)
+	updateGeneral(cfg.General, true)
 	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.General.IPv6)
 	updateListeners(cfg.General, cfg.Listeners, force)
@@ -161,16 +162,16 @@ func GetGeneral() *config.General {
 		Interface:    dialer.DefaultInterface.Load(),
 		RoutingMark:  int(dialer.DefaultRoutingMark.Load()),
 		GeoXUrl: config.GeoXUrl{
-			GeoIp:   G.GeoIpUrl(),
-			Mmdb:    G.MmdbUrl(),
-			ASN:     G.ASNUrl(),
-			GeoSite: G.GeoSiteUrl(),
+			GeoIp:   geodata.GeoIpUrl(),
+			Mmdb:    geodata.MmdbUrl(),
+			ASN:     geodata.ASNUrl(),
+			GeoSite: geodata.GeoSiteUrl(),
 		},
 		GeoAutoUpdate:           updater.GeoAutoUpdate(),
 		GeoUpdateInterval:       updater.GeoUpdateInterval(),
-		GeodataMode:             G.GeodataMode(),
-		GeodataLoader:           G.LoaderName(),
-		GeositeMatcher:          G.SiteMatcherName(),
+		GeodataMode:             geodata.GeodataMode(),
+		GeodataLoader:           geodata.LoaderName(),
+		GeositeMatcher:          geodata.SiteMatcherName(),
 		TCPConcurrent:           dialer.GetTcpConcurrent(),
 		FindProcessMode:         tunnel.FindProcessMode(),
 		Sniffing:                tunnel.IsSniffing(),
@@ -408,13 +409,22 @@ func updateUpdater(cfg *config.Config) {
 	updater.DefaultUiUpdater.AutoDownloadUI()
 }
 
-func updateGeneral(general *config.General) {
+//go:linkname temporaryUpdateGeneral github.com/metacubex/mihomo/config.temporaryUpdateGeneral
+func temporaryUpdateGeneral(general *config.General) func() {
+	oldGeneral := GetGeneral()
+	updateGeneral(general, false)
+	return func() {
+		updateGeneral(oldGeneral, false)
+	}
+}
+
+func updateGeneral(general *config.General, logging bool) {
 	tunnel.SetMode(general.Mode)
 	tunnel.SetFindProcessMode(general.FindProcessMode)
 	resolver.DisableIPv6 = !general.IPv6
 
-	if general.TCPConcurrent {
-		dialer.SetTcpConcurrent(general.TCPConcurrent)
+	dialer.SetTcpConcurrent(general.TCPConcurrent)
+	if logging && general.TCPConcurrent {
 		log.Infoln("Use tcp concurrent")
 	}
 
@@ -429,13 +439,23 @@ func updateGeneral(general *config.General) {
 
 	dialer.DefaultInterface.Store(general.Interface)
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
-	if general.RoutingMark > 0 {
+	if logging && general.RoutingMark > 0 {
 		log.Infoln("Use routing mark: %#x", general.RoutingMark)
 	}
 
 	iface.FlushCache()
-	G.SetLoader(general.GeodataLoader)
-	G.SetSiteMatcher(general.GeositeMatcher)
+
+	geodata.SetGeodataMode(general.GeodataMode)
+	geodata.SetLoader(general.GeodataLoader)
+	geodata.SetSiteMatcher(general.GeositeMatcher)
+	geodata.SetGeoIpUrl(general.GeoXUrl.GeoIp)
+	geodata.SetGeoSiteUrl(general.GeoXUrl.GeoSite)
+	geodata.SetMmdbUrl(general.GeoXUrl.Mmdb)
+	geodata.SetASNUrl(general.GeoXUrl.ASN)
+	mihomoHttp.SetUA(general.GlobalUA)
+	resource.SetETag(general.ETagSupport)
+
+	tlsC.SetGlobalUtlsClient(general.GlobalClientFingerprint)
 }
 
 func updateUsers(users []auth.AuthUser) {

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outbound"
@@ -19,12 +20,9 @@ import (
 	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/resource"
 	"github.com/metacubex/mihomo/component/sniffer"
-	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
@@ -588,10 +586,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	if len(config.General.GlobalClientFingerprint) != 0 {
-		log.Debugln("GlobalClientFingerprint: %s", config.General.GlobalClientFingerprint)
-		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
-	}
+	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
+	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
+	// This implementation is very disgusting, but there is currently no better solution
+	rollback := temporaryUpdateGeneral(config.General)
+	defer rollback()
 
 	controller, err := parseController(rawCfg)
 	if err != nil {
@@ -707,17 +706,10 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	return config, nil
 }
 
-func parseGeneral(cfg *RawConfig) (*General, error) {
-	geodata.SetGeodataMode(cfg.GeodataMode)
-	geodata.SetLoader(cfg.GeodataLoader)
-	geodata.SetSiteMatcher(cfg.GeositeMatcher)
-	geodata.SetGeoIpUrl(cfg.GeoXUrl.GeoIp)
-	geodata.SetGeoSiteUrl(cfg.GeoXUrl.GeoSite)
-	geodata.SetMmdbUrl(cfg.GeoXUrl.Mmdb)
-	geodata.SetASNUrl(cfg.GeoXUrl.ASN)
-	mihomoHttp.SetUA(cfg.GlobalUA)
-	resource.SetETag(cfg.ETagSupport)
+//go:linkname temporaryUpdateGeneral
+func temporaryUpdateGeneral(general *General) func()
 
+func parseGeneral(cfg *RawConfig) (*General, error) {
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,
@@ -751,6 +743,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeoUpdateInterval:       cfg.GeoUpdateInterval,
 		GeodataMode:             cfg.GeodataMode,
 		GeodataLoader:           cfg.GeodataLoader,
+		GeositeMatcher:          cfg.GeositeMatcher,
 		TCPConcurrent:           cfg.TCPConcurrent,
 		FindProcessMode:         cfg.FindProcessMode,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
