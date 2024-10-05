@@ -117,7 +117,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	runtime.GC()
 	tunnel.OnRunning()
 	hcCompatibleProvider(cfg.Providers)
-	initExternalUI()
+	initExternalUI(cfg.Controller)
 
 	resolver.ResetConnection()
 }
@@ -394,16 +394,9 @@ func updateTunnels(tunnels []LC.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.Tunnel)
 }
 
-func initExternalUI() {
-	if updater.AutoDownloadUI {
-		dirEntries, _ := os.ReadDir(updater.ExternalUIPath)
-		if len(dirEntries) > 0 {
-			log.Infoln("UI already exists, skip downloading")
-		} else {
-			log.Infoln("External UI downloading ...")
-			updater.DownloadUI()
-		}
-	}
+func initExternalUI(controller *config.Controller) {
+	updater.DefaultUiUpdater = updater.NewUiUpdater(controller.ExternalUI, controller.ExternalUIURL, controller.ExternalUIName)
+	updater.DefaultUiUpdater.AutoDownloadUI()
 }
 
 func updateGeneral(general *config.General) {

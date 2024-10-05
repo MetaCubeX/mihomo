@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
-	"path"
 	"strings"
 	"time"
 
@@ -105,6 +104,8 @@ type Controller struct {
 	ExternalControllerUnix string
 	ExternalControllerPipe string
 	ExternalUI             string
+	ExternalUIURL          string
+	ExternalUIName         string
 	ExternalDohServer      string
 	Secret                 string
 	Cors                   Cors
@@ -718,32 +719,9 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	mihomoHttp.SetUA(cfg.GlobalUA)
 	resource.SetETag(cfg.ETagSupport)
 
-	if cfg.KeepAliveIdle != 0 {
-		keepalive.SetKeepAliveIdle(time.Duration(cfg.KeepAliveIdle) * time.Second)
-	}
-	if cfg.KeepAliveInterval != 0 {
-		keepalive.SetKeepAliveInterval(time.Duration(cfg.KeepAliveInterval) * time.Second)
-	}
+	keepalive.SetKeepAliveIdle(time.Duration(cfg.KeepAliveIdle) * time.Second)
+	keepalive.SetKeepAliveInterval(time.Duration(cfg.KeepAliveInterval) * time.Second)
 	keepalive.SetDisableKeepAlive(cfg.DisableKeepAlive)
-
-	// checkout externalUI exist
-	if cfg.ExternalUI != "" {
-		updater.AutoDownloadUI = true
-		updater.ExternalUIPath = C.Path.Resolve(cfg.ExternalUI)
-	} else {
-		// default externalUI path
-		updater.ExternalUIPath = path.Join(C.Path.HomeDir(), "ui")
-	}
-
-	// checkout UIpath/name exist
-	if cfg.ExternalUIName != "" {
-		updater.AutoDownloadUI = true
-		updater.ExternalUIPath = path.Join(updater.ExternalUIPath, cfg.ExternalUIName)
-	}
-
-	if cfg.ExternalUIURL != "" {
-		updater.ExternalUIURL = cfg.ExternalUIURL
-	}
 
 	return &General{
 		Inbound: Inbound{
@@ -790,6 +768,8 @@ func parseController(cfg *RawConfig) (*Controller, error) {
 	return &Controller{
 		ExternalController:     cfg.ExternalController,
 		ExternalUI:             cfg.ExternalUI,
+		ExternalUIURL:          cfg.ExternalUIURL,
+		ExternalUIName:         cfg.ExternalUIName,
 		Secret:                 cfg.Secret,
 		ExternalControllerPipe: cfg.ExternalControllerPipe,
 		ExternalControllerUnix: cfg.ExternalControllerUnix,
