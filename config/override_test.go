@@ -36,6 +36,30 @@ override:
 		assert.Equal(t, "0.0.0.0:9090", cfg.Controller.ExternalController)
 	})
 
+	t.Run("override_zero_value_test", func(t *testing.T) {
+		config_file := `
+mixed-port: 7890
+ipv6: true
+log-level: debug
+allow-lan: true
+unified-delay: false
+tcp-concurrent: true
+external-controller: 127.0.0.1:9090
+default-nameserver:
+  - "223.5.5.5"
+override:
+  - content:
+      external-controller: ""
+      allow-lan: false`
+		rawCfg, err := UnmarshalRawConfig([]byte(config_file))
+		assert.NoError(t, err)
+		cfg, err := ParseRawConfig(rawCfg)
+		assert.NoError(t, err)
+		assert.Equal(t, log.DEBUG, cfg.General.LogLevel)
+		assert.Equal(t, false, cfg.General.AllowLan)
+		assert.Equal(t, "", cfg.Controller.ExternalController)
+	})
+
 	t.Run("add_new", func(t *testing.T) {
 		config_file := `
 mixed-port: 7890

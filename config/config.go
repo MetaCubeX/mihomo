@@ -365,7 +365,7 @@ type RawOverride struct {
 	Hostname     string            `yaml:"hostname" json:"hostname"`
 	Username     string            `yaml:"username" json:"username"`
 	ListStrategy ListMergeStrategy `yaml:"list-strategy" json:"list-strategy"`
-	Content      *RawConfig        `yaml:"content" json:"content"`
+	Content      map[string]any    `yaml:"content" json:"content"`
 }
 
 type RawConfig struct {
