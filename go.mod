@@ -3,7 +3,6 @@ module github.com/metacubex/mihomo
 go 1.20
 
 require (
-	dario.cat/mergo v1.0.1
 	github.com/3andne/restls-client-go v0.1.6
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
