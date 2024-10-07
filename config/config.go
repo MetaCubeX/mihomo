@@ -593,7 +593,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	// apply overrides
 	err := ApplyOverride(rawCfg, rawCfg.Override)
 	if err != nil {
-		log.Errorln("Error when applying overrides: %v", err)
+		return nil, err
 	}
 
 	general, err := parseGeneral(rawCfg)
