@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"github.com/metacubex/mihomo/log"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -55,7 +57,7 @@ func ApplyOverride(rawCfg *RawConfig, overrides []RawOverride) error {
 		overrideContent, err := yaml.Marshal(override.Content)
 		if err != nil {
 			log.Errorln("Error when applying override #%v: %v", id, err)
-			continue
+			return err
 		}
 
 		// unmarshal override content into rawConfig, with custom list merge strategy
@@ -69,11 +71,13 @@ func ApplyOverride(rawCfg *RawConfig, overrides []RawOverride) error {
 		case Override, Default:
 			err = yaml.Unmarshal(overrideContent, rawCfg)
 		default:
-			log.Errorln("Bad list strategy in override #%v: %v", id, override.ListStrategy)
+			err = errors.New(fmt.Sprintf("Bad list strategy in override #%v: %v", id, override.ListStrategy))
+			log.Errorln(err.Error())
+			return err
 		}
 		if err != nil {
 			log.Errorln("Error when applying override #%v: %v", id, err)
-			continue
+			return err
 		}
 	}
 	return nil

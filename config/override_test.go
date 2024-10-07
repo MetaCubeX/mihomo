@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -244,5 +245,27 @@ override:
 		assert.Contains(t, cfg.Providers, "provider2")
 		assert.Contains(t, cfg.Providers, "provider3")
 		assert.Equal(t, "https://www.google.com", cfg.Providers["provider3"].HealthCheckURL())
+	})
+
+	t.Run("bad_override", func(t *testing.T) {
+		config_file := `
+mixed-port: 7890
+ipv6: true
+log-level: debug
+allow-lan: false
+unified-delay: false
+tcp-concurrent: true
+external-controller: 127.0.0.1:9090
+default-nameserver:
+  - "223.5.5.5"
+override:
+  - list-strategy: 12wlfiu3o
+    content:
+      external-controller: 0.0.0.0:9090
+      allow-lan: true`
+		rawCfg, err := UnmarshalRawConfig([]byte(config_file))
+		assert.NoError(t, err)
+		_, err = ParseRawConfig(rawCfg)
+		assert.True(t, strings.HasPrefix(err.Error(), "Bad list strategy in override #0:"))
 	})
 }
