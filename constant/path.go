@@ -37,18 +37,24 @@ var Path = func() *path {
 		}
 	}
 
-	return &path{homeDir: homeDir, configFile: "config.yaml", allowUnsafePath: allowUnsafePath}
+	return &path{homeDir: homeDir, configFile: "config.yaml", cacheFile: "cache.db", allowUnsafePath: allowUnsafePath}
 }()
 
 type path struct {
 	homeDir         string
 	configFile      string
+	cacheFile       string
 	allowUnsafePath bool
 }
 
 // SetHomeDir is used to set the configuration path
 func SetHomeDir(root string) {
 	Path.homeDir = root
+}
+
+// SetCache is used to set the cache file path
+func SetCache(file string) {
+	Path.cacheFile = file
 }
 
 // SetConfig is used to set the configuration file
@@ -138,7 +144,7 @@ func (p *path) OldCache() string {
 }
 
 func (p *path) Cache() string {
-	return P.Join(p.homeDir, "cache.db")
+	return p.cacheFile
 }
 
 func (p *path) GeoIP() string {

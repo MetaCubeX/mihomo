@@ -31,6 +31,7 @@ var (
 	testConfig             bool
 	geodataMode            bool
 	homeDir                string
+	cacheFile              string
 	configFile             string
 	configString           string
 	configBytes            []byte
@@ -45,6 +46,7 @@ func init() {
 	flag.StringVar(&homeDir, "d", os.Getenv("CLASH_HOME_DIR"), "set configuration directory")
 	flag.StringVar(&configFile, "f", os.Getenv("CLASH_CONFIG_FILE"), "specify configuration file")
 	flag.StringVar(&configString, "config", os.Getenv("CLASH_CONFIG_STRING"), "specify base64-encoded configuration string")
+	flag.StringVar(&cacheFile, "cache", os.Getenv("CLASH_CACHE_FILE"), "specify cache file")
 	flag.StringVar(&externalUI, "ext-ui", os.Getenv("CLASH_OVERRIDE_EXTERNAL_UI_DIR"), "override external ui directory")
 	flag.StringVar(&externalController, "ext-ctl", os.Getenv("CLASH_OVERRIDE_EXTERNAL_CONTROLLER"), "override external controller address")
 	flag.StringVar(&externalControllerUnix, "ext-ctl-unix", os.Getenv("CLASH_OVERRIDE_EXTERNAL_CONTROLLER_UNIX"), "override external controller unix address")
@@ -87,6 +89,16 @@ func main() {
 		}
 		C.SetHomeDir(homeDir)
 	}
+
+	if cacheFile != "" {
+		if !filepath.IsAbs(cacheFile) {
+			currentDir, _ := os.Getwd()
+			cacheFile = filepath.Join(currentDir, cacheFile)
+		}
+	} else {
+		cacheFile = filepath.Join(C.Path.HomeDir(), C.Path.Cache())
+	}
+	C.SetCache(cacheFile)
 
 	if geodataMode {
 		geodata.SetGeodataMode(true)
