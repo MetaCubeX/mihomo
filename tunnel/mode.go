@@ -73,11 +73,11 @@ func (m TunnelMode) MarshalText() ([]byte, error) {
 func (m TunnelMode) String() string {
 	switch m {
 	case Global:
-		return "global"
+		return "GLOBAL"
 	case Rule:
-		return "rule"
+		return "RULE"
 	case Direct:
-		return "direct"
+		return "DIRECT"
 	default:
 		return "Unknown"
 	}
