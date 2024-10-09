@@ -131,11 +131,7 @@ func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 }
 
 func NewHysteria(option HysteriaOption) (*Hysteria, error) {
-	clientTransport := &transport.ClientTransport{
-		Dialer: &net.Dialer{
-			Timeout: 8 * time.Second,
-		},
-	}
+	clientTransport := &transport.ClientTransport{}
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	ports := option.Ports
 
