@@ -42,6 +42,7 @@ const (
 	WireGuard
 	Tuic
 	Ssh
+	Mieru
 )
 
 const (
@@ -213,6 +214,8 @@ func (at AdapterType) String() string {
 		return "WireGuard"
 	case Tuic:
 		return "Tuic"
+	case Mieru:
+		return "Mieru"
 
 	case Relay:
 		return "Relay"
