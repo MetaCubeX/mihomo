@@ -625,7 +625,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				// normal check for process
 				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 				if err != nil {
-					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+					log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 				} else {
 					metadata.Process = filepath.Base(path)
 					metadata.ProcessPath = path
@@ -639,7 +639,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				// check package names
 				pkg, err := P.FindPackageName(metadata)
 				if err != nil {
-					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+					log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 				} else {
 					metadata.Process = pkg
 				}
