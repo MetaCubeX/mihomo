@@ -229,20 +229,22 @@ func UpdateGeoDatabases() error {
 }
 
 func getUpdateTime() (err error, time time.Time) {
-	var fileInfo os.FileInfo
-	if geodata.GeodataMode() {
-		fileInfo, err = os.Stat(C.Path.GeoIP())
-		if err != nil {
-			return err, time
-		}
-	} else {
-		fileInfo, err = os.Stat(C.Path.MMDB())
-		if err != nil {
-			return err, time
+	filesToCheck := []string{
+		C.Path.GeoIP(),
+		C.Path.MMDB(),
+		C.Path.ASN(),
+		C.Path.GeoSite(),
+	}
+
+	for _, file := range filesToCheck {
+		var fileInfo os.FileInfo
+		fileInfo, err = os.Stat(file)
+		if err == nil {
+			return nil, fileInfo.ModTime()
 		}
 	}
 
-	return nil, fileInfo.ModTime()
+	return
 }
 
 func RegisterGeoUpdater() {
