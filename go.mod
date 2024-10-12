@@ -117,3 +117,5 @@ require (
 )
 
 replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20240724044459-6f3cf5896297
+
+replace gopkg.in/yaml.v3 => github.com/Benyamin-Tehrani/yaml v0.0.0-20241006120305-e828807d2bb4
