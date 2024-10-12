@@ -204,7 +204,7 @@ func strategyStickySessions(url string) strategyFn {
 		for i := 1; i < maxRetry; i++ {
 			proxy := proxies[nowIdx]
 			if proxy.AliveForTestUrl(url) {
-				if nowIdx != idx {
+				if !has || nowIdx != idx {
 					lruCache.Set(key, nowIdx)
 				}
 
