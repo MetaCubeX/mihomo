@@ -27,7 +27,7 @@ func New(proxy C.ProxyAdapter, dialer C.Dialer, statistic bool) C.Dialer {
 }
 
 func NewByName(proxyName string, dialer C.Dialer) (C.Dialer, error) {
-	proxies := tunnel.Proxies()
+	proxies := tunnel.ProxiesWithProviders()
 	if proxy, ok := proxies[proxyName]; ok {
 		return New(proxy, dialer, true), nil
 	}
