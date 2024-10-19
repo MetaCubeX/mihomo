@@ -1,11 +1,9 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
@@ -14,7 +12,7 @@ import (
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/common/convert"
 	"github.com/metacubex/mihomo/common/utils"
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	types "github.com/metacubex/mihomo/constant/provider"
@@ -80,7 +78,9 @@ func (pp *proxySetProvider) Initial() error {
 	if err != nil {
 		return err
 	}
-	pp.getSubscriptionInfo()
+	if subscriptionInfo := cachefile.Cache().GetSubscriptionInfo(pp.Name()); subscriptionInfo != "" {
+		pp.SetSubscriptionInfo(subscriptionInfo)
+	}
 	pp.closeAllConnections()
 	return nil
 }
@@ -117,35 +117,14 @@ func (pp *proxySetProvider) setProxies(proxies []C.Proxy) {
 	}
 }
 
-func (pp *proxySetProvider) getSubscriptionInfo() {
-	if pp.VehicleType() != types.HTTP {
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
-		defer cancel()
-		resp, err := mihomoHttp.HttpRequestWithProxy(ctx, pp.Vehicle().Url(),
-			http.MethodGet, nil, nil, pp.Vehicle().Proxy())
-		if err != nil {
-			return
-		}
-		defer resp.Body.Close()
+func (pp *proxySetProvider) SetSubscriptionInfo(userInfo string) {
+	pp.subscriptionInfo = NewSubscriptionInfo(userInfo)
+}
 
-		userInfoStr := strings.TrimSpace(resp.Header.Get("subscription-userinfo"))
-		if userInfoStr == "" {
-			resp2, err := mihomoHttp.HttpRequestWithProxy(ctx, pp.Vehicle().Url(),
-				http.MethodGet, http.Header{"User-Agent": {"Quantumultx"}}, nil, pp.Vehicle().Proxy())
-			if err != nil {
-				return
-			}
-			defer resp2.Body.Close()
-			userInfoStr = strings.TrimSpace(resp2.Header.Get("subscription-userinfo"))
-			if userInfoStr == "" {
-				return
-			}
-		}
-		pp.subscriptionInfo = NewSubscriptionInfo(userInfoStr)
-	}()
+func (pp *proxySetProvider) SetProvider(provider types.ProxyProvider) {
+	if httpVehicle, ok := pp.Vehicle().(*resource.HTTPVehicle); ok {
+		httpVehicle.SetProvider(provider)
+	}
 }
 
 func (pp *proxySetProvider) closeAllConnections() {
@@ -196,6 +175,9 @@ func NewProxySetProvider(name string, interval time.Duration, filter string, exc
 	fetcher := resource.NewFetcher[[]C.Proxy](name, interval, vehicle, proxiesParseAndFilter(filter, excludeFilter, excludeTypeArray, filterRegs, excludeFilterReg, dialerProxy, override), proxiesOnUpdate(pd))
 	pd.Fetcher = fetcher
 	wrapper := &ProxySetProvider{pd}
+	if httpVehicle, ok := vehicle.(*resource.HTTPVehicle); ok {
+		httpVehicle.SetProvider(wrapper)
+	}
 	runtime.SetFinalizer(wrapper, (*ProxySetProvider).Close)
 	return wrapper, nil
 }
@@ -205,16 +187,21 @@ func (pp *ProxySetProvider) Close() error {
 	return pp.proxySetProvider.Close()
 }
 
+func (pp *ProxySetProvider) SetProvider(provider types.ProxyProvider) {
+	pp.proxySetProvider.SetProvider(provider)
+}
+
 // CompatibleProvider for auto gc
 type CompatibleProvider struct {
 	*compatibleProvider
 }
 
 type compatibleProvider struct {
-	name        string
-	healthCheck *HealthCheck
-	proxies     []C.Proxy
-	version     uint32
+	name             string
+	healthCheck      *HealthCheck
+	subscriptionInfo *SubscriptionInfo
+	proxies          []C.Proxy
+	version          uint32
 }
 
 func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
@@ -284,6 +271,10 @@ func (cp *compatibleProvider) Close() error {
 	return nil
 }
 
+func (cp *compatibleProvider) SetSubscriptionInfo(userInfo string) {
+	cp.subscriptionInfo = NewSubscriptionInfo(userInfo)
+}
+
 func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvider, error) {
 	if len(proxies) == 0 {
 		return nil, errors.New("provider need one proxy at least")
@@ -313,7 +304,6 @@ func proxiesOnUpdate(pd *proxySetProvider) func([]C.Proxy) {
 	return func(elm []C.Proxy) {
 		pd.setProxies(elm)
 		pd.version += 1
-		pd.getSubscriptionInfo()
 	}
 }
 

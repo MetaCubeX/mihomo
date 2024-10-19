@@ -16,8 +16,7 @@ type SubscriptionInfo struct {
 }
 
 func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo) {
-	userinfo = strings.ToLower(userinfo)
-	userinfo = strings.ReplaceAll(userinfo, " ", "")
+	userinfo = strings.ReplaceAll(strings.ToLower(userinfo), " ", "")
 	si = new(SubscriptionInfo)
 
 	for _, field := range strings.Split(userinfo, ";") {
