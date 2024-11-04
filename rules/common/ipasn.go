@@ -1,8 +1,6 @@
 package common
 
 import (
-	"strconv"
-
 	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/mmdb"
 	C "github.com/metacubex/mihomo/constant"
@@ -26,17 +24,14 @@ func (a *ASN) Match(metadata *C.Metadata) (bool, string) {
 		return false, ""
 	}
 
-	result := mmdb.ASNInstance().LookupASN(ip.AsSlice())
-	asnNumber := strconv.FormatUint(uint64(result.AutonomousSystemNumber), 10)
-	ipASN := asnNumber + " " + result.AutonomousSystemOrganization
+	asn, aso := mmdb.ASNInstance().LookupASN(ip.AsSlice())
 	if a.isSourceIP {
-		metadata.SrcIPASN = ipASN
+		metadata.SrcIPASN = asn + " " + aso
 	} else {
-		metadata.DstIPASN = ipASN
+		metadata.DstIPASN = asn + " " + aso
 	}
 
-	match := a.asn == asnNumber
-	return match, a.adapter
+	return a.asn == asn, a.adapter
 }
 
 func (a *ASN) RuleType() C.RuleType {
