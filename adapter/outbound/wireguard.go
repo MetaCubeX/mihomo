@@ -625,6 +625,20 @@ func (r *refProxyAdapter) SupportTFO() bool {
 	return false
 }
 
+func (r *refProxyAdapter) SupportMPTCP() bool {
+	if r.proxyAdapter != nil {
+		return r.proxyAdapter.SupportMPTCP()
+	}
+	return false
+}
+
+func (r *refProxyAdapter) SupportSMUX() bool {
+	if r.proxyAdapter != nil {
+		return r.proxyAdapter.SupportSMUX()
+	}
+	return false
+}
+
 func (r *refProxyAdapter) MarshalJSON() ([]byte, error) {
 	if r.proxyAdapter != nil {
 		return r.proxyAdapter.MarshalJSON()
