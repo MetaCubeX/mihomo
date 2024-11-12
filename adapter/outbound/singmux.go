@@ -97,6 +97,10 @@ func (s *SingMux) SupportUOT() bool {
 	return true
 }
 
+func (s *SingMux) SupportSMUX() bool {
+	return true
+}
+
 func closeSingMux(s *SingMux) {
 	_ = s.client.Close()
 }

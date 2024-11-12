@@ -95,6 +95,16 @@ func (b *Base) SupportTFO() bool {
 	return b.tfo
 }
 
+// SupportMPTCP implements C.ProxyAdapter
+func (b *Base) SupportMPTCP() bool {
+	return b.mpTcp
+}
+
+// SupportSMUX implements C.ProxyAdapter
+func (b *Base) SupportSMUX() bool {
+	return false
+}
+
 // IsL3Protocol implements C.ProxyAdapter
 func (b *Base) IsL3Protocol(metadata *C.Metadata) bool {
 	return false
