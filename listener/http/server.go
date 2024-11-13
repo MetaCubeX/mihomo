@@ -4,7 +4,6 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
 	authStore "github.com/metacubex/mihomo/listener/auth"
@@ -33,20 +32,20 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithAuthenticator(addr, tunnel, authStore.Authenticator, additions...)
+	return NewWithAuthenticator(addr, tunnel, authStore.Default, additions...)
 }
 
 // NewWithAuthenticate
 // never change type traits because it's used in CMFA
 func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
-	getAuth := authStore.Authenticator
+	store := authStore.Default
 	if !authenticate {
-		getAuth = authStore.Nil
+		store = authStore.Default
 	}
-	return NewWithAuthenticator(addr, tunnel, getAuth, additions...)
+	return NewWithAuthenticator(addr, tunnel, store, additions...)
 }
 
-func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Authenticator, additions ...inbound.Addition) (*Listener, error) {
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -55,8 +54,8 @@ func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Auth
 			inbound.WithSpecialRules(""),
 		}
 	}
-	l, err := inbound.Listen("tcp", addr)
 
+	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -74,19 +73,18 @@ func NewWithAuthenticator(addr string, tunnel C.Tunnel, getAuth func() auth.Auth
 				}
 				continue
 			}
-			N.TCPKeepAlive(conn)
 
-			getAuth := getAuth
-			if isDefault { // only apply on default listener
+			store := store
+			if isDefault || store == authStore.Default { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
 					_ = conn.Close()
 					continue
 				}
 				if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
-					getAuth = authStore.Nil
+					store = authStore.Nil
 				}
 			}
-			go HandleConn(conn, tunnel, getAuth, additions...)
+			go HandleConn(conn, tunnel, store, additions...)
 		}
 	}()
 

@@ -4,13 +4,24 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
+	"strconv"
 
 	"github.com/metacubex/mihomo/common/callback"
 	"github.com/metacubex/mihomo/component/iface"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
 
 	"github.com/puzpuzpuz/xsync/v3"
 )
+
+var disableLoopBackDetector, _ = strconv.ParseBool(os.Getenv("DISABLE_LOOPBACK_DETECTOR"))
+
+func init() {
+	if features.CMFA {
+		disableLoopBackDetector = true
+	}
+}
 
 var ErrReject = errors.New("reject loopback connection")
 
@@ -20,6 +31,9 @@ type Detector struct {
 }
 
 func NewDetector() *Detector {
+	if disableLoopBackDetector {
+		return nil
+	}
 	return &Detector{
 		connMap:       xsync.NewMapOf[netip.AddrPort, struct{}](),
 		packetConnMap: xsync.NewMapOf[uint16, struct{}](),
@@ -27,6 +41,9 @@ func NewDetector() *Detector {
 }
 
 func (l *Detector) NewConn(conn C.Conn) C.Conn {
+	if l == nil || l.connMap == nil {
+		return conn
+	}
 	metadata := C.Metadata{}
 	if metadata.SetRemoteAddr(conn.LocalAddr()) != nil {
 		return conn
@@ -42,6 +59,9 @@ func (l *Detector) NewConn(conn C.Conn) C.Conn {
 }
 
 func (l *Detector) NewPacketConn(conn C.PacketConn) C.PacketConn {
+	if l == nil || l.packetConnMap == nil {
+		return conn
+	}
 	metadata := C.Metadata{}
 	if metadata.SetRemoteAddr(conn.LocalAddr()) != nil {
 		return conn
@@ -58,6 +78,9 @@ func (l *Detector) NewPacketConn(conn C.PacketConn) C.PacketConn {
 }
 
 func (l *Detector) CheckConn(metadata *C.Metadata) error {
+	if l == nil || l.connMap == nil {
+		return nil
+	}
 	connAddr := metadata.SourceAddrPort()
 	if !connAddr.IsValid() {
 		return nil
@@ -69,6 +92,9 @@ func (l *Detector) CheckConn(metadata *C.Metadata) error {
 }
 
 func (l *Detector) CheckPacketConn(metadata *C.Metadata) error {
+	if l == nil || l.packetConnMap == nil {
+		return nil
+	}
 	connAddr := metadata.SourceAddrPort()
 	if !connAddr.IsValid() {
 		return nil

@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/keepalive"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/socks5"
 )
@@ -33,7 +33,7 @@ func (l *Listener) Close() error {
 
 func (l *Listener) handleTProxy(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	target := socks5.ParseAddrToSocksAddr(conn.LocalAddr())
-	N.TCPKeepAlive(conn)
+	keepalive.TCPKeepAlive(conn)
 	// TProxy's conn.LocalAddr() is target address, so we set from l.listener
 	additions = append([]inbound.Addition{inbound.WithInAddr(l.listener.Addr())}, additions...)
 	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.TPROXY, additions...))

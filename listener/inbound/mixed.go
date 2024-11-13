@@ -53,7 +53,7 @@ func (m *Mixed) Address() string {
 // Listen implements constant.InboundListener
 func (m *Mixed) Listen(tunnel C.Tunnel) error {
 	var err error
-	m.l, err = mixed.NewWithAuthenticator(m.RawAddress(), tunnel, m.config.Users.GetAuth(), m.Additions()...)
+	m.l, err = mixed.NewWithAuthenticator(m.RawAddress(), tunnel, m.config.Users.GetAuthStore(), m.Additions()...)
 	if err != nil {
 		return err
 	}

@@ -59,7 +59,6 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 					}
 					continue
 				}
-				N.TCPKeepAlive(c)
 				go sl.HandleConn(c, tunnel, additions...)
 			}
 		}()

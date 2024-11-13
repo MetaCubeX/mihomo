@@ -53,6 +53,12 @@ func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg,
 	return
 }
 
+func (d *dhcpClient) ResetConnection() {
+	for _, client := range d.clients {
+		client.ResetConnection()
+	}
+}
+
 func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {
 	d.lock.Lock()
 

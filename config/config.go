@@ -7,28 +7,23 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
-	"path"
 	"strings"
 	"time"
+	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/adapter/provider"
-	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/auth"
 	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	P "github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/resource"
 	"github.com/metacubex/mihomo/component/sniffer"
-	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/component/trie"
-	"github.com/metacubex/mihomo/component/updater"
 	C "github.com/metacubex/mihomo/constant"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
 	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
@@ -67,6 +62,9 @@ type General struct {
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
 	ETagSupport             bool              `json:"etag-support"`
+	KeepAliveIdle           int               `json:"keep-alive-idle"`
+	KeepAliveInterval       int               `json:"keep-alive-interval"`
+	DisableKeepAlive        bool              `json:"disable-keep-alive"`
 }
 
 // Inbound config
@@ -103,9 +101,18 @@ type Controller struct {
 	ExternalController     string
 	ExternalControllerTLS  string
 	ExternalControllerUnix string
+	ExternalControllerPipe string
 	ExternalUI             string
+	ExternalUIURL          string
+	ExternalUIName         string
 	ExternalDohServer      string
 	Secret                 string
+	Cors                   Cors
+}
+
+type Cors struct {
+	AllowOrigins        []string
+	AllowPrivateNetwork bool
 }
 
 // Experimental config
@@ -153,6 +160,8 @@ type DNS struct {
 	Hosts                 *trie.DomainTrie[resolver.HostValue]
 	NameServerPolicy      []dns.Policy
 	ProxyServerNameserver []dns.NameServer
+	DirectNameServer      []dns.NameServer
+	DirectFollowPolicy    bool
 }
 
 // Profile config
@@ -190,26 +199,33 @@ type Config struct {
 	TLS           *TLS
 }
 
+type RawCors struct {
+	AllowOrigins        []string `yaml:"allow-origins" json:"allow-origins"`
+	AllowPrivateNetwork bool     `yaml:"allow-private-network" json:"allow-private-network"`
+}
+
 type RawDNS struct {
-	Enable                bool                                `yaml:"enable" json:"enable"`
-	PreferH3              bool                                `yaml:"prefer-h3" json:"prefer-h3"`
-	IPv6                  bool                                `yaml:"ipv6" json:"ipv6"`
-	IPv6Timeout           uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
-	UseHosts              bool                                `yaml:"use-hosts" json:"use-hosts"`
-	UseSystemHosts        bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
-	RespectRules          bool                                `yaml:"respect-rules" json:"respect-rules"`
-	NameServer            []string                            `yaml:"nameserver" json:"nameserver"`
-	Fallback              []string                            `yaml:"fallback" json:"fallback"`
-	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
-	Listen                string                              `yaml:"listen" json:"listen"`
-	EnhancedMode          C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
-	FakeIPRange           string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
-	FakeIPFilter          []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
-	FakeIPFilterMode      C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
-	DefaultNameserver     []string                            `yaml:"default-nameserver" json:"default-nameserver"`
-	CacheAlgorithm        string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
-	NameServerPolicy      *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
-	ProxyServerNameserver []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+	Enable                       bool                                `yaml:"enable" json:"enable"`
+	PreferH3                     bool                                `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                         bool                                `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout                  uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts                     bool                                `yaml:"use-hosts" json:"use-hosts"`
+	UseSystemHosts               bool                                `yaml:"use-system-hosts" json:"use-system-hosts"`
+	RespectRules                 bool                                `yaml:"respect-rules" json:"respect-rules"`
+	NameServer                   []string                            `yaml:"nameserver" json:"nameserver"`
+	Fallback                     []string                            `yaml:"fallback" json:"fallback"`
+	FallbackFilter               RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
+	Listen                       string                              `yaml:"listen" json:"listen"`
+	EnhancedMode                 C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange                  string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPFilter                 []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	FakeIPFilterMode             C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
+	DefaultNameserver            []string                            `yaml:"default-nameserver" json:"default-nameserver"`
+	CacheAlgorithm               string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
+	NameServerPolicy             *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
+	ProxyServerNameserver        []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+	DirectNameServer             []string                            `yaml:"direct-nameserver" json:"direct-nameserver"`
+	DirectNameServerFollowPolicy bool                                `yaml:"direct-nameserver-follow-policy" json:"direct-nameserver-follow-policy"`
 }
 
 type RawFallbackFilter struct {
@@ -364,8 +380,10 @@ type RawConfig struct {
 	LogLevel                log.LogLevel      `yaml:"log-level" json:"log-level"`
 	IPv6                    bool              `yaml:"ipv6" json:"ipv6"`
 	ExternalController      string            `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerPipe  string            `yaml:"external-controller-pipe" json:"external-controller-pipe"`
 	ExternalControllerUnix  string            `yaml:"external-controller-unix" json:"external-controller-unix"`
 	ExternalControllerTLS   string            `yaml:"external-controller-tls" json:"external-controller-tls"`
+	ExternalControllerCors  RawCors           `yaml:"external-controller-cors" json:"external-controller-cors"`
 	ExternalUI              string            `yaml:"external-ui" json:"external-ui"`
 	ExternalUIURL           string            `yaml:"external-ui-url" json:"external-ui-url"`
 	ExternalUIName          string            `yaml:"external-ui-name" json:"external-ui-name"`
@@ -539,6 +557,10 @@ func DefaultRawConfig() *RawConfig {
 			OverrideDest:    true,
 		},
 		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
+		ExternalControllerCors: RawCors{
+			AllowOrigins:        []string{"*"},
+			AllowPrivateNetwork: true,
+		},
 	}
 }
 
@@ -564,10 +586,11 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	if len(config.General.GlobalClientFingerprint) != 0 {
-		log.Debugln("GlobalClientFingerprint: %s", config.General.GlobalClientFingerprint)
-		tlsC.SetGlobalUtlsClient(config.General.GlobalClientFingerprint)
-	}
+	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
+	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
+	// This implementation is very disgusting, but there is currently no better solution
+	rollback := temporaryUpdateGeneral(config.General)
+	defer rollback()
 
 	controller, err := parseController(rawCfg)
 	if err != nil {
@@ -683,46 +706,10 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	return config, nil
 }
 
+//go:linkname temporaryUpdateGeneral
+func temporaryUpdateGeneral(general *General) func()
+
 func parseGeneral(cfg *RawConfig) (*General, error) {
-	updater.SetGeoAutoUpdate(cfg.GeoAutoUpdate)
-	updater.SetGeoUpdateInterval(cfg.GeoUpdateInterval)
-	geodata.SetGeodataMode(cfg.GeodataMode)
-	geodata.SetLoader(cfg.GeodataLoader)
-	geodata.SetSiteMatcher(cfg.GeositeMatcher)
-	geodata.SetGeoIpUrl(cfg.GeoXUrl.GeoIp)
-	geodata.SetGeoSiteUrl(cfg.GeoXUrl.GeoSite)
-	geodata.SetMmdbUrl(cfg.GeoXUrl.Mmdb)
-	geodata.SetASNUrl(cfg.GeoXUrl.ASN)
-	mihomoHttp.SetUA(cfg.GlobalUA)
-	resource.SetETag(cfg.ETagSupport)
-
-	if cfg.KeepAliveIdle != 0 {
-		N.KeepAliveIdle = time.Duration(cfg.KeepAliveIdle) * time.Second
-	}
-	if cfg.KeepAliveInterval != 0 {
-		N.KeepAliveInterval = time.Duration(cfg.KeepAliveInterval) * time.Second
-	}
-	N.DisableKeepAlive = cfg.DisableKeepAlive
-
-	// checkout externalUI exist
-	if cfg.ExternalUI != "" {
-		updater.AutoDownloadUI = true
-		updater.ExternalUIPath = C.Path.Resolve(cfg.ExternalUI)
-	} else {
-		// default externalUI path
-		updater.ExternalUIPath = path.Join(C.Path.HomeDir(), "ui")
-	}
-
-	// checkout UIpath/name exist
-	if cfg.ExternalUIName != "" {
-		updater.AutoDownloadUI = true
-		updater.ExternalUIPath = path.Join(updater.ExternalUIPath, cfg.ExternalUIName)
-	}
-
-	if cfg.ExternalUIURL != "" {
-		updater.ExternalUIURL = cfg.ExternalUIURL
-	}
-
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,
@@ -756,11 +743,15 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeoUpdateInterval:       cfg.GeoUpdateInterval,
 		GeodataMode:             cfg.GeodataMode,
 		GeodataLoader:           cfg.GeodataLoader,
+		GeositeMatcher:          cfg.GeositeMatcher,
 		TCPConcurrent:           cfg.TCPConcurrent,
 		FindProcessMode:         cfg.FindProcessMode,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
 		ETagSupport:             cfg.ETagSupport,
+		KeepAliveIdle:           cfg.KeepAliveIdle,
+		KeepAliveInterval:       cfg.KeepAliveInterval,
+		DisableKeepAlive:        cfg.DisableKeepAlive,
 	}, nil
 }
 
@@ -768,10 +759,17 @@ func parseController(cfg *RawConfig) (*Controller, error) {
 	return &Controller{
 		ExternalController:     cfg.ExternalController,
 		ExternalUI:             cfg.ExternalUI,
+		ExternalUIURL:          cfg.ExternalUIURL,
+		ExternalUIName:         cfg.ExternalUIName,
 		Secret:                 cfg.Secret,
+		ExternalControllerPipe: cfg.ExternalControllerPipe,
 		ExternalControllerUnix: cfg.ExternalControllerUnix,
 		ExternalControllerTLS:  cfg.ExternalControllerTLS,
 		ExternalDohServer:      cfg.ExternalDohServer,
+		Cors: Cors{
+			AllowOrigins:        cfg.ExternalControllerCors.AllowOrigins,
+			AllowPrivateNetwork: cfg.ExternalControllerCors.AllowPrivateNetwork,
+		},
 	}, nil
 }
 
@@ -1162,16 +1160,6 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
-		if strings.HasPrefix(server, "dhcp://") {
-			nameservers = append(
-				nameservers,
-				dns.NameServer{
-					Net:  "dhcp",
-					Addr: server[len("dhcp://"):],
-				},
-			)
-			continue
-		}
 		server = parsePureDNSServer(server)
 		u, err := url.Parse(server)
 		if err != nil {
@@ -1222,6 +1210,13 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			dnsNetType = "quic" // DNS over QUIC
 		case "system":
 			dnsNetType = "system" // System DNS
+		case "dhcp":
+			addr = server[len("dhcp://"):] // some special notation cannot be parsed by url
+			dnsNetType = "dhcp"            // UDP from DHCP
+			if addr == "system" {          // Compatible with old writing "dhcp://system"
+				dnsNetType = "system"
+				addr = ""
+			}
 		case "rcode":
 			dnsNetType = "rcode"
 			addr = u.Host
@@ -1247,16 +1242,18 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 			proxyName = dns.RespectRules
 		}
 
-		nameservers = append(
-			nameservers,
-			dns.NameServer{
-				Net:       dnsNetType,
-				Addr:      addr,
-				ProxyName: proxyName,
-				Params:    params,
-				PreferH3:  preferH3,
-			},
-		)
+		nameserver := dns.NameServer{
+			Net:       dnsNetType,
+			Addr:      addr,
+			ProxyName: proxyName,
+			Params:    params,
+			PreferH3:  preferH3,
+		}
+		if slices.ContainsFunc(nameservers, nameserver.Equal) {
+			continue // skip duplicates nameserver
+		}
+
+		nameservers = append(nameservers, nameserver)
 	}
 	return nameservers, nil
 }
@@ -1400,6 +1397,11 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 	if dnsCfg.ProxyServerNameserver, err = parseNameServer(cfg.ProxyServerNameserver, false, cfg.PreferH3); err != nil {
 		return nil, err
 	}
+
+	if dnsCfg.DirectNameServer, err = parseNameServer(cfg.DirectNameServer, false, cfg.PreferH3); err != nil {
+		return nil, err
+	}
+	dnsCfg.DirectFollowPolicy = cfg.DirectNameServerFollowPolicy
 
 	if len(cfg.DefaultNameserver) == 0 {
 		return nil, errors.New("default nameserver should have at least one nameserver")

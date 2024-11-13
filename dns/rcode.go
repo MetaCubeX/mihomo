@@ -48,3 +48,5 @@ func (r rcodeClient) ExchangeContext(ctx context.Context, m *D.Msg) (*D.Msg, err
 func (r rcodeClient) Address() string {
 	return r.addr
 }
+
+func (r rcodeClient) ResetConnection() {}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/listener/inner"
 )
 
@@ -71,8 +72,7 @@ func HttpRequestWithProxy(ctx context.Context, url, method string, header map[st
 			if conn, err := inner.HandleTcp(address, specialProxy); err == nil {
 				return conn, nil
 			} else {
-				d := net.Dialer{}
-				return d.DialContext(ctx, network, address)
+				return dialer.DialContext(ctx, network, address)
 			}
 		},
 		TLSClientConfig: ca.GetGlobalTLSConfig(&tls.Config{}),

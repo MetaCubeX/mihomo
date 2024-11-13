@@ -1,14 +1,13 @@
 package constant
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"os"
 	P "path"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/constant/features"
 )
 
@@ -89,8 +88,8 @@ func (p *path) IsSafePath(path string) bool {
 }
 
 func (p *path) GetPathByHash(prefix, name string) string {
-	hash := md5.Sum([]byte(name))
-	filename := hex.EncodeToString(hash[:])
+	hash := utils.MakeHash([]byte(name))
+	filename := hash.String()
 	return filepath.Join(p.HomeDir(), prefix, filename)
 }
 

@@ -203,11 +203,23 @@ func (doh *dnsOverHTTPS) Close() (err error) {
 	return doh.closeClient(doh.client)
 }
 
-// closeClient cleans up resources used by client if necessary.  Note, that at
-// this point it should only be done for HTTP/3 as it may leak due to keep-alive
-// connections.
+func (doh *dnsOverHTTPS) ResetConnection() {
+	doh.clientMu.Lock()
+	defer doh.clientMu.Unlock()
+
+	if doh.client == nil {
+		return
+	}
+
+	_ = doh.closeClient(doh.client)
+	doh.client = nil
+}
+
+// closeClient cleans up resources used by client if necessary.
 func (doh *dnsOverHTTPS) closeClient(client *http.Client) (err error) {
-	if isHTTP3(client) {
+	client.CloseIdleConnections()
+
+	if isHTTP3(client) { // HTTP/3 may leak due to keep-alive connections.
 		return client.Transport.(io.Closer).Close()
 	}
 
@@ -506,6 +518,13 @@ func (h *http3Transport) Close() (err error) {
 	h.closed = true
 
 	return h.baseTransport.Close()
+}
+
+func (h *http3Transport) CloseIdleConnections() {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	h.baseTransport.CloseIdleConnections()
 }
 
 // createTransportH3 tries to create an HTTP/3 transport for this upstream.

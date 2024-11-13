@@ -144,6 +144,10 @@ func (doq *dnsOverQUIC) Close() (err error) {
 	return err
 }
 
+func (doq *dnsOverQUIC) ResetConnection() {
+	doq.closeConnWithError(nil)
+}
+
 // exchangeQUIC attempts to open a QUIC connection, send the DNS message
 // through it and return the response it got from the server.
 func (doq *dnsOverQUIC) exchangeQUIC(ctx context.Context, msg *D.Msg) (resp *D.Msg, err error) {

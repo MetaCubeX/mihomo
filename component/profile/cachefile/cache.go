@@ -1,7 +1,6 @@
 package cachefile
 
 import (
-	"math"
 	"os"
 	"sync"
 	"time"
@@ -18,9 +17,10 @@ var (
 	fileMode     os.FileMode = 0o666
 	defaultCache *CacheFile
 
-	bucketSelected = []byte("selected")
-	bucketFakeip   = []byte("fakeip")
-	bucketETag     = []byte("etag")
+	bucketSelected         = []byte("selected")
+	bucketFakeip           = []byte("fakeip")
+	bucketETag             = []byte("etag")
+	bucketSubscriptionInfo = []byte("subscriptioninfo")
 )
 
 // CacheFile store and update the cache file
@@ -69,133 +69,6 @@ func (c *CacheFile) SelectedMap() map[string]string {
 		return nil
 	})
 	return mapping
-}
-
-func (c *CacheFile) PutFakeip(key, value []byte) error {
-	if c.DB == nil {
-		return nil
-	}
-
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
-		if err != nil {
-			return err
-		}
-		return bucket.Put(key, value)
-	})
-	if err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
-	}
-
-	return err
-}
-
-func (c *CacheFile) DelFakeipPair(ip, host []byte) error {
-	if c.DB == nil {
-		return nil
-	}
-
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
-		if err != nil {
-			return err
-		}
-		err = bucket.Delete(ip)
-		if len(host) > 0 {
-			if err := bucket.Delete(host); err != nil {
-				return err
-			}
-		}
-		return err
-	})
-	if err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
-	}
-
-	return err
-}
-
-func (c *CacheFile) GetFakeip(key []byte) []byte {
-	if c.DB == nil {
-		return nil
-	}
-
-	tx, err := c.DB.Begin(false)
-	if err != nil {
-		return nil
-	}
-	defer tx.Rollback()
-
-	bucket := tx.Bucket(bucketFakeip)
-	if bucket == nil {
-		return nil
-	}
-
-	return bucket.Get(key)
-}
-
-func (c *CacheFile) FlushFakeIP() error {
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket := t.Bucket(bucketFakeip)
-		if bucket == nil {
-			return nil
-		}
-		return t.DeleteBucket(bucketFakeip)
-	})
-	return err
-}
-
-func (c *CacheFile) SetETagWithHash(url string, hash []byte, etag string) {
-	if c.DB == nil {
-		return
-	}
-
-	lenHash := len(hash)
-	if lenHash > math.MaxUint8 {
-		return // maybe panic is better
-	}
-
-	data := make([]byte, 1, 1+lenHash+len(etag))
-	data[0] = uint8(lenHash)
-	data = append(data, hash...)
-	data = append(data, etag...)
-
-	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketETag)
-		if err != nil {
-			return err
-		}
-
-		return bucket.Put([]byte(url), data)
-	})
-	if err != nil {
-		log.Warnln("[CacheFile] write cache to %s failed: %s", c.DB.Path(), err.Error())
-		return
-	}
-}
-func (c *CacheFile) GetETagWithHash(key string) (hash []byte, etag string) {
-	if c.DB == nil {
-		return
-	}
-	var value []byte
-	c.DB.View(func(t *bbolt.Tx) error {
-		if bucket := t.Bucket(bucketETag); bucket != nil {
-			if v := bucket.Get([]byte(key)); v != nil {
-				value = v
-			}
-		}
-		return nil
-	})
-	if len(value) == 0 {
-		return
-	}
-	lenHash := int(value[0])
-	if len(value) < 1+lenHash {
-		return
-	}
-	hash = value[1 : 1+lenHash]
-	etag = string(value[1+lenHash:])
-	return
 }
 
 func (c *CacheFile) Close() error {

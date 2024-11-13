@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
@@ -18,6 +19,7 @@ import (
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -37,6 +39,11 @@ type Proxy struct {
 	alive   atomic.Bool
 	history *queue.Queue[C.DelayHistory]
 	extra   *xsync.MapOf[string, *internalProxyState]
+}
+
+// Adapter implements C.Proxy
+func (p *Proxy) Adapter() C.ProxyAdapter {
+	return p.ProxyAdapter
 }
 
 // AliveForTestUrl implements C.Proxy
@@ -255,10 +262,18 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 
 	if unifiedDelay {
 		second := time.Now()
-		resp, err = client.Do(req)
-		if err == nil {
+		var ignoredErr error
+		var secondResp *http.Response
+		secondResp, ignoredErr = client.Do(req)
+		if ignoredErr == nil {
+			resp = secondResp
 			_ = resp.Body.Close()
 			start = second
+		} else {
+			if strings.HasPrefix(url, "http://") {
+				log.Errorln("%s failed to get the second response from %s: %v", p.Name(), url, ignoredErr)
+				log.Warnln("It is recommended to use HTTPS for provider.health-check.url and group.url to ensure better reliability. Due to some proxy providers hijacking test addresses and not being compatible with repeated HEAD requests, using HTTP may result in failed tests.")
+			}
 		}
 	}
 

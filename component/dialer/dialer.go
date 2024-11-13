@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/log"
 )
@@ -144,6 +145,7 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	dialer := netDialer.(*net.Dialer)
+	keepalive.SetNetDialer(dialer)
 	if opt.mpTcp {
 		setMultiPathTCP(dialer)
 	}
@@ -338,26 +340,18 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 		return nil, "-1", err
 	}
 
+	if preferResolver == nil {
+		preferResolver = resolver.ProxyServerHostResolver
+	}
+
 	var ips []netip.Addr
 	switch network {
 	case "tcp4", "udp4":
-		if preferResolver == nil {
-			ips, err = resolver.LookupIPv4ProxyServerHost(ctx, host)
-		} else {
-			ips, err = resolver.LookupIPv4WithResolver(ctx, host, preferResolver)
-		}
+		ips, err = resolver.LookupIPv4WithResolver(ctx, host, preferResolver)
 	case "tcp6", "udp6":
-		if preferResolver == nil {
-			ips, err = resolver.LookupIPv6ProxyServerHost(ctx, host)
-		} else {
-			ips, err = resolver.LookupIPv6WithResolver(ctx, host, preferResolver)
-		}
+		ips, err = resolver.LookupIPv6WithResolver(ctx, host, preferResolver)
 	default:
-		if preferResolver == nil {
-			ips, err = resolver.LookupIPProxyServerHost(ctx, host)
-		} else {
-			ips, err = resolver.LookupIPWithResolver(ctx, host, preferResolver)
-		}
+		ips, err = resolver.LookupIPWithResolver(ctx, host, preferResolver)
 	}
 	if err != nil {
 		return nil, "-1", fmt.Errorf("dns resolve failed: %w", err)

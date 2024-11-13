@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -16,9 +17,10 @@ import (
 	"github.com/metacubex/mihomo/component/auth"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
-	G "github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/geodata"
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/iface"
+	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/profile"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -100,7 +102,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
-	updateGeneral(cfg.General)
+	updateGeneral(cfg.General, true)
 	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.General.IPv6)
 	updateListeners(cfg.General, cfg.Listeners, force)
@@ -117,7 +119,9 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	runtime.GC()
 	tunnel.OnRunning()
 	hcCompatibleProvider(cfg.Providers)
-	initExternalUI()
+	updateUpdater(cfg)
+
+	resolver.ResetConnection()
 }
 
 func initInnerTcp() {
@@ -127,7 +131,7 @@ func initInnerTcp() {
 func GetGeneral() *config.General {
 	ports := listener.GetPorts()
 	var authenticator []string
-	if auth := authStore.Authenticator(); auth != nil {
+	if auth := authStore.Default.Authenticator(); auth != nil {
 		authenticator = auth.Users()
 	}
 
@@ -158,22 +162,25 @@ func GetGeneral() *config.General {
 		Interface:    dialer.DefaultInterface.Load(),
 		RoutingMark:  int(dialer.DefaultRoutingMark.Load()),
 		GeoXUrl: config.GeoXUrl{
-			GeoIp:   G.GeoIpUrl(),
-			Mmdb:    G.MmdbUrl(),
-			ASN:     G.ASNUrl(),
-			GeoSite: G.GeoSiteUrl(),
+			GeoIp:   geodata.GeoIpUrl(),
+			Mmdb:    geodata.MmdbUrl(),
+			ASN:     geodata.ASNUrl(),
+			GeoSite: geodata.GeoSiteUrl(),
 		},
 		GeoAutoUpdate:           updater.GeoAutoUpdate(),
 		GeoUpdateInterval:       updater.GeoUpdateInterval(),
-		GeodataMode:             G.GeodataMode(),
-		GeodataLoader:           G.LoaderName(),
-		GeositeMatcher:          G.SiteMatcherName(),
+		GeodataMode:             geodata.GeodataMode(),
+		GeodataLoader:           geodata.LoaderName(),
+		GeositeMatcher:          geodata.SiteMatcherName(),
 		TCPConcurrent:           dialer.GetTcpConcurrent(),
 		FindProcessMode:         tunnel.FindProcessMode(),
 		Sniffing:                tunnel.IsSniffing(),
 		GlobalClientFingerprint: tlsC.GetGlobalFingerprint(),
 		GlobalUA:                mihomoHttp.UA(),
 		ETagSupport:             resource.ETag(),
+		KeepAliveInterval:       int(keepalive.KeepAliveInterval() / time.Second),
+		KeepAliveIdle:           int(keepalive.KeepAliveIdle() / time.Second),
+		DisableKeepAlive:        keepalive.DisableKeepAlive(),
 	}
 
 	return general
@@ -233,6 +240,8 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		resolver.DefaultResolver = nil
 		resolver.DefaultHostMapper = nil
 		resolver.DefaultLocalServer = nil
+		resolver.ProxyServerHostResolver = nil
+		resolver.DirectHostResolver = nil
 		dns.ReCreateServer("", nil, nil)
 		return
 	}
@@ -249,12 +258,12 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 		Default:              c.DefaultNameserver,
 		Policy:               c.NameServerPolicy,
 		ProxyServer:          c.ProxyServerNameserver,
-		Tunnel:               tunnel.Tunnel,
+		DirectServer:         c.DirectNameServer,
+		DirectFollowPolicy:   c.DirectFollowPolicy,
 		CacheAlgorithm:       c.CacheAlgorithm,
 	}
 
 	r := dns.NewResolver(cfg)
-	pr := dns.NewProxyServerHostResolver(r)
 	m := dns.NewEnhancer(cfg)
 
 	// reuse cache of old host mapper
@@ -264,14 +273,22 @@ func updateDNS(c *config.DNS, generalIPv6 bool) {
 
 	resolver.DefaultResolver = r
 	resolver.DefaultHostMapper = m
-	resolver.DefaultLocalServer = dns.NewLocalServer(r, m)
+	resolver.DefaultLocalServer = dns.NewLocalServer(r.Resolver, m)
 	resolver.UseSystemHosts = c.UseSystemHosts
 
-	if pr.Invalid() {
-		resolver.ProxyServerHostResolver = pr
+	if r.ProxyResolver.Invalid() {
+		resolver.ProxyServerHostResolver = r.ProxyResolver
+	} else {
+		resolver.ProxyServerHostResolver = r.Resolver
 	}
 
-	dns.ReCreateServer(c.Listen, r, m)
+	if r.DirectResolver.Invalid() {
+		resolver.DirectHostResolver = r.DirectResolver
+	} else {
+		resolver.DirectHostResolver = r.Resolver
+	}
+
+	dns.ReCreateServer(c.Listen, r.Resolver, m)
 }
 
 func updateHosts(tree *trie.DomainTrie[resolver.HostValue]) {
@@ -382,47 +399,68 @@ func updateTunnels(tunnels []LC.Tunnel) {
 	listener.PatchTunnel(tunnels, tunnel.Tunnel)
 }
 
-func initExternalUI() {
-	if updater.AutoDownloadUI {
-		dirEntries, _ := os.ReadDir(updater.ExternalUIPath)
-		if len(dirEntries) > 0 {
-			log.Infoln("UI already exists, skip downloading")
-		} else {
-			log.Infoln("External UI downloading ...")
-			updater.DownloadUI()
-		}
+func updateUpdater(cfg *config.Config) {
+	general := cfg.General
+	updater.SetGeoAutoUpdate(general.GeoAutoUpdate)
+	updater.SetGeoUpdateInterval(general.GeoUpdateInterval)
+
+	controller := cfg.Controller
+	updater.DefaultUiUpdater = updater.NewUiUpdater(controller.ExternalUI, controller.ExternalUIURL, controller.ExternalUIName)
+	updater.DefaultUiUpdater.AutoDownloadUI()
+}
+
+//go:linkname temporaryUpdateGeneral github.com/metacubex/mihomo/config.temporaryUpdateGeneral
+func temporaryUpdateGeneral(general *config.General) func() {
+	oldGeneral := GetGeneral()
+	updateGeneral(general, false)
+	return func() {
+		updateGeneral(oldGeneral, false)
 	}
 }
 
-func updateGeneral(general *config.General) {
+func updateGeneral(general *config.General, logging bool) {
 	tunnel.SetMode(general.Mode)
 	tunnel.SetFindProcessMode(general.FindProcessMode)
 	resolver.DisableIPv6 = !general.IPv6
 
-	if general.TCPConcurrent {
-		dialer.SetTcpConcurrent(general.TCPConcurrent)
+	dialer.SetTcpConcurrent(general.TCPConcurrent)
+	if logging && general.TCPConcurrent {
 		log.Infoln("Use tcp concurrent")
 	}
 
 	inbound.SetTfo(general.InboundTfo)
 	inbound.SetMPTCP(general.InboundMPTCP)
 
+	keepalive.SetKeepAliveIdle(time.Duration(general.KeepAliveIdle) * time.Second)
+	keepalive.SetKeepAliveInterval(time.Duration(general.KeepAliveInterval) * time.Second)
+	keepalive.SetDisableKeepAlive(general.DisableKeepAlive)
+
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 
 	dialer.DefaultInterface.Store(general.Interface)
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
-	if general.RoutingMark > 0 {
+	if logging && general.RoutingMark > 0 {
 		log.Infoln("Use routing mark: %#x", general.RoutingMark)
 	}
 
 	iface.FlushCache()
-	G.SetLoader(general.GeodataLoader)
-	G.SetSiteMatcher(general.GeositeMatcher)
+
+	geodata.SetGeodataMode(general.GeodataMode)
+	geodata.SetLoader(general.GeodataLoader)
+	geodata.SetSiteMatcher(general.GeositeMatcher)
+	geodata.SetGeoIpUrl(general.GeoXUrl.GeoIp)
+	geodata.SetGeoSiteUrl(general.GeoXUrl.GeoSite)
+	geodata.SetMmdbUrl(general.GeoXUrl.Mmdb)
+	geodata.SetASNUrl(general.GeoXUrl.ASN)
+	mihomoHttp.SetUA(general.GlobalUA)
+	resource.SetETag(general.ETagSupport)
+
+	tlsC.SetGlobalUtlsClient(general.GlobalClientFingerprint)
 }
 
 func updateUsers(users []auth.AuthUser) {
 	authenticator := auth.NewAuthenticator(users)
-	authStore.SetAuthenticator(authenticator)
+	authStore.Default.SetAuthenticator(authenticator)
 	if authenticator != nil {
 		log.Infoln("Authentication of local server updated")
 	}
@@ -444,12 +482,12 @@ func patchSelectGroup(proxies map[string]C.Proxy) {
 	}
 
 	for name, proxy := range proxies {
-		outbound, ok := proxy.(*adapter.Proxy)
+		outbound, ok := proxy.(C.Proxy)
 		if !ok {
 			continue
 		}
 
-		selector, ok := outbound.ProxyAdapter.(outboundgroup.SelectAble)
+		selector, ok := outbound.Adapter().(outboundgroup.SelectAble)
 		if !ok {
 			continue
 		}

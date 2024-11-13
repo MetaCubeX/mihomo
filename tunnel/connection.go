@@ -1,15 +1,108 @@
 package tunnel
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/netip"
 	"time"
 
+	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 )
+
+type packetSender struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	ch     chan C.PacketAdapter
+	cache  *lru.LruCache[string, netip.Addr]
+}
+
+// newPacketSender return a chan based C.PacketSender
+// It ensures that packets can be sent sequentially and without blocking
+func newPacketSender() C.PacketSender {
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan C.PacketAdapter, senderCapacity)
+	return &packetSender{
+		ctx:    ctx,
+		cancel: cancel,
+		ch:     ch,
+		cache:  lru.New[string, netip.Addr](lru.WithSize[string, netip.Addr](senderCapacity)),
+	}
+}
+
+func (s *packetSender) Process(pc C.PacketConn, proxy C.WriteBackProxy) {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return // sender closed
+		case packet := <-s.ch:
+			if proxy != nil {
+				proxy.UpdateWriteBack(packet)
+			}
+			if err := s.ResolveUDP(packet.Metadata()); err != nil {
+				log.Warnln("[UDP] Resolve Ip error: %s", err)
+			} else {
+				_ = handleUDPToRemote(packet, pc, packet.Metadata())
+			}
+			packet.Drop()
+		}
+	}
+}
+
+func (s *packetSender) dropAll() {
+	for {
+		select {
+		case data := <-s.ch:
+			data.Drop() // drop all data still in chan
+		default:
+			return // no data, exit goroutine
+		}
+	}
+}
+
+func (s *packetSender) Send(packet C.PacketAdapter) {
+	select {
+	case <-s.ctx.Done():
+		packet.Drop() // sender closed before Send()
+		return
+	default:
+	}
+
+	select {
+	case s.ch <- packet:
+		// put ok, so don't drop packet, will process by other side of chan
+	case <-s.ctx.Done():
+		packet.Drop() // sender closed when putting data to chan
+	default:
+		packet.Drop() // chan is full
+	}
+}
+
+func (s *packetSender) Close() {
+	s.cancel()
+	s.dropAll()
+}
+
+func (s *packetSender) ResolveUDP(metadata *C.Metadata) (err error) {
+	// local resolve UDP dns
+	if !metadata.Resolved() {
+		ip, ok := s.cache.Get(metadata.Host)
+		if !ok {
+			ip, err = resolver.ResolveIP(s.ctx, metadata.Host)
+			if err != nil {
+				return err
+			}
+			s.cache.Set(metadata.Host, ip)
+		}
+
+		metadata.DstIP = ip
+	}
+	return nil
+}
 
 func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata) error {
 	addr := metadata.UDPAddr()
@@ -26,8 +119,9 @@ func handleUDPToRemote(packet C.UDPPacket, pc C.PacketConn, metadata *C.Metadata
 	return nil
 }
 
-func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, key string, oAddrPort netip.AddrPort, fAddr netip.Addr) {
+func handleUDPToLocal(writeBack C.WriteBack, pc N.EnhancePacketConn, sender C.PacketSender, key string, oAddrPort netip.AddrPort, fAddr netip.Addr) {
 	defer func() {
+		sender.Close()
 		_ = pc.Close()
 		closeAllLocalCoon(key)
 		natTable.Delete(key)

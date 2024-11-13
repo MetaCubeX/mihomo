@@ -1,6 +1,6 @@
 //go:build go1.23 && unix
 
-package net
+package keepalive
 
 func SupportTCPKeepAliveIdle() bool {
 	return true

@@ -23,10 +23,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/sagernet/cors"
 )
 
 var (
@@ -35,7 +35,14 @@ var (
 	httpServer *http.Server
 	tlsServer  *http.Server
 	unixServer *http.Server
+	pipeServer *http.Server
+
+	embedMode = false
 )
+
+func SetEmbedMode(embed bool) {
+	embedMode = embed
+}
 
 type Traffic struct {
 	Up   int64 `json:"up"`
@@ -51,33 +58,46 @@ type Config struct {
 	Addr        string
 	TLSAddr     string
 	UnixAddr    string
+	PipeAddr    string
 	Secret      string
 	Certificate string
 	PrivateKey  string
 	DohServer   string
 	IsDebug     bool
+	Cors        Cors
+}
+
+type Cors struct {
+	AllowOrigins        []string
+	AllowPrivateNetwork bool
+}
+
+func (c Cors) Apply(r chi.Router) {
+	r.Use(cors.New(cors.Options{
+		AllowedOrigins:      c.AllowOrigins,
+		AllowedMethods:      []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
+		AllowedHeaders:      []string{"Content-Type", "Authorization"},
+		AllowPrivateNetwork: c.AllowPrivateNetwork,
+		MaxAge:              300,
+	}).Handler)
 }
 
 func ReCreateServer(cfg *Config) {
 	go start(cfg)
 	go startTLS(cfg)
 	go startUnix(cfg)
+	if inbound.SupportNamedPipe {
+		go startPipe(cfg)
+	}
 }
 
 func SetUIPath(path string) {
 	uiPath = C.Path.Resolve(path)
 }
 
-func router(isDebug bool, secret string, dohServer string) *chi.Mux {
+func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 	r := chi.NewRouter()
-	corsM := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
-		AllowedHeaders: []string{"Content-Type", "Authorization"},
-		MaxAge:         300,
-	})
-	r.Use(setPrivateNetworkAccess)
-	r.Use(corsM.Handler)
+	cors.Apply(r)
 	if isDebug {
 		r.Mount("/debug", func() http.Handler {
 			r := chi.NewRouter()
@@ -100,15 +120,17 @@ func router(isDebug bool, secret string, dohServer string) *chi.Mux {
 		r.Get("/version", version)
 		r.Mount("/configs", configRouter())
 		r.Mount("/proxies", proxyRouter())
-		r.Mount("/group", GroupRouter())
+		r.Mount("/group", groupRouter())
 		r.Mount("/rules", ruleRouter())
 		r.Mount("/connections", connectionRouter())
 		r.Mount("/providers/proxies", proxyProviderRouter())
 		r.Mount("/providers/rules", ruleProviderRouter())
 		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
-		r.Mount("/restart", restartRouter())
-		r.Mount("/upgrade", upgradeRouter())
+		if !embedMode { // disallow restart and upgrade in embed mode
+			r.Mount("/restart", restartRouter())
+			r.Mount("/upgrade", upgradeRouter())
+		}
 		addExternalRouters(r)
 
 	})
@@ -146,7 +168,7 @@ func start(cfg *Config) {
 		log.Infoln("RESTful API listening at: %s", l.Addr().String())
 
 		server := &http.Server{
-			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer),
+			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer, cfg.Cors),
 		}
 		httpServer = server
 		if err = server.Serve(l); err != nil {
@@ -178,7 +200,7 @@ func startTLS(cfg *Config) {
 
 		log.Infoln("RESTful API tls listening at: %s", l.Addr().String())
 		server := &http.Server{
-			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer),
+			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer, cfg.Cors),
 			TLSConfig: &tls.Config{
 				Certificates: []tls.Certificate{c},
 			},
@@ -223,26 +245,48 @@ func startUnix(cfg *Config) {
 			log.Errorln("External controller unix listen error: %s", err)
 			return
 		}
+		_ = os.Chmod(addr, 0o666)
 		log.Infoln("RESTful API unix listening at: %s", l.Addr().String())
 
 		server := &http.Server{
-			Handler: router(cfg.IsDebug, "", cfg.DohServer),
+			Handler: router(cfg.IsDebug, "", cfg.DohServer, cfg.Cors),
 		}
 		unixServer = server
 		if err = server.Serve(l); err != nil {
 			log.Errorln("External controller unix serve error: %s", err)
 		}
 	}
-
 }
 
-func setPrivateNetworkAccess(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-			w.Header().Add("Access-Control-Allow-Private-Network", "true")
+func startPipe(cfg *Config) {
+	// first stop existing server
+	if pipeServer != nil {
+		_ = pipeServer.Close()
+		pipeServer = nil
+	}
+
+	// handle addr
+	if len(cfg.PipeAddr) > 0 {
+		if !strings.HasPrefix(cfg.PipeAddr, "\\\\.\\pipe\\") { // windows namedpipe must start with "\\.\pipe\"
+			log.Errorln("External controller pipe listen error: windows namedpipe must start with \"\\\\.\\pipe\\\"")
+			return
 		}
-		next.ServeHTTP(w, r)
-	})
+
+		l, err := inbound.ListenNamedPipe(cfg.PipeAddr)
+		if err != nil {
+			log.Errorln("External controller pipe listen error: %s", err)
+			return
+		}
+		log.Infoln("RESTful API pipe listening at: %s", l.Addr().String())
+
+		server := &http.Server{
+			Handler: router(cfg.IsDebug, "", cfg.DohServer, cfg.Cors),
+		}
+		pipeServer = server
+		if err = server.Serve(l); err != nil {
+			log.Errorln("External controller pipe serve error: %s", err)
+		}
+	}
 }
 
 func safeEuqal(a, b string) bool {

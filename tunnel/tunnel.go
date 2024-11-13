@@ -28,10 +28,15 @@ import (
 	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
+const (
+	queueCapacity  = 64  // chan capacity tcpQueue and udpQueue
+	senderCapacity = 128 // chan capacity of PacketSender
+)
+
 var (
 	status        = newAtomicStatus(Suspend)
-	tcpQueue      = make(chan C.ConnContext, 200)
-	udpQueue      = make(chan C.PacketAdapter, 200)
+	udpInit       sync.Once
+	udpQueues     []chan C.PacketAdapter
 	natTable      = nat.New()
 	rules         []C.Rule
 	listeners     = make(map[string]C.InboundListener)
@@ -40,6 +45,12 @@ var (
 	providers     map[string]provider.ProxyProvider
 	ruleProviders map[string]provider.RuleProvider
 	configMux     sync.RWMutex
+
+	// for compatibility, lazy init
+	tcpQueue  chan C.ConnContext
+	tcpInOnce sync.Once
+	udpQueue  chan C.PacketAdapter
+	udpInOnce sync.Once
 
 	// Outbound Rule
 	mode = Rule
@@ -68,11 +79,33 @@ func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	handleTCPConn(connCtx)
 }
 
+func initUDP() {
+	numUDPWorkers := 4
+	if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
+		numUDPWorkers = num
+	}
+
+	udpQueues = make([]chan C.PacketAdapter, numUDPWorkers)
+	for i := 0; i < numUDPWorkers; i++ {
+		queue := make(chan C.PacketAdapter, queueCapacity)
+		udpQueues[i] = queue
+		go processUDP(queue)
+	}
+}
+
 func (t tunnel) HandleUDPPacket(packet C.UDPPacket, metadata *C.Metadata) {
+	udpInit.Do(initUDP)
+
 	packetAdapter := C.NewPacketAdapter(packet, metadata)
+	key := packetAdapter.Key()
+
+	hash := utils.MapHash(key)
+	queueNo := uint(hash) % uint(len(udpQueues))
+
 	select {
-	case udpQueue <- packetAdapter:
+	case udpQueues[queueNo] <- packetAdapter:
 	default:
+		packet.Drop()
 	}
 }
 
@@ -128,19 +161,31 @@ func IsSniffing() bool {
 	return sniffingEnable
 }
 
-func init() {
-	go process()
-}
-
 // TCPIn return fan-in queue
 // Deprecated: using Tunnel instead
 func TCPIn() chan<- C.ConnContext {
+	tcpInOnce.Do(func() {
+		tcpQueue = make(chan C.ConnContext, queueCapacity)
+		go func() {
+			for connCtx := range tcpQueue {
+				go handleTCPConn(connCtx)
+			}
+		}()
+	})
 	return tcpQueue
 }
 
 // UDPIn return fan-in udp queue
 // Deprecated: using Tunnel instead
 func UDPIn() chan<- C.PacketAdapter {
+	udpInOnce.Do(func() {
+		udpQueue = make(chan C.PacketAdapter, queueCapacity)
+		go func() {
+			for packet := range udpQueue {
+				Tunnel.HandleUDPPacket(packet, packet.Metadata())
+			}
+		}()
+	})
 	return udpQueue
 }
 
@@ -242,29 +287,6 @@ func isHandle(t C.Type) bool {
 	return status == Running || (status == Inner && t == C.INNER)
 }
 
-// processUDP starts a loop to handle udp packet
-func processUDP() {
-	queue := udpQueue
-	for conn := range queue {
-		handleUDPConn(conn)
-	}
-}
-
-func process() {
-	numUDPWorkers := 4
-	if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
-		numUDPWorkers = num
-	}
-	for i := 0; i < numUDPWorkers; i++ {
-		go processUDP()
-	}
-
-	queue := tcpQueue
-	for conn := range queue {
-		go handleTCPConn(conn)
-	}
-}
-
 func needLookupIP(metadata *C.Metadata) bool {
 	return resolver.MappingEnabled() && metadata.Host == "" && metadata.DstIP.IsValid()
 }
@@ -324,6 +346,13 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	return
 }
 
+// processUDP starts a loop to handle udp packet
+func processUDP(queue chan C.PacketAdapter) {
+	for conn := range queue {
+		handleUDPConn(conn)
+	}
+}
+
 func handleUDPConn(packet C.PacketAdapter) {
 	if !isHandle(packet.Metadata().Type) {
 		packet.Drop()
@@ -353,85 +382,58 @@ func handleUDPConn(packet C.PacketAdapter) {
 		snifferDispatcher.UDPSniff(packet)
 	}
 
-	// local resolve UDP dns
-	if !metadata.Resolved() {
-		ip, err := resolver.ResolveIP(context.Background(), metadata.Host)
-		if err != nil {
-			return
-		}
-		metadata.DstIP = ip
-	}
-
-	key := packet.LocalAddr().String()
-
-	handle := func() bool {
-		pc, proxy := natTable.Get(key)
-		if pc != nil {
-			if proxy != nil {
-				proxy.UpdateWriteBack(packet)
+	key := packet.Key()
+	sender, loaded := natTable.GetOrCreate(key, newPacketSender)
+	if !loaded {
+		dial := func() (C.PacketConn, C.WriteBackProxy, error) {
+			if err := sender.ResolveUDP(metadata); err != nil {
+				log.Warnln("[UDP] Resolve Ip error: %s", err)
+				return nil, nil, err
 			}
-			_ = handleUDPToRemote(packet, pc, metadata)
-			return true
+
+			proxy, rule, err := resolveMetadata(metadata)
+			if err != nil {
+				log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
+				return nil, nil, err
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
+			defer cancel()
+			rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
+				return proxy.ListenPacketContext(ctx, metadata.Pure())
+			}, func(err error) {
+				logMetadataErr(metadata, rule, proxy, err)
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			logMetadata(metadata, rule, rawPc)
+
+			pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
+
+			if rawPc.Chains().Last() == "REJECT-DROP" {
+				_ = pc.Close()
+				return nil, nil, errors.New("rejected drop packet")
+			}
+
+			oAddrPort := metadata.AddrPort()
+			writeBackProxy := nat.NewWriteBackProxy(packet)
+
+			go handleUDPToLocal(writeBackProxy, pc, sender, key, oAddrPort, fAddr)
+			return pc, writeBackProxy, nil
 		}
-		return false
-	}
 
-	if handle() {
-		packet.Drop()
-		return
-	}
-
-	cond, loaded := natTable.GetOrCreateLock(key)
-
-	go func() {
-		defer packet.Drop()
-
-		if loaded {
-			cond.L.Lock()
-			cond.Wait()
-			handle()
-			cond.L.Unlock()
-			return
-		}
-
-		defer func() {
-			natTable.DeleteLock(key)
-			cond.Broadcast()
+		go func() {
+			pc, proxy, err := dial()
+			if err != nil {
+				sender.Close()
+				natTable.Delete(key)
+				return
+			}
+			sender.Process(pc, proxy)
 		}()
-
-		proxy, rule, err := resolveMetadata(metadata)
-		if err != nil {
-			log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
-		defer cancel()
-		rawPc, err := retry(ctx, func(ctx context.Context) (C.PacketConn, error) {
-			return proxy.ListenPacketContext(ctx, metadata.Pure())
-		}, func(err error) {
-			logMetadataErr(metadata, rule, proxy, err)
-		})
-		if err != nil {
-			return
-		}
-		logMetadata(metadata, rule, rawPc)
-
-		pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
-
-		if rawPc.Chains().Last() == "REJECT-DROP" {
-			pc.Close()
-			return
-		}
-
-		oAddrPort := metadata.AddrPort()
-		writeBackProxy := nat.NewWriteBackProxy(packet)
-		natTable.Set(key, pc, writeBackProxy)
-
-		go handleUDPToLocal(writeBackProxy, pc, key, oAddrPort, fAddr)
-
-		handle()
-	}()
+	}
+	sender.Send(packet) // nonblocking
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
@@ -623,7 +625,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				// normal check for process
 				uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 				if err != nil {
-					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+					log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 				} else {
 					metadata.Process = filepath.Base(path)
 					metadata.ProcessPath = path
@@ -637,7 +639,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 				// check package names
 				pkg, err := P.FindPackageName(metadata)
 				if err != nil {
-					log.Debugln("[Process] find process %s error: %v", metadata.String(), err)
+					log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 				} else {
 					metadata.Process = pkg
 				}
