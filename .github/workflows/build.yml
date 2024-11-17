@@ -118,16 +118,16 @@ jobs:
     - name: Set up Go1.22 loongarch abi1
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
       run: |
-        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.22.4/go1.22.4.linux-amd64-abi1.tar.gz
-        sudo tar zxf go1.22.4.linux-amd64-abi1.tar.gz -C /usr/local
+        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.23.0/go1.23.0.linux-amd64-abi1.tar.gz
+        sudo tar zxf go1.23.0.linux-amd64-abi1.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
 
-    - name: Set up Go1.22 loongarch abi2
-      if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
-      run: |
-        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.22.4/go1.22.4.linux-amd64-abi2.tar.gz
-        sudo tar zxf go1.22.4.linux-amd64-abi2.tar.gz -C /usr/local
-        echo "/usr/local/go/bin" >> $GITHUB_PATH
+    # - name: Set up Go1.22 loongarch abi2
+    #   if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
+    #   run: |
+    #     wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.22.4/go1.22.4.linux-amd64-abi2.tar.gz
+    #     sudo tar zxf go1.22.4.linux-amd64-abi2.tar.gz -C /usr/local
+    #     echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
       # this patch file only works on golang1.23.x
@@ -194,7 +194,7 @@ jobs:
       uses: nttld/setup-ndk@v1
       id: setup-ndk
       with:
-        ndk-version: r27
+        ndk-version: r28-beta1
 
     - name: Set NDK path
       if: ${{ matrix.jobs.goos == 'android' }}
