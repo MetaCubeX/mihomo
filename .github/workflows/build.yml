@@ -104,30 +104,23 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Go
-      if: ${{ matrix.jobs.goversion == '' && matrix.jobs.goarch != 'loong64' }}
+      if: ${{ matrix.jobs.goversion == '' && matrix.jobs.abi != '1' }}
       uses: actions/setup-go@v5
       with:
         go-version: '1.23'
 
     - name: Set up Go
-      if: ${{ matrix.jobs.goversion != '' && matrix.jobs.goarch != 'loong64' }}
+      if: ${{ matrix.jobs.goversion != '' && matrix.jobs.abi != '1' }}
       uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.jobs.goversion }}
 
-    - name: Set up Go1.22 loongarch abi1
+    - name: Set up Go1.23 loongarch abi1
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
       run: |
         wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.23.0/go1.23.0.linux-amd64-abi1.tar.gz
         sudo tar zxf go1.23.0.linux-amd64-abi1.tar.gz -C /usr/local
         echo "/usr/local/go/bin" >> $GITHUB_PATH
-
-    # - name: Set up Go1.22 loongarch abi2
-    #   if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '2' }}
-    #   run: |
-    #     wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.22.4/go1.22.4.linux-amd64-abi2.tar.gz
-    #     sudo tar zxf go1.22.4.linux-amd64-abi2.tar.gz -C /usr/local
-    #     echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
       # this patch file only works on golang1.23.x
