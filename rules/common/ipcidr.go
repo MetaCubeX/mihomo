@@ -40,7 +40,7 @@ func (i *IPCIDR) Match(metadata *C.Metadata) (bool, string) {
 	if i.isSourceIP {
 		ip = metadata.SrcIP
 	}
-	return ip.IsValid() && i.ipnet.Contains(ip), i.adapter
+	return ip.IsValid() && i.ipnet.Contains(ip.WithZone("")), i.adapter
 }
 
 func (i *IPCIDR) Adapter() string {
