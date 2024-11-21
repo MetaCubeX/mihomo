@@ -141,6 +141,11 @@ func (s *Snell) SupportUOT() bool {
 	return true
 }
 
+// SupportDialerProxy implements C.ProxyAdapter
+func (s *Snell) SupportDialerProxy() string {
+	return s.option.DialerProxy
+}
+
 func NewSnell(option SnellOption) (*Snell, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	psk := []byte(option.Psk)
@@ -204,7 +209,7 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			if err != nil {
 				return nil, err
 			}
-			
+
 			return streamConn(c, streamOption{psk, option.Version, addr, obfsOption}), nil
 		})
 	}

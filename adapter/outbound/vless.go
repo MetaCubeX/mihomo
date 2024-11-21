@@ -379,6 +379,11 @@ func (v *Vless) SupportUOT() bool {
 	return true
 }
 
+// SupportDialerProxy implements C.ProxyAdapter
+func (v *Vless) SupportDialerProxy() string {
+	return v.option.DialerProxy
+}
+
 func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 	var addrType byte
 	var addr []byte

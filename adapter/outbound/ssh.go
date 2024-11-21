@@ -121,6 +121,11 @@ func closeSsh(s *Ssh) {
 	_ = s.client.Close()
 }
 
+// SupportWithDialer implements C.ProxyAdapter
+func (s *Ssh) SupportDialerProxy() string {
+	return s.option.DialerProxy
+}
+
 func NewSsh(option SshOption) (*Ssh, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 

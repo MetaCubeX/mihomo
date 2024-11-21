@@ -196,6 +196,11 @@ func (ss *ShadowSocks) SupportWithDialer() C.NetWork {
 	return C.ALLNet
 }
 
+// SupportDialerProxy implements C.ProxyAdapter
+func (ss *ShadowSocks) SupportDialerProxy() string {
+	return ss.option.DialerProxy
+}
+
 // ListenPacketOnStreamConn implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	if ss.option.UDPOverTCP {

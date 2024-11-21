@@ -92,6 +92,11 @@ func (h *Http) SupportWithDialer() C.NetWork {
 	return C.TCP
 }
 
+// SupportDialerProxy implements C.ProxyAdapter
+func (h *Http) SupportDialerProxy() string {
+	return h.option.DialerProxy
+}
+
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	addr := metadata.RemoteAddress()
 	HeaderString := "CONNECT " + addr + " HTTP/1.1\r\n"

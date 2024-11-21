@@ -674,6 +674,27 @@ func (r *refProxyAdapter) SupportUOT() bool {
 	return false
 }
 
+func (r *refProxyAdapter) SupportDialerProxy() string {
+	if r.proxyAdapter != nil {
+		return r.proxyAdapter.SupportDialerProxy()
+	}
+	return ""
+}
+
+func (r *refProxyAdapter) SupportInterface() string {
+	if r.proxyAdapter != nil {
+		return r.proxyAdapter.SupportInterface()
+	}
+	return ""
+}
+
+func (r *refProxyAdapter) SupportRoutingMark() int {
+	if r.proxyAdapter != nil {
+		return r.proxyAdapter.SupportRoutingMark()
+	}
+	return 0
+}
+
 func (r *refProxyAdapter) SupportWithDialer() C.NetWork {
 	if r.proxyAdapter != nil {
 		return r.proxyAdapter.SupportWithDialer()

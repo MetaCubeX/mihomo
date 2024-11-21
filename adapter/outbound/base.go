@@ -105,6 +105,18 @@ func (b *Base) SupportSMUX() bool {
 	return false
 }
 
+func (b *Base) SupportDialerProxy() string {
+	return ""
+}
+
+func (b *Base) SupportInterface() string {
+	return b.iface
+}
+
+func (b *Base) SupportRoutingMark() int {
+	return b.rmark
+}
+
 // IsL3Protocol implements C.ProxyAdapter
 func (b *Base) IsL3Protocol(metadata *C.Metadata) bool {
 	return false

@@ -96,6 +96,11 @@ func closeHysteria2(h *Hysteria2) {
 	}
 }
 
+// SupportDialerProxy implements C.ProxyAdapter
+func (h *Hysteria2) SupportDialerProxy() string {
+	return h.option.DialerProxy
+}
+
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	var salamanderPassword string

@@ -108,6 +108,9 @@ type ProxyAdapter interface {
 	SupportTFO() bool
 	SupportMPTCP() bool
 	SupportSMUX() bool
+	SupportInterface() string
+	SupportRoutingMark() int
+	SupportDialerProxy() string
 	MarshalJSON() ([]byte, error)
 
 	// Deprecated: use DialContextWithDialer and ListenPacketWithDialer instead.
