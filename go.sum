@@ -104,8 +104,8 @@ github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvO
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20241126021258-5b028898cc5a h1:cZ6oNVrsmsi3SNlnSnRio4zOgtQq+/XidwsaNgKICcg=
 github.com/metacubex/gvisor v0.0.0-20241126021258-5b028898cc5a/go.mod h1:xBw/SYJPgUMPQ1tklV/brGn2nxhfr3BnvBzNlyi4Nic=
-github.com/metacubex/quic-go v0.48.2-0.20241105005628-a3e65bac65b2 h1:1prpWzQnhN/LgGTMA6nz86MGcppDUOwfRkhxPOnrzAk=
-github.com/metacubex/quic-go v0.48.2-0.20241105005628-a3e65bac65b2/go.mod h1:AiZ+UPgrkO1DTnmiAX4b+kRoV1Vfc65UkYD7RbFlIZA=
+github.com/metacubex/quic-go v0.48.3-0.20241126053724-b69fea3888da h1:Mq6cbHbPTLLTUfA9scrwBmOGkvl6y99E3WmtMIMqo30=
+github.com/metacubex/quic-go v0.48.3-0.20241126053724-b69fea3888da/go.mod h1:AiZ+UPgrkO1DTnmiAX4b+kRoV1Vfc65UkYD7RbFlIZA=
 github.com/metacubex/randv2 v0.2.0 h1:uP38uBvV2SxYfLj53kuvAjbND4RUDfFJjwr4UigMiLs=
 github.com/metacubex/randv2 v0.2.0/go.mod h1:kFi2SzrQ5WuneuoLLCMkABtiBu6VRrMrWFqSPyj2cxY=
 github.com/metacubex/sing v0.0.0-20241121030428-33b6ebc52000 h1:gUbMXcQXhXGj0vCpCVFTUyIH7TMpD1dpTcNv/MCS+ok=
