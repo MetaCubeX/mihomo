@@ -96,9 +96,11 @@ func closeHysteria2(h *Hysteria2) {
 	}
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (h *Hysteria2) SupportDialerProxy() string {
-	return h.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (h *Hysteria2) ProxyInfo() C.ProxyInfo {
+	info := h.Base.ProxyInfo()
+	info.DialerProxy = h.option.DialerProxy
+	return info
 }
 
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {

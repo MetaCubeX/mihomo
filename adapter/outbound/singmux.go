@@ -97,8 +97,10 @@ func (s *SingMux) SupportUOT() bool {
 	return true
 }
 
-func (s *SingMux) SupportSMUX() bool {
-	return true
+func (s *SingMux) ProxyInfo() C.ProxyInfo {
+	info := s.ProxyAdapter.ProxyInfo()
+	info.SMUX = true
+	return info
 }
 
 func closeSingMux(s *SingMux) {

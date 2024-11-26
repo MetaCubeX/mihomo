@@ -85,36 +85,15 @@ func (b *Base) SupportUDP() bool {
 	return b.udp
 }
 
-// SupportXUDP implements C.ProxyAdapter
-func (b *Base) SupportXUDP() bool {
-	return b.xudp
-}
-
-// SupportTFO implements C.ProxyAdapter
-func (b *Base) SupportTFO() bool {
-	return b.tfo
-}
-
-// SupportMPTCP implements C.ProxyAdapter
-func (b *Base) SupportMPTCP() bool {
-	return b.mpTcp
-}
-
-// SupportSMUX implements C.ProxyAdapter
-func (b *Base) SupportSMUX() bool {
-	return false
-}
-
-func (b *Base) SupportDialerProxy() string {
-	return ""
-}
-
-func (b *Base) SupportInterface() string {
-	return b.iface
-}
-
-func (b *Base) SupportRoutingMark() int {
-	return b.rmark
+// ProxyInfo implements C.ProxyAdapter
+func (b *Base) ProxyInfo() (info C.ProxyInfo) {
+	info.XUDP = b.xudp
+	info.TFO = b.tfo
+	info.MPTCP = b.mpTcp
+	info.SMUX = false
+	info.Interface = b.iface
+	info.RoutingMark = b.rmark
+	return
 }
 
 // IsL3Protocol implements C.ProxyAdapter

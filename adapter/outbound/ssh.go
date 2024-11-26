@@ -121,9 +121,11 @@ func closeSsh(s *Ssh) {
 	_ = s.client.Close()
 }
 
-// SupportWithDialer implements C.ProxyAdapter
-func (s *Ssh) SupportDialerProxy() string {
-	return s.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (s *Ssh) ProxyInfo() C.ProxyInfo {
+	info := s.Base.ProxyInfo()
+	info.DialerProxy = s.option.DialerProxy
+	return info
 }
 
 func NewSsh(option SshOption) (*Ssh, error) {

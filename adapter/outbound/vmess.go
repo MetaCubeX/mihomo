@@ -388,8 +388,11 @@ func (v *Vmess) SupportWithDialer() C.NetWork {
 	return C.ALLNet
 }
 
-func (v *Vmess) SupportDialerProxy() string {
-	return v.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (v *Vmess) ProxyInfo() C.ProxyInfo {
+	info := v.Base.ProxyInfo()
+	info.DialerProxy = v.option.DialerProxy
+	return info
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

@@ -141,9 +141,11 @@ func (s *Snell) SupportUOT() bool {
 	return true
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (s *Snell) SupportDialerProxy() string {
-	return s.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (s *Snell) ProxyInfo() C.ProxyInfo {
+	info := s.Base.ProxyInfo()
+	info.DialerProxy = s.option.DialerProxy
+	return info
 }
 
 func NewSnell(option SnellOption) (*Snell, error) {

@@ -196,9 +196,11 @@ func (ss *ShadowSocks) SupportWithDialer() C.NetWork {
 	return C.ALLNet
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (ss *ShadowSocks) SupportDialerProxy() string {
-	return ss.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (ss *ShadowSocks) ProxyInfo() C.ProxyInfo {
+	info := ss.Base.ProxyInfo()
+	info.DialerProxy = ss.option.DialerProxy
+	return info
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter

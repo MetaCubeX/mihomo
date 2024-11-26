@@ -92,9 +92,11 @@ func (h *Http) SupportWithDialer() C.NetWork {
 	return C.TCP
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (h *Http) SupportDialerProxy() string {
-	return h.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (h *Http) ProxyInfo() C.ProxyInfo {
+	info := h.Base.ProxyInfo()
+	info.DialerProxy = h.option.DialerProxy
+	return info
 }
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {

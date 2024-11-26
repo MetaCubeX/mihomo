@@ -611,32 +611,11 @@ func (r *refProxyAdapter) SupportUDP() bool {
 	return false
 }
 
-func (r *refProxyAdapter) SupportXUDP() bool {
+func (r *refProxyAdapter) ProxyInfo() C.ProxyInfo {
 	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportXUDP()
+		return r.proxyAdapter.ProxyInfo()
 	}
-	return false
-}
-
-func (r *refProxyAdapter) SupportTFO() bool {
-	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportTFO()
-	}
-	return false
-}
-
-func (r *refProxyAdapter) SupportMPTCP() bool {
-	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportMPTCP()
-	}
-	return false
-}
-
-func (r *refProxyAdapter) SupportSMUX() bool {
-	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportSMUX()
-	}
-	return false
+	return C.ProxyInfo{}
 }
 
 func (r *refProxyAdapter) MarshalJSON() ([]byte, error) {
@@ -672,27 +651,6 @@ func (r *refProxyAdapter) SupportUOT() bool {
 		return r.proxyAdapter.SupportUOT()
 	}
 	return false
-}
-
-func (r *refProxyAdapter) SupportDialerProxy() string {
-	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportDialerProxy()
-	}
-	return ""
-}
-
-func (r *refProxyAdapter) SupportInterface() string {
-	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportInterface()
-	}
-	return ""
-}
-
-func (r *refProxyAdapter) SupportRoutingMark() int {
-	if r.proxyAdapter != nil {
-		return r.proxyAdapter.SupportRoutingMark()
-	}
-	return 0
 }
 
 func (r *refProxyAdapter) SupportWithDialer() C.NetWork {

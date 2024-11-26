@@ -122,9 +122,11 @@ func (ssr *ShadowSocksR) SupportWithDialer() C.NetWork {
 	return C.ALLNet
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (ssr *ShadowSocksR) SupportDialerProxy() string {
-	return ssr.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (ssr *ShadowSocksR) ProxyInfo() C.ProxyInfo {
+	info := ssr.Base.ProxyInfo()
+	info.DialerProxy = ssr.option.DialerProxy
+	return info
 }
 
 func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {

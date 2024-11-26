@@ -146,9 +146,11 @@ func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (transport *
 	return
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (t *Tuic) SupportDialerProxy() string {
-	return t.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (t *Tuic) ProxyInfo() C.ProxyInfo {
+	info := t.Base.ProxyInfo()
+	info.DialerProxy = t.option.DialerProxy
+	return info
 }
 
 func NewTuic(option TuicOption) (*Tuic, error) {

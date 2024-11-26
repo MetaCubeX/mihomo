@@ -99,18 +99,24 @@ type Dialer interface {
 	ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error)
 }
 
+type ProxyInfo struct {
+	XUDP        bool
+	TFO         bool
+	MPTCP       bool
+	SMUX        bool
+	Interface   string
+	RoutingMark int
+	DialerProxy string
+}
+
 type ProxyAdapter interface {
 	Name() string
 	Type() AdapterType
 	Addr() string
 	SupportUDP() bool
-	SupportXUDP() bool
-	SupportTFO() bool
-	SupportMPTCP() bool
-	SupportSMUX() bool
-	SupportInterface() string
-	SupportRoutingMark() int
-	SupportDialerProxy() string
+
+	// ProxyInfo contains some extra information maybe useful for MarshalJSON
+	ProxyInfo() ProxyInfo
 	MarshalJSON() ([]byte, error)
 
 	// Deprecated: use DialContextWithDialer and ListenPacketWithDialer instead.

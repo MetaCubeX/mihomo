@@ -87,9 +87,11 @@ func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.Pack
 	}
 }
 
-// SupportDialerProxy implements C.ProxyAdapter
-func (h *Hysteria) SupportDialerProxy() string {
-	return h.option.DialerProxy
+// ProxyInfo implements C.ProxyAdapter
+func (h *Hysteria) ProxyInfo() C.ProxyInfo {
+	info := h.Base.ProxyInfo()
+	info.DialerProxy = h.option.DialerProxy
+	return info
 }
 
 type HysteriaOption struct {
