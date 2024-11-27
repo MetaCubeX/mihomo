@@ -2,7 +2,9 @@ package inbound
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 
 	"github.com/metacubex/mihomo/component/keepalive"
@@ -42,6 +44,27 @@ func MPTCP() bool {
 }
 
 func ListenContext(ctx context.Context, network, address string) (net.Listener, error) {
+	switch network { // like net.Resolver.internetAddrList but filter domain to avoid call net.Resolver.lookupIPAddr
+	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6", "ip", "ip4", "ip6":
+		if host, port, err := net.SplitHostPort(address); err == nil {
+			switch host {
+			case "localhost":
+				switch network {
+				case "tcp6", "udp6", "ip6":
+					address = net.JoinHostPort("::1", port)
+				default:
+					address = net.JoinHostPort("127.0.0.1", port)
+				}
+			case "": // internetAddrList can handle this special case
+				break
+			default:
+				if _, err := netip.ParseAddr(host); err != nil { // not ip
+					return nil, fmt.Errorf("invalid network address: %s", address)
+				}
+			}
+		}
+	}
+
 	mutex.RLock()
 	defer mutex.RUnlock()
 	return lc.Listen(ctx, network, address)
