@@ -66,6 +66,7 @@ type proxyProviderSchema struct {
 	ExcludeFilter string `provider:"exclude-filter,omitempty"`
 	ExcludeType   string `provider:"exclude-type,omitempty"`
 	DialerProxy   string `provider:"dialer-proxy,omitempty"`
+	SizeLimit     int64  `provider:"size-limit,omitempty"`
 
 	HealthCheck healthCheckSchema   `provider:"health-check,omitempty"`
 	Override    OverrideSchema      `provider:"override,omitempty"`
@@ -111,7 +112,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout, schema.SizeLimit)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}

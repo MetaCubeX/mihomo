@@ -84,12 +84,13 @@ func NewFileVehicle(path string) *FileVehicle {
 }
 
 type HTTPVehicle struct {
-	url      string
-	path     string
-	proxy    string
-	header   http.Header
-	timeout  time.Duration
-	provider types.ProxyProvider
+	url       string
+	path      string
+	proxy     string
+	header    http.Header
+	timeout   time.Duration
+	sizeLimit int64
+	provider  types.ProxyProvider
 }
 
 func (h *HTTPVehicle) Url() string {
@@ -151,7 +152,11 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []b
 		err = errors.New(resp.Status)
 		return
 	}
-	buf, err = io.ReadAll(resp.Body)
+	var reader io.Reader = resp.Body
+	if h.sizeLimit > 0 {
+		reader = io.LimitReader(reader, h.sizeLimit)
+	}
+	buf, err = io.ReadAll(reader)
 	if err != nil {
 		return
 	}
@@ -166,12 +171,13 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []b
 	return
 }
 
-func NewHTTPVehicle(url string, path string, proxy string, header http.Header, timeout time.Duration) *HTTPVehicle {
+func NewHTTPVehicle(url string, path string, proxy string, header http.Header, timeout time.Duration, sizeLimit int64) *HTTPVehicle {
 	return &HTTPVehicle{
-		url:     url,
-		path:    path,
-		proxy:   proxy,
-		header:  header,
-		timeout: timeout,
+		url:       url,
+		path:      path,
+		proxy:     proxy,
+		header:    header,
+		timeout:   timeout,
+		sizeLimit: sizeLimit,
 	}
 }

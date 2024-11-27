@@ -16,13 +16,14 @@ var (
 )
 
 type ruleProviderSchema struct {
-	Type     string `provider:"type"`
-	Behavior string `provider:"behavior"`
-	Path     string `provider:"path,omitempty"`
-	URL      string `provider:"url,omitempty"`
-	Proxy    string `provider:"proxy,omitempty"`
-	Format   string `provider:"format,omitempty"`
-	Interval int    `provider:"interval,omitempty"`
+	Type      string `provider:"type"`
+	Behavior  string `provider:"behavior"`
+	Path      string `provider:"path,omitempty"`
+	URL       string `provider:"url,omitempty"`
+	Proxy     string `provider:"proxy,omitempty"`
+	Format    string `provider:"format,omitempty"`
+	Interval  int    `provider:"interval,omitempty"`
+	SizeLimit int64  `provider:"size-limit,omitempty"`
 }
 
 func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) (P.RuleProvider, error) {
@@ -53,7 +54,7 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 				return nil, fmt.Errorf("%w: %s", errSubPath, path)
 			}
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil, resource.DefaultHttpTimeout)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil, resource.DefaultHttpTimeout, schema.SizeLimit)
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
