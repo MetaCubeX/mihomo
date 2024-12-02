@@ -35,7 +35,7 @@ func KeepAliveInterval() time.Duration {
 
 func SetDisableKeepAlive(disable bool) {
 	if runtime.GOOS == "android" {
-		setDisableKeepAlive(false)
+		setDisableKeepAlive(true)
 	} else {
 		setDisableKeepAlive(disable)
 	}
