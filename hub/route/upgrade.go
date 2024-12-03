@@ -14,9 +14,11 @@ import (
 
 func upgradeRouter() http.Handler {
 	r := chi.NewRouter()
-	r.Post("/", upgradeCore)
 	r.Post("/ui", updateUI)
-	r.Post("/geo", updateGeoDatabases)
+	if !embedMode { // disallow upgrade core/geo in embed mode
+		r.Post("/", upgradeCore)
+		r.Post("/geo", updateGeoDatabases)
+	}
 	return r
 }
 
