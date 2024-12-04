@@ -127,10 +127,10 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 		r.Mount("/providers/rules", ruleProviderRouter())
 		r.Mount("/cache", cacheRouter())
 		r.Mount("/dns", dnsRouter())
-		if !embedMode { // disallow restart and upgrade in embed mode
+		if !embedMode { // disallow restart in embed mode
 			r.Mount("/restart", restartRouter())
-			r.Mount("/upgrade", upgradeRouter())
 		}
+		r.Mount("/upgrade", upgradeRouter())
 		addExternalRouters(r)
 
 	})
