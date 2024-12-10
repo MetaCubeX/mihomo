@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -95,6 +96,13 @@ func main() {
 	if configString != "" {
 		var err error
 		configBytes, err = base64.StdEncoding.DecodeString(configString)
+		if err != nil {
+			log.Fatalln("Initial configuration error: %s", err.Error())
+			return
+		}
+	} else if configFile == "-" {
+		var err error
+		configBytes, err = io.ReadAll(os.Stdin)
 		if err != nil {
 			log.Fatalln("Initial configuration error: %s", err.Error())
 			return
