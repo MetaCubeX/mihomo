@@ -855,6 +855,8 @@ proxies: # socks5
     transport: TCP # 只支持 TCP
     username: user
     password: password
+    # 可以使用的值包括 MULTIPLEXING_OFF, MULTIPLEXING_LOW, MULTIPLEXING_MIDDLE, MULTIPLEXING_HIGH。其中 MULTIPLEXING_OFF 会关闭多路复用功能。默认值为 MULTIPLEXING_LOW。
+    # multiplexing: MULTIPLEXING_LOW
 
 # dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
   - name: "dns-out"

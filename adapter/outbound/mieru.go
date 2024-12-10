@@ -8,12 +8,13 @@ import (
 	"strconv"
 	"sync"
 
-	mieruclient "github.com/enfein/mieru/v3/apis/client"
-	mierumodel "github.com/enfein/mieru/v3/apis/model"
-	mierupb "github.com/enfein/mieru/v3/pkg/appctl/appctlpb"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
+
+	mieruclient "github.com/enfein/mieru/v3/apis/client"
+	mierumodel "github.com/enfein/mieru/v3/apis/model"
+	mierupb "github.com/enfein/mieru/v3/pkg/appctl/appctlpb"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,13 +27,14 @@ type Mieru struct {
 
 type MieruOption struct {
 	BasicOption
-	Name      string `proxy:"name"`
-	Server    string `proxy:"server"`
-	Port      int    `proxy:"port,omitempty"`
-	PortRange string `proxy:"port-range,omitempty"`
-	Transport string `proxy:"transport"`
-	UserName  string `proxy:"username"`
-	Password  string `proxy:"password"`
+	Name         string `proxy:"name"`
+	Server       string `proxy:"server"`
+	Port         int    `proxy:"port,omitempty"`
+	PortRange    string `proxy:"port-range,omitempty"`
+	Transport    string `proxy:"transport"`
+	UserName     string `proxy:"username"`
+	Password     string `proxy:"password"`
+	Multiplexing string `proxy:"multiplexing,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -205,7 +207,7 @@ func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, erro
 			}
 		}
 	}
-	return &mieruclient.ClientConfig{
+	config := &mieruclient.ClientConfig{
 		Profile: &mierupb.ClientProfile{
 			ProfileName: proto.String(option.Name),
 			User: &mierupb.User{
@@ -214,7 +216,13 @@ func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, erro
 			},
 			Servers: []*mierupb.ServerEndpoint{server},
 		},
-	}, nil
+	}
+	if multiplexing, ok := mierupb.MultiplexingLevel_value[option.Multiplexing]; ok {
+		config.Profile.Multiplexing = &mierupb.MultiplexingConfig{
+			Level: mierupb.MultiplexingLevel(multiplexing).Enum(),
+		}
+	}
+	return config, nil
 }
 
 func validateMieruOption(option MieruOption) error {
@@ -257,6 +265,11 @@ func validateMieruOption(option MieruOption) error {
 	}
 	if option.Password == "" {
 		return fmt.Errorf("password is empty")
+	}
+	if option.Multiplexing != "" {
+		if _, ok := mierupb.MultiplexingLevel_value[option.Multiplexing]; !ok {
+			return fmt.Errorf("invalid multiplexing level: %s", option.Multiplexing)
+		}
 	}
 	return nil
 }
