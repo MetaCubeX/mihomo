@@ -146,7 +146,7 @@ func (sd *Dispatcher) Enable() bool {
 
 func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (string, error) {
 	for s := range sd.sniffers {
-		if s.SupportNetwork() == C.TCP {
+		if s.SupportNetwork() == C.TCP && s.SupportPort(metadata.DstPort) {
 			_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 			_, err := conn.Peek(1)
 			_ = conn.SetReadDeadline(time.Time{})
