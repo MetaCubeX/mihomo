@@ -173,6 +173,19 @@ func (sd *Dispatcher) sniffDomain(conn *N.BufferedConn, metadata *C.Metadata) (s
 			}
 
 			host, err := s.SniffData(bytes)
+			var e *errNeedAtLeastData
+			if errors.As(err, &e) {
+				log.Debugln("[Sniffer] [%s] [%s] %v, got length: %d", metadata.DstIP, s.Protocol(), e, len(bytes))
+				_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+				bytes, err = conn.Peek(e.length)
+				_ = conn.SetReadDeadline(time.Time{})
+				log.Debugln("[Sniffer] [%s] [%s] try again, got length: %d", metadata.DstIP, s.Protocol(), len(bytes))
+				if err != nil {
+					log.Debugln("[Sniffer] [%s] [%s] the data length not enough, error: %v", metadata.DstIP, s.Protocol(), err)
+					continue
+				}
+				host, err = s.SniffData(bytes)
+			}
 			if err != nil {
 				log.Debugln("[Sniffer] [%s] [%s] Sniff data failed, error: %v", metadata.DstIP, s.Protocol(), err)
 				continue
