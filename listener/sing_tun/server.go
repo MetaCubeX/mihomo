@@ -209,31 +209,47 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		}
 	}
 
-	var dnsAdds []netip.AddrPort
+	var dnsAdds map[string][]netip.AddrPort = make(map[string][]netip.AddrPort)
+
+	supportedProtocols := map[string]bool{
+		"all": true,
+		"tcp": true,
+		"udp": true,
+	}
 
 	for _, d := range options.DNSHijack {
-		if _, after, ok := strings.Cut(d, "://"); ok {
-			d = after
+		protocol := "all"
+		address := d
+
+		if parts := strings.SplitN(d, "://", 2); len(parts) == 2 {
+			protocol = parts[0]
+			address = parts[1]
 		}
-		d = strings.Replace(d, "any", "0.0.0.0", 1)
-		addrPort, err := netip.ParseAddrPort(d)
+
+		if !supportedProtocols[protocol] {
+			return nil, fmt.Errorf("unsupported dns-hijack protocol: %s", protocol)
+		}
+
+		address = strings.Replace(address, "any", "0.0.0.0", 1)
+
+		addrPort, err := netip.ParseAddrPort(address)
 		if err != nil {
 			return nil, fmt.Errorf("parse dns-hijack url error: %w", err)
 		}
 
-		dnsAdds = append(dnsAdds, addrPort)
+		dnsAdds[protocol] = append(dnsAdds[protocol], addrPort)
 	}
 
 	var dnsServerIp []string
 	for _, a := range options.Inet4Address {
 		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsServerIp = append(dnsServerIp, a.Addr().Next().String())
-		dnsAdds = append(dnsAdds, addrPort)
+		dnsAdds["all"] = append(dnsAdds["all"], addrPort)
 	}
 	for _, a := range options.Inet6Address {
 		addrPort := netip.AddrPortFrom(a.Addr().Next(), 53)
 		dnsServerIp = append(dnsServerIp, a.Addr().Next().String())
-		dnsAdds = append(dnsAdds, addrPort)
+		dnsAdds["all"] = append(dnsAdds["all"], addrPort)
 	}
 
 	h, err := sing.NewListenerHandler(sing.ListenerConfig{

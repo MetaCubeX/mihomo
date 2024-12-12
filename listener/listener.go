@@ -37,11 +37,11 @@ var (
 	tproxyListener      *tproxy.Listener
 	tproxyUDPListener   *tproxy.UDPListener
 	mixedListener       *mixed.Listener
-	mixedUDPLister      *socks.UDPListener
+	mixedUDPListener      *socks.UDPListener
 	tunnelTCPListeners  = map[string]*LT.Listener{}
 	tunnelUDPListeners  = map[string]*LT.PacketConn{}
 	inboundListeners    = map[string]C.InboundListener{}
-	tunLister           *sing_tun.Listener
+	tunListener           *sing_tun.Listener
 	shadowSocksListener C.MultiAddrListener
 	vmessListener       *sing_vmess.Listener
 	tuicListener        *tuic.Listener
@@ -74,10 +74,10 @@ type Ports struct {
 }
 
 func GetTunConf() LC.Tun {
-	if tunLister == nil {
+	if tunListener == nil {
 		return LastTunConf
 	}
-	return tunLister.Config()
+	return tunListener.Config()
 }
 
 func GetTuicConf() LC.TuicServer {
@@ -463,10 +463,10 @@ func ReCreateMixed(port int, tunnel C.Tunnel) {
 			shouldTCPIgnore = true
 		}
 	}
-	if mixedUDPLister != nil {
-		if mixedUDPLister.RawAddress() != addr {
-			mixedUDPLister.Close()
-			mixedUDPLister = nil
+	if mixedUDPListener != nil {
+		if mixedUDPListener.RawAddress() != addr {
+			mixedUDPListener.Close()
+			mixedUDPListener = nil
 		} else {
 			shouldUDPIgnore = true
 		}
@@ -485,7 +485,7 @@ func ReCreateMixed(port int, tunnel C.Tunnel) {
 		return
 	}
 
-	mixedUDPLister, err = socks.NewUDP(addr, tunnel)
+	mixedUDPListener, err = socks.NewUDP(addr, tunnel)
 	if err != nil {
 		mixedListener.Close()
 		return
@@ -512,8 +512,8 @@ func ReCreateTun(tunConf LC.Tun, tunnel C.Tunnel) {
 	}()
 
 	if tunConf.Equal(LastTunConf) {
-		if tunLister != nil {
-			tunLister.FlushDefaultInterface()
+		if tunListener != nil {
+			tunListener.FlushDefaultInterface()
 		}
 		return
 	}
@@ -524,13 +524,13 @@ func ReCreateTun(tunConf LC.Tun, tunnel C.Tunnel) {
 		return
 	}
 
-	lister, err := sing_tun.New(tunConf, tunnel)
+	listener, err := sing_tun.New(tunConf, tunnel)
 	if err != nil {
 		return
 	}
-	tunLister = lister
+	tunListener = listener
 
-	log.Infoln("[TUN] Tun adapter listening at: %s", tunLister.Address())
+	log.Infoln("[TUN] Tun adapter listening at: %s", tunListener.Address())
 }
 
 func PatchTunnel(tunnels []LC.Tunnel, tunnel C.Tunnel) {
@@ -716,9 +716,9 @@ func genAddr(host string, port int, allowLan bool) string {
 }
 
 func closeTunListener() {
-	if tunLister != nil {
-		tunLister.Close()
-		tunLister = nil
+	if tunListener != nil {
+		tunListener.Close()
+		tunListener = nil
 	}
 }
 

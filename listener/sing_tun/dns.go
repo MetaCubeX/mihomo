@@ -20,23 +20,31 @@ import (
 
 type ListenerHandler struct {
 	*sing.ListenerHandler
-	DnsAdds []netip.AddrPort
+	DnsAdds map[string][]netip.AddrPort
 }
 
-func (h *ListenerHandler) ShouldHijackDns(targetAddr netip.AddrPort) bool {
-	if targetAddr.Addr().IsLoopback() && targetAddr.Port() == 53 { // cause by system stack
-		return true
-	}
-	for _, addrPort := range h.DnsAdds {
-		if addrPort == targetAddr || (addrPort.Addr().IsUnspecified() && targetAddr.Port() == 53) {
-			return true
-		}
-	}
-	return false
+func (h *ListenerHandler) ShouldHijackDns(targetAddr netip.AddrPort, protocol string) bool {
+    if targetAddr.Addr().IsLoopback() && targetAddr.Port() == 53 {
+        return true
+    }
+    
+    for proto, addrPorts := range h.DnsAdds {
+        if proto != protocol && proto != "all" {
+            continue
+        }
+        
+        for _, addrPort := range addrPorts {
+            if addrPort == targetAddr || (addrPort.Addr().IsUnspecified() && targetAddr.Port() == 53) {
+                return true
+            }
+        }
+    }
+    
+    return false
 }
 
 func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
-	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
+	if h.ShouldHijackDns(metadata.Destination.AddrPort(), "tcp") {
 		log.Debugln("[DNS] hijack tcp:%s", metadata.Destination.String())
 		return resolver.RelayDnsConn(ctx, conn, resolver.DefaultDnsReadTimeout)
 	}
@@ -44,7 +52,7 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 }
 
 func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, metadata M.Metadata) error {
-	if h.ShouldHijackDns(metadata.Destination.AddrPort()) {
+	if h.ShouldHijackDns(metadata.Destination.AddrPort(), "udp") {
 		log.Debugln("[DNS] hijack udp:%s from %s", metadata.Destination.String(), metadata.Source.String())
 		defer func() { _ = conn.Close() }()
 		mutex := sync.Mutex{}
