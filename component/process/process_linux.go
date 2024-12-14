@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -15,6 +14,8 @@ import (
 	"unsafe"
 
 	"github.com/mdlayher/netlink"
+	"github.com/shirou/gopsutil/v4/net"
+	"github.com/shirou/gopsutil/v4/process"
 	"golang.org/x/sys/unix"
 )
 
@@ -69,6 +70,23 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 }
 
 func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32, uint32, error) {
+	if runtime.GOOS == "android" {
+		connections, err := net.Connections("all")
+		if err != nil {
+			return 0, 0, err
+		}
+
+		for _, conn := range connections {
+			// 直接检查端口和IP匹配即可
+			if conn.Laddr.Port == uint32(srcPort) && conn.Laddr.IP == ip.String() {
+				if len(conn.Uids) > 0 {
+					return uint32(conn.Uids[0]), conn.Fd, nil
+				}
+			}
+		}
+		return 0, 0, ErrNotFound
+	}
+
 	request := &inetDiagRequest{
 		States: 0xffffffff,
 		Cookie: [2]uint32{0xffffffff, 0xffffffff},
@@ -125,6 +143,25 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32,
 }
 
 func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
+	if runtime.GOOS == "android" {
+		processes, err := process.Processes()
+		if err != nil {
+			return "", err
+		}
+
+		for _, p := range processes {
+			puid, err := p.Uids()
+			if err == nil && len(puid) > 0 && uint32(puid[0]) == uid {
+				name, err := p.Name()
+				if err != nil {
+					continue
+				}
+				return name, nil
+			}
+		}
+		return "", fmt.Errorf("process of uid(%d) not found", uid)
+	}
+
 	files, err := os.ReadDir("/proc")
 	if err != nil {
 		return "", err
@@ -159,21 +196,10 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 			if err != nil {
 				continue
 			}
-
-			if runtime.GOOS == "android" {
-				if bytes.Equal(buffer[:n], socket) {
-					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
-					if err != nil {
-						return "", err
-					}
-
-					return splitCmdline(cmdline), nil
-				}
-			} else {
-				if bytes.Equal(buffer[:n], socket) {
-					return os.Readlink(filepath.Join(processPath, "exe"))
-				}
+			if bytes.Equal(buffer[:n], socket) {
+				return os.Readlink(filepath.Join(processPath, "exe"))
 			}
+
 		}
 	}
 
