@@ -359,6 +359,15 @@ type RawTLS struct {
 	CustomTrustCert []string `yaml:"custom-certifactes" json:"custom-certifactes"`
 }
 
+type RawOverride struct {
+	OS           string            `yaml:"os" json:"os"`
+	Arch         string            `yaml:"arch" json:"arch"`
+	Hostname     string            `yaml:"hostname" json:"hostname"`
+	Username     string            `yaml:"username" json:"username"`
+	ListStrategy ListMergeStrategy `yaml:"list-strategy" json:"list-strategy"`
+	Content      map[string]any    `yaml:"content" json:"content"`
+}
+
 type RawConfig struct {
 	Port                    int               `yaml:"port" json:"port"`
 	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
@@ -424,6 +433,7 @@ type RawConfig struct {
 	GeoXUrl       RawGeoXUrl                `yaml:"geox-url" json:"geox-url"`
 	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
 	TLS           RawTLS                    `yaml:"tls" json:"tls"`
+	Override      []RawOverride             `yaml:"override" json:"override"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
@@ -579,6 +589,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
 	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
 	startTime := time.Now()
+
+	// apply overrides
+	err := ApplyOverride(rawCfg, rawCfg.Override)
+	if err != nil {
+		return nil, err
+	}
 
 	general, err := parseGeneral(rawCfg)
 	if err != nil {
