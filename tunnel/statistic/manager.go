@@ -7,7 +7,7 @@ import (
 	"github.com/metacubex/mihomo/common/atomic"
 
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var DefaultManager *Manager
