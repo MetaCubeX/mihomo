@@ -1014,6 +1014,14 @@ rule-providers:
     format: mrs
     behavior: domain
     path: /path/to/save/file.mrs
+  rule4:
+    type: inline
+    behavior: domain # classical / ipcidr
+    payload:
+      - '.blogger.com'
+      - '*.*.microsoft.com'
+      - 'books.itunes.apple.com'
+
 rules:
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY
