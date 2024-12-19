@@ -23,9 +23,7 @@ type Logic struct {
 	payloadOnce sync.Once
 }
 
-type ParseRuleFunc func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (C.Rule, error)
-
-func NewSubRule(payload, adapter string, subRules map[string][]C.Rule, parseRule ParseRuleFunc) (*Logic, error) {
+func NewSubRule(payload, adapter string, subRules map[string][]C.Rule, parseRule common.ParseRuleFunc) (*Logic, error) {
 	logic := &Logic{Base: &common.Base{}, payload: payload, adapter: adapter, ruleType: C.SubRules, subRules: subRules}
 	err := logic.parsePayload(fmt.Sprintf("(%s)", payload), parseRule)
 	if err != nil {
@@ -38,7 +36,7 @@ func NewSubRule(payload, adapter string, subRules map[string][]C.Rule, parseRule
 	return logic, nil
 }
 
-func NewNOT(payload string, adapter string, parseRule ParseRuleFunc) (*Logic, error) {
+func NewNOT(payload string, adapter string, parseRule common.ParseRuleFunc) (*Logic, error) {
 	logic := &Logic{Base: &common.Base{}, payload: payload, adapter: adapter, ruleType: C.NOT}
 	err := logic.parsePayload(payload, parseRule)
 	if err != nil {
@@ -51,7 +49,7 @@ func NewNOT(payload string, adapter string, parseRule ParseRuleFunc) (*Logic, er
 	return logic, nil
 }
 
-func NewOR(payload string, adapter string, parseRule ParseRuleFunc) (*Logic, error) {
+func NewOR(payload string, adapter string, parseRule common.ParseRuleFunc) (*Logic, error) {
 	logic := &Logic{Base: &common.Base{}, payload: payload, adapter: adapter, ruleType: C.OR}
 	err := logic.parsePayload(payload, parseRule)
 	if err != nil {
@@ -60,7 +58,7 @@ func NewOR(payload string, adapter string, parseRule ParseRuleFunc) (*Logic, err
 	return logic, nil
 }
 
-func NewAND(payload string, adapter string, parseRule ParseRuleFunc) (*Logic, error) {
+func NewAND(payload string, adapter string, parseRule common.ParseRuleFunc) (*Logic, error) {
 	logic := &Logic{Base: &common.Base{}, payload: payload, adapter: adapter, ruleType: C.AND}
 	err := logic.parsePayload(payload, parseRule)
 	if err != nil {
@@ -79,7 +77,7 @@ func (r Range) containRange(preStart, preEnd int) bool {
 	return preStart < r.start && preEnd > r.end
 }
 
-func (logic *Logic) payloadToRule(subPayload string, parseRule ParseRuleFunc) (C.Rule, error) {
+func (logic *Logic) payloadToRule(subPayload string, parseRule common.ParseRuleFunc) (C.Rule, error) {
 	splitStr := strings.SplitN(subPayload, ",", 2)
 	if len(splitStr) < 2 {
 		return nil, fmt.Errorf("[%s] format is error", subPayload)
@@ -160,7 +158,7 @@ func (logic *Logic) findSubRuleRange(payload string, ruleRanges []Range) []Range
 	return subRuleRange
 }
 
-func (logic *Logic) parsePayload(payload string, parseRule ParseRuleFunc) error {
+func (logic *Logic) parsePayload(payload string, parseRule common.ParseRuleFunc) error {
 	regex, err := regexp.Compile("\\(.*\\)")
 	if err != nil {
 		return err

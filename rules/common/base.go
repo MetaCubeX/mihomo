@@ -3,6 +3,8 @@ package common
 import (
 	"errors"
 
+	C "github.com/metacubex/mihomo/constant"
+
 	"golang.org/x/exp/slices"
 )
 
@@ -38,3 +40,5 @@ func ParseParams(params []string) (isSrc bool, noResolve bool) {
 	}
 	return
 }
+
+type ParseRuleFunc func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (C.Rule, error)

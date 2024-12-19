@@ -13,6 +13,7 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/rules/common"
 
 	"gopkg.in/yaml.v3"
 )
@@ -132,9 +133,7 @@ func (rp *RuleSetProvider) Close() error {
 	return rp.ruleSetProvider.Close()
 }
 
-func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle,
-	parse parseRuleFunc,
-) P.RuleProvider {
+func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleFormat, interval time.Duration, vehicle P.Vehicle, parse common.ParseRuleFunc) P.RuleProvider {
 	rp := &ruleSetProvider{
 		ruleSetProviderBase: ruleSetProviderBase{
 			behavior: behavior,
@@ -160,7 +159,7 @@ func NewRuleSetProvider(name string, behavior P.RuleBehavior, format P.RuleForma
 	return wrapper
 }
 
-func newStrategy(behavior P.RuleBehavior, parse parseRuleFunc) ruleStrategy {
+func newStrategy(behavior P.RuleBehavior, parse common.ParseRuleFunc) ruleStrategy {
 	switch behavior {
 	case P.Domain:
 		strategy := NewDomainStrategy()
@@ -324,12 +323,7 @@ func (i *inlineProvider) MarshalJSON() ([]byte, error) {
 		})
 }
 
-func newInlineProvider(
-	name string,
-	behavior P.RuleBehavior,
-	payload []string,
-	parse parseRuleFunc,
-) P.RuleProvider {
+func newInlineProvider(name string, behavior P.RuleBehavior, payload []string, parse common.ParseRuleFunc) P.RuleProvider {
 	rp := &inlineProvider{
 		ruleSetProviderBase: ruleSetProviderBase{
 			behavior: behavior,

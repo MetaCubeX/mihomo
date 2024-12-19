@@ -9,6 +9,7 @@ import (
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
+	"github.com/metacubex/mihomo/rules/common"
 )
 
 var (
@@ -27,9 +28,7 @@ type ruleProviderSchema struct {
 	Payload   []string `provider:"payload,omitempty"`
 }
 
-type parseRuleFunc func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)
-
-func ParseRuleProvider(name string, mapping map[string]any, parse parseRuleFunc) (P.RuleProvider, error) {
+func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc) (P.RuleProvider, error) {
 	schema := &ruleProviderSchema{}
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 	if err := decoder.Decode(mapping, schema); err != nil {
