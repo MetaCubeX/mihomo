@@ -975,6 +975,17 @@ proxy-providers:
       #   - pattern: "IPLC-(.*?)倍"
       #     target: "iplc x $1"
 
+  provider2:
+    type: inline
+    dialer-proxy: proxy
+    payload:
+      - name: "ss1"
+        type: ss
+        server: server
+        port: 443
+        cipher: chacha20-ietf-poly1305
+        password: "password"
+
   test:
     type: file
     path: /test.yaml

@@ -57,16 +57,17 @@ type OverrideSchema struct {
 }
 
 type proxyProviderSchema struct {
-	Type          string `provider:"type"`
-	Path          string `provider:"path,omitempty"`
-	URL           string `provider:"url,omitempty"`
-	Proxy         string `provider:"proxy,omitempty"`
-	Interval      int    `provider:"interval,omitempty"`
-	Filter        string `provider:"filter,omitempty"`
-	ExcludeFilter string `provider:"exclude-filter,omitempty"`
-	ExcludeType   string `provider:"exclude-type,omitempty"`
-	DialerProxy   string `provider:"dialer-proxy,omitempty"`
-	SizeLimit     int64  `provider:"size-limit,omitempty"`
+	Type          string           `provider:"type"`
+	Path          string           `provider:"path,omitempty"`
+	URL           string           `provider:"url,omitempty"`
+	Proxy         string           `provider:"proxy,omitempty"`
+	Interval      int              `provider:"interval,omitempty"`
+	Filter        string           `provider:"filter,omitempty"`
+	ExcludeFilter string           `provider:"exclude-filter,omitempty"`
+	ExcludeType   string           `provider:"exclude-type,omitempty"`
+	DialerProxy   string           `provider:"dialer-proxy,omitempty"`
+	SizeLimit     int64            `provider:"size-limit,omitempty"`
+	Payload       []map[string]any `provider:"payload,omitempty"`
 
 	HealthCheck healthCheckSchema   `provider:"health-check,omitempty"`
 	Override    OverrideSchema      `provider:"override,omitempty"`
@@ -99,6 +100,11 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	}
 	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus)
 
+	parser, err := NewProxiesParser(schema.Filter, schema.ExcludeFilter, schema.ExcludeType, schema.DialerProxy, schema.Override)
+	if err != nil {
+		return nil, err
+	}
+
 	var vehicle types.Vehicle
 	switch schema.Type {
 	case "file":
@@ -113,16 +119,13 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 			}
 		}
 		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout, schema.SizeLimit)
+	case "inline":
+		return NewInlineProvider(name, schema.Payload, parser, hc)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
-	filter := schema.Filter
-	excludeFilter := schema.ExcludeFilter
-	excludeType := schema.ExcludeType
-	dialerProxy := schema.DialerProxy
-	override := schema.Override
 
-	return NewProxySetProvider(name, interval, filter, excludeFilter, excludeType, dialerProxy, override, vehicle, hc)
+	return NewProxySetProvider(name, interval, parser, vehicle, hc)
 }

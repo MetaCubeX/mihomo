@@ -15,9 +15,8 @@ type SubscriptionInfo struct {
 	Expire   int64
 }
 
-func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo) {
+func (info *SubscriptionInfo) Update(userinfo string) {
 	userinfo = strings.ReplaceAll(strings.ToLower(userinfo), " ", "")
-	si = new(SubscriptionInfo)
 
 	for _, field := range strings.Split(userinfo, ";") {
 		name, value, ok := strings.Cut(field, "=")
@@ -33,17 +32,15 @@ func NewSubscriptionInfo(userinfo string) (si *SubscriptionInfo) {
 
 		switch name {
 		case "upload":
-			si.Upload = intValue
+			info.Upload = intValue
 		case "download":
-			si.Download = intValue
+			info.Download = intValue
 		case "total":
-			si.Total = intValue
+			info.Total = intValue
 		case "expire":
-			si.Expire = intValue
+			info.Expire = intValue
 		}
 	}
-
-	return si
 }
 
 func parseValue(value string) (int64, error) {

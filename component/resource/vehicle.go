@@ -90,6 +90,7 @@ type HTTPVehicle struct {
 	header    http.Header
 	timeout   time.Duration
 	sizeLimit int64
+	inRead    func(response *http.Response)
 	provider  types.ProxyProvider
 }
 
@@ -113,8 +114,8 @@ func (h *HTTPVehicle) Write(buf []byte) error {
 	return safeWrite(h.path, buf)
 }
 
-func (h *HTTPVehicle) SetProvider(provider types.ProxyProvider) {
-	h.provider = provider
+func (h *HTTPVehicle) SetInRead(fn func(response *http.Response)) {
+	h.inRead = fn
 }
 
 func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []byte, hash utils.HashType, err error) {
@@ -140,9 +141,8 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []b
 	}
 	defer resp.Body.Close()
 
-	if subscriptionInfo := resp.Header.Get("subscription-userinfo"); h.provider != nil && subscriptionInfo != "" {
-		cachefile.Cache().SetSubscriptionInfo(h.provider.Name(), subscriptionInfo)
-		h.provider.SetSubscriptionInfo(subscriptionInfo)
+	if h.inRead != nil {
+		h.inRead(resp)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
