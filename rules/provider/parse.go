@@ -58,7 +58,7 @@ func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRu
 		}
 		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil, resource.DefaultHttpTimeout, schema.SizeLimit)
 	case "inline":
-		return newInlineProvider(name, behavior, schema.Payload, parse), nil
+		return NewInlineProvider(name, behavior, schema.Payload, parse), nil
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}
