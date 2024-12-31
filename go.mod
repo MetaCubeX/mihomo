@@ -7,12 +7,12 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.11.4
-	github.com/enfein/mieru/v3 v3.8.4
-	github.com/go-chi/chi/v5 v5.1.0
+	github.com/enfein/mieru/v3 v3.9.0
+	github.com/go-chi/chi/v5 v5.2.0
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
 	github.com/gofrs/uuid/v5 v5.3.0
-	github.com/insomniacslk/dhcp v0.0.0-20241203100832-a481575ed0ef
+	github.com/insomniacslk/dhcp v0.0.0-20241224095048-b56fa0d5f25d
 	github.com/klauspost/compress v1.17.9 // lastest version compatible with golang1.20
 	github.com/klauspost/cpuid/v2 v2.2.9
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40
@@ -29,7 +29,7 @@ require (
 	github.com/metacubex/sing-tun v0.4.5
 	github.com/metacubex/sing-vmess v0.1.9-0.20240719134745-1df6fb20bbf9
 	github.com/metacubex/sing-wireguard v0.0.0-20241126021510-0827d417b589
-	github.com/metacubex/tfo-go v0.0.0-20240830120620-c5e019b67785
+	github.com/metacubex/tfo-go v0.0.0-20241231083714-66613d49c422
 	github.com/metacubex/utls v1.6.6
 	github.com/metacubex/wireguard-go v0.0.0-20240922131502-c182e7471181
 	github.com/miekg/dns v1.1.62
@@ -54,7 +54,7 @@ require (
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e // lastest version compatible with golang1.20
-	golang.org/x/net v0.32.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sys v0.28.0
 	google.golang.org/protobuf v1.34.2 // lastest version compatible with golang1.20
 	gopkg.in/yaml.v3 v3.0.1
