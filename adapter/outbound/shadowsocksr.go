@@ -141,7 +141,7 @@ func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 	password := option.Password
 	coreCiph, err := core.PickCipher(cipher, nil, password)
 	if err != nil {
-		return nil, fmt.Errorf("ssr %s initialize error: %w", addr, err)
+		return nil, fmt.Errorf("ssr %s cipher: %s initialize error: %w", addr, cipher, err)
 	}
 	var (
 		ivSize int

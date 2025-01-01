@@ -236,7 +236,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		Password: option.Password,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("ss %s initialize error: %w", addr, err)
+		return nil, fmt.Errorf("ss %s cipher: %s initialize error: %w", addr, option.Cipher, err)
 	}
 
 	var v2rayOption *v2rayObfs.Option
