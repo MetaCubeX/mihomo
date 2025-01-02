@@ -26,7 +26,7 @@ type ARC[K comparable, V any] struct {
 	b1    *list.List[*entry[K, V]]
 	t2    *list.List[*entry[K, V]]
 	b2    *list.List[*entry[K, V]]
-	mutex sync.Mutex
+	mutex sync.RWMutex
 	len   int
 	cache map[K]*entry[K, V]
 }
@@ -100,8 +100,8 @@ func (a *ARC[K, V]) setWithExpire(key K, value V, expires time.Time) {
 // Get retrieves a previously via Set inserted entry.
 // This optimizes future access to this entry (side effect).
 func (a *ARC[K, V]) Get(key K) (value V, ok bool) {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
 
 	ent, ok := a.get(key)
 	if !ok {
@@ -124,8 +124,8 @@ func (a *ARC[K, V]) get(key K) (e *entry[K, V], ok bool) {
 // and a bool set to true if the key was found.
 // This method will NOT update the expires.
 func (a *ARC[K, V]) GetWithExpire(key K) (V, time.Time, bool) {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
 
 	ent, ok := a.get(key)
 	if !ok {

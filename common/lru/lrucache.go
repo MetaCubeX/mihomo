@@ -58,7 +58,7 @@ func WithStale[K comparable, V any](stale bool) Option[K, V] {
 type LruCache[K comparable, V any] struct {
 	maxAge         int64
 	maxSize        int
-	mu             sync.Mutex
+	mu             sync.RWMutex
 	cache          map[K]*list.Element[*entry[K, V]]
 	lru            *list.List[*entry[K, V]] // Front is least-recent
 	updateAgeOnGet bool
@@ -89,8 +89,8 @@ func (c *LruCache[K, V]) Clear() {
 // Get returns any representation of a cached response and a bool
 // set to true if the key was found.
 func (c *LruCache[K, V]) Get(key K) (V, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	el := c.get(key)
 	if el == nil {
@@ -121,8 +121,8 @@ func (c *LruCache[K, V]) GetOrStore(key K, constructor func() V) (V, bool) {
 // and a bool set to true if the key was found.
 // This method will NOT check the maxAge of element and will NOT update the expires.
 func (c *LruCache[K, V]) GetWithExpire(key K) (V, time.Time, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	el := c.get(key)
 	if el == nil {
@@ -134,8 +134,8 @@ func (c *LruCache[K, V]) GetWithExpire(key K) (V, time.Time, bool) {
 
 // Exist returns if key exist in cache but not put item to the head of linked list
 func (c *LruCache[K, V]) Exist(key K) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	_, ok := c.cache[key]
 	return ok
