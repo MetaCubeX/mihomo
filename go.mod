@@ -7,7 +7,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.11.4
-	github.com/enfein/mieru/v3 v3.9.0
+	github.com/enfein/mieru/v3 v3.10.0
 	github.com/go-chi/chi/v5 v5.2.0
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
