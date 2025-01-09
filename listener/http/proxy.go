@@ -8,24 +8,32 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	_ "unsafe"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
-	authStore "github.com/metacubex/mihomo/listener/auth"
 	"github.com/metacubex/mihomo/log"
 )
 
-//go:linkname registerOnHitEOF net/http.registerOnHitEOF
-func registerOnHitEOF(rc io.ReadCloser, fn func())
+type bodyWrapper struct {
+	io.ReadCloser
+	once     sync.Once
+	onHitEOF func()
+}
 
-//go:linkname requestBodyRemains net/http.requestBodyRemains
-func requestBodyRemains(rc io.ReadCloser) bool
+func (b *bodyWrapper) Read(p []byte) (n int, err error) {
+	n, err = b.ReadCloser.Read(p)
+	if err == io.EOF && b.onHitEOF != nil {
+		b.once.Do(b.onHitEOF)
+	}
+	return n, err
+}
 
-func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], additions ...inbound.Addition) {
-	client := newClient(c, tunnel, additions...)
+func HandleConn(c net.Conn, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) {
+	additions = append(additions, inbound.Placeholder) // Add a placeholder for InUser
+	inUserIdx := len(additions) - 1
+	client := newClient(c, tunnel, additions)
 	defer client.CloseIdleConnections()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -33,8 +41,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 	conn := N.NewBufferedConn(c)
 
+	authenticator := store.Authenticator()
 	keepAlive := true
-	trusted := cache == nil // disable authenticate if lru is nil
+	trusted := authenticator == nil // disable authenticate if lru is nil
+	lastUser := ""
 
 	for keepAlive {
 		peekMutex.Lock()
@@ -50,11 +60,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 
 		var resp *http.Response
 
-		if !trusted {
-			resp = authenticate(request, cache)
-
-			trusted = resp == nil
-		}
+		var user string
+		resp, user = authenticate(request, authenticator) // always call authenticate function to get user
+		trusted = trusted || resp == nil
+		additions[inUserIdx] = inbound.WithInUser(user)
 
 		if trusted {
 			if request.Method == http.MethodConnect {
@@ -81,6 +90,13 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 				return // hijack connection
 			}
 
+			// ensure there is a client with correct additions
+			// when the authenticated user changed, outbound client should close idle connections
+			if user != lastUser {
+				client.CloseIdleConnections()
+				lastUser = user
+			}
+
 			removeHopByHopHeaders(request.Header)
 			removeExtraHTTPHostPort(request)
 
@@ -99,10 +115,10 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 						}
 					}()
 				}
-				if requestBodyRemains(request.Body) {
-					registerOnHitEOF(request.Body, startBackgroundRead)
-				} else {
+				if request.Body == nil || request.Body == http.NoBody {
 					startBackgroundRead()
+				} else {
+					request.Body = &bodyWrapper{ReadCloser: request.Body, onHitEOF: startBackgroundRead}
 				}
 				resp, err = client.Do(request)
 				if err != nil {
@@ -130,33 +146,21 @@ func HandleConn(c net.Conn, tunnel C.Tunnel, cache *lru.LruCache[string, bool], 
 	_ = conn.Close()
 }
 
-func authenticate(request *http.Request, cache *lru.LruCache[string, bool]) *http.Response {
-	authenticator := authStore.Authenticator()
-	if inbound.SkipAuthRemoteAddress(request.RemoteAddr) {
-		authenticator = nil
+func authenticate(request *http.Request, authenticator auth.Authenticator) (resp *http.Response, user string) {
+	credential := parseBasicProxyAuthorization(request)
+	if credential == "" && authenticator != nil {
+		resp = responseWith(request, http.StatusProxyAuthRequired)
+		resp.Header.Set("Proxy-Authenticate", "Basic")
+		return
 	}
-	if authenticator != nil {
-		credential := parseBasicProxyAuthorization(request)
-		if credential == "" {
-			resp := responseWith(request, http.StatusProxyAuthRequired)
-			resp.Header.Set("Proxy-Authenticate", "Basic")
-			return resp
-		}
-
-		authed, exist := cache.Get(credential)
-		if !exist {
-			user, pass, err := decodeBasicProxyAuthorization(credential)
-			authed = err == nil && authenticator.Verify(user, pass)
-			cache.Set(credential, authed)
-		}
-		if !authed {
-			log.Infoln("Auth failed from %s", request.RemoteAddr)
-
-			return responseWith(request, http.StatusForbidden)
-		}
+	user, pass, err := decodeBasicProxyAuthorization(credential)
+	authed := authenticator == nil || (err == nil && authenticator.Verify(user, pass))
+	if !authed {
+		log.Infoln("Auth failed from %s", request.RemoteAddr)
+		return responseWith(request, http.StatusForbidden), user
 	}
-
-	return nil
+	log.Debugln("Auth success from %s -> %s", request.RemoteAddr, user)
+	return
 }
 
 func responseWith(request *http.Request, statusCode int) *http.Response {

@@ -89,14 +89,14 @@ func (d *dnsPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 		return len(p), nil
 	}
 
-	ctx, cancel := context.WithTimeout(d.ctx, resolver.DefaultDnsRelayTimeout)
-	defer cancel()
-
 	buf := pool.Get(resolver.SafeDnsPacketSize)
 	put := func() { _ = pool.Put(buf) }
 	copy(buf, p) // avoid p be changed after WriteTo returned
 
 	go func() { // don't block the WriteTo function
+		ctx, cancel := context.WithTimeout(d.ctx, resolver.DefaultDnsRelayTimeout)
+		defer cancel()
+
 		buf, err = resolver.RelayDnsPacket(ctx, buf[:len(p)], buf)
 		if err != nil {
 			put()

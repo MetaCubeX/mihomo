@@ -129,6 +129,12 @@ func (h *ListenerHandler) NewConnection(ctx context.Context, conn net.Conn, meta
 		NetWork: C.TCP,
 		Type:    h.Type,
 	}
+	if metadata.Source.IsIP() && metadata.Source.Fqdn == "" {
+		cMetadata.RawSrcAddr = metadata.Source.Unwrap().TCPAddr()
+	}
+	if metadata.Destination.IsIP() && metadata.Destination.Fqdn == "" {
+		cMetadata.RawDstAddr = metadata.Destination.Unwrap().TCPAddr()
+	}
 	inbound.ApplyAdditions(cMetadata, inbound.WithDstAddr(metadata.Destination), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
 	inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
 	inbound.ApplyAdditions(cMetadata, h.Additions...)
@@ -185,6 +191,12 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 			NetWork: C.UDP,
 			Type:    h.Type,
 		}
+		if metadata.Source.IsIP() && metadata.Source.Fqdn == "" {
+			cMetadata.RawSrcAddr = metadata.Source.Unwrap().UDPAddr()
+		}
+		if dest.IsIP() && dest.Fqdn == "" {
+			cMetadata.RawDstAddr = dest.Unwrap().UDPAddr()
+		}
 		inbound.ApplyAdditions(cMetadata, inbound.WithDstAddr(dest), inbound.WithSrcAddr(metadata.Source), inbound.WithInAddr(conn.LocalAddr()))
 		inbound.ApplyAdditions(cMetadata, getAdditions(ctx)...)
 		inbound.ApplyAdditions(cMetadata, h.Additions...)
@@ -196,6 +208,12 @@ func (h *ListenerHandler) NewPacketConnection(ctx context.Context, conn network.
 
 func (h *ListenerHandler) NewError(ctx context.Context, err error) {
 	log.Warnln("%s listener get error: %+v", h.Type.String(), err)
+}
+
+func (h *ListenerHandler) TypeMutation(typ C.Type) *ListenerHandler {
+	handler := *h
+	handler.Type = typ
+	return &handler
 }
 
 func ShouldIgnorePacketError(err error) bool {

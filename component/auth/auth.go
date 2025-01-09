@@ -5,6 +5,11 @@ type Authenticator interface {
 	Users() []string
 }
 
+type AuthStore interface {
+	Authenticator() Authenticator
+	SetAuthenticator(Authenticator)
+}
+
 type AuthUser struct {
 	User string
 	Pass string

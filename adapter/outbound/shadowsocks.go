@@ -149,7 +149,6 @@ func (ss *ShadowSocks) DialContextWithDialer(ctx context.Context, dialer C.Diale
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
-	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
@@ -166,18 +165,18 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 
 // ListenPacketWithDialer implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if len(ss.option.DialerProxy) > 0 {
-		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
-		if err != nil {
-			return nil, err
-		}
-	}
 	if ss.option.UDPOverTCP {
 		tcpConn, err := ss.DialContextWithDialer(ctx, dialer, metadata)
 		if err != nil {
 			return nil, err
 		}
 		return ss.ListenPacketOnStreamConn(ctx, tcpConn, metadata)
+	}
+	if len(ss.option.DialerProxy) > 0 {
+		dialer, err = proxydialer.NewByName(ss.option.DialerProxy, dialer)
+		if err != nil {
+			return nil, err
+		}
 	}
 	addr, err := resolveUDPAddrWithPrefer(ctx, "udp", ss.addr, ss.prefer)
 	if err != nil {
@@ -195,6 +194,13 @@ func (ss *ShadowSocks) ListenPacketWithDialer(ctx context.Context, dialer C.Dial
 // SupportWithDialer implements C.ProxyAdapter
 func (ss *ShadowSocks) SupportWithDialer() C.NetWork {
 	return C.ALLNet
+}
+
+// ProxyInfo implements C.ProxyAdapter
+func (ss *ShadowSocks) ProxyInfo() C.ProxyInfo {
+	info := ss.Base.ProxyInfo()
+	info.DialerProxy = ss.option.DialerProxy
+	return info
 }
 
 // ListenPacketOnStreamConn implements C.ProxyAdapter
@@ -230,7 +236,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		Password: option.Password,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("ss %s initialize error: %w", addr, err)
+		return nil, fmt.Errorf("ss %s cipher: %s initialize error: %w", addr, option.Cipher, err)
 	}
 
 	var v2rayOption *v2rayObfs.Option
@@ -273,6 +279,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 		if opts.TLS {
 			v2rayOption.TLS = true
 			v2rayOption.SkipCertVerify = opts.SkipCertVerify
+			v2rayOption.Fingerprint = opts.Fingerprint
 		}
 	} else if option.Plugin == shadowtls.Mode {
 		obfsMode = shadowtls.Mode

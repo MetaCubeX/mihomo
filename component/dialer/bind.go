@@ -14,6 +14,7 @@ func LookupLocalAddrFromIfaceName(ifaceName string, network string, destination 
 	if err != nil {
 		return nil, err
 	}
+	destination = destination.Unmap()
 
 	var addr netip.Prefix
 	switch network {
@@ -23,7 +24,7 @@ func LookupLocalAddrFromIfaceName(ifaceName string, network string, destination 
 		addr, err = ifaceObj.PickIPv6Addr(destination)
 	default:
 		if destination.IsValid() {
-			if destination.Is4() || destination.Is4In6() {
+			if destination.Is4() {
 				addr, err = ifaceObj.PickIPv4Addr(destination)
 			} else {
 				addr, err = ifaceObj.PickIPv6Addr(destination)
@@ -74,7 +75,7 @@ func fallbackBindIfaceToDialer(ifaceName string, dialer *net.Dialer, network str
 	return nil
 }
 
-func fallbackBindIfaceToListenConfig(ifaceName string, _ *net.ListenConfig, network, address string) (string, error) {
+func fallbackBindIfaceToListenConfig(ifaceName string, _ *net.ListenConfig, network, address string, rAddrPort netip.AddrPort) (string, error) {
 	_, port, err := net.SplitHostPort(address)
 	if err != nil {
 		port = "0"

@@ -21,7 +21,7 @@ const (
 	cubeCongestionWindowScale                      = 410
 	cubeFactor                congestion.ByteCount = 1 << cubeScale / cubeCongestionWindowScale / maxDatagramSize
 	// TODO: when re-enabling cubic, make sure to use the actual packet size here
-	maxDatagramSize = congestion.ByteCount(InitialPacketSizeIPv4)
+	maxDatagramSize = congestion.ByteCount(InitialPacketSize)
 )
 
 const defaultNumConnections = 1

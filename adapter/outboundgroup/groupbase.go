@@ -48,7 +48,7 @@ type GroupBaseOption struct {
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	var excludeFilterReg *regexp2.Regexp
 	if opt.excludeFilter != "" {
-		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, 0)
+		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, regexp2.None)
 	}
 	var excludeTypeArray []string
 	if opt.excludeType != "" {
@@ -58,7 +58,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	var filterRegs []*regexp2.Regexp
 	if opt.filter != "" {
 		for _, filter := range strings.Split(opt.filter, "`") {
-			filterReg := regexp2.MustCompile(filter, 0)
+			filterReg := regexp2.MustCompile(filter, regexp2.None)
 			filterRegs = append(filterRegs, filterReg)
 		}
 	}
@@ -126,7 +126,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				for _, filterReg := range gb.filterRegs {
 					for _, p := range proxies {
 						name := p.Name()
-						if mat, _ := filterReg.FindStringMatch(name); mat != nil {
+						if mat, _ := filterReg.MatchString(name); mat {
 							if _, ok := proxiesSet[name]; !ok {
 								proxiesSet[name] = struct{}{}
 								newProxies = append(newProxies, p)
@@ -150,7 +150,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		for _, filterReg := range gb.filterRegs {
 			for _, p := range proxies {
 				name := p.Name()
-				if mat, _ := filterReg.FindStringMatch(name); mat != nil {
+				if mat, _ := filterReg.MatchString(name); mat {
 					if _, ok := proxiesSet[name]; !ok {
 						proxiesSet[name] = struct{}{}
 						newProxies = append(newProxies, p)
@@ -191,7 +191,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		var newProxies []C.Proxy
 		for _, p := range proxies {
 			name := p.Name()
-			if mat, _ := gb.excludeFilterReg.FindStringMatch(name); mat != nil {
+			if mat, _ := gb.excludeFilterReg.MatchString(name); mat {
 				continue
 			}
 			newProxies = append(newProxies, p)

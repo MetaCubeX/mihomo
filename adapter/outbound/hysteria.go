@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/metacubex/quic-go/congestion"
 	M "github.com/sagernet/sing/common/metadata"
 
+	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
@@ -43,6 +45,8 @@ type Hysteria struct {
 
 	option *HysteriaOption
 	client *core.Client
+
+	closeCh chan struct{} // for test
 }
 
 func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
@@ -51,7 +55,7 @@ func (h *Hysteria) DialContext(ctx context.Context, metadata *C.Metadata, opts .
 		return nil, err
 	}
 
-	return NewConn(tcpConn, h), nil
+	return NewConn(CN.NewRefConn(tcpConn, h), h), nil
 }
 
 func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
@@ -59,13 +63,13 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	if err != nil {
 		return nil, err
 	}
-	return newPacketConn(&hyPacketConn{udpConn}, h), nil
+	return newPacketConn(CN.NewRefPacketConn(&hyPacketConn{udpConn}, h), h), nil
 }
 
 func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.PacketDialer {
 	return &hyDialerWithContext{
 		ctx: context.Background(),
-		hyDialer: func(network string) (net.PacketConn, error) {
+		hyDialer: func(network string, rAddr net.Addr) (net.PacketConn, error) {
 			var err error
 			var cDialer C.Dialer = dialer.NewDialer(h.Base.DialOptions(opts...)...)
 			if len(h.option.DialerProxy) > 0 {
@@ -74,13 +78,20 @@ func (h *Hysteria) genHdc(ctx context.Context, opts ...dialer.Option) utils.Pack
 					return nil, err
 				}
 			}
-			rAddrPort, _ := netip.ParseAddrPort(h.Addr())
+			rAddrPort, _ := netip.ParseAddrPort(rAddr.String())
 			return cDialer.ListenPacket(ctx, network, "", rAddrPort)
 		},
 		remoteAddr: func(addr string) (net.Addr, error) {
 			return resolveUDPAddrWithPrefer(ctx, "udp", addr, h.prefer)
 		},
 	}
+}
+
+// ProxyInfo implements C.ProxyAdapter
+func (h *Hysteria) ProxyInfo() C.ProxyInfo {
+	info := h.Base.ProxyInfo()
+	info.DialerProxy = h.option.DialerProxy
+	return info
 }
 
 type HysteriaOption struct {
@@ -127,11 +138,7 @@ func (c *HysteriaOption) Speed() (uint64, uint64, error) {
 }
 
 func NewHysteria(option HysteriaOption) (*Hysteria, error) {
-	clientTransport := &transport.ClientTransport{
-		Dialer: &net.Dialer{
-			Timeout: 8 * time.Second,
-		},
-	}
+	clientTransport := &transport.ClientTransport{}
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	ports := option.Ports
 
@@ -218,7 +225,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 	if err != nil {
 		return nil, fmt.Errorf("hysteria %s create error: %w", addr, err)
 	}
-	return &Hysteria{
+	outbound := &Hysteria{
 		Base: &Base{
 			name:   option.Name,
 			addr:   addr,
@@ -231,7 +238,19 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		},
 		option: &option,
 		client: client,
-	}, nil
+	}
+	runtime.SetFinalizer(outbound, closeHysteria)
+
+	return outbound, nil
+}
+
+func closeHysteria(h *Hysteria) {
+	if h.client != nil {
+		_ = h.client.Close()
+	}
+	if h.closeCh != nil {
+		close(h.closeCh)
+	}
 }
 
 type hyPacketConn struct {
@@ -268,7 +287,7 @@ func (c *hyPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 }
 
 type hyDialerWithContext struct {
-	hyDialer   func(network string) (net.PacketConn, error)
+	hyDialer   func(network string, rAddr net.Addr) (net.PacketConn, error)
 	ctx        context.Context
 	remoteAddr func(host string) (net.Addr, error)
 }
@@ -278,7 +297,7 @@ func (h *hyDialerWithContext) ListenPacket(rAddr net.Addr) (net.PacketConn, erro
 	if addrPort, err := netip.ParseAddrPort(rAddr.String()); err == nil {
 		network = dialer.ParseNetwork(network, addrPort.Addr())
 	}
-	return h.hyDialer(network)
+	return h.hyDialer(network, rAddr)
 }
 
 func (h *hyDialerWithContext) Context() context.Context {

@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/keepalive"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -37,10 +37,12 @@ func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener
 			inbound.WithSpecialRules(""),
 		}
 	}
+
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
+
 	rl := &Listener{
 		listener: l,
 		addr:     addr,
@@ -68,6 +70,6 @@ func handleRedir(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) 
 		conn.Close()
 		return
 	}
-	N.TCPKeepAlive(conn)
+	keepalive.TCPKeepAlive(conn)
 	tunnel.HandleTCPConn(inbound.NewSocket(target, conn, C.REDIR, additions...))
 }

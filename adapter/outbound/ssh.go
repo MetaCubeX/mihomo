@@ -17,7 +17,7 @@ import (
 	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -77,7 +77,6 @@ func (s *sshClient) connect(ctx context.Context, cDialer C.Dialer, addr string) 
 	if err != nil {
 		return nil, err
 	}
-	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
@@ -120,6 +119,13 @@ func (s *sshClient) Close() error {
 
 func closeSsh(s *Ssh) {
 	_ = s.client.Close()
+}
+
+// ProxyInfo implements C.ProxyAdapter
+func (s *Ssh) ProxyInfo() C.ProxyInfo {
+	info := s.Base.ProxyInfo()
+	info.DialerProxy = s.option.DialerProxy
+	return info
 }
 
 func NewSsh(option SshOption) (*Ssh, error) {
@@ -180,10 +186,10 @@ func NewSsh(option SshOption) (*Ssh, error) {
 	}
 
 	version := "SSH-2.0-OpenSSH_"
-	if fastrand.Intn(2) == 0 {
-		version += "7." + strconv.Itoa(fastrand.Intn(10))
+	if randv2.IntN(2) == 0 {
+		version += "7." + strconv.Itoa(randv2.IntN(10))
 	} else {
-		version += "8." + strconv.Itoa(fastrand.Intn(9))
+		version += "8." + strconv.Itoa(randv2.IntN(9))
 	}
 	config.ClientVersion = version
 

@@ -12,7 +12,7 @@ import (
 	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 type quicStreamPacketConn struct {
@@ -137,7 +137,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if len(p) > 0xffff { // uint16 max
-		return 0, &quic.DatagramTooLargeError{PeerMaxDatagramFrameSize: 0xffff}
+		return 0, &quic.DatagramTooLargeError{MaxDatagramPayloadSize: 0xffff}
 	}
 	if q.closed {
 		return 0, net.ErrClosed
@@ -157,7 +157,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 	if err != nil {
 		return
 	}
-	pktId := uint16(fastrand.Uint32())
+	pktId := uint16(randv2.Uint32())
 	packet := NewPacket(q.connId, pktId, 1, 0, uint16(len(p)), address, p)
 	switch q.udpRelayMode {
 	case common.QUIC:
@@ -189,7 +189,7 @@ func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err erro
 
 		var tooLarge *quic.DatagramTooLargeError
 		if errors.As(err, &tooLarge) {
-			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge.PeerMaxDatagramFrameSize)-PacketOverHead)
+			err = fragWriteNative(q.quicConn, packet, buf, int(tooLarge.MaxDatagramPayloadSize)-PacketOverHead)
 		}
 		if err != nil {
 			return

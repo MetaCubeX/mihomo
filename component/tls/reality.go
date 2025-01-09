@@ -16,17 +16,14 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
-	"unsafe"
 
-	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
 
-	utls "github.com/sagernet/utls"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
+	utls "github.com/metacubex/utls"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/net/http2"
@@ -38,9 +35,6 @@ type RealityConfig struct {
 	PublicKey *ecdh.PublicKey
 	ShortID   [RealityMaxShortIDLen]byte
 }
-
-//go:linkname aesgcmPreferred crypto/tls.aesgcmPreferred
-func aesgcmPreferred(ciphers []uint16) bool
 
 func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string, tlsConfig *tls.Config, realityConfig *RealityConfig) (net.Conn, error) {
 	retry := 0
@@ -102,7 +96,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, ClientFingerprint string
 			return nil, err
 		}
 		var aeadCipher cipher.AEAD
-		if aesgcmPreferred(hello.CipherSuites) {
+		if utls.AesgcmPreferred(hello.CipherSuites) {
 			aesBlock, _ := aes.NewCipher(authKey)
 			aeadCipher, _ = cipher.NewGCM(aesBlock)
 		} else {
@@ -139,15 +133,18 @@ func realityClientFallback(uConn net.Conn, serverName string, fingerprint utls.C
 			},
 		},
 	}
-	request, _ := http.NewRequest("GET", "https://"+serverName, nil)
+	request, err := http.NewRequest("GET", "https://"+serverName, nil)
+	if err != nil {
+		return
+	}
 	request.Header.Set("User-Agent", fingerprint.Client)
-	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", fastrand.Intn(32)+30)})
+	request.AddCookie(&http.Cookie{Name: "padding", Value: strings.Repeat("0", randv2.IntN(32)+30)})
 	response, err := client.Do(request)
 	if err != nil {
 		return
 	}
 	//_, _ = io.Copy(io.Discard, response.Body)
-	time.Sleep(time.Duration(5+fastrand.Int63n(10)) * time.Second)
+	time.Sleep(time.Duration(5+randv2.IntN(10)) * time.Second)
 	response.Body.Close()
 	client.CloseIdleConnections()
 }
@@ -159,11 +156,12 @@ type realityVerifier struct {
 	verified   bool
 }
 
-var pOffset = utils.MustOK(reflect.TypeOf((*utls.Conn)(nil)).Elem().FieldByName("peerCertificates")).Offset
+//var pOffset = utils.MustOK(reflect.TypeOf((*utls.Conn)(nil)).Elem().FieldByName("peerCertificates")).Offset
 
 func (c *realityVerifier) VerifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	//p, _ := reflect.TypeOf(c.Conn).Elem().FieldByName("peerCertificates")
-	certs := *(*[]*x509.Certificate)(unsafe.Add(unsafe.Pointer(c.Conn), pOffset))
+	//certs := *(*[]*x509.Certificate)(unsafe.Add(unsafe.Pointer(c.Conn), pOffset))
+	certs := c.Conn.PeerCertificates()
 	if pub, ok := certs[0].PublicKey.(ed25519.PublicKey); ok {
 		h := hmac.New(sha512.New, c.authKey)
 		h.Write(pub)

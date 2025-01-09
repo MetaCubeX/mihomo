@@ -262,7 +262,6 @@ func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -327,7 +326,6 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 	}
-	N.TCPKeepAlive(c)
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
 	}(c)
@@ -379,6 +377,13 @@ func (v *Vless) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metada
 // SupportUOT implements C.ProxyAdapter
 func (v *Vless) SupportUOT() bool {
 	return true
+}
+
+// ProxyInfo implements C.ProxyAdapter
+func (v *Vless) ProxyInfo() C.ProxyInfo {
+	info := v.Base.ProxyInfo()
+	info.DialerProxy = v.option.DialerProxy
+	return info
 }
 
 func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
@@ -505,16 +510,13 @@ func NewVless(option VlessOption) (*Vless, error) {
 	var addons *vless.Addons
 	if option.Network != "ws" && len(option.Flow) >= 16 {
 		option.Flow = option.Flow[:16]
-		switch option.Flow {
-		case vless.XRV:
-			log.Warnln("To use %s, ensure your server is upgrade to Xray-core v1.8.0+", vless.XRV)
-			addons = &vless.Addons{
-				Flow: option.Flow,
-			}
-		case vless.XRO, vless.XRD, vless.XRS:
-			log.Fatalln("Legacy XTLS protocol %s is deprecated and no longer supported", option.Flow)
-		default:
+		if option.Flow != vless.XRV {
 			return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
+		}
+
+		log.Warnln("To use %s, ensure your server is upgrade to Xray-core v1.8.0+", vless.XRV)
+		addons = &vless.Addons{
+			Flow: option.Flow,
 		}
 	}
 
@@ -577,7 +579,6 @@ func NewVless(option VlessOption) (*Vless, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
 			}
-			N.TCPKeepAlive(c)
 			return c, nil
 		}
 

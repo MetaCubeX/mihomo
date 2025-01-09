@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/common/singledo"
@@ -12,9 +11,11 @@ import (
 
 type Interface struct {
 	Index        int
+	MTU          int
 	Name         string
-	Addrs        []netip.Prefix
+	Addresses    []netip.Prefix
 	HardwareAddr net.HardwareAddr
+	Flags        net.Flags
 }
 
 var (
@@ -24,7 +25,7 @@ var (
 
 var interfaces = singledo.NewSingle[map[string]*Interface](time.Second * 20)
 
-func ResolveInterface(name string) (*Interface, error) {
+func Interfaces() (map[string]*Interface, error) {
 	value, err, _ := interfaces.Do(func() (map[string]*Interface, error) {
 		ifaces, err := net.Interfaces()
 		if err != nil {
@@ -38,51 +39,70 @@ func ResolveInterface(name string) (*Interface, error) {
 			if err != nil {
 				continue
 			}
-			// if not available device like Meta, dummy0, docker0, etc.
-			if (iface.Flags&net.FlagMulticast == 0) || (iface.Flags&net.FlagPointToPoint != 0) || (iface.Flags&net.FlagRunning == 0) {
-				continue
-			}
 
 			ipNets := make([]netip.Prefix, 0, len(addrs))
 			for _, addr := range addrs {
-				ipNet := addr.(*net.IPNet)
-				ip, _ := netip.AddrFromSlice(ipNet.IP)
-
-				//unavailable IPv6 Address
-				if ip.Is6() && strings.HasPrefix(ip.String(), "fe80") {
-					continue
-				}
-
-				ones, bits := ipNet.Mask.Size()
-				if bits == 32 {
+				var pf netip.Prefix
+				switch ipNet := addr.(type) {
+				case *net.IPNet:
+					ip, _ := netip.AddrFromSlice(ipNet.IP)
+					ones, bits := ipNet.Mask.Size()
+					if bits == 32 {
+						ip = ip.Unmap()
+					}
+					pf = netip.PrefixFrom(ip, ones)
+				case *net.IPAddr:
+					ip, _ := netip.AddrFromSlice(ipNet.IP)
 					ip = ip.Unmap()
+					pf = netip.PrefixFrom(ip, ip.BitLen())
 				}
-
-				pf := netip.PrefixFrom(ip, ones)
-				ipNets = append(ipNets, pf)
+				if pf.IsValid() {
+					ipNets = append(ipNets, pf)
+				}
 			}
 
 			r[iface.Name] = &Interface{
 				Index:        iface.Index,
+				MTU:          iface.MTU,
 				Name:         iface.Name,
-				Addrs:        ipNets,
+				Addresses:    ipNets,
 				HardwareAddr: iface.HardwareAddr,
+				Flags:        iface.Flags,
 			}
 		}
 
 		return r, nil
 	})
+	return value, err
+}
+
+func ResolveInterface(name string) (*Interface, error) {
+	ifaces, err := Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	ifaces := value
 	iface, ok := ifaces[name]
 	if !ok {
 		return nil, ErrIfaceNotFound
 	}
 
 	return iface, nil
+}
+
+func IsLocalIp(ip netip.Addr) (bool, error) {
+	ifaces, err := Interfaces()
+	if err != nil {
+		return false, err
+	}
+	for _, iface := range ifaces {
+		for _, addr := range iface.Addresses {
+			if addr.Contains(ip) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func FlushCache() {
@@ -104,7 +124,7 @@ func (iface *Interface) PickIPv6Addr(destination netip.Addr) (netip.Prefix, erro
 func (iface *Interface) pickIPAddr(destination netip.Addr, accept func(addr netip.Prefix) bool) (netip.Prefix, error) {
 	var fallback netip.Prefix
 
-	for _, addr := range iface.Addrs {
+	for _, addr := range iface.Addresses {
 		if !accept(addr) {
 			continue
 		}

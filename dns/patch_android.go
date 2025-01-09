@@ -3,54 +3,19 @@
 package dns
 
 import (
-	"context"
-
-	D "github.com/miekg/dns"
-
-	"github.com/metacubex/mihomo/common/lru"
-	"github.com/metacubex/mihomo/component/dhcp"
 	"github.com/metacubex/mihomo/component/resolver"
 )
 
-const SystemDNSPlaceholder = "system"
-
-var systemResolver *Resolver
-var isolateHandler handler
-
-var _ dnsClient = (*dhcpClient)(nil)
-
-type dhcpClient struct {
-	enable bool
-}
-
-func (d *dhcpClient) Address() string {
-	return SystemDNSPlaceholder
-}
-
-func (d *dhcpClient) Exchange(m *D.Msg) (msg *D.Msg, err error) {
-	return d.ExchangeContext(context.Background(), m)
-}
-
-func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
-	if s := systemResolver; s != nil {
-		return s.ExchangeContext(ctx, m)
-	}
-
-	return nil, dhcp.ErrNotFound
-}
-
-func ServeDNSWithDefaultServer(msg *D.Msg) (*D.Msg, error) {
-	if h := isolateHandler; h != nil {
-		return handlerWithContext(context.Background(), h, msg)
-	}
-
-	return nil, D.ErrTime
-}
+var systemResolver []dnsClient
 
 func FlushCacheWithDefaultResolver() {
 	if r := resolver.DefaultResolver; r != nil {
-		r.(*Resolver).cache = lru.New(lru.WithSize[string, *D.Msg](4096), lru.WithStale[string, *D.Msg](true))
+		r.ClearCache()
 	}
+	if r := resolver.SystemResolver; r != nil {
+		r.ClearCache()
+	}
+	resolver.ResetConnection()
 }
 
 func UpdateSystemDNS(addr []string) {
@@ -63,19 +28,15 @@ func UpdateSystemDNS(addr []string) {
 		ns = append(ns, NameServer{Addr: d})
 	}
 
-	systemResolver = NewResolver(Config{Main: ns})
+	systemResolver = transform(ns, nil)
 }
 
-func UpdateIsolateHandler(resolver *Resolver, mapper *ResolverEnhancer) {
-	if resolver == nil {
-		isolateHandler = nil
+func (c *systemClient) getDnsClients() ([]dnsClient, error) {
+	return systemResolver, nil
+}
 
-		return
+func (c *systemClient) ResetConnection() {
+	for _, r := range systemResolver {
+		r.ResetConnection()
 	}
-
-	isolateHandler = NewHandler(resolver, mapper)
-}
-
-func newDHCPClient(ifaceName string) *dhcpClient {
-	return &dhcpClient{enable: ifaceName == SystemDNSPlaceholder}
 }

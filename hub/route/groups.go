@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 
-	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
@@ -17,7 +16,7 @@ import (
 	"github.com/metacubex/mihomo/tunnel"
 )
 
-func GroupRouter() http.Handler {
+func groupRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getGroups)
 
@@ -32,7 +31,7 @@ func GroupRouter() http.Handler {
 func getGroups(w http.ResponseWriter, r *http.Request) {
 	var gs []C.Proxy
 	for _, p := range tunnel.Proxies() {
-		if _, ok := p.(*adapter.Proxy).ProxyAdapter.(C.Group); ok {
+		if _, ok := p.Adapter().(C.Group); ok {
 			gs = append(gs, p)
 		}
 	}
@@ -43,7 +42,7 @@ func getGroups(w http.ResponseWriter, r *http.Request) {
 
 func getGroup(w http.ResponseWriter, r *http.Request) {
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
-	if _, ok := proxy.(*adapter.Proxy).ProxyAdapter.(C.Group); ok {
+	if _, ok := proxy.Adapter().(C.Group); ok {
 		render.JSON(w, r, proxy)
 		return
 	}
@@ -53,19 +52,15 @@ func getGroup(w http.ResponseWriter, r *http.Request) {
 
 func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
-	group, ok := proxy.(*adapter.Proxy).ProxyAdapter.(C.Group)
+	group, ok := proxy.Adapter().(C.Group)
 	if !ok {
 		render.Status(r, http.StatusNotFound)
 		render.JSON(w, r, ErrNotFound)
 		return
 	}
 
-	if proxy.(*adapter.Proxy).Type() == C.URLTest {
-		URLTestGroup := proxy.(*adapter.Proxy).ProxyAdapter.(*outboundgroup.URLTest)
-		URLTestGroup.ForceSet("")
-	}
-
-	if proxy.(*adapter.Proxy).Type() != C.Selector {
+	if selectAble, ok := proxy.Adapter().(outboundgroup.SelectAble); ok && proxy.Type() != C.Selector {
+		selectAble.ForceSet("")
 		cachefile.Cache().SetSelected(proxy.Name(), "")
 	}
 

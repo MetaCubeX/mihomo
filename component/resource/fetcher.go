@@ -1,35 +1,32 @@
 package resource
 
 import (
-	"bytes"
-	"crypto/md5"
+	"context"
 	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/metacubex/mihomo/common/utils"
 	types "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
+	"github.com/sagernet/fswatch"
 	"github.com/samber/lo"
-)
-
-var (
-	fileMode os.FileMode = 0o666
-	dirMode  os.FileMode = 0o755
 )
 
 type Parser[V any] func([]byte) (V, error)
 
 type Fetcher[V any] struct {
+	ctx          context.Context
+	ctxCancel    context.CancelFunc
 	resourceType string
 	name         string
 	vehicle      types.Vehicle
-	UpdatedAt    time.Time
-	done         chan struct{}
-	hash         [16]byte
+	updatedAt    time.Time
+	hash         utils.HashType
 	parser       Parser[V]
 	interval     time.Duration
-	OnUpdate     func(V)
+	onUpdate     func(V)
+	watcher      *fswatch.Watcher
 }
 
 func (f *Fetcher[V]) Name() string {
@@ -44,93 +41,69 @@ func (f *Fetcher[V]) VehicleType() types.VehicleType {
 	return f.vehicle.Type()
 }
 
+func (f *Fetcher[V]) UpdatedAt() time.Time {
+	return f.updatedAt
+}
+
 func (f *Fetcher[V]) Initial() (V, error) {
 	var (
-		buf         []byte
-		err         error
-		isLocal     bool
-		forceUpdate bool
+		buf      []byte
+		contents V
+		err      error
 	)
 
 	if stat, fErr := os.Stat(f.vehicle.Path()); fErr == nil {
+		// local file exists, use it first
 		buf, err = os.ReadFile(f.vehicle.Path())
 		modTime := stat.ModTime()
-		f.UpdatedAt = modTime
-		isLocal = true
-		if f.interval != 0 && modTime.Add(f.interval).Before(time.Now()) {
-			log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
-			forceUpdate = true
+		contents, _, err = f.loadBuf(buf, utils.MakeHash(buf), false)
+		f.updatedAt = modTime // reset updatedAt to file's modTime
+
+		if err == nil {
+			err = f.startPullLoop(time.Since(modTime) > f.interval)
+			if err != nil {
+				return lo.Empty[V](), err
+			}
+			return contents, nil
 		}
-	} else {
-		buf, err = f.vehicle.Read()
-		f.UpdatedAt = time.Now()
 	}
+
+	// parse local file error, fallback to remote
+	contents, _, err = f.Update()
 
 	if err != nil {
 		return lo.Empty[V](), err
 	}
-
-	var contents V
-	if forceUpdate {
-		var forceBuf []byte
-		if forceBuf, err = f.vehicle.Read(); err == nil {
-			if contents, err = f.parser(forceBuf); err == nil {
-				isLocal = false
-				buf = forceBuf
-			}
-		}
-	}
-
-	if err != nil || !forceUpdate {
-		contents, err = f.parser(buf)
-	}
-
+	err = f.startPullLoop(false)
 	if err != nil {
-		if !isLocal {
-			return lo.Empty[V](), err
-		}
-
-		// parse local file error, fallback to remote
-		buf, err = f.vehicle.Read()
-		if err != nil {
-			return lo.Empty[V](), err
-		}
-
-		contents, err = f.parser(buf)
-		if err != nil {
-			return lo.Empty[V](), err
-		}
-
-		isLocal = false
+		return lo.Empty[V](), err
 	}
-
-	if f.vehicle.Type() != types.File && !isLocal {
-		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
-			return lo.Empty[V](), err
-		}
-	}
-
-	f.hash = md5.Sum(buf)
-
-	// pull contents automatically
-	if f.interval > 0 {
-		go f.pullLoop()
-	}
-
 	return contents, nil
 }
 
 func (f *Fetcher[V]) Update() (V, bool, error) {
-	buf, err := f.vehicle.Read()
+	buf, hash, err := f.vehicle.Read(f.ctx, f.hash)
 	if err != nil {
 		return lo.Empty[V](), false, err
 	}
+	return f.loadBuf(buf, hash, f.vehicle.Type() != types.File)
+}
 
+func (f *Fetcher[V]) SideUpdate(buf []byte) (V, bool, error) {
+	return f.loadBuf(buf, utils.MakeHash(buf), true)
+}
+
+func (f *Fetcher[V]) loadBuf(buf []byte, hash utils.HashType, updateFile bool) (V, bool, error) {
 	now := time.Now()
-	hash := md5.Sum(buf)
-	if bytes.Equal(f.hash[:], hash[:]) {
-		f.UpdatedAt = now
-		_ = os.Chtimes(f.vehicle.Path(), now, now)
+	if f.hash.Equal(hash) {
+		if updateFile {
+			_ = os.Chtimes(f.vehicle.Path(), now, now)
+		}
+		f.updatedAt = now
+		return lo.Empty[V](), true, nil
+	}
+
+	if buf == nil { // f.hash has been changed between f.vehicle.Read but should not happen (cause by concurrent)
 		return lo.Empty[V](), true, nil
 	}
 
@@ -139,29 +112,38 @@ func (f *Fetcher[V]) Update() (V, bool, error) {
 		return lo.Empty[V](), false, err
 	}
 
-	if f.vehicle.Type() != types.File {
-		if err := safeWrite(f.vehicle.Path(), buf); err != nil {
+	if updateFile {
+		if err = f.vehicle.Write(buf); err != nil {
 			return lo.Empty[V](), false, err
 		}
 	}
-
-	f.UpdatedAt = now
+	f.updatedAt = now
 	f.hash = hash
+
+	if f.onUpdate != nil {
+		f.onUpdate(contents)
+	}
 
 	return contents, false, nil
 }
 
-func (f *Fetcher[V]) Destroy() error {
-	if f.interval > 0 {
-		f.done <- struct{}{}
+func (f *Fetcher[V]) Close() error {
+	f.ctxCancel()
+	if f.watcher != nil {
+		_ = f.watcher.Close()
 	}
 	return nil
 }
 
-func (f *Fetcher[V]) pullLoop() {
-	initialInterval := f.interval - time.Since(f.UpdatedAt)
+func (f *Fetcher[V]) pullLoop(forceUpdate bool) {
+	initialInterval := f.interval - time.Since(f.updatedAt)
 	if initialInterval > f.interval {
 		initialInterval = f.interval
+	}
+
+	if forceUpdate {
+		log.Warnln("[Provider] %s not updated for a long time, force refresh", f.Name())
+		f.updateWithLog()
 	}
 
 	timer := time.NewTimer(initialInterval)
@@ -170,47 +152,63 @@ func (f *Fetcher[V]) pullLoop() {
 		select {
 		case <-timer.C:
 			timer.Reset(f.interval)
-			elm, same, err := f.Update()
-			if err != nil {
-				log.Errorln("[Provider] %s pull error: %s", f.Name(), err.Error())
-				continue
-			}
-
-			if same {
-				log.Debugln("[Provider] %s's content doesn't change", f.Name())
-				continue
-			}
-
-			log.Infoln("[Provider] %s's content update", f.Name())
-			if f.OnUpdate != nil {
-				f.OnUpdate(elm)
-			}
-		case <-f.done:
+			f.updateWithLog()
+		case <-f.ctx.Done():
 			return
 		}
 	}
 }
 
-func safeWrite(path string, buf []byte) error {
-	dir := filepath.Dir(path)
-
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, dirMode); err != nil {
+func (f *Fetcher[V]) startPullLoop(forceUpdate bool) (err error) {
+	// pull contents automatically
+	if f.vehicle.Type() == types.File {
+		f.watcher, err = fswatch.NewWatcher(fswatch.Options{
+			Path:     []string{f.vehicle.Path()},
+			Direct:   true,
+			Callback: f.updateCallback,
+		})
+		if err != nil {
 			return err
 		}
+		err = f.watcher.Start()
+		if err != nil {
+			return err
+		}
+	} else if f.interval > 0 {
+		go f.pullLoop(forceUpdate)
+	}
+	return
+}
+
+func (f *Fetcher[V]) updateCallback(path string) {
+	f.updateWithLog()
+}
+
+func (f *Fetcher[V]) updateWithLog() {
+	_, same, err := f.Update()
+	if err != nil {
+		log.Errorln("[Provider] %s pull error: %s", f.Name(), err.Error())
+		return
 	}
 
-	return os.WriteFile(path, buf, fileMode)
+	if same {
+		log.Debugln("[Provider] %s's content doesn't change", f.Name())
+		return
+	}
+
+	log.Infoln("[Provider] %s's content update", f.Name())
+	return
 }
 
 func NewFetcher[V any](name string, interval time.Duration, vehicle types.Vehicle, parser Parser[V], onUpdate func(V)) *Fetcher[V] {
-
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Fetcher[V]{
-		name:     name,
-		vehicle:  vehicle,
-		parser:   parser,
-		done:     make(chan struct{}, 8),
-		OnUpdate: onUpdate,
-		interval: interval,
+		ctx:       ctx,
+		ctxCancel: cancel,
+		name:      name,
+		vehicle:   vehicle,
+		parser:    parser,
+		onUpdate:  onUpdate,
+		interval:  interval,
 	}
 }

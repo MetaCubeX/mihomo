@@ -1,37 +1,14 @@
 package config
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"net/netip"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/structure"
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	C "github.com/metacubex/mihomo/constant"
 )
-
-func downloadForBytes(url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
-	defer cancel()
-	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, http.Header{"User-Agent": {C.UA}}, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	return io.ReadAll(resp.Body)
-}
-
-func saveFile(bytes []byte, path string) error {
-	return os.WriteFile(path, bytes, 0o644)
-}
 
 func trimArr(arr []string) (r []string) {
 	for _, e := range arr {

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
@@ -31,6 +30,7 @@ func proxyRouter() http.Handler {
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
 		r.Put("/", updateProxy)
+		r.Delete("/", unfixedProxy)
 	})
 	return r
 }
@@ -81,8 +81,8 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proxy := r.Context().Value(CtxKeyProxy).(*adapter.Proxy)
-	selector, ok := proxy.ProxyAdapter.(outboundgroup.SelectAble)
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+	selector, ok := proxy.Adapter().(outboundgroup.SelectAble)
 	if !ok {
 		render.Status(r, http.StatusBadRequest)
 		render.JSON(w, r, newError("Must be a Selector"))
@@ -145,4 +145,16 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{
 		"delay": delay,
 	})
+}
+
+func unfixedProxy(w http.ResponseWriter, r *http.Request) {
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+	if selectAble, ok := proxy.Adapter().(outboundgroup.SelectAble); ok && proxy.Type() != C.Selector {
+		selectAble.ForceSet("")
+		cachefile.Cache().SetSelected(proxy.Name(), "")
+		render.NoContent(w, r)
+		return
+	}
+	render.Status(r, http.StatusBadRequest)
+	render.JSON(w, r, ErrBadRequest)
 }

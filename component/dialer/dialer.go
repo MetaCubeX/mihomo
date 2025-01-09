@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/constant/features"
 	"github.com/metacubex/mihomo/log"
 )
 
@@ -78,30 +78,30 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 	}
 }
 
-func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
-	if features.CMFA && DefaultSocketHook != nil {
-		return listenPacketHooked(ctx, network, address)
-	}
-
+func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort, options ...Option) (net.PacketConn, error) {
 	cfg := applyOptions(options...)
 
 	lc := &net.ListenConfig{}
-	if cfg.interfaceName != "" {
-		bind := bindIfaceToListenConfig
-		if cfg.fallbackBind {
-			bind = fallbackBindIfaceToListenConfig
-		}
-		addr, err := bind(cfg.interfaceName, lc, network, address)
-		if err != nil {
-			return nil, err
-		}
-		address = addr
-	}
 	if cfg.addrReuse {
 		addrReuseToListenConfig(lc)
 	}
-	if cfg.routingMark != 0 {
-		bindMarkToListenConfig(cfg.routingMark, lc, network, address)
+	if DefaultSocketHook != nil { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CMFA)
+		socketHookToListenConfig(lc)
+	} else {
+		if cfg.interfaceName != "" {
+			bind := bindIfaceToListenConfig
+			if cfg.fallbackBind {
+				bind = fallbackBindIfaceToListenConfig
+			}
+			addr, err := bind(cfg.interfaceName, lc, network, address, rAddrPort)
+			if err != nil {
+				return nil, err
+			}
+			address = addr
+		}
+		if cfg.routingMark != 0 {
+			bindMarkToListenConfig(cfg.routingMark, lc, network, address)
+		}
 	}
 
 	return lc.ListenPacket(ctx, network, address)
@@ -127,17 +127,11 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
-	if features.CMFA && DefaultSocketHook != nil {
-		return dialContextHooked(ctx, network, destination, port)
-	}
-
 	var address string
 	if IP4PEnable {
-		NewDestination, NewPort := lookupIP4P(destination.String(), port)
-		address = net.JoinHostPort(NewDestination, NewPort)
-	} else {
-		address = net.JoinHostPort(destination.String(), port)
+		destination, port = lookupIP4P(destination, port)
 	}
+	address = net.JoinHostPort(destination.String(), port)
 
 	netDialer := opt.netDialer
 	switch netDialer.(type) {
@@ -151,24 +145,31 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	dialer := netDialer.(*net.Dialer)
-	if opt.interfaceName != "" {
-		bind := bindIfaceToDialer
-		if opt.fallbackBind {
-			bind = fallbackBindIfaceToDialer
-		}
-		if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
-			return nil, err
-		}
-	}
-	if opt.routingMark != 0 {
-		bindMarkToDialer(opt.routingMark, dialer, network, destination)
-	}
+	keepalive.SetNetDialer(dialer)
 	if opt.mpTcp {
 		setMultiPathTCP(dialer)
 	}
-	if opt.tfo {
-		return dialTFO(ctx, *dialer, network, address)
+
+	if DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo when DefaultSocketHook not null (in CMFA)
+		socketHookToToDialer(dialer)
+	} else {
+		if opt.interfaceName != "" {
+			bind := bindIfaceToDialer
+			if opt.fallbackBind {
+				bind = fallbackBindIfaceToDialer
+			}
+			if err := bind(opt.interfaceName, dialer, network, destination); err != nil {
+				return nil, err
+			}
+		}
+		if opt.routingMark != 0 {
+			bindMarkToDialer(opt.routingMark, dialer, network, destination)
+		}
+		if opt.tfo && !DisableTFO {
+			return dialTFO(ctx, *dialer, network, address)
+		}
 	}
+
 	return dialer.DialContext(ctx, network, address)
 }
 
@@ -339,26 +340,18 @@ func parseAddr(ctx context.Context, network, address string, preferResolver reso
 		return nil, "-1", err
 	}
 
+	if preferResolver == nil {
+		preferResolver = resolver.ProxyServerHostResolver
+	}
+
 	var ips []netip.Addr
 	switch network {
 	case "tcp4", "udp4":
-		if preferResolver == nil {
-			ips, err = resolver.LookupIPv4ProxyServerHost(ctx, host)
-		} else {
-			ips, err = resolver.LookupIPv4WithResolver(ctx, host, preferResolver)
-		}
+		ips, err = resolver.LookupIPv4WithResolver(ctx, host, preferResolver)
 	case "tcp6", "udp6":
-		if preferResolver == nil {
-			ips, err = resolver.LookupIPv6ProxyServerHost(ctx, host)
-		} else {
-			ips, err = resolver.LookupIPv6WithResolver(ctx, host, preferResolver)
-		}
+		ips, err = resolver.LookupIPv6WithResolver(ctx, host, preferResolver)
 	default:
-		if preferResolver == nil {
-			ips, err = resolver.LookupIPProxyServerHost(ctx, host)
-		} else {
-			ips, err = resolver.LookupIPWithResolver(ctx, host, preferResolver)
-		}
+		ips, err = resolver.LookupIPWithResolver(ctx, host, preferResolver)
 	}
 	if err != nil {
 		return nil, "-1", fmt.Errorf("dns resolve failed: %w", err)
@@ -380,12 +373,12 @@ func (d Dialer) DialContext(ctx context.Context, network, address string) (net.C
 }
 
 func (d Dialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
-	opt := WithOption(d.Opt)
+	opt := d.Opt // make a copy
 	if rAddrPort.Addr().Unmap().IsLoopback() {
 		// avoid "The requested address is not valid in its context."
-		opt = WithInterface("")
+		WithInterface("")(&opt)
 	}
-	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, opt)
+	return ListenPacket(ctx, ParseNetwork(network, rAddrPort.Addr()), address, rAddrPort, WithOption(opt))
 }
 
 func NewDialer(options ...Option) Dialer {
@@ -399,13 +392,13 @@ func GetIP4PEnable(enableIP4PConvert bool) {
 
 // kanged from https://github.com/heiher/frp/blob/ip4p/client/ip4p.go
 
-func lookupIP4P(addr string, port string) (string, string) {
-	ip := net.ParseIP(addr)
+func lookupIP4P(addr netip.Addr, port string) (netip.Addr, string) {
+	ip := addr.AsSlice()
 	if ip[0] == 0x20 && ip[1] == 0x01 &&
 		ip[2] == 0x00 && ip[3] == 0x00 {
-		addr = net.IPv4(ip[12], ip[13], ip[14], ip[15]).String()
+		addr = netip.AddrFrom4([4]byte{ip[12], ip[13], ip[14], ip[15]})
 		port = strconv.Itoa(int(ip[10])<<8 + int(ip[11]))
-		log.Debugln("Convert IP4P address %s to %s", ip, net.JoinHostPort(addr, port))
+		log.Debugln("Convert IP4P address %s to %s", ip, net.JoinHostPort(addr.String(), port))
 		return addr, port
 	}
 	return addr, port

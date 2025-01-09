@@ -55,7 +55,7 @@ func resolveUDPAddr(ctx context.Context, network, address string) (*net.UDPAddr,
 		return nil, err
 	}
 
-	ip, err := resolver.ResolveProxyServerHost(ctx, host)
+	ip, err := resolver.ResolveIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
 	if err != nil {
 		return nil, err
 	}
@@ -71,12 +71,12 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 	var fallback netip.Addr
 	switch prefer {
 	case C.IPv4Only:
-		ip, err = resolver.ResolveIPv4ProxyServerHost(ctx, host)
+		ip, err = resolver.ResolveIPv4WithResolver(ctx, host, resolver.ProxyServerHostResolver)
 	case C.IPv6Only:
-		ip, err = resolver.ResolveIPv6ProxyServerHost(ctx, host)
+		ip, err = resolver.ResolveIPv6WithResolver(ctx, host, resolver.ProxyServerHostResolver)
 	case C.IPv6Prefer:
 		var ips []netip.Addr
-		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
+		ips, err = resolver.LookupIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
 		if err == nil {
 			for _, addr := range ips {
 				if addr.Is6() {
@@ -92,7 +92,7 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 	default:
 		// C.IPv4Prefer, C.DualStack and other
 		var ips []netip.Addr
-		ips, err = resolver.LookupIPProxyServerHost(ctx, host)
+		ips, err = resolver.LookupIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
 		if err == nil {
 			for _, addr := range ips {
 				if addr.Is4() {

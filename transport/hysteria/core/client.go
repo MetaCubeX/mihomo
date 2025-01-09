@@ -19,7 +19,7 @@ import (
 	"github.com/lunixbochs/struc"
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/congestion"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 var (
@@ -289,7 +289,10 @@ func (c *Client) DialUDP(dialer utils.PacketDialer) (UDPConn, error) {
 func (c *Client) Close() error {
 	c.reconnectMutex.Lock()
 	defer c.reconnectMutex.Unlock()
-	err := c.quicSession.CloseWithError(closeErrorCodeGeneric, "")
+	var err error
+	if c.quicSession != nil {
+		err = c.quicSession.CloseWithError(closeErrorCodeGeneric, "")
+	}
 	c.closed = true
 	return err
 }
@@ -405,8 +408,8 @@ func (c *quicPktConn) WriteTo(p []byte, addr string) error {
 		var errSize *quic.DatagramTooLargeError
 		if errors.As(err, &errSize) {
 			// need to frag
-			msg.MsgID = uint16(fastrand.Intn(0xFFFF)) + 1 // msgID must be > 0 when fragCount > 1
-			fragMsgs := fragUDPMessage(msg, int(errSize.PeerMaxDatagramFrameSize))
+			msg.MsgID = uint16(randv2.IntN(0xFFFF)) + 1 // msgID must be > 0 when fragCount > 1
+			fragMsgs := fragUDPMessage(msg, int(errSize.MaxDatagramPayloadSize))
 			for _, fragMsg := range fragMsgs {
 				msgBuf.Reset()
 				_ = struc.Pack(&msgBuf, &fragMsg)

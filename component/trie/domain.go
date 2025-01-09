@@ -3,6 +3,8 @@ package trie
 import (
 	"errors"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -24,6 +26,14 @@ type DomainTrie[T any] struct {
 func ValidAndSplitDomain(domain string) ([]string, bool) {
 	if domain != "" && domain[len(domain)-1] == '.' {
 		return nil, false
+	}
+	if domain != "" {
+		if r, _ := utf8.DecodeRuneInString(domain); unicode.IsSpace(r) {
+			return nil, false
+		}
+		if r, _ := utf8.DecodeLastRuneInString(domain); unicode.IsSpace(r) {
+			return nil, false
+		}
 	}
 	domain = strings.ToLower(domain)
 	parts := strings.Split(domain, domainStep)
@@ -123,27 +133,41 @@ func (t *DomainTrie[T]) Optimize() {
 	t.root.optimize()
 }
 
-func (t *DomainTrie[T]) Foreach(print func(domain string, data T)) {
+func (t *DomainTrie[T]) Foreach(fn func(domain string, data T) bool) {
 	for key, data := range t.root.getChildren() {
-		recursion([]string{key}, data, print)
-		if data != nil && data.inited {
-			print(joinDomain([]string{key}), data.data)
+		recursion([]string{key}, data, fn)
+		if !data.isEmpty() {
+			if !fn(joinDomain([]string{key}), data.data) {
+				return
+			}
 		}
 	}
 }
 
-func recursion[T any](items []string, node *Node[T], fn func(domain string, data T)) {
+func (t *DomainTrie[T]) IsEmpty() bool {
+	if t == nil || t.root == nil {
+		return true
+	}
+	return len(t.root.getChildren()) == 0
+}
+
+func recursion[T any](items []string, node *Node[T], fn func(domain string, data T) bool) bool {
 	for key, data := range node.getChildren() {
 		newItems := append([]string{key}, items...)
-		if data != nil && data.inited {
+		if !data.isEmpty() {
 			domain := joinDomain(newItems)
 			if domain[0] == domainStepByte {
 				domain = complexWildcard + domain
 			}
-			fn(domain, data.Data())
+			if !fn(domain, data.Data()) {
+				return false
+			}
 		}
-		recursion(newItems, data, fn)
+		if !recursion(newItems, data, fn) {
+			return false
+		}
 	}
+	return true
 }
 
 func joinDomain(items []string) string {

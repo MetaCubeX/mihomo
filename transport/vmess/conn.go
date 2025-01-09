@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -14,7 +15,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -72,7 +73,7 @@ func (vc *Conn) sendRequest() error {
 	buf.WriteByte(vc.respV)
 	buf.WriteByte(OptionChunkStream)
 
-	p := fastrand.Intn(16)
+	p := randv2.IntN(16)
 	// P Sec Reserve Cmd
 	buf.WriteByte(byte(p<<4) | byte(vc.security))
 	buf.WriteByte(0)
@@ -90,7 +91,7 @@ func (vc *Conn) sendRequest() error {
 	// padding
 	if p > 0 {
 		padding := make([]byte, p)
-		fastrand.Read(padding)
+		rand.Read(padding)
 		buf.Write(padding)
 	}
 
@@ -196,7 +197,7 @@ func hashTimestamp(t time.Time) []byte {
 // newConn return a Conn instance
 func newConn(conn net.Conn, id *ID, dst *DstAddr, security Security, isAead bool) (*Conn, error) {
 	randBytes := make([]byte, 33)
-	fastrand.Read(randBytes)
+	rand.Read(randBytes)
 	reqBodyIV := make([]byte, 16)
 	reqBodyKey := make([]byte, 16)
 	copy(reqBodyIV[:], randBytes[:16])

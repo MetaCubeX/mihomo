@@ -43,12 +43,20 @@ func (set *IpCidrSet) IsContainForString(ipString string) bool {
 }
 
 func (set *IpCidrSet) IsContain(ip netip.Addr) bool {
-	return set.toIPSet().Contains(ip.WithZone(""))
+	return set.ToIPSet().Contains(ip.WithZone(""))
+}
+
+// MatchIp implements C.IpMatcher
+func (set *IpCidrSet) MatchIp(ip netip.Addr) bool {
+	if set.IsEmpty() {
+		return false
+	}
+	return set.IsContain(ip)
 }
 
 func (set *IpCidrSet) Merge() error {
 	var b netipx.IPSetBuilder
-	b.AddSet(set.toIPSet())
+	b.AddSet(set.ToIPSet())
 	i, err := b.IPSet()
 	if err != nil {
 		return err
@@ -57,7 +65,23 @@ func (set *IpCidrSet) Merge() error {
 	return nil
 }
 
-func (set *IpCidrSet) toIPSet() *netipx.IPSet {
+func (set *IpCidrSet) IsEmpty() bool {
+	return set == nil || len(set.rr) == 0
+}
+
+func (set *IpCidrSet) Foreach(f func(prefix netip.Prefix) bool) {
+	for _, r := range set.rr {
+		for _, prefix := range r.Prefixes() {
+			if !f(prefix) {
+				return
+			}
+		}
+	}
+}
+
+// ToIPSet not safe convert to *netipx.IPSet
+// be careful, must be used after Merge
+func (set *IpCidrSet) ToIPSet() *netipx.IPSet {
 	return (*netipx.IPSet)(unsafe.Pointer(set))
 }
 

@@ -123,7 +123,7 @@ func (q *quicStreamPacketConn) WaitReadFrom() (data []byte, put func(), addr net
 
 func (q *quicStreamPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if q.udpRelayMode != common.QUIC && len(p) > q.maxUdpRelayPacketSize {
-		return 0, &quic.DatagramTooLargeError{PeerMaxDatagramFrameSize: int64(q.maxUdpRelayPacketSize)}
+		return 0, &quic.DatagramTooLargeError{MaxDatagramPayloadSize: int64(q.maxUdpRelayPacketSize)}
 	}
 	if q.closed {
 		return 0, net.ErrClosed

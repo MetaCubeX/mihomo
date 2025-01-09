@@ -3,6 +3,7 @@ package sniffer
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/metacubex/mihomo/common/utils"
@@ -14,6 +15,19 @@ var (
 	errNotTLS         = errors.New("not TLS header")
 	errNotClientHello = errors.New("not client hello")
 )
+
+type errNeedAtLeastData struct {
+	length int
+	err    error
+}
+
+func (e *errNeedAtLeastData) Error() string {
+	return fmt.Sprintf("%v, need at least length: %d", e.err, e.length)
+}
+
+func (e *errNeedAtLeastData) Unwrap() error {
+	return e.err
+}
 
 var _ sniffer.Sniffer = (*TLSSniffer)(nil)
 
@@ -160,7 +174,10 @@ func SniffTLS(b []byte) (*string, error) {
 	}
 	headerLen := int(binary.BigEndian.Uint16(b[3:5]))
 	if 5+headerLen > len(b) {
-		return nil, ErrNoClue
+		return nil, &errNeedAtLeastData{
+			length: 5 + headerLen,
+			err:    ErrNoClue,
+		}
 	}
 
 	domain, err := ReadClientHello(b[5 : 5+headerLen])

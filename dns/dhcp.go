@@ -1,5 +1,3 @@
-//go:build !(android && cmfa)
-
 package dns
 
 import (
@@ -53,6 +51,12 @@ func (d *dhcpClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg,
 
 	msg, _, err = batchExchange(ctx, clients, m)
 	return
+}
+
+func (d *dhcpClient) ResetConnection() {
+	for _, client := range d.clients {
+		client.ResetConnection()
+	}
 }
 
 func (d *dhcpClient) resolve(ctx context.Context) ([]dnsClient, error) {

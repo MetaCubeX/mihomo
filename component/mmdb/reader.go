@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/metacubex/mihomo/log"
 	"github.com/oschwald/maxminddb-golang"
 )
 
@@ -23,9 +24,14 @@ type ASNReader struct {
 	*maxminddb.Reader
 }
 
-type ASNResult struct {
+type GeoLite2 struct {
 	AutonomousSystemNumber       uint32 `maxminddb:"autonomous_system_number"`
 	AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
+}
+
+type IPInfo struct {
+	ASN  string `maxminddb:"asn"`
+	Name string `maxminddb:"name"`
 }
 
 func (r IPReader) LookupCode(ipAddress net.IP) []string {
@@ -66,8 +72,18 @@ func (r IPReader) LookupCode(ipAddress net.IP) []string {
 	}
 }
 
-func (r ASNReader) LookupASN(ip net.IP) ASNResult {
-	var result ASNResult
-	r.Lookup(ip, &result)
-	return result
+func (r ASNReader) LookupASN(ip net.IP) (string, string) {
+	switch r.Metadata.DatabaseType {
+	case "GeoLite2-ASN", "DBIP-ASN-Lite (compat=GeoLite2-ASN)":
+		var result GeoLite2
+		_ = r.Lookup(ip, &result)
+		return fmt.Sprint(result.AutonomousSystemNumber), result.AutonomousSystemOrganization
+	case "ipinfo generic_asn_free.mmdb":
+		var result IPInfo
+		_ = r.Lookup(ip, &result)
+		return result.ASN[2:], result.Name
+	default:
+		log.Warnln("Unsupported ASN type: %s", r.Metadata.DatabaseType)
+	}
+	return "", ""
 }

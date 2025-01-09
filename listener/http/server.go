@@ -4,9 +4,9 @@ import (
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/lru"
+	"github.com/metacubex/mihomo/component/auth"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
+	authStore "github.com/metacubex/mihomo/listener/auth"
 )
 
 type Listener struct {
@@ -32,10 +32,20 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithAuthenticate(addr, tunnel, true, additions...)
+	return NewWithAuthenticator(addr, tunnel, authStore.Default, additions...)
 }
 
+// NewWithAuthenticate
+// never change type traits because it's used in CMFA
 func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additions ...inbound.Addition) (*Listener, error) {
+	store := authStore.Default
+	if !authenticate {
+		store = authStore.Default
+	}
+	return NewWithAuthenticator(addr, tunnel, store, additions...)
+}
+
+func NewWithAuthenticator(addr string, tunnel C.Tunnel, store auth.AuthStore, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -44,15 +54,10 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 			inbound.WithSpecialRules(""),
 		}
 	}
-	l, err := inbound.Listen("tcp", addr)
 
+	l, err := inbound.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
-	}
-
-	var c *lru.LruCache[string, bool]
-	if authenticate {
-		c = lru.New[string, bool](lru.WithAge[string, bool](30))
 	}
 
 	hl := &Listener{
@@ -68,18 +73,18 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 				}
 				continue
 			}
-			if features.CMFA {
-				if t, ok := conn.(*net.TCPConn); ok {
-					t.SetKeepAlive(false)
-				}
-			}
-			if isDefault { // only apply on default listener
+
+			store := store
+			if isDefault || store == authStore.Default { // only apply on default listener
 				if !inbound.IsRemoteAddrDisAllowed(conn.RemoteAddr()) {
 					_ = conn.Close()
 					continue
 				}
+				if inbound.SkipAuthRemoteAddr(conn.RemoteAddr()) {
+					store = authStore.Nil
+				}
 			}
-			go HandleConn(conn, tunnel, c, additions...)
+			go HandleConn(conn, tunnel, store, additions...)
 		}
 	}()
 

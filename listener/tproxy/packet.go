@@ -105,9 +105,9 @@ func listenLocalConn(rAddr, lAddr net.Addr, tunnel C.Tunnel) (*net.UDPConn, erro
 			buf := pool.Get(pool.UDPBufferSize)
 			br, err := lc.Read(buf)
 			if err != nil {
-				pool.Put(buf)
 				if errors.Is(err, net.ErrClosed) {
 					log.Debugln("TProxy local conn listener exit.. rAddr=%s lAddr=%s", rAddr.String(), lAddr.String())
+					pool.Put(buf)
 					return
 				}
 			}

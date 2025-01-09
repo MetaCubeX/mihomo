@@ -8,7 +8,7 @@ import (
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/gofrs/uuid/v5"
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 const (
@@ -25,9 +25,9 @@ func WriteWithPadding(buffer *buf.Buffer, p []byte, command byte, userUUID *uuid
 	if contentLen < 900 {
 		if paddingTLS {
 			//log.Debugln("long padding")
-			paddingLen = fastrand.Int31n(500) + 900 - contentLen
+			paddingLen = randv2.Int32N(500) + 900 - contentLen
 		} else {
-			paddingLen = fastrand.Int31n(256)
+			paddingLen = randv2.Int32N(256)
 		}
 	}
 	if userUUID != nil {
@@ -49,9 +49,9 @@ func ApplyPadding(buffer *buf.Buffer, command byte, userUUID *uuid.UUID, padding
 	if contentLen < 900 {
 		if paddingTLS {
 			//log.Debugln("long padding")
-			paddingLen = fastrand.Int31n(500) + 900 - contentLen
+			paddingLen = randv2.Int32N(500) + 900 - contentLen
 		} else {
-			paddingLen = fastrand.Int31n(256)
+			paddingLen = randv2.Int32N(256)
 		}
 	}
 

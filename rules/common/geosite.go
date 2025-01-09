@@ -15,7 +15,6 @@ type GEOSITE struct {
 	*Base
 	country    string
 	adapter    string
-	matcher    router.DomainMatcher
 	recodeSize int
 }
 
@@ -24,11 +23,19 @@ func (gs *GEOSITE) RuleType() C.RuleType {
 }
 
 func (gs *GEOSITE) Match(metadata *C.Metadata) (bool, string) {
-	domain := metadata.RuleHost()
+	return gs.MatchDomain(metadata.RuleHost()), gs.adapter
+}
+
+// MatchDomain implements C.DomainMatcher
+func (gs *GEOSITE) MatchDomain(domain string) bool {
 	if len(domain) == 0 {
-		return false, ""
+		return false
 	}
-	return gs.matcher.ApplyDomain(domain), gs.adapter
+	matcher, err := gs.GetDomainMatcher()
+	if err != nil {
+		return false
+	}
+	return matcher.ApplyDomain(domain)
 }
 
 func (gs *GEOSITE) Adapter() string {
@@ -39,12 +46,19 @@ func (gs *GEOSITE) Payload() string {
 	return gs.country
 }
 
-func (gs *GEOSITE) GetDomainMatcher() router.DomainMatcher {
-	return gs.matcher
+func (gs *GEOSITE) GetDomainMatcher() (router.DomainMatcher, error) {
+	matcher, err := geodata.LoadGeoSiteMatcher(gs.country)
+	if err != nil {
+		return nil, fmt.Errorf("load GeoSite data error, %w", err)
+	}
+	return matcher, nil
 }
 
 func (gs *GEOSITE) GetRecodeSize() int {
-	return gs.recodeSize
+	if matcher, err := gs.GetDomainMatcher(); err == nil {
+		return matcher.Count()
+	}
+	return 0
 }
 
 func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
@@ -53,20 +67,18 @@ func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
 		return nil, err
 	}
 
-	matcher, size, err := geodata.LoadGeoSiteMatcher(country)
-	if err != nil {
-		return nil, fmt.Errorf("load GeoSite data error, %s", err.Error())
-	}
-
-	log.Infoln("Start initial GeoSite rule %s => %s, records: %d", country, adapter, size)
-
 	geoSite := &GEOSITE{
-		Base:       &Base{},
-		country:    country,
-		adapter:    adapter,
-		matcher:    matcher,
-		recodeSize: size,
+		Base:    &Base{},
+		country: country,
+		adapter: adapter,
 	}
+
+	matcher, err := geoSite.GetDomainMatcher() // test load
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infoln("Finished initial GeoSite rule %s => %s, records: %d", country, adapter, matcher.Count())
 
 	return geoSite, nil
 }

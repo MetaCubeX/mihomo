@@ -9,9 +9,9 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/log"
 
+	utls "github.com/metacubex/utls"
 	"github.com/sagernet/sing-shadowtls"
 	sing_common "github.com/sagernet/sing/common"
-	utls "github.com/sagernet/utls"
 )
 
 const (

@@ -1,13 +1,14 @@
 package constant
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"os"
 	P "path"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/constant/features"
 )
 
 const Name = "mihomo"
@@ -73,7 +74,7 @@ func (p *path) Resolve(path string) string {
 
 // IsSafePath return true if path is a subpath of homedir
 func (p *path) IsSafePath(path string) bool {
-	if p.allowUnsafePath {
+	if p.allowUnsafePath || features.CMFA {
 		return true
 	}
 	homedir := p.HomeDir()
@@ -87,8 +88,8 @@ func (p *path) IsSafePath(path string) bool {
 }
 
 func (p *path) GetPathByHash(prefix, name string) string {
-	hash := md5.Sum([]byte(name))
-	filename := hex.EncodeToString(hash[:])
+	hash := utils.MakeHash([]byte(name))
+	filename := hash.String()
 	return filepath.Join(p.HomeDir(), prefix, filename)
 }
 

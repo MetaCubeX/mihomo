@@ -117,24 +117,19 @@ func (tt *tcpTracker) Upstream() any {
 }
 
 func parseRemoteDestination(addr net.Addr, conn C.Connection) string {
-	if addr == nil && conn != nil {
-		return conn.RemoteDestination()
-	}
-	if addrPort, err := netip.ParseAddrPort(addr.String()); err == nil && addrPort.Addr().IsValid() {
-		return addrPort.Addr().String()
-	} else {
-		if conn != nil {
-			return conn.RemoteDestination()
-		} else {
-			return ""
+	if addr != nil {
+		if addrPort, err := netip.ParseAddrPort(addr.String()); err == nil && addrPort.Addr().IsValid() {
+			return addrPort.Addr().String()
 		}
 	}
+	if conn != nil {
+		return conn.RemoteDestination()
+	}
+	return ""
 }
 
 func NewTCPTracker(conn C.Conn, manager *Manager, metadata *C.Metadata, rule C.Rule, uploadTotal int64, downloadTotal int64, pushToManager bool) *tcpTracker {
-	if conn != nil {
-		metadata.RemoteDst = parseRemoteDestination(conn.RemoteAddr(), conn)
-	}
+	metadata.RemoteDst = parseRemoteDestination(conn.RemoteAddr(), conn)
 
 	t := &tcpTracker{
 		Conn:    conn,

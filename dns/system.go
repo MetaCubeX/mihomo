@@ -3,15 +3,13 @@ package dns
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/component/resolver"
 
 	D "github.com/miekg/dns"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -28,65 +26,15 @@ type systemClient struct {
 	mu         sync.Mutex
 	dnsClients map[string]*systemDnsClient
 	lastFlush  time.Time
-}
-
-func (c *systemClient) getDnsClients() ([]dnsClient, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	var err error
-	if time.Since(c.lastFlush) > SystemDnsFlushTime {
-		var nameservers []string
-		if nameservers, err = dnsReadConfig(); err == nil {
-			log.Debugln("[DNS] system dns update to %s", nameservers)
-			for _, addr := range nameservers {
-				if _, ok := c.dnsClients[addr]; !ok {
-					clients := transform(
-						[]NameServer{{
-							Addr: net.JoinHostPort(addr, "53"),
-							Net:  "udp",
-						}},
-						nil,
-					)
-					if len(clients) > 0 {
-						c.dnsClients[addr] = &systemDnsClient{
-							disableTimes: 0,
-							dnsClient:    clients[0],
-						}
-					}
-				}
-			}
-			available := 0
-			for nameserver, sdc := range c.dnsClients {
-				if slices.Contains(nameservers, nameserver) {
-					sdc.disableTimes = 0 // enable
-					available++
-				} else {
-					if sdc.disableTimes > SystemDnsDeleteTimes {
-						delete(c.dnsClients, nameserver) // drop too old dnsClient
-					} else {
-						sdc.disableTimes++
-					}
-				}
-			}
-			if available > 0 {
-				c.lastFlush = time.Now()
-			}
-		}
-	}
-	dnsClients := make([]dnsClient, 0, len(c.dnsClients))
-	for _, sdc := range c.dnsClients {
-		if sdc.disableTimes == 0 {
-			dnsClients = append(dnsClients, sdc.dnsClient)
-		}
-	}
-	if len(dnsClients) > 0 {
-		return dnsClients, nil
-	}
-	return nil, err
+	defaultNS  []dnsClient
 }
 
 func (c *systemClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, err error) {
 	dnsClients, err := c.getDnsClients()
+	if len(dnsClients) == 0 && len(c.defaultNS) > 0 {
+		dnsClients = c.defaultNS
+		err = nil
+	}
 	if err != nil {
 		return
 	}
@@ -97,11 +45,16 @@ func (c *systemClient) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Ms
 // Address implements dnsClient
 func (c *systemClient) Address() string {
 	dnsClients, _ := c.getDnsClients()
+	isDefault := ""
+	if len(dnsClients) == 0 && len(c.defaultNS) > 0 {
+		dnsClients = c.defaultNS
+		isDefault = "[defaultNS]"
+	}
 	addrs := make([]string, 0, len(dnsClients))
 	for _, c := range dnsClients {
 		addrs = append(addrs, c.Address())
 	}
-	return fmt.Sprintf("system(%s)", strings.Join(addrs, ","))
+	return fmt.Sprintf("system%s(%s)", isDefault, strings.Join(addrs, ","))
 }
 
 var _ dnsClient = (*systemClient)(nil)
@@ -110,4 +63,12 @@ func newSystemClient() *systemClient {
 	return &systemClient{
 		dnsClients: map[string]*systemDnsClient{},
 	}
+}
+
+func init() {
+	r := NewResolver(Config{})
+	c := newSystemClient()
+	c.defaultNS = transform([]NameServer{{Addr: "114.114.114.114:53"}, {Addr: "8.8.8.8:53"}}, nil)
+	r.main = []dnsClient{c}
+	resolver.SystemResolver = r
 }

@@ -31,27 +31,17 @@ func IsRemoteAddrDisAllowed(addr net.Addr) bool {
 	if err := m.SetRemoteAddr(addr); err != nil {
 		return false
 	}
-	return isAllowed(m.AddrPort().Addr().Unmap()) && !isDisAllowed(m.AddrPort().Addr().Unmap())
+	ipAddr := m.AddrPort().Addr()
+	if ipAddr.IsValid() {
+		return isAllowed(ipAddr) && !isDisAllowed(ipAddr)
+	}
+	return false
 }
 
 func isAllowed(addr netip.Addr) bool {
-	if addr.IsValid() {
-		for _, prefix := range lanAllowedIPs {
-			if prefix.Contains(addr) {
-				return true
-			}
-		}
-	}
-	return false
+	return prefixesContains(lanAllowedIPs, addr)
 }
 
 func isDisAllowed(addr netip.Addr) bool {
-	if addr.IsValid() {
-		for _, prefix := range lanDisAllowedIPs {
-			if prefix.Contains(addr) {
-				return true
-			}
-		}
-	}
-	return false
+	return prefixesContains(lanDisAllowedIPs, addr)
 }

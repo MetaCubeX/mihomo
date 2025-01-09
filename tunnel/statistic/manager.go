@@ -7,7 +7,7 @@ import (
 	"github.com/metacubex/mihomo/common/atomic"
 
 	"github.com/puzpuzpuz/xsync/v3"
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var DefaultManager *Manager
@@ -114,10 +114,8 @@ func (m *Manager) handle() {
 	ticker := time.NewTicker(time.Second)
 
 	for range ticker.C {
-		m.uploadBlip.Store(m.uploadTemp.Load())
-		m.uploadTemp.Store(0)
-		m.downloadBlip.Store(m.downloadTemp.Load())
-		m.downloadTemp.Store(0)
+		m.uploadBlip.Store(m.uploadTemp.Swap(0))
+		m.downloadBlip.Store(m.downloadTemp.Swap(0))
 	}
 }
 

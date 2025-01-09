@@ -11,7 +11,7 @@ import (
 	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/transport/ssr/tools"
 
-	"github.com/zhangyunhao116/fastrand"
+	"github.com/metacubex/randv2"
 )
 
 func init() {
@@ -178,7 +178,7 @@ func (a *authSHA1V4) getRandDataLength(size int) int {
 		return 0
 	}
 	if size > 400 {
-		return fastrand.Intn(256)
+		return randv2.IntN(256)
 	}
-	return fastrand.Intn(512)
+	return randv2.IntN(512)
 }

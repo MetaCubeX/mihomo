@@ -67,8 +67,9 @@ func (m *memoryStore) CloneTo(store store) {
 
 // FlushFakeIP implements store.FlushFakeIP
 func (m *memoryStore) FlushFakeIP() error {
-	_ = m.cacheIP.Clear()
-	return m.cacheHost.Clear()
+	m.cacheIP.Clear()
+	m.cacheHost.Clear()
+	return nil
 }
 
 func newMemoryStore(size int) *memoryStore {

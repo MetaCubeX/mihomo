@@ -64,7 +64,6 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 	if err != nil {
 		return 0, "", err
 	}
-
 	pp, err := resolveProcessNameByProcSearch(inode, uid)
 	return uid, pp, err
 }
@@ -160,6 +159,7 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 			if err != nil {
 				continue
 			}
+
 			if runtime.GOOS == "android" {
 				if bytes.Equal(buffer[:n], socket) {
 					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
@@ -174,7 +174,6 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 					return os.Readlink(filepath.Join(processPath, "exe"))
 				}
 			}
-
 		}
 	}
 
@@ -185,7 +184,7 @@ func splitCmdline(cmdline []byte) string {
 	cmdline = bytes.Trim(cmdline, " ")
 
 	idx := bytes.IndexFunc(cmdline, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r) || r == ':'
+		return unicode.IsControl(r) || unicode.IsSpace(r)
 	})
 
 	if idx == -1 {

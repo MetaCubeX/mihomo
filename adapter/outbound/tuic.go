@@ -146,6 +146,13 @@ func (t *Tuic) dialWithDialer(ctx context.Context, dialer C.Dialer) (transport *
 	return
 }
 
+// ProxyInfo implements C.ProxyAdapter
+func (t *Tuic) ProxyInfo() C.ProxyInfo {
+	info := t.Base.ProxyInfo()
+	info.DialerProxy = t.option.DialerProxy
+	return info
+}
+
 func NewTuic(option TuicOption) (*Tuic, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	serverName := option.Server

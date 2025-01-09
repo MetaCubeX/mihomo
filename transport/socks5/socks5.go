@@ -106,7 +106,7 @@ type User struct {
 }
 
 // ServerHandshake fast-tracks SOCKS initialization to get target address to connect on server side.
-func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, command Command, err error) {
+func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, command Command, user string, err error) {
 	// Read RFC 1928 for request and reply structure and sizes.
 	buf := make([]byte, MaxAddrLen)
 	// read VER, NMETHODS, METHODS
@@ -141,7 +141,7 @@ func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, 
 		if _, err = io.ReadFull(rw, authBuf[:userLen]); err != nil {
 			return
 		}
-		user := string(authBuf[:userLen])
+		user = string(authBuf[:userLen])
 
 		// Get password
 		if _, err = rw.Read(header[:1]); err != nil {

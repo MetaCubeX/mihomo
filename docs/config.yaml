@@ -8,15 +8,15 @@ mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
 
 allow-lan: true # 允许局域网连接
 bind-address: "*" # 绑定 IP 地址，仅作用于 allow-lan 为 true，'*'表示所有地址
-authentication: # http,socks入口的验证用户名，密码
+authentication: # http,socks 入口的验证用户名，密码
   - "username:password"
-skip-auth-prefixes: # 设置跳过验证的IP段
+skip-auth-prefixes: # 设置跳过验证的 IP 段
   - 127.0.0.1/8
   - ::1/128
-lan-allowed-ips: # 允许连接的 IP 地址段，仅作用于 allow-lan 为 true, 默认值为0.0.0.0/0和::/0
+lan-allowed-ips: # 允许连接的 IP 地址段，仅作用于 allow-lan 为 true, 默认值为 0.0.0.0/0 和::/0
   - 0.0.0.0/0
   - ::/0
-lan-disallowed-ips: # 禁止连接的 IP 地址段, 黑名单优先级高于白名单, 默认值为空
+lan-disallowed-ips: # 禁止连接的 IP 地址段，黑名单优先级高于白名单，默认值为空
   - 192.168.0.3/32
 
 #  find-process-mode has 3 values:always, strict, off
@@ -58,12 +58,31 @@ external-controller: 0.0.0.0:9093 # RESTful API 监听地址
 external-controller-tls: 0.0.0.0:9443 # RESTful API HTTPS 监听地址，需要配置 tls 部分配置文件
 # secret: "123456" # `Authorization:Bearer ${secret}`
 
+# RESTful API CORS标头配置
+external-controller-cors:
+  allow-origins:
+    - *
+  allow-private-network: true
+
+# RESTful API Unix socket 监听地址（ windows版本大于17063也可以使用，即大于等于1803/RS4版本即可使用 ）
+# ！！！注意： 从Unix socket访问api接口不会验证secret， 如果开启请自行保证安全问题 ！！！
+# 测试方法： curl -v --unix-socket "mihomo.sock" http://localhost/
+external-controller-unix: mihomo.sock
+
+# RESTful API Windows namedpipe 监听地址
+# ！！！注意： 从Windows namedpipe访问api接口不会验证secret， 如果开启请自行保证安全问题 ！！！
+external-controller-pipe: \\.\pipe\mihomo
+
 # tcp-concurrent: true # TCP 并发连接所有 IP, 将使用最快握手的 TCP
 
 # 配置 WEB UI 目录，使用 http://{{external-controller}}/ui 访问
 external-ui: /path/to/ui/folder/
 external-ui-name: xd
 external-ui-url: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
+
+# 在RESTful API端口上开启DOH服务器
+# ！！！该URL不会验证secret， 如果开启请自行保证安全问题 ！！！
+external-doh-server: /dns-query
 
 # interface-name: en0 # 设置出口网卡
 
@@ -73,7 +92,9 @@ external-ui-url: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-
 global-client-fingerprint: chrome
 
 #  TCP keep alive interval
-keep-alive-interval: 15
+# disable-keep-alive: false #目前在android端强制为true
+# keep-alive-idle: 15
+# keep-alive-interval: 15
 
 # routing-mark:6666 # 配置 fwmark 仅用于 Linux
 experimental:
@@ -109,19 +130,31 @@ tun:
   # auto-detect-interface: true # 自动识别出口网卡
   # auto-route: true # 配置路由表
   # mtu: 9000 # 最大传输单元
-  # gso: false # 启用通用分段卸载, 仅支持 Linux
+  # gso: false # 启用通用分段卸载，仅支持 Linux
   # gso-max-size: 65536 # 通用分段卸载包的最大大小
-  # strict-route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
-  inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
+  auto-redirect: false # 自动配置 iptables 以重定向 TCP 连接。仅支持 Linux。带有 auto-redirect 的 auto-route 现在可以在路由器上按预期工作，无需干预。
+  # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
+  route-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 不匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
+    - ruleset-1
+    - ruleset-2
+  route-exclude-address-set: # 将指定规则集中的目标 IP CIDR 规则添加到防火墙, 匹配的流量将绕过路由, 仅支持 Linux，且需要 nftables，`auto-route` 和 `auto-redirect` 已启用。
+    - ruleset-3
+    - ruleset-4
+  route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     - 0.0.0.0/1
     - 128.0.0.0/1
-  inet6-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     - "::/1"
     - "8000::/1"
+  # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由（旧写法）
+  #   - 0.0.0.0/1
+  #   - 128.0.0.0/1
+  # inet6-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由（旧写法）
+  #   - "::/1"
+  #   - "8000::/1"
   # endpoint-independent-nat: false # 启用独立于端点的 NAT
-  # include-interface: # 限制被路由的接口。默认不限制, 与 `exclude-interface` 冲突
+  # include-interface: # 限制被路由的接口。默认不限制，与 `exclude-interface` 冲突
   #   - "lan0"
-  # exclude-interface: # 排除路由的接口, 与 `include-interface` 冲突
+  # exclude-interface: # 排除路由的接口，与 `include-interface` 冲突
   #   - "lan1"
   # include-uid: # UID 规则仅在 Linux 下被支持，并且需要 auto-route
   # - 0
@@ -142,13 +175,6 @@ tun:
   # - com.android.chrome
   # exclude-package: # 排除被路由的 Android 应用包名
   # - com.android.captiveportallogin
-
-#ebpf配置
-ebpf:
-  auto-redir: # redirect 模式，仅支持 TCP
-    - eth0
-  redirect-to-tun: # UDP+TCP 使用该功能请勿启用 auto-route
-    - eth0
 
 # 嗅探域名 可选配置
 sniffer:
@@ -174,6 +200,10 @@ sniffer:
       override-destination: true
   force-domain:
     - +.v2ex.com
+  # skip-src-address: # 对于来源ip跳过嗅探
+  #   - 192.168.0.3/32
+  # skip-dst-address: # 对于目标ip跳过嗅探
+  #   - 192.168.0.3/32
   ## 对嗅探结果进行跳过
   # skip-domain:
   #   - Mijia Cloud
@@ -200,15 +230,15 @@ tunnels: # one line config
     target: target.com
     proxy: proxy
 
-# DNS配置
+# DNS 配置
 dns:
   cache-algorithm: arc
   enable: false # 关闭将使用系统 DNS
-  prefer-h3: true # 开启 DoH 支持 HTTP/3，将并发尝试
+  prefer-h3: false # 是否开启 DoH 支持 HTTP/3，将并发尝试
   listen: 0.0.0.0:53 # 开启 DNS 服务器监听
   # ipv6: false # false 将返回 AAAA 的空结果
   # ipv6-timeout: 300 # 单位：ms，内部双栈并发时，向上游查询 AAAA 时，等待 AAAA 的时间，默认 100ms
-  # 用于解析 nameserver，fallback 以及其他DNS服务器配置的，DNS 服务域名
+  # 用于解析 nameserver，fallback 以及其他 DNS 服务器配置的，DNS 服务域名
   # 只能使用纯 IP 地址，可使用加密 DNS
   default-nameserver:
     - 114.114.114.114
@@ -220,14 +250,29 @@ dns:
 
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
 
+  # 配置不使用 fake-ip 的域名
+  fake-ip-filter:
+    - '*.lan'
+    - localhost.ptlogin2.qq.com
+    # fakeip-filter 为 rule-providers 中的名为 fakeip-filter 规则订阅，
+    # 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
+    - rule-set:fakeip-filter
+    # fakeip-filter 为 geosite 中名为 fakeip-filter 的分类（需要自行保证该分类存在）
+    - geosite:fakeip-filter
+  # 配置fake-ip-filter的匹配模式，默认为blacklist，即如果匹配成功不返回fake-ip
+  # 可设置为whitelist，即只有匹配成功才返回fake-ip
+  fake-ip-filter-mode: blacklist
+
   # use-hosts: true # 查询 hosts
 
-  # 配置不使用fake-ip的域名
-  # fake-ip-filter:
-  #   - '*.lan'
-  #   - localhost.ptlogin2.qq.com
+  # 配置后面的nameserver、fallback和nameserver-policy向dns服务器的连接过程是否遵守遵守rules规则
+  # 如果为false（默认值）则这三部分的dns服务器在未特别指定的情况下会直连
+  # 如果为true，将会按照rules的规则匹配链接方式（走代理或直连），如果有特别指定则任然以指定值为准
+  # 仅当proxy-server-nameserver非空时可以开启此选项, 强烈不建议和prefer-h3一起使用
+  # 此外，这三者配置中的dns服务器如果出现域名会采用default-nameserver配置项解析，也请确保正确配置default-nameserver
+  respect-rules: false
 
-  # DNS主要域名配置
+  # DNS 主要域名配置
   # 支持 UDP，TCP，DoT，DoH，DoQ
   # 这部分为主要 DNS 配置，影响所有直连，确保使用对大陆解析精准的 DNS
   nameserver:
@@ -239,7 +284,8 @@ dns:
     - https://mozilla.cloudflare-dns.com/dns-query#DNS&h3=true # 指定策略组和使用 HTTP/3
     - dhcp://en0 # dns from dhcp
     - quic://dns.adguard.com:784 # DNS over QUIC
-    # - '8.8.8.8#en0' # 兼容指定DNS出口网卡
+    # - '8.8.8.8#RULES' # 效果同respect-rules，但仅对该服务器生效
+    # - '8.8.8.8#en0' # 兼容指定 DNS 出口网卡
 
   # 当配置 fallback 时，会查询 nameserver 中返回的 IP 是否为 CN，非必要配置
   # 当不是 CN，则使用 fallback 中的 DNS 查询结果
@@ -248,11 +294,15 @@ dns:
   #   - tcp://1.1.1.1
   #   - 'tcp://1.1.1.1#ProxyGroupName' # 指定 DNS 过代理查询，ProxyGroupName 为策略组名或节点名，过代理配置优先于配置出口网卡，当找不到策略组或节点名则设置为出口网卡
 
-  # 专用于节点域名解析的 DNS 服务器，非必要配置项
-  # 配置服务器若查询失败将使用 nameserver，非并发查询
+  # 专用于节点域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
   # proxy-server-nameserver:
-  # - https://dns.google/dns-query
-  # - tls://one.one.one.one
+  #   - https://dns.google/dns-query
+  #   - tls://one.one.one.one
+
+  # 专用于direct出口域名解析的 DNS 服务器，非必要配置项，如果不填则遵循nameserver-policy、nameserver和fallback的配置
+  # direct-nameserver:
+  #   - system://
+  # direct-nameserver-follow-policy: false # 是否遵循nameserver-policy，默认为不遵守，仅当direct-nameserver不为空时生效
 
   # 配置 fallback 使用条件
   # fallback-filter:
@@ -338,7 +388,7 @@ proxies: # socks5
     # udp-over-tcp: false
     # ip-version: ipv4 # 设置节点使用 IP 版本，可选：dual，ipv4，ipv6，ipv4-prefer，ipv6-prefer。默认使用 dual
     # ipv4：仅使用 IPv4  ipv6：仅使用 IPv6
-    # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接,
+    # ipv4-prefer：优先使用 IPv4 对于 TCP 会进行双栈解析，并发链接但是优先使用 IPv4 链接，
     # UDP 则为双栈解析，获取结果中的第一个 IPv4
     # ipv6-prefer 同 ipv4-prefer
     # 现有协议都支持此参数，TCP 效果仅在开启 tcp-concurrent 生效
@@ -350,7 +400,7 @@ proxies: # socks5
       # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
       # padding: false # Enable padding. Requires sing-box server version 1.3-beta9 or later.
       # statistic: false # 控制是否将底层连接显示在面板中，方便打断底层连接
-      # only-tcp: false # 如果设置为true, smux的设置将不会对udp生效，udp连接会直接走底层协议
+      # only-tcp: false # 如果设置为 true, smux 的设置将不会对 udp 生效，udp 连接会直接走底层协议
 
   - name: "ss2"
     type: ss
@@ -383,6 +433,7 @@ proxies: # socks5
       # headers:
       #   custom: value
       # v2ray-http-upgrade: false
+      # v2ray-http-upgrade-fast-open: false
 
   - name: "ss4-shadow-tls"
     type: ss
@@ -405,18 +456,18 @@ proxies: # socks5
     password: [YOUR_SS_PASSWORD]
     client-fingerprint:
       chrome # One of: chrome, ios, firefox or safari
-      # 可以是chrome, ios, firefox, safari中的一个
+      # 可以是 chrome, ios, firefox, safari 中的一个
     plugin: restls
     plugin-opts:
       host:
         "www.microsoft.com" # Must be a TLS 1.3 server
-        # 应当是一个TLS 1.3 服务器
+        # 应当是一个 TLS 1.3 服务器
       password: [YOUR_RESTLS_PASSWORD]
       version-hint: "tls13"
       # Control your post-handshake traffic through restls-script
       # Hide proxy behaviors like "tls in tls".
       # see https://github.com/3andne/restls/blob/main/Restls-Script:%20Hide%20Your%20Proxy%20Traffic%20Behavior.md
-      # 用restls剧本来控制握手后的行为，隐藏"tls in tls"等特征
+      # 用 restls 剧本来控制握手后的行为，隐藏"tls in tls"等特征
       # 详情：https://github.com/3andne/restls/blob/main/Restls-Script:%20%E9%9A%90%E8%97%8F%E4%BD%A0%E7%9A%84%E4%BB%A3%E7%90%86%E8%A1%8C%E4%B8%BA.md
       restls-script: "300?100<1,400~100,350~100,600~100,300~200,300~100"
 
@@ -428,18 +479,18 @@ proxies: # socks5
     password: [YOUR_SS_PASSWORD]
     client-fingerprint:
       chrome # One of: chrome, ios, firefox or safari
-      # 可以是chrome, ios, firefox, safari中的一个
+      # 可以是 chrome, ios, firefox, safari 中的一个
     plugin: restls
     plugin-opts:
       host:
         "vscode.dev" # Must be a TLS 1.2 server
-        # 应当是一个TLS 1.2 服务器
+        # 应当是一个 TLS 1.2 服务器
       password: [YOUR_RESTLS_PASSWORD]
       version-hint: "tls12"
       restls-script: "1000?100<1,500~100,350~100,600~100,400~200"
 
   # vmess
-  # cipher支持 auto/aes-128-gcm/chacha20-poly1305/none
+  # cipher 支持 auto/aes-128-gcm/chacha20-poly1305/none
   - name: "vmess"
     type: vmess
     server: server
@@ -461,6 +512,7 @@ proxies: # socks5
       # max-early-data: 2048
       # early-data-header-name: Sec-WebSocket-Protocol
       # v2ray-http-upgrade: false
+      # v2ray-http-upgrade-fast-open: false
 
   - name: "vmess-h2"
     type: vmess
@@ -589,6 +641,7 @@ proxies: # socks5
       headers:
         Host: example.com
       # v2ray-http-upgrade: false
+      # v2ray-http-upgrade-fast-open: false
 
   # Trojan
   - name: "trojan"
@@ -604,6 +657,10 @@ proxies: # socks5
     #   - h2
     #   - http/1.1
     # skip-cert-verify: true
+    # ss-opts: # like trojan-go's `shadowsocks` config
+    #   enabled: false
+    #   method: aes-128-gcm # aes-128-gcm/aes-256-gcm/chacha20-ietf-poly1305
+    #   password: "example"
 
   - name: trojan-grpc
     server: server
@@ -633,6 +690,7 @@ proxies: # socks5
     #   headers:
     #     Host: example.com
     #   v2ray-http-upgrade: false
+    #   v2ray-http-upgrade-fast-open: false
 
   - name: "trojan-xtls"
     type: trojan
@@ -676,11 +734,11 @@ proxies: # socks5
     port: 443
     # ports: 1000,2000-3000,5000 # port 不可省略
     # hop-interval: 15
-    #  up和down均不写或为0则使用BBR流控
+    #  up 和 down 均不写或为 0 则使用 BBR 流控
     # up: "30 Mbps" # 若不写单位，默认为 Mbps
     # down: "200 Mbps" # 若不写单位，默认为 Mbps
     password: yourpassword
-    # obfs: salamander # 默认为空，如果填写则开启obfs，目前仅支持salamander
+    # obfs: salamander # 默认为空，如果填写则开启 obfs，目前仅支持 salamander
     # obfs-password: yourpassword
     # sni: server.com
     # skip-cert-verify: false
@@ -706,27 +764,37 @@ proxies: # socks5
     # reserved: [209,98,59]
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
     # dialer-proxy: "ss1"
-    # remote-dns-resolve: true # 强制dns远程解析，默认值为false
-    # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在remote-dns-resolve为true时生效
-    # 如果peers不为空，该段落中的allowed-ips不可为空；前面段落的server,port,ip,ipv6,public-key,pre-shared-key均会被忽略，但private-key会被保留且只能在顶层指定
+    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
+    # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
+    # refresh-server-ip-interval: 60 # 重新解析server ip的间隔，单位为秒，默认值为0即仅第一次链接时解析server域名，仅应在server域名对应的IP会发生变化时启用该选项（如家宽ddns）
+    # 如果 peers 不为空，该段落中的 allowed-ips 不可为空；前面段落的 server,port,public-key,pre-shared-key 均会被忽略，但 private-key 会被保留且只能在顶层指定
     # peers:
     #   - server: 162.159.192.1
     #     port: 2480
-    #     ip: 172.16.0.2
-    #     ipv6: fd01:5ca1:ab1e:80fa:ab85:6eea:213f:f4a5
     #     public-key: Cr8hWlKvtDt7nrvf+f0brNQQzabAqrjfBvas9pmowjo=
     #     # pre-shared-key: 31aIhAPwktDGpH4JDhA8GNvjFXEf/a6+UaQRyOAiyfM=
     #     allowed-ips: ['0.0.0.0/0']
     #     reserved: [209,98,59]
+    # 如果存在则开启AmneziaWG功能
+    # amnezia-wg-option:
+    #   jc: 5
+    #   jmin: 500
+    #   jmax: 501
+    #   s1: 30
+    #   s2: 40
+    #   h1: 123456
+    #   h2: 67543
+    #   h4: 32345
+    #   h3: 123123
 
   # tuic
   - name: tuic
     server: www.example.com
     port: 10443
     type: tuic
-    # tuicV4必须填写token （不可同时填写uuid和password）
+    # tuicV4 必须填写 token（不可同时填写 uuid 和 password）
     token: TOKEN
-    # tuicV5必须填写uuid和password（不可同时填写token）
+    # tuicV5 必须填写 uuid 和 password（不可同时填写 token）
     uuid: 00000000-0000-0000-0000-000000000001
     password: PASSWORD_1
     # ip: 127.0.0.1 # for overwriting the DNS lookup result of the server address set in option 'server'
@@ -744,8 +812,8 @@ proxies: # socks5
     # max-open-streams: 20 # default 100, too many open streams may hurt performance
     # sni: example.com
     #
-    # meta和sing-box私有扩展，将ss-uot用于udp中继，开启此选项后udp-relay-mode将失效
-    # 警告，与原版tuic不兼容！！！
+    # meta 和 sing-box 私有扩展，将 ss-uot 用于 udp 中继，开启此选项后 udp-relay-mode 将失效
+    # 警告，与原版 tuic 不兼容！！！
     # udp-over-stream: false
     # udp-over-stream-version: 1
 
@@ -778,12 +846,24 @@ proxies: # socks5
     password: password
     privateKey: path
 
-# dns出站会将请求劫持到内部dns模块,所有请求均在内部处理
+  # mieru
+  - name: mieru
+    type: mieru
+    server: 1.2.3.4
+    port: 2999
+    # port-range: 2090-2099 #（不可同时填写 port 和 port-range）
+    transport: TCP # 只支持 TCP
+    username: user
+    password: password
+    # 可以使用的值包括 MULTIPLEXING_OFF, MULTIPLEXING_LOW, MULTIPLEXING_MIDDLE, MULTIPLEXING_HIGH。其中 MULTIPLEXING_OFF 会关闭多路复用功能。默认值为 MULTIPLEXING_LOW。
+    # multiplexing: MULTIPLEXING_LOW
+
+# dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
   - name: "dns-out"
     type: dns
 proxy-groups:
-  # 代理链，目前relay可以支持udp的只有vmess/vless/trojan/ss/ssr/tuic
-  # wireguard目前不支持在relay中使用，请使用proxy中的dialer-proxy配置项
+  # 代理链，目前 relay 可以支持 udp 的只有 vmess/vless/trojan/ss/ssr/tuic
+  # wireguard 目前不支持在 relay 中使用，请使用 proxy 中的 dialer-proxy 配置项
   # Traffic: mihomo <-> http <-> vmess <-> ss1 <-> ss2 <-> Internet
   - name: "relay"
     type: relay
@@ -857,10 +937,20 @@ proxy-groups:
 # Mihomo 格式的节点或支持 *ray 的分享格式
 proxy-providers:
   provider1:
-    type: http # http 的 path 可空置,默认储存路径为 homedir的proxies文件夹,文件名为url的md5
+    type: http # http 的 path 可空置，默认储存路径为 homedir 的 proxies 文件夹，文件名为 url 的 md5
     url: "url"
     interval: 3600
     path: ./provider1.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
+    proxy: DIRECT
+    # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
+    header:
+      User-Agent:
+      - "Clash/v1.18.0"
+      - "mihomo/1.18.3"
+      # Accept:
+      # - 'application/vnd.github.v3.raw'
+      # Authorization:
+      # - 'token 1231231'
     health-check:
       enable: true
       interval: 600
@@ -878,6 +968,24 @@ proxy-providers:
       # ip-version: ipv4-prefer
       # additional-prefix: "[provider1]"
       # additional-suffix: "test"
+      # # 名字替换，支持正则表达式
+      # proxy-name:
+      #   - pattern: "test"
+      #     target: "TEST"
+      #   - pattern: "IPLC-(.*?)倍"
+      #     target: "iplc x $1"
+
+  provider2:
+    type: inline
+    dialer-proxy: proxy
+    payload:
+      - name: "ss1"
+        type: ss
+        server: server
+        port: 443
+        cipher: chacha20-ietf-poly1305
+        password: "password"
+
   test:
     type: file
     path: /test.yaml
@@ -890,13 +998,41 @@ rule-providers:
     behavior: classical # domain ipcidr
     interval: 259200
     path: /path/to/save/file.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到任意位置，添加环境变量 SKIP_SAFE_PATH_CHECK=1
-    type: http # http 的 path 可空置,默认储存路径为 homedir的rules文件夹,文件名为url的md5
+    type: http # http 的 path 可空置，默认储存路径为 homedir 的 rules 文件夹，文件名为 url 的 md5
     url: "url"
+    proxy: DIRECT
+    # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
   rule2:
     behavior: classical
     interval: 259200
     path: /path/to/save/file.yaml
     type: file
+  rule3:
+    # mrs类型ruleset，目前仅支持domain和ipcidr(即不支持classical），
+    #
+    # 对于behavior=domain:
+    #  - format=yaml 可以通过“mihomo convert-ruleset domain yaml XXX.yaml XXX.mrs”转换到mrs格式
+    #  - format=text 可以通过“mihomo convert-ruleset domain text XXX.text XXX.mrs”转换到mrs格式
+    #  - XXX.mrs 可以通过"mihomo convert-ruleset domain mrs XXX.mrs XXX.text"转换回text格式（暂不支持转换回yaml格式）
+    #
+    # 对于behavior=ipcidr:
+    #  - format=yaml 可以通过“mihomo convert-ruleset ipcidr yaml XXX.yaml XXX.mrs”转换到mrs格式
+    #  - format=text 可以通过“mihomo convert-ruleset ipcidr text XXX.text XXX.mrs”转换到mrs格式
+    #  - XXX.mrs 可以通过"mihomo convert-ruleset ipcidr mrs XXX.mrs XXX.text"转换回text格式（暂不支持转换回yaml格式）
+    #
+    type: http
+    url: "url"
+    format: mrs
+    behavior: domain
+    path: /path/to/save/file.mrs
+  rule4:
+    type: inline
+    behavior: domain # classical / ipcidr
+    payload:
+      - '.blogger.com'
+      - '*.*.microsoft.com'
+      - 'books.itunes.apple.com'
+
 rules:
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY
@@ -940,37 +1076,46 @@ listeners:
     port: 10808
     #listen: 0.0.0.0 # 默认监听 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理
     # udp: false # 默认 true
+    # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
+    #   - username: aaa
+    #     password: aaa
 
   - name: http-in-1
     type: http
     port: 10809
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
+    #   - username: aaa
+    #     password: aaa
 
   - name: mixed-in-1
     type: mixed #  HTTP(S) 和 SOCKS 代理混合
     port: 10810
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # udp: false # 默认 true
+    # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
+    #   - username: aaa
+    #     password: aaa
 
   - name: reidr-in-1
     type: redir
     port: 10811
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
 
   - name: tproxy-in-1
     type: tproxy
     port: 10812
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # udp: false # 默认 true
 
   - name: shadowsocks-in-1
@@ -978,7 +1123,7 @@ listeners:
     port: 10813
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
     cipher: 2022-blake3-aes-256-gcm
 
@@ -987,13 +1132,13 @@ listeners:
     port: 10814
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
       - username: 1
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
         alterId: 1
-    # ws-path: "/" # 如果不为空则开启websocket传输层
-    # 下面两项如果填写则开启tls（需要同时填写）
+    # ws-path: "/" # 如果不为空则开启 websocket 传输层
+    # 下面两项如果填写则开启 tls（需要同时填写）
     # certificate: ./server.crt
     # private-key: ./server.key
 
@@ -1002,10 +1147,10 @@ listeners:
     port: 10815
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
-    # token:    # tuicV4填写（可以同时填写users）
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
+    # token:    # tuicV4 填写（可以同时填写 users）
     #   - TOKEN
-    # users:    # tuicV5填写（可以同时填写token）
+    # users:    # tuicV5 填写（可以同时填写 token）
     #   00000000-0000-0000-0000-000000000000: PASSWORD_0
     #   00000000-0000-0000-0000-000000000001: PASSWORD_1
     #  certificate: ./server.crt
@@ -1022,25 +1167,25 @@ listeners:
     port: 10816
     listen: 0.0.0.0
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     network: [tcp, udp]
     target: target.com
 
   - name: tun-in-1
     type: tun
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
-    # proxy: proxy # 如果不为空则直接将该入站流量交由指定proxy处理(当proxy不为空时，这里的proxy名称必须合法，否则会出错)
+    # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     stack: system # gvisor / mixed
     dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
     # auto-route: false # 配置路由表
     # mtu: 9000 # 最大传输单元
-    inet4-address: # 必须手动设置ipv4地址段
+    inet4-address: # 必须手动设置 ipv4 地址段
     - 198.19.0.1/30
-    inet6-address: # 必须手动设置ipv6地址段
+    inet6-address: # 必须手动设置 ipv6 地址段
     - "fdfe:dcba:9877::1/126"
-    # strict-route: true # 将所有连接路由到tun来防止泄漏，但你的设备将无法其他设备被访问
+    # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
     # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     # - 0.0.0.0/1
     # - 128.0.0.0/1
@@ -1068,17 +1213,17 @@ listeners:
     # exclude-package: # 排除被路由的 Android 应用包名
     # - com.android.captiveportallogin
 # 入口配置与 Listener 等价，传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理
-# shadowsocks,vmess 入口配置（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+# shadowsocks,vmess 入口配置（传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理）
 # ss-config: ss://2022-blake3-aes-256-gcm:vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=@:23456
 # vmess-config: vmess://1:9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68@:12345
 
-# tuic服务器入口（传入流量将和socks,mixed等入口一样按照mode所指定的方式进行匹配处理）
+# tuic 服务器入口（传入流量将和 socks,mixed 等入口一样按照 mode 所指定的方式进行匹配处理）
 # tuic-server:
 #  enable: true
 #  listen: 127.0.0.1:10443
-#  token:    # tuicV4填写（可以同时填写users）
+#  token:    # tuicV4 填写（可以同时填写 users）
 #    - TOKEN
-#  users:    # tuicV5填写（可以同时填写token）
+#  users:    # tuicV5 填写（可以同时填写 token）
 #    00000000-0000-0000-0000-000000000000: PASSWORD_0
 #    00000000-0000-0000-0000-000000000001: PASSWORD_1
 #  certificate: ./server.crt

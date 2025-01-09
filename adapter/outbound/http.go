@@ -7,13 +7,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-
 	"io"
 	"net"
 	"net/http"
 	"strconv"
 
-	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
@@ -76,7 +74,6 @@ func (h *Http) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metad
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", h.addr, err)
 	}
-	N.TCPKeepAlive(c)
 
 	defer func(c net.Conn) {
 		safeConnClose(c, err)
@@ -93,6 +90,13 @@ func (h *Http) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metad
 // SupportWithDialer implements C.ProxyAdapter
 func (h *Http) SupportWithDialer() C.NetWork {
 	return C.TCP
+}
+
+// ProxyInfo implements C.ProxyAdapter
+func (h *Http) ProxyInfo() C.ProxyInfo {
+	info := h.Base.ProxyInfo()
+	info.DialerProxy = h.option.DialerProxy
+	return info
 }
 
 func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
