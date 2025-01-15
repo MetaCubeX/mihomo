@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	address string
-	server  = &Server{}
+	address   string
+	tcpServer = &Server{}
+	udpServer = &Server{}
 
 	dnsDefaultTTL uint32 = 600
 )
@@ -51,13 +52,20 @@ func (s *Server) SetHandler(handler handler) {
 func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 	if addr == address && resolver != nil {
 		handler := NewHandler(resolver, mapper)
-		server.SetHandler(handler)
+		tcpServer.SetHandler(handler)
+		udpServer.SetHandler(handler)
 		return
 	}
 
-	if server.Server != nil {
-		server.Shutdown()
-		server = &Server{}
+	if tcpServer.Server != nil {
+		tcpServer.Shutdown()
+		tcpServer = &Server{}
+		address = ""
+	}
+
+	if udpServer.Server != nil {
+		udpServer.Shutdown()
+		udpServer = &Server{}
 		address = ""
 	}
 
@@ -74,6 +82,16 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 
 	_, port, err := net.SplitHostPort(addr)
 	if port == "0" || port == "" || err != nil {
+		return
+	}
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return
+	}
+
+	l, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
 		return
 	}
 
@@ -96,11 +114,19 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 
 	address = addr
 	handler := NewHandler(resolver, mapper)
-	server = &Server{handler: handler}
-	server.Server = &D.Server{Addr: addr, PacketConn: p, Handler: server}
+
+	tcpServer = &Server{handler: handler}
+	tcpServer.Server = &D.Server{Addr: addr, Listener: l, Handler: tcpServer}
+
+	udpServer = &Server{handler: handler}
+	udpServer.Server = &D.Server{Addr: addr, PacketConn: p, Handler: udpServer}
 
 	go func() {
-		server.ActivateAndServe()
+		tcpServer.ActivateAndServe()
+	}()
+
+	go func() {
+		udpServer.ActivateAndServe()
 	}()
 
 	log.Infoln("DNS server listening at: %s", p.LocalAddr().String())
