@@ -48,6 +48,10 @@ func (sd *Dispatcher) shouldOverride(metadata *C.Metadata) bool {
 	if metadata.DNSMode == C.DNSMapping && sd.forceDnsMapping {
 		return true
 	}
+	return sd.forceSniff(metadata)
+}
+
+func (sd *Dispatcher) forceSniff(metadata *C.Metadata) bool {
 	for _, matcher := range sd.forceDomain {
 		if matcher.MatchDomain(metadata.Host) {
 			return true
@@ -98,16 +102,21 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 		if !inWhitelist {
 			return false
 		}
+		forceSniffer := sd.forceSniff(metadata)
 
 		dst := metadata.AddrPort()
-		if count, ok := sd.skipList.Get(dst); ok && count > 5 {
-			log.Debugln("[Sniffer] Skip sniffing[%s] due to multiple failures", dst)
-			return false
+		if !forceSniffer {
+			if count, ok := sd.skipList.Get(dst); ok && count > 5 {
+				log.Debugln("[Sniffer] Skip sniffing[%s] due to multiple failures", dst)
+				return false
+			}
 		}
 
 		host, err := sd.sniffDomain(conn, metadata)
 		if err != nil {
-			sd.cacheSniffFailed(metadata)
+			if !forceSniffer {
+				sd.cacheSniffFailed(metadata)
+			}
 			log.Debugln("[Sniffer] All sniffing sniff failed with from [%s:%d] to [%s:%d]", metadata.SrcIP, metadata.SrcPort, metadata.String(), metadata.DstPort)
 			return false
 		}
