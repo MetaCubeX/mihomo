@@ -152,13 +152,12 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
 
-		ul, err := net.ListenPacket("udp", addr)
+		ul, err := inbound.ListenPacket("udp", addr)
 		if err != nil {
 			return nil, err
 		}
 
-		err = sockopt.UDPReuseaddr(ul.(*net.UDPConn))
-		if err != nil {
+		if err := sockopt.UDPReuseaddr(ul); err != nil {
 			log.Warnln("Failed to Reuse UDP Address: %s", err)
 		}
 

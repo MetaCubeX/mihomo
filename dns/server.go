@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 
+	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/common/sockopt"
 	"github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
@@ -20,8 +21,9 @@ var (
 )
 
 type Server struct {
-	*D.Server
-	handler handler
+	handler   handler
+	tcpServer *D.Server
+	udpServer *D.Server
 }
 
 // ServeDNS implement D.Handler ServeDNS
@@ -55,11 +57,18 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 		return
 	}
 
-	if server.Server != nil {
-		server.Shutdown()
-		server = &Server{}
-		address = ""
+	if server.tcpServer != nil {
+		_ = server.tcpServer.Shutdown()
+		server.tcpServer = nil
 	}
+
+	if server.udpServer != nil {
+		_ = server.udpServer.Shutdown()
+		server.udpServer = nil
+	}
+
+	server.handler = nil
+	address = ""
 
 	if addr == "" {
 		return
@@ -77,31 +86,36 @@ func ReCreateServer(addr string, resolver *Resolver, mapper *ResolverEnhancer) {
 		return
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return
-	}
-
-	p, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		return
-	}
-
-	err = sockopt.UDPReuseaddr(p)
-	if err != nil {
-		log.Warnln("Failed to Reuse UDP Address: %s", err)
-
-		err = nil
-	}
-
 	address = addr
 	handler := NewHandler(resolver, mapper)
 	server = &Server{handler: handler}
-	server.Server = &D.Server{Addr: addr, PacketConn: p, Handler: server}
 
 	go func() {
-		server.ActivateAndServe()
+		p, err := inbound.ListenPacket("udp", addr)
+		if err != nil {
+			log.Errorln("Start DNS server(UDP) error: %s", err.Error())
+			return
+		}
+
+		if err := sockopt.UDPReuseaddr(p); err != nil {
+			log.Warnln("Failed to Reuse UDP Address: %s", err)
+		}
+
+		log.Infoln("DNS server(UDP) listening at: %s", p.LocalAddr().String())
+		server.udpServer = &D.Server{Addr: addr, PacketConn: p, Handler: server}
+		_ = server.udpServer.ActivateAndServe()
 	}()
 
-	log.Infoln("DNS server listening at: %s", p.LocalAddr().String())
+	go func() {
+		l, err := inbound.Listen("tcp", addr)
+		if err != nil {
+			log.Errorln("Start DNS server(TCP) error: %s", err.Error())
+			return
+		}
+
+		log.Infoln("DNS server(TCP) listening at: %s", l.Addr().String())
+		server.tcpServer = &D.Server{Addr: addr, Listener: l, Handler: server}
+		_ = server.tcpServer.ActivateAndServe()
+	}()
+
 }

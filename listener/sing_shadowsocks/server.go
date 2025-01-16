@@ -82,13 +82,12 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 
 		if config.Udp {
 			//UDP
-			ul, err := net.ListenPacket("udp", addr)
+			ul, err := inbound.ListenPacket("udp", addr)
 			if err != nil {
 				return nil, err
 			}
 
-			err = sockopt.UDPReuseaddr(ul.(*net.UDPConn))
-			if err != nil {
+			if err := sockopt.UDPReuseaddr(ul); err != nil {
 				log.Warnln("Failed to Reuse UDP Address: %s", err)
 			}
 

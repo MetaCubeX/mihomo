@@ -1,9 +1,5 @@
 //go:build !darwin && !dragonfly && !freebsd && !linux && !netbsd && !openbsd && !solaris && !windows
 
-package dialer
+package sockopt
 
-import (
-	"net"
-)
-
-func addrReuseToListenConfig(*net.ListenConfig) {}
+func reuseControl(fd uintptr) error { return nil }

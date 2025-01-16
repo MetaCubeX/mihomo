@@ -40,12 +40,12 @@ func NewUDP(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPLi
 			inbound.WithSpecialRules(""),
 		}
 	}
-	l, err := net.ListenPacket("udp", addr)
+	l, err := inbound.ListenPacket("udp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := sockopt.UDPReuseaddr(l.(*net.UDPConn)); err != nil {
+	if err := sockopt.UDPReuseaddr(l); err != nil {
 		log.Warnln("Failed to Reuse UDP Address: %s", err)
 	}
 
