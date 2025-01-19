@@ -21,6 +21,7 @@ import (
 
 	"github.com/metacubex/sing-quic/hysteria2"
 
+	"github.com/metacubex/quic-go"
 	"github.com/metacubex/randv2"
 	M "github.com/sagernet/sing/common/metadata"
 )
@@ -62,6 +63,12 @@ type Hysteria2Option struct {
 	CustomCAString string   `proxy:"ca-str,omitempty"`
 	CWND           int      `proxy:"cwnd,omitempty"`
 	UdpMTU         int      `proxy:"udp-mtu,omitempty"`
+
+	// quic-go special config
+	InitialStreamReceiveWindow     uint64 `proxy:"initial-stream-receive-window,omitempty"`
+	MaxStreamReceiveWindow         uint64 `proxy:"max-stream-receive-window,omitempty"`
+	InitialConnectionReceiveWindow uint64 `proxy:"initial-connection-receive-window,omitempty"`
+	MaxConnectionReceiveWindow     uint64 `proxy:"max-connection-receive-window,omitempty"`
 }
 
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
@@ -145,6 +152,13 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		option.UdpMTU = 1200 - 3
 	}
 
+	quicConfig := &quic.Config{
+		InitialStreamReceiveWindow:     option.InitialStreamReceiveWindow,
+		MaxStreamReceiveWindow:         option.MaxStreamReceiveWindow,
+		InitialConnectionReceiveWindow: option.InitialConnectionReceiveWindow,
+		MaxConnectionReceiveWindow:     option.MaxConnectionReceiveWindow,
+	}
+
 	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer())
 
 	clientOptions := hysteria2.ClientOptions{
@@ -156,6 +170,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		SalamanderPassword: salamanderPassword,
 		Password:           option.Password,
 		TLSConfig:          tlsConfig,
+		QUICConfig:         quicConfig,
 		UDPDisabled:        false,
 		CWND:               option.CWND,
 		UdpMTU:             option.UdpMTU,

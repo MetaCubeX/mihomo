@@ -22,6 +22,7 @@ import (
 
 	"github.com/metacubex/sing-quic/hysteria2"
 
+	"github.com/metacubex/quic-go"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -110,6 +111,13 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		config.UdpMTU = 1200 - 3
 	}
 
+	quicConfig := &quic.Config{
+		InitialStreamReceiveWindow:     config.InitialStreamReceiveWindow,
+		MaxStreamReceiveWindow:         config.MaxStreamReceiveWindow,
+		InitialConnectionReceiveWindow: config.InitialConnectionReceiveWindow,
+		MaxConnectionReceiveWindow:     config.MaxConnectionReceiveWindow,
+	}
+
 	service, err := hysteria2.NewService[string](hysteria2.ServiceOptions{
 		Context:               context.Background(),
 		Logger:                log.SingLogger,
@@ -117,6 +125,7 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		ReceiveBPS:            outbound.StringToBps(config.Down),
 		SalamanderPassword:    salamanderPassword,
 		TLSConfig:             tlsConfig,
+		QUICConfig:            quicConfig,
 		IgnoreClientBandwidth: config.IgnoreClientBandwidth,
 		Handler:               h,
 		MasqueradeHandler:     masqueradeHandler,

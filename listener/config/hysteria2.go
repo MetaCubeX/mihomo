@@ -23,6 +23,12 @@ type Hysteria2Server struct {
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
 	UdpMTU                int               `yaml:"udp-mtu" json:"udp-mtu,omitempty"`
 	MuxOption             sing.MuxOption    `yaml:"mux-option" json:"mux-option,omitempty"`
+
+	// quic-go special config
+	InitialStreamReceiveWindow     uint64 `yaml:"initial-stream-receive-window" json:"initial-stream-receive-window,omitempty"`
+	MaxStreamReceiveWindow         uint64 `yaml:"max-stream-receive-window" json:"max-stream-receive-window,omitempty"`
+	InitialConnectionReceiveWindow uint64 `yaml:"initial-connection-receive-window" json:"initial-connection-receive-window,omitempty"`
+	MaxConnectionReceiveWindow     uint64 `yaml:"max-connection-receive-window" json:"max-connection-receive-window,omitempty"`
 }
 
 func (h Hysteria2Server) String() string {
