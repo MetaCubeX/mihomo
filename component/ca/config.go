@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	_ "embed"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,9 @@ import (
 	"strings"
 	"sync"
 
+	log "github.com/metacubex/mihomo/log"
+
+	CN "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -27,14 +31,38 @@ var _CaCertificates []byte
 var DisableEmbedCa, _ = strconv.ParseBool(os.Getenv("DISABLE_EMBED_CA"))
 var DisableSystemCa, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_CA"))
 
+func AddCertificateKeyPair(certificate string, privateKey string) {
+
+	certKeyPair, err := CN.ParseCert(certificate, privateKey, C.Path)
+	if err != nil {
+		log.Warnln("failed to parse certificate and privateKey: %v", err)
+	}
+	for _, certPEM := range certKeyPair.Certificate {
+		// []byte to x509.Certificate
+		customCertificate, err := x509.ParseCertificate(certPEM)
+		if err != nil {
+			log.Warnln("failed to parse x509 certificate: %v", err)
+		}
+		trustCerts = append(trustCerts, customCertificate)
+		globalCertPool.AddCert(customCertificate)
+	}
+}
 func AddCertificate(certificate string) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if certificate == "" {
 		return fmt.Errorf("certificate is empty")
 	}
-	if cert, err := x509.ParseCertificate([]byte(certificate)); err == nil {
+
+	block, _ := pem.Decode([]byte(certificate))
+	if block == nil {
+		log.Fatalln("failed to parse PEM block containing the certificate")
+		return fmt.Errorf("decode certificate failed")
+	}
+
+	if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
 		trustCerts = append(trustCerts, cert)
+		globalCertPool.AddCert(cert)
 		return nil
 	} else {
 		return fmt.Errorf("add certificate failed")

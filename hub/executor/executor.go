@@ -89,7 +89,14 @@ func ApplyConfig(cfg *config.Config, force bool) {
 
 	tunnel.OnSuspend()
 
+	//This method is confusing, when ResetCertificate
+	//it will clear the trusted certificates and call the initialize CertPool internally
+	//it will not add any certificates to the global
 	ca.ResetCertificate()
+	//check the private key and certificate , add the global certs
+	if cfg.TLS.PrivateKey != "" && cfg.TLS.Certificate != "" {
+		ca.AddCertificateKeyPair(cfg.TLS.Certificate, cfg.TLS.PrivateKey)
+	}
 	for _, c := range cfg.TLS.CustomTrustCert {
 		if err := ca.AddCertificate(c); err != nil {
 			log.Warnln("%s\nadd error: %s", c, err.Error())
