@@ -17,7 +17,6 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 )
 
-var trustCerts []*x509.Certificate
 var globalCertPool *x509.CertPool
 var mutex sync.RWMutex
 var errNotMatch = errors.New("certificate fingerprints do not match")
@@ -30,11 +29,19 @@ var DisableSystemCa, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_CA"))
 func AddCertificate(certificate string) error {
 	mutex.Lock()
 	defer mutex.Unlock()
+
 	if certificate == "" {
 		return fmt.Errorf("certificate is empty")
 	}
-	if cert, err := x509.ParseCertificate([]byte(certificate)); err == nil {
-		trustCerts = append(trustCerts, cert)
+
+	if globalCertPool == nil {
+		initializeCertPool()
+	}
+
+	if globalCertPool.AppendCertsFromPEM([]byte(certificate)) {
+		return nil
+	} else if cert, err := x509.ParseCertificate([]byte(certificate)); err == nil {
+		globalCertPool.AddCert(cert)
 		return nil
 	} else {
 		return fmt.Errorf("add certificate failed")
@@ -51,9 +58,6 @@ func initializeCertPool() {
 			globalCertPool = x509.NewCertPool()
 		}
 	}
-	for _, cert := range trustCerts {
-		globalCertPool.AddCert(cert)
-	}
 	if !DisableEmbedCa {
 		globalCertPool.AppendCertsFromPEM(_CaCertificates)
 	}
@@ -62,7 +66,6 @@ func initializeCertPool() {
 func ResetCertificate() {
 	mutex.Lock()
 	defer mutex.Unlock()
-	trustCerts = nil
 	initializeCertPool()
 }
 
