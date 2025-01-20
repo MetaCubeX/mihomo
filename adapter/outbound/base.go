@@ -153,11 +153,11 @@ func (b *Base) DialOptions(opts ...dialer.Option) []dialer.Option {
 }
 
 type BasicOption struct {
-	TFO         bool   `proxy:"tfo,omitempty" group:"tfo,omitempty"`
-	MPTCP       bool   `proxy:"mptcp,omitempty" group:"mptcp,omitempty"`
+	TFO         bool   `proxy:"tfo,omitempty"`
+	MPTCP       bool   `proxy:"mptcp,omitempty"`
 	Interface   string `proxy:"interface-name,omitempty" group:"interface-name,omitempty"`
 	RoutingMark int    `proxy:"routing-mark,omitempty" group:"routing-mark,omitempty"`
-	IPVersion   string `proxy:"ip-version,omitempty" group:"ip-version,omitempty"`
+	IPVersion   string `proxy:"ip-version,omitempty"`
 	DialerProxy string `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
 }
 

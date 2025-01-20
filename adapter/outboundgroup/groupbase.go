@@ -46,6 +46,13 @@ type GroupBaseOption struct {
 }
 
 func NewGroupBase(opt GroupBaseOption) *GroupBase {
+	if opt.RoutingMark != 0 {
+		log.Warnln("The group [%s] with routing-mark configuration is deprecated, please set it directly on the proxy instead", opt.Name)
+	}
+	if opt.Interface != "" {
+		log.Warnln("The group [%s] with interface-name configuration is deprecated, please set it directly on the proxy instead", opt.Name)
+	}
+
 	var excludeFilterReg *regexp2.Regexp
 	if opt.excludeFilter != "" {
 		excludeFilterReg = regexp2.MustCompile(opt.excludeFilter, regexp2.None)
