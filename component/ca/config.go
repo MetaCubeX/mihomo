@@ -7,8 +7,10 @@ import (
 	"crypto/x509"
 	_ "embed"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -33,8 +35,16 @@ func AddCertificate(certificate string) error {
 	if certificate == "" {
 		return fmt.Errorf("certificate is empty")
 	}
-	if cert, err := x509.ParseCertificate([]byte(certificate)); err == nil {
+
+	block, _ := pem.Decode([]byte(certificate))
+	if block == nil {
+		log.Fatalln("failed to parse PEM block containing the certificate")
+		return fmt.Errorf("decode certificate failed")
+	}
+
+	if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
 		trustCerts = append(trustCerts, cert)
+		globalCertPool.AddCert(cert)
 		return nil
 	} else {
 		return fmt.Errorf("add certificate failed")
