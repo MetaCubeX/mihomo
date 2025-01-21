@@ -11,7 +11,7 @@ linters-settings:
     custom-order: true
     sections:
       - standard
-      - prefix(github.com/metacubex/mihomo)
+      - prefix(github.com/abyss219/mihomo)
       - default
   staticcheck:
     go: '1.19'

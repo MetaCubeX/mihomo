@@ -217,7 +217,7 @@ jobs:
         GOMIPS: ${{matrix.jobs.gomips}}
       run: |
         go env
-        go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
+        go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/abyss219/mihomo/constant.Version=${VERSION}' -X 'github.com/abyss219/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
         if [ "${{matrix.jobs.goos}}" = "windows" ]; then
           cp mihomo.exe mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
           zip -r mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.zip mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
