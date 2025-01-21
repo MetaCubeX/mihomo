@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/component/keepalive"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/component/keepalive"
+	"github.com/abyss219/mihomo/component/resolver"
+	"github.com/abyss219/mihomo/log"
 )
 
 const (

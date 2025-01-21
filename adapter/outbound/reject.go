@@ -6,9 +6,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/metacubex/mihomo/common/buf"
-	"github.com/metacubex/mihomo/component/dialer"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/abyss219/mihomo/common/buf"
+	"github.com/abyss219/mihomo/component/dialer"
+	C "github.com/abyss219/mihomo/constant"
 )
 
 type Reject struct {

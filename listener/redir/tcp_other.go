@@ -6,7 +6,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/abyss219/mihomo/transport/socks5"
 )
 
 func parserPacket(conn net.Conn) (socks5.Addr, error) {

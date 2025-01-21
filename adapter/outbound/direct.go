@@ -3,10 +3,10 @@ package outbound
 import (
 	"context"
 	"errors"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/loopback"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/abyss219/mihomo/component/dialer"
+	"github.com/abyss219/mihomo/component/loopback"
+	"github.com/abyss219/mihomo/component/resolver"
+	C "github.com/abyss219/mihomo/constant"
 )
 
 type Direct struct {

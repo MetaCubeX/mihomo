@@ -5,10 +5,10 @@ import (
 	"io"
 	"net/netip"
 
-	"github.com/metacubex/mihomo/component/cidr"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/component/cidr"
+	C "github.com/abyss219/mihomo/constant"
+	P "github.com/abyss219/mihomo/constant/provider"
+	"github.com/abyss219/mihomo/log"
 
 	"go4.org/netipx"
 )

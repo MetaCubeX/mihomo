@@ -12,10 +12,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/proxydialer"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/abyss219/mihomo/component/ca"
+	"github.com/abyss219/mihomo/component/dialer"
+	"github.com/abyss219/mihomo/component/proxydialer"
+	C "github.com/abyss219/mihomo/constant"
 )
 
 type Http struct {

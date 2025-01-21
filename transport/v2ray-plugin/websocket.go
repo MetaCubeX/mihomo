@@ -6,8 +6,8 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/transport/vmess"
+	"github.com/abyss219/mihomo/component/ca"
+	"github.com/abyss219/mihomo/transport/vmess"
 )
 
 // Option is options of websocket obfs

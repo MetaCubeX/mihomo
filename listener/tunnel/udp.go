@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/pool"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/abyss219/mihomo/adapter/inbound"
+	"github.com/abyss219/mihomo/common/pool"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/transport/socks5"
 )
 
 type PacketConn struct {

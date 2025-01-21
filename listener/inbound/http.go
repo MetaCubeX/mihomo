@@ -1,9 +1,9 @@
 package inbound
 
 import (
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/http"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/listener/http"
+	"github.com/abyss219/mihomo/log"
 )
 
 type HTTPOption struct {

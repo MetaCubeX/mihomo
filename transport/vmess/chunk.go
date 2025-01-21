@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/metacubex/mihomo/common/pool"
+	"github.com/abyss219/mihomo/common/pool"
 )
 
 const (

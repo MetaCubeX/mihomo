@@ -3,7 +3,7 @@ package fakeip
 import (
 	"net/netip"
 
-	"github.com/metacubex/mihomo/common/lru"
+	"github.com/abyss219/mihomo/common/lru"
 )
 
 type memoryStore struct {

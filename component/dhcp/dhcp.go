@@ -6,8 +6,8 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/metacubex/mihomo/common/nnip"
-	"github.com/metacubex/mihomo/component/iface"
+	"github.com/abyss219/mihomo/common/nnip"
+	"github.com/abyss219/mihomo/component/iface"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 )

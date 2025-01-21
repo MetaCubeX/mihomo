@@ -4,8 +4,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/abyss219/mihomo/common/atomic"
+	"github.com/abyss219/mihomo/component/resolver"
 )
 
 var (

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/log"
 )
 
 var (

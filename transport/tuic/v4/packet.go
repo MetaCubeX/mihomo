@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/transport/tuic/common"
+	"github.com/abyss219/mihomo/common/atomic"
+	N "github.com/abyss219/mihomo/common/net"
+	"github.com/abyss219/mihomo/common/pool"
+	"github.com/abyss219/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
 )

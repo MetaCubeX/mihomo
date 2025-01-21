@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 
-	N "github.com/metacubex/mihomo/common/net"
+	N "github.com/abyss219/mihomo/common/net"
 
 	"github.com/metacubex/randv2"
 )

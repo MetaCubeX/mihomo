@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/transport/hysteria/obfs"
-	"github.com/metacubex/mihomo/transport/hysteria/pmtud_fix"
-	"github.com/metacubex/mihomo/transport/hysteria/transport"
-	"github.com/metacubex/mihomo/transport/hysteria/utils"
+	"github.com/abyss219/mihomo/transport/hysteria/obfs"
+	"github.com/abyss219/mihomo/transport/hysteria/pmtud_fix"
+	"github.com/abyss219/mihomo/transport/hysteria/transport"
+	"github.com/abyss219/mihomo/transport/hysteria/utils"
 
 	"github.com/lunixbochs/struc"
 	"github.com/metacubex/quic-go"

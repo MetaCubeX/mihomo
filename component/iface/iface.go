@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/metacubex/mihomo/common/singledo"
+	"github.com/abyss219/mihomo/common/singledo"
 )
 
 type Interface struct {

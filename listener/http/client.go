@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/abyss219/mihomo/adapter/inbound"
+	N "github.com/abyss219/mihomo/common/net"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/transport/socks5"
 )
 
 func newClient(srcConn net.Conn, tunnel C.Tunnel, additions []inbound.Addition) *http.Client { // additions using slice let caller can change its value (without size) after newClient return

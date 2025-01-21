@@ -1,11 +1,11 @@
 package context
 
 import (
-	"github.com/metacubex/mihomo/common/utils"
+	"github.com/abyss219/mihomo/common/utils"
 	"net"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
+	N "github.com/abyss219/mihomo/common/net"
+	C "github.com/abyss219/mihomo/constant"
 
 	"github.com/gofrs/uuid/v5"
 )

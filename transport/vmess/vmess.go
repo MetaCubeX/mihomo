@@ -5,7 +5,7 @@ import (
 	"net"
 	"runtime"
 
-	"github.com/metacubex/mihomo/common/utils"
+	"github.com/abyss219/mihomo/common/utils"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/randv2"

@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	"github.com/metacubex/mihomo/component/mmdb"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/common/atomic"
+	mihomoHttp "github.com/abyss219/mihomo/component/http"
+	"github.com/abyss219/mihomo/component/mmdb"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/log"
 )
 
 var (

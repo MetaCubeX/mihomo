@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/proxydialer"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/tuic"
+	"github.com/abyss219/mihomo/component/ca"
+	"github.com/abyss219/mihomo/component/dialer"
+	"github.com/abyss219/mihomo/component/proxydialer"
+	"github.com/abyss219/mihomo/component/resolver"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/transport/tuic"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"

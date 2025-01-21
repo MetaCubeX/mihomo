@@ -7,10 +7,10 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/component/process"
+	"github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/constant/features"
+	"github.com/abyss219/mihomo/log"
 
 	"github.com/metacubex/sing-tun"
 	"github.com/sagernet/netlink"

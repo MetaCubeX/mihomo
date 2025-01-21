@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/common/batch"
-	"github.com/metacubex/mihomo/common/singledo"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/common/atomic"
+	"github.com/abyss219/mihomo/common/batch"
+	"github.com/abyss219/mihomo/common/singledo"
+	"github.com/abyss219/mihomo/common/utils"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/log"
 
 	"github.com/dlclark/regexp2"
 )

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/metacubex/mihomo/common/buf"
-	"github.com/metacubex/mihomo/log"
+	"github.com/abyss219/mihomo/common/buf"
+	"github.com/abyss219/mihomo/log"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/randv2"

@@ -3,9 +3,9 @@ package inbound
 import (
 	"fmt"
 
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/tproxy"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/listener/tproxy"
+	"github.com/abyss219/mihomo/log"
 )
 
 type TProxyOption struct {

@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/metacubex/mihomo/common/utils"
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	"github.com/metacubex/mihomo/component/profile/cachefile"
-	types "github.com/metacubex/mihomo/constant/provider"
+	"github.com/abyss219/mihomo/common/utils"
+	mihomoHttp "github.com/abyss219/mihomo/component/http"
+	"github.com/abyss219/mihomo/component/profile/cachefile"
+	types "github.com/abyss219/mihomo/constant/provider"
 )
 
 const (

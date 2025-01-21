@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/metacubex/mihomo/common/structure"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/resource"
-	C "github.com/metacubex/mihomo/constant"
-	types "github.com/metacubex/mihomo/constant/provider"
+	"github.com/abyss219/mihomo/common/structure"
+	"github.com/abyss219/mihomo/common/utils"
+	"github.com/abyss219/mihomo/component/resource"
+	C "github.com/abyss219/mihomo/constant"
+	types "github.com/abyss219/mihomo/constant/provider"
 
 	"github.com/dlclark/regexp2"
 )

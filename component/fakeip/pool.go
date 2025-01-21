@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/common/nnip"
-	"github.com/metacubex/mihomo/component/profile/cachefile"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/abyss219/mihomo/common/nnip"
+	"github.com/abyss219/mihomo/component/profile/cachefile"
+	C "github.com/abyss219/mihomo/constant"
 )
 
 const (

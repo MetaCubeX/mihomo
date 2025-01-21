@@ -4,7 +4,7 @@ import (
 	"net"
 	"sort"
 
-	"github.com/metacubex/mihomo/transport/ssr/tools"
+	"github.com/abyss219/mihomo/transport/ssr/tools"
 )
 
 func init() {

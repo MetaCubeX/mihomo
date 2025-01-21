@@ -240,7 +240,7 @@ jobs:
         else
           ARCH=${{matrix.jobs.goarch}}
         fi
-        PackageVersion=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | grep -o '"tag_name": "[^"]*' | grep -o '[^"]*$' | sed 's/v//g' )
+        PackageVersion=$(curl -s "https://api.github.com/repos/abyss219/mihomo/releases/latest" | grep -o '"tag_name": "[^"]*' | grep -o '[^"]*$' | sed 's/v//g' )
         if [ $(git branch | awk -F ' ' '{print $2}') = "Alpha" ]; then
           PackageVersion="$(echo "${PackageVersion}" | awk -F '.' '{$NF = $NF + 1; print}' OFS='.')-${VERSION}"
         fi
@@ -344,7 +344,7 @@ jobs:
         Release created at  ${{ env.BUILDTIME }}
         Synchronize ${{ github.ref_name }} branch code updates, keeping only the latest version
         <br>
-        [我应该下载哪个文件? / Which file should I download?](https://github.com/MetaCubeX/mihomo/wiki/FAQ)
+        [我应该下载哪个文件? / Which file should I download?](https://github.com/abyss219/mihomo/wiki/FAQ)
         [二进制文件筛选 / Binary file selector](https://metacubex.github.io/Meta-Docs/startup/#_1)
         [查看文档 / Docs](https://metacubex.github.io/Meta-Docs/)
         EOF
