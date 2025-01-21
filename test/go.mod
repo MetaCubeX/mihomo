@@ -5,13 +5,13 @@ go 1.20
 require (
 	github.com/docker/docker v20.10.21+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/metacubex/mihomo v0.0.0
+	github.com/abyss219/mihomo v0.0.0
 	github.com/miekg/dns v1.1.57
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/net v0.18.0
 )
 
-replace github.com/metacubex/mihomo => ../
+replace github.com/abyss219/mihomo => ../
 
 require (
 	github.com/3andne/restls-client-go v0.1.6 // indirect

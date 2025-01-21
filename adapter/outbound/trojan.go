@@ -9,14 +9,14 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/proxydialer"
-	tlsC "github.com/metacubex/mihomo/component/tls"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/gun"
-	"github.com/metacubex/mihomo/transport/shadowsocks/core"
-	"github.com/metacubex/mihomo/transport/trojan"
+	"github.com/abyss219/mihomo/component/ca"
+	"github.com/abyss219/mihomo/component/dialer"
+	"github.com/abyss219/mihomo/component/proxydialer"
+	tlsC "github.com/abyss219/mihomo/component/tls"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/transport/gun"
+	"github.com/abyss219/mihomo/transport/shadowsocks/core"
+	"github.com/abyss219/mihomo/transport/trojan"
 )
 
 type Trojan struct {

@@ -3,9 +3,9 @@ package sniffer
 import (
 	"errors"
 
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/sniffer"
+	"github.com/abyss219/mihomo/common/utils"
+	"github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/constant/sniffer"
 )
 
 type SnifferConfig struct {

@@ -1,6 +1,6 @@
 package dialer
 
-import "github.com/metacubex/mihomo/constant/features"
+import "github.com/abyss219/mihomo/constant/features"
 
 func init() {
 	// According to MSDN, this option is available since Windows 10, 1607

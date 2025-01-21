@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/hysteria/obfs"
+	"github.com/abyss219/mihomo/log"
+	"github.com/abyss219/mihomo/transport/hysteria/obfs"
 
 	"github.com/metacubex/randv2"
 )

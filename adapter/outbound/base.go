@@ -7,10 +7,10 @@ import (
 	"strings"
 	"syscall"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/dialer"
-	C "github.com/metacubex/mihomo/constant"
+	N "github.com/abyss219/mihomo/common/net"
+	"github.com/abyss219/mihomo/common/utils"
+	"github.com/abyss219/mihomo/component/dialer"
+	C "github.com/abyss219/mihomo/constant"
 )
 
 type Base struct {

@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	mihomoHttp "github.com/abyss219/mihomo/component/http"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/log"
 
 	"github.com/klauspost/cpuid/v2"
 )
@@ -41,8 +41,8 @@ var (
 	backupExeName  string // 备份文件名
 	updateExeName  string // 更新后的可执行文件
 
-	baseURL       string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/mihomo"
-	versionURL    string = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
+	baseURL       string = "https://github.com/abyss219/mihomo/releases/download/Prerelease-Alpha/mihomo"
+	versionURL    string = "https://github.com/abyss219/mihomo/releases/download/Prerelease-Alpha/version.txt"
 	packageURL    string
 	latestVersion string
 )
@@ -52,8 +52,8 @@ func init() {
 		amd64Compatible = "-compatible"
 	}
 	if !strings.HasPrefix(C.Version, "alpha") {
-		baseURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/mihomo"
-		versionURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
+		baseURL = "https://github.com/abyss219/mihomo/releases/latest/download/mihomo"
+		versionURL = "https://github.com/abyss219/mihomo/releases/latest/download/version.txt"
 	}
 }
 

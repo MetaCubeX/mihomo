@@ -1,7 +1,7 @@
 package ca
 
 import (
-	"github.com/metacubex/mihomo/constant/features"
+	"github.com/abyss219/mihomo/constant/features"
 )
 
 func init() {

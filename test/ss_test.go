@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/metacubex/mihomo/adapter/outbound"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/abyss219/mihomo/adapter/outbound"
+	C "github.com/abyss219/mihomo/constant"
 	"github.com/stretchr/testify/require"
 )
 

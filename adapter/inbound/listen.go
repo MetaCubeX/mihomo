@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"sync"
 
-	"github.com/metacubex/mihomo/component/keepalive"
+	"github.com/abyss219/mihomo/component/keepalive"
 
 	"github.com/metacubex/tfo-go"
 )

@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/abyss219/mihomo/transport/socks5"
 )
 
 // Socks addr type
@@ -156,7 +156,8 @@ type Metadata struct {
 	RawSrcAddr net.Addr `json:"-"`
 	RawDstAddr net.Addr `json:"-"`
 	// Only domain rule
-	SniffHost string `json:"sniffHost"`
+	SniffHost  string     `json:"sniffHost"`
+	SniffDstIP netip.Addr `json:"sniffDestinationIP"`
 }
 
 func (m *Metadata) RemoteAddress() string {

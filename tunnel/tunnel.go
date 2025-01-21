@@ -12,20 +12,20 @@ import (
 	"sync"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/loopback"
-	"github.com/metacubex/mihomo/component/nat"
-	P "github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/slowdown"
-	"github.com/metacubex/mihomo/component/sniffer"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
-	"github.com/metacubex/mihomo/constant/provider"
-	icontext "github.com/metacubex/mihomo/context"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/tunnel/statistic"
+	N "github.com/abyss219/mihomo/common/net"
+	"github.com/abyss219/mihomo/common/utils"
+	"github.com/abyss219/mihomo/component/loopback"
+	"github.com/abyss219/mihomo/component/nat"
+	P "github.com/abyss219/mihomo/component/process"
+	"github.com/abyss219/mihomo/component/resolver"
+	"github.com/abyss219/mihomo/component/slowdown"
+	"github.com/abyss219/mihomo/component/sniffer"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/constant/features"
+	"github.com/abyss219/mihomo/constant/provider"
+	icontext "github.com/abyss219/mihomo/context"
+	"github.com/abyss219/mihomo/log"
+	"github.com/abyss219/mihomo/tunnel/statistic"
 )
 
 const (
@@ -616,6 +616,20 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 					metadata.DstIP = ip
 				}
 				resolved = true
+			}()
+		}
+
+		if metadata.SniffHost != "" && !metadata.SniffDstIP.IsValid() && rule.ShouldResolveIP() {
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+				defer cancel()
+				ip, err := resolver.ResolveIP(ctx, metadata.SniffHost)
+				if err != nil {
+					log.Debugln("[DNS] resolve sniffed host %s error: %s", metadata.SniffHost, err.Error())
+				} else {
+					log.Debugln("[DNS] sniffed %s --> %s", metadata.SniffHost, ip.String())
+					metadata.SniffDstIP = ip
+				}
 			}()
 		}
 

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mihomo.component.geodata.router;
 option csharp_namespace = "Mihomo.Component.Geodata.Router";
-option go_package = "github.com/metacubex/mihomo/component/geodata/router";
+option go_package = "github.com/abyss219/mihomo/component/geodata/router";
 option java_package = "com.mihomo.component.geodata.router";
 option java_multiple_files = true;
 

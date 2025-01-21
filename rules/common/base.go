@@ -3,7 +3,7 @@ package common
 import (
 	"errors"
 
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/abyss219/mihomo/constant"
 
 	"golang.org/x/exp/slices"
 )

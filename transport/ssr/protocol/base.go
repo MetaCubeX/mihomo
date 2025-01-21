@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/shadowsocks/core"
+	"github.com/abyss219/mihomo/common/pool"
+	"github.com/abyss219/mihomo/log"
+	"github.com/abyss219/mihomo/transport/shadowsocks/core"
 
 	"github.com/metacubex/randv2"
 )

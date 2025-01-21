@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/outbound"
-	"github.com/metacubex/mihomo/common/callback"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/singledo"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/dialer"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/provider"
+	"github.com/abyss219/mihomo/adapter/outbound"
+	"github.com/abyss219/mihomo/common/callback"
+	N "github.com/abyss219/mihomo/common/net"
+	"github.com/abyss219/mihomo/common/singledo"
+	"github.com/abyss219/mihomo/common/utils"
+	"github.com/abyss219/mihomo/component/dialer"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/constant/provider"
 )
 
 type urlTestOption func(*URLTest)

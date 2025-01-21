@@ -3,7 +3,7 @@ package net
 import (
 	"net"
 
-	"github.com/metacubex/mihomo/common/buf"
+	"github.com/abyss219/mihomo/common/buf"
 )
 
 var _ ExtendedConn = (*CachedConn)(nil)

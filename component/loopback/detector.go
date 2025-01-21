@@ -7,10 +7,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/metacubex/mihomo/common/callback"
-	"github.com/metacubex/mihomo/component/iface"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
+	"github.com/abyss219/mihomo/common/callback"
+	"github.com/abyss219/mihomo/component/iface"
+	C "github.com/abyss219/mihomo/constant"
+	"github.com/abyss219/mihomo/constant/features"
 
 	"github.com/puzpuzpuz/xsync/v3"
 )

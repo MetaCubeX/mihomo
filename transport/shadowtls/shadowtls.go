@@ -11,8 +11,8 @@ import (
 	"io"
 	"net"
 
-	"github.com/metacubex/mihomo/common/pool"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/abyss219/mihomo/common/pool"
+	C "github.com/abyss219/mihomo/constant"
 )
 
 const (

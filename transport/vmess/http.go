@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/textproto"
 
-	"github.com/metacubex/mihomo/common/utils"
+	"github.com/abyss219/mihomo/common/utils"
 
 	"github.com/metacubex/randv2"
 )

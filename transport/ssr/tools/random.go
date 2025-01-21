@@ -3,7 +3,7 @@ package tools
 import (
 	"encoding/binary"
 
-	"github.com/metacubex/mihomo/common/pool"
+	"github.com/abyss219/mihomo/common/pool"
 )
 
 // XorShift128Plus - a pseudorandom number generator
