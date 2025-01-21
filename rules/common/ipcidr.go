@@ -37,10 +37,17 @@ func (i *IPCIDR) RuleType() C.RuleType {
 
 func (i *IPCIDR) Match(metadata *C.Metadata) (bool, string) {
 	ip := metadata.DstIP
+
+	var ipsValid bool = true
+	ips := metadata.SniffDstIP
+	if ips.IsValid() {
+		ipsValid = i.ipnet.Contains(ips.WithZone(""))
+	}
+
 	if i.isSourceIP {
 		ip = metadata.SrcIP
 	}
-	return ip.IsValid() && i.ipnet.Contains(ip.WithZone("")), i.adapter
+	return ip.IsValid() && i.ipnet.Contains(ip.WithZone("")) && ipsValid, i.adapter
 }
 
 func (i *IPCIDR) Adapter() string {

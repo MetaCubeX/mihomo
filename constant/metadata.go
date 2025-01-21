@@ -156,7 +156,8 @@ type Metadata struct {
 	RawSrcAddr net.Addr `json:"-"`
 	RawDstAddr net.Addr `json:"-"`
 	// Only domain rule
-	SniffHost string `json:"sniffHost"`
+	SniffHost  string     `json:"sniffHost"`
+	SniffDstIP netip.Addr `json:"sniffDestinationIP"`
 }
 
 func (m *Metadata) RemoteAddress() string {
