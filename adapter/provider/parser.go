@@ -39,19 +39,23 @@ type OverrideProxyNameSchema struct {
 var _ encoding.TextUnmarshaler = (*regexp2.Regexp)(nil) // ensure *regexp2.Regexp can decode direct by structure package
 
 type OverrideSchema struct {
-	TFO              *bool   `provider:"tfo,omitempty"`
-	MPTcp            *bool   `provider:"mptcp,omitempty"`
-	UDP              *bool   `provider:"udp,omitempty"`
-	UDPOverTCP       *bool   `provider:"udp-over-tcp,omitempty"`
-	Up               *string `provider:"up,omitempty"`
-	Down             *string `provider:"down,omitempty"`
-	DialerProxy      *string `provider:"dialer-proxy,omitempty"`
-	SkipCertVerify   *bool   `provider:"skip-cert-verify,omitempty"`
-	Interface        *string `provider:"interface-name,omitempty"`
-	RoutingMark      *int    `provider:"routing-mark,omitempty"`
-	IPVersion        *string `provider:"ip-version,omitempty"`
-	AdditionalPrefix *string `provider:"additional-prefix,omitempty"`
-	AdditionalSuffix *string `provider:"additional-suffix,omitempty"`
+	TFO                            *bool   `provider:"tfo,omitempty"`
+	MPTcp                          *bool   `provider:"mptcp,omitempty"`
+	UDP                            *bool   `provider:"udp,omitempty"`
+	UDPOverTCP                     *bool   `provider:"udp-over-tcp,omitempty"`
+	Up                             *string `provider:"up,omitempty"`
+	Down                           *string `provider:"down,omitempty"`
+	InitialStreamReceiveWindow     *uint64 `provider:"initial-stream-receive-window,omitempty"`
+	MaxStreamReceiveWindow         *uint64 `provider:"max-stream-receive-window,omitempty"`
+	InitialConnectionReceiveWindow *uint64 `provider:"initial-connection-receive-window,omitempty"`
+	MaxConnectionReceiveWindow     *uint64 `provider:"max-connection-receive-window,omitempty"`
+	DialerProxy                    *string `provider:"dialer-proxy,omitempty"`
+	SkipCertVerify                 *bool   `provider:"skip-cert-verify,omitempty"`
+	Interface                      *string `provider:"interface-name,omitempty"`
+	RoutingMark                    *int    `provider:"routing-mark,omitempty"`
+	IPVersion                      *string `provider:"ip-version,omitempty"`
+	AdditionalPrefix               *string `provider:"additional-prefix,omitempty"`
+	AdditionalSuffix               *string `provider:"additional-suffix,omitempty"`
 
 	ProxyName []OverrideProxyNameSchema `provider:"proxy-name,omitempty"`
 }
