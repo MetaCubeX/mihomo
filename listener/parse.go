@@ -86,6 +86,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewVmess(vmessOption)
+	case "vless":
+		vlessOption := &IN.VlessOption{}
+		err = decoder.Decode(mapping, vlessOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewVless(vlessOption)
 	case "hysteria2":
 		hysteria2Option := &IN.Hysteria2Option{}
 		err = decoder.Decode(mapping, hysteria2Option)
