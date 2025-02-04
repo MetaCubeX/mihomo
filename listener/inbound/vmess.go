@@ -9,11 +9,12 @@ import (
 
 type VmessOption struct {
 	BaseOption
-	Users       []VmessUser `inbound:"users"`
-	WsPath      string      `inbound:"ws-path,omitempty"`
-	Certificate string      `inbound:"certificate,omitempty"`
-	PrivateKey  string      `inbound:"private-key,omitempty"`
-	MuxOption   MuxOption   `inbound:"mux-option,omitempty"`
+	Users         []VmessUser   `inbound:"users"`
+	WsPath        string        `inbound:"ws-path,omitempty"`
+	Certificate   string        `inbound:"certificate,omitempty"`
+	PrivateKey    string        `inbound:"private-key,omitempty"`
+	RealityConfig RealityConfig `inbound:"reality-config,omitempty"`
+	MuxOption     MuxOption     `inbound:"mux-option,omitempty"`
 }
 
 type VmessUser struct {
@@ -50,13 +51,14 @@ func NewVmess(options *VmessOption) (*Vmess, error) {
 		Base:   base,
 		config: options,
 		vs: LC.VmessServer{
-			Enable:      true,
-			Listen:      base.RawAddress(),
-			Users:       users,
-			WsPath:      options.WsPath,
-			Certificate: options.Certificate,
-			PrivateKey:  options.PrivateKey,
-			MuxOption:   options.MuxOption.Build(),
+			Enable:        true,
+			Listen:        base.RawAddress(),
+			Users:         users,
+			WsPath:        options.WsPath,
+			Certificate:   options.Certificate,
+			PrivateKey:    options.PrivateKey,
+			RealityConfig: options.RealityConfig.Build(),
+			MuxOption:     options.MuxOption.Build(),
 		},
 	}, nil
 }

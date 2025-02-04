@@ -1,9 +1,10 @@
 package config
 
 import (
-	"github.com/metacubex/mihomo/listener/sing"
-
 	"encoding/json"
+
+	"github.com/metacubex/mihomo/listener/reality"
+	"github.com/metacubex/mihomo/listener/sing"
 )
 
 type VlessUser struct {
@@ -19,20 +20,11 @@ type VlessServer struct {
 	WsPath        string
 	Certificate   string
 	PrivateKey    string
-	RealityConfig RealityConfig
+	RealityConfig reality.Config
 	MuxOption     sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
 }
 
 func (t VlessServer) String() string {
 	b, _ := json.Marshal(t)
 	return string(b)
-}
-
-type RealityConfig struct {
-	Dest              string
-	PrivateKey        string
-	ShortID           []string
-	ServerNames       []string
-	MaxTimeDifference int
-	Proxy             string
 }

@@ -23,26 +23,6 @@ type VlessUser struct {
 	Flow     string `inbound:"flow,omitempty"`
 }
 
-type RealityConfig struct {
-	Dest              string   `inbound:"dest"`
-	PrivateKey        string   `inbound:"private-key"`
-	ShortID           []string `inbound:"short-id"`
-	ServerNames       []string `inbound:"server-names"`
-	MaxTimeDifference int      `inbound:"max-time-difference,omitempty"`
-	Proxy             string   `inbound:"proxy,omitempty"`
-}
-
-func (c RealityConfig) Build() LC.RealityConfig {
-	return LC.RealityConfig{
-		Dest:              c.Dest,
-		PrivateKey:        c.PrivateKey,
-		ShortID:           c.ShortID,
-		ServerNames:       c.ServerNames,
-		MaxTimeDifference: c.MaxTimeDifference,
-		Proxy:             c.Proxy,
-	}
-}
-
 func (o VlessOption) Equal(config C.InboundConfig) bool {
 	return optionToString(o) == optionToString(config)
 }

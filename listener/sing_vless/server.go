@@ -3,15 +3,11 @@ package sing_vless
 import (
 	"context"
 	"crypto/tls"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"reflect"
 	"strings"
-	"time"
 	"unsafe"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -19,15 +15,13 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/inner"
+	"github.com/metacubex/mihomo/listener/reality"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/ntp"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
 	"github.com/metacubex/sing-vmess/vless"
 	utls "github.com/metacubex/utls"
-	"github.com/sagernet/reality"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/metadata"
 )
@@ -97,7 +91,7 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 	sl = &Listener{false, config, nil, service}
 
 	tlsConfig := &tls.Config{}
-	var realityConfig *reality.Config
+	var realityBuilder *reality.Builder
 	var httpMux *http.ServeMux
 
 	if config.Certificate != "" && config.PrivateKey != "" {
@@ -106,6 +100,15 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			return nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	if config.RealityConfig.PrivateKey != "" {
+		if tlsConfig.Certificates != nil {
+			return nil, errors.New("certificate is unavailable in reality")
+		}
+		realityBuilder, err = config.RealityConfig.Build()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if config.WsPath != "" {
 		httpMux = http.NewServeMux()
@@ -119,47 +122,6 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		})
 		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
 	}
-	if config.RealityConfig.PrivateKey != "" {
-		if tlsConfig.Certificates != nil {
-			return nil, errors.New("certificate is unavailable in reality")
-		}
-		realityConfig = &reality.Config{}
-		realityConfig.SessionTicketsDisabled = true
-		realityConfig.Type = "tcp"
-		realityConfig.Dest = config.RealityConfig.Dest
-		realityConfig.Time = ntp.Now
-		realityConfig.ServerNames = make(map[string]bool)
-		for _, it := range config.RealityConfig.ServerNames {
-			realityConfig.ServerNames[it] = true
-		}
-		privateKey, err := base64.RawURLEncoding.DecodeString(config.RealityConfig.PrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("decode private key: %w", err)
-		}
-		if len(privateKey) != 32 {
-			return nil, errors.New("invalid private key")
-		}
-		realityConfig.PrivateKey = privateKey
-
-		realityConfig.MaxTimeDiff = time.Duration(config.RealityConfig.MaxTimeDifference) * time.Microsecond
-
-		realityConfig.ShortIds = make(map[[8]byte]bool)
-		for i, shortIDString := range config.RealityConfig.ShortID {
-			var shortID [8]byte
-			decodedLen, err := hex.Decode(shortID[:], []byte(shortIDString))
-			if err != nil {
-				return nil, fmt.Errorf("decode short_id[%d] '%s': %w", i, shortIDString, err)
-			}
-			if decodedLen > 8 {
-				return nil, fmt.Errorf("invalid short_id[%d]: %s", i, shortIDString)
-			}
-			realityConfig.ShortIds[shortID] = true
-		}
-
-		realityConfig.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-			return inner.HandleTcp(address, config.RealityConfig.Proxy)
-		}
-	}
 
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
@@ -169,11 +131,8 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		if err != nil {
 			return nil, err
 		}
-		if realityConfig != nil {
-			l = reality.NewListener(l, realityConfig)
-			// Due to low implementation quality, the reality server intercepted half close and caused memory leaks.
-			// We fixed it by calling Close() directly.
-			l = realityListenerWrapper{l}
+		if realityBuilder != nil {
+			l = realityBuilder.NewListener(l)
 		} else if len(tlsConfig.Certificates) > 0 {
 			l = tls.NewListener(l, tlsConfig)
 		} else {
@@ -236,28 +195,4 @@ func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		_ = conn.Close()
 		return
 	}
-}
-
-type realityConnWrapper struct {
-	*reality.Conn
-}
-
-func (c realityConnWrapper) Upstream() any {
-	return c.Conn
-}
-
-func (c realityConnWrapper) CloseWrite() error {
-	return c.Close()
-}
-
-type realityListenerWrapper struct {
-	net.Listener
-}
-
-func (l realityListenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	return realityConnWrapper{c.(*reality.Conn)}, nil
 }

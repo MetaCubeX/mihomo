@@ -3,6 +3,7 @@ package sing_vmess
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/reality"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/ntp"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
@@ -73,6 +75,7 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 	sl = &Listener{false, config, nil, service}
 
 	tlsConfig := &tls.Config{}
+	var realityBuilder *reality.Builder
 	var httpMux *http.ServeMux
 
 	if config.Certificate != "" && config.PrivateKey != "" {
@@ -81,6 +84,15 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			return nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	if config.RealityConfig.PrivateKey != "" {
+		if tlsConfig.Certificates != nil {
+			return nil, errors.New("certificate is unavailable in reality")
+		}
+		realityBuilder, err = config.RealityConfig.Build()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if config.WsPath != "" {
 		httpMux = http.NewServeMux()
@@ -103,7 +115,9 @@ func New(config LC.VmessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		if err != nil {
 			return nil, err
 		}
-		if len(tlsConfig.Certificates) > 0 {
+		if realityBuilder != nil {
+			l = realityBuilder.NewListener(l)
+		} else if len(tlsConfig.Certificates) > 0 {
 			l = tls.NewListener(l, tlsConfig)
 		}
 		sl.listeners = append(sl.listeners, l)
