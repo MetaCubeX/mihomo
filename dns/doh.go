@@ -37,13 +37,14 @@ const (
 	transportDefaultIdleConnTimeout = 5 * time.Minute
 
 	// dohMaxConnsPerHost controls the maximum number of connections for
-	// each host.
-	dohMaxConnsPerHost = 1
+	// each host.  Note, that setting it to 1 may cause issues with Go's http
+	// implementation, see https://github.com/AdguardTeam/dnsproxy/issues/278.
+	dohMaxConnsPerHost = 2
 	dialTimeout        = 10 * time.Second
 
 	// dohMaxIdleConns controls the maximum number of connections being idle
 	// at the same time.
-	dohMaxIdleConns = 1
+	dohMaxIdleConns = 2
 	maxElapsedTime  = time.Second * 30
 )
 
