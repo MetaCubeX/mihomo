@@ -59,7 +59,11 @@ func (c *classicalStrategy) Insert(rule string) {
 
 	r, err := c.parse(ruleType, rule, "", params)
 	if err != nil {
-		log.Warnln("parse rule error:[%s]", err.Error())
+		if ruleType == "" {
+			log.Warnln("parse classical rule error:[%s]", err.Error()+rule)
+		} else {
+			log.Warnln("parse classical rule error:[%s]", err.Error())
+		}
 	} else {
 		if r.ShouldResolveIP() {
 			c.shouldResolveIP = true
@@ -83,7 +87,7 @@ func ruleParse(ruleRaw string) (string, string, []string) {
 		return item[0], item[1], nil
 	} else if len(item) > 2 {
 		if item[0] == "NOT" || item[0] == "OR" || item[0] == "AND" || item[0] == "SUB-RULE" || item[0] == "DOMAIN-REGEX" || item[0] == "PROCESS-NAME-REGEX" || item[0] == "PROCESS-PATH-REGEX" {
-			return item[0], strings.Join(item[1:len(item)], ","), nil
+			return item[0], strings.Join(item[1:], ","), nil
 		} else {
 			return item[0], item[1], item[2:]
 		}
