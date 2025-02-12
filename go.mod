@@ -6,12 +6,12 @@ require (
 	github.com/3andne/restls-client-go v0.1.6
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
-	github.com/dlclark/regexp2 v1.11.4
-	github.com/enfein/mieru/v3 v3.11.1
-	github.com/go-chi/chi/v5 v5.2.0
+	github.com/dlclark/regexp2 v1.11.5
+	github.com/enfein/mieru/v3 v3.11.2
+	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/render v1.0.3
 	github.com/gobwas/ws v1.4.0
-	github.com/gofrs/uuid/v5 v5.3.0
+	github.com/gofrs/uuid/v5 v5.3.1
 	github.com/insomniacslk/dhcp v0.0.0-20250109001534-8abf58130905
 	github.com/klauspost/compress v1.17.9 // lastest version compatible with golang1.20
 	github.com/klauspost/cpuid/v2 v2.2.9
