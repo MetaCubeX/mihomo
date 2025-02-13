@@ -59,7 +59,7 @@ func (c *classicalStrategy) Insert(rule string) {
 
 	r, err := c.parse(ruleType, rule, "", params)
 	if err != nil {
-		log.Warnln("parse Classical rule error: %s", err.Error())
+		log.Warnln("parse classical rule error: %s", err.Error())
 	} else {
 		if r.ShouldResolveIP() {
 			c.shouldResolveIP = true
@@ -96,7 +96,7 @@ func NewClassicalStrategy(parse func(tp, payload, target string, params []string
 	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
 		switch tp {
 		case "MATCH", "RULE-SET", "SUB-RULE":
-			return nil, fmt.Errorf("unsupported rule type on Classical rule-set: (%s)", tp)
+			return nil, fmt.Errorf("unsupported rule type on classical rule-set: (%s)", tp)
 		default:
 			return parse(tp, payload, target, params, nil)
 		}
