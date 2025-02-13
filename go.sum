@@ -99,8 +99,8 @@ github.com/metacubex/amneziawg-go v0.0.0-20240922133038-fdf3a4d5a4ab h1:Chbw+/31
 github.com/metacubex/amneziawg-go v0.0.0-20240922133038-fdf3a4d5a4ab/go.mod h1:xVKK8jC5Sd3hfh7WjmCq+HorehIbrBijaUWmcuKjPcI=
 github.com/metacubex/bbolt v0.0.0-20240822011022-aed6d4850399 h1:oBowHVKZycNtAFbZ6avaCSZJYeme2Nrj+4RpV2cNJig=
 github.com/metacubex/bbolt v0.0.0-20240822011022-aed6d4850399/go.mod h1:4xcieuIK+M4bGQmQYZVqEaIYqjS1ahO4kXG7EmDgEro=
-github.com/metacubex/chacha v0.1.0 h1:tg9RSJ18NvL38cCWNyYH1eiG6qDCyyXIaTLQthon0sc=
-github.com/metacubex/chacha v0.1.0/go.mod h1:Djn9bPZxLTXbJFSeyo0/qzEzQI+gUSSzttuzZM75GH8=
+github.com/metacubex/chacha v0.1.1 h1:OHIv11Nd9CISAIzegpjfupIoZp9DYm6uQw41RxvmU/c=
+github.com/metacubex/chacha v0.1.1/go.mod h1:Djn9bPZxLTXbJFSeyo0/qzEzQI+gUSSzttuzZM75GH8=
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759 h1:cjd4biTvOzK9ubNCCkQ+ldc4YSH/rILn53l/xGBFHHI=
 github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759/go.mod h1:UHOv2xu+RIgLwpXca7TLrXleEd4oR3sPatW6IF8wU88=
 github.com/metacubex/gvisor v0.0.0-20241126021258-5b028898cc5a h1:cZ6oNVrsmsi3SNlnSnRio4zOgtQq+/XidwsaNgKICcg=

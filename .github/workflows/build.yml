@@ -49,11 +49,7 @@ jobs:
           - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1' }
           - { goos: linux, goarch: loong64, output: loong64-abi2, abi: '2' }
           - { goos: linux, goarch: riscv64, output: riscv64 }
-
-          # Broken in Golang1.24 with:
-          # "Error: github.com/metacubex/chacha@v0.1.0/chacha/chacha_ref.go:32:18: illegal combination MOVWBR ADDR NONE NONE NONE NONE REG"
-          # So just stay in golang1.23
-          - { goos: linux, goarch: s390x, output: s390x, goversion: '1.23' }
+          - { goos: linux, goarch: s390x, output: s390x }
 
           - { goos: windows, goarch: '386', output: '386' }
           - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible }
