@@ -74,8 +74,15 @@ func (p *PaddingFactory) GenerateRecordPayloadSizes(pkt uint32) (pktSizes []int)
 					continue
 				}
 				_min, _max = common.Min(_min, _max), common.Max(_min, _max)
-				i, _ := rand.Int(rand.Reader, big.NewInt(_max-_min))
-				pktSizes = append(pktSizes, int(i.Int64()+_min))
+				if _min <= 0 || _max <= 0 {
+					continue
+				}
+				if _min == _max {
+					pktSizes = append(pktSizes, int(_min))
+				} else {
+					i, _ := rand.Int(rand.Reader, big.NewInt(_max-_min))
+					pktSizes = append(pktSizes, int(i.Int64()+_min))
+				}
 			} else if sRange == "c" {
 				pktSizes = append(pktSizes, CheckMark)
 			}
