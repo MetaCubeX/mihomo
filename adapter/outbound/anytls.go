@@ -13,6 +13,7 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/anytls"
 	"github.com/sagernet/sing/common"
@@ -101,6 +102,7 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		Dialer:                   singDialer,
 		IdleSessionCheckInterval: time.Duration(option.IdleSessionCheckInterval) * time.Second,
 		IdleSessionTimeout:       time.Duration(option.IdleSessionTimeout) * time.Second,
+		ClientFingerprint:        option.ClientFingerprint,
 	}
 	tlsConfig := &tls.Config{
 		ServerName:         option.SNI,
@@ -111,6 +113,10 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		tlsConfig.ServerName = "127.0.0.1"
 	}
 	tOption.TLSConfig = tlsConfig
+
+	if tlsC.HaveGlobalFingerprint() && len(tOption.ClientFingerprint) == 0 {
+		tOption.ClientFingerprint = tlsC.GetGlobalFingerprint()
+	}
 
 	outbound := &AnyTLS{
 		Base: &Base{
