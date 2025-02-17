@@ -7,14 +7,12 @@ import (
 	"math"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/transport/anytls/padding"
 	"github.com/metacubex/mihomo/transport/anytls/skiplist"
 	"github.com/metacubex/mihomo/transport/anytls/util"
-	"github.com/sagernet/sing/common"
-	singAtomic "github.com/sagernet/sing/common/atomic"
 )
 
 type Client struct {
@@ -27,12 +25,12 @@ type Client struct {
 	idleSession     *skiplist.SkipList[uint64, *Session]
 	idleSessionLock sync.Mutex
 
-	padding *singAtomic.TypedValue[*padding.PaddingFactory]
+	padding *atomic.TypedValue[*padding.PaddingFactory]
 
 	idleSessionTimeout time.Duration
 }
 
-func NewClient(ctx context.Context, dialOut func(ctx context.Context) (net.Conn, error), _padding *singAtomic.TypedValue[*padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration) *Client {
+func NewClient(ctx context.Context, dialOut func(ctx context.Context) (net.Conn, error), _padding *atomic.TypedValue[*padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration) *Client {
 	c := &Client{
 		dialOut:            dialOut,
 		padding:            _padding,
@@ -68,7 +66,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 		}
 		stream, err = session.OpenStream()
 		if err != nil {
-			common.Close(session, stream)
+			_ = session.Close()
 			continue
 		}
 		break

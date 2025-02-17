@@ -14,8 +14,6 @@ import (
 	"math/bits"
 	"math/rand"
 	"time"
-
-	"github.com/sagernet/sing/common"
 )
 
 const (
@@ -102,7 +100,11 @@ func (sl *SkipList[K, V]) Insert(key K, value V) {
 	level := sl.randomLevel()
 	node = newSkipListNode(level, key, value)
 
-	for i := 0; i < common.Min(level, sl.level); i++ {
+	minLevel := level
+	if sl.level < level {
+		minLevel = sl.level
+	}
+	for i := 0; i < minLevel; i++ {
 		node.next[i] = prevs[i].next[i]
 		prevs[i].next[i] = node
 	}

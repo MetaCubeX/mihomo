@@ -16,7 +16,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/anytls"
-	"github.com/sagernet/sing/common"
+
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
 )
@@ -130,7 +130,7 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		dialer: singDialer,
 	}
 	runtime.SetFinalizer(outbound, func(o *AnyTLS) {
-		common.Close(o.client)
+		_ = o.client.Close()
 	})
 
 	return outbound, nil

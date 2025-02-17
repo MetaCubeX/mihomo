@@ -8,13 +8,13 @@ import (
 	"net"
 	"time"
 
-	tlsC "github.com/metacubex/mihomo/component/tls"
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/buf"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/anytls/padding"
 	"github.com/metacubex/mihomo/transport/anytls/session"
 	"github.com/metacubex/mihomo/transport/vmess"
-	"github.com/sagernet/sing/common/atomic"
-	"github.com/sagernet/sing/common/buf"
+
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -91,7 +91,7 @@ func (c *Client) CreateOutboundTLSConnection(ctx context.Context) (net.Conn, err
 				ctx, cancel := context.WithTimeout(ctx, C.DefaultTLSTimeout)
 				defer cancel()
 
-				err := utlsConn.(*tlsC.UConn).HandshakeContext(ctx)
+				err := utlsConn.HandshakeContext(ctx)
 				return utlsConn, err
 			}
 		}

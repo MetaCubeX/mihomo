@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/buf"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
@@ -17,7 +18,7 @@ import (
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/transport/anytls/padding"
 	"github.com/metacubex/mihomo/transport/anytls/session"
-	"github.com/sagernet/sing/common/atomic"
+
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"

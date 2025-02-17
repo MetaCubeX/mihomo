@@ -7,15 +7,15 @@ import (
 	"net"
 	"runtime/debug"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/buf"
+	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/anytls/padding"
 	"github.com/metacubex/mihomo/transport/anytls/util"
-	singAtomic "github.com/sagernet/sing/common/atomic"
-	"github.com/sagernet/sing/common/buf"
 )
 
 type Session struct {
@@ -33,7 +33,7 @@ type Session struct {
 	// pool
 	seq       uint64
 	idleSince time.Time
-	padding   *singAtomic.TypedValue[*padding.PaddingFactory]
+	padding   *atomic.TypedValue[*padding.PaddingFactory]
 
 	// client
 	isClient   bool
@@ -45,7 +45,7 @@ type Session struct {
 	onNewStream func(stream *Stream)
 }
 
-func NewClientSession(conn net.Conn, _padding *singAtomic.TypedValue[*padding.PaddingFactory]) *Session {
+func NewClientSession(conn net.Conn, _padding *atomic.TypedValue[*padding.PaddingFactory]) *Session {
 	s := &Session{
 		conn:     conn,
 		isClient: true,
@@ -56,7 +56,7 @@ func NewClientSession(conn net.Conn, _padding *singAtomic.TypedValue[*padding.Pa
 	return s
 }
 
-func NewServerSession(conn net.Conn, onNewStream func(stream *Stream), _padding *singAtomic.TypedValue[*padding.PaddingFactory]) *Session {
+func NewServerSession(conn net.Conn, onNewStream func(stream *Stream), _padding *atomic.TypedValue[*padding.PaddingFactory]) *Session {
 	s := &Session{
 		conn:        conn,
 		onNewStream: onNewStream,
@@ -169,7 +169,7 @@ func (s *Session) recvLoop() error {
 			switch hdr.Cmd() {
 			case cmdPSH:
 				if hdr.Length() > 0 {
-					buffer := buf.Get(int(hdr.Length()))
+					buffer := pool.Get(int(hdr.Length()))
 					if _, err := io.ReadFull(s.conn, buffer); err == nil {
 						s.streamLock.RLock()
 						stream, ok := s.streams[sid]
@@ -177,9 +177,9 @@ func (s *Session) recvLoop() error {
 						if ok {
 							stream.pipeW.Write(buffer)
 						}
-						buf.Put(buffer)
+						pool.Put(buffer)
 					} else {
-						buf.Put(buffer)
+						pool.Put(buffer)
 						return err
 					}
 				}
@@ -211,18 +211,18 @@ func (s *Session) recvLoop() error {
 				//logrus.Debugln("stream fin", sid, s.streams)
 			case cmdWaste:
 				if hdr.Length() > 0 {
-					buffer := buf.Get(int(hdr.Length()))
+					buffer := pool.Get(int(hdr.Length()))
 					if _, err := io.ReadFull(s.conn, buffer); err != nil {
-						buf.Put(buffer)
+						pool.Put(buffer)
 						return err
 					}
-					buf.Put(buffer)
+					pool.Put(buffer)
 				}
 			case cmdSettings:
 				if hdr.Length() > 0 {
-					buffer := buf.Get(int(hdr.Length()))
+					buffer := pool.Get(int(hdr.Length()))
 					if _, err := io.ReadFull(s.conn, buffer); err != nil {
-						buf.Put(buffer)
+						pool.Put(buffer)
 						return err
 					}
 					if !s.isClient {
@@ -235,31 +235,31 @@ func (s *Session) recvLoop() error {
 							f.data = paddingF.RawScheme
 							_, err = s.writeFrame(f)
 							if err != nil {
-								buf.Put(buffer)
+								pool.Put(buffer)
 								return err
 							}
 						}
 					}
-					buf.Put(buffer)
+					pool.Put(buffer)
 				}
 			case cmdAlert:
 				if hdr.Length() > 0 {
-					buffer := buf.Get(int(hdr.Length()))
+					buffer := pool.Get(int(hdr.Length()))
 					if _, err := io.ReadFull(s.conn, buffer); err != nil {
-						buf.Put(buffer)
+						pool.Put(buffer)
 						return err
 					}
 					if s.isClient {
 						log.Errorln("[Alert from server] %s", string(buffer))
 					}
-					buf.Put(buffer)
+					pool.Put(buffer)
 					return nil
 				}
 			case cmdUpdatePaddingScheme:
 				if hdr.Length() > 0 {
-					buffer := buf.Get(int(hdr.Length()))
+					buffer := pool.Get(int(hdr.Length()))
 					if _, err := io.ReadFull(s.conn, buffer); err != nil {
-						buf.Put(buffer)
+						pool.Put(buffer)
 						return err
 					}
 					if s.isClient {
@@ -269,7 +269,7 @@ func (s *Session) recvLoop() error {
 							log.Warnln("[Update padding failed] %x\n", md5.Sum(buffer))
 						}
 					}
-					buf.Put(buffer)
+					pool.Put(buffer)
 				}
 			default:
 				// I don't know what command it is (can't have data)

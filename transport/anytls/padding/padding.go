@@ -8,10 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/transport/anytls/util"
-
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/atomic"
 )
 
 const CheckMark = -1
@@ -73,7 +71,9 @@ func (p *PaddingFactory) GenerateRecordPayloadSizes(pkt uint32) (pktSizes []int)
 				if err != nil {
 					continue
 				}
-				_min, _max = common.Min(_min, _max), common.Max(_min, _max)
+				if _min > _max {
+					_min, _max = _max, _min
+				}
 				if _min <= 0 || _max <= 0 {
 					continue
 				}
