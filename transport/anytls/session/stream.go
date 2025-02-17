@@ -18,6 +18,7 @@ type Stream struct {
 	pipeW *io.PipeWriter
 
 	dieOnce sync.Once
+	dieHook func()
 }
 
 // newStream initiates a Stream struct
@@ -57,6 +58,10 @@ func (s *Stream) sessionClose() (once bool) {
 	s.dieOnce.Do(func() {
 		s.pipeR.Close()
 		once = true
+		if s.dieHook != nil {
+			s.dieHook()
+			s.dieHook = nil
+		}
 	})
 	return
 }

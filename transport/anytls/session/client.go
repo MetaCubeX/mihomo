@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/mihomo/transport/anytls/extend"
 	"github.com/metacubex/mihomo/transport/anytls/padding"
 	"github.com/metacubex/mihomo/transport/anytls/skiplist"
 	"github.com/metacubex/mihomo/transport/anytls/util"
@@ -78,7 +77,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("too many closed session: %w", err)
 	}
 
-	streamC := extend.NewCloseHookConn(stream, func() {
+	stream.dieHook = func() {
 		if session.IsClosed() {
 			if session.dieHook != nil {
 				session.dieHook()
@@ -89,9 +88,9 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 			c.idleSession.Insert(math.MaxUint64-session.seq, session)
 			c.idleSessionLock.Unlock()
 		}
-	})
+	}
 
-	return streamC, nil
+	return stream, nil
 }
 
 func (c *Client) findSession(ctx context.Context) (*Session, error) {
