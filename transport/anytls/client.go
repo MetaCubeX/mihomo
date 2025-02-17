@@ -50,12 +50,12 @@ func NewClient(ctx context.Context, config ClientConfig) *Client {
 	}
 	// Initialize the padding state of this client
 	padding.UpdatePaddingScheme(padding.DefaultPaddingScheme, &c.padding)
-	c.sessionClient = session.NewClient(ctx, &c.padding, config.IdleSessionCheckInterval, config.IdleSessionTimeout)
+	c.sessionClient = session.NewClient(ctx, c.CreateOutboundTLSConnection, &c.padding, config.IdleSessionCheckInterval, config.IdleSessionTimeout)
 	return c
 }
 
 func (c *Client) CreateProxy(ctx context.Context, destination M.Socksaddr) (net.Conn, error) {
-	conn, err := c.sessionClient.CreateStream(ctx, c.CreateOutboundTLSConnection)
+	conn, err := c.sessionClient.CreateStream(ctx)
 	if err != nil {
 		return nil, err
 	}
