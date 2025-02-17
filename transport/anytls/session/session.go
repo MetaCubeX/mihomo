@@ -342,7 +342,7 @@ func (s *Session) writeConn(b []byte) (n int, err error) {
 					n += l
 					b = b[l:]
 				} else if remainPayloadLen > 0 { // this packet contains padding and the last part of payload
-					paddingLen := l - remainPayloadLen
+					paddingLen := l - remainPayloadLen - headerOverHeadSize
 					if paddingLen > 0 {
 						padding := make([]byte, headerOverHeadSize+paddingLen)
 						padding[0] = cmdWaste
@@ -361,7 +361,7 @@ func (s *Session) writeConn(b []byte) (n int, err error) {
 					padding[0] = cmdWaste
 					binary.BigEndian.PutUint32(padding[1:5], 0)
 					binary.BigEndian.PutUint16(padding[5:7], uint16(l))
-					_, err = s.conn.Write(b)
+					_, err = s.conn.Write(padding)
 					if err != nil {
 						return 0, err
 					}
