@@ -2,7 +2,6 @@ package outbound
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"net"
 	"runtime"
@@ -16,6 +15,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/anytls"
+	"github.com/metacubex/mihomo/transport/vmess"
 
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/uot"
@@ -38,6 +38,7 @@ type AnyTLSOption struct {
 	SNI                      string   `proxy:"sni,omitempty"`
 	ClientFingerprint        string   `proxy:"client-fingerprint,omitempty"`
 	SkipCertVerify           bool     `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint              string   `proxy:"fingerprint,omitempty"`
 	UDP                      bool     `proxy:"udp,omitempty"`
 	IdleSessionCheckInterval int      `proxy:"idle-session-check-interval,omitempty"`
 	IdleSessionTimeout       int      `proxy:"idle-session-timeout,omitempty"`
@@ -97,21 +98,21 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		Dialer:                   singDialer,
 		IdleSessionCheckInterval: time.Duration(option.IdleSessionCheckInterval) * time.Second,
 		IdleSessionTimeout:       time.Duration(option.IdleSessionTimeout) * time.Second,
-		ClientFingerprint:        option.ClientFingerprint,
 	}
-	tlsConfig := &tls.Config{
-		ServerName:         option.SNI,
-		InsecureSkipVerify: option.SkipCertVerify,
-		NextProtos:         option.ALPN,
+	tlsConfig := &vmess.TLSConfig{
+		Host:              option.SNI,
+		SkipCertVerify:    option.SkipCertVerify,
+		NextProtos:        option.ALPN,
+		FingerPrint:       option.Fingerprint,
+		ClientFingerprint: option.ClientFingerprint,
 	}
-	if tlsConfig.ServerName == "" {
-		tlsConfig.ServerName = "127.0.0.1"
+	if tlsConfig.Host == "" {
+		tlsConfig.Host = option.Server
+	}
+	if tlsC.HaveGlobalFingerprint() && len(option.ClientFingerprint) == 0 {
+		tlsConfig.ClientFingerprint = tlsC.GetGlobalFingerprint()
 	}
 	tOption.TLSConfig = tlsConfig
-
-	if tlsC.HaveGlobalFingerprint() && len(tOption.ClientFingerprint) == 0 {
-		tOption.ClientFingerprint = tlsC.GetGlobalFingerprint()
-	}
 
 	outbound := &AnyTLS{
 		Base: &Base{

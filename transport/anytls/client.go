@@ -3,7 +3,6 @@ package anytls
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/binary"
 	"net"
 	"time"
@@ -25,13 +24,12 @@ type ClientConfig struct {
 	IdleSessionTimeout       time.Duration
 	Server                   M.Socksaddr
 	Dialer                   N.Dialer
-	TLSConfig                *tls.Config
-	ClientFingerprint        string
+	TLSConfig                *vmess.TLSConfig
 }
 
 type Client struct {
 	passwordSha256    []byte
-	tlsConfig         *tls.Config
+	tlsConfig         *vmess.TLSConfig
 	clientFingerprint string
 	dialer            N.Dialer
 	server            M.Socksaddr
@@ -42,11 +40,10 @@ type Client struct {
 func NewClient(ctx context.Context, config ClientConfig) *Client {
 	pw := sha256.Sum256([]byte(config.Password))
 	c := &Client{
-		passwordSha256:    pw[:],
-		tlsConfig:         config.TLSConfig,
-		clientFingerprint: config.ClientFingerprint,
-		dialer:            config.Dialer,
-		server:            config.Server,
+		passwordSha256: pw[:],
+		tlsConfig:      config.TLSConfig,
+		dialer:         config.Dialer,
+		server:         config.Server,
 	}
 	// Initialize the padding state of this client
 	padding.UpdatePaddingScheme(padding.DefaultPaddingScheme, &c.padding)
@@ -85,24 +82,9 @@ func (c *Client) CreateOutboundTLSConnection(ctx context.Context) (net.Conn, err
 	}
 
 	getTlsConn := func() (net.Conn, error) {
-		if len(c.clientFingerprint) != 0 {
-			utlsConn, valid := vmess.GetUTLSConn(conn, c.clientFingerprint, c.tlsConfig)
-			if valid {
-				ctx, cancel := context.WithTimeout(ctx, C.DefaultTLSTimeout)
-				defer cancel()
-
-				err := utlsConn.HandshakeContext(ctx)
-				return utlsConn, err
-			}
-		}
-
-		tlsConn := tls.Client(conn, c.tlsConfig)
-
-		ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTLSTimeout)
+		ctx, cancel := context.WithTimeout(ctx, C.DefaultTLSTimeout)
 		defer cancel()
-
-		err = tlsConn.HandshakeContext(ctx)
-		return tlsConn, err
+		return vmess.StreamTLSConn(ctx, conn, c.tlsConfig)
 	}
 	tlsConn, err := getTlsConn()
 	if err != nil {
