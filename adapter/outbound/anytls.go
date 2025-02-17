@@ -57,7 +57,7 @@ func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 	// create tcp
 	options := t.Base.DialOptions(opts...)
 	t.dialer.SetDialer(dialer.NewDialer(options...))
-	c, err := t.client.CreateProxy(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
+	c, err := t.client.CreateProxy(ctx, uot.RequestDestination(2))
 	if err != nil {
 		return nil, err
 	}
