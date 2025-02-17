@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
+	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -50,7 +50,7 @@ func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata, opts ...
 	if err != nil {
 		return nil, err
 	}
-	return NewConn(N.NewRefConn(c, t), t), nil
+	return NewConn(CN.NewRefConn(c, t), t), nil
 }
 
 func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.PacketConn, err error) {
@@ -71,12 +71,7 @@ func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata, 
 		metadata.DstIP = ip
 	}
 	destination := M.SocksaddrFromNet(metadata.UDPAddr())
-	return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), t), nil
-}
-
-// SupportWithDialer implements C.ProxyAdapter
-func (t *AnyTLS) SupportWithDialer() C.NetWork {
-	return C.ALLNet
+	return newPacketConn(CN.NewRefPacketConn(CN.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), t), t), nil
 }
 
 // SupportUOT implements C.ProxyAdapter
