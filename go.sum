@@ -109,6 +109,8 @@ github.com/metacubex/quic-go v0.49.1-0.20250212162123-c135a4412996 h1:B+AP/Pj2/j
 github.com/metacubex/quic-go v0.49.1-0.20250212162123-c135a4412996/go.mod h1:ExVjGyEwTUjCFqx+5uxgV7MOoA3fZI+th4D40H35xmY=
 github.com/metacubex/randv2 v0.2.0 h1:uP38uBvV2SxYfLj53kuvAjbND4RUDfFJjwr4UigMiLs=
 github.com/metacubex/randv2 v0.2.0/go.mod h1:kFi2SzrQ5WuneuoLLCMkABtiBu6VRrMrWFqSPyj2cxY=
+github.com/metacubex/reality v0.0.0-20250219003814-74e8d7850629 h1:aHsYiTvubfgMa3JMTDY//hDXVvFWrHg6ARckR52ttZs=
+github.com/metacubex/reality v0.0.0-20250219003814-74e8d7850629/go.mod h1:TTeIOZLdGmzc07Oedn++vWUUfkZoXLF4sEMxWuhBFr8=
 github.com/metacubex/sing v0.0.0-20241121030428-33b6ebc52000 h1:gUbMXcQXhXGj0vCpCVFTUyIH7TMpD1dpTcNv/MCS+ok=
 github.com/metacubex/sing v0.0.0-20241121030428-33b6ebc52000/go.mod h1:ARkL0gM13/Iv5VCZmci/NuoOlePoIsW0m7BWfln/Hak=
 github.com/metacubex/sing-quic v0.0.0-20250119013740-2a19cce83925 h1:UkPoRAnoBQMn7IK5qpoIV3OejU15q+rqel3NrbSCFKA=
@@ -168,8 +170,6 @@ github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a h1:ObwtHN2VpqE0ZN
 github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a/go.mod h1:xLnfdiJbSp8rNqYEdIW/6eDO4mVoogml14Bh2hSiFpM=
 github.com/sagernet/nftables v0.3.0-beta.4 h1:kbULlAwAC3jvdGAC1P5Fa3GSxVwQJibNenDW2zaXr8I=
 github.com/sagernet/nftables v0.3.0-beta.4/go.mod h1:OQXAjvjNGGFxaTgVCSTRIhYB5/llyVDeapVoENYBDS8=
-github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691 h1:5Th31OC6yj8byLGkEnIYp6grlXfo1QYUfiYFGjewIdc=
-github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691/go.mod h1:B8lp4WkQ1PwNnrVMM6KyuFR20pU8jYBD+A4EhJovEXU=
 github.com/sagernet/sing-mux v0.2.1 h1:N/3MHymfnFZRd29tE3TaXwPUVVgKvxhtOkiCMLp9HVo=
 github.com/sagernet/sing-mux v0.2.1/go.mod h1:dm3BWL6NvES9pbib7llpylrq7Gq+LjlzG+0RacdxcyE=
 github.com/sagernet/sing-shadowtls v0.1.5 h1:uXxmq/HXh8DIiBGLzpMjCbWnzIAFs+lIxiTOjdgG5qo=

@@ -12,7 +12,7 @@ import (
 	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/ntp"
 
-	"github.com/sagernet/reality"
+	"github.com/metacubex/reality"
 )
 
 type Conn = reality.Conn

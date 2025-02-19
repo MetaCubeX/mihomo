@@ -23,6 +23,7 @@ require (
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
 	github.com/metacubex/quic-go v0.49.1-0.20250212162123-c135a4412996
 	github.com/metacubex/randv2 v0.2.0
+	github.com/metacubex/reality v0.0.0-20250219003814-74e8d7850629
 	github.com/metacubex/sing-quic v0.0.0-20250119013740-2a19cce83925
 	github.com/metacubex/sing-shadowsocks v0.2.8
 	github.com/metacubex/sing-shadowsocks2 v0.2.2
@@ -40,7 +41,6 @@ require (
 	github.com/sagernet/cors v1.2.1
 	github.com/sagernet/fswatch v0.1.1
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a
-	github.com/sagernet/reality v0.0.0-20230406110435-ee17307e7691
 	github.com/sagernet/sing v0.5.1
 	github.com/sagernet/sing-mux v0.2.1
 	github.com/sagernet/sing-shadowtls v0.1.5
