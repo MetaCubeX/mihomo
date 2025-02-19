@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/metacubex/mihomo/transport/anytls/pipe"
 )
 
 // Stream implements net.Conn
@@ -14,8 +16,9 @@ type Stream struct {
 
 	sess *Session
 
-	pipeR *io.PipeReader
-	pipeW *io.PipeWriter
+	pipeR         *pipe.PipeReader
+	pipeW         *pipe.PipeWriter
+	writeDeadline pipe.PipeDeadline
 
 	dieOnce sync.Once
 	dieHook func()
@@ -26,7 +29,8 @@ func newStream(id uint32, sess *Session) *Stream {
 	s := new(Stream)
 	s.id = id
 	s.sess = sess
-	s.pipeR, s.pipeW = io.Pipe()
+	s.pipeR, s.pipeW = pipe.Pipe()
+	s.writeDeadline = pipe.MakePipeDeadline()
 	return s
 }
 
@@ -37,6 +41,11 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 
 // Write implements net.Conn
 func (s *Stream) Write(b []byte) (n int, err error) {
+	select {
+	case <-s.writeDeadline.Wait():
+		return 0, os.ErrDeadlineExceeded
+	default:
+	}
 	f := newFrame(cmdPSH, s.id)
 	f.data = b
 	n, err = s.sess.writeFrame(f)
@@ -67,15 +76,17 @@ func (s *Stream) sessionClose() (once bool) {
 }
 
 func (s *Stream) SetReadDeadline(t time.Time) error {
-	return os.ErrNotExist
+	return s.pipeR.SetReadDeadline(t)
 }
 
 func (s *Stream) SetWriteDeadline(t time.Time) error {
-	return os.ErrNotExist
+	s.writeDeadline.Set(t)
+	return nil
 }
 
 func (s *Stream) SetDeadline(t time.Time) error {
-	return os.ErrNotExist
+	s.SetWriteDeadline(t)
+	return s.SetReadDeadline(t)
 }
 
 // LocalAddr satisfies net.Conn interface
