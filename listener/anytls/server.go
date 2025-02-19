@@ -135,6 +135,8 @@ func (l *Listener) HandleConn(conn net.Conn, h *sing.ListenerHandler) {
 	defer conn.Close()
 
 	b := buf.NewPacket()
+	defer b.Release()
+
 	_, err := b.ReadOnceFrom(conn)
 	if err != nil {
 		return
@@ -177,6 +179,6 @@ func (l *Listener) HandleConn(conn net.Conn, h *sing.ListenerHandler) {
 			Destination: destination,
 		})
 	}, &l.padding)
-	session.Run(true)
+	session.Run()
 	session.Close()
 }
