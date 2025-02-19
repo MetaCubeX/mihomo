@@ -177,6 +177,6 @@ func (l *Listener) HandleConn(conn net.Conn, h *sing.ListenerHandler) {
 			Destination: destination,
 		})
 	}, &l.padding)
-	session.Run(true)
+	session.Run()
 	session.Close()
 }
