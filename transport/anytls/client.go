@@ -71,6 +71,8 @@ func (c *Client) CreateOutboundTLSConnection(ctx context.Context) (net.Conn, err
 	}
 
 	b := buf.NewPacket()
+	defer b.Release()
+
 	b.Write(c.passwordSha256)
 	var paddingLen int
 	if pad := c.padding.Load().GenerateRecordPayloadSizes(0); len(pad) > 0 {
