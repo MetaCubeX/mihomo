@@ -874,6 +874,7 @@ proxies: # socks5
     udp: true
     # idle-session-check-interval: 30 # seconds
     # idle-session-timeout: 30 # seconds
+    # min-idle-session: 0
     # sni: "example.com"
     # alpn:
     #   - h2

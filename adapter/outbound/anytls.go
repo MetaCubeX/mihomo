@@ -42,6 +42,7 @@ type AnyTLSOption struct {
 	UDP                      bool     `proxy:"udp,omitempty"`
 	IdleSessionCheckInterval int      `proxy:"idle-session-check-interval,omitempty"`
 	IdleSessionTimeout       int      `proxy:"idle-session-timeout,omitempty"`
+	MinIdleSession           int      `proxy:"min-idle-session,omitempty"`
 }
 
 func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (_ C.Conn, err error) {
@@ -98,6 +99,7 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		Dialer:                   singDialer,
 		IdleSessionCheckInterval: time.Duration(option.IdleSessionCheckInterval) * time.Second,
 		IdleSessionTimeout:       time.Duration(option.IdleSessionTimeout) * time.Second,
+		MinIdleSession:           option.MinIdleSession,
 	}
 	tlsConfig := &vmess.TLSConfig{
 		Host:              option.SNI,
