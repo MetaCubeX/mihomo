@@ -7,21 +7,25 @@ body:
     id: ensure
     attributes:
       label: Verify steps
-      description: "Before submitting, please check all the following options to demonstrate that you have read and understood the requirements below, otherwise this issue will be closed."
+      description: Before submitting, please check all the options below to confirm that you have read and understood the following requirements; otherwise, this issue will be closed.
       options:
-        - label: "I have read the [documentation](https://wiki.metacubex.one/) and understand the meaning of all configuration items I have written, avoiding a large number of seemingly useful options or default values."
-          required: true
-        - label: "I have not reviewed the [documentation](https://wiki.metacubex.one/) and resolve this issue."
+        - label: I have read the [documentation](https://wiki.metacubex.one/) and understand the meaning of all the configuration items I have written, rather than just piling up seemingly useful options or default values.
           required: false
-        - label: "I have not searched the [Issue Tracker](……/)  for the problem I am going to raise."
+        - label: I have carefully reviewed the [documentation](https://wiki.metacubex.one/) and have not resolved the issue.
           required: false
-        - label: "I have tested with the latest Alpha branch version, and the issue still persists."
+        - label: I have searched the [Issue Tracker](……/) for the issue I want to raise and did not find it.
+          required: false
+        - label: I am a non-Chinese user.
+          required: false
+        - label: I have tested with the latest Alpha branch version, and the issue still persists.
           required: true
-        - label: "I have provided server and client configuration files and processes that can reproduce the issue locally, rather than a desensitized complex client configuration file."
+        - label: I have provided the server and client configuration files and processes that can reproduce the issue locally, rather than a sanitized complex client configuration file.
           required: true
-        - label: "I have provided the simplest configuration that can reproduce the error I reported, rather than relying on remote servers, TUN, graphical client interfaces, or other closed-source software."
+        - label: I provided the simplest configuration that can be used to reproduce the errors in my report, rather than relying on remote servers or piling on a lot of unnecessary configurations for reproduction.
           required: true
-        - label:  "I have provided complete configuration files and logs, rather than providing only parts that I believe are useful due to confidence in my own intelligence."
+        - label: I have provided complete logs, rather than just the parts I think are useful out of confidence in my own intelligence.
+          required: true
+        - label: I have directly reproduced the error using the Mihomo command-line program, rather than using other tools or scripts.
           required: true
 
   - type: dropdown

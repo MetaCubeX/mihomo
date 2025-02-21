@@ -1,0 +1,23 @@
+name: 功能请求
+description: 为该项目提出建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: ensure
+    attributes:
+      label: 验证步骤
+      description: 在提交之前，请勾选以下选项以证明您已经阅读并理解了以下要求，否则该 issue 将被关闭。
+      options:
+        - label: 我已经阅读了 [文档](https://wiki.metacubex.one/)，确认了该功能没有实现
+          required: false
+        - label: 我已在 [Issue Tracker](……/) 中寻找过我要提出的功能请求，并且没有找到
+          required: false
+        - label: 我是中文用户，而非其他语言用户
+          required: false
+  - type: textarea
+    attributes:
+      label: 描述
+      description: 请提供对于该功能的详细描述，而不是莫名其妙的话术。
+    validations:
+      required: true

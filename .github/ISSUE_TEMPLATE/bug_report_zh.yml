@@ -6,22 +6,26 @@ body:
   - type: checkboxes
     id: ensure
     attributes:
-      label: Verify steps
-      description: 在提交之前，请勾选以下所有选项以证明您已经阅读并理解了以下要求，否则该 issue 将被关闭。
+      label: 验证步骤
+      description: 在提交之前，请勾选以下选项以证明您已经阅读并理解了以下要求，否则该 issue 将被关闭。
       options:
         - label: 我已经阅读了 [文档](https://wiki.metacubex.one/)，了解所有我编写的配置文件项的含义，而不是大量堆砌看似有用的选项或默认值。
-          required: true
-        - label: 我未仔细看过 [文档](https://wiki.metacubex.one/) 并解决问题
           required: false
-        - label: 我未在 [Issue Tracker](……/) 中寻找过我要提出的问题
+        - label: 我仔细看过 [文档](https://wiki.metacubex.one/) 并未解决问题
+          required: false
+        - label: 我已在 [Issue Tracker](……/) 中寻找过我要提出的问题，并且没有找到
+          required: false
+        - label: 我是中文用户，而非其他语言用户
           required: false
         - label: 我已经使用最新的 Alpha 分支版本测试过，问题依旧存在
           required: true
         - label: 我提供了可以在本地重现该问题的服务器、客户端配置文件与流程，而不是一个脱敏的复杂客户端配置文件。
           required: true
-        - label: 我提供了可用于重现我报告的错误的最简配置，而不是依赖远程服务器、TUN、图形界面客户端或者其他闭源软件。
+        - label: 我提供了可用于重现我报告的错误的最简配置，而不是依赖远程服务器或者堆砌大量对于复现无用的配置等。
           required: true
-        - label: 我提供了完整的配置文件与日志，而不是出于对自身智力的自信而仅提供了部分认为有用的部分。
+        - label: 我提供了完整的日志，而不是出于对自身智力的自信而仅提供了部分认为有用的部分。
+          required: true
+        - label: 我直接使用 Mihomo 命令行程序重现了错误，而不是使用其他工具或脚本。
           required: true
 
   - type: dropdown
