@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	ReservedName = "default"
+	ReservedName = "__internal_default_provider"
 )
 
 type ProxySchema struct {
