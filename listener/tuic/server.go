@@ -1,7 +1,6 @@
 package tuic
 
 import (
-	"context"
 	"crypto/tls"
 	"net"
 	"strings"
@@ -93,23 +92,14 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 	quicConfig.MaxDatagramFrameSize = int64(maxDatagramFrameSize)
 
 	handleTcpFn := func(conn net.Conn, addr socks5.Addr, _additions ...inbound.Addition) error {
-		newAdditions := additions
-		if len(_additions) > 0 {
-			newAdditions = slices.Clone(additions)
-			newAdditions = append(newAdditions, _additions...)
-		}
-		conn, metadata := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
-		if h.IsSpecialFqdn(metadata.Host) {
-			go func() { // ParseSpecialFqdn will block, so open a new goroutine
-				_ = h.ParseSpecialFqdn(
-					sing.WithAdditions(context.Background(), newAdditions...),
-					conn,
-					sing.ConvertMetadata(metadata),
-				)
-			}()
-			return nil
-		}
-		go tunnel.HandleTCPConn(conn, metadata)
+		//newAdditions := additions
+		//if len(_additions) > 0 {
+		//	newAdditions = slices.Clone(additions)
+		//	newAdditions = append(newAdditions, _additions...)
+		//}
+		//conn, metadata := inbound.NewSocket(addr, conn, C.TUIC, newAdditions...)
+		//go tunnel.HandleTCPConn(conn, metadata)
+		go h.HandleSocket(addr, conn, _additions...) // h.HandleSocket will block, so open a new goroutine
 		return nil
 	}
 	handleUdpFn := func(addr socks5.Addr, packet C.UDPPacket, _additions ...inbound.Addition) error {
