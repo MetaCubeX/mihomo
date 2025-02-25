@@ -75,6 +75,10 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = logic.NewOR(payload, target, ParseRule)
 	case "NOT":
 		parsed, parseErr = logic.NewNOT(payload, target, ParseRule)
+	case "SRC-MAC":
+		parsed = RC.NewMAC(payload, target)
+	case "SCHEDULE":
+		parsed, parseErr = RC.NewSchedule(payload, target)
 	case "RULE-SET":
 		isSrc, noResolve := RC.ParseParams(params)
 		parsed, parseErr = RP.NewRuleSet(payload, target, isSrc, noResolve)
