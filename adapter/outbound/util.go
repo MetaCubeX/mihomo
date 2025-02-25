@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/socks5"
@@ -106,6 +107,10 @@ func resolveUDPAddrWithPrefer(ctx context.Context, network, address string, pref
 			}
 
 		}
+	}
+
+	if ip.Is6() && dialer.IP4PEnable {
+		ip, port = dialer.LookupIP4P(ip, port)
 	}
 
 	if !ip.IsValid() && fallback.IsValid() {
