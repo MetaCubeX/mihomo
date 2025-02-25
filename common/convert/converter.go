@@ -178,14 +178,22 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			switch network {
-			case "ws":
+			case "ws", "httpupgrade":
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 
 				headers["User-Agent"] = RandUserAgent()
+				if host := query.Get("host"); host != "" {
+					headers["Host"] = host
+				}
 
 				wsOpts["path"] = query.Get("path")
 				wsOpts["headers"] = headers
+
+				if network == "httpupgrade" {
+					wsOpts["v2ray-http-upgrade"] = true
+					wsOpts["v2ray-http-upgrade-fast-open"] = true
+				}
 
 				trojan["ws-opts"] = wsOpts
 
@@ -350,6 +358,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 									wsOpts["max-early-data"] = med
 									wsOpts["early-data-header-name"] = "Sec-WebSocket-Protocol"
 								case "httpupgrade":
+									wsOpts["v2ray-http-upgrade"] = true
 									wsOpts["v2ray-http-upgrade-fast-open"] = true
 								}
 								query.Del("ed")
@@ -443,10 +452,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				} else if strings.Contains(pluginName, "v2ray-plugin") {
 					ss["plugin"] = "v2ray-plugin"
 					ss["plugin-opts"] = map[string]any{
-						"mode": pluginInfo.Get("mode"),
-						"host": pluginInfo.Get("host"),
-						"path": pluginInfo.Get("path"),
-						"tls":  strings.Contains(plugin, "tls"),
+						"mode":               pluginInfo.Get("mode"),
+						"host":               pluginInfo.Get("host"),
+						"path":               pluginInfo.Get("path"),
+						"tls":                strings.Contains(plugin, "tls"),
+						"mux":                pluginInfo.Get("mux") != "0",
+						"v2ray-http-upgrade": strings.Contains(plugin, "httpupgrade"),
 					}
 				}
 			}
