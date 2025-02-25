@@ -9,6 +9,8 @@ const (
 	GEOSITE
 	GEOIP
 	SrcGEOIP
+	SrcMAC
+	DstMAC
 	IPASN
 	SrcIPASN
 	IPCIDR
@@ -54,6 +56,10 @@ func (rt RuleType) String() string {
 		return "GeoIP"
 	case SrcGEOIP:
 		return "SrcGeoIP"
+	case SrcMAC:
+		return "SrcMAC"
+	case DstMAC:
+		return "DstMAC"
 	case IPASN:
 		return "IPASN"
 	case SrcIPASN:
