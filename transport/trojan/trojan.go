@@ -38,10 +38,9 @@ type Command = byte
 const (
 	CommandTCP byte = 1
 	CommandUDP byte = 3
+	CommandMux byte = 0x7f
 
-	// deprecated XTLS commands, as souvenirs
-	commandXRD byte = 0xf0 // XTLS direct mode
-	commandXRO byte = 0xf1 // XTLS origin mode
+	KeyLength = 56
 )
 
 type Option struct {
@@ -65,7 +64,7 @@ type WebsocketOption struct {
 
 type Trojan struct {
 	option      *Option
-	hexPassword []byte
+	hexPassword [KeyLength]byte
 }
 
 func (t *Trojan) StreamConn(ctx context.Context, conn net.Conn) (net.Conn, error) {
@@ -152,7 +151,7 @@ func (t *Trojan) WriteHeader(w io.Writer, command Command, socks5Addr []byte) er
 	buf := pool.GetBuffer()
 	defer pool.PutBuffer(buf)
 
-	buf.Write(t.hexPassword)
+	buf.Write(t.hexPassword[:])
 	buf.Write(crlf)
 
 	buf.WriteByte(command)
@@ -245,7 +244,7 @@ func ReadPacket(r io.Reader, payload []byte) (net.Addr, int, int, error) {
 }
 
 func New(option *Option) *Trojan {
-	return &Trojan{option, hexSha224([]byte(option.Password))}
+	return &Trojan{option, Key(option.Password)}
 }
 
 var _ N.EnhancePacketConn = (*PacketConn)(nil)
@@ -340,9 +339,12 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 	return
 }
 
-func hexSha224(data []byte) []byte {
-	buf := make([]byte, 56)
-	hash := sha256.Sum224(data)
-	hex.Encode(buf, hash[:])
-	return buf
+func NewPacketConn(conn net.Conn) *PacketConn {
+	return &PacketConn{Conn: conn}
+}
+
+func Key(password string) (key [56]byte) {
+	hash := sha256.Sum224([]byte(password))
+	hex.Encode(key[:], hash[:])
+	return
 }

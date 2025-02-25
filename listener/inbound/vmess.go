@@ -81,14 +81,6 @@ func (v *Vmess) Address() string {
 // Listen implements constant.InboundListener
 func (v *Vmess) Listen(tunnel C.Tunnel) error {
 	var err error
-	users := make([]LC.VmessUser, len(v.config.Users))
-	for i, v := range v.config.Users {
-		users[i] = LC.VmessUser{
-			Username: v.Username,
-			UUID:     v.UUID,
-			AlterID:  v.AlterID,
-		}
-	}
 	v.l, err = sing_vmess.New(v.vs, tunnel, v.Additions()...)
 	if err != nil {
 		return err

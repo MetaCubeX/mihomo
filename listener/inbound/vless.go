@@ -81,14 +81,6 @@ func (v *Vless) Address() string {
 // Listen implements constant.InboundListener
 func (v *Vless) Listen(tunnel C.Tunnel) error {
 	var err error
-	users := make([]LC.VlessUser, len(v.config.Users))
-	for i, v := range v.config.Users {
-		users[i] = LC.VlessUser{
-			Username: v.Username,
-			UUID:     v.UUID,
-			Flow:     v.Flow,
-		}
-	}
 	v.l, err = sing_vless.New(v.vs, tunnel, v.Additions()...)
 	if err != nil {
 		return err

@@ -28,6 +28,7 @@ const (
 	VLESS
 	REDIR
 	TPROXY
+	TROJAN
 	TUNNEL
 	TUN
 	TUIC
@@ -77,6 +78,8 @@ func (t Type) String() string {
 		return "Redir"
 	case TPROXY:
 		return "TProxy"
+	case TROJAN:
+		return "Trojan"
 	case TUNNEL:
 		return "Tunnel"
 	case TUN:
@@ -115,6 +118,8 @@ func ParseType(t string) (*Type, error) {
 		res = REDIR
 	case "TPROXY":
 		res = TPROXY
+	case "TROJAN":
+		res = TROJAN
 	case "TUNNEL":
 		res = TUNNEL
 	case "TUN":
