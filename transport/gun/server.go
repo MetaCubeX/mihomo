@@ -5,8 +5,10 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/buf"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 
@@ -57,9 +59,14 @@ func NewServerHandler(options ServerOption) http.Handler {
 				conn.localAddr = addr
 			}
 
-			// gun.Conn can't correct handle ReadDeadline
-			// so call N.NewDeadlineConn to add a safe wrapper
-			connHandler(N.NewDeadlineConn(conn))
+			wrapper := &h2ConnWrapper{
+				// gun.Conn can't correct handle ReadDeadline
+				// so call N.NewDeadlineConn to add a safe wrapper
+				ExtendedConn: N.NewDeadlineConn(conn),
+			}
+			connHandler(wrapper)
+			wrapper.CloseWrapper()
+
 			return
 		}
 
@@ -67,4 +74,44 @@ func NewServerHandler(options ServerOption) http.Handler {
 	}), &http2.Server{
 		IdleTimeout: idleTimeout,
 	})
+}
+
+// h2ConnWrapper used to avoid "panic: Write called after Handler finished" for gun.Conn
+type h2ConnWrapper struct {
+	N.ExtendedConn
+	access sync.Mutex
+	closed bool
+}
+
+func (w *h2ConnWrapper) Write(p []byte) (n int, err error) {
+	w.access.Lock()
+	defer w.access.Unlock()
+	if w.closed {
+		return 0, net.ErrClosed
+	}
+	return w.ExtendedConn.Write(p)
+}
+
+func (w *h2ConnWrapper) WriteBuffer(buffer *buf.Buffer) error {
+	w.access.Lock()
+	defer w.access.Unlock()
+	if w.closed {
+		return net.ErrClosed
+	}
+	return w.ExtendedConn.WriteBuffer(buffer)
+}
+
+func (w *h2ConnWrapper) CloseWrapper() {
+	w.access.Lock()
+	defer w.access.Unlock()
+	w.closed = true
+}
+
+func (w *h2ConnWrapper) Close() error {
+	w.CloseWrapper()
+	return w.ExtendedConn.Close()
+}
+
+func (w *h2ConnWrapper) Upstream() any {
+	return w.ExtendedConn
 }
