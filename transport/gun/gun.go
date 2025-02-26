@@ -38,15 +38,17 @@ var defaultHeader = http.Header{
 type DialFn = func(network, addr string) (net.Conn, error)
 
 type Conn struct {
-	response  *http.Response
-	request   *http.Request
-	transport *TransportWrap
-	writer    *io.PipeWriter
-	once      sync.Once
-	close     atomic.Bool
-	err       error
-	remain    int
-	br        *bufio.Reader
+	initFn  func() (io.ReadCloser, error)
+	writer  io.Writer
+	flusher http.Flusher
+	netAddr
+
+	reader io.ReadCloser
+	once   sync.Once
+	close  atomic.Bool
+	err    error
+	remain int
+	br     *bufio.Reader
 	// deadlines
 	deadline *time.Timer
 }
@@ -57,26 +59,32 @@ type Config struct {
 	ClientFingerprint string
 }
 
-func (g *Conn) initRequest() {
-	response, err := g.transport.RoundTrip(g.request)
+func (g *Conn) initReader() {
+	reader, err := g.initFn()
 	if err != nil {
 		g.err = err
-		g.writer.Close()
+		if closer, ok := g.writer.(io.Closer); ok {
+			closer.Close()
+		}
 		return
 	}
 
 	if !g.close.Load() {
-		g.response = response
-		g.br = bufio.NewReader(response.Body)
+		g.reader = reader
+		g.br = bufio.NewReader(reader)
 	} else {
-		response.Body.Close()
+		reader.Close()
 	}
 }
 
+func (g *Conn) Init() error {
+	g.once.Do(g.initReader)
+	return g.err
+}
+
 func (g *Conn) Read(b []byte) (n int, err error) {
-	g.once.Do(g.initRequest)
-	if g.err != nil {
-		return 0, g.err
+	if err = g.Init(); err != nil {
+		return
 	}
 
 	if g.remain > 0 {
@@ -88,7 +96,7 @@ func (g *Conn) Read(b []byte) (n int, err error) {
 		n, err = io.ReadFull(g.br, b[:size])
 		g.remain -= n
 		return
-	} else if g.response == nil {
+	} else if g.reader == nil {
 		return 0, net.ErrClosed
 	}
 
@@ -139,6 +147,10 @@ func (g *Conn) Write(b []byte) (n int, err error) {
 		err = g.err
 	}
 
+	if g.flusher != nil {
+		g.flusher.Flush()
+	}
+
 	return len(b), err
 }
 
@@ -158,6 +170,10 @@ func (g *Conn) WriteBuffer(buffer *buf.Buffer) error {
 		err = g.err
 	}
 
+	if g.flusher != nil {
+		g.flusher.Flush()
+	}
+
 	return err
 }
 
@@ -167,15 +183,16 @@ func (g *Conn) FrontHeadroom() int {
 
 func (g *Conn) Close() error {
 	g.close.Store(true)
-	if r := g.response; r != nil {
-		r.Body.Close()
+	if reader := g.reader; reader != nil {
+		reader.Close()
 	}
 
-	return g.writer.Close()
+	if closer, ok := g.writer.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
-func (g *Conn) LocalAddr() net.Addr                { return g.transport.LocalAddr() }
-func (g *Conn) RemoteAddr() net.Addr               { return g.transport.RemoteAddr() }
 func (g *Conn) SetReadDeadline(t time.Time) error  { return g.SetDeadline(t) }
 func (g *Conn) SetWriteDeadline(t time.Time) error { return g.SetDeadline(t) }
 
@@ -200,6 +217,7 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string, re
 			return nil, err
 		}
 		wrap.remoteAddr = pconn.RemoteAddr()
+		wrap.localAddr = pconn.LocalAddr()
 
 		if tlsConfig == nil {
 			return pconn, nil
@@ -286,13 +304,18 @@ func StreamGunWithTransport(transport *TransportWrap, cfg *Config) (net.Conn, er
 	}
 
 	conn := &Conn{
-		request:   request,
-		transport: transport,
-		writer:    writer,
-		close:     atomic.NewBool(false),
+		initFn: func() (io.ReadCloser, error) {
+			response, err := transport.RoundTrip(request)
+			if err != nil {
+				return nil, err
+			}
+			return response.Body, nil
+		},
+		writer:  writer,
+		netAddr: transport.netAddr,
 	}
 
-	go conn.once.Do(conn.initRequest)
+	go conn.Init()
 	return conn, nil
 }
 

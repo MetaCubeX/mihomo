@@ -14,14 +14,15 @@ type VlessUser struct {
 }
 
 type VlessServer struct {
-	Enable        bool
-	Listen        string
-	Users         []VlessUser
-	WsPath        string
-	Certificate   string
-	PrivateKey    string
-	RealityConfig reality.Config
-	MuxOption     sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
+	Enable          bool
+	Listen          string
+	Users           []VlessUser
+	WsPath          string
+	GrpcServiceName string
+	Certificate     string
+	PrivateKey      string
+	RealityConfig   reality.Config
+	MuxOption       sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
 }
 
 func (t VlessServer) String() string {

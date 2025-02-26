@@ -13,15 +13,16 @@ type TrojanUser struct {
 }
 
 type TrojanServer struct {
-	Enable         bool
-	Listen         string
-	Users          []TrojanUser
-	WsPath         string
-	Certificate    string
-	PrivateKey     string
-	RealityConfig  reality.Config
-	MuxOption      sing.MuxOption
-	TrojanSSOption TrojanSSOption
+	Enable          bool
+	Listen          string
+	Users           []TrojanUser
+	WsPath          string
+	GrpcServiceName string
+	Certificate     string
+	PrivateKey      string
+	RealityConfig   reality.Config
+	MuxOption       sing.MuxOption
+	TrojanSSOption  TrojanSSOption
 }
 
 // TrojanSSOption from https://github.com/p4gefau1t/trojan-go/blob/v0.10.6/tunnel/shadowsocks/config.go#L5

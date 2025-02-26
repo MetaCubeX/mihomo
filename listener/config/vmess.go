@@ -14,14 +14,15 @@ type VmessUser struct {
 }
 
 type VmessServer struct {
-	Enable        bool
-	Listen        string
-	Users         []VmessUser
-	WsPath        string
-	Certificate   string
-	PrivateKey    string
-	RealityConfig reality.Config
-	MuxOption     sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
+	Enable          bool
+	Listen          string
+	Users           []VmessUser
+	WsPath          string
+	GrpcServiceName string
+	Certificate     string
+	PrivateKey      string
+	RealityConfig   reality.Config
+	MuxOption       sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
 }
 
 func (t VmessServer) String() string {

@@ -9,13 +9,14 @@ import (
 
 type TrojanOption struct {
 	BaseOption
-	Users         []TrojanUser   `inbound:"users"`
-	WsPath        string         `inbound:"ws-path,omitempty"`
-	Certificate   string         `inbound:"certificate,omitempty"`
-	PrivateKey    string         `inbound:"private-key,omitempty"`
-	RealityConfig RealityConfig  `inbound:"reality-config,omitempty"`
-	MuxOption     MuxOption      `inbound:"mux-option,omitempty"`
-	SSOption      TrojanSSOption `inbound:"ss-option,omitempty"`
+	Users           []TrojanUser   `inbound:"users"`
+	WsPath          string         `inbound:"ws-path,omitempty"`
+	GrpcServiceName string         `inbound:"grpc-service-name,omitempty"`
+	Certificate     string         `inbound:"certificate,omitempty"`
+	PrivateKey      string         `inbound:"private-key,omitempty"`
+	RealityConfig   RealityConfig  `inbound:"reality-config,omitempty"`
+	MuxOption       MuxOption      `inbound:"mux-option,omitempty"`
+	SSOption        TrojanSSOption `inbound:"ss-option,omitempty"`
 }
 
 type TrojanUser struct {
@@ -57,14 +58,15 @@ func NewTrojan(options *TrojanOption) (*Trojan, error) {
 		Base:   base,
 		config: options,
 		vs: LC.TrojanServer{
-			Enable:        true,
-			Listen:        base.RawAddress(),
-			Users:         users,
-			WsPath:        options.WsPath,
-			Certificate:   options.Certificate,
-			PrivateKey:    options.PrivateKey,
-			RealityConfig: options.RealityConfig.Build(),
-			MuxOption:     options.MuxOption.Build(),
+			Enable:          true,
+			Listen:          base.RawAddress(),
+			Users:           users,
+			WsPath:          options.WsPath,
+			GrpcServiceName: options.GrpcServiceName,
+			Certificate:     options.Certificate,
+			PrivateKey:      options.PrivateKey,
+			RealityConfig:   options.RealityConfig.Build(),
+			MuxOption:       options.MuxOption.Build(),
 			TrojanSSOption: LC.TrojanSSOption{
 				Enabled:  options.SSOption.Enabled,
 				Method:   options.SSOption.Method,

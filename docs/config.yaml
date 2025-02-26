@@ -1161,6 +1161,7 @@ listeners:
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
         alterId: 1
     # ws-path: "/" # 如果不为空则开启 websocket 传输层
+    # grpc-service-name: "GunService" # 如果不为空则开启 grpc 传输层
     # 下面两项如果填写则开启 tls（需要同时填写）
     # certificate: ./server.crt
     # private-key: ./server.key
@@ -1213,6 +1214,7 @@ listeners:
         uuid: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
         flow: xtls-rprx-vision
     # ws-path: "/" # 如果不为空则开启 websocket 传输层
+    # grpc-service-name: "GunService" # 如果不为空则开启 grpc 传输层
     # 下面两项如果填写则开启 tls（需要同时填写）
     # certificate: ./server.crt
     # private-key: ./server.key
@@ -1248,6 +1250,7 @@ listeners:
       - username: 1
         password: 9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68
     # ws-path: "/" # 如果不为空则开启 websocket 传输层
+    # grpc-service-name: "GunService" # 如果不为空则开启 grpc 传输层
     # 下面两项如果填写则开启 tls（需要同时填写）
     certificate: ./server.crt
     private-key: ./server.key

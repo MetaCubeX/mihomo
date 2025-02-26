@@ -9,12 +9,13 @@ import (
 
 type VlessOption struct {
 	BaseOption
-	Users         []VlessUser   `inbound:"users"`
-	WsPath        string        `inbound:"ws-path,omitempty"`
-	Certificate   string        `inbound:"certificate,omitempty"`
-	PrivateKey    string        `inbound:"private-key,omitempty"`
-	RealityConfig RealityConfig `inbound:"reality-config,omitempty"`
-	MuxOption     MuxOption     `inbound:"mux-option,omitempty"`
+	Users           []VlessUser   `inbound:"users"`
+	WsPath          string        `inbound:"ws-path,omitempty"`
+	GrpcServiceName string        `inbound:"grpc-service-name,omitempty"`
+	Certificate     string        `inbound:"certificate,omitempty"`
+	PrivateKey      string        `inbound:"private-key,omitempty"`
+	RealityConfig   RealityConfig `inbound:"reality-config,omitempty"`
+	MuxOption       MuxOption     `inbound:"mux-option,omitempty"`
 }
 
 type VlessUser struct {
@@ -51,14 +52,15 @@ func NewVless(options *VlessOption) (*Vless, error) {
 		Base:   base,
 		config: options,
 		vs: LC.VlessServer{
-			Enable:        true,
-			Listen:        base.RawAddress(),
-			Users:         users,
-			WsPath:        options.WsPath,
-			Certificate:   options.Certificate,
-			PrivateKey:    options.PrivateKey,
-			RealityConfig: options.RealityConfig.Build(),
-			MuxOption:     options.MuxOption.Build(),
+			Enable:          true,
+			Listen:          base.RawAddress(),
+			Users:           users,
+			WsPath:          options.WsPath,
+			GrpcServiceName: options.GrpcServiceName,
+			Certificate:     options.Certificate,
+			PrivateKey:      options.PrivateKey,
+			RealityConfig:   options.RealityConfig.Build(),
+			MuxOption:       options.MuxOption.Build(),
 		},
 	}, nil
 }
