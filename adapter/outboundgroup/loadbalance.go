@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"sync"
+	"net"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
@@ -134,31 +134,31 @@ func (lb *LoadBalance) IsL3Protocol(metadata *C.Metadata) bool {
 }
 
 func strategyRoundRobin(url string) strategyFn {
+	var availableProxies []C.Proxy
 	idx := 0
 	idxMutex := sync.Mutex{}
+
 	return func(proxies []C.Proxy, metadata *C.Metadata, touch bool) C.Proxy {
 		idxMutex.Lock()
 		defer idxMutex.Unlock()
 
-		i := 0
-		length := len(proxies)
-
 		if touch {
-			defer func() {
-				idx = (idx + i) % length
-			}()
-		}
-
-		for ; i < length; i++ {
-			id := (idx + i) % length
-			proxy := proxies[id]
-			if proxy.AliveForTestUrl(url) {
-				i++
-				return proxy
+			// check list
+			availableProxies = []C.Proxy{}
+			for _, proxy := range proxies {
+				if proxy.AliveForTestUrl(url) {
+					availableProxies = append(availableProxies, proxy)
+				}
+			}
+			// fallback
+			if len(availableProxies) == 0 {
+				return proxies[0]
 			}
 		}
-
-		return proxies[0]
+		proxy := availableProxies[idx]
+		// reset idx
+		idx = (idx + 1) % len(availableProxies)
+		return proxy
 	}
 }
 
