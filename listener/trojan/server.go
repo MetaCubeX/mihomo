@@ -110,7 +110,7 @@ func New(config LC.TrojanServer, tunnel C.Tunnel, additions ...inbound.Addition)
 			},
 			HttpHandler: httpHandler,
 		})
-		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2")
+		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...) // h2 must before http/1.1
 	}
 
 	for _, addr := range strings.Split(config.Listen, ",") {
