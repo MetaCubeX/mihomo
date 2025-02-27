@@ -1,6 +1,10 @@
 package inbound
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/http"
 	"github.com/metacubex/mihomo/log"
@@ -18,7 +22,7 @@ func (o HTTPOption) Equal(config C.InboundConfig) bool {
 type HTTP struct {
 	*Base
 	config *HTTPOption
-	l      *http.Listener
+	l      []*http.Listener
 }
 
 func NewHTTP(options *HTTPOption) (*HTTP, error) {
@@ -39,15 +43,21 @@ func (h *HTTP) Config() C.InboundConfig {
 
 // Address implements constant.InboundListener
 func (h *HTTP) Address() string {
-	return h.l.Address()
+	var addrList []string
+	for _, l := range h.l {
+		addrList = append(addrList, l.Address())
+	}
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener
 func (h *HTTP) Listen(tunnel C.Tunnel) error {
-	var err error
-	h.l, err = http.NewWithAuthenticator(h.RawAddress(), tunnel, h.config.Users.GetAuthStore(), h.Additions()...)
-	if err != nil {
-		return err
+	for _, addr := range strings.Split(h.RawAddress(), ",") {
+		l, err := http.NewWithAuthenticator(addr, tunnel, h.config.Users.GetAuthStore(), h.Additions()...)
+		if err != nil {
+			return err
+		}
+		h.l = append(h.l, l)
 	}
 	log.Infoln("HTTP[%s] proxy listening at: %s", h.Name(), h.Address())
 	return nil
@@ -55,8 +65,15 @@ func (h *HTTP) Listen(tunnel C.Tunnel) error {
 
 // Close implements constant.InboundListener
 func (h *HTTP) Close() error {
-	if h.l != nil {
-		return h.l.Close()
+	var errs []error
+	for _, l := range h.l {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close tcp listener %s err: %w", l.Address(), err))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }

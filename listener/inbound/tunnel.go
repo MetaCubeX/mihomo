@@ -1,7 +1,9 @@
 package inbound
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
 	LT "github.com/metacubex/mihomo/listener/tunnel"
@@ -21,8 +23,8 @@ func (o TunnelOption) Equal(config C.InboundConfig) bool {
 type Tunnel struct {
 	*Base
 	config *TunnelOption
-	ttl    *LT.Listener
-	tul    *LT.PacketConn
+	ttl    []*LT.Listener
+	tul    []*LT.PacketConn
 }
 
 func NewTunnel(options *TunnelOption) (*Tunnel, error) {
@@ -43,55 +45,61 @@ func (t *Tunnel) Config() C.InboundConfig {
 
 // Close implements constant.InboundListener
 func (t *Tunnel) Close() error {
-	var err error
-	if t.ttl != nil {
-		if tcpErr := t.ttl.Close(); tcpErr != nil {
-			err = tcpErr
+	var errs []error
+	for _, l := range t.ttl {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close tcp listener %s err: %w", l.Address(), err))
 		}
 	}
-	if t.tul != nil {
-		if udpErr := t.tul.Close(); udpErr != nil {
-			if err == nil {
-				err = udpErr
-			} else {
-				return fmt.Errorf("close tcp err: %s, close udp err: %s", err.Error(), udpErr.Error())
-			}
+	for _, l := range t.tul {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close udp listener %s err: %w", l.Address(), err))
 		}
 	}
-
-	return err
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // Address implements constant.InboundListener
 func (t *Tunnel) Address() string {
-	if t.ttl != nil {
-		return t.ttl.Address()
+	var addrList []string
+	for _, l := range t.ttl {
+		addrList = append(addrList, "tcp://"+l.Address())
 	}
-	if t.tul != nil {
-		return t.tul.Address()
+	for _, l := range t.tul {
+		addrList = append(addrList, "udp://"+l.Address())
 	}
-	return ""
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener
 func (t *Tunnel) Listen(tunnel C.Tunnel) error {
-	var err error
-	for _, network := range t.config.Network {
-		switch network {
-		case "tcp":
-			if t.ttl, err = LT.New(t.RawAddress(), t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...); err != nil {
-				return err
+	for _, addr := range strings.Split(t.RawAddress(), ",") {
+		for _, network := range t.config.Network {
+			switch network {
+			case "tcp":
+				ttl, err := LT.New(addr, t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...)
+				if err != nil {
+					return err
+				}
+				t.ttl = append(t.ttl, ttl)
+			case "udp":
+				tul, err := LT.NewUDP(addr, t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...)
+				if err != nil {
+					return err
+				}
+				t.tul = append(t.tul, tul)
+			default:
+				log.Warnln("unknown network type: %s, passed", network)
+				continue
 			}
-		case "udp":
-			if t.tul, err = LT.NewUDP(t.RawAddress(), t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...); err != nil {
-				return err
-			}
-		default:
-			log.Warnln("unknown network type: %s, passed", network)
-			continue
 		}
-		log.Infoln("Tunnel[%s](%s/%s)proxy listening at: %s", t.Name(), network, t.config.Target, t.Address())
 	}
+	log.Infoln("Tunnel[%s](%s)proxy listening at: %s", t.Name(), t.config.Target, t.Address())
 	return nil
 }
 

@@ -1,7 +1,9 @@
 package inbound
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/tproxy"
@@ -20,8 +22,8 @@ func (o TProxyOption) Equal(config C.InboundConfig) bool {
 type TProxy struct {
 	*Base
 	config *TProxyOption
-	lUDP   *tproxy.UDPListener
-	lTCP   *tproxy.Listener
+	lUDP   []*tproxy.UDPListener
+	lTCP   []*tproxy.Listener
 	udp    bool
 }
 
@@ -45,20 +47,27 @@ func (t *TProxy) Config() C.InboundConfig {
 
 // Address implements constant.InboundListener
 func (t *TProxy) Address() string {
-	return t.lTCP.Address()
+	var addrList []string
+	for _, l := range t.lTCP {
+		addrList = append(addrList, l.Address())
+	}
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener
 func (t *TProxy) Listen(tunnel C.Tunnel) error {
-	var err error
-	t.lTCP, err = tproxy.New(t.RawAddress(), tunnel, t.Additions()...)
-	if err != nil {
-		return err
-	}
-	if t.udp {
-		t.lUDP, err = tproxy.NewUDP(t.RawAddress(), tunnel, t.Additions()...)
+	for _, addr := range strings.Split(t.RawAddress(), ",") {
+		lTCP, err := tproxy.New(addr, tunnel, t.Additions()...)
 		if err != nil {
 			return err
+		}
+		t.lTCP = append(t.lTCP, lTCP)
+		if t.udp {
+			lUDP, err := tproxy.NewUDP(addr, tunnel, t.Additions()...)
+			if err != nil {
+				return err
+			}
+			t.lUDP = append(t.lUDP, lUDP)
 		}
 	}
 	log.Infoln("TProxy[%s] proxy listening at: %s", t.Name(), t.Address())
@@ -67,23 +76,21 @@ func (t *TProxy) Listen(tunnel C.Tunnel) error {
 
 // Close implements constant.InboundListener
 func (t *TProxy) Close() error {
-	var tcpErr error
-	var udpErr error
-	if t.lTCP != nil {
-		tcpErr = t.lTCP.Close()
+	var errs []error
+	for _, l := range t.lTCP {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close tcp listener %s err: %w", l.Address(), err))
+		}
 	}
-	if t.lUDP != nil {
-		udpErr = t.lUDP.Close()
+	for _, l := range t.lUDP {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close udp listener %s err: %w", l.Address(), err))
+		}
 	}
-
-	if tcpErr != nil && udpErr != nil {
-		return fmt.Errorf("tcp close err: %s and udp close err: %s", tcpErr, udpErr)
-	}
-	if tcpErr != nil {
-		return tcpErr
-	}
-	if udpErr != nil {
-		return udpErr
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }

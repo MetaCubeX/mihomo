@@ -1,6 +1,8 @@
 package inbound
 
 import (
+	"strings"
+
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing_vmess"
@@ -72,12 +74,13 @@ func (v *Vmess) Config() C.InboundConfig {
 
 // Address implements constant.InboundListener
 func (v *Vmess) Address() string {
+	var addrList []string
 	if v.l != nil {
 		for _, addr := range v.l.AddrList() {
-			return addr.String()
+			addrList = append(addrList, addr.String())
 		}
 	}
-	return ""
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener

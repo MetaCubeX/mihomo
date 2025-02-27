@@ -1,7 +1,9 @@
 package inbound
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -23,8 +25,8 @@ func (o MixedOption) Equal(config C.InboundConfig) bool {
 type Mixed struct {
 	*Base
 	config *MixedOption
-	l      *mixed.Listener
-	lUDP   *socks.UDPListener
+	l      []*mixed.Listener
+	lUDP   []*socks.UDPListener
 	udp    bool
 }
 
@@ -47,20 +49,27 @@ func (m *Mixed) Config() C.InboundConfig {
 
 // Address implements constant.InboundListener
 func (m *Mixed) Address() string {
-	return m.l.Address()
+	var addrList []string
+	for _, l := range m.l {
+		addrList = append(addrList, l.Address())
+	}
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener
 func (m *Mixed) Listen(tunnel C.Tunnel) error {
-	var err error
-	m.l, err = mixed.NewWithAuthenticator(m.RawAddress(), tunnel, m.config.Users.GetAuthStore(), m.Additions()...)
-	if err != nil {
-		return err
-	}
-	if m.udp {
-		m.lUDP, err = socks.NewUDP(m.RawAddress(), tunnel, m.Additions()...)
+	for _, addr := range strings.Split(m.RawAddress(), ",") {
+		l, err := mixed.NewWithAuthenticator(addr, tunnel, m.config.Users.GetAuthStore(), m.Additions()...)
 		if err != nil {
 			return err
+		}
+		m.l = append(m.l, l)
+		if m.udp {
+			lUDP, err := socks.NewUDP(addr, tunnel, m.Additions()...)
+			if err != nil {
+				return err
+			}
+			m.lUDP = append(m.lUDP, lUDP)
 		}
 	}
 	log.Infoln("Mixed(http+socks)[%s] proxy listening at: %s", m.Name(), m.Address())
@@ -69,22 +78,23 @@ func (m *Mixed) Listen(tunnel C.Tunnel) error {
 
 // Close implements constant.InboundListener
 func (m *Mixed) Close() error {
-	var err error
-	if m.l != nil {
-		if tcpErr := m.l.Close(); tcpErr != nil {
-			err = tcpErr
+	var errs []error
+	for _, l := range m.l {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close tcp listener %s err: %w", l.Address(), err))
 		}
 	}
-	if m.udp && m.lUDP != nil {
-		if udpErr := m.lUDP.Close(); udpErr != nil {
-			if err == nil {
-				err = udpErr
-			} else {
-				return fmt.Errorf("close tcp err: %s, close udp err: %s", err.Error(), udpErr.Error())
-			}
+	for _, l := range m.lUDP {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close udp listener %s err: %w", l.Address(), err))
 		}
 	}
-	return err
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 var _ C.InboundListener = (*Mixed)(nil)

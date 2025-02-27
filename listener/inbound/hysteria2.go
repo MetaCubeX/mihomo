@@ -1,6 +1,8 @@
 package inbound
 
 import (
+	"strings"
+
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing_hysteria2"
@@ -83,12 +85,13 @@ func (t *Hysteria2) Config() C.InboundConfig {
 
 // Address implements constant.InboundListener
 func (t *Hysteria2) Address() string {
+	var addrList []string
 	if t.l != nil {
 		for _, addr := range t.l.AddrList() {
-			return addr.String()
+			addrList = append(addrList, addr.String())
 		}
 	}
-	return ""
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener

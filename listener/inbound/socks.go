@@ -1,7 +1,10 @@
 package inbound
 
 import (
+	"errors"
 	"fmt"
+	"strings"
+
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/socks"
 	"github.com/metacubex/mihomo/log"
@@ -21,8 +24,8 @@ type Socks struct {
 	*Base
 	config *SocksOption
 	udp    bool
-	stl    *socks.Listener
-	sul    *socks.UDPListener
+	stl    []*socks.Listener
+	sul    []*socks.UDPListener
 }
 
 func NewSocks(options *SocksOption) (*Socks, error) {
@@ -44,39 +47,48 @@ func (s *Socks) Config() C.InboundConfig {
 
 // Close implements constant.InboundListener
 func (s *Socks) Close() error {
-	var err error
-	if s.stl != nil {
-		if tcpErr := s.stl.Close(); tcpErr != nil {
-			err = tcpErr
+	var errs []error
+	for _, l := range s.stl {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close tcp listener %s err: %w", l.Address(), err))
 		}
 	}
-	if s.udp && s.sul != nil {
-		if udpErr := s.sul.Close(); udpErr != nil {
-			if err == nil {
-				err = udpErr
-			} else {
-				return fmt.Errorf("close tcp err: %s, close udp err: %s", err.Error(), udpErr.Error())
-			}
+	for _, l := range s.sul {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close udp listener %s err: %w", l.Address(), err))
 		}
 	}
-
-	return err
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // Address implements constant.InboundListener
 func (s *Socks) Address() string {
-	return s.stl.Address()
+	var addrList []string
+	for _, l := range s.stl {
+		addrList = append(addrList, l.Address())
+	}
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener
 func (s *Socks) Listen(tunnel C.Tunnel) error {
-	var err error
-	if s.stl, err = socks.NewWithAuthenticator(s.RawAddress(), tunnel, s.config.Users.GetAuthStore(), s.Additions()...); err != nil {
-		return err
-	}
-	if s.udp {
-		if s.sul, err = socks.NewUDP(s.RawAddress(), tunnel, s.Additions()...); err != nil {
+	for _, addr := range strings.Split(s.RawAddress(), ",") {
+		stl, err := socks.NewWithAuthenticator(addr, tunnel, s.config.Users.GetAuthStore(), s.Additions()...)
+		if err != nil {
 			return err
+		}
+		s.stl = append(s.stl, stl)
+		if s.udp {
+			sul, err := socks.NewUDP(addr, tunnel, s.Additions()...)
+			if err != nil {
+				return err
+			}
+			s.sul = append(s.sul, sul)
 		}
 	}
 

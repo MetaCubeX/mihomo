@@ -1,6 +1,10 @@
 package inbound
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/listener/redir"
 	"github.com/metacubex/mihomo/log"
@@ -17,7 +21,7 @@ func (o RedirOption) Equal(config C.InboundConfig) bool {
 type Redir struct {
 	*Base
 	config *RedirOption
-	l      *redir.Listener
+	l      []*redir.Listener
 }
 
 func NewRedir(options *RedirOption) (*Redir, error) {
@@ -38,15 +42,21 @@ func (r *Redir) Config() C.InboundConfig {
 
 // Address implements constant.InboundListener
 func (r *Redir) Address() string {
-	return r.l.Address()
+	var addrList []string
+	for _, l := range r.l {
+		addrList = append(addrList, l.Address())
+	}
+	return strings.Join(addrList, ",")
 }
 
 // Listen implements constant.InboundListener
 func (r *Redir) Listen(tunnel C.Tunnel) error {
-	var err error
-	r.l, err = redir.New(r.RawAddress(), tunnel, r.Additions()...)
-	if err != nil {
-		return err
+	for _, addr := range strings.Split(r.RawAddress(), ",") {
+		l, err := redir.New(addr, tunnel, r.Additions()...)
+		if err != nil {
+			return err
+		}
+		r.l = append(r.l, l)
 	}
 	log.Infoln("Redir[%s] proxy listening at: %s", r.Name(), r.Address())
 	return nil
@@ -54,8 +64,15 @@ func (r *Redir) Listen(tunnel C.Tunnel) error {
 
 // Close implements constant.InboundListener
 func (r *Redir) Close() error {
-	if r.l != nil {
-		r.l.Close()
+	var errs []error
+	for _, l := range r.l {
+		err := l.Close()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("close redir listener %s err: %w", l.Address(), err))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }

@@ -5,8 +5,10 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -15,7 +17,7 @@ type Base struct {
 	name         string
 	specialRules string
 	listenAddr   netip.Addr
-	port         int
+	ports        utils.IntRanges[uint16]
 }
 
 func NewBase(options *BaseOption) (*Base, error) {
@@ -26,11 +28,15 @@ func NewBase(options *BaseOption) (*Base, error) {
 	if err != nil {
 		return nil, err
 	}
+	ports, err := utils.NewUnsignedRanges[uint16](options.Port)
+	if err != nil {
+		return nil, err
+	}
 	return &Base{
 		name:         options.Name(),
 		listenAddr:   addr,
 		specialRules: options.SpecialRules,
-		port:         options.Port,
+		ports:        ports,
 		config:       options,
 	}, nil
 }
@@ -57,7 +63,15 @@ func (b *Base) Name() string {
 
 // RawAddress implements constant.InboundListener
 func (b *Base) RawAddress() string {
-	return net.JoinHostPort(b.listenAddr.String(), strconv.Itoa(int(b.port)))
+	if len(b.ports) == 0 {
+		return net.JoinHostPort(b.listenAddr.String(), "0")
+	}
+	address := make([]string, 0, len(b.ports))
+	b.ports.Range(func(port uint16) bool {
+		address = append(address, net.JoinHostPort(b.listenAddr.String(), strconv.Itoa(int(port))))
+		return true
+	})
+	return strings.Join(address, ",")
 }
 
 // Listen implements constant.InboundListener
@@ -74,7 +88,7 @@ var _ C.InboundListener = (*Base)(nil)
 type BaseOption struct {
 	NameStr      string `inbound:"name"`
 	Listen       string `inbound:"listen,omitempty"`
-	Port         int    `inbound:"port,omitempty"`
+	Port         string `inbound:"port,omitempty"`
 	SpecialRules string `inbound:"rule,omitempty"`
 	SpecialProxy string `inbound:"proxy,omitempty"`
 }
