@@ -274,7 +274,7 @@ func NewHTTP2Client(dialFn DialFn, tlsConfig *tls.Config, Fingerprint string, re
 		TLSClientConfig:    tlsConfig,
 		AllowHTTP:          false,
 		DisableCompression: true,
-		PingTimeout:        0,
+		ReadIdleTimeout:    15 * time.Second,
 	}
 
 	return &wrap
