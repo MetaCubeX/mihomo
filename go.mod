@@ -41,7 +41,7 @@ require (
 	github.com/sagernet/cors v1.2.1
 	github.com/sagernet/fswatch v0.1.1
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a
-	github.com/sagernet/sing v0.5.1
+	github.com/sagernet/sing v0.5.2
 	github.com/sagernet/sing-mux v0.2.1
 	github.com/sagernet/sing-shadowtls v0.1.5
 	github.com/sagernet/smux v0.0.0-20231208180855-7041f6ea79e7
@@ -117,4 +117,4 @@ require (
 	golang.org/x/tools v0.24.0 // indirect
 )
 
-replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20241121030428-33b6ebc52000
+replace github.com/sagernet/sing => github.com/metacubex/sing v0.0.0-20250228041610-d94509dc612a
