@@ -139,9 +139,12 @@ func (ranges IntRanges[T]) Range(f func(t T) bool) {
 	}
 
 	for _, r := range ranges {
-		for i := r.Start(); i <= r.End(); i++ {
+		for i := r.Start(); i <= r.End() && i >= r.Start(); i++ {
 			if !f(i) {
 				return
+			}
+			if i+1 < i { // integer overflow
+				break
 			}
 		}
 	}
