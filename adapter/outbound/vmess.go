@@ -459,6 +459,11 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		option: &option,
 	}
 
+	v.realityConfig, err = v.option.RealityOpts.Parse()
+	if err != nil {
+		return nil, err
+	}
+
 	switch option.Network {
 	case "h2":
 		if len(option.HTTP2Opts.Host) == 0 {
@@ -505,11 +510,6 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		v.gunConfig = gunConfig
 
 		v.transport = gun.NewHTTP2Client(dialFn, tlsConfig, v.option.ClientFingerprint, v.realityConfig)
-	}
-
-	v.realityConfig, err = v.option.RealityOpts.Parse()
-	if err != nil {
-		return nil, err
 	}
 
 	return v, nil
