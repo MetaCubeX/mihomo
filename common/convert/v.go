@@ -118,6 +118,7 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 				wsOpts["max-early-data"] = med
 				wsOpts["early-data-header-name"] = "Sec-WebSocket-Protocol"
 			case "httpupgrade":
+				wsOpts["v2ray-http-upgrade"] = true
 				wsOpts["v2ray-http-upgrade-fast-open"] = true
 			}
 		}
