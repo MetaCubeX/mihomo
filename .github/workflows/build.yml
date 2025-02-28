@@ -276,17 +276,20 @@ jobs:
 
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin
-        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo
-        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/systemd/system/
         mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/share/licenses/mihomo
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo
+        mkdir -p mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/lib/systemd/system
 
-        cp mihomo mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin/mihomo
+        cp mihomo mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/bin/
         cp LICENSE mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/usr/share/licenses/mihomo/
-        cp .github/mihomo.service mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/systemd/system/
+        cp .github/{mihomo.service,mihomo@.service} mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/lib/systemd/system/
 
         cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/etc/mihomo/config.yaml <<EOF
         mixed-port: 7890
-        external-controller: 127.0.0.1:9090
+        EOF
+
+        cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN/conffiles <<EOF
+        /etc/mihomo/config.yaml
         EOF
 
         cat > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}/DEBIAN/control <<EOF
