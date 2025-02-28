@@ -6,16 +6,19 @@ import (
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
-
+	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/mixed"
 	"github.com/metacubex/mihomo/listener/socks"
+	"github.com/metacubex/mihomo/log"
 )
 
 type MixedOption struct {
 	BaseOption
-	Users AuthUsers `inbound:"users,omitempty"`
-	UDP   bool      `inbound:"udp,omitempty"`
+	Users         AuthUsers     `inbound:"users,omitempty"`
+	UDP           bool          `inbound:"udp,omitempty"`
+	Certificate   string        `inbound:"certificate,omitempty"`
+	PrivateKey    string        `inbound:"private-key,omitempty"`
+	RealityConfig RealityConfig `inbound:"reality-config,omitempty"`
 }
 
 func (o MixedOption) Equal(config C.InboundConfig) bool {
@@ -59,7 +62,18 @@ func (m *Mixed) Address() string {
 // Listen implements constant.InboundListener
 func (m *Mixed) Listen(tunnel C.Tunnel) error {
 	for _, addr := range strings.Split(m.RawAddress(), ",") {
-		l, err := mixed.NewWithAuthenticator(addr, tunnel, m.config.Users.GetAuthStore(), m.Additions()...)
+		l, err := mixed.NewWithConfig(
+			LC.AuthServer{
+				Enable:        true,
+				Listen:        addr,
+				AuthStore:     m.config.Users.GetAuthStore(),
+				Certificate:   m.config.Certificate,
+				PrivateKey:    m.config.PrivateKey,
+				RealityConfig: m.config.RealityConfig.Build(),
+			},
+			tunnel,
+			m.Additions()...,
+		)
 		if err != nil {
 			return err
 		}

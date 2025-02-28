@@ -6,14 +6,18 @@ import (
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/socks"
 	"github.com/metacubex/mihomo/log"
 )
 
 type SocksOption struct {
 	BaseOption
-	Users AuthUsers `inbound:"users,omitempty"`
-	UDP   bool      `inbound:"udp,omitempty"`
+	Users         AuthUsers     `inbound:"users,omitempty"`
+	UDP           bool          `inbound:"udp,omitempty"`
+	Certificate   string        `inbound:"certificate,omitempty"`
+	PrivateKey    string        `inbound:"private-key,omitempty"`
+	RealityConfig RealityConfig `inbound:"reality-config,omitempty"`
 }
 
 func (o SocksOption) Equal(config C.InboundConfig) bool {
@@ -78,7 +82,18 @@ func (s *Socks) Address() string {
 // Listen implements constant.InboundListener
 func (s *Socks) Listen(tunnel C.Tunnel) error {
 	for _, addr := range strings.Split(s.RawAddress(), ",") {
-		stl, err := socks.NewWithAuthenticator(addr, tunnel, s.config.Users.GetAuthStore(), s.Additions()...)
+		stl, err := socks.NewWithConfig(
+			LC.AuthServer{
+				Enable:        true,
+				Listen:        addr,
+				AuthStore:     s.config.Users.GetAuthStore(),
+				Certificate:   s.config.Certificate,
+				PrivateKey:    s.config.PrivateKey,
+				RealityConfig: s.config.RealityConfig.Build(),
+			},
+			tunnel,
+			s.Additions()...,
+		)
 		if err != nil {
 			return err
 		}

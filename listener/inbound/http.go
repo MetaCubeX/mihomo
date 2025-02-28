@@ -6,13 +6,17 @@ import (
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/http"
 	"github.com/metacubex/mihomo/log"
 )
 
 type HTTPOption struct {
 	BaseOption
-	Users AuthUsers `inbound:"users,omitempty"`
+	Users         AuthUsers     `inbound:"users,omitempty"`
+	Certificate   string        `inbound:"certificate,omitempty"`
+	PrivateKey    string        `inbound:"private-key,omitempty"`
+	RealityConfig RealityConfig `inbound:"reality-config,omitempty"`
 }
 
 func (o HTTPOption) Equal(config C.InboundConfig) bool {
@@ -53,7 +57,18 @@ func (h *HTTP) Address() string {
 // Listen implements constant.InboundListener
 func (h *HTTP) Listen(tunnel C.Tunnel) error {
 	for _, addr := range strings.Split(h.RawAddress(), ",") {
-		l, err := http.NewWithAuthenticator(addr, tunnel, h.config.Users.GetAuthStore(), h.Additions()...)
+		l, err := http.NewWithConfig(
+			LC.AuthServer{
+				Enable:        true,
+				Listen:        addr,
+				AuthStore:     h.config.Users.GetAuthStore(),
+				Certificate:   h.config.Certificate,
+				PrivateKey:    h.config.PrivateKey,
+				RealityConfig: h.config.RealityConfig.Build(),
+			},
+			tunnel,
+			h.Additions()...,
+		)
 		if err != nil {
 			return err
 		}

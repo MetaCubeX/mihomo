@@ -1104,6 +1104,9 @@ listeners:
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
     #   - username: aaa
     #     password: aaa
+    # 下面两项如果填写则开启 tls（需要同时填写）
+    # certificate: ./server.crt
+    # private-key: ./server.key
 
   - name: http-in-1
     type: http
@@ -1114,6 +1117,9 @@ listeners:
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
     #   - username: aaa
     #     password: aaa
+    # 下面两项如果填写则开启 tls（需要同时填写）
+    # certificate: ./server.crt
+    # private-key: ./server.key
 
   - name: mixed-in-1
     type: mixed #  HTTP(S) 和 SOCKS 代理混合
@@ -1125,6 +1131,9 @@ listeners:
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
     #   - username: aaa
     #     password: aaa
+    # 下面两项如果填写则开启 tls（需要同时填写）
+    # certificate: ./server.crt
+    # private-key: ./server.key
 
   - name: reidr-in-1
     type: redir
