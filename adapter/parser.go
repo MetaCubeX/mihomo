@@ -2,6 +2,8 @@ package adapter
 
 import (
 	"fmt"
+	"net"
+	"net/netip"
 
 	tlsC "github.com/metacubex/mihomo/component/tls"
 
@@ -15,6 +17,17 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	proxyType, existType := mapping["type"].(string)
 	if !existType {
 		return nil, fmt.Errorf("missing type")
+	}
+
+	if interfaceName, ok := mapping["interface-name"].(string); ok && interfaceName == "auto" {
+		mapping["interface-name"] = ""
+		addr, _ := mapping["server"].(string)
+		if ip := net.ParseIP(addr); ip != nil {
+			iface, err := findInterfaceByAddr(ip)
+			if err == nil && iface != nil {
+				mapping["interface-name"] = iface.Name
+			}
+		}
 	}
 
 	var (
@@ -178,4 +191,86 @@ func ParseProxy(mapping map[string]any) (C.Proxy, error) {
 	}
 
 	return NewProxy(proxy), nil
+}
+
+func findInterfaceByAddr(ipAddr net.IP) (*net.Interface, error) {
+	if ipAddr == nil {
+		return nil, fmt.Errorf("nil IP address")
+	}
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interfaces: %w", err)
+	}
+
+	var addr netip.Addr
+	if ipv4 := ipAddr.To4(); ipv4 != nil {
+		addr, _ = netip.AddrFromSlice(ipv4)
+	} else {
+		addr, _ = netip.AddrFromSlice(ipAddr)
+	}
+
+	var bestMatch *net.Interface
+	var bestPrefixLen int = -1
+	var bestMatchDistance uint64 = 1<<64 - 1 // Max uint64 value
+
+	for i, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, a := range addrs {
+			cidrStr := a.String()
+			prefix, err := netip.ParsePrefix(cidrStr)
+			if err != nil {
+				continue
+			}
+
+			if prefix.Contains(addr) {
+				prefixLen := prefix.Bits()
+
+				networkAddr := prefix.Addr()
+				distance := ipDistance(networkAddr, addr)
+
+				// Choose interface with:
+				// 1. Longer prefix (more specific network), or
+				// 2. Same prefix length but closer network address
+				if prefixLen > bestPrefixLen ||
+					(prefixLen == bestPrefixLen && distance < bestMatchDistance) {
+					bestPrefixLen = prefixLen
+					bestMatchDistance = distance
+					bestMatch = &interfaces[i]
+				}
+			}
+		}
+	}
+
+	if bestMatch != nil {
+		return bestMatch, nil
+	}
+
+	return nil, fmt.Errorf("no interface found with address %s", ipAddr)
+}
+
+func ipDistance(a, b netip.Addr) uint64 {
+	aBytes := a.AsSlice()
+	bBytes := b.AsSlice()
+
+	minLen := len(aBytes)
+	if len(bBytes) < minLen {
+		minLen = len(bBytes)
+	}
+
+	var distance uint64
+	for i := 0; i < minLen; i++ {
+		// Add the absolute difference between bytes
+		if aBytes[i] > bBytes[i] {
+			distance = (distance << 8) + uint64(aBytes[i]-bBytes[i])
+		} else {
+			distance = (distance << 8) + uint64(bBytes[i]-aBytes[i])
+		}
+	}
+
+	return distance
 }
