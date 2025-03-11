@@ -72,7 +72,7 @@ func NewV2rayObfs(ctx context.Context, conn net.Conn, option *Option) (net.Conn,
 			if err != nil {
 				return nil, err
 			}
-
+			session.Open()
 			stream, err := session.OpenStream()
 			if err != nil {
 				return nil, err
