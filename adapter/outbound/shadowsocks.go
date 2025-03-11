@@ -67,6 +67,7 @@ type v2rayObfsOption struct {
 	Headers                  map[string]string `obfs:"headers,omitempty"`
 	SkipCertVerify           bool              `obfs:"skip-cert-verify,omitempty"`
 	Mux                      bool              `obfs:"mux,omitempty"`
+	MuxProtocol              string            `obfs:"mux-protocol,omitempty"`
 	V2rayHttpUpgrade         bool              `obfs:"v2ray-http-upgrade,omitempty"`
 	V2rayHttpUpgradeFastOpen bool              `obfs:"v2ray-http-upgrade-fast-open,omitempty"`
 }
@@ -272,6 +273,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			Path:                     opts.Path,
 			Headers:                  opts.Headers,
 			Mux:                      opts.Mux,
+			MuxProtocol:              opts.MuxProtocol,
 			V2rayHttpUpgrade:         opts.V2rayHttpUpgrade,
 			V2rayHttpUpgradeFastOpen: opts.V2rayHttpUpgradeFastOpen,
 		}
