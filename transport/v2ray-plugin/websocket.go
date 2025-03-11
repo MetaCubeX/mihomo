@@ -8,7 +8,6 @@ import (
 
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/transport/vmess"
-	smux "github.com/xtaci/smux"
 )
 
 // Option is options of websocket obfs
@@ -21,7 +20,6 @@ type Option struct {
 	SkipCertVerify           bool
 	Fingerprint              string
 	Mux                      bool
-	MuxProtocol              string
 	V2rayHttpUpgrade         bool
 	V2rayHttpUpgradeFastOpen bool
 }
@@ -67,25 +65,11 @@ func NewV2rayObfs(ctx context.Context, conn net.Conn, option *Option) (net.Conn,
 	}
 
 	if option.Mux {
-		if option.MuxProtocol == "smux" {
-			session, err := smux.Client(conn, nil)
-			if err != nil {
-				return nil, err
-			}
-			session.Open()
-			stream, err := session.OpenStream()
-			if err != nil {
-				return nil, err
-			}
-
-			conn = stream
-		} else {
-			conn = NewMux(conn, MuxOption{
-				ID:   [2]byte{0, 0},
-				Host: "127.0.0.1",
-				Port: 0,
-			})
-		}
+		conn = NewMux(conn, MuxOption{
+			ID:   [2]byte{0, 0},
+			Host: "127.0.0.1",
+			Port: 0,
+		})
 	}
 	return conn, nil
 }
