@@ -110,13 +110,13 @@ func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metada
 		c = obfs.NewHTTPObfs(c, ss.obfsOption.Host, port)
 	case "websocket":
 		var err error
-		c, err = v2rayObfs.NewV2rayObfs(ctx, c, ss.v2rayOption)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
+		if ss.v2rayOption != nil {
+			c, err = v2rayObfs.NewV2rayObfs(ctx, c, ss.v2rayOption)
+		} else if ss.gostOption != nil {
+			c, err = gost.NewGostWebsocket(ctx, c, ss.gostOption)
+		} else {
+			return nil, fmt.Errorf("plugin options is required")
 		}
-	case gost.ModeWebsocket:
-		var err error
-		c, err = gost.NewGostWebsocket(ctx, c, ss.gostOption)
 		if err != nil {
 			return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 		}
@@ -307,7 +307,7 @@ func NewShadowSocks(option ShadowSocksOption) (*ShadowSocks, error) {
 			return nil, fmt.Errorf("ss %s initialize gost-plugin error: %w", addr, err)
 		}
 
-		if opts.Mode != gost.ModeWebsocket {
+		if opts.Mode != "websocket" {
 			return nil, fmt.Errorf("ss %s obfs mode error: %s", addr, opts.Mode)
 		}
 		obfsMode = opts.Mode

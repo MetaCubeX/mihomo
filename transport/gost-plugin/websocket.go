@@ -11,10 +11,6 @@ import (
 	smux "github.com/sagernet/smux"
 )
 
-const (
-	ModeWebsocket string = "gost-websocket"
-)
-
 // Option is options of gost websocket
 type Option struct {
 	Host           string
