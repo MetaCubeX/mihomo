@@ -10,6 +10,10 @@ type Sniffer interface {
 	SupportPort(port uint16) bool
 }
 
+type MultiPacketSniffer interface {
+	WrapperSender(packetSender constant.PacketSender, override bool) constant.PacketSender
+}
+
 const (
 	TLS Type = iota
 	HTTP

@@ -66,18 +66,22 @@ func (sd *Dispatcher) forceSniff(metadata *C.Metadata) bool {
 func (sd *Dispatcher) UDPSniff(packet C.PacketAdapter, packetSender C.PacketSender) C.PacketSender {
 	metadata := packet.Metadata()
 	if sd.shouldOverride(metadata) {
-		for sniffer, config := range sd.sniffers {
-			if sniffer.SupportNetwork() == C.UDP || sniffer.SupportNetwork() == C.ALLNet {
-				inWhitelist := sniffer.SupportPort(metadata.DstPort)
+		for current, config := range sd.sniffers {
+			if current.SupportNetwork() == C.UDP || current.SupportNetwork() == C.ALLNet {
+				inWhitelist := current.SupportPort(metadata.DstPort)
 				overrideDest := config.OverrideDest
 
 				if inWhitelist {
-					host, err := sniffer.SniffData(packet.Data())
+					if wrapable, ok := current.(sniffer.MultiPacketSniffer); ok {
+						return wrapable.WrapperSender(packetSender, overrideDest)
+					}
+
+					host, err := current.SniffData(packet.Data())
 					if err != nil {
 						continue
 					}
 
-					sd.replaceDomain(metadata, host, overrideDest)
+					replaceDomain(metadata, host, overrideDest)
 					return packetSender
 				}
 			}
@@ -133,13 +137,13 @@ func (sd *Dispatcher) TCPSniff(conn *N.BufferedConn, metadata *C.Metadata) bool 
 
 		sd.skipList.Delete(dst)
 
-		sd.replaceDomain(metadata, host, overrideDest)
+		replaceDomain(metadata, host, overrideDest)
 		return true
 	}
 	return false
 }
 
-func (sd *Dispatcher) replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
+func replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
 	metadata.SniffHost = host
 	if overrideDest {
 		log.Debugln("[Sniffer] Sniff %s [%s]-->[%s] success, replace domain [%s]-->[%s]",
