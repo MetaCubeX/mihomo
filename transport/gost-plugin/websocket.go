@@ -62,7 +62,10 @@ func NewGostWebsocket(ctx context.Context, conn net.Conn, option *Option) (net.C
 	}
 
 	if option.Mux {
-		session, err := smux.Client(conn, nil)
+		config := smux.DefaultConfig()
+		config.KeepAliveDisabled = true
+
+		session, err := smux.Client(conn, config)
 		if err != nil {
 			return nil, err
 		}
