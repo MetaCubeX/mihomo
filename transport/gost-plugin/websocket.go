@@ -23,6 +23,23 @@ type Option struct {
 	Mux            bool
 }
 
+// muxConn is a wrapper around smux.Stream that also closes the session when closed
+type muxConn struct {
+	net.Conn
+	session *smux.Session
+}
+
+func (m *muxConn) Close() error {
+	streamErr := m.Conn.Close()
+	sessionErr := m.session.Close()
+
+	// Return stream error if there is one, otherwise return session error
+	if streamErr != nil {
+		return streamErr
+	}
+	return sessionErr
+}
+
 // NewGostWebsocket return a gost websocket
 func NewGostWebsocket(ctx context.Context, conn net.Conn, option *Option) (net.Conn, error) {
 	header := http.Header{}
@@ -72,10 +89,14 @@ func NewGostWebsocket(ctx context.Context, conn net.Conn, option *Option) (net.C
 
 		stream, err := session.OpenStream()
 		if err != nil {
+			session.Close()
 			return nil, err
 		}
 
-		conn = stream
+		return &muxConn{
+			Conn:    stream,
+			session: session,
+		}, nil
 	}
 	return conn, nil
 }
