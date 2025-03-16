@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"net/netip"
 	"strings"
 
 	"github.com/metacubex/mihomo/common/lru"
@@ -28,9 +27,8 @@ func (r *ruleMatcher) MatchDomain(domain string) bool {
 			NetWork: C.TCP,
 			Type:    C.INNER, // avoid process lookup
 			Host:    domain,
-			DstIP:   netip.AddrFrom4([4]byte{}), // avoid dns lookup
 		}
-		p, _, err := tunnel.ResolveMetadata(meta)
+		p, r, err := tunnel.ResolveMetadata(meta, &tunnel.ResolveOption{SkipResolveIP: true})
 		if err != nil {
 			log.Warnln("[DNS] ruleMatcher: match(%s) got err %v", domain, err.Error())
 			return false
@@ -45,6 +43,9 @@ func (r *ruleMatcher) MatchDomain(domain string) bool {
 				break
 			}
 		}
+		log.Debugln("[DNS] ruleMatcher: domain(%s, %s) rule(%s)",
+			domain, typ.String(), r)
+
 		typ = adapter.Type()
 		cache.Set(domain, typ)
 	}

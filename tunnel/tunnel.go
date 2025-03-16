@@ -324,7 +324,11 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
-func ResolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
+type ResolveOption struct {
+	SkipResolveIP bool
+}
+
+func ResolveMetadata(metadata *C.Metadata, option *ResolveOption) (proxy C.Proxy, rule C.Rule, err error) {
 	if metadata.SpecialProxy != "" {
 		var exist bool
 		proxy, exist = proxies[metadata.SpecialProxy]
@@ -341,7 +345,7 @@ func ResolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		proxy = proxies["GLOBAL"]
 	// Rule
 	default:
-		proxy, rule, err = match(metadata)
+		proxy, rule, err = match(metadata, option)
 	}
 	return
 }
@@ -393,7 +397,7 @@ func handleUDPConn(packet C.PacketAdapter) {
 				return nil, nil, err
 			}
 
-			proxy, rule, err := ResolveMetadata(metadata)
+			proxy, rule, err := ResolveMetadata(metadata, &ResolveOption{})
 			if err != nil {
 				log.Warnln("[UDP] Parse metadata failed: %s", err.Error())
 				return nil, nil, err
@@ -489,7 +493,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		}()
 	}
 
-	proxy, rule, err := ResolveMetadata(metadata)
+	proxy, rule, err := ResolveMetadata(metadata, &ResolveOption{})
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
 		return
@@ -592,7 +596,7 @@ func shouldResolveIP(rule C.Rule, metadata *C.Metadata) bool {
 	return rule.ShouldResolveIP() && metadata.Host != "" && !metadata.DstIP.IsValid()
 }
 
-func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
+func match(metadata *C.Metadata, option *ResolveOption) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
 	var (
@@ -606,7 +610,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	for _, rule := range getRules(metadata) {
-		if !resolved && shouldResolveIP(rule, metadata) {
+		if !resolved && !option.SkipResolveIP && shouldResolveIP(rule, metadata) {
 			func() {
 				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
 				defer cancel()
