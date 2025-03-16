@@ -6,6 +6,7 @@ import (
 
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/context"
 	D "github.com/miekg/dns"
 )
 
@@ -20,26 +21,47 @@ func newFakeIPClient(back dnsClient) *fakeIPclient {
 }
 
 func (f *fakeIPclient) ExchangeContext(ctx stdCtx.Context, r *D.Msg) (*D.Msg, error) {
+	fakeip := resolver.DefaultHostMapper.(*ResolverEnhancer).fakePool
+
+	dnsCtx := context.NewDNSContext(ctx, r)
+	return fakeipExchange(dnsCtx, r, &fakeipExchangeOption{
+		fakePool:    fakeip,
+		forceFakeip: true,
+		back: func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
+			return f.back.ExchangeContext(ctx.Context, r)
+		},
+	})
+}
+
+type fakeipExchangeOption struct {
+	fakePool    *fakeip.Pool
+	forceFakeip bool
+	back        handler
+}
+
+func fakeipExchange(ctx *context.DNSContext, r *D.Msg, option *fakeipExchangeOption) (*D.Msg, error) {
 	q := r.Question[0]
 	host := strings.TrimRight(q.Name, ".")
 
-	// todo unify
+	fakePool := option.fakePool
+	back := option.back
+	if !option.forceFakeip {
+		if fakePool.ShouldSkipped(host) {
+			return back(ctx, r)
+		}
+	}
+
 	switch q.Qtype {
 	case D.TypeAAAA, D.TypeSVCB, D.TypeHTTPS:
 		return handleMsgWithEmptyAnswer(r), nil
 	}
 
 	if q.Qtype != D.TypeA {
-		return f.back.ExchangeContext(ctx, r)
+		return back(ctx, r)
 	}
 
-	fakeip := resolver.DefaultHostMapper.(*ResolverEnhancer).fakePool
+	ctx.SetType(context.DNSTypeFakeIP)
 
-	msg := fakeipExchange(q, fakeip, host, r)
-	return msg, nil
-}
-
-func fakeipExchange(q D.Question, fakePool *fakeip.Pool, host string, r *D.Msg) *D.Msg {
 	rr := &D.A{}
 	rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
 	ip := fakePool.Lookup(host)
@@ -51,7 +73,7 @@ func fakeipExchange(q D.Question, fakePool *fakeip.Pool, host string, r *D.Msg) 
 	msg.SetRcode(r, D.RcodeSuccess)
 	msg.Authoritative = true
 	msg.RecursionAvailable = true
-	return msg
+	return msg, nil
 }
 
 func (r fakeIPclient) Address() string {

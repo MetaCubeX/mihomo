@@ -144,24 +144,11 @@ func withMapping(mapping *lru.LruCache[netip.Addr, string]) middleware {
 func withFakeIP(fakePool *fakeip.Pool) middleware {
 	return func(next handler) handler {
 		return func(ctx *context.DNSContext, r *D.Msg) (*D.Msg, error) {
-			q := r.Question[0]
-
-			host := strings.TrimRight(q.Name, ".")
-			if fakePool.ShouldSkipped(host) {
-				return next(ctx, r)
-			}
-
-			switch q.Qtype {
-			case D.TypeAAAA, D.TypeSVCB, D.TypeHTTPS:
-				return handleMsgWithEmptyAnswer(r), nil
-			}
-
-			if q.Qtype != D.TypeA {
-				return next(ctx, r)
-			}
-
-			ctx.SetType(context.DNSTypeFakeIP)
-			return fakeipExchange(q, fakePool, host, r), nil
+			return fakeipExchange(ctx, r, &fakeipExchangeOption{
+				fakePool:    fakePool,
+				forceFakeip: false,
+				back:        next,
+			})
 		}
 	}
 }
