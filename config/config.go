@@ -261,7 +261,7 @@ type RawTun struct {
 	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
 	GSOMaxSize uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
-	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	// Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
 	Inet6Address           []netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
 	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2-table-index,omitempty"`
 	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2-rule-index,omitempty"`
@@ -571,7 +571,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
-	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
+	log.Infoln("Start initial configuration in progress") // Segment finished in xxm
 	startTime := time.Now()
 
 	general, err := parseGeneral(rawCfg)
@@ -695,7 +695,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
-	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
+	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) // Segment finished in xxm
 
 	return config, nil
 }
@@ -1148,94 +1148,9 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 	var nameservers []dns.NameServer
 
 	for idx, server := range servers {
-		server = parsePureDNSServer(server)
-		u, err := url.Parse(server)
+		nameserver, err := parseOneNameServer(server, idx, respectRules, preferH3)
 		if err != nil {
-			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
-		}
-
-		proxyName := u.Fragment
-
-		var addr, dnsNetType string
-		params := map[string]string{}
-		switch u.Scheme {
-		case "udp":
-			addr, err = hostWithDefaultPort(u.Host, "53")
-			dnsNetType = "" // UDP
-		case "tcp":
-			addr, err = hostWithDefaultPort(u.Host, "53")
-			dnsNetType = "tcp" // TCP
-		case "tls":
-			addr, err = hostWithDefaultPort(u.Host, "853")
-			dnsNetType = "tcp-tls" // DNS over TLS
-		case "http", "https":
-			addr, err = hostWithDefaultPort(u.Host, "443")
-			dnsNetType = "https" // DNS over HTTPS
-			if u.Scheme == "http" {
-				addr, err = hostWithDefaultPort(u.Host, "80")
-			}
-			if err == nil {
-				proxyName = ""
-				clearURL := url.URL{Scheme: u.Scheme, Host: addr, Path: u.Path, User: u.User}
-				addr = clearURL.String()
-				if len(u.Fragment) != 0 {
-					for _, s := range strings.Split(u.Fragment, "&") {
-						arr := strings.Split(s, "=")
-						if len(arr) == 0 {
-							continue
-						} else if len(arr) == 1 {
-							proxyName = arr[0]
-						} else if len(arr) == 2 {
-							params[arr[0]] = arr[1]
-						} else {
-							params[arr[0]] = strings.Join(arr[1:], "=")
-						}
-					}
-				}
-			}
-		case "quic":
-			addr, err = hostWithDefaultPort(u.Host, "853")
-			dnsNetType = "quic" // DNS over QUIC
-		case "system":
-			dnsNetType = "system" // System DNS
-		case "dhcp":
-			addr = server[len("dhcp://"):] // some special notation cannot be parsed by url
-			dnsNetType = "dhcp"            // UDP from DHCP
-			if addr == "system" {          // Compatible with old writing "dhcp://system"
-				dnsNetType = "system"
-				addr = ""
-			}
-		case "rcode":
-			dnsNetType = "rcode"
-			addr = u.Host
-			switch addr {
-			case "success",
-				"format_error",
-				"server_failure",
-				"name_error",
-				"not_implemented",
-				"refused":
-			default:
-				err = fmt.Errorf("unsupported RCode type: %s", addr)
-			}
-		default:
-			return nil, fmt.Errorf("DNS NameServer[%d] unsupport scheme: %s", idx, u.Scheme)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
-		}
-
-		if respectRules && len(proxyName) == 0 {
-			proxyName = dns.RespectRules
-		}
-
-		nameserver := dns.NameServer{
-			Net:       dnsNetType,
-			Addr:      addr,
-			ProxyName: proxyName,
-			Params:    params,
-			PreferH3:  preferH3,
+			return nil, err
 		}
 		if slices.ContainsFunc(nameservers, nameserver.Equal) {
 			continue // skip duplicates nameserver
@@ -1244,6 +1159,116 @@ func parseNameServer(servers []string, respectRules bool, preferH3 bool) ([]dns.
 		nameservers = append(nameservers, nameserver)
 	}
 	return nameservers, nil
+}
+
+func parseOneNameServer(server string, idx int, respectRules bool, preferH3 bool) (dns.NameServer, error) {
+	empty := dns.NameServer{}
+	server = parsePureDNSServer(server)
+	u, err := url.Parse(server)
+	if err != nil {
+		return empty, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
+	}
+
+	proxyName := u.Fragment
+
+	var addr, dnsNetType string
+	params := map[string]string{}
+	switch u.Scheme {
+	case "udp":
+		addr, err = hostWithDefaultPort(u.Host, "53")
+		dnsNetType = "" // UDP
+	case "tcp":
+		addr, err = hostWithDefaultPort(u.Host, "53")
+		dnsNetType = "tcp" // TCP
+	case "tls":
+		addr, err = hostWithDefaultPort(u.Host, "853")
+		dnsNetType = "tcp-tls" // DNS over TLS
+	case "http", "https":
+		addr, err = hostWithDefaultPort(u.Host, "443")
+		dnsNetType = "https" // DNS over HTTPS
+		if u.Scheme == "http" {
+			addr, err = hostWithDefaultPort(u.Host, "80")
+		}
+		if err == nil {
+			proxyName = ""
+			clearURL := url.URL{Scheme: u.Scheme, Host: addr, Path: u.Path, User: u.User}
+			addr = clearURL.String()
+			if len(u.Fragment) != 0 {
+				for _, s := range strings.Split(u.Fragment, "&") {
+					arr := strings.Split(s, "=")
+					if len(arr) == 0 {
+						continue
+					} else if len(arr) == 1 {
+						proxyName = arr[0]
+					} else if len(arr) == 2 {
+						params[arr[0]] = arr[1]
+					} else {
+						params[arr[0]] = strings.Join(arr[1:], "=")
+					}
+				}
+			}
+		}
+	case "quic":
+		addr, err = hostWithDefaultPort(u.Host, "853")
+		dnsNetType = "quic" // DNS over QUIC
+	case "system":
+		dnsNetType = "system" // System DNS
+	case "dhcp":
+		addr = server[len("dhcp://"):] // some special notation cannot be parsed by url
+		dnsNetType = "dhcp"            // UDP from DHCP
+		if addr == "system" {          // Compatible with old writing "dhcp://system"
+			dnsNetType = "system"
+			addr = ""
+		}
+	case "rcode":
+		dnsNetType = "rcode"
+		addr = u.Host
+		switch addr {
+		case "success",
+			"format_error",
+			"server_failure",
+			"name_error",
+			"not_implemented",
+			"refused":
+		default:
+			err = fmt.Errorf("unsupported RCode type: %s", addr)
+		}
+	case "fakeip":
+		dnsNetType = "fakeip"
+		// prase back dns
+		// fakeip://quic://223.5.5.5
+		back := strings.TrimPrefix(server, "fakeip://")
+		if back != "" {
+			ns, err := parseOneNameServer(back, idx, respectRules, preferH3)
+			if err != nil {
+				return empty, err
+			}
+			return dns.NameServer{
+				Net:  dnsNetType,
+				Back: &ns,
+			}, nil
+		}
+
+	default:
+		return empty, fmt.Errorf("DNS NameServer[%d](%s) unsupport scheme: %s",
+			idx, u.String(), u.Scheme)
+	}
+
+	if err != nil {
+		return empty, fmt.Errorf("DNS NameServer[%d] format error: %s", idx, err.Error())
+	}
+
+	if respectRules && len(proxyName) == 0 {
+		proxyName = dns.RespectRules
+	}
+
+	return dns.NameServer{
+		Net:       dnsNetType,
+		Addr:      addr,
+		ProxyName: proxyName,
+		Params:    params,
+		PreferH3:  preferH3,
+	}, nil
 }
 
 func init() {
@@ -1288,65 +1313,12 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 		if err != nil {
 			return nil, err
 		}
-		kLower := strings.ToLower(k)
-		if strings.Contains(kLower, ",") {
-			if strings.Contains(kLower, "geosite:") {
-				subkeys := strings.Split(k, ":")
-				subkeys = subkeys[1:]
-				subkeys = strings.Split(subkeys[0], ",")
-				for _, subkey := range subkeys {
-					newKey := "geosite:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
-				}
-			} else if strings.Contains(kLower, "rule-set:") {
-				subkeys := strings.Split(k, ":")
-				subkeys = subkeys[1:]
-				subkeys = strings.Split(subkeys[0], ",")
-				for _, subkey := range subkeys {
-					newKey := "rule-set:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
-				}
-			} else {
-				subkeys := strings.Split(k, ",")
-				for _, subkey := range subkeys {
-					policy = append(policy, dns.Policy{Domain: subkey, NameServers: nameservers})
-				}
-			}
-		} else {
-			if strings.Contains(kLower, "geosite:") {
-				policy = append(policy, dns.Policy{Domain: "geosite:" + k[8:], NameServers: nameservers})
-			} else if strings.Contains(kLower, "rule-set:") {
-				policy = append(policy, dns.Policy{Domain: "rule-set:" + k[9:], NameServers: nameservers})
-			} else {
-				policy = append(policy, dns.Policy{Domain: k, NameServers: nameservers})
-			}
+		ps, err := parseDNSPolicy(k, nameservers, ruleProviders)
+		if err != nil {
+			return nil, err
 		}
+		policy = append(policy, ps...)
 	}
-
-	for idx, p := range policy {
-		domain, nameservers := p.Domain, p.NameServers
-
-		if strings.HasPrefix(domain, "rule-set:") {
-			domainSetName := domain[9:]
-			matcher, err := parseDomainRuleSet(domainSetName, "dns.nameserver-policy", ruleProviders)
-			if err != nil {
-				return nil, err
-			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
-		} else if strings.HasPrefix(domain, "geosite:") {
-			country := domain[8:]
-			matcher, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
-			if err != nil {
-				return nil, err
-			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
-		} else {
-			if _, valid := trie.ValidAndSplitDomain(domain); !valid {
-				return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
-			}
-		}
-	}
-
 	return policy, nil
 }
 

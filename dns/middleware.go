@@ -160,20 +160,8 @@ func withFakeIP(fakePool *fakeip.Pool) middleware {
 				return next(ctx, r)
 			}
 
-			rr := &D.A{}
-			rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
-			ip := fakePool.Lookup(host)
-			rr.A = ip.AsSlice()
-			msg := r.Copy()
-			msg.Answer = []D.RR{rr}
-
 			ctx.SetType(context.DNSTypeFakeIP)
-			setMsgTTL(msg, 1)
-			msg.SetRcode(r, D.RcodeSuccess)
-			msg.Authoritative = true
-			msg.RecursionAvailable = true
-
-			return msg, nil
+			return fakeipExchange(q, fakePool, host, r), nil
 		}
 	}
 }

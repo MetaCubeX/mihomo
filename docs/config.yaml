@@ -253,7 +253,7 @@ dns:
 
   # 配置不使用 fake-ip 的域名
   fake-ip-filter:
-    - '*.lan'
+    - "*.lan"
     - localhost.ptlogin2.qq.com
     # fakeip-filter 为 rule-providers 中的名为 fakeip-filter 规则订阅，
     # 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
@@ -333,6 +333,17 @@ dns:
     ## 且 behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
     # "rule-set:global,dns": 8.8.8.8
 
+    ## 使用network TCP 进行代理规则匹配
+    ## direct 直连，包含 Direct、Compatible
+    ## proxy 使用了代理
+    ## reject 拒绝, 包含Reject、RejectDrop
+    ##
+    ## fakeip 后面可选后备dns，默认为system，当dns查询为txt等非A AAAA SVCB HTTPS时使用
+    ## fakeip 使用的 fake-ip-range，
+    ## 由于全局fakeip优先级高，需要配置 fake-ip-filter-mode、fake-ip-filter 失效从而让nameserver-policy策略生效
+    "rule:proxy": "fakeip://quic://223.5.5.5"
+    "rule:direct": quic://223.5.5.5
+    "rule:reject": rcode://success
 proxies: # socks5
   - name: "socks"
     type: socks5
@@ -527,13 +538,13 @@ proxies: # socks5
     # servername: example.com # priority over wss host
     # network: ws
     # ws-opts:
-      # path: /path
-      # headers:
-      #   Host: v2ray.com
-      # max-early-data: 2048
-      # early-data-header-name: Sec-WebSocket-Protocol
-      # v2ray-http-upgrade: false
-      # v2ray-http-upgrade-fast-open: false
+    # path: /path
+    # headers:
+    #   Host: v2ray.com
+    # max-early-data: 2048
+    # early-data-header-name: Sec-WebSocket-Protocol
+    # v2ray-http-upgrade: false
+    # v2ray-http-upgrade-fast-open: false
 
   - name: "vmess-h2"
     type: vmess
@@ -901,7 +912,7 @@ proxies: # socks5
     #   - http/1.1
     # skip-cert-verify: true
 
-# dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
+  # dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
   - name: "dns-out"
     type: dns
 proxy-groups:
@@ -988,8 +999,8 @@ proxy-providers:
     # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
     header:
       User-Agent:
-      - "Clash/v1.18.0"
-      - "mihomo/1.18.3"
+        - "Clash/v1.18.0"
+        - "mihomo/1.18.3"
       # Accept:
       # - 'application/vnd.github.v3.raw'
       # Authorization:
@@ -1072,9 +1083,9 @@ rule-providers:
     type: inline
     behavior: domain # classical / ipcidr
     payload:
-      - '.blogger.com'
-      - '*.*.microsoft.com'
-      - 'books.itunes.apple.com'
+      - ".blogger.com"
+      - "*.*.microsoft.com"
+      - "books.itunes.apple.com"
 
 rules:
   - RULE-SET,rule1,REJECT
@@ -1303,14 +1314,14 @@ listeners:
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     stack: system # gvisor / mixed
     dns-hijack:
-    - 0.0.0.0:53 # 需要劫持的 DNS
+      - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
     # auto-route: false # 配置路由表
     # mtu: 9000 # 最大传输单元
     inet4-address: # 必须手动设置 ipv4 地址段
-    - 198.19.0.1/30
+      - 198.19.0.1/30
     inet6-address: # 必须手动设置 ipv6 地址段
-    - "fdfe:dcba:9877::1/126"
+      - "fdfe:dcba:9877::1/126"
     # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
     # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     # - 0.0.0.0/1

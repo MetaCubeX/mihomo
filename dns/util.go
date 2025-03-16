@@ -94,35 +94,44 @@ func isIPRequest(q D.Question) bool {
 func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 	ret := make([]dnsClient, 0, len(servers))
 	for _, s := range servers {
-		switch s.Net {
-		case "https":
-			ret = append(ret, newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter, s.ProxyName))
-			continue
-		case "dhcp":
-			ret = append(ret, newDHCPClient(s.Addr))
-			continue
-		case "system":
-			ret = append(ret, newSystemClient())
-			continue
-		case "rcode":
-			ret = append(ret, newRCodeClient(s.Addr))
-			continue
-		case "quic":
-			if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter, s.ProxyName); err == nil {
-				ret = append(ret, doq)
-			} else {
-				log.Fatalln("DoQ format error: %v", err)
-			}
-			continue
-		}
+		ret = append(ret, getDnsClient(s, resolver))
+	}
+	return ret
+}
 
+func getDnsClient(s NameServer, resolver *Resolver) dnsClient {
+	switch s.Net {
+	case "https":
+		return newDoHClient(s.Addr, resolver, s.PreferH3, s.Params, s.ProxyAdapter, s.ProxyName)
+	case "dhcp":
+		return newDHCPClient(s.Addr)
+	case "system":
+		return newSystemClient()
+	case "rcode":
+		return newRCodeClient(s.Addr)
+	case "quic":
+		if doq, err := newDoQ(resolver, s.Addr, s.ProxyAdapter, s.ProxyName); err == nil {
+			return doq
+		} else {
+			log.Fatalln("DoQ format error: %v", err)
+			return nil
+		}
+	case "fakeip":
+		var back dnsClient
+		if s.Back == nil {
+			back = newSystemClient()
+		} else {
+			back = getDnsClient(*s.Back, resolver)
+		}
+		return newFakeIPClient(back)
+	default:
 		var options []dialer.Option
 		if s.Interface != "" {
 			options = append(options, dialer.WithInterface(s.Interface))
 		}
 
 		host, port, _ := net.SplitHostPort(s.Addr)
-		ret = append(ret, &client{
+		return &client{
 			Client: &D.Client{
 				Net: s.Net,
 				TLSConfig: &tls.Config{
@@ -134,9 +143,8 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			port:   port,
 			host:   host,
 			dialer: newDNSDialer(resolver, s.ProxyAdapter, s.ProxyName, options...),
-		})
+		}
 	}
-	return ret
 }
 
 func handleMsgWithEmptyAnswer(r *D.Msg) *D.Msg {

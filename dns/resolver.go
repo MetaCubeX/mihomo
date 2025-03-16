@@ -398,6 +398,8 @@ type NameServer struct {
 	ProxyName    string
 	Params       map[string]string
 	PreferH3     bool
+	// fakeip will use this
+	Back *NameServer
 }
 
 func (ns NameServer) Equal(ns2 NameServer) bool {
@@ -411,7 +413,8 @@ func (ns NameServer) Equal(ns2 NameServer) bool {
 		ns.ProxyAdapter == ns2.ProxyAdapter &&
 		ns.ProxyName == ns2.ProxyName &&
 		maps.Equal(ns.Params, ns2.Params) &&
-		ns.PreferH3 == ns2.PreferH3 {
+		ns.PreferH3 == ns2.PreferH3 &&
+		(ns.Back == ns2.Back || (ns.Back != nil && ns2.Back != nil && ns.Back.Equal(*ns2.Back))) {
 		return true
 	}
 	return false
