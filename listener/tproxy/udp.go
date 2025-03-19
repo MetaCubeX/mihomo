@@ -76,6 +76,7 @@ func NewUDP(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPLi
 
 			rAddr, err := getOrigDst(oob[:oobn])
 			if err != nil {
+				pool.Put(buf)
 				continue
 			}
 
