@@ -879,6 +879,7 @@ proxies: # socks5
     port: 2999
     # port-range: 2090-2099 #（不可同时填写 port 和 port-range）
     transport: TCP # 只支持 TCP
+    udp: true # 支持 UDP over TCP
     username: user
     password: password
     # 可以使用的值包括 MULTIPLEXING_OFF, MULTIPLEXING_LOW, MULTIPLEXING_MIDDLE, MULTIPLEXING_HIGH。其中 MULTIPLEXING_OFF 会关闭多路复用功能。默认值为 MULTIPLEXING_LOW。
