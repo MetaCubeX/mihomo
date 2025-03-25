@@ -54,25 +54,20 @@ func (s *Stream) Write(b []byte) (n int, err error) {
 
 // Close implements net.Conn
 func (s *Stream) Close() error {
-	if s.sessionClose() {
-		// notify remote
-		return s.sess.streamClosed(s.id)
-	} else {
-		return io.ErrClosedPipe
-	}
-}
-
-// sessionClose close stream from session side, do not notify remote
-func (s *Stream) sessionClose() (once bool) {
+	var once bool
 	s.dieOnce.Do(func() {
 		s.pipeR.Close()
 		once = true
+	})
+	if once {
 		if s.dieHook != nil {
 			s.dieHook()
 			s.dieHook = nil
 		}
-	})
-	return
+		return s.sess.streamClosed(s.id)
+	} else {
+		return io.ErrClosedPipe
+	}
 }
 
 func (s *Stream) SetReadDeadline(t time.Time) error {
