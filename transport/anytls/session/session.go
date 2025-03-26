@@ -108,10 +108,11 @@ func (s *Session) Close() error {
 	if once {
 		if s.dieHook != nil {
 			s.dieHook()
+			s.dieHook = nil
 		}
 		s.streamLock.Lock()
-		for k := range s.streams {
-			s.streams[k].Close()
+		for _, stream := range s.streams {
+			stream.Close()
 		}
 		s.streams = make(map[uint32]*Stream)
 		s.streamLock.Unlock()

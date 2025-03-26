@@ -83,11 +83,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 	}
 
 	stream.dieHook = func() {
-		if session.IsClosed() {
-			if session.dieHook != nil {
-				session.dieHook()
-			}
-		} else {
+		if !session.IsClosed() {
 			select {
 			case <-c.die.Done():
 				// Now client has been closed
@@ -154,10 +150,10 @@ func (c *Client) Close() error {
 
 	c.sessionsLock.Lock()
 	sessionToClose := make([]*Session, 0, len(c.sessions))
-	for seq, session := range c.sessions {
+	for _, session := range c.sessions {
 		sessionToClose = append(sessionToClose, session)
-		delete(c.sessions, seq)
 	}
+	c.sessions = make(map[uint64]*Session)
 	c.sessionsLock.Unlock()
 
 	for _, session := range sessionToClose {
