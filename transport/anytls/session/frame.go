@@ -9,9 +9,14 @@ const ( // cmds
 	cmdSYN                 = 1 // stream open
 	cmdPSH                 = 2 // data push
 	cmdFIN                 = 3 // stream close, a.k.a EOF mark
-	cmdSettings            = 4 // Settings
+	cmdSettings            = 4 // Settings (Client send to Server)
 	cmdAlert               = 5 // Alert
 	cmdUpdatePaddingScheme = 6 // update padding scheme
+	// Since version 2
+	cmdSYNACK         = 7  // Server reports to the client that the stream has been opened
+	cmdHeartRequest   = 8  // Keep alive command
+	cmdHeartResponse  = 9  // Keep alive command
+	cmdServerSettings = 10 // Settings (Server send to client)
 )
 
 const (

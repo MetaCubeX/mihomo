@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,10 +31,15 @@ type Session struct {
 	die     chan struct{}
 	dieHook func()
 
+	synDone     func()
+	synDoneLock sync.Mutex
+
 	// pool
 	seq       uint64
 	idleSince time.Time
 	padding   *atomic.TypedValue[*padding.PaddingFactory]
+
+	peerVersion byte
 
 	// client
 	isClient    bool
@@ -76,7 +82,7 @@ func (s *Session) Run() {
 	}
 
 	settings := util.StringMap{
-		"v":           "1",
+		"v":           "2",
 		"client":      "mihomo/" + constant.Version,
 		"padding-md5": s.padding.Load().Md5,
 	}
@@ -132,6 +138,17 @@ func (s *Session) OpenStream() (*Stream, error) {
 	stream := newStream(sid, s)
 
 	//logrus.Debugln("stream open", sid, s.streams)
+
+	if sid >= 2 && s.peerVersion >= 2 {
+		s.synDoneLock.Lock()
+		if s.synDone != nil {
+			s.synDone()
+		}
+		s.synDone = util.NewDeadlineWatcher(time.Second*3, func() {
+			s.Close()
+		})
+		s.synDoneLock.Unlock()
+	}
 
 	if _, err := s.writeFrame(newFrame(cmdSYN, sid)); err != nil {
 		return nil, err
@@ -196,13 +213,29 @@ func (s *Session) recvLoop() error {
 				if _, ok := s.streams[sid]; !ok {
 					stream := newStream(sid, s)
 					s.streams[sid] = stream
-					if s.onNewStream != nil {
-						go s.onNewStream(stream)
-					} else {
-						go s.Close()
-					}
+					go func() {
+						if s.onNewStream != nil {
+							// report SYNACK to client
+							if s.peerVersion >= 2 {
+								if _, err := s.writeFrame(newFrame(cmdSYNACK, sid)); err != nil {
+									s.Close()
+									return
+								}
+							}
+							s.onNewStream(stream)
+						} else {
+							stream.Close()
+						}
+					}()
 				}
 				s.streamLock.Unlock()
+			case cmdSYNACK: // should be client only
+				s.synDoneLock.Lock()
+				if s.synDone != nil {
+					s.synDone()
+					s.synDone = nil
+				}
+				s.synDoneLock.Unlock()
 			case cmdFIN:
 				s.streamLock.RLock()
 				stream, ok := s.streams[sid]
@@ -241,6 +274,20 @@ func (s *Session) recvLoop() error {
 								return err
 							}
 						}
+						// check client's version
+						if v, err := strconv.Atoi(m["v"]); err == nil && v >= 2 {
+							s.peerVersion = byte(v)
+							// send cmdServerSettings
+							f := newFrame(cmdServerSettings, 0)
+							f.data = util.StringMap{
+								"v": "2",
+							}.ToBytes()
+							_, err = s.writeFrame(f)
+							if err != nil {
+								pool.Put(buffer)
+								return err
+							}
+						}
 					}
 					pool.Put(buffer)
 				}
@@ -271,6 +318,29 @@ func (s *Session) recvLoop() error {
 							log.Warnln("[Update padding failed] %x\n", md5.Sum(rawScheme))
 						}
 					}
+				}
+			case cmdHeartRequest:
+				if _, err := s.writeFrame(newFrame(cmdHeartResponse, sid)); err != nil {
+					return err
+				}
+			case cmdHeartResponse:
+				// Active keepalive checking is not implemented yet
+				break
+			case cmdServerSettings:
+				if hdr.Length() > 0 {
+					buffer := pool.Get(int(hdr.Length()))
+					if _, err := io.ReadFull(s.conn, buffer); err != nil {
+						pool.Put(buffer)
+						return err
+					}
+					if s.isClient {
+						// check server's version
+						m := util.StringMapFromBytes(buffer)
+						if v, err := strconv.Atoi(m["v"]); err == nil {
+							s.peerVersion = byte(v)
+						}
+					}
+					pool.Put(buffer)
 				}
 			default:
 				// I don't know what command it is (can't have data)
