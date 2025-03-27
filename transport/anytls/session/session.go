@@ -3,6 +3,7 @@ package session
 import (
 	"crypto/md5"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"runtime/debug"
@@ -215,13 +216,6 @@ func (s *Session) recvLoop() error {
 					s.streams[sid] = stream
 					go func() {
 						if s.onNewStream != nil {
-							// report SYNACK to client
-							if s.peerVersion >= 2 {
-								if _, err := s.writeFrame(newFrame(cmdSYNACK, sid)); err != nil {
-									s.Close()
-									return
-								}
-							}
 							s.onNewStream(stream)
 						} else {
 							stream.Close()
@@ -236,6 +230,21 @@ func (s *Session) recvLoop() error {
 					s.synDone = nil
 				}
 				s.synDoneLock.Unlock()
+				if hdr.Length() > 0 {
+					buffer := pool.Get(int(hdr.Length()))
+					if _, err := io.ReadFull(s.conn, buffer); err != nil {
+						pool.Put(buffer)
+						return err
+					}
+					// report error
+					s.streamLock.RLock()
+					stream, ok := s.streams[sid]
+					s.streamLock.RUnlock()
+					if ok {
+						stream.CloseWithError(fmt.Errorf("remote: %s", string(buffer)))
+					}
+					pool.Put(buffer)
+				}
 			case cmdFIN:
 				s.streamLock.RLock()
 				stream, ok := s.streams[sid]
