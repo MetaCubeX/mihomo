@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -16,13 +17,13 @@ import (
 func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 	data := DecodeBase64(buf)
 
-	arr := strings.Split(string(data), "\n")
+	arr := bufio.NewScanner(strings.NewReader(string(data)))
 
-	proxies := make([]map[string]any, 0, len(arr))
+	proxies := make([]map[string]any, 0, 200)
 	names := make(map[string]int, 200)
 
-	for _, line := range arr {
-		line = strings.TrimRight(line, " \r")
+	for arr.Scan() {
+		line := strings.TrimRight(arr.Text(), " \r")
 		if line == "" {
 			continue
 		}
@@ -275,11 +276,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vmess["skip-cert-verify"] = false
 
 			vmess["cipher"] = "auto"
-			if cipher, ok := values["scy"]; ok && cipher != "" {
+			if cipher, ok := values["scy"]; ok && cipher != nil {
 				vmess["cipher"] = cipher
 			}
 
-			if sni, ok := values["sni"]; ok && sni != "" {
+			if sni, ok := values["sni"]; ok && sni != nil {
 				vmess["servername"] = sni
 			}
 
@@ -307,11 +308,11 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "http":
 				headers := make(map[string]any)
 				httpOpts := make(map[string]any)
-				if host, ok := values["host"]; ok && host != "" {
+				if host, ok := values["host"]; ok && host != nil {
 					headers["Host"] = []string{host.(string)}
 				}
 				httpOpts["path"] = []string{"/"}
-				if path, ok := values["path"]; ok && path != "" {
+				if path, ok := values["path"]; ok && path != nil {
 					httpOpts["path"] = []string{path.(string)}
 				}
 				httpOpts["headers"] = headers
@@ -321,7 +322,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "h2":
 				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
-				if host, ok := values["host"]; ok && host != "" {
+				if host, ok := values["host"]; ok && host != nil {
 					headers["Host"] = []string{host.(string)}
 				}
 
@@ -334,10 +335,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				headers := make(map[string]any)
 				wsOpts := make(map[string]any)
 				wsOpts["path"] = "/"
-				if host, ok := values["host"]; ok && host != "" {
+				if host, ok := values["host"]; ok && host != nil {
 					headers["Host"] = host.(string)
 				}
-				if path, ok := values["path"]; ok && path != "" {
+				if path, ok := values["path"]; ok && path != nil {
 					path := path.(string)
 					pathURL, err := url.Parse(path)
 					if err == nil {
@@ -512,6 +513,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			proxies = append(proxies, ssr)
 		}
+	}
+	if err := arr.Err(); err != nil {
+		return nil, fmt.Errorf("read line failed: %v", err)
 	}
 
 	if len(proxies) == 0 {
