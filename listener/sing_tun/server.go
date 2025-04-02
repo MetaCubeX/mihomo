@@ -21,6 +21,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
+	"golang.org/x/exp/constraints"
 
 	tun "github.com/metacubex/sing-tun"
 	"github.com/metacubex/sing-tun/control"
@@ -211,6 +212,14 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 			return nil, E.Cause(err, "parse exclude_uid_range")
 		}
 	}
+	excludePort := uidToRange(options.ExcludePort)
+	if len(options.ExcludePortRange) > 0 {
+		var err error
+		excludePort, err = parseRange(excludePort, options.ExcludePortRange)
+		if err != nil {
+			return nil, E.Cause(err, "parse exclude_port_range")
+		}
+	}
 
 	var dnsAdds []netip.AddrPort
 
@@ -339,6 +348,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		ExcludeInterface:         options.ExcludeInterface,
 		IncludeUID:               includeUID,
 		ExcludeUID:               excludeUID,
+		ExcludePort:              excludePort,
 		IncludeAndroidUser:       options.IncludeAndroidUser,
 		IncludePackage:           options.IncludePackage,
 		ExcludePackage:           options.ExcludePackage,
@@ -566,13 +576,13 @@ func (d *cDialerInterfaceFinder) FindInterfaceName(destination netip.Addr) strin
 	return "<invalid>"
 }
 
-func uidToRange(uidList []uint32) []ranges.Range[uint32] {
-	return common.Map(uidList, func(uid uint32) ranges.Range[uint32] {
+func uidToRange[T constraints.Integer](uidList []T) []ranges.Range[T] {
+	return common.Map(uidList, func(uid T) ranges.Range[T] {
 		return ranges.NewSingle(uid)
 	})
 }
 
-func parseRange(uidRanges []ranges.Range[uint32], rangeList []string) ([]ranges.Range[uint32], error) {
+func parseRange[T constraints.Integer](uidRanges []ranges.Range[T], rangeList []string) ([]ranges.Range[T], error) {
 	for _, uidRange := range rangeList {
 		if !strings.Contains(uidRange, ":") {
 			return nil, E.New("missing ':' in range: ", uidRange)
@@ -593,7 +603,7 @@ func parseRange(uidRanges []ranges.Range[uint32], rangeList []string) ([]ranges.
 		if err != nil {
 			return nil, E.Cause(err, "parse range end")
 		}
-		uidRanges = append(uidRanges, ranges.New(uint32(start), uint32(end)))
+		uidRanges = append(uidRanges, ranges.New(T(start), T(end)))
 	}
 	return uidRanges, nil
 }

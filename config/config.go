@@ -279,6 +279,8 @@ type RawTun struct {
 	IncludeUIDRange        []string       `yaml:"include-uid-range" json:"include-uid-range,omitempty"`
 	ExcludeUID             []uint32       `yaml:"exclude-uid" json:"exclude-uid,omitempty"`
 	ExcludeUIDRange        []string       `yaml:"exclude-uid-range" json:"exclude-uid-range,omitempty"`
+	ExcludePort            []uint16       `yaml:"exclude-port" json:"exclude-port,omitempty"`
+	ExcludePortRange       []string       `yaml:"exclude-port-range" json:"exclude-port-range,omitempty"`
 	IncludeAndroidUser     []int          `yaml:"include-android-user" json:"include-android-user,omitempty"`
 	IncludePackage         []string       `yaml:"include-package" json:"include-package,omitempty"`
 	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
@@ -1560,6 +1562,8 @@ func parseTun(rawTun RawTun, general *General) error {
 		IncludeUIDRange:        rawTun.IncludeUIDRange,
 		ExcludeUID:             rawTun.ExcludeUID,
 		ExcludeUIDRange:        rawTun.ExcludeUIDRange,
+		ExcludePort:            rawTun.ExcludePort,
+		ExcludePortRange:       rawTun.ExcludePortRange,
 		IncludeAndroidUser:     rawTun.IncludeAndroidUser,
 		IncludePackage:         rawTun.IncludePackage,
 		ExcludePackage:         rawTun.ExcludePackage,
