@@ -40,7 +40,7 @@ func newStream(id uint32, sess *Session) *Stream {
 // Read implements net.Conn
 func (s *Stream) Read(b []byte) (n int, err error) {
 	n, err = s.pipeR.Read(b)
-	if s.dieErr != nil {
+	if n == 0 && s.dieErr != nil {
 		err = s.dieErr
 	}
 	return
