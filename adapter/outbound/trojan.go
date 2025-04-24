@@ -102,6 +102,9 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 			InsecureSkipVerify: t.option.SkipCertVerify,
 			ServerName:         t.option.SNI,
 		}
+		if tlsConfig.ServerName == "" {
+			tlsConfig.ServerName = host
+		}
 
 		wsOpts.TLSConfig, err = ca.GetSpecifiedFingerprintTLSConfig(tlsConfig, t.option.Fingerprint)
 		if err != nil {
@@ -118,8 +121,13 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		if len(t.option.ALPN) != 0 {
 			alpn = t.option.ALPN
 		}
+
+		sni := t.option.SNI
+		if sni == "" {
+			sni, _, _ = net.SplitHostPort(t.addr)
+		}
 		c, err = vmess.StreamTLSConn(ctx, c, &vmess.TLSConfig{
-			Host:              t.option.SNI,
+			Host:              sni,
 			SkipCertVerify:    t.option.SkipCertVerify,
 			FingerPrint:       t.option.Fingerprint,
 			ClientFingerprint: t.option.ClientFingerprint,
@@ -348,11 +356,16 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 			return c, nil
 		}
 
+		sni := option.SNI
+		if sni == "" {
+			sni = option.Server
+		}
+
 		tlsConfig := &tls.Config{
 			NextProtos:         option.ALPN,
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: option.SkipCertVerify,
-			ServerName:         option.SNI,
+			ServerName:         sni,
 		}
 
 		var err error
@@ -366,7 +379,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{
 			ServiceName:       option.GrpcOpts.GrpcServiceName,
-			Host:              option.SNI,
+			Host:              sni,
 			ClientFingerprint: option.ClientFingerprint,
 		}
 	}
