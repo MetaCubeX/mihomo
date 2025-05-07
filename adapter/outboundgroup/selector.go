@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
 )
@@ -19,8 +21,8 @@ type Selector struct {
 }
 
 // DialContext implements C.ProxyAdapter
-func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	c, err := s.selectedProxy(true).DialContext(ctx, metadata)
+func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.Conn, error) {
+	c, err := s.selectedProxy(true).DialContext(ctx, metadata, s.Base.DialOptions(opts...)...)
 	if err == nil {
 		c.AppendToChains(s)
 	}
@@ -28,8 +30,8 @@ func (s *Selector) DialContext(ctx context.Context, metadata *C.Metadata) (C.Con
 }
 
 // ListenPacketContext implements C.ProxyAdapter
-func (s *Selector) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	pc, err := s.selectedProxy(true).ListenPacketContext(ctx, metadata)
+func (s *Selector) ListenPacketContext(ctx context.Context, metadata *C.Metadata, opts ...dialer.Option) (C.PacketConn, error) {
+	pc, err := s.selectedProxy(true).ListenPacketContext(ctx, metadata, s.Base.DialOptions(opts...)...)
 	if err == nil {
 		pc.AppendToChains(s)
 	}
@@ -56,12 +58,20 @@ func (s *Selector) MarshalJSON() ([]byte, error) {
 	for _, proxy := range s.GetProxies(false) {
 		all = append(all, proxy.Name())
 	}
-
+    if s.testUrl != "" {
+		return json.Marshal(map[string]any{
+			"type":    s.Type().String(),
+			"now":     s.Now(),
+			"all":     all,
+			"testUrl": s.testUrl,
+			"hidden":  s.Hidden,
+			"icon":    s.Icon,
+		})
+	}
 	return json.Marshal(map[string]any{
 		"type":    s.Type().String(),
 		"now":     s.Now(),
 		"all":     all,
-		"testUrl": s.testUrl,
 		"hidden":  s.Hidden,
 		"icon":    s.Icon,
 	})
@@ -105,14 +115,18 @@ func (s *Selector) selectedProxy(touch bool) C.Proxy {
 func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) *Selector {
 	return &Selector{
 		GroupBase: NewGroupBase(GroupBaseOption{
-			Name:           option.Name,
-			Type:           C.Selector,
-			Filter:         option.Filter,
-			ExcludeFilter:  option.ExcludeFilter,
-			ExcludeType:    option.ExcludeType,
-			TestTimeout:    option.TestTimeout,
-			MaxFailedTimes: option.MaxFailedTimes,
-			Providers:      providers,
+			outbound.BaseOption{
+				Name:        option.Name,
+				Type:        C.Selector,
+				Interface:   option.Interface,
+				RoutingMark: option.RoutingMark,
+			},
+			option.Filter,
+			option.ExcludeFilter,
+			option.ExcludeType,
+			option.TestTimeout,
+			option.MaxFailedTimes,
+			providers,
 		}),
 		selected:   "COMPATIBLE",
 		disableUDP: option.DisableUDP,
