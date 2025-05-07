@@ -57,7 +57,7 @@ func (s *Selector) MarshalJSON() ([]byte, error) {
 		all = append(all, proxy.Name())
 	}
 
-    if s.testUrl != "" {
+	if s.testUrl != "" {
 		return json.Marshal(map[string]any{
 			"type":    s.Type().String(),
 			"now":     s.Now(),
