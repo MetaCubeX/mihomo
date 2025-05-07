@@ -13,6 +13,7 @@ type Selector struct {
 	*GroupBase
 	disableUDP bool
 	selected   string
+	testUrl    string
 	Hidden     bool
 	Icon       string
 }
@@ -57,11 +58,12 @@ func (s *Selector) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(map[string]any{
-		"type":   s.Type().String(),
-		"now":    s.Now(),
-		"all":    all,
-		"hidden": s.Hidden,
-		"icon":   s.Icon,
+		"type":    s.Type().String(),
+		"now":     s.Now(),
+		"all":     all,
+		"testUrl": s.testUrl,
+		"hidden":  s.Hidden,
+		"icon":    s.Icon,
 	})
 }
 
@@ -114,6 +116,7 @@ func NewSelector(option *GroupCommonOption, providers []provider.ProxyProvider) 
 		}),
 		selected:   "COMPATIBLE",
 		disableUDP: option.DisableUDP,
+		testUrl:    option.URL,
 		Hidden:     option.Hidden,
 		Icon:       option.Icon,
 	}
