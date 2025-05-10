@@ -962,14 +962,6 @@ proxy-groups:
       - vmess1
       - auto
 
-  # 配置指定 interface-name 和 fwmark 的 DIRECT
-  - name: en1
-    type: select
-    interface-name: en1
-    routing-mark: 6667
-    proxies:
-      - DIRECT
-
   - name: UseProvider
     type: select
     filter: "HK|TW" # 正则表达式，过滤 provider1 中节点名包含 HK 或 TW
