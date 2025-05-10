@@ -906,6 +906,12 @@ proxies: # socks5
 # dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
   - name: "dns-out"
     type: dns
+
+  # 配置指定 interface-name 和 fwmark 的 DIRECT
+  - name: en1-direct
+    type: direct
+    interface-name: en1
+    routing-mark: 6667
 proxy-groups:
   # 代理链，目前 relay 可以支持 udp 的只有 vmess/vless/trojan/ss/ssr/tuic
   # wireguard 目前不支持在 relay 中使用，请使用 proxy 中的 dialer-proxy 配置项
