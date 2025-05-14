@@ -208,6 +208,8 @@ func (f *Fetcher[V]) updateWithLog() {
 		log.Errorln("[Provider] %s pull error: %s", f.Name(), err.Error())
 		return
 	}
+	// reset backoff if update success
+	f.backoff.Reset()
 
 	if same {
 		log.Debugln("[Provider] %s's content doesn't change", f.Name())
@@ -231,7 +233,7 @@ func NewFetcher[V any](name string, interval time.Duration, vehicle types.Vehicl
 		backoff: slowdown.Backoff{
 			Factor: 2,
 			Jitter: false,
-			Min:    time.Second,
+			Min:    10 * time.Second,
 			Max:    interval,
 		},
 	}
