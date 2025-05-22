@@ -152,8 +152,6 @@ func TestMihomo_TrojanXTLS(t *testing.T) {
 		SkipCertVerify: true,
 		UDP:            true,
 		Network:        "tcp",
-		Flow:           "xtls-rprx-direct",
-		FlowShow:       true,
 	})
 	if err != nil {
 		require.NoError(t, err)
