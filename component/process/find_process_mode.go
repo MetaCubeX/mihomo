@@ -19,7 +19,7 @@ var (
 	}
 )
 
-type FindProcessMode int
+type FindProcessMode int32
 
 // UnmarshalText unserialize FindProcessMode
 func (m *FindProcessMode) UnmarshalText(data []byte) error {
