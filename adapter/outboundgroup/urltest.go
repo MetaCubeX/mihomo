@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/metacubex/mihomo/common/callback"
@@ -67,6 +68,11 @@ func (u *URLTest) DialContext(ctx context.Context, metadata *C.Metadata) (c C.Co
 		c.AppendToChains(u)
 	} else {
 		u.onDialFailed(proxy.Type(), err, u.healthCheck)
+		expectedStatus, err := utils.NewUnsignedRanges[uint16](u.expectedStatus)
+		if err != nil {
+			return nil, fmt.Errorf("DialContext onDialFailed %s: %w", proxy.Name(), err)
+		}
+		proxy.URLTest(ctx, u.testUrl, expectedStatus)
 	}
 
 	if N.NeedHandshake(c) {
