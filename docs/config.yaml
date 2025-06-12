@@ -600,6 +600,7 @@ proxies: # socks5
     # skip-cert-verify: true
     grpc-opts:
       grpc-service-name: "example"
+      user-agent: "example/1.0.0"
     # ip-version: ipv4
 
   # vless
@@ -662,6 +663,7 @@ proxies: # socks5
     servername: testingcf.jsdelivr.net
     grpc-opts:
       grpc-service-name: "grpc"
+      user-agent: "example/1.0.0"
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
