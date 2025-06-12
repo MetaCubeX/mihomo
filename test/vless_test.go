@@ -129,3 +129,42 @@ func TestMihomo_VlessWS(t *testing.T) {
 	time.Sleep(waitTime)
 	testSuit(t, proxy)
 }
+
+func TestMihomo_VlessgRPC(t *testing.T) {
+	cfg := &container.Config{
+		Image:        ImageVmess,
+		ExposedPorts: defaultExposedPorts,
+	}
+	hostCfg := &container.HostConfig{
+		PortBindings: defaultPortBindings,
+		Binds: []string{
+			fmt.Sprintf("%s:/etc/v2ray/config.json", C.Path.Resolve("vless-grpc-useragent.json")),
+			fmt.Sprintf("%s:/etc/ssl/v2ray/fullchain.pem", C.Path.Resolve("example.org.pem")),
+			fmt.Sprintf("%s:/etc/ssl/v2ray/privkey.pem", C.Path.Resolve("example.org-key.pem")),
+		},
+	}
+
+	id, err := startContainer(cfg, hostCfg, "vless-grpc")
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+	defer cleanContainer(id)
+
+	proxy, err := outbound.NewVless(outbound.VlessOption{
+		Name:           "vless",
+		Server:         localIP.String(),
+		Port:           10002,
+		UUID:           "b831381d-6324-4d53-ad4f-8cda48b30811",
+		TLS:            true,
+		SkipCertVerify: true,
+		ServerName:     "example.org",
+		Network:        "grpc",
+		UserAgent:      "Shimokitazawa/1.0.0",
+	})
+	if err != nil {
+		assert.FailNow(t, err.Error())
+	}
+
+	time.Sleep(waitTime)
+	testSuit(t, proxy)
+}
