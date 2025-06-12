@@ -86,6 +86,7 @@ type HTTP2Options struct {
 
 type GrpcOptions struct {
 	GrpcServiceName string `proxy:"grpc-service-name,omitempty"`
+	UserAgent       string `proxy:"user-agent,omitempty"`
 }
 
 type WSOptions struct {
@@ -493,6 +494,7 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 
 		gunConfig := &gun.Config{
 			ServiceName:       v.option.GrpcOpts.GrpcServiceName,
+			UserAgent:         v.option.GrpcOpts.UserAgent,
 			Host:              v.option.ServerName,
 			ClientFingerprint: v.option.ClientFingerprint,
 		}
