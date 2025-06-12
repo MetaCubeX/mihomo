@@ -67,12 +67,14 @@ func NewV2rayObfs(ctx context.Context, conn net.Conn, option *Option) (net.Conn,
 		return nil, err
 	}
 
-	if option.Mux {
-		conn = NewMux(conn, MuxOption{
-			ID:   [2]byte{0, 0},
-			Host: "127.0.0.1",
-			Port: 0,
-		})
-	}
+	// TODO: tmp disable mux
+	// https://github.com/MetaCubeX/mihomo/issues/2029
+	// if option.Mux {
+	// 	conn = NewMux(conn, MuxOption{
+	// 		ID:   [2]byte{0, 0},
+	// 		Host: "127.0.0.1",
+	// 		Port: 0,
+	// 	})
+	// }
 	return conn, nil
 }
