@@ -19,6 +19,7 @@ type VlessServer struct {
 	Users           []VlessUser
 	WsPath          string
 	GrpcServiceName string
+	UserAgent       string
 	Certificate     string
 	PrivateKey      string
 	EchKey          string

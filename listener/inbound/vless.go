@@ -14,6 +14,7 @@ type VlessOption struct {
 	Users           []VlessUser   `inbound:"users"`
 	WsPath          string        `inbound:"ws-path,omitempty"`
 	GrpcServiceName string        `inbound:"grpc-service-name,omitempty"`
+	UserAgent       string        `inbound:"user-agent,omitempty"`
 	Certificate     string        `inbound:"certificate,omitempty"`
 	PrivateKey      string        `inbound:"private-key,omitempty"`
 	EchKey          string        `inbound:"ech-key,omitempty"`
@@ -60,6 +61,7 @@ func NewVless(options *VlessOption) (*Vless, error) {
 			Users:           users,
 			WsPath:          options.WsPath,
 			GrpcServiceName: options.GrpcServiceName,
+			UserAgent:       options.UserAgent,
 			Certificate:     options.Certificate,
 			PrivateKey:      options.PrivateKey,
 			EchKey:          options.EchKey,
