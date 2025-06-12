@@ -32,11 +32,6 @@ var (
 	ErrSmallBuffer   = errors.New("buffer too small")
 )
 
-var defaultHeader = http.Header{
-	"content-type": []string{"application/grpc"},
-	"user-agent":   []string{"grpc-go/1.36.0"},
-}
-
 type DialFn = func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type Conn struct {
@@ -62,6 +57,7 @@ type Config struct {
 	ServiceName       string
 	Host              string
 	ClientFingerprint string
+	UserAgent         string
 }
 
 func (g *Conn) initReader() {
@@ -368,7 +364,17 @@ func StreamGunWithTransport(transport *TransportWrap, cfg *Config) (net.Conn, er
 		Proto:      "HTTP/2",
 		ProtoMajor: 2,
 		ProtoMinor: 0,
-		Header:     defaultHeader,
+		// use cfg.UserAgent if set, otherwise use default user-agent
+		Header: func() http.Header {
+			ua := cfg.UserAgent
+			if ua == "" {
+				ua = "grpc-go/1.36.0"
+			}
+			return http.Header{
+				"Content-Type": []string{"application/grpc"},
+				"User-Agent":   []string{ua},
+			}
+		}(),
 	}
 	request = request.WithContext(transport.ctx)
 
