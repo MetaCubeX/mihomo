@@ -371,6 +371,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			case "grpc":
 				grpcOpts := make(map[string]any)
 				grpcOpts["grpc-service-name"] = values["path"]
+				grpcOpts["user-agent"] = values["user-agent"]
 				vmess["grpc-opts"] = grpcOpts
 			}
 
