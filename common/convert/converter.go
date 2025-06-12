@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/metacubex/mihomo/log"
 )
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to mihomo proxies config
@@ -212,7 +210,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			vless := make(map[string]any, 20)
 			err = handleVShareLink(names, urlVLess, scheme, vless)
 			if err != nil {
-				log.Warnln("error:%s line:%s", err.Error(), line)
 				continue
 			}
 			if flow := query.Get("flow"); flow != "" {
@@ -234,7 +231,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess := make(map[string]any, 20)
 				err = handleVShareLink(names, urlVMess, scheme, vmess)
 				if err != nil {
-					log.Warnln("error:%s line:%s", err.Error(), line)
 					continue
 				}
 				vmess["alterId"] = 0
@@ -513,6 +509,94 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			proxies = append(proxies, ssr)
+		case "socks", "socks5", "socks5h", "http", "https":
+			link, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			server := link.Hostname()
+			if server == "" {
+				continue
+			}
+			portStr := link.Port()
+			if portStr == "" {
+				continue
+			}
+			remarks := link.Fragment
+			if remarks == "" {
+				remarks = fmt.Sprintf("%s:%s", server, portStr)
+			}
+			name := uniqueName(names, remarks)
+			encodeStr := link.User.String()
+			var username, password string
+			if encodeStr != "" {
+				decodeStr := string(DecodeBase64([]byte(encodeStr)))
+				splitStr := strings.Split(decodeStr, ":")
+
+				// todo: should use url.QueryUnescape ?
+				username = splitStr[0]
+				if len(splitStr) == 2 {
+					password = splitStr[1]
+				}
+			}
+			socks := make(map[string]any, 10)
+			socks["name"] = name
+			socks["type"] = func() string {
+				switch scheme {
+				case "socks", "socks5", "socks5h":
+					return "socks5"
+				case "http", "https":
+					return "http"
+				}
+				return scheme
+			}()
+			socks["server"] = server
+			socks["port"] = portStr
+			socks["username"] = username
+			socks["password"] = password
+			socks["skip-cert-verify"] = true
+
+			proxies = append(proxies, socks)
+
+		case "anytls":
+			// https://github.com/anytls/anytls-go/blob/main/docs/uri_scheme.md
+			link, err := url.Parse(line)
+			if err != nil {
+				continue
+			}
+			username := link.User.Username()
+			password, exist := link.User.Password()
+			if !exist {
+				password = username
+			}
+			query := link.Query()
+			server := link.Hostname()
+			if server == "" {
+				continue
+			}
+			portStr := link.Port()
+			if portStr == "" {
+				continue
+			}
+			insecure, sni := query.Get("insecure"), query.Get("sni")
+			insecureBool := insecure == "1"
+			remarks := link.Fragment
+			if remarks == "" {
+				remarks = fmt.Sprintf("%s:%s", server, portStr)
+			}
+			name := uniqueName(names, remarks)
+			anytls := make(map[string]any, 10)
+			anytls["name"] = name
+			anytls["type"] = "anytls"
+			anytls["server"] = server
+			anytls["port"] = portStr
+			anytls["username"] = username
+			anytls["password"] = password
+			anytls["sni"] = sni
+			anytls["skip-cert-verify"] = insecureBool
+			anytls["udp"] = true
+
+			proxies = append(proxies, anytls)
 		}
 	}
 
