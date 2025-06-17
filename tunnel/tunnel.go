@@ -299,7 +299,7 @@ func fixMetadata(metadata *C.Metadata) {
 }
 
 func needLookupIP(metadata *C.Metadata) bool {
-	return resolver.MappingEnabled() && metadata.Host == "" && metadata.DstIP.IsValid()
+	return resolver.MappingEnabled() && metadata.Host == "" && (!metadata.DstIP.IsValid() || metadata.SniffHost != "")
 }
 
 func preHandleMetadata(metadata *C.Metadata) error {
