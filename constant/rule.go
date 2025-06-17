@@ -6,6 +6,7 @@ const (
 	DomainSuffix
 	DomainKeyword
 	DomainRegex
+	DomainWildcard
 	GEOSITE
 	GEOIP
 	SrcGEOIP
@@ -48,6 +49,8 @@ func (rt RuleType) String() string {
 		return "DomainKeyword"
 	case DomainRegex:
 		return "DomainRegex"
+	case DomainWildcard:
+		return "DomainWildcard"
 	case GEOSITE:
 		return "GeoSite"
 	case GEOIP:
