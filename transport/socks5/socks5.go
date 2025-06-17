@@ -118,6 +118,10 @@ func ServerHandshake(rw net.Conn, authenticator auth.Authenticator) (addr Addr, 
 		return
 	}
 
+	if nmethods == 1 && buf[0] == 0x02 /* will use password */ && authenticator == nil {
+		authenticator = auth.AlwaysValid
+	}
+
 	// write VER METHOD
 	if authenticator != nil {
 		if _, err = rw.Write([]byte{5, 2}); err != nil {
