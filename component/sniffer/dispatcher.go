@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/metacubex/sing/common/metadata"
+
 	"github.com/metacubex/mihomo/common/lru"
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
@@ -164,6 +166,9 @@ func replaceDomain(metadata *C.Metadata, host string, overrideDest bool) {
 }
 
 func (sd *Dispatcher) domainCanReplace(host string) bool {
+	if host == "." || !metadata.IsDomainName(host) {
+		return false
+	}
 	for _, matcher := range sd.skipDomain {
 		if matcher.MatchDomain(host) {
 			return false
