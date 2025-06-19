@@ -414,7 +414,7 @@ type RawConfig struct {
 	KeepAliveInterval       int               `yaml:"keep-alive-interval" json:"keep-alive-interval"`
 	DisableKeepAlive        bool              `yaml:"disable-keep-alive" json:"disable-keep-alive"`
 
-	ProxyProvider map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
+	ProxyProvider *orderedmap.OrderedMap[string, map[string]any] `yaml:"proxy-providers" json:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
 	Proxy         []map[string]any          `yaml:"proxies" json:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups" json:"proxy-groups"`
@@ -464,6 +464,7 @@ func DefaultRawConfig() *RawConfig {
 		Rule:              []string{},
 		Proxy:             []map[string]any{},
 		ProxyGroup:        []map[string]any{},
+		ProxyProvider:     orderedmap.New[string, map[string]any](),
 		TCPConcurrent:     false,
 		FindProcessMode:   P.FindProcessStrict,
 		GlobalUA:          "clash.meta/" + C.Version,
@@ -884,7 +885,8 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	var AllProviders []string
 	// parse and initial providers
-	for name, mapping := range providersConfig {
+	for pair := providersConfig.Oldest(); pair != nil; pair = pair.Next() {
+		name, mapping := pair.Key, pair.Value
 		if name == provider.ReservedName {
 			return nil, nil, fmt.Errorf("can not defined a provider called `%s`", provider.ReservedName)
 		}
@@ -899,7 +901,6 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	}
 
 	slices.Sort(AllProxies)
-	slices.Sort(AllProviders)
 
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
