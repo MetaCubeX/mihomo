@@ -2,6 +2,7 @@ package convert
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 )
 
@@ -42,4 +43,23 @@ func decodeUrlSafe(data string) string {
 		return ""
 	}
 	return string(dcBuf)
+}
+
+func TryDecodeBase64(s string) (decoded []byte, err error) {
+	if len(s)%4 == 0 {
+		if decoded, err = base64.StdEncoding.DecodeString(s); err == nil {
+			return
+		}
+		if decoded, err = base64.URLEncoding.DecodeString(s); err == nil {
+			return
+		}
+	} else {
+		if decoded, err = base64.RawStdEncoding.DecodeString(s); err == nil {
+			return
+		}
+		if decoded, err = base64.RawURLEncoding.DecodeString(s); err == nil {
+			return
+		}
+	}
+	return nil, fmt.Errorf("invalid base64-encoded string")
 }

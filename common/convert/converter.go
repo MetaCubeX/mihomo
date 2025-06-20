@@ -456,12 +456,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			proxies = append(proxies, ss)
 
 		case "ssr":
-			dcBuf, err := encRaw.DecodeString(body)
+			dcBuf, err := TryDecodeBase64(body)
 			if err != nil {
 				continue
 			}
 
-			// ssr://host:port:protocol:method:obfs:urlsafebase64pass/?obfsparam=urlsafebase64&protoparam=&remarks=urlsafebase64&group=urlsafebase64&udpport=0&uot=1
+			// ssr://host:port:protocol:method:obfs:urlsafebase64pass/?obfsparam=urlsafebase64param&protoparam=urlsafebase64param&remarks=urlsafebase64remarks&group=urlsafebase64group&udpport=0&uot=1
 
 			before, after, ok := strings.Cut(string(dcBuf), "/?")
 			if !ok {
@@ -490,7 +490,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			name := uniqueName(names, remarks)
 
 			obfsParam := decodeUrlSafe(query.Get("obfsparam"))
-			protocolParam := query.Get("protoparam")
+			protocolParam := decodeUrlSafe(query.Get("protoparam"))
 
 			ssr := make(map[string]any, 20)
 
