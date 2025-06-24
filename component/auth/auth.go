@@ -41,3 +41,11 @@ func NewAuthenticator(users []AuthUser) Authenticator {
 	}
 	return au
 }
+
+var AlwaysValid Authenticator = alwaysValid{}
+
+type alwaysValid struct{}
+
+func (alwaysValid) Verify(string, string) bool { return true }
+
+func (alwaysValid) Users() []string { return nil }
