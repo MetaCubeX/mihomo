@@ -113,7 +113,7 @@ func NewHostValueByDomain(domain string) (HostValue, error) {
 	domain = strings.Trim(domain, ".")
 	item := strings.Split(domain, ".")
 	if len(item) < 2 {
-		return HostValue{}, errors.New("invaild domain")
+		return HostValue{}, errors.New("invalid domain")
 	}
 	return HostValue{
 		IsDomain: true,
