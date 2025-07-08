@@ -31,7 +31,7 @@ require (
 	github.com/metacubex/sing-shadowsocks v0.2.11-0.20250621023810-0e9ef9dd0c92
 	github.com/metacubex/sing-shadowsocks2 v0.2.5-0.20250621023950-93d605a2143d
 	github.com/metacubex/sing-shadowtls v0.0.0-20250503063515-5d9f966d17a2
-	github.com/metacubex/sing-tun v0.4.7-0.20250708023529-4d4dfb003df6
+	github.com/metacubex/sing-tun v0.4.7-0.20250708161036-39e27fac35ed
 	github.com/metacubex/sing-vmess v0.2.2
 	github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f
 	github.com/metacubex/smux v0.0.0-20250503055512-501391591dee
