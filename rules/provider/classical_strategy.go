@@ -12,7 +12,7 @@ import (
 type classicalStrategy struct {
 	rules []C.Rule
 	count int
-	parse func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error)
+	parse common.ParseRuleFunc
 }
 
 func (c *classicalStrategy) Behavior() P.RuleBehavior {
@@ -39,25 +39,26 @@ func (c *classicalStrategy) Reset() {
 }
 
 func (c *classicalStrategy) Insert(rule string) {
-	ruleType, rule, params := common.ParseRulePayload(rule)
-	r, err := c.parse(ruleType, rule, "", params)
+	r, err := c.payloadToRule(rule)
 	if err != nil {
-		log.Warnln("parse classical rule error: %s", err.Error())
+		log.Warnln("parse classical rule [%s] error: %s", rule, err.Error())
 	} else {
 		c.rules = append(c.rules, r)
 		c.count++
 	}
 }
 
+func (c *classicalStrategy) payloadToRule(rule string) (C.Rule, error) {
+	tp, payload, target, params := common.ParseRulePayload(rule, false)
+	switch tp {
+	case "MATCH", "RULE-SET", "SUB-RULE":
+		return nil, fmt.Errorf("unsupported rule type on classical rule-set: %s", tp)
+	}
+	return c.parse(tp, payload, target, params, nil)
+}
+
 func (c *classicalStrategy) FinishInsert() {}
 
-func NewClassicalStrategy(parse func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error)) *classicalStrategy {
-	return &classicalStrategy{rules: []C.Rule{}, parse: func(tp, payload, target string, params []string) (parsed C.Rule, parseErr error) {
-		switch tp {
-		case "MATCH", "RULE-SET", "SUB-RULE":
-			return nil, fmt.Errorf("unsupported rule type on classical rule-set: %s", tp)
-		default:
-			return parse(tp, payload, target, params, nil)
-		}
-	}}
+func NewClassicalStrategy(parse common.ParseRuleFunc) *classicalStrategy {
+	return &classicalStrategy{rules: []C.Rule{}, parse: parse}
 }

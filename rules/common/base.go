@@ -34,22 +34,48 @@ func ParseParams(params []string) (isSrc bool, noResolve bool) {
 	return
 }
 
-func ParseRulePayload(ruleRaw string) (string, string, []string) {
-	item := strings.Split(ruleRaw, ",")
-	if len(item) == 1 {
-		return "", item[0], nil
-	} else if len(item) == 2 {
-		return item[0], item[1], nil
-	} else if len(item) > 2 {
-		// keep in sync with config/config.go [parseRules]
-		if item[0] == "NOT" || item[0] == "OR" || item[0] == "AND" || item[0] == "SUB-RULE" || item[0] == "DOMAIN-REGEX" || item[0] == "PROCESS-NAME-REGEX" || item[0] == "PROCESS-PATH-REGEX" {
-			return item[0], strings.Join(item[1:], ","), nil
-		} else {
-			return item[0], item[1], item[2:]
+func trimArr(arr []string) (r []string) {
+	for _, e := range arr {
+		r = append(r, strings.Trim(e, " "))
+	}
+	return
+}
+
+// ParseRulePayload parse rule format like:
+// `tp,payload,target(,params...)` or `tp,payload(,params...)`
+// needTarget control the format contains `target` in string
+func ParseRulePayload(ruleRaw string, needTarget bool) (tp, payload, target string, params []string) {
+	item := trimArr(strings.Split(ruleRaw, ","))
+	tp = strings.ToUpper(item[0])
+	if len(item) > 1 {
+		switch tp {
+		case "MATCH":
+			// MATCH doesn't contain payload and params
+			target = item[1]
+		case "NOT", "OR", "AND", "SUB-RULE", "DOMAIN-REGEX", "PROCESS-NAME-REGEX", "PROCESS-PATH-REGEX":
+			// some type of rules that has comma in payload and don't need params
+			if needTarget {
+				l := len(item)
+				target = item[l-1] // don't have params so target must at the end of slices
+				item = item[:l-1]  // remove the target from slices
+			}
+			payload = strings.Join(item[1:], ",")
+		default:
+			payload = item[1]
+			if len(item) > 2 {
+				if needTarget {
+					target = item[2]
+					if len(item) > 3 {
+						params = item[3:]
+					}
+				} else {
+					params = item[2:]
+				}
+			}
 		}
 	}
 
-	return "", "", nil
+	return
 }
 
 type ParseRuleFunc func(tp, payload, target string, params []string, subRules map[string][]C.Rule) (C.Rule, error)

@@ -1035,46 +1035,20 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, ruleProviders 
 
 	// parse rules
 	for idx, line := range rulesConfig {
-		rule := trimArr(strings.Split(line, ","))
-		var (
-			payload  string
-			target   string
-			params   []string
-			ruleName = strings.ToUpper(rule[0])
-		)
-
-		l := len(rule)
-
-		if ruleName == "NOT" || ruleName == "OR" || ruleName == "AND" || ruleName == "SUB-RULE" || ruleName == "DOMAIN-REGEX" || ruleName == "PROCESS-NAME-REGEX" || ruleName == "PROCESS-PATH-REGEX" {
-			target = rule[l-1]
-			payload = strings.Join(rule[1:l-1], ",")
-		} else {
-			if l < 2 {
-				return nil, fmt.Errorf("%s[%d] [%s] error: format invalid", format, idx, line)
-			}
-			if l < 4 {
-				rule = append(rule, make([]string, 4-l)...)
-			}
-			if ruleName == "MATCH" {
-				l = 2
-			}
-			if l >= 3 {
-				l = 3
-				payload = rule[1]
-			}
-			target = rule[l-1]
-			params = rule[l:]
+		tp, payload, target, params := RC.ParseRulePayload(line, true)
+		if target == "" {
+			return nil, fmt.Errorf("%s[%d] [%s] error: format invalid", format, idx, line)
 		}
+
 		if _, ok := proxies[target]; !ok {
-			if ruleName != "SUB-RULE" {
+			if tp != "SUB-RULE" {
 				return nil, fmt.Errorf("%s[%d] [%s] error: proxy [%s] not found", format, idx, line, target)
 			} else if _, ok = subRules[target]; !ok {
 				return nil, fmt.Errorf("%s[%d] [%s] error: sub-rule [%s] not found", format, idx, line, target)
 			}
 		}
 
-		params = trimArr(params)
-		parsed, parseErr := R.ParseRule(ruleName, payload, target, params, subRules)
+		parsed, parseErr := R.ParseRule(tp, payload, target, params, subRules)
 		if parseErr != nil {
 			return nil, fmt.Errorf("%s[%d] [%s] error: %s", format, idx, line, parseErr.Error())
 		}
