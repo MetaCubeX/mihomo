@@ -348,7 +348,7 @@ jobs:
       shell: bash
 
     - name: Tag Repo
-      uses: 8Mi-Tech/action-gh-release-update-tag@main
+      uses: 8Mi-Tech/action-gh-release-update-tag@v2
       with:
         tag_name: Prerelease-${{ github.ref_name }}
       
