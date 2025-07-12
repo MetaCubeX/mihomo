@@ -339,20 +339,18 @@ jobs:
     - name: Delete current release assets
       uses: 8Mi-Tech/delete-release-assets-action@main
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
         tag: Prerelease-${{ github.ref_name }}
         deleteOnlyFromDrafts: false
+
     - name: Set Env
       run: |
         echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
       shell: bash
 
     - name: Tag Repo
-      uses: richardsimko/update-tag@v1
+      uses: 8Mi-Tech/action-gh-release-update-tag@main
       with:
         tag_name: Prerelease-${{ github.ref_name }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
     - run: |
         cat > release.txt << 'EOF'
@@ -401,7 +399,7 @@ jobs:
           git fetch origin Alpha:Alpha
           git push origin Alpha:Meta --force
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Tag the commit on Alpha
         run: |
@@ -409,7 +407,7 @@ jobs:
           git tag ${{ github.event.inputs.version }}
           git push origin ${{ github.event.inputs.version }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Generate release notes
         run: |
