@@ -348,9 +348,10 @@ jobs:
       shell: bash
 
     - name: Tag Repo
-      uses: 8Mi-Tech/action-gh-release-update-tag@v2
+      uses: richardsimko/update-tag@v1
       with:
         tag_name: Prerelease-${{ github.ref_name }}
+        GITHUB_TOKEN: ${{ github.token }}
       
     - run: |
         cat > release.txt << 'EOF'
