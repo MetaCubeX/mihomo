@@ -351,6 +351,7 @@ jobs:
       uses: richardsimko/update-tag@v1
       with:
         tag_name: Prerelease-${{ github.ref_name }}
+      env:
         GITHUB_TOKEN: ${{ github.token }}
       
     - run: |
