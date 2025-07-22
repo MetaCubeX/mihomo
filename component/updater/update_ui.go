@@ -179,10 +179,12 @@ func unzip(data []byte, dest string) error {
 		if info.Mode()&os.ModeSymlink != 0 {
 			continue // disallow symlink
 		}
+		// Remove dangerous permission bits (suid, sgid, sticky)
+		mode := f.Mode() &^ (os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
 		if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
 			return err
 		}
-		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 		if err != nil {
 			return err
 		}
@@ -207,10 +209,8 @@ func untgz(data []byte, dest string) error {
 	}
 	defer gzr.Close()
 
-	tr := tar.NewReader(gzr)
-
 	_ = gzr.Reset(bytes.NewReader(data))
-	tr = tar.NewReader(gzr)
+	tr := tar.NewReader(gzr)
 
 	for {
 		header, err := tr.Next()
@@ -236,7 +236,9 @@ func untgz(data []byte, dest string) error {
 			if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
 				return err
 			}
-			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
+			// Remove dangerous permission bits for regular files
+			mode := os.FileMode(header.Mode) &^ (os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 			if err != nil {
 				return err
 			}
