@@ -108,6 +108,9 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 	switch schema.Type {
 	case "file":
 		path := C.Path.Resolve(schema.Path)
+		if !C.Path.IsSafePath(path) {
+			return nil, C.Path.ErrNotSafePath(path)
+		}
 		vehicle = resource.NewFileVehicle(path)
 	case "http":
 		path := C.Path.GetPathByHash("proxies", schema.URL)
