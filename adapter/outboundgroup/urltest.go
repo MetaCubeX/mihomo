@@ -27,6 +27,7 @@ type URLTest struct {
 	selected       string
 	testUrl        string
 	expectedStatus string
+	testHeader     map[string][]string
 	tolerance      uint16
 	disableUDP     bool
 	Hidden         bool
@@ -179,14 +180,15 @@ func (u *URLTest) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        u.testUrl,
 		"expectedStatus": u.expectedStatus,
+		"testHeader":     u.testHeader,
 		"fixed":          u.selected,
 		"hidden":         u.Hidden,
 		"icon":           u.Icon,
 	})
 }
 
-func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (map[string]uint16, error) {
-	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus)
+func (u *URLTest) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], header map[string][]string) (map[string]uint16, error) {
+	return u.GroupBase.URLTest(ctx, u.testUrl, expectedStatus, header)
 }
 
 func parseURLTestOption(config map[string]any) []urlTestOption {
@@ -218,6 +220,7 @@ func NewURLTest(option *GroupCommonOption, providers []provider.ProxyProvider, o
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		testHeader:     option.TestHeader,
 		Hidden:         option.Hidden,
 		Icon:           option.Icon,
 	}

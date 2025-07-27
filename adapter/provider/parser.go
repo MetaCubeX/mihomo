@@ -20,12 +20,13 @@ var (
 )
 
 type healthCheckSchema struct {
-	Enable         bool   `provider:"enable"`
-	URL            string `provider:"url"`
-	Interval       int    `provider:"interval"`
-	TestTimeout    int    `provider:"timeout,omitempty"`
-	Lazy           bool   `provider:"lazy,omitempty"`
-	ExpectedStatus string `provider:"expected-status,omitempty"`
+	Enable         bool                `provider:"enable"`
+	URL            string              `provider:"url"`
+	Interval       int                 `provider:"interval"`
+	TestTimeout    int                 `provider:"timeout,omitempty"`
+	Lazy           bool                `provider:"lazy,omitempty"`
+	ExpectedStatus string              `provider:"expected-status,omitempty"`
+	TestHeader     map[string][]string `provider:"header,omitempty"`
 }
 
 type OverrideProxyNameSchema struct {
@@ -97,7 +98,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		}
 		hcInterval = uint(schema.HealthCheck.Interval)
 	}
-	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus)
+	hc := NewHealthCheck([]C.Proxy{}, schema.HealthCheck.URL, uint(schema.HealthCheck.TestTimeout), hcInterval, schema.HealthCheck.Lazy, expectedStatus, schema.HealthCheck.TestHeader)
 
 	parser, err := NewProxiesParser(schema.Filter, schema.ExcludeFilter, schema.ExcludeType, schema.DialerProxy, schema.Override)
 	if err != nil {

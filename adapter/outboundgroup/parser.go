@@ -23,25 +23,26 @@ var (
 )
 
 type GroupCommonOption struct {
-	Name                string   `group:"name"`
-	Type                string   `group:"type"`
-	Proxies             []string `group:"proxies,omitempty"`
-	Use                 []string `group:"use,omitempty"`
-	URL                 string   `group:"url,omitempty"`
-	Interval            int      `group:"interval,omitempty"`
-	TestTimeout         int      `group:"timeout,omitempty"`
-	MaxFailedTimes      int      `group:"max-failed-times,omitempty"`
-	Lazy                bool     `group:"lazy,omitempty"`
-	DisableUDP          bool     `group:"disable-udp,omitempty"`
-	Filter              string   `group:"filter,omitempty"`
-	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
-	ExcludeType         string   `group:"exclude-type,omitempty"`
-	ExpectedStatus      string   `group:"expected-status,omitempty"`
-	IncludeAll          bool     `group:"include-all,omitempty"`
-	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
-	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
-	Hidden              bool     `group:"hidden,omitempty"`
-	Icon                string   `group:"icon,omitempty"`
+	Name                string              `group:"name"`
+	Type                string              `group:"type"`
+	Proxies             []string            `group:"proxies,omitempty"`
+	Use                 []string            `group:"use,omitempty"`
+	URL                 string              `group:"url,omitempty"`
+	TestHeader          map[string][]string `group:"header,omitempty"`
+	Interval            int                 `group:"interval,omitempty"`
+	TestTimeout         int                 `group:"timeout,omitempty"`
+	MaxFailedTimes      int                 `group:"max-failed-times,omitempty"`
+	Lazy                bool                `group:"lazy,omitempty"`
+	DisableUDP          bool                `group:"disable-udp,omitempty"`
+	Filter              string              `group:"filter,omitempty"`
+	ExcludeFilter       string              `group:"exclude-filter,omitempty"`
+	ExcludeType         string              `group:"exclude-type,omitempty"`
+	ExpectedStatus      string              `group:"expected-status,omitempty"`
+	IncludeAll          bool                `group:"include-all,omitempty"`
+	IncludeAllProxies   bool                `group:"include-all-proxies,omitempty"`
+	IncludeAllProviders bool                `group:"include-all-providers,omitempty"`
+	Hidden              bool                `group:"hidden,omitempty"`
+	Icon                string              `group:"icon,omitempty"`
 
 	// removed configs, only for error logging
 	Interface   string `group:"interface-name,omitempty"`
@@ -136,7 +137,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 				groupOption.URL = C.DefaultTestURL
 			}
 		} else {
-			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval))
+			addTestUrlToProviders(PDs, groupOption.URL, expectedStatus, groupOption.Filter, uint(groupOption.Interval), groupOption.TestHeader)
 		}
 		providers = append(providers, PDs...)
 	}
@@ -162,7 +163,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 			}
 		}
 
-		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus)
+		hc := provider.NewHealthCheck(ps, groupOption.URL, uint(groupOption.TestTimeout), uint(groupOption.Interval), groupOption.Lazy, expectedStatus, groupOption.TestHeader)
 
 		pd, err := provider.NewCompatibleProvider(groupName, ps, hc)
 		if err != nil {
@@ -222,12 +223,12 @@ func getProviders(mapping map[string]types.ProxyProvider, list []string) ([]type
 	return ps, nil
 }
 
-func addTestUrlToProviders(providers []types.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+func addTestUrlToProviders(providers []types.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint, testHeader map[string][]string) {
 	if len(providers) == 0 || len(url) == 0 {
 		return
 	}
 
 	for _, pd := range providers {
-		pd.RegisterHealthCheckTask(url, expectedStatus, filter, interval)
+		pd.RegisterHealthCheckTask(url, expectedStatus, filter, interval, testHeader)
 	}
 }

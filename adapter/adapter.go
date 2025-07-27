@@ -176,7 +176,7 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
-func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, err error) {
+func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], header map[string][]string) (t uint16, err error) {
 	var satisfied bool
 
 	defer func() {
@@ -235,6 +235,12 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		return
 	}
 	req = req.WithContext(ctx)
+
+	for k, vs := range header {
+		for _, v := range vs {
+			req.Header.Add(k, v)
+		}
+	}
 
 	transport := &http.Transport{
 		DialContext: func(context.Context, string, string) (net.Conn, error) {

@@ -154,7 +154,7 @@ type ProxyAdapter interface {
 }
 
 type Group interface {
-	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], header map[string][]string) (mp map[string]uint16, err error)
 	Touch()
 }
 
@@ -177,7 +177,7 @@ type Proxy interface {
 	DelayHistory() []DelayHistory
 	ExtraDelayHistories() map[string]ProxyState
 	LastDelayForTestUrl(url string) uint16
-	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16], header map[string][]string) (uint16, error)
 
 	// Deprecated: use DialContext instead.
 	Dial(metadata *Metadata) (Conn, error)

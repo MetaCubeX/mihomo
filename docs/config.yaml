@@ -973,6 +973,10 @@ proxy-groups:
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
+    # # 用于状态检查的请求头
+    # header:
+    #   Authorization:
+    #     - "Bearer 1231231"
 
   # fallback 将按照 url 测试结果按照节点顺序选择
   - name: "fallback-auto"
@@ -983,6 +987,10 @@ proxy-groups:
       - vmess1
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
+    # # 用于状态检查的请求头
+    # header:
+    #   Authorization:
+    #     - "Bearer 1231231"
 
   # load-balance 将按照算法随机选择节点
   - name: "load-balance"
@@ -993,6 +1001,10 @@ proxy-groups:
       - vmess1
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
+    # # 用于状态检查的请求头
+    # header:
+    #   Authorization:
+    #     - "Bearer 1231231"
   # strategy: consistent-hashing # 可选 round-robin 和 sticky-sessions
 
   # select 用户自行选择节点
@@ -1037,6 +1049,10 @@ proxy-providers:
       # lazy: true
       url: https://cp.cloudflare.com/generate_204
       # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
+      # # 用于状态检查的请求头
+      # header:
+      #   Authorization:
+      #     - "Bearer 1231231"
     override: # 覆写节点加载时的一些配置项
       skip-cert-verify: true
       udp: true

@@ -24,6 +24,7 @@ type HealthCheckOption struct {
 type extraOption struct {
 	expectedStatus utils.IntRanges[uint16]
 	filters        map[string]struct{}
+	testHeader     map[string][]string
 }
 
 type HealthCheck struct {
@@ -39,6 +40,7 @@ type HealthCheck struct {
 	lastTouch      atomic.TypedValue[time.Time]
 	singleDo       *singledo.Single[struct{}]
 	timeout        time.Duration
+	testHeader     map[string][]string
 }
 
 func (hc *HealthCheck) process() {
@@ -65,7 +67,7 @@ func (hc *HealthCheck) setProxies(proxies []C.Proxy) {
 	hc.proxies = proxies
 }
 
-func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint, testHeader map[string][]string) {
 	url = strings.TrimSpace(url)
 	if len(url) == 0 || url == hc.url {
 		log.Debugln("ignore invalid health check url: %s", url)
@@ -95,7 +97,7 @@ func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.
 		return
 	}
 
-	option := &extraOption{filters: map[string]struct{}{}, expectedStatus: expectedStatus}
+	option := &extraOption{filters: map[string]struct{}{}, expectedStatus: expectedStatus, testHeader: testHeader}
 	splitAndAddFiltersToExtra(filter, option)
 	hc.extra[url] = option
 }
@@ -132,7 +134,7 @@ func (hc *HealthCheck) check() {
 		b.SetLimit(10)
 
 		// execute default health check
-		option := &extraOption{filters: nil, expectedStatus: hc.expectedStatus}
+		option := &extraOption{filters: nil, expectedStatus: hc.expectedStatus, testHeader: hc.testHeader}
 		hc.execute(b, hc.url, id, option)
 
 		// execute extra health check
@@ -156,8 +158,10 @@ func (hc *HealthCheck) execute(b *errgroup.Group, url, uid string, option *extra
 
 	var filterReg *regexp2.Regexp
 	var expectedStatus utils.IntRanges[uint16]
+	var testHeader map[string][]string
 	if option != nil {
 		expectedStatus = option.expectedStatus
+		testHeader = option.testHeader
 		if len(option.filters) != 0 {
 			filters := make([]string, 0, len(option.filters))
 			for filter := range option.filters {
@@ -181,7 +185,7 @@ func (hc *HealthCheck) execute(b *errgroup.Group, url, uid string, option *extra
 			ctx, cancel := context.WithTimeout(hc.ctx, hc.timeout)
 			defer cancel()
 			log.Debugln("Health Checking, proxy: %s, url: %s, id: {%s}", p.Name(), url, uid)
-			_, _ = p.URLTest(ctx, url, expectedStatus)
+			_, _ = p.URLTest(ctx, url, expectedStatus, testHeader)
 			log.Debugln("Health Checked, proxy: %s, url: %s, alive: %t, delay: %d ms uid: {%s}", p.Name(), url, p.AliveForTestUrl(url), p.LastDelayForTestUrl(url), uid)
 			return nil
 		})
@@ -192,7 +196,7 @@ func (hc *HealthCheck) close() {
 	hc.ctxCancel()
 }
 
-func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
+func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16], testHeader map[string][]string) *HealthCheck {
 	if url == "" {
 		expectedStatus = nil
 		interval = 0
@@ -213,5 +217,6 @@ func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, 
 		lazy:           lazy,
 		expectedStatus: expectedStatus,
 		singleDo:       singledo.NewSingle[struct{}](time.Second),
+		testHeader:     testHeader,
 	}
 }

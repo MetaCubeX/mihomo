@@ -17,6 +17,7 @@ type Fallback struct {
 	*GroupBase
 	disableUDP     bool
 	testUrl        string
+	testHeader     map[string][]string
 	selected       string
 	expectedStatus string
 	Hidden         bool
@@ -89,6 +90,7 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        f.testUrl,
 		"expectedStatus": f.expectedStatus,
+		"testHeader":     f.testHeader,
 		"fixed":          f.selected,
 		"hidden":         f.Hidden,
 		"icon":           f.Icon,
@@ -140,7 +142,7 @@ func (f *Fallback) Set(name string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
 		expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
-		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus)
+		_, _ = p.URLTest(ctx, f.testUrl, expectedStatus, f.testHeader)
 	}
 
 	return nil
@@ -165,6 +167,7 @@ func NewFallback(option *GroupCommonOption, providers []provider.ProxyProvider) 
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
 		expectedStatus: option.ExpectedStatus,
+		testHeader:     option.TestHeader,
 		Hidden:         option.Hidden,
 		Icon:           option.Icon,
 	}

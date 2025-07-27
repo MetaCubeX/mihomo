@@ -27,6 +27,7 @@ type LoadBalance struct {
 	strategyFn     strategyFn
 	testUrl        string
 	expectedStatus string
+	testHeader     map[string][]string
 	Hidden         bool
 	Icon           string
 }
@@ -234,6 +235,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        lb.testUrl,
 		"expectedStatus": lb.expectedStatus,
+		"testHeader":     lb.testHeader,
 		"hidden":         lb.Hidden,
 		"icon":           lb.Icon,
 	})
@@ -265,6 +267,7 @@ func NewLoadBalance(option *GroupCommonOption, providers []provider.ProxyProvide
 		strategyFn:     strategyFn,
 		disableUDP:     option.DisableUDP,
 		testUrl:        option.URL,
+		testHeader:     option.TestHeader,
 		expectedStatus: option.ExpectedStatus,
 		Hidden:         option.Hidden,
 		Icon:           option.Icon,

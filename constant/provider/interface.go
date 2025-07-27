@@ -82,7 +82,7 @@ type ProxyProvider interface {
 	Touch()
 	HealthCheck()
 	Version() uint32
-	RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint)
+	RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint, testHeader map[string][]string)
 	HealthCheckURL() string
 }
 
