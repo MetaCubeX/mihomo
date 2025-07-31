@@ -514,9 +514,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 
 	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
-		log.Warnln("[Metadata] not valid: %#v", metadata)
-		return
+		log.Infoln("[Metadata] not valid: %#v, will sniff it", metadata)
 	}
+
 	fixMetadata(metadata) // fix some metadata not set via metadata.SetRemoteAddr or metadata.SetRemoteAddress
 
 	preHandleFailed := false
@@ -534,6 +534,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 			// we now have a domain name
 			preHandleFailed = false
 		}
+	}
+
+	if !metadata.Valid() {
+		log.Warnln("[Metadata] not valid: %#v", metadata)
+		return
 	}
 
 	// If both trials have failed, we can do nothing but give up
