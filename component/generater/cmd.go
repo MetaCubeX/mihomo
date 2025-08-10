@@ -46,7 +46,7 @@ func Main(args []string) {
 		}
 		fmt.Println("Config:", configBase64)
 		fmt.Println("Key:", keyPem)
-	case "vless-mlkem768":
+	case "vless-mlkem768-keypair":
 		var seed string
 		if len(args) > 1 {
 			seed = args[1]

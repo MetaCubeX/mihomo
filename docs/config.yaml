@@ -1346,7 +1346,7 @@ listeners:
         flow: xtls-rprx-vision
     # ws-path: "/" # 如果不为空则开启 websocket 传输层
     # grpc-service-name: "GunService" # 如果不为空则开启 grpc 传输层
-    # decryption: "10min-mlkem768seed-bas64RawURLEncoding" # 同时允许 1-RTT 模式与十分钟复用的 0-RTT 模式
+    # decryption: "10min-mlkem768seed-bas64RawURLEncoding" # 同时允许 1-RTT 模式与十分钟复用的 0-RTT 模式, 后面base64字符串可由可由 mihomo generate vless-mlkem768 命令生成
     # 下面两项如果填写则开启 tls（需要同时填写）
     # certificate: ./server.crt
     # private-key: ./server.key
