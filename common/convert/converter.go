@@ -221,6 +221,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if flow := query.Get("flow"); flow != "" {
 				vless["flow"] = strings.ToLower(flow)
 			}
+			if encryption := query.Get("encryption"); encryption != "" {
+				vless["encryption"] = encryption
+			}
 			proxies = append(proxies, vless)
 
 		case "vmess":
