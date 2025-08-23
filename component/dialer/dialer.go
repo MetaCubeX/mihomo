@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/metacubex/mihomo/component/keepalive"
@@ -175,6 +176,34 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	}
 
 	return dialer.DialContext(ctx, network, address)
+}
+
+func ICMPControl(destination netip.Addr) func(network, address string, conn syscall.RawConn) error {
+	return func(network, address string, conn syscall.RawConn) error {
+		if DefaultSocketHook != nil {
+			return DefaultSocketHook(network, address, conn)
+		}
+		dialer := &net.Dialer{}
+		interfaceName := DefaultInterface.Load()
+		if interfaceName == "" {
+			if finder := DefaultInterfaceFinder.Load(); finder != nil {
+				interfaceName = finder.FindInterfaceName(destination)
+			}
+		}
+		if interfaceName != "" {
+			if err := bindIfaceToDialer(interfaceName, dialer, network, destination); err != nil {
+				return err
+			}
+		}
+		routingMark := int(DefaultRoutingMark.Load())
+		if routingMark != 0 {
+			bindMarkToDialer(routingMark, dialer, network, destination)
+		}
+		if dialer.ControlContext != nil {
+			return dialer.ControlContext(context.TODO(), network, address, conn)
+		}
+		return nil
+	}
 }
 
 func serialSingleStackDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt option) (net.Conn, error) {

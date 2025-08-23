@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/component/dialer"
@@ -174,11 +175,11 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	if tunMTU == 0 {
 		tunMTU = 9000
 	}
-	var udpTimeout int64
+	var udpTimeout time.Duration
 	if options.UDPTimeout != 0 {
-		udpTimeout = options.UDPTimeout
+		udpTimeout = time.Second * time.Duration(options.UDPTimeout)
 	} else {
-		udpTimeout = int64(sing.UDPTimeout.Seconds())
+		udpTimeout = sing.UDPTimeout
 	}
 	tableIndex := options.IPRoute2TableIndex
 	if tableIndex == 0 {
