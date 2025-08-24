@@ -95,7 +95,7 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		}
 
 		alpn := trojan.DefaultWebsocketALPN
-		if len(t.option.ALPN) != 0 {
+		if t.option.ALPN != nil {
 			alpn = t.option.ALPN
 		}
 
@@ -119,7 +119,7 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		// default tcp network
 		// handle TLS
 		alpn := trojan.DefaultALPN
-		if len(t.option.ALPN) != 0 {
+		if t.option.ALPN != nil {
 			alpn = t.option.ALPN
 		}
 		c, err = vmess.StreamTLSConn(ctx, c, &vmess.TLSConfig{

@@ -172,7 +172,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		return nil, err
 	}
 
-	if len(option.ALPN) > 0 {
+	if option.ALPN != nil {
 		tlsConfig.NextProtos = option.ALPN
 	} else {
 		tlsConfig.NextProtos = []string{DefaultALPN}
