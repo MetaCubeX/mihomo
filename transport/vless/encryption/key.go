@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/metacubex/blake3"
 	"github.com/metacubex/utls/mlkem"
-	"golang.org/x/crypto/sha3"
 )
 
 const MLKEM768SeedLength = mlkem.SeedSize
@@ -15,7 +15,7 @@ const MLKEM768ClientLength = mlkem.EncapsulationKeySize768
 const X25519PasswordSize = 32
 const X25519PrivateKeySize = 32
 
-func GenMLKEM768(seedStr string) (seedBase64, clientBase64, hash11Base64 string, err error) {
+func GenMLKEM768(seedStr string) (seedBase64, clientBase64, hash32Base64 string, err error) {
 	var seed [MLKEM768SeedLength]byte
 	if len(seedStr) > 0 {
 		s, _ := base64.RawURLEncoding.DecodeString(seedStr)
@@ -33,14 +33,14 @@ func GenMLKEM768(seedStr string) (seedBase64, clientBase64, hash11Base64 string,
 
 	key, _ := mlkem.NewDecapsulationKey768(seed[:])
 	client := key.EncapsulationKey().Bytes()
-	hash32 := sha3.Sum256(client)
+	hash32 := blake3.Sum256(client)
 	seedBase64 = base64.RawURLEncoding.EncodeToString(seed[:])
 	clientBase64 = base64.RawURLEncoding.EncodeToString(client)
-	hash11Base64 = base64.RawURLEncoding.EncodeToString(hash32[:11])
+	hash32Base64 = base64.RawURLEncoding.EncodeToString(hash32[:])
 	return
 }
 
-func GenX25519(privateKeyStr string) (privateKeyBase64, passwordBase64 string, err error) {
+func GenX25519(privateKeyStr string) (privateKeyBase64, passwordBase64, hash32Base64 string, err error) {
 	var privateKey [X25519PrivateKeySize]byte
 	if len(privateKeyStr) > 0 {
 		s, _ := base64.RawURLEncoding.DecodeString(privateKeyStr)
@@ -70,7 +70,10 @@ func GenX25519(privateKeyStr string) (privateKeyBase64, passwordBase64 string, e
 		fmt.Println(err.Error())
 		return
 	}
+	password := key.PublicKey().Bytes()
+	hash32 := blake3.Sum256(password)
 	privateKeyBase64 = base64.RawURLEncoding.EncodeToString(privateKey[:])
-	passwordBase64 = base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())
+	passwordBase64 = base64.RawURLEncoding.EncodeToString(password)
+	hash32Base64 = base64.RawURLEncoding.EncodeToString(hash32[:])
 	return
 }

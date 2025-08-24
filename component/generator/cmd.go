@@ -50,23 +50,24 @@ func Main(args []string) {
 		if len(args) > 1 {
 			seed = args[1]
 		}
-		seedBase64, clientBase64, hash11Base64, err := encryption.GenMLKEM768(seed)
+		seedBase64, clientBase64, hash32Base64, err := encryption.GenMLKEM768(seed)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Println("Seed: " + seedBase64)
 		fmt.Println("Client: " + clientBase64)
-		fmt.Println("Hash11: " + hash11Base64)
+		fmt.Println("Hash32: " + hash32Base64)
 	case "vless-x25519":
 		var privateKey string
 		if len(args) > 1 {
 			privateKey = args[1]
 		}
-		privateKeyBase64, passwordBase64, err := encryption.GenX25519(privateKey)
+		privateKeyBase64, passwordBase64, hash32Base64, err := encryption.GenX25519(privateKey)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Println("PrivateKey: " + privateKeyBase64)
 		fmt.Println("Password: " + passwordBase64)
+		fmt.Println("Hash32: " + hash32Base64)
 	}
 }

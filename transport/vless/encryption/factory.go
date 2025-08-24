@@ -14,46 +14,39 @@ func NewClient(encryption string) (*ClientInstance, error) {
 	case "", "none": // We will not reject empty string like xray-core does, because we need to ensure compatibility
 		return nil, nil
 	}
-	if s := strings.Split(encryption, "."); len(s) == 5 && s[2] == "mlkem768Client" {
-		var minutes uint32
-		if s[0] != "1rtt" {
-			t := strings.TrimSuffix(s[0], "min")
-			if t == s[0] {
-				return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
-			}
-			i, err := strconv.Atoi(t)
-			if err != nil {
-				return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
-			}
-			minutes = uint32(i)
-		}
+	if s := strings.Split(encryption, "."); len(s) >= 4 && s[0] == "mlkem768x25519plus" {
 		var xorMode uint32
 		switch s[1] {
 		case "native":
-		case "divide":
+		case "xorpub":
 			xorMode = 1
 		case "random":
 			xorMode = 2
 		default:
 			return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
 		}
-		xorPKeyBytes, err := base64.RawURLEncoding.DecodeString(s[3])
-		if err != nil {
+		var seconds uint32
+		switch s[2] {
+		case "1rtt":
+		case "0rtt":
+			seconds = 1
+		default:
 			return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
 		}
-		if len(xorPKeyBytes) != X25519PasswordSize {
-			return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
-		}
-		nfsEKeyBytes, err := base64.RawURLEncoding.DecodeString(s[4])
-		if err != nil {
-			return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
-		}
-		if len(nfsEKeyBytes) != MLKEM768ClientLength {
-			return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
+		var nfsPKeysBytes [][]byte
+		for _, r := range s[3:] {
+			b, err := base64.RawURLEncoding.DecodeString(r)
+			if err != nil {
+				return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
+			}
+			if len(b) != X25519PasswordSize && len(b) != MLKEM768ClientLength {
+				return nil, fmt.Errorf("invaild vless encryption value: %s", encryption)
+			}
+			nfsPKeysBytes = append(nfsPKeysBytes, b)
 		}
 		client := &ClientInstance{}
-		if err = client.Init(nfsEKeyBytes, xorPKeyBytes, xorMode, minutes); err != nil {
-			return nil, fmt.Errorf("failed to use mlkem768seed: %w", err)
+		if err := client.Init(nfsPKeysBytes, xorMode, seconds); err != nil {
+			return nil, fmt.Errorf("failed to use encryption: %w", err)
 		}
 		return client, nil
 	}
@@ -67,10 +60,20 @@ func NewServer(decryption string) (*ServerInstance, error) {
 	case "", "none": // We will not reject empty string like xray-core does, because we need to ensure compatibility
 		return nil, nil
 	}
-	if s := strings.Split(decryption, "."); len(s) == 5 && s[2] == "mlkem768Seed" {
-		var minutes uint32
-		if s[0] != "1rtt" {
-			t := strings.TrimSuffix(s[0], "min")
+	if s := strings.Split(decryption, "."); len(s) >= 4 && s[0] == "mlkem768x25519plus" {
+		var xorMode uint32
+		switch s[1] {
+		case "native":
+		case "xorpub":
+			xorMode = 1
+		case "random":
+			xorMode = 2
+		default:
+			return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
+		}
+		var seconds uint32
+		if s[2] != "1rtt" {
+			t := strings.TrimSuffix(s[2], "s")
 			if t == s[0] {
 				return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
 			}
@@ -78,35 +81,22 @@ func NewServer(decryption string) (*ServerInstance, error) {
 			if err != nil {
 				return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
 			}
-			minutes = uint32(i)
+			seconds = uint32(i)
 		}
-		var xorMode uint32
-		switch s[1] {
-		case "native":
-		case "divide":
-			xorMode = 1
-		case "random":
-			xorMode = 2
-		default:
-			return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
-		}
-		xorSKeyBytes, err := base64.RawURLEncoding.DecodeString(s[3])
-		if err != nil {
-			return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
-		}
-		if len(xorSKeyBytes) != X25519PrivateKeySize {
-			return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
-		}
-		nfsDKeySeed, err := base64.RawURLEncoding.DecodeString(s[4])
-		if err != nil {
-			return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
-		}
-		if len(nfsDKeySeed) != MLKEM768SeedLength {
-			return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
+		var nfsSKeysBytes [][]byte
+		for _, r := range s[3:] {
+			b, err := base64.RawURLEncoding.DecodeString(r)
+			if err != nil {
+				return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
+			}
+			if len(b) != X25519PrivateKeySize && len(b) != MLKEM768SeedLength {
+				return nil, fmt.Errorf("invaild vless decryption value: %s", decryption)
+			}
+			nfsSKeysBytes = append(nfsSKeysBytes, b)
 		}
 		server := &ServerInstance{}
-		if err = server.Init(nfsDKeySeed, xorSKeyBytes, xorMode, minutes); err != nil {
-			return nil, fmt.Errorf("failed to use mlkem768seed: %w", err)
+		if err := server.Init(nfsSKeysBytes, xorMode, seconds); err != nil {
+			return nil, fmt.Errorf("failed to use decryption: %w", err)
 		}
 		return server, nil
 	}

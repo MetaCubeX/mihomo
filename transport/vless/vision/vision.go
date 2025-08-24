@@ -51,13 +51,8 @@ func NewConn(conn net.Conn, tlsConn net.Conn, userUUID *uuid.UUID) (*Conn, error
 		t = reflect.TypeOf(underlying.Conn).Elem()
 		//log.Debugln("t:%v", t)
 		p = unsafe.Pointer(underlying.Conn)
-	case *encryption.ClientConn:
-		//log.Debugln("type *encryption.ClientConn")
-		c.netConn = underlying.Conn
-		t = reflect.TypeOf(underlying).Elem()
-		p = unsafe.Pointer(underlying)
-	case *encryption.ServerConn:
-		//log.Debugln("type *encryption.ServerConn")
+	case *encryption.CommonConn:
+		//log.Debugln("type *encryption.CommonConn")
 		c.netConn = underlying.Conn
 		t = reflect.TypeOf(underlying).Elem()
 		p = unsafe.Pointer(underlying)

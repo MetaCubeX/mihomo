@@ -640,10 +640,10 @@ proxies: # socks5
     network: tcp
     # -------------------------
     # vless encryption客户端配置：
-    # （只使用 1-RTT 模式 / 复用八分钟后协商新的 baseKey，周期需小于服务端的值）
-    # / 是只能选一个，后面是 base64RawURLEncoding，使用 mihomo generate vless-x25519 和 mihomo generate vless-mlkem768 生成，替换值时需去掉括号
+    # （native/xorpub 的 XTLS 可以 Splice。只使用 1-RTT 模式 / 若服务端发的 ticket 中秒数不为零则 0-RTT 复用）
+    # / 是只能选一个，后面 base64 至少一个，无限串联，使用  mihomo generate vless-x25519 和 mihomo generate vless-mlkem768 生成，替换值时需去掉括号
     # -------------------------
-    encryption: "1rtt/8min.native/divide/random.mlkem768Client.(X25519 Password).(ML-KEM-768 Client)"
+    encryption: "mlkem768x25519plus.native/xorpub/random.1rtt/0rtt.(X25519 Password).(ML-KEM-768 Client)..."
     tls: false #可以不开启tls
     udp: true
 
@@ -1365,10 +1365,10 @@ listeners:
     # grpc-service-name: "GunService" # 如果不为空则开启 grpc 传输层
     # -------------------------
     # vless encryption服务端配置：
-    # （只允许 1-RTT 模式 / 同时允许 1-RTT 模式与十分钟复用的 0-RTT 模式；原生外观 / ECH 式 XOR / 全随机数）
-    # / 是只能选一个，后面是 base64RawURLEncoding，使用 mihomo generate vless-x25519 和 mihomo generate vless-mlkem768 生成，替换值时需去掉括号
+    # （原生外观 / 只 XOR 公钥 / 全随机数。只允许 1-RTT 模式 / 同时允许 1-RTT 模式与 600 秒复用的 0-RTT 模式）
+    # / 是只能选一个，后面 base64 至少一个，无限串联，使用 mihomo generate vless-x25519 和 mihomo generate vless-mlkem768 生成，替换值时需去掉括号
     # -------------------------
-    # decryption: "1rtt/10min.native/divide/random.mlkem768Seed.(X25519 PrivateKey).(ML-KEM-768 Seed)"
+    # decryption: "mlkem768x25519plus.native/xorpub/random.1rtt/600s.(X25519 PrivateKey).(ML-KEM-768 Seed)..."
     # 下面两项如果填写则开启 tls（需要同时填写）
     # certificate: ./server.crt
     # private-key: ./server.key
