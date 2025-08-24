@@ -172,7 +172,7 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		return nil, err
 	}
 
-	if option.ALPN != nil {
+	if option.ALPN != nil { // structure's Decode will ensure value not nil when input has value even it was set an empty array
 		tlsConfig.NextProtos = option.ALPN
 	} else {
 		tlsConfig.NextProtos = []string{DefaultALPN}
