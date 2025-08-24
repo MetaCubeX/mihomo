@@ -23,7 +23,7 @@ type CommonConn struct {
 	PreWrite  []byte
 	GCM       *GCM
 	PeerGCM   *GCM
-	PeerCache []byte
+	input     bytes.Reader // PeerCache
 }
 
 func (c *CommonConn) Write(b []byte) (int, error) {
@@ -72,10 +72,8 @@ func (c *CommonConn) Read(b []byte) (int, error) {
 			xorConn.PeerCTR = NewCTR(c.UnitedKey, serverRandom[16:])
 		}
 	}
-	if len(c.PeerCache) != 0 {
-		n := copy(b, c.PeerCache)
-		c.PeerCache = c.PeerCache[n:]
-		return n, nil
+	if c.input.Len() > 0 {
+		return c.input.Read(b)
 	}
 	h, l, err := ReadAndDecodeHeader(c.Conn) // l: 17~17000
 	if err != nil {
@@ -110,7 +108,7 @@ func (c *CommonConn) Read(b []byte) (int, error) {
 		return 0, err
 	}
 	if len(dst) > len(b) {
-		c.PeerCache = dst[copy(b, dst):]
+		c.input.Reset(dst[copy(b, dst):])
 		dst = b // for len(dst)
 	}
 	return len(dst), nil
