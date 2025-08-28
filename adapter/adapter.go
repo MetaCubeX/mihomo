@@ -185,33 +185,22 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		if alive {
 			record.Delay = t
 		}
-
-		p.alive.Store(alive)
-		p.history.Put(record)
-		if p.history.Len() > defaultHistoriesNum {
-			p.history.Pop()
+		if !satisfied {
+			alive = false
 		}
-
 		state, ok := p.extra.Load(url)
 		if !ok {
 			state = &internalProxyState{
 				history: queue.New[C.DelayHistory](defaultHistoriesNum),
-				alive:   atomic.NewBool(true),
+				alive:   atomic.NewBool(alive),
 			}
 			p.extra.Store(url, state)
 		}
-
-		if !satisfied {
-			record.Delay = 0
-			alive = false
-		}
-
 		state.alive.Store(alive)
 		state.history.Put(record)
 		if state.history.Len() > defaultHistoriesNum {
 			state.history.Pop()
 		}
-
 	}()
 
 	unifiedDelay := UnifiedDelay.Load()
@@ -285,6 +274,9 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
 	t = uint16(time.Since(start) / time.Millisecond)
+	if !satisfied {
+		err = fmt.Errorf("failed by unsatisfied!status:%d", resp.StatusCode)
+	}
 	return
 }
 

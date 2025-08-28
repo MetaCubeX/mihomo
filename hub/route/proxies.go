@@ -135,7 +135,10 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	if err != nil || delay == 0 {
 		render.Status(r, http.StatusServiceUnavailable)
 		if err != nil && delay != 0 {
-			render.JSON(w, r, err)
+			render.JSON(w, r, render.M{
+				"delay": delay,
+				"error": err.Error(),
+			})
 		} else {
 			render.JSON(w, r, newError("An error occurred in the delay test"))
 		}
