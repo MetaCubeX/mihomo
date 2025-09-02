@@ -160,7 +160,14 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 		return fmt.Errorf("backuping: %w", err)
 	}
 
-	err = u.copyFile(updateExePath, currentExePath)
+	// Replace the current executable with the updated one
+	// On Windows, use copyFile because rename fails with "File in use" error
+	// On other platforms, use rename which can handle running executables
+	if runtime.GOOS == "windows" {
+		err = u.copyFile(updateExePath, currentExePath)
+	} else {
+		err = os.Rename(updateExePath, currentExePath)
+	}
 	if err != nil {
 		return fmt.Errorf("replacing: %w", err)
 	}
