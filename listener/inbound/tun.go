@@ -49,6 +49,7 @@ type TunOption struct {
 	ExcludePackage         []string       `inbound:"exclude-package,omitempty"`
 	EndpointIndependentNat bool           `inbound:"endpoint-independent-nat,omitempty"`
 	UDPTimeout             int64          `inbound:"udp-timeout,omitempty"`
+	DisableICMPForwarding  bool           `inbound:"disable-icmp-forwarding,omitempty"`
 	FileDescriptor         int            `inbound:"file-descriptor,omitempty"`
 
 	Inet4RouteAddress        []netip.Prefix `inbound:"inet4-route-address,omitempty"`
@@ -122,6 +123,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 			ExcludePackage:         options.ExcludePackage,
 			EndpointIndependentNat: options.EndpointIndependentNat,
 			UDPTimeout:             options.UDPTimeout,
+			DisableICMPForwarding:  options.DisableICMPForwarding,
 			FileDescriptor:         options.FileDescriptor,
 
 			Inet4RouteAddress:        options.Inet4RouteAddress,

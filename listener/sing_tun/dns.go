@@ -20,7 +20,8 @@ import (
 
 type ListenerHandler struct {
 	*sing.ListenerHandler
-	DnsAdds []netip.AddrPort
+	DnsAdds               []netip.AddrPort
+	DisableICMPForwarding bool
 }
 
 func (h *ListenerHandler) ShouldHijackDns(targetAddr netip.AddrPort) bool {

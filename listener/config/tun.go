@@ -48,6 +48,7 @@ type Tun struct {
 	ExcludePackage         []string       `yaml:"exclude-package" json:"exclude-package,omitempty"`
 	EndpointIndependentNat bool           `yaml:"endpoint-independent-nat" json:"endpoint-independent-nat,omitempty"`
 	UDPTimeout             int64          `yaml:"udp-timeout" json:"udp-timeout,omitempty"`
+	DisableICMPForwarding  bool           `yaml:"disable-icmp-forwarding" json:"disable-icmp-forwarding,omitempty"`
 	FileDescriptor         int            `yaml:"file-descriptor" json:"file-descriptor"`
 
 	Inet4RouteAddress        []netip.Prefix `yaml:"inet4-route-address" json:"inet4-route-address,omitempty"`
@@ -184,6 +185,9 @@ func (t *Tun) Equal(other Tun) bool {
 		return false
 	}
 	if t.UDPTimeout != other.UDPTimeout {
+		return false
+	}
+	if t.DisableICMPForwarding != other.DisableICMPForwarding {
 		return false
 	}
 	if t.FileDescriptor != other.FileDescriptor {

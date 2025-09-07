@@ -17,7 +17,7 @@ import (
 func (h *ListenerHandler) PrepareConnection(network string, source M.Socksaddr, destination M.Socksaddr, routeContext tun.DirectRouteContext, timeout time.Duration) (tun.DirectRouteDestination, error) {
 	switch network {
 	case N.NetworkICMP: // our fork only send those type to PrepareConnection now
-		if resolver.IsFakeIP(destination.Addr) { // skip fakeip
+		if h.DisableICMPForwarding || resolver.IsFakeIP(destination.Addr) { // skip fakeip and if ICMP handling is disabled
 			log.Infoln("[ICMP] %s %s --> %s using fake ping echo", network, source, destination)
 			return nil, nil
 		}
