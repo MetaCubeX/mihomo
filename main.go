@@ -41,6 +41,7 @@ var (
 	externalControllerUnix string
 	externalControllerPipe string
 	secret                 string
+	runDaemon              bool
 )
 
 func init() {
@@ -55,6 +56,7 @@ func init() {
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
+	flagInit()
 	flag.Parse()
 }
 
@@ -124,6 +126,10 @@ func main() {
 		}
 		C.SetConfig(configFile)
 
+		if err := setLogFile(C.Path.HomeDir()); err != nil {
+			log.Errorln("%v", err)
+		}
+
 		if err := config.Init(C.Path.HomeDir()); err != nil {
 			log.Fatalln("Initial configuration directory error: %s", err.Error())
 		}
@@ -145,6 +151,13 @@ func main() {
 		}
 		fmt.Printf("configuration file %s test is successful\n", C.Path.Config())
 		return
+	}
+
+	if runDaemon {
+		if err := makeDaemon(); err != nil {
+			fmt.Println(err)
+			log.Fatalln("%v", err)
+		}
 	}
 
 	var options []hub.Option
