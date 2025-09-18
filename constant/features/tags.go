@@ -13,5 +13,8 @@ func Tags() (tags []string) {
 	if WithGVisor {
 		tags = append(tags, "with_gvisor")
 	}
+	if EmbedCaOnly {
+		tags = append(tags, "embed_ca_only")
+	}
 	return
 }

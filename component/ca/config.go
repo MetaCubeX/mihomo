@@ -12,6 +12,8 @@ import (
 
 	"github.com/metacubex/mihomo/common/once"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
 )
 
@@ -23,6 +25,16 @@ var errNotMatch = errors.New("certificate fingerprints do not match")
 var _CaCertificates []byte
 var DisableEmbedCa, _ = strconv.ParseBool(os.Getenv("DISABLE_EMBED_CA"))
 var DisableSystemCa, _ = strconv.ParseBool(os.Getenv("DISABLE_SYSTEM_CA"))
+
+func init() {
+	if features.EmbedCaOnly {
+		if len(_CaCertificates) == 0 {
+			panic("embed_ca_only build tag requires embedded CA certificates")
+		}
+		DisableEmbedCa = false
+		DisableSystemCa = true
+	}
+}
 
 func AddCertificate(certificate string) error {
 	mutex.Lock()
@@ -55,9 +67,11 @@ func initializeCertPool() {
 		if err != nil {
 			globalCertPool = x509.NewCertPool()
 		}
+		log.Debugln("append system CA")
 	}
 	if !DisableEmbedCa {
 		globalCertPool.AppendCertsFromPEM(_CaCertificates)
+		log.Debugln("append embed CA")
 	}
 }
 
