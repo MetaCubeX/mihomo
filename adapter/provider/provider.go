@@ -40,6 +40,7 @@ type providerForApi struct {
 	ExpectedStatus   string            `json:"expectedStatus"`
 	UpdatedAt        time.Time         `json:"updatedAt,omitempty"`
 	SubscriptionInfo *SubscriptionInfo `json:"subscriptionInfo,omitempty"`
+	Priority         int               `json:"priority"`
 }
 
 type baseProvider struct {
@@ -47,6 +48,7 @@ type baseProvider struct {
 	proxies     []C.Proxy
 	healthCheck *HealthCheck
 	version     uint32
+	priority    int
 }
 
 func (bp *baseProvider) Name() string {
@@ -55,6 +57,10 @@ func (bp *baseProvider) Name() string {
 
 func (bp *baseProvider) Version() uint32 {
 	return bp.version
+}
+
+func (bp *baseProvider) Priority() int {
+	return bp.priority
 }
 
 func (bp *baseProvider) Initial() error {
@@ -127,6 +133,7 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 		ExpectedStatus:   pp.healthCheck.expectedStatus.String(),
 		UpdatedAt:        pp.UpdatedAt(),
 		SubscriptionInfo: pp.subscriptionInfo,
+		Priority:         pp.Priority(),
 	})
 }
 
@@ -171,12 +178,13 @@ func (pp *proxySetProvider) Close() error {
 	return pp.Fetcher.Close()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, payload []map[string]any, parser resource.Parser[[]C.Proxy], vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, payload []map[string]any, parser resource.Parser[[]C.Proxy], vehicle types.Vehicle, hc *HealthCheck, priority int) (*ProxySetProvider, error) {
 	pd := &proxySetProvider{
 		baseProvider: baseProvider{
 			name:        name,
 			proxies:     []C.Proxy{},
 			healthCheck: hc,
+			priority:    priority,
 		},
 	}
 
@@ -234,6 +242,7 @@ func (ip *inlineProvider) MarshalJSON() ([]byte, error) {
 		Proxies:        ip.Proxies(),
 		TestUrl:        ip.healthCheck.url,
 		ExpectedStatus: ip.healthCheck.expectedStatus.String(),
+		Priority:       ip.Priority(),
 		UpdatedAt:      ip.updateAt,
 	})
 }
@@ -248,7 +257,7 @@ func (ip *inlineProvider) Update() error {
 	return nil
 }
 
-func NewInlineProvider(name string, payload []map[string]any, parser resource.Parser[[]C.Proxy], hc *HealthCheck) (*InlineProvider, error) {
+func NewInlineProvider(name string, payload []map[string]any, parser resource.Parser[[]C.Proxy], hc *HealthCheck, priority int) (*InlineProvider, error) {
 	ps := ProxySchema{Proxies: payload}
 	buf, err := yaml.Marshal(ps)
 	if err != nil {
@@ -266,6 +275,7 @@ func NewInlineProvider(name string, payload []map[string]any, parser resource.Pa
 			name:        name,
 			proxies:     proxies,
 			healthCheck: hc,
+			priority:    priority,
 		},
 		updateAt: time.Now(),
 	}
@@ -296,6 +306,7 @@ func (cp *compatibleProvider) MarshalJSON() ([]byte, error) {
 		Proxies:        cp.Proxies(),
 		TestUrl:        cp.healthCheck.url,
 		ExpectedStatus: cp.healthCheck.expectedStatus.String(),
+		Priority:       cp.Priority(),
 	})
 }
 
@@ -307,7 +318,7 @@ func (cp *compatibleProvider) VehicleType() types.VehicleType {
 	return types.Compatible
 }
 
-func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvider, error) {
+func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck, priority int) (*CompatibleProvider, error) {
 	if len(proxies) == 0 {
 		return nil, errors.New("provider need one proxy at least")
 	}
@@ -317,6 +328,7 @@ func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*Co
 			name:        name,
 			proxies:     proxies,
 			healthCheck: hc,
+			priority:    priority,
 		},
 	}
 

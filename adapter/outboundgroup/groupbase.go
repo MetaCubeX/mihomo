@@ -35,9 +35,10 @@ type GroupBase struct {
 	maxFailedTimes    int
 
 	// for GetProxies
-	getProxiesMutex  sync.Mutex
-	providerVersions []uint32
-	providerProxies  []C.Proxy
+	getProxiesMutex     sync.Mutex
+	providerVersions    []uint32
+	providerProxies     []C.Proxy
+	providerProxyOwners []provider.ProxyProvider
 }
 
 type GroupBaseOption struct {
@@ -100,7 +101,7 @@ func (gb *GroupBase) Touch() {
 	}
 }
 
-func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
+func (gb *GroupBase) getProxiesInternal(touch bool) ([]C.Proxy, []provider.ProxyProvider) {
 	providerVersions := make([]uint32, len(gb.providers))
 	for i, pd := range gb.providers {
 		if touch { // touch first
@@ -115,22 +116,32 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 
 	// return the cached proxies if version not changed
 	if slices.Equal(providerVersions, gb.providerVersions) {
-		return gb.providerProxies
+		return gb.providerProxies, gb.providerProxyOwners
 	}
 
 	var proxies []C.Proxy
+	var owners []provider.ProxyProvider
 	if len(gb.filterRegs) == 0 {
 		for _, pd := range gb.providers {
-			proxies = append(proxies, pd.Proxies()...)
+			pds := pd.Proxies()
+			proxies = append(proxies, pds...)
+			for range pds {
+				owners = append(owners, pd)
+			}
 		}
 	} else {
 		for _, pd := range gb.providers {
 			if pd.VehicleType() == types.Compatible { // compatible provider unneeded filter
-				proxies = append(proxies, pd.Proxies()...)
+				pds := pd.Proxies()
+				proxies = append(proxies, pds...)
+				for range pds {
+					owners = append(owners, pd)
+				}
 				continue
 			}
 
 			var newProxies []C.Proxy
+			var newOwners []provider.ProxyProvider
 			proxiesSet := map[string]struct{}{}
 			for _, filterReg := range gb.filterRegs {
 				for _, p := range pd.Proxies() {
@@ -139,11 +150,13 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 						if _, ok := proxiesSet[name]; !ok {
 							proxiesSet[name] = struct{}{}
 							newProxies = append(newProxies, p)
+							newOwners = append(newOwners, pd)
 						}
 					}
 				}
 			}
 			proxies = append(proxies, newProxies...)
+			owners = append(owners, newOwners...)
 		}
 	}
 
@@ -152,32 +165,37 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	// when there are multiple providers, the array needs to be reordered as a whole.
 	if len(gb.providers) > 1 && len(gb.filterRegs) > 1 {
 		var newProxies []C.Proxy
+		var newOwners []provider.ProxyProvider
 		proxiesSet := map[string]struct{}{}
 		for _, filterReg := range gb.filterRegs {
-			for _, p := range proxies {
+			for idx, p := range proxies {
 				name := p.Name()
 				if mat, _ := filterReg.MatchString(name); mat {
 					if _, ok := proxiesSet[name]; !ok {
 						proxiesSet[name] = struct{}{}
 						newProxies = append(newProxies, p)
+						newOwners = append(newOwners, owners[idx])
 					}
 				}
 			}
 		}
-		for _, p := range proxies { // add not matched proxies at the end
+		for idx, p := range proxies { // add not matched proxies at the end
 			name := p.Name()
 			if _, ok := proxiesSet[name]; !ok {
 				proxiesSet[name] = struct{}{}
 				newProxies = append(newProxies, p)
+				newOwners = append(newOwners, owners[idx])
 			}
 		}
 		proxies = newProxies
+		owners = newOwners
 	}
 
 	if len(gb.excludeFilterRegs) > 0 {
 		var newProxies []C.Proxy
+		var newOwners []provider.ProxyProvider
 	LOOP1:
-		for _, p := range proxies {
+		for idx, p := range proxies {
 			name := p.Name()
 			for _, excludeFilterReg := range gb.excludeFilterRegs {
 				if mat, _ := excludeFilterReg.MatchString(name); mat {
@@ -185,14 +203,17 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				}
 			}
 			newProxies = append(newProxies, p)
+			newOwners = append(newOwners, owners[idx])
 		}
 		proxies = newProxies
+		owners = newOwners
 	}
 
 	if gb.excludeTypeArray != nil {
 		var newProxies []C.Proxy
+		var newOwners []provider.ProxyProvider
 	LOOP2:
-		for _, p := range proxies {
+		for idx, p := range proxies {
 			mType := p.Type().String()
 			for _, excludeType := range gb.excludeTypeArray {
 				if strings.EqualFold(mType, excludeType) {
@@ -200,19 +221,31 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 				}
 			}
 			newProxies = append(newProxies, p)
+			newOwners = append(newOwners, owners[idx])
 		}
 		proxies = newProxies
+		owners = newOwners
 	}
 
 	if len(proxies) == 0 {
-		return []C.Proxy{tunnel.Proxies()["COMPATIBLE"]}
+		return []C.Proxy{tunnel.Proxies()["COMPATIBLE"]}, nil
 	}
 
 	// only cache when proxies not empty
 	gb.providerVersions = providerVersions
 	gb.providerProxies = proxies
+	gb.providerProxyOwners = owners
 
+	return proxies, owners
+}
+
+func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
+	proxies, _ := gb.getProxiesInternal(touch)
 	return proxies
+}
+
+func (gb *GroupBase) GetProxiesWithOwners(touch bool) ([]C.Proxy, []provider.ProxyProvider) {
+	return gb.getProxiesInternal(touch)
 }
 
 func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (map[string]uint16, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/metacubex/mihomo/common/callback"
@@ -108,7 +109,7 @@ func (u *URLTest) healthCheck() {
 
 func (u *URLTest) fast(touch bool) C.Proxy {
 	elm, _, shared := u.fastSingle.Do(func() (C.Proxy, error) {
-		proxies := u.GetProxies(touch)
+		proxies, owners := u.GetProxiesWithOwners(touch)
 		if u.selected != "" {
 			for _, proxy := range proxies {
 				if !proxy.AliveForTestUrl(u.testUrl) {
@@ -121,11 +122,51 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 			}
 		}
 
-		fast := proxies[0]
+		var candidates []C.Proxy
+		if len(proxies) != 0 {
+			priorityBuckets := map[int][]C.Proxy{}
+			prioritySet := map[int]struct{}{}
+			for idx, proxy := range proxies {
+				var owner provider.ProxyProvider
+				if owners != nil && idx < len(owners) {
+					owner = owners[idx]
+				}
+				priority := 0
+				if owner != nil {
+					priority = owner.Priority()
+				}
+				prioritySet[priority] = struct{}{}
+				if proxy.AliveForTestUrl(u.testUrl) {
+					priorityBuckets[priority] = append(priorityBuckets[priority], proxy)
+				}
+			}
+
+			priorities := make([]int, 0, len(prioritySet))
+			for priority := range prioritySet {
+				priorities = append(priorities, priority)
+			}
+			sort.Sort(sort.Reverse(sort.IntSlice(priorities)))
+
+			for _, priority := range priorities {
+				if bucket := priorityBuckets[priority]; len(bucket) != 0 {
+					candidates = bucket
+					break
+				}
+			}
+		}
+
+		if len(candidates) == 0 {
+			candidates = proxies
+		}
+		if len(candidates) == 0 {
+			return nil, errors.New("proxy not exist")
+		}
+
+		fast := candidates[0]
 		minDelay := fast.LastDelayForTestUrl(u.testUrl)
 		fastNotExist := true
 
-		for _, proxy := range proxies[1:] {
+		for _, proxy := range candidates[1:] {
 			if u.fastNode != nil && proxy.Name() == u.fastNode.Name() {
 				fastNotExist = false
 			}

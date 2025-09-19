@@ -84,6 +84,7 @@ type ProxyProvider interface {
 	Version() uint32
 	RegisterHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint)
 	HealthCheckURL() string
+	Priority() int
 }
 
 // RuleProvider interface

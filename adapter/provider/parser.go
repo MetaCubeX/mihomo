@@ -67,6 +67,7 @@ type proxyProviderSchema struct {
 	DialerProxy   string           `provider:"dialer-proxy,omitempty"`
 	SizeLimit     int64            `provider:"size-limit,omitempty"`
 	Payload       []map[string]any `provider:"payload,omitempty"`
+	Priority      int              `provider:"priority,omitempty"`
 
 	HealthCheck healthCheckSchema   `provider:"health-check,omitempty"`
 	Override    OverrideSchema      `provider:"override,omitempty"`
@@ -122,12 +123,12 @@ func ParseProxyProvider(name string, mapping map[string]any) (types.ProxyProvide
 		}
 		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout, schema.SizeLimit)
 	case "inline":
-		return NewInlineProvider(name, schema.Payload, parser, hc)
+		return NewInlineProvider(name, schema.Payload, parser, hc, schema.Priority)
 	default:
 		return nil, fmt.Errorf("%w: %s", errVehicleType, schema.Type)
 	}
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 
-	return NewProxySetProvider(name, interval, schema.Payload, parser, vehicle, hc)
+	return NewProxySetProvider(name, interval, schema.Payload, parser, vehicle, hc, schema.Priority)
 }

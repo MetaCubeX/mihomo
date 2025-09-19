@@ -1001,6 +1001,21 @@ proxy-groups:
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 
+  # priority 示例：当 provider A/B/C/D 均可用时优先使用 priority 为 4 的 provider A
+  - name: "priority-auto"
+    type: url-test
+    use:
+      - providerA
+      - providerB
+      - providerC
+      - providerD
+    url: "https://cp.cloudflare.com/generate_204"
+    interval: 300
+    # 当 providerA priority=4、providerB priority=3、providerC priority=3、providerD priority=2 时：
+    # 1. 首先从 providerA 的节点中选择延迟最低的；
+    # 2. 若 providerA 全部不可用，则在 providerB 与 providerC 中合并比较延迟；
+    # 3. 若 A/B/C 均不可用，则回退到 providerD。
+
   # fallback 将按照 url 测试结果按照节点顺序选择
   - name: "fallback-auto"
     type: fallback
@@ -1049,6 +1064,7 @@ proxy-providers:
     interval: 3600
     path: ./provider1.yaml # 默认只允许存储在 mihomo 的 Home Dir，如果想存储到其他位置，请通过设置 SAFE_PATHS 环境变量指定额外的安全路径。该环境变量的语法同本操作系统的PATH环境变量解析规则（即Windows下以分号分割，其他系统下以冒号分割）
     proxy: DIRECT
+    priority: 1 # 可选，默认为 0。值越高的 provider 在 url-test 中会被优先选取，只有节点全部不可用，才会选择低优先级的 provider
     # size-limit: 10240 # 限制下载文件最大为10kb，默认为0即不限制文件大小
     header:
       User-Agent:
@@ -1085,6 +1101,7 @@ proxy-providers:
   provider2:
     type: inline
     dialer-proxy: proxy
+    priority: 2
     payload:
       - name: "ss1"
         type: ss
@@ -1559,3 +1576,24 @@ listeners:
 #  alpn:
 #    - h3
 #  max-udp-relay-packet-size: 1500
+  # priority 示例：当 url-test 同时引用多个 provider 时，可通过 priority 控制优先级
+  providerA:
+    type: http
+    url: "https://example.com/providerA.yaml"
+    priority: 4
+    interval: 600
+  providerB:
+    type: http
+    url: "https://example.com/providerB.yaml"
+    priority: 3
+    interval: 600
+  providerC:
+    type: http
+    url: "https://example.com/providerC.yaml"
+    priority: 3
+    interval: 600
+  providerD:
+    type: http
+    url: "https://example.com/providerD.yaml"
+    priority: 2
+    interval: 600
