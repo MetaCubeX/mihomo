@@ -1024,8 +1024,8 @@ proxies: # socks5
   - name: mieru
     type: mieru
     server: 1.2.3.4
-    port: 2999
-    # port-range: 2090-2099 #（不可同时填写 port 和 port-range）
+    port: 2999 # 支持使用 ports 格式，例如 2999,3999 或 2999-3010,3950,3995-3999
+    # port-range: 2090-2099 # 已废弃，请使用 port
     transport: TCP # 只支持 TCP
     udp: true # 支持 UDP over TCP
     username: user

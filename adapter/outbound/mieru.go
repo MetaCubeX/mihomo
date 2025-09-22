@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
 	CN "github.com/metacubex/mihomo/common/net"
@@ -30,8 +31,8 @@ type MieruOption struct {
 	BasicOption
 	Name          string `proxy:"name"`
 	Server        string `proxy:"server"`
-	Port          int    `proxy:"port,omitempty"`
-	PortRange     string `proxy:"port-range,omitempty"`
+	Port          string `proxy:"port,omitempty"`
+	PortRange     string `proxy:"port-range,omitempty"` // deprecated
 	Transport     string `proxy:"transport"`
 	UDP           bool   `proxy:"udp,omitempty"`
 	UserName      string `proxy:"username"`
@@ -123,13 +124,19 @@ func NewMieru(option MieruOption) (*Mieru, error) {
 	}
 	// Client is started lazily on the first use.
 
+	// Use the first port to construct the address.
 	var addr string
-	if option.Port != 0 {
-		addr = net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
+	var portStr string
+	if option.Port != "" {
+		portStr = option.Port
 	} else {
-		beginPort, _, _ := beginAndEndPortFromPortRange(option.PortRange)
-		addr = net.JoinHostPort(option.Server, strconv.Itoa(beginPort))
+		portStr = option.PortRange
 	}
+	firstPort, err := getFirstPort(portStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get first port from port string %q: %w", portStr, err)
+	}
+	addr = net.JoinHostPort(option.Server, strconv.Itoa(firstPort))
 	outbound := &Mieru{
 		Base: &Base{
 			name:   option.Name,
@@ -183,54 +190,62 @@ func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, erro
 	}
 
 	transportProtocol := mierupb.TransportProtocol_TCP.Enum()
-	var server *mierupb.ServerEndpoint
-	if net.ParseIP(option.Server) != nil {
-		// server is an IP address
-		if option.PortRange != "" {
-			server = &mierupb.ServerEndpoint{
-				IpAddress: proto.String(option.Server),
-				PortBindings: []*mierupb.PortBinding{
-					{
-						PortRange: proto.String(option.PortRange),
+
+	portBindings := make([]*mierupb.PortBinding, 0)
+	if option.Port != "" {
+		parts := strings.Split(option.Port, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if strings.Contains(part, "-") {
+				_, _, err := beginAndEndPortFromPortRange(part)
+				if err == nil {
+					portBindings = append(portBindings, &mierupb.PortBinding{
+						PortRange: proto.String(part),
 						Protocol:  transportProtocol,
-					},
-				},
-			}
-		} else {
-			server = &mierupb.ServerEndpoint{
-				IpAddress: proto.String(option.Server),
-				PortBindings: []*mierupb.PortBinding{
-					{
-						Port:     proto.Int32(int32(option.Port)),
-						Protocol: transportProtocol,
-					},
-				},
-			}
-		}
-	} else {
-		// server is a domain name
-		if option.PortRange != "" {
-			server = &mierupb.ServerEndpoint{
-				DomainName: proto.String(option.Server),
-				PortBindings: []*mierupb.PortBinding{
-					{
-						PortRange: proto.String(option.PortRange),
-						Protocol:  transportProtocol,
-					},
-				},
-			}
-		} else {
-			server = &mierupb.ServerEndpoint{
-				DomainName: proto.String(option.Server),
-				PortBindings: []*mierupb.PortBinding{
-					{
-						Port:     proto.Int32(int32(option.Port)),
-						Protocol: transportProtocol,
-					},
-				},
+					})
+				} else {
+					return nil, err
+				}
+			} else {
+				p, err := strconv.Atoi(part)
+				if err != nil {
+					return nil, fmt.Errorf("invalid port value: %s", part)
+				}
+				portBindings = append(portBindings, &mierupb.PortBinding{
+					Port:     proto.Int32(int32(p)),
+					Protocol: transportProtocol,
+				})
 			}
 		}
 	}
+	if option.PortRange != "" {
+		parts := strings.Split(option.PortRange, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if _, _, err := beginAndEndPortFromPortRange(part); err == nil {
+				portBindings = append(portBindings, &mierupb.PortBinding{
+					PortRange: proto.String(part),
+					Protocol:  transportProtocol,
+				})
+			}
+		}
+	}
+
+	var server *mierupb.ServerEndpoint
+	if net.ParseIP(option.Server) != nil {
+		// server is an IP address
+		server = &mierupb.ServerEndpoint{
+			IpAddress:    proto.String(option.Server),
+			PortBindings: portBindings,
+		}
+	} else {
+		// server is a domain name
+		server = &mierupb.ServerEndpoint{
+			DomainName:   proto.String(option.Server),
+			PortBindings: portBindings,
+		}
+	}
+
 	config := &mieruclient.ClientConfig{
 		Profile: &mierupb.ClientProfile{
 			ProfileName: proto.String(option.Name),
@@ -259,31 +274,9 @@ func validateMieruOption(option MieruOption) error {
 	if option.Server == "" {
 		return fmt.Errorf("server is empty")
 	}
-	if option.Port == 0 && option.PortRange == "" {
-		return fmt.Errorf("either port or port-range must be set")
+	if option.Port == "" && option.PortRange == "" {
+		return fmt.Errorf("port must be set")
 	}
-	if option.Port != 0 && option.PortRange != "" {
-		return fmt.Errorf("port and port-range cannot be set at the same time")
-	}
-	if option.Port != 0 && (option.Port < 1 || option.Port > 65535) {
-		return fmt.Errorf("port must be between 1 and 65535")
-	}
-	if option.PortRange != "" {
-		begin, end, err := beginAndEndPortFromPortRange(option.PortRange)
-		if err != nil {
-			return fmt.Errorf("invalid port-range format")
-		}
-		if begin < 1 || begin > 65535 {
-			return fmt.Errorf("begin port must be between 1 and 65535")
-		}
-		if end < 1 || end > 65535 {
-			return fmt.Errorf("end port must be between 1 and 65535")
-		}
-		if begin > end {
-			return fmt.Errorf("begin port must be less than or equal to end port")
-		}
-	}
-
 	if option.Transport != "TCP" {
 		return fmt.Errorf("transport must be TCP")
 	}
@@ -306,8 +299,36 @@ func validateMieruOption(option MieruOption) error {
 	return nil
 }
 
+func getFirstPort(portStr string) (int, error) {
+	if portStr == "" {
+		return 0, fmt.Errorf("port string is empty")
+	}
+	parts := strings.Split(portStr, ",")
+	firstPart := parts[0]
+
+	if strings.Contains(firstPart, "-") {
+		begin, _, err := beginAndEndPortFromPortRange(firstPart)
+		if err != nil {
+			return 0, err
+		}
+		return begin, nil
+	}
+
+	port, err := strconv.Atoi(firstPart)
+	if err != nil {
+		return 0, fmt.Errorf("invalid port format: %s", firstPart)
+	}
+	return port, nil
+}
+
 func beginAndEndPortFromPortRange(portRange string) (int, int, error) {
 	var begin, end int
 	_, err := fmt.Sscanf(portRange, "%d-%d", &begin, &end)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid port range format: %w", err)
+	}
+	if begin > end {
+		return 0, 0, fmt.Errorf("begin port is greater than end port: %s", portRange)
+	}
 	return begin, end, err
 }
