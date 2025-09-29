@@ -187,6 +187,8 @@ tun:
   # - com.android.chrome
   # exclude-package: # 排除被路由的 Android 应用包名
   # - com.android.captiveportallogin
+  # loopback-address: # 将选项值设置为 10.7.0.1 可实现与 SideStore/StosVPN 相同的行为,需要`auto-route` 和 `auto-redirect` 已启用。
+  # - 10.7.0.1
 
 # 嗅探域名 可选配置
 sniffer:
