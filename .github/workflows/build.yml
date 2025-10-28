@@ -20,7 +20,7 @@ on:
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
-  
+
 env:
   REGISTRY: docker.io
 jobs:
@@ -43,9 +43,9 @@ jobs:
           - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1, debian: amd64, rpm: x86_64, pacman: x86_64, test: test }
           - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2, debian: amd64, rpm: x86_64, pacman: x86_64}
           - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3, debian: amd64, rpm: x86_64, pacman: x86_64}
-          - { goos: linux, goarch: arm64, output: arm64, debian: arm64, rpm: aarch64, pacman: aarch64}  
+          - { goos: linux, goarch: arm64, output: arm64, debian: arm64, rpm: aarch64, pacman: aarch64}
           - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
-          - { goos: linux, goarch: arm, goarm: '6', output: armv6, debian: armel, rpm: armv6hl} 
+          - { goos: linux, goarch: arm, goarm: '6', output: armv6, debian: armel, rpm: armv6hl}
           - { goos: linux, goarch: arm, goarm: '7', output: armv7, debian: armhf, rpm: armv7hl, pacman: armv7hl}
           - { goos: linux, goarch: mips, gomips: hardfloat, output: mips-hardfloat }
           - { goos: linux, goarch: mips, gomips: softfloat, output: mips-softfloat }
@@ -245,7 +245,7 @@ jobs:
         fi
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
         echo "PackageVersion=${PackageVersion}" >> $GITHUB_ENV
-      
+
         echo "BUILDTIME=$(date)" >> $GITHUB_ENV
         echo "CGO_ENABLED=0" >> $GITHUB_ENV
         echo "BUILDTAG=-extldflags --static" >> $GITHUB_ENV
@@ -392,7 +392,7 @@ jobs:
         tag_name: Prerelease-${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
     - run: |
         cat > release.txt << 'EOF'
         Release created at  ${{ env.BUILDTIME }}
@@ -413,6 +413,21 @@ jobs:
         prerelease: true
         generate_release_notes: true
         body_path: release.txt
+
+  - name: Also push to Branch
+    run: |
+      cd bin/
+      for file in *; do
+        [[ -f "$file" ]] && mv "$file" "${file%-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*}" 2>/dev/null || true
+      done
+      git init
+      git config --local user.name "github-actions[bot]"
+      git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      git checkout -b compiled_prerelease_branch
+      git add .
+      git commit -m "Released on ${{ env.BUILDTIME }}"
+      git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+      git push -f -u origin compiled_prerelease_branch
 
   Upload-Release:
     permissions: write-all
@@ -444,7 +459,7 @@ jobs:
 
       - name: Tag the commit on Alpha
         run: |
-          git checkout Alpha 
+          git checkout Alpha
           git tag ${{ github.event.inputs.version }}
           git push origin ${{ github.event.inputs.version }}
         env:
@@ -455,16 +470,16 @@ jobs:
             cp ./.github/genReleaseNote.sh ./
             bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
             rm ./genReleaseNote.sh
-  
+
       - uses: actions/download-artifact@v4
         with:
           path: bin/
           merge-multiple: true
-  
+
       - name: Display structure of downloaded files
         run: ls -R
         working-directory: bin
-  
+
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         if: ${{ success() }}
@@ -500,7 +515,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           version: latest
-      
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
@@ -509,7 +524,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: '${{ env.REGISTRY }}/${{ github.repository }}'
-      
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
@@ -523,12 +538,12 @@ jobs:
           flavor: |
             latest=true
           labels: org.opencontainers.image.version=${{ github.event.inputs.version }}
-      
+
       - name: Show files
         run: |
           ls .
           ls bin/
-      
+
       - name: login to docker REGISTRY
         uses: docker/login-action@v3
         with:
@@ -552,7 +567,7 @@ jobs:
             linux/arm/v7
           tags: ${{ steps.meta_alpha.outputs.tags }}
           labels: ${{ steps.meta_alpha.outputs.labels }}
-      
+
       - name: Build and push Docker image
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
         uses: docker/build-push-action@v5
