@@ -252,8 +252,8 @@ func (spc *ssrPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr
 		return nil, nil, nil, errors.New("parse addr error")
 	}
 
-	addr = _addr.UDPAddr()
-	if addr == nil {
+	udpAddr := _addr.UDPAddr()
+	if udpAddr == nil {
 		if put != nil {
 			put()
 		}
@@ -261,5 +261,5 @@ func (spc *ssrPacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr
 	}
 
 	data = data[len(_addr):]
-	return
+	return data, put, udpAddr, err
 }
