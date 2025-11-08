@@ -127,6 +127,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewAnyTLS(anytlsOption)
+	case "mieru":
+		mieruOption := &IN.MieruOption{}
+		err = decoder.Decode(mapping, mieruOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewMieru(mieruOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}

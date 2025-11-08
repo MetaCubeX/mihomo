@@ -1556,6 +1556,15 @@ listeners:
     #   -----END ECH KEYS-----
     # padding-scheme: "" # https://github.com/anytls/anytls-go/blob/main/docs/protocol.md#cmdupdatepaddingscheme
 
+  - name: mieru-in-1
+    type: mieru
+    port: 10818 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
+    listen: 0.0.0.0
+    transport: TCP # 支持 TCP 或者 UDP
+    users:
+      username1: password1
+      username2: password2
+
   - name: trojan-in-1
     type: trojan
     port: 10819 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
