@@ -90,6 +90,8 @@ func (m *Mieru) Listen(tunnel C.Tunnel) error {
 			if err != nil {
 				if !m.server.IsRunning() {
 					break
+				} else {
+					continue
 				}
 			}
 			go mieru.Handle(c, tunnel, req, additions...)
