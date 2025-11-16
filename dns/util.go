@@ -102,6 +102,8 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			c = newRCodeClient(s.Addr)
 		case "quic":
 			c = newDoQ(s.Addr, resolver, s.Params, s.ProxyAdapter, s.ProxyName)
+		case "udpme":
+			c = newUdpme(s.Addr, resolver, s.ProxyAdapter, s.ProxyName)
 		default:
 			c = newClient(s.Addr, resolver, s.Net, s.Params, s.ProxyAdapter, s.ProxyName)
 		}
