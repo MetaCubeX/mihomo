@@ -768,6 +768,32 @@ proxies: # socks5
       # v2ray-http-upgrade: false
       # v2ray-http-upgrade-fast-open: false
 
+  - name: "vless-xhttp"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    tls: true
+    network: xhttp
+    xhttp-opts:
+      host: example.com
+      path: /splithttp
+      mode: auto
+      # http-version: 3
+      headers:
+        User-Agent: Mozilla/5.0
+      # download-settings:
+      #   path: /downstream
+      # xmux:
+      #   max-concurrency: 1
+      #   max-connections: 2
+    # xhttp-opts:
+    #   host: example.com        # HTTP Host header (optional)
+    #   path: /splithttp         # URL path, default "/"
+    #   mode: auto               # auto/packet-up/stream-one
+    #   headers:
+    #     User-Agent: example
+
   # Trojan
   - name: "trojan"
     type: trojan
