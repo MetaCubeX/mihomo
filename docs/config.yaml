@@ -1027,7 +1027,7 @@ proxies: # socks5
     server: 1.2.3.4
     port: 2999
     # port-range: 2090-2099 #（不可同时填写 port 和 port-range）
-    transport: TCP # 只支持 TCP
+    transport: TCP # 支持 TCP 或者 UDP
     udp: true # 支持 UDP over TCP
     username: user
     password: password

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 
@@ -38,6 +39,20 @@ type MieruOption struct {
 	Password      string `proxy:"password"`
 	Multiplexing  string `proxy:"multiplexing,omitempty"`
 	HandshakeMode string `proxy:"handshake-mode,omitempty"`
+}
+
+type mieruPacketDialer struct {
+	C.Dialer
+}
+
+var _ mierucommon.PacketDialer = (*mieruPacketDialer)(nil)
+
+func (pd mieruPacketDialer) ListenPacket(ctx context.Context, network, laddr, raddr string) (net.PacketConn, error) {
+	rAddrPort, err := netip.ParseAddrPort(raddr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address %s: %w", raddr, err)
+	}
+	return pd.Dialer.ListenPacket(ctx, network, laddr, rAddrPort)
 }
 
 // DialContext implements C.ProxyAdapter
@@ -102,6 +117,7 @@ func (m *Mieru) ensureClientIsRunning() error {
 		return err
 	}
 	config.Dialer = dialer
+	config.PacketDialer = mieruPacketDialer{Dialer: dialer}
 	if err := m.client.Store(config); err != nil {
 		return err
 	}
@@ -158,23 +174,21 @@ func (m *Mieru) Close() error {
 }
 
 func metadataToMieruNetAddrSpec(metadata *C.Metadata) mierumodel.NetAddrSpec {
+	spec := mierumodel.NetAddrSpec{
+		Net: metadata.NetWork.String(),
+	}
 	if metadata.Host != "" {
-		return mierumodel.NetAddrSpec{
-			AddrSpec: mierumodel.AddrSpec{
-				FQDN: metadata.Host,
-				Port: int(metadata.DstPort),
-			},
-			Net: "tcp",
+		spec.AddrSpec = mierumodel.AddrSpec{
+			FQDN: metadata.Host,
+			Port: int(metadata.DstPort),
 		}
 	} else {
-		return mierumodel.NetAddrSpec{
-			AddrSpec: mierumodel.AddrSpec{
-				IP:   metadata.DstIP.AsSlice(),
-				Port: int(metadata.DstPort),
-			},
-			Net: "tcp",
+		spec.AddrSpec = mierumodel.AddrSpec{
+			IP:   metadata.DstIP.AsSlice(),
+			Port: int(metadata.DstPort),
 		}
 	}
+	return spec
 }
 
 func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, error) {
@@ -182,7 +196,13 @@ func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, erro
 		return nil, fmt.Errorf("failed to validate mieru option: %w", err)
 	}
 
-	transportProtocol := mierupb.TransportProtocol_TCP.Enum()
+	var transportProtocol = mierupb.TransportProtocol_UNKNOWN_TRANSPORT_PROTOCOL.Enum()
+	switch option.Transport {
+	case "TCP":
+		transportProtocol = mierupb.TransportProtocol_TCP.Enum()
+	case "UDP":
+		transportProtocol = mierupb.TransportProtocol_UDP.Enum()
+	}
 	var server *mierupb.ServerEndpoint
 	if net.ParseIP(option.Server) != nil {
 		// server is an IP address
@@ -284,8 +304,8 @@ func validateMieruOption(option MieruOption) error {
 		}
 	}
 
-	if option.Transport != "TCP" {
-		return fmt.Errorf("transport must be TCP")
+	if option.Transport != "TCP" && option.Transport != "UDP" {
+		return fmt.Errorf("transport must be TCP or UDP")
 	}
 	if option.UserName == "" {
 		return fmt.Errorf("username is empty")
