@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/metacubex/mihomo/common/convert"
 	N "github.com/metacubex/mihomo/common/net"
@@ -323,7 +322,7 @@ func (v *Vless) dialXHTTP(ctx context.Context, d C.Dialer) (net.Conn, error) {
 	if scheme == "https" {
 		httpVersion = "2"
 	}
-	if len(v.option.ALPN) == 1 && strings.EqualFold(v.option.ALPN[0], "http/1.1") {
+	if len(v.option.ALPN) == 1 && v.option.ALPN[0] == "http/1.1" {
 		httpVersion = "1.1"
 	}
 	cfg.EnsureHTTP3TLS(hostHeader, v.option.SkipCertVerify)

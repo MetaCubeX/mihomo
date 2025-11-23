@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/ca"
@@ -319,7 +318,7 @@ func (t *Trojan) dialXHTTP(ctx context.Context, d C.Dialer) (net.Conn, error) {
 		}
 	}
 	httpVersion := "2"
-	if len(t.option.ALPN) == 1 && strings.EqualFold(t.option.ALPN[0], "http/1.1") {
+	if len(t.option.ALPN) == 1 && t.option.ALPN[0] == "http/1.1" {
 		httpVersion = "1.1"
 	}
 	cfg.EnsureHTTP3TLS(hostHeader, t.option.SkipCertVerify)
@@ -341,7 +340,7 @@ func (t *Trojan) dialXHTTP(ctx context.Context, d C.Dialer) (net.Conn, error) {
 		}
 		if httpVersion == "2" {
 			alpn = []string{"h2"}
-		} else if len(alpn) == 0 || !strings.EqualFold(alpn[0], "http/1.1") {
+		} else if len(alpn) == 0 || alpn[0] != "http/1.1" {
 			alpn = []string{"http/1.1"}
 		}
 		tlsCfg := &vmess.TLSConfig{
