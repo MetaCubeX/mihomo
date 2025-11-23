@@ -326,7 +326,7 @@ func (v *Vless) dialXHTTP(ctx context.Context, d C.Dialer) (net.Conn, error) {
 	if len(v.option.ALPN) == 1 && strings.EqualFold(v.option.ALPN[0], "http/1.1") {
 		httpVersion = "1.1"
 	}
-	ensureHTTP3TLS(cfg, hostHeader, v.option.SkipCertVerify)
+	cfg.EnsureHTTP3TLS(hostHeader, v.option.SkipCertVerify)
 
 	dialFn := func(ctx context.Context, network string) (net.Conn, error) {
 		if network == "" {

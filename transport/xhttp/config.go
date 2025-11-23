@@ -29,6 +29,28 @@ type Config struct {
 	internalTLS *tls.Config `json:"-"`
 }
 
+func (c *Config) EnsureHTTP3TLS(fallbackHost string, skipVerify bool) {
+	if c == nil {
+		return
+	}
+	if strings.EqualFold(c.HTTPVersion, "3") {
+		host := c.Host
+		if host == "" {
+			host = fallbackHost
+		}
+		tlsCfg := &tls.Config{
+			ServerName:         host,
+			InsecureSkipVerify: skipVerify,
+			MinVersion:         tls.VersionTLS13,
+			NextProtos:         []string{"h3"},
+		}
+		c.internalTLS = tlsCfg
+	}
+	if c.Download != nil {
+		c.Download.EnsureHTTP3TLS(fallbackHost, skipVerify)
+	}
+}
+
 func (c *Config) clone() *Config {
 	if c == nil {
 		return defaultConfig()
@@ -132,10 +154,6 @@ func (c *Config) httpVersion(defaultSecure bool) string {
 	default:
 		return "1.1"
 	}
-}
-
-func (c *Config) WithInternalTLS(tlsCfg *tls.Config) {
-	c.internalTLS = tlsCfg
 }
 
 func (c *Config) internalTLSConfig() *tls.Config {
