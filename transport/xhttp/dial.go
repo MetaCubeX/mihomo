@@ -121,7 +121,7 @@ func Dial(ctx context.Context, opts Options) (net.Conn, error) {
 }
 
 func resolveMode(mode string, preferStream bool, hasDownload bool) string {
-	switch strings.ToLower(mode) {
+	switch mode {
 	case "stream-one", "stream-up", "packet-up":
 		return mode
 	}
@@ -144,9 +144,9 @@ func prepareEndpoint(cfg *Config, opts Options, sessionID string, isDownload boo
 		host = "127.0.0.1"
 	}
 
-	httpVersion := cfg.httpVersion(strings.EqualFold(scheme, "https"))
+	httpVersion := cfg.httpVersion(scheme == "https")
 	if opts.HTTPVersion != "" {
-		httpVersion = strings.ToLower(opts.HTTPVersion)
+		httpVersion = opts.HTTPVersion
 	}
 	if httpVersion == "3" {
 		scheme = "https"

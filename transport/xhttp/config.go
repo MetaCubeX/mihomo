@@ -33,7 +33,7 @@ func (c *Config) EnsureHTTP3TLS(fallbackHost string, skipVerify bool) {
 	if c == nil {
 		return
 	}
-	if strings.EqualFold(c.HTTPVersion, "3") {
+	if c.HTTPVersion == "3" {
 		host := c.Host
 		if host == "" {
 			host = fallbackHost
@@ -88,7 +88,6 @@ func (c *Config) normalize() {
 	c.XPaddingBytes = c.XPaddingBytes.WithDefault(100, 1000)
 	c.ScMaxEachPostBytes = c.ScMaxEachPostBytes.WithDefault(1_000_000, 1_000_000)
 	c.ScMinPostsIntervalMs = c.ScMinPostsIntervalMs.WithDefault(30, 30)
-	c.Mode = strings.ToLower(c.Mode)
 	switch c.Mode {
 	case "", "auto", "packet-up", "stream-up", "stream-one":
 	default:
@@ -138,8 +137,7 @@ func (c *Config) validate() error {
 }
 
 func (c *Config) httpVersion(defaultSecure bool) string {
-	version := strings.TrimSpace(strings.ToLower(c.HTTPVersion))
-	switch version {
+	switch c.HTTPVersion {
 	case "", "auto":
 		if defaultSecure {
 			return "2"
