@@ -327,7 +327,7 @@ func (v *Vmess) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 		}
 	}
 
-	if strings.EqualFold(v.option.Network, "xhttp") {
+	if v.option.Network == "xhttp" {
 		c, err := v.dialXHTTP(ctx, dialer)
 		if err != nil {
 			return nil, err

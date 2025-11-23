@@ -211,7 +211,7 @@ func (t *Trojan) DialContextWithDialer(ctx context.Context, dialer C.Dialer, met
 		}
 	}
 
-	if strings.EqualFold(t.option.Network, "xhttp") {
+	if t.option.Network == "xhttp" {
 		c, err := t.dialXHTTP(ctx, dialer)
 		if err != nil {
 			return nil, err
