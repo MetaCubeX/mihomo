@@ -63,7 +63,7 @@ func removeExtraHTTPHostPort(req *http.Request) {
 // parseBasicProxyAuthorization parse header Proxy-Authorization and return base64-encoded credential
 func parseBasicProxyAuthorization(request *http.Request) string {
 	value := request.Header.Get("Proxy-Authorization")
-	if !strings.HasPrefix(value, "Basic ") {
+	if !(len(value) >= 6 && strings.EqualFold(value[:6], "Basic ")) {
 		return ""
 	}
 
