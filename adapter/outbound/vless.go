@@ -18,6 +18,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/gun"
+	"github.com/metacubex/mihomo/transport/splithttp"
 	"github.com/metacubex/mihomo/transport/vless"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	"github.com/metacubex/mihomo/transport/vmess"
@@ -63,6 +64,7 @@ type VlessOption struct {
 	HTTPOpts          HTTPOptions       `proxy:"http-opts,omitempty"`
 	HTTP2Opts         HTTP2Options      `proxy:"h2-opts,omitempty"`
 	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
+	SplitHTTPOpts     SplitHTTPOptions  `proxy:"splithttp-opts,omitempty"`
 	WSOpts            WSOptions         `proxy:"ws-opts,omitempty"`
 	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
@@ -152,6 +154,70 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		}
 
 		c, err = vmess.StreamH2Conn(ctx, c, h2Opts)
+	case "splithttp", "xhttp":
+		c.Close()
+
+		var tlsConfig *tls.Config
+		if v.option.TLS {
+			host, _, _ := net.SplitHostPort(v.addr)
+			tlsConfig, err = ca.GetTLSConfig(ca.Option{
+				TLSConfig: &tls.Config{
+					ServerName:         host,
+					InsecureSkipVerify: v.option.SkipCertVerify,
+					NextProtos:         v.option.ALPN,
+				},
+				Fingerprint: v.option.Fingerprint,
+				Certificate: v.option.Certificate,
+				PrivateKey:  v.option.PrivateKey,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			if v.option.ServerName != "" {
+				tlsConfig.ServerName = v.option.ServerName
+			} else if host := v.option.SplitHTTPOpts.Headers["Host"]; host != "" {
+				tlsConfig.ServerName = host
+			}
+
+			// Default ALPN if empty
+			if len(tlsConfig.NextProtos) == 0 {
+				tlsConfig.NextProtos = []string{"h2", "http/1.1"}
+			}
+		}
+
+		conf := &splithttp.Config{
+			Host:                 v.option.SplitHTTPOpts.Host,
+			Path:                 v.option.SplitHTTPOpts.Path,
+			Mode:                 v.option.SplitHTTPOpts.Mode,
+			Headers:              v.option.SplitHTTPOpts.Headers,
+			NoGRPCHeader:         v.option.SplitHTTPOpts.NoGRPCHeader,
+			XPaddingBytes:        v.option.SplitHTTPOpts.XPaddingBytes,
+			ScMaxEachPostBytes:   v.option.SplitHTTPOpts.ScMaxEachPostBytes,
+			ScMinPostsIntervalMs: v.option.SplitHTTPOpts.ScMinPostsIntervalMs,
+			ScMaxBufferedPosts:   int32(v.option.SplitHTTPOpts.ScMaxBufferedPosts),
+			ScStreamUpServerSecs: v.option.SplitHTTPOpts.ScStreamUpServerSecs,
+			Xmux:                 v.option.SplitHTTPOpts.Xmux,
+		}
+
+		if conf.Host == "" {
+			host, _, _ := net.SplitHostPort(v.addr)
+			conf.Host = host
+		}
+
+		dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
+			var err error
+			var cDialer C.Dialer = dialer.NewDialer(v.DialOptions()...)
+			if len(v.option.DialerProxy) > 0 {
+				cDialer, err = proxydialer.NewByName(v.option.DialerProxy, cDialer)
+				if err != nil {
+					return nil, err
+				}
+			}
+			return cDialer.DialContext(ctx, "tcp", v.addr)
+		}
+
+		c, err = splithttp.Dial(ctx, dialFn, conf, tlsConfig)
 	case "grpc":
 		c, err = gun.StreamGunWithConn(c, v.gunTLSConfig, v.gunConfig, v.echConfig, v.realityConfig)
 	default:
