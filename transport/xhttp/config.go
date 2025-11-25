@@ -22,6 +22,7 @@ type Config struct {
 	XPaddingBytes        Range             `proxy:"x-padding-bytes" json:"x-padding-bytes"`
 	ScMaxEachPostBytes   Range             `proxy:"sc-max-each-post-bytes" json:"sc-max-each-post-bytes"`
 	ScMinPostsIntervalMs Range             `proxy:"sc-min-posts-interval-ms" json:"sc-min-posts-interval-ms"`
+	ScMaxBufferedPosts   Range             `proxy:"sc-max-buffered-posts" json:"sc-max-buffered-posts"`
 	ScStreamUpServerSecs Range             `proxy:"sc-stream-up-server-secs" json:"sc-stream-up-server-secs"`
 	Xmux                 *XmuxConfig       `proxy:"xmux" json:"xmux"`
 	Download             *Config           `proxy:"download-settings" json:"download-settings"`
@@ -77,6 +78,7 @@ func defaultConfig() *Config {
 		XPaddingBytes:        Range{From: 100, To: 1000},
 		ScMaxEachPostBytes:   Range{From: 1_000_000, To: 1_000_000},
 		ScMinPostsIntervalMs: Range{From: 30, To: 30},
+		ScMaxBufferedPosts:   Range{From: 30, To: 30},
 	}
 }
 
@@ -88,6 +90,7 @@ func (c *Config) normalize() {
 	c.XPaddingBytes = c.XPaddingBytes.WithDefault(100, 1000)
 	c.ScMaxEachPostBytes = c.ScMaxEachPostBytes.WithDefault(1_000_000, 1_000_000)
 	c.ScMinPostsIntervalMs = c.ScMinPostsIntervalMs.WithDefault(30, 30)
+	c.ScMaxBufferedPosts = c.ScMaxBufferedPosts.WithDefault(30, 30)
 	switch c.Mode {
 	case "", "auto", "packet-up", "stream-up", "stream-one":
 	default:
@@ -175,7 +178,7 @@ type XmuxConfig struct {
 	CMaxReuseTimes   Range `proxy:"c-max-reuse-times" json:"c-max-reuse-times"`
 	HMaxRequestTimes Range `proxy:"h-max-request-times" json:"h-max-request-times"`
 	HMaxReusableSecs Range `proxy:"h-max-reusable-secs" json:"h-max-reusable-secs"`
-	HKeepAlivePeriod int   `proxy:"h-keep-alive-period" json:"h-keep-alive-period"`
+	HKeepAlivePeriod int64 `proxy:"h-keep-alive-period" json:"h-keep-alive-period"`
 }
 
 func (x *XmuxConfig) clone() *XmuxConfig {
