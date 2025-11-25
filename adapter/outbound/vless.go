@@ -271,8 +271,8 @@ func (v *Vless) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 		if err != nil {
 			return nil, err
 		}
-		defer func(conn net.Conn) {
-			safeConnClose(conn, err)
+		defer func(c net.Conn) {
+			safeConnClose(c, err)
 		}(c)
 		c, err = v.streamConnContext(ctx, c, metadata)
 		if err != nil {
@@ -394,6 +394,21 @@ func (v *Vless) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 
 	if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
+	}
+
+	if v.option.Network == "xhttp" {
+		c, err := v.dialXHTTP(ctx, dialer)
+		if err != nil {
+			return nil, err
+		}
+		defer func(c net.Conn) {
+			safeConnClose(c, err)
+		}(c)
+		c, err = v.streamConnContext(ctx, c, metadata)
+		if err != nil {
+			return nil, err
+		}
+		return v.ListenPacketOnStreamConn(ctx, c, metadata)
 	}
 
 	c, err := dialer.DialContext(ctx, "tcp", v.addr)
