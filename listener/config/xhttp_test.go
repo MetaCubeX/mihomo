@@ -71,7 +71,7 @@ func TestXhttpServer_Validation(t *testing.T) {
 		assert.Equal(t, int32(1), xs.Xmux.MaxConcurrency.From)
 		assert.Equal(t, int32(600), xs.Xmux.HMaxRequestTimes.From)
 		assert.Equal(t, int32(900), xs.Xmux.HMaxRequestTimes.To)
-		assert.Equal(t, 30, xs.Xmux.HKeepAlivePeriod)
+		assert.Equal(t, int64(30), xs.Xmux.HKeepAlivePeriod)
 	})
 
 	t.Run("Valid config with TLS certificates", func(t *testing.T) {
@@ -178,7 +178,7 @@ func TestXhttpXmuxConfig_Defaults(t *testing.T) {
 		assert.True(t, xmux.CMaxReuseTimes.IsZero())
 		assert.True(t, xmux.HMaxRequestTimes.IsZero())
 		assert.True(t, xmux.HMaxReusableSecs.IsZero())
-		assert.Equal(t, 0, xmux.HKeepAlivePeriod)
+		assert.Equal(t, int64(0), xmux.HKeepAlivePeriod)
 	})
 
 	t.Run("Partial xmux config", func(t *testing.T) {
@@ -203,7 +203,7 @@ func TestXhttpXmuxConfig_Defaults(t *testing.T) {
 		assert.False(t, xmux.MaxConcurrency.IsZero())
 		assert.False(t, xmux.MaxConnections.IsZero())
 		assert.False(t, xmux.HMaxRequestTimes.IsZero())
-		assert.Equal(t, 30, xmux.HKeepAlivePeriod)
+		assert.Equal(t, int64(30), xmux.HKeepAlivePeriod)
 	})
 }
 
