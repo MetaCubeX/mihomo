@@ -289,7 +289,7 @@ func (d *Decoder) decodeBool(name string, data any, val reflect.Value) (err erro
 	case isInt(kind) && d.option.WeaklyTypedInput:
 		val.SetBool(dataVal.Int() != 0)
 	case isUint(kind) && d.option.WeaklyTypedInput:
-		val.SetString(strconv.FormatUint(dataVal.Uint(), 10))
+		val.SetBool(dataVal.Uint() != 0)
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",
