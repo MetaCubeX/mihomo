@@ -1,8 +1,6 @@
 module github.com/metacubex/mihomo
 
-go 1.24.7
-
-toolchain go1.24.10
+go 1.20
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0
@@ -24,7 +22,7 @@ require (
 	github.com/metacubex/chacha v0.1.5
 	github.com/metacubex/fswatch v0.1.1
 	github.com/metacubex/gopacket v1.1.20-0.20230608035415-7e2f98a3e759
-	github.com/metacubex/kcp-go v0.0.0-20251111012849-7455698490e9
+	github.com/metacubex/kcp-go v0.0.0-20251105084629-8c93f4bf37be
 	github.com/metacubex/quic-go v0.55.1-0.20251024060151-bd465f127128
 	github.com/metacubex/randv2 v0.2.0
 	github.com/metacubex/restls-client-go v0.1.7
@@ -37,7 +35,7 @@ require (
 	github.com/metacubex/sing-tun v0.4.9
 	github.com/metacubex/sing-vmess v0.2.4
 	github.com/metacubex/sing-wireguard v0.0.0-20250503063753-2dc62acc626f
-	github.com/metacubex/smux v0.0.0-20251111013112-03f8d12dafc1
+	github.com/metacubex/smux v0.0.0-20250922175018-15c9a6a78719
 	github.com/metacubex/tfo-go v0.0.0-20251024101424-368b42b59148
 	github.com/metacubex/utls v1.8.3
 	github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f
@@ -45,6 +43,7 @@ require (
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.12.0 // lastest version compatible with golang1.20
+	github.com/saba-futai/sudoku v0.0.1-b
 	github.com/sagernet/cors v1.2.1
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a
 	github.com/samber/lo v1.52.0
@@ -55,16 +54,14 @@ require (
 	gitlab.com/go-extension/aes-ccm v0.0.0-20230221065045-e58665ef23c7
 	go.uber.org/automaxprocs v1.6.0
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
-	golang.org/x/crypto v0.45.0 // lastest version compatible with golang1.20
+	golang.org/x/crypto v0.33.0 // lastest version compatible with golang1.20
 	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e // lastest version compatible with golang1.20
-	golang.org/x/net v0.47.0 // lastest version compatible with golang1.20
-	golang.org/x/sync v0.18.0 // lastest version compatible with golang1.20
-	golang.org/x/sys v0.38.0 // lastest version compatible with golang1.20
+	golang.org/x/net v0.35.0 // lastest version compatible with golang1.20
+	golang.org/x/sync v0.11.0 // lastest version compatible with golang1.20
+	golang.org/x/sys v0.30.0 // lastest version compatible with golang1.20
 	google.golang.org/protobuf v1.34.2 // lastest version compatible with golang1.20
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-require github.com/saba-futai/sudoku v0.0.0-00010101000000-000000000000
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -109,10 +106,8 @@ require (
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	gitlab.com/yawning/bsaes.git v0.0.0-20190805113838-0a714cd429ec // indirect
-	golang.org/x/mod v0.29.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
-	golang.org/x/tools v0.38.0 // indirect
+	golang.org/x/tools v0.24.0 // indirect
 )
-
-replace github.com/saba-futai/sudoku => ../sudoku-main
