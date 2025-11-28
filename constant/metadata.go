@@ -39,8 +39,8 @@ const (
 	HYSTERIA2
 	ANYTLS
 	MIERU
-	INNER
 	SUDOKU
+	INNER
 )
 
 type AddrType byte
@@ -113,10 +113,10 @@ func (t Type) String() string {
 		return "AnyTLS"
 	case MIERU:
 		return "Mieru"
-	case INNER:
-		return "Inner"
 	case SUDOKU:
 		return "Sudoku"
+	case INNER:
+		return "Inner"
 	default:
 		return "Unknown"
 	}
@@ -157,10 +157,10 @@ func ParseType(t string) (*Type, error) {
 		res = ANYTLS
 	case "MIERU":
 		res = MIERU
-	case "INNER":
-		res = INNER
 	case "SUDOKU":
 		res = SUDOKU
+	case "INNER":
+		res = INNER
 	default:
 		return nil, fmt.Errorf("unknown type: %s", t)
 	}
