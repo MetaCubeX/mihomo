@@ -116,9 +116,24 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		protoConf.AEADMethod = config.AEADMethod
 	}
 
-	return &Listener{
+	sl := &Listener{
 		listener:  l,
 		addr:      config.Listen,
 		protoConf: protoConf,
-	}, nil
+	}
+
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				if sl.closed {
+					break
+				}
+				continue
+			}
+			go sl.handleConn(c, tunnel, additions...)
+		}
+	}()
+
+	return sl, nil
 }
