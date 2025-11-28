@@ -40,6 +40,7 @@ const (
 	ANYTLS
 	MIERU
 	INNER
+	SUDOKU
 )
 
 type AddrType byte
@@ -114,6 +115,8 @@ func (t Type) String() string {
 		return "Mieru"
 	case INNER:
 		return "Inner"
+	case SUDOKU:
+		return "Sudoku"
 	default:
 		return "Unknown"
 	}
@@ -156,6 +159,8 @@ func ParseType(t string) (*Type, error) {
 		res = MIERU
 	case "INNER":
 		res = INNER
+	case "SUDOKU":
+		res = SUDOKU
 	default:
 		return nil, fmt.Errorf("unknown type: %s", t)
 	}
