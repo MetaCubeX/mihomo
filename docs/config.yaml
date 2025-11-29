@@ -1047,8 +1047,8 @@ proxies: # socks5
     aead-method: chacha20-poly1305 # 可选值：chacha20-poly1305、aes-128-gcm、none 我们保证在none的情况下sudoku混淆层仍然确保安全
     padding-min: 2 # 最小填充字节数
     padding-max: 7 # 最大填充字节数
-    seed: "<seed-or-key>" # 如果使用sudoku生成的ED25519密钥对，请填写密钥对中的公钥（如果你有安全焦虑，填入私钥也可以，只是私钥长度比较长不好看而已），否则填入和服务端相同的uuid
     table-type: prefer_ascii    # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
+    http-mask: true # 是否启用http掩码
 
   # anytls
   - name: anytls
@@ -1587,7 +1587,7 @@ listeners:
     aead-method: chacha20-poly1305 # 支持chacha20-poly1305或者aes-128-gcm以及none，sudoku的混淆层可以确保none情况下数据安全
     padding-min: 1 # 填充最小长度
     padding-max: 15 # 填充最大长度，均不建议过大
-    seed: "<seed-or-key>" # 如果你不使用ED25519密钥对，就请填入客户端的key，否则仍然是公钥
+    seed: "<seed-or-key>" # 如果你不使用ED25519密钥对，就请填入uuid，否则仍然是公钥
     table-type: prefer_ascii # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
     handshake-timeout: 5   # optional
 

@@ -6,10 +6,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/metacubex/mihomo/log"
 
 	"github.com/saba-futai/sudoku/apis"
 	"github.com/saba-futai/sudoku/pkg/crypto"
@@ -38,8 +41,8 @@ type SudokuOption struct {
 	AEADMethod string `proxy:"aead-method,omitempty"`
 	PaddingMin *int   `proxy:"padding-min,omitempty"`
 	PaddingMax *int   `proxy:"padding-max,omitempty"`
-	Seed       string `proxy:"seed,omitempty"`
 	TableType  string `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
+	HTTPMask   bool   `proxy:"http-mask,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -120,8 +123,10 @@ func (s *Sudoku) buildConfig(metadata *C.Metadata) (*apis.ProtocolConfig, error)
 }
 
 func (s *Sudoku) streamConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.Conn, err error) {
-	if err = httpmask.WriteRandomRequestHeader(rawConn, cfg.ServerAddress); err != nil {
-		return nil, fmt.Errorf("write http mask failed: %w", err)
+	if !cfg.DisableHTTPMask {
+		if err = httpmask.WriteRandomRequestHeader(rawConn, cfg.ServerAddress); err != nil {
+			return nil, fmt.Errorf("write http mask failed: %w", err)
+		}
 	}
 
 	obfsConn := sudoku.NewConn(rawConn, cfg.Table, cfg.PaddingMin, cfg.PaddingMax, false)
@@ -163,12 +168,13 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		return nil, fmt.Errorf("table-type must be prefer_ascii or prefer_entropy")
 	}
 
-	seed := option.Seed
-	if seed == "" {
-		seed = option.Key
+	seed := option.Key
+	if recoveredFromKey, err := crypto.RecoverPublicKey(option.Key); err == nil {
+		seed = crypto.EncodePoint(recoveredFromKey)
 	}
 
-	table := sudoku.NewTable(seed, tableType)
+	// Use local initTable instead of sudoku.NewTable to control logging
+	table := initTable(seed, tableType)
 
 	defaultConf := apis.DefaultConfig()
 	paddingMin := defaultConf.PaddingMin
@@ -194,6 +200,7 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		PaddingMin:              paddingMin,
 		PaddingMax:              paddingMax,
 		HandshakeTimeoutSeconds: defaultConf.HandshakeTimeoutSeconds,
+		DisableHTTPMask:         !option.HTTPMask,
 	}
 	if option.AEADMethod != "" {
 		baseConf.AEADMethod = option.AEADMethod
@@ -260,4 +267,148 @@ func writeTargetAddress(w io.Writer, rawAddr string) error {
 
 	_, err = w.Write(buf)
 	return err
+}
+
+// initTable initializes the obfuscation tables with Mihomo logging
+// mode: "prefer_ascii" or "prefer_entropy"
+func initTable(key string, mode string) *sudoku.Table {
+	start := time.Now()
+	t := &sudoku.Table{
+		DecodeMap: make(map[uint32]byte),
+		IsASCII:   mode == "prefer_ascii",
+	}
+
+	// Initialize padding pool and encoding logic
+	if t.IsASCII {
+		// === ASCII Mode (0x20 - 0x7F) ===
+		// Payload (Hint): 01vvpppp (Bit 6 is 1) -> 0x40 | ...
+		// Padding: 001xxxxx (Bit 6 is 0) -> 0x20 | rand(0-31)
+		// Range: Padding [32, 63], Payload [64, 127]
+
+		t.PaddingPool = make([]byte, 0, 32)
+		for i := 0; i < 32; i++ {
+			// 001xxxxx -> 0x20 + i
+			t.PaddingPool = append(t.PaddingPool, byte(0x20+i))
+		}
+	} else {
+		// === Entropy Mode (Legacy) ===
+		// Padding: 0x80 (10000xxx) & 0x10 (00010xxx)
+		// Payload: Avoids bits 7 and 4 being strictly defined like padding
+		t.PaddingPool = make([]byte, 0, 16)
+		for i := 0; i < 8; i++ {
+			t.PaddingPool = append(t.PaddingPool, byte(0x80+i))
+			t.PaddingPool = append(t.PaddingPool, byte(0x10+i))
+		}
+	}
+
+	// Generate sudoku grids
+	allGrids := sudoku.GenerateAllGrids()
+	h := sha256.New()
+	h.Write([]byte(key))
+	seed := int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
+	rng := rand.New(rand.NewSource(seed))
+
+	shuffledGrids := make([]sudoku.Grid, 288)
+	copy(shuffledGrids, allGrids)
+	rng.Shuffle(len(shuffledGrids), func(i, j int) {
+		shuffledGrids[i], shuffledGrids[j] = shuffledGrids[j], shuffledGrids[i]
+	})
+
+	// Pre-calculate combinations
+	var combinations [][]int
+	var combine func(int, int, []int)
+	combine = func(s, k int, c []int) {
+		if k == 0 {
+			tmp := make([]int, len(c))
+			copy(tmp, c)
+			combinations = append(combinations, tmp)
+			return
+		}
+		for i := s; i <= 16-k; i++ {
+			c = append(c, i)
+			combine(i+1, k-1, c)
+			c = c[:len(c)-1]
+		}
+	}
+	combine(0, 4, []int{})
+
+	// Build mapping table
+	for byteVal := 0; byteVal < 256; byteVal++ {
+		targetGrid := shuffledGrids[byteVal]
+		for _, positions := range combinations {
+			var currentHints [4]byte
+
+			// 1. Calculate Abstract Hints
+			var rawParts [4]struct{ val, pos byte }
+
+			for i, pos := range positions {
+				val := targetGrid[pos] // 1..4
+				rawParts[i] = struct{ val, pos byte }{val, uint8(pos)}
+			}
+
+			// Check uniqueness (Sudoku logic)
+			matchCount := 0
+			for _, g := range allGrids {
+				match := true
+				for _, p := range rawParts {
+					if g[p.pos] != p.val {
+						match = false
+						break
+					}
+				}
+				if match {
+					matchCount++
+					if matchCount > 1 {
+						break
+					}
+				}
+			}
+
+			if matchCount == 1 {
+				// Unique, generate final encoding bytes
+				for i, p := range rawParts {
+					if t.IsASCII {
+						// ASCII Encoding: 01vvpppp
+						// vv = val-1 (0..3), pppp = pos (0..15)
+						// 0x40 | (vv << 4) | pppp
+						currentHints[i] = 0x40 | ((p.val - 1) << 4) | (p.pos & 0x0F)
+					} else {
+						// Entropy Encoding (Legacy)
+						// 0vv0pppp
+						// Format: ((val-1) << 5) | pos
+						currentHints[i] = ((p.val - 1) << 5) | (p.pos & 0x0F)
+					}
+				}
+
+				t.EncodeTable[byteVal] = append(t.EncodeTable[byteVal], currentHints)
+				// Generate decode key
+				key := packHintsToKey(currentHints)
+				t.DecodeMap[key] = byte(byteVal)
+			}
+		}
+	}
+	log.Infoln("[Sudoku] Tables initialized (%s) in %v", mode, time.Since(start))
+	return t
+}
+
+func packHintsToKey(hints [4]byte) uint32 {
+	// Sorting network for 4 elements (Bubble sort unrolled)
+	// Swap if a > b
+	if hints[0] > hints[1] {
+		hints[0], hints[1] = hints[1], hints[0]
+	}
+	if hints[2] > hints[3] {
+		hints[2], hints[3] = hints[3], hints[2]
+	}
+	if hints[0] > hints[2] {
+		hints[0], hints[2] = hints[2], hints[0]
+	}
+	if hints[1] > hints[3] {
+		hints[1], hints[3] = hints[3], hints[1]
+	}
+	if hints[1] > hints[2] {
+		hints[1], hints[2] = hints[2], hints[1]
+	}
+
+	return uint32(hints[0])<<24 | uint32(hints[1])<<16 | uint32(hints[2])<<8 | uint32(hints[3])
 }
