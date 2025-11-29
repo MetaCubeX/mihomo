@@ -172,7 +172,6 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		seed = crypto.EncodePoint(recoveredFromKey)
 	}
 
-	// Use local initTable instead of sudoku.NewTable to control logging
 	table := sudoku.NewTable(seed, tableType)
 	log.Infoln("[Sudoku] Tables initialized (%s)", tableType)
 
