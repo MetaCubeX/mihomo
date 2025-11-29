@@ -172,8 +172,9 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		seed = crypto.EncodePoint(recoveredFromKey)
 	}
 
+	start := time.Now()
 	table := sudoku.NewTable(seed, tableType)
-	log.Infoln("[Sudoku] Tables initialized (%s)", tableType)
+	log.Infoln("[Sudoku] Tables initialized (%s) in %v", tableType, time.Since(start))
 
 	defaultConf := apis.DefaultConfig()
 	paddingMin := defaultConf.PaddingMin
