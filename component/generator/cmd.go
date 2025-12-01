@@ -6,6 +6,7 @@ import (
 
 	"github.com/metacubex/mihomo/component/ech"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
+	"github.com/saba-futai/sudoku/pkg/crypto"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -71,17 +72,17 @@ func Main(args []string) {
 		fmt.Println("Hash32: " + hash32Base64)
 	case "sudoku-keypair":
 		// Generate Master Key
-		masterPrivate, masterPublic, err := GenerateSudokuMasterKey()
+		pair, err := crypto.GenerateMasterKey()
 		if err != nil {
 			panic(err)
 		}
 		// Split the master private key to get Available Private Key
-		availablePrivateKey, err := SplitSudokuPrivateKey(masterPrivate)
+		availablePrivateKey, err := crypto.SplitPrivateKey(pair.Private)
 		if err != nil {
 			panic(err)
 		}
 		// Output: Available Private Key for client, Master Public Key for server
 		fmt.Println("PrivateKey: " + availablePrivateKey)
-		fmt.Println("PublicKey: " + EncodeSudokuPoint(masterPublic))
+		fmt.Println("PublicKey: " + crypto.EncodePoint(pair.Public))
 	}
 }
