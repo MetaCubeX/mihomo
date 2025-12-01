@@ -11,6 +11,7 @@ import (
 	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 
 	mieruclient "github.com/enfein/mieru/v3/apis/client"
@@ -53,6 +54,18 @@ func (pd mieruPacketDialer) ListenPacket(ctx context.Context, network, laddr, ra
 		return nil, fmt.Errorf("invalid address %s: %w", raddr, err)
 	}
 	return pd.Dialer.ListenPacket(ctx, network, laddr, rAddrPort)
+}
+
+type mieruDNSResolver struct{}
+
+var _ mierucommon.DNSResolver = (*mieruDNSResolver)(nil)
+
+func (dr mieruDNSResolver) LookupIP(ctx context.Context, network, host string) ([]net.IP, error) {
+	ip, err := resolver.ResolveIP(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("can't resolve ip: %w", err)
+	}
+	return []net.IP{ip.AsSlice()}, nil
 }
 
 // DialContext implements C.ProxyAdapter
@@ -118,6 +131,7 @@ func (m *Mieru) ensureClientIsRunning() error {
 	}
 	config.Dialer = dialer
 	config.PacketDialer = mieruPacketDialer{Dialer: dialer}
+	config.Resolver = mieruDNSResolver{}
 	if err := m.client.Store(config); err != nil {
 		return err
 	}
@@ -259,6 +273,9 @@ func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, erro
 				Password: proto.String(option.Password),
 			},
 			Servers: []*mierupb.ServerEndpoint{server},
+		},
+		DNSConfig: &mierucommon.ClientDNSConfig{
+			BypassDialerDNS: true,
 		},
 	}
 	if multiplexing, ok := mierupb.MultiplexingLevel_value[option.Multiplexing]; ok {

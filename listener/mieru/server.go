@@ -44,7 +44,12 @@ func Handle(conn net.Conn, tunnel C.Tunnel, request *mierumodel.Request, additio
 			metadata.DstIP, _ = netip.AddrFromSlice(request.DstAddr.IP)
 			metadata.DstIP = metadata.DstIP.Unmap()
 		}
-		inbound.ApplyAdditions(metadata, inbound.WithSrcAddr(conn.RemoteAddr()), inbound.WithInAddr(conn.LocalAddr()))
+		inbound.ApplyAdditions(
+			metadata,
+			inbound.WithInName(conn.(mierucommon.UserContext).UserName()),
+			inbound.WithSrcAddr(conn.RemoteAddr()),
+			inbound.WithInAddr(conn.LocalAddr()),
+		)
 		inbound.ApplyAdditions(metadata, additions...)
 		tunnel.HandleTCPConn(conn, metadata)
 	case mieruconstant.Socks5UDPAssociateCmd: // UDP
