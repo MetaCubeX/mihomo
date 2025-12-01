@@ -56,15 +56,28 @@ func (pd mieruPacketDialer) ListenPacket(ctx context.Context, network, laddr, ra
 	return pd.Dialer.ListenPacket(ctx, network, laddr, rAddrPort)
 }
 
-type mieruDNSResolver struct{}
+type mieruDNSResolver struct {
+	prefer C.DNSPrefer
+}
 
 var _ mierucommon.DNSResolver = (*mieruDNSResolver)(nil)
 
-func (dr mieruDNSResolver) LookupIP(ctx context.Context, network, host string) ([]net.IP, error) {
-	ip, err := resolver.ResolveIP(ctx, host)
+func (dr mieruDNSResolver) LookupIP(ctx context.Context, network, host string) (_ []net.IP, err error) {
+	var ip netip.Addr
+	switch dr.prefer {
+	case C.IPv4Only:
+		ip, err = resolver.ResolveIPv4WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+	case C.IPv6Only:
+		ip, err = resolver.ResolveIPv6WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+	case C.IPv6Prefer:
+		ip, err = resolver.ResolveIPPrefer6WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+	default:
+		ip, err = resolver.ResolveIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("can't resolve ip: %w", err)
 	}
+	// TODO: handle IP4P (due to interface limitations, it's currently impossible to modify the port here)
 	return []net.IP{ip.AsSlice()}, nil
 }
 
@@ -131,7 +144,7 @@ func (m *Mieru) ensureClientIsRunning() error {
 	}
 	config.Dialer = dialer
 	config.PacketDialer = mieruPacketDialer{Dialer: dialer}
-	config.Resolver = mieruDNSResolver{}
+	config.Resolver = mieruDNSResolver{prefer: m.prefer}
 	if err := m.client.Store(config); err != nil {
 		return err
 	}
