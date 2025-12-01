@@ -12,7 +12,7 @@ import (
 
 func Main(args []string) {
 	if len(args) < 1 {
-		panic("Using: generate uuid/reality-keypair/wg-keypair/ech-keypair/vless-mlkem768/vless-x25519")
+		panic("Using: generate uuid/reality-keypair/wg-keypair/ech-keypair/vless-mlkem768/vless-x25519/sudoku-keypair")
 	}
 	switch args[0] {
 	case "uuid":
@@ -69,5 +69,19 @@ func Main(args []string) {
 		fmt.Println("PrivateKey: " + privateKeyBase64)
 		fmt.Println("Password: " + passwordBase64)
 		fmt.Println("Hash32: " + hash32Base64)
+	case "sudoku-keypair":
+		// Generate Master Key
+		masterPrivate, masterPublic, err := GenerateSudokuMasterKey()
+		if err != nil {
+			panic(err)
+		}
+		// Split the master private key to get Available Private Key
+		availablePrivateKey, err := SplitSudokuPrivateKey(masterPrivate)
+		if err != nil {
+			panic(err)
+		}
+		// Output: Available Private Key for client, Master Public Key for server
+		fmt.Println("PrivateKey: " + availablePrivateKey)
+		fmt.Println("PublicKey: " + EncodeSudokuPoint(masterPublic))
 	}
 }

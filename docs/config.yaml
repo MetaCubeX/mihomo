@@ -1587,7 +1587,6 @@ listeners:
     aead-method: chacha20-poly1305 # 支持chacha20-poly1305或者aes-128-gcm以及none，sudoku的混淆层可以确保none情况下数据安全
     padding-min: 1 # 填充最小长度
     padding-max: 15 # 填充最大长度，均不建议过大
-    seed: "<seed-or-key>" # 如果你不使用ED25519密钥对，就请填入uuid，否则仍然是公钥
     table-type: prefer_ascii # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
     handshake-timeout: 5   # optional
 

@@ -71,17 +71,12 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		return nil, err
 	}
 
-	seed := config.Seed
-	if seed == "" {
-		seed = config.Key
-	}
-
 	tableType := strings.ToLower(config.TableType)
 	if tableType == "" {
 		tableType = "prefer_ascii"
 	}
 
-	table := sudokuobfs.NewTable(seed, tableType)
+	table := sudokuobfs.NewTable(config.Key, tableType)
 
 	defaultConf := apis.DefaultConfig()
 	paddingMin := defaultConf.PaddingMin

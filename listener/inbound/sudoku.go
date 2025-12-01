@@ -19,7 +19,6 @@ type SudokuOption struct {
 	AEADMethod             string `inbound:"aead-method,omitempty"`
 	PaddingMin             *int   `inbound:"padding-min,omitempty"`
 	PaddingMax             *int   `inbound:"padding-max,omitempty"`
-	Seed                   string `inbound:"seed,omitempty"`
 	TableType              string `inbound:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	HandshakeTimeoutSecond *int   `inbound:"handshake-timeout,omitempty"`
 }
@@ -53,7 +52,6 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 		AEADMethod: options.AEADMethod,
 		PaddingMin: options.PaddingMin,
 		PaddingMax: options.PaddingMax,
-		Seed:       options.Seed,
 		TableType:  options.TableType,
 	}
 	if options.HandshakeTimeoutSecond != nil {
