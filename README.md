@@ -99,3 +99,10 @@ API.
 This software is released under the GPL-3.0 license.
 
 **In addition, any downstream projects not affiliated with `MetaCubeX` shall not contain the word `mihomo` in their names.**
+
+## 命令
+
+```bash
+# 打包
+CGO_ENABLED=0 GOARCH=arm64 GOOS=darwin go build -tags with_gvisor -trimpath -ldflags '-X "github.com/metacubex/mihomo/constant.Version=v1.19.15-debug" -w -s -buildid=' -o verge-mihomo-alpha
+```
