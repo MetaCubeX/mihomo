@@ -14,7 +14,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/socks5"
-	"github.com/metacubex/mihomo/transport/sudotun"
+	ts "github.com/metacubex/mihomo/transport/sudoku"
 )
 
 type Listener struct {
@@ -47,14 +47,14 @@ func (l *Listener) Close() error {
 }
 
 func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	session, err := sudotun.ServerHandshake(conn, &l.protoConf)
+	session, err := ts.ServerHandshake(conn, &l.protoConf)
 	if err != nil {
 		_ = conn.Close()
 		return
 	}
 
 	switch session.Type {
-	case sudotun.SessionTypeUoT:
+	case ts.SessionTypeUoT:
 		l.handleUoTSession(session.Conn, tunnel, additions...)
 	default:
 		targetAddr := socks5.ParseAddr(session.Target)
@@ -67,11 +67,11 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 }
 
 func (l *Listener) handleUoTSession(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	writer := sudotun.NewUoTPacketConn(conn)
+	writer := ts.NewUoTPacketConn(conn)
 	remoteAddr := conn.RemoteAddr()
 
 	for {
-		addrStr, payload, err := sudotun.ReadDatagram(conn)
+		addrStr, payload, err := ts.ReadDatagram(conn)
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				log.Debugln("[Sudoku][UoT] session closed: %v", err)
@@ -97,7 +97,7 @@ func (l *Listener) handleUoTSession(conn net.Conn, tunnel C.Tunnel, additions ..
 
 type uotPacket struct {
 	payload []byte
-	writer  *sudotun.UoTPacketConn
+	writer  *ts.UoTPacketConn
 	rAddr   net.Addr
 }
 

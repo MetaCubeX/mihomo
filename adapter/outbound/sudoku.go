@@ -14,18 +14,18 @@ import (
 	"github.com/saba-futai/sudoku/apis"
 	"github.com/saba-futai/sudoku/pkg/crypto"
 	"github.com/saba-futai/sudoku/pkg/obfs/httpmask"
-	"github.com/saba-futai/sudoku/pkg/obfs/sudoku"
+	sudokuobfs "github.com/saba-futai/sudoku/pkg/obfs/sudoku"
 
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/sudotun"
+	ts "github.com/metacubex/mihomo/transport/sudoku"
 )
 
 type Sudoku struct {
 	*Base
 	option   *SudokuOption
-	table    *sudoku.Table
+	table    *sudokuobfs.Table
 	baseConf apis.ProtocolConfig
 }
 
@@ -101,12 +101,12 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		return nil, err
 	}
 
-	if err = sudotun.WritePreface(c); err != nil {
+	if err = ts.WritePreface(c); err != nil {
 		_ = c.Close()
 		return nil, fmt.Errorf("send uot preface failed: %w", err)
 	}
 
-	return newPacketConn(N.NewThreadSafePacketConn(sudotun.NewUoTPacketConn(c)), s), nil
+	return newPacketConn(N.NewThreadSafePacketConn(ts.NewUoTPacketConn(c)), s), nil
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -142,7 +142,7 @@ func (s *Sudoku) handshakeConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ ne
 		}
 	}
 
-	obfsConn := sudoku.NewConn(rawConn, cfg.Table, cfg.PaddingMin, cfg.PaddingMax, false)
+	obfsConn := sudokuobfs.NewConn(rawConn, cfg.Table, cfg.PaddingMin, cfg.PaddingMax, false)
 	cConn, err := crypto.NewAEADConn(obfsConn, cfg.Key, cfg.AEADMethod)
 	if err != nil {
 		return nil, fmt.Errorf("setup crypto failed: %w", err)
@@ -196,7 +196,7 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 	}
 
 	start := time.Now()
-	table := sudoku.NewTable(seed, tableType)
+	table := sudokuobfs.NewTable(seed, tableType)
 	log.Infoln("[Sudoku] Tables initialized (%s) in %v", tableType, time.Since(start))
 
 	defaultConf := apis.DefaultConfig()

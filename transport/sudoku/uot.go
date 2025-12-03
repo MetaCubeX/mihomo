@@ -1,4 +1,4 @@
-package sudotun
+package sudoku
 
 import (
 	"bytes"
