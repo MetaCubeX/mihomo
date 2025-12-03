@@ -17,13 +17,13 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/loopback"
 	"github.com/metacubex/mihomo/component/nat"
-	P "github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/slowdown"
 	"github.com/metacubex/mihomo/component/sniffer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/features"
-	"github.com/metacubex/mihomo/constant/provider"
+	P "github.com/metacubex/mihomo/constant/provider"
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
@@ -43,8 +43,8 @@ var (
 	listeners     = make(map[string]C.InboundListener)
 	subRules      map[string][]C.Rule
 	proxies       = make(map[string]C.Proxy)
-	providers     map[string]provider.ProxyProvider
-	ruleProviders map[string]provider.RuleProvider
+	providers     map[string]P.ProxyProvider
+	ruleProviders map[string]P.RuleProvider
 	configMux     sync.RWMutex
 
 	// for compatibility, lazy init
@@ -59,21 +59,19 @@ var (
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
 
-	findProcessMode = atomic.NewInt32Enum(P.FindProcessStrict)
-
-	fakeIPRange netip.Prefix
+	findProcessMode = atomic.NewInt32Enum(process.FindProcessStrict)
 
 	snifferDispatcher *sniffer.Dispatcher
 	sniffingEnable    = false
 
-	ruleUpdateCallback = utils.NewCallback[provider.RuleProvider]()
+	ruleUpdateCallback = utils.NewCallback[P.RuleProvider]()
 )
 
 type tunnel struct{}
 
 var Tunnel = tunnel{}
 var _ C.Tunnel = Tunnel
-var _ provider.Tunnel = Tunnel
+var _ P.Tunnel = Tunnel
 
 func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	connCtx := icontext.NewConnContext(conn, metadata)
@@ -114,15 +112,15 @@ func (t tunnel) NatTable() C.NatTable {
 	return natTable
 }
 
-func (t tunnel) Providers() map[string]provider.ProxyProvider {
+func (t tunnel) Providers() map[string]P.ProxyProvider {
 	return providers
 }
 
-func (t tunnel) RuleProviders() map[string]provider.RuleProvider {
+func (t tunnel) RuleProviders() map[string]P.RuleProvider {
 	return ruleProviders
 }
 
-func (t tunnel) RuleUpdateCallback() *utils.Callback[provider.RuleProvider] {
+func (t tunnel) RuleUpdateCallback() *utils.Callback[P.RuleProvider] {
 	return ruleUpdateCallback
 }
 
@@ -140,14 +138,6 @@ func OnRunning() {
 
 func Status() TunnelStatus {
 	return status.Load()
-}
-
-func SetFakeIPRange(p netip.Prefix) {
-	fakeIPRange = p
-}
-
-func FakeIPRange() netip.Prefix {
-	return fakeIPRange
 }
 
 func SetSniffing(b bool) {
@@ -205,7 +195,7 @@ func Listeners() map[string]C.InboundListener {
 }
 
 // UpdateRules handle update rules
-func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]provider.RuleProvider) {
+func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]P.RuleProvider) {
 	configMux.Lock()
 	rules = newRules
 	ruleProviders = rp
@@ -233,17 +223,17 @@ func ProxiesWithProviders() map[string]C.Proxy {
 }
 
 // Providers return all compatible providers
-func Providers() map[string]provider.ProxyProvider {
+func Providers() map[string]P.ProxyProvider {
 	return providers
 }
 
 // RuleProviders return all loaded rule providers
-func RuleProviders() map[string]provider.RuleProvider {
+func RuleProviders() map[string]P.RuleProvider {
 	return ruleProviders
 }
 
 // UpdateProxies handle update proxies
-func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provider.ProxyProvider) {
+func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]P.ProxyProvider) {
 	configMux.Lock()
 	proxies = newProxies
 	providers = newProviders
@@ -273,13 +263,13 @@ func SetMode(m TunnelMode) {
 	mode = m
 }
 
-func FindProcessMode() P.FindProcessMode {
+func FindProcessMode() process.FindProcessMode {
 	return findProcessMode.Load()
 }
 
 // SetFindProcessMode replace SetAlwaysFindProcess
 // always find process info if legacyAlways = true or mode.Always() = true, may be increase many memory
-func SetFindProcessMode(mode P.FindProcessMode) {
+func SetFindProcessMode(mode process.FindProcessMode) {
 	findProcessMode.Store(mode)
 }
 
@@ -368,7 +358,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 				attemptProcessLookup = false
 				if !features.CMFA {
 					// normal check for process
-					uid, path, err := P.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
+					uid, path, err := process.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 					if err != nil {
 						log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 					} else {
@@ -376,13 +366,13 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 						metadata.ProcessPath = path
 						metadata.Uid = uid
 
-						if pkg, err := P.FindPackageName(metadata); err == nil { // for android (not CMFA) package names
+						if pkg, err := process.FindPackageName(metadata); err == nil { // for android (not CMFA) package names
 							metadata.Process = pkg
 						}
 					}
 				} else {
 					// check package names
-					pkg, err := P.FindPackageName(metadata)
+					pkg, err := process.FindPackageName(metadata)
 					if err != nil {
 						log.Debugln("[Process] find process error for %s: %v", metadata.String(), err)
 					} else {
@@ -394,10 +384,10 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	}
 
 	switch FindProcessMode() {
-	case P.FindProcessAlways:
+	case process.FindProcessAlways:
 		helper.FindProcess()
 		helper.FindProcess = nil
-	case P.FindProcessOff:
+	case process.FindProcessOff:
 		helper.FindProcess = nil
 	}
 
@@ -563,7 +553,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	dialMetadata := metadata
 	if len(metadata.Host) > 0 {
 		if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
-			if dstIp, _ := node.RandIP(); !FakeIPRange().Contains(dstIp) {
+			if dstIp, _ := node.RandIP(); !resolver.IsFakeIP(dstIp) {
 				dialMetadata.DstIP = dstIp
 				dialMetadata.DNSMode = C.DNSHosts
 				dialMetadata = dialMetadata.Pure()
@@ -637,7 +627,7 @@ func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err
 func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 	switch {
 	case metadata.SpecialProxy != "":
-		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
+		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
 	case rule != nil:
 		if rule.Payload() != "" {
 			log.Infoln("[%s] %s --> %s match %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
@@ -649,7 +639,7 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 	case mode == Direct:
 		log.Infoln("[%s] %s --> %s using DIRECT", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress())
 	default:
-		log.Infoln("[%s] %s --> %s doesn't match any rule using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().Last())
+		log.Infoln("[%s] %s --> %s doesn't match any rule using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
 	}
 }
 

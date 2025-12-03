@@ -183,7 +183,11 @@ func (pc *PacketConn) WaitReadFrom() (data []byte, put func(), addr net.Addr, er
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	addr = destination.UDPAddr()
+	udpAddr := destination.UDPAddr()
+	if udpAddr == nil {
+		return nil, nil, nil, errors.New("parse addr error")
+	}
+	addr = udpAddr
 
 	data = pool.Get(pool.UDPBufferSize)
 	put = func() {

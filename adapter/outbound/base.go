@@ -12,6 +12,7 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -35,6 +36,7 @@ type Base struct {
 	rmark  int
 	id     string
 	prefer C.DNSPrefer
+	dialer C.Dialer
 }
 
 // Name implements C.ProxyAdapter
@@ -56,33 +58,13 @@ func (b *Base) Type() C.AdapterType {
 	return b.tp
 }
 
-// StreamConnContext implements C.ProxyAdapter
-func (b *Base) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
-	return c, C.ErrNotSupport
-}
-
 func (b *Base) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
-	return nil, C.ErrNotSupport
-}
-
-// DialContextWithDialer implements C.ProxyAdapter
-func (b *Base) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
 	return nil, C.ErrNotSupport
 }
 
 // ListenPacketContext implements C.ProxyAdapter
 func (b *Base) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	return nil, C.ErrNotSupport
-}
-
-// ListenPacketWithDialer implements C.ProxyAdapter
-func (b *Base) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	return nil, C.ErrNotSupport
-}
-
-// SupportWithDialer implements C.ProxyAdapter
-func (b *Base) SupportWithDialer() C.NetWork {
-	return C.InvalidNet
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -184,6 +166,20 @@ type BasicOption struct {
 	RoutingMark int    `proxy:"routing-mark,omitempty"`
 	IPVersion   string `proxy:"ip-version,omitempty"`
 	DialerProxy string `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
+
+	DialerForAPI C.Dialer `proxy:"-"` // the dialer used for API usage has higher priority than all the above configurations.
+}
+
+func (b *BasicOption) NewDialer(opts []dialer.Option) C.Dialer {
+	cDialer := b.DialerForAPI
+	if cDialer == nil {
+		if b.DialerProxy != "" {
+			cDialer = proxydialer.NewByName(b.DialerProxy)
+		} else {
+			cDialer = dialer.NewDialer(opts...)
+		}
+	}
+	return cDialer
 }
 
 type BaseOption struct {
@@ -263,7 +259,9 @@ func NewConn(c net.Conn, a C.ProxyAdapter) C.Conn {
 	if _, ok := c.(syscall.Conn); !ok { // exclusion system conn like *net.TCPConn
 		c = N.NewDeadlineConn(c) // most conn from outbound can't handle readDeadline correctly
 	}
-	return &conn{N.NewExtendedConn(c), []string{a.Name()}, a.Addr()}
+	cc := &conn{N.NewExtendedConn(c), nil, a.Addr()}
+	cc.AppendToChains(a)
+	return cc
 }
 
 type packetConn struct {
@@ -320,7 +318,9 @@ func newPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
 	if _, ok := pc.(syscall.Conn); !ok { // exclusion system conn like *net.UDPConn
 		epc = N.NewDeadlineEnhancePacketConn(epc) // most conn from outbound can't handle readDeadline correctly
 	}
-	return &packetConn{epc, []string{a.Name()}, a.Name(), utils.NewUUIDV4().String(), a.Addr(), a.ResolveUDP}
+	cpc := &packetConn{epc, nil, a.Name(), utils.NewUUIDV4().String(), a.Addr(), a.ResolveUDP}
+	cpc.AppendToChains(a)
+	return cpc
 }
 
 type AddRef interface {
@@ -344,30 +344,8 @@ func (p *autoCloseProxyAdapter) DialContext(ctx context.Context, metadata *C.Met
 	return c, nil
 }
 
-func (p *autoCloseProxyAdapter) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
-	c, err := p.ProxyAdapter.DialContextWithDialer(ctx, dialer, metadata)
-	if err != nil {
-		return nil, err
-	}
-	if c, ok := c.(AddRef); ok {
-		c.AddRef(p)
-	}
-	return c, nil
-}
-
 func (p *autoCloseProxyAdapter) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	pc, err := p.ProxyAdapter.ListenPacketContext(ctx, metadata)
-	if err != nil {
-		return nil, err
-	}
-	if pc, ok := pc.(AddRef); ok {
-		pc.AddRef(p)
-	}
-	return pc, nil
-}
-
-func (p *autoCloseProxyAdapter) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	pc, err := p.ProxyAdapter.ListenPacketWithDialer(ctx, dialer, metadata)
 	if err != nil {
 		return nil, err
 	}

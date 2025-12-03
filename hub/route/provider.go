@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/provider"
+	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/go-chi/chi/v5"
@@ -45,12 +45,12 @@ func getProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func getProvider(w http.ResponseWriter, r *http.Request) {
-	provider := r.Context().Value(CtxKeyProvider).(provider.ProxyProvider)
+	provider := r.Context().Value(CtxKeyProvider).(P.ProxyProvider)
 	render.JSON(w, r, provider)
 }
 
 func updateProvider(w http.ResponseWriter, r *http.Request) {
-	provider := r.Context().Value(CtxKeyProvider).(provider.ProxyProvider)
+	provider := r.Context().Value(CtxKeyProvider).(P.ProxyProvider)
 	if err := provider.Update(); err != nil {
 		render.Status(r, http.StatusServiceUnavailable)
 		render.JSON(w, r, newError(err.Error()))
@@ -60,7 +60,7 @@ func updateProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 func healthCheckProvider(w http.ResponseWriter, r *http.Request) {
-	provider := r.Context().Value(CtxKeyProvider).(provider.ProxyProvider)
+	provider := r.Context().Value(CtxKeyProvider).(P.ProxyProvider)
 	provider.HealthCheck()
 	render.NoContent(w, r)
 }
@@ -93,7 +93,7 @@ func findProviderProxyByName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var (
 			name = r.Context().Value(CtxKeyProxyName).(string)
-			pd   = r.Context().Value(CtxKeyProvider).(provider.ProxyProvider)
+			pd   = r.Context().Value(CtxKeyProvider).(P.ProxyProvider)
 		)
 		proxy, exist := lo.Find(pd.Proxies(), func(proxy C.Proxy) bool {
 			return proxy.Name() == name
@@ -128,7 +128,7 @@ func getRuleProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateRuleProvider(w http.ResponseWriter, r *http.Request) {
-	provider := r.Context().Value(CtxKeyProvider).(provider.RuleProvider)
+	provider := r.Context().Value(CtxKeyProvider).(P.RuleProvider)
 	if err := provider.Update(); err != nil {
 		render.Status(r, http.StatusServiceUnavailable)
 		render.JSON(w, r, newError(err.Error()))

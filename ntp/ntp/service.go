@@ -3,18 +3,19 @@ package ntp
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+	mihomoNtp "github.com/metacubex/mihomo/ntp"
 
 	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/sing/common/ntp"
 )
 
-var globalSrv atomic.Pointer[Service]
+var globalSrv *Service
 var globalMu sync.Mutex
 
 type Service struct {
@@ -23,30 +24,32 @@ type Service struct {
 	ticker         *time.Ticker
 	ctx            context.Context
 	cancel         context.CancelFunc
-	offset         atomic.Int64 // [time.Duration]
 	syncSystemTime bool
 }
 
 func ReCreateNTPService(server string, interval time.Duration, dialerProxy string, syncSystemTime bool) {
 	globalMu.Lock()
 	defer globalMu.Unlock()
-	if service := globalSrv.Swap(nil); service != nil {
-		service.Stop()
+	if globalSrv != nil {
+		globalSrv.Stop()
 	}
 	if server == "" || interval <= 0 {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service := &Service{
+	var cDialer C.Dialer = dialer.NewDialer()
+	if dialerProxy != "" {
+		cDialer = proxydialer.NewByName(dialerProxy)
+	}
+	globalSrv = &Service{
 		server:         M.ParseSocksaddr(server),
-		dialer:         proxydialer.NewByNameSingDialer(dialerProxy, dialer.NewDialer()),
+		dialer:         proxydialer.NewSingDialer(cDialer),
 		ticker:         time.NewTicker(interval * time.Minute),
 		ctx:            ctx,
 		cancel:         cancel,
 		syncSystemTime: syncSystemTime,
 	}
-	service.Start()
-	globalSrv.Store(service)
+	globalSrv.Start()
 }
 
 func (srv *Service) Start() {
@@ -57,10 +60,6 @@ func (srv *Service) Start() {
 func (srv *Service) Stop() {
 	log.Infoln("NTP service stop")
 	srv.cancel()
-}
-
-func (srv *Service) Offset() time.Duration {
-	return time.Duration(srv.offset.Load())
 }
 
 func (srv *Service) update() error {
@@ -80,7 +79,7 @@ func (srv *Service) update() error {
 		} else if offset < time.Duration(0) {
 			log.Infoln("System clock is behind NTP time by %s", -offset)
 		}
-		srv.offset.Store(int64(offset))
+		mihomoNtp.SetOffset(offset)
 		if srv.syncSystemTime {
 			timeNow := response.Time
 			syncErr := setSystemTime(timeNow)
@@ -97,7 +96,7 @@ func (srv *Service) update() error {
 }
 
 func (srv *Service) loopUpdate() {
-	defer srv.offset.Store(0)
+	defer mihomoNtp.SetOffset(0)
 	defer srv.ticker.Stop()
 	for {
 		err := srv.update()
@@ -110,14 +109,4 @@ func (srv *Service) loopUpdate() {
 		case <-srv.ticker.C:
 		}
 	}
-}
-
-func Now() time.Time {
-	now := time.Now()
-	if service := globalSrv.Load(); service != nil {
-		if offset := service.Offset(); offset.Abs() > 0 {
-			now = now.Add(offset)
-		}
-	}
-	return now
 }

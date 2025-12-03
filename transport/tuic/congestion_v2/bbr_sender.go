@@ -96,7 +96,6 @@ const (
 
 type bbrSender struct {
 	rttStats congestion.RTTStatsProvider
-	clock    Clock
 	pacer    *Pacer
 
 	mode bbrMode
@@ -244,12 +243,10 @@ type bbrSender struct {
 var _ congestion.CongestionControl = &bbrSender{}
 
 func NewBbrSender(
-	clock Clock,
 	initialMaxDatagramSize congestion.ByteCount,
 	initialCongestionWindowPackets congestion.ByteCount,
 ) *bbrSender {
 	return newBbrSender(
-		clock,
 		initialMaxDatagramSize,
 		initialCongestionWindowPackets*initialMaxDatagramSize,
 		congestion.MaxCongestionWindowPackets*initialMaxDatagramSize,
@@ -257,13 +254,11 @@ func NewBbrSender(
 }
 
 func newBbrSender(
-	clock Clock,
 	initialMaxDatagramSize,
 	initialCongestionWindow,
 	initialMaxCongestionWindow congestion.ByteCount,
 ) *bbrSender {
 	b := &bbrSender{
-		clock:                        clock,
 		mode:                         bbrModeStartup,
 		sampler:                      newBandwidthSampler(roundTripCount(bandwidthWindowSize)),
 		lastSentPacket:               invalidPacketNumber,
@@ -297,7 +292,7 @@ func newBbrSender(
 		}
 	*/
 
-	b.enterStartupMode(b.clock.Now())
+	b.enterStartupMode()
 	b.setHighCwndGain(derivedHighCWNDGain)
 
 	return b
@@ -605,7 +600,7 @@ func (b *bbrSender) maybeUpdateMinRtt(now monotime.Time, sampleMinRtt time.Durat
 }
 
 // Enters the STARTUP mode.
-func (b *bbrSender) enterStartupMode(now monotime.Time) {
+func (b *bbrSender) enterStartupMode() {
 	b.mode = bbrModeStartup
 	// b.maybeTraceStateChange(logging.CongestionStateStartup)
 	b.pacingGain = b.highGain
@@ -757,7 +752,7 @@ func (b *bbrSender) maybeEnterOrExitProbeRtt(now monotime.Time, isRoundStart, mi
 			if now.Sub(b.exitProbeRttAt) >= 0 && b.probeRttRoundPassed {
 				b.minRttTimestamp = now
 				if !b.isAtFullBandwidth {
-					b.enterStartupMode(now)
+					b.enterStartupMode()
 				} else {
 					b.enterProbeBandwidthMode(now)
 				}

@@ -59,11 +59,13 @@ func init() {
 }
 
 type TestTunnel struct {
-	HandleTCPConnFn   func(conn net.Conn, metadata *C.Metadata)
-	HandleUDPPacketFn func(packet C.UDPPacket, metadata *C.Metadata)
-	NatTableFn        func() C.NatTable
-	CloseFn           func() error
-	DoTestFn          func(t *testing.T, proxy C.ProxyAdapter)
+	HandleTCPConnFn    func(conn net.Conn, metadata *C.Metadata)
+	HandleUDPPacketFn  func(packet C.UDPPacket, metadata *C.Metadata)
+	NatTableFn         func() C.NatTable
+	CloseFn            func() error
+	DoTestFn           func(t *testing.T, proxy C.ProxyAdapter)
+	DoSequentialTestFn func(t *testing.T, proxy C.ProxyAdapter)
+	DoConcurrentTestFn func(t *testing.T, proxy C.ProxyAdapter)
 }
 
 func (tt *TestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
@@ -84,6 +86,14 @@ func (tt *TestTunnel) Close() error {
 
 func (tt *TestTunnel) DoTest(t *testing.T, proxy C.ProxyAdapter) {
 	tt.DoTestFn(t, proxy)
+}
+
+func (tt *TestTunnel) DoSequentialTest(t *testing.T, proxy C.ProxyAdapter) {
+	tt.DoSequentialTestFn(t, proxy)
+}
+
+func (tt *TestTunnel) DoConcurrentTest(t *testing.T, proxy C.ProxyAdapter) {
+	tt.DoConcurrentTestFn(t, proxy)
 }
 
 type TestTunnelListener struct {
@@ -213,6 +223,40 @@ func NewHttpTestTunnel() *TestTunnel {
 		}
 		assert.Equal(t, httpData[:size], data)
 	}
+
+	sequentialTestFn := func(t *testing.T, proxy C.ProxyAdapter) {
+		// Sequential testing for debugging
+		t.Run("Sequential", func(t *testing.T) {
+			testFn(t, proxy, "http", len(httpData))
+			testFn(t, proxy, "https", len(httpData))
+		})
+	}
+
+	concurrentTestFn := func(t *testing.T, proxy C.ProxyAdapter) {
+		// Concurrent testing to detect stress
+		t.Run("Concurrent", func(t *testing.T) {
+			wg := sync.WaitGroup{}
+			num := len(httpData) / 1024
+			for i := 1; i <= num; i++ {
+				i := i
+				wg.Add(1)
+				go func() {
+					testFn(t, proxy, "https", i*1024)
+					defer wg.Done()
+				}()
+			}
+			for i := 1; i <= num; i++ {
+				i := i
+				wg.Add(1)
+				go func() {
+					testFn(t, proxy, "http", i*1024)
+					defer wg.Done()
+				}()
+			}
+			wg.Wait()
+		})
+	}
+
 	tunnel := &TestTunnel{
 		HandleTCPConnFn: func(conn net.Conn, metadata *C.Metadata) {
 			defer conn.Close()
@@ -252,36 +296,11 @@ func NewHttpTestTunnel() *TestTunnel {
 		},
 		CloseFn: ln.Close,
 		DoTestFn: func(t *testing.T, proxy C.ProxyAdapter) {
-
-			// Sequential testing for debugging
-			t.Run("Sequential", func(t *testing.T) {
-				testFn(t, proxy, "http", len(httpData))
-				testFn(t, proxy, "https", len(httpData))
-			})
-
-			// Concurrent testing to detect stress
-			t.Run("Concurrent", func(t *testing.T) {
-				wg := sync.WaitGroup{}
-				num := len(httpData) / 1024
-				for i := 1; i <= num; i++ {
-					i := i
-					wg.Add(1)
-					go func() {
-						testFn(t, proxy, "https", i*1024)
-						defer wg.Done()
-					}()
-				}
-				for i := 1; i <= num; i++ {
-					i := i
-					wg.Add(1)
-					go func() {
-						testFn(t, proxy, "http", i*1024)
-						defer wg.Done()
-					}()
-				}
-				wg.Wait()
-			})
+			sequentialTestFn(t, proxy)
+			concurrentTestFn(t, proxy)
 		},
+		DoSequentialTestFn: sequentialTestFn,
+		DoConcurrentTestFn: concurrentTestFn,
 	}
 	return tunnel
 }

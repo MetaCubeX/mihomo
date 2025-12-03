@@ -242,14 +242,26 @@ func (vc *Conn) WriteBuffer(buffer *buf.Buffer) (err error) {
 }
 
 func (vc *Conn) FrontHeadroom() int {
+	fontHeadroom := PaddingHeaderLen - uuid.Size
 	if vc.readFilterUUID || vc.writeOnceUserUUID != nil {
-		return PaddingHeaderLen
+		fontHeadroom = PaddingHeaderLen
 	}
-	return PaddingHeaderLen - uuid.Size
+	if vc.writeFilterApplicationData { // The writer may be replaced, add the required value for vc.netConn
+		if abs := N.CalculateFrontHeadroom(vc.netConn) - N.CalculateFrontHeadroom(vc.Conn); abs > 0 {
+			fontHeadroom += abs
+		}
+	}
+	return fontHeadroom
 }
 
 func (vc *Conn) RearHeadroom() int {
-	return 500 + 900
+	rearHeadroom := 500 + 900
+	if vc.writeFilterApplicationData { // The writer may be replaced, add the required value for vc.netConn
+		if abs := N.CalculateRearHeadroom(vc.netConn) - N.CalculateRearHeadroom(vc.Conn); abs > 0 {
+			rearHeadroom += abs
+		}
+	}
+	return rearHeadroom
 }
 
 func (vc *Conn) NeedHandshake() bool {

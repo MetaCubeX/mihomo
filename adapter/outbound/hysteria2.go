@@ -12,7 +12,6 @@ import (
 	CN "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
@@ -36,7 +35,6 @@ type Hysteria2 struct {
 
 	option *Hysteria2Option
 	client *hysteria2.Client
-	dialer proxydialer.SingDialer
 }
 
 type Hysteria2Option struct {
@@ -119,9 +117,8 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		},
 		option: &option,
 	}
-
-	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer(outbound.DialOptions()...))
-	outbound.dialer = singDialer
+	outbound.dialer = option.NewDialer(outbound.DialOptions())
+	singDialer := proxydialer.NewSingDialer(outbound.dialer)
 
 	var salamanderPassword string
 	if len(option.Obfs) > 0 {

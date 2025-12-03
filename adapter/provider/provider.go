@@ -16,7 +16,7 @@ import (
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/resource"
 	C "github.com/metacubex/mihomo/constant"
-	types "github.com/metacubex/mihomo/constant/provider"
+	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/dlclark/regexp2"
@@ -68,8 +68,8 @@ func (bp *baseProvider) HealthCheck() {
 	bp.healthCheck.check()
 }
 
-func (bp *baseProvider) Type() types.ProviderType {
-	return types.Proxy
+func (bp *baseProvider) Type() P.ProviderType {
+	return P.Proxy
 }
 
 func (bp *baseProvider) Proxies() []C.Proxy {
@@ -171,7 +171,7 @@ func (pp *proxySetProvider) Close() error {
 	return pp.Fetcher.Close()
 }
 
-func NewProxySetProvider(name string, interval time.Duration, payload []map[string]any, parser resource.Parser[[]C.Proxy], vehicle types.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
+func NewProxySetProvider(name string, interval time.Duration, payload []map[string]any, parser resource.Parser[[]C.Proxy], vehicle P.Vehicle, hc *HealthCheck) (*ProxySetProvider, error) {
 	pd := &proxySetProvider{
 		baseProvider: baseProvider{
 			name:        name,
@@ -238,8 +238,8 @@ func (ip *inlineProvider) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (ip *inlineProvider) VehicleType() types.VehicleType {
-	return types.Inline
+func (ip *inlineProvider) VehicleType() P.VehicleType {
+	return P.Inline
 }
 
 func (ip *inlineProvider) Update() error {
@@ -303,8 +303,8 @@ func (cp *compatibleProvider) Update() error {
 	return nil
 }
 
-func (cp *compatibleProvider) VehicleType() types.VehicleType {
-	return types.Compatible
+func (cp *compatibleProvider) VehicleType() P.VehicleType {
+	return P.Compatible
 }
 
 func NewCompatibleProvider(name string, proxies []C.Proxy, hc *HealthCheck) (*CompatibleProvider, error) {

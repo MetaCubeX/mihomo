@@ -155,6 +155,10 @@ func verifyIP6() bool {
 				}
 			}
 		}
+	} else {
+		// eg: Calling net.InterfaceAddrs() fails on Android SDK 30
+		// https://github.com/golang/go/issues/40569
+		return true // just ignore
 	}
 	return false
 }

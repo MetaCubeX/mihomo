@@ -21,7 +21,6 @@ func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int) {
 	case "cubic":
 		quicConn.SetCongestionControl(
 			congestion.NewCubicSender(
-				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(quicConn),
 				false,
 			),
@@ -29,7 +28,6 @@ func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int) {
 	case "new_reno":
 		quicConn.SetCongestionControl(
 			congestion.NewCubicSender(
-				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(quicConn),
 				true,
 			),
@@ -37,7 +35,6 @@ func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int) {
 	case "bbr_meta_v1":
 		quicConn.SetCongestionControl(
 			congestion.NewBBRSender(
-				congestion.DefaultClock{},
 				congestion.GetInitialPacketSize(quicConn),
 				c.ByteCount(cwnd)*congestion.InitialMaxDatagramSize,
 				congestion.DefaultBBRMaxCongestionWindow*congestion.InitialMaxDatagramSize,
@@ -48,7 +45,6 @@ func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int) {
 	case "bbr":
 		quicConn.SetCongestionControl(
 			congestionv2.NewBbrSender(
-				congestionv2.DefaultClock{},
 				congestionv2.GetInitialPacketSize(quicConn),
 				c.ByteCount(cwnd),
 			),

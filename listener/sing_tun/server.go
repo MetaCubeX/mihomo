@@ -18,7 +18,7 @@ import (
 	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/provider"
+	P "github.com/metacubex/mihomo/constant/provider"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
@@ -133,7 +133,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		}
 	}
 	ctx := context.TODO()
-	rpTunnel := tunnel.(provider.Tunnel)
+	rpTunnel := tunnel.(P.Tunnel)
 	if options.GSOMaxSize == 0 {
 		options.GSOMaxSize = 65536
 	}
@@ -504,7 +504,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	return
 }
 
-func (l *Listener) ruleUpdateCallback(ruleProvider provider.RuleProvider) {
+func (l *Listener) ruleUpdateCallback(ruleProvider P.RuleProvider) {
 	name := ruleProvider.Name()
 	if slices.Contains(l.options.RouteAddressSet, name) {
 		l.updateRule(ruleProvider, false, true)
@@ -520,7 +520,7 @@ type toIpCidr interface {
 	ToIpCidr() *netipx.IPSet
 }
 
-func (l *Listener) updateRule(ruleProvider provider.RuleProvider, exclude bool, update bool) {
+func (l *Listener) updateRule(ruleProvider P.RuleProvider, exclude bool, update bool) {
 	l.ruleUpdateMutex.Lock()
 	defer l.ruleUpdateMutex.Unlock()
 	name := ruleProvider.Name()

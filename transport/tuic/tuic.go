@@ -1,7 +1,6 @@
 package tuic
 
 import (
-	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/tuic/common"
 	v4 "github.com/metacubex/mihomo/transport/tuic/v4"
 	v5 "github.com/metacubex/mihomo/transport/tuic/v5"
@@ -12,12 +11,12 @@ type ClientOptionV5 = v5.ClientOption
 
 type Client = common.Client
 
-func NewClientV4(clientOption *ClientOptionV4, udp bool, dialerRef C.Dialer) Client {
-	return v4.NewClient(clientOption, udp, dialerRef)
+func NewClientV4(clientOption *ClientOptionV4, udp bool, dialFn DialFunc) Client {
+	return v4.NewClient(clientOption, udp, dialFn)
 }
 
-func NewClientV5(clientOption *ClientOptionV5, udp bool, dialerRef C.Dialer) Client {
-	return v5.NewClient(clientOption, udp, dialerRef)
+func NewClientV5(clientOption *ClientOptionV5, udp bool, dialFn DialFunc) Client {
+	return v5.NewClient(clientOption, udp, dialFn)
 }
 
 type DialFunc = common.DialFunc

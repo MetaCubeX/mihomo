@@ -18,13 +18,12 @@ var (
 	TooManyOpenStreams = errors.New("tuic: too many open streams")
 )
 
-type DialFunc func(ctx context.Context, dialer C.Dialer) (transport *quic.Transport, addr net.Addr, err error)
+type DialFunc func(ctx context.Context) (transport *quic.Transport, addr net.Addr, err error)
 
 type Client interface {
-	DialContextWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.Conn, error)
-	ListenPacketWithDialer(ctx context.Context, metadata *C.Metadata, dialer C.Dialer, dialFn DialFunc) (net.PacketConn, error)
+	DialContext(ctx context.Context, metadata *C.Metadata) (net.Conn, error)
+	ListenPacket(ctx context.Context, metadata *C.Metadata) (net.PacketConn, error)
 	OpenStreams() int64
-	DialerRef() C.Dialer
 	LastVisited() time.Time
 	SetLastVisited(last time.Time)
 	Close()

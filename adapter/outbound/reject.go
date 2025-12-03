@@ -17,6 +17,7 @@ type Reject struct {
 }
 
 type RejectOption struct {
+	BasicOption
 	Name string `proxy:"name"`
 }
 

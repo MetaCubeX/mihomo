@@ -51,24 +51,10 @@ func (p *Proxy) AliveForTestUrl(url string) bool {
 	return p.alive.Load()
 }
 
-// Dial implements C.Proxy
-func (p *Proxy) Dial(metadata *C.Metadata) (C.Conn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultTCPTimeout)
-	defer cancel()
-	return p.DialContext(ctx, metadata)
-}
-
 // DialContext implements C.ProxyAdapter
 func (p *Proxy) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	conn, err := p.ProxyAdapter.DialContext(ctx, metadata)
 	return conn, err
-}
-
-// DialUDP implements C.ProxyAdapter
-func (p *Proxy) DialUDP(metadata *C.Metadata) (C.PacketConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), C.DefaultUDPTimeout)
-	defer cancel()
-	return p.ListenPacketContext(ctx, metadata)
 }
 
 // ListenPacketContext implements C.ProxyAdapter

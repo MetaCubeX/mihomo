@@ -23,7 +23,6 @@ type cubicSender struct {
 	rttStats        congestion.RTTStatsProvider
 	cubic           *Cubic
 	pacer           *pacer
-	clock           Clock
 
 	reno bool
 
@@ -61,12 +60,10 @@ var (
 
 // NewCubicSender makes a new cubic sender
 func NewCubicSender(
-	clock Clock,
 	initialMaxDatagramSize congestion.ByteCount,
 	reno bool,
 ) *cubicSender {
 	return newCubicSender(
-		clock,
 		reno,
 		initialMaxDatagramSize,
 		initialCongestionWindow*initialMaxDatagramSize,
@@ -75,7 +72,6 @@ func NewCubicSender(
 }
 
 func newCubicSender(
-	clock Clock,
 	reno bool,
 	initialMaxDatagramSize,
 	initialCongestionWindow,
@@ -89,8 +85,7 @@ func newCubicSender(
 		initialMaxCongestionWindow: initialMaxCongestionWindow,
 		congestionWindow:           initialCongestionWindow,
 		slowStartThreshold:         MaxByteCount,
-		cubic:                      NewCubic(clock),
-		clock:                      clock,
+		cubic:                      NewCubic(),
 		reno:                       reno,
 		maxDatagramSize:            initialMaxDatagramSize,
 	}

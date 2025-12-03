@@ -3,7 +3,6 @@ package vmess
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -55,11 +54,11 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 		return hc.Conn.Write(b)
 	}
 
-	if len(hc.cfg.Path) == 0 {
-		return -1, errors.New("path is empty")
+	path := "/"
+	if len(hc.cfg.Path) > 0 {
+		path = hc.cfg.Path[randv2.IntN(len(hc.cfg.Path))]
 	}
 
-	path := hc.cfg.Path[randv2.IntN(len(hc.cfg.Path))]
 	host := hc.cfg.Host
 	if header := hc.cfg.Headers["Host"]; len(header) != 0 {
 		host = header[randv2.IntN(len(header))]

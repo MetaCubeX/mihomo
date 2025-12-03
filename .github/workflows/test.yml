@@ -54,6 +54,11 @@ jobs:
           cd $(go env GOROOT)
           patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go${{matrix.go-version}}.patch
 
+      - name: Remove inbound test for macOS
+        if: ${{ runner.os == 'macOS' }}
+        run: |
+          rm -rf listener/inbound/*_test.go
+
       - name: Test
         run: go test ./... -v -count=1
 

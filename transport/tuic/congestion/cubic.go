@@ -37,8 +37,6 @@ const betaLastMax float32 = 0.85
 
 // Cubic implements the cubic algorithm from TCP
 type Cubic struct {
-	clock Clock
-
 	// Number of connections to simulate.
 	numConnections int
 
@@ -67,9 +65,8 @@ type Cubic struct {
 }
 
 // NewCubic returns a new Cubic instance
-func NewCubic(clock Clock) *Cubic {
+func NewCubic() *Cubic {
 	c := &Cubic{
-		clock:          clock,
 		numConnections: defaultNumConnections,
 	}
 	c.Reset()

@@ -8,7 +8,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/slowdown"
-	types "github.com/metacubex/mihomo/constant/provider"
+	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/metacubex/fswatch"
@@ -22,7 +22,7 @@ type Fetcher[V any] struct {
 	ctxCancel    context.CancelFunc
 	resourceType string
 	name         string
-	vehicle      types.Vehicle
+	vehicle      P.Vehicle
 	updatedAt    time.Time
 	hash         utils.HashType
 	parser       Parser[V]
@@ -37,11 +37,11 @@ func (f *Fetcher[V]) Name() string {
 	return f.name
 }
 
-func (f *Fetcher[V]) Vehicle() types.Vehicle {
+func (f *Fetcher[V]) Vehicle() P.Vehicle {
 	return f.vehicle
 }
 
-func (f *Fetcher[V]) VehicleType() types.VehicleType {
+func (f *Fetcher[V]) VehicleType() P.VehicleType {
 	return f.vehicle.Type()
 }
 
@@ -88,7 +88,7 @@ func (f *Fetcher[V]) Update() (V, bool, error) {
 		f.backoff.AddAttempt() // add a failed attempt to backoff
 		return lo.Empty[V](), false, err
 	}
-	return f.loadBuf(buf, hash, f.vehicle.Type() != types.File)
+	return f.loadBuf(buf, hash, f.vehicle.Type() != P.File)
 }
 
 func (f *Fetcher[V]) SideUpdate(buf []byte) (V, bool, error) {
@@ -180,7 +180,7 @@ func (f *Fetcher[V]) pullLoop(forceUpdate bool) {
 
 func (f *Fetcher[V]) startPullLoop(forceUpdate bool) (err error) {
 	// pull contents automatically
-	if f.vehicle.Type() == types.File {
+	if f.vehicle.Type() == P.File {
 		f.watcher, err = fswatch.NewWatcher(fswatch.Options{
 			Path:     []string{f.vehicle.Path()},
 			Callback: f.updateCallback,
@@ -218,7 +218,7 @@ func (f *Fetcher[V]) updateWithLog() {
 	return
 }
 
-func NewFetcher[V any](name string, interval time.Duration, vehicle types.Vehicle, parser Parser[V], onUpdate func(V)) *Fetcher[V] {
+func NewFetcher[V any](name string, interval time.Duration, vehicle P.Vehicle, parser Parser[V], onUpdate func(V)) *Fetcher[V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	minBackoff := 10 * time.Second
 	if interval < minBackoff {

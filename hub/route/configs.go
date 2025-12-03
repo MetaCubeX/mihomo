@@ -13,7 +13,7 @@ import (
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/hub/executor"
-	P "github.com/metacubex/mihomo/listener"
+	"github.com/metacubex/mihomo/listener"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
@@ -306,7 +306,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if general.AllowLan != nil {
-		P.SetAllowLan(*general.AllowLan)
+		listener.SetAllowLan(*general.AllowLan)
 	}
 
 	if general.SkipAuthPrefixes != nil {
@@ -322,7 +322,7 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if general.BindAddress != nil {
-		P.SetBindAddress(*general.BindAddress)
+		listener.SetBindAddress(*general.BindAddress)
 	}
 
 	if general.Sniffing != nil {
@@ -337,17 +337,17 @@ func patchConfigs(w http.ResponseWriter, r *http.Request) {
 		dialer.DefaultInterface.Store(*general.InterfaceName)
 	}
 
-	ports := P.GetPorts()
+	ports := listener.GetPorts()
 
-	P.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port), tunnel.Tunnel)
-	P.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort), tunnel.Tunnel)
-	P.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tunnel.Tunnel)
-	P.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tunnel.Tunnel)
-	P.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tunnel.Tunnel)
-	P.ReCreateTun(pointerOrDefaultTun(general.Tun, P.LastTunConf), tunnel.Tunnel)
-	P.ReCreateShadowSocks(pointerOrDefault(general.ShadowSocksConfig, ports.ShadowSocksConfig), tunnel.Tunnel)
-	P.ReCreateVmess(pointerOrDefault(general.VmessConfig, ports.VmessConfig), tunnel.Tunnel)
-	P.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, P.LastTuicConf), tunnel.Tunnel)
+	listener.ReCreateHTTP(pointerOrDefault(general.Port, ports.Port), tunnel.Tunnel)
+	listener.ReCreateSocks(pointerOrDefault(general.SocksPort, ports.SocksPort), tunnel.Tunnel)
+	listener.ReCreateRedir(pointerOrDefault(general.RedirPort, ports.RedirPort), tunnel.Tunnel)
+	listener.ReCreateTProxy(pointerOrDefault(general.TProxyPort, ports.TProxyPort), tunnel.Tunnel)
+	listener.ReCreateMixed(pointerOrDefault(general.MixedPort, ports.MixedPort), tunnel.Tunnel)
+	listener.ReCreateTun(pointerOrDefaultTun(general.Tun, listener.LastTunConf), tunnel.Tunnel)
+	listener.ReCreateShadowSocks(pointerOrDefault(general.ShadowSocksConfig, ports.ShadowSocksConfig), tunnel.Tunnel)
+	listener.ReCreateVmess(pointerOrDefault(general.VmessConfig, ports.VmessConfig), tunnel.Tunnel)
+	listener.ReCreateTuic(pointerOrDefaultTuicServer(general.TuicServer, listener.LastTuicConf), tunnel.Tunnel)
 
 	if general.Mode != nil {
 		tunnel.SetMode(*general.Mode)

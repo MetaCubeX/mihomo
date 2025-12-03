@@ -19,6 +19,7 @@ var (
 
 	bucketSelected         = []byte("selected")
 	bucketFakeip           = []byte("fakeip")
+	bucketFakeip6          = []byte("fakeip6")
 	bucketETag             = []byte("etag")
 	bucketSubscriptionInfo = []byte("subscriptioninfo")
 )

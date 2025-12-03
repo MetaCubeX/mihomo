@@ -50,6 +50,10 @@ func (c *cachefileStore) FlushFakeIP() error {
 	return c.cache.FlushFakeIP()
 }
 
-func newCachefileStore(cache *cachefile.CacheFile) *cachefileStore {
-	return &cachefileStore{cache.FakeIpStore()}
+func newCachefileStore(cache *cachefile.CacheFile, prefix netip.Prefix) *cachefileStore {
+	if prefix.Addr().Is6() {
+		return &cachefileStore{cache.FakeIpStore6()}
+	} else {
+		return &cachefileStore{cache.FakeIpStore()}
+	}
 }

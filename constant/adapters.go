@@ -44,6 +44,7 @@ const (
 	Ssh
 	Mieru
 	AnyTLS
+	Sudoku
 )
 
 const (
@@ -120,17 +121,6 @@ type ProxyAdapter interface {
 	ProxyInfo() ProxyInfo
 	MarshalJSON() ([]byte, error)
 
-	// Deprecated: use DialContextWithDialer and ListenPacketWithDialer instead.
-	// StreamConn wraps a protocol around net.Conn with Metadata.
-	//
-	// Examples:
-	//	conn, _ := net.DialContext(context.Background(), "tcp", "host:port")
-	//	conn, _ = adapter.StreamConnContext(context.Background(), conn, metadata)
-	//
-	// It returns a C.Conn with protocol which start with
-	// a new session (if any)
-	StreamConnContext(ctx context.Context, c net.Conn, metadata *Metadata) (net.Conn, error)
-
 	// DialContext return a C.Conn with protocol which
 	// contains multiplexing-related reuse logic (if any)
 	DialContext(ctx context.Context, metadata *Metadata) (Conn, error)
@@ -138,10 +128,6 @@ type ProxyAdapter interface {
 
 	// SupportUOT return UDP over TCP support
 	SupportUOT() bool
-
-	SupportWithDialer() NetWork
-	DialContextWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (Conn, error)
-	ListenPacketWithDialer(ctx context.Context, dialer Dialer, metadata *Metadata) (PacketConn, error)
 
 	// IsL3Protocol return ProxyAdapter working in L3 (tell dns module not pass the domain to avoid loopback)
 	IsL3Protocol(metadata *Metadata) bool
@@ -178,12 +164,6 @@ type Proxy interface {
 	ExtraDelayHistories() map[string]ProxyState
 	LastDelayForTestUrl(url string) uint16
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
-
-	// Deprecated: use DialContext instead.
-	Dial(metadata *Metadata) (Conn, error)
-
-	// Deprecated: use DialPacketConn instead.
-	DialUDP(metadata *Metadata) (PacketConn, error)
 }
 
 // AdapterType is enum of adapter type
@@ -233,6 +213,8 @@ func (at AdapterType) String() string {
 		return "Mieru"
 	case AnyTLS:
 		return "AnyTLS"
+	case Sudoku:
+		return "Sudoku"
 	case Relay:
 		return "Relay"
 	case Selector:

@@ -64,11 +64,10 @@ func withHosts(mapping *lru.LruCache[netip.Addr, string]) middleware {
 						if mapping != nil {
 							mapping.SetWithExpire(ipAddr, host, time.Now().Add(time.Second*10))
 						}
-					} else if q.Qtype == D.TypeAAAA {
+					} else if ipAddr.Is6() && q.Qtype == D.TypeAAAA {
 						rr := &D.AAAA{}
 						rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: 10}
-						ip := ipAddr.As16()
-						rr.AAAA = ip[:]
+						rr.AAAA = ipAddr.AsSlice()
 						msg.Answer = append(msg.Answer, rr)
 						if mapping != nil {
 							mapping.SetWithExpire(ipAddr, host, time.Now().Add(time.Second*10))
@@ -147,34 +146,47 @@ func withMapping(mapping *lru.LruCache[netip.Addr, string]) middleware {
 	}
 }
 
-func withFakeIP(fakePool *fakeip.Pool) middleware {
+func withFakeIP(skipper *fakeip.Skipper, fakePool *fakeip.Pool, fakePool6 *fakeip.Pool, fakeIPTTL int) middleware {
 	return func(next handler) handler {
 		return func(ctx *icontext.DNSContext, r *D.Msg) (*D.Msg, error) {
 			q := r.Question[0]
 
 			host := strings.TrimRight(q.Name, ".")
-			if fakePool.ShouldSkipped(host) {
+			if skipper.ShouldSkipped(host) {
 				return next(ctx, r)
 			}
 
+			var rr D.RR
 			switch q.Qtype {
-			case D.TypeAAAA, D.TypeSVCB, D.TypeHTTPS:
+			case D.TypeA:
+				if fakePool == nil {
+					return handleMsgWithEmptyAnswer(r), nil
+				}
+				ip := fakePool.Lookup(host)
+				rr = &D.A{
+					Hdr: D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL},
+					A:   ip.AsSlice(),
+				}
+			case D.TypeAAAA:
+				if fakePool6 == nil {
+					return handleMsgWithEmptyAnswer(r), nil
+				}
+				ip := fakePool6.Lookup(host)
+				rr = &D.AAAA{
+					Hdr:  D.RR_Header{Name: q.Name, Rrtype: D.TypeAAAA, Class: D.ClassINET, Ttl: dnsDefaultTTL},
+					AAAA: ip.AsSlice(),
+				}
+			case D.TypeSVCB, D.TypeHTTPS:
 				return handleMsgWithEmptyAnswer(r), nil
-			}
-
-			if q.Qtype != D.TypeA {
+			default:
 				return next(ctx, r)
 			}
 
-			rr := &D.A{}
-			rr.Hdr = D.RR_Header{Name: q.Name, Rrtype: D.TypeA, Class: D.ClassINET, Ttl: dnsDefaultTTL}
-			ip := fakePool.Lookup(host)
-			rr.A = ip.AsSlice()
 			msg := r.Copy()
 			msg.Answer = []D.RR{rr}
 
 			ctx.SetType(icontext.DNSTypeFakeIP)
-			setMsgTTL(msg, 1)
+			setMsgTTL(msg, uint32(fakeIPTTL))
 			msg.SetRcode(r, D.RcodeSuccess)
 			msg.Authoritative = true
 			msg.RecursionAvailable = true
@@ -226,7 +238,7 @@ func newHandler(resolver *Resolver, mapper *ResolverEnhancer) handler {
 	}
 
 	if mapper.mode == C.DNSFakeIP {
-		middlewares = append(middlewares, withFakeIP(mapper.fakePool))
+		middlewares = append(middlewares, withFakeIP(mapper.fakeIPSkipper, mapper.fakeIPPool, mapper.fakeIPPool6, mapper.fakeIPTTL))
 	}
 
 	if mapper.mode != C.DNSNormal {

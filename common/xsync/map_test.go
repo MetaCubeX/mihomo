@@ -3,6 +3,7 @@ package xsync
 import (
 	"math"
 	"math/rand"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -53,11 +54,11 @@ func runParallel(b *testing.B, benchFn func(pb *testing.PB)) {
 }
 
 func TestMap_BucketStructSize(t *testing.T) {
-	size := unsafe.Sizeof(bucketPadded[string, int64]{})
+	size := unsafe.Sizeof(bucketPadded{})
 	if size != 64 {
 		t.Fatalf("size of 64B (one cache line) is expected, got: %d", size)
 	}
-	size = unsafe.Sizeof(bucketPadded[struct{}, int32]{})
+	size = unsafe.Sizeof(bucketPadded{})
 	if size != 64 {
 		t.Fatalf("size of 64B (one cache line) is expected, got: %d", size)
 	}
@@ -743,10 +744,7 @@ func TestNewMapGrowOnly_OnlyShrinksOnClear(t *testing.T) {
 }
 
 func TestMapResize(t *testing.T) {
-	testMapResize(t, NewMap[string, int]())
-}
-
-func testMapResize(t *testing.T, m *Map[string, int]) {
+	m := NewMap[string, int]()
 	const numEntries = 100_000
 
 	for i := 0; i < numEntries; i++ {
@@ -808,6 +806,147 @@ func TestMapResize_CounterLenLimit(t *testing.T) {
 		t.Fatalf("number of counter stripes was too large: %d, expected: %d",
 			stats.CounterLen, maxMapCounterLen)
 	}
+}
+
+func testParallelResize(t *testing.T, numGoroutines int) {
+	m := NewMap[int, int]()
+
+	// Fill the map to trigger resizing
+	const initialEntries = 10000
+	const newEntries = 5000
+	for i := 0; i < initialEntries; i++ {
+		m.Store(i, i*2)
+	}
+
+	// Start concurrent operations that should trigger helping behavior
+	var wg sync.WaitGroup
+
+	// Launch goroutines that will encounter resize operations
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(goroutineID int) {
+			defer wg.Done()
+
+			// Perform many operations to trigger resize and helping
+			for i := 0; i < newEntries; i++ {
+				key := goroutineID*newEntries + i + initialEntries
+				m.Store(key, key*2)
+
+				// Verify the value
+				if val, ok := m.Load(key); !ok || val != key*2 {
+					t.Errorf("Failed to load key %d: got %v, %v", key, val, ok)
+					return
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify all entries are present
+	finalSize := m.Size()
+	expectedSize := initialEntries + numGoroutines*newEntries
+	if finalSize != expectedSize {
+		t.Errorf("Expected size %d, got %d", expectedSize, finalSize)
+	}
+
+	stats := m.Stats()
+	if stats.TotalGrowths == 0 {
+		t.Error("Expected at least one table growth due to concurrent operations")
+	}
+}
+
+func TestMapParallelResize(t *testing.T) {
+	testParallelResize(t, 1)
+	testParallelResize(t, runtime.GOMAXPROCS(0))
+	testParallelResize(t, 100)
+}
+
+func testParallelResizeWithSameKeys(t *testing.T, numGoroutines int) {
+	m := NewMap[int, int]()
+
+	// Fill the map to trigger resizing
+	const entries = 1000
+	for i := 0; i < entries; i++ {
+		m.Store(2*i, 2*i)
+	}
+
+	// Start concurrent operations that should trigger helping behavior
+	var wg sync.WaitGroup
+
+	// Launch goroutines that will encounter resize operations
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(goroutineID int) {
+			defer wg.Done()
+			for i := 0; i < 10*entries; i++ {
+				m.Store(i, i)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify all entries are present
+	finalSize := m.Size()
+	expectedSize := 10 * entries
+	if finalSize != expectedSize {
+		t.Errorf("Expected size %d, got %d", expectedSize, finalSize)
+	}
+
+	stats := m.Stats()
+	if stats.TotalGrowths == 0 {
+		t.Error("Expected at least one table growth due to concurrent operations")
+	}
+}
+
+func TestMapParallelResize_IntersectingKeys(t *testing.T) {
+	testParallelResizeWithSameKeys(t, 1)
+	testParallelResizeWithSameKeys(t, runtime.GOMAXPROCS(0))
+	testParallelResizeWithSameKeys(t, 100)
+}
+
+func testParallelShrinking(t *testing.T, numGoroutines int) {
+	m := NewMap[int, int]()
+
+	// Fill the map to trigger resizing
+	const entries = 100000
+	for i := 0; i < entries; i++ {
+		m.Store(i, i)
+	}
+
+	// Start concurrent operations that should trigger helping behavior
+	var wg sync.WaitGroup
+
+	// Launch goroutines that will encounter resize operations
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(goroutineID int) {
+			defer wg.Done()
+			for i := 0; i < entries; i++ {
+				m.Delete(i)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// Verify all entries are present
+	finalSize := m.Size()
+	if finalSize != 0 {
+		t.Errorf("Expected size 0, got %d", finalSize)
+	}
+
+	stats := m.Stats()
+	if stats.TotalShrinks == 0 {
+		t.Error("Expected at least one table shrinking due to concurrent operations")
+	}
+}
+
+func TestMapParallelShrinking(t *testing.T) {
+	testParallelShrinking(t, 1)
+	testParallelShrinking(t, runtime.GOMAXPROCS(0))
+	testParallelShrinking(t, 100)
 }
 
 func parallelSeqMapGrower(m *Map[int, int], numEntries int, positive bool, cdone chan bool) {
@@ -1459,7 +1598,7 @@ func BenchmarkMapRange(b *testing.B) {
 }
 
 // Benchmarks noop performance of Compute
-func BenchmarkCompute(b *testing.B) {
+func BenchmarkMapCompute(b *testing.B) {
 	tests := []struct {
 		Name string
 		Op   ComputeOp
@@ -1482,6 +1621,57 @@ func BenchmarkCompute(b *testing.B) {
 				m.Compute(struct{}{}, func(oldValue bool, loaded bool) (newValue bool, op ComputeOp) {
 					return oldValue, test.Op
 				})
+			}
+		})
+	}
+}
+
+func BenchmarkMapParallelRehashing(b *testing.B) {
+	tests := []struct {
+		name       string
+		goroutines int
+		numEntries int
+	}{
+		{"1goroutine_10M", 1, 10_000_000},
+		{"4goroutines_10M", 4, 10_000_000},
+		{"8goroutines_10M", 8, 10_000_000},
+	}
+	for _, test := range tests {
+		b.Run(test.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				m := NewMap[int, int]()
+
+				var wg sync.WaitGroup
+				entriesPerGoroutine := test.numEntries / test.goroutines
+
+				start := time.Now()
+
+				for g := 0; g < test.goroutines; g++ {
+					wg.Add(1)
+					go func(goroutineID int) {
+						defer wg.Done()
+						base := goroutineID * entriesPerGoroutine
+						for j := 0; j < entriesPerGoroutine; j++ {
+							key := base + j
+							m.Store(key, key)
+						}
+					}(g)
+				}
+
+				wg.Wait()
+				duration := time.Since(start)
+
+				b.ReportMetric(float64(test.numEntries)/duration.Seconds(), "entries/s")
+
+				finalSize := m.Size()
+				if finalSize != test.numEntries {
+					b.Fatalf("Expected size %d, got %d", test.numEntries, finalSize)
+				}
+
+				stats := m.Stats()
+				if stats.TotalGrowths == 0 {
+					b.Error("Expected at least one table growth during rehashing")
+				}
 			}
 		})
 	}

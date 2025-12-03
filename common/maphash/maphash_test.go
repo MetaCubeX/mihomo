@@ -423,7 +423,9 @@ func TestWriteComparableNoncommute(t *testing.T) {
 }
 
 func TestComparableAllocations(t *testing.T) {
-	t.Skip("test broken in old golang version")
+	if !testComparableAllocations {
+		t.Skip("test broken in old golang version")
+	}
 	seed := MakeSeed()
 	x := heapStr(t)
 	allocs := testing.AllocsPerRun(10, func() {

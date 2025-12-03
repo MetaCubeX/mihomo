@@ -8,8 +8,6 @@ import (
 
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/structure"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
 	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
 	"github.com/metacubex/mihomo/transport/snell"
@@ -89,18 +87,7 @@ func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 		return NewConn(c, s), err
 	}
 
-	return s.DialContextWithDialer(ctx, dialer.NewDialer(s.DialOptions()...), metadata)
-}
-
-// DialContextWithDialer implements C.ProxyAdapter
-func (s *Snell) DialContextWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (_ C.Conn, err error) {
-	if len(s.option.DialerProxy) > 0 {
-		dialer, err = proxydialer.NewByName(s.option.DialerProxy, dialer)
-		if err != nil {
-			return nil, err
-		}
-	}
-	c, err := dialer.DialContext(ctx, "tcp", s.addr)
+	c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
 	}
@@ -115,22 +102,11 @@ func (s *Snell) DialContextWithDialer(ctx context.Context, dialer C.Dialer, meta
 
 // ListenPacketContext implements C.ProxyAdapter
 func (s *Snell) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	return s.ListenPacketWithDialer(ctx, dialer.NewDialer(s.DialOptions()...), metadata)
-}
-
-// ListenPacketWithDialer implements C.ProxyAdapter
-func (s *Snell) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, metadata *C.Metadata) (C.PacketConn, error) {
 	var err error
-	if len(s.option.DialerProxy) > 0 {
-		dialer, err = proxydialer.NewByName(s.option.DialerProxy, dialer)
-		if err != nil {
-			return nil, err
-		}
-	}
 	if err = s.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	c, err := dialer.DialContext(ctx, "tcp", s.addr)
+	c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
 	if err != nil {
 		return nil, err
 	}
@@ -139,11 +115,6 @@ func (s *Snell) ListenPacketWithDialer(ctx context.Context, dialer C.Dialer, met
 
 	pc := snell.PacketConn(c)
 	return newPacketConn(pc, s), nil
-}
-
-// SupportWithDialer implements C.ProxyAdapter
-func (s *Snell) SupportWithDialer() C.NetWork {
-	return C.ALLNet
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -206,18 +177,11 @@ func NewSnell(option SnellOption) (*Snell, error) {
 		obfsOption: obfsOption,
 		version:    option.Version,
 	}
+	s.dialer = option.NewDialer(s.DialOptions())
 
 	if option.Version == snell.Version2 {
 		s.pool = snell.NewPool(func(ctx context.Context) (*snell.Snell, error) {
-			var err error
-			var cDialer C.Dialer = dialer.NewDialer(s.DialOptions()...)
-			if len(s.option.DialerProxy) > 0 {
-				cDialer, err = proxydialer.NewByName(s.option.DialerProxy, cDialer)
-				if err != nil {
-					return nil, err
-				}
-			}
-			c, err := cDialer.DialContext(ctx, "tcp", addr)
+			c, err := s.dialer.DialContext(ctx, "tcp", addr)
 			if err != nil {
 				return nil, err
 			}

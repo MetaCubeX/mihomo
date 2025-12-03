@@ -63,7 +63,11 @@ func removeExtraHTTPHostPort(req *http.Request) {
 // parseBasicProxyAuthorization parse header Proxy-Authorization and return base64-encoded credential
 func parseBasicProxyAuthorization(request *http.Request) string {
 	value := request.Header.Get("Proxy-Authorization")
-	if !strings.HasPrefix(value, "Basic ") {
+	const prefix = "Basic "
+	// According to RFC7617, the scheme should be case-insensitive.
+	// In practice, some implementations do use different case styles, causing authentication to fail
+	// eg: https://github.com/algesten/ureq/blob/381fd42cfcb80a5eb709d64860aa0ae726f17b8e/src/unversioned/transport/connect.rs#L118
+	if len(value) < len(prefix) || !strings.EqualFold(value[:len(prefix)], prefix) {
 		return ""
 	}
 

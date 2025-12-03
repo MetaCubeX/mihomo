@@ -53,6 +53,12 @@ func (d *Decoder) Decode(src map[string]any, dst any) error {
 		key, omitKey, found := strings.Cut(tag, ",")
 		omitempty := found && omitKey == "omitempty"
 
+		// As a special case, if the field tag is "-", the field is always omitted.
+		// Note that a field with name "-" can still be generated using the tag "-,".
+		if key == "-" {
+			continue
+		}
+
 		value, ok := src[key]
 		if !ok {
 			if d.option.KeyReplacer != nil {
@@ -283,7 +289,7 @@ func (d *Decoder) decodeBool(name string, data any, val reflect.Value) (err erro
 	case isInt(kind) && d.option.WeaklyTypedInput:
 		val.SetBool(dataVal.Int() != 0)
 	case isUint(kind) && d.option.WeaklyTypedInput:
-		val.SetString(strconv.FormatUint(dataVal.Uint(), 10))
+		val.SetBool(dataVal.Uint() != 0)
 	default:
 		err = fmt.Errorf(
 			"'%s' expected type '%s', got unconvertible type '%s'",

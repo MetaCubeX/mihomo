@@ -40,7 +40,6 @@ type WireGuard struct {
 	bind      *wireguard.ClientBind
 	device    wireguardGoDevice
 	tunDevice wireguard.Device
-	dialer    proxydialer.SingDialer
 	resolver  resolver.Resolver
 
 	initOk        atomic.Bool
@@ -177,8 +176,8 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			prefer: C.NewDNSPrefer(option.IPVersion),
 		},
 	}
-	singDialer := proxydialer.NewSlowDownSingDialer(proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer(outbound.DialOptions()...)), slowdown.New())
-	outbound.dialer = singDialer
+	outbound.dialer = option.NewDialer(outbound.DialOptions())
+	singDialer := proxydialer.NewSlowDownSingDialer(proxydialer.NewSingDialer(outbound.dialer), slowdown.New())
 
 	var reserved [3]uint8
 	if len(option.Reserved) > 0 {
@@ -196,7 +195,7 @@ func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 			outbound.connectAddr = option.Addr()
 		}
 	}
-	outbound.bind = wireguard.NewClientBind(context.Background(), wgSingErrorHandler{outbound.Name()}, outbound.dialer, isConnect, outbound.connectAddr.AddrPort(), reserved)
+	outbound.bind = wireguard.NewClientBind(context.Background(), wgSingErrorHandler{outbound.Name()}, singDialer, isConnect, outbound.connectAddr.AddrPort(), reserved)
 
 	var err error
 	outbound.localPrefixes, err = option.Prefixes()

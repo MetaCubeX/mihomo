@@ -101,7 +101,6 @@ const (
 
 type bbrSender struct {
 	mode          bbrMode
-	clock         Clock
 	rttStats      congestion.RTTStatsProvider
 	bytesInFlight congestion.ByteCount
 	// return total bytes of unacked packets.
@@ -232,14 +231,12 @@ type bbrSender struct {
 }
 
 func NewBBRSender(
-	clock Clock,
 	initialMaxDatagramSize,
 	initialCongestionWindow,
 	initialMaxCongestionWindow congestion.ByteCount,
 ) *bbrSender {
 	b := &bbrSender{
 		mode:                      STARTUP,
-		clock:                     clock,
 		sampler:                   NewBandwidthSampler(),
 		maxBandwidth:              NewWindowedFilter(int64(BandwidthWindowSize), MaxFilter),
 		maxAckHeight:              NewWindowedFilter(int64(BandwidthWindowSize), MaxFilter),

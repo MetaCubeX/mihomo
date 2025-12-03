@@ -7,7 +7,6 @@ import (
 	"time"
 
 	CN "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/anytls"
@@ -20,7 +19,6 @@ import (
 type AnyTLS struct {
 	*Base
 	client *anytls.Client
-	dialer proxydialer.SingDialer
 	option *AnyTLSOption
 }
 
@@ -101,9 +99,8 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 		},
 		option: &option,
 	}
-
-	singDialer := proxydialer.NewByNameSingDialer(option.DialerProxy, dialer.NewDialer(outbound.DialOptions()...))
-	outbound.dialer = singDialer
+	outbound.dialer = option.NewDialer(outbound.DialOptions())
+	singDialer := proxydialer.NewSingDialer(outbound.dialer)
 
 	tOption := anytls.ClientConfig{
 		Password:                 option.Password,

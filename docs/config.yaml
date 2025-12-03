@@ -261,6 +261,7 @@ dns:
   enhanced-mode: fake-ip # or redir-host
 
   fake-ip-range: 198.18.0.1/16 # fake-ip 池设置
+  # fake-ip-range6: fdfe:dcba:9876::1/64 # fake-ip6 池设置
 
   # 配置不使用 fake-ip 的域名
   fake-ip-filter:
@@ -274,6 +275,8 @@ dns:
   # 配置fake-ip-filter的匹配模式，默认为blacklist，即如果匹配成功不返回fake-ip
   # 可设置为whitelist，即只有匹配成功才返回fake-ip
   fake-ip-filter-mode: blacklist
+  # 配置fakeip查询返回的TTL，非必要情况下请勿修改
+  fake-ip-ttl: 1
 
   # use-hosts: true # 查询 hosts
 
@@ -1026,7 +1029,7 @@ proxies: # socks5
     server: 1.2.3.4
     port: 2999
     # port-range: 2090-2099 #（不可同时填写 port 和 port-range）
-    transport: TCP # 只支持 TCP
+    transport: TCP # 支持 TCP 或者 UDP
     udp: true # 支持 UDP over TCP
     username: user
     password: password
@@ -1034,6 +1037,18 @@ proxies: # socks5
     # multiplexing: MULTIPLEXING_LOW
     # 如果想开启 0-RTT 握手，请设置为 HANDSHAKE_NO_WAIT，否则请设置为 HANDSHAKE_STANDARD。默认值为 HANDSHAKE_STANDARD
     # handshake-mode: HANDSHAKE_STANDARD
+
+  # sudoku
+  - name: sudoku
+    type: sudoku
+    server: serverip # 1.2.3.4
+    port: 443 
+    key: "<client_key>" # 如果你使用sudoku生成的ED25519密钥对，请填写密钥对中的私钥，否则填入和服务端相同的uuid
+    aead-method: chacha20-poly1305 # 可选值：chacha20-poly1305、aes-128-gcm、none 我们保证在none的情况下sudoku混淆层仍然确保安全
+    padding-min: 2 # 最小填充字节数
+    padding-max: 7 # 最大填充字节数
+    table-type: prefer_ascii    # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
+    http-mask: true # 是否启用http掩码
 
   # anytls
   - name: anytls
@@ -1555,6 +1570,27 @@ listeners:
     #   -----END ECH KEYS-----
     # padding-scheme: "" # https://github.com/anytls/anytls-go/blob/main/docs/protocol.md#cmdupdatepaddingscheme
 
+  - name: mieru-in-1
+    type: mieru
+    port: 10818 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
+    listen: 0.0.0.0
+    transport: TCP # 支持 TCP 或者 UDP
+    users:
+      username1: password1
+      username2: password2
+
+  - name: sudoku-in-1
+    type: sudoku
+    port: 8443 # 仅支持单端口
+    listen: 0.0.0.0
+    key: "<server_key>" # 如果你使用sudoku生成的ED25519密钥对，此处是密钥对中的公钥，当然，你也可以仅仅使用任意uuid充当key
+    aead-method: chacha20-poly1305 # 支持chacha20-poly1305或者aes-128-gcm以及none，sudoku的混淆层可以确保none情况下数据安全
+    padding-min: 1 # 填充最小长度
+    padding-max: 15 # 填充最大长度，均不建议过大
+    table-type: prefer_ascii # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
+    handshake-timeout: 5   # optional
+
+
   - name: trojan-in-1
     type: trojan
     port: 10819 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
@@ -1703,3 +1739,4 @@ listeners:
 #  alpn:
 #    - h3
 #  max-udp-relay-packet-size: 1500
+

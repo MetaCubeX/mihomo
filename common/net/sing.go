@@ -24,6 +24,8 @@ var WriteBuffer = bufio.WriteBuffer
 type ReadWaitOptions = network.ReadWaitOptions
 
 var NewReadWaitOptions = network.NewReadWaitOptions
+var CalculateFrontHeadroom = network.CalculateFrontHeadroom
+var CalculateRearHeadroom = network.CalculateRearHeadroom
 
 type ReaderWithUpstream = network.ReaderWithUpstream
 type WithUpstreamReader = network.WithUpstreamReader

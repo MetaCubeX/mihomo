@@ -10,10 +10,15 @@ import (
 
 type FakeIpStore struct {
 	*CacheFile
+	bucketName []byte
 }
 
 func (c *CacheFile) FakeIpStore() *FakeIpStore {
-	return &FakeIpStore{c}
+	return &FakeIpStore{c, bucketFakeip}
+}
+
+func (c *CacheFile) FakeIpStore6() *FakeIpStore {
+	return &FakeIpStore{c, bucketFakeip6}
 }
 
 func (c *FakeIpStore) GetByHost(host string) (ip netip.Addr, exist bool) {
@@ -21,7 +26,7 @@ func (c *FakeIpStore) GetByHost(host string) (ip netip.Addr, exist bool) {
 		return
 	}
 	c.DB.View(func(t *bbolt.Tx) error {
-		if bucket := t.Bucket(bucketFakeip); bucket != nil {
+		if bucket := t.Bucket(c.bucketName); bucket != nil {
 			if v := bucket.Get([]byte(host)); v != nil {
 				ip, exist = netip.AddrFromSlice(v)
 			}
@@ -36,7 +41,7 @@ func (c *FakeIpStore) PutByHost(host string, ip netip.Addr) {
 		return
 	}
 	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
+		bucket, err := t.CreateBucketIfNotExists(c.bucketName)
 		if err != nil {
 			return err
 		}
@@ -52,7 +57,7 @@ func (c *FakeIpStore) GetByIP(ip netip.Addr) (host string, exist bool) {
 		return
 	}
 	c.DB.View(func(t *bbolt.Tx) error {
-		if bucket := t.Bucket(bucketFakeip); bucket != nil {
+		if bucket := t.Bucket(c.bucketName); bucket != nil {
 			if v := bucket.Get(ip.AsSlice()); v != nil {
 				host, exist = string(v), true
 			}
@@ -67,7 +72,7 @@ func (c *FakeIpStore) PutByIP(ip netip.Addr, host string) {
 		return
 	}
 	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
+		bucket, err := t.CreateBucketIfNotExists(c.bucketName)
 		if err != nil {
 			return err
 		}
@@ -85,7 +90,7 @@ func (c *FakeIpStore) DelByIP(ip netip.Addr) {
 
 	addr := ip.AsSlice()
 	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket, err := t.CreateBucketIfNotExists(bucketFakeip)
+		bucket, err := t.CreateBucketIfNotExists(c.bucketName)
 		if err != nil {
 			return err
 		}
@@ -105,11 +110,11 @@ func (c *FakeIpStore) DelByIP(ip netip.Addr) {
 
 func (c *FakeIpStore) FlushFakeIP() error {
 	err := c.DB.Batch(func(t *bbolt.Tx) error {
-		bucket := t.Bucket(bucketFakeip)
+		bucket := t.Bucket(c.bucketName)
 		if bucket == nil {
 			return nil
 		}
-		return t.DeleteBucket(bucketFakeip)
+		return t.DeleteBucket(c.bucketName)
 	})
 	return err
 }
