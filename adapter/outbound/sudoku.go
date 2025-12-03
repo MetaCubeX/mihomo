@@ -19,6 +19,7 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/sudotun"
 )
 
 type Sudoku struct {
@@ -72,12 +73,45 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 
 // ListenPacketContext implements C.ProxyAdapter
 func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
-	return nil, C.ErrNotSupport
+	if err := s.ResolveUDP(ctx, metadata); err != nil {
+		return nil, err
+	}
+
+	cfg, err := s.buildConfig(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
+	}
+
+	defer func() {
+		safeConnClose(c, err)
+	}()
+
+	if ctx.Done() != nil {
+		done := N.SetupContextForConn(ctx, c)
+		defer done(&err)
+	}
+
+	c, err = s.handshakeConn(c, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = sudotun.WritePreface(c); err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("send uot preface failed: %w", err)
+	}
+
+	return newPacketConn(N.NewThreadSafePacketConn(sudotun.NewUoTPacketConn(c)), s), nil
 }
 
 // SupportUOT implements C.ProxyAdapter
 func (s *Sudoku) SupportUOT() bool {
-	return false // Sudoku protocol only supports TCP
+	return true
 }
 
 // ProxyInfo implements C.ProxyAdapter
@@ -101,7 +135,7 @@ func (s *Sudoku) buildConfig(metadata *C.Metadata) (*apis.ProtocolConfig, error)
 	return &cfg, nil
 }
 
-func (s *Sudoku) streamConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.Conn, err error) {
+func (s *Sudoku) handshakeConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.Conn, err error) {
 	if !cfg.DisableHTTPMask {
 		if err = httpmask.WriteRandomRequestHeader(rawConn, cfg.ServerAddress); err != nil {
 			return nil, fmt.Errorf("write http mask failed: %w", err)
@@ -118,6 +152,15 @@ func (s *Sudoku) streamConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.C
 	if _, err = cConn.Write(handshake[:]); err != nil {
 		cConn.Close()
 		return nil, fmt.Errorf("send handshake failed: %w", err)
+	}
+
+	return cConn, nil
+}
+
+func (s *Sudoku) streamConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.Conn, err error) {
+	cConn, err := s.handshakeConn(rawConn, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	if err = writeTargetAddress(cConn, cfg.TargetAddress); err != nil {
@@ -191,7 +234,7 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 			name:   option.Name,
 			addr:   baseConf.ServerAddress,
 			tp:     C.Sudoku,
-			udp:    false,
+			udp:    true,
 			tfo:    option.TFO,
 			mpTcp:  option.MPTCP,
 			iface:  option.Interface,

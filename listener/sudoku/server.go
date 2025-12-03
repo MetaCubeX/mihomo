@@ -1,6 +1,8 @@
 package sudoku
 
 import (
+	"errors"
+	"io"
 	"net"
 	"strings"
 
@@ -10,7 +12,9 @@ import (
 	"github.com/metacubex/mihomo/adapter/inbound"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/metacubex/mihomo/transport/sudotun"
 )
 
 type Listener struct {
@@ -43,19 +47,74 @@ func (l *Listener) Close() error {
 }
 
 func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	tunnelConn, target, err := apis.ServerHandshake(conn, &l.protoConf)
+	session, err := sudotun.ServerHandshake(conn, &l.protoConf)
 	if err != nil {
 		_ = conn.Close()
 		return
 	}
 
-	targetAddr := socks5.ParseAddr(target)
-	if targetAddr == nil {
-		_ = tunnelConn.Close()
-		return
+	switch session.Type {
+	case sudotun.SessionTypeUoT:
+		l.handleUoTSession(session.Conn, tunnel, additions...)
+	default:
+		targetAddr := socks5.ParseAddr(session.Target)
+		if targetAddr == nil {
+			_ = session.Conn.Close()
+			return
+		}
+		tunnel.HandleTCPConn(inbound.NewSocket(targetAddr, session.Conn, C.SUDOKU, additions...))
 	}
+}
 
-	tunnel.HandleTCPConn(inbound.NewSocket(targetAddr, tunnelConn, C.SUDOKU, additions...))
+func (l *Listener) handleUoTSession(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
+	writer := sudotun.NewUoTPacketConn(conn)
+	remoteAddr := conn.RemoteAddr()
+
+	for {
+		addrStr, payload, err := sudotun.ReadDatagram(conn)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				log.Debugln("[Sudoku][UoT] session closed: %v", err)
+			}
+			_ = conn.Close()
+			return
+		}
+
+		target := socks5.ParseAddr(addrStr)
+		if target == nil {
+			log.Debugln("[Sudoku][UoT] drop invalid target: %s", addrStr)
+			continue
+		}
+
+		packet := &uotPacket{
+			payload: payload,
+			writer:  writer,
+			rAddr:   remoteAddr,
+		}
+		tunnel.HandleUDPPacket(inbound.NewPacket(target, packet, C.SUDOKU, additions...))
+	}
+}
+
+type uotPacket struct {
+	payload []byte
+	writer  *sudotun.UoTPacketConn
+	rAddr   net.Addr
+}
+
+func (p *uotPacket) Data() []byte {
+	return p.payload
+}
+
+func (p *uotPacket) WriteBack(b []byte, addr net.Addr) (int, error) {
+	return p.writer.WriteTo(b, addr)
+}
+
+func (p *uotPacket) Drop() {
+	p.payload = nil
+}
+
+func (p *uotPacket) LocalAddr() net.Addr {
+	return p.rAddr
 }
 
 func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
