@@ -12,6 +12,7 @@ import (
 type ECHOptions struct {
 	Enable bool   `proxy:"enable,omitempty" obfs:"enable,omitempty"`
 	Config string `proxy:"config,omitempty" obfs:"config,omitempty"`
+	Domain string `proxy:"domain,omitempty" obfs:"domain,omitempty"`
 }
 
 func (o ECHOptions) Parse() (*ech.Config, error) {
@@ -28,6 +29,9 @@ func (o ECHOptions) Parse() (*ech.Config, error) {
 			return list, nil
 		}
 	} else {
+		if o.Domain != "" {
+			serverName = o.Domain
+		}
 		echConfig.GetEncryptedClientHelloConfigList = func(ctx context.Context, serverName string) ([]byte, error) {
 			return resolver.ResolveECHWithResolver(ctx, serverName, resolver.ProxyServerHostResolver)
 		}
