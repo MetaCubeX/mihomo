@@ -21,6 +21,7 @@ type SudokuOption struct {
 	PaddingMax             *int   `inbound:"padding-max,omitempty"`
 	TableType              string `inbound:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	HandshakeTimeoutSecond *int   `inbound:"handshake-timeout,omitempty"`
+	EnablePureDownlink     *bool  `inbound:"enable-pure-downlink,omitempty"`
 }
 
 func (o SudokuOption) Equal(config C.InboundConfig) bool {
@@ -46,13 +47,14 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 	defaultConf := apis.DefaultConfig()
 
 	serverConf := LC.SudokuServer{
-		Enable:     true,
-		Listen:     base.RawAddress(),
-		Key:        options.Key,
-		AEADMethod: options.AEADMethod,
-		PaddingMin: options.PaddingMin,
-		PaddingMax: options.PaddingMax,
-		TableType:  options.TableType,
+		Enable:             true,
+		Listen:             base.RawAddress(),
+		Key:                options.Key,
+		AEADMethod:         options.AEADMethod,
+		PaddingMin:         options.PaddingMin,
+		PaddingMax:         options.PaddingMax,
+		TableType:          options.TableType,
+		EnablePureDownlink: options.EnablePureDownlink,
 	}
 	if options.HandshakeTimeoutSecond != nil {
 		serverConf.HandshakeTimeoutSecond = options.HandshakeTimeoutSecond

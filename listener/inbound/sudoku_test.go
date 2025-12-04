@@ -89,3 +89,17 @@ func TestInboundSudoku_Padding(t *testing.T) {
 	}
 	testInboundSudoku(t, inboundOptions, outboundOptions)
 }
+
+func TestInboundSudoku_PackedDownlink(t *testing.T) {
+	key := "test_key_packed"
+	enablePure := false
+	inboundOptions := inbound.SudokuOption{
+		Key:                key,
+		EnablePureDownlink: &enablePure,
+	}
+	outboundOptions := outbound.SudokuOption{
+		Key:                key,
+		EnablePureDownlink: &enablePure,
+	}
+	testInboundSudoku(t, inboundOptions, outboundOptions)
+}

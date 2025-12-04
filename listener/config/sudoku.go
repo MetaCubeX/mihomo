@@ -13,6 +13,7 @@ type SudokuServer struct {
 	PaddingMax             *int   `json:"padding-max,omitempty"`
 	TableType              string `json:"table-type,omitempty"`
 	HandshakeTimeoutSecond *int   `json:"handshake-timeout,omitempty"`
+	EnablePureDownlink     *bool  `json:"enable-pure-downlink,omitempty"`
 }
 
 func (s SudokuServer) String() string {

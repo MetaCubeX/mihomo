@@ -152,6 +152,10 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 	if config.PaddingMax == nil && config.PaddingMin != nil && paddingMax < paddingMin {
 		paddingMax = paddingMin
 	}
+	enablePureDownlink := defaultConf.EnablePureDownlink
+	if config.EnablePureDownlink != nil {
+		enablePureDownlink = *config.EnablePureDownlink
+	}
 
 	handshakeTimeout := defaultConf.HandshakeTimeoutSeconds
 	if config.HandshakeTimeoutSecond != nil {
@@ -164,6 +168,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		Table:                   table,
 		PaddingMin:              paddingMin,
 		PaddingMax:              paddingMax,
+		EnablePureDownlink:      enablePureDownlink,
 		HandshakeTimeoutSeconds: handshakeTimeout,
 	}
 	if config.AEADMethod != "" {

@@ -2,8 +2,6 @@ package outbound
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"strconv"
@@ -12,7 +10,6 @@ import (
 
 	"github.com/saba-futai/sudoku/apis"
 	"github.com/saba-futai/sudoku/pkg/crypto"
-	"github.com/saba-futai/sudoku/pkg/obfs/httpmask"
 	sudokuobfs "github.com/saba-futai/sudoku/pkg/obfs/sudoku"
 
 	N "github.com/metacubex/mihomo/common/net"
@@ -30,15 +27,16 @@ type Sudoku struct {
 
 type SudokuOption struct {
 	BasicOption
-	Name       string `proxy:"name"`
-	Server     string `proxy:"server"`
-	Port       int    `proxy:"port"`
-	Key        string `proxy:"key"`
-	AEADMethod string `proxy:"aead-method,omitempty"`
-	PaddingMin *int   `proxy:"padding-min,omitempty"`
-	PaddingMax *int   `proxy:"padding-max,omitempty"`
-	TableType  string `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
-	HTTPMask   bool   `proxy:"http-mask,omitempty"`
+	Name               string `proxy:"name"`
+	Server             string `proxy:"server"`
+	Port               int    `proxy:"port"`
+	Key                string `proxy:"key"`
+	AEADMethod         string `proxy:"aead-method,omitempty"`
+	PaddingMin         *int   `proxy:"padding-min,omitempty"`
+	PaddingMax         *int   `proxy:"padding-max,omitempty"`
+	TableType          string `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
+	EnablePureDownlink *bool  `proxy:"enable-pure-downlink,omitempty"`
+	HTTPMask           bool   `proxy:"http-mask,omitempty"`
 }
 
 // DialContext implements C.ProxyAdapter
@@ -135,25 +133,7 @@ func (s *Sudoku) buildConfig(metadata *C.Metadata) (*apis.ProtocolConfig, error)
 }
 
 func (s *Sudoku) handshakeConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.Conn, err error) {
-	if !cfg.DisableHTTPMask {
-		if err = httpmask.WriteRandomRequestHeader(rawConn, cfg.ServerAddress); err != nil {
-			return nil, fmt.Errorf("write http mask failed: %w", err)
-		}
-	}
-
-	obfsConn := sudokuobfs.NewConn(rawConn, cfg.Table, cfg.PaddingMin, cfg.PaddingMax, false)
-	cConn, err := crypto.NewAEADConn(obfsConn, cfg.Key, cfg.AEADMethod)
-	if err != nil {
-		return nil, fmt.Errorf("setup crypto failed: %w", err)
-	}
-
-	handshake := buildSudokuHandshakePayload(cfg.Key)
-	if _, err = cConn.Write(handshake[:]); err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("send handshake failed: %w", err)
-	}
-
-	return cConn, nil
+	return sudoku.ClientHandshake(rawConn, cfg)
 }
 
 func (s *Sudoku) streamConn(rawConn net.Conn, cfg *apis.ProtocolConfig) (_ net.Conn, err error) {
@@ -218,6 +198,10 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 	if option.PaddingMax == nil && option.PaddingMin != nil && paddingMax < paddingMin {
 		paddingMax = paddingMin
 	}
+	enablePureDownlink := defaultConf.EnablePureDownlink
+	if option.EnablePureDownlink != nil {
+		enablePureDownlink = *option.EnablePureDownlink
+	}
 
 	baseConf := apis.ProtocolConfig{
 		ServerAddress:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
@@ -226,6 +210,7 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		Table:                   table,
 		PaddingMin:              paddingMin,
 		PaddingMax:              paddingMax,
+		EnablePureDownlink:      enablePureDownlink,
 		HandshakeTimeoutSeconds: defaultConf.HandshakeTimeoutSeconds,
 		DisableHTTPMask:         !option.HTTPMask,
 	}
@@ -252,12 +237,4 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	return outbound, nil
-}
-
-func buildSudokuHandshakePayload(key string) [16]byte {
-	var payload [16]byte
-	binary.BigEndian.PutUint64(payload[:8], uint64(time.Now().Unix()))
-	hash := sha256.Sum256([]byte(key))
-	copy(payload[8:], hash[:8])
-	return payload
 }
