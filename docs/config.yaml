@@ -1049,6 +1049,7 @@ proxies: # socks5
     padding-max: 7 # 最大填充字节数
     table-type: prefer_ascii    # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
     http-mask: true # 是否启用http掩码
+    enable-pure-downlink: false # 是否启用混淆下行，false的情况下能在保证数据安全的前提下极大提升下行速度
 
   # anytls
   - name: anytls
@@ -1589,6 +1590,8 @@ listeners:
     padding-max: 15 # 填充最大长度，均不建议过大
     table-type: prefer_ascii # 可选值：prefer_ascii、prefer_entropy 前者全ascii映射，后者保证熵值（汉明1）低于3
     handshake-timeout: 5   # optional
+    enable-pure-downlink: false # 是否启用混淆下行，false的情况下能在保证数据安全的前提下极大提升下行速度，与客户端保持相同
+
 
 
   - name: trojan-in-1
