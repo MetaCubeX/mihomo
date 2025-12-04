@@ -63,12 +63,19 @@ func main() {
 	net.DefaultResolver.PreferGo = true
 	net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 		//panic("should never be called")
+		const maxStackSize = 65536 // 64KB max buffer size
 		buf := make([]byte, 1024)
 		for {
 			n := runtime.Stack(buf, true)
 			if n < len(buf) {
 				buf = buf[:n]
 				break
+			}
+			// Prevent unbounded growth
+			if len(buf) >= maxStackSize {
+				fmt.Fprintf(os.Stderr, "panic: should never be called (stack trace truncated at %d bytes)\n\n%s", maxStackSize, buf)
+				os.Exit(2)
+				return nil, nil
 			}
 			buf = make([]byte, 2*len(buf))
 		}

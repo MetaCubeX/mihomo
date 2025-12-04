@@ -64,6 +64,10 @@ var (
 	snifferDispatcher *sniffer.Dispatcher
 	sniffingEnable    = false
 
+	// Cache for ProxiesWithProviders
+	cachedProxiesWithProviders map[string]C.Proxy
+	proxiesWithProvidersValid  bool
+
 	ruleUpdateCallback = utils.NewCallback[P.RuleProvider]()
 )
 
@@ -141,10 +145,10 @@ func Status() TunnelStatus {
 }
 
 func SetSniffing(b bool) {
+	configMux.Lock()
+	defer configMux.Unlock()
 	if snifferDispatcher.Enable() {
-		configMux.Lock()
 		sniffingEnable = b
-		configMux.Unlock()
 	}
 }
 
@@ -209,6 +213,24 @@ func Proxies() map[string]C.Proxy {
 }
 
 func ProxiesWithProviders() map[string]C.Proxy {
+	configMux.RLock()
+	// Return cached result if valid
+	if proxiesWithProvidersValid && cachedProxiesWithProviders != nil {
+		result := cachedProxiesWithProviders
+		configMux.RUnlock()
+		return result
+	}
+	configMux.RUnlock()
+
+	// Build new cache
+	configMux.Lock()
+	defer configMux.Unlock()
+
+	// Double-check after acquiring write lock
+	if proxiesWithProvidersValid && cachedProxiesWithProviders != nil {
+		return cachedProxiesWithProviders
+	}
+
 	allProxies := make(map[string]C.Proxy)
 	for name, proxy := range proxies {
 		allProxies[name] = proxy
@@ -219,6 +241,11 @@ func ProxiesWithProviders() map[string]C.Proxy {
 			allProxies[name] = proxy
 		}
 	}
+
+	// Cache the result
+	cachedProxiesWithProviders = allProxies
+	proxiesWithProvidersValid = true
+
 	return allProxies
 }
 
@@ -237,6 +264,9 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]P.Prox
 	configMux.Lock()
 	proxies = newProxies
 	providers = newProviders
+	// Invalidate cache when proxies/providers are updated
+	proxiesWithProvidersValid = false
+	cachedProxiesWithProviders = nil
 	configMux.Unlock()
 }
 
@@ -492,20 +522,11 @@ func handleUDPConn(packet C.PacketAdapter) {
 	sender.Send(packet) // nonblocking
 }
 
-func handleTCPConn(connCtx C.ConnContext) {
-	if !isHandle(connCtx.Metadata().Type) {
-		_ = connCtx.Conn().Close()
-		return
-	}
-
-	defer func(conn net.Conn) {
-		_ = conn.Close()
-	}(connCtx.Conn())
-
-	metadata := connCtx.Metadata()
+// prepareMetadata validates and prepares metadata for connection handling
+func prepareMetadata(metadata *C.Metadata, conn C.Conn) bool {
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
-		return
+		return false
 	}
 	fixMetadata(metadata) // fix some metadata not set via metadata.SetRemoteAddr or metadata.SetRemoteAddress
 
@@ -515,7 +536,6 @@ func handleTCPConn(connCtx C.ConnContext) {
 		preHandleFailed = true
 	}
 
-	conn := connCtx.Conn()
 	conn.ResetPeeked() // reset before sniffer
 	if sniffingEnable && snifferDispatcher.Enable() {
 		// Try to sniff a domain when `preHandleMetadata` failed, this is usually
@@ -530,19 +550,39 @@ func handleTCPConn(connCtx C.ConnContext) {
 	if preHandleFailed {
 		log.Debugln("[Metadata PreHandle] failed to sniff a domain for connection %s --> %s, give up",
 			metadata.SourceDetail(), metadata.RemoteAddress())
+		return false
+	}
+
+	return true
+}
+
+// peekConnection triggers TLS handshake if needed
+func peekConnection(conn C.Conn) {
+	if !conn.Peeked() {
+		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		_, _ = conn.Peek(1)
+		_ = conn.SetReadDeadline(time.Time{})
+	}
+}
+
+func handleTCPConn(connCtx C.ConnContext) {
+	if !isHandle(connCtx.Metadata().Type) {
+		_ = connCtx.Conn().Close()
 		return
 	}
 
-	peekMutex := sync.Mutex{}
-	if !conn.Peeked() {
-		peekMutex.Lock()
-		go func() {
-			defer peekMutex.Unlock()
-			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-			_, _ = conn.Peek(1)
-			_ = conn.SetReadDeadline(time.Time{})
-		}()
+	defer func(conn net.Conn) {
+		_ = conn.Close()
+	}(connCtx.Conn())
+
+	metadata := connCtx.Metadata()
+	conn := connCtx.Conn()
+
+	if !prepareMetadata(metadata, conn) {
+		return
 	}
+
+	peekConnection(conn)
 
 	proxy, rule, err := resolveMetadata(metadata)
 	if err != nil {
@@ -627,7 +667,7 @@ func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err
 func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 	switch {
 	case metadata.SpecialProxy != "":
-		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
+		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), metadata.SpecialProxy)
 	case rule != nil:
 		if rule.Payload() != "" {
 			log.Infoln("[%s] %s --> %s match %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), fmt.Sprintf("%s(%s)", rule.RuleType().String(), rule.Payload()), remoteConn.Chains().String())
@@ -639,7 +679,7 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 	case mode == Direct:
 		log.Infoln("[%s] %s --> %s using DIRECT", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress())
 	default:
-		log.Infoln("[%s] %s --> %s doesn't match any rule using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())
+		log.Infoln("[%s] %s --> %s doesn't match any rule using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().Last())
 	}
 }
 

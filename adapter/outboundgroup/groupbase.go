@@ -117,28 +117,43 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		return gb.providerProxies
 	}
 
+	// Pre-calculate total capacity for better allocation
+	var totalCapacity int
+	for _, pd := range gb.providers {
+		totalCapacity += len(pd.Proxies())
+	}
+
 	var proxies []C.Proxy
 	if len(gb.filterRegs) == 0 {
+		proxies = make([]C.Proxy, 0, totalCapacity)
 		for _, pd := range gb.providers {
 			proxies = append(proxies, pd.Proxies()...)
 		}
 	} else {
+		proxies = make([]C.Proxy, 0, totalCapacity)
 		for _, pd := range gb.providers {
 			if pd.VehicleType() == P.Compatible { // compatible provider unneeded filter
 				proxies = append(proxies, pd.Proxies()...)
 				continue
 			}
 
-			var newProxies []C.Proxy
-			proxiesSet := map[string]struct{}{}
-			for _, filterReg := range gb.filterRegs {
-				for _, p := range pd.Proxies() {
-					name := p.Name()
+			pdProxies := pd.Proxies()
+			newProxies := make([]C.Proxy, 0, len(pdProxies))
+			proxiesSet := make(map[string]struct{}, len(pdProxies))
+
+			// Optimize: loop through proxies first, then check all filters
+			for _, p := range pdProxies {
+				name := p.Name()
+				if _, exists := proxiesSet[name]; exists {
+					continue
+				}
+
+				// Check if proxy matches any filter
+				for _, filterReg := range gb.filterRegs {
 					if mat, _ := filterReg.MatchString(name); mat {
-						if _, ok := proxiesSet[name]; !ok {
-							proxiesSet[name] = struct{}{}
-							newProxies = append(newProxies, p)
-						}
+						proxiesSet[name] = struct{}{}
+						newProxies = append(newProxies, p)
+						break // Found a match, no need to check other filters
 					}
 				}
 			}
@@ -150,22 +165,23 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	// Although the filter has been performed once in the previous process,
 	// when there are multiple providers, the array needs to be reordered as a whole.
 	if len(gb.providers) > 1 && len(gb.filterRegs) > 1 {
-		var newProxies []C.Proxy
-		proxiesSet := map[string]struct{}{}
+		newProxies := make([]C.Proxy, 0, len(proxies))
+		proxiesSet := make(map[string]struct{}, len(proxies))
 		for _, filterReg := range gb.filterRegs {
 			for _, p := range proxies {
 				name := p.Name()
+				if _, exists := proxiesSet[name]; exists {
+					continue
+				}
 				if mat, _ := filterReg.MatchString(name); mat {
-					if _, ok := proxiesSet[name]; !ok {
-						proxiesSet[name] = struct{}{}
-						newProxies = append(newProxies, p)
-					}
+					proxiesSet[name] = struct{}{}
+					newProxies = append(newProxies, p)
 				}
 			}
 		}
 		for _, p := range proxies { // add not matched proxies at the end
 			name := p.Name()
-			if _, ok := proxiesSet[name]; !ok {
+			if _, exists := proxiesSet[name]; !exists {
 				proxiesSet[name] = struct{}{}
 				newProxies = append(newProxies, p)
 			}
@@ -174,7 +190,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	}
 
 	if len(gb.excludeFilterRegs) > 0 {
-		var newProxies []C.Proxy
+		newProxies := make([]C.Proxy, 0, len(proxies))
 	LOOP1:
 		for _, p := range proxies {
 			name := p.Name()

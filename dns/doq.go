@@ -191,7 +191,8 @@ func (doq *dnsOverQUIC) exchangeQUIC(ctx context.Context, msg *D.Msg) (resp *D.M
 
 // AddPrefix adds a 2-byte prefix with the DNS message length.
 func AddPrefix(b []byte) (m []byte) {
-	m = make([]byte, 2+len(b))
+	msgLen := 2 + len(b)
+	m = make([]byte, msgLen)
 	binary.BigEndian.PutUint16(m, uint16(len(b)))
 	copy(m[2:], b)
 

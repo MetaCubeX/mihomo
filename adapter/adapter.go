@@ -177,14 +177,12 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 			p.history.Pop()
 		}
 
-		state, ok := p.extra.Load(url)
-		if !ok {
-			state = &internalProxyState{
-				history: queue.New[C.DelayHistory](defaultHistoriesNum),
-				alive:   atomic.NewBool(true),
-			}
-			p.extra.Store(url, state)
+		// Use LoadOrStore to avoid race condition
+		newState := &internalProxyState{
+			history: queue.New[C.DelayHistory](defaultHistoriesNum),
+			alive:   atomic.NewBool(true),
 		}
+		state, _ := p.extra.LoadOrStore(url, newState)
 
 		if !satisfied {
 			record.Delay = 0
