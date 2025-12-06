@@ -197,6 +197,10 @@ func newSearcher(major int) *searcher {
 	case 12:
 		fallthrough
 	case 13:
+		fallthrough
+	case 14:
+		fallthrough
+	case 15:
 		s = &searcher{
 			headSize:     64,
 			tcpItemSize:  744,
