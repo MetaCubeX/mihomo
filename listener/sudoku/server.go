@@ -152,6 +152,12 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		enablePureDownlink = *config.EnablePureDownlink
 	}
 
+	table, err := sudoku.NewTableWithCustom(config.Key, tableType, config.CustomTable)
+	if err != nil {
+		_ = l.Close()
+		return nil, err
+	}
+
 	handshakeTimeout := defaultConf.HandshakeTimeoutSeconds
 	if config.HandshakeTimeoutSecond != nil {
 		handshakeTimeout = *config.HandshakeTimeoutSecond
@@ -160,7 +166,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 	protoConf := sudoku.ProtocolConfig{
 		Key:                     config.Key,
 		AEADMethod:              defaultConf.AEADMethod,
-		Table:                   sudoku.NewTable(config.Key, tableType),
+		Table:                   table,
 		PaddingMin:              paddingMin,
 		PaddingMax:              paddingMax,
 		EnablePureDownlink:      enablePureDownlink,

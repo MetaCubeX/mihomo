@@ -138,3 +138,27 @@ func TestInboundSudoku_PackedDownlink(t *testing.T) {
 		testInboundSudoku(t, inboundOptions, outboundOptions)
 	})
 }
+
+func TestInboundSudoku_CustomTable(t *testing.T) {
+	key := "test_key_custom"
+	custom := "xpxvvpvv"
+	inboundOptions := inbound.SudokuOption{
+		Key:         key,
+		TableType:   "prefer_entropy",
+		CustomTable: custom,
+	}
+	outboundOptions := outbound.SudokuOption{
+		Key:         key,
+		TableType:   "prefer_entropy",
+		CustomTable: custom,
+	}
+	testInboundSudoku(t, inboundOptions, outboundOptions)
+
+	t.Run("ed25519key", func(t *testing.T) {
+		inboundOptions := inboundOptions
+		outboundOptions := outboundOptions
+		inboundOptions.Key = sudokuPublicKey
+		outboundOptions.Key = sudokuPrivateKey
+		testInboundSudoku(t, inboundOptions, outboundOptions)
+	})
+}

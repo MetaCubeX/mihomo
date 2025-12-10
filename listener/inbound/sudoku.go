@@ -20,6 +20,7 @@ type SudokuOption struct {
 	TableType              string `inbound:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	HandshakeTimeoutSecond *int   `inbound:"handshake-timeout,omitempty"`
 	EnablePureDownlink     *bool  `inbound:"enable-pure-downlink,omitempty"`
+	CustomTable            string `inbound:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
 }
 
 func (o SudokuOption) Equal(config C.InboundConfig) bool {
@@ -52,6 +53,7 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 		TableType:              options.TableType,
 		HandshakeTimeoutSecond: options.HandshakeTimeoutSecond,
 		EnablePureDownlink:     options.EnablePureDownlink,
+		CustomTable:            options.CustomTable,
 	}
 
 	return &Sudoku{

@@ -228,3 +228,22 @@ func runPackedUoTSession(id int, cfg *apis.ProtocolConfig, errCh chan<- error) {
 		return
 	}
 }
+
+func TestCustomTableHandshake(t *testing.T) {
+	table, err := sudokuobfs.NewTableWithCustom("custom-seed", "prefer_entropy", "xpxvvpvv")
+	if err != nil {
+		t.Fatalf("build custom table: %v", err)
+	}
+	cfg := newPackedConfig(table)
+	errCh := make(chan error, 2)
+
+	runPackedTCPSession(42, cfg, errCh)
+	runPackedUoTSession(43, cfg, errCh)
+
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("custom table handshake failed: %v", err)
+		}
+	}
+}

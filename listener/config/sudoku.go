@@ -14,6 +14,7 @@ type SudokuServer struct {
 	TableType              string `json:"table-type,omitempty"`
 	HandshakeTimeoutSecond *int   `json:"handshake-timeout,omitempty"`
 	EnablePureDownlink     *bool  `json:"enable-pure-downlink,omitempty"`
+	CustomTable            string `json:"custom-table,omitempty"`
 }
 
 func (s SudokuServer) String() string {

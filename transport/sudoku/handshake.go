@@ -146,10 +146,21 @@ func buildHandshakePayload(key string) [16]byte {
 }
 
 func NewTable(key string, tableType string) *sudoku.Table {
-	start := time.Now()
-	table := sudoku.NewTable(key, tableType)
-	log.Infoln("[Sudoku] Tables initialized (%s) in %v", tableType, time.Since(start))
+	table, err := NewTableWithCustom(key, tableType, "")
+	if err != nil {
+		panic(fmt.Sprintf("[Sudoku] failed to init tables: %v", err))
+	}
 	return table
+}
+
+func NewTableWithCustom(key string, tableType string, customTable string) (*sudoku.Table, error) {
+	start := time.Now()
+	table, err := sudoku.NewTableWithCustom(key, tableType, customTable)
+	if err != nil {
+		return nil, err
+	}
+	log.Infoln("[Sudoku] Tables initialized (%s, custom=%v) in %v", tableType, customTable != "", time.Since(start))
+	return table, nil
 }
 
 func ClientAEADSeed(key string) string {

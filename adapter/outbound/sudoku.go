@@ -30,6 +30,7 @@ type SudokuOption struct {
 	TableType          string `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	EnablePureDownlink *bool  `proxy:"enable-pure-downlink,omitempty"`
 	HTTPMask           bool   `proxy:"http-mask,omitempty"`
+	CustomTable        string `proxy:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
 }
 
 // DialContext implements C.ProxyAdapter
@@ -178,13 +179,17 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		ServerAddress:           net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
 		Key:                     option.Key,
 		AEADMethod:              defaultConf.AEADMethod,
-		Table:                   sudoku.NewTable(sudoku.ClientAEADSeed(option.Key), tableType),
 		PaddingMin:              paddingMin,
 		PaddingMax:              paddingMax,
 		EnablePureDownlink:      enablePureDownlink,
 		HandshakeTimeoutSeconds: defaultConf.HandshakeTimeoutSeconds,
 		DisableHTTPMask:         !option.HTTPMask,
 	}
+	table, err := sudoku.NewTableWithCustom(sudoku.ClientAEADSeed(option.Key), tableType, option.CustomTable)
+	if err != nil {
+		return nil, fmt.Errorf("build table failed: %w", err)
+	}
+	baseConf.Table = table
 	if option.AEADMethod != "" {
 		baseConf.AEADMethod = option.AEADMethod
 	}
