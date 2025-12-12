@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/picker"
+	"github.com/metacubex/mihomo/component/ech/echparser"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/log"
 
@@ -226,6 +227,77 @@ func msgToQtype(msg *D.Msg) (uint16, string) {
 	return 0, ""
 }
 
+func msgToHTTPSRRInfo(msg *D.Msg) string {
+	var alpns []string
+	var publicName string
+	var hasIPv4, hasIPv6 bool
+
+	collect := func(rrs []D.RR) {
+		for _, rr := range rrs {
+			httpsRR, ok := rr.(*D.HTTPS)
+			if !ok {
+				continue
+			}
+
+			for _, kv := range httpsRR.Value {
+				switch v := kv.(type) {
+				case *D.SVCBAlpn:
+					if len(alpns) == 0 && len(v.Alpn) > 0 {
+						alpns = append(alpns, v.Alpn...)
+					}
+				case *D.SVCBIPv4Hint:
+					if len(v.Hint) > 0 {
+						hasIPv4 = true
+					}
+				case *D.SVCBIPv6Hint:
+					if len(v.Hint) > 0 {
+						hasIPv6 = true
+					}
+				case *D.SVCBECHConfig:
+					if publicName == "" && len(v.ECH) > 0 {
+						if cfgs, err := echparser.ParseECHConfigList(v.ECH); err == nil && len(cfgs) > 0 {
+							publicName = string(cfgs[0].PublicName)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	collect(msg.Answer)
+	collect(msg.Extra)
+
+	if len(alpns) == 0 && publicName == "" && !hasIPv4 && !hasIPv6 {
+		return ""
+	}
+
+	var parts []string
+	if len(alpns) > 0 {
+		parts = append(parts, "alpn:"+strings.Join(alpns, ","))
+	}
+	if publicName != "" {
+		parts = append(parts, "pn:"+publicName)
+	}
+	if hasIPv4 {
+		parts = append(parts, "ipv4hint")
+	}
+	if hasIPv6 {
+		parts = append(parts, "ipv6hint")
+	}
+
+	return strings.Join(parts, ";")
+}
+
+func msgToLogString(msg *D.Msg) string {
+	qType, qTypeStr := msgToQtype(msg)
+	switch qType {
+	case D.TypeHTTPS:
+		return fmt.Sprintf("[%s] %s", msgToHTTPSRRInfo(msg), qTypeStr)
+	default:
+		return fmt.Sprintf("%s %s", msgToIP(msg), qTypeStr)
+	}
+}
+
 func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.Msg, cache bool, err error) {
 	cache = true
 	fast, ctx := picker.WithTimeout[*D.Msg](ctx, resolver.DefaultDNSTimeout)
@@ -248,8 +320,7 @@ func batchExchange(ctx context.Context, clients []dnsClient, m *D.Msg) (msg *D.M
 				// so we would ignore RCode errors from RCode clients.
 				return nil, errors.New("server failure: " + D.RcodeToString[m.Rcode])
 			}
-			ips := msgToIP(m)
-			log.Debugln("[DNS] %s --> %s %s from %s", domain, ips, qTypeStr, client.Address())
+			log.Debugln("[DNS] %s --> %s from %s", domain, msgToLogString(m), client.Address())
 			return m, nil
 		})
 	}
