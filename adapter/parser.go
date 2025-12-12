@@ -159,6 +159,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewSudoku(*sudokuOption)
+	case "echtunnel":
+		echTunnelOption := &outbound.ECHTunnelOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, echTunnelOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewECHTunnel(*echTunnelOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
