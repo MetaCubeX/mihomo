@@ -171,8 +171,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
 github.com/quic-go/qpack v0.4.0 h1:Cr9BXA1sQS2SmDUWjSofMPNKmvF6IiIfDRmgU0w1ZCo=
 github.com/quic-go/qpack v0.4.0/go.mod h1:UZVnYIfi5GRk+zI9UMaCPsmZ2xKJP7XBUvVyT1Knj9A=
-github.com/saba-futai/sudoku v0.0.2-c h1:0CaoCKx4Br8UL97fnIxn8Y7rnQpflBza7kfaIrdg2rI=
-github.com/saba-futai/sudoku v0.0.2-c/go.mod h1:Rvggsoprp7HQM7bMIZUd1M27bPj8THRsZdY1dGbIAvo=
+github.com/saba-futai/sudoku v0.0.2-d h1:HW/gIyNUFcDchpMN+ZhluM86U/HGkWkkRV+9Km6WZM8=
+github.com/saba-futai/sudoku v0.0.2-d/go.mod h1:Rvggsoprp7HQM7bMIZUd1M27bPj8THRsZdY1dGbIAvo=
 github.com/sagernet/cors v1.2.1 h1:Cv5Z8y9YSD6Gm+qSpNrL3LO4lD3eQVvbFYJSG7JCMHQ=
 github.com/sagernet/cors v1.2.1/go.mod h1:O64VyOjjhrkLmQIjF4KGRrJO/5dVXFdpEmCW/eISRAI=
 github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a h1:ObwtHN2VpqE0ZNjr6sGeT00J8uU7JF4cNUdb44/Duis=

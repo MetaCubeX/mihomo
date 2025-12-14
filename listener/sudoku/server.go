@@ -166,7 +166,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		enablePureDownlink = *config.EnablePureDownlink
 	}
 
-	table, err := sudoku.NewTableWithCustom(config.Key, tableType, config.CustomTable)
+	tables, err := sudoku.NewTablesWithCustomPatterns(config.Key, tableType, config.CustomTable, config.CustomTables)
 	if err != nil {
 		_ = l.Close()
 		return nil, err
@@ -180,11 +180,15 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 	protoConf := sudoku.ProtocolConfig{
 		Key:                     config.Key,
 		AEADMethod:              defaultConf.AEADMethod,
-		Table:                   table,
 		PaddingMin:              paddingMin,
 		PaddingMax:              paddingMax,
 		EnablePureDownlink:      enablePureDownlink,
 		HandshakeTimeoutSeconds: handshakeTimeout,
+	}
+	if len(tables) == 1 {
+		protoConf.Table = tables[0]
+	} else {
+		protoConf.Tables = tables
 	}
 	if config.AEADMethod != "" {
 		protoConf.AEADMethod = config.AEADMethod

@@ -2,11 +2,13 @@ package sudoku
 
 import (
 	"bufio"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/saba-futai/sudoku/apis"
@@ -110,25 +112,35 @@ func downlinkMode(cfg *apis.ProtocolConfig) byte {
 	return downlinkModePacked
 }
 
-func buildClientObfsConn(raw net.Conn, cfg *apis.ProtocolConfig) net.Conn {
-	base := sudoku.NewConn(raw, cfg.Table, cfg.PaddingMin, cfg.PaddingMax, false)
+func buildClientObfsConn(raw net.Conn, cfg *apis.ProtocolConfig, table *sudoku.Table) net.Conn {
+	baseReader := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
+	baseWriter := newSudokuObfsWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax)
 	if cfg.EnablePureDownlink {
-		return base
+		return &directionalConn{
+			Conn:   raw,
+			reader: baseReader,
+			writer: baseWriter,
+		}
 	}
-	packed := sudoku.NewPackedConn(raw, cfg.Table, cfg.PaddingMin, cfg.PaddingMax)
+	packed := sudoku.NewPackedConn(raw, table, cfg.PaddingMin, cfg.PaddingMax)
 	return &directionalConn{
 		Conn:   raw,
 		reader: packed,
-		writer: base,
+		writer: baseWriter,
 	}
 }
 
-func buildServerObfsConn(raw net.Conn, cfg *apis.ProtocolConfig, record bool) (*sudoku.Conn, net.Conn) {
-	uplink := sudoku.NewConn(raw, cfg.Table, cfg.PaddingMin, cfg.PaddingMax, record)
+func buildServerObfsConn(raw net.Conn, cfg *apis.ProtocolConfig, table *sudoku.Table, record bool) (*sudoku.Conn, net.Conn) {
+	uplink := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, record)
 	if cfg.EnablePureDownlink {
-		return uplink, uplink
+		downlink := &directionalConn{
+			Conn:   raw,
+			reader: uplink,
+			writer: newSudokuObfsWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax),
+		}
+		return uplink, downlink
 	}
-	packed := sudoku.NewPackedConn(raw, cfg.Table, cfg.PaddingMin, cfg.PaddingMax)
+	packed := sudoku.NewPackedConn(raw, table, cfg.PaddingMin, cfg.PaddingMax)
 	return uplink, &directionalConn{
 		Conn:    raw,
 		reader:  uplink,
@@ -170,8 +182,19 @@ func ClientAEADSeed(key string) string {
 	return key
 }
 
+type ClientHandshakeOptions struct {
+	// HTTPMaskStrategy controls how the client generates the HTTP mask header when DisableHTTPMask=false.
+	// Supported: ""/"random" (default), "post", "websocket".
+	HTTPMaskStrategy string
+}
+
 // ClientHandshake performs the client-side Sudoku handshake (without sending target address).
 func ClientHandshake(rawConn net.Conn, cfg *apis.ProtocolConfig) (net.Conn, error) {
+	return ClientHandshakeWithOptions(rawConn, cfg, ClientHandshakeOptions{})
+}
+
+// ClientHandshakeWithOptions performs the client-side Sudoku handshake (without sending target address).
+func ClientHandshakeWithOptions(rawConn net.Conn, cfg *apis.ProtocolConfig, opt ClientHandshakeOptions) (net.Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -180,18 +203,26 @@ func ClientHandshake(rawConn net.Conn, cfg *apis.ProtocolConfig) (net.Conn, erro
 	}
 
 	if !cfg.DisableHTTPMask {
-		if err := httpmask.WriteRandomRequestHeader(rawConn, cfg.ServerAddress); err != nil {
+		if err := WriteHTTPMaskHeader(rawConn, cfg.ServerAddress, opt.HTTPMaskStrategy); err != nil {
 			return nil, fmt.Errorf("write http mask failed: %w", err)
 		}
 	}
 
-	obfsConn := buildClientObfsConn(rawConn, cfg)
+	table, tableID, err := pickClientTable(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	obfsConn := buildClientObfsConn(rawConn, cfg, table)
 	cConn, err := crypto.NewAEADConn(obfsConn, ClientAEADSeed(cfg.Key), cfg.AEADMethod)
 	if err != nil {
 		return nil, fmt.Errorf("setup crypto failed: %w", err)
 	}
 
 	handshake := buildHandshakePayload(cfg.Key)
+	if len(tableCandidates(cfg)) > 1 {
+		handshake[15] = tableID
+	}
 	if _, err := cConn.Write(handshake[:]); err != nil {
 		cConn.Close()
 		return nil, fmt.Errorf("send handshake failed: %w", err)
@@ -218,21 +249,25 @@ func ServerHandshake(rawConn net.Conn, cfg *apis.ProtocolConfig) (*ServerSession
 		handshakeTimeout = 5 * time.Second
 	}
 
+	rawConn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+
 	bufReader := bufio.NewReader(rawConn)
 	if !cfg.DisableHTTPMask {
-		if peek, _ := bufReader.Peek(4); len(peek) == 4 && string(peek) == "POST" {
+		if peek, err := bufReader.Peek(4); err == nil && httpmask.LooksLikeHTTPRequestStart(peek) {
 			if _, err := httpmask.ConsumeHeader(bufReader); err != nil {
 				return nil, fmt.Errorf("invalid http header: %w", err)
 			}
 		}
 	}
 
-	rawConn.SetReadDeadline(time.Now().Add(handshakeTimeout))
-	bConn := &bufferedConn{
-		Conn: rawConn,
-		r:    bufReader,
+	selectedTable, preRead, err := selectTableByProbe(bufReader, cfg, tableCandidates(cfg))
+	if err != nil {
+		return nil, err
 	}
-	sConn, obfsConn := buildServerObfsConn(bConn, cfg, true)
+
+	baseConn := &preBufferedConn{Conn: rawConn, buf: preRead}
+	bConn := &bufferedConn{Conn: baseConn, r: bufio.NewReader(baseConn)}
+	sConn, obfsConn := buildServerObfsConn(bConn, cfg, selectedTable, true)
 	cConn, err := crypto.NewAEADConn(obfsConn, cfg.Key, cfg.AEADMethod)
 	if err != nil {
 		return nil, fmt.Errorf("crypto setup failed: %w", err)
@@ -312,4 +347,25 @@ func GenKeyPair() (privateKey, publicKey string, err error) {
 	privateKey = availablePrivateKey            // Available Private Key for client
 	publicKey = crypto.EncodePoint(pair.Public) // Master Public Key for server
 	return
+}
+
+func normalizeHTTPMaskStrategy(strategy string) string {
+	s := strings.TrimSpace(strings.ToLower(strategy))
+	switch s {
+	case "", "random":
+		return "random"
+	case "ws":
+		return "websocket"
+	default:
+		return s
+	}
+}
+
+// randomByte returns a cryptographically random byte (with a math/rand fallback).
+func randomByte() byte {
+	var b [1]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return b[0]
+	}
+	return byte(time.Now().UnixNano())
 }

@@ -20,17 +20,19 @@ type Sudoku struct {
 
 type SudokuOption struct {
 	BasicOption
-	Name               string `proxy:"name"`
-	Server             string `proxy:"server"`
-	Port               int    `proxy:"port"`
-	Key                string `proxy:"key"`
-	AEADMethod         string `proxy:"aead-method,omitempty"`
-	PaddingMin         *int   `proxy:"padding-min,omitempty"`
-	PaddingMax         *int   `proxy:"padding-max,omitempty"`
-	TableType          string `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
-	EnablePureDownlink *bool  `proxy:"enable-pure-downlink,omitempty"`
-	HTTPMask           bool   `proxy:"http-mask,omitempty"`
-	CustomTable        string `proxy:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
+	Name               string   `proxy:"name"`
+	Server             string   `proxy:"server"`
+	Port               int      `proxy:"port"`
+	Key                string   `proxy:"key"`
+	AEADMethod         string   `proxy:"aead-method,omitempty"`
+	PaddingMin         *int     `proxy:"padding-min,omitempty"`
+	PaddingMax         *int     `proxy:"padding-max,omitempty"`
+	TableType          string   `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
+	EnablePureDownlink *bool    `proxy:"enable-pure-downlink,omitempty"`
+	HTTPMask           bool     `proxy:"http-mask,omitempty"`
+	HTTPMaskStrategy   string   `proxy:"http-mask-strategy,omitempty"` // "random" (default), "post", "websocket"
+	CustomTable        string   `proxy:"custom-table,omitempty"`       // optional custom byte layout, e.g. xpxvvpvv
+	CustomTables       []string `proxy:"custom-tables,omitempty"`      // optional table rotation patterns, overrides custom-table when non-empty
 }
 
 // DialContext implements C.ProxyAdapter
@@ -54,7 +56,9 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 		defer done(&err)
 	}
 
-	c, err = sudoku.ClientHandshake(c, cfg)
+	c, err = sudoku.ClientHandshakeWithOptions(c, cfg, sudoku.ClientHandshakeOptions{
+		HTTPMaskStrategy: s.option.HTTPMaskStrategy,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +101,9 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		defer done(&err)
 	}
 
-	c, err = sudoku.ClientHandshake(c, cfg)
+	c, err = sudoku.ClientHandshakeWithOptions(c, cfg, sudoku.ClientHandshakeOptions{
+		HTTPMaskStrategy: s.option.HTTPMaskStrategy,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -185,11 +191,15 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		HandshakeTimeoutSeconds: defaultConf.HandshakeTimeoutSeconds,
 		DisableHTTPMask:         !option.HTTPMask,
 	}
-	table, err := sudoku.NewTableWithCustom(sudoku.ClientAEADSeed(option.Key), tableType, option.CustomTable)
+	tables, err := sudoku.NewTablesWithCustomPatterns(sudoku.ClientAEADSeed(option.Key), tableType, option.CustomTable, option.CustomTables)
 	if err != nil {
-		return nil, fmt.Errorf("build table failed: %w", err)
+		return nil, fmt.Errorf("build table(s) failed: %w", err)
 	}
-	baseConf.Table = table
+	if len(tables) == 1 {
+		baseConf.Table = tables[0]
+	} else {
+		baseConf.Tables = tables
+	}
 	if option.AEADMethod != "" {
 		baseConf.AEADMethod = option.AEADMethod
 	}
