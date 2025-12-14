@@ -13,7 +13,7 @@ case $TARGETPLATFORM in
     "linux/arm/v7")
         arch="armv7"
         ;;
-    "riscv64")
+    "linux/riscv64")
         arch="riscv64"
         ;;
     *)
