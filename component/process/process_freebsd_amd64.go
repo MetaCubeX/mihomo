@@ -180,20 +180,6 @@ func (s *searcher) searchSocketPid(socket uint64) (uint32, error) {
 func newSearcher(major int) *searcher {
 	var s *searcher
 	switch major {
-	case 11:
-		s = &searcher{
-			headSize:     32,
-			tcpItemSize:  1304,
-			udpItemSize:  632,
-			port:         198,
-			ip:           228,
-			vflag:        116,
-			socket:       88,
-			fileItemSize: 80,
-			data:         56,
-			pid:          8,
-			udpInpOffset: 8,
-		}
 	case 12:
 		fallthrough
 	case 13:
