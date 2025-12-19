@@ -1712,7 +1712,7 @@ func parseSniffer(snifferRaw RawSniffer, ruleProviders map[string]P.RuleProvider
 	}
 	snifferConfig.SkipSrcAddress = skipSrcAddress
 
-	skipDstAddress, err := parseIPCIDR(snifferRaw.SkipDstAddress, nil, "sniffer.skip-src-address", ruleProviders)
+	skipDstAddress, err := parseIPCIDR(snifferRaw.SkipDstAddress, nil, "sniffer.skip-dst-address", ruleProviders)
 	if err != nil {
 		return nil, fmt.Errorf("error in skip-dst-address, error:%w", err)
 	}
