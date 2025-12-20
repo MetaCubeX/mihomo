@@ -21,6 +21,7 @@ import (
 )
 
 var UnifiedDelay = atomic.NewBool(false)
+var UseTCPing = atomic.NewBool(false)
 
 const (
 	defaultHistoriesNum = 10
@@ -199,6 +200,15 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 
 	}()
 
+	// Use TCP ping if enabled
+	if UseTCPing.Load() {
+		t, err = p.tcpPing(ctx, url)
+		if err == nil {
+			satisfied = true
+		}
+		return
+	}
+
 	unifiedDelay := UnifiedDelay.Load()
 
 	addr, err := urlToMetadata(url)
@@ -274,6 +284,31 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	}
 
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
+	t = uint16(time.Since(start) / time.Millisecond)
+	return
+}
+
+// tcpPing performs a lightweight TCP connection test to proxy server directly
+func (p *Proxy) tcpPing(ctx context.Context, url string) (t uint16, err error) {
+	// Get proxy server address (IP:Port)
+	proxyAddr := p.ProxyAdapter.Addr()
+	if proxyAddr == "" {
+		err = fmt.Errorf("proxy addr is empty")
+		return
+	}
+
+	// Directly connect to proxy server (not through proxy)
+	start := time.Now()
+	dialer := &net.Dialer{
+		Timeout: 5 * time.Second,
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", proxyAddr)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	// TCP connection to proxy server established successfully
 	t = uint16(time.Since(start) / time.Millisecond)
 	return
 }

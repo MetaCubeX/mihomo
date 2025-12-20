@@ -156,6 +156,7 @@ func GetGeneral() *config.General {
 		},
 		Mode:         tunnel.Mode(),
 		UnifiedDelay: adapter.UnifiedDelay.Load(),
+		UseTCPing:    adapter.UseTCPing.Load(),
 		LogLevel:     log.Level(),
 		IPv6:         !resolver.DisableIPv6,
 		Interface:    dialer.DefaultInterface.Load(),
@@ -405,6 +406,10 @@ func updateGeneral(general *config.General, logging bool) {
 	keepalive.SetDisableKeepAlive(general.DisableKeepAlive)
 
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
+	adapter.UseTCPing.Store(general.UseTCPing)
+	if logging && general.UseTCPing {
+		log.Infoln("Use TCP Ping for delay test")
+	}
 
 	dialer.DefaultInterface.Store(general.Interface)
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))

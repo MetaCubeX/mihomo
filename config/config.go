@@ -46,6 +46,7 @@ type General struct {
 	Inbound
 	Mode                    T.TunnelMode            `json:"mode"`
 	UnifiedDelay            bool                    `json:"unified-delay"`
+	UseTCPing               bool                    `json:"use-tcping"`
 	LogLevel                log.LogLevel            `json:"log-level"`
 	IPv6                    bool                    `json:"ipv6"`
 	Interface               string                  `json:"interface-name"`
@@ -401,6 +402,7 @@ type RawConfig struct {
 	BindAddress             string                  `yaml:"bind-address" json:"bind-address"`
 	Mode                    T.TunnelMode            `yaml:"mode" json:"mode"`
 	UnifiedDelay            bool                    `yaml:"unified-delay" json:"unified-delay"`
+	UseTCPing               bool                    `yaml:"use-tcping" json:"use-tcping"`
 	LogLevel                log.LogLevel            `yaml:"log-level" json:"log-level"`
 	IPv6                    bool                    `yaml:"ipv6" json:"ipv6"`
 	ExternalController      string                  `yaml:"external-controller" json:"external-controller"`
@@ -751,6 +753,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			InboundMPTCP:      cfg.InboundMPTCP,
 		},
 		UnifiedDelay: cfg.UnifiedDelay,
+		UseTCPing:    cfg.UseTCPing,
 		Mode:         cfg.Mode,
 		LogLevel:     cfg.LogLevel,
 		IPv6:         cfg.IPv6,
