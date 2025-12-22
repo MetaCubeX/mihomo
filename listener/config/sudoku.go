@@ -20,6 +20,8 @@ type SudokuServer struct {
 	EnablePureDownlink     *bool    `json:"enable-pure-downlink,omitempty"`
 	CustomTable            string   `json:"custom-table,omitempty"`
 	CustomTables           []string `json:"custom-tables,omitempty"`
+	DisableHTTPMask        bool     `json:"disable-http-mask,omitempty"`
+	HTTPMaskMode           string   `json:"http-mask-mode,omitempty"`
 
 	// mihomo private extension (not the part of standard Sudoku protocol)
 	MuxOption sing.MuxOption `json:"mux-option,omitempty"`

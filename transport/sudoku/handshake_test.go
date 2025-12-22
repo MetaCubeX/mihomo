@@ -9,8 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/saba-futai/sudoku/apis"
-	sudokuobfs "github.com/saba-futai/sudoku/pkg/obfs/sudoku"
+	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
 
 func TestPackedConnRoundTrip_WithPadding(t *testing.T) {
@@ -67,8 +66,8 @@ func TestPackedConnRoundTrip_WithPadding(t *testing.T) {
 	}
 }
 
-func newPackedConfig(table *sudokuobfs.Table) *apis.ProtocolConfig {
-	cfg := apis.DefaultConfig()
+func newPackedConfig(table *sudokuobfs.Table) *ProtocolConfig {
+	cfg := DefaultConfig()
 	cfg.Key = "sudoku-test-key"
 	cfg.Table = table
 	cfg.PaddingMin = 10
@@ -118,7 +117,7 @@ func TestPackedDownlinkSoak(t *testing.T) {
 	}
 }
 
-func runPackedTCPSession(id int, cfg *apis.ProtocolConfig, errCh chan<- error) {
+func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 	serverConn, clientConn := net.Pipe()
 	target := fmt.Sprintf("1.1.1.%d:80", (id%200)+1)
 	payload := []byte{0x42, byte(id)}
@@ -176,7 +175,7 @@ func runPackedTCPSession(id int, cfg *apis.ProtocolConfig, errCh chan<- error) {
 	}
 }
 
-func runPackedUoTSession(id int, cfg *apis.ProtocolConfig, errCh chan<- error) {
+func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 	serverConn, clientConn := net.Pipe()
 	target := "8.8.8.8:53"
 	payload := []byte{0xaa, byte(id)}

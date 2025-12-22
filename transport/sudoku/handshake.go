@@ -11,17 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/saba-futai/sudoku/apis"
-	"github.com/saba-futai/sudoku/pkg/crypto"
-	"github.com/saba-futai/sudoku/pkg/obfs/httpmask"
-	"github.com/saba-futai/sudoku/pkg/obfs/sudoku"
+	"github.com/metacubex/mihomo/transport/sudoku/crypto"
+	"github.com/metacubex/mihomo/transport/sudoku/obfs/httpmask"
+	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 
 	"github.com/metacubex/mihomo/log"
 )
-
-type ProtocolConfig = apis.ProtocolConfig
-
-func DefaultConfig() *ProtocolConfig { return apis.DefaultConfig() }
 
 type SessionType int
 
@@ -105,14 +100,14 @@ const (
 	downlinkModePacked byte = 0x02
 )
 
-func downlinkMode(cfg *apis.ProtocolConfig) byte {
+func downlinkMode(cfg *ProtocolConfig) byte {
 	if cfg.EnablePureDownlink {
 		return downlinkModePure
 	}
 	return downlinkModePacked
 }
 
-func buildClientObfsConn(raw net.Conn, cfg *apis.ProtocolConfig, table *sudoku.Table) net.Conn {
+func buildClientObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table) net.Conn {
 	baseReader := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
 	baseWriter := newSudokuObfsWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax)
 	if cfg.EnablePureDownlink {
@@ -130,7 +125,7 @@ func buildClientObfsConn(raw net.Conn, cfg *apis.ProtocolConfig, table *sudoku.T
 	}
 }
 
-func buildServerObfsConn(raw net.Conn, cfg *apis.ProtocolConfig, table *sudoku.Table, record bool) (*sudoku.Conn, net.Conn) {
+func buildServerObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table, record bool) (*sudoku.Conn, net.Conn) {
 	uplink := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, record)
 	if cfg.EnablePureDownlink {
 		downlink := &directionalConn{
@@ -189,12 +184,12 @@ type ClientHandshakeOptions struct {
 }
 
 // ClientHandshake performs the client-side Sudoku handshake (without sending target address).
-func ClientHandshake(rawConn net.Conn, cfg *apis.ProtocolConfig) (net.Conn, error) {
+func ClientHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, error) {
 	return ClientHandshakeWithOptions(rawConn, cfg, ClientHandshakeOptions{})
 }
 
 // ClientHandshakeWithOptions performs the client-side Sudoku handshake (without sending target address).
-func ClientHandshakeWithOptions(rawConn net.Conn, cfg *apis.ProtocolConfig, opt ClientHandshakeOptions) (net.Conn, error) {
+func ClientHandshakeWithOptions(rawConn net.Conn, cfg *ProtocolConfig, opt ClientHandshakeOptions) (net.Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -220,7 +215,7 @@ func ClientHandshakeWithOptions(rawConn net.Conn, cfg *apis.ProtocolConfig, opt 
 	}
 
 	handshake := buildHandshakePayload(cfg.Key)
-	if len(tableCandidates(cfg)) > 1 {
+	if len(cfg.tableCandidates()) > 1 {
 		handshake[15] = tableID
 	}
 	if _, err := cConn.Write(handshake[:]); err != nil {
@@ -236,7 +231,7 @@ func ClientHandshakeWithOptions(rawConn net.Conn, cfg *apis.ProtocolConfig, opt 
 }
 
 // ServerHandshake performs Sudoku server-side handshake and detects UoT preface.
-func ServerHandshake(rawConn net.Conn, cfg *apis.ProtocolConfig) (*ServerSession, error) {
+func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -260,7 +255,7 @@ func ServerHandshake(rawConn net.Conn, cfg *apis.ProtocolConfig) (*ServerSession
 		}
 	}
 
-	selectedTable, preRead, err := selectTableByProbe(bufReader, cfg, tableCandidates(cfg))
+	selectedTable, preRead, err := selectTableByProbe(bufReader, cfg, cfg.tableCandidates())
 	if err != nil {
 		return nil, err
 	}

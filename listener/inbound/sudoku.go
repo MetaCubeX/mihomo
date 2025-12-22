@@ -22,6 +22,8 @@ type SudokuOption struct {
 	EnablePureDownlink     *bool    `inbound:"enable-pure-downlink,omitempty"`
 	CustomTable            string   `inbound:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
 	CustomTables           []string `inbound:"custom-tables,omitempty"`
+	DisableHTTPMask        bool     `inbound:"disable-http-mask,omitempty"`
+	HTTPMaskMode           string   `inbound:"http-mask-mode,omitempty"` // "legacy" (default), "xhttp", "pht", "auto"
 
 	// mihomo private extension (not the part of standard Sudoku protocol)
 	MuxOption MuxOption `inbound:"mux-option,omitempty"`
@@ -59,6 +61,8 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 		EnablePureDownlink:     options.EnablePureDownlink,
 		CustomTable:            options.CustomTable,
 		CustomTables:           options.CustomTables,
+		DisableHTTPMask:        options.DisableHTTPMask,
+		HTTPMaskMode:           options.HTTPMaskMode,
 	}
 	serverConf.MuxOption = options.MuxOption.Build()
 

@@ -3,7 +3,7 @@ package sudoku
 import (
 	"strings"
 
-	"github.com/saba-futai/sudoku/pkg/obfs/sudoku"
+	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
 
 // NewTablesWithCustomPatterns builds one or more obfuscation tables from x/v/p custom patterns.

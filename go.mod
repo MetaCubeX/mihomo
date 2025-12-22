@@ -46,7 +46,6 @@ require (
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
 	github.com/oschwald/maxminddb-golang v1.12.0 // lastest version compatible with golang1.20
-	github.com/saba-futai/sudoku v0.0.2-d
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a
 	github.com/samber/lo v1.52.0
 	github.com/sirupsen/logrus v1.9.3
@@ -65,8 +64,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require filippo.io/edwards25519 v1.1.0
+
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/RyuaNerin/go-krypto v1.3.0 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
 	github.com/ajg/form v1.5.1 // indirect

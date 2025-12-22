@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/saba-futai/sudoku/pkg/obfs/httpmask"
+	"github.com/metacubex/mihomo/transport/sudoku/obfs/httpmask"
 )
 
 var (

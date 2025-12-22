@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"net"
 
-	"github.com/saba-futai/sudoku/pkg/obfs/sudoku"
+	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
 
 // perm4 matches github.com/saba-futai/sudoku/pkg/obfs/sudoku perm4.

@@ -20,6 +20,7 @@ type Listener struct {
 	addr      string
 	closed    bool
 	protoConf sudoku.ProtocolConfig
+	tunnelSrv *sudoku.HTTPMaskTunnelServer
 	handler   *sing.ListenerHandler
 }
 
@@ -46,9 +47,31 @@ func (l *Listener) Close() error {
 }
 
 func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
-	session, err := sudoku.ServerHandshake(conn, &l.protoConf)
+	handshakeConn := conn
+	handshakeCfg := &l.protoConf
+	if l.tunnelSrv != nil {
+		c, cfg, done, err := l.tunnelSrv.WrapConn(conn)
+		if err != nil {
+			_ = conn.Close()
+			return
+		}
+		if done {
+			return
+		}
+		if c != nil {
+			handshakeConn = c
+		}
+		if cfg != nil {
+			handshakeCfg = cfg
+		}
+	}
+
+	session, err := sudoku.ServerHandshake(handshakeConn, handshakeCfg)
 	if err != nil {
-		_ = conn.Close()
+		_ = handshakeConn.Close()
+		if handshakeConn != conn {
+			_ = conn.Close()
+		}
 		return
 	}
 
@@ -184,6 +207,8 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		PaddingMax:              paddingMax,
 		EnablePureDownlink:      enablePureDownlink,
 		HandshakeTimeoutSeconds: handshakeTimeout,
+		DisableHTTPMask:         config.DisableHTTPMask,
+		HTTPMaskMode:            config.HTTPMaskMode,
 	}
 	if len(tables) == 1 {
 		protoConf.Table = tables[0]
@@ -200,6 +225,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		protoConf: protoConf,
 		handler:   h,
 	}
+	sl.tunnelSrv = sudoku.NewHTTPMaskTunnelServer(&sl.protoConf)
 
 	go func() {
 		for {

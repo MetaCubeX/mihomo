@@ -30,6 +30,9 @@ type SudokuOption struct {
 	TableType          string   `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	EnablePureDownlink *bool    `proxy:"enable-pure-downlink,omitempty"`
 	HTTPMask           bool     `proxy:"http-mask,omitempty"`
+	HTTPMaskMode       string   `proxy:"http-mask-mode,omitempty"`     // "legacy" (default), "xhttp", "pht", "auto"
+	HTTPMaskTLS        bool     `proxy:"http-mask-tls,omitempty"`      // only for http-mask-mode xhttp/pht/auto
+	HTTPMaskHost       string   `proxy:"http-mask-host,omitempty"`     // optional Host/SNI override (domain or domain:port)
 	HTTPMaskStrategy   string   `proxy:"http-mask-strategy,omitempty"` // "random" (default), "post", "websocket"
 	CustomTable        string   `proxy:"custom-table,omitempty"`       // optional custom byte layout, e.g. xpxvvpvv
 	CustomTables       []string `proxy:"custom-tables,omitempty"`      // optional table rotation patterns, overrides custom-table when non-empty
@@ -42,7 +45,16 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 		return nil, err
 	}
 
-	c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
+	var c net.Conn
+	if !cfg.DisableHTTPMask {
+		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
+		case "xhttp", "pht", "auto":
+			c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
+		}
+	}
+	if c == nil && err == nil {
+		c, err = s.dialer.DialContext(ctx, "tcp", s.addr)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
 	}
@@ -56,9 +68,14 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 		defer done(&err)
 	}
 
-	c, err = sudoku.ClientHandshakeWithOptions(c, cfg, sudoku.ClientHandshakeOptions{
-		HTTPMaskStrategy: s.option.HTTPMaskStrategy,
-	})
+	handshakeCfg := *cfg
+	if !handshakeCfg.DisableHTTPMask {
+		switch strings.ToLower(strings.TrimSpace(handshakeCfg.HTTPMaskMode)) {
+		case "xhttp", "pht", "auto":
+			handshakeCfg.DisableHTTPMask = true
+		}
+	}
+	c, err = sudoku.ClientHandshakeWithOptions(c, &handshakeCfg, sudoku.ClientHandshakeOptions{HTTPMaskStrategy: s.option.HTTPMaskStrategy})
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +104,16 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		return nil, err
 	}
 
-	c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
+	var c net.Conn
+	if !cfg.DisableHTTPMask {
+		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
+		case "xhttp", "pht", "auto":
+			c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
+		}
+	}
+	if c == nil && err == nil {
+		c, err = s.dialer.DialContext(ctx, "tcp", s.addr)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
 	}
@@ -101,9 +127,14 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		defer done(&err)
 	}
 
-	c, err = sudoku.ClientHandshakeWithOptions(c, cfg, sudoku.ClientHandshakeOptions{
-		HTTPMaskStrategy: s.option.HTTPMaskStrategy,
-	})
+	handshakeCfg := *cfg
+	if !handshakeCfg.DisableHTTPMask {
+		switch strings.ToLower(strings.TrimSpace(handshakeCfg.HTTPMaskMode)) {
+		case "xhttp", "pht", "auto":
+			handshakeCfg.DisableHTTPMask = true
+		}
+	}
+	c, err = sudoku.ClientHandshakeWithOptions(c, &handshakeCfg, sudoku.ClientHandshakeOptions{HTTPMaskStrategy: s.option.HTTPMaskStrategy})
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +221,12 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		EnablePureDownlink:      enablePureDownlink,
 		HandshakeTimeoutSeconds: defaultConf.HandshakeTimeoutSeconds,
 		DisableHTTPMask:         !option.HTTPMask,
+		HTTPMaskMode:            defaultConf.HTTPMaskMode,
+		HTTPMaskTLSEnabled:      option.HTTPMaskTLS,
+		HTTPMaskHost:            option.HTTPMaskHost,
+	}
+	if option.HTTPMaskMode != "" {
+		baseConf.HTTPMaskMode = option.HTTPMaskMode
 	}
 	tables, err := sudoku.NewTablesWithCustomPatterns(sudoku.ClientAEADSeed(option.Key), tableType, option.CustomTable, option.CustomTables)
 	if err != nil {
