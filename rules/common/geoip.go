@@ -186,6 +186,11 @@ func (g *GEOIP) getIPMatcher() (router.IPMatcher, error) {
 }
 
 func (g *GEOIP) GetRecodeSize() int {
+	// skip pseudorule lan
+	if g.country == "lan" {
+		return 0
+	}
+
 	if matcher, err := g.GetIPMatcher(); err == nil {
 		return matcher.Count()
 	}
