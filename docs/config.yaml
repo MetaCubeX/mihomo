@@ -1354,7 +1354,7 @@ listeners:
     #   dC5jb20AAA==
     #   -----END ECH KEYS-----
 
-  - name: reidr-in-1
+  - name: redir-in-1
     type: redir
     port: 10811 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
