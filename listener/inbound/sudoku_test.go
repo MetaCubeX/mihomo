@@ -164,3 +164,23 @@ func TestInboundSudoku_CustomTable(t *testing.T) {
 		testInboundSudoku(t, inboundOptions, outboundOptions)
 	})
 }
+
+func TestInboundSudoku_HTTPMaskMode(t *testing.T) {
+	key := "test_key_http_mask_mode"
+
+	for _, mode := range []string{"legacy", "stream", "poll", "auto"} {
+		mode := mode
+		t.Run(mode, func(t *testing.T) {
+			inboundOptions := inbound.SudokuOption{
+				Key:          key,
+				HTTPMaskMode: mode,
+			}
+			outboundOptions := outbound.SudokuOption{
+				Key:          key,
+				HTTPMask:     true,
+				HTTPMaskMode: mode,
+			}
+			testInboundSudoku(t, inboundOptions, outboundOptions)
+		})
+	}
+}
