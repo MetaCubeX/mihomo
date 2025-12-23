@@ -23,7 +23,7 @@ type SudokuOption struct {
 	CustomTable            string   `inbound:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
 	CustomTables           []string `inbound:"custom-tables,omitempty"`
 	DisableHTTPMask        bool     `inbound:"disable-http-mask,omitempty"`
-	HTTPMaskMode           string   `inbound:"http-mask-mode,omitempty"` // "legacy" (default), "xhttp", "pht", "auto"
+	HTTPMaskMode           string   `inbound:"http-mask-mode,omitempty"` // "legacy" (default), "stream", "poll", "auto"
 
 	// mihomo private extension (not the part of standard Sudoku protocol)
 	MuxOption MuxOption `inbound:"mux-option,omitempty"`

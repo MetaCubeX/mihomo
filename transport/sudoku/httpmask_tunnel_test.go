@@ -128,12 +128,12 @@ func newTunnelTestTable(t *testing.T, key string) *ProtocolConfig {
 	return cfg
 }
 
-func TestHTTPMaskTunnel_XHTTP_TCPRoundTrip(t *testing.T) {
-	key := "tunnel-xhttp-key"
+func TestHTTPMaskTunnel_Stream_TCPRoundTrip(t *testing.T) {
+	key := "tunnel-stream-key"
 	target := "1.1.1.1:80"
 
 	serverCfg := newTunnelTestTable(t, key)
-	serverCfg.HTTPMaskMode = "xhttp"
+	serverCfg.HTTPMaskMode = "stream"
 
 	addr, stop, errCh := startTunnelServer(t, serverCfg, func(s *ServerSession) error {
 		if s.Type != SessionTypeTCP {
@@ -190,13 +190,13 @@ func TestHTTPMaskTunnel_XHTTP_TCPRoundTrip(t *testing.T) {
 	}
 }
 
-func TestHTTPMaskTunnel_PHT_UoTRoundTrip(t *testing.T) {
-	key := "tunnel-pht-key"
+func TestHTTPMaskTunnel_Poll_UoTRoundTrip(t *testing.T) {
+	key := "tunnel-poll-key"
 	target := "8.8.8.8:53"
 	payload := []byte{0xaa, 0xbb, 0xcc, 0xdd}
 
 	serverCfg := newTunnelTestTable(t, key)
-	serverCfg.HTTPMaskMode = "pht"
+	serverCfg.HTTPMaskMode = "poll"
 
 	addr, stop, errCh := startTunnelServer(t, serverCfg, func(s *ServerSession) error {
 		if s.Type != SessionTypeUoT {
@@ -330,7 +330,7 @@ func TestHTTPMaskTunnel_Validation(t *testing.T) {
 	cfg.ServerAddress = "127.0.0.1:1"
 
 	cfg.DisableHTTPMask = true
-	cfg.HTTPMaskMode = "xhttp"
+	cfg.HTTPMaskMode = "stream"
 	if _, err := DialHTTPMaskTunnel(context.Background(), cfg.ServerAddress, cfg, (&net.Dialer{}).DialContext); err == nil {
 		t.Fatalf("expected error for disabled http mask")
 	}
@@ -347,7 +347,7 @@ func TestHTTPMaskTunnel_Soak_Concurrent(t *testing.T) {
 	target := "1.0.0.1:80"
 
 	serverCfg := newTunnelTestTable(t, key)
-	serverCfg.HTTPMaskMode = "xhttp"
+	serverCfg.HTTPMaskMode = "stream"
 	serverCfg.EnablePureDownlink = false
 
 	const (

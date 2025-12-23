@@ -22,7 +22,7 @@ func NewHTTPMaskTunnelServer(cfg *ProtocolConfig) *HTTPMaskTunnelServer {
 	var ts *httpmask.TunnelServer
 	if !cfg.DisableHTTPMask {
 		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
-		case "xhttp", "pht", "auto":
+		case "stream", "poll", "auto":
 			ts = httpmask.NewTunnelServer(httpmask.TunnelServerOptions{Mode: cfg.HTTPMaskMode})
 		}
 	}
@@ -32,7 +32,7 @@ func NewHTTPMaskTunnelServer(cfg *ProtocolConfig) *HTTPMaskTunnelServer {
 // WrapConn inspects an accepted TCP connection and upgrades it to an HTTP tunnel stream when needed.
 //
 // Returns:
-//   - done=true: this TCP connection has been fully handled (e.g., xhttp/pht control request), caller should return
+//   - done=true: this TCP connection has been fully handled (e.g., stream/poll control request), caller should return
 //   - done=false: handshakeConn+cfg are ready for ServerHandshake
 func (s *HTTPMaskTunnelServer) WrapConn(rawConn net.Conn) (handshakeConn net.Conn, cfg *ProtocolConfig, done bool, err error) {
 	if rawConn == nil {
@@ -66,7 +66,7 @@ func (s *HTTPMaskTunnelServer) WrapConn(rawConn net.Conn) (handshakeConn net.Con
 
 type TunnelDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
-// DialHTTPMaskTunnel dials a CDN-capable HTTP tunnel (xhttp/pht/auto) and returns a stream carrying raw Sudoku bytes.
+// DialHTTPMaskTunnel dials a CDN-capable HTTP tunnel (stream/poll/auto) and returns a stream carrying raw Sudoku bytes.
 func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *ProtocolConfig, dial TunnelDialer) (net.Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -75,7 +75,7 @@ func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *Protocol
 		return nil, fmt.Errorf("http mask is disabled")
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
-	case "xhttp", "pht", "auto":
+	case "stream", "poll", "auto":
 	default:
 		return nil, fmt.Errorf("http-mask-mode=%q does not use http tunnel", cfg.HTTPMaskMode)
 	}

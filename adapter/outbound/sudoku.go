@@ -30,8 +30,8 @@ type SudokuOption struct {
 	TableType          string   `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	EnablePureDownlink *bool    `proxy:"enable-pure-downlink,omitempty"`
 	HTTPMask           bool     `proxy:"http-mask,omitempty"`
-	HTTPMaskMode       string   `proxy:"http-mask-mode,omitempty"`     // "legacy" (default), "xhttp", "pht", "auto"
-	HTTPMaskTLS        bool     `proxy:"http-mask-tls,omitempty"`      // only for http-mask-mode xhttp/pht/auto
+	HTTPMaskMode       string   `proxy:"http-mask-mode,omitempty"`     // "legacy" (default), "stream", "poll", "auto"
+	HTTPMaskTLS        bool     `proxy:"http-mask-tls,omitempty"`      // only for http-mask-mode stream/poll/auto
 	HTTPMaskHost       string   `proxy:"http-mask-host,omitempty"`     // optional Host/SNI override (domain or domain:port)
 	HTTPMaskStrategy   string   `proxy:"http-mask-strategy,omitempty"` // "random" (default), "post", "websocket"
 	CustomTable        string   `proxy:"custom-table,omitempty"`       // optional custom byte layout, e.g. xpxvvpvv
@@ -48,7 +48,7 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 	var c net.Conn
 	if !cfg.DisableHTTPMask {
 		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
-		case "xhttp", "pht", "auto":
+		case "stream", "poll", "auto":
 			c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
 		}
 	}
@@ -71,7 +71,7 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 	handshakeCfg := *cfg
 	if !handshakeCfg.DisableHTTPMask {
 		switch strings.ToLower(strings.TrimSpace(handshakeCfg.HTTPMaskMode)) {
-		case "xhttp", "pht", "auto":
+		case "stream", "poll", "auto":
 			handshakeCfg.DisableHTTPMask = true
 		}
 	}
@@ -107,7 +107,7 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	var c net.Conn
 	if !cfg.DisableHTTPMask {
 		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
-		case "xhttp", "pht", "auto":
+		case "stream", "poll", "auto":
 			c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
 		}
 	}
@@ -130,7 +130,7 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	handshakeCfg := *cfg
 	if !handshakeCfg.DisableHTTPMask {
 		switch strings.ToLower(strings.TrimSpace(handshakeCfg.HTTPMaskMode)) {
-		case "xhttp", "pht", "auto":
+		case "stream", "poll", "auto":
 			handshakeCfg.DisableHTTPMask = true
 		}
 	}
