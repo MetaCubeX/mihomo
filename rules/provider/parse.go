@@ -12,15 +12,16 @@ import (
 )
 
 type ruleProviderSchema struct {
-	Type      string   `provider:"type"`
-	Behavior  string   `provider:"behavior"`
-	Path      string   `provider:"path,omitempty"`
-	URL       string   `provider:"url,omitempty"`
-	Proxy     string   `provider:"proxy,omitempty"`
-	Format    string   `provider:"format,omitempty"`
-	Interval  int      `provider:"interval,omitempty"`
-	SizeLimit int64    `provider:"size-limit,omitempty"`
-	Payload   []string `provider:"payload,omitempty"`
+	Type      string              `provider:"type"`
+	Behavior  string              `provider:"behavior"`
+	Path      string              `provider:"path,omitempty"`
+	URL       string              `provider:"url,omitempty"`
+	Proxy     string              `provider:"proxy,omitempty"`
+	Format    string              `provider:"format,omitempty"`
+	Interval  int                 `provider:"interval,omitempty"`
+	SizeLimit int64               `provider:"size-limit,omitempty"`
+	Payload   []string            `provider:"payload,omitempty"`
+	Header    map[string][]string `provider:"header,omitempty"`
 }
 
 func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc) (P.RuleProvider, error) {
@@ -54,7 +55,7 @@ func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRu
 				return nil, C.Path.ErrNotSafePath(path)
 			}
 		}
-		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, nil, resource.DefaultHttpTimeout, schema.SizeLimit)
+		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout, schema.SizeLimit)
 	case "inline":
 		return NewInlineProvider(name, behavior, schema.Payload, parse), nil
 	default:
