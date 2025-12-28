@@ -845,7 +845,10 @@ func (c *pollConn) Close() error {
 		req.Host = c.headerHost
 		req.Header.Set("X-Sudoku-Tunnel", string(TunnelModePoll))
 		req.Header.Set("X-Sudoku-Version", "1")
-		_, _ = c.client.Do(req)
+		if resp, doErr := c.client.Do(req); doErr == nil && resp != nil {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
+			_ = resp.Body.Close()
+		}
 	}
 
 	return nil
@@ -1168,6 +1171,8 @@ type TunnelServer struct {
 
 	mu       sync.Mutex
 	sessions map[string]*tunnelSession
+
+	reapOnce sync.Once
 }
 
 type tunnelSession struct {
@@ -1620,7 +1625,7 @@ func (s *TunnelServer) authorizeSession(rawConn net.Conn) (HandleResult, net.Con
 	s.sessions[token] = &tunnelSession{conn: c2, lastActive: time.Now()}
 	s.mu.Unlock()
 
-	go s.reapSessionLater(token)
+	s.startSessionReaper()
 
 	_ = writeTokenHTTPResponse(rawConn, token)
 	_ = rawConn.Close()
@@ -1635,28 +1640,44 @@ func newSessionToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
-func (s *TunnelServer) reapSessionLater(token string) {
+func (s *TunnelServer) startSessionReaper() {
 	ttl := s.sessionTTL
 	if ttl <= 0 {
 		return
 	}
-	timer := time.NewTimer(ttl)
-	defer timer.Stop()
-	<-timer.C
 
-	s.mu.Lock()
-	sess, ok := s.sessions[token]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-	if time.Since(sess.lastActive) < ttl {
-		s.mu.Unlock()
-		return
-	}
-	delete(s.sessions, token)
-	s.mu.Unlock()
-	_ = sess.conn.Close()
+	s.reapOnce.Do(func() {
+		interval := ttl / 2
+		if interval < 1*time.Second {
+			interval = 1 * time.Second
+		}
+		if interval > 30*time.Second {
+			interval = 30 * time.Second
+		}
+
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			for range ticker.C {
+				now := time.Now()
+
+				var toClose []net.Conn
+				s.mu.Lock()
+				for token, sess := range s.sessions {
+					if now.Sub(sess.lastActive) >= ttl {
+						delete(s.sessions, token)
+						toClose = append(toClose, sess.conn)
+					}
+				}
+				s.mu.Unlock()
+
+				for _, c := range toClose {
+					_ = c.Close()
+				}
+			}
+		}()
+	})
 }
 
 func (s *TunnelServer) getSession(token string) (*tunnelSession, bool) {
