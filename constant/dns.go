@@ -103,6 +103,7 @@ func (d *DNSPrefer) UnmarshalText(data []byte) error {
 var FilterModeMapping = map[string]FilterMode{
 	FilterBlackList.String(): FilterBlackList,
 	FilterWhiteList.String(): FilterWhiteList,
+	FilterRule.String():      FilterRule,
 }
 
 type FilterMode int
@@ -110,6 +111,7 @@ type FilterMode int
 const (
 	FilterBlackList FilterMode = iota
 	FilterWhiteList
+	FilterRule
 )
 
 func (e FilterMode) String() string {
@@ -118,6 +120,8 @@ func (e FilterMode) String() string {
 		return "blacklist"
 	case FilterWhiteList:
 		return "whitelist"
+	case FilterRule:
+		return "rule"
 	default:
 		return "unknown"
 	}

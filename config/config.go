@@ -1450,33 +1450,22 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 			}
 		}
 
-		// separate fake-ip-rules and fake-ip-filters (blacklist or whitelist)
-		var ruleLines, domainFilters []string
-		for _, item := range cfg.FakeIPFilter {
-			if strings.Contains(item, ",") {
-				ruleLines = append(ruleLines, item)
-			} else {
-				domainFilters = append(domainFilters, item)
-			}
-		}
+		skipper := &fakeip.Skipper{}
 
-		host, err := parseDomain(domainFilters, fakeIPTrie, "dns.fake-ip-filter", ruleProviders)
-		if err != nil {
-			return nil, err
-		}
-
-		skipper := &fakeip.Skipper{
-			Host: host,
-			Mode: cfg.FakeIPFilterMode,
-		}
-
-		if len(ruleLines) > 0 {
-			rules, defaultMode, err := parseFakeIPRules(ruleLines, ruleProviders)
+		if cfg.FakeIPFilterMode == C.FilterRule {
+			rules, defaultMode, err := parseFakeIPRules(cfg.FakeIPFilter, ruleProviders)
 			if err != nil {
 				return nil, err
 			}
 			skipper.Rules = rules
 			skipper.DefaultMode = defaultMode
+		} else {
+			host, err := parseDomain(cfg.FakeIPFilter, fakeIPTrie, "dns.fake-ip-filter", ruleProviders)
+			if err != nil {
+				return nil, err
+			}
+			skipper.Host = host
+			skipper.Mode = cfg.FakeIPFilterMode
 		}
 
 		dnsCfg.FakeIPSkipper = skipper

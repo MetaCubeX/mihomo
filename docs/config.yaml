@@ -273,7 +273,7 @@ dns:
     # fakeip-filter 为 geosite 中名为 fakeip-filter 的分类（需要自行保证该分类存在）
     - geosite:fakeip-filter
 
-    # 当 fake-ip 语法与路由 rules 一致时，自动启用规则模式
+    # fake-ip-filter-mode: rule 也可以设置为下面的 blacklist whitelist
     # fake-ip 与路由 rules 匹配逻辑一致(自上而下)，语法也一致，支持GEOSITE、RuleSet、DOMAIN*、MATCH
     - RULE-SET,reject-domain,fake-ip # 自定义 RuleSet behavior 必须为 domain/classical，当为 classical 时仅会生效域名类规则
     - RULE-SET,proxy-domain,fake-ip
