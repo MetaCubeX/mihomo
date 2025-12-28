@@ -1459,6 +1459,7 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 			}
 			skipper.Rules = rules
 			skipper.DefaultMode = defaultMode
+			skipper.Mode = cfg.FakeIPFilterMode
 		} else {
 			host, err := parseDomain(cfg.FakeIPFilter, fakeIPTrie, "dns.fake-ip-filter", ruleProviders)
 			if err != nil {
