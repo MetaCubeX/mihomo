@@ -4,9 +4,14 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 )
 
+const (
+	UseFakeIP = "fake-ip"
+	UseRealIP = "real-ip"
+)
+
 type Skipper struct {
-	Rules       []*FakeIPRule
-	DefaultMode FakeIPMode
+	Rules       []C.Rule
+	DefaultMode string
 
 	Host []C.DomainMatcher
 	Mode C.FilterMode
@@ -15,9 +20,10 @@ type Skipper struct {
 // ShouldSkipped return if domain should be skipped
 func (p *Skipper) ShouldSkipped(domain string) bool {
 	if len(p.Rules) > 0 {
+		metadata := &C.Metadata{Host: domain}
 		for _, rule := range p.Rules {
-			if rule.Match(domain) {
-				return rule.ShouldSkip()
+			if matched, _ := rule.Match(metadata, C.RuleMatchHelper{}); matched {
+				return rule.Adapter() == UseRealIP
 			}
 		}
 		return p.DefaultMode == UseRealIP

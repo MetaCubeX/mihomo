@@ -229,7 +229,6 @@ type RawDNS struct {
 	FakeIPRange6                 string                              `yaml:"fake-ip-range6" json:"fake-ip-range6"`
 	FakeIPFilter                 []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
 	FakeIPFilterMode             C.FilterMode                        `yaml:"fake-ip-filter-mode" json:"fake-ip-filter-mode"`
-	FakeIPRules                  []string                            `yaml:"fake-ip-rules" json:"fake-ip-rules"`
 	FakeIPTTL                    int                                 `yaml:"fake-ip-ttl" json:"fake-ip-ttl"`
 	DefaultNameserver            []string                            `yaml:"default-nameserver" json:"default-nameserver"`
 	CacheAlgorithm               string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
@@ -1451,8 +1450,17 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 			}
 		}
 
-		// fake ip skip host filter
-		host, err := parseDomain(cfg.FakeIPFilter, fakeIPTrie, "dns.fake-ip-filter", ruleProviders)
+		// separate fake-ip-rules and fake-ip-filters (blacklist or whitelist)
+		var ruleLines, domainFilters []string
+		for _, item := range cfg.FakeIPFilter {
+			if strings.Contains(item, ",") {
+				ruleLines = append(ruleLines, item)
+			} else {
+				domainFilters = append(domainFilters, item)
+			}
+		}
+
+		host, err := parseDomain(domainFilters, fakeIPTrie, "dns.fake-ip-filter", ruleProviders)
 		if err != nil {
 			return nil, err
 		}
@@ -1462,8 +1470,8 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 			Mode: cfg.FakeIPFilterMode,
 		}
 
-		if len(cfg.FakeIPRules) > 0 {
-			rules, defaultMode, err := parseFakeIPRules(cfg.FakeIPRules, ruleProviders)
+		if len(ruleLines) > 0 {
+			rules, defaultMode, err := parseFakeIPRules(ruleLines, ruleProviders)
 			if err != nil {
 				return nil, err
 			}
@@ -1552,54 +1560,47 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	return dnsCfg, nil
 }
 
-func parseFakeIPRules(rawRules []string, ruleProviders map[string]P.RuleProvider) ([]*fakeip.FakeIPRule, fakeip.FakeIPMode, error) {
-	var rules []*fakeip.FakeIPRule
+func parseFakeIPRules(rawRules []string, ruleProviders map[string]P.RuleProvider) ([]C.Rule, string, error) {
+	var rules []C.Rule
 	defaultMode := fakeip.UseFakeIP
 
 	for idx, line := range rawRules {
 		tp, payload, action, params := RC.ParseRulePayload(line, true)
 
-		var mode fakeip.FakeIPMode
-		switch strings.ToLower(action) {
-		case "fake-ip":
-			mode = fakeip.UseFakeIP
-		case "real-ip":
-			mode = fakeip.UseRealIP
-		default:
-			return nil, defaultMode, fmt.Errorf("dns.fake-ip-rules[%d] [%s] error: invalid action '%s', must be 'fake-ip' or 'real-ip'", idx, line, action)
+		action = strings.ToLower(action)
+		if action != fakeip.UseFakeIP && action != fakeip.UseRealIP {
+			return nil, defaultMode, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: invalid action '%s', must be 'fake-ip' or 'real-ip'", idx, line, action)
 		}
 
 		if tp == "MATCH" {
-			defaultMode = mode
+			defaultMode = action
 			continue
 		}
 
 		if tp == "RULE-SET" {
 			if rp, ok := ruleProviders[payload]; !ok {
-				return nil, defaultMode, fmt.Errorf("dns.fake-ip-rules[%d] [%s] error: rule-set '%s' not found", idx, line, payload)
+				return nil, defaultMode, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: rule-set '%s' not found", idx, line, payload)
 			} else {
 				switch rp.Behavior() {
 				case P.IPCIDR:
-					return nil, defaultMode, fmt.Errorf("dns.fake-ip-rules[%d] [%s] error: rule-set behavior is %s, must be domain or classical", idx, line, rp.Behavior())
+					return nil, defaultMode, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: rule-set behavior is %s, must be domain or classical", idx, line, rp.Behavior())
 				case P.Classical:
-					log.Warnln("%s provider is %s, only matching domain rules in fake-ip-rules", rp.Name(), rp.Behavior())
+					log.Warnln("%s provider is %s, only matching domain rules in fake-ip-filter", rp.Name(), rp.Behavior())
+				default:
 				}
 			}
 		}
 
-		parsed, err := R.ParseRule(tp, payload, "", params, nil)
+		parsed, err := R.ParseRule(tp, payload, action, params, nil)
 		if err != nil {
-			return nil, defaultMode, fmt.Errorf("dns.fake-ip-rules[%d] [%s] error: %w", idx, line, err)
+			return nil, defaultMode, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: %w", idx, line, err)
 		}
 
 		if !isDomainRule(parsed.RuleType()) {
-			return nil, defaultMode, fmt.Errorf("dns.fake-ip-rules[%d] [%s] error: rule type '%s' not supported, only domain-based rules allowed", idx, line, tp)
+			return nil, defaultMode, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: rule type '%s' not supported, only domain-based rules allowed", idx, line, tp)
 		}
 
-		rules = append(rules, &fakeip.FakeIPRule{
-			Rule:   parsed,
-			Action: mode,
-		})
+		rules = append(rules, parsed)
 	}
 
 	return rules, defaultMode, nil
@@ -1609,8 +1610,9 @@ func isDomainRule(rt C.RuleType) bool {
 	switch rt {
 	case C.Domain, C.DomainSuffix, C.DomainKeyword, C.DomainRegex, C.DomainWildcard, C.GEOSITE, C.RuleSet:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func parseAuthentication(rawRecords []string) []auth.AuthUser {
