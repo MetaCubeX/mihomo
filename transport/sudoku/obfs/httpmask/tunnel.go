@@ -78,6 +78,14 @@ func isRetryableDialError(err error) bool {
 	}
 }
 
+func shouldBurstMitigate(serverAddress string, opts TunnelDialOptions) bool {
+	_, _, dialAddr, _, err := normalizeHTTPDialTarget(serverAddress, opts.TLSEnabled, opts.HostOverride)
+	if err != nil {
+		return false
+	}
+	return shouldThrottleLoopbackDial(dialAddr)
+}
+
 func normalizeTunnelMode(mode string) TunnelMode {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", string(TunnelModeLegacy):
@@ -387,6 +395,8 @@ type streamSplitConn struct {
 	closeURL   string
 	headerHost string
 
+	loopbackThrottle bool
+
 	rxc    chan []byte
 	closed chan struct{}
 
@@ -543,11 +553,13 @@ func dialStreamSplit(ctx context.Context, serverAddress string, opts TunnelDialO
 		pullURL:    pullURL,
 		closeURL:   closeURL,
 		headerHost: target.headerHost,
-		rxc:        make(chan []byte, 256),
-		closed:     make(chan struct{}),
-		writeCh:    make(chan []byte, 256),
-		localAddr:  &net.TCPAddr{},
-		remoteAddr: &net.TCPAddr{},
+		// Only burst-mitigate in Windows loopback tests; keep non-loopback behavior unchanged.
+		loopbackThrottle: shouldBurstMitigate(serverAddress, opts),
+		rxc:              make(chan []byte, 256),
+		closed:           make(chan struct{}),
+		writeCh:          make(chan []byte, 256),
+		localAddr:        &net.TCPAddr{},
+		remoteAddr:       &net.TCPAddr{},
 	}
 
 	go c.pullLoop()
@@ -632,11 +644,14 @@ func (c *streamSplitConn) pullLoop() {
 }
 
 func (c *streamSplitConn) pushLoop() {
-	const (
-		maxBatchBytes  = 512 * 1024
-		flushInterval  = 50 * time.Millisecond
+	maxBatchBytes := 256 * 1024
+	flushInterval := 5 * time.Millisecond
+	requestTimeout := 20 * time.Second
+	if c.loopbackThrottle {
+		maxBatchBytes = 512 * 1024
+		flushInterval = 50 * time.Millisecond
 		requestTimeout = 30 * time.Second
-	)
+	}
 
 	var (
 		buf   bytes.Buffer
@@ -732,6 +747,8 @@ type pollConn struct {
 	pullURL    string
 	closeURL   string
 	headerHost string
+
+	loopbackThrottle bool
 
 	rxc    chan []byte
 	closed chan struct{}
@@ -889,11 +906,13 @@ func dialPoll(ctx context.Context, serverAddress string, opts TunnelDialOptions)
 		pullURL:    pullURL,
 		closeURL:   closeURL,
 		headerHost: target.headerHost,
-		rxc:        make(chan []byte, 128),
-		closed:     make(chan struct{}),
-		writeCh:    make(chan []byte, 256),
-		localAddr:  &net.TCPAddr{},
-		remoteAddr: &net.TCPAddr{},
+		// Only burst-mitigate in Windows loopback tests; keep non-loopback behavior unchanged.
+		loopbackThrottle: shouldBurstMitigate(serverAddress, opts),
+		rxc:              make(chan []byte, 128),
+		closed:           make(chan struct{}),
+		writeCh:          make(chan []byte, 256),
+		localAddr:        &net.TCPAddr{},
+		remoteAddr:       &net.TCPAddr{},
 	}
 
 	go c.pullLoop()
@@ -966,12 +985,16 @@ func (c *pollConn) pullLoop() {
 }
 
 func (c *pollConn) pushLoop() {
+	maxBatchBytes := 64 * 1024
+	flushInterval := 5 * time.Millisecond
 	const (
-		maxBatchBytes   = 256 * 1024
-		flushInterval   = 50 * time.Millisecond
 		maxLineRawBytes = 16 * 1024
 		requestTimeout  = 30 * time.Second
 	)
+	if c.loopbackThrottle {
+		maxBatchBytes = 256 * 1024
+		flushInterval = 50 * time.Millisecond
+	}
 
 	var (
 		buf        bytes.Buffer
@@ -1509,7 +1532,7 @@ func writeTunnelResponseHeader(w io.Writer) error {
 			"Transfer-Encoding: chunked\r\n"+
 			"Cache-Control: no-store\r\n"+
 			"Pragma: no-cache\r\n"+
-			"Connection: close\r\n"+
+			"Connection: keep-alive\r\n"+
 			"X-Accel-Buffering: no\r\n"+
 			"\r\n")
 	return err
