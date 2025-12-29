@@ -272,7 +272,7 @@ type RawTun struct {
 	MTU        uint32 `yaml:"mtu" json:"mtu,omitempty"`
 	GSO        bool   `yaml:"gso" json:"gso,omitempty"`
 	GSOMaxSize uint32 `yaml:"gso-max-size" json:"gso-max-size,omitempty"`
-	//Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
+	// Inet4Address           []netip.Prefix `yaml:"inet4-address" json:"inet4-address,omitempty"`
 	Inet6Address           []netip.Prefix `yaml:"inet6-address" json:"inet6-address,omitempty"`
 	IPRoute2TableIndex     int            `yaml:"iproute2-table-index" json:"iproute2-table-index,omitempty"`
 	IPRoute2RuleIndex      int            `yaml:"iproute2-rule-index" json:"iproute2-rule-index,omitempty"`
@@ -598,7 +598,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
-	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
+	log.Infoln("Start initial configuration in progress") // Segment finished in xxm
 	startTime := time.Now()
 
 	general, err := parseGeneral(rawCfg)
@@ -724,7 +724,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
-	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm
+	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) // Segment finished in xxm
 
 	return config, nil
 }
@@ -1290,63 +1290,11 @@ func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], rulePro
 		if err != nil {
 			return nil, err
 		}
-		kLower := strings.ToLower(k)
-		if strings.Contains(kLower, ",") {
-			if strings.HasPrefix(kLower, "geosite:") {
-				subkeys := strings.Split(k, ":")
-				subkeys = subkeys[1:]
-				subkeys = strings.Split(subkeys[0], ",")
-				for _, subkey := range subkeys {
-					newKey := "geosite:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
-				}
-			} else if strings.HasPrefix(kLower, "rule-set:") {
-				subkeys := strings.Split(k, ":")
-				subkeys = subkeys[1:]
-				subkeys = strings.Split(subkeys[0], ",")
-				for _, subkey := range subkeys {
-					newKey := "rule-set:" + subkey
-					policy = append(policy, dns.Policy{Domain: newKey, NameServers: nameservers})
-				}
-			} else {
-				subkeys := strings.Split(k, ",")
-				for _, subkey := range subkeys {
-					policy = append(policy, dns.Policy{Domain: subkey, NameServers: nameservers})
-				}
-			}
-		} else {
-			if strings.HasPrefix(kLower, "geosite:") {
-				policy = append(policy, dns.Policy{Domain: "geosite:" + k[8:], NameServers: nameservers})
-			} else if strings.HasPrefix(kLower, "rule-set:") {
-				policy = append(policy, dns.Policy{Domain: "rule-set:" + k[9:], NameServers: nameservers})
-			} else {
-				policy = append(policy, dns.Policy{Domain: k, NameServers: nameservers})
-			}
+		ps, err := parseDNSPolicy(k, nameservers, ruleProviders)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	for idx, p := range policy {
-		domain, nameservers := p.Domain, p.NameServers
-
-		if strings.HasPrefix(domain, "rule-set:") {
-			domainSetName := domain[9:]
-			matcher, err := parseDomainRuleSet(domainSetName, "dns.nameserver-policy", ruleProviders)
-			if err != nil {
-				return nil, err
-			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
-		} else if strings.HasPrefix(domain, "geosite:") {
-			country := domain[8:]
-			matcher, err := RC.NewGEOSITE(country, "dns.nameserver-policy")
-			if err != nil {
-				return nil, err
-			}
-			policy[idx] = dns.Policy{Matcher: matcher, NameServers: nameservers}
-		} else {
-			if _, valid := trie.ValidAndSplitDomain(domain); !valid {
-				return nil, fmt.Errorf("DNS ResoverRule invalid domain: %s", domain)
-			}
-		}
+		policy = append(policy, ps...)
 	}
 
 	return policy, nil
