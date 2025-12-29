@@ -20,8 +20,8 @@ func (p *Skipper) ShouldSkipped(domain string) bool {
 	if len(p.Rules) > 0 {
 		metadata := &C.Metadata{Host: domain}
 		for _, rule := range p.Rules {
-			if matched, _ := rule.Match(metadata, C.RuleMatchHelper{}); matched {
-				return rule.Adapter() == UseRealIP
+			if matched, action := rule.Match(metadata, C.RuleMatchHelper{}); matched {
+				return action == UseRealIP
 			}
 		}
 		return false
