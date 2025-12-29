@@ -10,11 +10,9 @@ const (
 )
 
 type Skipper struct {
-	Rules       []C.Rule
-	DefaultMode string
-
-	Host []C.DomainMatcher
-	Mode C.FilterMode
+	Rules []C.Rule
+	Host  []C.DomainMatcher
+	Mode  C.FilterMode
 }
 
 // ShouldSkipped return if domain should be skipped
@@ -26,7 +24,7 @@ func (p *Skipper) ShouldSkipped(domain string) bool {
 				return rule.Adapter() == UseRealIP
 			}
 		}
-		return p.DefaultMode == UseRealIP
+		return false
 	}
 
 	should := p.shouldSkipped(domain)
