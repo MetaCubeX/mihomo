@@ -4,11 +4,17 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/metacubex/mihomo/component/geodata"
 	C "github.com/metacubex/mihomo/constant"
 	providerTypes "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/dns"
 	RP "github.com/metacubex/mihomo/rules/provider"
 )
+
+func init() {
+	// run test need geosite
+	geodata.SetGeoSiteUrl("https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat")
+}
 
 func Test_getMatcher(t *testing.T) {
 	type args struct {
