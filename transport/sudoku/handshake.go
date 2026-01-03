@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -23,12 +24,17 @@ type SessionType int
 const (
 	SessionTypeTCP SessionType = iota
 	SessionTypeUoT
+	SessionTypeMultiplex
 )
 
 type ServerSession struct {
 	Conn   net.Conn
 	Type   SessionType
 	Target string
+
+	// UserHash is a stable per-key identifier derived from the handshake payload.
+	// It is primarily useful for debugging / user attribution when table rotation is enabled.
+	UserHash string
 }
 
 type bufferedConn struct {
@@ -216,7 +222,7 @@ func ClientHandshakeWithOptions(rawConn net.Conn, cfg *ProtocolConfig, opt Clien
 
 	handshake := buildHandshakePayload(cfg.Key)
 	if len(cfg.tableCandidates()) > 1 {
-		handshake[15] = tableID
+		handshake[8] = tableID
 	}
 	if _, err := cConn.Write(handshake[:]); err != nil {
 		cConn.Close()
@@ -280,6 +286,7 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, err
 		return nil, fmt.Errorf("timestamp skew detected")
 	}
 
+	userHash := userHashFromHandshake(handshakeBuf[:])
 	sConn.StopRecording()
 
 	modeBuf := []byte{0}
@@ -298,6 +305,11 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, err
 		return nil, fmt.Errorf("read first byte failed: %w", err)
 	}
 
+	if firstByte[0] == MultiplexMagicByte {
+		rawConn.SetReadDeadline(time.Time{})
+		return &ServerSession{Conn: cConn, Type: SessionTypeMultiplex, UserHash: userHash}, nil
+	}
+
 	if firstByte[0] == UoTMagicByte {
 		version := make([]byte, 1)
 		if _, err := io.ReadFull(cConn, version); err != nil {
@@ -309,7 +321,7 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, err
 			return nil, fmt.Errorf("unsupported uot version: %d", version[0])
 		}
 		rawConn.SetReadDeadline(time.Time{})
-		return &ServerSession{Conn: cConn, Type: SessionTypeUoT}, nil
+		return &ServerSession{Conn: cConn, Type: SessionTypeUoT, UserHash: userHash}, nil
 	}
 
 	prefixed := &preBufferedConn{Conn: cConn, buf: firstByte}
@@ -325,6 +337,7 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, err
 		Conn:   prefixed,
 		Type:   SessionTypeTCP,
 		Target: target,
+		UserHash: userHash,
 	}, nil
 }
 
@@ -363,4 +376,12 @@ func randomByte() byte {
 		return b[0]
 	}
 	return byte(time.Now().UnixNano())
+}
+
+func userHashFromHandshake(handshakeBuf []byte) string {
+	if len(handshakeBuf) < 16 {
+		return ""
+	}
+	// handshake[8] may be a table ID when table rotation is enabled; use [9:16] as stable user hash bytes.
+	return hex.EncodeToString(handshakeBuf[9:16])
 }

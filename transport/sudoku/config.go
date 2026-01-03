@@ -57,6 +57,11 @@ type ProtocolConfig struct {
 
 	// HTTPMaskHost optionally overrides the HTTP Host header / SNI host for HTTP tunnel modes (client-side).
 	HTTPMaskHost string
+
+	// HTTPMaskMultiplex controls whether the client reuses a single (HTTP-masked) tunnel connection and
+	// opens multiple logical target streams inside it (reduces RTT for subsequent connections).
+	// Values: "off" / "auto" / "on".
+	HTTPMaskMultiplex string
 }
 
 func (c *ProtocolConfig) Validate() error {
@@ -103,6 +108,12 @@ func (c *ProtocolConfig) Validate() error {
 		return fmt.Errorf("invalid http-mask-mode: %s, must be one of: legacy, stream, poll, auto", c.HTTPMaskMode)
 	}
 
+	switch strings.ToLower(strings.TrimSpace(c.HTTPMaskMultiplex)) {
+	case "", "off", "auto", "on":
+	default:
+		return fmt.Errorf("invalid http-mask-multiplex: %s, must be one of: off, auto, on", c.HTTPMaskMultiplex)
+	}
+
 	return nil
 }
 
@@ -127,6 +138,7 @@ func DefaultConfig() *ProtocolConfig {
 		EnablePureDownlink:      true,
 		HandshakeTimeoutSeconds: 5,
 		HTTPMaskMode:            "legacy",
+		HTTPMaskMultiplex:       "off",
 	}
 }
 
