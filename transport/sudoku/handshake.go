@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -153,7 +153,14 @@ func buildServerObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table,
 func buildHandshakePayload(key string) [16]byte {
 	var payload [16]byte
 	binary.BigEndian.PutUint64(payload[:8], uint64(time.Now().Unix()))
-	hash := sha256.Sum256([]byte(key))
+	// Hash the decoded HEX bytes of the key, not the HEX string itself.
+	// This ensures the user hash is computed on the actual key bytes.
+	keyBytes, err := hex.DecodeString(key)
+	if err != nil {
+		// Fallback: if key is not valid HEX (e.g., a UUID or plain string), hash the string bytes
+		keyBytes = []byte(key)
+	}
+	hash := sha256.Sum256(keyBytes)
 	copy(payload[8:], hash[:8])
 	return payload
 }
@@ -334,9 +341,9 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, err
 	rawConn.SetReadDeadline(time.Time{})
 	log.Debugln("[Sudoku] incoming TCP session target: %s", target)
 	return &ServerSession{
-		Conn:   prefixed,
-		Type:   SessionTypeTCP,
-		Target: target,
+		Conn:     prefixed,
+		Type:     SessionTypeTCP,
+		Target:   target,
 		UserHash: userHash,
 	}, nil
 }

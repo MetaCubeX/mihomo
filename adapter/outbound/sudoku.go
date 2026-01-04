@@ -37,13 +37,11 @@ type SudokuOption struct {
 	TableType          string   `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
 	EnablePureDownlink *bool    `proxy:"enable-pure-downlink,omitempty"`
 	HTTPMask           bool     `proxy:"http-mask,omitempty"`
-	HTTPMaskMode       string   `proxy:"http-mask-mode,omitempty"`     // "legacy" (default), "stream", "poll", "auto"
-	HTTPMaskTLS        bool     `proxy:"http-mask-tls,omitempty"`      // only for http-mask-mode stream/poll/auto
-	HTTPMaskHost       string   `proxy:"http-mask-host,omitempty"`     // optional Host/SNI override (domain or domain:port)
-	HTTPMaskStrategy   string   `proxy:"http-mask-strategy,omitempty"` // "random" (default), "post", "websocket"
+	HTTPMaskMode       string   `proxy:"http-mask-mode,omitempty"`      // "legacy" (default), "stream", "poll", "auto"
+	HTTPMaskTLS        bool     `proxy:"http-mask-tls,omitempty"`       // only for http-mask-mode stream/poll/auto
 	HTTPMaskMultiplex  string   `proxy:"http-mask-multiplex,omitempty"` // "off" (default), "auto", "on"
-	CustomTable        string   `proxy:"custom-table,omitempty"`       // optional custom byte layout, e.g. xpxvvpvv
-	CustomTables       []string `proxy:"custom-tables,omitempty"`      // optional table rotation patterns, overrides custom-table when non-empty
+	CustomTable        string   `proxy:"custom-table,omitempty"`        // optional custom byte layout, e.g. xpxvvpvv
+	CustomTables       []string `proxy:"custom-tables,omitempty"`       // optional table rotation patterns, overrides custom-table when non-empty
 }
 
 // DialContext implements C.ProxyAdapter
@@ -186,7 +184,6 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		DisableHTTPMask:         !option.HTTPMask,
 		HTTPMaskMode:            defaultConf.HTTPMaskMode,
 		HTTPMaskTLSEnabled:      option.HTTPMaskTLS,
-		HTTPMaskHost:            option.HTTPMaskHost,
 		HTTPMaskMultiplex:       defaultConf.HTTPMaskMultiplex,
 	}
 	if option.HTTPMaskMode != "" {
@@ -261,11 +258,8 @@ func (s *Sudoku) dialAndHandshake(ctx context.Context, cfg *sudoku.ProtocolConfi
 	}
 
 	var c net.Conn
-	if !cfg.DisableHTTPMask {
-		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
-		case "stream", "poll", "auto":
-			c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
-		}
+	if !cfg.DisableHTTPMask && httpTunnelModeEnabled(cfg.HTTPMaskMode) {
+		c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
 	}
 	if c == nil && err == nil {
 		c, err = s.dialer.DialContext(ctx, "tcp", s.addr)
@@ -282,14 +276,11 @@ func (s *Sudoku) dialAndHandshake(ctx context.Context, cfg *sudoku.ProtocolConfi
 	}
 
 	handshakeCfg := *cfg
-	if !handshakeCfg.DisableHTTPMask {
-		switch strings.ToLower(strings.TrimSpace(handshakeCfg.HTTPMaskMode)) {
-		case "stream", "poll", "auto":
-			handshakeCfg.DisableHTTPMask = true
-		}
+	if !handshakeCfg.DisableHTTPMask && httpTunnelModeEnabled(handshakeCfg.HTTPMaskMode) {
+		handshakeCfg.DisableHTTPMask = true
 	}
 
-	c, err = sudoku.ClientHandshakeWithOptions(c, &handshakeCfg, sudoku.ClientHandshakeOptions{HTTPMaskStrategy: s.option.HTTPMaskStrategy})
+	c, err = sudoku.ClientHandshakeWithOptions(c, &handshakeCfg, sudoku.ClientHandshakeOptions{})
 	if err != nil {
 		return nil, err
 	}
