@@ -39,6 +39,7 @@ type SudokuOption struct {
 	HTTPMask           bool     `proxy:"http-mask,omitempty"`
 	HTTPMaskMode       string   `proxy:"http-mask-mode,omitempty"`      // "legacy" (default), "stream", "poll", "auto"
 	HTTPMaskTLS        bool     `proxy:"http-mask-tls,omitempty"`       // only for http-mask-mode stream/poll/auto
+	HTTPMaskHost       string   `proxy:"http-mask-host,omitempty"`      // optional Host/SNI override (domain or domain:port)
 	HTTPMaskMultiplex  string   `proxy:"http-mask-multiplex,omitempty"` // "off" (default), "auto", "on"
 	CustomTable        string   `proxy:"custom-table,omitempty"`        // optional custom byte layout, e.g. xpxvvpvv
 	CustomTables       []string `proxy:"custom-tables,omitempty"`       // optional table rotation patterns, overrides custom-table when non-empty
@@ -184,6 +185,7 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		DisableHTTPMask:         !option.HTTPMask,
 		HTTPMaskMode:            defaultConf.HTTPMaskMode,
 		HTTPMaskTLSEnabled:      option.HTTPMaskTLS,
+		HTTPMaskHost:            option.HTTPMaskHost,
 		HTTPMaskMultiplex:       defaultConf.HTTPMaskMultiplex,
 	}
 	if option.HTTPMaskMode != "" {
