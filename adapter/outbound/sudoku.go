@@ -19,7 +19,8 @@ type Sudoku struct {
 	option   *SudokuOption
 	baseConf sudoku.ProtocolConfig
 
-	httpMaskReuseKey string
+	httpMaskMu     sync.Mutex
+	httpMaskClient *sudoku.HTTPMaskTunnelClient
 
 	muxMu           sync.Mutex
 	muxClient       *sudoku.MultiplexClient
@@ -220,12 +221,12 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		baseConf: baseConf,
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
-	outbound.httpMaskReuseKey = fmt.Sprintf("sudoku:%p", outbound)
 	return outbound, nil
 }
 
 func (s *Sudoku) Close() error {
 	s.resetMuxClient()
+	s.resetHTTPMaskClient()
 	return s.Base.Close()
 }
 
@@ -258,7 +259,17 @@ func (s *Sudoku) dialAndHandshake(ctx context.Context, cfg *sudoku.ProtocolConfi
 
 	var c net.Conn
 	if !cfg.DisableHTTPMask && httpTunnelModeEnabled(cfg.HTTPMaskMode) {
-		c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext, s.httpMaskReuseKey)
+		muxMode := normalizeHTTPMaskMultiplex(cfg.HTTPMaskMultiplex)
+		switch muxMode {
+		case "auto", "on":
+			client, errX := s.getOrCreateHTTPMaskClient(cfg)
+			if errX != nil {
+				return nil, errX
+			}
+			c, err = client.Dial(ctx)
+		default:
+			c, err = sudoku.DialHTTPMaskTunnel(ctx, cfg.ServerAddress, cfg, s.dialer.DialContext)
+		}
 	}
 	if c == nil && err == nil {
 		c, err = s.dialer.DialContext(ctx, "tcp", s.addr)
@@ -375,5 +386,37 @@ func (s *Sudoku) resetMuxClient() {
 	if s.muxClient != nil {
 		_ = s.muxClient.Close()
 		s.muxClient = nil
+	}
+}
+
+func (s *Sudoku) getOrCreateHTTPMaskClient(cfg *sudoku.ProtocolConfig) (*sudoku.HTTPMaskTunnelClient, error) {
+	if s == nil {
+		return nil, fmt.Errorf("nil adapter")
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("config is required")
+	}
+
+	s.httpMaskMu.Lock()
+	defer s.httpMaskMu.Unlock()
+
+	if s.httpMaskClient != nil {
+		return s.httpMaskClient, nil
+	}
+
+	c, err := sudoku.NewHTTPMaskTunnelClient(cfg.ServerAddress, cfg, s.dialer.DialContext)
+	if err != nil {
+		return nil, err
+	}
+	s.httpMaskClient = c
+	return c, nil
+}
+
+func (s *Sudoku) resetHTTPMaskClient() {
+	s.httpMaskMu.Lock()
+	defer s.httpMaskMu.Unlock()
+	if s.httpMaskClient != nil {
+		s.httpMaskClient.CloseIdleConnections()
+		s.httpMaskClient = nil
 	}
 }

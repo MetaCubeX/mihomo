@@ -62,23 +62,81 @@ type TunnelDialOptions struct {
 	Mode         string
 	TLSEnabled   bool   // when true, use HTTPS; otherwise, use HTTP (no port-based inference)
 	HostOverride string // optional Host header / SNI host (without scheme); accepts "example.com" or "example.com:443"
-	// Multiplex controls whether DialTunnel reuses underlying HTTP connections (HTTP/1.1 keep-alive / HTTP/2).
-	// Values: "off" disables reuse; "auto"/"on" enables it. Empty defaults to "auto".
+	// Multiplex controls whether the caller should reuse underlying HTTP connections (HTTP/1.1 keep-alive / HTTP/2).
+	// To reuse across multiple dials, create a TunnelClient per proxy and reuse it.
+	// Values: "off" disables reuse; "auto"/"on" enables it.
 	Multiplex string
-	// ReuseKey scopes transport reuse to a specific caller/dialer to avoid cross-dialer mixing.
-	// When empty, transports may be reused globally (not recommended when DialContext differs across callers).
-	ReuseKey string
 	// DialContext overrides how the HTTP tunnel dials raw TCP/TLS connections.
 	// It must not be nil; passing nil is a programming error.
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
-func multiplexEnabled(mode string) bool {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", "auto", "on":
-		return true
+type TunnelClientOptions struct {
+	TLSEnabled   bool
+	HostOverride string
+	DialContext  func(ctx context.Context, network, addr string) (net.Conn, error)
+	MaxIdleConns int
+}
+
+type TunnelClient struct {
+	client    *http.Client
+	transport *http.Transport
+	target    httpClientTarget
+}
+
+func NewTunnelClient(serverAddress string, opts TunnelClientOptions) (*TunnelClient, error) {
+	maxIdle := opts.MaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 32
+	}
+
+	transport, target, err := buildHTTPTransport(serverAddress, opts.TLSEnabled, opts.HostOverride, opts.DialContext, maxIdle)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TunnelClient{
+		client:    &http.Client{Transport: transport},
+		transport: transport,
+		target:    target,
+	}, nil
+}
+
+func (c *TunnelClient) CloseIdleConnections() {
+	if c == nil || c.transport == nil {
+		return
+	}
+	c.transport.CloseIdleConnections()
+}
+
+func (c *TunnelClient) DialTunnel(ctx context.Context, mode string) (net.Conn, error) {
+	if c == nil || c.client == nil {
+		return nil, fmt.Errorf("nil tunnel client")
+	}
+	tm := normalizeTunnelMode(mode)
+	if tm == TunnelModeLegacy {
+		return nil, fmt.Errorf("legacy mode does not use http tunnel")
+	}
+
+	switch tm {
+	case TunnelModeStream:
+		return dialStreamWithClient(ctx, c.client, c.target)
+	case TunnelModePoll:
+		return dialPollWithClient(ctx, c.client, c.target)
+	case TunnelModeAuto:
+		streamCtx, cancelX := context.WithTimeout(ctx, 3*time.Second)
+		c1, errX := dialStreamWithClient(streamCtx, c.client, c.target)
+		cancelX()
+		if errX == nil {
+			return c1, nil
+		}
+		c2, errP := dialPollWithClient(ctx, c.client, c.target)
+		if errP == nil {
+			return c2, nil
+		}
+		return nil, fmt.Errorf("auto tunnel failed: stream: %v; poll: %w", errX, errP)
 	default:
-		return false
+		return dialStreamWithClient(ctx, c.client, c.target)
 	}
 }
 
@@ -207,97 +265,53 @@ type httpClientTarget struct {
 	headerHost string
 }
 
-type transportKey struct {
-	scheme     string
-	urlHost    string
-	dialAddr   string
-	serverName string
-	maxIdle    int
-	reuseKey   string
-}
-
-var (
-	transportMu   sync.Mutex
-	transportPool = make(map[transportKey]*http.Transport)
-)
-
-func newHTTPClient(serverAddress string, opts TunnelDialOptions, maxIdleConns int) (*http.Client, httpClientTarget, error) {
-	if opts.DialContext == nil {
+func buildHTTPTransport(serverAddress string, tlsEnabled bool, hostOverride string, dialContext func(ctx context.Context, network, addr string) (net.Conn, error), maxIdleConns int) (*http.Transport, httpClientTarget, error) {
+	if dialContext == nil {
 		panic("httpmask: DialContext is nil")
 	}
 
-	scheme, urlHost, dialAddr, serverName, err := normalizeHTTPDialTarget(serverAddress, opts.TLSEnabled, opts.HostOverride)
+	scheme, urlHost, dialAddr, serverName, err := normalizeHTTPDialTarget(serverAddress, tlsEnabled, hostOverride)
 	if err != nil {
 		return nil, httpClientTarget{}, err
 	}
 
-	buildTransport := func() (*http.Transport, error) {
-		transport := &http.Transport{
-			ForceAttemptHTTP2:     scheme == "https",
-			DisableCompression:    true,
-			MaxIdleConns:          maxIdleConns,
-			MaxIdleConnsPerHost:   maxIdleConns,
-			IdleConnTimeout:       30 * time.Second,
-			ResponseHeaderTimeout: 20 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			DialContext: func(dialCtx context.Context, network, _ string) (net.Conn, error) {
-				return opts.DialContext(dialCtx, network, dialAddr)
-			},
-		}
-		if scheme == "https" {
-			var tlsConf *tls.Config
-			tlsConf, err = ca.GetTLSConfig(ca.Option{TLSConfig: &tls.Config{
-				ServerName: serverName,
-				MinVersion: tls.VersionTLS12,
-			}})
-			if err != nil {
-				return nil, err
-			}
-			transport.TLSClientConfig = tlsConf
-		}
-		return transport, nil
+	transport := &http.Transport{
+		ForceAttemptHTTP2:     scheme == "https",
+		DisableCompression:    true,
+		MaxIdleConns:          maxIdleConns,
+		MaxIdleConnsPerHost:   maxIdleConns,
+		IdleConnTimeout:       30 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		DialContext: func(dialCtx context.Context, network, _ string) (net.Conn, error) {
+			return dialContext(dialCtx, network, dialAddr)
+		},
 	}
-
-	reuseTransport := multiplexEnabled(opts.Multiplex)
-	var transport *http.Transport
-	if !reuseTransport {
-		transport, err = buildTransport()
+	if scheme == "https" {
+		var tlsConf *tls.Config
+		tlsConf, err = ca.GetTLSConfig(ca.Option{TLSConfig: &tls.Config{
+			ServerName: serverName,
+			MinVersion: tls.VersionTLS12,
+		}})
 		if err != nil {
 			return nil, httpClientTarget{}, err
 		}
-	} else {
-		key := transportKey{
-			scheme:     scheme,
-			urlHost:    urlHost,
-			dialAddr:   dialAddr,
-			serverName: serverName,
-			maxIdle:    maxIdleConns,
-			reuseKey:   opts.ReuseKey,
-		}
-		transportMu.Lock()
-		transport = transportPool[key]
-		transportMu.Unlock()
-		if transport == nil {
-			transport, err = buildTransport()
-			if err != nil {
-				return nil, httpClientTarget{}, err
-			}
-			transportMu.Lock()
-			if existing := transportPool[key]; existing != nil {
-				transportMu.Unlock()
-				transport = existing
-			} else {
-				transportPool[key] = transport
-				transportMu.Unlock()
-			}
-		}
+		transport.TLSClientConfig = tlsConf
 	}
 
-	return &http.Client{Transport: transport}, httpClientTarget{
+	return transport, httpClientTarget{
 		scheme:     scheme,
 		urlHost:    urlHost,
 		headerHost: canonicalHeaderHost(urlHost, scheme),
 	}, nil
+}
+
+func newHTTPClient(serverAddress string, opts TunnelDialOptions, maxIdleConns int) (*http.Client, httpClientTarget, error) {
+	transport, target, err := buildHTTPTransport(serverAddress, opts.TLSEnabled, opts.HostOverride, opts.DialContext, maxIdleConns)
+	if err != nil {
+		return nil, httpClientTarget{}, err
+	}
+	return &http.Client{Transport: transport}, target, nil
 }
 
 type sessionDialInfo struct {
@@ -308,10 +322,9 @@ type sessionDialInfo struct {
 	headerHost string
 }
 
-func dialSession(ctx context.Context, serverAddress string, opts TunnelDialOptions, mode TunnelMode) (*sessionDialInfo, error) {
-	client, target, err := newHTTPClient(serverAddress, opts, 32)
-	if err != nil {
-		return nil, err
+func dialSessionWithClient(ctx context.Context, client *http.Client, target httpClientTarget, mode TunnelMode) (*sessionDialInfo, error) {
+	if client == nil {
+		return nil, fmt.Errorf("nil http client")
 	}
 
 	authorizeURL := (&url.URL{Scheme: target.scheme, Host: target.urlHost, Path: "/session"}).String()
@@ -356,6 +369,14 @@ func dialSession(ctx context.Context, serverAddress string, opts TunnelDialOptio
 	}, nil
 }
 
+func dialSession(ctx context.Context, serverAddress string, opts TunnelDialOptions, mode TunnelMode) (*sessionDialInfo, error) {
+	client, target, err := newHTTPClient(serverAddress, opts, 32)
+	if err != nil {
+		return nil, err
+	}
+	return dialSessionWithClient(ctx, client, target, mode)
+}
+
 func bestEffortCloseSession(client *http.Client, closeURL, headerHost string, mode TunnelMode) {
 	if client == nil || closeURL == "" || headerHost == "" {
 		return
@@ -379,6 +400,19 @@ func bestEffortCloseSession(client *http.Client, closeURL, headerHost string, mo
 	_ = resp.Body.Close()
 }
 
+func dialStreamWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
+	// Prefer split session (Cloudflare-friendly). Fall back to stream-one for older servers / environments.
+	c, errSplit := dialStreamSplitWithClient(ctx, client, target)
+	if errSplit == nil {
+		return c, nil
+	}
+	c2, errOne := dialStreamOneWithClient(ctx, client, target)
+	if errOne == nil {
+		return c2, nil
+	}
+	return nil, fmt.Errorf("dial stream failed: split: %v; stream-one: %w", errSplit, errOne)
+}
+
 func dialStream(ctx context.Context, serverAddress string, opts TunnelDialOptions) (net.Conn, error) {
 	// Prefer split session (Cloudflare-friendly). Fall back to stream-one for older servers / environments.
 	c, errSplit := dialStreamSplit(ctx, serverAddress, opts)
@@ -392,10 +426,9 @@ func dialStream(ctx context.Context, serverAddress string, opts TunnelDialOption
 	return nil, fmt.Errorf("dial stream failed: split: %v; stream-one: %w", errSplit, errOne)
 }
 
-func dialStreamOne(ctx context.Context, serverAddress string, opts TunnelDialOptions) (net.Conn, error) {
-	client, target, err := newHTTPClient(serverAddress, opts, 32)
-	if err != nil {
-		return nil, err
+func dialStreamOneWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
+	if client == nil {
+		return nil, fmt.Errorf("nil http client")
 	}
 
 	r := rngPool.Get().(*mrand.Rand)
@@ -460,6 +493,14 @@ func dialStreamOne(ctx context.Context, serverAddress string, opts TunnelDialOpt
 			remoteAddr: &net.TCPAddr{},
 		}, nil
 	}
+}
+
+func dialStreamOne(ctx context.Context, serverAddress string, opts TunnelDialOptions) (net.Conn, error) {
+	client, target, err := newHTTPClient(serverAddress, opts, 32)
+	if err != nil {
+		return nil, err
+	}
+	return dialStreamOneWithClient(ctx, client, target)
 }
 
 type queuedConn struct {
@@ -568,6 +609,35 @@ func (c *streamSplitConn) Close() error {
 	}
 	bestEffortCloseSession(c.client, c.closeURL, c.headerHost, TunnelModeStream)
 	return nil
+}
+
+func dialStreamSplitWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
+	info, err := dialSessionWithClient(ctx, client, target, TunnelModeStream)
+	if err != nil {
+		return nil, err
+	}
+
+	connCtx, cancel := context.WithCancel(context.Background())
+	c := &streamSplitConn{
+		ctx:        connCtx,
+		cancel:     cancel,
+		client:     info.client,
+		pushURL:    info.pushURL,
+		pullURL:    info.pullURL,
+		closeURL:   info.closeURL,
+		headerHost: info.headerHost,
+		queuedConn: queuedConn{
+			rxc:        make(chan []byte, 256),
+			closed:     make(chan struct{}),
+			writeCh:    make(chan []byte, 256),
+			localAddr:  &net.TCPAddr{},
+			remoteAddr: &net.TCPAddr{},
+		},
+	}
+
+	go c.pullLoop()
+	go c.pushLoop()
+	return c, nil
 }
 
 func dialStreamSplit(ctx context.Context, serverAddress string, opts TunnelDialOptions) (net.Conn, error) {
@@ -859,6 +929,35 @@ func (c *pollConn) closeWithError(err error) error {
 
 func (c *pollConn) Close() error {
 	return c.closeWithError(io.ErrClosedPipe)
+}
+
+func dialPollWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
+	info, err := dialSessionWithClient(ctx, client, target, TunnelModePoll)
+	if err != nil {
+		return nil, err
+	}
+
+	connCtx, cancel := context.WithCancel(context.Background())
+	c := &pollConn{
+		ctx:        connCtx,
+		cancel:     cancel,
+		client:     info.client,
+		pushURL:    info.pushURL,
+		pullURL:    info.pullURL,
+		closeURL:   info.closeURL,
+		headerHost: info.headerHost,
+		queuedConn: queuedConn{
+			rxc:        make(chan []byte, 128),
+			closed:     make(chan struct{}),
+			writeCh:    make(chan []byte, 256),
+			localAddr:  &net.TCPAddr{},
+			remoteAddr: &net.TCPAddr{},
+		},
+	}
+
+	go c.pullLoop()
+	go c.pushLoop()
+	return c, nil
 }
 
 func dialPoll(ctx context.Context, serverAddress string, opts TunnelDialOptions) (net.Conn, error) {
