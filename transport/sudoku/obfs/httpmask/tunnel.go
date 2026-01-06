@@ -611,10 +611,9 @@ func (c *streamSplitConn) Close() error {
 	return nil
 }
 
-func dialStreamSplitWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
-	info, err := dialSessionWithClient(ctx, client, target, TunnelModeStream)
-	if err != nil {
-		return nil, err
+func newStreamSplitConnFromInfo(info *sessionDialInfo) *streamSplitConn {
+	if info == nil {
+		return nil
 	}
 
 	connCtx, cancel := context.WithCancel(context.Background())
@@ -637,6 +636,18 @@ func dialStreamSplitWithClient(ctx context.Context, client *http.Client, target 
 
 	go c.pullLoop()
 	go c.pushLoop()
+	return c
+}
+
+func dialStreamSplitWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
+	info, err := dialSessionWithClient(ctx, client, target, TunnelModeStream)
+	if err != nil {
+		return nil, err
+	}
+	c := newStreamSplitConnFromInfo(info)
+	if c == nil {
+		return nil, fmt.Errorf("failed to build stream split conn")
+	}
 	return c, nil
 }
 
@@ -645,27 +656,10 @@ func dialStreamSplit(ctx context.Context, serverAddress string, opts TunnelDialO
 	if err != nil {
 		return nil, err
 	}
-
-	connCtx, cancel := context.WithCancel(context.Background())
-	c := &streamSplitConn{
-		ctx:        connCtx,
-		cancel:     cancel,
-		client:     info.client,
-		pushURL:    info.pushURL,
-		pullURL:    info.pullURL,
-		closeURL:   info.closeURL,
-		headerHost: info.headerHost,
-		queuedConn: queuedConn{
-			rxc:        make(chan []byte, 256),
-			closed:     make(chan struct{}),
-			writeCh:    make(chan []byte, 256),
-			localAddr:  &net.TCPAddr{},
-			remoteAddr: &net.TCPAddr{},
-		},
+	c := newStreamSplitConnFromInfo(info)
+	if c == nil {
+		return nil, fmt.Errorf("failed to build stream split conn")
 	}
-
-	go c.pullLoop()
-	go c.pushLoop()
 	return c, nil
 }
 
@@ -931,10 +925,9 @@ func (c *pollConn) Close() error {
 	return c.closeWithError(io.ErrClosedPipe)
 }
 
-func dialPollWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
-	info, err := dialSessionWithClient(ctx, client, target, TunnelModePoll)
-	if err != nil {
-		return nil, err
+func newPollConnFromInfo(info *sessionDialInfo) *pollConn {
+	if info == nil {
+		return nil
 	}
 
 	connCtx, cancel := context.WithCancel(context.Background())
@@ -957,6 +950,18 @@ func dialPollWithClient(ctx context.Context, client *http.Client, target httpCli
 
 	go c.pullLoop()
 	go c.pushLoop()
+	return c
+}
+
+func dialPollWithClient(ctx context.Context, client *http.Client, target httpClientTarget) (net.Conn, error) {
+	info, err := dialSessionWithClient(ctx, client, target, TunnelModePoll)
+	if err != nil {
+		return nil, err
+	}
+	c := newPollConnFromInfo(info)
+	if c == nil {
+		return nil, fmt.Errorf("failed to build poll conn")
+	}
 	return c, nil
 }
 
@@ -965,27 +970,10 @@ func dialPoll(ctx context.Context, serverAddress string, opts TunnelDialOptions)
 	if err != nil {
 		return nil, err
 	}
-
-	connCtx, cancel := context.WithCancel(context.Background())
-	c := &pollConn{
-		ctx:        connCtx,
-		cancel:     cancel,
-		client:     info.client,
-		pushURL:    info.pushURL,
-		pullURL:    info.pullURL,
-		closeURL:   info.closeURL,
-		headerHost: info.headerHost,
-		queuedConn: queuedConn{
-			rxc:        make(chan []byte, 128),
-			closed:     make(chan struct{}),
-			writeCh:    make(chan []byte, 256),
-			localAddr:  &net.TCPAddr{},
-			remoteAddr: &net.TCPAddr{},
-		},
+	c := newPollConnFromInfo(info)
+	if c == nil {
+		return nil, fmt.Errorf("failed to build poll conn")
 	}
-
-	go c.pullLoop()
-	go c.pushLoop()
 	return c, nil
 }
 
