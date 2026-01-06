@@ -67,7 +67,7 @@ func (s *HTTPMaskTunnelServer) WrapConn(rawConn net.Conn) (handshakeConn net.Con
 type TunnelDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // DialHTTPMaskTunnel dials a CDN-capable HTTP tunnel (stream/poll/auto) and returns a stream carrying raw Sudoku bytes.
-func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *ProtocolConfig, dial TunnelDialer) (net.Conn, error) {
+func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *ProtocolConfig, dial TunnelDialer, reuseKey string) (net.Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -83,6 +83,8 @@ func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *Protocol
 		Mode:         cfg.HTTPMaskMode,
 		TLSEnabled:   cfg.HTTPMaskTLSEnabled,
 		HostOverride: cfg.HTTPMaskHost,
+		Multiplex:    cfg.HTTPMaskMultiplex,
+		ReuseKey:     reuseKey,
 		DialContext:  dial,
 	})
 }

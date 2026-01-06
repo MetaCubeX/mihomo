@@ -1068,7 +1068,7 @@ proxies: # socks5
     # http-mask-mode: legacy # 可选：legacy（默认）、stream、poll、auto；stream/poll/auto 支持走 CDN/反代
     # http-mask-tls: true # 可选：仅在 http-mask-mode 为 stream/poll/auto 时生效；true 强制 https；false 强制 http（不会根据端口自动推断）
     # http-mask-host: "" # 可选：覆盖 Host/SNI（支持 example.com 或 example.com:443）；仅在 http-mask-mode 为 stream/poll/auto 时生效
-    # http-mask-multiplex: off # 可选：off（默认）、auto、on；复用单条隧道并在其内多路复用多个目标连接
+    # http-mask-multiplex: off # 可选：off（默认）、auto（复用 h1.1 keep-alive / h2 连接，减少每次建链 RTT）、on（单条隧道内多路复用多个目标连接；仅在 http-mask-mode=stream/poll/auto 生效）
     enable-pure-downlink: false # 是否启用混淆下行，false的情况下能在保证数据安全的前提下极大提升下行速度，与服务端端保持相同(如果此处为false，则要求aead不可为none)
 
   # anytls

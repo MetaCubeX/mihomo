@@ -58,9 +58,10 @@ type ProtocolConfig struct {
 	// HTTPMaskHost optionally overrides the HTTP Host header / SNI host for HTTP tunnel modes (client-side).
 	HTTPMaskHost string
 
-	// HTTPMaskMultiplex controls whether the client reuses a single (HTTP-masked) tunnel connection and
-	// opens multiple logical target streams inside it (reduces RTT for subsequent connections).
-	// Values: "off" / "auto" / "on".
+	// HTTPMaskMultiplex controls multiplex behavior when HTTPMask tunnel modes are enabled:
+	//   - "off": disable reuse; each Dial establishes its own HTTPMask tunnel
+	//   - "auto": reuse underlying HTTP connections across multiple tunnel dials (HTTP/1.1 keep-alive / HTTP/2)
+	//   - "on": enable "single tunnel, multi-target" mux (Sudoku-level multiplex; Dial behaves like "auto" otherwise)
 	HTTPMaskMultiplex string
 }
 

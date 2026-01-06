@@ -1,11 +1,11 @@
 package sudoku
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"strings"
-	"time"
 
 	"github.com/metacubex/mihomo/transport/sudoku/multiplex"
 )
@@ -46,26 +46,19 @@ func (c *MultiplexClient) Dial(ctx context.Context, targetAddress string) (net.C
 		return nil, fmt.Errorf("target address cannot be empty")
 	}
 
-	stream, err := c.sess.OpenStream()
+	addrBuf, err := EncodeAddress(targetAddress)
+	if err != nil {
+		return nil, fmt.Errorf("encode target address failed: %w", err)
+	}
+
+	if ctx != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	stream, err := c.sess.OpenStream(addrBuf)
 	if err != nil {
 		return nil, err
 	}
-
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = stream.SetWriteDeadline(deadline)
-		defer stream.SetWriteDeadline(time.Time{})
-	}
-
-	addrBuf, err := EncodeAddress(targetAddress)
-	if err != nil {
-		_ = stream.Close()
-		return nil, fmt.Errorf("encode target address failed: %w", err)
-	}
-	if _, err := stream.Write(addrBuf); err != nil {
-		_ = stream.Close()
-		return nil, fmt.Errorf("send target address failed: %w", err)
-	}
-
 	return stream, nil
 }
 
@@ -114,18 +107,21 @@ func (s *MultiplexServer) AcceptStream() (net.Conn, error) {
 	if s == nil || s.sess == nil {
 		return nil, fmt.Errorf("nil session")
 	}
-	return s.sess.AcceptStream()
+	c, _, err := s.sess.AcceptStream()
+	return c, err
 }
 
-// AcceptTCP accepts a multiplex stream and reads the target address preface, returning the stream positioned at
-// application data.
+// AcceptTCP accepts a multiplex stream and returns the target address declared in the open frame.
 func (s *MultiplexServer) AcceptTCP() (net.Conn, string, error) {
-	stream, err := s.AcceptStream()
+	if s == nil || s.sess == nil {
+		return nil, "", fmt.Errorf("nil session")
+	}
+	stream, payload, err := s.sess.AcceptStream()
 	if err != nil {
 		return nil, "", err
 	}
 
-	target, err := DecodeAddress(stream)
+	target, err := DecodeAddress(bytes.NewReader(payload))
 	if err != nil {
 		_ = stream.Close()
 		return nil, "", err
@@ -147,4 +143,3 @@ func (s *MultiplexServer) IsClosed() bool {
 	}
 	return s.sess.IsClosed()
 }
-
