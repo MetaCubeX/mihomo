@@ -232,6 +232,11 @@ func RuleProviders() map[string]P.RuleProvider {
 	return ruleProviders
 }
 
+// SubRules return all subRules
+func SubRules() map[string][]C.Rule {
+	return subRules
+}
+
 // UpdateProxies handle update proxies
 func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]P.ProxyProvider) {
 	configMux.Lock()

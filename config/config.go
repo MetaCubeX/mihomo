@@ -608,7 +608,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.General = general
 
 	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
-	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
+	// The loading and downloading of geodata in the ParseRules and parseRuleProviders rely on these.
 	// This implementation is very disgusting, but there is currently no better solution
 	rollback := temporaryUpdateGeneral(config.General)
 	defer rollback()
@@ -676,7 +676,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.SubRules = subRules
 
-	rules, err := parseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
+	rules, err := ParseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
 	if err != nil {
 		return nil, err
 	}
@@ -1001,7 +1001,7 @@ func parseSubRules(cfg *RawConfig, proxies map[string]C.Proxy, ruleProviders map
 			return nil, fmt.Errorf("sub-rule name is empty")
 		}
 		var rules []C.Rule
-		rules, err = parseRules(rawRules, proxies, ruleProviders, subRules, fmt.Sprintf("sub-rules[%s]", name))
+		rules, err = ParseRules(rawRules, proxies, ruleProviders, subRules, fmt.Sprintf("sub-rules[%s]", name))
 		if err != nil {
 			return nil, err
 		}
@@ -1054,7 +1054,7 @@ func verifySubRuleCircularReferences(n string, subRules map[string][]C.Rule, arr
 	return nil
 }
 
-func parseRules(rulesConfig []string, proxies map[string]C.Proxy, ruleProviders map[string]P.RuleProvider, subRules map[string][]C.Rule, format string) ([]C.Rule, error) {
+func ParseRules(rulesConfig []string, proxies map[string]C.Proxy, ruleProviders map[string]P.RuleProvider, subRules map[string][]C.Rule, format string) ([]C.Rule, error) {
 	var rules []C.Rule
 
 	// parse rules
