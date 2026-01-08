@@ -60,7 +60,7 @@ func updateRules(w http.ResponseWriter, r *http.Request) {
 
 	// empty rules is not allowed, ignored
 	if len(req.Rules) != 0 {
-		proxies := tunnel.ProxiesWithProviders()
+		proxies := tunnel.Proxies()
 		ruleProviders := tunnel.RuleProviders()
 		subRules := tunnel.SubRules()
 		rules, err := config.ParseRules(req.Rules, proxies, ruleProviders, subRules, "rules")
