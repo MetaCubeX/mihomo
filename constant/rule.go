@@ -1,5 +1,7 @@
 package constant
 
+import "time"
+
 // Rule Type
 const (
 	Domain RuleType = iota
@@ -124,6 +126,27 @@ type Rule interface {
 	Adapter() string
 	Payload() string
 	ProviderNames() []string
+}
+
+type RuleWrapper interface {
+	Rule
+
+	// SetDisabled to set enable/disable rule
+	SetDisabled(v bool)
+	// IsDisabled return rule is disabled or not
+	IsDisabled() bool
+
+	// HitCount for statistics
+	HitCount() uint64
+	// HitAt for statistics
+	HitAt() time.Time
+	// MissCount for statistics
+	MissCount() uint64
+	// MissAt for statistics
+	MissAt() time.Time
+
+	// Unwrap return Rule
+	Unwrap() Rule
 }
 
 type RuleMatchHelper struct {
