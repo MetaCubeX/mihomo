@@ -356,6 +356,7 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 		t.gunTLSConfig = tlsConfig
 		t.gunConfig = &gun.Config{
 			ServiceName:       option.GrpcOpts.GrpcServiceName,
+			UserAgent:         option.GrpcOpts.GrpcUserAgent,
 			Host:              option.SNI,
 			ClientFingerprint: option.ClientFingerprint,
 		}

@@ -669,6 +669,7 @@ proxies: # socks5
     # skip-cert-verify: true
     grpc-opts:
       grpc-service-name: "example"
+      # grpc-user-agent: "grpc-go/1.36.0"
     # ip-version: ipv4
 
   # vless
@@ -757,6 +758,8 @@ proxies: # socks5
     servername: testingcf.jsdelivr.net
     grpc-opts:
       grpc-service-name: "grpc"
+      # grpc-user-agent: "grpc-go/1.36.0"
+      
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
@@ -825,6 +828,7 @@ proxies: # socks5
     udp: true
     grpc-opts:
       grpc-service-name: "example"
+      # grpc-user-agent: "grpc-go/1.36.0"
 
   - name: trojan-ws
     server: server

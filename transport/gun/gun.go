@@ -60,6 +60,7 @@ type Conn struct {
 
 type Config struct {
 	ServiceName       string
+	UserAgent         string
 	Host              string
 	ClientFingerprint string
 }
@@ -347,6 +348,12 @@ func StreamGunWithTransport(transport *TransportWrap, cfg *Config) (net.Conn, er
 	path := ServiceNameToPath(serviceName)
 
 	reader, writer := io.Pipe()
+
+	header := defaultHeader.Clone()
+	if cfg.UserAgent != "" {
+		header["user-agent"] = []string{cfg.UserAgent}
+	}
+
 	request := &http.Request{
 		Method: http.MethodPost,
 		Body:   reader,
@@ -360,7 +367,7 @@ func StreamGunWithTransport(transport *TransportWrap, cfg *Config) (net.Conn, er
 		Proto:      "HTTP/2",
 		ProtoMajor: 2,
 		ProtoMinor: 0,
-		Header:     defaultHeader,
+		Header:     header,
 	}
 	request = request.WithContext(transport.ctx)
 
