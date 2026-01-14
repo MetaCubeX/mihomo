@@ -2,7 +2,6 @@ package sudoku
 
 import (
 	"bufio"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -219,7 +218,7 @@ func ClientHandshakeWithOptions(rawConn net.Conn, cfg *ProtocolConfig, opt Clien
 		}
 	}
 
-	table, tableID, err := pickClientTable(cfg)
+	table, err := pickClientTable(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -231,9 +230,6 @@ func ClientHandshakeWithOptions(rawConn net.Conn, cfg *ProtocolConfig, opt Clien
 	}
 
 	handshake := buildHandshakePayload(cfg.Key)
-	if len(cfg.tableCandidates()) > 1 {
-		handshake[8] = tableID
-	}
 	if _, err := cConn.Write(handshake[:]); err != nil {
 		cConn.Close()
 		return nil, fmt.Errorf("send handshake failed: %w", err)
@@ -379,19 +375,9 @@ func normalizeHTTPMaskStrategy(strategy string) string {
 	}
 }
 
-// randomByte returns a cryptographically random byte (with a math/rand fallback).
-func randomByte() byte {
-	var b [1]byte
-	if _, err := rand.Read(b[:]); err == nil {
-		return b[0]
-	}
-	return byte(time.Now().UnixNano())
-}
-
 func userHashFromHandshake(handshakeBuf []byte) string {
 	if len(handshakeBuf) < 16 {
 		return ""
 	}
-	// handshake[8] may be a table ID when table rotation is enabled; use [9:16] as stable user hash bytes.
-	return hex.EncodeToString(handshakeBuf[9:16])
+	return hex.EncodeToString(handshakeBuf[8:16])
 }
