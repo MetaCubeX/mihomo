@@ -153,14 +153,17 @@ func buildServerObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table,
 func buildHandshakePayload(key string) [16]byte {
 	var payload [16]byte
 	binary.BigEndian.PutUint64(payload[:8], uint64(time.Now().Unix()))
-	// Hash the decoded HEX bytes of the key, not the HEX string itself.
-	// This ensures the user hash is computed on the actual key bytes.
-	keyBytes, err := hex.DecodeString(key)
-	if err != nil {
-		// Fallback: if key is not valid HEX (e.g., a UUID or plain string), hash the string bytes
-		keyBytes = []byte(key)
+
+	// Align with upstream: only decode hex bytes when this key is an ED25519 key material.
+	// For plain UUID/strings (even if they look like hex), hash the string bytes as-is.
+	src := []byte(key)
+	if _, err := crypto.RecoverPublicKey(key); err == nil {
+		if keyBytes, decErr := hex.DecodeString(key); decErr == nil && len(keyBytes) > 0 {
+			src = keyBytes
+		}
 	}
-	hash := sha256.Sum256(keyBytes)
+
+	hash := sha256.Sum256(src)
 	copy(payload[8:], hash[:8])
 	return payload
 }

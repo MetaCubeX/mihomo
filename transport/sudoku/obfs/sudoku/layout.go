@@ -20,7 +20,11 @@ type byteLayout struct {
 }
 
 func (l *byteLayout) isHint(b byte) bool {
-	return (b & l.hintMask) == l.hintValue
+	if (b & l.hintMask) == l.hintValue {
+		return true
+	}
+	// ASCII layout maps the single non-printable marker (0x7F) to '\n' on the wire.
+	return l.name == "ascii" && b == '\n'
 }
 
 // resolveLayout picks the byte layout based on ASCII preference and optional custom pattern.
@@ -53,12 +57,25 @@ func newASCIILayout() *byteLayout {
 		padMarker:   0x3F,
 		paddingPool: padding,
 		encodeHint: func(val, pos byte) byte {
-			return 0x40 | ((val & 0x03) << 4) | (pos & 0x0F)
+			b := 0x40 | ((val & 0x03) << 4) | (pos & 0x0F)
+			// Avoid DEL (0x7F) in prefer_ascii mode; map it to '\n' to reduce fingerprint.
+			if b == 0x7F {
+				return '\n'
+			}
+			return b
 		},
 		encodeGroup: func(group byte) byte {
-			return 0x40 | (group & 0x3F)
+			b := 0x40 | (group & 0x3F)
+			// Avoid DEL (0x7F) in prefer_ascii mode; map it to '\n' to reduce fingerprint.
+			if b == 0x7F {
+				return '\n'
+			}
+			return b
 		},
 		decodeGroup: func(b byte) (byte, bool) {
+			if b == '\n' {
+				return 0x3F, true
+			}
 			if (b & 0x40) == 0 {
 				return 0, false
 			}
