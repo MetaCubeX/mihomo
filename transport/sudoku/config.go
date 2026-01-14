@@ -58,6 +58,10 @@ type ProtocolConfig struct {
 	// HTTPMaskHost optionally overrides the HTTP Host header / SNI host for HTTP tunnel modes (client-side).
 	HTTPMaskHost string
 
+	// HTTPMaskPathRoot optionally prefixes all HTTP mask paths with a first-level segment.
+	// Example: "aabbcc" => "/aabbcc/session", "/aabbcc/api/v1/upload", ...
+	HTTPMaskPathRoot string
+
 	// HTTPMaskMultiplex controls multiplex behavior when HTTPMask tunnel modes are enabled:
 	//   - "off": disable reuse; each Dial establishes its own HTTPMask tunnel
 	//   - "auto": reuse underlying HTTP connections across multiple tunnel dials (HTTP/1.1 keep-alive / HTTP/2)
@@ -107,6 +111,23 @@ func (c *ProtocolConfig) Validate() error {
 	case "", "legacy", "stream", "poll", "auto":
 	default:
 		return fmt.Errorf("invalid http-mask-mode: %s, must be one of: legacy, stream, poll, auto", c.HTTPMaskMode)
+	}
+
+	if v := strings.TrimSpace(c.HTTPMaskPathRoot); v != "" {
+		if strings.Contains(v, "/") {
+			return fmt.Errorf("invalid http-mask-path-root: must be a single path segment")
+		}
+		for i := 0; i < len(v); i++ {
+			ch := v[i]
+			switch {
+			case ch >= 'a' && ch <= 'z':
+			case ch >= 'A' && ch <= 'Z':
+			case ch >= '0' && ch <= '9':
+			case ch == '_' || ch == '-':
+			default:
+				return fmt.Errorf("invalid http-mask-path-root: contains invalid character %q", ch)
+			}
+		}
 	}
 
 	switch strings.ToLower(strings.TrimSpace(c.HTTPMaskMultiplex)) {

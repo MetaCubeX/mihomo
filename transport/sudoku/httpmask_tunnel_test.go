@@ -154,7 +154,7 @@ func TestHTTPMaskTunnel_Stream_TCPRoundTrip(t *testing.T) {
 	clientCfg.ServerAddress = addr
 	clientCfg.HTTPMaskHost = "example.com"
 
-	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext)
+	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext, nil)
 	if err != nil {
 		t.Fatalf("dial tunnel: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestHTTPMaskTunnel_Poll_UoTRoundTrip(t *testing.T) {
 	clientCfg := *serverCfg
 	clientCfg.ServerAddress = addr
 
-	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext)
+	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext, nil)
 	if err != nil {
 		t.Fatalf("dial tunnel: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestHTTPMaskTunnel_Auto_TCPRoundTrip(t *testing.T) {
 	clientCfg := *serverCfg
 	clientCfg.ServerAddress = addr
 
-	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext)
+	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext, nil)
 	if err != nil {
 		t.Fatalf("dial tunnel: %v", err)
 	}
@@ -331,13 +331,13 @@ func TestHTTPMaskTunnel_Validation(t *testing.T) {
 
 	cfg.DisableHTTPMask = true
 	cfg.HTTPMaskMode = "stream"
-	if _, err := DialHTTPMaskTunnel(context.Background(), cfg.ServerAddress, cfg, (&net.Dialer{}).DialContext); err == nil {
+	if _, err := DialHTTPMaskTunnel(context.Background(), cfg.ServerAddress, cfg, (&net.Dialer{}).DialContext, nil); err == nil {
 		t.Fatalf("expected error for disabled http mask")
 	}
 
 	cfg.DisableHTTPMask = false
 	cfg.HTTPMaskMode = "legacy"
-	if _, err := DialHTTPMaskTunnel(context.Background(), cfg.ServerAddress, cfg, (&net.Dialer{}).DialContext); err == nil {
+	if _, err := DialHTTPMaskTunnel(context.Background(), cfg.ServerAddress, cfg, (&net.Dialer{}).DialContext, nil); err == nil {
 		t.Fatalf("expected error for legacy mode")
 	}
 }
@@ -385,7 +385,7 @@ func TestHTTPMaskTunnel_Soak_Concurrent(t *testing.T) {
 			clientCfg.ServerAddress = addr
 			clientCfg.HTTPMaskHost = strings.TrimSpace(clientCfg.HTTPMaskHost)
 
-			tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext)
+			tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext, nil)
 			if err != nil {
 				runErr <- fmt.Errorf("dial: %w", err)
 				return

@@ -229,6 +229,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		HandshakeTimeoutSeconds: handshakeTimeout,
 		DisableHTTPMask:         config.DisableHTTPMask,
 		HTTPMaskMode:            config.HTTPMaskMode,
+		HTTPMaskPathRoot:        strings.TrimSpace(config.PathRoot),
 	}
 	if len(tables) == 1 {
 		protoConf.Table = tables[0]

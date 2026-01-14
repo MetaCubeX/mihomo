@@ -22,6 +22,7 @@ type SudokuServer struct {
 	CustomTables           []string `json:"custom-tables,omitempty"`
 	DisableHTTPMask        bool     `json:"disable-http-mask,omitempty"`
 	HTTPMaskMode           string   `json:"http-mask-mode,omitempty"`
+	PathRoot               string   `json:"path-root,omitempty"`
 
 	// mihomo private extension (not the part of standard Sudoku protocol)
 	MuxOption sing.MuxOption `json:"mux-option,omitempty"`

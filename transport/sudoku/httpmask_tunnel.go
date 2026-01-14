@@ -23,7 +23,11 @@ func NewHTTPMaskTunnelServer(cfg *ProtocolConfig) *HTTPMaskTunnelServer {
 	if !cfg.DisableHTTPMask {
 		switch strings.ToLower(strings.TrimSpace(cfg.HTTPMaskMode)) {
 		case "stream", "poll", "auto":
-			ts = httpmask.NewTunnelServer(httpmask.TunnelServerOptions{Mode: cfg.HTTPMaskMode})
+			ts = httpmask.NewTunnelServer(httpmask.TunnelServerOptions{
+				Mode:     cfg.HTTPMaskMode,
+				PathRoot: cfg.HTTPMaskPathRoot,
+				AuthKey:  ClientAEADSeed(cfg.Key),
+			})
 		}
 	}
 	return &HTTPMaskTunnelServer{cfg: cfg, ts: ts}
@@ -67,7 +71,7 @@ func (s *HTTPMaskTunnelServer) WrapConn(rawConn net.Conn) (handshakeConn net.Con
 type TunnelDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // DialHTTPMaskTunnel dials a CDN-capable HTTP tunnel (stream/poll/auto) and returns a stream carrying raw Sudoku bytes.
-func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *ProtocolConfig, dial TunnelDialer) (net.Conn, error) {
+func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *ProtocolConfig, dial TunnelDialer, upgrade func(net.Conn) (net.Conn, error)) (net.Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -83,14 +87,19 @@ func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *Protocol
 		Mode:         cfg.HTTPMaskMode,
 		TLSEnabled:   cfg.HTTPMaskTLSEnabled,
 		HostOverride: cfg.HTTPMaskHost,
+		PathRoot:     cfg.HTTPMaskPathRoot,
+		AuthKey:      ClientAEADSeed(cfg.Key),
+		Upgrade:      upgrade,
 		Multiplex:    cfg.HTTPMaskMultiplex,
 		DialContext:  dial,
 	})
 }
 
 type HTTPMaskTunnelClient struct {
-	mode   string
-	client *httpmask.TunnelClient
+	mode     string
+	pathRoot string
+	authKey  string
+	client   *httpmask.TunnelClient
 }
 
 func NewHTTPMaskTunnelClient(serverAddress string, cfg *ProtocolConfig, dial TunnelDialer) (*HTTPMaskTunnelClient, error) {
@@ -121,16 +130,23 @@ func NewHTTPMaskTunnelClient(serverAddress string, cfg *ProtocolConfig, dial Tun
 	}
 
 	return &HTTPMaskTunnelClient{
-		mode:   cfg.HTTPMaskMode,
-		client: c,
+		mode:     cfg.HTTPMaskMode,
+		pathRoot: cfg.HTTPMaskPathRoot,
+		authKey:  ClientAEADSeed(cfg.Key),
+		client:   c,
 	}, nil
 }
 
-func (c *HTTPMaskTunnelClient) Dial(ctx context.Context) (net.Conn, error) {
+func (c *HTTPMaskTunnelClient) Dial(ctx context.Context, upgrade func(net.Conn) (net.Conn, error)) (net.Conn, error) {
 	if c == nil || c.client == nil {
 		return nil, fmt.Errorf("nil httpmask tunnel client")
 	}
-	return c.client.DialTunnel(ctx, c.mode)
+	return c.client.DialTunnel(ctx, httpmask.TunnelDialOptions{
+		Mode:     c.mode,
+		PathRoot: c.pathRoot,
+		AuthKey:  c.authKey,
+		Upgrade:  upgrade,
+	})
 }
 
 func (c *HTTPMaskTunnelClient) CloseIdleConnections() {

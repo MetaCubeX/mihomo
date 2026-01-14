@@ -211,7 +211,7 @@ func ClientHandshakeWithOptions(rawConn net.Conn, cfg *ProtocolConfig, opt Clien
 	}
 
 	if !cfg.DisableHTTPMask {
-		if err := WriteHTTPMaskHeader(rawConn, cfg.ServerAddress, opt.HTTPMaskStrategy); err != nil {
+		if err := WriteHTTPMaskHeader(rawConn, cfg.ServerAddress, cfg.HTTPMaskPathRoot, opt.HTTPMaskStrategy); err != nil {
 			return nil, fmt.Errorf("write http mask failed: %w", err)
 		}
 	}

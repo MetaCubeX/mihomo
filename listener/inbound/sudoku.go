@@ -24,6 +24,7 @@ type SudokuOption struct {
 	CustomTables           []string `inbound:"custom-tables,omitempty"`
 	DisableHTTPMask        bool     `inbound:"disable-http-mask,omitempty"`
 	HTTPMaskMode           string   `inbound:"http-mask-mode,omitempty"` // "legacy" (default), "stream", "poll", "auto"
+	PathRoot               string   `inbound:"path-root,omitempty"`      // optional first-level path prefix for HTTP tunnel endpoints
 
 	// mihomo private extension (not the part of standard Sudoku protocol)
 	MuxOption MuxOption `inbound:"mux-option,omitempty"`
@@ -63,6 +64,7 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 		CustomTables:           options.CustomTables,
 		DisableHTTPMask:        options.DisableHTTPMask,
 		HTTPMaskMode:           options.HTTPMaskMode,
+		PathRoot:               strings.TrimSpace(options.PathRoot),
 	}
 	serverConf.MuxOption = options.MuxOption.Build()
 

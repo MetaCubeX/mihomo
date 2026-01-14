@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,24 +93,24 @@ func appendCommonHeaders(buf []byte, host string, r *rand.Rand) []byte {
 
 // WriteHTTPMaskHeader writes an HTTP/1.x request header as a mask, according to strategy.
 // Supported strategies: ""/"random", "post", "websocket".
-func WriteHTTPMaskHeader(w io.Writer, host string, strategy string) error {
+func WriteHTTPMaskHeader(w io.Writer, host string, pathRoot string, strategy string) error {
 	switch normalizeHTTPMaskStrategy(strategy) {
 	case "random":
-		return httpmask.WriteRandomRequestHeader(w, host)
+		return httpmask.WriteRandomRequestHeaderWithPathRoot(w, host, pathRoot)
 	case "post":
-		return writeHTTPMaskPOST(w, host)
+		return writeHTTPMaskPOST(w, host, pathRoot)
 	case "websocket":
-		return writeHTTPMaskWebSocket(w, host)
+		return writeHTTPMaskWebSocket(w, host, pathRoot)
 	default:
 		return fmt.Errorf("unsupported http-mask-strategy: %s", strategy)
 	}
 }
 
-func writeHTTPMaskPOST(w io.Writer, host string) error {
+func writeHTTPMaskPOST(w io.Writer, host string, pathRoot string) error {
 	r := httpMaskRngPool.Get().(*rand.Rand)
 	defer httpMaskRngPool.Put(r)
 
-	path := httpMaskPaths[r.Intn(len(httpMaskPaths))]
+	path := joinPathRoot(pathRoot, httpMaskPaths[r.Intn(len(httpMaskPaths))])
 	ctype := httpMaskContentTypes[r.Intn(len(httpMaskContentTypes))]
 
 	bufPtr := httpMaskBufPool.Get().(*[]byte)
@@ -140,11 +141,11 @@ func writeHTTPMaskPOST(w io.Writer, host string) error {
 	return err
 }
 
-func writeHTTPMaskWebSocket(w io.Writer, host string) error {
+func writeHTTPMaskWebSocket(w io.Writer, host string, pathRoot string) error {
 	r := httpMaskRngPool.Get().(*rand.Rand)
 	defer httpMaskRngPool.Put(r)
 
-	path := httpMaskPaths[r.Intn(len(httpMaskPaths))]
+	path := joinPathRoot(pathRoot, httpMaskPaths[r.Intn(len(httpMaskPaths))])
 
 	bufPtr := httpMaskBufPool.Get().(*[]byte)
 	buf := *bufPtr
@@ -176,4 +177,38 @@ func writeHTTPMaskWebSocket(w io.Writer, host string) error {
 
 	_, err := w.Write(buf)
 	return err
+}
+
+func normalizePathRoot(root string) string {
+	root = strings.TrimSpace(root)
+	root = strings.Trim(root, "/")
+	if root == "" {
+		return ""
+	}
+	for i := 0; i < len(root); i++ {
+		c := root[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '_' || c == '-':
+		default:
+			return ""
+		}
+	}
+	return "/" + root
+}
+
+func joinPathRoot(root, path string) string {
+	root = normalizePathRoot(root)
+	if root == "" {
+		return path
+	}
+	if path == "" {
+		return root
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return root + path
 }
