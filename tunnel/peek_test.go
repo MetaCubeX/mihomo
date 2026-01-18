@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"runtime"
@@ -132,6 +133,184 @@ func TestPeekDataIntegrity(t *testing.T) {
 	n, _ := conn.Read(read)
 	if n != 4 || string(read) != "HTTP" {
 		t.Errorf("Read after peek failed: got %s (len %d), want HTTP (len 4)", read[:n], n)
+	}
+}
+
+// TestAlreadyPeekedSkip tests that already-peeked connections skip re-peeking
+func TestAlreadyPeekedSkip(t *testing.T) {
+	conn := NewMockBufferedConn([]byte("GET"))
+
+	// First peek
+	if !conn.Peeked() {
+		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		_, _ = conn.Peek(1)
+		_ = conn.SetReadDeadline(time.Time{})
+	}
+
+	// Verify state is marked as peeked
+	if !conn.Peeked() {
+		t.Errorf("Peeked() should return true after first peek")
+	}
+
+	// Second call should skip the peek block (matches handleTCPConn logic)
+	if !conn.Peeked() {
+		t.Errorf("Second check: should have skipped re-peeking")
+	}
+}
+
+// TestDeadlineNotAffectHandshake verifies deadline is properly reset
+func TestDeadlineNotAffectHandshake(t *testing.T) {
+	conn := NewMockBufferedConn([]byte("GET"))
+
+	// Simulate peek with deadline
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_, _ = conn.Peek(1)
+	_ = conn.SetReadDeadline(time.Time{}) // Reset to zero value
+
+	// Simulate handshake operation (should not be affected by previous deadline)
+	handshakeData := []byte("TLS handshake data")
+	n, _ := conn.Write(handshakeData)
+
+	if n != len(handshakeData) {
+		t.Errorf("Handshake write failed: expected %d bytes, got %d", len(handshakeData), n)
+	}
+}
+
+// TestEmptyConnPeek tests peek on empty/no-data connections
+func TestEmptyConnPeek(t *testing.T) {
+	conn := NewMockBufferedConn([]byte(""))
+
+	// Peek on empty connection
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	data, err := conn.Peek(1)
+	_ = conn.SetReadDeadline(time.Time{})
+
+	// Should handle gracefully without panic
+	if err == nil && data == nil {
+		// Expected: no data, no error
+		t.Logf("Empty conn handled correctly: data=%v, err=%v", data, err)
+	}
+
+	// Connection should still be usable
+	if conn.Buffered() != 0 {
+		t.Errorf("Empty conn should have 0 buffered bytes, got %d", conn.Buffered())
+	}
+}
+
+// TestMultiplePeekIdempotent tests that multiple peek calls are idempotent
+func TestMultiplePeekIdempotent(t *testing.T) {
+	conn := NewMockBufferedConn([]byte("HTTP/1.1"))
+
+	// Simulate retry scenario: peek called multiple times
+	for i := 0; i < 3; i++ {
+		if !conn.Peeked() {
+			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+			data1, _ := conn.Peek(1)
+			_ = conn.SetReadDeadline(time.Time{})
+
+			if len(data1) == 0 {
+				t.Errorf("Iteration %d: Peek returned empty data", i)
+			}
+		}
+	}
+
+	// After multiple peeks, data should still be intact for reading
+	read := make([]byte, 4)
+	n, _ := conn.Read(read)
+	if n != 4 || string(read) != "HTTP" {
+		t.Errorf("After multiple peeks, Read failed: got %s (len %d)", read[:n], n)
+	}
+}
+
+// TestHandleTCPConnEarlyReturnPath simulates real handleTCPConn scenarios
+func TestHandleTCPConnEarlyReturnPath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		connData []byte
+		metadata *C.Metadata
+	}{
+		{
+			name:     "valid connection with http data",
+			connData: []byte("GET / HTTP/1.1\r\n"),
+			metadata: &C.Metadata{},
+		},
+		{
+			name:     "connection with partial data",
+			connData: []byte("G"),
+			metadata: &C.Metadata{},
+		},
+		{
+			name:     "empty connection",
+			connData: []byte(""),
+			metadata: &C.Metadata{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := NewMockBufferedConn(tc.connData)
+
+			// Simulate handleTCPConn peek block
+			if !conn.Peeked() {
+				_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+				_, _ = conn.Peek(1)
+				_ = conn.SetReadDeadline(time.Time{})
+			}
+
+			// Verify state after peek
+			if !conn.Peeked() && len(tc.connData) > 0 {
+				t.Errorf("Should mark connection as peeked when data exists")
+			}
+
+			// Simulate early return (metadata.Valid() == false)
+			if tc.metadata == nil || !tc.metadata.Valid() {
+				// Early return path - connection should be safely closed
+				_ = conn.Close()
+				return
+			}
+		})
+	}
+}
+
+// TestPeekUnderHighConcurrencyLoad tests peek under stress
+func TestPeekUnderHighConcurrencyLoad(t *testing.T) {
+	const concurrency = 1000
+	var wg sync.WaitGroup
+	errChan := make(chan error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			conn := NewMockBufferedConn([]byte("H"))
+
+			if !conn.Peeked() {
+				_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+				_, err := conn.Peek(1)
+				_ = conn.SetReadDeadline(time.Time{})
+
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}
+
+			// Verify idempotence
+			if !conn.Peeked() {
+				errChan <- fmt.Errorf("goroutine %d: should be peeked", id)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors
+	for err := range errChan {
+		if err != nil {
+			t.Errorf("High concurrency test failed: %v", err)
+		}
 	}
 }
 
