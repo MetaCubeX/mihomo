@@ -523,9 +523,8 @@ func handleTCPConn(connCtx C.ConnContext) {
 	// Synchronous peek: eliminates goroutine leak on error paths.
 	// The previous async design had minimal benefit as we wait for peek
 	// completion at line 600 anyway, and added complexity with error handling.
-	// Reduced timeout to 50ms as most protocols send data < 1ms after connection.
 	if !conn.Peeked() {
-		_ = conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 		_, _ = conn.Peek(1)
 		_ = conn.SetReadDeadline(time.Time{})
 	}
