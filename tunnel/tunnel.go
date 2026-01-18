@@ -520,15 +520,14 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
-	peekMutex := sync.Mutex{}
+	// Synchronous peek: eliminates goroutine leak on error paths.
+	// The previous async design had minimal benefit as we wait for peek
+	// completion at line 600 anyway, and added complexity with error handling.
+	// Reduced timeout to 50ms as most protocols send data < 1ms after connection.
 	if !conn.Peeked() {
-		peekMutex.Lock()
-		go func() {
-			defer peekMutex.Unlock()
-			_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-			_, _ = conn.Peek(1)
-			_ = conn.SetReadDeadline(time.Time{})
-		}()
+		_ = conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		_, _ = conn.Peek(1)
+		_ = conn.SetReadDeadline(time.Time{})
 	}
 
 	proxy, rule, err := resolveMetadata(metadata)
@@ -571,8 +570,6 @@ func handleTCPConn(connCtx C.ConnContext) {
 					remoteConn = nil
 				}
 			}()
-			peekMutex.Lock()
-			defer peekMutex.Unlock()
 			peekBytes, _ = conn.Peek(conn.Buffered())
 			_, err = remoteConn.Write(peekBytes)
 			if err != nil {
@@ -596,10 +593,6 @@ func handleTCPConn(connCtx C.ConnContext) {
 		_ = remoteConn.Close()
 	}(remoteConn)
 
-	_ = conn.SetReadDeadline(time.Now()) // stop unfinished peek
-	peekMutex.Lock()
-	defer peekMutex.Unlock()
-	_ = conn.SetReadDeadline(time.Time{}) // reset
 	handleSocket(conn, remoteConn)
 }
 
