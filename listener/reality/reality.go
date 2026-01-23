@@ -74,7 +74,7 @@ func (c Config) Build(tunnel C.Tunnel) (*Builder, error) {
 	}
 
 	realityConfig.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		return inner.HandleTcp(tunnel, address, c.Proxy)
+		return inner.HandleTcp(tunnel, address, c.Proxy, false)
 	}
 
 	realityConfig.LimitFallbackUpload = c.LimitFallbackUpload

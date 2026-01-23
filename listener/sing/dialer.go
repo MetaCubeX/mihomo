@@ -21,7 +21,7 @@ func (d Dialer) DialContext(ctx context.Context, network string, destination M.S
 	if network != "tcp" && network != "tcp4" && network != "tcp6" {
 		return nil, fmt.Errorf("unsupported network %s", network)
 	}
-	return inner.HandleTcp(d.t, destination.String(), d.proxy)
+	return inner.HandleTcp(d.t, destination.String(), d.proxy, false)
 }
 
 func (d Dialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {

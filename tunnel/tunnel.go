@@ -78,6 +78,11 @@ func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	handleTCPConn(connCtx)
 }
 
+func (t tunnel) HandleTCPConnWithError(conn net.Conn, metadata *C.Metadata) error {
+	connCtx := icontext.NewConnContext(conn, metadata)
+	return handleTCPConnWithError(connCtx)
+}
+
 func initUDP() {
 	numUDPWorkers := 4
 	if num := runtime.GOMAXPROCS(0); num > numUDPWorkers {
@@ -480,9 +485,13 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
+	_ = handleTCPConnWithError(connCtx)
+}
+
+func handleTCPConnWithError(connCtx C.ConnContext) error {
 	if !isHandle(connCtx.Metadata().Type) {
 		_ = connCtx.Conn().Close()
-		return
+		return errors.New("tunnel not running")
 	}
 
 	defer func(conn net.Conn) {
@@ -492,14 +501,16 @@ func handleTCPConn(connCtx C.ConnContext) {
 	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
-		return
+		return errors.New("metadata invalid")
 	}
 	fixMetadata(metadata) // fix some metadata not set via metadata.SetRemoteAddr or metadata.SetRemoteAddress
 
 	preHandleFailed := false
+	preHandleErr := error(nil)
 	if err := preHandleMetadata(metadata); err != nil {
 		log.Debugln("[Metadata PreHandle] error: %s", err)
 		preHandleFailed = true
+		preHandleErr = err
 	}
 
 	conn := connCtx.Conn()
@@ -517,7 +528,10 @@ func handleTCPConn(connCtx C.ConnContext) {
 	if preHandleFailed {
 		log.Debugln("[Metadata PreHandle] failed to sniff a domain for connection %s --> %s, give up",
 			metadata.SourceDetail(), metadata.RemoteAddress())
-		return
+		if preHandleErr != nil {
+			return preHandleErr
+		}
+		return errors.New("metadata prehandle failed")
 	}
 
 	peekMutex := sync.Mutex{}
@@ -534,7 +548,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	proxy, rule, err := resolveMetadata(metadata)
 	if err != nil {
 		log.Warnln("[Metadata] parse failed: %s", err.Error())
-		return
+		return err
 	}
 
 	dialMetadata := metadata
@@ -587,7 +601,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 		logMetadataErr(metadata, rule, proxy, err)
 	})
 	if err != nil {
-		return
+		return err
 	}
 	logMetadata(metadata, rule, remoteConn)
 
@@ -601,6 +615,7 @@ func handleTCPConn(connCtx C.ConnContext) {
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
 	handleSocket(conn, remoteConn)
+	return nil
 }
 
 func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {
