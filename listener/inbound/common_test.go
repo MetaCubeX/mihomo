@@ -57,17 +57,26 @@ func init() {
 }
 
 type TestTunnel struct {
-	HandleTCPConnFn    func(conn net.Conn, metadata *C.Metadata)
-	HandleUDPPacketFn  func(packet C.UDPPacket, metadata *C.Metadata)
-	NatTableFn         func() C.NatTable
-	CloseFn            func() error
-	DoTestFn           func(t *testing.T, proxy C.ProxyAdapter)
-	DoSequentialTestFn func(t *testing.T, proxy C.ProxyAdapter)
-	DoConcurrentTestFn func(t *testing.T, proxy C.ProxyAdapter)
+	HandleTCPConnFn          func(conn net.Conn, metadata *C.Metadata)
+	HandleTCPConnWithErrorFn func(conn net.Conn, metadata *C.Metadata) error
+	HandleUDPPacketFn        func(packet C.UDPPacket, metadata *C.Metadata)
+	NatTableFn               func() C.NatTable
+	CloseFn                  func() error
+	DoTestFn                 func(t *testing.T, proxy C.ProxyAdapter)
+	DoSequentialTestFn       func(t *testing.T, proxy C.ProxyAdapter)
+	DoConcurrentTestFn       func(t *testing.T, proxy C.ProxyAdapter)
 }
 
 func (tt *TestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	tt.HandleTCPConnFn(conn, metadata)
+}
+
+func (tt *TestTunnel) HandleTCPConnWithError(conn net.Conn, metadata *C.Metadata) error {
+	if tt.HandleTCPConnWithErrorFn != nil {
+		return tt.HandleTCPConnWithErrorFn(conn, metadata)
+	}
+	tt.HandleTCPConn(conn, metadata)
+	return nil
 }
 
 func (tt *TestTunnel) HandleUDPPacket(packet C.UDPPacket, metadata *C.Metadata) {
