@@ -21,31 +21,23 @@ func GetTunnel() C.Tunnel {
 
 type errConn struct {
 	net.Conn
-	errOnce sync.Once
-	errMu   sync.RWMutex
-	err     error
+	errMu sync.RWMutex
+	err   error
 }
 
-func newErrConn(conn net.Conn, errCh <-chan error) net.Conn {
-	c := &errConn{Conn: conn}
-	go func() {
-		if err, ok := <-errCh; ok && err != nil {
-			c.setErr(err)
-			_ = c.Conn.Close()
-		}
-	}()
-	return c
+func newErrConn(conn net.Conn) *errConn {
+	return &errConn{Conn: conn}
 }
 
 func (c *errConn) setErr(err error) {
 	if err == nil {
 		return
 	}
-	c.errOnce.Do(func() {
-		c.errMu.Lock()
+	c.errMu.Lock()
+	if c.err == nil {
 		c.err = err
-		c.errMu.Unlock()
-	})
+	}
+	c.errMu.Unlock()
 }
 
 func (c *errConn) getErr() error {
@@ -98,12 +90,14 @@ func HandleTcp(tunnel C.Tunnel, address string, proxy string, withAccurateError 
 	}
 
 	if withAccurateError {
-		errCh := make(chan error, 1)
+		c := newErrConn(conn1)
 		go func() {
-			errCh <- tunnel.HandleTCPConnWithError(conn2, metadata)
-			close(errCh)
+			if err := tunnel.HandleTCPConnWithError(conn2, metadata); err != nil {
+				c.setErr(err)
+				_ = c.Conn.Close()
+			}
 		}()
-		return newErrConn(conn1, errCh), nil
+		return c, nil
 	}
 
 	go tunnel.HandleTCPConn(conn2, metadata)
