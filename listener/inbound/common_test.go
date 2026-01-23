@@ -276,7 +276,7 @@ func NewHttpTestTunnel() *TestTunnel {
 						if err != nil {
 							panic(err)
 						}
-						N.Relay(rconn, conn)
+						N.Relay(rconn, conn, nil)
 						return
 					}
 				}

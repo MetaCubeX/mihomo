@@ -614,8 +614,7 @@ func handleTCPConnWithError(connCtx C.ConnContext) error {
 	peekMutex.Lock()
 	defer peekMutex.Unlock()
 	_ = conn.SetReadDeadline(time.Time{}) // reset
-	handleSocket(conn, remoteConn)
-	return nil
+	return handleSocket(conn, remoteConn)
 }
 
 func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {

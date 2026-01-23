@@ -66,7 +66,7 @@ func closeWrite(writer io.Closer) error {
 
 // Relay copies between left and right bidirectionally.
 // like [bufio.CopyConn] but remove unneeded [context.Context] handle and the cost of [task.Group]
-func Relay(leftConn, rightConn net.Conn) {
+func Relay(leftConn, rightConn net.Conn, onError func(err error)) {
 	defer func() {
 		_ = leftConn.Close()
 		_ = rightConn.Close()
@@ -78,6 +78,9 @@ func Relay(leftConn, rightConn net.Conn) {
 		if err == nil {
 			_ = closeWrite(leftConn)
 		} else {
+			if onError != nil {
+				onError(err)
+			}
 			_ = leftConn.Close()
 		}
 		close(ch)
@@ -87,6 +90,9 @@ func Relay(leftConn, rightConn net.Conn) {
 	if err == nil {
 		_ = closeWrite(rightConn)
 	} else {
+		if onError != nil {
+			onError(err)
+		}
 		_ = rightConn.Close()
 	}
 	<-ch

@@ -85,6 +85,6 @@ func handleUpgrade(conn net.Conn, request *http.Request, tunnel C.Tunnel, additi
 	}
 
 	if resp.StatusCode == http.StatusSwitchingProtocols {
-		N.Relay(bufferedLeft, conn)
+		N.Relay(bufferedLeft, conn, nil)
 	}
 }
