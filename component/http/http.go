@@ -11,9 +11,12 @@ import (
 
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/listener/inner"
+	"github.com/metacubex/sing/common/metadata"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/tls"
 )
 
 var (
@@ -80,7 +83,37 @@ func HttpRequest(ctx context.Context, url, method string, header map[string][]st
 				return dialer.DialContext(ctx, network, address)
 			}
 		},
-		TLSClientConfig: tlsConfig,
+		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			conn, err := inner.HandleTcp(inner.GetTunnel(), address, opt.specialProxy)
+			if err != nil {
+				conn, err = dialer.DialContext(ctx, network, address)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				host = address
+			}
+
+			cfg := tlsConfig.Clone()
+			cfg.ServerName = host
+
+			if opt.echResolver != nil && metadata.IsDomainName(cfg.ServerName) {
+				if echConfigList, err := resolver.ResolveECHWithResolver(ctx, cfg.ServerName, opt.echResolver); err == nil {
+					cfg.EncryptedClientHelloConfigList = echConfigList
+					if cfg.MinVersion != 0 && cfg.MinVersion < tls.VersionTLS13 {
+						cfg.MinVersion = tls.VersionTLS13
+					}
+					if cfg.MaxVersion != 0 && cfg.MaxVersion < tls.VersionTLS13 {
+						cfg.MaxVersion = tls.VersionTLS13
+					}
+				}
+			}
+
+			return tls.Client(conn, cfg), nil
+		},
 	}
 
 	client := http.Client{Transport: transport}
@@ -92,6 +125,7 @@ type Option func(opt *option)
 type option struct {
 	specialProxy string
 	caOption     ca.Option
+	echResolver  resolver.Resolver
 }
 
 func WithSpecialProxy(name string) Option {
@@ -103,5 +137,11 @@ func WithSpecialProxy(name string) Option {
 func WithCAOption(caOption ca.Option) Option {
 	return func(opt *option) {
 		opt.caOption = caOption
+	}
+}
+
+func WithEch(resolver resolver.Resolver) Option {
+	return func(opt *option) {
+		opt.echResolver = resolver
 	}
 }
