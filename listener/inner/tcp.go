@@ -92,9 +92,9 @@ func HandleTcp(tunnel C.Tunnel, address string, proxy string, withAccurateError 
 	if withAccurateError {
 		c := newErrConn(conn1)
 		go func() {
-			if err := tunnel.HandleTCPConnWithError(conn2, metadata); err != nil {
+			defer conn2.Close()
+			if err := tunnel.HandleTCPConnWithError(conn2, metadata, false); err != nil {
 				c.setErr(err)
-				_ = c.Conn.Close()
 			}
 		}()
 		return c, nil

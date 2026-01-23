@@ -58,7 +58,7 @@ func init() {
 
 type TestTunnel struct {
 	HandleTCPConnFn          func(conn net.Conn, metadata *C.Metadata)
-	HandleTCPConnWithErrorFn func(conn net.Conn, metadata *C.Metadata) error
+	HandleTCPConnWithErrorFn func(conn net.Conn, metadata *C.Metadata, closeBeforeReturn bool) error
 	HandleUDPPacketFn        func(packet C.UDPPacket, metadata *C.Metadata)
 	NatTableFn               func() C.NatTable
 	CloseFn                  func() error
@@ -71,9 +71,9 @@ func (tt *TestTunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	tt.HandleTCPConnFn(conn, metadata)
 }
 
-func (tt *TestTunnel) HandleTCPConnWithError(conn net.Conn, metadata *C.Metadata) error {
+func (tt *TestTunnel) HandleTCPConnWithError(conn net.Conn, metadata *C.Metadata, closeBeforeReturn bool) error {
 	if tt.HandleTCPConnWithErrorFn != nil {
-		return tt.HandleTCPConnWithErrorFn(conn, metadata)
+		return tt.HandleTCPConnWithErrorFn(conn, metadata, closeBeforeReturn)
 	}
 	tt.HandleTCPConn(conn, metadata)
 	return nil

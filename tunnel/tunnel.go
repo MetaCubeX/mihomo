@@ -78,9 +78,9 @@ func (t tunnel) HandleTCPConn(conn net.Conn, metadata *C.Metadata) {
 	handleTCPConn(connCtx)
 }
 
-func (t tunnel) HandleTCPConnWithError(conn net.Conn, metadata *C.Metadata) error {
+func (t tunnel) HandleTCPConnWithError(conn net.Conn, metadata *C.Metadata, closeBeforeReturn bool) error {
 	connCtx := icontext.NewConnContext(conn, metadata)
-	return handleTCPConnWithError(connCtx)
+	return handleTCPConnWithError(connCtx, closeBeforeReturn)
 }
 
 func initUDP() {
@@ -485,18 +485,20 @@ func handleUDPConn(packet C.PacketAdapter) {
 }
 
 func handleTCPConn(connCtx C.ConnContext) {
-	_ = handleTCPConnWithError(connCtx)
+	_ = handleTCPConnWithError(connCtx, true)
 }
 
-func handleTCPConnWithError(connCtx C.ConnContext) error {
+func handleTCPConnWithError(connCtx C.ConnContext, closeBeforeReturn bool) error {
 	if !isHandle(connCtx.Metadata().Type) {
 		_ = connCtx.Conn().Close()
 		return errors.New("tunnel not running")
 	}
 
-	defer func(conn net.Conn) {
-		_ = conn.Close()
-	}(connCtx.Conn())
+	if closeBeforeReturn {
+		defer func(conn net.Conn) {
+			_ = conn.Close()
+		}(connCtx.Conn())
+	}
 
 	metadata := connCtx.Metadata()
 	if !metadata.Valid() {
