@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/resolver"
 )
 
@@ -13,7 +14,9 @@ var (
 	DefaultInterface   = atomic.NewTypedValue[string]("")
 	DefaultRoutingMark = atomic.NewInt32(0)
 
-	DefaultInterfaceFinder = atomic.NewTypedValue[InterfaceFinder](nil)
+	DefaultInterfaceFinder          = atomic.NewTypedValue[InterfaceFinder](nil)
+	DefaultInterfaceSelectBypass    = atomic.NewTypedValue[*cidr.IpCidrSet](nil)
+	DefaultInterfaceSelectBypassCfg = atomic.NewTypedValue[[]string](nil)
 )
 
 type InterfaceFinder interface {

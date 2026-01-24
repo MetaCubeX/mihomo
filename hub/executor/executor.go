@@ -154,12 +154,14 @@ func GetGeneral() *config.General {
 			InboundTfo:        inbound.Tfo(),
 			InboundMPTCP:      inbound.MPTCP(),
 		},
-		Mode:         tunnel.Mode(),
-		UnifiedDelay: adapter.UnifiedDelay.Load(),
-		LogLevel:     log.Level(),
-		IPv6:         !resolver.DisableIPv6,
-		Interface:    dialer.DefaultInterface.Load(),
-		RoutingMark:  int(dialer.DefaultRoutingMark.Load()),
+		Mode:                     tunnel.Mode(),
+		UnifiedDelay:             adapter.UnifiedDelay.Load(),
+		LogLevel:                 log.Level(),
+		IPv6:                     !resolver.DisableIPv6,
+		Interface:                dialer.DefaultInterface.Load(),
+		InterfaceSelectBypassCfg: dialer.DefaultInterfaceSelectBypassCfg.Load(),
+		InterfaceSelectBypass:    dialer.DefaultInterfaceSelectBypass.Load(),
+		RoutingMark:              int(dialer.DefaultRoutingMark.Load()),
 		GeoXUrl: config.GeoXUrl{
 			GeoIp:   geodata.GeoIpUrl(),
 			Mmdb:    geodata.MmdbUrl(),
@@ -407,6 +409,8 @@ func updateGeneral(general *config.General, logging bool) {
 	adapter.UnifiedDelay.Store(general.UnifiedDelay)
 
 	dialer.DefaultInterface.Store(general.Interface)
+	dialer.DefaultInterfaceSelectBypassCfg.Store(general.InterfaceSelectBypassCfg)
+	dialer.DefaultInterfaceSelectBypass.Store(general.InterfaceSelectBypass)
 	dialer.DefaultRoutingMark.Store(int32(general.RoutingMark))
 	if logging && general.RoutingMark > 0 {
 		log.Infoln("Use routing mark: %#x", general.RoutingMark)

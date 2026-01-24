@@ -32,6 +32,14 @@ var (
 	fallbackTimeout              = 300 * time.Millisecond
 )
 
+// Returns true if the IP should bypass interface binding.
+func shouldBypass(ip netip.Addr) bool {
+	if bypass := DefaultInterfaceSelectBypass.Load(); bypass != nil {
+		return bypass.MatchIp(ip.Unmap())
+	}
+	return false
+}
+
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
 	opt := applyOptions(options...)
 
@@ -70,12 +78,16 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 	if DefaultSocketHook != nil { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CMFA)
 		socketHookToListenConfig(lc)
 	} else {
-		if opt.interfaceName == "" {
-			opt.interfaceName = DefaultInterface.Load()
-		}
-		if opt.interfaceName == "" {
-			if finder := DefaultInterfaceFinder.Load(); finder != nil {
-				opt.interfaceName = finder.FindInterfaceName(rAddrPort.Addr().Unmap())
+		if shouldBypass(rAddrPort.Addr()) {
+			opt.interfaceName = ""
+		} else {
+			if opt.interfaceName == "" {
+				opt.interfaceName = DefaultInterface.Load()
+			}
+			if opt.interfaceName == "" {
+				if finder := DefaultInterfaceFinder.Load(); finder != nil {
+					opt.interfaceName = finder.FindInterfaceName(rAddrPort.Addr().Unmap())
+				}
 			}
 		}
 		if rAddrPort.Addr().Unmap().IsLoopback() {
@@ -146,14 +158,19 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	if DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo when DefaultSocketHook not null (in CMFA)
 		socketHookToToDialer(dialer)
 	} else {
-		if opt.interfaceName == "" {
-			opt.interfaceName = DefaultInterface.Load()
-		}
-		if opt.interfaceName == "" {
-			if finder := DefaultInterfaceFinder.Load(); finder != nil {
-				opt.interfaceName = finder.FindInterfaceName(destination)
+		if shouldBypass(destination) {
+			opt.interfaceName = ""
+		} else {
+			if opt.interfaceName == "" {
+				opt.interfaceName = DefaultInterface.Load()
+			}
+			if opt.interfaceName == "" {
+				if finder := DefaultInterfaceFinder.Load(); finder != nil {
+					opt.interfaceName = finder.FindInterfaceName(destination)
+				}
 			}
 		}
+
 		if opt.interfaceName != "" {
 			bind := bindIfaceToDialer
 			if opt.fallbackBind {
@@ -183,15 +200,17 @@ func ICMPControl(destination netip.Addr) func(network, address string, conn sysc
 			return DefaultSocketHook(network, address, conn)
 		}
 		dialer := &net.Dialer{}
-		interfaceName := DefaultInterface.Load()
-		if interfaceName == "" {
-			if finder := DefaultInterfaceFinder.Load(); finder != nil {
-				interfaceName = finder.FindInterfaceName(destination)
+		if !shouldBypass(destination) {
+			interfaceName := DefaultInterface.Load()
+			if interfaceName == "" {
+				if finder := DefaultInterfaceFinder.Load(); finder != nil {
+					interfaceName = finder.FindInterfaceName(destination)
+				}
 			}
-		}
-		if interfaceName != "" {
-			if err := bindIfaceToDialer(interfaceName, dialer, network, destination); err != nil {
-				return err
+			if interfaceName != "" {
+				if err := bindIfaceToDialer(interfaceName, dialer, network, destination); err != nil {
+					return err
+				}
 			}
 		}
 		routingMark := int(DefaultRoutingMark.Load())

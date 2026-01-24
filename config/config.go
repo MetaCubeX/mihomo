@@ -45,27 +45,29 @@ import (
 // General config
 type General struct {
 	Inbound
-	Mode                    T.TunnelMode            `json:"mode"`
-	UnifiedDelay            bool                    `json:"unified-delay"`
-	LogLevel                log.LogLevel            `json:"log-level"`
-	IPv6                    bool                    `json:"ipv6"`
-	Interface               string                  `json:"interface-name"`
-	RoutingMark             int                     `json:"routing-mark"`
-	GeoXUrl                 GeoXUrl                 `json:"geox-url"`
-	GeoAutoUpdate           bool                    `json:"geo-auto-update"`
-	GeoUpdateInterval       int                     `json:"geo-update-interval"`
-	GeodataMode             bool                    `json:"geodata-mode"`
-	GeodataLoader           string                  `json:"geodata-loader"`
-	GeositeMatcher          string                  `json:"geosite-matcher"`
-	TCPConcurrent           bool                    `json:"tcp-concurrent"`
-	FindProcessMode         process.FindProcessMode `json:"find-process-mode"`
-	Sniffing                bool                    `json:"sniffing"`
-	GlobalClientFingerprint string                  `json:"global-client-fingerprint"`
-	GlobalUA                string                  `json:"global-ua"`
-	ETagSupport             bool                    `json:"etag-support"`
-	KeepAliveIdle           int                     `json:"keep-alive-idle"`
-	KeepAliveInterval       int                     `json:"keep-alive-interval"`
-	DisableKeepAlive        bool                    `json:"disable-keep-alive"`
+	Mode                     T.TunnelMode            `json:"mode"`
+	UnifiedDelay             bool                    `json:"unified-delay"`
+	LogLevel                 log.LogLevel            `json:"log-level"`
+	IPv6                     bool                    `json:"ipv6"`
+	Interface                string                  `json:"interface-name"`
+	InterfaceSelectBypassCfg []string                `json:"interface-select-bypass"`
+	InterfaceSelectBypass    *cidr.IpCidrSet         `json:"-"`
+	RoutingMark              int                     `json:"routing-mark"`
+	GeoXUrl                  GeoXUrl                 `json:"geox-url"`
+	GeoAutoUpdate            bool                    `json:"geo-auto-update"`
+	GeoUpdateInterval        int                     `json:"geo-update-interval"`
+	GeodataMode              bool                    `json:"geodata-mode"`
+	GeodataLoader            string                  `json:"geodata-loader"`
+	GeositeMatcher           string                  `json:"geosite-matcher"`
+	TCPConcurrent            bool                    `json:"tcp-concurrent"`
+	FindProcessMode          process.FindProcessMode `json:"find-process-mode"`
+	Sniffing                 bool                    `json:"sniffing"`
+	GlobalClientFingerprint  string                  `json:"global-client-fingerprint"`
+	GlobalUA                 string                  `json:"global-ua"`
+	ETagSupport              bool                    `json:"etag-support"`
+	KeepAliveIdle            int                     `json:"keep-alive-idle"`
+	KeepAliveInterval        int                     `json:"keep-alive-interval"`
+	DisableKeepAlive         bool                    `json:"disable-keep-alive"`
 }
 
 // Inbound config
@@ -415,6 +417,7 @@ type RawConfig struct {
 	ExternalDohServer       string                  `yaml:"external-doh-server" json:"external-doh-server"`
 	Secret                  string                  `yaml:"secret" json:"secret"`
 	Interface               string                  `yaml:"interface-name" json:"interface-name"`
+	InterfaceSelectBypass   []string                `yaml:"interface-select-bypass" json:"interface-select-bypass"`
 	RoutingMark             int                     `yaml:"routing-mark" json:"routing-mark"`
 	Tunnels                 []LC.Tunnel             `yaml:"tunnels" json:"tunnels"`
 	GeoAutoUpdate           bool                    `yaml:"geo-auto-update" json:"geo-auto-update"`
@@ -734,6 +737,17 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 func temporaryUpdateGeneral(general *General) func()
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
+	var interfaceSelectBypass *cidr.IpCidrSet
+	if len(cfg.InterfaceSelectBypass) > 0 {
+		interfaceSelectBypass = cidr.NewIpCidrSet()
+		for _, s := range cfg.InterfaceSelectBypass {
+			if err := interfaceSelectBypass.AddIpCidrForString(s); err != nil {
+				return nil, fmt.Errorf("interface-select-bypass CIDR parse error: %w", err)
+			}
+		}
+		_ = interfaceSelectBypass.Merge()
+	}
+
 	return &General{
 		Inbound: Inbound{
 			Port:              cfg.Port,
@@ -751,12 +765,14 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			InboundTfo:        cfg.InboundTfo,
 			InboundMPTCP:      cfg.InboundMPTCP,
 		},
-		UnifiedDelay: cfg.UnifiedDelay,
-		Mode:         cfg.Mode,
-		LogLevel:     cfg.LogLevel,
-		IPv6:         cfg.IPv6,
-		Interface:    cfg.Interface,
-		RoutingMark:  cfg.RoutingMark,
+		UnifiedDelay:             cfg.UnifiedDelay,
+		Mode:                     cfg.Mode,
+		LogLevel:                 cfg.LogLevel,
+		IPv6:                     cfg.IPv6,
+		Interface:                cfg.Interface,
+		InterfaceSelectBypassCfg: cfg.InterfaceSelectBypass,
+		InterfaceSelectBypass:    interfaceSelectBypass,
+		RoutingMark:              cfg.RoutingMark,
 		GeoXUrl: GeoXUrl{
 			GeoIp:   cfg.GeoXUrl.GeoIp,
 			Mmdb:    cfg.GeoXUrl.Mmdb,
