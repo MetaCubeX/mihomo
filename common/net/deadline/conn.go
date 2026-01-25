@@ -13,8 +13,8 @@ import (
 )
 
 type connReadResult struct {
-	buffer []byte
-	err    error
+	n   int
+	err error
 }
 
 type Conn struct {
@@ -42,84 +42,42 @@ func NewConn(conn net.Conn) *Conn {
 }
 
 func (c *Conn) Read(p []byte) (n int, err error) {
-	select {
-	case result := <-c.resultCh:
-		if result != nil {
-			n = copy(p, result.buffer)
-			err = result.err
-			if n >= len(result.buffer) {
-				c.resultCh <- nil // finish cache read
-			} else {
-				result.buffer = result.buffer[n:]
-				c.resultCh <- result // push back for next call
-			}
-			return
-		} else {
-			c.resultCh <- nil
-			break
-		}
-	case <-c.pipeDeadline.Wait():
-		return 0, os.ErrDeadlineExceeded
-	}
-
-	if c.disablePipe.Load() {
-		return c.ExtendedConn.Read(p)
-	} else if c.deadline.Load().IsZero() {
-		c.inRead.Store(true)
-		defer c.inRead.Store(false)
-		return c.ExtendedConn.Read(p)
-	}
-
-	<-c.resultCh
-	go c.pipeRead(len(p))
-
-	return c.Read(p)
-}
-
-func (c *Conn) pipeRead(size int) {
-	buffer := make([]byte, size)
-	n, err := c.ExtendedConn.Read(buffer)
-	buffer = buffer[:n]
-	c.resultCh <- &connReadResult{
-		buffer: buffer,
-		err:    err,
-	}
+	buffer := buf.With(p)
+	err = c.ReadBuffer(buffer)
+	n = buffer.Len()
+	return
 }
 
 func (c *Conn) ReadBuffer(buffer *buf.Buffer) (err error) {
-	select {
-	case result := <-c.resultCh:
-		if result != nil {
-			n, _ := buffer.Write(result.buffer)
-			err = result.err
-
-			if n >= len(result.buffer) {
-				c.resultCh <- nil // finish cache read
-			} else {
-				result.buffer = result.buffer[n:]
-				c.resultCh <- result // push back for next call
-			}
-			return
-		} else {
+	for {
+		select {
+		case result := <-c.resultCh:
 			c.resultCh <- nil
-			break
+			if result != nil {
+				buffer.Truncate(buffer.Len() + result.n)
+				return result.err
+			}
+		case <-c.pipeDeadline.Wait():
+			return os.ErrDeadlineExceeded
 		}
-	case <-c.pipeDeadline.Wait():
-		return os.ErrDeadlineExceeded
+
+		if c.disablePipe.Load() {
+			return c.ExtendedConn.ReadBuffer(buffer)
+		} else if c.deadline.Load().IsZero() {
+			c.inRead.Store(true)
+			defer c.inRead.Store(false)
+			return c.ExtendedConn.ReadBuffer(buffer)
+		}
+
+		<-c.resultCh
+		go func(read_buf []byte) {
+			n, err := c.ExtendedConn.Read(read_buf)
+			c.resultCh <- &connReadResult{
+				n:   n,
+				err: err,
+			}
+		}(buffer.FreeBytes())
 	}
-
-	if c.disablePipe.Load() {
-		return c.ExtendedConn.ReadBuffer(buffer)
-	} else if c.deadline.Load().IsZero() {
-		c.inRead.Store(true)
-		defer c.inRead.Store(false)
-		return c.ExtendedConn.ReadBuffer(buffer)
-	}
-
-	<-c.resultCh
-	go c.pipeRead(buffer.FreeLen())
-
-	return c.ReadBuffer(buffer)
 }
 
 func (c *Conn) SetReadDeadline(t time.Time) error {
