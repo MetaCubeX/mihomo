@@ -22,6 +22,26 @@ type AEADConn struct {
 	nonceSize int
 }
 
+func (cc *AEADConn) CloseWrite() error {
+	if cc == nil || cc.Conn == nil {
+		return nil
+	}
+	if cw, ok := cc.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (cc *AEADConn) CloseRead() error {
+	if cc == nil || cc.Conn == nil {
+		return nil
+	}
+	if cr, ok := cc.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
+}
+
 func NewAEADConn(c net.Conn, key string, method string) (*AEADConn, error) {
 	if method == "none" {
 		return &AEADConn{Conn: c, aead: nil}, nil

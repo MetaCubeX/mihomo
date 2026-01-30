@@ -52,8 +52,28 @@ type Conn struct {
 	pendingData []byte
 	hintBuf     []byte
 
-	rng         *rand.Rand
-	paddingRate float32
+	rng              *rand.Rand
+	paddingThreshold uint64
+}
+
+func (sc *Conn) CloseWrite() error {
+	if sc == nil || sc.Conn == nil {
+		return nil
+	}
+	if cw, ok := sc.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (sc *Conn) CloseRead() error {
+	if sc == nil || sc.Conn == nil {
+		return nil
+	}
+	if cr, ok := sc.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
 }
 
 func NewConn(c net.Conn, table *Table, pMin, pMax int, record bool) *Conn {
@@ -64,19 +84,15 @@ func NewConn(c net.Conn, table *Table, pMin, pMax int, record bool) *Conn {
 	seed := int64(binary.BigEndian.Uint64(seedBytes[:]))
 	localRng := rand.New(rand.NewSource(seed))
 
-	min := float32(pMin) / 100.0
-	rng := float32(pMax-pMin) / 100.0
-	rate := min + localRng.Float32()*rng
-
 	sc := &Conn{
-		Conn:        c,
-		table:       table,
-		reader:      bufio.NewReaderSize(c, IOBufferSize),
-		rawBuf:      make([]byte, IOBufferSize),
-		pendingData: make([]byte, 0, 4096),
-		hintBuf:     make([]byte, 0, 4),
-		rng:         localRng,
-		paddingRate: rate,
+		Conn:             c,
+		table:            table,
+		reader:           bufio.NewReaderSize(c, IOBufferSize),
+		rawBuf:           make([]byte, IOBufferSize),
+		pendingData:      make([]byte, 0, 4096),
+		hintBuf:          make([]byte, 0, 4),
+		rng:              localRng,
+		paddingThreshold: pickPaddingThreshold(localRng, pMin, pMax),
 	}
 	if record {
 		sc.recorder = new(bytes.Buffer)
@@ -127,7 +143,7 @@ func (sc *Conn) Write(p []byte) (n int, err error) {
 	padLen := len(pads)
 
 	for _, b := range p {
-		if sc.rng.Float32() < sc.paddingRate {
+		if shouldPad(sc.rng, sc.paddingThreshold) {
 			out = append(out, pads[sc.rng.Intn(padLen)])
 		}
 
@@ -136,14 +152,14 @@ func (sc *Conn) Write(p []byte) (n int, err error) {
 
 		perm := perm4[sc.rng.Intn(len(perm4))]
 		for _, idx := range perm {
-			if sc.rng.Float32() < sc.paddingRate {
+			if shouldPad(sc.rng, sc.paddingThreshold) {
 				out = append(out, pads[sc.rng.Intn(padLen)])
 			}
 			out = append(out, puzzle[idx])
 		}
 	}
 
-	if sc.rng.Float32() < sc.paddingRate {
+	if shouldPad(sc.rng, sc.paddingThreshold) {
 		out = append(out, pads[sc.rng.Intn(padLen)])
 	}
 

@@ -383,7 +383,11 @@ func (c *stream) enqueue(payload []byte) {
 		c.mu.Unlock()
 		return
 	}
-	c.queue = append(c.queue, payload)
+	if len(c.readBuf) == 0 && len(c.queue) == 0 {
+		c.readBuf = payload
+	} else {
+		c.queue = append(c.queue, payload)
+	}
 	c.cond.Signal()
 	c.mu.Unlock()
 }
@@ -491,6 +495,9 @@ func (c *stream) Close() error {
 	return nil
 }
 
+func (c *stream) CloseWrite() error { return c.Close() }
+func (c *stream) CloseRead() error  { return c.Close() }
+
 func (c *stream) LocalAddr() net.Addr  { return c.localAddr }
 func (c *stream) RemoteAddr() net.Addr { return c.remoteAddr }
 
@@ -501,4 +508,3 @@ func (c *stream) SetDeadline(t time.Time) error {
 }
 func (c *stream) SetReadDeadline(time.Time) error  { return nil }
 func (c *stream) SetWriteDeadline(time.Time) error { return nil }
-

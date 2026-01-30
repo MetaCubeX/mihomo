@@ -16,7 +16,7 @@ const (
 )
 
 // 1. 使用 12字节->16组 的块处理优化 Write (减少循环开销)
-// 2. 使用浮点随机概率判断 Padding，与纯 Sudoku 保持流量特征一致
+// 2. 使用整数阈值随机概率判断 Padding，与纯 Sudoku 保持流量特征一致
 // 3. Read 使用 copy 移动避免底层数组泄漏
 type PackedConn struct {
 	net.Conn
@@ -37,11 +37,31 @@ type PackedConn struct {
 	readBitBuf uint64
 	readBits   int
 
-	// 随机数与填充控制 - 使用浮点随机，与 Conn 一致
-	rng         *rand.Rand
-	paddingRate float32 // 与 Conn 保持一致的随机概率模型
-	padMarker   byte
-	padPool     []byte
+	// 随机数与填充控制 - 使用整数阈值随机，与 Conn 一致
+	rng              *rand.Rand
+	paddingThreshold uint64 // 与 Conn 保持一致的随机概率模型
+	padMarker        byte
+	padPool          []byte
+}
+
+func (pc *PackedConn) CloseWrite() error {
+	if pc == nil || pc.Conn == nil {
+		return nil
+	}
+	if cw, ok := pc.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (pc *PackedConn) CloseRead() error {
+	if pc == nil || pc.Conn == nil {
+		return nil
+	}
+	if cr, ok := pc.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
 }
 
 func NewPackedConn(c net.Conn, table *Table, pMin, pMax int) *PackedConn {
@@ -52,20 +72,15 @@ func NewPackedConn(c net.Conn, table *Table, pMin, pMax int) *PackedConn {
 	seed := int64(binary.BigEndian.Uint64(seedBytes[:]))
 	localRng := rand.New(rand.NewSource(seed))
 
-	// 与 Conn 保持一致的 padding 概率计算
-	min := float32(pMin) / 100.0
-	rng := float32(pMax-pMin) / 100.0
-	rate := min + localRng.Float32()*rng
-
 	pc := &PackedConn{
-		Conn:        c,
-		table:       table,
-		reader:      bufio.NewReaderSize(c, IOBufferSize),
-		rawBuf:      make([]byte, IOBufferSize),
-		pendingData: make([]byte, 0, 4096),
-		writeBuf:    make([]byte, 0, 4096),
-		rng:         localRng,
-		paddingRate: rate,
+		Conn:             c,
+		table:            table,
+		reader:           bufio.NewReaderSize(c, IOBufferSize),
+		rawBuf:           make([]byte, IOBufferSize),
+		pendingData:      make([]byte, 0, 4096),
+		writeBuf:         make([]byte, 0, 4096),
+		rng:              localRng,
+		paddingThreshold: pickPaddingThreshold(localRng, pMin, pMax),
 	}
 
 	pc.padMarker = table.layout.padMarker
@@ -80,9 +95,9 @@ func NewPackedConn(c net.Conn, table *Table, pMin, pMax int) *PackedConn {
 	return pc
 }
 
-// maybeAddPadding 内联辅助：根据浮点概率插入 padding
+// maybeAddPadding 内联辅助：根据概率阈值插入 padding
 func (pc *PackedConn) maybeAddPadding(out []byte) []byte {
-	if pc.rng.Float32() < pc.paddingRate {
+	if shouldPad(pc.rng, pc.paddingThreshold) {
 		out = append(out, pc.getPaddingByte())
 	}
 	return out

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	N "github.com/metacubex/mihomo/common/net"
 	C "github.com/metacubex/mihomo/constant"
@@ -22,10 +21,8 @@ type Sudoku struct {
 	httpMaskMu     sync.Mutex
 	httpMaskClient *sudoku.HTTPMaskTunnelClient
 
-	muxMu           sync.Mutex
-	muxClient       *sudoku.MultiplexClient
-	muxBackoffUntil time.Time
-	muxLastErr      error
+	muxMu     sync.Mutex
+	muxClient *sudoku.MultiplexClient
 }
 
 type SudokuOption struct {
@@ -58,7 +55,7 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 
 	muxMode := normalizeHTTPMaskMultiplex(cfg.HTTPMaskMultiplex)
 	if muxMode == "on" && !cfg.DisableHTTPMask && httpTunnelModeEnabled(cfg.HTTPMaskMode) {
-		stream, muxErr := s.dialMultiplex(ctx, cfg.TargetAddress, muxMode)
+		stream, muxErr := s.dialMultiplex(ctx, cfg.TargetAddress)
 		if muxErr == nil {
 			return NewConn(stream, s), nil
 		}
@@ -312,9 +309,9 @@ func (s *Sudoku) dialAndHandshake(ctx context.Context, cfg *sudoku.ProtocolConfi
 	return c, nil
 }
 
-func (s *Sudoku) dialMultiplex(ctx context.Context, targetAddress string, mode string) (net.Conn, error) {
+func (s *Sudoku) dialMultiplex(ctx context.Context, targetAddress string) (net.Conn, error) {
 	for attempt := 0; attempt < 2; attempt++ {
-		client, err := s.getOrCreateMuxClient(ctx, mode)
+		client, err := s.getOrCreateMuxClient(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -330,19 +327,9 @@ func (s *Sudoku) dialMultiplex(ctx context.Context, targetAddress string, mode s
 	return nil, fmt.Errorf("multiplex open stream failed")
 }
 
-func (s *Sudoku) getOrCreateMuxClient(ctx context.Context, mode string) (*sudoku.MultiplexClient, error) {
+func (s *Sudoku) getOrCreateMuxClient(ctx context.Context) (*sudoku.MultiplexClient, error) {
 	if s == nil {
 		return nil, fmt.Errorf("nil adapter")
-	}
-
-	if mode == "auto" {
-		s.muxMu.Lock()
-		backoffUntil := s.muxBackoffUntil
-		lastErr := s.muxLastErr
-		s.muxMu.Unlock()
-		if time.Now().Before(backoffUntil) {
-			return nil, fmt.Errorf("multiplex temporarily disabled: %v", lastErr)
-		}
 	}
 
 	s.muxMu.Lock()
@@ -363,35 +350,17 @@ func (s *Sudoku) getOrCreateMuxClient(ctx context.Context, mode string) (*sudoku
 	baseCfg := s.baseConf
 	baseConn, err := s.dialAndHandshake(ctx, &baseCfg)
 	if err != nil {
-		if mode == "auto" {
-			s.muxLastErr = err
-			s.muxBackoffUntil = time.Now().Add(45 * time.Second)
-		}
 		return nil, err
 	}
 
 	client, err := sudoku.StartMultiplexClient(baseConn)
 	if err != nil {
 		_ = baseConn.Close()
-		if mode == "auto" {
-			s.muxLastErr = err
-			s.muxBackoffUntil = time.Now().Add(45 * time.Second)
-		}
 		return nil, err
 	}
 
 	s.muxClient = client
 	return client, nil
-}
-
-func (s *Sudoku) noteMuxFailure(mode string, err error) {
-	if mode != "auto" {
-		return
-	}
-	s.muxMu.Lock()
-	s.muxLastErr = err
-	s.muxBackoffUntil = time.Now().Add(45 * time.Second)
-	s.muxMu.Unlock()
 }
 
 func (s *Sudoku) resetMuxClient() {

@@ -32,7 +32,8 @@ type ProtocolConfig struct {
 	PaddingMin int
 	PaddingMax int
 
-	// EnablePureDownlink toggles the bandwidth-optimized downlink mode.
+	// EnablePureDownlink enables the pure Sudoku downlink mode.
+	// When false, the connection uses the bandwidth-optimized packed downlink (requires AEAD).
 	EnablePureDownlink bool
 
 	// Client-only: final target "host:port".
@@ -46,7 +47,7 @@ type ProtocolConfig struct {
 
 	// HTTPMaskMode controls how the HTTP layer behaves:
 	//   - "legacy": write a fake HTTP/1.1 header then switch to raw stream (default, not CDN-compatible)
-	//   - "stream": real HTTP tunnel (stream-one or split), CDN-compatible
+	//   - "stream": real HTTP tunnel (split-stream), CDN-compatible
 	//   - "poll": plain HTTP tunnel (authorize/push/pull), strong restricted-network pass-through
 	//   - "auto": try stream then fall back to poll
 	HTTPMaskMode string
@@ -114,7 +115,8 @@ func (c *ProtocolConfig) Validate() error {
 	}
 
 	if v := strings.TrimSpace(c.HTTPMaskPathRoot); v != "" {
-		if strings.Contains(v, "/") {
+		v = strings.Trim(v, "/")
+		if v == "" || strings.Contains(v, "/") {
 			return fmt.Errorf("invalid http-mask-path-root: must be a single path segment")
 		}
 		for i := 0; i < len(v); i++ {
