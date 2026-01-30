@@ -955,6 +955,12 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 		)
 		proxies["GLOBAL"] = adapter.NewProxy(global)
 	}
+
+	// validate dialer-proxy references
+	if err := validateDialerProxies(proxies); err != nil {
+		return nil, nil, err
+	}
+
 	return proxies, providersMap, nil
 }
 
@@ -1905,4 +1911,103 @@ func parseDomainRuleSet(domainSetName string, adapterName string, ruleProviders 
 		}
 	}
 	return RP.NewRuleSet(domainSetName, adapterName, false, true)
+}
+
+// proxyWithDialer stores proxy name and its dialer-proxy reference
+type proxyWithDialer struct {
+	name        string
+	dialerProxy string
+}
+
+// validateDialerProxies checks if all dialer-proxy references are valid
+func validateDialerProxies(proxies map[string]C.Proxy) error {
+	var needValidate []proxyWithDialer
+
+	// collect all proxies with dialer-proxy configured
+	for name, proxy := range proxies {
+		// skip built-in special proxies
+		if name == "DIRECT" || name == "REJECT" || name == "REJECT-DROP" ||
+			name == "COMPATIBLE" || name == "PASS" || name == "GLOBAL" {
+			continue
+		}
+
+		dialerProxy := proxy.Adapter().ProxyInfo().DialerProxy
+		if dialerProxy != "" {
+			needValidate = append(needValidate, proxyWithDialer{
+				name:        name,
+				dialerProxy: dialerProxy,
+			})
+		}
+	}
+
+	// validate each dialer-proxy reference
+	for _, pv := range needValidate {
+		targetProxy, exist := proxies[pv.dialerProxy]
+		if !exist {
+			return fmt.Errorf("proxy [%s] dialer-proxy [%s] not found",
+				pv.name, pv.dialerProxy)
+		}
+
+		// check if target proxy type is valid
+		targetType := targetProxy.Type()
+		if targetType == C.Reject || targetType == C.RejectDrop ||
+			targetType == C.Compatible || targetType == C.Pass {
+			return fmt.Errorf("proxy [%s] dialer-proxy [%s] has invalid type: %s",
+				pv.name, pv.dialerProxy, targetType.String())
+		}
+	}
+
+	// detect circular dependencies
+	if err := detectDialerProxyCycles(proxies, needValidate); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// detectDialerProxyCycles detects circular dialer-proxy dependencies
+func detectDialerProxyCycles(proxies map[string]C.Proxy, needValidate []proxyWithDialer) error {
+	// build dependency graph
+	graph := make(map[string]string) // proxy name -> dialer-proxy name
+	for _, pv := range needValidate {
+		graph[pv.name] = pv.dialerProxy
+	}
+
+	// perform depth-first search to detect cycles for each proxy
+	for _, pv := range needValidate {
+		visited := make(map[string]bool)
+		if hasCycle(pv.name, graph, proxies, visited, []string{}) {
+			return fmt.Errorf("proxy [%s] has circular dialer-proxy dependency", pv.name)
+		}
+	}
+
+	return nil
+}
+
+// hasCycle performs DFS to detect if there's a cycle starting from current proxy
+func hasCycle(current string, graph map[string]string, proxies map[string]C.Proxy,
+	visited map[string]bool, path []string) bool {
+	// check if current is already in path (cycle detected)
+	for _, p := range path {
+		if p == current {
+			return true
+		}
+	}
+
+	// already visited and no cycle
+	if visited[current] {
+		return false
+	}
+
+	visited[current] = true
+	path = append(path, current)
+
+	// check dialer-proxy of current proxy
+	if dialerProxy, exists := graph[current]; exists {
+		if hasCycle(dialerProxy, graph, proxies, visited, path) {
+			return true
+		}
+	}
+
+	return false
 }
