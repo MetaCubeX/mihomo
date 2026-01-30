@@ -150,7 +150,7 @@ func validateDialerProxies(proxies map[string]C.Proxy) error {
 
 	// collect all proxies with dialer-proxy configured
 	for name, proxy := range proxies {
-		dialerProxy := proxy.Adapter().ProxyInfo().DialerProxy
+		dialerProxy := proxy.ProxyInfo().DialerProxy
 		if dialerProxy != "" {
 			// validate each dialer-proxy reference
 			_, exist := proxies[dialerProxy]
@@ -165,8 +165,9 @@ func validateDialerProxies(proxies map[string]C.Proxy) error {
 
 	// perform depth-first search to detect cycles for each proxy
 	for name := range graph {
-		visited := make(map[string]bool)
-		if validateDialerProxiesHasCycle(name, graph, visited, []string{}) {
+		visited := make(map[string]bool, len(graph))
+		path := make([]string, 0, len(graph))
+		if validateDialerProxiesHasCycle(name, graph, visited, path) {
 			return fmt.Errorf("proxy [%s] has circular dialer-proxy dependency", name)
 		}
 	}
