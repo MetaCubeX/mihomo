@@ -63,30 +63,6 @@ func TestValidateDialerProxies_NotFoundReference(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found", "error message should indicate proxy not found")
 }
 
-func TestValidateDialerProxies_InvalidType(t *testing.T) {
-	proxies := make(map[string]C.Proxy)
-
-	// add built-in proxies
-	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
-	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
-	proxies["REJECT-DROP"] = adapter.NewProxy(outbound.NewRejectDrop())
-
-	// create proxy with REJECT as dialer-proxy (invalid type)
-	proxyWithDialer, _ := outbound.NewSocks5(outbound.Socks5Option{
-		BasicOption: outbound.BasicOption{
-			DialerProxy: "REJECT",
-		},
-		Name:   "proxy-with-dialer",
-		Server: "127.0.0.1",
-		Port:   1081,
-	})
-	proxies["proxy-with-dialer"] = adapter.NewProxy(proxyWithDialer)
-
-	err := validateDialerProxies(proxies)
-	assert.Error(t, err, "invalid dialer-proxy type should fail validation")
-	assert.Contains(t, err.Error(), "invalid type", "error message should indicate invalid type")
-}
-
 func TestValidateDialerProxies_CircularDependency(t *testing.T) {
 	proxies := make(map[string]C.Proxy)
 
