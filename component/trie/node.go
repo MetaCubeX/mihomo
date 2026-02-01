@@ -54,7 +54,7 @@ func (n *Node[T]) getOrNewChild(s string) *Node[T] {
 
 func (n *Node[T]) optimize() {
 	if len(n.childStr) > 0 {
-		n.childStr = strClone(n.childStr)
+		strClone(&n.childStr)
 	}
 	if n.childNode != nil {
 		n.childNode.optimize()
@@ -81,27 +81,27 @@ func (n *Node[T]) optimize() {
 		if child == nil {
 			continue
 		}
-		key = strClone(key)
+		strClone(&key)
 		children[key] = child
 		child.optimize()
 	}
 	n.childMap = children
 }
 
-func strClone(key string) string {
-	switch key { // try to save string's memory
+func strClone(key *string) {
+	s := *key
+	switch s { // try to save string's memory
 	case wildcard:
-		key = wildcard
+		*key = wildcard
 	case dotWildcard:
-		key = dotWildcard
+		*key = dotWildcard
 	case complexWildcard:
-		key = complexWildcard
+		*key = complexWildcard
 	case domainStep:
-		key = domainStep
+		*key = domainStep
 	default:
-		key = strings.Clone(key)
+		*key = strings.Clone(s)
 	}
-	return key
 }
 
 func (n *Node[T]) isEmpty() bool {
