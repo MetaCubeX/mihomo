@@ -98,11 +98,17 @@ func GetTLSConfig(opt Option) (tlsConfig *tls.Config, err error) {
 	}
 
 	if len(opt.Fingerprint) > 0 {
-		tlsConfig.VerifyPeerCertificate, err = NewFingerprintVerifier(opt.Fingerprint, tlsConfig.Time)
-		if err != nil {
-			return nil, err
+		if tlsConfig.InsecureSkipVerify {
+			tlsConfig.VerifyPeerCertificate, err = NewFingerprintVerifier(opt.Fingerprint, tlsConfig.Time)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tlsConfig.VerifyConnection, err = NewConnectionVerifier(opt.Fingerprint)
+			if err != nil {
+				return nil, err
+			}
 		}
-		tlsConfig.InsecureSkipVerify = true
 	}
 
 	if len(opt.Certificate) > 0 || len(opt.PrivateKey) > 0 {

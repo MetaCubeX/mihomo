@@ -1,10 +1,12 @@
 package ca
 
 import (
+	"crypto/x509"
 	"encoding/pem"
 	"testing"
 	"time"
 
+	"github.com/metacubex/tls"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -349,3 +351,64 @@ QnMFlEPVjjxOAToZpR9GTnfQXeWBIiGH/pR9hNiTrdZoQ0iy2+tzJOeRf1SktoA+
 naM8THLCV8Sg1Mw4J87VBp6iSNnpn86CcDaTmjvfliHjWbcM2pE38P1ZWrOZyGls
 QyYBNWNgVYkDOnXYukrZVP/u3oDYLdE41V4tC5h9Pmzb/CaIxw==
 -----END CERTIFICATE-----`
+
+func TestConnectionVerifier(t *testing.T) {
+	leafFingerprint := CalculateFingerprint(leafPEM.Bytes)
+	verifier, err := NewConnectionVerifier(leafFingerprint)
+	require.NoError(t, err)
+
+	// Mock connection state
+	cs := tls.ConnectionState{
+		VerifiedChains: [][]*x509.Certificate{
+			{
+				{Raw: leafPEM.Bytes},
+				{Raw: intermediatePEM.Bytes},
+				{Raw: rootPEM.Bytes},
+			},
+		},
+	}
+
+	err = verifier(cs)
+	assert.NoError(t, err)
+
+	// Test with invalid hash in chain
+	csInvalid := tls.ConnectionState{
+		VerifiedChains: [][]*x509.Certificate{
+			{
+				{Raw: leafWithInvalidHashPEM.Bytes},
+				{Raw: intermediatePEM.Bytes},
+				{Raw: rootPEM.Bytes},
+			},
+		},
+	}
+	err = verifier(csInvalid)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no matching fingerprint found")
+
+	// Test with different fingerprint
+	otherFingerprint := CalculateFingerprint(intermediatePEM.Bytes)
+	verifier2, err := NewConnectionVerifier(otherFingerprint)
+	require.NoError(t, err)
+
+	// Should pass because intermediate is in the chain
+	err = verifier2(cs)
+	assert.NoError(t, err)
+
+	// Test with random fingerprint strings
+	_, err = NewConnectionVerifier("random")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client-fingerprint")
+
+	_, err = NewConnectionVerifier("chrome")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "client-fingerprint")
+
+	// Test with invalid hex string
+	_, err = NewConnectionVerifier("not-a-hex-string")
+	assert.Error(t, err)
+
+	// Test with valid hex but wrong length
+	_, err = NewConnectionVerifier("1234")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "sha256 fingerprint")
+}
