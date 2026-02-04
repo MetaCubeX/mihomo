@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/mptcp"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -25,11 +26,8 @@ const (
 type dialFunc func(ctx context.Context, network string, ips []netip.Addr, port string, opt option) (net.Conn, error)
 
 var (
-	dialMux                      sync.Mutex
-	actualSingleStackDialContext = serialSingleStackDialContext
-	actualDualStackDialContext   = serialDualStackDialContext
-	tcpConcurrent                = false
-	fallbackTimeout              = 300 * time.Millisecond
+	tcpConcurrent   = atomic.NewBool(false)
+	fallbackTimeout = 300 * time.Millisecond
 )
 
 func DialContext(ctx context.Context, network, address string, options ...Option) (net.Conn, error) {
@@ -105,22 +103,11 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 }
 
 func SetTcpConcurrent(concurrent bool) {
-	dialMux.Lock()
-	defer dialMux.Unlock()
-	tcpConcurrent = concurrent
-	if concurrent {
-		actualSingleStackDialContext = concurrentSingleStackDialContext
-		actualDualStackDialContext = concurrentDualStackDialContext
-	} else {
-		actualSingleStackDialContext = serialSingleStackDialContext
-		actualDualStackDialContext = serialDualStackDialContext
-	}
+	tcpConcurrent.Store(concurrent)
 }
 
 func GetTcpConcurrent() bool {
-	dialMux.Lock()
-	defer dialMux.Unlock()
-	return tcpConcurrent
+	return tcpConcurrent.Load()
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt option) (net.Conn, error) {
@@ -202,6 +189,22 @@ func ICMPControl(destination netip.Addr) func(network, address string, conn sysc
 			return dialer.ControlContext(context.TODO(), network, address, conn)
 		}
 		return nil
+	}
+}
+
+func actualSingleStackDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt option) (net.Conn, error) {
+	if tcpConcurrent.Load() {
+		return concurrentSingleStackDialContext(ctx, network, ips, port, opt)
+	} else {
+		return serialSingleStackDialContext(ctx, network, ips, port, opt)
+	}
+}
+
+func actualDualStackDialContext(ctx context.Context, network string, ips []netip.Addr, port string, opt option) (net.Conn, error) {
+	if tcpConcurrent.Load() {
+		return concurrentDualStackDialContext(ctx, network, ips, port, opt)
+	} else {
+		return serialDualStackDialContext(ctx, network, ips, port, opt)
 	}
 }
 
