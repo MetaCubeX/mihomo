@@ -272,7 +272,7 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 
 			log.Debugln("ProxyGroup: %s failed count: %d", gb.Name(), gb.failedTimes)
 			if gb.failedTimes >= gb.maxFailedTimes {
-				log.Warnln("because %s failed multiple times, active health check", gb.Name())
+				log.Warnln("because %s failed multiple times, activate health check", gb.Name())
 				fn()
 			}
 		}
