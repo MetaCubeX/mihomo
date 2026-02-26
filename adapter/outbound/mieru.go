@@ -15,6 +15,7 @@ import (
 	mieruclient "github.com/enfein/mieru/v3/apis/client"
 	mierucommon "github.com/enfein/mieru/v3/apis/common"
 	mierumodel "github.com/enfein/mieru/v3/apis/model"
+	mierutp "github.com/enfein/mieru/v3/apis/trafficpattern"
 	mierupb "github.com/enfein/mieru/v3/pkg/appctl/appctlpb"
 	"google.golang.org/protobuf/proto"
 )
@@ -28,16 +29,17 @@ type Mieru struct {
 
 type MieruOption struct {
 	BasicOption
-	Name          string `proxy:"name"`
-	Server        string `proxy:"server"`
-	Port          int    `proxy:"port,omitempty"`
-	PortRange     string `proxy:"port-range,omitempty"`
-	Transport     string `proxy:"transport"`
-	UDP           bool   `proxy:"udp,omitempty"`
-	UserName      string `proxy:"username"`
-	Password      string `proxy:"password"`
-	Multiplexing  string `proxy:"multiplexing,omitempty"`
-	HandshakeMode string `proxy:"handshake-mode,omitempty"`
+	Name           string `proxy:"name"`
+	Server         string `proxy:"server"`
+	Port           int    `proxy:"port,omitempty"`
+	PortRange      string `proxy:"port-range,omitempty"`
+	Transport      string `proxy:"transport"`
+	UDP            bool   `proxy:"udp,omitempty"`
+	UserName       string `proxy:"username"`
+	Password       string `proxy:"password"`
+	Multiplexing   string `proxy:"multiplexing,omitempty"`
+	HandshakeMode  string `proxy:"handshake-mode,omitempty"`
+	TrafficPattern string `proxy:"traffic-pattern,omitempty"`
 }
 
 type mieruPacketDialer struct {
@@ -291,6 +293,10 @@ func buildMieruClientConfig(option MieruOption) (*mieruclient.ClientConfig, erro
 	if handshakeMode, ok := mierupb.HandshakeMode_value[option.HandshakeMode]; ok {
 		config.Profile.HandshakeMode = (*mierupb.HandshakeMode)(&handshakeMode)
 	}
+	if option.TrafficPattern != "" {
+		trafficPattern, _ := mierutp.Decode(option.TrafficPattern)
+		config.Profile.TrafficPattern = trafficPattern
+	}
 	return config, nil
 }
 
@@ -343,6 +349,15 @@ func validateMieruOption(option MieruOption) error {
 	if option.HandshakeMode != "" {
 		if _, ok := mierupb.HandshakeMode_value[option.HandshakeMode]; !ok {
 			return fmt.Errorf("invalid handshake mode: %s", option.HandshakeMode)
+		}
+	}
+	if option.TrafficPattern != "" {
+		trafficPattern, err := mierutp.Decode(option.TrafficPattern)
+		if err != nil {
+			return fmt.Errorf("failed to decode traffic pattern %q: %w", option.TrafficPattern, err)
+		}
+		if err := mierutp.Validate(trafficPattern); err != nil {
+			return fmt.Errorf("invalid traffic pattern %q: %w", option.TrafficPattern, err)
 		}
 	}
 	return nil

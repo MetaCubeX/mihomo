@@ -62,6 +62,20 @@ func TestNewMieru(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid traffic pattern",
+			args: args{
+				option: &inbound.MieruOption{
+					BaseOption: inbound.BaseOption{
+						Port: "8080",
+					},
+					Transport:      "TCP",
+					Users:          map[string]string{"user": "pass"},
+					TrafficPattern: "GgQIARAK",
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "invalid - no port",
 			args: args{
 				option: &inbound.MieruOption{
@@ -131,6 +145,20 @@ func TestNewMieru(t *testing.T) {
 					},
 					Transport: "TCP",
 					Users:     map[string]string{"user": ""},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid traffic pattern",
+			args: args{
+				option: &inbound.MieruOption{
+					BaseOption: inbound.BaseOption{
+						Port: "8080",
+					},
+					Transport:      "TCP",
+					Users:          map[string]string{"user": "pass"},
+					TrafficPattern: "1212ababXYYX",
 				},
 			},
 			wantErr: true,

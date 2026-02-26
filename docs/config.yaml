@@ -1077,6 +1077,8 @@ proxies: # socks5
     # multiplexing: MULTIPLEXING_LOW
     # 如果想开启 0-RTT 握手，请设置为 HANDSHAKE_NO_WAIT，否则请设置为 HANDSHAKE_STANDARD。默认值为 HANDSHAKE_STANDARD
     # handshake-mode: HANDSHAKE_STANDARD
+    # 一个 base64 字符串用于微调网络行为
+    # traffic-pattern: ""
 
   # sudoku
   - name: sudoku
@@ -1645,6 +1647,8 @@ listeners:
     users:
       username1: password1
       username2: password2
+    # 一个 base64 字符串用于微调网络行为
+    # traffic-pattern: ""
 
   - name: sudoku-in-1
     type: sudoku
