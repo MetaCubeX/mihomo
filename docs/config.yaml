@@ -1156,6 +1156,7 @@ proxy-groups:
       - ss1
       - ss2
       - vmess1
+    # tolerance: 150 # 单位: ms, 延迟超过该值将视为 timeout
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 

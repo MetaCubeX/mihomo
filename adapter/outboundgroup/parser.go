@@ -181,7 +181,8 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	case "select":
 		group = NewSelector(groupOption, providers)
 	case "fallback":
-		group = NewFallback(groupOption, providers)
+		opts := parseFallbackOption(config)
+		group = NewFallback(groupOption, providers, opts...)
 	case "load-balance":
 		strategy := parseStrategy(config)
 		return NewLoadBalance(groupOption, providers, strategy)

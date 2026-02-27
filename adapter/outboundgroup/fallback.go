@@ -13,12 +13,21 @@ import (
 	P "github.com/metacubex/mihomo/constant/provider"
 )
 
+type fallbackOption func(*Fallback)
+
+func fallbackWithTolerance(tolerance uint16) fallbackOption {
+	return func(f *Fallback) {
+		f.tolerance = tolerance
+	}
+}
+
 type Fallback struct {
 	*GroupBase
 	disableUDP     bool
 	testUrl        string
 	selected       string
 	expectedStatus string
+	tolerance      uint16
 	Hidden         bool
 	Icon           string
 }
@@ -105,12 +114,12 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
-			if proxy.AliveForTestUrl(f.testUrl) {
+			if f.proxyAlive(proxy) {
 				return proxy
 			}
 		} else {
 			if proxy.Name() == f.selected {
-				if proxy.AliveForTestUrl(f.testUrl) {
+				if f.proxyAlive(proxy) {
 					return proxy
 				} else {
 					f.selected = ""
@@ -136,7 +145,7 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
-	if !p.AliveForTestUrl(f.testUrl) {
+	if !f.proxyAlive(p) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
 		expectedStatus, _ := utils.NewUnsignedRanges[uint16](f.expectedStatus)
@@ -158,8 +167,32 @@ func (f *Fallback) Proxies() []C.Proxy {
 	return f.GetProxies(false)
 }
 
-func NewFallback(option *GroupCommonOption, providers []P.ProxyProvider) *Fallback {
-	return &Fallback{
+func (f *Fallback) proxyAlive(proxy C.Proxy) bool {
+	if !proxy.AliveForTestUrl(f.testUrl) {
+		return false
+	}
+
+	if f.tolerance == 0 {
+		return true
+	}
+
+	return proxy.LastDelayForTestUrl(f.testUrl) <= f.tolerance
+}
+
+func parseFallbackOption(config map[string]any) []fallbackOption {
+	opts := []fallbackOption{}
+
+	if elm, ok := config["tolerance"]; ok {
+		if tolerance, ok := elm.(int); ok {
+			opts = append(opts, fallbackWithTolerance(uint16(tolerance)))
+		}
+	}
+
+	return opts
+}
+
+func NewFallback(option *GroupCommonOption, providers []P.ProxyProvider, options ...fallbackOption) *Fallback {
+	fallback := &Fallback{
 		GroupBase: NewGroupBase(GroupBaseOption{
 			Name:           option.Name,
 			Type:           C.Fallback,
@@ -176,4 +209,10 @@ func NewFallback(option *GroupCommonOption, providers []P.ProxyProvider) *Fallba
 		Hidden:         option.Hidden,
 		Icon:           option.Icon,
 	}
+
+	for _, option := range options {
+		option(fallback)
+	}
+
+	return fallback
 }
