@@ -1,6 +1,7 @@
 package sudoku
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net"
@@ -54,10 +55,16 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 	log.Debugln("[Sudoku] accepted %s", conn.RemoteAddr())
 	handshakeConn := conn
 	handshakeCfg := &l.protoConf
+	closeConns := func() {
+		_ = handshakeConn.Close()
+		if handshakeConn != conn {
+			_ = conn.Close()
+		}
+	}
 	if l.tunnelSrv != nil {
 		c, cfg, done, err := l.tunnelSrv.WrapConn(conn)
 		if err != nil {
-			_ = conn.Close()
+			closeConns()
 			return
 		}
 		if done {
@@ -71,14 +78,11 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		}
 	}
 
-	if strings.TrimSpace(l.fallback) != "" {
+	if l.fallback != "" {
 		if r, ok := handshakeConn.(interface{ IsHTTPMaskRejected() bool }); ok && r.IsHTTPMaskRejected() {
 			fb, err := net.DialTimeout("tcp", l.fallback, 10*time.Second)
 			if err != nil {
-				_ = handshakeConn.Close()
-				if handshakeConn != conn {
-					_ = conn.Close()
-				}
+				closeConns()
 				return
 			}
 			N.Relay(handshakeConn, fb)
@@ -88,7 +92,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 
 	cConn, meta, err := sudoku.ServerHandshake(handshakeConn, handshakeCfg)
 	if err != nil {
-		fallbackAddr := strings.TrimSpace(l.fallback)
+		fallbackAddr := l.fallback
 		var susp *sudoku.SuspiciousError
 		isSuspicious := errors.As(err, &susp) && susp != nil && susp.Conn != nil
 		if isSuspicious {
@@ -103,10 +107,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		} else {
 			log.Debugln("[Sudoku] handshake failed from %s: %v", conn.RemoteAddr(), err)
 		}
-		_ = handshakeConn.Close()
-		if handshakeConn != conn {
-			_ = conn.Close()
-		}
+		closeConns()
 		return
 	}
 
@@ -208,29 +209,13 @@ func (p *uotPacket) LocalAddr() net.Addr {
 	return p.rAddr
 }
 
-func writeFullConn(conn net.Conn, data []byte) error {
-	for len(data) > 0 {
-		n, err := conn.Write(data)
-		if n > 0 {
-			data = data[n:]
-		}
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return io.ErrShortWrite
-		}
-	}
-	return nil
-}
-
 func relayToFallback(wrapper net.Conn, rawConn net.Conn, fallback net.Conn) {
 	if wrapper != nil {
 		if recorder, ok := wrapper.(interface{ GetBufferedAndRecorded() []byte }); ok {
 			badData := recorder.GetBufferedAndRecorded()
 			if len(badData) > 0 {
 				_ = fallback.SetWriteDeadline(time.Now().Add(3 * time.Second))
-				if err := writeFullConn(fallback, badData); err != nil {
+				if _, err := io.Copy(fallback, bytes.NewReader(badData)); err != nil {
 					_ = fallback.Close()
 					_ = rawConn.Close()
 					return
@@ -266,30 +251,15 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		return nil, err
 	}
 
-	tableType := strings.ToLower(config.TableType)
-	if tableType == "" {
-		tableType = "prefer_ascii"
+	tableType, err := sudoku.NormalizeTableType(config.TableType)
+	if err != nil {
+		_ = l.Close()
+		return nil, err
 	}
 
 	defaultConf := sudoku.DefaultConfig()
-	paddingMin := defaultConf.PaddingMin
-	paddingMax := defaultConf.PaddingMax
-	if config.PaddingMin != nil {
-		paddingMin = *config.PaddingMin
-	}
-	if config.PaddingMax != nil {
-		paddingMax = *config.PaddingMax
-	}
-	if config.PaddingMin == nil && config.PaddingMax != nil && paddingMax < paddingMin {
-		paddingMin = paddingMax
-	}
-	if config.PaddingMax == nil && config.PaddingMin != nil && paddingMax < paddingMin {
-		paddingMax = paddingMin
-	}
-	enablePureDownlink := defaultConf.EnablePureDownlink
-	if config.EnablePureDownlink != nil {
-		enablePureDownlink = *config.EnablePureDownlink
-	}
+	paddingMin, paddingMax := sudoku.ResolvePadding(config.PaddingMin, config.PaddingMax, defaultConf.PaddingMin, defaultConf.PaddingMax)
+	enablePureDownlink := sudoku.DerefBool(config.EnablePureDownlink, defaultConf.EnablePureDownlink)
 
 	tables, err := sudoku.NewServerTablesWithCustomPatterns(sudoku.ServerAEADSeed(config.Key), tableType, config.CustomTable, config.CustomTables)
 	if err != nil {
@@ -297,10 +267,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		return nil, err
 	}
 
-	handshakeTimeout := defaultConf.HandshakeTimeoutSeconds
-	if config.HandshakeTimeoutSecond != nil {
-		handshakeTimeout = *config.HandshakeTimeoutSecond
-	}
+	handshakeTimeout := sudoku.DerefInt(config.HandshakeTimeoutSecond, defaultConf.HandshakeTimeoutSeconds)
 
 	protoConf := sudoku.ProtocolConfig{
 		Key:                     config.Key,

@@ -167,6 +167,44 @@ func DefaultConfig() *ProtocolConfig {
 	}
 }
 
+func DerefInt(v *int, def int) int {
+	if v == nil {
+		return def
+	}
+	return *v
+}
+
+func DerefBool(v *bool, def bool) bool {
+	if v == nil {
+		return def
+	}
+	return *v
+}
+
+// ResolvePadding applies defaults and keeps min/max consistent when only one side is provided.
+func ResolvePadding(min, max *int, defMin, defMax int) (int, int) {
+	paddingMin := DerefInt(min, defMin)
+	paddingMax := DerefInt(max, defMax)
+	switch {
+	case min == nil && max != nil && paddingMax < paddingMin:
+		paddingMin = paddingMax
+	case max == nil && min != nil && paddingMax < paddingMin:
+		paddingMax = paddingMin
+	}
+	return paddingMin, paddingMax
+}
+
+func NormalizeTableType(tableType string) (string, error) {
+	switch t := strings.ToLower(strings.TrimSpace(tableType)); t {
+	case "", "prefer_ascii":
+		return "prefer_ascii", nil
+	case "prefer_entropy":
+		return "prefer_entropy", nil
+	default:
+		return "", fmt.Errorf("table-type must be prefer_ascii or prefer_entropy")
+	}
+}
+
 func (c *ProtocolConfig) tableCandidates() []*sudoku.Table {
 	if c == nil {
 		return nil

@@ -153,33 +153,13 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 		return nil, fmt.Errorf("key is required")
 	}
 
-	tableType := strings.ToLower(option.TableType)
-	if tableType == "" {
-		tableType = "prefer_ascii"
-	}
-	if tableType != "prefer_ascii" && tableType != "prefer_entropy" {
-		return nil, fmt.Errorf("table-type must be prefer_ascii or prefer_entropy")
-	}
-
 	defaultConf := sudoku.DefaultConfig()
-	paddingMin := defaultConf.PaddingMin
-	paddingMax := defaultConf.PaddingMax
-	if option.PaddingMin != nil {
-		paddingMin = *option.PaddingMin
+	tableType, err := sudoku.NormalizeTableType(option.TableType)
+	if err != nil {
+		return nil, err
 	}
-	if option.PaddingMax != nil {
-		paddingMax = *option.PaddingMax
-	}
-	if option.PaddingMin == nil && option.PaddingMax != nil && paddingMax < paddingMin {
-		paddingMin = paddingMax
-	}
-	if option.PaddingMax == nil && option.PaddingMin != nil && paddingMax < paddingMin {
-		paddingMax = paddingMin
-	}
-	enablePureDownlink := defaultConf.EnablePureDownlink
-	if option.EnablePureDownlink != nil {
-		enablePureDownlink = *option.EnablePureDownlink
-	}
+	paddingMin, paddingMax := sudoku.ResolvePadding(option.PaddingMin, option.PaddingMax, defaultConf.PaddingMin, defaultConf.PaddingMax)
+	enablePureDownlink := sudoku.DerefBool(option.EnablePureDownlink, defaultConf.EnablePureDownlink)
 
 	disableHTTPMask := defaultConf.DisableHTTPMask
 	if option.HTTPMask != nil {
