@@ -55,7 +55,7 @@ func drainBuffered(r *bufio.Reader) ([]byte, error) {
 func probeHandshakeBytes(probe []byte, cfg *ProtocolConfig, table *sudoku.Table) error {
 	rc := &readOnlyConn{Reader: bytes.NewReader(probe)}
 	_, obfsConn := buildServerObfsConn(rc, cfg, table, false)
-	seed := ClientAEADSeed(cfg.Key)
+	seed := ServerAEADSeed(cfg.Key)
 	pskC2S, pskS2C := derivePSKDirectionalBases(seed)
 	// Server side: recv is client->server, send is server->client.
 	cConn, err := crypto.NewRecordConn(obfsConn, cfg.AEADMethod, pskS2C, pskC2S)

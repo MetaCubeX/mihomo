@@ -34,7 +34,7 @@ func newHTTPMaskTunnelServer(cfg *ProtocolConfig, passThroughOnReject bool) *HTT
 			ts = httpmask.NewTunnelServer(httpmask.TunnelServerOptions{
 				Mode:     cfg.HTTPMaskMode,
 				PathRoot: cfg.HTTPMaskPathRoot,
-				AuthKey:  ClientAEADSeed(cfg.Key),
+				AuthKey:  ServerAEADSeed(cfg.Key),
 				// When upstream fallback is enabled, preserve rejected HTTP requests for the caller.
 				PassThroughOnReject: passThroughOnReject,
 			})

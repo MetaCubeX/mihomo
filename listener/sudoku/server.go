@@ -239,7 +239,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		enablePureDownlink = *config.EnablePureDownlink
 	}
 
-	tables, err := sudoku.NewTablesWithCustomPatterns(config.Key, tableType, config.CustomTable, config.CustomTables)
+	tables, err := sudoku.NewTablesWithCustomPatterns(sudoku.ServerAEADSeed(config.Key), tableType, config.CustomTable, config.CustomTables)
 	if err != nil {
 		_ = l.Close()
 		return nil, err

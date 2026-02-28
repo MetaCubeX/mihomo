@@ -222,7 +222,7 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 	bConn := &bufferedConn{Conn: baseConn, r: bufio.NewReader(baseConn)}
 	sConn, obfsConn := buildServerObfsConn(bConn, cfg, selectedTable, true)
 
-	seed := ClientAEADSeed(cfg.Key)
+	seed := ServerAEADSeed(cfg.Key)
 	pskC2S, pskS2C := derivePSKDirectionalBases(seed)
 	// Server side: recv is client->server, send is server->client.
 	rc, err := crypto.NewRecordConn(obfsConn, cfg.AEADMethod, pskS2C, pskC2S)

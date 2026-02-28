@@ -15,13 +15,12 @@ func TestClientAEADSeed_IsStableForPrivAndPub(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, pub, ClientAEADSeed(priv))
-		require.Equal(t, pub, ClientAEADSeed(pub))
+		require.Equal(t, pub, ServerAEADSeed(pub))
+		require.Equal(t, pub, ServerAEADSeed(priv))
 	}
 }
 
-func TestClientAEADSeed_DoesNotTransform32ByteHex(t *testing.T) {
-	// Some compressed points may coincidentally look like valid scalars.
-	// Ensure we never "recover" a 32-byte hex key into a different seed.
+func TestClientAEADSeed_Supports32ByteMasterScalar(t *testing.T) {
 	var seed [64]byte
 	_, err := rand.Read(seed[:])
 	require.NoError(t, err)
@@ -31,13 +30,15 @@ func TestClientAEADSeed_DoesNotTransform32ByteHex(t *testing.T) {
 
 	keyHex := hex.EncodeToString(s.Bytes())
 	require.Len(t, keyHex, 64)
-	require.Equal(t, keyHex, ClientAEADSeed(keyHex))
+	require.NotEqual(t, keyHex, ClientAEADSeed(keyHex))
+	require.Equal(t, ClientAEADSeed(keyHex), ServerAEADSeed(ClientAEADSeed(keyHex)))
 }
 
-func TestKIPUserHash_IsStableForPrivAndPub(t *testing.T) {
+func TestServerAEADSeed_LeavesPublicKeyAsIs(t *testing.T) {
 	for i := 0; i < 64; i++ {
 		priv, pub, err := GenKeyPair()
 		require.NoError(t, err)
-		require.Equal(t, kipUserHashFromKey(priv), kipUserHashFromKey(pub))
+		require.Equal(t, pub, ServerAEADSeed(pub))
+		require.Equal(t, pub, ServerAEADSeed(priv))
 	}
 }

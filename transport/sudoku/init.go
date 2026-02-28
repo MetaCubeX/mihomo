@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/metacubex/edwards25519"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/sudoku/crypto"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
@@ -36,17 +37,55 @@ func ClientAEADSeed(key string) string {
 		return ""
 	}
 
-	// Only attempt recovery for split private keys (64 bytes hex => 128 hex chars).
+	b, err := hex.DecodeString(key)
+	if err != nil {
+		return key
+	}
+
+	// Client-side key material can be:
+	//   - split private key: 64 bytes hex (r||k)
+	//   - master private scalar: 32 bytes hex (x)
+	//   - PSK string: non-hex
 	//
-	// Public keys are encoded as 32-byte compressed points (also hex), and may coincidentally
-	// look like valid scalars. Treating them as scalars would make the derived seed unstable
-	// across runs (and break handshake for some generated key pairs).
-	if b, err := hex.DecodeString(key); err == nil && len(b) == 64 {
+	// We intentionally do NOT treat a 32-byte hex as a public key here; the client is expected
+	// to carry private material. Server-side should use ServerAEADSeed for public keys.
+	switch len(b) {
+	case 64:
 		if recovered, err := crypto.RecoverPublicKey(key); err == nil {
 			return crypto.EncodePoint(recovered)
 		}
+	case 32:
+		if s, err := edwards25519.NewScalar().SetCanonicalBytes(b); err == nil {
+			return hex.EncodeToString(new(edwards25519.Point).ScalarBaseMult(s).Bytes())
+		}
 	}
 	return key
+}
+
+// ServerAEADSeed returns a canonical seed for server-side configuration.
+//
+// When key is a public key (32-byte compressed point, hex), it returns the canonical point encoding.
+// When key is private key material (split/master scalar), it derives and returns the public key.
+func ServerAEADSeed(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+
+	b, err := hex.DecodeString(key)
+	if err != nil {
+		return key
+	}
+
+	// Prefer interpreting 32-byte hex as a public key point, to avoid accidental scalar parsing.
+	if len(b) == 32 {
+		if p, err := new(edwards25519.Point).SetBytes(b); err == nil {
+			return hex.EncodeToString(p.Bytes())
+		}
+	}
+
+	// Fall back to client-side rules for private key materials / other formats.
+	return ClientAEADSeed(key)
 }
 
 // GenKeyPair generates a client "available private key" and the corresponding server public key.
