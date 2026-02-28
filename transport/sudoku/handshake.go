@@ -2,19 +2,19 @@ package sudoku
 
 import (
 	"bufio"
-	"crypto/sha256"
-	"encoding/binary"
+	"bytes"
+	"crypto/ecdh"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/transport/sudoku/crypto"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/httpmask"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
-
-	"github.com/metacubex/mihomo/log"
 )
 
 type SessionType int
@@ -30,8 +30,11 @@ type ServerSession struct {
 	Type   SessionType
 	Target string
 
-	// UserHash is a stable per-key identifier derived from the handshake payload.
-	// It is primarily useful for debugging / user attribution when table rotation is enabled.
+	// UserHash is a stable per-key identifier derived from the client hello payload.
+	UserHash string
+}
+
+type HandshakeMeta struct {
 	UserHash string
 }
 
@@ -108,18 +111,6 @@ func absInt64(v int64) int64 {
 	return v
 }
 
-const (
-	downlinkModePure   byte = 0x01
-	downlinkModePacked byte = 0x02
-)
-
-func downlinkMode(cfg *ProtocolConfig) byte {
-	if cfg.EnablePureDownlink {
-		return downlinkModePure
-	}
-	return downlinkModePacked
-}
-
 func buildClientObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table) net.Conn {
 	baseSudoku := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
 	if cfg.EnablePureDownlink {
@@ -138,50 +129,16 @@ func buildServerObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table,
 	return uplinkSudoku, newDirectionalConn(raw, uplinkSudoku, packed, packed.Flush)
 }
 
-func buildHandshakePayload(key string) [16]byte {
-	var payload [16]byte
-	binary.BigEndian.PutUint64(payload[:8], uint64(time.Now().Unix()))
-
-	// Align with upstream: only decode hex bytes when this key is an ED25519 key material.
-	// For plain UUID/strings (even if they look like hex), hash the string bytes as-is.
-	src := []byte(key)
-	if _, err := crypto.RecoverPublicKey(key); err == nil {
-		if keyBytes, decErr := hex.DecodeString(key); decErr == nil && len(keyBytes) > 0 {
-			src = keyBytes
-		}
+func isLegacyHTTPMaskMode(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "legacy":
+		return true
+	default:
+		return false
 	}
-
-	hash := sha256.Sum256(src)
-	copy(payload[8:], hash[:8])
-	return payload
 }
 
-func NewTable(key string, tableType string) *sudoku.Table {
-	table, err := NewTableWithCustom(key, tableType, "")
-	if err != nil {
-		panic(fmt.Sprintf("[Sudoku] failed to init tables: %v", err))
-	}
-	return table
-}
-
-func NewTableWithCustom(key string, tableType string, customTable string) (*sudoku.Table, error) {
-	start := time.Now()
-	table, err := sudoku.NewTableWithCustom(key, tableType, customTable)
-	if err != nil {
-		return nil, err
-	}
-	log.Infoln("[Sudoku] Tables initialized (%s, custom=%v) in %v", tableType, customTable != "", time.Since(start))
-	return table, nil
-}
-
-func ClientAEADSeed(key string) string {
-	if recovered, err := crypto.RecoverPublicKey(key); err == nil {
-		return crypto.EncodePoint(recovered)
-	}
-	return key
-}
-
-// ClientHandshake performs the client-side Sudoku handshake (without sending target address).
+// ClientHandshake performs the client-side Sudoku handshake (no target request).
 func ClientHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -190,7 +147,7 @@ func ClientHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	if !cfg.DisableHTTPMask {
+	if !cfg.DisableHTTPMask && isLegacyHTTPMaskMode(cfg.HTTPMaskMode) {
 		if err := httpmask.WriteRandomRequestHeaderWithPathRoot(rawConn, cfg.ServerAddress, cfg.HTTPMaskPathRoot); err != nil {
 			return nil, fmt.Errorf("write http mask failed: %w", err)
 		}
@@ -201,32 +158,42 @@ func ClientHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, error) {
 		return nil, err
 	}
 
+	seed := ClientAEADSeed(cfg.Key)
 	obfsConn := buildClientObfsConn(rawConn, cfg, table)
-	cConn, err := crypto.NewAEADConn(obfsConn, ClientAEADSeed(cfg.Key), cfg.AEADMethod)
+	pskC2S, pskS2C := derivePSKDirectionalBases(seed)
+	rc, err := crypto.NewRecordConn(obfsConn, cfg.AEADMethod, pskC2S, pskS2C)
 	if err != nil {
 		return nil, fmt.Errorf("setup crypto failed: %w", err)
 	}
 
-	handshake := buildHandshakePayload(cfg.Key)
-	if _, err := cConn.Write(handshake[:]); err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("send handshake failed: %w", err)
-	}
-	if _, err := cConn.Write([]byte{downlinkMode(cfg)}); err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("send downlink mode failed: %w", err)
+	if _, err := kipHandshakeClient(rc, seed, kipUserHashFromKey(cfg.Key), KIPFeatAll); err != nil {
+		_ = rc.Close()
+		return nil, err
 	}
 
-	return cConn, nil
+	return rc, nil
 }
 
-// ServerHandshake performs Sudoku server-side handshake and detects UoT preface.
-func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, error) {
+func readFirstSessionMessage(conn net.Conn) (*KIPMessage, error) {
+	for {
+		msg, err := ReadKIPMessage(conn)
+		if err != nil {
+			return nil, err
+		}
+		if msg.Type == KIPTypeKeepAlive {
+			continue
+		}
+		return msg, nil
+	}
+}
+
+// ServerHandshake performs the server-side KIP handshake.
+func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *HandshakeMeta, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("config is required")
+		return nil, nil, fmt.Errorf("config is required")
 	}
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+		return nil, nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	handshakeTimeout := time.Duration(cfg.HandshakeTimeoutSeconds) * time.Second
@@ -234,116 +201,125 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (*ServerSession, err
 		handshakeTimeout = 5 * time.Second
 	}
 
-	rawConn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	_ = rawConn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+	defer func() { _ = rawConn.SetReadDeadline(time.Time{}) }()
 
 	bufReader := bufio.NewReader(rawConn)
-	if !cfg.DisableHTTPMask {
+	if !cfg.DisableHTTPMask && isLegacyHTTPMaskMode(cfg.HTTPMaskMode) {
 		if peek, err := bufReader.Peek(4); err == nil && httpmask.LooksLikeHTTPRequestStart(peek) {
 			if _, err := httpmask.ConsumeHeader(bufReader); err != nil {
-				return nil, fmt.Errorf("invalid http header: %w", err)
+				return nil, nil, fmt.Errorf("invalid http header: %w", err)
 			}
 		}
 	}
 
 	selectedTable, preRead, err := selectTableByProbe(bufReader, cfg, cfg.tableCandidates())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	baseConn := &preBufferedConn{Conn: rawConn, buf: preRead}
 	bConn := &bufferedConn{Conn: baseConn, r: bufio.NewReader(baseConn)}
 	sConn, obfsConn := buildServerObfsConn(bConn, cfg, selectedTable, true)
-	cConn, err := crypto.NewAEADConn(obfsConn, cfg.Key, cfg.AEADMethod)
+
+	seed := ClientAEADSeed(cfg.Key)
+	pskC2S, pskS2C := derivePSKDirectionalBases(seed)
+	// Server side: recv is client->server, send is server->client.
+	rc, err := crypto.NewRecordConn(obfsConn, cfg.AEADMethod, pskS2C, pskC2S)
 	if err != nil {
-		return nil, fmt.Errorf("crypto setup failed: %w", err)
+		return nil, nil, fmt.Errorf("setup crypto failed: %w", err)
 	}
 
-	var handshakeBuf [16]byte
-	if _, err := io.ReadFull(cConn, handshakeBuf[:]); err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("read handshake failed: %w", err)
+	msg, err := ReadKIPMessage(rc)
+	if err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("handshake read failed: %w", err)
+	}
+	if msg.Type != KIPTypeClientHello {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("unexpected handshake message: %d", msg.Type)
+	}
+	ch, err := DecodeKIPClientHelloPayload(msg.Payload)
+	if err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("decode client hello failed: %w", err)
+	}
+	if absInt64(time.Now().Unix()-ch.Timestamp.Unix()) > int64(kipHandshakeSkew.Seconds()) {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("time skew/replay")
 	}
 
-	ts := int64(binary.BigEndian.Uint64(handshakeBuf[:8]))
-	if absInt64(time.Now().Unix()-ts) > 60 {
-		cConn.Close()
-		return nil, fmt.Errorf("timestamp skew detected")
+	userHashHex := hex.EncodeToString(ch.UserHash[:])
+	if !globalHandshakeReplay.allow(userHashHex, ch.Nonce, time.Now()) {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("replay")
 	}
 
-	userHash := userHashFromHandshake(handshakeBuf[:])
+	curve := ecdh.X25519()
+	serverEphemeral, err := curve.GenerateKey(rand.Reader)
+	if err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("ecdh generate failed: %w", err)
+	}
+	shared, err := x25519SharedSecret(serverEphemeral, ch.ClientPub[:])
+	if err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("ecdh failed: %w", err)
+	}
+	sessC2S, sessS2C, err := deriveSessionDirectionalBases(seed, shared, ch.Nonce)
+	if err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("derive session keys failed: %w", err)
+	}
+
+	var serverPub [kipHelloPubSize]byte
+	copy(serverPub[:], serverEphemeral.PublicKey().Bytes())
+	sh := &KIPServerHello{
+		Nonce:         ch.Nonce,
+		ServerPub:     serverPub,
+		SelectedFeats: ch.Features & KIPFeatAll,
+	}
+	if err := WriteKIPMessage(rc, KIPTypeServerHello, sh.EncodePayload()); err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("write server hello failed: %w", err)
+	}
+	if err := rc.Rekey(sessS2C, sessC2S); err != nil {
+		_ = rc.Close()
+		return nil, nil, fmt.Errorf("rekey failed: %w", err)
+	}
+
 	sConn.StopRecording()
 
-	modeBuf := []byte{0}
-	if _, err := io.ReadFull(cConn, modeBuf); err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("read downlink mode failed: %w", err)
-	}
-	if modeBuf[0] != downlinkMode(cfg) {
-		cConn.Close()
-		return nil, fmt.Errorf("downlink mode mismatch: client=%d server=%d", modeBuf[0], downlinkMode(cfg))
-	}
-
-	firstByte := make([]byte, 1)
-	if _, err := io.ReadFull(cConn, firstByte); err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("read first byte failed: %w", err)
-	}
-
-	if firstByte[0] == MultiplexMagicByte {
-		rawConn.SetReadDeadline(time.Time{})
-		return &ServerSession{Conn: cConn, Type: SessionTypeMultiplex, UserHash: userHash}, nil
-	}
-
-	if firstByte[0] == UoTMagicByte {
-		version := make([]byte, 1)
-		if _, err := io.ReadFull(cConn, version); err != nil {
-			cConn.Close()
-			return nil, fmt.Errorf("read uot version failed: %w", err)
-		}
-		if version[0] != uotVersion {
-			cConn.Close()
-			return nil, fmt.Errorf("unsupported uot version: %d", version[0])
-		}
-		rawConn.SetReadDeadline(time.Time{})
-		return &ServerSession{Conn: cConn, Type: SessionTypeUoT, UserHash: userHash}, nil
-	}
-
-	prefixed := &preBufferedConn{Conn: cConn, buf: firstByte}
-	target, err := DecodeAddress(prefixed)
-	if err != nil {
-		cConn.Close()
-		return nil, fmt.Errorf("read target address failed: %w", err)
-	}
-
-	rawConn.SetReadDeadline(time.Time{})
-	log.Debugln("[Sudoku] incoming TCP session target: %s", target)
-	return &ServerSession{
-		Conn:     prefixed,
-		Type:     SessionTypeTCP,
-		Target:   target,
-		UserHash: userHash,
-	}, nil
+	return rc, &HandshakeMeta{UserHash: userHashHex}, nil
 }
 
-func GenKeyPair() (privateKey, publicKey string, err error) {
-	// Generate Master Key
-	pair, err := crypto.GenerateMasterKey()
-	if err != nil {
-		return
+// ReadServerSession consumes the first post-handshake KIP control message and returns the session intent.
+func ReadServerSession(conn net.Conn, meta *HandshakeMeta) (*ServerSession, error) {
+	if conn == nil {
+		return nil, fmt.Errorf("nil conn")
 	}
-	// Split the master private key to get Available Private Key
-	availablePrivateKey, err := crypto.SplitPrivateKey(pair.Private)
-	if err != nil {
-		return
+	userHash := ""
+	if meta != nil {
+		userHash = meta.UserHash
 	}
-	privateKey = availablePrivateKey            // Available Private Key for client
-	publicKey = crypto.EncodePoint(pair.Public) // Master Public Key for server
-	return
-}
 
-func userHashFromHandshake(handshakeBuf []byte) string {
-	if len(handshakeBuf) < 16 {
-		return ""
+	first, err := readFirstSessionMessage(conn)
+	if err != nil {
+		return nil, err
 	}
-	return hex.EncodeToString(handshakeBuf[8:16])
+
+	switch first.Type {
+	case KIPTypeStartUoT:
+		return &ServerSession{Conn: conn, Type: SessionTypeUoT, UserHash: userHash}, nil
+	case KIPTypeStartMux:
+		return &ServerSession{Conn: conn, Type: SessionTypeMultiplex, UserHash: userHash}, nil
+	case KIPTypeOpenTCP:
+		target, err := DecodeAddress(bytes.NewReader(first.Payload))
+		if err != nil {
+			return nil, fmt.Errorf("decode target address failed: %w", err)
+		}
+		return &ServerSession{Conn: conn, Type: SessionTypeTCP, Target: target, UserHash: userHash}, nil
+	default:
+		return nil, fmt.Errorf("unknown kip message: %d", first.Type)
+	}
 }

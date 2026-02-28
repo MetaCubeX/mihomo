@@ -61,7 +61,7 @@ func startTunnelServer(t *testing.T, cfg *ProtocolConfig, handle func(*ServerSes
 					return
 				}
 
-				session, err := ServerHandshake(handshakeConn, handshakeCfg)
+				cConn, meta, err := ServerHandshake(handshakeConn, handshakeCfg)
 				if err != nil {
 					_ = handshakeConn.Close()
 					if handshakeConn != conn {
@@ -70,8 +70,13 @@ func startTunnelServer(t *testing.T, cfg *ProtocolConfig, handle func(*ServerSes
 					errC <- err
 					return
 				}
-				defer session.Conn.Close()
+				defer cConn.Close()
 
+				session, err := ReadServerSession(cConn, meta)
+				if err != nil {
+					errC <- err
+					return
+				}
 				if handleErr := handle(session); handleErr != nil {
 					errC <- handleErr
 				}
@@ -172,7 +177,7 @@ func TestHTTPMaskTunnel_Stream_TCPRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode addr: %v", err)
 	}
-	if _, err := cConn.Write(addrBuf); err != nil {
+	if err := WriteKIPMessage(cConn, KIPTypeOpenTCP, addrBuf); err != nil {
 		t.Fatalf("write addr: %v", err)
 	}
 
@@ -239,8 +244,8 @@ func TestHTTPMaskTunnel_Poll_UoTRoundTrip(t *testing.T) {
 	}
 	defer cConn.Close()
 
-	if err := WritePreface(cConn); err != nil {
-		t.Fatalf("write preface: %v", err)
+	if err := WriteKIPMessage(cConn, KIPTypeStartUoT, nil); err != nil {
+		t.Fatalf("start uot: %v", err)
 	}
 	if err := WriteDatagram(cConn, target, payload); err != nil {
 		t.Fatalf("write datagram: %v", err)
@@ -305,7 +310,7 @@ func TestHTTPMaskTunnel_Auto_TCPRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode addr: %v", err)
 	}
-	if _, err := cConn.Write(addrBuf); err != nil {
+	if err := WriteKIPMessage(cConn, KIPTypeOpenTCP, addrBuf); err != nil {
 		t.Fatalf("write addr: %v", err)
 	}
 
@@ -406,7 +411,7 @@ func TestHTTPMaskTunnel_Soak_Concurrent(t *testing.T) {
 				runErr <- fmt.Errorf("encode addr: %w", err)
 				return
 			}
-			if _, err := cConn.Write(addrBuf); err != nil {
+			if err := WriteKIPMessage(cConn, KIPTypeOpenTCP, addrBuf); err != nil {
 				runErr <- fmt.Errorf("write addr: %w", err)
 				return
 			}

@@ -124,13 +124,18 @@ func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 
 	// Server side
 	go func() {
-		session, err := ServerHandshake(serverConn, cfg)
+		c, meta, err := ServerHandshake(serverConn, cfg)
 		if err != nil {
 			errCh <- fmt.Errorf("server handshake tcp: %w", err)
 			return
 		}
-		defer session.Conn.Close()
+		defer c.Close()
 
+		session, err := ReadServerSession(c, meta)
+		if err != nil {
+			errCh <- fmt.Errorf("server read session tcp: %w", err)
+			return
+		}
 		if session.Type != SessionTypeTCP {
 			errCh <- fmt.Errorf("unexpected session type: %v", session.Type)
 			return
@@ -159,8 +164,8 @@ func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 		errCh <- fmt.Errorf("encode address: %w", err)
 		return
 	}
-	if _, err := cConn.Write(addrBuf); err != nil {
-		errCh <- fmt.Errorf("client send addr: %w", err)
+	if err := WriteKIPMessage(cConn, KIPTypeOpenTCP, addrBuf); err != nil {
+		errCh <- fmt.Errorf("client send open tcp: %w", err)
 		return
 	}
 
@@ -182,13 +187,18 @@ func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 
 	// Server side
 	go func() {
-		session, err := ServerHandshake(serverConn, cfg)
+		c, meta, err := ServerHandshake(serverConn, cfg)
 		if err != nil {
 			errCh <- fmt.Errorf("server handshake uot: %w", err)
 			return
 		}
-		defer session.Conn.Close()
+		defer c.Close()
 
+		session, err := ReadServerSession(c, meta)
+		if err != nil {
+			errCh <- fmt.Errorf("server read session uot: %w", err)
+			return
+		}
 		if session.Type != SessionTypeUoT {
 			errCh <- fmt.Errorf("unexpected session type: %v", session.Type)
 			return
@@ -208,8 +218,8 @@ func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 	}
 	defer cConn.Close()
 
-	if err := WritePreface(cConn); err != nil {
-		errCh <- fmt.Errorf("client write preface: %w", err)
+	if err := WriteKIPMessage(cConn, KIPTypeStartUoT, nil); err != nil {
+		errCh <- fmt.Errorf("client start uot: %w", err)
 		return
 	}
 

@@ -16,16 +16,8 @@ import (
 )
 
 const (
-	UoTMagicByte  byte = 0xEE
-	uotVersion         = 0x01
-	maxUoTPayload      = 64 * 1024
+	maxUoTPayload = 64 * 1024
 )
-
-// WritePreface writes the UDP-over-TCP marker and version.
-func WritePreface(w io.Writer) error {
-	_, err := w.Write([]byte{UoTMagicByte, uotVersion})
-	return err
-}
 
 // WriteDatagram sends a single UDP datagram frame over a reliable stream.
 func WriteDatagram(w io.Writer, addr string, payload []byte) error {
@@ -45,14 +37,13 @@ func WriteDatagram(w io.Writer, addr string, payload []byte) error {
 	binary.BigEndian.PutUint16(header[:2], uint16(len(addrBuf)))
 	binary.BigEndian.PutUint16(header[2:], uint16(len(payload)))
 
-	if _, err := w.Write(header[:]); err != nil {
+	if err := writeFull(w, header[:]); err != nil {
 		return err
 	}
-	if _, err := w.Write(addrBuf); err != nil {
+	if err := writeFull(w, addrBuf); err != nil {
 		return err
 	}
-	_, err = w.Write(payload)
-	return err
+	return writeFull(w, payload)
 }
 
 // ReadDatagram parses a single UDP datagram frame from the reliable stream.

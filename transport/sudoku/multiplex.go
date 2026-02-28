@@ -10,19 +10,14 @@ import (
 	"github.com/metacubex/mihomo/transport/sudoku/multiplex"
 )
 
-const (
-	MultiplexMagicByte byte = multiplex.MagicByte
-	MultiplexVersion   byte = multiplex.Version
-)
-
-// StartMultiplexClient writes the multiplex preface and upgrades an already-handshaked Sudoku tunnel into a multiplex session.
+// StartMultiplexClient upgrades an already-handshaked Sudoku tunnel into a multiplex session.
 func StartMultiplexClient(conn net.Conn) (*MultiplexClient, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("nil conn")
 	}
 
-	if err := multiplex.WritePreface(conn); err != nil {
-		return nil, fmt.Errorf("write multiplex preface failed: %w", err)
+	if err := WriteKIPMessage(conn, KIPTypeStartMux, nil); err != nil {
+		return nil, fmt.Errorf("write mux start failed: %w", err)
 	}
 
 	sess, err := multiplex.NewClientSession(conn)
@@ -77,19 +72,9 @@ func (c *MultiplexClient) IsClosed() bool {
 }
 
 // AcceptMultiplexServer upgrades a server-side, already-handshaked Sudoku connection into a multiplex session.
-//
-// The caller must have already consumed the multiplex magic byte (MultiplexMagicByte). This function consumes the
-// multiplex version byte and starts the session.
 func AcceptMultiplexServer(conn net.Conn) (*MultiplexServer, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("nil conn")
-	}
-	v, err := multiplex.ReadVersion(conn)
-	if err != nil {
-		return nil, err
-	}
-	if err := multiplex.ValidateVersion(v); err != nil {
-		return nil, err
 	}
 	sess, err := multiplex.NewServerSession(conn)
 	if err != nil {

@@ -43,12 +43,17 @@ func TestCustomTablesRotation_ProbedByServer(t *testing.T) {
 		go func() {
 			defer close(errCh)
 			defer serverConn.Close()
-			session, err := ServerHandshake(serverConn, serverCfg)
+			c, meta, err := ServerHandshake(serverConn, serverCfg)
 			if err != nil {
 				errCh <- err
 				return
 			}
-			defer session.Conn.Close()
+			session, err := ReadServerSession(c, meta)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			defer c.Close()
 			if session.Type != SessionTypeTCP {
 				errCh <- io.ErrUnexpectedEOF
 				return
@@ -69,7 +74,7 @@ func TestCustomTablesRotation_ProbedByServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("encode addr: %v", err)
 		}
-		if _, err := cConn.Write(addrBuf); err != nil {
+		if err := WriteKIPMessage(cConn, KIPTypeOpenTCP, addrBuf); err != nil {
 			t.Fatalf("write addr: %v", err)
 		}
 

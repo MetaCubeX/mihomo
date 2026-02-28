@@ -68,9 +68,18 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		}
 	}
 
-	session, err := sudoku.ServerHandshake(handshakeConn, handshakeCfg)
+	cConn, meta, err := sudoku.ServerHandshake(handshakeConn, handshakeCfg)
 	if err != nil {
 		_ = handshakeConn.Close()
+		if handshakeConn != conn {
+			_ = conn.Close()
+		}
+		return
+	}
+
+	session, err := sudoku.ReadServerSession(cConn, meta)
+	if err != nil {
+		_ = cConn.Close()
 		if handshakeConn != conn {
 			_ = conn.Close()
 		}

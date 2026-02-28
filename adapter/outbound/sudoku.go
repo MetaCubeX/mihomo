@@ -73,7 +73,7 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 		return nil, fmt.Errorf("encode target address failed: %w", err)
 	}
 
-	if _, err = c.Write(addrBuf); err != nil {
+	if err = sudoku.WriteKIPMessage(c, sudoku.KIPTypeOpenTCP, addrBuf); err != nil {
 		return nil, fmt.Errorf("send target address failed: %w", err)
 	}
 
@@ -96,9 +96,9 @@ func (s *Sudoku) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 		return nil, err
 	}
 
-	if err = sudoku.WritePreface(c); err != nil {
+	if err = sudoku.WriteKIPMessage(c, sudoku.KIPTypeStartUoT, nil); err != nil {
 		_ = c.Close()
-		return nil, fmt.Errorf("send uot preface failed: %w", err)
+		return nil, fmt.Errorf("start uot failed: %w", err)
 	}
 
 	return newPacketConn(N.NewThreadSafePacketConn(sudoku.NewUoTPacketConn(c)), s), nil
