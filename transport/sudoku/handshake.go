@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/transport/sudoku/crypto"
@@ -38,13 +39,88 @@ type HandshakeMeta struct {
 	UserHash string
 }
 
-type bufferedConn struct {
-	net.Conn
-	r *bufio.Reader
+// SuspiciousError indicates a potential probing attempt or protocol violation.
+// When returned, Conn (if non-nil) should contain all bytes already consumed/buffered so the caller
+// can perform a best-effort fallback relay (e.g. to a local web server) without losing the request.
+type SuspiciousError struct {
+	Err  error
+	Conn net.Conn
 }
 
-func (bc *bufferedConn) Read(p []byte) (int, error) {
-	return bc.r.Read(p)
+func (e *SuspiciousError) Error() string {
+	if e == nil || e.Err == nil {
+		return ""
+	}
+	return e.Err.Error()
+}
+
+func (e *SuspiciousError) Unwrap() error { return e.Err }
+
+type recordedConn struct {
+	net.Conn
+	recorded []byte
+}
+
+func (rc *recordedConn) GetBufferedAndRecorded() []byte { return rc.recorded }
+
+type prefixedRecorderConn struct {
+	net.Conn
+	prefix []byte
+}
+
+func (pc *prefixedRecorderConn) GetBufferedAndRecorded() []byte {
+	var rest []byte
+	if r, ok := pc.Conn.(interface{ GetBufferedAndRecorded() []byte }); ok {
+		rest = r.GetBufferedAndRecorded()
+	}
+	out := make([]byte, 0, len(pc.prefix)+len(rest))
+	out = append(out, pc.prefix...)
+	out = append(out, rest...)
+	return out
+}
+
+// bufferedRecorderConn wraps a net.Conn and a shared bufio.Reader so we can expose buffered bytes.
+// This is used for legacy HTTP mask parsing errors so callers can fall back to a real HTTP server.
+type bufferedRecorderConn struct {
+	net.Conn
+	r        *bufio.Reader
+	recorder *bytes.Buffer
+	mu       sync.Mutex
+}
+
+func (bc *bufferedRecorderConn) Read(p []byte) (n int, err error) {
+	n, err = bc.r.Read(p)
+	if n > 0 && bc.recorder != nil {
+		bc.mu.Lock()
+		bc.recorder.Write(p[:n])
+		bc.mu.Unlock()
+	}
+	return n, err
+}
+
+func (bc *bufferedRecorderConn) GetBufferedAndRecorded() []byte {
+	if bc == nil {
+		return nil
+	}
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	var recorded []byte
+	if bc.recorder != nil {
+		recorded = bc.recorder.Bytes()
+	}
+	buffered := 0
+	if bc.r != nil {
+		buffered = bc.r.Buffered()
+	}
+	if buffered <= 0 {
+		return recorded
+	}
+	peeked, _ := bc.r.Peek(buffered)
+	full := make([]byte, len(recorded)+len(peeked))
+	copy(full, recorded)
+	copy(full[len(recorded):], peeked)
+	return full
 }
 
 type preBufferedConn struct {
@@ -62,6 +138,26 @@ func (p *preBufferedConn) Read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 	return p.Conn.Read(b)
+}
+
+func (p *preBufferedConn) CloseWrite() error {
+	if p == nil {
+		return nil
+	}
+	if cw, ok := p.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (p *preBufferedConn) CloseRead() error {
+	if p == nil {
+		return nil
+	}
+	if cr, ok := p.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
 }
 
 type directionalConn struct {
@@ -102,6 +198,26 @@ func (c *directionalConn) Close() error {
 		firstErr = err
 	}
 	return firstErr
+}
+
+func (c *directionalConn) CloseWrite() error {
+	if c == nil {
+		return nil
+	}
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (c *directionalConn) CloseRead() error {
+	if c == nil {
+		return nil
+	}
+	if cr, ok := c.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
 }
 
 func absInt64(v int64) int64 {
@@ -187,8 +303,34 @@ func readFirstSessionMessage(conn net.Conn) (*KIPMessage, error) {
 	}
 }
 
+func maybeConsumeLegacyHTTPMask(rawConn net.Conn, r *bufio.Reader, cfg *ProtocolConfig) ([]byte, *SuspiciousError) {
+	if rawConn == nil || r == nil || cfg == nil || cfg.DisableHTTPMask || !isLegacyHTTPMaskMode(cfg.HTTPMaskMode) {
+		return nil, nil
+	}
+
+	peekBytes, _ := r.Peek(4) // ignore error; subsequent read will handle it
+	if !httpmask.LooksLikeHTTPRequestStart(peekBytes) {
+		return nil, nil
+	}
+
+	consumed, err := httpmask.ConsumeHeader(r)
+	if err == nil {
+		return consumed, nil
+	}
+
+	recorder := new(bytes.Buffer)
+	if len(consumed) > 0 {
+		recorder.Write(consumed)
+	}
+	badConn := &bufferedRecorderConn{Conn: rawConn, r: r, recorder: recorder}
+	return consumed, &SuspiciousError{Err: fmt.Errorf("invalid http header: %w", err), Conn: badConn}
+}
+
 // ServerHandshake performs the server-side KIP handshake.
 func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *HandshakeMeta, error) {
+	if rawConn == nil {
+		return nil, nil, fmt.Errorf("nil conn")
+	}
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("config is required")
 	}
@@ -201,26 +343,25 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 		handshakeTimeout = 5 * time.Second
 	}
 
+	bufReader := bufio.NewReader(rawConn)
 	_ = rawConn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 	defer func() { _ = rawConn.SetReadDeadline(time.Time{}) }()
 
-	bufReader := bufio.NewReader(rawConn)
-	if !cfg.DisableHTTPMask && isLegacyHTTPMaskMode(cfg.HTTPMaskMode) {
-		if peek, err := bufReader.Peek(4); err == nil && httpmask.LooksLikeHTTPRequestStart(peek) {
-			if _, err := httpmask.ConsumeHeader(bufReader); err != nil {
-				return nil, nil, fmt.Errorf("invalid http header: %w", err)
-			}
-		}
+	httpHeaderData, susp := maybeConsumeLegacyHTTPMask(rawConn, bufReader, cfg)
+	if susp != nil {
+		return nil, nil, susp
 	}
 
 	selectedTable, preRead, err := selectTableByProbe(bufReader, cfg, cfg.tableCandidates())
 	if err != nil {
-		return nil, nil, err
+		combined := make([]byte, 0, len(httpHeaderData)+len(preRead))
+		combined = append(combined, httpHeaderData...)
+		combined = append(combined, preRead...)
+		return nil, nil, &SuspiciousError{Err: err, Conn: &recordedConn{Conn: rawConn, recorded: combined}}
 	}
 
 	baseConn := &preBufferedConn{Conn: rawConn, buf: preRead}
-	bConn := &bufferedConn{Conn: baseConn, r: bufio.NewReader(baseConn)}
-	sConn, obfsConn := buildServerObfsConn(bConn, cfg, selectedTable, true)
+	sConn, obfsConn := buildServerObfsConn(baseConn, cfg, selectedTable, true)
 
 	seed := ServerAEADSeed(cfg.Key)
 	pskC2S, pskS2C := derivePSKDirectionalBases(seed)
@@ -232,44 +373,36 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 
 	msg, err := ReadKIPMessage(rc)
 	if err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("handshake read failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("handshake read failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	if msg.Type != KIPTypeClientHello {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("unexpected handshake message: %d", msg.Type)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("unexpected handshake message: %d", msg.Type), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	ch, err := DecodeKIPClientHelloPayload(msg.Payload)
 	if err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("decode client hello failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("decode client hello failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	if absInt64(time.Now().Unix()-ch.Timestamp.Unix()) > int64(kipHandshakeSkew.Seconds()) {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("time skew/replay")
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("time skew/replay"), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 
 	userHashHex := hex.EncodeToString(ch.UserHash[:])
 	if !globalHandshakeReplay.allow(userHashHex, ch.Nonce, time.Now()) {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("replay")
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("replay"), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 
 	curve := ecdh.X25519()
 	serverEphemeral, err := curve.GenerateKey(rand.Reader)
 	if err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("ecdh generate failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("ecdh generate failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	shared, err := x25519SharedSecret(serverEphemeral, ch.ClientPub[:])
 	if err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("ecdh failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("ecdh failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	sessC2S, sessS2C, err := deriveSessionDirectionalBases(seed, shared, ch.Nonce)
 	if err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("derive session keys failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("derive session keys failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 
 	var serverPub [kipHelloPubSize]byte
@@ -280,16 +413,13 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 		SelectedFeats: ch.Features & KIPFeatAll,
 	}
 	if err := WriteKIPMessage(rc, KIPTypeServerHello, sh.EncodePayload()); err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("write server hello failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("write server hello failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	if err := rc.Rekey(sessS2C, sessC2S); err != nil {
-		_ = rc.Close()
-		return nil, nil, fmt.Errorf("rekey failed: %w", err)
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("rekey failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 
 	sConn.StopRecording()
-
 	return rc, &HandshakeMeta{UserHash: userHashHex}, nil
 }
 
