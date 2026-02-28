@@ -4,10 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/metacubex/edwards25519"
-	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/sudoku/crypto"
 	"github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
@@ -21,12 +19,10 @@ func NewTable(key string, tableType string) *sudoku.Table {
 }
 
 func NewTableWithCustom(key string, tableType string, customTable string) (*sudoku.Table, error) {
-	start := time.Now()
 	table, err := sudoku.NewTableWithCustom(key, tableType, customTable)
 	if err != nil {
 		return nil, err
 	}
-	log.Infoln("[Sudoku] Tables initialized (%s, custom=%v) in %v", tableType, customTable != "", time.Since(start))
 	return table, nil
 }
 
