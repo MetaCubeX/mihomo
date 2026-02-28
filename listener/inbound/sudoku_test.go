@@ -175,9 +175,10 @@ func TestInboundSudoku_HTTPMaskMode(t *testing.T) {
 				Key:          key,
 				HTTPMaskMode: mode,
 			}
+			httpMask := true
 			outboundOptions := outbound.SudokuOption{
 				Key:          key,
-				HTTPMask:     true,
+				HTTPMask:     &httpMask,
 				HTTPMaskMode: mode,
 			}
 			testInboundSudoku(t, inboundOptions, outboundOptions)
