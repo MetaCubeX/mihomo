@@ -1495,7 +1495,7 @@ func (s *TunnelServer) HandleConn(rawConn net.Conn) (HandleResult, net.Conn, err
 		}
 		return s.handlePoll(rawConn, req, headerBytes, buffered)
 	case TunnelModeWS:
-		if s.mode != TunnelModeWS {
+		if s.mode != TunnelModeWS && s.mode != TunnelModeAuto {
 			if s.passThroughOnReject {
 				return reject()
 			}
