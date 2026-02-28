@@ -51,13 +51,12 @@ func ClientAEADSeed(key string) string {
 	// to carry private material. Server-side should use ServerAEADSeed for public keys.
 	switch len(b) {
 	case 64:
-		if recovered, err := crypto.RecoverPublicKey(key); err == nil {
-			return crypto.EncodePoint(recovered)
-		}
 	case 32:
-		if s, err := edwards25519.NewScalar().SetCanonicalBytes(b); err == nil {
-			return hex.EncodeToString(new(edwards25519.Point).ScalarBaseMult(s).Bytes())
-		}
+	default:
+		return key
+	}
+	if recovered, err := crypto.RecoverPublicKey(key); err == nil {
+		return crypto.EncodePoint(recovered)
 	}
 	return key
 }

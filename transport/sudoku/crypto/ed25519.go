@@ -65,6 +65,7 @@ func SplitPrivateKey(x *edwards25519.Scalar) (string, error) {
 // RecoverPublicKey takes a split private key (r, k) or a master private key (x)
 // and returns the public key P.
 // Input can be:
+// - 32 bytes hex (Master Scalar x)
 // - 64 bytes hex (Split Key r || k)
 func RecoverPublicKey(keyHex string) (*edwards25519.Point, error) {
 	keyBytes, err := hex.DecodeString(keyHex)
@@ -72,6 +73,14 @@ func RecoverPublicKey(keyHex string) (*edwards25519.Point, error) {
 		return nil, fmt.Errorf("invalid hex: %w", err)
 	}
 
+	if len(keyBytes) == 32 {
+		// Master Key x
+		x, err := edwards25519.NewScalar().SetCanonicalBytes(keyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid scalar: %w", err)
+		}
+		return new(edwards25519.Point).ScalarBaseMult(x), nil
+	}
 	if len(keyBytes) == 64 {
 		// Split Key r || k
 		rBytes := keyBytes[:32]
@@ -93,7 +102,7 @@ func RecoverPublicKey(keyHex string) (*edwards25519.Point, error) {
 		return new(edwards25519.Point).ScalarBaseMult(sum), nil
 	}
 
-	return nil, errors.New("invalid key length: must be 64 bytes (Split)")
+	return nil, errors.New("invalid key length: must be 32 bytes (Master) or 64 bytes (Split)")
 }
 
 // EncodePoint returns the hex string of the compressed point
