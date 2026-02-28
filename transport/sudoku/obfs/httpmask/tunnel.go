@@ -1074,7 +1074,7 @@ func (c *pollConn) pullLoop() {
 		resp, err := c.client.Do(req)
 		if err != nil {
 			cancel()
-			if isDialError(err) && dialRetry < maxDialRetry {
+			if (isDialError(err) || isRetryableRequestError(err)) && dialRetry < maxDialRetry {
 				dialRetry++
 				select {
 				case <-time.After(backoff):
@@ -1122,6 +1122,10 @@ func (c *pollConn) pullLoop() {
 		_ = resp.Body.Close()
 		cancel()
 		if err := scanner.Err(); err != nil {
+			// Treat transient stream breaks (RST/EOF) as an ended long-poll and retry.
+			if errors.Is(err, io.ErrUnexpectedEOF) || isRetryableRequestError(err) {
+				continue
+			}
 			_ = c.closeWithError(fmt.Errorf("poll pull scan failed: %w", err))
 			return
 		}
@@ -1184,7 +1188,7 @@ func (c *pollConn) pushLoop() {
 		for {
 			if err := flush(); err == nil {
 				return nil
-			} else if isDialError(err) && dialRetry < maxDialRetry {
+			} else if (isDialError(err) || isRetryableRequestError(err)) && dialRetry < maxDialRetry {
 				dialRetry++
 				select {
 				case <-time.After(backoff):
