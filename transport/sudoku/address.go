@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
 
 func EncodeAddress(rawAddr string) ([]byte, error) {
@@ -20,13 +21,21 @@ func EncodeAddress(rawAddr string) ([]byte, error) {
 	}
 
 	var buf []byte
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		// Zone identifiers are not representable in SOCKS5 IPv6 address encoding.
+		host = host[:i]
+	}
 	if ip := net.ParseIP(host); ip != nil {
 		if ip4 := ip.To4(); ip4 != nil {
 			buf = append(buf, 0x01) // IPv4
 			buf = append(buf, ip4...)
 		} else {
 			buf = append(buf, 0x04) // IPv6
-			buf = append(buf, ip...)
+			ip16 := ip.To16()
+			if ip16 == nil {
+				return nil, fmt.Errorf("invalid ipv6: %q", host)
+			}
+			buf = append(buf, ip16...)
 		}
 	} else {
 		if len(host) > 255 {
