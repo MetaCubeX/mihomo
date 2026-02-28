@@ -51,6 +51,7 @@ func (l *Listener) Close() error {
 }
 
 func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
+	log.Debugln("[Sudoku] accepted %s", conn.RemoteAddr())
 	handshakeConn := conn
 	handshakeCfg := &l.protoConf
 	if l.tunnelSrv != nil {
@@ -87,6 +88,21 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 
 	cConn, meta, err := sudoku.ServerHandshake(handshakeConn, handshakeCfg)
 	if err != nil {
+		fallbackAddr := strings.TrimSpace(l.fallback)
+		var susp *sudoku.SuspiciousError
+		isSuspicious := errors.As(err, &susp) && susp != nil && susp.Conn != nil
+		if isSuspicious {
+			log.Warnln("[Sudoku] suspicious handshake from %s: %v", conn.RemoteAddr(), err)
+			if fallbackAddr != "" {
+				fb, err := net.DialTimeout("tcp", fallbackAddr, 10*time.Second)
+				if err == nil {
+					relayToFallback(susp.Conn, conn, fb)
+					return
+				}
+			}
+		} else {
+			log.Debugln("[Sudoku] handshake failed from %s: %v", conn.RemoteAddr(), err)
+		}
 		_ = handshakeConn.Close()
 		if handshakeConn != conn {
 			_ = conn.Close()
@@ -96,6 +112,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 
 	session, err := sudoku.ReadServerSession(cConn, meta)
 	if err != nil {
+		log.Warnln("[Sudoku] read session failed from %s: %v", conn.RemoteAddr(), err)
 		_ = cConn.Close()
 		if handshakeConn != conn {
 			_ = conn.Close()
@@ -129,6 +146,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 	default:
 		targetAddr := socks5.ParseAddr(session.Target)
 		if targetAddr == nil {
+			log.Warnln("[Sudoku] invalid target from %s: %q", conn.RemoteAddr(), session.Target)
 			_ = session.Conn.Close()
 			return
 		}
@@ -190,6 +208,40 @@ func (p *uotPacket) LocalAddr() net.Addr {
 	return p.rAddr
 }
 
+func writeFullConn(conn net.Conn, data []byte) error {
+	for len(data) > 0 {
+		n, err := conn.Write(data)
+		if n > 0 {
+			data = data[n:]
+		}
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrShortWrite
+		}
+	}
+	return nil
+}
+
+func relayToFallback(wrapper net.Conn, rawConn net.Conn, fallback net.Conn) {
+	if wrapper != nil {
+		if recorder, ok := wrapper.(interface{ GetBufferedAndRecorded() []byte }); ok {
+			badData := recorder.GetBufferedAndRecorded()
+			if len(badData) > 0 {
+				_ = fallback.SetWriteDeadline(time.Now().Add(3 * time.Second))
+				if err := writeFullConn(fallback, badData); err != nil {
+					_ = fallback.Close()
+					_ = rawConn.Close()
+					return
+				}
+				_ = fallback.SetWriteDeadline(time.Time{})
+			}
+		}
+	}
+	N.Relay(rawConn, fallback)
+}
+
 func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
@@ -239,7 +291,7 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		enablePureDownlink = *config.EnablePureDownlink
 	}
 
-	tables, err := sudoku.NewTablesWithCustomPatterns(sudoku.ServerAEADSeed(config.Key), tableType, config.CustomTable, config.CustomTables)
+	tables, err := sudoku.NewServerTablesWithCustomPatterns(sudoku.ServerAEADSeed(config.Key), tableType, config.CustomTable, config.CustomTables)
 	if err != nil {
 		_ = l.Close()
 		return nil, err

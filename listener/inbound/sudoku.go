@@ -33,10 +33,9 @@ type SudokuOption struct {
 }
 
 type SudokuHTTPMaskOptions struct {
-	Disable   bool   `inbound:"disable,omitempty"`
-	Mode      string `inbound:"mode,omitempty"`
-	PathRoot  string `inbound:"path_root,omitempty"`
-	PathRoot2 string `inbound:"path-root,omitempty"`
+	Disable  bool   `inbound:"disable,omitempty"`
+	Mode     string `inbound:"mode,omitempty"`
+	PathRoot string `inbound:"path_root,omitempty"`
 }
 
 func (o SudokuOption) Equal(config C.InboundConfig) bool {
@@ -83,8 +82,6 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 		}
 		if pr := strings.TrimSpace(hm.PathRoot); pr != "" {
 			serverConf.PathRoot = pr
-		} else {
-			serverConf.PathRoot = strings.TrimSpace(hm.PathRoot2)
 		}
 	}
 	serverConf.MuxOption = options.MuxOption.Build()
