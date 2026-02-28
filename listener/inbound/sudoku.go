@@ -13,21 +13,30 @@ import (
 
 type SudokuOption struct {
 	BaseOption
-	Key                    string   `inbound:"key"`
-	AEADMethod             string   `inbound:"aead-method,omitempty"`
-	PaddingMin             *int     `inbound:"padding-min,omitempty"`
-	PaddingMax             *int     `inbound:"padding-max,omitempty"`
-	TableType              string   `inbound:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
-	HandshakeTimeoutSecond *int     `inbound:"handshake-timeout,omitempty"`
-	EnablePureDownlink     *bool    `inbound:"enable-pure-downlink,omitempty"`
-	CustomTable            string   `inbound:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
-	CustomTables           []string `inbound:"custom-tables,omitempty"`
-	DisableHTTPMask        bool     `inbound:"disable-http-mask,omitempty"`
-	HTTPMaskMode           string   `inbound:"http-mask-mode,omitempty"` // "legacy" (default), "stream", "poll", "auto"
-	PathRoot               string   `inbound:"path-root,omitempty"`      // optional first-level path prefix for HTTP tunnel endpoints
+	Key                    string                 `inbound:"key"`
+	AEADMethod             string                 `inbound:"aead-method,omitempty"`
+	PaddingMin             *int                   `inbound:"padding-min,omitempty"`
+	PaddingMax             *int                   `inbound:"padding-max,omitempty"`
+	TableType              string                 `inbound:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
+	HandshakeTimeoutSecond *int                   `inbound:"handshake-timeout,omitempty"`
+	EnablePureDownlink     *bool                  `inbound:"enable-pure-downlink,omitempty"`
+	CustomTable            string                 `inbound:"custom-table,omitempty"` // optional custom byte layout, e.g. xpxvvpvv
+	CustomTables           []string               `inbound:"custom-tables,omitempty"`
+	DisableHTTPMask        bool                   `inbound:"disable-http-mask,omitempty"`
+	HTTPMaskMode           string                 `inbound:"http-mask-mode,omitempty"` // "legacy" (default), "stream", "poll", "auto"
+	PathRoot               string                 `inbound:"path-root,omitempty"`      // optional first-level path prefix for HTTP tunnel endpoints
+	Fallback               string                 `inbound:"fallback,omitempty"`
+	HTTPMaskOptions        *SudokuHTTPMaskOptions `inbound:"httpmask,omitempty"`
 
 	// mihomo private extension (not the part of standard Sudoku protocol)
 	MuxOption MuxOption `inbound:"mux-option,omitempty"`
+}
+
+type SudokuHTTPMaskOptions struct {
+	Disable   bool   `inbound:"disable,omitempty"`
+	Mode      string `inbound:"mode,omitempty"`
+	PathRoot  string `inbound:"path_root,omitempty"`
+	PathRoot2 string `inbound:"path-root,omitempty"`
 }
 
 func (o SudokuOption) Equal(config C.InboundConfig) bool {
@@ -65,6 +74,18 @@ func NewSudoku(options *SudokuOption) (*Sudoku, error) {
 		DisableHTTPMask:        options.DisableHTTPMask,
 		HTTPMaskMode:           options.HTTPMaskMode,
 		PathRoot:               strings.TrimSpace(options.PathRoot),
+		Fallback:               strings.TrimSpace(options.Fallback),
+	}
+	if hm := options.HTTPMaskOptions; hm != nil {
+		serverConf.DisableHTTPMask = hm.Disable
+		if hm.Mode != "" {
+			serverConf.HTTPMaskMode = hm.Mode
+		}
+		if pr := strings.TrimSpace(hm.PathRoot); pr != "" {
+			serverConf.PathRoot = pr
+		} else {
+			serverConf.PathRoot = strings.TrimSpace(hm.PathRoot2)
+		}
 	}
 	serverConf.MuxOption = options.MuxOption.Build()
 

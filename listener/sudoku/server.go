@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	N "github.com/metacubex/mihomo/common/net"
@@ -23,6 +24,7 @@ type Listener struct {
 	closed    bool
 	protoConf sudoku.ProtocolConfig
 	tunnelSrv *sudoku.HTTPMaskTunnelServer
+	fallback  string
 	handler   *sing.ListenerHandler
 }
 
@@ -65,6 +67,21 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		}
 		if cfg != nil {
 			handshakeCfg = cfg
+		}
+	}
+
+	if strings.TrimSpace(l.fallback) != "" {
+		if r, ok := handshakeConn.(interface{ IsHTTPMaskRejected() bool }); ok && r.IsHTTPMaskRejected() {
+			fb, err := net.DialTimeout("tcp", l.fallback, 10*time.Second)
+			if err != nil {
+				_ = handshakeConn.Close()
+				if handshakeConn != conn {
+					_ = conn.Close()
+				}
+				return
+			}
+			N.Relay(handshakeConn, fb)
+			return
 		}
 	}
 
@@ -258,8 +275,13 @@ func New(config LC.SudokuServer, tunnel C.Tunnel, additions ...inbound.Addition)
 		addr:      config.Listen,
 		protoConf: protoConf,
 		handler:   h,
+		fallback:  strings.TrimSpace(config.Fallback),
 	}
-	sl.tunnelSrv = sudoku.NewHTTPMaskTunnelServer(&sl.protoConf)
+	if sl.fallback != "" {
+		sl.tunnelSrv = sudoku.NewHTTPMaskTunnelServerWithFallback(&sl.protoConf)
+	} else {
+		sl.tunnelSrv = sudoku.NewHTTPMaskTunnelServer(&sl.protoConf)
+	}
 
 	go func() {
 		for {

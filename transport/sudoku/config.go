@@ -50,6 +50,7 @@ type ProtocolConfig struct {
 	//   - "stream": real HTTP tunnel (split-stream), CDN-compatible
 	//   - "poll": plain HTTP tunnel (authorize/push/pull), strong restricted-network pass-through
 	//   - "auto": try stream then fall back to poll
+	//   - "ws": WebSocket tunnel (GET upgrade), CDN-friendly
 	HTTPMaskMode string
 
 	// HTTPMaskTLSEnabled enables HTTPS for HTTP tunnel modes (client-side).
@@ -109,9 +110,9 @@ func (c *ProtocolConfig) Validate() error {
 	}
 
 	switch strings.ToLower(strings.TrimSpace(c.HTTPMaskMode)) {
-	case "", "legacy", "stream", "poll", "auto":
+	case "", "legacy", "stream", "poll", "auto", "ws":
 	default:
-		return fmt.Errorf("invalid http-mask-mode: %s, must be one of: legacy, stream, poll, auto", c.HTTPMaskMode)
+		return fmt.Errorf("invalid http-mask-mode: %s, must be one of: legacy, stream, poll, auto, ws", c.HTTPMaskMode)
 	}
 
 	if v := strings.TrimSpace(c.HTTPMaskPathRoot); v != "" {

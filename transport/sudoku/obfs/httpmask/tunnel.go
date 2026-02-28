@@ -32,6 +32,7 @@ const (
 	TunnelModeStream TunnelMode = "stream"
 	TunnelModePoll   TunnelMode = "poll"
 	TunnelModeAuto   TunnelMode = "auto"
+	TunnelModeWS     TunnelMode = "ws"
 )
 
 func normalizeTunnelMode(mode string) TunnelMode {
@@ -44,6 +45,8 @@ func normalizeTunnelMode(mode string) TunnelMode {
 		return TunnelModePoll
 	case string(TunnelModeAuto):
 		return TunnelModeAuto
+	case string(TunnelModeWS):
+		return TunnelModeWS
 	default:
 		// Be conservative: unknown => legacy
 		return TunnelModeLegacy
@@ -132,6 +135,8 @@ func (c *TunnelClient) DialTunnel(ctx context.Context, opts TunnelDialOptions) (
 		return dialStreamWithClient(ctx, c.client, c.target, opts)
 	case TunnelModePoll:
 		return dialPollWithClient(ctx, c.client, c.target, opts)
+	case TunnelModeWS:
+		return nil, fmt.Errorf("ws mode does not support TunnelClient reuse")
 	case TunnelModeAuto:
 		streamCtx, cancelX := context.WithTimeout(ctx, 3*time.Second)
 		c1, errX := dialStreamWithClient(streamCtx, c.client, c.target, opts)
@@ -166,6 +171,8 @@ func DialTunnel(ctx context.Context, serverAddress string, opts TunnelDialOption
 		return dialStreamFn(ctx, serverAddress, opts)
 	case TunnelModePoll:
 		return dialPollFn(ctx, serverAddress, opts)
+	case TunnelModeWS:
+		return dialWS(ctx, serverAddress, opts)
 	case TunnelModeAuto:
 		// "stream" can hang on some CDNs that buffer uploads until request body completes.
 		// Keep it on a short leash so we can fall back to poll within the caller's deadline.
@@ -1012,8 +1019,10 @@ func (c *pollConn) pullLoop() {
 		default:
 		}
 
-		req, err := http.NewRequestWithContext(c.ctx, http.MethodGet, c.pullURL, nil)
+		reqCtx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, c.pullURL, nil)
 		if err != nil {
+			cancel()
 			_ = c.Close()
 			return
 		}
@@ -1023,6 +1032,7 @@ func (c *pollConn) pullLoop() {
 
 		resp, err := c.client.Do(req)
 		if err != nil {
+			cancel()
 			if isDialError(err) && dialRetry < maxDialRetry {
 				dialRetry++
 				select {
@@ -1044,6 +1054,7 @@ func (c *pollConn) pullLoop() {
 
 		if resp.StatusCode != http.StatusOK {
 			_ = resp.Body.Close()
+			cancel()
 			_ = c.closeWithError(fmt.Errorf("poll pull bad status: %s", resp.Status))
 			return
 		}
@@ -1068,6 +1079,7 @@ func (c *pollConn) pullLoop() {
 			}
 		}
 		_ = resp.Body.Close()
+		cancel()
 		if err := scanner.Err(); err != nil {
 			_ = c.closeWithError(fmt.Errorf("poll pull scan failed: %w", err))
 			return
@@ -1077,8 +1089,8 @@ func (c *pollConn) pullLoop() {
 
 func (c *pollConn) pushLoop() {
 	const (
-		maxBatchBytes   = 64 * 1024
-		flushInterval   = 5 * time.Millisecond
+		maxBatchBytes   = 512 * 1024
+		flushInterval   = 50 * time.Millisecond
 		maxLineRawBytes = 16 * 1024
 		maxDialRetry    = 12
 		minBackoff      = 10 * time.Millisecond
@@ -1482,6 +1494,16 @@ func (s *TunnelServer) HandleConn(rawConn net.Conn) (HandleResult, net.Conn, err
 			return HandleDone, nil, nil
 		}
 		return s.handlePoll(rawConn, req, headerBytes, buffered)
+	case TunnelModeWS:
+		if s.mode != TunnelModeWS {
+			if s.passThroughOnReject {
+				return reject()
+			}
+			_ = writeSimpleHTTPResponse(rawConn, http.StatusNotFound, "not found")
+			_ = rawConn.Close()
+			return HandleDone, nil, nil
+		}
+		return s.handleWS(rawConn, req, headerBytes, buffered)
 	default:
 		if s.passThroughOnReject {
 			return reject()
