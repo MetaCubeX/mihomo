@@ -113,12 +113,20 @@ type KIPServerHello struct {
 
 func kipUserHashFromKey(psk string) [kipHelloUserHashSize]byte {
 	var out [kipHelloUserHashSize]byte
-	seed := ClientAEADSeed(psk)
-	src := []byte(strings.TrimSpace(seed))
-	if keyBytes, decErr := hex.DecodeString(strings.TrimSpace(seed)); decErr == nil && len(keyBytes) > 0 {
-		src = keyBytes
+	psk = strings.TrimSpace(psk)
+	if psk == "" {
+		return out
 	}
-	sum := sha256.Sum256(src)
+
+	// Align with upstream: when the client carries private key material (or even just a public key),
+	// prefer hashing the raw hex bytes so different split/master keys can be distinguished.
+	if keyBytes, err := hex.DecodeString(psk); err == nil && len(keyBytes) > 0 {
+		sum := sha256.Sum256(keyBytes)
+		copy(out[:], sum[:kipHelloUserHashSize])
+		return out
+	}
+
+	sum := sha256.Sum256([]byte(psk))
 	copy(out[:], sum[:kipHelloUserHashSize])
 	return out
 }
