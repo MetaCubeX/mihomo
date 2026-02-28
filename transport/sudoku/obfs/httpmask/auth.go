@@ -6,9 +6,10 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/binary"
-	"github.com/metacubex/http"
 	"strings"
 	"time"
+
+	"github.com/metacubex/http"
 )
 
 const (
@@ -33,7 +34,7 @@ func newTunnelAuth(key string, skew time.Duration) *tunnelAuth {
 
 	// Domain separation: keep this HMAC key independent from other uses of cfg.Key.
 	h := sha256.New()
-	_, _ = h.Write([]byte("sudoku-httpmask-auth:"))
+	_, _ = h.Write([]byte("sudoku-httpmask-auth-v1:"))
 	_, _ = h.Write([]byte(key))
 
 	var sum [32]byte
