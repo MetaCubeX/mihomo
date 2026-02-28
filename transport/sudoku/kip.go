@@ -10,8 +10,6 @@ import (
 	"io"
 	"strings"
 	"time"
-
-	scrypto "github.com/metacubex/mihomo/transport/sudoku/crypto"
 )
 
 const (
@@ -115,11 +113,10 @@ type KIPServerHello struct {
 
 func kipUserHashFromKey(psk string) [kipHelloUserHashSize]byte {
 	var out [kipHelloUserHashSize]byte
-	src := []byte(strings.TrimSpace(psk))
-	if _, err := scrypto.RecoverPublicKey(psk); err == nil {
-		if keyBytes, decErr := hex.DecodeString(psk); decErr == nil && len(keyBytes) > 0 {
-			src = keyBytes
-		}
+	seed := ClientAEADSeed(psk)
+	src := []byte(strings.TrimSpace(seed))
+	if keyBytes, decErr := hex.DecodeString(strings.TrimSpace(seed)); decErr == nil && len(keyBytes) > 0 {
+		src = keyBytes
 	}
 	sum := sha256.Sum256(src)
 	copy(out[:], sum[:kipHelloUserHashSize])

@@ -1,7 +1,9 @@
 package sudoku
 
 import (
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/log"
@@ -29,8 +31,20 @@ func NewTableWithCustom(key string, tableType string, customTable string) (*sudo
 
 // ClientAEADSeed returns a canonical "seed" that is stable between client private key material and server public key.
 func ClientAEADSeed(key string) string {
-	if recovered, err := crypto.RecoverPublicKey(key); err == nil {
-		return crypto.EncodePoint(recovered)
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+
+	// Only attempt recovery for split private keys (64 bytes hex => 128 hex chars).
+	//
+	// Public keys are encoded as 32-byte compressed points (also hex), and may coincidentally
+	// look like valid scalars. Treating them as scalars would make the derived seed unstable
+	// across runs (and break handshake for some generated key pairs).
+	if b, err := hex.DecodeString(key); err == nil && len(b) == 64 {
+		if recovered, err := crypto.RecoverPublicKey(key); err == nil {
+			return crypto.EncodePoint(recovered)
+		}
 	}
 	return key
 }
