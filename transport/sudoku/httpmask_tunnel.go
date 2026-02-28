@@ -72,6 +72,14 @@ func (s *HTTPMaskTunnelServer) WrapConn(rawConn net.Conn) (handshakeConn net.Con
 	case httpmask.HandleStartTunnel:
 		inner := *s.cfg
 		inner.DisableHTTPMask = true
+		// HTTPMask tunnel modes (stream/poll/auto/ws) add extra round trips before the first
+		// handshake bytes can reach ServerHandshake, especially under high concurrency.
+		// Bump the handshake timeout for tunneled conns to avoid flaky timeouts while keeping
+		// the default strict for raw TCP handshakes.
+		const minTunneledHandshakeTimeoutSeconds = 15
+		if inner.HandshakeTimeoutSeconds <= 0 || inner.HandshakeTimeoutSeconds < minTunneledHandshakeTimeoutSeconds {
+			inner.HandshakeTimeoutSeconds = minTunneledHandshakeTimeoutSeconds
+		}
 		return c, &inner, false, nil
 	default:
 		return nil, nil, true, nil
