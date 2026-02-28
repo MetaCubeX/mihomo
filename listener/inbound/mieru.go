@@ -29,7 +29,7 @@ type MieruOption struct {
 	BaseOption
 	Transport      string            `inbound:"transport"`
 	Users          map[string]string `inbound:"users"`
-	TrafficPattern string            `inbound:"traffic-pattern"`
+	TrafficPattern string            `inbound:"traffic-pattern,omitempty"`
 }
 
 type mieruListenerFactory struct{}
