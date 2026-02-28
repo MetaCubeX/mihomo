@@ -93,6 +93,17 @@ func selectTableByProbe(r *bufio.Reader, cfg *ProtocolConfig, tables []*sudoku.T
 		return nil, nil, fmt.Errorf("too many table candidates: %d", len(tables))
 	}
 
+	// Copy so we can prune candidates without mutating the caller slice.
+	candidates := make([]*sudoku.Table, 0, len(tables))
+	for _, t := range tables {
+		if t != nil {
+			candidates = append(candidates, t)
+		}
+	}
+	if len(candidates) == 0 {
+		return nil, nil, fmt.Errorf("no table candidates")
+	}
+
 	probe, err := drainBuffered(r)
 	if err != nil {
 		return nil, nil, fmt.Errorf("drain buffered bytes failed: %w", err)
@@ -100,17 +111,18 @@ func selectTableByProbe(r *bufio.Reader, cfg *ProtocolConfig, tables []*sudoku.T
 
 	tmp := make([]byte, readChunk)
 	for {
-		if len(tables) == 1 {
+		if len(candidates) == 1 {
 			tail, err := drainBuffered(r)
 			if err != nil {
 				return nil, nil, fmt.Errorf("drain buffered bytes failed: %w", err)
 			}
 			probe = append(probe, tail...)
-			return tables[0], probe, nil
+			return candidates[0], probe, nil
 		}
 
 		needMore := false
-		for _, table := range tables {
+		next := candidates[:0]
+		for _, table := range candidates {
 			err := probeHandshakeBytes(probe, cfg, table)
 			if err == nil {
 				tail, err := drainBuffered(r)
@@ -122,10 +134,13 @@ func selectTableByProbe(r *bufio.Reader, cfg *ProtocolConfig, tables []*sudoku.T
 			}
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				needMore = true
+				next = append(next, table)
 			}
+			// Definitive mismatch: drop table.
 		}
+		candidates = next
 
-		if !needMore {
+		if len(candidates) == 0 || !needMore {
 			return nil, probe, fmt.Errorf("handshake table selection failed")
 		}
 		if len(probe) >= maxProbeBytes {
