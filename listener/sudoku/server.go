@@ -13,6 +13,7 @@ import (
 	"github.com/metacubex/mihomo/common/utils"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/listener/inner"
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/socks5"
@@ -80,7 +81,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 
 	if l.fallback != "" {
 		if r, ok := handshakeConn.(interface{ IsHTTPMaskRejected() bool }); ok && r.IsHTTPMaskRejected() {
-			fb, err := net.DialTimeout("tcp", l.fallback, 10*time.Second)
+			fb, err := inner.HandleTcp(tunnel, l.fallback, "")
 			if err != nil {
 				closeConns()
 				return
@@ -98,7 +99,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		if isSuspicious {
 			log.Warnln("[Sudoku] suspicious handshake from %s: %v", conn.RemoteAddr(), err)
 			if fallbackAddr != "" {
-				fb, err := net.DialTimeout("tcp", fallbackAddr, 10*time.Second)
+				fb, err := inner.HandleTcp(tunnel, fallbackAddr, "")
 				if err == nil {
 					relayToFallback(susp.Conn, conn, fb)
 					return
