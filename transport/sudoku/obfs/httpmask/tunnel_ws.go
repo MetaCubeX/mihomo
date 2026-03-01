@@ -2,7 +2,6 @@ package httpmask
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	mrand "math/rand"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gobwas/ws"
+	"github.com/metacubex/tls"
 )
 
 func normalizeWSSchemeFromAddress(serverAddress string, tlsEnabled bool) (string, string) {
@@ -140,9 +140,12 @@ func dialWS(ctx context.Context, serverAddress string, opts TunnelDialOptions) (
 		},
 	}
 	if scheme == "wss" {
-		d.TLSConfig = &tls.Config{
+		tlsConfig := &tls.Config{
 			ServerName: serverName,
 			MinVersion: tls.VersionTLS12,
+		}
+		d.TLSClient = func(conn net.Conn, hostname string) net.Conn {
+			return tls.Client(conn, tlsConfig)
 		}
 	}
 
