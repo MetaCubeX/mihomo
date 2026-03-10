@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -55,13 +57,15 @@ type RecordConn struct {
 	recvAEADEpoch uint32
 
 	// Send direction state.
-	sendEpoch uint32
-	sendSeq   uint64
-	sendBytes int64
+	sendEpoch        uint32
+	sendSeq          uint64
+	sendBytes        int64
+	sendEpochUpdates uint32
 
 	// Receive direction state.
-	recvEpoch uint32
-	recvSeq   uint64
+	recvEpoch       uint32
+	recvSeq         uint64
+	recvInitialized bool
 
 	readBuf bytes.Buffer
 
@@ -105,6 +109,9 @@ func NewRecordConn(conn net.Conn, method string, baseSend, baseRecv []byte) (*Re
 	}
 	rc := &RecordConn{Conn: conn, method: method}
 	rc.keys = recordKeys{baseSend: cloneBytes(baseSend), baseRecv: cloneBytes(baseRecv)}
+	if err := rc.resetTrafficState(); err != nil {
+		return nil, err
+	}
 	return rc, nil
 }
 
@@ -127,17 +134,30 @@ func (c *RecordConn) Rekey(baseSend, baseRecv []byte) error {
 	defer c.writeMu.Unlock()
 
 	c.keys = recordKeys{baseSend: cloneBytes(baseSend), baseRecv: cloneBytes(baseRecv)}
-	c.sendEpoch = 0
-	c.sendSeq = 0
-	c.sendBytes = 0
-	c.recvEpoch = 0
-	c.recvSeq = 0
+	if err := c.resetTrafficState(); err != nil {
+		return err
+	}
 	c.readBuf.Reset()
 
 	c.sendAEAD = nil
 	c.recvAEAD = nil
 	c.sendAEADEpoch = 0
 	c.recvAEADEpoch = 0
+	return nil
+}
+
+func (c *RecordConn) resetTrafficState() error {
+	sendEpoch, sendSeq, err := randomRecordCounters()
+	if err != nil {
+		return fmt.Errorf("initialize record counters: %w", err)
+	}
+	c.sendEpoch = sendEpoch
+	c.sendSeq = sendSeq
+	c.sendBytes = 0
+	c.sendEpochUpdates = 0
+	c.recvEpoch = 0
+	c.recvSeq = 0
+	c.recvInitialized = false
 	return nil
 }
 
@@ -164,6 +184,44 @@ func cloneBytes(b []byte) []byte {
 		return nil
 	}
 	return append([]byte(nil), b...)
+}
+
+func randomRecordCounters() (uint32, uint64, error) {
+	epoch, err := randomNonZeroUint32()
+	if err != nil {
+		return 0, 0, err
+	}
+	seq, err := randomNonZeroUint64()
+	if err != nil {
+		return 0, 0, err
+	}
+	return epoch, seq, nil
+}
+
+func randomNonZeroUint32() (uint32, error) {
+	var b [4]byte
+	for {
+		if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
+			return 0, err
+		}
+		v := binary.BigEndian.Uint32(b[:])
+		if v != 0 && v != ^uint32(0) {
+			return v, nil
+		}
+	}
+}
+
+func randomNonZeroUint64() (uint64, error) {
+	var b [8]byte
+	for {
+		if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
+			return 0, err
+		}
+		v := binary.BigEndian.Uint64(b[:])
+		if v != 0 && v != ^uint64(0) {
+			return v, nil
+		}
+	}
 }
 
 func (c *RecordConn) newAEADFor(base []byte, epoch uint32) (cipher.AEAD, error) {
@@ -209,17 +267,49 @@ func deriveEpochKey(base []byte, epoch uint32, method string) []byte {
 	return mac.Sum(nil)
 }
 
-func (c *RecordConn) maybeBumpSendEpochLocked(addedPlain int) {
-	if KeyUpdateAfterBytes <= 0 || c.method == "none" {
-		return
+func (c *RecordConn) maybeBumpSendEpochLocked(addedPlain int) error {
+	ku := atomic.LoadInt64(&KeyUpdateAfterBytes)
+	if ku <= 0 || c.method == "none" {
+		return nil
 	}
 	c.sendBytes += int64(addedPlain)
-	threshold := KeyUpdateAfterBytes * int64(c.sendEpoch+1)
+	threshold := ku * int64(c.sendEpochUpdates+1)
 	if c.sendBytes < threshold {
-		return
+		return nil
 	}
 	c.sendEpoch++
-	c.sendSeq = 0
+	c.sendEpochUpdates++
+	nextSeq, err := randomNonZeroUint64()
+	if err != nil {
+		return fmt.Errorf("rotate record seq: %w", err)
+	}
+	c.sendSeq = nextSeq
+	return nil
+}
+
+func (c *RecordConn) validateRecvPosition(epoch uint32, seq uint64) error {
+	if !c.recvInitialized {
+		return nil
+	}
+	if epoch < c.recvEpoch {
+		return fmt.Errorf("replayed epoch: got %d want >=%d", epoch, c.recvEpoch)
+	}
+	if epoch == c.recvEpoch && seq != c.recvSeq {
+		return fmt.Errorf("out of order: epoch=%d got=%d want=%d", epoch, seq, c.recvSeq)
+	}
+	if epoch > c.recvEpoch {
+		const maxJump = 8
+		if epoch-c.recvEpoch > maxJump {
+			return fmt.Errorf("epoch jump too large: got=%d want<=%d", epoch-c.recvEpoch, maxJump)
+		}
+	}
+	return nil
+}
+
+func (c *RecordConn) markRecvPosition(epoch uint32, seq uint64) {
+	c.recvEpoch = epoch
+	c.recvSeq = seq + 1
+	c.recvInitialized = true
 }
 
 func (c *RecordConn) Write(p []byte) (int, error) {
@@ -282,7 +372,9 @@ func (c *RecordConn) Write(p []byte) (int, error) {
 		}
 
 		total += n
-		c.maybeBumpSendEpochLocked(n)
+		if err := c.maybeBumpSendEpochLocked(n); err != nil {
+			return total, err
+		}
 	}
 	return total, nil
 }
@@ -324,31 +416,17 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 	epoch := binary.BigEndian.Uint32(header[:4])
 	seq := binary.BigEndian.Uint64(header[4:])
 
-	if epoch < c.recvEpoch {
-		return 0, fmt.Errorf("replayed epoch: got %d want >=%d", epoch, c.recvEpoch)
-	}
-	if epoch == c.recvEpoch && seq != c.recvSeq {
-		return 0, fmt.Errorf("out of order: epoch=%d got=%d want=%d", epoch, seq, c.recvSeq)
-	}
-	if epoch > c.recvEpoch {
-		const maxJump = 8
-		if epoch-c.recvEpoch > maxJump {
-			return 0, fmt.Errorf("epoch jump too large: got=%d want<=%d", epoch-c.recvEpoch, maxJump)
-		}
-		c.recvEpoch = epoch
-		c.recvSeq = 0
-		if seq != 0 {
-			return 0, fmt.Errorf("out of order: epoch advanced to %d but seq=%d", epoch, seq)
-		}
+	if err := c.validateRecvPosition(epoch, seq); err != nil {
+		return 0, err
 	}
 
-	if c.recvAEAD == nil || c.recvAEADEpoch != c.recvEpoch {
-		a, err := c.newAEADFor(c.keys.baseRecv, c.recvEpoch)
+	if c.recvAEAD == nil || c.recvAEADEpoch != epoch {
+		a, err := c.newAEADFor(c.keys.baseRecv, epoch)
 		if err != nil {
 			return 0, err
 		}
 		c.recvAEAD = a
-		c.recvAEADEpoch = c.recvEpoch
+		c.recvAEADEpoch = epoch
 	}
 	aead := c.recvAEAD
 
@@ -356,7 +434,7 @@ func (c *RecordConn) Read(p []byte) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("decryption failed: epoch=%d seq=%d: %w", epoch, seq, err)
 	}
-	c.recvSeq++
+	c.markRecvPosition(epoch, seq)
 
 	c.readBuf.Write(plaintext)
 	return c.readBuf.Read(p)
