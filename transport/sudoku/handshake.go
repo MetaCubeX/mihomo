@@ -337,6 +337,9 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 	if err := cfg.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("invalid config: %w", err)
 	}
+	if userHash, ok := httpmask.EarlyHandshakeUserHash(rawConn); ok {
+		return rawConn, &HandshakeMeta{UserHash: userHash}, nil
+	}
 
 	handshakeTimeout := time.Duration(cfg.HandshakeTimeoutSeconds) * time.Second
 	if handshakeTimeout <= 0 {

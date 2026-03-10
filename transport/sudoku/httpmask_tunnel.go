@@ -14,6 +14,30 @@ type HTTPMaskTunnelServer struct {
 	ts  *httpmask.TunnelServer
 }
 
+func newHTTPMaskEarlyCodecConfig(cfg *ProtocolConfig, psk string) EarlyCodecConfig {
+	return EarlyCodecConfig{
+		PSK:                psk,
+		AEAD:               cfg.AEADMethod,
+		EnablePureDownlink: cfg.EnablePureDownlink,
+		PaddingMin:         cfg.PaddingMin,
+		PaddingMax:         cfg.PaddingMax,
+	}
+}
+
+func newClientHTTPMaskEarlyHandshake(cfg *ProtocolConfig) (*httpmask.ClientEarlyHandshake, error) {
+	table, err := pickClientTable(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewHTTPMaskClientEarlyHandshake(
+		newHTTPMaskEarlyCodecConfig(cfg, ClientAEADSeed(cfg.Key)),
+		table,
+		kipUserHashFromKey(cfg.Key),
+		KIPFeatAll,
+	)
+}
+
 func NewHTTPMaskTunnelServer(cfg *ProtocolConfig) *HTTPMaskTunnelServer {
 	return newHTTPMaskTunnelServer(cfg, false)
 }
@@ -35,6 +59,11 @@ func newHTTPMaskTunnelServer(cfg *ProtocolConfig, passThroughOnReject bool) *HTT
 				Mode:     cfg.HTTPMaskMode,
 				PathRoot: cfg.HTTPMaskPathRoot,
 				AuthKey:  ServerAEADSeed(cfg.Key),
+				EarlyHandshake: NewHTTPMaskServerEarlyHandshake(
+					newHTTPMaskEarlyCodecConfig(cfg, ServerAEADSeed(cfg.Key)),
+					cfg.tableCandidates(),
+					globalHandshakeReplay.allow,
+				),
 				// When upstream fallback is enabled, preserve rejected HTTP requests for the caller.
 				PassThroughOnReject: passThroughOnReject,
 			})
@@ -101,14 +130,25 @@ func DialHTTPMaskTunnel(ctx context.Context, serverAddress string, cfg *Protocol
 	default:
 		return nil, fmt.Errorf("http-mask-mode=%q does not use http tunnel", cfg.HTTPMaskMode)
 	}
+	var (
+		earlyHandshake *httpmask.ClientEarlyHandshake
+		err            error
+	)
+	if upgrade != nil {
+		earlyHandshake, err = newClientHTTPMaskEarlyHandshake(cfg)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return httpmask.DialTunnel(ctx, serverAddress, httpmask.TunnelDialOptions{
-		Mode:         cfg.HTTPMaskMode,
-		TLSEnabled:   cfg.HTTPMaskTLSEnabled,
-		HostOverride: cfg.HTTPMaskHost,
-		PathRoot:     cfg.HTTPMaskPathRoot,
-		AuthKey:      ClientAEADSeed(cfg.Key),
-		Upgrade:      upgrade,
-		Multiplex:    cfg.HTTPMaskMultiplex,
-		DialContext:  dial,
+		Mode:           cfg.HTTPMaskMode,
+		TLSEnabled:     cfg.HTTPMaskTLSEnabled,
+		HostOverride:   cfg.HTTPMaskHost,
+		PathRoot:       cfg.HTTPMaskPathRoot,
+		AuthKey:        ClientAEADSeed(cfg.Key),
+		EarlyHandshake: earlyHandshake,
+		Upgrade:        upgrade,
+		Multiplex:      cfg.HTTPMaskMultiplex,
+		DialContext:    dial,
 	})
 }

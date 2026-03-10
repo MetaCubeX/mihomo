@@ -1,6 +1,7 @@
 package httpmask
 
 import (
+	"encoding/base64"
 	"net"
 	"net/http"
 	"net/url"
@@ -63,15 +64,46 @@ func (s *TunnelServer) handleWS(rawConn net.Conn, req *httpRequestHeader, header
 		return rejectOrReply(http.StatusNotFound, "not found")
 	}
 
+	earlyPayload, err := parseEarlyDataQuery(u)
+	if err != nil {
+		return rejectOrReply(http.StatusBadRequest, "bad request")
+	}
+	var prepared *PreparedServerEarlyHandshake
+	if len(earlyPayload) > 0 && s.earlyHandshake != nil && s.earlyHandshake.Prepare != nil {
+		prepared, err = s.earlyHandshake.Prepare(earlyPayload)
+		if err != nil {
+			return rejectOrReply(http.StatusNotFound, "not found")
+		}
+	}
+
 	prefix := make([]byte, 0, len(headerBytes)+len(buffered))
 	prefix = append(prefix, headerBytes...)
 	prefix = append(prefix, buffered...)
 	wsConnRaw := newPreBufferedConn(rawConn, prefix)
 
-	if _, err := ws.Upgrade(wsConnRaw); err != nil {
+	upgrader := ws.Upgrader{}
+	if prepared != nil && len(prepared.ResponsePayload) > 0 {
+		upgrader.OnBeforeUpgrade = func() (ws.HandshakeHeader, error) {
+			h := http.Header{}
+			h.Set(tunnelEarlyDataHeader, base64.RawURLEncoding.EncodeToString(prepared.ResponsePayload))
+			return ws.HandshakeHeaderHTTP(h), nil
+		}
+	}
+	if _, err := upgrader.Upgrade(wsConnRaw); err != nil {
 		_ = rawConn.Close()
 		return HandleDone, nil, nil
 	}
 
-	return HandleStartTunnel, newWSStreamConn(wsConnRaw, ws.StateServerSide), nil
+	outConn := net.Conn(newWSStreamConn(wsConnRaw, ws.StateServerSide))
+	if prepared != nil && prepared.WrapConn != nil {
+		wrapped, err := prepared.WrapConn(outConn)
+		if err != nil {
+			_ = outConn.Close()
+			return HandleDone, nil, nil
+		}
+		if wrapped != nil {
+			outConn = wrapEarlyHandshakeConn(wrapped, prepared.UserHash)
+		}
+	}
+	return HandleStartTunnel, outConn, nil
 }

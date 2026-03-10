@@ -2,6 +2,7 @@ package httpmask
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	mrand "math/rand"
@@ -115,6 +116,16 @@ func dialWS(ctx context.Context, serverAddress string, opts TunnelDialOptions) (
 		Host:   urlHost,
 		Path:   joinPathRoot(opts.PathRoot, "/ws"),
 	}
+	if opts.EarlyHandshake != nil && len(opts.EarlyHandshake.RequestPayload) > 0 {
+		rawURL, err := setEarlyDataQuery(u.String(), opts.EarlyHandshake.RequestPayload)
+		if err != nil {
+			return nil, err
+		}
+		u, err = url.Parse(rawURL)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	header := make(stdhttp.Header)
 	applyWSHeaders(header, headerHost)
@@ -132,6 +143,16 @@ func dialWS(ctx context.Context, serverAddress string, opts TunnelDialOptions) (
 	d := ws.Dialer{
 		Host:   headerHost,
 		Header: ws.HandshakeHeaderHTTP(header),
+		OnHeader: func(key, value []byte) error {
+			if !strings.EqualFold(string(key), tunnelEarlyDataHeader) || opts.EarlyHandshake == nil || opts.EarlyHandshake.HandleResponse == nil {
+				return nil
+			}
+			decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(string(value)))
+			if err != nil {
+				return err
+			}
+			return opts.EarlyHandshake.HandleResponse(decoded)
+		},
 		NetDial: func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 			if addr == urlHost {
 				addr = dialAddr
@@ -161,16 +182,10 @@ func dialWS(ctx context.Context, serverAddress string, opts TunnelDialOptions) (
 	}
 
 	wsConn := newWSStreamConn(conn, ws.StateClientSide)
-	if opts.Upgrade == nil {
-		return wsConn, nil
-	}
-	upgraded, err := opts.Upgrade(wsConn)
+	upgraded, err := applyEarlyHandshakeOrUpgrade(wsConn, opts)
 	if err != nil {
 		_ = wsConn.Close()
 		return nil, err
 	}
-	if upgraded != nil {
-		return upgraded, nil
-	}
-	return wsConn, nil
+	return upgraded, nil
 }
