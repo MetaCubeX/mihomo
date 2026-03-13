@@ -33,8 +33,8 @@ var (
 )
 
 var defaultHeader = http.Header{
-	"content-type": []string{"application/grpc"},
-	"user-agent":   []string{"grpc-go/1.36.0"},
+	"Content-Type": []string{"application/grpc"},
+	"User-Agent":   []string{"grpc-go/1.36.0"},
 }
 
 type DialFn = func(ctx context.Context, network, addr string) (net.Conn, error)
