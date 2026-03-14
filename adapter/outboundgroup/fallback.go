@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/callback"
@@ -15,6 +16,7 @@ import (
 
 type Fallback struct {
 	*GroupBase
+	stateMux       sync.RWMutex
 	disableUDP     bool
 	testUrl        string
 	selected       string
@@ -89,7 +91,7 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 		"all":            all,
 		"testUrl":        f.testUrl,
 		"expectedStatus": f.expectedStatus,
-		"fixed":          f.selected,
+		"fixed":          f.getSelected(),
 		"hidden":         f.Hidden,
 		"icon":           f.Icon,
 	})
@@ -103,19 +105,24 @@ func (f *Fallback) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
-	for _, proxy := range proxies {
-		if len(f.selected) == 0 {
+	selected := f.getSelected()
+
+	if len(selected) != 0 {
+		for _, proxy := range proxies {
+			if proxy.Name() != selected {
+				continue
+			}
 			if proxy.AliveForTestUrl(f.testUrl) {
 				return proxy
 			}
-		} else {
-			if proxy.Name() == f.selected {
-				if proxy.AliveForTestUrl(f.testUrl) {
-					return proxy
-				} else {
-					f.selected = ""
-				}
-			}
+			f.clearSelectedIf(selected)
+			break
+		}
+	}
+
+	for _, proxy := range proxies {
+		if proxy.AliveForTestUrl(f.testUrl) {
+			return proxy
 		}
 	}
 
@@ -135,7 +142,7 @@ func (f *Fallback) Set(name string) error {
 		return errors.New("proxy not exist")
 	}
 
-	f.selected = name
+	f.setSelected(name)
 	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
@@ -147,7 +154,28 @@ func (f *Fallback) Set(name string) error {
 }
 
 func (f *Fallback) ForceSet(name string) {
+	f.setSelected(name)
+}
+
+func (f *Fallback) getSelected() string {
+	f.stateMux.RLock()
+	defer f.stateMux.RUnlock()
+
+	return f.selected
+}
+
+func (f *Fallback) setSelected(name string) {
+	f.stateMux.Lock()
 	f.selected = name
+	f.stateMux.Unlock()
+}
+
+func (f *Fallback) clearSelectedIf(selected string) {
+	f.stateMux.Lock()
+	if f.selected == selected {
+		f.selected = ""
+	}
+	f.stateMux.Unlock()
 }
 
 func (f *Fallback) Providers() []P.ProxyProvider {
