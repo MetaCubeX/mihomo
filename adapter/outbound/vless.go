@@ -14,7 +14,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	// "github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/vless"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
