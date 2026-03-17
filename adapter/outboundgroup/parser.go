@@ -22,26 +22,34 @@ var (
 	errDuplicateProvider = errors.New("duplicate provider name")
 )
 
+const (
+	defaultPinUnhealthyLogIntervalSeconds  = 10
+	defaultPersistentPinAutoUnfixThreshold = 10
+)
+
 type GroupCommonOption struct {
-	Name                string   `group:"name"`
-	Type                string   `group:"type"`
-	Proxies             []string `group:"proxies,omitempty"`
-	Use                 []string `group:"use,omitempty"`
-	URL                 string   `group:"url,omitempty"`
-	Interval            int      `group:"interval,omitempty"`
-	TestTimeout         int      `group:"timeout,omitempty"`
-	MaxFailedTimes      int      `group:"max-failed-times,omitempty"`
-	Lazy                bool     `group:"lazy,omitempty"`
-	DisableUDP          bool     `group:"disable-udp,omitempty"`
-	Filter              string   `group:"filter,omitempty"`
-	ExcludeFilter       string   `group:"exclude-filter,omitempty"`
-	ExcludeType         string   `group:"exclude-type,omitempty"`
-	ExpectedStatus      string   `group:"expected-status,omitempty"`
-	IncludeAll          bool     `group:"include-all,omitempty"`
-	IncludeAllProxies   bool     `group:"include-all-proxies,omitempty"`
-	IncludeAllProviders bool     `group:"include-all-providers,omitempty"`
-	Hidden              bool     `group:"hidden,omitempty"`
-	Icon                string   `group:"icon,omitempty"`
+	Name                            string   `group:"name"`
+	Type                            string   `group:"type"`
+	Proxies                         []string `group:"proxies,omitempty"`
+	Use                             []string `group:"use,omitempty"`
+	URL                             string   `group:"url,omitempty"`
+	Interval                        int      `group:"interval,omitempty"`
+	TestTimeout                     int      `group:"timeout,omitempty"`
+	MaxFailedTimes                  int      `group:"max-failed-times,omitempty"`
+	Lazy                            bool     `group:"lazy,omitempty"`
+	DisableUDP                      bool     `group:"disable-udp,omitempty"`
+	Filter                          string   `group:"filter,omitempty"`
+	ExcludeFilter                   string   `group:"exclude-filter,omitempty"`
+	ExcludeType                     string   `group:"exclude-type,omitempty"`
+	ExpectedStatus                  string   `group:"expected-status,omitempty"`
+	PersistentPin                   bool     `group:"persistent-pin,omitempty"`
+	PinUnhealthyLogInterval         int      `group:"pin-unhealthy-log-interval,omitempty"`
+	PersistentPinAutoUnfixThreshold int      `group:"persistent-pin-auto-unfix-threshold,omitempty"`
+	IncludeAll                      bool     `group:"include-all,omitempty"`
+	IncludeAllProxies               bool     `group:"include-all-proxies,omitempty"`
+	IncludeAllProviders             bool     `group:"include-all-providers,omitempty"`
+	Hidden                          bool     `group:"hidden,omitempty"`
+	Icon                            string   `group:"icon,omitempty"`
 }
 
 func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string) (C.ProxyAdapter, error) {
@@ -69,6 +77,14 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 
 	groupName := groupOption.Name
+	if groupOption.PinUnhealthyLogInterval < 0 {
+		log.Warnln("group [%s] has invalid pin-unhealthy-log-interval=%d, fallback to default 10s", groupName, groupOption.PinUnhealthyLogInterval)
+		groupOption.PinUnhealthyLogInterval = defaultPinUnhealthyLogIntervalSeconds
+	}
+	if _, ok := config["persistent-pin-auto-unfix-threshold"]; ok && groupOption.PersistentPinAutoUnfixThreshold <= 0 {
+		log.Warnln("group [%s] has invalid persistent-pin-auto-unfix-threshold=%d, fallback to default %d", groupName, groupOption.PersistentPinAutoUnfixThreshold, defaultPersistentPinAutoUnfixThreshold)
+		groupOption.PersistentPinAutoUnfixThreshold = defaultPersistentPinAutoUnfixThreshold
+	}
 
 	providers := []P.ProxyProvider{}
 

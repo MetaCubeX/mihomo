@@ -1177,6 +1177,9 @@ proxy-groups:
       - vmess1
     # tolerance: 150
     # lazy: true
+    # persistent-pin: false # true 时固定节点将不再被自动测速流程释放
+    # pin-unhealthy-log-interval: 10 # persistent-pin=true 且固定节点异常时，日志提醒间隔（秒）
+    # persistent-pin-auto-unfix-threshold: 10 # persistent-pin=true 时生效，固定节点连续 N 次异常且每次都有其他可用节点时自动解除固定
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
@@ -1188,6 +1191,9 @@ proxy-groups:
       - ss1
       - ss2
       - vmess1
+    # persistent-pin: false
+    # pin-unhealthy-log-interval: 10
+    # persistent-pin-auto-unfix-threshold: 10
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
 

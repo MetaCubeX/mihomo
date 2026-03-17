@@ -60,8 +60,10 @@ func getGroupDelay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if selectAble, ok := proxy.Adapter().(outboundgroup.SelectAble); ok && proxy.Type() != C.Selector {
-		selectAble.ForceSet("")
-		cachefile.Cache().SetSelected(proxy.Name(), "")
+		if pinAware, ok := proxy.Adapter().(outboundgroup.PersistentPinAware); !ok || !pinAware.PersistentPin() {
+			selectAble.ForceSet("")
+			cachefile.Cache().SetSelected(proxy.Name(), "")
+		}
 	}
 
 	query := r.URL.Query()

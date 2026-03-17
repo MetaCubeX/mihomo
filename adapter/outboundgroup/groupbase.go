@@ -224,7 +224,7 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 		wg.Add(1)
 		go func() {
 			delay, err := proxy.URLTest(ctx, url, expectedStatus)
-			if err == nil {
+			if err == nil && proxy.AliveForTestUrl(url) {
 				lock.Lock()
 				mp[proxy.Name()] = delay
 				lock.Unlock()
