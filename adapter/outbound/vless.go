@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/vless"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
@@ -174,6 +176,17 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			return
 		}
 	}
+
+	// xtls-rprx-vision时禁用443 udp start
+	if v.option.Flow == vless.XRV {
+        // 如果是 UDP 且端口是 443，拒绝连接
+        if metadata.NetWork == C.UDP && metadata.DstPort == 443 {
+			log.Infoln("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected, host: %s, destIp: %s", metadata.Host, metadata.DstIP)
+            return nil, errors.New("XTLS Vision Flow xtls-rprx-vision: UDP/443 rejected")
+        }
+    }
+	// end
+
 	if metadata.NetWork == C.UDP {
 		if v.option.PacketAddr {
 			metadata = &C.Metadata{
@@ -354,10 +367,12 @@ func parseVlessAddr(metadata *C.Metadata, xudp bool) *vless.DstAddr {
 func NewVless(option VlessOption) (*Vless, error) {
 	var addons *vless.Addons
 	if len(option.Flow) >= 16 {
-		option.Flow = option.Flow[:16]
-		if option.Flow != vless.XRV {
+		// 适配xtls-rprx-vision-udp443，注释截取flow satrt
+		// option.Flow = option.Flow[:16]
+		if option.Flow[:16] != vless.XRV {
 			return nil, fmt.Errorf("unsupported xtls flow type: %s", option.Flow)
 		}
+		// end
 		addons = &vless.Addons{
 			Flow: option.Flow,
 		}

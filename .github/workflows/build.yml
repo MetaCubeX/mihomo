@@ -29,130 +29,130 @@ jobs:
     strategy:
       matrix:
         jobs:
-          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
-          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64 }
-          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1 }
-          - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2 }
-          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3 }
-          - { goos: darwin, goarch: arm64, output: arm64 }
+          # - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
+          # - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64 }
+          # - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1 }
+          # - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2 }
+          # - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3 }
+          # - { goos: darwin, goarch: arm64, output: arm64 }
 
-          - { goos: linux, goarch: '386', go386: sse2, output: '386', debian: i386, rpm: i386}
-          - { goos: linux, goarch: '386', go386: softfloat, output: '386-softfloat' }
-          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible} # old style file name will be removed in next released
+          # - { goos: linux, goarch: '386', go386: sse2, output: '386', debian: i386, rpm: i386}
+          # - { goos: linux, goarch: '386', go386: softfloat, output: '386-softfloat' }
+          # - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-compatible} # old style file name will be removed in next released
           - { goos: linux, goarch: amd64, goamd64: v3, output: amd64, debian: amd64, rpm: x86_64, pacman: x86_64}
-          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1, debian: amd64, rpm: x86_64, pacman: x86_64, test: test }
-          - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2, debian: amd64, rpm: x86_64, pacman: x86_64}
-          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3, debian: amd64, rpm: x86_64, pacman: x86_64}
-          - { goos: linux, goarch: arm64, output: arm64, debian: arm64, rpm: aarch64, pacman: aarch64}  
-          - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
-          - { goos: linux, goarch: arm, goarm: '6', output: armv6, debian: armel, rpm: armv6hl} 
-          - { goos: linux, goarch: arm, goarm: '7', output: armv7, debian: armhf, rpm: armv7hl, pacman: armv7hl}
-          - { goos: linux, goarch: mips, gomips: hardfloat, output: mips-hardfloat }
-          - { goos: linux, goarch: mips, gomips: softfloat, output: mips-softfloat }
-          - { goos: linux, goarch: mipsle, gomips: hardfloat, output: mipsle-hardfloat }
-          - { goos: linux, goarch: mipsle, gomips: softfloat, output: mipsle-softfloat }
-          - { goos: linux, goarch: mips64, output: mips64 }
-          - { goos: linux, goarch: mips64le, output: mips64le, debian: mips64el, rpm: mips64el }
-          - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1', debian: loongarch64, rpm: loongarch64, goversion: 'custom' }
-          - { goos: linux, goarch: loong64, output: loong64-abi2, abi: '2', debian: loong64, rpm: loong64 }
-          - { goos: linux, goarch: riscv64, output: riscv64, debian: riscv64, rpm: riscv64 }
-          - { goos: linux, goarch: s390x, output: s390x, debian: s390x, rpm: s390x }
-          - { goos: linux, goarch: ppc64le, output: ppc64le, debian: ppc64el, rpm: ppc64le }
+          # - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1, debian: amd64, rpm: x86_64, pacman: x86_64, test: test }
+          # - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2, debian: amd64, rpm: x86_64, pacman: x86_64}
+          # - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3, debian: amd64, rpm: x86_64, pacman: x86_64}
+          # - { goos: linux, goarch: arm64, output: arm64, debian: arm64, rpm: aarch64, pacman: aarch64}  
+          # - { goos: linux, goarch: arm, goarm: '5', output: armv5 }
+          # - { goos: linux, goarch: arm, goarm: '6', output: armv6, debian: armel, rpm: armv6hl} 
+          # - { goos: linux, goarch: arm, goarm: '7', output: armv7, debian: armhf, rpm: armv7hl, pacman: armv7hl}
+          # - { goos: linux, goarch: mips, gomips: hardfloat, output: mips-hardfloat }
+          # - { goos: linux, goarch: mips, gomips: softfloat, output: mips-softfloat }
+          # - { goos: linux, goarch: mipsle, gomips: hardfloat, output: mipsle-hardfloat }
+          # - { goos: linux, goarch: mipsle, gomips: softfloat, output: mipsle-softfloat }
+          # - { goos: linux, goarch: mips64, output: mips64 }
+          # - { goos: linux, goarch: mips64le, output: mips64le, debian: mips64el, rpm: mips64el }
+          # - { goos: linux, goarch: loong64, output: loong64-abi1, abi: '1', debian: loongarch64, rpm: loongarch64 }
+          # - { goos: linux, goarch: loong64, output: loong64-abi2, abi: '2', debian: loong64, rpm: loong64 }
+          # - { goos: linux, goarch: riscv64, output: riscv64, debian: riscv64, rpm: riscv64 }
+          # - { goos: linux, goarch: s390x, output: s390x, debian: s390x, rpm: s390x }
+          # - { goos: linux, goarch: ppc64le, output: ppc64le, debian: ppc64el, rpm: ppc64le }
 
           # Go 1.26 with special patch can work on Windows 7
           # https://github.com/MetaCubeX/go/commits/release-branch.go1.26/
-          - { goos: windows, goarch: '386', output: '386' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
+          # - { goos: windows, goarch: '386', output: '386' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
           - { goos: windows, goarch: amd64, goamd64: v3, output: amd64 }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1 }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2 }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3 }
-          - { goos: windows, goarch: arm64, output: arm64 }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1 }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2 }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3 }
+          # - { goos: windows, goarch: arm64, output: arm64 }
 
-          - { goos: freebsd, goarch: '386', output: '386' }
-          - { goos: freebsd, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
-          - { goos: freebsd, goarch: amd64, goamd64: v3, output: amd64 }
-          - { goos: freebsd, goarch: amd64, goamd64: v1, output: amd64-v1 }
-          - { goos: freebsd, goarch: amd64, goamd64: v2, output: amd64-v2 }
-          - { goos: freebsd, goarch: amd64, goamd64: v3, output: amd64-v3 }
-          - { goos: freebsd, goarch: arm64, output: arm64 }
+          # - { goos: freebsd, goarch: '386', output: '386' }
+          # - { goos: freebsd, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
+          # - { goos: freebsd, goarch: amd64, goamd64: v3, output: amd64 }
+          # - { goos: freebsd, goarch: amd64, goamd64: v1, output: amd64-v1 }
+          # - { goos: freebsd, goarch: amd64, goamd64: v2, output: amd64-v2 }
+          # - { goos: freebsd, goarch: amd64, goamd64: v3, output: amd64-v3 }
+          # - { goos: freebsd, goarch: arm64, output: arm64 }
 
-          - { goos: android, goarch: '386', ndk: i686-linux-android34, output: '386' }
-          - { goos: android, goarch: amd64, ndk: x86_64-linux-android34, output: amd64 }
-          - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
-          - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
+          # - { goos: android, goarch: '386', ndk: i686-linux-android34, output: '386' }
+          # - { goos: android, goarch: amd64, ndk: x86_64-linux-android34, output: amd64 }
+          # - { goos: android, goarch: arm, ndk: armv7a-linux-androideabi34, output: armv7 }
+          # - { goos: android, goarch: arm64, ndk: aarch64-linux-android34, output: arm64-v8 }
 
           # Go 1.25 with special patch can work on Windows 7
           # https://github.com/MetaCubeX/go/commits/release-branch.go1.25/
-          - { goos: windows, goarch: '386', output: '386-go125', goversion: '1.25' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go125, goversion: '1.25' }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go125, goversion: '1.25' }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go125, goversion: '1.25' }
+          # - { goos: windows, goarch: '386', output: '386-go125', goversion: '1.25' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go125, goversion: '1.25' }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go125, goversion: '1.25' }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go125, goversion: '1.25' }
 
           # Go 1.24 with special patch can work on Windows 7
           # https://github.com/MetaCubeX/go/commits/release-branch.go1.24/
-          - { goos: windows, goarch: '386', output: '386-go124', goversion: '1.24' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go124, goversion: '1.24' }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go124, goversion: '1.24' }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go124, goversion: '1.24' }
+          # - { goos: windows, goarch: '386', output: '386-go124', goversion: '1.24' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go124, goversion: '1.24' }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go124, goversion: '1.24' }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go124, goversion: '1.24' }
 
           # Go 1.23 with special patch can work on Windows 7
           # https://github.com/MetaCubeX/go/commits/release-branch.go1.23/
-          - { goos: windows, goarch: '386', output: '386-go123', goversion: '1.23' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go123, goversion: '1.23' }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go123, goversion: '1.23' }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go123, goversion: '1.23' }
+          # - { goos: windows, goarch: '386', output: '386-go123', goversion: '1.23' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go123, goversion: '1.23' }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go123, goversion: '1.23' }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go123, goversion: '1.23' }
 
           # Go 1.22 with special patch can work on Windows 7
           # https://github.com/MetaCubeX/go/commits/release-branch.go1.22/
-          - { goos: windows, goarch: '386', output: '386-go122', goversion: '1.22' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go122, goversion: '1.22' }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go122, goversion: '1.22' }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go122, goversion: '1.22' }
+          # - { goos: windows, goarch: '386', output: '386-go122', goversion: '1.22' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go122, goversion: '1.22' }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go122, goversion: '1.22' }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go122, goversion: '1.22' }
 
           # Go 1.21 can revert commit `9e4385` to work on Windows 7
           # https://github.com/golang/go/issues/64622#issuecomment-1847475161
           # (OR we can just use golang1.21.4 which unneeded any patch)
-          - { goos: windows, goarch: '386', output: '386-go121', goversion: '1.21' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go121, goversion: '1.21' }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go121, goversion: '1.21' }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go121, goversion: '1.21' }
+          # - { goos: windows, goarch: '386', output: '386-go121', goversion: '1.21' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go121, goversion: '1.21' }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go121, goversion: '1.21' }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go121, goversion: '1.21' }
 
           # Go 1.20 is the last release that will run on any release of Windows 7, 8, Server 2008 and Server 2012. Go 1.21 will require at least Windows 10 or Server 2016.
-          - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
-          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go120, goversion: '1.20' }
-          - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go120, goversion: '1.20' }
-          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
+          # - { goos: windows, goarch: '386', output: '386-go120', goversion: '1.20' }
+          # - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1-go120, goversion: '1.20' }
+          # - { goos: windows, goarch: amd64, goamd64: v2, output: amd64-v2-go120, goversion: '1.20' }
+          # - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
 
           # Go 1.24 is the last release that will run on macOS 11 Big Sur. Go 1.25 will require macOS 12 Monterey or later.
-          - { goos: darwin, goarch: arm64, output: arm64-go124, goversion: '1.24' }
-          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1-go124, goversion: '1.24' }
-          - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2-go124, goversion: '1.24' }
-          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3-go124, goversion: '1.24' }
+          # - { goos: darwin, goarch: arm64, output: arm64-go124, goversion: '1.24' }
+          # - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1-go124, goversion: '1.24' }
+          # - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2-go124, goversion: '1.24' }
+          # - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3-go124, goversion: '1.24' }
 
           # Go 1.22 is the last release that will run on macOS 10.15 Catalina. Go 1.23 will require macOS 11 Big Sur or later.
-          - { goos: darwin, goarch: arm64, output: arm64-go122, goversion: '1.22' }
-          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1-go122, goversion: '1.22' }
-          - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2-go122, goversion: '1.22' }
-          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3-go122, goversion: '1.22' }
+          # - { goos: darwin, goarch: arm64, output: arm64-go122, goversion: '1.22' }
+          # - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1-go122, goversion: '1.22' }
+          # - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2-go122, goversion: '1.22' }
+          # - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3-go122, goversion: '1.22' }
 
           # Go 1.20 is the last release that will run on macOS 10.13 High Sierra or 10.14 Mojave. Go 1.21 will require macOS 10.15 Catalina or later.
-          - { goos: darwin, goarch: arm64, output: arm64-go120, goversion: '1.20' }
-          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1-go120, goversion: '1.20' }
-          - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2-go120, goversion: '1.20' }
-          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
+          # - { goos: darwin, goarch: arm64, output: arm64-go120, goversion: '1.20' }
+          # - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1-go120, goversion: '1.20' }
+          # - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2-go120, goversion: '1.20' }
+          # - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
 
           # Go 1.23 is the last release that requires Linux kernel version 2.6.32 or later. Go 1.24 will require Linux kernel version 3.2 or later.
-          - { goos: linux, goarch: '386', output: '386-go123', goversion: '1.23' }
-          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1-go123, goversion: '1.23', test: test }
-          - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2-go123, goversion: '1.23' }
-          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3-go123, goversion: '1.23' }
+          # - { goos: linux, goarch: '386', output: '386-go123', goversion: '1.23' }
+          # - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1-go123, goversion: '1.23', test: test }
+          # - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2-go123, goversion: '1.23' }
+          # - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3-go123, goversion: '1.23' }
 
           # only for test
-          - { goos: linux, goarch: '386', output: '386-go120', goversion: '1.20' }
-          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1-go120, goversion: '1.20', test: test }
-          - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2-go120, goversion: '1.20' }
-          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
+          # - { goos: linux, goarch: '386', output: '386-go120', goversion: '1.20' }
+          # - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1-go120, goversion: '1.20', test: test }
+          # - { goos: linux, goarch: amd64, goamd64: v2, output: amd64-v2-go120, goversion: '1.20' }
+          # - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
 
     steps:
     - uses: actions/checkout@v5
@@ -515,97 +515,97 @@ jobs:
           files: bin/*
           body_path: release.md
 
-  Docker:
-    if: ${{ !startsWith(github.event_name, 'pull_request') }}
-    permissions: write-all
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+  # Docker:
+  #   if: ${{ !startsWith(github.event_name, 'pull_request') }}
+  #   permissions: write-all
+  #   needs: [build]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v5
+  #       with:
+  #         fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
-        with:
-          path: bin/
-          merge-multiple: true
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         path: bin/
+  #         merge-multiple: true
 
-      - name: Display structure of downloaded files
-        run: ls -R
-        working-directory: bin
+  #     - name: Display structure of downloaded files
+  #       run: ls -R
+  #       working-directory: bin
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+  #     - name: Set up QEMU
+  #       uses: docker/setup-qemu-action@v3
 
-      - name: Setup Docker buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          version: latest
+  #     - name: Setup Docker buildx
+  #       uses: docker/setup-buildx-action@v3
+  #       with:
+  #         version: latest
       
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
-      - name: Extract Docker metadata
-        if: ${{ github.event_name != 'workflow_dispatch' }}
-        id: meta_alpha
-        uses: docker/metadata-action@v5
-        with:
-          images: '${{ env.REGISTRY }}/${{ github.repository }}'
+      # - name: Extract Docker metadata
+      #   if: ${{ github.event_name != 'workflow_dispatch' }}
+      #   id: meta_alpha
+      #   uses: docker/metadata-action@v5
+      #   with:
+      #     images: '${{ env.REGISTRY }}/${{ github.repository }}'
       
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
-      - name: Extract Docker metadata
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
-        id: meta_release
-        uses: docker/metadata-action@v5
-        with:
-          images: '${{ env.REGISTRY }}/${{ github.repository }}'
-          tags: |
-            ${{ github.event.inputs.version }}
-          flavor: |
-            latest=true
-          labels: org.opencontainers.image.version=${{ github.event.inputs.version }}
+      # - name: Extract Docker metadata
+      #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+      #   id: meta_release
+      #   uses: docker/metadata-action@v5
+      #   with:
+      #     images: '${{ env.REGISTRY }}/${{ github.repository }}'
+      #     tags: |
+      #       ${{ github.event.inputs.version }}
+      #     flavor: |
+      #       latest=true
+      #     labels: org.opencontainers.image.version=${{ github.event.inputs.version }}
       
-      - name: Show files
-        run: |
-          ls .
-          ls bin/
+      # - name: Show files
+      #   run: |
+      #     ls .
+      #     ls bin/
       
-      - name: login to docker REGISTRY
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      # - name: login to docker REGISTRY
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ${{ env.REGISTRY }}
+      #     username: ${{ secrets.DOCKER_HUB_USER }}
+      #     password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        if: ${{ github.event_name != 'workflow_dispatch' }}
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          platforms: |
-            linux/386
-            linux/amd64
-            linux/arm64
-            linux/arm/v7
-          tags: ${{ steps.meta_alpha.outputs.tags }}
-          labels: ${{ steps.meta_alpha.outputs.labels }}
+      # - name: Build and push Docker image
+      #   if: ${{ github.event_name != 'workflow_dispatch' }}
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: .
+      #     file: ./Dockerfile
+      #     push: ${{ github.event_name != 'pull_request' }}
+      #     platforms: |
+      #       linux/386
+      #       linux/amd64
+      #       linux/arm64
+      #       linux/arm/v7
+      #     tags: ${{ steps.meta_alpha.outputs.tags }}
+      #     labels: ${{ steps.meta_alpha.outputs.labels }}
       
-      - name: Build and push Docker image
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          platforms: |
-            linux/386
-            linux/amd64
-            linux/arm64
-            linux/arm/v7
-          tags: ${{ steps.meta_release.outputs.tags }}
-          labels: ${{ steps.meta_release.outputs.labels }}
+      # - name: Build and push Docker image
+      #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: .
+      #     file: ./Dockerfile
+      #     push: ${{ github.event_name != 'pull_request' }}
+      #     platforms: |
+      #       linux/386
+      #       linux/amd64
+      #       linux/arm64
+      #       linux/arm/v7
+      #     tags: ${{ steps.meta_release.outputs.tags }}
+      #     labels: ${{ steps.meta_release.outputs.labels }}

@@ -165,7 +165,9 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (net.Conn, error) {
 	}
 
 	if client.Addons != nil {
-		switch client.Addons.Flow {
+		// 适配xtls-rprx-vision-udp443，注释截取flow satrt
+		switch client.Addons.Flow[:16] {
+		// end
 		case XRV:
 			visionConn, err := vision.NewConn(c, conn, c.id)
 			if err != nil {
