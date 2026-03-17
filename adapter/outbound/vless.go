@@ -182,7 +182,7 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
         // 如果是 UDP 且端口是 443，拒绝连接
         if metadata.NetWork == C.UDP && metadata.DstPort == 443 {
 			// log.Infoln("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected, host: %s, destIp: %s", metadata.Host, metadata.DstIP)
-            return nil, errors.New("XTLS Vision Flow xtls-rprx-vision: UDP/443 rejected")
+            return nil, errors.New("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected")
         }
     }
 	// end

@@ -8,7 +8,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/buf"
 	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/log"
+	// "github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/vless/vision"
 
 	"github.com/gofrs/uuid/v5"
@@ -158,7 +158,7 @@ func (vc *Conn) NeedHandshake() bool {
 
 // newConn return a Conn instance
 func newConn(conn net.Conn, client *Client, dst *DstAddr) (net.Conn, error) {
-	log.Errorln("XTLS Vision Flow newConn, Flow: %s", client.Addons.Flow)
+	// log.Errorln("XTLS Vision Flow newConn, Flow: %s", client.Addons.Flow)
 	c := &Conn{
 		ExtendedConn: N.NewExtendedConn(conn),
 		id:           client.uuid,
@@ -173,7 +173,7 @@ func newConn(conn net.Conn, client *Client, dst *DstAddr) (net.Conn, error) {
 		switch client.Addons.Flow[:16] {
 		case XRV:
 			c.addons.Flow = XRV
-			log.Errorln("XTLS Vision Flow newConn after, Flow: %s", c.addons.Flow)
+			// log.Errorln("XTLS Vision Flow newConn after, Flow: %s", c.addons.Flow)
 			// end
 			visionConn, err := vision.NewConn(c, conn, c.id)
 			if err != nil {
