@@ -2,7 +2,6 @@ package outbound
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
