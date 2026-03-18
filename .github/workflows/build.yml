@@ -462,12 +462,12 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: Meta
-          fetch-depth: '0'
-          fetch-tags: 'true'
+      # - name: Checkout
+      #   uses: actions/checkout@v5
+      #   with:
+      #     ref: Meta
+      #     fetch-depth: '0'
+      #     fetch-tags: 'true'
 
       - name: Get tags
         run: |
@@ -475,18 +475,18 @@ jobs:
           git fetch --tags
           echo "PREVERSION=$(git describe --tags --abbrev=0 HEAD)" >> $GITHUB_ENV
 
-      - name: Force push Alpha branch to Meta
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git fetch origin Alpha:Alpha
-          git push origin Alpha:Meta --force
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Force push Alpha branch to Meta
+      #   run: |
+      #     git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      #     git config --global user.name "github-actions[bot]"
+      #     git fetch origin Alpha:Alpha
+      #     git push origin Alpha:Meta --force
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag the commit on Alpha
+      - name: Tag the commit on mMate
         run: |
-          git checkout Alpha 
+          git checkout mMate 
           git tag ${{ github.event.inputs.version }}
           git push origin ${{ github.event.inputs.version }}
         env:
