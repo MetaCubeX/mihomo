@@ -462,12 +462,12 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-      # - name: Checkout
-      #   uses: actions/checkout@v5
-      #   with:
-      #     ref: Meta
-      #     fetch-depth: '0'
-      #     fetch-tags: 'true'
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: mMeta
+          fetch-depth: '0'
+          fetch-tags: 'true'
 
       - name: Get tags
         run: |
