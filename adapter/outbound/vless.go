@@ -176,17 +176,6 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			return
 		}
 	}
-
-	// xtls-rprx-vision时禁用443 udp start
-	if v.option.Flow == vless.XRV {
-        // 如果是 UDP 且端口是 443，拒绝连接
-        if metadata.NetWork == C.UDP && metadata.DstPort == 443 {
-			// log.Infoln("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected, host: %s, destIp: %s", metadata.Host, metadata.DstIP)
-            return nil, errors.New("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected")
-        }
-    }
-	// end
-
 	if metadata.NetWork == C.UDP {
 		if v.option.PacketAddr {
 			metadata = &C.Metadata{
@@ -268,7 +257,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
 	// xtls-rprx-vision时禁用443/udp start
 	if v.option.Flow == vless.XRV && metadata.NetWork == C.UDP && metadata.DstPort == 443 {
-		log.Errorln("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected, Host: %s", metadata.Host)
+		log.Infoln("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected, Host: %s", metadata.Host)
         r := NewReject()
 		return r.ListenPacketContext(ctx, metadata)
     }
