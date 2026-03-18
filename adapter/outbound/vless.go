@@ -14,7 +14,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
-	// "github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/vless"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
@@ -266,6 +266,13 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 
 // ListenPacketContext implements C.ProxyAdapter
 func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	// xtls-rprx-vision时禁用443/udp start
+	if v.option.Flow == vless.XRV && metadata.NetWork == C.UDP && metadata.DstPort == 443 {
+		log.Errorln("XTLS Vision Flow xtls-rprx-vision UDP/443 rejected, Host: %s", metadata.Host)
+        r := NewReject()
+		return r.ListenPacketContext(ctx, metadata)
+    }
+	// end
 	if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
