@@ -484,9 +484,9 @@ jobs:
       #   env:
       #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag the commit on mMate
+      - name: Tag the commit on mMeta
         run: |
-          git checkout mMate 
+          git checkout mMeta 
           git tag ${{ github.event.inputs.version }}
           git push origin ${{ github.event.inputs.version }}
         env:
