@@ -14,6 +14,11 @@ import (
 	"github.com/miekg/dns"
 )
 
+// context key for tracking DNS resolution chain to detect loops
+type ctxKey struct{}
+
+var resolvingHostsKey = ctxKey{}
+
 var (
 	// DefaultResolver aim to resolve ip
 	DefaultResolver Resolver
@@ -42,7 +47,38 @@ var (
 	ErrIPNotFound   = errors.New("couldn't find ip")
 	ErrIPVersion    = errors.New("ip version error")
 	ErrIPv6Disabled = errors.New("ipv6 disabled")
+	ErrDNSLoop      = errors.New("dns resolution loop detected")
 )
+
+// checkDNSLoop checks if the host is already being resolved in the current context chain
+// to prevent infinite recursion when proxy-server-nameserver creates a circular dependency
+func checkDNSLoop(ctx context.Context, host string) error {
+	hosts, ok := ctx.Value(resolvingHostsKey).(map[string]struct{})
+	if !ok {
+		return nil
+	}
+	if _, exists := hosts[host]; exists {
+		return fmt.Errorf("%w: host %s is already being resolved", ErrDNSLoop, host)
+	}
+	return nil
+}
+
+// withResolvingHost returns a new context with the host added to the resolution chain
+func withResolvingHost(ctx context.Context, host string) context.Context {
+	hosts, ok := ctx.Value(resolvingHostsKey).(map[string]struct{})
+	if !ok {
+		hosts = make(map[string]struct{})
+	} else {
+		// Create a copy to avoid modifying the original
+		newHosts := make(map[string]struct{}, len(hosts)+1)
+		for h := range hosts {
+			newHosts[h] = struct{}{}
+		}
+		hosts = newHosts
+	}
+	hosts[host] = struct{}{}
+	return context.WithValue(ctx, resolvingHostsKey, hosts)
+}
 
 type Resolver interface {
 	LookupIP(ctx context.Context, host string) (ips []netip.Addr, err error)
@@ -57,6 +93,11 @@ type Resolver interface {
 
 // LookupIPv4WithResolver same as LookupIPv4, but with a resolver
 func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]netip.Addr, error) {
+	// Check for DNS resolution loop
+	if err := checkDNSLoop(ctx, host); err != nil {
+		return nil, err
+	}
+
 	if node, ok := DefaultHosts.Search(host, false); ok {
 		if addrs := utils.Filter(node.IPs, func(ip netip.Addr) bool {
 			return ip.Is4()
@@ -73,6 +114,9 @@ func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		}
 		return []netip.Addr{}, ErrIPVersion
 	}
+
+	// Add host to resolution chain before delegating to resolver
+	ctx = withResolvingHost(ctx, host)
 
 	if r != nil && r.Invalid() {
 		return r.LookupIPv4(ctx, host)
@@ -108,6 +152,11 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		return nil, ErrIPv6Disabled
 	}
 
+	// Check for DNS resolution loop
+	if err := checkDNSLoop(ctx, host); err != nil {
+		return nil, err
+	}
+
 	if node, ok := DefaultHosts.Search(host, false); ok {
 		if addrs := utils.Filter(node.IPs, func(ip netip.Addr) bool {
 			return ip.Is6()
@@ -123,6 +172,9 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		}
 		return nil, ErrIPVersion
 	}
+
+	// Add host to resolution chain before delegating to resolver
+	ctx = withResolvingHost(ctx, host)
 
 	if r != nil && r.Invalid() {
 		return r.LookupIPv6(ctx, host)
@@ -153,9 +205,17 @@ func ResolveIPv6(ctx context.Context, host string) (netip.Addr, error) {
 
 // LookupIPWithResolver same as LookupIP, but with a resolver
 func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip.Addr, error) {
+	// Check for DNS resolution loop
+	if err := checkDNSLoop(ctx, host); err != nil {
+		return nil, err
+	}
+
 	if node, ok := DefaultHosts.Search(host, false); ok {
 		return node.IPs, nil
 	}
+
+	// Add host to resolution chain before delegating to resolver
+	ctx = withResolvingHost(ctx, host)
 
 	if r != nil && r.Invalid() {
 		if DisableIPv6 {
