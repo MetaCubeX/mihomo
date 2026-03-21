@@ -1,0 +1,8 @@
+{
+  "listen": ":10002",
+  "cert": "/home/ubuntu/my.crt",
+  "key": "/home/ubuntu/my.key",
+  "obfs": "fuck me till the daylight",
+  "up_mbps": 100,
+  "down_mbps": 100
+}

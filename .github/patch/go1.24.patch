@@ -1,0 +1,657 @@
+Subject: [PATCH] Revert "runtime: always use LoadLibraryEx to load system libraries"
+Revert "syscall: remove Windows 7 console handle workaround"
+Revert "net: remove sysSocket fallback for Windows 7"
+Revert "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
+---
+Index: src/crypto/internal/sysrand/rand_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/crypto/internal/sysrand/rand_windows.go b/src/crypto/internal/sysrand/rand_windows.go
+--- a/src/crypto/internal/sysrand/rand_windows.go	(revision 3901409b5d0fb7c85a3e6730a59943cc93b2835c)
++++ b/src/crypto/internal/sysrand/rand_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
+@@ -7,5 +7,26 @@
+ import "internal/syscall/windows"
+ 
+ func read(b []byte) error {
+-	return windows.ProcessPrng(b)
++	// RtlGenRandom only returns 1<<32-1 bytes at a time. We only read at
++	// most 1<<31-1 bytes at a time so that  this works the same on 32-bit
++	// and 64-bit systems.
++	return batched(windows.RtlGenRandom, 1<<31-1)(b)
++}
++
++// batched returns a function that calls f to populate a []byte by chunking it
++// into subslices of, at most, readMax bytes.
++func batched(f func([]byte) error, readMax int) func([]byte) error {
++	return func(out []byte) error {
++		for len(out) > 0 {
++			read := len(out)
++			if read > readMax {
++				read = readMax
++			}
++			if err := f(out[:read]); err != nil {
++				return err
++			}
++			out = out[read:]
++		}
++		return nil
++	}
+ }
+Index: src/crypto/rand/rand.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/crypto/rand/rand.go b/src/crypto/rand/rand.go
+--- a/src/crypto/rand/rand.go	(revision 3901409b5d0fb7c85a3e6730a59943cc93b2835c)
++++ b/src/crypto/rand/rand.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
+@@ -22,7 +22,7 @@
+ //   - On legacy Linux (< 3.17), Reader opens /dev/urandom on first use.
+ //   - On macOS, iOS, and OpenBSD Reader, uses arc4random_buf(3).
+ //   - On NetBSD, Reader uses the kern.arandom sysctl.
+-//   - On Windows, Reader uses the ProcessPrng API.
++//   - On Windows systems, Reader uses the RtlGenRandom API.
+ //   - On js/wasm, Reader uses the Web Crypto API.
+ //   - On wasip1/wasm, Reader uses random_get.
+ //
+Index: src/internal/syscall/windows/syscall_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/internal/syscall/windows/syscall_windows.go b/src/internal/syscall/windows/syscall_windows.go
+--- a/src/internal/syscall/windows/syscall_windows.go	(revision 3901409b5d0fb7c85a3e6730a59943cc93b2835c)
++++ b/src/internal/syscall/windows/syscall_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
+@@ -416,7 +416,7 @@
+ //sys	DestroyEnvironmentBlock(block *uint16) (err error) = userenv.DestroyEnvironmentBlock
+ //sys	CreateEvent(eventAttrs *SecurityAttributes, manualReset uint32, initialState uint32, name *uint16) (handle syscall.Handle, err error) = kernel32.CreateEventW
+ 
+-//sys	ProcessPrng(buf []byte) (err error) = bcryptprimitives.ProcessPrng
++//sys	RtlGenRandom(buf []byte) (err error) = advapi32.SystemFunction036
+ 
+ type FILE_ID_BOTH_DIR_INFO struct {
+ 	NextEntryOffset uint32
+Index: src/internal/syscall/windows/zsyscall_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/internal/syscall/windows/zsyscall_windows.go b/src/internal/syscall/windows/zsyscall_windows.go
+--- a/src/internal/syscall/windows/zsyscall_windows.go	(revision 3901409b5d0fb7c85a3e6730a59943cc93b2835c)
++++ b/src/internal/syscall/windows/zsyscall_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
+@@ -38,7 +38,6 @@
+ 
+ var (
+ 	modadvapi32         = syscall.NewLazyDLL(sysdll.Add("advapi32.dll"))
+-	modbcryptprimitives = syscall.NewLazyDLL(sysdll.Add("bcryptprimitives.dll"))
+ 	modiphlpapi         = syscall.NewLazyDLL(sysdll.Add("iphlpapi.dll"))
+ 	modkernel32         = syscall.NewLazyDLL(sysdll.Add("kernel32.dll"))
+ 	modnetapi32         = syscall.NewLazyDLL(sysdll.Add("netapi32.dll"))
+@@ -63,7 +62,7 @@
+ 	procQueryServiceStatus                = modadvapi32.NewProc("QueryServiceStatus")
+ 	procRevertToSelf                      = modadvapi32.NewProc("RevertToSelf")
+ 	procSetTokenInformation               = modadvapi32.NewProc("SetTokenInformation")
+-	procProcessPrng                       = modbcryptprimitives.NewProc("ProcessPrng")
++	procSystemFunction036                 = modadvapi32.NewProc("SystemFunction036")
+ 	procGetAdaptersAddresses              = modiphlpapi.NewProc("GetAdaptersAddresses")
+ 	procCreateEventW                      = modkernel32.NewProc("CreateEventW")
+ 	procGetACP                            = modkernel32.NewProc("GetACP")
+@@ -236,12 +235,12 @@
+ 	return
+ }
+ 
+-func ProcessPrng(buf []byte) (err error) {
++func RtlGenRandom(buf []byte) (err error) {
+ 	var _p0 *byte
+ 	if len(buf) > 0 {
+ 		_p0 = &buf[0]
+ 	}
+-	r1, _, e1 := syscall.Syscall(procProcessPrng.Addr(), 2, uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), 0)
++	r1, _, e1 := syscall.Syscall(procSystemFunction036.Addr(), 2, uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), 0)
+ 	if r1 == 0 {
+ 		err = errnoErr(e1)
+ 	}
+Index: src/runtime/os_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
+--- a/src/runtime/os_windows.go	(revision 3901409b5d0fb7c85a3e6730a59943cc93b2835c)
++++ b/src/runtime/os_windows.go	(revision ac3e93c061779dfefc0dd13a5b6e6f764a25621e)
+@@ -40,8 +40,8 @@
+ //go:cgo_import_dynamic runtime._GetSystemInfo GetSystemInfo%1 "kernel32.dll"
+ //go:cgo_import_dynamic runtime._GetThreadContext GetThreadContext%2 "kernel32.dll"
+ //go:cgo_import_dynamic runtime._SetThreadContext SetThreadContext%2 "kernel32.dll"
+-//go:cgo_import_dynamic runtime._LoadLibraryExW LoadLibraryExW%3 "kernel32.dll"
+ //go:cgo_import_dynamic runtime._LoadLibraryW LoadLibraryW%1 "kernel32.dll"
++//go:cgo_import_dynamic runtime._LoadLibraryA LoadLibraryA%1 "kernel32.dll"
+ //go:cgo_import_dynamic runtime._PostQueuedCompletionStatus PostQueuedCompletionStatus%4 "kernel32.dll"
+ //go:cgo_import_dynamic runtime._QueryPerformanceCounter QueryPerformanceCounter%1 "kernel32.dll"
+ //go:cgo_import_dynamic runtime._QueryPerformanceFrequency QueryPerformanceFrequency%1 "kernel32.dll"
+@@ -75,7 +75,6 @@
+ 	// Following syscalls are available on every Windows PC.
+ 	// All these variables are set by the Windows executable
+ 	// loader before the Go program starts.
+-	_AddVectoredContinueHandler,
+ 	_AddVectoredExceptionHandler,
+ 	_CloseHandle,
+ 	_CreateEventA,
+@@ -98,8 +97,8 @@
+ 	_GetSystemInfo,
+ 	_GetThreadContext,
+ 	_SetThreadContext,
+-	_LoadLibraryExW,
+ 	_LoadLibraryW,
++	_LoadLibraryA,
+ 	_PostQueuedCompletionStatus,
+ 	_QueryPerformanceCounter,
+ 	_QueryPerformanceFrequency,
+@@ -128,8 +127,23 @@
+ 	_WriteFile,
+ 	_ stdFunction
+ 
+-	// Use ProcessPrng to generate cryptographically random data.
+-	_ProcessPrng stdFunction
++	// Following syscalls are only available on some Windows PCs.
++	// We will load syscalls, if available, before using them.
++	_AddDllDirectory,
++	_AddVectoredContinueHandler,
++	_LoadLibraryExA,
++	_LoadLibraryExW,
++	_ stdFunction
++
++	// Use RtlGenRandom to generate cryptographically random data.
++	// This approach has been recommended by Microsoft (see issue
++	// 15589 for details).
++	// The RtlGenRandom is not listed in advapi32.dll, instead
++	// RtlGenRandom function can be found by searching for SystemFunction036.
++	// Also some versions of Mingw cannot link to SystemFunction036
++	// when building executable as Cgo. So load SystemFunction036
++	// manually during runtime startup.
++	_RtlGenRandom stdFunction
+ 
+ 	// Load ntdll.dll manually during startup, otherwise Mingw
+ 	// links wrong printf function to cgo executable (see issue
+@@ -146,13 +160,6 @@
+ 	_ stdFunction
+ )
+ 
+-var (
+-	bcryptprimitivesdll = [...]uint16{'b', 'c', 'r', 'y', 'p', 't', 'p', 'r', 'i', 'm', 'i', 't', 'i', 'v', 'e', 's', '.', 'd', 'l', 'l', 0}
+-	ntdlldll            = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
+-	powrprofdll         = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
+-	winmmdll            = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
+-)
+-
+ // Function to be called by windows CreateThread
+ // to start new os thread.
+ func tstart_stdcall(newm *m)
+@@ -245,8 +252,18 @@
+ 	return unsafe.String(&sysDirectory[0], sysDirectoryLen)
+ }
+ 
+-func windowsLoadSystemLib(name []uint16) uintptr {
+-	return stdcall3(_LoadLibraryExW, uintptr(unsafe.Pointer(&name[0])), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
++//go:linkname syscall_getSystemDirectory syscall.getSystemDirectory
++func syscall_getSystemDirectory() string {
++	return unsafe.String(&sysDirectory[0], sysDirectoryLen)
++}
++
++func windowsLoadSystemLib(name []byte) uintptr {
++	if useLoadLibraryEx {
++		return stdcall3(_LoadLibraryExA, uintptr(unsafe.Pointer(&name[0])), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
++	} else {
++		absName := append(sysDirectory[:sysDirectoryLen], name...)
++		return stdcall1(_LoadLibraryA, uintptr(unsafe.Pointer(&absName[0])))
++	}
+ }
+ 
+ //go:linkname windows_QueryPerformanceCounter internal/syscall/windows.QueryPerformanceCounter
+@@ -264,13 +281,28 @@
+ }
+ 
+ func loadOptionalSyscalls() {
+-	bcryptPrimitives := windowsLoadSystemLib(bcryptprimitivesdll[:])
+-	if bcryptPrimitives == 0 {
+-		throw("bcryptprimitives.dll not found")
++	var kernel32dll = []byte("kernel32.dll\000")
++	k32 := stdcall1(_LoadLibraryA, uintptr(unsafe.Pointer(&kernel32dll[0])))
++	if k32 == 0 {
++		throw("kernel32.dll not found")
+ 	}
+-	_ProcessPrng = windowsFindfunc(bcryptPrimitives, []byte("ProcessPrng\000"))
++	_AddDllDirectory = windowsFindfunc(k32, []byte("AddDllDirectory\000"))
++	_AddVectoredContinueHandler = windowsFindfunc(k32, []byte("AddVectoredContinueHandler\000"))
++	_LoadLibraryExA = windowsFindfunc(k32, []byte("LoadLibraryExA\000"))
++	_LoadLibraryExW = windowsFindfunc(k32, []byte("LoadLibraryExW\000"))
++	useLoadLibraryEx = (_LoadLibraryExW != nil && _LoadLibraryExA != nil && _AddDllDirectory != nil)
++
++	initSysDirectory()
+ 
+-	n32 := windowsLoadSystemLib(ntdlldll[:])
++	var advapi32dll = []byte("advapi32.dll\000")
++	a32 := windowsLoadSystemLib(advapi32dll)
++	if a32 == 0 {
++		throw("advapi32.dll not found")
++	}
++	_RtlGenRandom = windowsFindfunc(a32, []byte("SystemFunction036\000"))
++
++	var ntdll = []byte("ntdll.dll\000")
++	n32 := windowsLoadSystemLib(ntdll)
+ 	if n32 == 0 {
+ 		throw("ntdll.dll not found")
+ 	}
+@@ -299,7 +331,7 @@
+ 		context  uintptr
+ 	}
+ 
+-	powrprof := windowsLoadSystemLib(powrprofdll[:])
++	powrprof := windowsLoadSystemLib([]byte("powrprof.dll\000"))
+ 	if powrprof == 0 {
+ 		return // Running on Windows 7, where we don't need it anyway.
+ 	}
+@@ -358,6 +390,22 @@
+ // in sys_windows_386.s and sys_windows_amd64.s:
+ func getlasterror() uint32
+ 
++// When loading DLLs, we prefer to use LoadLibraryEx with
++// LOAD_LIBRARY_SEARCH_* flags, if available. LoadLibraryEx is not
++// available on old Windows, though, and the LOAD_LIBRARY_SEARCH_*
++// flags are not available on some versions of Windows without a
++// security patch.
++//
++// https://msdn.microsoft.com/en-us/library/ms684179(v=vs.85).aspx says:
++// "Windows 7, Windows Server 2008 R2, Windows Vista, and Windows
++// Server 2008: The LOAD_LIBRARY_SEARCH_* flags are available on
++// systems that have KB2533623 installed. To determine whether the
++// flags are available, use GetProcAddress to get the address of the
++// AddDllDirectory, RemoveDllDirectory, or SetDefaultDllDirectories
++// function. If GetProcAddress succeeds, the LOAD_LIBRARY_SEARCH_*
++// flags can be used with LoadLibraryEx."
++var useLoadLibraryEx bool
++
+ var timeBeginPeriodRetValue uint32
+ 
+ // osRelaxMinNS indicates that sysmon shouldn't osRelax if the next
+@@ -431,7 +479,8 @@
+ 		// Only load winmm.dll if we need it.
+ 		// This avoids a dependency on winmm.dll for Go programs
+ 		// that run on new Windows versions.
+-		m32 := windowsLoadSystemLib(winmmdll[:])
++		var winmmdll = []byte("winmm.dll\000")
++		m32 := windowsLoadSystemLib(winmmdll)
+ 		if m32 == 0 {
+ 			print("runtime: LoadLibraryExW failed; errno=", getlasterror(), "\n")
+ 			throw("winmm.dll not found")
+@@ -472,6 +521,28 @@
+ 	canUseLongPaths = true
+ }
+ 
++var osVersionInfo struct {
++	majorVersion uint32
++	minorVersion uint32
++	buildNumber  uint32
++}
++
++func initOsVersionInfo() {
++	info := _OSVERSIONINFOW{}
++	info.osVersionInfoSize = uint32(unsafe.Sizeof(info))
++	stdcall1(_RtlGetVersion, uintptr(unsafe.Pointer(&info)))
++	osVersionInfo.majorVersion = info.majorVersion
++	osVersionInfo.minorVersion = info.minorVersion
++	osVersionInfo.buildNumber = info.buildNumber
++}
++
++//go:linkname rtlGetNtVersionNumbers syscall.rtlGetNtVersionNumbers
++func rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32) {
++	*majorVersion = osVersionInfo.majorVersion
++	*minorVersion = osVersionInfo.minorVersion
++	*buildNumber = osVersionInfo.buildNumber
++}
++
+ func osinit() {
+ 	asmstdcallAddr = unsafe.Pointer(abi.FuncPCABI0(asmstdcall))
+ 
+@@ -484,8 +555,8 @@
+ 	initHighResTimer()
+ 	timeBeginPeriodRetValue = osRelax(false)
+ 
+-	initSysDirectory()
+ 	initLongPathSupport()
++	initOsVersionInfo()
+ 
+ 	ncpu = getproccount()
+ 
+@@ -501,7 +572,7 @@
+ //go:nosplit
+ func readRandom(r []byte) int {
+ 	n := 0
+-	if stdcall2(_ProcessPrng, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
++	if stdcall2(_RtlGenRandom, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
+ 		n = len(r)
+ 	}
+ 	return n
+Index: src/net/hook_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/net/hook_windows.go b/src/net/hook_windows.go
+--- a/src/net/hook_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
++++ b/src/net/hook_windows.go	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
+@@ -13,6 +13,7 @@
+ 	hostsFilePath = windows.GetSystemDirectory() + "/Drivers/etc/hosts"
+ 
+ 	// Placeholders for socket system calls.
++	socketFunc    func(int, int, int) (syscall.Handle, error)                                                 = syscall.Socket
+ 	wsaSocketFunc func(int32, int32, int32, *syscall.WSAProtocolInfo, uint32, uint32) (syscall.Handle, error) = windows.WSASocket
+ 	connectFunc   func(syscall.Handle, syscall.Sockaddr) error                                                = syscall.Connect
+ 	listenFunc    func(syscall.Handle, int) error                                                             = syscall.Listen
+Index: src/net/internal/socktest/main_test.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/net/internal/socktest/main_test.go b/src/net/internal/socktest/main_test.go
+--- a/src/net/internal/socktest/main_test.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
++++ b/src/net/internal/socktest/main_test.go	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
+@@ -2,7 +2,7 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+ 
+-//go:build !js && !plan9 && !wasip1 && !windows
++//go:build !js && !plan9 && !wasip1
+ 
+ package socktest_test
+ 
+Index: src/net/internal/socktest/main_windows_test.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/net/internal/socktest/main_windows_test.go b/src/net/internal/socktest/main_windows_test.go
+new file mode 100644
+--- /dev/null	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
++++ b/src/net/internal/socktest/main_windows_test.go	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
+@@ -0,0 +1,22 @@
++// Copyright 2015 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package socktest_test
++
++import "syscall"
++
++var (
++	socketFunc func(int, int, int) (syscall.Handle, error)
++	closeFunc  func(syscall.Handle) error
++)
++
++func installTestHooks() {
++	socketFunc = sw.Socket
++	closeFunc = sw.Closesocket
++}
++
++func uninstallTestHooks() {
++	socketFunc = syscall.Socket
++	closeFunc = syscall.Closesocket
++}
+Index: src/net/internal/socktest/sys_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/net/internal/socktest/sys_windows.go b/src/net/internal/socktest/sys_windows.go
+--- a/src/net/internal/socktest/sys_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
++++ b/src/net/internal/socktest/sys_windows.go	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
+@@ -9,6 +9,38 @@
+ 	"syscall"
+ )
+ 
++// Socket wraps [syscall.Socket].
++func (sw *Switch) Socket(family, sotype, proto int) (s syscall.Handle, err error) {
++	sw.once.Do(sw.init)
++
++	so := &Status{Cookie: cookie(family, sotype, proto)}
++	sw.fmu.RLock()
++	f, _ := sw.fltab[FilterSocket]
++	sw.fmu.RUnlock()
++
++	af, err := f.apply(so)
++	if err != nil {
++		return syscall.InvalidHandle, err
++	}
++	s, so.Err = syscall.Socket(family, sotype, proto)
++	if err = af.apply(so); err != nil {
++		if so.Err == nil {
++			syscall.Closesocket(s)
++		}
++		return syscall.InvalidHandle, err
++	}
++
++	sw.smu.Lock()
++	defer sw.smu.Unlock()
++	if so.Err != nil {
++		sw.stats.getLocked(so.Cookie).OpenFailed++
++		return syscall.InvalidHandle, so.Err
++	}
++	nso := sw.addLocked(s, family, sotype, proto)
++	sw.stats.getLocked(nso.Cookie).Opened++
++	return s, nil
++}
++
+ // WSASocket wraps [syscall.WSASocket].
+ func (sw *Switch) WSASocket(family, sotype, proto int32, protinfo *syscall.WSAProtocolInfo, group uint32, flags uint32) (s syscall.Handle, err error) {
+ 	sw.once.Do(sw.init)
+Index: src/net/main_windows_test.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/net/main_windows_test.go b/src/net/main_windows_test.go
+--- a/src/net/main_windows_test.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
++++ b/src/net/main_windows_test.go	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
+@@ -8,6 +8,7 @@
+ 
+ var (
+ 	// Placeholders for saving original socket system calls.
++	origSocket      = socketFunc
+ 	origWSASocket   = wsaSocketFunc
+ 	origClosesocket = poll.CloseFunc
+ 	origConnect     = connectFunc
+@@ -17,6 +18,7 @@
+ )
+ 
+ func installTestHooks() {
++	socketFunc = sw.Socket
+ 	wsaSocketFunc = sw.WSASocket
+ 	poll.CloseFunc = sw.Closesocket
+ 	connectFunc = sw.Connect
+@@ -26,6 +28,7 @@
+ }
+ 
+ func uninstallTestHooks() {
++	socketFunc = origSocket
+ 	wsaSocketFunc = origWSASocket
+ 	poll.CloseFunc = origClosesocket
+ 	connectFunc = origConnect
+Index: src/net/sock_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/net/sock_windows.go b/src/net/sock_windows.go
+--- a/src/net/sock_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
++++ b/src/net/sock_windows.go	(revision 7b1fd7d39c6be0185fbe1d929578ab372ac5c632)
+@@ -20,6 +20,21 @@
+ func sysSocket(family, sotype, proto int) (syscall.Handle, error) {
+ 	s, err := wsaSocketFunc(int32(family), int32(sotype), int32(proto),
+ 		nil, 0, windows.WSA_FLAG_OVERLAPPED|windows.WSA_FLAG_NO_HANDLE_INHERIT)
++	if err == nil {
++		return s, nil
++	}
++	// WSA_FLAG_NO_HANDLE_INHERIT flag is not supported on some
++	// old versions of Windows, see
++	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms742212(v=vs.85).aspx
++	// for details. Just use syscall.Socket, if windows.WSASocket failed.
++
++	// See ../syscall/exec_unix.go for description of ForkLock.
++	syscall.ForkLock.RLock()
++	s, err = socketFunc(family, sotype, proto)
++	if err == nil {
++		syscall.CloseOnExec(s)
++	}
++	syscall.ForkLock.RUnlock()
+ 	if err != nil {
+ 		return syscall.InvalidHandle, os.NewSyscallError("socket", err)
+ 	}
+Index: src/syscall/exec_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
+--- a/src/syscall/exec_windows.go	(revision 2a406dc9f1ea7323d6ca9fccb2fe9ddebb6b1cc8)
++++ b/src/syscall/exec_windows.go	(revision 979d6d8bab3823ff572ace26767fd2ce3cf351ae)
+@@ -14,7 +14,6 @@
+ 	"unsafe"
+ )
+ 
+-// ForkLock is not used on Windows.
+ var ForkLock sync.RWMutex
+ 
+ // EscapeArg rewrites command line argument s as prescribed
+@@ -254,6 +253,9 @@
+ var zeroProcAttr ProcAttr
+ var zeroSysProcAttr SysProcAttr
+ 
++//go:linkname rtlGetNtVersionNumbers
++func rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32)
++
+ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle uintptr, err error) {
+ 	if len(argv0) == 0 {
+ 		return 0, 0, EWINDOWS
+@@ -317,6 +319,17 @@
+ 		}
+ 	}
+ 
++	var maj, min, build uint32
++	rtlGetNtVersionNumbers(&maj, &min, &build)
++	isWin7 := maj < 6 || (maj == 6 && min <= 1)
++	// NT kernel handles are divisible by 4, with the bottom 3 bits left as
++	// a tag. The fully set tag correlates with the types of handles we're
++	// concerned about here.  Except, the kernel will interpret some
++	// special handle values, like -1, -2, and so forth, so kernelbase.dll
++	// checks to see that those bottom three bits are checked, but that top
++	// bit is not checked.
++	isLegacyWin7ConsoleHandle := func(handle Handle) bool { return isWin7 && handle&0x10000003 == 3 }
++
+ 	p, _ := GetCurrentProcess()
+ 	parentProcess := p
+ 	if sys.ParentProcess != 0 {
+@@ -325,7 +338,15 @@
+ 	fd := make([]Handle, len(attr.Files))
+ 	for i := range attr.Files {
+ 		if attr.Files[i] > 0 {
+-			err := DuplicateHandle(p, Handle(attr.Files[i]), parentProcess, &fd[i], 0, true, DUPLICATE_SAME_ACCESS)
++			destinationProcessHandle := parentProcess
++
++			// On Windows 7, console handles aren't real handles, and can only be duplicated
++			// into the current process, not a parent one, which amounts to the same thing.
++			if parentProcess != p && isLegacyWin7ConsoleHandle(Handle(attr.Files[i])) {
++				destinationProcessHandle = p
++			}
++
++			err := DuplicateHandle(p, Handle(attr.Files[i]), destinationProcessHandle, &fd[i], 0, true, DUPLICATE_SAME_ACCESS)
+ 			if err != nil {
+ 				return 0, 0, err
+ 			}
+@@ -356,6 +377,14 @@
+ 
+ 	fd = append(fd, sys.AdditionalInheritedHandles...)
+ 
++	// On Windows 7, console handles aren't real handles, so don't pass them
++	// through to PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
++	for i := range fd {
++		if isLegacyWin7ConsoleHandle(fd[i]) {
++			fd[i] = 0
++		}
++	}
++
+ 	// The presence of a NULL handle in the list is enough to cause PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+ 	// to treat the entire list as empty, so remove NULL handles.
+ 	j := 0
+Index: src/runtime/syscall_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/runtime/syscall_windows.go b/src/runtime/syscall_windows.go
+--- a/src/runtime/syscall_windows.go	(revision 979d6d8bab3823ff572ace26767fd2ce3cf351ae)
++++ b/src/runtime/syscall_windows.go	(revision ac3e93c061779dfefc0dd13a5b6e6f764a25621e)
+@@ -413,10 +413,20 @@
+ 
+ const _LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800
+ 
++// When available, this function will use LoadLibraryEx with the filename
++// parameter and the important SEARCH_SYSTEM32 argument. But on systems that
++// do not have that option, absoluteFilepath should contain a fallback
++// to the full path inside of system32 for use with vanilla LoadLibrary.
++//
+ //go:linkname syscall_loadsystemlibrary syscall.loadsystemlibrary
+-func syscall_loadsystemlibrary(filename *uint16) (handle, err uintptr) {
+-	handle, _, err = syscall_SyscallN(uintptr(unsafe.Pointer(_LoadLibraryExW)), uintptr(unsafe.Pointer(filename)), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
++func syscall_loadsystemlibrary(filename *uint16, absoluteFilepath *uint16) (handle, err uintptr) {
++	if useLoadLibraryEx {
++		handle, _, err = syscall_SyscallN(uintptr(unsafe.Pointer(_LoadLibraryExW)), uintptr(unsafe.Pointer(filename)), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
++	} else {
++		handle, _, err = syscall_SyscallN(uintptr(unsafe.Pointer(_LoadLibraryW)), uintptr(unsafe.Pointer(absoluteFilepath)))
++	}
+ 	KeepAlive(filename)
++	KeepAlive(absoluteFilepath)
+ 	if handle != 0 {
+ 		err = 0
+ 	}
+Index: src/syscall/dll_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/syscall/dll_windows.go b/src/syscall/dll_windows.go
+--- a/src/syscall/dll_windows.go	(revision 979d6d8bab3823ff572ace26767fd2ce3cf351ae)
++++ b/src/syscall/dll_windows.go	(revision ac3e93c061779dfefc0dd13a5b6e6f764a25621e)
+@@ -45,7 +45,7 @@
+ //go:noescape
+ func SyscallN(trap uintptr, args ...uintptr) (r1, r2 uintptr, err Errno)
+ func loadlibrary(filename *uint16) (handle uintptr, err Errno)
+-func loadsystemlibrary(filename *uint16) (handle uintptr, err Errno)
++func loadsystemlibrary(filename *uint16, absoluteFilepath *uint16) (handle uintptr, err Errno)
+ func getprocaddress(handle uintptr, procname *uint8) (proc uintptr, err Errno)
+ 
+ // A DLL implements access to a single DLL.
+@@ -54,6 +54,9 @@
+ 	Handle Handle
+ }
+ 
++//go:linkname getSystemDirectory
++func getSystemDirectory() string // Implemented in runtime package.
++
+ // LoadDLL loads the named DLL file into memory.
+ //
+ // If name is not an absolute path and is not a known system DLL used by
+@@ -70,7 +73,11 @@
+ 	var h uintptr
+ 	var e Errno
+ 	if sysdll.IsSystemDLL[name] {
+-		h, e = loadsystemlibrary(namep)
++		absoluteFilepathp, err := UTF16PtrFromString(getSystemDirectory() + name)
++		if err != nil {
++			return nil, err
++		}
++		h, e = loadsystemlibrary(namep, absoluteFilepathp)
+ 	} else {
+ 		h, e = loadlibrary(namep)
+ 	}

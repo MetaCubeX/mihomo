@@ -1,0 +1,27 @@
+{
+    "inbounds": [
+        {
+            "port": 10002,
+            "listen": "0.0.0.0",
+            "protocol": "shadowsocks",
+            "settings": {
+                "network": "tcp,udp",
+                "clients": [
+                    {
+                        "method": "aes-128-gcm",
+                        "level": 0,
+                        "password": "FzcLbKs2dY9mhL"
+                    }
+                ]
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "freedom"
+        }
+    ],
+    "log": {
+        "loglevel": "debug"
+    }
+}

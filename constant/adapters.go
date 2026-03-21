@@ -1,0 +1,333 @@
+package constant
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/netip"
+	"sync"
+	"time"
+
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/dialer"
+)
+
+// Adapter Type
+const (
+	Direct AdapterType = iota
+	Reject
+	RejectDrop
+	Compatible
+	Pass
+	Dns
+
+	Relay
+	Selector
+	Fallback
+	URLTest
+	LoadBalance
+
+	Shadowsocks
+	ShadowsocksR
+	Snell
+	Socks5
+	Http
+	Vmess
+	Vless
+	Trojan
+	Hysteria
+	Hysteria2
+	WireGuard
+	Tuic
+	Ssh
+	Mieru
+	AnyTLS
+	Sudoku
+	Masque
+	TrustTunnel
+)
+
+const (
+	DefaultTCPTimeout = dialer.DefaultTCPTimeout
+	DefaultUDPTimeout = dialer.DefaultUDPTimeout
+	DefaultDropTime   = 12 * DefaultTCPTimeout
+	DefaultTLSTimeout = DefaultTCPTimeout
+	DefaultTestURL    = "https://www.gstatic.com/generate_204"
+)
+
+var ErrNotSupport = errors.New("no support")
+
+type Connection interface {
+	Chains() Chain
+	ProviderChains() Chain
+	AppendToChains(adapter ProxyAdapter)
+	RemoteDestination() string
+}
+
+type Chain []string
+
+func (c Chain) String() string {
+	switch len(c) {
+	case 0:
+		return ""
+	case 1:
+		return c[0]
+	default:
+		return fmt.Sprintf("%s[%s]", c[len(c)-1], c[0])
+	}
+}
+
+func (c Chain) Last() string {
+	switch len(c) {
+	case 0:
+		return ""
+	default:
+		return c[0]
+	}
+}
+
+type Conn interface {
+	N.ExtendedConn
+	Connection
+}
+
+type PacketConn interface {
+	N.EnhancePacketConn
+	Connection
+	ResolveUDP(ctx context.Context, metadata *Metadata) error
+}
+
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+	ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error)
+}
+
+type ProxyInfo struct {
+	XUDP         bool
+	TFO          bool
+	MPTCP        bool
+	SMUX         bool
+	Interface    string
+	RoutingMark  int
+	ProviderName string
+	DialerProxy  string
+}
+
+type ProxyAdapter interface {
+	Name() string
+	Type() AdapterType
+	Addr() string
+	SupportUDP() bool
+
+	// ProxyInfo contains some extra information maybe useful for MarshalJSON
+	ProxyInfo() ProxyInfo
+	MarshalJSON() ([]byte, error)
+
+	// DialContext return a C.Conn with protocol which
+	// contains multiplexing-related reuse logic (if any)
+	DialContext(ctx context.Context, metadata *Metadata) (Conn, error)
+	ListenPacketContext(ctx context.Context, metadata *Metadata) (PacketConn, error)
+
+	// SupportUOT return UDP over TCP support
+	SupportUOT() bool
+
+	// IsL3Protocol return ProxyAdapter working in L3 (tell dns module not pass the domain to avoid loopback)
+	IsL3Protocol(metadata *Metadata) bool
+
+	// Unwrap extracts the proxy from a proxy-group. It returns nil when nothing to extract.
+	Unwrap(metadata *Metadata, touch bool) Proxy
+
+	// Close releasing associated resources
+	Close() error
+}
+
+type DelayHistory struct {
+	Time  time.Time `json:"time"`
+	Delay uint16    `json:"delay"`
+}
+
+type ProxyState struct {
+	Alive   bool           `json:"alive"`
+	History []DelayHistory `json:"history"`
+}
+
+type DelayHistoryStoreType int
+
+type Proxy interface {
+	ProxyAdapter
+	Adapter() ProxyAdapter
+	AliveForTestUrl(url string) bool
+	DelayHistory() []DelayHistory
+	ExtraDelayHistories() map[string]ProxyState
+	LastDelayForTestUrl(url string) uint16
+	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
+}
+
+// AdapterType is enum of adapter type
+type AdapterType int
+
+func (at AdapterType) String() string {
+	switch at {
+	case Direct:
+		return "Direct"
+	case Reject:
+		return "Reject"
+	case RejectDrop:
+		return "RejectDrop"
+	case Compatible:
+		return "Compatible"
+	case Pass:
+		return "Pass"
+	case Dns:
+		return "Dns"
+	case Shadowsocks:
+		return "Shadowsocks"
+	case ShadowsocksR:
+		return "ShadowsocksR"
+	case Snell:
+		return "Snell"
+	case Socks5:
+		return "Socks5"
+	case Http:
+		return "Http"
+	case Vmess:
+		return "Vmess"
+	case Vless:
+		return "Vless"
+	case Trojan:
+		return "Trojan"
+	case Hysteria:
+		return "Hysteria"
+	case Hysteria2:
+		return "Hysteria2"
+	case WireGuard:
+		return "WireGuard"
+	case Tuic:
+		return "Tuic"
+	case Ssh:
+		return "Ssh"
+	case Mieru:
+		return "Mieru"
+	case AnyTLS:
+		return "AnyTLS"
+	case Sudoku:
+		return "Sudoku"
+	case Masque:
+		return "Masque"
+	case TrustTunnel:
+		return "TrustTunnel"
+	case Relay:
+		return "Relay"
+	case Selector:
+		return "Selector"
+	case Fallback:
+		return "Fallback"
+	case URLTest:
+		return "URLTest"
+	case LoadBalance:
+		return "LoadBalance"
+	default:
+		return "Unknown"
+	}
+}
+
+// UDPPacket contains the data of UDP packet, and offers control/info of UDP packet's source
+type UDPPacket interface {
+	// Data get the payload of UDP Packet
+	Data() []byte
+
+	// WriteBack writes the payload with source IP/Port equals addr
+	// - variable source IP/Port is important to STUN
+	// - if addr is not provided, WriteBack will write out UDP packet with SourceIP/Port equals to original Target,
+	//   this is important when using Fake-IP.
+	WriteBack
+
+	// Drop call after packet is used, could recycle buffer in this function.
+	Drop()
+
+	// LocalAddr returns the source IP/Port of packet
+	LocalAddr() net.Addr
+}
+
+type UDPPacketInAddr interface {
+	InAddr() net.Addr
+}
+
+// PacketAdapter is a UDP Packet adapter for socks/redir/tun
+type PacketAdapter interface {
+	UDPPacket
+	// Metadata returns destination metadata
+	Metadata() *Metadata
+	// Key is a SNAT key
+	Key() string
+}
+
+type packetAdapter struct {
+	UDPPacket
+	metadata *Metadata
+	key      string
+}
+
+// Metadata returns destination metadata
+func (s *packetAdapter) Metadata() *Metadata {
+	return s.metadata
+}
+
+// Key is a SNAT key
+func (s *packetAdapter) Key() string {
+	return s.key
+}
+
+func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
+	return &packetAdapter{
+		packet,
+		metadata,
+		packet.LocalAddr().String(),
+	}
+}
+
+type WriteBack interface {
+	WriteBack(b []byte, addr net.Addr) (n int, err error)
+}
+
+type WriteBackProxy interface {
+	WriteBack
+	UpdateWriteBack(wb WriteBack)
+}
+
+type PacketSender interface {
+	// Send will send PacketAdapter nonblocking
+	// the implement must call UDPPacket.Drop() inside Send
+	Send(PacketAdapter)
+	// Process is a blocking loop to send PacketAdapter to PacketConn and update the WriteBackProxy
+	Process(PacketConn, WriteBackProxy)
+	// Close stop the Process loop
+	Close()
+	// DoSniff will blocking after sniffer work done
+	DoSniff(*Metadata) error
+	// AddMapping add a destination NAT record
+	AddMapping(originMetadata *Metadata, metadata *Metadata)
+	// RestoreReadFrom restore destination NAT for ReadFrom
+	// the implement must ensure returned netip.Add is valid (or just return input addr)
+	RestoreReadFrom(addr netip.Addr) netip.Addr
+}
+
+type NatTable interface {
+	GetOrCreate(key string, maker func() PacketSender) (PacketSender, bool)
+
+	Delete(key string)
+
+	GetForLocalConn(lAddr, rAddr string) *net.UDPConn
+
+	AddForLocalConn(lAddr, rAddr string, conn *net.UDPConn) bool
+
+	RangeForLocalConn(lAddr string, f func(key string, value *net.UDPConn) bool)
+
+	GetOrCreateLockForLocalConn(lAddr string, key string) (*sync.Cond, bool)
+
+	DeleteForLocalConn(lAddr, key string)
+
+	DeleteLockForLocalConn(lAddr, key string)
+}

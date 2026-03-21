@@ -1,0 +1,182 @@
+Subject: [PATCH] Revert "[release-branch.go1.21] crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
+---
+Index: src/crypto/rand/rand.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/crypto/rand/rand.go b/src/crypto/rand/rand.go
+--- a/src/crypto/rand/rand.go	(revision 8bba868de983dd7bf55fcd121495ba8d6e2734e7)
++++ b/src/crypto/rand/rand.go	(revision 7e6c963d81e14ee394402671d4044b2940c8d2c1)
+@@ -15,7 +15,7 @@
+ // available, /dev/urandom otherwise.
+ // On OpenBSD and macOS, Reader uses getentropy(2).
+ // On other Unix-like systems, Reader reads from /dev/urandom.
+-// On Windows systems, Reader uses the ProcessPrng API.
++// On Windows systems, Reader uses the RtlGenRandom API.
+ // On JS/Wasm, Reader uses the Web Crypto API.
+ // On WASIP1/Wasm, Reader uses random_get from wasi_snapshot_preview1.
+ var Reader io.Reader
+Index: src/crypto/rand/rand_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/crypto/rand/rand_windows.go b/src/crypto/rand/rand_windows.go
+--- a/src/crypto/rand/rand_windows.go	(revision 8bba868de983dd7bf55fcd121495ba8d6e2734e7)
++++ b/src/crypto/rand/rand_windows.go	(revision 7e6c963d81e14ee394402671d4044b2940c8d2c1)
+@@ -15,8 +15,11 @@
+ 
+ type rngReader struct{}
+ 
+-func (r *rngReader) Read(b []byte) (int, error) {
+-	if err := windows.ProcessPrng(b); err != nil {
++func (r *rngReader) Read(b []byte) (n int, err error) {
++	// RtlGenRandom only returns 1<<32-1 bytes at a time. We only read at
++	// most 1<<31-1 bytes at a time so that  this works the same on 32-bit
++	// and 64-bit systems.
++	if err := batched(windows.RtlGenRandom, 1<<31-1)(b); err != nil {
+ 		return 0, err
+ 	}
+ 	return len(b), nil
+Index: src/internal/syscall/windows/syscall_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/internal/syscall/windows/syscall_windows.go b/src/internal/syscall/windows/syscall_windows.go
+--- a/src/internal/syscall/windows/syscall_windows.go	(revision 8bba868de983dd7bf55fcd121495ba8d6e2734e7)
++++ b/src/internal/syscall/windows/syscall_windows.go	(revision 7e6c963d81e14ee394402671d4044b2940c8d2c1)
+@@ -384,7 +384,7 @@
+ //sys	DestroyEnvironmentBlock(block *uint16) (err error) = userenv.DestroyEnvironmentBlock
+ //sys	CreateEvent(eventAttrs *SecurityAttributes, manualReset uint32, initialState uint32, name *uint16) (handle syscall.Handle, err error) = kernel32.CreateEventW
+ 
+-//sys	ProcessPrng(buf []byte) (err error) = bcryptprimitives.ProcessPrng
++//sys	RtlGenRandom(buf []byte) (err error) = advapi32.SystemFunction036
+ 
+ //sys	RtlLookupFunctionEntry(pc uintptr, baseAddress *uintptr, table *byte) (ret uintptr) = kernel32.RtlLookupFunctionEntry
+ //sys	RtlVirtualUnwind(handlerType uint32, baseAddress uintptr, pc uintptr, entry uintptr, ctxt uintptr, data *uintptr, frame *uintptr, ctxptrs *byte) (ret uintptr) = kernel32.RtlVirtualUnwind
+Index: src/internal/syscall/windows/zsyscall_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/internal/syscall/windows/zsyscall_windows.go b/src/internal/syscall/windows/zsyscall_windows.go
+--- a/src/internal/syscall/windows/zsyscall_windows.go	(revision 8bba868de983dd7bf55fcd121495ba8d6e2734e7)
++++ b/src/internal/syscall/windows/zsyscall_windows.go	(revision 7e6c963d81e14ee394402671d4044b2940c8d2c1)
+@@ -37,14 +37,13 @@
+ }
+ 
+ var (
+-	modadvapi32         = syscall.NewLazyDLL(sysdll.Add("advapi32.dll"))
+-	modbcryptprimitives = syscall.NewLazyDLL(sysdll.Add("bcryptprimitives.dll"))
+-	modiphlpapi         = syscall.NewLazyDLL(sysdll.Add("iphlpapi.dll"))
+-	modkernel32         = syscall.NewLazyDLL(sysdll.Add("kernel32.dll"))
+-	modnetapi32         = syscall.NewLazyDLL(sysdll.Add("netapi32.dll"))
+-	modpsapi            = syscall.NewLazyDLL(sysdll.Add("psapi.dll"))
+-	moduserenv          = syscall.NewLazyDLL(sysdll.Add("userenv.dll"))
+-	modws2_32           = syscall.NewLazyDLL(sysdll.Add("ws2_32.dll"))
++	modadvapi32 = syscall.NewLazyDLL(sysdll.Add("advapi32.dll"))
++	modiphlpapi = syscall.NewLazyDLL(sysdll.Add("iphlpapi.dll"))
++	modkernel32 = syscall.NewLazyDLL(sysdll.Add("kernel32.dll"))
++	modnetapi32 = syscall.NewLazyDLL(sysdll.Add("netapi32.dll"))
++	modpsapi    = syscall.NewLazyDLL(sysdll.Add("psapi.dll"))
++	moduserenv  = syscall.NewLazyDLL(sysdll.Add("userenv.dll"))
++	modws2_32   = syscall.NewLazyDLL(sysdll.Add("ws2_32.dll"))
+ 
+ 	procAdjustTokenPrivileges        = modadvapi32.NewProc("AdjustTokenPrivileges")
+ 	procDuplicateTokenEx             = modadvapi32.NewProc("DuplicateTokenEx")
+@@ -53,7 +52,7 @@
+ 	procOpenThreadToken              = modadvapi32.NewProc("OpenThreadToken")
+ 	procRevertToSelf                 = modadvapi32.NewProc("RevertToSelf")
+ 	procSetTokenInformation          = modadvapi32.NewProc("SetTokenInformation")
+-	procProcessPrng                  = modbcryptprimitives.NewProc("ProcessPrng")
++	procSystemFunction036            = modadvapi32.NewProc("SystemFunction036")
+ 	procGetAdaptersAddresses         = modiphlpapi.NewProc("GetAdaptersAddresses")
+ 	procCreateEventW                 = modkernel32.NewProc("CreateEventW")
+ 	procGetACP                       = modkernel32.NewProc("GetACP")
+@@ -149,12 +148,12 @@
+ 	return
+ }
+ 
+-func ProcessPrng(buf []byte) (err error) {
++func RtlGenRandom(buf []byte) (err error) {
+ 	var _p0 *byte
+ 	if len(buf) > 0 {
+ 		_p0 = &buf[0]
+ 	}
+-	r1, _, e1 := syscall.Syscall(procProcessPrng.Addr(), 2, uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), 0)
++	r1, _, e1 := syscall.Syscall(procSystemFunction036.Addr(), 2, uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), 0)
+ 	if r1 == 0 {
+ 		err = errnoErr(e1)
+ 	}
+Index: src/runtime/os_windows.go
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
+--- a/src/runtime/os_windows.go	(revision 8bba868de983dd7bf55fcd121495ba8d6e2734e7)
++++ b/src/runtime/os_windows.go	(revision 7e6c963d81e14ee394402671d4044b2940c8d2c1)
+@@ -127,8 +127,15 @@
+ 	_AddVectoredContinueHandler,
+ 	_ stdFunction
+ 
+-	// Use ProcessPrng to generate cryptographically random data.
+-	_ProcessPrng stdFunction
++	// Use RtlGenRandom to generate cryptographically random data.
++	// This approach has been recommended by Microsoft (see issue
++	// 15589 for details).
++	// The RtlGenRandom is not listed in advapi32.dll, instead
++	// RtlGenRandom function can be found by searching for SystemFunction036.
++	// Also some versions of Mingw cannot link to SystemFunction036
++	// when building executable as Cgo. So load SystemFunction036
++	// manually during runtime startup.
++	_RtlGenRandom stdFunction
+ 
+ 	// Load ntdll.dll manually during startup, otherwise Mingw
+ 	// links wrong printf function to cgo executable (see issue
+@@ -145,12 +152,12 @@
+ )
+ 
+ var (
+-	bcryptprimitivesdll = [...]uint16{'b', 'c', 'r', 'y', 'p', 't', 'p', 'r', 'i', 'm', 'i', 't', 'i', 'v', 'e', 's', '.', 'd', 'l', 'l', 0}
+-	kernel32dll         = [...]uint16{'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '.', 'd', 'l', 'l', 0}
+-	ntdlldll            = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
+-	powrprofdll         = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
+-	winmmdll            = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
+-	ws2_32dll           = [...]uint16{'w', 's', '2', '_', '3', '2', '.', 'd', 'l', 'l', 0}
++	advapi32dll = [...]uint16{'a', 'd', 'v', 'a', 'p', 'i', '3', '2', '.', 'd', 'l', 'l', 0}
++	kernel32dll = [...]uint16{'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '.', 'd', 'l', 'l', 0}
++	ntdlldll    = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
++	powrprofdll = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
++	winmmdll    = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
++	ws2_32dll   = [...]uint16{'w', 's', '2', '_', '3', '2', '.', 'd', 'l', 'l', 0}
+ )
+ 
+ // Function to be called by windows CreateThread
+@@ -249,11 +256,11 @@
+ 	}
+ 	_AddVectoredContinueHandler = windowsFindfunc(k32, []byte("AddVectoredContinueHandler\000"))
+ 
+-	bcryptPrimitives := windowsLoadSystemLib(bcryptprimitivesdll[:])
+-	if bcryptPrimitives == 0 {
+-		throw("bcryptprimitives.dll not found")
++	a32 := windowsLoadSystemLib(advapi32dll[:])
++	if a32 == 0 {
++		throw("advapi32.dll not found")
+ 	}
+-	_ProcessPrng = windowsFindfunc(bcryptPrimitives, []byte("ProcessPrng\000"))
++	_RtlGenRandom = windowsFindfunc(a32, []byte("SystemFunction036\000"))
+ 
+ 	n32 := windowsLoadSystemLib(ntdlldll[:])
+ 	if n32 == 0 {
+@@ -610,7 +617,7 @@
+ //go:nosplit
+ func getRandomData(r []byte) {
+ 	n := 0
+-	if stdcall2(_ProcessPrng, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
++	if stdcall2(_RtlGenRandom, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
+ 		n = len(r)
+ 	}
+ 	extendRandom(r, n)

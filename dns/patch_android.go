@@ -1,0 +1,37 @@
+//go:build android && cmfa
+
+package dns
+
+import (
+	"github.com/metacubex/mihomo/component/resolver"
+)
+
+var systemResolver []dnsClient
+
+func FlushCacheWithDefaultResolver() {
+	resolver.ClearCache()
+	resolver.ResetConnection()
+}
+
+func UpdateSystemDNS(addr []string) {
+	if len(addr) == 0 {
+		systemResolver = nil
+	}
+
+	ns := make([]NameServer, 0, len(addr))
+	for _, d := range addr {
+		ns = append(ns, NameServer{Addr: d})
+	}
+
+	systemResolver = transform(ns, nil)
+}
+
+func (c *systemClient) getDnsClients() ([]dnsClient, error) {
+	return systemResolver, nil
+}
+
+func (c *systemClient) ResetConnection() {
+	for _, r := range systemResolver {
+		r.ResetConnection()
+	}
+}

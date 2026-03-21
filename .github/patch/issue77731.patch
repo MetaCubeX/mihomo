@@ -1,0 +1,36 @@
+From b8f897a9da7a82ad8584a22284ceac61262fcb7e Mon Sep 17 00:00:00 2001
+From: Jorropo <jorropo.pgm@gmail.com>
+Date: Sun, 22 Feb 2026 01:47:45 +0100
+Subject: [PATCH] runtime: fix value of ENOSYS on mips from 38 to 89
+
+Fixes #77731
+
+Change-Id: Iaca444e2d5f9e19fd2de38414b357b41471a668c
+---
+
+diff --git a/src/runtime/defs_linux_mips64x.go b/src/runtime/defs_linux_mips64x.go
+index 7449d2c..4d0f103 100644
+--- a/src/runtime/defs_linux_mips64x.go
++++ b/src/runtime/defs_linux_mips64x.go
+@@ -12,7 +12,7 @@
+ 	_EINTR  = 0x4
+ 	_EAGAIN = 0xb
+ 	_ENOMEM = 0xc
+-	_ENOSYS = 0x26
++	_ENOSYS = 0x59
+ 
+ 	_PROT_NONE  = 0x0
+ 	_PROT_READ  = 0x1
+diff --git a/src/runtime/defs_linux_mipsx.go b/src/runtime/defs_linux_mipsx.go
+index 5a446e0..b8da4d0 100644
+--- a/src/runtime/defs_linux_mipsx.go
++++ b/src/runtime/defs_linux_mipsx.go
+@@ -12,7 +12,7 @@
+ 	_EINTR  = 0x4
+ 	_EAGAIN = 0xb
+ 	_ENOMEM = 0xc
+-	_ENOSYS = 0x26
++	_ENOSYS = 0x59
+ 
+ 	_PROT_NONE  = 0x0
+ 	_PROT_READ  = 0x1

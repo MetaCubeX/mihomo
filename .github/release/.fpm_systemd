@@ -1,0 +1,18 @@
+-s dir
+--name mihomo
+--category net
+--license GPL-3.0-or-later
+--description "The universal proxy platform."
+--url "https://wiki.metacubex.one/"
+--maintainer "MetaCubeX <none@example.com>"
+--deb-field "Bug: https://github.com/MetaCubeX/mihomo/issues"
+--no-deb-generate-changes
+--config-files /etc/mihomo/config.yaml
+
+.github/release/config.yaml=/etc/mihomo/config.yaml
+
+.github/release/mihomo.service=/usr/lib/systemd/system/mihomo.service
+.github/release/mihomo@.service=/usr/lib/systemd/system/mihomo@.service
+
+
+LICENSE=/usr/share/licenses/mihomo/LICENSE

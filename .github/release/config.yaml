@@ -1,0 +1,15 @@
+mixed-port: 7890
+
+dns:
+  enable: true
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-filter:
+    - "*"
+    - "+.lan"
+    - "+.local"
+  nameserver:
+    - system
+
+rules:
+  - MATCH,DIRECT
