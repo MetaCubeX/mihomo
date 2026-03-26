@@ -26,6 +26,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         jobs:
@@ -404,6 +408,17 @@ jobs:
           mihomo*.zip
           version.txt
           checksums.txt
+
+    - name: Attest production artifacts
+      if: ${{ github.event_name != 'pull_request' }}
+      uses: actions/attest-build-provenance@v3
+      with:
+        subject-path: |
+          mihomo*.gz
+          mihomo*.deb
+          mihomo*.rpm
+          mihomo*.pkg.tar.zst
+          mihomo*.zip
 
   Upload-Prerelease:
     permissions: write-all
