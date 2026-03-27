@@ -17,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/transport/vless"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	"github.com/metacubex/mihomo/transport/vmess"
+	"github.com/metacubex/mihomo/transport/xhttp"
 
 	"github.com/metacubex/http"
 	vmessSing "github.com/metacubex/sing-vmess"
@@ -60,6 +61,7 @@ type VlessOption struct {
 	HTTP2Opts         HTTP2Options      `proxy:"h2-opts,omitempty"`
 	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
 	WSOpts            WSOptions         `proxy:"ws-opts,omitempty"`
+	XHTTPOpts         XHTTPOptions      `proxy:"xhttp-opts,omitempty"`
 	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint       string            `proxy:"fingerprint,omitempty"`
@@ -228,8 +230,78 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 	return conn, nil
 }
 
+func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
+	requestHost := v.option.XHTTPOpts.Host
+	if requestHost == "" {
+		if v.option.ServerName != "" {
+			requestHost = v.option.ServerName
+		} else {
+			requestHost = v.option.Server
+		}
+	}
+
+	cfg := &xhttp.Config{
+		Host:                 requestHost,
+		Path:                 v.option.XHTTPOpts.Path,
+		Mode:                 v.option.XHTTPOpts.Mode,
+		Headers:              v.option.XHTTPOpts.Headers,
+		ScMaxEachPostBytes:   v.option.XHTTPOpts.ScMaxEachPostBytes,
+		ScMinPostsIntervalMs: v.option.XHTTPOpts.ScMinPostsIntervalMs,
+		NoGRPCHeader:         v.option.XHTTPOpts.NoGRPCHeader,
+		XPaddingBytes:        v.option.XHTTPOpts.XPaddingBytes,
+	}
+
+	mode := cfg.EffectiveMode(v.realityConfig != nil)
+
+	switch mode {
+	case "stream-one":
+		return xhttp.DialStreamOne(
+			ctx,
+			v.option.Server,
+			v.option.Port,
+			cfg,
+			func(ctx context.Context) (net.Conn, error) {
+				return v.dialer.DialContext(ctx, "tcp", v.addr)
+			},
+			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
+				return v.streamTLSConn(ctx, raw, isH2)
+			},
+		)
+	case "packet-up":
+		return xhttp.DialPacketUp(
+			ctx,
+			v.option.Server,
+			v.option.Port,
+			cfg,
+			func(ctx context.Context) (net.Conn, error) {
+				return v.dialer.DialContext(ctx, "tcp", v.addr)
+			},
+			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
+				return v.streamTLSConn(ctx, raw, isH2)
+			},
+		)
+	default:
+		return nil, fmt.Errorf("xhttp mode %s is not implemented yet", mode)
+	}
+}
+
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	if v.option.Network == "xhttp" {
+		c, err := v.dialXHTTPConn(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+		}
+
+		c, err = v.streamConnContext(ctx, c, metadata)
+		if err != nil {
+			safeConnClose(c, err)
+			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+		}
+
+		return NewConn(c, v), nil
+	}
+
 	var c net.Conn
 	// gun transport
 	if v.gunTransport != nil {
@@ -256,6 +328,22 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	if err = v.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
+
+	if v.option.Network == "xhttp" {
+		c, err := v.dialXHTTPConn(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
+		}
+
+		c, err = v.streamConnContext(ctx, c, metadata)
+		if err != nil {
+			safeConnClose(c, err)
+			return nil, fmt.Errorf("new vless client error: %v", err)
+		}
+
+		return v.ListenPacketOnStreamConn(ctx, c, metadata)
+	}
+
 	var c net.Conn
 	// gun transport
 	if v.gunTransport != nil {
@@ -420,6 +508,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 		if len(option.HTTP2Opts.Host) == 0 {
 			option.HTTP2Opts.Host = append(option.HTTP2Opts.Host, "www.example.com")
 		}
+
 	case "grpc":
 		dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
 			c, err := v.dialer.DialContext(ctx, "tcp", v.addr)

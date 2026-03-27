@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	nethttp "net/http"
 	"strings"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -17,11 +18,13 @@ import (
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
+	"github.com/metacubex/mihomo/transport/xhttp"
 
-	"github.com/metacubex/http"
+	mihomoHTTP "github.com/metacubex/http"
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
+	"golang.org/x/net/http2"
 )
 
 type Listener struct {
@@ -78,7 +81,8 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 	tlsConfig := &tls.Config{Time: ntp.Now}
 	var realityBuilder *reality.Builder
-	var httpServer http.Server
+	var httpServer mihomoHTTP.Server
+	var xhttpStdHandler nethttp.Handler
 
 	if config.Certificate != "" && config.PrivateKey != "" {
 		certLoader, err := ca.NewTLSKeyPairLoader(config.Certificate, config.PrivateKey)
@@ -122,11 +126,11 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		}
 	}
 	if config.WsPath != "" {
-		httpMux := http.NewServeMux()
-		httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
+		httpMux := mihomoHTTP.NewServeMux()
+		httpMux.HandleFunc(config.WsPath, func(w mihomoHTTP.ResponseWriter, r *mihomoHTTP.Request) {
 			conn, err := mihomoVMess.StreamUpgradedWebsocketConn(w, r)
 			if err != nil {
-				http.Error(w, err.Error(), 500)
+				mihomoHTTP.Error(w, err.Error(), 500)
 				return
 			}
 			sl.HandleConn(conn, tunnel, additions...)
@@ -144,7 +148,35 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		})
 		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...) // h2 must before http/1.1
 	}
+	if config.XHTTPMode != "" {
+		switch config.XHTTPMode {
+		case "auto":
+		default:
+			return nil, errors.New("unsupported xhttp mode")
+		}
+	}
+	if config.XHTTPPath != "" || config.XHTTPHost != "" || config.XHTTPMode != "" {
+		httpServer.Handler = xhttp.NewServerHandler(xhttp.ServerOption{
+			Path: config.XHTTPPath,
+			Host: config.XHTTPHost,
+			Mode: config.XHTTPMode,
+			ConnHandler: func(conn net.Conn) {
+				sl.HandleConn(conn, tunnel, additions...)
+			},
+			HttpHandler: httpServer.Handler,
+		})
 
+		xhttpStdHandler = xhttp.NewStdServerHandler(xhttp.ServerOption{
+			Path: config.XHTTPPath,
+			Host: config.XHTTPHost,
+			Mode: config.XHTTPMode,
+			ConnHandler: func(conn net.Conn) {
+				sl.HandleConn(conn, tunnel, additions...)
+			},
+		})
+
+		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
+	}
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
 
@@ -164,9 +196,30 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 		go func() {
 			if httpServer.Handler != nil {
+				if realityBuilder != nil && xhttpStdHandler != nil {
+					h2s := &http2.Server{}
+					for {
+						c, err := l.Accept()
+						if err != nil {
+							if sl.closed {
+								break
+							}
+							continue
+						}
+
+						go func(conn net.Conn) {
+							h2s.ServeConn(conn, &http2.ServeConnOpts{
+								Handler: xhttpStdHandler,
+							})
+						}(c)
+					}
+					return
+				}
+
 				_ = httpServer.Serve(l)
 				return
 			}
+
 			for {
 				c, err := l.Accept()
 				if err != nil {
@@ -179,6 +232,7 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 				go sl.HandleConn(c, tunnel)
 			}
 		}()
+
 	}
 
 	return sl, nil
