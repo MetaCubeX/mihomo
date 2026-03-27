@@ -4,10 +4,10 @@ import (
 	"crypto/rand"
 	"math"
 	"math/big"
-	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/metacubex/http"
 	"golang.org/x/net/http2/hpack"
 )
 

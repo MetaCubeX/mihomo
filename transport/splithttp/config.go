@@ -2,12 +2,15 @@ package splithttp
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"io"
-	"net/http"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/http"
 )
 
 const (
@@ -35,6 +38,10 @@ type RangeConfig struct {
 type SplitHTTPConfig struct {
 	Host               string
 	Path               string
+	ALPN               []string
+	DialAddr           string
+	H3PacketDial       func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error)
+	TLSServerName      string
 	Headers            http.Header
 	MaxUploadSize      int
 	MaxConcurrentPosts int
@@ -55,6 +62,56 @@ type SplitHTTPConfig struct {
 	UplinkDataPlacement string
 	UplinkDataKey       string
 	RequestLog          bool
+}
+
+func (c *SplitHTTPConfig) HasALPN(token string) bool {
+	if token == "" {
+		return false
+	}
+	token = strings.ToLower(token)
+	for _, p := range c.ALPN {
+		if strings.ToLower(strings.TrimSpace(p)) == token {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *SplitHTTPConfig) HasTCPFallback() bool {
+	if len(c.ALPN) == 0 {
+		return true
+	}
+	return c.HasALPN("h2") || c.HasALPN("http/1.1") || c.HasALPN("http/1.0")
+}
+
+func (c *SplitHTTPConfig) IsHTTPProtoAllowed(proto string) bool {
+	if len(c.ALPN) == 0 {
+		return true
+	}
+	allowed := map[string]bool{}
+	for _, p := range c.ALPN {
+		switch strings.ToLower(strings.TrimSpace(p)) {
+		case "h3":
+			allowed["HTTP/3"] = true
+		case "h2":
+			allowed["HTTP/2"] = true
+		case "http/1.1":
+			allowed["HTTP/1.1"] = true
+			// User-required behavior: when declared as HTTP/1.1, still allow/try h2 upgrade.
+			allowed["HTTP/2"] = true
+		case "http/1.0":
+			allowed["HTTP/1.0"] = true
+		}
+	}
+	if len(allowed) == 0 {
+		return true
+	}
+	for ap := range allowed {
+		if strings.HasPrefix(proto, ap) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *SplitHTTPConfig) GetNormalizedPath() string {

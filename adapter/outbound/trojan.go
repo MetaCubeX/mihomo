@@ -12,6 +12,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/shadowsocks/core"
 	"github.com/metacubex/mihomo/transport/splithttp"
@@ -70,7 +71,24 @@ type TrojanSSOption struct {
 func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch t.option.Network {
 	case "xhttp", "splithttp":
-		splitConfig := buildSplitHTTPConfig(t.addr, t.option.XHTTPOpts, t.option.SplitHTTPOpts, true)
+		splitConfig := buildSplitHTTPConfig(ctx, t.addr, t.option.SNI, t.option.ALPN, t.option.XHTTPOpts, t.option.SplitHTTPOpts, true)
+		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
+			return t.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
+		}
+		attempted := []string{}
+		if splitConfig.HasALPN("h3") {
+			attempted = append(attempted, "h3")
+			h3Conn, h3Err := splithttp.StreamConnH3(ctx, splitConfig)
+			if h3Err == nil {
+				log.Infoln("xhttp protocol-selection attempted=%v selected=h3", attempted)
+				return t.streamConnContext(ctx, h3Conn, metadata)
+			}
+			if !splitConfig.HasTCPFallback() {
+				log.Warnln("xhttp protocol-selection attempted=%v selected=none fallback_reason=%v", attempted, h3Err)
+				return nil, h3Err
+			}
+			log.Infoln("xhttp protocol-selection attempted=%v selected=tcp fallback_reason=%v", attempted, h3Err)
+		}
 
 		alpn := trojan.DefaultALPN
 		if t.option.ALPN != nil {
@@ -95,6 +113,8 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		if err != nil {
 			return nil, err
 		}
+		attempted = append(attempted, "tcp")
+		log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
 
 		return t.streamConnContext(ctx, c, metadata)
 	case "ws":

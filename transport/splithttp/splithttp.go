@@ -2,18 +2,21 @@ package splithttp
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
+	"net/http/httptrace"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/metacubex/http"
 	"github.com/metacubex/mihomo/common/utils"
+	ctls "github.com/metacubex/mihomo/component/tls"
 	"github.com/metacubex/mihomo/log"
-	"golang.org/x/net/http2"
+	quic "github.com/metacubex/quic-go"
+	"github.com/metacubex/quic-go/http3"
+	"github.com/metacubex/tls"
 )
 
 func appendToPath(path string, sessionId string) string {
@@ -27,7 +30,8 @@ func appendToPath(path string, sessionId string) string {
 }
 
 func getBaseRequest(ctx context.Context, method, urlStr string, body io.Reader, config *SplitHTTPConfig) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, method, urlStr, body)
+	// Keep SplitHTTP request lifecycle independent from outer dial context cancellation.
+	req, err := http.NewRequestWithContext(context.WithoutCancel(ctx), method, urlStr, body)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +100,43 @@ func (c *Conn) Close() error {
 	if len(errs) > 0 {
 		return errs[0]
 	}
+	return nil
+}
+
+type WaitReadCloser struct {
+	Wait chan struct{}
+	io.ReadCloser
+}
+
+func (w *WaitReadCloser) Set(rc io.ReadCloser) {
+	w.ReadCloser = rc
+	defer func() {
+		if recover() != nil {
+			rc.Close()
+		}
+	}()
+	close(w.Wait)
+}
+
+func (w *WaitReadCloser) Read(b []byte) (int, error) {
+	if w.ReadCloser == nil {
+		if <-w.Wait; w.ReadCloser == nil {
+			return 0, io.ErrClosedPipe
+		}
+	}
+	return w.ReadCloser.Read(b)
+}
+
+func (w *WaitReadCloser) Close() error {
+	if w.ReadCloser != nil {
+		return w.ReadCloser.Close()
+	}
+	defer func() {
+		if recover() != nil && w.ReadCloser != nil {
+			w.ReadCloser.Close()
+		}
+	}()
+	close(w.Wait)
 	return nil
 }
 
@@ -169,6 +210,16 @@ func logResponse(config *SplitHTTPConfig, stage string, resp *http.Response, ses
 	)
 }
 
+func ensureHTTPProtocolAllowed(config *SplitHTTPConfig, resp *http.Response) error {
+	if resp == nil {
+		return nil
+	}
+	if config.IsHTTPProtoAllowed(resp.Proto) {
+		return nil
+	}
+	return fmt.Errorf("splithttp protocol mismatch: actual=%s not allowed by alpn=%v", resp.Proto, config.ALPN)
+}
+
 // PacketUpWriter splits Write calls into separate HTTP requests
 type PacketUpWriter struct {
 	ctx       context.Context
@@ -204,7 +255,15 @@ func (w *PacketUpWriter) Write(b []byte) (int, error) {
 		return 0, err
 	}
 	logResponse(w.config, "packet-up", resp, w.sessionId, seqStr, w.meta)
+	if err := ensureHTTPProtocolAllowed(w.config, resp); err != nil {
+		if resp != nil && resp.Body != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		return 0, err
+	}
 	if resp != nil && resp.Body != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -221,6 +280,177 @@ func (w *PacketUpWriter) Close() error {
 	return nil
 }
 
+type noopNetConn struct{}
+
+func (noopNetConn) Read([]byte) (int, error)         { return 0, io.EOF }
+func (noopNetConn) Write([]byte) (int, error)        { return 0, io.ErrClosedPipe }
+func (noopNetConn) Close() error                     { return nil }
+func (noopNetConn) LocalAddr() net.Addr              { return nil }
+func (noopNetConn) RemoteAddr() net.Addr             { return nil }
+func (noopNetConn) SetDeadline(time.Time) error      { return nil }
+func (noopNetConn) SetReadDeadline(time.Time) error  { return nil }
+func (noopNetConn) SetWriteDeadline(time.Time) error { return nil }
+
+func buildHTTP3Client(config *SplitHTTPConfig) *http.Client {
+	tlsServerName := config.TLSServerName
+	if tlsServerName == "" {
+		tlsServerName = config.Host
+	}
+	tlsConf := &tls.Config{
+		ServerName: tlsServerName,
+		NextProtos: []string{"h3"},
+	}
+	quicConf := &quic.Config{
+		KeepAlivePeriod: 15 * time.Second,
+	}
+	rt := &http3.Transport{
+		TLSClientConfig: tlsConf,
+		QUICConfig:      quicConf,
+		Dial: func(ctx context.Context, _ string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+			udpAddr, err := net.ResolveUDPAddr("udp", config.DialAddr)
+			if err != nil {
+				return nil, err
+			}
+
+			var conn net.PacketConn
+			if config.H3PacketDial != nil {
+				conn, err = config.H3PacketDial(ctx, udpAddr)
+			} else {
+				conn, err = net.ListenPacket("udp", ":0")
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			if tlsCfg == nil {
+				tlsCfg = tlsConf.Clone()
+			} else {
+				tlsCfg = tlsCfg.Clone()
+			}
+			if tlsCfg.ServerName == "" {
+				tlsCfg.ServerName = tlsServerName
+			}
+			if len(tlsCfg.NextProtos) == 0 {
+				tlsCfg.NextProtos = []string{"h3"}
+			}
+
+			quicConn, err := quic.DialEarly(ctx, conn, udpAddr, tlsCfg, cfg)
+			if err != nil {
+				_ = conn.Close()
+				return nil, err
+			}
+			return quicConn, nil
+		},
+	}
+	return &http.Client{Transport: rt}
+}
+
+func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) {
+	mode := parseMode(config)
+	sessionId := ""
+	if mode != "stream-one" {
+		sessionId = utils.NewUUIDV4().String()
+	}
+	url := fmt.Sprintf("https://%s%s", config.Host, config.GetNormalizedPath())
+	connMeta := connTelemetry{localAddr: "unknown", remoteAddr: config.DialAddr}
+	client := buildHTTP3Client(config)
+
+	if mode == "stream-one" {
+		pr, pw := io.Pipe()
+		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr, config)
+		if err != nil {
+			return nil, fmt.Errorf("create req failed: %w", err)
+		}
+		config.FillStreamRequest(req, sessionId)
+		logRequest(config, "stream-one", req, sessionId, "", connMeta)
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("splithttp h3 stream-one failed: %w", err)
+		}
+		if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("splithttp h3 stream-one bad status code: %d, body: %s", resp.StatusCode, string(b))
+		}
+		return NewConn(noopNetConn{}, resp.Body, pw, config.RequestLog), nil
+	}
+
+	downReq, err := getBaseRequest(ctx, "GET", url, nil, config)
+	if err != nil {
+		return nil, fmt.Errorf("create stream-down req failed: %w", err)
+	}
+	downReq = downReq.WithContext(httptrace.WithClientTrace(downReq.Context(), &httptrace.ClientTrace{}))
+	config.FillStreamRequest(downReq, sessionId)
+	logRequest(config, "stream-down", downReq, sessionId, "", connMeta)
+
+	downRespChan := make(chan *http.Response, 1)
+	downErrChan := make(chan error, 1)
+
+	go func() {
+		downResp, downErr := client.Do(downReq)
+		if downErr != nil {
+			downErrChan <- downErr
+			return
+		}
+		downRespChan <- downResp
+	}()
+
+	var downstreamReader io.ReadCloser
+
+	select {
+	case err := <-downErrChan:
+		return nil, fmt.Errorf("splithttp h3 stream-down failed: %w", err)
+	case downResp := <-downRespChan:
+		logResponse(config, "stream-down", downResp, sessionId, "", connMeta)
+		if err := ensureHTTPProtocolAllowed(config, downResp); err != nil {
+			downResp.Body.Close()
+			return nil, err
+		}
+		if downResp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(downResp.Body)
+			downResp.Body.Close()
+			return nil, fmt.Errorf("splithttp h3 stream-down bad status code: %d, body: %s", downResp.StatusCode, string(b))
+		}
+		downstreamReader = downResp.Body
+	case <-time.After(10 * time.Second): // QUIC handshake + timeout might take more than 5s
+		return nil, fmt.Errorf("splithttp h3 stream-down timeout")
+	}
+
+	if mode == "stream-up" {
+		upReader, upWriter := io.Pipe()
+		upReq, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, upReader, config)
+		if err != nil {
+			return nil, fmt.Errorf("create stream-up req failed: %w", err)
+		}
+		config.FillStreamRequest(upReq, sessionId)
+		logRequest(config, "stream-up", upReq, sessionId, "", connMeta)
+		go func() {
+			resp, _ := client.Do(upReq)
+			if resp != nil && resp.Body != nil {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}
+		}()
+		return NewConn(noopNetConn{}, downstreamReader, upWriter, config.RequestLog), nil
+	}
+
+	if mode == "packet-up" {
+		writer := &PacketUpWriter{
+			ctx:       ctx,
+			client:    client,
+			url:       url,
+			config:    config,
+			sessionId: sessionId,
+			meta:      connMeta,
+		}
+		return NewConn(noopNetConn{}, downstreamReader, writer, config.RequestLog), nil
+	}
+
+	return nil, fmt.Errorf("unsupported splithttp mode %s", mode)
+}
+
 // StreamConn builds either Stream-One, Stream-Up/Down, or Packet-Up multiplexed flow based on configs.
 func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.Conn, error) {
 	mode := parseMode(config)
@@ -233,15 +463,32 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 	url := fmt.Sprintf("https://%s%s", config.Host, config.GetNormalizedPath())
 	connMeta := getConnTelemetry(c)
 
-	// Since c implies an underlying TLS connection ALREADY wrapped from outside, we use http2.Transport
-	// with AllowHTTP to force H2 frames unencrypted down the pipe.
-	rt := &http2.Transport{
-		AllowHTTP: true,
-		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-			return c, nil
-		},
-		ReadIdleTimeout: 30 * time.Second,
-		PingTimeout:     10 * time.Second,
+	// Select transport explicitly to avoid parsing HTTP/2 frames with HTTP/1 reader.
+	useH2 := config.HasALPN("h2")
+	if ts, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		if ts.ConnectionState().NegotiatedProtocol == "h2" {
+			useH2 = true
+		}
+	} else if ts, ok := c.(interface{ ConnectionState() ctls.ConnectionState }); ok {
+		if ts.ConnectionState().NegotiatedProtocol == "h2" {
+			useH2 = true
+		}
+	}
+	var rt http.RoundTripper
+	if useH2 {
+		rt = &http.Http2Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+				return c, nil
+			},
+			ReadIdleTimeout: 30 * time.Second,
+		}
+	} else {
+		rt = &http.Transport{
+			ForceAttemptHTTP2: false,
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return c, nil
+			},
+		}
 	}
 
 	client := &http.Client{
@@ -302,6 +549,9 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 			}
 
 		case resp := <-respChan:
+			if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
+				return nil, err
+			}
 			if resp.StatusCode != http.StatusOK {
 				return nil, fmt.Errorf("splithttp unexpected status code: %d", resp.StatusCode)
 			}
@@ -337,12 +587,15 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 			return nil, fmt.Errorf("splithttp stream-down failed: %w", err)
 		case resp := <-downRespChan:
 			logResponse(config, "stream-down", resp, sessionId, "", connMeta)
+			if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
+				return nil, err
+			}
 			if resp.StatusCode != http.StatusOK {
 				b, _ := io.ReadAll(resp.Body)
 				return nil, fmt.Errorf("splithttp stream-down bad status code: %d, body: %s", resp.StatusCode, string(b))
 			}
 			downstreamReader = resp.Body
-		case <-time.After(5 * time.Second):
+		case <-time.After(10 * time.Second):
 			return nil, fmt.Errorf("splithttp stream-down timeout")
 		}
 
@@ -358,6 +611,7 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 			go func() {
 				resp, _ := client.Do(upReq)
 				if resp != nil && resp.Body != nil {
+					_, _ = io.Copy(io.Discard, resp.Body)
 					resp.Body.Close()
 				}
 			}()

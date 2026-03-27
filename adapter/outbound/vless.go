@@ -13,6 +13,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/splithttp"
 	"github.com/metacubex/mihomo/transport/vless"
@@ -75,17 +76,36 @@ type VlessOption struct {
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
 	case "xhttp", "splithttp":
-		splitConfig := buildSplitHTTPConfig(v.addr, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
+		splitConfig := buildSplitHTTPConfig(ctx, v.addr, v.option.ServerName, v.option.ALPN, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
+		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
+			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
+		}
+		attempted := []string{}
+		if splitConfig.HasALPN("h3") {
+			attempted = append(attempted, "h3")
+			h3Conn, h3Err := splithttp.StreamConnH3(ctx, splitConfig)
+			if h3Err == nil {
+				log.Infoln("xhttp protocol-selection attempted=%v selected=h3", attempted)
+				return v.streamConnContext(ctx, h3Conn, metadata)
+			}
+			if !splitConfig.HasTCPFallback() {
+				log.Warnln("xhttp protocol-selection attempted=%v selected=none fallback_reason=%v", attempted, h3Err)
+				return nil, h3Err
+			}
+			log.Infoln("xhttp protocol-selection attempted=%v selected=tcp fallback_reason=%v", attempted, h3Err)
+		}
 
 		c, err = v.streamTLSConn(ctx, c, false)
 		if err != nil {
 			return nil, err
 		}
 
+		attempted = append(attempted, "tcp")
 		c, err = splithttp.StreamConn(ctx, c, splitConfig)
 		if err != nil {
 			return nil, err
 		}
+		log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
 
 		return v.streamConnContext(ctx, c, metadata)
 	case "ws":

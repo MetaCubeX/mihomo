@@ -1,9 +1,11 @@
 package outbound
 
 import (
+	"context"
 	"net"
-	"net/http"
 
+	"github.com/metacubex/http"
+	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/transport/splithttp"
 )
 
@@ -31,11 +33,29 @@ type SplitHTTPOptions struct {
 	RequestLog          bool              `proxy:"request-log,omitempty"`
 }
 
-func buildSplitHTTPConfig(addr string, xhttpOpts SplitHTTPOptions, splitHTTPOpts SplitHTTPOptions, tlsEnabled bool) *splithttp.SplitHTTPConfig {
+func normalizeSplitHTTPDialAddr(ctx context.Context, addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	if net.ParseIP(host) != nil {
+		return addr
+	}
+	ip, err := resolver.ResolveIP(ctx, host)
+	if err != nil {
+		return addr
+	}
+	return net.JoinHostPort(ip.String(), port)
+}
+
+func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string, alpn []string, xhttpOpts SplitHTTPOptions, splitHTTPOpts SplitHTTPOptions, tlsEnabled bool) *splithttp.SplitHTTPConfig {
 	host, _, _ := net.SplitHostPort(addr)
 	config := &splithttp.SplitHTTPConfig{
 		Host:                xhttpOpts.Host,
 		Path:                xhttpOpts.Path,
+		ALPN:                alpn,
+		DialAddr:            normalizeSplitHTTPDialAddr(ctx, addr),
+		TLSServerName:       tlsServerName,
 		Headers:             http.Header{},
 		MaxUploadSize:       xhttpOpts.MaxUploadSize,
 		MaxConcurrentPosts:  xhttpOpts.MaxConcurrentPosts,
