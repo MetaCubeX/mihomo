@@ -1,6 +1,6 @@
 package memory
 
-const sizeOfKinfoProc    = 0x300
+const sizeOfKinfoProc = 0x300
 
 type Timeval struct {
 	Sec  int32

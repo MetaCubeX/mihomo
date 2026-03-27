@@ -14,6 +14,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/gun"
+	"github.com/metacubex/mihomo/transport/splithttp"
 	"github.com/metacubex/mihomo/transport/vless"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	"github.com/metacubex/mihomo/transport/vmess"
@@ -61,6 +62,8 @@ type VlessOption struct {
 	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
 	WSOpts            WSOptions         `proxy:"ws-opts,omitempty"`
 	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
+	XHTTPOpts         SplitHTTPOptions  `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts     SplitHTTPOptions  `proxy:"splithttp-opts,omitempty"`
 	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint       string            `proxy:"fingerprint,omitempty"`
 	Certificate       string            `proxy:"certificate,omitempty"`
@@ -71,6 +74,20 @@ type VlessOption struct {
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
+	case "xhttp", "splithttp":
+		splitConfig := buildSplitHTTPConfig(v.addr, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
+
+		c, err = v.streamTLSConn(ctx, c, false)
+		if err != nil {
+			return nil, err
+		}
+
+		c, err = splithttp.StreamConn(ctx, c, splitConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		return v.streamConnContext(ctx, c, metadata)
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{

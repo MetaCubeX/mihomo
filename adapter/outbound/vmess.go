@@ -17,6 +17,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
+	"github.com/metacubex/mihomo/transport/splithttp"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
 	"github.com/metacubex/http"
@@ -42,33 +43,35 @@ type Vmess struct {
 
 type VmessOption struct {
 	BasicOption
-	Name                string         `proxy:"name"`
-	Server              string         `proxy:"server"`
-	Port                int            `proxy:"port"`
-	UUID                string         `proxy:"uuid"`
-	AlterID             int            `proxy:"alterId"`
-	Cipher              string         `proxy:"cipher"`
-	UDP                 bool           `proxy:"udp,omitempty"`
-	Network             string         `proxy:"network,omitempty"`
-	TLS                 bool           `proxy:"tls,omitempty"`
-	ALPN                []string       `proxy:"alpn,omitempty"`
-	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string         `proxy:"fingerprint,omitempty"`
-	Certificate         string         `proxy:"certificate,omitempty"`
-	PrivateKey          string         `proxy:"private-key,omitempty"`
-	ServerName          string         `proxy:"servername,omitempty"`
-	ECHOpts             ECHOptions     `proxy:"ech-opts,omitempty"`
-	RealityOpts         RealityOptions `proxy:"reality-opts,omitempty"`
-	HTTPOpts            HTTPOptions    `proxy:"http-opts,omitempty"`
-	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
-	GrpcOpts            GrpcOptions    `proxy:"grpc-opts,omitempty"`
-	WSOpts              WSOptions      `proxy:"ws-opts,omitempty"`
-	PacketAddr          bool           `proxy:"packet-addr,omitempty"`
-	XUDP                bool           `proxy:"xudp,omitempty"`
-	PacketEncoding      string         `proxy:"packet-encoding,omitempty"`
-	GlobalPadding       bool           `proxy:"global-padding,omitempty"`
-	AuthenticatedLength bool           `proxy:"authenticated-length,omitempty"`
-	ClientFingerprint   string         `proxy:"client-fingerprint,omitempty"`
+	Name                string           `proxy:"name"`
+	Server              string           `proxy:"server"`
+	Port                int              `proxy:"port"`
+	UUID                string           `proxy:"uuid"`
+	AlterID             int              `proxy:"alterId"`
+	Cipher              string           `proxy:"cipher"`
+	UDP                 bool             `proxy:"udp,omitempty"`
+	Network             string           `proxy:"network,omitempty"`
+	TLS                 bool             `proxy:"tls,omitempty"`
+	ALPN                []string         `proxy:"alpn,omitempty"`
+	SkipCertVerify      bool             `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string           `proxy:"fingerprint,omitempty"`
+	Certificate         string           `proxy:"certificate,omitempty"`
+	PrivateKey          string           `proxy:"private-key,omitempty"`
+	ServerName          string           `proxy:"servername,omitempty"`
+	ECHOpts             ECHOptions       `proxy:"ech-opts,omitempty"`
+	RealityOpts         RealityOptions   `proxy:"reality-opts,omitempty"`
+	HTTPOpts            HTTPOptions      `proxy:"http-opts,omitempty"`
+	HTTP2Opts           HTTP2Options     `proxy:"h2-opts,omitempty"`
+	GrpcOpts            GrpcOptions      `proxy:"grpc-opts,omitempty"`
+	WSOpts              WSOptions        `proxy:"ws-opts,omitempty"`
+	XHTTPOpts           SplitHTTPOptions `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts       SplitHTTPOptions `proxy:"splithttp-opts,omitempty"`
+	PacketAddr          bool             `proxy:"packet-addr,omitempty"`
+	XUDP                bool             `proxy:"xudp,omitempty"`
+	PacketEncoding      string           `proxy:"packet-encoding,omitempty"`
+	GlobalPadding       bool             `proxy:"global-padding,omitempty"`
+	AuthenticatedLength bool             `proxy:"authenticated-length,omitempty"`
+	ClientFingerprint   string           `proxy:"client-fingerprint,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -99,6 +102,35 @@ type WSOptions struct {
 
 func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
+	case "xhttp", "splithttp":
+		host, _, _ := net.SplitHostPort(v.addr)
+		splitConfig := buildSplitHTTPConfig(v.addr, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
+
+		if v.option.TLS {
+			tlsOpts := mihomoVMess.TLSConfig{
+				Host:              host,
+				SkipCertVerify:    v.option.SkipCertVerify,
+				FingerPrint:       v.option.Fingerprint,
+				Certificate:       v.option.Certificate,
+				PrivateKey:        v.option.PrivateKey,
+				ClientFingerprint: v.option.ClientFingerprint,
+				Reality:           v.realityConfig,
+			}
+			if v.option.ServerName != "" {
+				tlsOpts.Host = v.option.ServerName
+			}
+			c, err = mihomoVMess.StreamTLSConn(ctx, c, &tlsOpts)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		c, err = splithttp.StreamConn(ctx, c, splitConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		return v.streamConnContext(ctx, c, metadata)
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &mihomoVMess.WebsocketConfig{

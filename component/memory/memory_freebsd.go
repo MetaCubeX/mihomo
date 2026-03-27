@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	CTLKern          = 1
-	KernProc         = 14
-	KernProcPID      = 1
+	CTLKern     = 1
+	KernProc    = 14
+	KernProcPID = 1
 )
 
 func CallSyscall(mib []int32) ([]byte, uint64, error) {
