@@ -12,14 +12,12 @@ import (
 )
 
 type Config struct {
-	Host                 string
-	Path                 string
-	Mode                 string
-	Headers              map[string]string
-	ScMaxEachPostBytes   int
-	ScMinPostsIntervalMs int
-	NoGRPCHeader         bool
-	XPaddingBytes        string
+	Host          string
+	Path          string
+	Mode          string
+	Headers       map[string]string
+	NoGRPCHeader  bool
+	XPaddingBytes string
 }
 
 func (c *Config) NormalizedMode() string {

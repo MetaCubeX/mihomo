@@ -77,8 +77,6 @@ type XHTTPOptions struct {
 	Mode                 string            `proxy:"mode,omitempty"`
 	Headers              map[string]string `proxy:"headers,omitempty"`
 	ScMaxConcurrentPosts int               `proxy:"sc-max-concurrent-posts,omitempty"`
-	ScMaxEachPostBytes   int               `proxy:"sc-max-each-post-bytes,omitempty"`
-	ScMinPostsIntervalMs int               `proxy:"sc-min-posts-interval-ms,omitempty"`
 	NoGRPCHeader         bool              `proxy:"no-grpc-header,omitempty"`
 	XPaddingBytes        string            `proxy:"x-padding-bytes,omitempty"`
 }
@@ -255,14 +253,12 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 	}
 
 	cfg := &xhttp.Config{
-		Host:                 requestHost,
-		Path:                 v.option.XHTTPOpts.Path,
-		Mode:                 v.option.XHTTPOpts.Mode,
-		Headers:              v.option.XHTTPOpts.Headers,
-		ScMaxEachPostBytes:   v.option.XHTTPOpts.ScMaxEachPostBytes,
-		ScMinPostsIntervalMs: v.option.XHTTPOpts.ScMinPostsIntervalMs,
-		NoGRPCHeader:         v.option.XHTTPOpts.NoGRPCHeader,
-		XPaddingBytes:        v.option.XHTTPOpts.XPaddingBytes,
+		Host:          requestHost,
+		Path:          v.option.XHTTPOpts.Path,
+		Mode:          v.option.XHTTPOpts.Mode,
+		Headers:       v.option.XHTTPOpts.Headers,
+		NoGRPCHeader:  v.option.XHTTPOpts.NoGRPCHeader,
+		XPaddingBytes: v.option.XHTTPOpts.XPaddingBytes,
 	}
 
 	mode := cfg.EffectiveMode(v.realityConfig != nil)
