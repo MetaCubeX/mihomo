@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/contextutils"
+
 	"github.com/metacubex/http"
 	"github.com/metacubex/tls"
 )
@@ -155,7 +157,7 @@ func DialStreamOne(
 
 	pr, pw := io.Pipe()
 
-	req, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodPost, requestURL.String(), pr)
+	req, err := http.NewRequestWithContext(contextutils.WithoutCancel(ctx), http.MethodPost, requestURL.String(), pr)
 	if err != nil {
 		_ = pr.Close()
 		_ = pw.Close()
@@ -249,7 +251,7 @@ func DialPacketUp(
 		Path:   cfg.NormalizedPath(),
 	}
 
-	req, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodGet, downloadURL.String(), nil)
+	req, err := http.NewRequestWithContext(contextutils.WithoutCancel(ctx), http.MethodGet, downloadURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +270,7 @@ func DialPacketUp(
 	}
 
 	return &PacketUpConn{
-		ctx:        context.WithoutCancel(ctx),
+		ctx:        contextutils.WithoutCancel(ctx),
 		cfg:        cfg,
 		address:    address,
 		port:       port,
