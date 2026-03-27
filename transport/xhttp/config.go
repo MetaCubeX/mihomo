@@ -80,16 +80,17 @@ func (c *Config) RequestHeader() http.Header {
 }
 
 func (c *Config) RandomPadding() (string, error) {
-	if c.XPaddingBytes == "" {
-		return "", nil
+	paddingRange := c.XPaddingBytes
+	if paddingRange == "" {
+		paddingRange = "100-1000"
 	}
 
-	minVal, maxVal, err := parseRange(c.XPaddingBytes)
+	minVal, maxVal, err := parseRange(paddingRange)
 	if err != nil {
 		return "", err
 	}
 	if minVal < 0 || maxVal < minVal {
-		return "", fmt.Errorf("invalid x-padding-bytes range: %s", c.XPaddingBytes)
+		return "", fmt.Errorf("invalid x-padding-bytes range: %s", paddingRange)
 	}
 	if maxVal == 0 {
 		return "", nil
