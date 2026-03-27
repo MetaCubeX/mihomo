@@ -1,11 +1,13 @@
 package xhttp
 
 import (
+	"github.com/metacubex/http/h2c"
 	"io"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/metacubex/http"
 )
@@ -113,14 +115,18 @@ func NewServerHandler(opt ServerOption) http.Handler {
 		path += "/"
 	}
 
-	return &requestHandler{
+	// using h2c.NewHandler to ensure we can work in plain http2
+	// and some tls conn is not *tls.Conn (like *reality.Conn)
+	return h2c.NewHandler(&requestHandler{
 		path:        path,
 		host:        opt.Host,
 		mode:        opt.Mode,
 		connHandler: opt.ConnHandler,
 		httpHandler: opt.HttpHandler,
 		sessions:    map[string]*httpSession{},
-	}
+	}, &http.Http2Server{
+		IdleTimeout: 30 * time.Second,
+	})
 }
 
 func (h *requestHandler) getOrCreateSession(sessionID string) *httpSession {

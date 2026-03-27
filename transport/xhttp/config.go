@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	http "github.com/metacubex/http"
 	"strconv"
 	"strings"
+
+	"github.com/metacubex/http"
 )
 
 type Config struct {

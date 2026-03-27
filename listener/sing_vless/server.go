@@ -19,10 +19,10 @@ import (
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 	"github.com/metacubex/mihomo/transport/xhttp"
 
+	"github.com/metacubex/http"
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
-	http "github.com/metacubex/http"
 )
 
 type Listener struct {
@@ -184,30 +184,9 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 		go func() {
 			if httpServer.Handler != nil {
-				if realityBuilder != nil && httpServer.Handler != nil {
-	h2s := &http.Http2Server{}
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			if sl.closed {
-				break
-			}
-			continue
-		}
-
-		go func(conn net.Conn) {
-			h2s.ServeConn(conn, &http.Http2ServeConnOpts{
-				Handler: httpServer.Handler,
-			})
-		}(c)
-	}
-	return
-}
-
 				_ = httpServer.Serve(l)
 				return
 			}
-
 			for {
 				c, err := l.Accept()
 				if err != nil {
@@ -220,7 +199,6 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 				go sl.HandleConn(c, tunnel)
 			}
 		}()
-
 	}
 
 	return sl, nil

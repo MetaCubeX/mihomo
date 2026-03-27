@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/metacubex/tls"
 	"io"
 	"net"
 	"net/url"
@@ -13,7 +12,8 @@ import (
 	"sync"
 	"time"
 
-	http "github.com/metacubex/http"
+	"github.com/metacubex/http"
+	"github.com/metacubex/tls"
 )
 
 type DialRawFunc func(ctx context.Context) (net.Conn, error)

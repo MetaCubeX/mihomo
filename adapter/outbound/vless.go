@@ -164,6 +164,8 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		c, err = vmess.StreamH2Conn(ctx, c, h2Opts)
 	case "grpc":
 		break // already handle in gun transport
+	case "xhttp":
+		break // already handle in dialXHTTPConn
 	default:
 		// default tcp network
 		// handle TLS
@@ -315,10 +317,12 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	}
 
 	var c net.Conn
-	// gun transport
-	if v.gunTransport != nil {
+	switch v.option.Network {
+	case "xhttp":
+		c, err = v.dialXHTTPConn(ctx)
+	case "grpc": // gun transport
 		c, err = v.gunTransport.Dial()
-	} else {
+	default:
 		c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
 	}
 	if err != nil {
@@ -341,26 +345,13 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		return nil, err
 	}
 
-	if v.option.Network == "xhttp" {
-		c, err := v.dialXHTTPConn(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-		}
-
-		c, err = v.streamConnContext(ctx, c, metadata)
-		if err != nil {
-			safeConnClose(c, err)
-			return nil, fmt.Errorf("new vless client error: %v", err)
-		}
-
-		return v.ListenPacketOnStreamConn(ctx, c, metadata)
-	}
-
 	var c net.Conn
-	// gun transport
-	if v.gunTransport != nil {
+	switch v.option.Network {
+	case "xhttp":
+		c, err = v.dialXHTTPConn(ctx)
+	case "grpc": // gun transport
 		c, err = v.gunTransport.Dial()
-	} else {
+	default:
 		c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
 	}
 	if err != nil {
@@ -520,7 +511,6 @@ func NewVless(option VlessOption) (*Vless, error) {
 		if len(option.HTTP2Opts.Host) == 0 {
 			option.HTTP2Opts.Host = append(option.HTTP2Opts.Host, "www.example.com")
 		}
-
 	case "grpc":
 		dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
 			c, err := v.dialer.DialContext(ctx, "tcp", v.addr)
