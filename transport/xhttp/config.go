@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"net/http"
+	http "github.com/metacubex/http"
 	"strconv"
 	"strings"
 )

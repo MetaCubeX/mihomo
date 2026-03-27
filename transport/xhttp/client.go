@@ -3,18 +3,17 @@ package xhttp
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"github.com/metacubex/tls"
 	"io"
 	"net"
-	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
 
-	"golang.org/x/net/http2"
+	http "github.com/metacubex/http"
 )
 
 type DialRawFunc func(ctx context.Context) (net.Conn, error)
@@ -135,7 +134,7 @@ func DialStreamOne(
 		Path:   cfg.NormalizedPath(),
 	}
 
-	transport := &http2.Transport{
+	transport := &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
 			raw, err := dialRaw(ctx)
 			if err != nil {
@@ -225,7 +224,7 @@ func DialPacketUp(
 		host = address
 	}
 
-	transport := &http2.Transport{
+	transport := &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
 			raw, err := dialRaw(ctx)
 			if err != nil {

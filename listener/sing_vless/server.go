@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	nethttp "net/http"
 	"strings"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -20,11 +19,10 @@ import (
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 	"github.com/metacubex/mihomo/transport/xhttp"
 
-	mihomoHTTP "github.com/metacubex/http"
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
-	"golang.org/x/net/http2"
+	http "github.com/metacubex/http"
 )
 
 type Listener struct {
@@ -81,8 +79,7 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 	tlsConfig := &tls.Config{Time: ntp.Now}
 	var realityBuilder *reality.Builder
-	var httpServer mihomoHTTP.Server
-	var xhttpStdHandler nethttp.Handler
+	var httpServer http.Server
 
 	if config.Certificate != "" && config.PrivateKey != "" {
 		certLoader, err := ca.NewTLSKeyPairLoader(config.Certificate, config.PrivateKey)
@@ -126,11 +123,11 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		}
 	}
 	if config.WsPath != "" {
-		httpMux := mihomoHTTP.NewServeMux()
-		httpMux.HandleFunc(config.WsPath, func(w mihomoHTTP.ResponseWriter, r *mihomoHTTP.Request) {
+		httpMux := http.NewServeMux()
+		httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
 			conn, err := mihomoVMess.StreamUpgradedWebsocketConn(w, r)
 			if err != nil {
-				mihomoHTTP.Error(w, err.Error(), 500)
+				http.Error(w, err.Error(), 500)
 				return
 			}
 			sl.HandleConn(conn, tunnel, additions...)
@@ -166,15 +163,6 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			HttpHandler: httpServer.Handler,
 		})
 
-		xhttpStdHandler = xhttp.NewStdServerHandler(xhttp.ServerOption{
-			Path: config.XHTTPPath,
-			Host: config.XHTTPHost,
-			Mode: config.XHTTPMode,
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
-			},
-		})
-
 		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
 	}
 	for _, addr := range strings.Split(config.Listen, ",") {
@@ -196,25 +184,25 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 
 		go func() {
 			if httpServer.Handler != nil {
-				if realityBuilder != nil && xhttpStdHandler != nil {
-					h2s := &http2.Server{}
-					for {
-						c, err := l.Accept()
-						if err != nil {
-							if sl.closed {
-								break
-							}
-							continue
-						}
+				if realityBuilder != nil && httpServer.Handler != nil {
+	h2s := &http.Http2Server{}
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			if sl.closed {
+				break
+			}
+			continue
+		}
 
-						go func(conn net.Conn) {
-							h2s.ServeConn(conn, &http2.ServeConnOpts{
-								Handler: xhttpStdHandler,
-							})
-						}(c)
-					}
-					return
-				}
+		go func(conn net.Conn) {
+			h2s.ServeConn(conn, &http.Http2ServeConnOpts{
+				Handler: httpServer.Handler,
+			})
+		}(c)
+	}
+	return
+}
 
 				_ = httpServer.Serve(l)
 				return
