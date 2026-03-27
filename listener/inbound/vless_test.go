@@ -342,13 +342,14 @@ func TestInboundVless_Reality_Grpc(t *testing.T) {
 }
 
 func TestInboundVless_XHTTP(t *testing.T) {
-
 	inboundOptions := inbound.VlessOption{
 		Certificate: tlsCertificate,
 		PrivateKey:  tlsPrivateKey,
-		XHTTPPath:   "/vless-xhttp",
-		XHTTPHost:   "example.com",
-		XHTTPMode:   "auto",
+		XHTTPConfig: inbound.XHTTPConfig{
+			Path: "/vless-xhttp",
+			Host: "example.com",
+			Mode: "auto",
+		},
 	}
 	outboundOptions := outbound.VlessOption{
 		TLS:         true,
@@ -364,7 +365,6 @@ func TestInboundVless_XHTTP(t *testing.T) {
 }
 
 func TestInboundVless_Reality_XHTTP(t *testing.T) {
-
 	inboundOptions := inbound.VlessOption{
 		RealityConfig: inbound.RealityConfig{
 			Dest:        net.JoinHostPort(realityDest, "443"),
@@ -372,7 +372,9 @@ func TestInboundVless_Reality_XHTTP(t *testing.T) {
 			ShortID:     []string{realityShortid},
 			ServerNames: []string{realityDest},
 		},
-		XHTTPMode: "auto",
+		XHTTPConfig: inbound.XHTTPConfig{
+			Mode: "auto",
+		},
 	}
 	outboundOptions := outbound.VlessOption{
 		TLS:        true,

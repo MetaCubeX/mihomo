@@ -1,7 +1,6 @@
 package xhttp
 
 import (
-	"github.com/metacubex/http/h2c"
 	"io"
 	"net"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/http/h2c"
 )
 
 type ServerOption struct {

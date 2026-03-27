@@ -145,18 +145,18 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		})
 		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...) // h2 must before http/1.1
 	}
-	if config.XHTTPMode != "" {
-		switch config.XHTTPMode {
+	if config.XHTTPConfig.Mode != "" {
+		switch config.XHTTPConfig.Mode {
 		case "auto":
 		default:
 			return nil, errors.New("unsupported xhttp mode")
 		}
 	}
-	if config.XHTTPPath != "" || config.XHTTPHost != "" || config.XHTTPMode != "" {
+	if config.XHTTPConfig.Path != "" || config.XHTTPConfig.Host != "" || config.XHTTPConfig.Mode != "" {
 		httpServer.Handler = xhttp.NewServerHandler(xhttp.ServerOption{
-			Path: config.XHTTPPath,
-			Host: config.XHTTPHost,
-			Mode: config.XHTTPMode,
+			Path: config.XHTTPConfig.Path,
+			Host: config.XHTTPConfig.Host,
+			Mode: config.XHTTPConfig.Mode,
 			ConnHandler: func(conn net.Conn) {
 				sl.HandleConn(conn, tunnel, additions...)
 			},

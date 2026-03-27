@@ -19,9 +19,7 @@ type VlessServer struct {
 	Users           []VlessUser
 	Decryption      string
 	WsPath          string
-	XHTTPPath       string
-	XHTTPHost       string
-	XHTTPMode       string
+	XHTTPConfig     XHTTPConfig
 	GrpcServiceName string
 	Certificate     string
 	PrivateKey      string
@@ -30,6 +28,12 @@ type VlessServer struct {
 	EchKey          string
 	RealityConfig   reality.Config
 	MuxOption       sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
+}
+
+type XHTTPConfig struct {
+	Path string
+	Host string
+	Mode string
 }
 
 func (t VlessServer) String() string {
