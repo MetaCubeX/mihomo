@@ -23,6 +23,7 @@ import (
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
+	"golang.org/x/exp/slices"
 )
 
 type Listener struct {
@@ -162,8 +163,9 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			},
 			HttpHandler: httpServer.Handler,
 		})
-
-		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
+		if !slices.Contains(tlsConfig.NextProtos, "h2") {
+			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
+		}
 	}
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
