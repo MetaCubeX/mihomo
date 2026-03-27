@@ -17,6 +17,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
+"github.com/metacubex/mihomo/transport/xhttp"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
 	"github.com/metacubex/http"
@@ -63,6 +64,8 @@ type VmessOption struct {
 	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
 	GrpcOpts            GrpcOptions    `proxy:"grpc-opts,omitempty"`
 	WSOpts              WSOptions      `proxy:"ws-opts,omitempty"`
+	XHTTPOpts       SplitHTTPOptions  `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts   SplitHTTPOptions  `proxy:"splithttp-opts,omitempty"`
 	PacketAddr          bool           `proxy:"packet-addr,omitempty"`
 	XUDP                bool           `proxy:"xudp,omitempty"`
 	PacketEncoding      string         `proxy:"packet-encoding,omitempty"`
@@ -99,6 +102,47 @@ type WSOptions struct {
 
 func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
+	case "xhttp", "splithttp":
+		host, _, _ := net.SplitHostPort(v.addr)
+		splitConfig := buildSplitHTTPConfig(ctx, v.addr, v.option.ServerName, v.option.ALPN, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
+		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
+			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
+		}
+		attempted := []string{}
+		if splitConfig.HasALPN("h3") {
+			attempted = append(attempted, "h3")
+			h3Conn, h3Err := xhttp.StreamConnH3(ctx, splitConfig)
+			if h3Err == nil {
+				return v.streamConnContext(ctx, h3Conn, metadata)
+			}
+			if !splitConfig.HasTCPFallback() {
+				return nil, h3Err
+			}
+		}
+		if v.option.TLS {
+			tlsOpts := mihomoVMess.TLSConfig{
+				Host:              host,
+				SkipCertVerify:    v.option.SkipCertVerify,
+				FingerPrint:       v.option.Fingerprint,
+				Certificate:       v.option.Certificate,
+				PrivateKey:        v.option.PrivateKey,
+				ClientFingerprint: v.option.ClientFingerprint,
+				Reality:           v.realityConfig,
+			}
+			if v.option.ServerName != "" {
+				tlsOpts.Host = v.option.ServerName
+			}
+			c, err = mihomoVMess.StreamTLSConn(ctx, c, &tlsOpts)
+			if err != nil {
+				return nil, err
+			}
+		}
+		attempted = append(attempted, "tcp")
+		c, err = xhttp.StreamConn(ctx, c, splitConfig)
+		if err != nil {
+			return nil, err
+		}
+		return v.streamConnContext(ctx, c, metadata)
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &mihomoVMess.WebsocketConfig{

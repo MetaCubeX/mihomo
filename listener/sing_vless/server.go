@@ -154,15 +154,28 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		}
 	}
 	if config.XHTTPConfig.Path != "" || config.XHTTPConfig.Host != "" || config.XHTTPConfig.Mode != "" {
-		httpServer.Handler = xhttp.NewServerHandler(xhttp.ServerOption{
-			Path: config.XHTTPConfig.Path,
-			Host: config.XHTTPConfig.Host,
-			Mode: config.XHTTPConfig.Mode,
-			ConnHandler: func(conn net.Conn) {
-				sl.HandleConn(conn, tunnel, additions...)
-			},
-			HttpHandler: httpServer.Handler,
+		xhttpPath := config.XHTTPConfig.Path
+		importSplithttpConfig := &xhttp.SplitHTTPConfig{
+			Path:               xhttpPath,
+			Host:               config.XHTTPConfig.Host,
+			MaxConcurrentPosts: 100,
+		}
+		splithttpServer := xhttp.NewSplitHTTPServer(importSplithttpConfig, func(conn net.Conn) {
+			sl.HandleConn(conn, tunnel, additions...)
 		})
+
+		muxPath := xhttpPath
+		if !strings.HasSuffix(muxPath, "/") {
+			muxPath += "/"
+		}
+		httpMux := http.NewServeMux()
+		httpMux.Handle(muxPath, splithttpServer)
+		httpMux.Handle(xhttpPath, splithttpServer)
+		if httpServer.Handler != nil {
+			// Assuming fallback if needed
+		}
+		httpServer.Handler = httpMux
+
 		if !slices.Contains(tlsConfig.NextProtos, "h2") {
 			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
 		}

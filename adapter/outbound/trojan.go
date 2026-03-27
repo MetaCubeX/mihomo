@@ -13,6 +13,7 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/gun"
+"github.com/metacubex/mihomo/transport/xhttp"
 	"github.com/metacubex/mihomo/transport/shadowsocks/core"
 	"github.com/metacubex/mihomo/transport/trojan"
 	"github.com/metacubex/mihomo/transport/vmess"
@@ -53,6 +54,8 @@ type TrojanOption struct {
 	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
 	GrpcOpts          GrpcOptions    `proxy:"grpc-opts,omitempty"`
 	WSOpts            WSOptions      `proxy:"ws-opts,omitempty"`
+	XHTTPOpts         SplitHTTPOptions `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts     SplitHTTPOptions `proxy:"splithttp-opts,omitempty"`
 	SSOpts            TrojanSSOption `proxy:"ss-opts,omitempty"`
 	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
 }
@@ -66,6 +69,46 @@ type TrojanSSOption struct {
 
 func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch t.option.Network {
+	case "xhttp", "splithttp":
+		splitConfig := buildSplitHTTPConfig(ctx, t.addr, t.option.SNI, t.option.ALPN, t.option.XHTTPOpts, t.option.SplitHTTPOpts, true)
+		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
+			return t.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
+		}
+		attempted := []string{}
+		if splitConfig.HasALPN("h3") {
+			attempted = append(attempted, "h3")
+			h3Conn, h3Err := xhttp.StreamConnH3(ctx, splitConfig)
+			if h3Err == nil {
+				return t.streamConnContext(ctx, h3Conn, metadata)
+			}
+			if !splitConfig.HasTCPFallback() {
+				return nil, h3Err
+			}
+		}
+		alpn := trojan.DefaultALPN
+		if t.option.ALPN != nil {
+			alpn = t.option.ALPN
+		}
+		c, err = vmess.StreamTLSConn(ctx, c, &vmess.TLSConfig{
+			Host:              t.option.SNI,
+			SkipCertVerify:    t.option.SkipCertVerify,
+			FingerPrint:       t.option.Fingerprint,
+			Certificate:       t.option.Certificate,
+			PrivateKey:        t.option.PrivateKey,
+			ClientFingerprint: t.option.ClientFingerprint,
+			NextProtos:        alpn,
+			ECH:               t.echConfig,
+			Reality:           t.realityConfig,
+		})
+		if err != nil {
+			return nil, err
+		}
+		attempted = append(attempted, "tcp")
+		c, err = xhttp.StreamConn(ctx, c, splitConfig)
+		if err != nil {
+			return nil, err
+		}
+		return t.streamConnContext(ctx, c, metadata)
 	case "ws":
 		host, port, _ := net.SplitHostPort(t.addr)
 
