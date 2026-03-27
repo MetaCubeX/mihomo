@@ -15,6 +15,7 @@ import (
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
+	"github.com/metacubex/mihomo/transport/splithttp"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
@@ -121,18 +122,45 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 			return nil, err
 		}
 	}
-	if config.WsPath != "" {
+	if config.WsPath != "" || config.XHTTPPath != "" || config.SplitHTTPPath != "" {
 		httpMux := http.NewServeMux()
-		httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
-			conn, err := mihomoVMess.StreamUpgradedWebsocketConn(w, r)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
+		if config.WsPath != "" {
+			httpMux.HandleFunc(config.WsPath, func(w http.ResponseWriter, r *http.Request) {
+				conn, err := mihomoVMess.StreamUpgradedWebsocketConn(w, r)
+				if err != nil {
+					http.Error(w, err.Error(), 500)
+					return
+				}
+				sl.HandleConn(conn, tunnel, additions...)
+			})
+			tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
+		}
+
+		xhttpPath := config.XHTTPPath
+		if xhttpPath == "" {
+			xhttpPath = config.SplitHTTPPath
+		}
+		if xhttpPath != "" {
+			importSplithttpConfig := &splithttp.SplitHTTPConfig{
+				Path:               xhttpPath,
+				Host:               "",
+				MaxConcurrentPosts: 100,
 			}
-			sl.HandleConn(conn, tunnel, additions...)
-		})
+			splithttpServer := splithttp.NewSplitHTTPServer(importSplithttpConfig, func(conn net.Conn) {
+				sl.HandleConn(conn, tunnel, additions...)
+			})
+
+			muxPath := xhttpPath
+			if !strings.HasSuffix(muxPath, "/") {
+				muxPath += "/"
+			}
+			httpMux.Handle(muxPath, splithttpServer)
+			httpMux.Handle(xhttpPath, splithttpServer)
+
+			tlsConfig.NextProtos = append([]string{"h2", "http/1.1"}, tlsConfig.NextProtos...)
+		}
+
 		httpServer.Handler = httpMux
-		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
 	}
 	if config.GrpcServiceName != "" {
 		httpServer.Handler = gun.NewServerHandler(gun.ServerOption{

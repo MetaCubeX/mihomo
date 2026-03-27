@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"net"
+	"strings"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -48,12 +49,23 @@ func normalizeSplitHTTPDialAddr(ctx context.Context, addr string) string {
 	return net.JoinHostPort(ip.String(), port)
 }
 
+func decideXHTTPALPN(alpn []string) []string {
+	if len(alpn) != 1 {
+		return []string{"h2"}
+	}
+	p := strings.ToLower(alpn[0])
+	if p == "h3" || p == "http/1.1" {
+		return []string{p}
+	}
+	return []string{"h2"}
+}
+
 func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string, alpn []string, xhttpOpts SplitHTTPOptions, splitHTTPOpts SplitHTTPOptions, tlsEnabled bool) *splithttp.SplitHTTPConfig {
 	host, _, _ := net.SplitHostPort(addr)
 	config := &splithttp.SplitHTTPConfig{
 		Host:                xhttpOpts.Host,
 		Path:                xhttpOpts.Path,
-		ALPN:                alpn,
+		ALPN:                decideXHTTPALPN(alpn),
 		DialAddr:            normalizeSplitHTTPDialAddr(ctx, addr),
 		TLSServerName:       tlsServerName,
 		Headers:             http.Header{},

@@ -27,6 +27,8 @@ type VlessServer struct {
 	EchKey          string
 	RealityConfig   reality.Config
 	MuxOption       sing.MuxOption `yaml:"mux-option" json:"mux-option,omitempty"`
+	XHTTPPath       string         `yaml:"xhttp-path" json:"xhttp-path,omitempty"`
+	SplitHTTPPath   string         `yaml:"splithttp-path" json:"xhttp-path,omitempty"`
 }
 
 func (t VlessServer) String() string {

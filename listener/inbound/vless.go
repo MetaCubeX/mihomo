@@ -22,6 +22,8 @@ type VlessOption struct {
 	EchKey          string        `inbound:"ech-key,omitempty"`
 	RealityConfig   RealityConfig `inbound:"reality-config,omitempty"`
 	MuxOption       MuxOption     `inbound:"mux-option,omitempty"`
+	XHTTPPath       string        `inbound:"xhttp-path,omitempty"`
+	SplitHTTPPath   string        `inbound:"splithttp-path,omitempty"`
 }
 
 type VlessUser struct {
@@ -71,6 +73,8 @@ func NewVless(options *VlessOption) (*Vless, error) {
 			EchKey:          options.EchKey,
 			RealityConfig:   options.RealityConfig.Build(),
 			MuxOption:       options.MuxOption.Build(),
+			XHTTPPath:       options.XHTTPPath,
+			SplitHTTPPath:   options.SplitHTTPPath,
 		},
 	}, nil
 }
