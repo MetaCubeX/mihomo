@@ -61,7 +61,8 @@ type VlessOption struct {
 	HTTP2Opts         HTTP2Options      `proxy:"h2-opts,omitempty"`
 	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
 	WSOpts            WSOptions         `proxy:"ws-opts,omitempty"`
-	XHTTPOpts         XHTTPOptions      `proxy:"xhttp-opts,omitempty"`
+	XHTTPOpts         SplitHTTPOptions  `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts     SplitHTTPOptions  `proxy:"splithttp-opts,omitempty"`
 	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint       string            `proxy:"fingerprint,omitempty"`
@@ -83,6 +84,32 @@ type XHTTPOptions struct {
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
+	case "xhttp", "splithttp":
+		splitConfig := buildSplitHTTPConfig(ctx, v.addr, v.option.ServerName, v.option.ALPN, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
+		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
+			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
+		}
+		attempted := []string{}
+		if splitConfig.HasALPN("h3") {
+			attempted = append(attempted, "h3")
+			h3Conn, h3Err := xhttp.StreamConnH3(ctx, splitConfig)
+			if h3Err == nil {
+				return v.streamConnContext(ctx, h3Conn, metadata)
+			}
+			if !splitConfig.HasTCPFallback() {
+				return nil, h3Err
+			}
+		}
+		c, err = v.streamTLSConn(ctx, c, false)
+		if err != nil {
+			return nil, err
+		}
+		attempted = append(attempted, "tcp")
+		c, err = xhttp.StreamConn(ctx, c, splitConfig)
+		if err != nil {
+			return nil, err
+		}
+		return v.streamConnContext(ctx, c, metadata)
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
 		wsOpts := &vmess.WebsocketConfig{
@@ -162,8 +189,6 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		c, err = vmess.StreamH2Conn(ctx, c, h2Opts)
 	case "grpc":
 		break // already handle in gun transport
-	case "xhttp":
-		break // already handle in dialXHTTPConn
 	default:
 		// default tcp network
 		// handle TLS
@@ -242,80 +267,12 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 	return conn, nil
 }
 
-func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
-	requestHost := v.option.XHTTPOpts.Host
-	if requestHost == "" {
-		if v.option.ServerName != "" {
-			requestHost = v.option.ServerName
-		} else {
-			requestHost = v.option.Server
-		}
-	}
-
-	cfg := &xhttp.Config{
-		Host:          requestHost,
-		Path:          v.option.XHTTPOpts.Path,
-		Mode:          v.option.XHTTPOpts.Mode,
-		Headers:       v.option.XHTTPOpts.Headers,
-		NoGRPCHeader:  v.option.XHTTPOpts.NoGRPCHeader,
-		XPaddingBytes: v.option.XHTTPOpts.XPaddingBytes,
-	}
-
-	mode := cfg.EffectiveMode(v.realityConfig != nil)
-
-	switch mode {
-	case "stream-one":
-		return xhttp.DialStreamOne(
-			ctx,
-			v.option.Server,
-			v.option.Port,
-			cfg,
-			func(ctx context.Context) (net.Conn, error) {
-				return v.dialer.DialContext(ctx, "tcp", v.addr)
-			},
-			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
-				return v.streamTLSConn(ctx, raw, isH2)
-			},
-		)
-	case "packet-up":
-		return xhttp.DialPacketUp(
-			ctx,
-			v.option.Server,
-			v.option.Port,
-			cfg,
-			func(ctx context.Context) (net.Conn, error) {
-				return v.dialer.DialContext(ctx, "tcp", v.addr)
-			},
-			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
-				return v.streamTLSConn(ctx, raw, isH2)
-			},
-		)
-	default:
-		return nil, fmt.Errorf("xhttp mode %s is not implemented yet", mode)
-	}
-}
 
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
-	if v.option.Network == "xhttp" {
-		c, err := v.dialXHTTPConn(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-		}
-
-		c, err = v.streamConnContext(ctx, c, metadata)
-		if err != nil {
-			safeConnClose(c, err)
-			return nil, fmt.Errorf("%s connect error: %s", v.addr, err.Error())
-		}
-
-		return NewConn(c, v), nil
-	}
 
 	var c net.Conn
 	switch v.option.Network {
-	case "xhttp":
-		c, err = v.dialXHTTPConn(ctx)
 	case "grpc": // gun transport
 		c, err = v.gunTransport.Dial()
 	default:
@@ -343,8 +300,6 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 
 	var c net.Conn
 	switch v.option.Network {
-	case "xhttp":
-		c, err = v.dialXHTTPConn(ctx)
 	case "grpc": // gun transport
 		c, err = v.gunTransport.Dial()
 	default:

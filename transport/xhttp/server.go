@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"encoding/base64"
 	"io"
 	"net"
 	"strconv"
@@ -8,299 +9,234 @@ import (
 	"sync"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-
 	"github.com/metacubex/http"
-	"github.com/metacubex/http/h2c"
 )
 
-type ServerOption struct {
-	Path        string
-	Host        string
-	Mode        string
-	ConnHandler func(net.Conn)
-	HttpHandler http.Handler
+type SplitHTTPServer struct {
+	config    *SplitHTTPConfig
+	sessionMu sync.Mutex
+	sessions  sync.Map
+	addConn   func(net.Conn)
+}
+
+func NewSplitHTTPServer(config *SplitHTTPConfig, addConn func(net.Conn)) *SplitHTTPServer {
+	return &SplitHTTPServer{
+		config:  config,
+		addConn: addConn,
+	}
+}
+
+type httpSession struct {
+	uploadQueue      *uploadQueue
+	isFullyConnected chan struct{}
+	once             sync.Once
+}
+
+func (s *httpSession) fullyConnected() {
+	s.once.Do(func() {
+		close(s.isFullyConnected)
+	})
+}
+
+func (h *SplitHTTPServer) upsertSession(sessionId string) *httpSession {
+	if currentSessionAny, ok := h.sessions.Load(sessionId); ok {
+		return currentSessionAny.(*httpSession)
+	}
+
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+
+	if currentSessionAny, ok := h.sessions.Load(sessionId); ok {
+		return currentSessionAny.(*httpSession)
+	}
+
+	queueSize := h.config.MaxConcurrentPosts
+	if queueSize == 0 {
+		queueSize = 100 // default max concurrent posts
+	}
+	s := &httpSession{
+		uploadQueue:      NewUploadQueue(queueSize),
+		isFullyConnected: make(chan struct{}),
+	}
+
+	h.sessions.Store(sessionId, s)
+
+	go func() {
+		timer := time.NewTimer(30 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			h.sessions.Delete(sessionId)
+			s.uploadQueue.Close()
+		case <-s.isFullyConnected:
+		}
+	}()
+
+	return s
+}
+
+func (h *SplitHTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	config := h.config
+	path := config.GetNormalizedPath()
+
+	if !strings.HasPrefix(request.URL.Path, path) {
+		writer.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	header := writer.Header()
+	header.Set("Content-Type", "application/grpc") // basic emulation
+	if paddingAuth := request.Header.Get("X-Padding"); paddingAuth != "" {
+		// skip complex padding, just flush
+	}
+
+	// Try parsing session ID from Path
+	sessionId := strings.TrimPrefix(request.URL.Path, path)
+	if sessionId == "" {
+		sessionId = request.URL.Query().Get(config.GetNormalizedSessionKey())
+	}
+	if sessionId == "" {
+		sessionId = request.Header.Get(config.GetNormalizedSessionKey())
+	}
+
+	seqStr := request.Header.Get(config.GetNormalizedSeqKey())
+	if seqStr == "" {
+		seqStr = request.URL.Query().Get(config.GetNormalizedSeqKey())
+	}
+
+	if request.Method == config.GetNormalizedUplinkHTTPMethod() && sessionId != "" && seqStr != "" {
+		// packet-up
+		seq, err := strconv.ParseInt(seqStr, 10, 64)
+		if err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// decode body
+		placement := config.GetNormalizedUplinkDataPlacement()
+		var payload []byte
+		if placement == PlacementHeader {
+			encoded := request.Header.Get(config.GetNormalizedUplinkDataKey() + "-0")
+			payload, _ = base64.RawURLEncoding.DecodeString(encoded)
+		} else {
+			payload = body
+		}
+
+		session := h.upsertSession(sessionId)
+		session.uploadQueue.Push(Packet{Payload: payload, Seq: uint64(seq)})
+
+		writer.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if request.Method == "GET" || request.Method == config.GetNormalizedUplinkHTTPMethod() {
+		// stream-down or stream-one or stream-up
+		mode := "stream-up"
+		if request.Method == "GET" {
+			mode = "stream-down"
+		}
+		if sessionId == "" && request.Method == config.GetNormalizedUplinkHTTPMethod() {
+			mode = "stream-one"
+		}
+
+		var currentSession *httpSession
+		if mode != "stream-one" {
+			if sessionId == "" {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			currentSession = h.upsertSession(sessionId)
+			currentSession.fullyConnected()
+		}
+
+		writer.WriteHeader(http.StatusOK)
+		writer.(http.Flusher).Flush()
+
+		httpSC := &httpServerConn{
+			waitCh:         make(chan struct{}),
+			Reader:         request.Body,
+			ResponseWriter: writer,
+		}
+		conn := &splitConn{
+			writer:     httpSC,
+			reader:     httpSC,
+			remoteAddr: request.RemoteAddr,
+			localAddr:  request.Host,
+		}
+		if currentSession != nil { // if not stream-one
+			conn.reader = currentSession.uploadQueue
+		}
+
+		h.addConn(conn)
+
+		select {
+		case <-request.Context().Done():
+		case <-httpSC.waitCh:
+		}
+		conn.Close()
+	} else {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 type httpServerConn struct {
-	mu      sync.Mutex
-	w       http.ResponseWriter
-	flusher http.Flusher
-	reader  io.Reader
-	closed  bool
-	done    chan struct{}
-	once    sync.Once
+	sync.Mutex
+	waitCh   chan struct{}
+	waitOnce sync.Once
+	io.Reader
+	http.ResponseWriter
 }
 
-func newHTTPServerConn(w http.ResponseWriter, r io.Reader) *httpServerConn {
-	flusher, _ := w.(http.Flusher)
-	return &httpServerConn{
-		w:       w,
-		flusher: flusher,
-		reader:  r,
-		done:    make(chan struct{}),
-	}
-}
-
-func (c *httpServerConn) Read(b []byte) (int, error) {
-	return c.reader.Read(b)
+func (c *httpServerConn) Close() error {
+	c.waitOnce.Do(func() { close(c.waitCh) })
+	return nil
 }
 
 func (c *httpServerConn) Write(b []byte) (int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
-	if c.closed {
-		return 0, io.ErrClosedPipe
+	n, err := c.ResponseWriter.Write(b)
+	if f, ok := c.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
-
-	n, err := c.w.Write(b)
-	if err == nil && c.flusher != nil {
-		c.flusher.Flush()
+	if err != nil {
+		c.Close()
 	}
 	return n, err
 }
 
-func (c *httpServerConn) Close() error {
-	c.once.Do(func() {
-		c.mu.Lock()
-		c.closed = true
-		c.mu.Unlock()
-		close(c.done)
-	})
-	return nil
+type splitConn struct {
+	writer     io.WriteCloser
+	reader     io.ReadCloser
+	remoteAddr string
+	localAddr  string
 }
 
-func (c *httpServerConn) Wait() <-chan struct{} {
-	return c.done
+func (c *splitConn) Write(b []byte) (int, error) { return c.writer.Write(b) }
+func (c *splitConn) Read(b []byte) (int, error)  { return c.reader.Read(b) }
+func (c *splitConn) Close() error {
+	err1 := c.writer.Close()
+	err2 := c.reader.Close()
+	if err1 != nil {
+		return err1
+	}
+	return err2
 }
 
-type httpSession struct {
-	uploadQueue *uploadQueue
-	connected   chan struct{}
-	once        sync.Once
-}
+type dummyAddr string
 
-func newHTTPSession() *httpSession {
-	return &httpSession{
-		uploadQueue: NewUploadQueue(),
-		connected:   make(chan struct{}),
-	}
-}
+func (a dummyAddr) Network() string { return "tcp" }
+func (a dummyAddr) String() string  { return string(a) }
 
-func (s *httpSession) markConnected() {
-	s.once.Do(func() {
-		close(s.connected)
-	})
-}
-
-type requestHandler struct {
-	path        string
-	host        string
-	mode        string
-	connHandler func(net.Conn)
-	httpHandler http.Handler
-
-	mu       sync.Mutex
-	sessions map[string]*httpSession
-}
-
-func NewServerHandler(opt ServerOption) http.Handler {
-	path := opt.Path
-	if path == "" {
-		path = "/"
-	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	if !strings.HasSuffix(path, "/") {
-		path += "/"
-	}
-
-	// using h2c.NewHandler to ensure we can work in plain http2
-	// and some tls conn is not *tls.Conn (like *reality.Conn)
-	return h2c.NewHandler(&requestHandler{
-		path:        path,
-		host:        opt.Host,
-		mode:        opt.Mode,
-		connHandler: opt.ConnHandler,
-		httpHandler: opt.HttpHandler,
-		sessions:    map[string]*httpSession{},
-	}, &http.Http2Server{
-		IdleTimeout: 30 * time.Second,
-	})
-}
-
-func (h *requestHandler) getOrCreateSession(sessionID string) *httpSession {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	s, ok := h.sessions[sessionID]
-	if ok {
-		return s
-	}
-
-	s = newHTTPSession()
-	h.sessions[sessionID] = s
-	return s
-}
-
-func (h *requestHandler) deleteSession(sessionID string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if s, ok := h.sessions[sessionID]; ok {
-		_ = s.uploadQueue.Close()
-		delete(h.sessions, sessionID)
-	}
-}
-
-func (h *requestHandler) getSession(sessionID string) *httpSession {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.sessions[sessionID]
-}
-
-func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.httpHandler != nil && !strings.HasPrefix(r.URL.Path, h.path) {
-		h.httpHandler.ServeHTTP(w, r)
-		return
-	}
-
-	if h.host != "" && !equalHost(r.Host, h.host) {
-		http.NotFound(w, r)
-		return
-	}
-
-	if !strings.HasPrefix(r.URL.Path, h.path) {
-		http.NotFound(w, r)
-		return
-	}
-
-	rest := strings.TrimPrefix(r.URL.Path, h.path)
-	parts := splitNonEmpty(rest)
-
-	// stream-one: POST /path
-	if r.Method == http.MethodPost && len(parts) == 0 {
-		w.Header().Set("X-Accel-Buffering", "no")
-		w.Header().Set("Cache-Control", "no-store")
-		w.WriteHeader(http.StatusOK)
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
-		}
-
-		httpSC := newHTTPServerConn(w, r.Body)
-		conn := &Conn{
-			writer: httpSC,
-			reader: httpSC,
-		}
-		conn.SetAddrFromRequest(r)
-
-		go h.connHandler(N.NewDeadlineConn(conn))
-
-		select {
-		case <-r.Context().Done():
-		case <-httpSC.Wait():
-		}
-
-		_ = conn.Close()
-		return
-	}
-
-	// packet-up download: GET /path/{session}
-	if r.Method == http.MethodGet && len(parts) == 1 {
-		sessionID := parts[0]
-		session := h.getOrCreateSession(sessionID)
-		session.markConnected()
-
-		w.Header().Set("X-Accel-Buffering", "no")
-		w.Header().Set("Cache-Control", "no-store")
-		w.WriteHeader(http.StatusOK)
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
-		}
-
-		httpSC := newHTTPServerConn(w, r.Body)
-		conn := &Conn{
-			writer: httpSC,
-			reader: session.uploadQueue,
-			onClose: func() {
-				h.deleteSession(sessionID)
-			},
-		}
-		conn.SetAddrFromRequest(r)
-
-		go h.connHandler(N.NewDeadlineConn(conn))
-
-		select {
-		case <-r.Context().Done():
-		case <-httpSC.Wait():
-		}
-
-		_ = conn.Close()
-		return
-	}
-
-	// packet-up upload: POST /path/{session}/{seq}
-	if r.Method == http.MethodPost && len(parts) == 2 {
-		sessionID := parts[0]
-		seq, err := strconv.ParseUint(parts[1], 10, 64)
-		if err != nil {
-			http.Error(w, "invalid xhttp seq", http.StatusBadRequest)
-			return
-		}
-
-		session := h.getSession(sessionID)
-		if session == nil {
-			http.Error(w, "unknown xhttp session", http.StatusBadRequest)
-			return
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if err := session.uploadQueue.Push(Packet{
-			Seq:     seq,
-			Payload: body,
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if len(body) == 0 {
-			w.Header().Set("Cache-Control", "no-store")
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	http.NotFound(w, r)
-}
-
-func splitNonEmpty(s string) []string {
-	raw := strings.Split(s, "/")
-	out := make([]string, 0, len(raw))
-	for _, v := range raw {
-		if v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-func equalHost(a, b string) bool {
-	a = strings.ToLower(a)
-	b = strings.ToLower(b)
-
-	if ah, _, err := net.SplitHostPort(a); err == nil {
-		a = ah
-	}
-	if bh, _, err := net.SplitHostPort(b); err == nil {
-		b = bh
-	}
-
-	return a == b
-}
+func (c *splitConn) LocalAddr() net.Addr                { return dummyAddr(c.localAddr) }
+func (c *splitConn) RemoteAddr() net.Addr               { return dummyAddr(c.remoteAddr) }
+func (c *splitConn) SetDeadline(t time.Time) error      { return nil }
+func (c *splitConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *splitConn) SetWriteDeadline(t time.Time) error { return nil }
