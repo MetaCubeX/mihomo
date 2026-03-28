@@ -17,8 +17,8 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
-"github.com/metacubex/mihomo/transport/xhttp"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
+	"github.com/metacubex/mihomo/transport/xhttp"
 
 	"github.com/metacubex/http"
 	vmess "github.com/metacubex/sing-vmess"
@@ -43,35 +43,35 @@ type Vmess struct {
 
 type VmessOption struct {
 	BasicOption
-	Name                string         `proxy:"name"`
-	Server              string         `proxy:"server"`
-	Port                int            `proxy:"port"`
-	UUID                string         `proxy:"uuid"`
-	AlterID             int            `proxy:"alterId"`
-	Cipher              string         `proxy:"cipher"`
-	UDP                 bool           `proxy:"udp,omitempty"`
-	Network             string         `proxy:"network,omitempty"`
-	TLS                 bool           `proxy:"tls,omitempty"`
-	ALPN                []string       `proxy:"alpn,omitempty"`
-	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string         `proxy:"fingerprint,omitempty"`
-	Certificate         string         `proxy:"certificate,omitempty"`
-	PrivateKey          string         `proxy:"private-key,omitempty"`
-	ServerName          string         `proxy:"servername,omitempty"`
-	ECHOpts             ECHOptions     `proxy:"ech-opts,omitempty"`
-	RealityOpts         RealityOptions `proxy:"reality-opts,omitempty"`
-	HTTPOpts            HTTPOptions    `proxy:"http-opts,omitempty"`
-	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
-	GrpcOpts            GrpcOptions    `proxy:"grpc-opts,omitempty"`
-	WSOpts              WSOptions      `proxy:"ws-opts,omitempty"`
-	XHTTPOpts       SplitHTTPOptions  `proxy:"xhttp-opts,omitempty"`
-	SplitHTTPOpts   SplitHTTPOptions  `proxy:"splithttp-opts,omitempty"`
-	PacketAddr          bool           `proxy:"packet-addr,omitempty"`
-	XUDP                bool           `proxy:"xudp,omitempty"`
-	PacketEncoding      string         `proxy:"packet-encoding,omitempty"`
-	GlobalPadding       bool           `proxy:"global-padding,omitempty"`
-	AuthenticatedLength bool           `proxy:"authenticated-length,omitempty"`
-	ClientFingerprint   string         `proxy:"client-fingerprint,omitempty"`
+	Name                string           `proxy:"name"`
+	Server              string           `proxy:"server"`
+	Port                int              `proxy:"port"`
+	UUID                string           `proxy:"uuid"`
+	AlterID             int              `proxy:"alterId"`
+	Cipher              string           `proxy:"cipher"`
+	UDP                 bool             `proxy:"udp,omitempty"`
+	Network             string           `proxy:"network,omitempty"`
+	TLS                 bool             `proxy:"tls,omitempty"`
+	ALPN                []string         `proxy:"alpn,omitempty"`
+	SkipCertVerify      bool             `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string           `proxy:"fingerprint,omitempty"`
+	Certificate         string           `proxy:"certificate,omitempty"`
+	PrivateKey          string           `proxy:"private-key,omitempty"`
+	ServerName          string           `proxy:"servername,omitempty"`
+	ECHOpts             ECHOptions       `proxy:"ech-opts,omitempty"`
+	RealityOpts         RealityOptions   `proxy:"reality-opts,omitempty"`
+	HTTPOpts            HTTPOptions      `proxy:"http-opts,omitempty"`
+	HTTP2Opts           HTTP2Options     `proxy:"h2-opts,omitempty"`
+	GrpcOpts            GrpcOptions      `proxy:"grpc-opts,omitempty"`
+	WSOpts              WSOptions        `proxy:"ws-opts,omitempty"`
+	XHTTPOpts           SplitHTTPOptions `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts       SplitHTTPOptions `proxy:"splithttp-opts,omitempty"`
+	PacketAddr          bool             `proxy:"packet-addr,omitempty"`
+	XUDP                bool             `proxy:"xudp,omitempty"`
+	PacketEncoding      string           `proxy:"packet-encoding,omitempty"`
+	GlobalPadding       bool             `proxy:"global-padding,omitempty"`
+	AuthenticatedLength bool             `proxy:"authenticated-length,omitempty"`
+	ClientFingerprint   string           `proxy:"client-fingerprint,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -108,6 +108,34 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
 			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
 		}
+		splitConfig.H1UploadDial = func(ctx context.Context) (net.Conn, error) {
+			rawConn, dialErr := v.dialer.DialContext(ctx, "tcp", v.addr)
+			if dialErr != nil {
+				return nil, dialErr
+			}
+			uploadConn := rawConn
+			if v.option.TLS {
+				tlsOpts := mihomoVMess.TLSConfig{
+					Host:              host,
+					SkipCertVerify:    v.option.SkipCertVerify,
+					FingerPrint:       v.option.Fingerprint,
+					Certificate:       v.option.Certificate,
+					PrivateKey:        v.option.PrivateKey,
+					ClientFingerprint: v.option.ClientFingerprint,
+					Reality:           v.realityConfig,
+					NextProtos:        splitConfig.ALPN,
+				}
+				if v.option.ServerName != "" {
+					tlsOpts.Host = v.option.ServerName
+				}
+				uploadConn, dialErr = mihomoVMess.StreamTLSConn(ctx, uploadConn, &tlsOpts)
+				if dialErr != nil {
+					_ = rawConn.Close()
+					return nil, dialErr
+				}
+			}
+			return uploadConn, nil
+		}
 		attempted := []string{}
 		if splitConfig.HasALPN("h3") {
 			attempted = append(attempted, "h3")
@@ -128,6 +156,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				PrivateKey:        v.option.PrivateKey,
 				ClientFingerprint: v.option.ClientFingerprint,
 				Reality:           v.realityConfig,
+				NextProtos:        splitConfig.ALPN,
 			}
 			if v.option.ServerName != "" {
 				tlsOpts.Host = v.option.ServerName

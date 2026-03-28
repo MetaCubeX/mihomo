@@ -13,10 +13,10 @@ import (
 	tlsC "github.com/metacubex/mihomo/component/tls"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/gun"
-"github.com/metacubex/mihomo/transport/xhttp"
 	"github.com/metacubex/mihomo/transport/shadowsocks/core"
 	"github.com/metacubex/mihomo/transport/trojan"
 	"github.com/metacubex/mihomo/transport/vmess"
+	"github.com/metacubex/mihomo/transport/xhttp"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/tls"
@@ -38,26 +38,26 @@ type Trojan struct {
 
 type TrojanOption struct {
 	BasicOption
-	Name              string         `proxy:"name"`
-	Server            string         `proxy:"server"`
-	Port              int            `proxy:"port"`
-	Password          string         `proxy:"password"`
-	ALPN              []string       `proxy:"alpn,omitempty"`
-	SNI               string         `proxy:"sni,omitempty"`
-	SkipCertVerify    bool           `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint       string         `proxy:"fingerprint,omitempty"`
-	Certificate       string         `proxy:"certificate,omitempty"`
-	PrivateKey        string         `proxy:"private-key,omitempty"`
-	UDP               bool           `proxy:"udp,omitempty"`
-	Network           string         `proxy:"network,omitempty"`
-	ECHOpts           ECHOptions     `proxy:"ech-opts,omitempty"`
-	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
-	GrpcOpts          GrpcOptions    `proxy:"grpc-opts,omitempty"`
-	WSOpts            WSOptions      `proxy:"ws-opts,omitempty"`
+	Name              string           `proxy:"name"`
+	Server            string           `proxy:"server"`
+	Port              int              `proxy:"port"`
+	Password          string           `proxy:"password"`
+	ALPN              []string         `proxy:"alpn,omitempty"`
+	SNI               string           `proxy:"sni,omitempty"`
+	SkipCertVerify    bool             `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint       string           `proxy:"fingerprint,omitempty"`
+	Certificate       string           `proxy:"certificate,omitempty"`
+	PrivateKey        string           `proxy:"private-key,omitempty"`
+	UDP               bool             `proxy:"udp,omitempty"`
+	Network           string           `proxy:"network,omitempty"`
+	ECHOpts           ECHOptions       `proxy:"ech-opts,omitempty"`
+	RealityOpts       RealityOptions   `proxy:"reality-opts,omitempty"`
+	GrpcOpts          GrpcOptions      `proxy:"grpc-opts,omitempty"`
+	WSOpts            WSOptions        `proxy:"ws-opts,omitempty"`
 	XHTTPOpts         SplitHTTPOptions `proxy:"xhttp-opts,omitempty"`
 	SplitHTTPOpts     SplitHTTPOptions `proxy:"splithttp-opts,omitempty"`
-	SSOpts            TrojanSSOption `proxy:"ss-opts,omitempty"`
-	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
+	SSOpts            TrojanSSOption   `proxy:"ss-opts,omitempty"`
+	ClientFingerprint string           `proxy:"client-fingerprint,omitempty"`
 }
 
 // TrojanSSOption from https://github.com/p4gefau1t/trojan-go/blob/v0.10.6/tunnel/shadowsocks/config.go#L5
@@ -88,6 +88,29 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		alpn := trojan.DefaultALPN
 		if t.option.ALPN != nil {
 			alpn = t.option.ALPN
+		}
+		splitConfig.H1UploadDial = func(ctx context.Context) (net.Conn, error) {
+			rawConn, dialErr := t.dialer.DialContext(ctx, "tcp", t.addr)
+			if dialErr != nil {
+				return nil, dialErr
+			}
+			uploadConn := rawConn
+			uploadConn, dialErr = vmess.StreamTLSConn(ctx, uploadConn, &vmess.TLSConfig{
+				Host:              t.option.SNI,
+				SkipCertVerify:    t.option.SkipCertVerify,
+				FingerPrint:       t.option.Fingerprint,
+				Certificate:       t.option.Certificate,
+				PrivateKey:        t.option.PrivateKey,
+				ClientFingerprint: t.option.ClientFingerprint,
+				NextProtos:        alpn,
+				ECH:               t.echConfig,
+				Reality:           t.realityConfig,
+			})
+			if dialErr != nil {
+				_ = rawConn.Close()
+				return nil, dialErr
+			}
+			return uploadConn, nil
 		}
 		c, err = vmess.StreamTLSConn(ctx, c, &vmess.TLSConfig{
 			Host:              t.option.SNI,
