@@ -41,6 +41,7 @@ type SplitHTTPConfig struct {
 	ALPN               []string
 	DialAddr           string
 	H3PacketDial       func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error)
+	H1UploadDial       func(ctx context.Context) (net.Conn, error)
 	TLSServerName      string
 	Headers            http.Header
 	MaxUploadSize      int
@@ -95,6 +96,7 @@ func (c *SplitHTTPConfig) IsHTTPProtoAllowed(proto string) bool {
 			allowed["HTTP/3"] = true
 		case "h2":
 			allowed["HTTP/2"] = true
+			allowed["HTTP/1.1"] = true
 		case "http/1.1":
 			allowed["HTTP/1.1"] = true
 			// User-required behavior: when declared as HTTP/1.1, still allow/try h2 upgrade.
@@ -250,6 +252,57 @@ func (c *SplitHTTPConfig) GetNormalizedUplinkDataKey() string {
 		return "x_data"
 	}
 	return ""
+}
+
+func (c *SplitHTTPConfig) ExtractMetaFromRequest(req *http.Request, path string) (sessionID string, seqStr string) {
+	sessionPlacement := c.GetNormalizedSessionPlacement()
+	seqPlacement := c.GetNormalizedSeqPlacement()
+	sessionKey := c.GetNormalizedSessionKey()
+	seqKey := c.GetNormalizedSeqKey()
+
+	var subpath []string
+	pathPart := 0
+	if sessionPlacement == PlacementPath || seqPlacement == PlacementPath {
+		restPath := strings.TrimPrefix(req.URL.Path, path)
+		restPath = strings.TrimPrefix(restPath, "/")
+		if restPath != "" {
+			subpath = strings.Split(restPath, "/")
+		}
+	}
+
+	switch sessionPlacement {
+	case PlacementPath:
+		if len(subpath) > pathPart {
+			sessionID = subpath[pathPart]
+			pathPart++
+		}
+	case PlacementQuery:
+		sessionID = req.URL.Query().Get(sessionKey)
+	case PlacementHeader:
+		sessionID = req.Header.Get(sessionKey)
+	case PlacementCookie:
+		if cookie, err := req.Cookie(sessionKey); err == nil {
+			sessionID = cookie.Value
+		}
+	}
+
+	switch seqPlacement {
+	case PlacementPath:
+		if len(subpath) > pathPart {
+			seqStr = subpath[pathPart]
+			pathPart++
+		}
+	case PlacementQuery:
+		seqStr = req.URL.Query().Get(seqKey)
+	case PlacementHeader:
+		seqStr = req.Header.Get(seqKey)
+	case PlacementCookie:
+		if cookie, err := req.Cookie(seqKey); err == nil {
+			seqStr = cookie.Value
+		}
+	}
+
+	return sessionID, seqStr
 }
 
 func (c *SplitHTTPConfig) ApplyMetaToRequest(req *http.Request, sessionID string, seqStr string) {

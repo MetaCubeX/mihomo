@@ -90,19 +90,7 @@ func (h *SplitHTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		// skip complex padding, just flush
 	}
 
-	// Try parsing session ID from Path
-	sessionId := strings.TrimPrefix(request.URL.Path, path)
-	if sessionId == "" {
-		sessionId = request.URL.Query().Get(config.GetNormalizedSessionKey())
-	}
-	if sessionId == "" {
-		sessionId = request.Header.Get(config.GetNormalizedSessionKey())
-	}
-
-	seqStr := request.Header.Get(config.GetNormalizedSeqKey())
-	if seqStr == "" {
-		seqStr = request.URL.Query().Get(config.GetNormalizedSeqKey())
-	}
+	sessionId, seqStr := config.ExtractMetaFromRequest(request, path)
 
 	if request.Method == config.GetNormalizedUplinkHTTPMethod() && sessionId != "" && seqStr != "" {
 		// packet-up

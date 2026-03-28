@@ -465,14 +465,24 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 
 	// Select transport explicitly to avoid parsing HTTP/2 frames with HTTP/1 reader.
 	useH2 := config.HasALPN("h2")
+	negotiatedProto := ""
+	if hs, ok := c.(interface{ HandshakeContext(context.Context) error }); ok {
+		_ = hs.HandshakeContext(ctx)
+	} else if hs, ok := c.(interface{ Handshake() error }); ok {
+		_ = hs.Handshake()
+	}
 	if ts, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
-		if ts.ConnectionState().NegotiatedProtocol == "h2" {
-			useH2 = true
-		}
+		negotiatedProto = ts.ConnectionState().NegotiatedProtocol
 	} else if ts, ok := c.(interface{ ConnectionState() ctls.ConnectionState }); ok {
-		if ts.ConnectionState().NegotiatedProtocol == "h2" {
-			useH2 = true
-		}
+		negotiatedProto = ts.ConnectionState().NegotiatedProtocol
+	}
+	if negotiatedProto != "" {
+		useH2 = negotiatedProto == "h2"
+	} else if !config.HasALPN("h2") {
+		useH2 = false
+	}
+	if config.RequestLog {
+		log.Infoln("splithttp[transport-select] requested_alpn=%v negotiated=%s use_h2=%v mode=%s", config.ALPN, negotiatedProto, useH2, mode)
 	}
 	var rt http.RoundTripper
 	if useH2 {
@@ -495,6 +505,22 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 		Transport: rt,
 	}
 
+	uploadClient := client
+	if !useH2 && (mode == "stream-up" || mode == "packet-up") {
+		if config.H1UploadDial == nil {
+			return nil, fmt.Errorf("splithttp %s requires h1-upload-dial when HTTP/2 is unavailable", mode)
+		}
+		uploadClient = &http.Client{
+			Transport: &http.Transport{
+				ForceAttemptHTTP2: false,
+				DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return config.H1UploadDial(ctx)
+				},
+				DisableKeepAlives: true,
+			},
+		}
+	}
+
 	if mode == "stream-one" {
 		pr, pw := io.Pipe()
 
@@ -505,60 +531,39 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 		config.FillStreamRequest(req, sessionId)
 		logRequest(config, "stream-one", req, sessionId, "", connMeta)
 
-		respChan := make(chan *http.Response, 1)
-		errChan := make(chan error, 1)
-
+		reader := &WaitReadCloser{Wait: make(chan struct{})}
 		go func() {
-			resp, err := client.Do(req)
-			if err != nil {
-				errChan <- err
+			resp, doErr := client.Do(req)
+			if doErr != nil {
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-one-resp] err=%v", doErr)
+				}
+				_ = reader.Close()
 				return
 			}
-			respChan <- resp
-		}()
-
-		select {
-		case <-errChan:
-			// Fallback: Retry with HTTP/1.1 if HTTP2 failed (some servers only accept H1)
-			client.Transport = &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					return c, nil
-				},
-				ForceAttemptHTTP2: false,
-			}
-			go func() {
-				// Must recreate Pipe to reset reader state
-				pr2, pw2 := io.Pipe()
-				pw = pw2
-				req, _ := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr2, config)
-				config.FillStreamRequest(req, sessionId)
-				logRequest(config, "stream-one-retry", req, sessionId, "", connMeta)
-				resp, err := client.Do(req)
-				if err != nil {
-					errChan <- err
-					return
+			if ensureErr := ensureHTTPProtocolAllowed(config, resp); ensureErr != nil {
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-one-resp] protocol_error=%v actual=%s", ensureErr, resp.Proto)
 				}
-				respChan <- resp
-			}()
-
-			select {
-			case <-errChan:
-				return nil, fmt.Errorf("splithttp single request failed: %w", err)
-			case resp := <-respChan:
-				return NewConn(c, resp.Body, pw, config.RequestLog), nil
-			}
-
-		case resp := <-respChan:
-			if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
-				return nil, err
+				resp.Body.Close()
+				_ = reader.Close()
+				return
 			}
 			if resp.StatusCode != http.StatusOK {
-				return nil, fmt.Errorf("splithttp unexpected status code: %d", resp.StatusCode)
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-one-resp] bad_status=%d actual=%s", resp.StatusCode, resp.Proto)
+				}
+				resp.Body.Close()
+				_ = reader.Close()
+				return
 			}
-			return NewConn(c, resp.Body, pw, config.RequestLog), nil
-		case <-time.After(5 * time.Second):
-			return NewConn(c, nil, pw, config.RequestLog), nil
-		}
+			if config.RequestLog {
+				log.Infoln("splithttp[stream-one-resp] status=%d actual=%s", resp.StatusCode, resp.Proto)
+			}
+			reader.Set(resp.Body)
+		}()
+
+		return NewConn(c, reader, pw, config.RequestLog), nil
 	} else {
 		// Both stream-up and packet-up use a long-lived GET request for downloads.
 		downReq, err := getBaseRequest(ctx, "GET", url, nil, config)
@@ -609,7 +614,7 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 			logRequest(config, "stream-up", upReq, sessionId, "", connMeta)
 
 			go func() {
-				resp, _ := client.Do(upReq)
+				resp, _ := uploadClient.Do(upReq)
 				if resp != nil && resp.Body != nil {
 					_, _ = io.Copy(io.Discard, resp.Body)
 					resp.Body.Close()
@@ -620,7 +625,7 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 		} else if mode == "packet-up" {
 			writer := &PacketUpWriter{
 				ctx:       ctx,
-				client:    client,
+				client:    uploadClient,
 				url:       url,
 				config:    config,
 				sessionId: sessionId,

@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/metacubex/http"
@@ -62,6 +63,10 @@ func decideXHTTPALPN(alpn []string) []string {
 
 func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string, alpn []string, xhttpOpts SplitHTTPOptions, splitHTTPOpts SplitHTTPOptions, tlsEnabled bool) *xhttp.SplitHTTPConfig {
 	host, _, _ := net.SplitHostPort(addr)
+	requestLog := xhttpOpts.RequestLog || splitHTTPOpts.RequestLog
+	if os.Getenv("MIHOMO_XHTTP_DEBUG") == "1" {
+		requestLog = true
+	}
 	config := &xhttp.SplitHTTPConfig{
 		Host:                xhttpOpts.Host,
 		Path:                xhttpOpts.Path,
@@ -85,7 +90,7 @@ func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string
 		SeqKey:              xhttpOpts.SeqKey,
 		UplinkDataPlacement: xhttpOpts.UplinkDataPlacement,
 		UplinkDataKey:       xhttpOpts.UplinkDataKey,
-		RequestLog:          xhttpOpts.RequestLog,
+		RequestLog:          requestLog,
 	}
 	if xhttpOpts.XPaddingBytesTo > 0 {
 		config.XPaddingBytes = &xhttp.RangeConfig{From: xhttpOpts.XPaddingBytesFrom, To: xhttpOpts.XPaddingBytesTo}

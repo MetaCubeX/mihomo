@@ -61,7 +61,7 @@ type VlessOption struct {
 	HTTP2Opts         HTTP2Options      `proxy:"h2-opts,omitempty"`
 	GrpcOpts          GrpcOptions       `proxy:"grpc-opts,omitempty"`
 	WSOpts            WSOptions         `proxy:"ws-opts,omitempty"`
-	XHTTPOpts         SplitHTTPOptions  `proxy:"xhttp-opts,omitempty"`
+	XHTTPOpts         XHTTPOptions      `proxy:"xhttp-opts,omitempty"`
 	SplitHTTPOpts     SplitHTTPOptions  `proxy:"splithttp-opts,omitempty"`
 	WSHeaders         map[string]string `proxy:"ws-headers,omitempty"`
 	SkipCertVerify    bool              `proxy:"skip-cert-verify,omitempty"`
@@ -72,15 +72,7 @@ type VlessOption struct {
 	ClientFingerprint string            `proxy:"client-fingerprint,omitempty"`
 }
 
-type XHTTPOptions struct {
-	Path                 string            `proxy:"path,omitempty"`
-	Host                 string            `proxy:"host,omitempty"`
-	Mode                 string            `proxy:"mode,omitempty"`
-	Headers              map[string]string `proxy:"headers,omitempty"`
-	ScMaxConcurrentPosts int               `proxy:"sc-max-concurrent-posts,omitempty"`
-	NoGRPCHeader         bool              `proxy:"no-grpc-header,omitempty"`
-	XPaddingBytes        string            `proxy:"x-padding-bytes,omitempty"`
-}
+type XHTTPOptions = SplitHTTPOptions
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
 	switch v.option.Network {
@@ -88,6 +80,18 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		splitConfig := buildSplitHTTPConfig(ctx, v.addr, v.option.ServerName, v.option.ALPN, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.option.TLS)
 		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
 			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
+		}
+		splitConfig.H1UploadDial = func(ctx context.Context) (net.Conn, error) {
+			rawConn, dialErr := v.dialer.DialContext(ctx, "tcp", v.addr)
+			if dialErr != nil {
+				return nil, dialErr
+			}
+			uploadConn, wrapErr := v.streamTLSConn(ctx, rawConn, false)
+			if wrapErr != nil {
+				_ = rawConn.Close()
+				return nil, wrapErr
+			}
+			return uploadConn, nil
 		}
 		attempted := []string{}
 		if splitConfig.HasALPN("h3") {
@@ -100,7 +104,7 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				return nil, h3Err
 			}
 		}
-		c, err = v.streamTLSConn(ctx, c, false)
+		c, err = v.streamTLSConn(ctx, c, splitConfig.HasALPN("h2"))
 		if err != nil {
 			return nil, err
 		}
@@ -266,7 +270,6 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 
 	return conn, nil
 }
-
 
 // DialContext implements C.ProxyAdapter
 func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {

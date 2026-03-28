@@ -20,6 +20,7 @@ import (
 	"github.com/metacubex/mihomo/transport/xhttp"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/http/h2c"
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
@@ -148,36 +149,46 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 	}
 	if config.XHTTPConfig.Mode != "" {
 		switch config.XHTTPConfig.Mode {
-		case "auto":
+		case "auto", "stream-up", "stream-one", "packet-up":
 		default:
 			return nil, errors.New("unsupported xhttp mode")
 		}
 	}
 	if config.XHTTPConfig.Path != "" || config.XHTTPConfig.Host != "" || config.XHTTPConfig.Mode != "" {
-		xhttpPath := config.XHTTPConfig.Path
 		importSplithttpConfig := &xhttp.SplitHTTPConfig{
-			Path:               xhttpPath,
+			Path:               config.XHTTPConfig.Path,
 			Host:               config.XHTTPConfig.Host,
 			MaxConcurrentPosts: 100,
 		}
+		xhttpPath := importSplithttpConfig.GetNormalizedPath()
 		splithttpServer := xhttp.NewSplitHTTPServer(importSplithttpConfig, func(conn net.Conn) {
 			sl.HandleConn(conn, tunnel, additions...)
 		})
 
-		muxPath := xhttpPath
-		if !strings.HasSuffix(muxPath, "/") {
-			muxPath += "/"
-		}
 		httpMux := http.NewServeMux()
-		httpMux.Handle(muxPath, splithttpServer)
 		httpMux.Handle(xhttpPath, splithttpServer)
-		if httpServer.Handler != nil {
-			// Assuming fallback if needed
+		trimmedPath := strings.TrimSuffix(xhttpPath, "/")
+		if trimmedPath != "" {
+			httpMux.Handle(trimmedPath, splithttpServer)
+		}
+
+		if httpServer.Handler != nil && xhttpPath != "/" {
+			httpMux.Handle("/", httpServer.Handler)
 		}
 		httpServer.Handler = httpMux
 
 		if !slices.Contains(tlsConfig.NextProtos, "h2") {
 			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
+		}
+	}
+	if httpServer.Handler != nil {
+		h2Server := &http.Http2Server{}
+		if realityBuilder != nil {
+			// reality listener is not a standard TLS listener; keep h2c compatibility path.
+			httpServer.Handler = h2c.NewHandler(httpServer.Handler, h2Server)
+		}
+		if err := http.Http2ConfigureServer(&httpServer, h2Server); err != nil {
+			return nil, err
 		}
 	}
 	for _, addr := range strings.Split(config.Listen, ",") {
