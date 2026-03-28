@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -231,6 +232,10 @@ type PacketUpWriter struct {
 	closed    bool
 	mu        sync.Mutex
 	meta      connTelemetry
+
+	h1RawUpload    bool
+	uploadRawPool  *sync.Pool
+	dialUploadConn func(ctx context.Context) (net.Conn, error)
 }
 
 func (w *PacketUpWriter) Write(b []byte) (int, error) {
@@ -249,6 +254,57 @@ func (w *PacketUpWriter) Write(b []byte) (int, error) {
 	}
 	w.config.FillPacketRequest(req, w.sessionId, seqStr, b)
 	logRequest(w.config, "packet-up", req, w.sessionId, seqStr, w.meta)
+
+	if w.h1RawUpload {
+		// Follow XRay's H1 packet-up approach: serialize request bytes and retry
+		// with another upload connection when write fails.
+		requestBuff := new(bytes.Buffer)
+		requestBuff.Grow(512 + int(req.ContentLength))
+		if err := req.Write(requestBuff); err != nil {
+			return 0, err
+		}
+
+		var uploadConn any
+		var h1UploadConn *H1Conn
+
+		for {
+			uploadConn = w.uploadRawPool.Get()
+			newConnection := uploadConn == nil
+			if newConnection {
+				newConn, err := w.dialUploadConn(context.WithoutCancel(w.ctx))
+				if err != nil {
+					return 0, err
+				}
+				h1UploadConn = NewH1Conn(newConn)
+				uploadConn = h1UploadConn
+			} else {
+				h1UploadConn = uploadConn.(*H1Conn)
+
+				// Keep this branch aligned with XRay's current behavior.
+				if h1UploadConn.UnreadedResponsesCount > 0 {
+					resp, err := http.ReadResponse(h1UploadConn.RespBufReader, req)
+					if err != nil {
+						return 0, fmt.Errorf("packet-up read response failed: %w", err)
+					}
+					_, _ = io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						return 0, fmt.Errorf("packet-up bad status: %d", resp.StatusCode)
+					}
+				}
+			}
+
+			_, err = h1UploadConn.Write(requestBuff.Bytes())
+			if err == nil {
+				break
+			} else if newConnection {
+				return 0, err
+			}
+		}
+
+		w.uploadRawPool.Put(uploadConn)
+		return len(b), nil
+	}
 
 	resp, err := w.client.Do(req)
 	if err != nil {
@@ -630,6 +686,11 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 				config:    config,
 				sessionId: sessionId,
 				meta:      connMeta,
+			}
+			if !useH2 {
+				writer.h1RawUpload = true
+				writer.uploadRawPool = &sync.Pool{}
+				writer.dialUploadConn = config.H1UploadDial
 			}
 			return NewConn(c, downstreamReader, writer, config.RequestLog), nil
 		}
