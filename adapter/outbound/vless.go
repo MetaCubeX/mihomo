@@ -76,7 +76,6 @@ type XHTTPOptions struct {
 	Host                 string            `proxy:"host,omitempty"`
 	Mode                 string            `proxy:"mode,omitempty"`
 	Headers              map[string]string `proxy:"headers,omitempty"`
-	ScMaxConcurrentPosts int               `proxy:"sc-max-concurrent-posts,omitempty"`
 	ScMaxEachPostBytes   int               `proxy:"sc-max-each-post-bytes,omitempty"`
 	ScMinPostsIntervalMs int               `proxy:"sc-min-posts-interval-ms,omitempty"`
 	NoGRPCHeader         bool              `proxy:"no-grpc-header,omitempty"`
