@@ -363,7 +363,11 @@ func (t *Transport) Dial() (net.Conn, error) {
 	}
 
 	go conn.Init()
-	<-initStarted // ensure g.initOnce.Do has been called before any g.Close
+
+	// ensure conn.initOnce.Do has been called before return
+	// prevent the race caused by the return side immediately calling conn.Close
+	<-initStarted
+
 	return conn, nil
 }
 
