@@ -72,13 +72,12 @@ type VlessOption struct {
 }
 
 type XHTTPOptions struct {
-	Path                 string            `proxy:"path,omitempty"`
-	Host                 string            `proxy:"host,omitempty"`
-	Mode                 string            `proxy:"mode,omitempty"`
-	Headers              map[string]string `proxy:"headers,omitempty"`
-	ScMaxConcurrentPosts int               `proxy:"sc-max-concurrent-posts,omitempty"`
-	NoGRPCHeader         bool              `proxy:"no-grpc-header,omitempty"`
-	XPaddingBytes        string            `proxy:"x-padding-bytes,omitempty"`
+	Path          string            `proxy:"path,omitempty"`
+	Host          string            `proxy:"host,omitempty"`
+	Mode          string            `proxy:"mode,omitempty"`
+	Headers       map[string]string `proxy:"headers,omitempty"`
+	NoGRPCHeader  bool              `proxy:"no-grpc-header,omitempty"`
+	XPaddingBytes string            `proxy:"x-padding-bytes,omitempty"`
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
