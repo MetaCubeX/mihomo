@@ -191,27 +191,37 @@ func (g *Conn) FrontHeadroom() int {
 }
 
 func (g *Conn) Close() error {
-	g.initOnce.Do(func() { // if initReader not called, it should not be run anymore
+	g.closeMutex.Lock()
+	if g.closed {
+		g.closeMutex.Unlock()
+		return nil
+	}
+	g.closed = true
+	g.closeMutex.Unlock()
+
+	var errorArr []error
+
+	// Close writer first to unblock any in-progress initFn (e.g. HTTP2 RoundTrip
+	// waiting on the pipe). This must happen before waiting on initOnce to avoid
+	// a deadlock where Close blocks on initOnce.Do while initReader blocks on
+	// network I/O that will never complete.
+	if closer, ok := g.writer.(io.Closer); ok {
+		if err := closer.Close(); err != nil {
+			errorArr = append(errorArr, err)
+		}
+	}
+
+	// Now safe to wait for initReader to finish — closing the writer above ensures
+	// initFn will fail promptly instead of blocking forever.
+	g.initOnce.Do(func() {
 		g.initErr = net.ErrClosed
 	})
 
 	g.closeMutex.Lock()
 	defer g.closeMutex.Unlock()
-	if g.closed {
-		return nil
-	}
-	g.closed = true
-
-	var errorArr []error
 
 	if reader := g.reader; reader != nil {
 		if err := reader.Close(); err != nil {
-			errorArr = append(errorArr, err)
-		}
-	}
-
-	if closer, ok := g.writer.(io.Closer); ok {
-		if err := closer.Close(); err != nil {
 			errorArr = append(errorArr, err)
 		}
 	}
