@@ -23,7 +23,7 @@ type Config struct {
 }
 
 type DownloadConfig struct {
-	Address           string
+	Server            string
 	Port              int
 	Security          string
 	Reality           *tlsC.RealityConfig

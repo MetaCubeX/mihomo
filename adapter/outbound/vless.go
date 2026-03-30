@@ -82,7 +82,7 @@ type XHTTPOptions struct {
 }
 
 type XHTTPDownloadSettings struct {
-	Address           string         `proxy:"address,omitempty"`
+	Server            string         `proxy:"server,omitempty"`
 	Port              int            `proxy:"port,omitempty"`
 	Network           string         `proxy:"network,omitempty"`
 	Security          string         `proxy:"security,omitempty"`
@@ -328,7 +328,7 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 		}
 
 		cfg.DownloadSettings = &xhttp.DownloadConfig{
-			Address:           ds.Address,
+			Server:            ds.Server,
 			Port:              ds.Port,
 			Security:          ds.Security,
 			Reality:           realityCfg,
@@ -359,8 +359,8 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 		server := v.option.Server
 		port := v.option.Port
 
-		if ds.Address != "" {
-			server = ds.Address
+		if ds.Server != "" {
+			server = ds.Server
 		}
 		if ds.Port != 0 {
 			port = ds.Port

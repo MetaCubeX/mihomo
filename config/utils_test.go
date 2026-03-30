@@ -77,3 +77,37 @@ func TestValidateDialerProxies(t *testing.T) {
 		})
 	}
 }
+
+func TestParseVlessXHTTPDownloadSettings(t *testing.T) {
+	proxies := []map[string]any{
+		{
+			"name":   "test-vless-xhttp",
+			"type":   "vless",
+			"server": "example.com",
+			"port":   443,
+			"uuid":   "11111111-1111-1111-1111-111111111111",
+			"network": "xhttp",
+			"tls":     true,
+			"xhttp-opts": map[string]any{
+				"download-settings": map[string]any{
+					"server":           "download.example.com",
+					"port":             8443,
+					"servername":       "dl.example.com",
+					"client-fingerprint": "firefox",
+					"skip-cert-verify": true,
+					"host":             "cdn.example.com",
+					"path":             "/dl",
+					"mode":             "auto",
+				},
+			},
+		},
+	}
+
+	config := RawConfig{Proxy: proxies}
+
+	parsed, _, err := parseProxies(&config)
+	assert.NoError(t, err)
+
+	_, ok := parsed["test-vless-xhttp"]
+	assert.True(t, ok)
+}
