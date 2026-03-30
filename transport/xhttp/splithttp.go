@@ -441,38 +441,30 @@ func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error
 	config.FillStreamRequest(downReq, sessionId)
 	logRequest(config, "stream-down", downReq, sessionId, "", connMeta)
 
-	downRespChan := make(chan *http.Response, 1)
-	downErrChan := make(chan error, 1)
-
+	reader := &WaitReadCloser{Wait: make(chan struct{})}
 	go func() {
 		downResp, downErr := client.Do(downReq)
 		if downErr != nil {
-			downErrChan <- downErr
+			if config.RequestLog {
+				log.Infoln("splithttp[stream-down-resp] err=%v", downErr)
+			}
+			_ = reader.Close()
 			return
 		}
-		downRespChan <- downResp
-	}()
-
-	var downstreamReader io.ReadCloser
-
-	select {
-	case err := <-downErrChan:
-		return nil, fmt.Errorf("splithttp h3 stream-down failed: %w", err)
-	case downResp := <-downRespChan:
 		logResponse(config, "stream-down", downResp, sessionId, "", connMeta)
 		if err := ensureHTTPProtocolAllowed(config, downResp); err != nil {
 			downResp.Body.Close()
-			return nil, err
+			_ = reader.Close()
+			return
 		}
 		if downResp.StatusCode != http.StatusOK {
-			b, _ := io.ReadAll(downResp.Body)
 			downResp.Body.Close()
-			return nil, fmt.Errorf("splithttp h3 stream-down bad status code: %d, body: %s", downResp.StatusCode, string(b))
+			_ = reader.Close()
+			return
 		}
-		downstreamReader = downResp.Body
-	case <-time.After(10 * time.Second): // QUIC handshake + timeout might take more than 5s
-		return nil, fmt.Errorf("splithttp h3 stream-down timeout")
-	}
+		reader.Set(downResp.Body)
+	}()
+	var downstreamReader io.ReadCloser = reader
 
 	if mode == "stream-up" {
 		upReader, upWriter := io.Pipe()
@@ -629,36 +621,30 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 		config.FillStreamRequest(downReq, sessionId)
 		logRequest(config, "stream-down", downReq, sessionId, "", connMeta)
 
-		downRespChan := make(chan *http.Response, 1)
-		downErrChan := make(chan error, 1)
-
+		reader := &WaitReadCloser{Wait: make(chan struct{})}
 		go func() {
 			resp, err := client.Do(downReq)
 			if err != nil {
-				downErrChan <- err
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-down-resp] err=%v", err)
+				}
+				_ = reader.Close()
 				return
 			}
-			downRespChan <- resp
-		}()
-
-		var downstreamReader io.ReadCloser
-
-		select {
-		case err := <-downErrChan:
-			return nil, fmt.Errorf("splithttp stream-down failed: %w", err)
-		case resp := <-downRespChan:
 			logResponse(config, "stream-down", resp, sessionId, "", connMeta)
 			if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
-				return nil, err
+				resp.Body.Close()
+				_ = reader.Close()
+				return
 			}
 			if resp.StatusCode != http.StatusOK {
-				b, _ := io.ReadAll(resp.Body)
-				return nil, fmt.Errorf("splithttp stream-down bad status code: %d, body: %s", resp.StatusCode, string(b))
+				resp.Body.Close()
+				_ = reader.Close()
+				return
 			}
-			downstreamReader = resp.Body
-		case <-time.After(10 * time.Second):
-			return nil, fmt.Errorf("splithttp stream-down timeout")
-		}
+			reader.Set(resp.Body)
+		}()
+		var downstreamReader io.ReadCloser = reader
 
 		if mode == "stream-up" {
 			upReader, upWriter := io.Pipe()
