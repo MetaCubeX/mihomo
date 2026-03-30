@@ -11,19 +11,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/httputils"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/vmess"
 
 	"github.com/metacubex/http"
-	"github.com/metacubex/http/httptrace"
 	"github.com/metacubex/tls"
 	"golang.org/x/exp/slices"
 )
-
-type RoundTripper interface {
-	http.RoundTripper
-	CloseIdleConnections()
-}
 
 type ResolvUDPFunc func(ctx context.Context, server string) (netip.AddrPort, error)
 
@@ -46,7 +41,7 @@ type Client struct {
 	resolv           ResolvUDPFunc
 	server           string
 	auth             string
-	roundTripper     RoundTripper
+	roundTripper     http.RoundTripper
 	startOnce        sync.Once
 	healthCheck      bool
 	healthCheckTimer *time.Timer
@@ -144,13 +139,7 @@ func (c *Client) roundTrip(request *http.Request, conn *httpConn) {
 	go func() {
 		timeout := time.AfterFunc(C.DefaultTCPTimeout, cancel) // only cancel when RoundTrip timeout
 		defer timeout.Stop()                                   // RoundTrip already returned, stop the timer
-		trace := &httptrace.ClientTrace{
-			GotConn: func(connInfo httptrace.GotConnInfo) {
-				conn.SetLocalAddr(connInfo.Conn.LocalAddr())
-				conn.SetRemoteAddr(connInfo.Conn.RemoteAddr())
-			},
-		}
-		request = request.WithContext(httptrace.WithClientTrace(ctx, trace))
+		request = request.WithContext(httputils.NewAddrContext(&conn.NetAddr, ctx))
 		response, err := c.roundTripper.RoundTrip(request)
 		if err != nil {
 			_ = pipeWriter.CloseWithError(err)
@@ -221,7 +210,7 @@ func (c *Client) ListenICMP(ctx context.Context) (*IcmpConn, error) {
 }
 
 func (c *Client) Close() error {
-	forceCloseAllConnections(c.roundTripper)
+	httputils.CloseTransport(c.roundTripper)
 	if c.healthCheckTimer != nil {
 		c.healthCheckTimer.Stop()
 	}
@@ -229,7 +218,7 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) ResetConnections() {
-	forceCloseAllConnections(c.roundTripper)
+	httputils.CloseTransport(c.roundTripper)
 	c.resetHealthCheckTimer()
 }
 

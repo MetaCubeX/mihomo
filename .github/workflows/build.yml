@@ -378,7 +378,7 @@ jobs:
         EOF
 
     - name: Upload Prerelease
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       if: ${{  success() }}
       with:
         tag_name: Prerelease-${{ github.ref_name }}
@@ -468,10 +468,10 @@ jobs:
         working-directory: bin
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Setup Docker buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           version: latest
       
@@ -480,7 +480,7 @@ jobs:
       - name: Extract Docker metadata
         if: ${{ github.event_name != 'workflow_dispatch' }}
         id: meta_alpha
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: '${{ env.REGISTRY }}/${{ github.repository }}'
       
@@ -489,7 +489,7 @@ jobs:
       - name: Extract Docker metadata
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
         id: meta_release
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: '${{ env.REGISTRY }}/${{ github.repository }}'
           tags: |
@@ -504,7 +504,7 @@ jobs:
           ls bin/
       
       - name: login to docker REGISTRY
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_HUB_USER }}
@@ -514,7 +514,7 @@ jobs:
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         if: ${{ github.event_name != 'workflow_dispatch' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -529,7 +529,7 @@ jobs:
       
       - name: Build and push Docker image
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile

@@ -6,6 +6,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/metacubex/mihomo/common/httputils"
+
 	"github.com/metacubex/http"
 	"github.com/metacubex/http/h2c"
 	"github.com/metacubex/quic-go/http3"
@@ -160,7 +162,7 @@ func (s *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 				},
 			},
 		}
-		conn.SetAddrFromRequest(request)
+		httputils.SetAddrFromRequest(&conn.NetAddr, request)
 		conn.setUp(request.Body, nil)
 		firstPacket := buf.NewPacket()
 		destination, err := conn.ReadPacket(firstPacket)
@@ -197,7 +199,7 @@ func (s *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 					created: make(chan struct{}),
 				},
 			}
-			conn.SetAddrFromRequest(request)
+			httputils.SetAddrFromRequest(&conn.NetAddr, request)
 			conn.setUp(request.Body, nil)
 			s.icmpHandler.NewICMPConnection(ctx, conn)
 		}
@@ -220,7 +222,7 @@ func (s *Service) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 				created: make(chan struct{}),
 			},
 		}
-		conn.SetAddrFromRequest(request)
+		httputils.SetAddrFromRequest(&conn.NetAddr, request)
 		conn.setUp(request.Body, nil)
 		_ = s.handler.NewConnection(ctx, conn, M.Metadata{
 			Protocol:    "trusttunnel",

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/metacubex/mihomo/common/httputils"
 	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/gun"
 )
 
 const (
@@ -98,7 +98,7 @@ type httpConn struct {
 	created   chan struct{}
 	createErr error
 	cancelFn  func()
-	gun.NetAddr
+	httputils.NetAddr
 
 	// deadlines
 	deadline *time.Timer

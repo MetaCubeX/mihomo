@@ -117,7 +117,10 @@ func (h *SplitHTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		}
 
 		session := h.upsertSession(sessionId)
-		session.uploadQueue.Push(Packet{Payload: payload, Seq: uint64(seq)})
+		if err := session.uploadQueue.Push(Packet{Payload: payload, Seq: uint64(seq)}); err != nil {
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		writer.WriteHeader(http.StatusOK)
 		return
@@ -141,10 +144,13 @@ func (h *SplitHTTPServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 			}
 			currentSession = h.upsertSession(sessionId)
 			currentSession.fullyConnected()
+			defer h.sessions.Delete(sessionId)
 		}
 
 		writer.WriteHeader(http.StatusOK)
-		writer.(http.Flusher).Flush()
+		if flusher, ok := writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
 
 		httpSC := &httpServerConn{
 			waitCh:         make(chan struct{}),

@@ -789,6 +789,29 @@ proxies: # socks5
       # v2ray-http-upgrade: false
       # v2ray-http-upgrade-fast-open: false
 
+  - name: "vless-xhttp"
+    type: vless
+    server: server
+    port: 443
+    uuid: uuid
+    udp: true
+    tls: true
+    network: xhttp
+    alpn:
+      - h2
+    client-fingerprint: chrome
+    servername: xxx.com
+    encryption: ""
+    xhttp-opts:
+      path: "/"
+      host: xxx.com
+      # mode: "stream-one" # Available: "stream-one" or "packet-up"
+      # headers:
+      #   X-Forwarded-For: ""
+      # no-grpc-header: false
+      # x-padding-bytes: "100-1000"
+
+
   # Trojan
   - name: "trojan"
     type: trojan

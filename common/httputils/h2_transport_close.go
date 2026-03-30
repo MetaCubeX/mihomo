@@ -1,4 +1,4 @@
-package gun
+package httputils
 
 import (
 	"net"
@@ -44,7 +44,7 @@ func closeClientConn(cc *http.Http2ClientConn) { // like forceCloseConn() in htt
 	_ = cc.Close()
 }
 
-func CloseHttp2Transport(tr *http.Http2Transport) {
+func closeHttp2Transport(tr *http.Http2Transport) {
 	connPool := transportConnPool(tr)
 	p := (*clientConnPool)((*efaceWords)(unsafe.Pointer(&connPool)).data)
 	p.mu.Lock()
