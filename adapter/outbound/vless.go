@@ -85,7 +85,6 @@ type XHTTPDownloadSettings struct {
 	Server            string         `proxy:"server,omitempty"`
 	Port              int            `proxy:"port,omitempty"`
 	Network           string         `proxy:"network,omitempty"`
-	Security          string         `proxy:"security,omitempty"`
 	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
 	Host              string         `proxy:"host,omitempty"`
 	Path              string         `proxy:"path,omitempty"`
@@ -330,7 +329,6 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 		cfg.DownloadSettings = &xhttp.DownloadConfig{
 			Server:            ds.Server,
 			Port:              ds.Port,
-			Security:          ds.Security,
 			Reality:           realityCfg,
 			Host:              ds.Host,
 			Path:              ds.Path,
@@ -368,20 +366,9 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 
 		downloadAddr = net.JoinHostPort(server, strconv.Itoa(port))
 
-		switch ds.Security {
-		case "":
-			// inherit
-		case "tls":
-			downloadTLSEnabled = true
-			downloadReality = nil
-		case "reality":
-			downloadTLSEnabled = true
+		if ds.Reality != nil {
 			downloadReality = ds.Reality
-		case "none":
-			downloadTLSEnabled = false
-			downloadReality = nil
-		default:
-			return nil, fmt.Errorf("unsupported xhttp download-settings security: %s", ds.Security)
+			downloadTLSEnabled = true
 		}
 
 		if ds.ServerName != "" {
@@ -395,7 +382,6 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 		if ds.SkipCertVerify {
 			downloadSkipCertVerify = true
 		}
-
 	}
 
 	switch mode {
