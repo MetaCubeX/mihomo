@@ -3,8 +3,10 @@ package xhttp
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"io"
+	"math/big"
 	"net"
 	"sort"
 	"strconv"
@@ -35,6 +37,15 @@ type RangeConfig struct {
 	To   int
 }
 
+type XmuxConfig struct {
+	MaxConcurrency   *RangeConfig
+	MaxConnections   *RangeConfig
+	CMaxReuseTimes   *RangeConfig
+	HMaxRequestTimes *RangeConfig
+	HMaxReusableSecs *RangeConfig
+	HKeepAlivePeriod int64
+}
+
 type SplitHTTPConfig struct {
 	Host               string
 	Path               string
@@ -42,12 +53,15 @@ type SplitHTTPConfig struct {
 	DialAddr           string
 	H3PacketDial       func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error)
 	H1UploadDial       func(ctx context.Context) (net.Conn, error)
+	H2Dial             func(ctx context.Context) (net.Conn, error)
 	TLSServerName      string
 	Headers            http.Header
 	MaxUploadSize      int
 	MaxConcurrentPosts int
 	Mode               string
 	TLS                bool
+	Xmux               *XmuxConfig
+	DownloadSettings   any // reserved for later
 
 	XPaddingBytes       *RangeConfig
 	XPaddingObfsMode    bool
@@ -437,4 +451,51 @@ func (c *SplitHTTPConfig) HeaderSummary(req *http.Request) string {
 
 func (c *SplitHTTPConfig) MetaSummary(req *http.Request) string {
 	return "sessionPlacement=" + c.GetNormalizedSessionPlacement() + ",seqPlacement=" + c.GetNormalizedSeqPlacement() + ",uplinkDataPlacement=" + c.GetNormalizedUplinkDataPlacement() + ",path=" + req.URL.Path + ",query=" + req.URL.RawQuery + ",contentLength=" + strconv.FormatInt(req.ContentLength, 10)
+}
+
+func (c RangeConfig) Rand() int32 {
+	if c.From == c.To {
+		return int32(c.From)
+	}
+	minVal, maxVal := c.From, c.To
+	if c.From > c.To {
+		minVal, maxVal = c.To, c.From
+	}
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(maxVal-minVal+1)))
+	return int32(minVal) + int32(n.Int64())
+}
+
+func (c *XmuxConfig) GetNormalizedMaxConcurrency() RangeConfig {
+	if c == nil || c.MaxConcurrency == nil || c.MaxConcurrency.To == 0 {
+		return RangeConfig{From: 16, To: 32}
+	}
+	return *c.MaxConcurrency
+}
+
+func (c *XmuxConfig) GetNormalizedMaxConnections() RangeConfig {
+	if c == nil || c.MaxConnections == nil || c.MaxConnections.To == 0 {
+		return RangeConfig{From: 8, To: 16}
+	}
+	return *c.MaxConnections
+}
+
+func (c *XmuxConfig) GetNormalizedCMaxReuseTimes() RangeConfig {
+	if c == nil || c.CMaxReuseTimes == nil || c.CMaxReuseTimes.To == 0 {
+		return RangeConfig{From: 64, To: 128}
+	}
+	return *c.CMaxReuseTimes
+}
+
+func (c *XmuxConfig) GetNormalizedHMaxRequestTimes() RangeConfig {
+	if c == nil || c.HMaxRequestTimes == nil || c.HMaxRequestTimes.To == 0 {
+		return RangeConfig{From: 256, To: 512}
+	}
+	return *c.HMaxRequestTimes
+}
+
+func (c *XmuxConfig) GetNormalizedHMaxReusableSecs() RangeConfig {
+	if c == nil || c.HMaxReusableSecs == nil || c.HMaxReusableSecs.To == 0 {
+		return RangeConfig{From: 120, To: 300}
+	}
+	return *c.HMaxReusableSecs
 }
