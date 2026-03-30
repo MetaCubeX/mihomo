@@ -148,13 +148,41 @@ func DialStreamUp(
 	address string,
 	port int,
 	cfg *Config,
-	dialRaw DialRawFunc,
-	wrapTLS WrapTLSFunc,
+	dialUploadRaw DialRawFunc,
+	wrapUploadTLS WrapTLSFunc,
+	dialDownloadRaw DialRawFunc,
+	wrapDownloadTLS WrapTLSFunc,
 ) (net.Conn, error) {
 	host := cfg.Host
 	if host == "" {
 		host = address
 	}
+
+	downloadPort := port
+	downloadCfg := cfg
+
+	if ds := cfg.DownloadSettings; ds != nil {
+		if ds.Port != 0 {
+			downloadPort = ds.Port
+		}
+
+		downloadCfg = &Config{
+			Host:             ds.Host,
+			Path:             ds.Path,
+			Mode:             ds.Mode,
+			Headers:          cfg.Headers,
+			NoGRPCHeader:     cfg.NoGRPCHeader,
+			XPaddingBytes:    cfg.XPaddingBytes,
+			DownloadSettings: nil,
+		}
+	}
+
+	downloadHost := downloadCfg.Host
+	if downloadHost == "" {
+		downloadHost = host
+	}
+
+	_ = downloadPort // пока оставляем для совместимости сигнатуры
 
 	streamURL := url.URL{
 		Scheme: "https",
@@ -162,13 +190,19 @@ func DialStreamUp(
 		Path:   cfg.NormalizedPath(),
 	}
 
+	downloadURL := url.URL{
+		Scheme: "https",
+		Host:   downloadHost,
+		Path:   downloadCfg.NormalizedPath(),
+	}
+
 	uploadTransport := &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
-			raw, err := dialRaw(ctx)
+			raw, err := dialUploadRaw(ctx)
 			if err != nil {
 				return nil, err
 			}
-			wrapped, err := wrapTLS(ctx, raw, true)
+			wrapped, err := wrapUploadTLS(ctx, raw, true)
 			if err != nil {
 				_ = raw.Close()
 				return nil, err
@@ -179,11 +213,11 @@ func DialStreamUp(
 
 	downloadTransport := &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
-			raw, err := dialRaw(ctx)
+			raw, err := dialDownloadRaw(ctx)
 			if err != nil {
 				return nil, err
 			}
-			wrapped, err := wrapTLS(ctx, raw, true)
+			wrapped, err := wrapDownloadTLS(ctx, raw, true)
 			if err != nil {
 				_ = raw.Close()
 				return nil, err
@@ -199,7 +233,7 @@ func DialStreamUp(
 	downloadReq, err := http.NewRequestWithContext(
 		httputils.NewAddrContext(&conn.NetAddr, contextutils.WithoutCancel(ctx)),
 		http.MethodGet,
-		streamURL.String(),
+		downloadURL.String(),
 		nil,
 	)
 	if err != nil {
@@ -208,12 +242,12 @@ func DialStreamUp(
 		return nil, err
 	}
 
-	if err := cfg.FillDownloadRequest(downloadReq, sessionID); err != nil {
+	if err := downloadCfg.FillDownloadRequest(downloadReq, sessionID); err != nil {
 		httputils.CloseTransport(uploadTransport)
 		httputils.CloseTransport(downloadTransport)
 		return nil, err
 	}
-	downloadReq.Host = host
+	downloadReq.Host = downloadHost
 
 	downloadResp, err := downloadTransport.RoundTrip(downloadReq)
 	if err != nil {

@@ -72,12 +72,24 @@ type VlessOption struct {
 }
 
 type XHTTPOptions struct {
-	Path          string            `proxy:"path,omitempty"`
-	Host          string            `proxy:"host,omitempty"`
-	Mode          string            `proxy:"mode,omitempty"`
-	Headers       map[string]string `proxy:"headers,omitempty"`
-	NoGRPCHeader  bool              `proxy:"no-grpc-header,omitempty"`
-	XPaddingBytes string            `proxy:"x-padding-bytes,omitempty"`
+	Path             string                 `proxy:"path,omitempty"`
+	Host             string                 `proxy:"host,omitempty"`
+	Mode             string                 `proxy:"mode,omitempty"`
+	Headers          map[string]string      `proxy:"headers,omitempty"`
+	NoGRPCHeader     bool                   `proxy:"no-grpc-header,omitempty"`
+	XPaddingBytes    string                 `proxy:"x-padding-bytes,omitempty"`
+	DownloadSettings *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
+}
+
+type XHTTPDownloadSettings struct {
+	Address     string         `proxy:"address,omitempty"`
+	Port        int            `proxy:"port,omitempty"`
+	Network     string         `proxy:"network,omitempty"`
+	Security    string         `proxy:"security,omitempty"`
+	RealityOpts RealityOptions `proxy:"reality-opts,omitempty"`
+	Host        string         `proxy:"host,omitempty"`
+	Path        string         `proxy:"path,omitempty"`
+	Mode        string         `proxy:"mode,omitempty"`
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
@@ -241,6 +253,46 @@ func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (ne
 	return conn, nil
 }
 
+func (v *Vless) streamTLSConnWith(
+	ctx context.Context,
+	conn net.Conn,
+	isH2 bool,
+	addr string,
+	tlsEnabled bool,
+	serverName string,
+	alpn []string,
+	realityConfig *tlsC.RealityConfig,
+) (net.Conn, error) {
+
+	if tlsEnabled {
+		host, _, _ := net.SplitHostPort(addr)
+
+		tlsOpts := vmess.TLSConfig{
+			Host:              host,
+			SkipCertVerify:    v.option.SkipCertVerify,
+			FingerPrint:       v.option.Fingerprint,
+			Certificate:       v.option.Certificate,
+			PrivateKey:        v.option.PrivateKey,
+			ClientFingerprint: v.option.ClientFingerprint,
+			ECH:               v.echConfig,
+			Reality:           realityConfig,
+			NextProtos:        alpn,
+		}
+
+		if isH2 {
+			tlsOpts.NextProtos = []string{"h2"}
+		}
+
+		if serverName != "" {
+			tlsOpts.Host = serverName
+		}
+
+		return vmess.StreamTLSConn(ctx, conn, &tlsOpts)
+	}
+
+	return conn, nil
+}
+
 func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 	requestHost := v.option.XHTTPOpts.Host
 	if requestHost == "" {
@@ -260,7 +312,69 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 		XPaddingBytes: v.option.XHTTPOpts.XPaddingBytes,
 	}
 
+	if ds := v.option.XHTTPOpts.DownloadSettings; ds != nil {
+		if ds.Network != "" && ds.Network != "xhttp" {
+			return nil, fmt.Errorf("xhttp download-settings network must be xhttp")
+		}
+
+		realityCfg, err := ds.RealityOpts.Parse()
+		if err != nil {
+			return nil, err
+		}
+
+		cfg.DownloadSettings = &xhttp.DownloadConfig{
+			Address:  ds.Address,
+			Port:     ds.Port,
+			Security: ds.Security,
+			Reality:  realityCfg,
+			Host:     ds.Host,
+			Path:     ds.Path,
+			Mode:     ds.Mode,
+		}
+	}
+
+	if cfg.DownloadSettings != nil && cfg.Mode == "stream-one" {
+		return nil, fmt.Errorf(`xhttp mode "stream-one" cannot be used with download-settings`)
+	}
+
 	mode := cfg.EffectiveMode(v.realityConfig != nil)
+
+	downloadAddr := v.addr
+	downloadTLSEnabled := v.option.TLS
+	downloadServerName := v.option.ServerName
+	downloadReality := v.realityConfig
+
+	if ds := cfg.DownloadSettings; ds != nil {
+		server := v.option.Server
+		port := v.option.Port
+
+		if ds.Address != "" {
+			server = ds.Address
+		}
+		if ds.Port != 0 {
+			port = ds.Port
+		}
+
+		downloadAddr = net.JoinHostPort(server, strconv.Itoa(port))
+
+		switch ds.Security {
+		case "":
+			// inherit
+		case "tls":
+			downloadTLSEnabled = true
+			downloadReality = nil
+		case "reality":
+			downloadTLSEnabled = true
+			downloadReality = ds.Reality
+		case "none":
+			downloadTLSEnabled = false
+			downloadReality = nil
+		default:
+			return nil, fmt.Errorf("unsupported xhttp download-settings security: %s", ds.Security)
+		}
+
+	}
+
 	switch mode {
 	case "stream-one":
 		return xhttp.DialStreamOne(
@@ -284,6 +398,21 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 			},
 			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
 				return v.streamTLSConn(ctx, raw, isH2)
+			},
+			func(ctx context.Context) (net.Conn, error) {
+				return v.dialer.DialContext(ctx, "tcp", downloadAddr)
+			},
+			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
+				return v.streamTLSConnWith(
+					ctx,
+					raw,
+					isH2,
+					downloadAddr,
+					downloadTLSEnabled,
+					downloadServerName,
+					v.option.ALPN,
+					downloadReality,
+				)
 			},
 		)
 	case "packet-up":

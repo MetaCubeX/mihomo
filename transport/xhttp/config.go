@@ -9,15 +9,27 @@ import (
 	"strings"
 
 	"github.com/metacubex/http"
+	tlsC "github.com/metacubex/mihomo/component/tls"
 )
 
 type Config struct {
-	Host          string
-	Path          string
-	Mode          string
-	Headers       map[string]string
-	NoGRPCHeader  bool
-	XPaddingBytes string
+	Host             string
+	Path             string
+	Mode             string
+	Headers          map[string]string
+	NoGRPCHeader     bool
+	XPaddingBytes    string
+	DownloadSettings *DownloadConfig
+}
+
+type DownloadConfig struct {
+	Address  string
+	Port     int
+	Security string
+	Reality  *tlsC.RealityConfig
+	Host     string
+	Path     string
+	Mode     string
 }
 
 func (c *Config) NormalizedMode() string {
@@ -33,6 +45,9 @@ func (c *Config) EffectiveMode(hasReality bool) string {
 		return mode
 	}
 	if hasReality {
+		if c.DownloadSettings != nil {
+			return "stream-up"
+		}
 		return "stream-one"
 	}
 	return "packet-up"
