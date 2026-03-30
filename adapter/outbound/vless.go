@@ -82,14 +82,17 @@ type XHTTPOptions struct {
 }
 
 type XHTTPDownloadSettings struct {
-	Address     string         `proxy:"address,omitempty"`
-	Port        int            `proxy:"port,omitempty"`
-	Network     string         `proxy:"network,omitempty"`
-	Security    string         `proxy:"security,omitempty"`
-	RealityOpts RealityOptions `proxy:"reality-opts,omitempty"`
-	Host        string         `proxy:"host,omitempty"`
-	Path        string         `proxy:"path,omitempty"`
-	Mode        string         `proxy:"mode,omitempty"`
+	Address           string         `proxy:"address,omitempty"`
+	Port              int            `proxy:"port,omitempty"`
+	Network           string         `proxy:"network,omitempty"`
+	Security          string         `proxy:"security,omitempty"`
+	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
+	Host              string         `proxy:"host,omitempty"`
+	Path              string         `proxy:"path,omitempty"`
+	Mode              string         `proxy:"mode,omitempty"`
+	ServerName        string         `proxy:"servername,omitempty"`
+	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
+	SkipCertVerify    bool           `proxy:"skip-cert-verify,omitempty"`
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
@@ -261,6 +264,8 @@ func (v *Vless) streamTLSConnWith(
 	tlsEnabled bool,
 	serverName string,
 	alpn []string,
+	skipCertVerify bool,
+	clientFingerprint string,
 	realityConfig *tlsC.RealityConfig,
 ) (net.Conn, error) {
 
@@ -269,11 +274,11 @@ func (v *Vless) streamTLSConnWith(
 
 		tlsOpts := vmess.TLSConfig{
 			Host:              host,
-			SkipCertVerify:    v.option.SkipCertVerify,
+			SkipCertVerify:    skipCertVerify,
 			FingerPrint:       v.option.Fingerprint,
 			Certificate:       v.option.Certificate,
 			PrivateKey:        v.option.PrivateKey,
-			ClientFingerprint: v.option.ClientFingerprint,
+			ClientFingerprint: clientFingerprint,
 			ECH:               v.echConfig,
 			Reality:           realityConfig,
 			NextProtos:        alpn,
@@ -323,13 +328,16 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 		}
 
 		cfg.DownloadSettings = &xhttp.DownloadConfig{
-			Address:  ds.Address,
-			Port:     ds.Port,
-			Security: ds.Security,
-			Reality:  realityCfg,
-			Host:     ds.Host,
-			Path:     ds.Path,
-			Mode:     ds.Mode,
+			Address:           ds.Address,
+			Port:              ds.Port,
+			Security:          ds.Security,
+			Reality:           realityCfg,
+			Host:              ds.Host,
+			Path:              ds.Path,
+			Mode:              ds.Mode,
+			ServerName:        ds.ServerName,
+			ClientFingerprint: ds.ClientFingerprint,
+			SkipCertVerify:    ds.SkipCertVerify,
 		}
 	}
 
@@ -343,6 +351,9 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 	downloadTLSEnabled := v.option.TLS
 	downloadServerName := v.option.ServerName
 	downloadReality := v.realityConfig
+	downloadSkipCertVerify := v.option.SkipCertVerify
+	downloadClientFingerprint := v.option.ClientFingerprint
+	downloadALPN := v.option.ALPN
 
 	if ds := cfg.DownloadSettings; ds != nil {
 		server := v.option.Server
@@ -371,6 +382,18 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 			downloadReality = nil
 		default:
 			return nil, fmt.Errorf("unsupported xhttp download-settings security: %s", ds.Security)
+		}
+
+		if ds.ServerName != "" {
+			downloadServerName = ds.ServerName
+		}
+
+		if ds.ClientFingerprint != "" {
+			downloadClientFingerprint = ds.ClientFingerprint
+		}
+
+		if ds.SkipCertVerify {
+			downloadSkipCertVerify = true
 		}
 
 	}
@@ -410,7 +433,9 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 					downloadAddr,
 					downloadTLSEnabled,
 					downloadServerName,
-					v.option.ALPN,
+					downloadALPN,
+					downloadSkipCertVerify,
+					downloadClientFingerprint,
 					downloadReality,
 				)
 			},

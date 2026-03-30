@@ -23,13 +23,16 @@ type Config struct {
 }
 
 type DownloadConfig struct {
-	Address  string
-	Port     int
-	Security string
-	Reality  *tlsC.RealityConfig
-	Host     string
-	Path     string
-	Mode     string
+	Address           string
+	Port              int
+	Security          string
+	Reality           *tlsC.RealityConfig
+	Host              string
+	Path              string
+	Mode              string
+	ServerName        string
+	ClientFingerprint string
+	SkipCertVerify    bool
 }
 
 func (c *Config) NormalizedMode() string {
