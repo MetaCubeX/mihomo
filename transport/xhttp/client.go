@@ -72,19 +72,8 @@ func (c *PacketUpWriter) Close() error {
 	return nil
 }
 
-func DialStreamOne(
-	ctx context.Context,
-	cfg *Config,
-	dialRaw DialRawFunc,
-	wrapTLS WrapTLSFunc,
-) (net.Conn, error) {
-	requestURL := url.URL{
-		Scheme: "https",
-		Host:   cfg.Host,
-		Path:   cfg.NormalizedPath(),
-	}
-
-	transport := &http.Http2Transport{
+func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc) http.RoundTripper {
+	return &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
 			raw, err := dialRaw(ctx)
 			if err != nil {
@@ -98,14 +87,20 @@ func DialStreamOne(
 			return wrapped, nil
 		},
 	}
+}
 
+func DialStreamOne(cfg *Config, transport http.RoundTripper) (net.Conn, error) {
+	requestURL := url.URL{
+		Scheme: "https",
+		Host:   cfg.Host,
+		Path:   cfg.NormalizedPath(),
+	}
 	pr, pw := io.Pipe()
 
-	conn := &Conn{
-		writer: pw,
-	}
+	ctx := context.Background()
+	conn := &Conn{writer: pw}
 
-	req, err := http.NewRequestWithContext(httputils.NewAddrContext(&conn.NetAddr, contextutils.WithoutCancel(ctx)), http.MethodPost, requestURL.String(), pr)
+	req, err := http.NewRequestWithContext(httputils.NewAddrContext(&conn.NetAddr, ctx), http.MethodPost, requestURL.String(), pr)
 	if err != nil {
 		_ = pr.Close()
 		_ = pw.Close()
@@ -144,28 +139,19 @@ func DialStreamOne(
 }
 
 func DialStreamUp(
-	ctx context.Context,
+	cfg *Config,
+	uploadTransport http.RoundTripper,
+	downloadTransport http.RoundTripper,
 	address string,
 	port int,
-	cfg *Config,
-	dialUploadRaw DialRawFunc,
-	wrapUploadTLS WrapTLSFunc,
-	dialDownloadRaw DialRawFunc,
-	wrapDownloadTLS WrapTLSFunc,
 ) (net.Conn, error) {
 	host := cfg.Host
 	if host == "" {
 		host = address
 	}
 
-	downloadPort := port
 	downloadCfg := cfg
-
 	if ds := cfg.DownloadSettings; ds != nil {
-		if ds.Port != 0 {
-			downloadPort = ds.Port
-		}
-
 		downloadCfg = &Config{
 			Host:             ds.Host,
 			Path:             ds.Path,
@@ -182,7 +168,7 @@ func DialStreamUp(
 		downloadHost = host
 	}
 
-	_ = downloadPort // пока оставляем для совместимости сигнатуры
+	_ = port
 
 	streamURL := url.URL{
 		Scheme: "https",
@@ -196,39 +182,10 @@ func DialStreamUp(
 		Path:   downloadCfg.NormalizedPath(),
 	}
 
-	uploadTransport := &http.Http2Transport{
-		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
-			raw, err := dialUploadRaw(ctx)
-			if err != nil {
-				return nil, err
-			}
-			wrapped, err := wrapUploadTLS(ctx, raw, true)
-			if err != nil {
-				_ = raw.Close()
-				return nil, err
-			}
-			return wrapped, nil
-		},
-	}
-
-	downloadTransport := &http.Http2Transport{
-		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
-			raw, err := dialDownloadRaw(ctx)
-			if err != nil {
-				return nil, err
-			}
-			wrapped, err := wrapDownloadTLS(ctx, raw, true)
-			if err != nil {
-				_ = raw.Close()
-				return nil, err
-			}
-			return wrapped, nil
-		},
-	}
+	ctx := context.Background()
+	conn := &Conn{}
 
 	sessionID := newSessionID()
-
-	conn := &Conn{}
 
 	downloadReq, err := http.NewRequestWithContext(
 		httputils.NewAddrContext(&conn.NetAddr, contextutils.WithoutCancel(ctx)),
@@ -315,27 +272,7 @@ func DialStreamUp(
 	return conn, nil
 }
 
-func DialPacketUp(
-	ctx context.Context,
-	cfg *Config,
-	dialRaw DialRawFunc,
-	wrapTLS WrapTLSFunc,
-) (net.Conn, error) {
-	transport := &http.Http2Transport{
-		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
-			raw, err := dialRaw(ctx)
-			if err != nil {
-				return nil, err
-			}
-			wrapped, err := wrapTLS(ctx, raw, true)
-			if err != nil {
-				_ = raw.Close()
-				return nil, err
-			}
-			return wrapped, nil
-		},
-	}
-
+func DialPacketUp(cfg *Config, transport http.RoundTripper) (net.Conn, error) {
 	sessionID := newSessionID()
 
 	downloadURL := url.URL{
@@ -344,7 +281,7 @@ func DialPacketUp(
 		Path:   cfg.NormalizedPath(),
 	}
 
-	ctx = contextutils.WithoutCancel(ctx)
+	ctx := context.Background()
 	writer := &PacketUpWriter{
 		ctx:       ctx,
 		cfg:       cfg,
