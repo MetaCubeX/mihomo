@@ -156,7 +156,13 @@ func DialStreamUp(
 		host = address
 	}
 
-	transport := &http.Http2Transport{
+	streamURL := url.URL{
+		Scheme: "https",
+		Host:   host,
+		Path:   cfg.NormalizedPath(),
+	}
+
+	uploadTransport := &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
 			raw, err := dialRaw(ctx)
 			if err != nil {
@@ -171,48 +177,54 @@ func DialStreamUp(
 		},
 	}
 
-	client := &http.Client{
-		Transport: transport,
+	downloadTransport := &http.Http2Transport{
+		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
+			raw, err := dialRaw(ctx)
+			if err != nil {
+				return nil, err
+			}
+			wrapped, err := wrapTLS(ctx, raw, true)
+			if err != nil {
+				_ = raw.Close()
+				return nil, err
+			}
+			return wrapped, nil
+		},
 	}
 
 	sessionID := newSessionID()
 
-	streamURL := url.URL{
-		Scheme: "https",
-		Host:   host,
-		Path:   cfg.NormalizedPath(),
-	}
-
 	conn := &Conn{}
 
-	downloadTrace := &httptrace.ClientTrace{
-		GotConn: func(connInfo httptrace.GotConnInfo) {
-			conn.SetLocalAddr(connInfo.Conn.LocalAddr())
-			conn.SetRemoteAddr(connInfo.Conn.RemoteAddr())
-		},
-	}
-
 	downloadReq, err := http.NewRequestWithContext(
-		httptrace.WithClientTrace(contextutils.WithoutCancel(ctx), downloadTrace),
+		httputils.NewAddrContext(&conn.NetAddr, contextutils.WithoutCancel(ctx)),
 		http.MethodGet,
 		streamURL.String(),
 		nil,
 	)
 	if err != nil {
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 		return nil, err
 	}
 
 	if err := cfg.FillDownloadRequest(downloadReq, sessionID); err != nil {
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 		return nil, err
 	}
 	downloadReq.Host = host
 
-	downloadResp, err := client.Do(downloadReq)
+	downloadResp, err := downloadTransport.RoundTrip(downloadReq)
 	if err != nil {
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 		return nil, err
 	}
 	if downloadResp.StatusCode != http.StatusOK {
 		_ = downloadResp.Body.Close()
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 		return nil, fmt.Errorf("xhttp stream-up download bad status: %s", downloadResp.Status)
 	}
 
@@ -228,6 +240,8 @@ func DialStreamUp(
 		_ = downloadResp.Body.Close()
 		_ = pr.Close()
 		_ = pw.Close()
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 		return nil, err
 	}
 
@@ -235,12 +249,14 @@ func DialStreamUp(
 		_ = downloadResp.Body.Close()
 		_ = pr.Close()
 		_ = pw.Close()
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 		return nil, err
 	}
 	uploadReq.Host = host
 
 	go func() {
-		resp, err := client.Do(uploadReq)
+		resp, err := uploadTransport.RoundTrip(uploadReq)
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
@@ -256,7 +272,10 @@ func DialStreamUp(
 	conn.writer = pw
 	conn.reader = downloadResp.Body
 	conn.onClose = func() {
+		_ = downloadResp.Body.Close()
 		_ = pr.Close()
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
 	}
 
 	return conn, nil
