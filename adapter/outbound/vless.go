@@ -83,13 +83,6 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
 			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
 		}
-				splitConfig.H2Dial = func(ctx context.Context) (net.Conn, error) {
-			rawConn, dialErr := v.dialer.DialContext(ctx, "tcp", v.addr)
-			if dialErr != nil {
-				return nil, dialErr
-			}
-			return v.streamTLSConn(ctx, rawConn, splitConfig.HasALPN("h2"))
-		}
 		splitConfig.H1UploadDial = func(ctx context.Context) (net.Conn, error) {
 			rawConn, dialErr := v.dialer.DialContext(ctx, "tcp", v.addr)
 			if dialErr != nil {
@@ -115,9 +108,13 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 				return nil, h3Err
 			}
 		}
+		c, err = v.streamTLSConn(ctx, c, splitConfig.HasALPN("h2"))
+		if err != nil {
+			return nil, err
+		}
 		attempted = append(attempted, "tcp")
-			log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
-			c, err = xhttp.StreamConn(ctx, splitConfig)
+		log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
+		c, err = xhttp.StreamConn(ctx, c, splitConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -285,9 +282,7 @@ func (v *Vless) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn
 	var c net.Conn
 	switch v.option.Network {
 	case "grpc": // gun transport
-		c, err = v.gunTransport.Dial() 
-	case "xhttp", "splithttp":
-		// delayed dial
+		c, err = v.gunTransport.Dial()
 	default:
 		c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
 	}
@@ -314,9 +309,7 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	var c net.Conn
 	switch v.option.Network {
 	case "grpc": // gun transport
-		c, err = v.gunTransport.Dial() 
-	case "xhttp", "splithttp":
-		// delayed dial
+		c, err = v.gunTransport.Dial()
 	default:
 		c, err = v.dialer.DialContext(ctx, "tcp", v.addr)
 	}

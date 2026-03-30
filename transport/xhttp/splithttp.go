@@ -9,7 +9,6 @@ import (
 	"net/http/httptrace"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/http"
@@ -42,21 +41,19 @@ func getBaseRequest(ctx context.Context, method, urlStr string, body io.Reader, 
 
 type Conn struct {
 	net.Conn
-	reader  io.ReadCloser
-	writer  io.WriteCloser
-	debug   bool
-	onClose func()
-	rOnce   sync.Once
-	wOnce   sync.Once
+	reader io.ReadCloser
+	writer io.WriteCloser
+	debug  bool
+	rOnce  sync.Once
+	wOnce  sync.Once
 }
 
-func NewConn(base net.Conn, reader io.ReadCloser, writer io.WriteCloser, debug bool, onClose func()) *Conn {
+func NewConn(base net.Conn, reader io.ReadCloser, writer io.WriteCloser, debug bool) *Conn {
 	return &Conn{
-		Conn:    base,
-		reader:  reader,
-		writer:  writer,
-		debug:   debug,
-		onClose: onClose,
+		Conn:   base,
+		reader: reader,
+		writer: writer,
+		debug:  debug,
 	}
 }
 
@@ -87,9 +84,6 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 }
 
 func (c *Conn) Close() error {
-	if c.onClose != nil {
-		c.onClose()
-	}
 	var errs []error
 	if c.reader != nil {
 		if err := c.reader.Close(); err != nil {
@@ -415,31 +409,10 @@ func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error
 	}
 	url := fmt.Sprintf("https://%s%s", config.Host, config.GetNormalizedPath())
 	connMeta := connTelemetry{localAddr: "unknown", remoteAddr: config.DialAddr}
-	client, xmuxClient, err := getXmuxClient(ctx, config, func() (*http.Client, error) {
-		return buildHTTP3Client(config), nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var closed atomic.Int32
-	if xmuxClient != nil {
-		xmuxClient.OpenUsage.Add(1)
-	}
-	onCloseWrapper := func() {
-		if closed.Add(1) > 1 {
-			return
-		}
-		if xmuxClient != nil {
-			xmuxClient.OpenUsage.Add(-1)
-		}
-	}
+	client := buildHTTP3Client(config)
 
 	if mode == "stream-one" {
 		pr, pw := io.Pipe()
-		if xmuxClient != nil {
-			xmuxClient.LeftRequests.Add(-1)
-		}
 		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr, config)
 		if err != nil {
 			return nil, fmt.Errorf("create req failed: %w", err)
@@ -457,7 +430,7 @@ func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error
 			b, _ := io.ReadAll(resp.Body)
 			return nil, fmt.Errorf("splithttp h3 stream-one bad status code: %d, body: %s", resp.StatusCode, string(b))
 		}
-		return NewConn(noopNetConn{}, resp.Body, pw, config.RequestLog, onCloseWrapper), nil
+		return NewConn(noopNetConn{}, resp.Body, pw, config.RequestLog), nil
 	}
 
 	downReq, err := getBaseRequest(ctx, "GET", url, nil, config)
@@ -494,10 +467,6 @@ func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error
 	var downstreamReader io.ReadCloser = reader
 
 	if mode == "stream-up" {
-
-		if xmuxClient != nil {
-			xmuxClient.LeftRequests.Add(-1)
-		}
 		upReader, upWriter := io.Pipe()
 		upReq, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, upReader, config)
 		if err != nil {
@@ -512,7 +481,7 @@ func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error
 				resp.Body.Close()
 			}
 		}()
-		return NewConn(noopNetConn{}, downstreamReader, upWriter, config.RequestLog, onCloseWrapper), nil
+		return NewConn(noopNetConn{}, downstreamReader, upWriter, config.RequestLog), nil
 	}
 
 	if mode == "packet-up" {
@@ -524,14 +493,14 @@ func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error
 			sessionId: sessionId,
 			meta:      connMeta,
 		}
-		return NewConn(noopNetConn{}, downstreamReader, writer, config.RequestLog, onCloseWrapper), nil
+		return NewConn(noopNetConn{}, downstreamReader, writer, config.RequestLog), nil
 	}
 
 	return nil, fmt.Errorf("unsupported splithttp mode %s", mode)
 }
 
 // StreamConn builds either Stream-One, Stream-Up/Down, or Packet-Up multiplexed flow based on configs.
-func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) {
+func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.Conn, error) {
 	mode := parseMode(config)
 
 	sessionId := ""
@@ -540,72 +509,52 @@ func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) 
 	}
 
 	url := fmt.Sprintf("https://%s%s", config.Host, config.GetNormalizedPath())
-	connMeta := connTelemetry{localAddr: "unknown", remoteAddr: config.DialAddr}
+	connMeta := getConnTelemetry(c)
 
-	client, xmuxClient, err := getXmuxClient(ctx, config, func() (*http.Client, error) {
-		c, err := config.H2Dial(ctx)
-		if err != nil {
-			return nil, err
+	// Select transport explicitly to avoid parsing HTTP/2 frames with HTTP/1 reader.
+	useH2 := config.HasALPN("h2")
+	negotiatedProto := ""
+	if hs, ok := c.(interface{ HandshakeContext(context.Context) error }); ok {
+		_ = hs.HandshakeContext(ctx)
+	} else if hs, ok := c.(interface{ Handshake() error }); ok {
+		_ = hs.Handshake()
+	}
+	if ts, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
+		negotiatedProto = ts.ConnectionState().NegotiatedProtocol
+	} else if ts, ok := c.(interface{ ConnectionState() ctls.ConnectionState }); ok {
+		negotiatedProto = ts.ConnectionState().NegotiatedProtocol
+	}
+	if negotiatedProto != "" {
+		useH2 = negotiatedProto == "h2"
+	} else if !config.HasALPN("h2") {
+		useH2 = false
+	}
+	if config.RequestLog {
+		log.Infoln("splithttp[transport-select] requested_alpn=%v negotiated=%s use_h2=%v mode=%s", config.ALPN, negotiatedProto, useH2, mode)
+	}
+	var rt http.RoundTripper
+	if useH2 {
+		rt = &http.Http2Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+				return c, nil
+			},
+			ReadIdleTimeout: 30 * time.Second,
 		}
-
-		useH2 := config.HasALPN("h2")
-		negotiatedProto := ""
-		if hs, ok := c.(interface{ HandshakeContext(context.Context) error }); ok {
-			_ = hs.HandshakeContext(ctx)
-		} else if hs, ok := c.(interface{ Handshake() error }); ok {
-			_ = hs.Handshake()
+	} else {
+		rt = &http.Transport{
+			ForceAttemptHTTP2: false,
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return c, nil
+			},
 		}
-		if ts, ok := c.(interface{ ConnectionState() tls.ConnectionState }); ok {
-			negotiatedProto = ts.ConnectionState().NegotiatedProtocol
-		} else if ts, ok := c.(interface{ ConnectionState() ctls.ConnectionState }); ok {
-			negotiatedProto = ts.ConnectionState().NegotiatedProtocol
-		}
-		if negotiatedProto != "" {
-			useH2 = negotiatedProto == "h2"
-		} else if !config.HasALPN("h2") {
-			useH2 = false
-		}
-		if config.RequestLog {
-			log.Infoln("splithttp[transport-select] requested_alpn=%v negotiated=%s use_h2=%v mode=%s", config.ALPN, negotiatedProto, useH2, config.Mode)
-		}
-
-		var rt http.RoundTripper
-		if useH2 {
-			rt = &http.Http2Transport{
-				DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-					return c, nil
-				},
-				ReadIdleTimeout: 30 * time.Second,
-			}
-		} else {
-			rt = &http.Transport{
-				ForceAttemptHTTP2: false,
-				DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					return c, nil
-				},
-			}
-		}
-		return &http.Client{Transport: rt}, nil
-	})
-	if err != nil {
-		return nil, err
 	}
 
-	var closed atomic.Int32
-	if xmuxClient != nil {
-		xmuxClient.OpenUsage.Add(1)
-	}
-	onCloseWrapper := func() {
-		if closed.Add(1) > 1 {
-			return
-		}
-		if xmuxClient != nil {
-			xmuxClient.OpenUsage.Add(-1)
-		}
+	client := &http.Client{
+		Transport: rt,
 	}
 
 	uploadClient := client
-	if !config.HasALPN("h2") && (mode == "stream-up" || mode == "packet-up") {
+	if !useH2 && (mode == "stream-up" || mode == "packet-up") {
 		if config.H1UploadDial == nil {
 			return nil, fmt.Errorf("splithttp %s requires h1-upload-dial when HTTP/2 is unavailable", mode)
 		}
@@ -622,9 +571,6 @@ func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) 
 
 	if mode == "stream-one" {
 		pr, pw := io.Pipe()
-		if xmuxClient != nil {
-			xmuxClient.LeftRequests.Add(-1)
-		}
 
 		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr, config)
 		if err != nil {
@@ -665,7 +611,7 @@ func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) 
 			reader.Set(resp.Body)
 		}()
 
-		return NewConn(noopNetConn{}, reader, pw, config.RequestLog, onCloseWrapper), nil
+		return NewConn(c, reader, pw, config.RequestLog), nil
 	} else {
 		// Both stream-up and packet-up use a long-lived GET request for downloads.
 		downReq, err := getBaseRequest(ctx, "GET", url, nil, config)
@@ -701,10 +647,6 @@ func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) 
 		var downstreamReader io.ReadCloser = reader
 
 		if mode == "stream-up" {
-
-			if xmuxClient != nil {
-				xmuxClient.LeftRequests.Add(-1)
-			}
 			upReader, upWriter := io.Pipe()
 			upReq, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, upReader, config)
 			if err != nil {
@@ -721,7 +663,7 @@ func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) 
 				}
 			}()
 
-			return NewConn(noopNetConn{}, downstreamReader, upWriter, config.RequestLog, onCloseWrapper), nil
+			return NewConn(c, downstreamReader, upWriter, config.RequestLog), nil
 		} else if mode == "packet-up" {
 			writer := &PacketUpWriter{
 				ctx:       ctx,
@@ -731,55 +673,14 @@ func StreamConn(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) 
 				sessionId: sessionId,
 				meta:      connMeta,
 			}
-			if !config.HasALPN("h2") {
+			if !useH2 {
 				writer.h1RawUpload = true
 				writer.uploadRawPool = &sync.Pool{}
 				writer.dialUploadConn = config.H1UploadDial
 			}
-			return NewConn(noopNetConn{}, downstreamReader, writer, config.RequestLog, onCloseWrapper), nil
+			return NewConn(c, downstreamReader, writer, config.RequestLog), nil
 		}
 	}
 
 	return nil, fmt.Errorf("unsupported splithttp mode %s", mode)
-}
-
-// xmux integration
-type httpXmuxConn struct {
-	client *http.Client
-	closed atomic.Bool
-}
-
-func (c *httpXmuxConn) IsClosed() bool {
-	return c.closed.Load()
-}
-
-var (
-	globalDialerMap    = make(map[string]*XmuxManager)
-	globalDialerAccess sync.Mutex
-)
-
-func getXmuxClient(ctx context.Context, config *SplitHTTPConfig, newClient func() (*http.Client, error)) (*http.Client, *XmuxClient, error) {
-	if config.Xmux == nil { // fallback to generic
-		cl, err := newClient()
-		return cl, nil, err
-	}
-	globalDialerAccess.Lock()
-	defer globalDialerAccess.Unlock()
-	key := config.Host + "|" + config.DialAddr
-	mgr, ok := globalDialerMap[key]
-	if !ok {
-		mgr = NewXmuxManager(config.Xmux, func(ctx context.Context) (XmuxConn, error) {
-			cl, err := newClient()
-			if err != nil {
-				return nil, err
-			}
-			return &httpXmuxConn{client: cl}, nil
-		})
-		globalDialerMap[key] = mgr
-	}
-	xc, err := mgr.GetXmuxClient(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	return xc.XmuxConn.(*httpXmuxConn).client, xc, nil
 }

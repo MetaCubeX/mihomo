@@ -93,25 +93,6 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		if t.option.ALPN != nil {
 			alpn = t.option.ALPN
 		}
-				splitConfig.H2Dial = func(ctx context.Context) (net.Conn, error) {
-			rawConn, dialErr := t.dialer.DialContext(ctx, "tcp", t.addr)
-			if dialErr != nil {
-				return nil, dialErr
-			}
-			nextProtos := alpn
-			if splitConfig.HasALPN("h2") {
-			    nextProtos = []string{"h2"}
-			}
-			return vmess.StreamTLSConn(ctx, rawConn, &vmess.TLSConfig{
-				Host:              t.option.SNI,
-				SkipCertVerify:    t.option.SkipCertVerify,
-				FingerPrint:       t.option.Fingerprint,
-				ClientFingerprint: t.option.ClientFingerprint,
-				ECH:               t.echConfig,
-				Reality:           t.realityConfig,
-				NextProtos:        nextProtos,
-			})
-		}
 		splitConfig.H1UploadDial = func(ctx context.Context) (net.Conn, error) {
 			rawConn, dialErr := t.dialer.DialContext(ctx, "tcp", t.addr)
 			if dialErr != nil {
@@ -151,7 +132,7 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		}
 		attempted = append(attempted, "tcp")
 		log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
-		c, err = xhttp.StreamConn(ctx, splitConfig)
+		c, err = xhttp.StreamConn(ctx, c, splitConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +176,7 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 				InsecureSkipVerify: t.option.SkipCertVerify,
 				ServerName:         t.option.SNI,
 			},
-			Fingerprint:       t.option.Fingerprint,
+			Fingerprint: t.option.Fingerprint,
 			Certificate: t.option.Certificate,
 			PrivateKey:  t.option.PrivateKey,
 		})

@@ -19,7 +19,6 @@ type SplitHTTPOptions struct {
 	MaxUploadSize       int               `proxy:"max-upload-size,omitempty"`
 	MaxConcurrentPosts  int               `proxy:"max-concurrent-posts,omitempty"`
 	Mode                string            `proxy:"mode,omitempty"`
-	Xmux                *xhttp.XmuxConfig `proxy:"xmux,omitempty"`
 	XPaddingBytesFrom   int               `proxy:"x-padding-bytes-from,omitempty"`
 	XPaddingBytesTo     int               `proxy:"x-padding-bytes-to,omitempty"`
 	XPaddingObfsMode    bool              `proxy:"x-padding-obfs-mode,omitempty"`
@@ -107,14 +106,9 @@ func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string
 		UplinkDataKey:       xhttpOpts.UplinkDataKey,
 		RequestLog:          requestLog,
 		TryQUIC:             tryQuic,
-		Xmux:                xhttpOpts.Xmux,
 	}
 	if xhttpOpts.XPaddingBytesTo > 0 {
 		config.XPaddingBytes = &xhttp.RangeConfig{From: xhttpOpts.XPaddingBytesFrom, To: xhttpOpts.XPaddingBytesTo}
-	}
-
-	if splitHTTPOpts.Xmux != nil {
-		config.Xmux = splitHTTPOpts.Xmux
 	}
 
 	if config.Host == "" {

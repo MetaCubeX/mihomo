@@ -110,30 +110,6 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		splitConfig.H3PacketDial = func(ctx context.Context, rAddr *net.UDPAddr) (net.PacketConn, error) {
 			return v.dialer.ListenPacket(ctx, "udp", "", rAddr.AddrPort())
 		}
-				splitConfig.H2Dial = func(ctx context.Context) (net.Conn, error) {
-			rawConn, dialErr := v.dialer.DialContext(ctx, "tcp", v.addr)
-			if dialErr != nil {
-				return nil, dialErr
-			}
-			if !v.option.TLS {
-				return rawConn, nil
-			}
-			tlsOpts := mihomoVMess.TLSConfig{
-				Host:              host,
-				SkipCertVerify:    v.option.SkipCertVerify,
-				FingerPrint:       v.option.Fingerprint,
-				Certificate:       v.option.Certificate,
-				PrivateKey:        v.option.PrivateKey,
-				ClientFingerprint: v.option.ClientFingerprint,
-				ECH:               v.echConfig,
-				Reality:           v.realityConfig,
-				NextProtos:        v.option.ALPN,
-			}
-			if splitConfig.HasALPN("h2") {
-				tlsOpts.NextProtos = []string{"h2"}
-			}
-			return mihomoVMess.StreamTLSConn(ctx, rawConn, &tlsOpts)
-		}
 		splitConfig.H1UploadDial = func(ctx context.Context) (net.Conn, error) {
 			rawConn, dialErr := v.dialer.DialContext(ctx, "tcp", v.addr)
 			if dialErr != nil {
@@ -196,7 +172,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		}
 		attempted = append(attempted, "tcp")
 		log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
-		c, err = xhttp.StreamConn(ctx, splitConfig)
+		c, err = xhttp.StreamConn(ctx, c, splitConfig)
 		if err != nil {
 			return nil, err
 		}
