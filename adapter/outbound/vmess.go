@@ -1,6 +1,8 @@
 package outbound
 
 import (
+	"github.com/metacubex/mihomo/log"
+
 	"context"
 	"errors"
 	"fmt"
@@ -137,12 +139,14 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			return uploadConn, nil
 		}
 		attempted := []string{}
-		if splitConfig.HasALPN("h3") {
+		if splitConfig.TryQUIC && splitConfig.HasALPN("h3") {
 			attempted = append(attempted, "h3")
 			h3Conn, h3Err := xhttp.StreamConnH3(ctx, splitConfig)
 			if h3Err == nil {
+				log.Infoln("xhttp protocol-selection attempted=%v selected=h3", attempted)
 				return v.streamConnContext(ctx, h3Conn, metadata)
 			}
+			log.Warnln("xhttp protocol-selection attempted=%v selected=none fallback_reason=%v", attempted, h3Err)
 			if !splitConfig.HasTCPFallback() {
 				return nil, h3Err
 			}
@@ -167,6 +171,7 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			}
 		}
 		attempted = append(attempted, "tcp")
+		log.Infoln("xhttp protocol-selection attempted=%v selected=tcp", attempted)
 		c, err = xhttp.StreamConn(ctx, c, splitConfig)
 		if err != nil {
 			return nil, err

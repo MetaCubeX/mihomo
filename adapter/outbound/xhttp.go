@@ -8,6 +8,7 @@ import (
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/transport/xhttp"
 )
 
@@ -33,6 +34,7 @@ type SplitHTTPOptions struct {
 	UplinkDataPlacement string            `proxy:"uplink-data-placement,omitempty"`
 	UplinkDataKey       string            `proxy:"uplink-data-key,omitempty"`
 	RequestLog          bool              `proxy:"request-log,omitempty"`
+	TryQUIC             *bool             `proxy:"try-quic,omitempty"`
 }
 
 func normalizeSplitHTTPDialAddr(ctx context.Context, addr string) string {
@@ -49,16 +51,22 @@ func normalizeSplitHTTPDialAddr(ctx context.Context, addr string) string {
 	}
 	return net.JoinHostPort(ip.String(), port)
 }
-
 func decideXHTTPALPN(alpn []string) []string {
-	if len(alpn) != 1 {
+	log.Infoln("decideXHTTPALPN received: %v", alpn)
+	if len(alpn) == 0 {
 		return []string{"h2"}
 	}
-	p := strings.ToLower(alpn[0])
-	if p == "h3" || p == "http/1.1" {
-		return []string{p}
+	var res []string
+	for _, a := range alpn {
+		p := strings.ToLower(a)
+		if p == "h3" || p == "h2" || p == "http/1.1" {
+			res = append(res, p)
+		}
 	}
-	return []string{"h2"}
+	if len(res) == 0 {
+		return []string{"h2"}
+	}
+	return res
 }
 
 func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string, alpn []string, xhttpOpts SplitHTTPOptions, splitHTTPOpts SplitHTTPOptions, tlsEnabled bool) *xhttp.SplitHTTPConfig {
@@ -66,6 +74,12 @@ func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string
 	requestLog := xhttpOpts.RequestLog || splitHTTPOpts.RequestLog
 	if os.Getenv("MIHOMO_XHTTP_DEBUG") == "1" {
 		requestLog = true
+	}
+	tryQuic := true
+	if xhttpOpts.TryQUIC != nil {
+		tryQuic = *xhttpOpts.TryQUIC
+	} else if splitHTTPOpts.TryQUIC != nil {
+		tryQuic = *splitHTTPOpts.TryQUIC
 	}
 	config := &xhttp.SplitHTTPConfig{
 		Host:                xhttpOpts.Host,
@@ -91,6 +105,7 @@ func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string
 		UplinkDataPlacement: xhttpOpts.UplinkDataPlacement,
 		UplinkDataKey:       xhttpOpts.UplinkDataKey,
 		RequestLog:          requestLog,
+		TryQUIC:             tryQuic,
 	}
 	if xhttpOpts.XPaddingBytesTo > 0 {
 		config.XPaddingBytes = &xhttp.RangeConfig{From: xhttpOpts.XPaddingBytesFrom, To: xhttpOpts.XPaddingBytesTo}

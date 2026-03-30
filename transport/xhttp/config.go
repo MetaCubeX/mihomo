@@ -63,6 +63,7 @@ type SplitHTTPConfig struct {
 	UplinkDataPlacement string
 	UplinkDataKey       string
 	RequestLog          bool
+	TryQUIC             bool
 }
 
 func (c *SplitHTTPConfig) HasALPN(token string) bool {
