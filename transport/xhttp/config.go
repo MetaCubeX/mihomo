@@ -129,6 +129,14 @@ func (c *SplitHTTPConfig) GetNormalizedPath() string {
 	return path
 }
 
+func (c *SplitHTTPConfig) GetNormalizedQuery() string {
+	pathAndQuery := strings.SplitN(c.Path, "?", 2)
+	if len(pathAndQuery) > 1 {
+		return pathAndQuery[1]
+	}
+	return ""
+}
+
 func (c *SplitHTTPConfig) GetRequestHeader() http.Header {
 	header := http.Header{}
 	for k, vv := range c.Headers {

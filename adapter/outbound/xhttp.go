@@ -75,7 +75,7 @@ func buildSplitHTTPConfig(ctx context.Context, addr string, tlsServerName string
 	if os.Getenv("MIHOMO_XHTTP_DEBUG") == "1" {
 		requestLog = true
 	}
-	tryQuic := true
+	tryQuic := false
 	if xhttpOpts.TryQUIC != nil {
 		tryQuic = *xhttpOpts.TryQUIC
 	} else if splitHTTPOpts.TryQUIC != nil {
