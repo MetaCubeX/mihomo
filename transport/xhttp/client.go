@@ -113,7 +113,7 @@ func DialStreamOne(
 	}
 	req.Host = cfg.Host
 
-	if err := cfg.FillStreamRequest(req); err != nil {
+	if err := cfg.FillStreamRequest(req, ""); err != nil {
 		_ = pr.Close()
 		_ = pw.Close()
 		return nil, err
@@ -138,6 +138,125 @@ func DialStreamOne(
 		_ = resp.Body.Close()
 		_ = pr.Close()
 		httputils.CloseTransport(transport)
+	}
+
+	return conn, nil
+}
+
+func DialStreamUp(
+	ctx context.Context,
+	address string,
+	port int,
+	cfg *Config,
+	dialRaw DialRawFunc,
+	wrapTLS WrapTLSFunc,
+) (net.Conn, error) {
+	host := cfg.Host
+	if host == "" {
+		host = address
+	}
+
+	transport := &http.Http2Transport{
+		DialTLSContext: func(ctx context.Context, network string, addr string, _ *tls.Config) (net.Conn, error) {
+			raw, err := dialRaw(ctx)
+			if err != nil {
+				return nil, err
+			}
+			wrapped, err := wrapTLS(ctx, raw, true)
+			if err != nil {
+				_ = raw.Close()
+				return nil, err
+			}
+			return wrapped, nil
+		},
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	sessionID := newSessionID()
+
+	streamURL := url.URL{
+		Scheme: "https",
+		Host:   host,
+		Path:   cfg.NormalizedPath(),
+	}
+
+	conn := &Conn{}
+
+	downloadTrace := &httptrace.ClientTrace{
+		GotConn: func(connInfo httptrace.GotConnInfo) {
+			conn.SetLocalAddr(connInfo.Conn.LocalAddr())
+			conn.SetRemoteAddr(connInfo.Conn.RemoteAddr())
+		},
+	}
+
+	downloadReq, err := http.NewRequestWithContext(
+		httptrace.WithClientTrace(contextutils.WithoutCancel(ctx), downloadTrace),
+		http.MethodGet,
+		streamURL.String(),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cfg.FillDownloadRequest(downloadReq, sessionID); err != nil {
+		return nil, err
+	}
+	downloadReq.Host = host
+
+	downloadResp, err := client.Do(downloadReq)
+	if err != nil {
+		return nil, err
+	}
+	if downloadResp.StatusCode != http.StatusOK {
+		_ = downloadResp.Body.Close()
+		return nil, fmt.Errorf("xhttp stream-up download bad status: %s", downloadResp.Status)
+	}
+
+	pr, pw := io.Pipe()
+
+	uploadReq, err := http.NewRequestWithContext(
+		contextutils.WithoutCancel(ctx),
+		http.MethodPost,
+		streamURL.String(),
+		pr,
+	)
+	if err != nil {
+		_ = downloadResp.Body.Close()
+		_ = pr.Close()
+		_ = pw.Close()
+		return nil, err
+	}
+
+	if err := cfg.FillStreamRequest(uploadReq, sessionID); err != nil {
+		_ = downloadResp.Body.Close()
+		_ = pr.Close()
+		_ = pw.Close()
+		return nil, err
+	}
+	uploadReq.Host = host
+
+	go func() {
+		resp, err := client.Do(uploadReq)
+		if err != nil {
+			_ = pw.CloseWithError(err)
+			return
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			_ = pw.CloseWithError(fmt.Errorf("xhttp stream-up upload bad status: %s", resp.Status))
+		}
+	}()
+
+	conn.writer = pw
+	conn.reader = downloadResp.Body
+	conn.onClose = func() {
+		_ = pr.Close()
 	}
 
 	return conn, nil

@@ -261,11 +261,23 @@ func (v *Vless) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
 	}
 
 	mode := cfg.EffectiveMode(v.realityConfig != nil)
-
 	switch mode {
 	case "stream-one":
 		return xhttp.DialStreamOne(
 			ctx,
+			cfg,
+			func(ctx context.Context) (net.Conn, error) {
+				return v.dialer.DialContext(ctx, "tcp", v.addr)
+			},
+			func(ctx context.Context, raw net.Conn, isH2 bool) (net.Conn, error) {
+				return v.streamTLSConn(ctx, raw, isH2)
+			},
+		)
+	case "stream-up":
+		return xhttp.DialStreamUp(
+			ctx,
+			v.option.Server,
+			v.option.Port,
 			cfg,
 			func(ctx context.Context) (net.Conn, error) {
 				return v.dialer.DialContext(ctx, "tcp", v.addr)

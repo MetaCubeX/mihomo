@@ -126,7 +126,7 @@ func parseRange(s string) (int, int, error) {
 	return minVal, maxVal, nil
 }
 
-func (c *Config) FillStreamRequest(req *http.Request) error {
+func (c *Config) FillStreamRequest(req *http.Request, sessionID string) error {
 	req.Header = c.RequestHeader()
 
 	paddingValue, err := c.RandomPadding()
@@ -142,6 +142,8 @@ func (c *Config) FillStreamRequest(req *http.Request) error {
 		}
 		req.Header.Set("Referer", rawURL+sep+"x_padding="+paddingValue)
 	}
+
+	c.ApplyMetaToRequest(req, sessionID, "")
 
 	if req.Body != nil && !c.NoGRPCHeader {
 		req.Header.Set("Content-Type", "application/grpc")
