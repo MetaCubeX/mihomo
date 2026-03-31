@@ -42,33 +42,35 @@ type Vmess struct {
 
 type VmessOption struct {
 	BasicOption
-	Name                string         `proxy:"name"`
-	Server              string         `proxy:"server"`
-	Port                int            `proxy:"port"`
-	UUID                string         `proxy:"uuid"`
-	AlterID             int            `proxy:"alterId"`
-	Cipher              string         `proxy:"cipher"`
-	UDP                 bool           `proxy:"udp,omitempty"`
-	Network             string         `proxy:"network,omitempty"`
-	TLS                 bool           `proxy:"tls,omitempty"`
-	ALPN                []string       `proxy:"alpn,omitempty"`
-	SkipCertVerify      bool           `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint         string         `proxy:"fingerprint,omitempty"`
-	Certificate         string         `proxy:"certificate,omitempty"`
-	PrivateKey          string         `proxy:"private-key,omitempty"`
-	ServerName          string         `proxy:"servername,omitempty"`
-	ECHOpts             ECHOptions     `proxy:"ech-opts,omitempty"`
-	RealityOpts         RealityOptions `proxy:"reality-opts,omitempty"`
-	HTTPOpts            HTTPOptions    `proxy:"http-opts,omitempty"`
-	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
-	GrpcOpts            GrpcOptions    `proxy:"grpc-opts,omitempty"`
-	WSOpts              WSOptions      `proxy:"ws-opts,omitempty"`
-	PacketAddr          bool           `proxy:"packet-addr,omitempty"`
-	XUDP                bool           `proxy:"xudp,omitempty"`
-	PacketEncoding      string         `proxy:"packet-encoding,omitempty"`
-	GlobalPadding       bool           `proxy:"global-padding,omitempty"`
-	AuthenticatedLength bool           `proxy:"authenticated-length,omitempty"`
-	ClientFingerprint   string         `proxy:"client-fingerprint,omitempty"`
+	Name                string           `proxy:"name"`
+	Server              string           `proxy:"server"`
+	Port                int              `proxy:"port"`
+	UUID                string           `proxy:"uuid"`
+	AlterID             int              `proxy:"alterId"`
+	Cipher              string           `proxy:"cipher"`
+	UDP                 bool             `proxy:"udp,omitempty"`
+	Network             string           `proxy:"network,omitempty"`
+	TLS                 bool             `proxy:"tls,omitempty"`
+	ALPN                []string         `proxy:"alpn,omitempty"`
+	SkipCertVerify      bool             `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint         string           `proxy:"fingerprint,omitempty"`
+	Certificate         string           `proxy:"certificate,omitempty"`
+	PrivateKey          string           `proxy:"private-key,omitempty"`
+	ServerName          string           `proxy:"servername,omitempty"`
+	ECHOpts             ECHOptions       `proxy:"ech-opts,omitempty"`
+	RealityOpts         RealityOptions   `proxy:"reality-opts,omitempty"`
+	HTTPOpts            HTTPOptions      `proxy:"http-opts,omitempty"`
+	HTTP2Opts           HTTP2Options     `proxy:"h2-opts,omitempty"`
+	GrpcOpts            GrpcOptions      `proxy:"grpc-opts,omitempty"`
+	WSOpts              WSOptions        `proxy:"ws-opts,omitempty"`
+	XHTTPOpts           XHTTPOptions     `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts       SplitHTTPOptions `proxy:"splithttp-opts,omitempty"`
+	PacketAddr          bool             `proxy:"packet-addr,omitempty"`
+	XUDP                bool             `proxy:"xudp,omitempty"`
+	PacketEncoding      string           `proxy:"packet-encoding,omitempty"`
+	GlobalPadding       bool             `proxy:"global-padding,omitempty"`
+	AuthenticatedLength bool             `proxy:"authenticated-length,omitempty"`
+	ClientFingerprint   string           `proxy:"client-fingerprint,omitempty"`
 }
 
 type HTTPOptions struct {
@@ -204,6 +206,8 @@ func (v *Vmess) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		c, err = mihomoVMess.StreamH2Conn(ctx, c, h2Opts)
 	case "grpc":
 		break // already handle in gun transport
+	case "xhttp", "splithttp":
+		break // already handle in dialXHTTPConn
 	default:
 		// handle TLS
 		if v.option.TLS {
@@ -290,8 +294,31 @@ func (v *Vmess) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 	return
 }
 
+func (v *Vmess) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
+	cfg, err := buildXHTTPConfig(v.option.Network, v.addr, v.option.ServerName, v.option.ALPN, v.option.XHTTPOpts, v.option.SplitHTTPOpts, v.realityConfig != nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return dialXHTTPConn(ctx, v.dialer, cfg, xhttpTLSOptions{
+		Address:           v.addr,
+		TLSEnabled:        v.option.TLS,
+		ServerName:        v.option.ServerName,
+		SkipCertVerify:    v.option.SkipCertVerify,
+		Fingerprint:       v.option.Fingerprint,
+		Certificate:       v.option.Certificate,
+		PrivateKey:        v.option.PrivateKey,
+		ClientFingerprint: v.option.ClientFingerprint,
+		ALPN:              cfg.ALPN,
+		ECH:               v.echConfig,
+		Reality:           v.realityConfig,
+	})
+}
+
 func (v *Vmess) dialContext(ctx context.Context) (c net.Conn, err error) {
 	switch v.option.Network {
+	case "xhttp", "splithttp":
+		return v.dialXHTTPConn(ctx)
 	case "grpc": // gun transport
 		return v.gunTransport.Dial()
 	default:

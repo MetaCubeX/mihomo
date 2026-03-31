@@ -672,6 +672,28 @@ proxies: # socks5
       # ping-interval: 0 # 默认关闭，单位为秒
     # ip-version: ipv4
 
+  - name: "vmess-xhttp"
+    type: vmess
+    server: server
+    port: 443
+    uuid: uuid
+    alterId: 0
+    cipher: auto
+    udp: true
+    tls: true
+    network: xhttp
+    alpn:
+      - h2
+    client-fingerprint: chrome
+    servername: xxx.com
+    xhttp-opts:
+      path: "/"
+      host: xxx.com
+      mode: "auto"
+      # headers:
+      #   X-Forwarded-For: ""
+      # x-padding-bytes: "100-1000"
+
   # vless
   - name: "vless-tcp"
     type: vless
@@ -789,6 +811,23 @@ proxies: # socks5
       # v2ray-http-upgrade: false
       # v2ray-http-upgrade-fast-open: false
 
+  # XHTTP / SplitHTTP 使用说明
+  # 1. network 可选 xhttp 或 splithttp
+  # 2. xhttp 默认读取 xhttp-opts；splithttp 默认读取 splithttp-opts
+  #    为兼容旧配置，splithttp 未填写 splithttp-opts 时会回退读取 xhttp-opts
+  # 3. mode:
+  #    - auto: 自动选择
+  #    - stream-one: 单连接上传/下载
+  #    - stream-up: 独立下载连接 + 流式上传
+  #    - packet-up: 独立下载连接 + 分包上传
+  # 4. auto 选择规则：
+  #    - 启用 reality 时优先使用 stream-one
+  #    - 可用 h2 时优先使用 stream-up
+  #    - 仅可用 h3 时使用 packet-up
+  # 5. 如需优先尝试 HTTP/3，请同时设置：
+  #    - alpn: [h3] 或 [h3, h2]
+  #    - try-quic: true
+  # 6. download-settings 用于单独控制下载链路，可覆盖 server/port/tls/servername/host/path/reality-opts
   - name: "vless-xhttp"
     type: vless
     server: server
@@ -796,7 +835,7 @@ proxies: # socks5
     uuid: uuid
     udp: true
     tls: true
-    network: xhttp
+    network: xhttp # or splithttp
     alpn:
       - h2
     client-fingerprint: chrome
@@ -805,11 +844,26 @@ proxies: # socks5
     xhttp-opts:
       path: "/"
       host: xxx.com
-      # mode: "stream-one" # Available: "stream-one" or "packet-up"
+      # mode: "auto" # Available: "auto", "stream-one", "stream-up", "packet-up"
       # headers:
       #   X-Forwarded-For: ""
       # no-grpc-header: false
       # x-padding-bytes: "100-1000"
+      # try-quic: true # Try HTTP/3 first when alpn contains "h3"
+      # download-settings:
+      #   server: download.example.com
+      #   port: 443
+      #   tls: true # omit to inherit outer tls/reality transport
+      #   servername: download.example.com
+      #   host: download.example.com
+      #   path: "/"
+      #   reality-opts:
+      #     public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
+      #     short-id: 10f897e26c4b9478
+    # splithttp-opts:
+    #   path: "/"
+    #   host: xxx.com
+    #   mode: "packet-up"
 
 
   # Trojan
@@ -876,6 +930,24 @@ proxies: # socks5
     #     Host: example.com
     #   v2ray-http-upgrade: false
     #   v2ray-http-upgrade-fast-open: false
+
+  - name: "trojan-splithttp-h3"
+    type: trojan
+    server: server
+    port: 443
+    password: yourpsk
+    udp: true
+    sni: xxx.com
+    network: splithttp
+    alpn:
+      - h3
+      - h2
+    client-fingerprint: chrome
+    splithttp-opts:
+      path: "/"
+      host: xxx.com
+      mode: "auto"
+      try-quic: true
 
   - name: "trojan-xtls"
     type: trojan

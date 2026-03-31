@@ -37,24 +37,26 @@ type Trojan struct {
 
 type TrojanOption struct {
 	BasicOption
-	Name              string         `proxy:"name"`
-	Server            string         `proxy:"server"`
-	Port              int            `proxy:"port"`
-	Password          string         `proxy:"password"`
-	ALPN              []string       `proxy:"alpn,omitempty"`
-	SNI               string         `proxy:"sni,omitempty"`
-	SkipCertVerify    bool           `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint       string         `proxy:"fingerprint,omitempty"`
-	Certificate       string         `proxy:"certificate,omitempty"`
-	PrivateKey        string         `proxy:"private-key,omitempty"`
-	UDP               bool           `proxy:"udp,omitempty"`
-	Network           string         `proxy:"network,omitempty"`
-	ECHOpts           ECHOptions     `proxy:"ech-opts,omitempty"`
-	RealityOpts       RealityOptions `proxy:"reality-opts,omitempty"`
-	GrpcOpts          GrpcOptions    `proxy:"grpc-opts,omitempty"`
-	WSOpts            WSOptions      `proxy:"ws-opts,omitempty"`
-	SSOpts            TrojanSSOption `proxy:"ss-opts,omitempty"`
-	ClientFingerprint string         `proxy:"client-fingerprint,omitempty"`
+	Name              string           `proxy:"name"`
+	Server            string           `proxy:"server"`
+	Port              int              `proxy:"port"`
+	Password          string           `proxy:"password"`
+	ALPN              []string         `proxy:"alpn,omitempty"`
+	SNI               string           `proxy:"sni,omitempty"`
+	SkipCertVerify    bool             `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint       string           `proxy:"fingerprint,omitempty"`
+	Certificate       string           `proxy:"certificate,omitempty"`
+	PrivateKey        string           `proxy:"private-key,omitempty"`
+	UDP               bool             `proxy:"udp,omitempty"`
+	Network           string           `proxy:"network,omitempty"`
+	ECHOpts           ECHOptions       `proxy:"ech-opts,omitempty"`
+	RealityOpts       RealityOptions   `proxy:"reality-opts,omitempty"`
+	GrpcOpts          GrpcOptions      `proxy:"grpc-opts,omitempty"`
+	WSOpts            WSOptions        `proxy:"ws-opts,omitempty"`
+	XHTTPOpts         XHTTPOptions     `proxy:"xhttp-opts,omitempty"`
+	SplitHTTPOpts     SplitHTTPOptions `proxy:"splithttp-opts,omitempty"`
+	SSOpts            TrojanSSOption   `proxy:"ss-opts,omitempty"`
+	ClientFingerprint string           `proxy:"client-fingerprint,omitempty"`
 }
 
 // TrojanSSOption from https://github.com/p4gefau1t/trojan-go/blob/v0.10.6/tunnel/shadowsocks/config.go#L5
@@ -116,6 +118,8 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 		c, err = vmess.StreamWebsocketConn(ctx, c, wsOpts)
 	case "grpc":
 		break // already handle in gun transport
+	case "xhttp", "splithttp":
+		break // already handle in dialXHTTPConn
 	default:
 		// default tcp network
 		// handle TLS
@@ -172,8 +176,31 @@ func (t *Trojan) writeHeaderContext(ctx context.Context, c net.Conn, metadata *C
 	return err
 }
 
+func (t *Trojan) dialXHTTPConn(ctx context.Context) (net.Conn, error) {
+	cfg, err := buildXHTTPConfig(t.option.Network, t.addr, t.option.SNI, t.option.ALPN, t.option.XHTTPOpts, t.option.SplitHTTPOpts, t.realityConfig != nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return dialXHTTPConn(ctx, t.dialer, cfg, xhttpTLSOptions{
+		Address:           t.addr,
+		TLSEnabled:        true,
+		ServerName:        t.option.SNI,
+		SkipCertVerify:    t.option.SkipCertVerify,
+		Fingerprint:       t.option.Fingerprint,
+		Certificate:       t.option.Certificate,
+		PrivateKey:        t.option.PrivateKey,
+		ClientFingerprint: t.option.ClientFingerprint,
+		ALPN:              cfg.ALPN,
+		ECH:               t.echConfig,
+		Reality:           t.realityConfig,
+	})
+}
+
 func (t *Trojan) dialContext(ctx context.Context) (c net.Conn, err error) {
 	switch t.option.Network {
+	case "xhttp", "splithttp":
+		return t.dialXHTTPConn(ctx)
 	case "grpc": // gun transport
 		return t.gunTransport.Dial()
 	default:

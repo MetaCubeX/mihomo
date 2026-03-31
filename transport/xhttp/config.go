@@ -8,26 +8,36 @@ import (
 	"strconv"
 	"strings"
 
+	tlsC "github.com/metacubex/mihomo/component/tls"
+
 	"github.com/metacubex/http"
 )
 
 type Config struct {
-	Host           string
-	Path           string
-	Mode           string
-	Headers        map[string]string
-	NoGRPCHeader   bool
-	XPaddingBytes  string
-	DownloadConfig *Config
+	Host             string
+	Path             string
+	Mode             string
+	Headers          map[string]string
+	NoGRPCHeader     bool
+	XPaddingBytes    string
+	ALPN             []string
+	TryQUIC          bool
+	HasReality       bool
+	DownloadSettings *DownloadConfig
 }
 
 type DownloadConfig struct {
+	Server            string
+	Port              int
+	TLS               *bool
+	Headers           map[string]string
 	Host              string
 	Path              string
 	Mode              string
 	ServerName        string
 	ClientFingerprint string
 	SkipCertVerify    bool
+	Reality           *tlsC.RealityConfig
 }
 
 func (c *Config) NormalizedMode() string {
@@ -37,18 +47,29 @@ func (c *Config) NormalizedMode() string {
 	return c.Mode
 }
 
-func (c *Config) EffectiveMode(hasReality bool) string {
+func (c *Config) EffectiveModeWithReality(hasReality bool) string {
+	return c.effectiveMode(hasReality)
+}
+
+func (c *Config) effectiveMode(hasReality bool) string {
 	mode := c.NormalizedMode()
 	if mode != "auto" {
 		return mode
 	}
+	if c.DownloadSettings != nil {
+		return "stream-up"
+	}
 	if hasReality {
-		if c.DownloadConfig != nil {
-			return "stream-up"
-		}
 		return "stream-one"
 	}
+	if c.SupportsHTTP2() {
+		return "stream-up"
+	}
 	return "packet-up"
+}
+
+func (c *Config) EffectiveMode() string {
+	return c.effectiveMode(c.HasReality)
 }
 
 func (c *Config) NormalizedPath() string {
@@ -88,6 +109,30 @@ func (c *Config) RequestHeader() http.Header {
 	}
 
 	return h
+}
+
+func (c *Config) HasALPN(token string) bool {
+	token = strings.ToLower(strings.TrimSpace(token))
+	if token == "" {
+		return false
+	}
+	for _, item := range c.ALPN {
+		if strings.ToLower(strings.TrimSpace(item)) == token {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) SupportsHTTP2() bool {
+	if len(c.ALPN) == 0 {
+		return true
+	}
+	return c.HasALPN("h2")
+}
+
+func (c *Config) ShouldTryHTTP3() bool {
+	return c.TryQUIC && c.HasALPN("h3")
 }
 
 func (c *Config) RandomPadding() (string, error) {
@@ -221,4 +266,37 @@ func (c *Config) FillDownloadRequest(req *http.Request, sessionID string) error 
 
 	c.ApplyMetaToRequest(req, sessionID, "")
 	return nil
+}
+
+func (c *Config) DownloadRequestConfig() *Config {
+	if c.DownloadSettings == nil {
+		return c
+	}
+
+	download := &Config{
+		Host:          c.Host,
+		Path:          c.Path,
+		Mode:          c.Mode,
+		Headers:       c.Headers,
+		NoGRPCHeader:  c.NoGRPCHeader,
+		XPaddingBytes: c.XPaddingBytes,
+		ALPN:          c.ALPN,
+		TryQUIC:       c.TryQUIC,
+		HasReality:    c.HasReality,
+	}
+
+	if c.DownloadSettings.Host != "" {
+		download.Host = c.DownloadSettings.Host
+	}
+	if c.DownloadSettings.Path != "" {
+		download.Path = c.DownloadSettings.Path
+	}
+	if c.DownloadSettings.Mode != "" {
+		download.Mode = c.DownloadSettings.Mode
+	}
+	if len(c.DownloadSettings.Headers) != 0 {
+		download.Headers = c.DownloadSettings.Headers
+	}
+
+	return download
 }
