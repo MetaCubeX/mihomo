@@ -26,3 +26,9 @@ test/config/cache*
 /output
 .vscode/
 .fleet/
+
+# AI ide
+.trae/
+.codebuddy/
+.cursor/
+
