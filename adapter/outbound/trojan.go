@@ -135,6 +135,9 @@ func (t *Trojan) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.
 			Reality:           t.realityConfig,
 		})
 	}
+	if err != nil {
+		return nil, err
+	}
 
 	return t.streamConnContext(ctx, c, metadata)
 }
