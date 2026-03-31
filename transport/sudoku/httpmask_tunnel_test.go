@@ -451,6 +451,64 @@ func TestHTTPMaskTunnel_EarlyHandshake_TCPRoundTrip(t *testing.T) {
 	}
 }
 
+func TestHTTPMaskTunnel_EarlyHandshake_AutoPathRoot_TCPRoundTrip(t *testing.T) {
+	key := "tunnel-early-auto-pathroot"
+	target := "1.1.1.1:80"
+
+	serverCfg := newTunnelTestTable(t, key)
+	serverCfg.HTTPMaskMode = "auto"
+	serverCfg.HTTPMaskPathRoot = "httpmaskpath"
+
+	addr, stop, errCh := startTunnelServer(t, serverCfg, func(s *ServerSession) error {
+		if s.Type != SessionTypeTCP {
+			return fmt.Errorf("unexpected session type: %v", s.Type)
+		}
+		if s.Target != target {
+			return fmt.Errorf("target mismatch: %s", s.Target)
+		}
+		_, _ = s.Conn.Write([]byte("ok"))
+		return nil
+	})
+	defer stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	clientCfg := *serverCfg
+	clientCfg.ServerAddress = addr
+
+	handshakeCfg := clientCfg
+	handshakeCfg.DisableHTTPMask = true
+	tunnelConn, err := DialHTTPMaskTunnel(ctx, clientCfg.ServerAddress, &clientCfg, (&net.Dialer{}).DialContext, func(raw net.Conn) (net.Conn, error) {
+		return ClientHandshake(raw, &handshakeCfg)
+	})
+	if err != nil {
+		t.Fatalf("dial tunnel: %v", err)
+	}
+	defer tunnelConn.Close()
+
+	addrBuf, err := EncodeAddress(target)
+	if err != nil {
+		t.Fatalf("encode addr: %v", err)
+	}
+	if err := WriteKIPMessage(tunnelConn, KIPTypeOpenTCP, addrBuf); err != nil {
+		t.Fatalf("write addr: %v", err)
+	}
+
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(tunnelConn, buf); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(buf) != "ok" {
+		t.Fatalf("unexpected payload: %q", buf)
+	}
+
+	stop()
+	for err := range errCh {
+		t.Fatalf("server error: %v", err)
+	}
+}
+
 func TestHTTPMaskTunnel_Validation(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Key = "k"

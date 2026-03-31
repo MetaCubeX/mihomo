@@ -184,6 +184,14 @@ func (c *directionalConn) Write(p []byte) (int, error) {
 	return c.writer.Write(p)
 }
 
+func (c *directionalConn) ReplaceWriter(writer io.Writer, closers ...func() error) {
+	if c == nil {
+		return
+	}
+	c.writer = writer
+	c.closers = closers
+}
+
 func (c *directionalConn) Close() error {
 	var firstErr error
 	for _, fn := range c.closers {
@@ -227,22 +235,55 @@ func absInt64(v int64) int64 {
 	return v
 }
 
+func oppositeDirectionTable(table *sudoku.Table) *sudoku.Table {
+	if table == nil {
+		return nil
+	}
+	if other := table.OppositeDirection(); other != nil {
+		return other
+	}
+	return table
+}
+
+func newClientDownlinkReader(raw net.Conn, table *sudoku.Table, paddingMin, paddingMax int, pureDownlink bool) io.Reader {
+	downlinkTable := oppositeDirectionTable(table)
+	if pureDownlink {
+		if downlinkTable == table {
+			return nil
+		}
+		return sudoku.NewConn(raw, downlinkTable, paddingMin, paddingMax, false)
+	}
+	return sudoku.NewPackedConn(raw, downlinkTable, paddingMin, paddingMax)
+}
+
+func newServerDownlinkWriter(raw net.Conn, table *sudoku.Table, paddingMin, paddingMax int, pureDownlink bool) (io.Writer, []func() error) {
+	downlinkTable := oppositeDirectionTable(table)
+	if pureDownlink {
+		if downlinkTable == table {
+			return nil, nil
+		}
+		return sudoku.NewConn(raw, downlinkTable, paddingMin, paddingMax, false), nil
+	}
+	packed := sudoku.NewPackedConn(raw, downlinkTable, paddingMin, paddingMax)
+	return packed, []func() error{packed.Flush}
+}
+
 func buildClientObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table) net.Conn {
 	baseSudoku := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
-	if cfg.EnablePureDownlink {
+	downlinkReader := newClientDownlinkReader(raw, table, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
+	if downlinkReader == nil {
 		return baseSudoku
 	}
-	packed := sudoku.NewPackedConn(raw, table, cfg.PaddingMin, cfg.PaddingMax)
-	return newDirectionalConn(raw, packed, baseSudoku)
+	return newDirectionalConn(raw, downlinkReader, baseSudoku)
 }
 
 func buildServerObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table, record bool) (*sudoku.Conn, net.Conn) {
 	uplinkSudoku := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, record)
-	if cfg.EnablePureDownlink {
+	downlinkWriter, closers := newServerDownlinkWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
+	if downlinkWriter == nil {
 		return uplinkSudoku, uplinkSudoku
 	}
-	packed := sudoku.NewPackedConn(raw, table, cfg.PaddingMin, cfg.PaddingMax)
-	return uplinkSudoku, newDirectionalConn(raw, uplinkSudoku, packed, packed.Flush)
+	return uplinkSudoku, newDirectionalConn(raw, uplinkSudoku, downlinkWriter, closers...)
 }
 
 func isLegacyHTTPMaskMode(mode string) bool {
@@ -269,20 +310,20 @@ func ClientHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, error) {
 		}
 	}
 
-	table, err := pickClientTable(cfg)
+	choice, err := pickClientTable(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	seed := ClientAEADSeed(cfg.Key)
-	obfsConn := buildClientObfsConn(rawConn, cfg, table)
+	obfsConn := buildClientObfsConn(rawConn, cfg, choice.Table)
 	pskC2S, pskS2C := derivePSKDirectionalBases(seed)
 	rc, err := crypto.NewRecordConn(obfsConn, cfg.AEADMethod, pskC2S, pskS2C)
 	if err != nil {
 		return nil, fmt.Errorf("setup crypto failed: %w", err)
 	}
 
-	if _, err := kipHandshakeClient(rc, seed, kipUserHashFromKey(cfg.Key), KIPFeatAll); err != nil {
+	if _, err := kipHandshakeClient(rc, seed, kipUserHashFromKey(cfg.Key), KIPFeatAll, choice.Hint, choice.HasHint); err != nil {
 		_ = rc.Close()
 		return nil, err
 	}
@@ -392,6 +433,18 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 	userHashHex := hex.EncodeToString(ch.UserHash[:])
 	if !globalHandshakeReplay.allow(userHashHex, ch.Nonce, time.Now()) {
 		return nil, nil, &SuspiciousError{Err: fmt.Errorf("replay"), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
+	}
+	resolvedTable, err := ResolveClientHelloTable(selectedTable, cfg.tableCandidates(), ch)
+	if err != nil {
+		return nil, nil, &SuspiciousError{Err: fmt.Errorf("resolve table hint failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
+	}
+	if resolvedTable != selectedTable {
+		downlinkWriter, closers := newServerDownlinkWriter(baseConn, resolvedTable, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
+		switchable, ok := obfsConn.(*directionalConn)
+		if !ok {
+			return nil, nil, &SuspiciousError{Err: fmt.Errorf("switch downlink writer failed"), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
+		}
+		switchable.ReplaceWriter(downlinkWriter, closers...)
 	}
 
 	curve := ecdh.X25519()

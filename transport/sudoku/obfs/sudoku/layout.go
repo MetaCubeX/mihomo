@@ -27,7 +27,7 @@ func (l *byteLayout) isHint(b byte) bool {
 	return l.name == "ascii" && b == '\n'
 }
 
-// resolveLayout picks the byte layout based on ASCII preference and optional custom pattern.
+// resolveLayout picks the byte layout for a single traffic direction.
 // ASCII always wins if requested. Custom patterns are ignored when ASCII is preferred.
 func resolveLayout(mode string, customPattern string) (*byteLayout, error) {
 	switch strings.ToLower(mode) {

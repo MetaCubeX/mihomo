@@ -86,23 +86,23 @@ func (a earlyDummyAddr) String() string  { return string(a) }
 
 func buildEarlyClientObfsConn(raw net.Conn, cfg EarlyCodecConfig, table *sudokuobfs.Table) net.Conn {
 	base := sudokuobfs.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
-	if cfg.EnablePureDownlink {
+	downlinkReader := newClientDownlinkReader(raw, table, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
+	if downlinkReader == nil {
 		return base
 	}
-	packed := sudokuobfs.NewPackedConn(raw, table, cfg.PaddingMin, cfg.PaddingMax)
-	return newDirectionalConn(raw, packed, base)
+	return newDirectionalConn(raw, downlinkReader, base)
 }
 
 func buildEarlyServerObfsConn(raw net.Conn, cfg EarlyCodecConfig, table *sudokuobfs.Table) net.Conn {
 	uplink := sudokuobfs.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
-	if cfg.EnablePureDownlink {
+	downlinkWriter, closers := newServerDownlinkWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
+	if downlinkWriter == nil {
 		return uplink
 	}
-	packed := sudokuobfs.NewPackedConn(raw, table, cfg.PaddingMin, cfg.PaddingMax)
-	return newDirectionalConn(raw, uplink, packed, packed.Flush)
+	return newDirectionalConn(raw, uplink, downlinkWriter, closers...)
 }
 
-func NewEarlyClientState(cfg EarlyCodecConfig, table *sudokuobfs.Table, userHash [kipHelloUserHashSize]byte, feats uint32) (*EarlyClientState, error) {
+func NewEarlyClientState(cfg EarlyCodecConfig, table *sudokuobfs.Table, tableHint uint32, hasTableHint bool, userHash [kipHelloUserHashSize]byte, feats uint32) (*EarlyClientState, error) {
 	if table == nil {
 		return nil, fmt.Errorf("nil table")
 	}
@@ -120,13 +120,7 @@ func NewEarlyClientState(cfg EarlyCodecConfig, table *sudokuobfs.Table, userHash
 
 	var clientPub [kipHelloPubSize]byte
 	copy(clientPub[:], ephemeral.PublicKey().Bytes())
-	hello := &KIPClientHello{
-		Timestamp: time.Now(),
-		UserHash:  userHash,
-		Nonce:     nonce,
-		ClientPub: clientPub,
-		Features:  feats,
-	}
+	hello := newKIPClientHello(userHash, nonce, clientPub, feats, tableHint, hasTableHint)
 
 	mem := newEarlyMemoryConn(nil)
 	obfsConn := buildEarlyClientObfsConn(mem, cfg, table)
@@ -208,8 +202,8 @@ func (s *EarlyClientState) Ready() bool {
 	return s != nil && s.responseSet
 }
 
-func NewHTTPMaskClientEarlyHandshake(cfg EarlyCodecConfig, table *sudokuobfs.Table, userHash [kipHelloUserHashSize]byte, feats uint32) (*httpmaskobfs.ClientEarlyHandshake, error) {
-	state, err := NewEarlyClientState(cfg, table, userHash, feats)
+func NewHTTPMaskClientEarlyHandshake(cfg EarlyCodecConfig, table *sudokuobfs.Table, tableHint uint32, hasTableHint bool, userHash [kipHelloUserHashSize]byte, feats uint32) (*httpmaskobfs.ClientEarlyHandshake, error) {
+	state, err := NewEarlyClientState(cfg, table, tableHint, hasTableHint, userHash, feats)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +225,7 @@ func ProcessEarlyClientPayload(cfg EarlyCodecConfig, tables []*sudokuobfs.Table,
 
 	var firstErr error
 	for _, table := range tables {
-		state, err := processEarlyClientPayloadForTable(cfg, table, payload, allowReplay)
+		state, err := processEarlyClientPayloadForTable(cfg, tables, table, payload, allowReplay)
 		if err == nil {
 			return state, nil
 		}
@@ -245,7 +239,7 @@ func ProcessEarlyClientPayload(cfg EarlyCodecConfig, tables []*sudokuobfs.Table,
 	return nil, firstErr
 }
 
-func processEarlyClientPayloadForTable(cfg EarlyCodecConfig, table *sudokuobfs.Table, payload []byte, allowReplay ReplayAllowFunc) (*EarlyServerState, error) {
+func processEarlyClientPayloadForTable(cfg EarlyCodecConfig, tables []*sudokuobfs.Table, table *sudokuobfs.Table, payload []byte, allowReplay ReplayAllowFunc) (*EarlyServerState, error) {
 	mem := newEarlyMemoryConn(payload)
 	obfsConn := buildEarlyServerObfsConn(mem, cfg, table)
 	pskC2S, pskS2C := derivePSKDirectionalBases(cfg.PSK)
@@ -273,6 +267,10 @@ func processEarlyClientPayloadForTable(cfg EarlyCodecConfig, table *sudokuobfs.T
 	if allowReplay != nil && !allowReplay(userHash, ch.Nonce, time.Now()) {
 		return nil, fmt.Errorf("replay detected")
 	}
+	resolvedTable, err := ResolveClientHelloTable(table, tables, ch)
+	if err != nil {
+		return nil, fmt.Errorf("resolve table hint failed: %w", err)
+	}
 
 	curve := ecdh.X25519()
 	serverEphemeral, err := curve.GenerateKey(rand.Reader)
@@ -297,7 +295,7 @@ func processEarlyClientPayloadForTable(cfg EarlyCodecConfig, table *sudokuobfs.T
 	}
 
 	respMem := newEarlyMemoryConn(nil)
-	respObfs := buildEarlyServerObfsConn(respMem, cfg, table)
+	respObfs := buildEarlyServerObfsConn(respMem, cfg, resolvedTable)
 	respConn, err := crypto.NewRecordConn(respObfs, cfg.AEAD, pskS2C, pskC2S)
 	if err != nil {
 		return nil, fmt.Errorf("server early crypto setup failed: %w", err)
@@ -310,7 +308,7 @@ func processEarlyClientPayloadForTable(cfg EarlyCodecConfig, table *sudokuobfs.T
 		ResponsePayload: respMem.Written(),
 		UserHash:        userHash,
 		cfg:             cfg,
-		table:           table,
+		table:           resolvedTable,
 		sessionC2S:      sessionC2S,
 		sessionS2C:      sessionS2C,
 	}, nil

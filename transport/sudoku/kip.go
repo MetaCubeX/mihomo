@@ -10,6 +10,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
 )
 
 const (
@@ -41,6 +43,8 @@ const (
 	kipHelloPubSize      = 32
 	kipMaxPayload        = 64 * 1024
 )
+
+const kipClientHelloTableHintSize = 4
 
 var errKIP = errors.New("kip protocol error")
 
@@ -98,17 +102,31 @@ func ReadKIPMessage(r io.Reader) (*KIPMessage, error) {
 }
 
 type KIPClientHello struct {
-	Timestamp time.Time
-	UserHash  [kipHelloUserHashSize]byte
-	Nonce     [kipHelloNonceSize]byte
-	ClientPub [kipHelloPubSize]byte
-	Features  uint32
+	Timestamp    time.Time
+	UserHash     [kipHelloUserHashSize]byte
+	Nonce        [kipHelloNonceSize]byte
+	ClientPub    [kipHelloPubSize]byte
+	Features     uint32
+	TableHint    uint32
+	HasTableHint bool
 }
 
 type KIPServerHello struct {
 	Nonce         [kipHelloNonceSize]byte
 	ServerPub     [kipHelloPubSize]byte
 	SelectedFeats uint32
+}
+
+func newKIPClientHello(userHash [kipHelloUserHashSize]byte, nonce [kipHelloNonceSize]byte, clientPub [kipHelloPubSize]byte, feats uint32, tableHint uint32, hasTableHint bool) *KIPClientHello {
+	return &KIPClientHello{
+		Timestamp:    time.Now(),
+		UserHash:     userHash,
+		Nonce:        nonce,
+		ClientPub:    clientPub,
+		Features:     feats,
+		TableHint:    tableHint,
+		HasTableHint: hasTableHint,
+	}
 }
 
 func kipUserHashFromKey(psk string) [kipHelloUserHashSize]byte {
@@ -147,6 +165,11 @@ func (m *KIPClientHello) EncodePayload() []byte {
 	var f [4]byte
 	binary.BigEndian.PutUint32(f[:], m.Features)
 	b.Write(f[:])
+	if m.HasTableHint {
+		var hint [kipClientHelloTableHintSize]byte
+		binary.BigEndian.PutUint32(hint[:], m.TableHint)
+		b.Write(hint[:])
+	}
 	return b.Bytes()
 }
 
@@ -166,7 +189,43 @@ func DecodeKIPClientHelloPayload(payload []byte) (*KIPClientHello, error) {
 	copy(h.ClientPub[:], payload[off:off+kipHelloPubSize])
 	off += kipHelloPubSize
 	h.Features = binary.BigEndian.Uint32(payload[off : off+4])
+	off += 4
+	if len(payload) >= off+kipClientHelloTableHintSize {
+		h.TableHint = binary.BigEndian.Uint32(payload[off : off+kipClientHelloTableHintSize])
+		h.HasTableHint = true
+	}
 	return &h, nil
+}
+
+func ResolveClientHelloTable(selected *sudokuobfs.Table, candidates []*sudokuobfs.Table, hello *KIPClientHello) (*sudokuobfs.Table, error) {
+	if selected == nil {
+		return nil, fmt.Errorf("nil selected table")
+	}
+	if hello == nil || !hello.HasTableHint {
+		return selected, nil
+	}
+	if selected.Hint() == hello.TableHint {
+		return selected, nil
+	}
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no table candidates")
+	}
+
+	var hinted *sudokuobfs.Table
+	for _, candidate := range candidates {
+		if candidate == nil || candidate.Hint() != hello.TableHint {
+			continue
+		}
+		hinted = candidate
+		break
+	}
+	if hinted == nil {
+		return nil, fmt.Errorf("unknown table hint: %d", hello.TableHint)
+	}
+	if hinted != selected && (!hinted.IsASCII || !selected.IsASCII) {
+		return nil, fmt.Errorf("table hint %d mismatches probed uplink table", hello.TableHint)
+	}
+	return hinted, nil
 }
 
 func (m *KIPServerHello) EncodePayload() []byte {

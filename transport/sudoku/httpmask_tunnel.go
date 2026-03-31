@@ -25,14 +25,16 @@ func newHTTPMaskEarlyCodecConfig(cfg *ProtocolConfig, psk string) EarlyCodecConf
 }
 
 func newClientHTTPMaskEarlyHandshake(cfg *ProtocolConfig) (*httpmask.ClientEarlyHandshake, error) {
-	table, err := pickClientTable(cfg)
+	choice, err := pickClientTable(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	return NewHTTPMaskClientEarlyHandshake(
 		newHTTPMaskEarlyCodecConfig(cfg, ClientAEADSeed(cfg.Key)),
-		table,
+		choice.Table,
+		choice.Hint,
+		choice.HasHint,
 		kipUserHashFromKey(cfg.Key),
 		KIPFeatAll,
 	)

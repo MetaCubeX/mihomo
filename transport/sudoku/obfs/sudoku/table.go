@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/rand"
+	"strings"
 )
 
 var (
@@ -17,6 +18,8 @@ type Table struct {
 	PaddingPool []byte
 	IsASCII     bool // 标记当前模式
 	layout      *byteLayout
+	opposite    *Table
+	hint        uint32
 }
 
 // NewTable initializes the obfuscation tables with built-in layouts.
@@ -29,10 +32,41 @@ func NewTable(key string, mode string) *Table {
 	return t
 }
 
-// NewTableWithCustom initializes obfuscation tables using either predefined or custom layouts.
-// mode: "prefer_ascii" or "prefer_entropy". If a custom pattern is provided, ASCII mode still takes precedence.
+// NewTableWithCustom initializes the uplink/probe Sudoku table using either predefined
+// or directional layouts. Directional modes such as "up_ascii_down_entropy" return the
+// client->server table and internally attach the opposite direction table for runtime use.
 // The customPattern must contain 8 characters with exactly 2 x, 2 p, and 4 v (case-insensitive).
 func NewTableWithCustom(key string, mode string, customPattern string) (*Table, error) {
+	asciiMode, err := ParseASCIIMode(mode)
+	if err != nil {
+		return nil, err
+	}
+
+	uplinkPattern := customPatternForToken(asciiMode.Uplink, customPattern)
+	downlinkPattern := customPatternForToken(asciiMode.Downlink, customPattern)
+	hint := tableHintFingerprint(key, asciiMode.Canonical(), uplinkPattern, downlinkPattern)
+
+	uplink, err := newSingleDirectionTable(key, asciiMode.uplinkPreference(), uplinkPattern)
+	if err != nil {
+		return nil, err
+	}
+	uplink.hint = hint
+	if asciiMode.Uplink == asciiMode.Downlink {
+		uplink.opposite = uplink
+		return uplink, nil
+	}
+
+	downlink, err := newSingleDirectionTable(key, asciiMode.downlinkPreference(), downlinkPattern)
+	if err != nil {
+		return nil, err
+	}
+	downlink.hint = hint
+	uplink.opposite = downlink
+	downlink.opposite = uplink
+	return uplink, nil
+}
+
+func newSingleDirectionTable(key string, mode string, customPattern string) (*Table, error) {
 	layout, err := resolveLayout(mode, customPattern)
 	if err != nil {
 		return nil, err
@@ -123,6 +157,38 @@ func NewTableWithCustom(key string, mode string, customPattern string) (*Table, 
 		}
 	}
 	return t, nil
+}
+
+func customPatternForToken(token string, customPattern string) string {
+	if token == asciiModeTokenEntropy {
+		return customPattern
+	}
+	return ""
+}
+
+func (t *Table) OppositeDirection() *Table {
+	if t == nil || t.opposite == nil {
+		return t
+	}
+	return t.opposite
+}
+
+func (t *Table) Hint() uint32 {
+	if t == nil {
+		return 0
+	}
+	return t.hint
+}
+
+func tableHintFingerprint(key string, mode string, uplinkPattern string, downlinkPattern string) uint32 {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		"sudoku-table-hint",
+		key,
+		mode,
+		strings.ToLower(strings.TrimSpace(uplinkPattern)),
+		strings.ToLower(strings.TrimSpace(downlinkPattern)),
+	}, "\x00")))
+	return binary.BigEndian.Uint32(sum[:4])
 }
 
 func packHintsToKey(hints [4]byte) uint32 {
