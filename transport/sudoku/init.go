@@ -39,16 +39,20 @@ func ClientAEADSeed(key string) string {
 	}
 
 	// Client-side key material can be:
+	//   - public key: 32 bytes hex compressed point
 	//   - split private key: 64 bytes hex (r||k)
 	//   - master private scalar: 32 bytes hex (x)
 	//   - PSK string: non-hex
 	//
-	// We intentionally do NOT treat a 32-byte hex as a public key here; the client is expected
-	// to carry private material. Server-side should use ServerAEADSeed for public keys.
-	switch len(b) {
-	case 64:
-	case 32:
-	default:
+	// 32-byte hex is ambiguous: it can be either a compressed public key or a
+	// master private scalar. Official Sudoku runtime accepts public keys directly,
+	// so when the bytes already decode as a point, preserve that point verbatim.
+	if len(b) == 32 {
+		if p, err := new(edwards25519.Point).SetBytes(b); err == nil {
+			return hex.EncodeToString(p.Bytes())
+		}
+	}
+	if len(b) != 64 && len(b) != 32 {
 		return key
 	}
 	if recovered, err := crypto.RecoverPublicKey(key); err == nil {
