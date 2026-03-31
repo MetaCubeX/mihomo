@@ -1,10 +1,12 @@
 package xhttp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net"
+	"net/http/httptrace"
 	"strconv"
 	"sync"
 	"time"
@@ -39,13 +41,11 @@ func getBaseRequest(ctx context.Context, method, urlStr string, body io.Reader, 
 
 type Conn struct {
 	net.Conn
-	reader     io.ReadCloser
-	writer     io.WriteCloser
-	localAddr  net.Addr
-	remoteAddr net.Addr
-	debug      bool
-	rOnce      sync.Once
-	wOnce      sync.Once
+	reader io.ReadCloser
+	writer io.WriteCloser
+	debug  bool
+	rOnce  sync.Once
+	wOnce  sync.Once
 }
 
 func NewConn(base net.Conn, reader io.ReadCloser, writer io.WriteCloser, debug bool) *Conn {
@@ -100,26 +100,6 @@ func (c *Conn) Close() error {
 	}
 	if len(errs) > 0 {
 		return errs[0]
-	}
-	return nil
-}
-
-func (c *Conn) LocalAddr() net.Addr {
-	if c.localAddr != nil {
-		return c.localAddr
-	}
-	if c.Conn != nil {
-		return c.Conn.LocalAddr()
-	}
-	return nil
-}
-
-func (c *Conn) RemoteAddr() net.Addr {
-	if c.remoteAddr != nil {
-		return c.remoteAddr
-	}
-	if c.Conn != nil {
-		return c.Conn.RemoteAddr()
 	}
 	return nil
 }
@@ -244,7 +224,7 @@ func ensureHTTPProtocolAllowed(config *SplitHTTPConfig, resp *http.Response) err
 // PacketUpWriter splits Write calls into separate HTTP requests
 type PacketUpWriter struct {
 	ctx       context.Context
-	client    DialerClient
+	client    *http.Client
 	url       string
 	config    *SplitHTTPConfig
 	sessionId string
@@ -274,9 +254,78 @@ func (w *PacketUpWriter) Write(b []byte) (int, error) {
 	}
 	w.config.FillPacketRequest(req, w.sessionId, seqStr, b)
 	logRequest(w.config, "packet-up", req, w.sessionId, seqStr, w.meta)
-	if err := w.client.PostPacket(w.ctx, w.url, w.sessionId, seqStr, append([]byte(nil), b...)); err != nil {
+
+	if w.h1RawUpload {
+		// Follow XRay's H1 packet-up approach: serialize request bytes and retry
+		// with another upload connection when write fails.
+		requestBuff := new(bytes.Buffer)
+		requestBuff.Grow(512 + int(req.ContentLength))
+		if err := req.Write(requestBuff); err != nil {
+			return 0, err
+		}
+
+		var uploadConn any
+		var h1UploadConn *H1Conn
+
+		for {
+			uploadConn = w.uploadRawPool.Get()
+			newConnection := uploadConn == nil
+			if newConnection {
+				newConn, err := w.dialUploadConn(context.WithoutCancel(w.ctx))
+				if err != nil {
+					return 0, err
+				}
+				h1UploadConn = NewH1Conn(newConn)
+				uploadConn = h1UploadConn
+			} else {
+				h1UploadConn = uploadConn.(*H1Conn)
+
+				// Keep this branch aligned with XRay's current behavior.
+				if h1UploadConn.UnreadedResponsesCount > 0 {
+					resp, err := http.ReadResponse(h1UploadConn.RespBufReader, req)
+					if err != nil {
+						return 0, fmt.Errorf("packet-up read response failed: %w", err)
+					}
+					_, _ = io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						return 0, fmt.Errorf("packet-up bad status: %d", resp.StatusCode)
+					}
+				}
+			}
+
+			_, err = h1UploadConn.Write(requestBuff.Bytes())
+			if err == nil {
+				break
+			} else if newConnection {
+				return 0, err
+			}
+		}
+
+		w.uploadRawPool.Put(uploadConn)
+		return len(b), nil
+	}
+
+	resp, err := w.client.Do(req)
+	if err != nil {
 		return 0, err
 	}
+	logResponse(w.config, "packet-up", resp, w.sessionId, seqStr, w.meta)
+	if err := ensureHTTPProtocolAllowed(w.config, resp); err != nil {
+		if resp != nil && resp.Body != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		return 0, err
+	}
+	if resp != nil && resp.Body != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("packet-up bad status: %d", resp.StatusCode)
+	}
+
 	return len(b), nil
 }
 
@@ -297,103 +346,6 @@ func (noopNetConn) RemoteAddr() net.Addr             { return nil }
 func (noopNetConn) SetDeadline(time.Time) error      { return nil }
 func (noopNetConn) SetReadDeadline(time.Time) error  { return nil }
 func (noopNetConn) SetWriteDeadline(time.Time) error { return nil }
-
-func buildRequestURL(config *SplitHTTPConfig) string {
-	scheme := "https"
-	if !config.TLS {
-		scheme = "http"
-	}
-	url := fmt.Sprintf("%s://%s%s", scheme, config.Host, config.GetNormalizedPath())
-	if rawQuery := config.GetNormalizedQuery(); rawQuery != "" {
-		url += "?" + rawQuery
-	}
-	return url
-}
-
-func streamConnWithDialerClient(ctx context.Context, client DialerClient, base net.Conn, config *SplitHTTPConfig, connMeta connTelemetry) (net.Conn, error) {
-	mode := parseMode(config)
-	sessionID := ""
-	if mode != "stream-one" {
-		sessionID = utils.NewUUIDV4().String()
-	}
-	url := buildRequestURL(config)
-
-	if mode == "stream-one" {
-		pr, pw := io.Pipe()
-		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr, config)
-		if err != nil {
-			return nil, fmt.Errorf("create req failed: %w", err)
-		}
-		config.FillStreamRequest(req, sessionID)
-		logRequest(config, "stream-one", req, sessionID, "", connMeta)
-		reader, remoteAddr, localAddr, err := client.OpenStream(ctx, url, sessionID, pr, false)
-		if err != nil {
-			_ = pr.Close()
-			_ = pw.Close()
-			return nil, err
-		}
-		conn := NewConn(base, reader, pw, config.RequestLog)
-		conn.localAddr = localAddr
-		conn.remoteAddr = remoteAddr
-		return conn, nil
-	}
-
-	req, err := getBaseRequest(ctx, http.MethodGet, url, nil, config)
-	if err != nil {
-		return nil, fmt.Errorf("create stream-down req failed: %w", err)
-	}
-	config.FillStreamRequest(req, sessionID)
-	logRequest(config, "stream-down", req, sessionID, "", connMeta)
-
-	reader, remoteAddr, localAddr, err := client.OpenStream(ctx, url, sessionID, nil, false)
-	if err != nil {
-		return nil, err
-	}
-	conn := NewConn(base, reader, nil, config.RequestLog)
-	conn.localAddr = localAddr
-	conn.remoteAddr = remoteAddr
-
-	if mode == "stream-up" {
-		upReader, upWriter := io.Pipe()
-		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, upReader, config)
-		if err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("create stream-up req failed: %w", err)
-		}
-		config.FillStreamRequest(req, sessionID)
-		logRequest(config, "stream-up", req, sessionID, "", connMeta)
-		if _, _, _, err := client.OpenStream(ctx, url, sessionID, upReader, true); err != nil {
-			_ = conn.Close()
-			_ = upReader.Close()
-			_ = upWriter.Close()
-			return nil, err
-		}
-		conn.writer = upWriter
-		return conn, nil
-	}
-
-	if mode == "packet-up" {
-		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, nil, config)
-		if err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("create packet-up req failed: %w", err)
-		}
-		config.FillPacketRequest(req, sessionID, "0", nil)
-		writer := &PacketUpWriter{
-			ctx:       ctx,
-			client:    client,
-			url:       url,
-			config:    config,
-			sessionId: sessionID,
-			meta:      connMeta,
-		}
-		conn.writer = writer
-		return conn, nil
-	}
-
-	_ = conn.Close()
-	return nil, fmt.Errorf("unsupported splithttp mode %s", mode)
-}
 
 func buildHTTP3Client(config *SplitHTTPConfig) *http.Client {
 	tlsServerName := config.TLSServerName
@@ -450,13 +402,113 @@ func buildHTTP3Client(config *SplitHTTPConfig) *http.Client {
 }
 
 func StreamConnH3(ctx context.Context, config *SplitHTTPConfig) (net.Conn, error) {
+	mode := parseMode(config)
+	sessionId := ""
+	if mode != "stream-one" {
+		sessionId = utils.NewUUIDV4().String()
+	}
+	url := fmt.Sprintf("https://%s%s", config.Host, config.GetNormalizedPath())
 	connMeta := connTelemetry{localAddr: "unknown", remoteAddr: config.DialAddr}
-	return streamConnWithDialerClient(ctx, getH3DialerClient(config), noopNetConn{}, config, connMeta)
+	client := buildHTTP3Client(config)
+
+	if mode == "stream-one" {
+		pr, pw := io.Pipe()
+		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr, config)
+		if err != nil {
+			return nil, fmt.Errorf("create req failed: %w", err)
+		}
+		config.FillStreamRequest(req, sessionId)
+		logRequest(config, "stream-one", req, sessionId, "", connMeta)
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("splithttp h3 stream-one failed: %w", err)
+		}
+		if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("splithttp h3 stream-one bad status code: %d, body: %s", resp.StatusCode, string(b))
+		}
+		return NewConn(noopNetConn{}, resp.Body, pw, config.RequestLog), nil
+	}
+
+	downReq, err := getBaseRequest(ctx, "GET", url, nil, config)
+	if err != nil {
+		return nil, fmt.Errorf("create stream-down req failed: %w", err)
+	}
+	downReq = downReq.WithContext(httptrace.WithClientTrace(downReq.Context(), &httptrace.ClientTrace{}))
+	config.FillStreamRequest(downReq, sessionId)
+	logRequest(config, "stream-down", downReq, sessionId, "", connMeta)
+
+	reader := &WaitReadCloser{Wait: make(chan struct{})}
+	go func() {
+		downResp, downErr := client.Do(downReq)
+		if downErr != nil {
+			if config.RequestLog {
+				log.Infoln("splithttp[stream-down-resp] err=%v", downErr)
+			}
+			_ = reader.Close()
+			return
+		}
+		logResponse(config, "stream-down", downResp, sessionId, "", connMeta)
+		if err := ensureHTTPProtocolAllowed(config, downResp); err != nil {
+			downResp.Body.Close()
+			_ = reader.Close()
+			return
+		}
+		if downResp.StatusCode != http.StatusOK {
+			downResp.Body.Close()
+			_ = reader.Close()
+			return
+		}
+		reader.Set(downResp.Body)
+	}()
+	var downstreamReader io.ReadCloser = reader
+
+	if mode == "stream-up" {
+		upReader, upWriter := io.Pipe()
+		upReq, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, upReader, config)
+		if err != nil {
+			return nil, fmt.Errorf("create stream-up req failed: %w", err)
+		}
+		config.FillStreamRequest(upReq, sessionId)
+		logRequest(config, "stream-up", upReq, sessionId, "", connMeta)
+		go func() {
+			resp, _ := client.Do(upReq)
+			if resp != nil && resp.Body != nil {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}
+		}()
+		return NewConn(noopNetConn{}, downstreamReader, upWriter, config.RequestLog), nil
+	}
+
+	if mode == "packet-up" {
+		writer := &PacketUpWriter{
+			ctx:       ctx,
+			client:    client,
+			url:       url,
+			config:    config,
+			sessionId: sessionId,
+			meta:      connMeta,
+		}
+		return NewConn(noopNetConn{}, downstreamReader, writer, config.RequestLog), nil
+	}
+
+	return nil, fmt.Errorf("unsupported splithttp mode %s", mode)
 }
 
 // StreamConn builds either Stream-One, Stream-Up/Down, or Packet-Up multiplexed flow based on configs.
 func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.Conn, error) {
 	mode := parseMode(config)
+
+	sessionId := ""
+	if mode != "stream-one" {
+		sessionId = utils.NewUUIDV4().String()
+	}
+
+	url := fmt.Sprintf("https://%s%s", config.Host, config.GetNormalizedPath())
 	connMeta := getConnTelemetry(c)
 
 	// Select transport explicitly to avoid parsing HTTP/2 frames with HTTP/1 reader.
@@ -500,19 +552,135 @@ func StreamConn(ctx context.Context, c net.Conn, config *SplitHTTPConfig) (net.C
 	client := &http.Client{
 		Transport: rt,
 	}
-	httpVersion := "2"
-	if !useH2 {
-		httpVersion = "1.1"
-		if config.H1UploadDial == nil && (mode == "stream-up" || mode == "packet-up") {
+
+	uploadClient := client
+	if !useH2 && (mode == "stream-up" || mode == "packet-up") {
+		if config.H1UploadDial == nil {
 			return nil, fmt.Errorf("splithttp %s requires h1-upload-dial when HTTP/2 is unavailable", mode)
 		}
+		uploadClient = &http.Client{
+			Transport: &http.Transport{
+				ForceAttemptHTTP2: false,
+				DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return config.H1UploadDial(ctx)
+				},
+				DisableKeepAlives: true,
+			},
+		}
 	}
-	dialerClient := &DefaultDialerClient{
-		transportConfig: config,
-		client:          client,
-		httpVersion:     httpVersion,
-		uploadRawPool:   &sync.Pool{},
-		dialUploadConn:  config.H1UploadDial,
+
+	if mode == "stream-one" {
+		pr, pw := io.Pipe()
+
+		req, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, pr, config)
+		if err != nil {
+			return nil, fmt.Errorf("create req failed: %w", err)
+		}
+		config.FillStreamRequest(req, sessionId)
+		logRequest(config, "stream-one", req, sessionId, "", connMeta)
+
+		reader := &WaitReadCloser{Wait: make(chan struct{})}
+		go func() {
+			resp, doErr := client.Do(req)
+			if doErr != nil {
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-one-resp] err=%v", doErr)
+				}
+				_ = reader.Close()
+				return
+			}
+			if ensureErr := ensureHTTPProtocolAllowed(config, resp); ensureErr != nil {
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-one-resp] protocol_error=%v actual=%s", ensureErr, resp.Proto)
+				}
+				resp.Body.Close()
+				_ = reader.Close()
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-one-resp] bad_status=%d actual=%s", resp.StatusCode, resp.Proto)
+				}
+				resp.Body.Close()
+				_ = reader.Close()
+				return
+			}
+			if config.RequestLog {
+				log.Infoln("splithttp[stream-one-resp] status=%d actual=%s", resp.StatusCode, resp.Proto)
+			}
+			reader.Set(resp.Body)
+		}()
+
+		return NewConn(c, reader, pw, config.RequestLog), nil
+	} else {
+		// Both stream-up and packet-up use a long-lived GET request for downloads.
+		downReq, err := getBaseRequest(ctx, "GET", url, nil, config)
+		if err != nil {
+			return nil, fmt.Errorf("create stream-down req failed: %w", err)
+		}
+		config.FillStreamRequest(downReq, sessionId)
+		logRequest(config, "stream-down", downReq, sessionId, "", connMeta)
+
+		reader := &WaitReadCloser{Wait: make(chan struct{})}
+		go func() {
+			resp, err := client.Do(downReq)
+			if err != nil {
+				if config.RequestLog {
+					log.Infoln("splithttp[stream-down-resp] err=%v", err)
+				}
+				_ = reader.Close()
+				return
+			}
+			logResponse(config, "stream-down", resp, sessionId, "", connMeta)
+			if err := ensureHTTPProtocolAllowed(config, resp); err != nil {
+				resp.Body.Close()
+				_ = reader.Close()
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				_ = reader.Close()
+				return
+			}
+			reader.Set(resp.Body)
+		}()
+		var downstreamReader io.ReadCloser = reader
+
+		if mode == "stream-up" {
+			upReader, upWriter := io.Pipe()
+			upReq, err := getBaseRequest(ctx, config.GetNormalizedUplinkHTTPMethod(), url, upReader, config)
+			if err != nil {
+				return nil, fmt.Errorf("create stream-up req failed: %w", err)
+			}
+			config.FillStreamRequest(upReq, sessionId)
+			logRequest(config, "stream-up", upReq, sessionId, "", connMeta)
+
+			go func() {
+				resp, _ := uploadClient.Do(upReq)
+				if resp != nil && resp.Body != nil {
+					_, _ = io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+				}
+			}()
+
+			return NewConn(c, downstreamReader, upWriter, config.RequestLog), nil
+		} else if mode == "packet-up" {
+			writer := &PacketUpWriter{
+				ctx:       ctx,
+				client:    uploadClient,
+				url:       url,
+				config:    config,
+				sessionId: sessionId,
+				meta:      connMeta,
+			}
+			if !useH2 {
+				writer.h1RawUpload = true
+				writer.uploadRawPool = &sync.Pool{}
+				writer.dialUploadConn = config.H1UploadDial
+			}
+			return NewConn(c, downstreamReader, writer, config.RequestLog), nil
+		}
 	}
-	return streamConnWithDialerClient(ctx, dialerClient, c, config, connMeta)
+
+	return nil, fmt.Errorf("unsupported splithttp mode %s", mode)
 }
