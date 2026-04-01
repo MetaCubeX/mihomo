@@ -22,6 +22,8 @@ import (
 
 type GroupBase struct {
 	*outbound.Base
+	hidden            bool
+	icon              string
 	filterRegs        []*regexp2.Regexp
 	excludeFilterRegs []*regexp2.Regexp
 	excludeTypeArray  []string
@@ -30,7 +32,7 @@ type GroupBase struct {
 	failedTimes       int
 	failedTime        time.Time
 	failedTesting     atomic.Bool
-	TestTimeout       int
+	testTimeout       int
 	maxFailedTimes    int
 
 	// for GetProxies
@@ -42,6 +44,8 @@ type GroupBase struct {
 type GroupBaseOption struct {
 	Name           string
 	Type           C.AdapterType
+	Hidden         bool
+	Icon           string
 	Filter         string
 	ExcludeFilter  string
 	ExcludeType    string
@@ -74,23 +78,33 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 
 	gb := &GroupBase{
 		Base:              outbound.NewBase(outbound.BaseOption{Name: opt.Name, Type: opt.Type}),
+		hidden:            opt.Hidden,
+		icon:              opt.Icon,
 		filterRegs:        filterRegs,
 		excludeFilterRegs: excludeFilterRegs,
 		excludeTypeArray:  excludeTypeArray,
 		providers:         opt.Providers,
 		failedTesting:     atomic.NewBool(false),
-		TestTimeout:       opt.TestTimeout,
+		testTimeout:       opt.TestTimeout,
 		maxFailedTimes:    opt.MaxFailedTimes,
 	}
 
-	if gb.TestTimeout == 0 {
-		gb.TestTimeout = 5000
+	if gb.testTimeout == 0 {
+		gb.testTimeout = 5000
 	}
 	if gb.maxFailedTimes == 0 {
 		gb.maxFailedTimes = 5
 	}
 
 	return gb
+}
+
+func (gb *GroupBase) Hidden() bool {
+	return gb.hidden
+}
+
+func (gb *GroupBase) Icon() string {
+	return gb.icon
 }
 
 func (gb *GroupBase) Touch() {
@@ -265,7 +279,7 @@ func (gb *GroupBase) onDialFailed(adapterType C.AdapterType, err error, fn func(
 			log.Debugln("ProxyGroup: %s first failed", gb.Name())
 			gb.failedTime = time.Now()
 		} else {
-			if time.Since(gb.failedTime) > time.Duration(gb.TestTimeout)*time.Millisecond {
+			if time.Since(gb.failedTime) > time.Duration(gb.testTimeout)*time.Millisecond {
 				gb.failedTimes = 0
 				return
 			}

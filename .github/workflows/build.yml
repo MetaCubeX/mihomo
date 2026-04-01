@@ -59,6 +59,15 @@ jobs:
           # - { goos: linux, goarch: s390x, output: s390x, debian: s390x, rpm: s390x }
           # - { goos: linux, goarch: ppc64le, output: ppc64le, debian: ppc64el, rpm: ppc64le }
 
+          # Go 1.26 with special patch can work on macOS 10.13 High Sierra
+          # https://github.com/MetaCubeX/go/commits/release-branch.go1.26/
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-compatible } # old style file name will be removed in next released
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64 }
+          - { goos: darwin, goarch: amd64, goamd64: v1, output: amd64-v1 }
+          - { goos: darwin, goarch: amd64, goamd64: v2, output: amd64-v2 }
+          - { goos: darwin, goarch: amd64, goamd64: v3, output: amd64-v3 }
+          - { goos: darwin, goarch: arm64, output: arm64 }
+
           # Go 1.26 with special patch can work on Windows 7
           # https://github.com/MetaCubeX/go/commits/release-branch.go1.26/
           # - { goos: windows, goarch: '386', output: '386' }
@@ -155,32 +164,37 @@ jobs:
           # - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3-go120, goversion: '1.20' }
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Go
       if: ${{ matrix.jobs.goversion == '' }}
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
       with:
+        go-download-base-url: 'https://github.com/MetaCubeX/go/releases/download/build'
         go-version: '1.26'
-        check-latest: true # Always check for the latest patch release
 
     - name: Set up Go
       if: ${{ matrix.jobs.goversion != '' && matrix.jobs.goversion != 'custom' }}
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
       with:
+        go-download-base-url: 'https://github.com/MetaCubeX/go/releases/download/build'
         go-version: ${{ matrix.jobs.goversion }}
-        check-latest: true # Always check for the latest patch release
 
     - name: Set up Go1.26 loongarch abi1
       if: ${{ matrix.jobs.goarch == 'loong64' && matrix.jobs.abi == '1' }}
-      run: |
-        wget -q https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.26.0/go1.26.0.linux-amd64-abi1.tar.gz
-        mkdir -p $HOME/usr/local
-        tar zxf go1.26.0.linux-amd64-abi1.tar.gz -C $HOME/usr/local
-        echo "$HOME/usr/local/go/bin" >> $GITHUB_PATH
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+      with:
+        go-download-base-url: 'https://github.com/MetaCubeX/loongarch64-golang/releases/download/1.26.0'
+        go-version: 1.26.0
 
-      # TODO: remove after issue77731 merged, see: https://github.com/golang/go/issues/77731
-    - name: Apply issue77731 for Golang1.26
+    - name: Verify Go installation
+      run: go version
+
+    - name: Verify Go env
+      run: go env
+
+      # TODO: remove after issue77731 fixed, see: https://github.com/golang/go/issues/77731
+    - name: Fix issue77731 for Golang1.26
       if: ${{ matrix.jobs.goversion == '' }}
       run: |
         cd $(go env GOROOT)
@@ -193,88 +207,12 @@ jobs:
         cd $(go env GOROOT)
         patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/issue77975.patch
 
-      # this patch file only works on golang1.26.x
-      # that means after golang1.27 release it must be changed
-      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.26/
-      # revert:
-      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
-      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
-      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
-      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
-      # f0894a00f4b756d4b9b4078af2e686b359493583: "os: remove 5ms sleep on Windows in (*Process).Wait"
-      # sepical fix:
-      # - os.RemoveAll not working on Windows7
-    - name: Revert Golang1.26 commit for Windows7/8
-      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '' }}
+      # TODO: remove after issue77930 fixed, see: https://github.com/golang/go/issues/77930
+    - name: Fix issue77930 for Golang1.26
+      if: ${{ matrix.jobs.goversion == '' }}
       run: |
         cd $(go env GOROOT)
-        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go1.26.patch
-
-      # this patch file only works on golang1.25.x
-      # that means after golang1.26 release it must be changed
-      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.25/
-      # revert:
-      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
-      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
-      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
-      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
-      # f0894a00f4b756d4b9b4078af2e686b359493583: "os: remove 5ms sleep on Windows in (*Process).Wait"
-      # sepical fix:
-      # - os.RemoveAll not working on Windows7
-    - name: Revert Golang1.25 commit for Windows7/8
-      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.25' }}
-      run: |
-        cd $(go env GOROOT)
-        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go1.25.patch
-
-      # this patch file only works on golang1.24.x
-      # that means after golang1.25 release it must be changed
-      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.24/
-      # revert:
-      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
-      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
-      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
-      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
-    - name: Revert Golang1.24 commit for Windows7/8
-      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.24' }}
-      run: |
-        cd $(go env GOROOT)
-        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go1.24.patch
-
-      # this patch file only works on golang1.23.x
-      # that means after golang1.24 release it must be changed
-      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.23/
-      # revert:
-      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
-      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
-      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
-      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
-    - name: Revert Golang1.23 commit for Windows7/8
-      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.23' }}
-      run: |
-        cd $(go env GOROOT)
-        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go1.23.patch
-
-      # this patch file only works on golang1.22.x
-      # that means after golang1.23 release it must be changed
-      # see: https://github.com/MetaCubeX/go/commits/release-branch.go1.22/
-      # revert:
-      # 693def151adff1af707d82d28f55dba81ceb08e1: "crypto/rand,runtime: switch RtlGenRandom for ProcessPrng"
-      # 7c1157f9544922e96945196b47b95664b1e39108: "net: remove sysSocket fallback for Windows 7"
-      # 48042aa09c2f878c4faa576948b07fe625c4707a: "syscall: remove Windows 7 console handle workaround"
-      # a17d959debdb04cd550016a3501dd09d50cd62e7: "runtime: always use LoadLibraryEx to load system libraries"
-    - name: Revert Golang1.22 commit for Windows7/8
-      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.22' }}
-      run: |
-        cd $(go env GOROOT)
-        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go1.22.patch
-
-      # modify from https://github.com/restic/restic/issues/4636#issuecomment-1896455557
-    - name: Revert Golang1.21 commit for Windows7/8
-      if: ${{ matrix.jobs.goos == 'windows' && matrix.jobs.goversion == '1.21' }}
-      run: |
-        cd $(go env GOROOT)
-        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go1.21.patch
+        patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/issue77930.patch
 
     - name: Set variables
       run: |
@@ -310,6 +248,7 @@ jobs:
     - name: Test
       if: ${{ matrix.jobs.test == 'test' }}
       run: |
+        export SKIP_CONCURRENT_TEST=1
         go test ./...
         echo "---test with_gvisor---"
         go test ./... -tags "with_gvisor" -count=1
@@ -386,7 +325,7 @@ jobs:
       shell: bash
 
     - name: Archive production artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: "${{ matrix.jobs.goos }}-${{ matrix.jobs.output }}"
         path: |
@@ -405,7 +344,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Download all workflow run artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         path: bin/
         merge-multiple: true
@@ -446,7 +385,7 @@ jobs:
         EOF
 
     - name: Upload Prerelease
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       if: ${{  success() }}
       with:
         tag_name: Prerelease-${{ github.ref_name }}
@@ -463,7 +402,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: mMeta
           fetch-depth: '0'
@@ -498,7 +437,7 @@ jobs:
             bash ./genReleaseNote.sh -v ${PREVERSION}...${CURRENTVERSION}
             rm ./genReleaseNote.sh
   
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: bin/
           merge-multiple: true

@@ -36,7 +36,7 @@ type SudokuOption struct {
 	AEADMethod         string                 `proxy:"aead-method,omitempty"`
 	PaddingMin         *int                   `proxy:"padding-min,omitempty"`
 	PaddingMax         *int                   `proxy:"padding-max,omitempty"`
-	TableType          string                 `proxy:"table-type,omitempty"` // "prefer_ascii" or "prefer_entropy"
+	TableType          string                 `proxy:"table-type,omitempty"` // "prefer_ascii", "prefer_entropy", or directional "up_ascii_down_entropy"/"up_entropy_down_ascii"
 	EnablePureDownlink *bool                  `proxy:"enable-pure-downlink,omitempty"`
 	HTTPMask           *bool                  `proxy:"http-mask,omitempty"`
 	HTTPMaskMode       string                 `proxy:"http-mask-mode,omitempty"`      // "legacy" (default), "stream", "poll", "auto", "ws"

@@ -189,29 +189,16 @@ func (ss *ShadowSocks) StreamConnContext(ctx context.Context, c net.Conn, metada
 	}
 }
 
+func (ss *ShadowSocks) dialContext(ctx context.Context) (c net.Conn, err error) {
+	if ss.kcptunClient != nil {
+		return ss.kcptunClient.OpenStream(ctx, ss.listenPacketContext)
+	}
+	return ss.dialer.DialContext(ctx, "tcp", ss.addr)
+}
+
 // DialContext implements C.ProxyAdapter
 func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
-	var c net.Conn
-	if ss.kcptunClient != nil {
-		c, err = ss.kcptunClient.OpenStream(ctx, func(ctx context.Context) (net.PacketConn, net.Addr, error) {
-			if err = ss.ResolveUDP(ctx, metadata); err != nil {
-				return nil, nil, err
-			}
-			addr, err := resolveUDPAddr(ctx, "udp", ss.addr, ss.prefer)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			pc, err := ss.dialer.ListenPacket(ctx, "udp", "", addr.AddrPort())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			return pc, addr, nil
-		})
-	} else {
-		c, err = ss.dialer.DialContext(ctx, "tcp", ss.addr)
-	}
+	c, err := ss.dialContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s connect error: %w", ss.addr, err)
 	}
@@ -224,24 +211,41 @@ func (ss *ShadowSocks) DialContext(ctx context.Context, metadata *C.Metadata) (_
 	return NewConn(c, ss), err
 }
 
+func (ss *ShadowSocks) listenPacketContext(ctx context.Context) (net.PacketConn, net.Addr, error) {
+	addr, err := resolveUDPAddr(ctx, "udp", ss.addr, ss.prefer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pc, err := ss.dialer.ListenPacket(ctx, "udp", "", addr.AddrPort())
+	if err != nil {
+		return nil, nil, err
+	}
+	return pc, addr, nil
+}
+
 // ListenPacketContext implements C.ProxyAdapter
 func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	if ss.option.UDPOverTCP {
-		tcpConn, err := ss.DialContext(ctx, metadata)
+		c, err := ss.DialContext(ctx, metadata)
 		if err != nil {
 			return nil, err
 		}
-		return ss.ListenPacketOnStreamConn(ctx, tcpConn, metadata)
+		if err = ss.ResolveUDP(ctx, metadata); err != nil {
+			return nil, err
+		}
+		destination := M.SocksaddrFromNet(metadata.UDPAddr())
+		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
+			return newPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
+		} else {
+			return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
+		}
 	}
 	if err := ss.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	addr, err := resolveUDPAddr(ctx, "udp", ss.addr, ss.prefer)
-	if err != nil {
-		return nil, err
-	}
 
-	pc, err := ss.dialer.ListenPacket(ctx, "udp", "", addr.AddrPort())
+	pc, addr, err := ss.listenPacketContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -254,22 +258,6 @@ func (ss *ShadowSocks) ProxyInfo() C.ProxyInfo {
 	info := ss.Base.ProxyInfo()
 	info.DialerProxy = ss.option.DialerProxy
 	return info
-}
-
-// ListenPacketOnStreamConn implements C.ProxyAdapter
-func (ss *ShadowSocks) ListenPacketOnStreamConn(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ C.PacketConn, err error) {
-	if ss.option.UDPOverTCP {
-		if err = ss.ResolveUDP(ctx, metadata); err != nil {
-			return nil, err
-		}
-		destination := M.SocksaddrFromNet(metadata.UDPAddr())
-		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
-			return newPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
-		} else {
-			return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
-		}
-	}
-	return nil, C.ErrNotSupport
 }
 
 // SupportUOT implements C.ProxyAdapter

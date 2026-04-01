@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -61,7 +62,6 @@ type TestTunnel struct {
 	HandleUDPPacketFn  func(packet C.UDPPacket, metadata *C.Metadata)
 	NatTableFn         func() C.NatTable
 	CloseFn            func() error
-	DoTestFn           func(t *testing.T, proxy C.ProxyAdapter)
 	DoSequentialTestFn func(t *testing.T, proxy C.ProxyAdapter)
 	DoConcurrentTestFn func(t *testing.T, proxy C.ProxyAdapter)
 }
@@ -83,7 +83,8 @@ func (tt *TestTunnel) Close() error {
 }
 
 func (tt *TestTunnel) DoTest(t *testing.T, proxy C.ProxyAdapter) {
-	tt.DoTestFn(t, proxy)
+	tt.DoSequentialTestFn(t, proxy)
+	tt.DoConcurrentTestFn(t, proxy)
 }
 
 func (tt *TestTunnel) DoSequentialTest(t *testing.T, proxy C.ProxyAdapter) {
@@ -236,6 +237,9 @@ func NewHttpTestTunnel() *TestTunnel {
 	concurrentTestFn := func(t *testing.T, proxy C.ProxyAdapter) {
 		// Concurrent testing to detect stress
 		t.Run("Concurrent", func(t *testing.T) {
+			if skip, _ := strconv.ParseBool(os.Getenv("SKIP_CONCURRENT_TEST")); skip {
+				t.Skip("skip concurrent test")
+			}
 			wg := sync.WaitGroup{}
 			num := len(httpData) / 1024
 			for i := 1; i <= num; i++ {
@@ -296,11 +300,7 @@ func NewHttpTestTunnel() *TestTunnel {
 			}
 			<-c.ch
 		},
-		CloseFn: ln.Close,
-		DoTestFn: func(t *testing.T, proxy C.ProxyAdapter) {
-			sequentialTestFn(t, proxy)
-			concurrentTestFn(t, proxy)
-		},
+		CloseFn:            ln.Close,
 		DoSequentialTestFn: sequentialTestFn,
 		DoConcurrentTestFn: concurrentTestFn,
 	}

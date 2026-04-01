@@ -42,13 +42,19 @@ jobs:
       # Fix mingw trying to be smart and converting paths https://github.com/moby/moby/issues/24029#issuecomment-250412919
       MSYS_NO_PATHCONV: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
         with:
+          go-download-base-url: 'https://github.com/MetaCubeX/go/releases/download/build'
           go-version: ${{ matrix.go-version }}
-          check-latest: true # Always check for the latest patch release
+
+      - name: Verify Go installation
+        run: go version
+
+      - name: Verify Go env
+        run: go env
 
       # TODO: remove after issue77975 fixed, see: https://github.com/golang/go/issues/77975
       - name: Fix issue77975 for Golang1.26
@@ -56,12 +62,6 @@ jobs:
         run: |
           cd $(go env GOROOT)
           patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/issue77975.patch
-
-      - name: Revert Golang commit for Windows7/8
-        if: ${{ runner.os == 'Windows' && matrix.go-version != '1.20' }}
-        run: |
-          cd $(go env GOROOT)
-          patch --verbose -p 1 < $GITHUB_WORKSPACE/.github/patch/go${{matrix.go-version}}.patch
 
       - name: Remove inbound test for macOS
         if: ${{ runner.os == 'macOS' }}

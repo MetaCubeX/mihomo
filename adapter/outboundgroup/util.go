@@ -16,6 +16,9 @@ type ProxyGroup interface {
 	Now() string
 	Touch()
 
+	Hidden() bool
+	Icon() string
+
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (mp map[string]uint16, err error)
 }
 

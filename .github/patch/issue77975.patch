@@ -1,4 +1,8 @@
-Subject: [PATCH] internal/poll: move rsan to heap on windows
+From 1a44be4cecdc742ac6cce9825f9ffc19857c99f3 Mon Sep 17 00:00:00 2001
+From: database64128 <free122448@hotmail.com>
+Date: Mon, 9 Mar 2026 16:25:16 +0800
+Subject: [PATCH] [release-branch.go1.26] internal/poll: move rsan to heap on
+ windows
 
 According to https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsarecvfrom,
 the memory pointed to by lpFromlen must remain available during the
@@ -14,20 +18,27 @@ with rsa in the same sync.Pool. The new wsaRsa struct is still in the
 same size class, so no additional overhead is introduced by this
 change.
 
-Fixes #77975.
+Fixes #78041.
 
 Change-Id: I5ffbccb332515116ddc03fb7c40ffc9293cad2ab
+Reviewed-on: https://go-review.googlesource.com/c/go/+/753040
+Reviewed-by: Quim Muntal <quimmuntal@gmail.com>
+Reviewed-by: Cherry Mui <cherryyz@google.com>
+Commit-Queue: Cherry Mui <cherryyz@google.com>
+LUCI-TryBot-Result: Go LUCI <golang-scoped@luci-project-accounts.iam.gserviceaccount.com>
+Reviewed-by: Damien Neil <dneil@google.com>
+Reviewed-on: https://go-review.googlesource.com/c/go/+/753480
+Reviewed-by: Mark Freeman <markfreeman@google.com>
 ---
-Index: src/internal/poll/fd_windows.go
-IDEA additional info:
-Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
-<+>UTF-8
-===================================================================
-diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
---- a/src/internal/poll/fd_windows.go	(revision 8149d992682ce76c6af804b507878e19fc966f7b)
-+++ b/src/internal/poll/fd_windows.go	(date 1773058735706)
-@@ -149,7 +149,7 @@
+ src/internal/poll/fd_windows.go | 94 +++++++++++++++++++++------------
+ 1 file changed, 59 insertions(+), 35 deletions(-)
 
+diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
+index 2ba967f990982f..26319548e3c310 100644
+--- a/src/internal/poll/fd_windows.go
++++ b/src/internal/poll/fd_windows.go
+@@ -149,7 +149,7 @@ var wsaMsgPool = sync.Pool{
+ 
  // newWSAMsg creates a new WSAMsg with the provided parameters.
  // Use [freeWSAMsg] to free it.
 -func newWSAMsg(p []byte, oob []byte, flags int, unconnected bool) *windows.WSAMsg {
@@ -35,8 +46,8 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	// The returned object can't be allocated in the stack because it is accessed asynchronously
  	// by Windows in between several system calls. If the stack frame is moved while that happens,
  	// then Windows may access invalid memory.
-@@ -164,33 +164,45 @@
- 		Buf: unsafe.SliceData(oob),
+@@ -166,34 +166,46 @@ func newWSAMsg(p []byte, oob []byte, flags int, unconnected bool) *windows.WSAMs
+ 		}
  	}
  	msg.Flags = uint32(flags)
 -	if unconnected {
@@ -48,7 +59,7 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	}
  	return msg
  }
-
+ 
  func freeWSAMsg(msg *windows.WSAMsg) {
  	// Clear pointers to buffers so they can be released by garbage collector.
 +	msg.Name = nil
@@ -65,7 +76,7 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
 -	}
  	wsaMsgPool.Put(msg)
  }
-
+ 
 +// wsaRsa bundles a [syscall.RawSockaddrAny] with its length for efficient caching.
 +//
 +// When used by WSARecvFrom, wsaRsa must be on the heap. See
@@ -81,20 +92,21 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
 +		return new(wsaRsa)
  	},
  }
-+
+ 
 +func newWSARsa() *wsaRsa {
 +	rsa := wsaRsaPool.Get().(*wsaRsa)
 +	rsa.name = syscall.RawSockaddrAny{}
 +	rsa.namelen = int32(unsafe.Sizeof(syscall.RawSockaddrAny{}))
 +	return rsa
 +}
-
++
  var operationPool = sync.Pool{
  	New: func() any {
-@@ -737,19 +749,18 @@
-
+ 		return new(operation)
+@@ -739,19 +751,18 @@ func (fd *FD) ReadFrom(buf []byte) (int, syscall.Sockaddr, error) {
+ 
  	fd.pin('r', &buf[0])
-
+ 
 -	rsa := wsaRsaPool.Get().(*syscall.RawSockaddrAny)
 +	rsa := newWSARsa()
  	defer wsaRsaPool.Put(rsa)
@@ -113,11 +125,11 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
 +	sa, _ := rsa.name.Sockaddr()
  	return n, sa, nil
  }
-
-@@ -768,19 +779,18 @@
-
+ 
+@@ -770,19 +781,18 @@ func (fd *FD) ReadFromInet4(buf []byte, sa4 *syscall.SockaddrInet4) (int, error)
+ 
  	fd.pin('r', &buf[0])
-
+ 
 -	rsa := wsaRsaPool.Get().(*syscall.RawSockaddrAny)
 +	rsa := newWSARsa()
  	defer wsaRsaPool.Put(rsa)
@@ -136,11 +148,11 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
 +	rawToSockaddrInet4(&rsa.name, sa4)
  	return n, err
  }
-
-@@ -799,19 +809,18 @@
-
+ 
+@@ -801,19 +811,18 @@ func (fd *FD) ReadFromInet6(buf []byte, sa6 *syscall.SockaddrInet6) (int, error)
+ 
  	fd.pin('r', &buf[0])
-
+ 
 -	rsa := wsaRsaPool.Get().(*syscall.RawSockaddrAny)
 +	rsa := newWSARsa()
  	defer wsaRsaPool.Put(rsa)
@@ -159,11 +171,11 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
 +	rawToSockaddrInet6(&rsa.name, sa6)
  	return n, err
  }
-
-@@ -1371,7 +1380,9 @@
+ 
+@@ -1373,7 +1382,9 @@ func (fd *FD) ReadMsg(p []byte, oob []byte, flags int) (int, int, int, syscall.S
  		p = p[:maxRW]
  	}
-
+ 
 -	msg := newWSAMsg(p, oob, flags, true)
 +	rsa := newWSARsa()
 +	defer wsaRsaPool.Put(rsa)
@@ -171,10 +183,10 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	defer freeWSAMsg(msg)
  	n, err := fd.execIO('r', func(o *operation) (qty uint32, err error) {
  		err = windows.WSARecvMsg(fd.Sysfd, msg, &qty, &o.o, nil)
-@@ -1396,7 +1407,9 @@
+@@ -1398,7 +1409,9 @@ func (fd *FD) ReadMsgInet4(p []byte, oob []byte, flags int, sa4 *syscall.Sockadd
  		p = p[:maxRW]
  	}
-
+ 
 -	msg := newWSAMsg(p, oob, flags, true)
 +	rsa := newWSARsa()
 +	defer wsaRsaPool.Put(rsa)
@@ -182,10 +194,10 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	defer freeWSAMsg(msg)
  	n, err := fd.execIO('r', func(o *operation) (qty uint32, err error) {
  		err = windows.WSARecvMsg(fd.Sysfd, msg, &qty, &o.o, nil)
-@@ -1420,7 +1433,9 @@
+@@ -1422,7 +1435,9 @@ func (fd *FD) ReadMsgInet6(p []byte, oob []byte, flags int, sa6 *syscall.Sockadd
  		p = p[:maxRW]
  	}
-
+ 
 -	msg := newWSAMsg(p, oob, flags, true)
 +	rsa := newWSARsa()
 +	defer wsaRsaPool.Put(rsa)
@@ -193,10 +205,10 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	defer freeWSAMsg(msg)
  	n, err := fd.execIO('r', func(o *operation) (qty uint32, err error) {
  		err = windows.WSARecvMsg(fd.Sysfd, msg, &qty, &o.o, nil)
-@@ -1444,15 +1459,18 @@
+@@ -1446,15 +1461,18 @@ func (fd *FD) WriteMsg(p []byte, oob []byte, sa syscall.Sockaddr) (int, int, err
  	}
  	defer fd.writeUnlock()
-
+ 
 -	msg := newWSAMsg(p, oob, 0, sa != nil)
 -	defer freeWSAMsg(msg)
 +	var rsa *wsaRsa
@@ -215,10 +227,10 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	n, err := fd.execIO('w', func(o *operation) (qty uint32, err error) {
  		err = windows.WSASendMsg(fd.Sysfd, msg, 0, nil, &o.o, nil)
  		return qty, err
-@@ -1471,11 +1489,14 @@
+@@ -1473,11 +1491,14 @@ func (fd *FD) WriteMsgInet4(p []byte, oob []byte, sa *syscall.SockaddrInet4) (in
  	}
  	defer fd.writeUnlock()
-
+ 
 -	msg := newWSAMsg(p, oob, 0, sa != nil)
 -	defer freeWSAMsg(msg)
 +	var rsa *wsaRsa
@@ -233,10 +245,10 @@ diff --git a/src/internal/poll/fd_windows.go b/src/internal/poll/fd_windows.go
  	n, err := fd.execIO('w', func(o *operation) (qty uint32, err error) {
  		err = windows.WSASendMsg(fd.Sysfd, msg, 0, nil, &o.o, nil)
  		return qty, err
-@@ -1494,11 +1515,14 @@
+@@ -1496,11 +1517,14 @@ func (fd *FD) WriteMsgInet6(p []byte, oob []byte, sa *syscall.SockaddrInet6) (in
  	}
  	defer fd.writeUnlock()
-
+ 
 -	msg := newWSAMsg(p, oob, 0, sa != nil)
 -	defer freeWSAMsg(msg)
 +	var rsa *wsaRsa

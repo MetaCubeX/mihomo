@@ -17,11 +17,13 @@ import (
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
+	"github.com/metacubex/mihomo/transport/xhttp"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
+	"golang.org/x/exp/slices"
 )
 
 type Listener struct {
@@ -144,7 +146,27 @@ func New(config LC.VlessServer, tunnel C.Tunnel, additions ...inbound.Addition) 
 		})
 		tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...) // h2 must before http/1.1
 	}
-
+	if config.XHTTPConfig.Mode != "" {
+		switch config.XHTTPConfig.Mode {
+		case "auto", "stream-up", "stream-one", "packet-up":
+		default:
+			return nil, errors.New("unsupported xhttp mode")
+		}
+	}
+	if config.XHTTPConfig.Path != "" || config.XHTTPConfig.Host != "" || config.XHTTPConfig.Mode != "" {
+		httpServer.Handler = xhttp.NewServerHandler(xhttp.ServerOption{
+			Path: config.XHTTPConfig.Path,
+			Host: config.XHTTPConfig.Host,
+			Mode: config.XHTTPConfig.Mode,
+			ConnHandler: func(conn net.Conn) {
+				sl.HandleConn(conn, tunnel, additions...)
+			},
+			HttpHandler: httpServer.Handler,
+		})
+		if !slices.Contains(tlsConfig.NextProtos, "h2") {
+			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
+		}
+	}
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr := addr
 

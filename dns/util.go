@@ -45,12 +45,31 @@ func updateTTL(records []D.RR, ttl uint32) {
 	}
 }
 
-func putMsgToCache(c dnsCache, key string, q D.Question, msg *D.Msg) {
+// getMsgFromCache returns a cached dns message if it exists, otherwise returns nil.
+// the returned msg is a copy of the original msg, so it can be modified without affecting the original msg.
+func getMsgFromCache(c dnsCache, q D.Question) (*D.Msg, time.Time, bool) {
+	msg, expireTime, hit := c.GetWithExpire(q.String())
+	if msg != nil {
+		msg = msg.Copy() // never modify the original msg
+	}
+	return msg, expireTime, hit
+}
+
+// putMsgToCache puts a dns message into the cache.
+// the msg is copied before being stored in the cache, so it can be modified without affecting the original msg.
+func putMsgToCache(c dnsCache, q D.Question, msg *D.Msg) {
 	// skip dns cache for acme challenge
 	if q.Qtype == D.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge.") {
 		log.Debugln("[DNS] dns cache ignored because of acme challenge for: %s", q.Name)
 		return
 	}
+
+	msg = msg.Copy() // never modify the original msg
+
+	// OPT RRs MUST NOT be cached, forwarded, or stored in or loaded from master files.
+	msg.Extra = lo.Filter(msg.Extra, func(rr D.RR, index int) bool {
+		return rr.Header().Rrtype != D.TypeOPT
+	})
 
 	var ttl uint32
 	if msg.Rcode == D.RcodeServerFailure {
@@ -58,12 +77,13 @@ func putMsgToCache(c dnsCache, key string, q D.Question, msg *D.Msg) {
 		// If it does so it MUST NOT cache it for longer than five (5) minutes [...]
 		ttl = serverFailureCacheTTL
 	} else {
-		ttl = minimalTTL(append(append(msg.Answer, msg.Ns...), msg.Extra...))
+		ttl = minimalTTL(lo.Concat(msg.Answer, msg.Ns, msg.Extra))
 	}
 	if ttl == 0 {
 		return
 	}
-	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Duration(ttl)*time.Second))
+
+	c.SetWithExpire(q.String(), msg, time.Now().Add(time.Duration(ttl)*time.Second))
 }
 
 func setMsgTTL(msg *D.Msg, ttl uint32) {

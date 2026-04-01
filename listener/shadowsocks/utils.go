@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"net"
-	"net/url"
 
 	"github.com/metacubex/mihomo/transport/socks5"
+
+	"github.com/metacubex/mhurl"
 )
 
 type packet struct {
@@ -48,7 +49,7 @@ func (c *packet) InAddr() net.Addr {
 }
 
 func ParseSSURL(s string) (addr, cipher, password string, err error) {
-	u, err := url.Parse(s)
+	u, err := mhurl.Parse(s) // we need multiple hosts url supports
 	if err != nil {
 		return
 	}
