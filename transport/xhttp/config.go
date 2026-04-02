@@ -19,6 +19,7 @@ type Config struct {
 	NoGRPCHeader   bool
 	XPaddingBytes  string
 	DownloadConfig *Config
+	XMux           *XMuxConfig
 }
 
 type DownloadConfig struct {
@@ -28,6 +29,13 @@ type DownloadConfig struct {
 	ServerName        string
 	ClientFingerprint string
 	SkipCertVerify    bool
+}
+
+type XMuxConfig struct {
+	MaxConnections   int
+	MaxConcurrency   int
+	HMaxRequestTimes int
+	HMaxReusableSecs int
 }
 
 func (c *Config) NormalizedMode() string {

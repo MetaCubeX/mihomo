@@ -83,6 +83,7 @@ type XHTTPOptions struct {
 	NoGRPCHeader     bool                   `proxy:"no-grpc-header,omitempty"`
 	XPaddingBytes    string                 `proxy:"x-padding-bytes,omitempty"`
 	DownloadSettings *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
+	XMux             *XHTTPXMuxOptions      `proxy:"xmux,omitempty"`
 }
 
 type XHTTPDownloadSettings struct {
@@ -105,6 +106,13 @@ type XHTTPDownloadSettings struct {
 	PrivateKey        *string         `proxy:"private-key,omitempty"`
 	ServerName        *string         `proxy:"servername,omitempty"`
 	ClientFingerprint *string         `proxy:"client-fingerprint,omitempty"`
+}
+
+type XHTTPXMuxOptions struct {
+	MaxConnections   int `proxy:"max-connections,omitempty"`
+	MaxConcurrency   int `proxy:"max-concurrency,omitempty"`
+	HMaxRequestTimes int `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs int `proxy:"h-max-reusable-secs,omitempty"`
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
@@ -506,6 +514,16 @@ func NewVless(option VlessOption) (*Vless, error) {
 			}
 		}
 
+		var xmuxCfg *xhttp.XMuxConfig
+		if option.XHTTPOpts.XMux != nil {
+			xmuxCfg = &xhttp.XMuxConfig{
+				MaxConnections:   option.XHTTPOpts.XMux.MaxConnections,
+				MaxConcurrency:   option.XHTTPOpts.XMux.MaxConcurrency,
+				HMaxRequestTimes: option.XHTTPOpts.XMux.HMaxRequestTimes,
+				HMaxReusableSecs: option.XHTTPOpts.XMux.HMaxReusableSecs,
+			}
+		}
+
 		cfg := &xhttp.Config{
 			Host:          requestHost,
 			Path:          v.option.XHTTPOpts.Path,
@@ -513,8 +531,8 @@ func NewVless(option VlessOption) (*Vless, error) {
 			Headers:       v.option.XHTTPOpts.Headers,
 			NoGRPCHeader:  v.option.XHTTPOpts.NoGRPCHeader,
 			XPaddingBytes: v.option.XHTTPOpts.XPaddingBytes,
+			XMux:          xmuxCfg,
 		}
-
 		makeTransport := func() http.RoundTripper {
 			return xhttp.NewTransport(
 				func(ctx context.Context) (net.Conn, error) {
