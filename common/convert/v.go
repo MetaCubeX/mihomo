@@ -90,6 +90,20 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 			proxy["http-opts"] = httpOpts
 		}
 
+	case "xhttp":
+		xhttpOpts := make(map[string]any)
+		xhttpOpts["path"] = "/"
+		if path := query.Get("path"); path != "" {
+			xhttpOpts["path"] = path
+		}
+		if host := query.Get("host"); host != "" {
+			xhttpOpts["host"] = host
+		}
+		if mode := query.Get("mode"); mode != "" {
+			xhttpOpts["mode"] = mode
+		}
+		proxy["xhttp-opts"] = xhttpOpts
+
 	case "http":
 		headers := make(map[string]any)
 		h2Opts := make(map[string]any)
