@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -134,6 +135,98 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		grpcOpts := make(map[string]any)
 		grpcOpts["grpc-service-name"] = query.Get("serviceName")
 		proxy["grpc-opts"] = grpcOpts
+
+	case "xhttp":
+		proxy["network"] = "xhttp"
+		xhttpOpts := make(map[string]any)
+
+		if path := query.Get("path"); path != "" {
+			xhttpOpts["path"] = path
+		}
+
+		if host := query.Get("host"); host != "" {
+			xhttpOpts["host"] = host
+		}
+
+		if mode := query.Get("mode"); mode != "" {
+			xhttpOpts["mode"] = mode
+		}
+
+		if extra := query.Get("extra"); extra != "" {
+			var extraMap map[string]any
+			if err := json.Unmarshal([]byte(extra), &extraMap); err == nil {
+				parseXHTTPExtra(extraMap, xhttpOpts)
+			}
+		}
+
+		proxy["xhttp-opts"] = xhttpOpts
 	}
+
 	return nil
+}
+
+// parseXHTTPExtra maps xray-core extra JSON fields to mihomo xhttp-opts fields.
+func parseXHTTPExtra(extra map[string]any, opts map[string]any) {
+	if v, ok := extra["noGRPCHeader"].(bool); ok && v {
+		opts["no-grpc-header"] = true
+	}
+
+	if v, ok := extra["xPaddingBytes"].(string); ok && v != "" {
+		opts["x-padding-bytes"] = v
+	}
+
+	if dsAny, ok := extra["downloadSettings"].(map[string]any); ok {
+		ds := make(map[string]any)
+
+		if addr, ok := dsAny["address"].(string); ok && addr != "" {
+			ds["server"] = addr
+		}
+
+		if port, ok := dsAny["port"].(float64); ok {
+			ds["port"] = int(port)
+		}
+
+		if sec, ok := dsAny["security"].(string); ok && strings.ToLower(sec) == "tls" {
+			ds["tls"] = true
+		}
+
+		if tlsAny, ok := dsAny["tlsSettings"].(map[string]any); ok {
+			if sn, ok := tlsAny["serverName"].(string); ok && sn != "" {
+				ds["servername"] = sn
+			}
+			if fp, ok := tlsAny["fingerprint"].(string); ok && fp != "" {
+				ds["client-fingerprint"] = fp
+			}
+			if alpnAny, ok := tlsAny["alpn"].([]any); ok && len(alpnAny) > 0 {
+				alpnList := make([]string, 0, len(alpnAny))
+				for _, a := range alpnAny {
+					if s, ok := a.(string); ok {
+						alpnList = append(alpnList, s)
+					}
+				}
+				if len(alpnList) > 0 {
+					ds["alpn"] = alpnList
+				}
+			}
+		}
+
+		if xhttpAny, ok := dsAny["xhttpSettings"].(map[string]any); ok {
+			if path, ok := xhttpAny["path"].(string); ok && path != "" {
+				ds["path"] = path
+			}
+			if host, ok := xhttpAny["host"].(string); ok && host != "" {
+				ds["host"] = host
+			}
+			if v, ok := xhttpAny["noGRPCHeader"].(bool); ok && v {
+				ds["no-grpc-header"] = true
+			}
+			if v, ok := xhttpAny["xPaddingBytes"].(string); ok && v != "" {
+				ds["x-padding-bytes"] = v
+			}
+		}
+
+		if len(ds) > 0 {
+			opts["download-settings"] = ds
+		}
+	}
 }
