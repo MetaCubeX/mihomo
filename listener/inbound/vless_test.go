@@ -494,16 +494,16 @@ func withXMux(out outbound.VlessOption) outbound.VlessOption {
 
 func withXMuxDownload(out outbound.VlessOption) outbound.VlessOption {
 	out.XHTTPOpts.XMux = &outbound.XHTTPXMuxOptions{
-		MaxConnections:   "2",
-		MaxConcurrency:   "4",
-		HMaxRequestTimes: "8",
-		HMaxReusableSecs: "10",
+		MaxConnections:   "8-16",
+		MaxConcurrency:   "32-64",
+		HMaxRequestTimes: "128-256",
+		HMaxReusableSecs: "30-60",
 	}
 	out.XHTTPOpts.DownloadSettings.XMux = &outbound.XHTTPXMuxOptions{
-		MaxConnections:   "8",
-		MaxConcurrency:   "16",
-		HMaxRequestTimes: "32",
-		HMaxReusableSecs: "40",
+		MaxConnections:   "8-16",
+		MaxConcurrency:   "32-64",
+		HMaxRequestTimes: "128-256",
+		HMaxReusableSecs: "30-60",
 	}
 	return out
 }
