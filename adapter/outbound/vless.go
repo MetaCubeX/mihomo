@@ -598,7 +598,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 				XPaddingBytes: lo.FromPtrOr(ds.XPaddingBytes, v.option.XHTTPOpts.XPaddingBytes),
 			}
 			if ds.XMux != nil && xmuxCfg != nil {
-				xmuxCfg.Download = &xhttp.XMuxDownloadConfig{
+				xmuxCfg.Download = &xhttp.XMuxConfig{
 					MaxConnections:   ds.XMux.MaxConnections,
 					MaxConcurrency:   ds.XMux.MaxConcurrency,
 					CMaxReuseTimes:   ds.XMux.CMaxReuseTimes,

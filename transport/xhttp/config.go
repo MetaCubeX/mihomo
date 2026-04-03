@@ -32,20 +32,12 @@ type DownloadConfig struct {
 }
 
 type XMuxConfig struct {
-	MaxConnections   string              `proxy:"max-connections,omitempty"`
-	MaxConcurrency   string              `proxy:"max-concurrency,omitempty"`
-	CMaxReuseTimes   string              `proxy:"c-max-reuse-times,omitempty"`
-	HMaxRequestTimes string              `proxy:"h-max-request-times,omitempty"`
-	HMaxReusableSecs string              `proxy:"h-max-reusable-secs,omitempty"`
-	Download         *XMuxDownloadConfig `proxy:"download,omitempty"`
-}
-
-type XMuxDownloadConfig struct {
-	MaxConnections   string `proxy:"max-connections,omitempty"`
-	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
-	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
-	HMaxRequestTimes string `proxy:"h-max-request-times,omitempty"`
-	HMaxReusableSecs string `proxy:"h-max-reusable-secs,omitempty"`
+	MaxConnections   string      `proxy:"max-connections,omitempty"`
+	MaxConcurrency   string      `proxy:"max-concurrency,omitempty"`
+	CMaxReuseTimes   string      `proxy:"c-max-reuse-times,omitempty"`
+	HMaxRequestTimes string      `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs string      `proxy:"h-max-reusable-secs,omitempty"`
+	Download         *XMuxConfig `proxy:"download,omitempty"`
 }
 
 func (c *Config) NormalizedMode() string {
