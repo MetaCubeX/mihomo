@@ -38,23 +38,21 @@ func TestXMuxReuseSameEntry(t *testing.T) {
 
 	entry1, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id1 := transportID(entry1.uploadTransport)
+	id1 := transportID(entry1.transport)
 
 	manager.release(entry1)
 
 	entry2, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2 := transportID(entry2.uploadTransport)
+	id2 := transportID(entry2.transport)
 
 	if id1 != id2 {
 		t.Fatalf("expected same transport to be reused, got %d and %d", id1, id2)
@@ -75,7 +73,6 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 
 	entry1, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +83,6 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 
 	entry2, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +97,6 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 
 	entry3, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err == nil {
 		t.Fatal("expected error when max-connections reached and all entries are at max-concurrency")
@@ -126,23 +121,21 @@ func TestXMuxRotateOnRequestLimit(t *testing.T) {
 
 	entry1, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id1 := transportID(entry1.uploadTransport)
+	id1 := transportID(entry1.transport)
 
 	manager.release(entry1)
 
 	entry2, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2 := transportID(entry2.uploadTransport)
+	id2 := transportID(entry2.transport)
 
 	if id1 == id2 {
 		t.Fatalf("expected new transport after request limit, got same id %d", id1)
@@ -164,24 +157,22 @@ func TestXMuxRotateOnReusableSecs(t *testing.T) {
 
 	entry1, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id1 := transportID(entry1.uploadTransport)
+	id1 := transportID(entry1.transport)
 
 	time.Sleep(1100 * time.Millisecond)
 	manager.release(entry1)
 
 	entry2, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2 := transportID(entry2.uploadTransport)
+	id2 := transportID(entry2.transport)
 
 	if id1 == id2 {
 		t.Fatalf("expected new transport after reusable timeout, got same id %d", id1)
@@ -203,23 +194,21 @@ func TestXMuxRotateOnConnReuseLimit(t *testing.T) {
 
 	entry1, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id1 := transportID(entry1.uploadTransport)
+	id1 := transportID(entry1.transport)
 
 	manager.release(entry1)
 
 	entry2, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2 := transportID(entry2.uploadTransport)
+	id2 := transportID(entry2.transport)
 
 	if id1 != id2 {
 		t.Fatalf("expected first reuse to use same transport, got %d and %d", id1, id2)
@@ -229,12 +218,11 @@ func TestXMuxRotateOnConnReuseLimit(t *testing.T) {
 
 	entry3, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
-		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id3 := transportID(entry3.uploadTransport)
+	id3 := transportID(entry3.transport)
 
 	if id3 == id2 {
 		t.Fatalf("expected new transport after c-max-reuse-times limit, got same id %d", id3)
@@ -328,7 +316,6 @@ func TestXMuxDownloadConfigPartialOverride(t *testing.T) {
 		HMaxReusableSecs: "5",
 		Download: &XMuxConfig{
 			MaxConnections: "11",
-			// остальные поля пустые -> должны взять base
 		},
 	}
 

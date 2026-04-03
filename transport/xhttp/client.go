@@ -104,7 +104,8 @@ type Client struct {
 	makeDownloadTransport TransportMaker
 	ctx                   context.Context
 	cancel                context.CancelFunc
-	xmux                  *xmuxManager
+	uploadXMux            *xmuxManager
+	downloadXMux          *xmuxManager
 }
 
 func NewClient(cfg *Config, makeTransport TransportMaker, makeDownloadTransport TransportMaker, hasReality bool) (*Client, error) {
@@ -125,7 +126,35 @@ func NewClient(cfg *Config, makeTransport TransportMaker, makeDownloadTransport 
 		cancel:                cancel,
 	}
 	if cfg.XMux != nil {
-		client.xmux = newXMuxManager(cfg.XMux)
+		client.uploadXMux = newXMuxManager(cfg.XMux)
+
+		if cfg.XMux.Download != nil {
+			downloadCfg := &XMuxConfig{
+				MaxConnections:   cfg.XMux.Download.MaxConnections,
+				MaxConcurrency:   cfg.XMux.Download.MaxConcurrency,
+				CMaxReuseTimes:   cfg.XMux.Download.CMaxReuseTimes,
+				HMaxRequestTimes: cfg.XMux.Download.HMaxRequestTimes,
+				HMaxReusableSecs: cfg.XMux.Download.HMaxReusableSecs,
+			}
+
+			if downloadCfg.MaxConnections == "" {
+				downloadCfg.MaxConnections = cfg.XMux.MaxConnections
+			}
+			if downloadCfg.MaxConcurrency == "" {
+				downloadCfg.MaxConcurrency = cfg.XMux.MaxConcurrency
+			}
+			if downloadCfg.CMaxReuseTimes == "" {
+				downloadCfg.CMaxReuseTimes = cfg.XMux.CMaxReuseTimes
+			}
+			if downloadCfg.HMaxRequestTimes == "" {
+				downloadCfg.HMaxRequestTimes = cfg.XMux.HMaxRequestTimes
+			}
+			if downloadCfg.HMaxReusableSecs == "" {
+				downloadCfg.HMaxReusableSecs = cfg.XMux.HMaxReusableSecs
+			}
+
+			client.downloadXMux = newXMuxManager(downloadCfg)
+		}
 	}
 	return client, nil
 }
@@ -145,8 +174,11 @@ func (c *Client) Dial() (net.Conn, error) {
 
 func (c *Client) Close() error {
 	c.cancel()
-	if c.xmux != nil {
-		c.xmux.Close()
+	if c.uploadXMux != nil {
+		c.uploadXMux.Close()
+	}
+	if c.downloadXMux != nil {
+		c.downloadXMux.Close()
 	}
 	return nil
 }
@@ -316,7 +348,7 @@ func (c *Client) dialStreamUpOnce(
 }
 
 func (c *Client) DialStreamUp() (net.Conn, error) {
-	if c.xmux == nil {
+	if c.uploadXMux == nil {
 		uploadTransport := c.makeTransport()
 		downloadTransport := uploadTransport
 		if c.makeDownloadTransport != nil {
@@ -331,16 +363,38 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 		})
 	}
 
-	entry, err := c.xmux.getOrCreate(c.makeTransport, c.makeDownloadTransport)
+	uploadEntry, err := c.uploadXMux.getOrCreate(c.makeTransport)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := c.dialStreamUpOnce(entry.uploadTransport, entry.downloadTransport, func() {
-		c.xmux.release(entry)
-	})
+	var downloadEntry *xmuxEntry
+	downloadTransport := uploadEntry.transport
+
+	if c.downloadXMux != nil {
+		if c.makeDownloadTransport == nil {
+			c.uploadXMux.release(uploadEntry)
+			return nil, fmt.Errorf("xhttp xmux: download manager requires download transport maker")
+		}
+
+		downloadEntry, err = c.downloadXMux.getOrCreate(c.makeDownloadTransport)
+		if err != nil {
+			c.uploadXMux.release(uploadEntry)
+			return nil, err
+		}
+		downloadTransport = downloadEntry.transport
+	}
+
+	release := func() {
+		c.uploadXMux.release(uploadEntry)
+		if downloadEntry != nil {
+			c.downloadXMux.release(downloadEntry)
+		}
+	}
+
+	conn, err := c.dialStreamUpOnce(uploadEntry.transport, downloadTransport, release)
 	if err != nil {
-		c.xmux.release(entry)
+		release()
 		return nil, err
 	}
 
@@ -418,7 +472,7 @@ func (c *Client) dialPacketUpOnce(
 }
 
 func (c *Client) DialPacketUp() (net.Conn, error) {
-	if c.xmux == nil {
+	if c.uploadXMux == nil {
 		uploadTransport := c.makeTransport()
 		downloadTransport := uploadTransport
 		if c.makeDownloadTransport != nil {
@@ -433,16 +487,38 @@ func (c *Client) DialPacketUp() (net.Conn, error) {
 		})
 	}
 
-	entry, err := c.xmux.getOrCreate(c.makeTransport, c.makeDownloadTransport)
+	uploadEntry, err := c.uploadXMux.getOrCreate(c.makeTransport)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := c.dialPacketUpOnce(entry.uploadTransport, entry.downloadTransport, func() {
-		c.xmux.release(entry)
-	})
+	var downloadEntry *xmuxEntry
+	downloadTransport := uploadEntry.transport
+
+	if c.downloadXMux != nil {
+		if c.makeDownloadTransport == nil {
+			c.uploadXMux.release(uploadEntry)
+			return nil, fmt.Errorf("xhttp xmux: download manager requires download transport maker")
+		}
+
+		downloadEntry, err = c.downloadXMux.getOrCreate(c.makeDownloadTransport)
+		if err != nil {
+			c.uploadXMux.release(uploadEntry)
+			return nil, err
+		}
+		downloadTransport = downloadEntry.transport
+	}
+
+	release := func() {
+		c.uploadXMux.release(uploadEntry)
+		if downloadEntry != nil {
+			c.downloadXMux.release(downloadEntry)
+		}
+	}
+
+	conn, err := c.dialPacketUpOnce(uploadEntry.transport, downloadTransport, release)
 	if err != nil {
-		c.xmux.release(entry)
+		release()
 		return nil, err
 	}
 
