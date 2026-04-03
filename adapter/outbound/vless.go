@@ -536,6 +536,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 			XPaddingBytes: v.option.XHTTPOpts.XPaddingBytes,
 			XMux:          xmuxCfg,
 		}
+
 		makeTransport := func() http.RoundTripper {
 			return xhttp.NewTransport(
 				func(ctx context.Context) (net.Conn, error) {
@@ -589,6 +590,17 @@ func NewVless(option VlessOption) (*Vless, error) {
 				}
 			}
 
+			downloadXMuxCfg := xmuxCfg
+			if ds.XMux != nil {
+				downloadXMuxCfg = &xhttp.XMuxConfig{
+					MaxConnections:   ds.XMux.MaxConnections,
+					MaxConcurrency:   ds.XMux.MaxConcurrency,
+					CMaxReuseTimes:   ds.XMux.CMaxReuseTimes,
+					HMaxRequestTimes: ds.XMux.HMaxRequestTimes,
+					HMaxReusableSecs: ds.XMux.HMaxReusableSecs,
+				}
+			}
+
 			cfg.DownloadConfig = &xhttp.Config{
 				Host:          downloadHost,
 				Path:          lo.FromPtrOr(ds.Path, v.option.XHTTPOpts.Path),
@@ -596,15 +608,7 @@ func NewVless(option VlessOption) (*Vless, error) {
 				Headers:       lo.FromPtrOr(ds.Headers, v.option.XHTTPOpts.Headers),
 				NoGRPCHeader:  lo.FromPtrOr(ds.NoGRPCHeader, v.option.XHTTPOpts.NoGRPCHeader),
 				XPaddingBytes: lo.FromPtrOr(ds.XPaddingBytes, v.option.XHTTPOpts.XPaddingBytes),
-			}
-			if ds.XMux != nil && xmuxCfg != nil {
-				xmuxCfg.Download = &xhttp.XMuxConfig{
-					MaxConnections:   ds.XMux.MaxConnections,
-					MaxConcurrency:   ds.XMux.MaxConcurrency,
-					CMaxReuseTimes:   ds.XMux.CMaxReuseTimes,
-					HMaxRequestTimes: ds.XMux.HMaxRequestTimes,
-					HMaxReusableSecs: ds.XMux.HMaxReusableSecs,
-				}
+				XMux:          downloadXMuxCfg,
 			}
 
 			makeDownloadTransport = func() http.RoundTripper {

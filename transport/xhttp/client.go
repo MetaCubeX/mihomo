@@ -127,33 +127,8 @@ func NewClient(cfg *Config, makeTransport TransportMaker, makeDownloadTransport 
 	}
 	if cfg.XMux != nil {
 		client.uploadXMux = newXMuxManager(cfg.XMux)
-
-		if cfg.XMux.Download != nil {
-			downloadCfg := &XMuxConfig{
-				MaxConnections:   cfg.XMux.Download.MaxConnections,
-				MaxConcurrency:   cfg.XMux.Download.MaxConcurrency,
-				CMaxReuseTimes:   cfg.XMux.Download.CMaxReuseTimes,
-				HMaxRequestTimes: cfg.XMux.Download.HMaxRequestTimes,
-				HMaxReusableSecs: cfg.XMux.Download.HMaxReusableSecs,
-			}
-
-			if downloadCfg.MaxConnections == "" {
-				downloadCfg.MaxConnections = cfg.XMux.MaxConnections
-			}
-			if downloadCfg.MaxConcurrency == "" {
-				downloadCfg.MaxConcurrency = cfg.XMux.MaxConcurrency
-			}
-			if downloadCfg.CMaxReuseTimes == "" {
-				downloadCfg.CMaxReuseTimes = cfg.XMux.CMaxReuseTimes
-			}
-			if downloadCfg.HMaxRequestTimes == "" {
-				downloadCfg.HMaxRequestTimes = cfg.XMux.HMaxRequestTimes
-			}
-			if downloadCfg.HMaxReusableSecs == "" {
-				downloadCfg.HMaxReusableSecs = cfg.XMux.HMaxReusableSecs
-			}
-
-			client.downloadXMux = newXMuxManager(downloadCfg)
+		if cfg.DownloadConfig != nil {
+			client.downloadXMux = newXMuxManager(cfg.DownloadConfig.XMux)
 		}
 	}
 	return client, nil
