@@ -389,7 +389,14 @@ func TestInboundVless_Reality_XHTTP(t *testing.T) {
 			Mode: "auto",
 		},
 	}
-	testInboundVless(t, inboundOptions, outboundOptions)
+
+	t.Run("default", func(t *testing.T) {
+		testInboundVless(t, inboundOptions, outboundOptions)
+	})
+
+	t.Run("xmux", func(t *testing.T) {
+		testInboundVless(t, inboundOptions, withXMux(outboundOptions))
+	})
 }
 
 func TestInboundVless_XHTTP_DownloadSettings(t *testing.T) {
@@ -417,7 +424,14 @@ func TestInboundVless_XHTTP_DownloadSettings(t *testing.T) {
 					DownloadSettings: &outbound.XHTTPDownloadSettings{},
 				},
 			}
-			testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
+
+			t.Run("default", func(t *testing.T) {
+				testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
+			})
+
+			t.Run("xmux", func(t *testing.T) {
+				testInboundVlessTLS(t, inboundOptions, withXMuxDownload(outboundOptions), false)
+			})
 		})
 	}
 }
@@ -442,5 +456,38 @@ func TestInboundVless_XHTTP_StreamUp(t *testing.T) {
 			Mode: "stream-up",
 		},
 	}
-	testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
+
+	t.Run("default", func(t *testing.T) {
+		testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
+	})
+
+	t.Run("xmux", func(t *testing.T) {
+		testInboundVlessTLS(t, inboundOptions, withXMux(outboundOptions), false)
+	})
+}
+
+func withXMux(out outbound.VlessOption) outbound.VlessOption {
+	out.XHTTPOpts.XMux = &outbound.XHTTPXMuxOptions{
+		MaxConnections:   "8-16",
+		MaxConcurrency:   "32-64",
+		HMaxRequestTimes: "128-256",
+		HMaxReusableSecs: "30-60",
+	}
+	return out
+}
+
+func withXMuxDownload(out outbound.VlessOption) outbound.VlessOption {
+	out.XHTTPOpts.XMux = &outbound.XHTTPXMuxOptions{
+		MaxConnections:   "8-16",
+		MaxConcurrency:   "32-64",
+		HMaxRequestTimes: "128-256",
+		HMaxReusableSecs: "30-60",
+		Download: &outbound.XHTTPXMuxDownloadOptions{
+			MaxConnections:   "8-16",
+			MaxConcurrency:   "32-64",
+			HMaxRequestTimes: "128-256",
+			HMaxReusableSecs: "30-60",
+		},
+	}
+	return out
 }

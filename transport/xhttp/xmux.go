@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,9 +14,11 @@ type xmuxEntry struct {
 	uploadTransport   http.RoundTripper
 	downloadTransport http.RoundTripper
 
-	openUsage    atomic.Int32
-	leftRequests atomic.Int32
-	unreusableAt time.Time
+	openUsage     atomic.Int32
+	leftRequests  atomic.Int32
+	reuseCount    atomic.Int32
+	maxReuseTimes int32
+	unreusableAt  time.Time
 
 	closed atomic.Bool
 }
@@ -95,17 +98,38 @@ func (m *xmuxManager) release(entry *xmuxEntry) {
 
 	if remaining == 0 {
 		now := time.Now()
-		if entry.leftRequests.Load() <= 0 || (!entry.unreusableAt.IsZero() && now.After(entry.unreusableAt)) {
+		if entry.leftRequests.Load() <= 0 ||
+			(entry.maxReuseTimes > 0 && entry.reuseCount.Load() >= entry.maxReuseTimes) ||
+			(!entry.unreusableAt.IsZero() && now.After(entry.unreusableAt)) {
 			entry.Close()
 		}
 	}
 }
 
-func (m *xmuxManager) pickLocked() *xmuxEntry {
-	maxConcurrency := 0
-	if m.cfg != nil {
-		maxConcurrency = m.cfg.MaxConcurrency
+func (m *xmuxManager) resolvedMaxConcurrency() int {
+	if m.cfg == nil {
+		return 0
 	}
+	v, err := resolveRangeValue(m.cfg.MaxConcurrency, 0)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func (m *xmuxManager) resolvedMaxConnections() int {
+	if m.cfg == nil {
+		return 0
+	}
+	v, err := resolveRangeValue(m.cfg.MaxConnections, 0)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func (m *xmuxManager) pickLocked() *xmuxEntry {
+	maxConcurrency := m.resolvedMaxConcurrency()
 
 	var best *xmuxEntry
 	for _, entry := range m.entries {
@@ -113,6 +137,9 @@ func (m *xmuxManager) pickLocked() *xmuxEntry {
 			continue
 		}
 		if entry.leftRequests.Load() <= 0 {
+			continue
+		}
+		if entry.maxReuseTimes > 0 && entry.reuseCount.Load() >= entry.maxReuseTimes {
 			continue
 		}
 		if maxConcurrency > 0 && int(entry.openUsage.Load()) >= maxConcurrency {
@@ -126,10 +153,11 @@ func (m *xmuxManager) pickLocked() *xmuxEntry {
 }
 
 func (m *xmuxManager) canCreateLocked() bool {
-	if m.cfg == nil || m.cfg.MaxConnections <= 0 {
+	maxConnections := m.resolvedMaxConnections()
+	if maxConnections <= 0 {
 		return true
 	}
-	return len(m.entries) < m.cfg.MaxConnections
+	return len(m.entries) < maxConnections
 }
 
 func (m *xmuxManager) newEntryLocked(
@@ -149,13 +177,23 @@ func (m *xmuxManager) newEntryLocked(
 	}
 
 	if m.cfg != nil {
-		if m.cfg.HMaxRequestTimes > 0 {
-			entry.leftRequests.Store(int32(m.cfg.HMaxRequestTimes))
+		hMaxRequestTimes, hMaxReusableSecs, err := m.cfg.ResolveEntryConfig()
+		if err == nil {
+			if hMaxRequestTimes > 0 {
+				entry.leftRequests.Store(int32(hMaxRequestTimes))
+			} else {
+				entry.leftRequests.Store(1<<30 - 1)
+			}
+			if hMaxReusableSecs > 0 {
+				entry.unreusableAt = now.Add(time.Duration(hMaxReusableSecs) * time.Second)
+			}
 		} else {
 			entry.leftRequests.Store(1<<30 - 1)
 		}
-		if m.cfg.HMaxReusableSecs > 0 {
-			entry.unreusableAt = now.Add(time.Duration(m.cfg.HMaxReusableSecs) * time.Second)
+
+		cMaxReuseTimes, err := m.cfg.ResolveConnReuseConfig()
+		if err == nil && cMaxReuseTimes > 0 {
+			entry.maxReuseTimes = int32(cMaxReuseTimes)
 		}
 	} else {
 		entry.leftRequests.Store(1<<30 - 1)
@@ -177,28 +215,17 @@ func (m *xmuxManager) getOrCreate(
 	m.cleanupLocked(now)
 
 	entry := m.pickLocked()
-	if entry == nil {
-		if !m.canCreateLocked() && len(m.entries) > 0 {
-			var best *xmuxEntry
-			for _, e := range m.entries {
-				if e.IsClosed() {
-					continue
-				}
-				if e.leftRequests.Load() <= 0 {
-					continue
-				}
-				if best == nil || e.openUsage.Load() < best.openUsage.Load() {
-					best = e
-				}
-			}
-			entry = best
-		} else {
-			entry = m.newEntryLocked(makeTransport, makeDownloadTransport, now)
-		}
-	}
+	reused := entry != nil
 
 	if entry == nil {
+		if !m.canCreateLocked() {
+			return nil, fmt.Errorf("xmux: no available connection")
+		}
 		entry = m.newEntryLocked(makeTransport, makeDownloadTransport, now)
+	}
+
+	if reused {
+		entry.reuseCount.Add(1)
 	}
 
 	entry.openUsage.Add(1)

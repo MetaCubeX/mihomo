@@ -32,10 +32,20 @@ type DownloadConfig struct {
 }
 
 type XMuxConfig struct {
-	MaxConnections   int
-	MaxConcurrency   int
-	HMaxRequestTimes int
-	HMaxReusableSecs int
+	MaxConnections   string              `proxy:"max-connections,omitempty"`
+	MaxConcurrency   string              `proxy:"max-concurrency,omitempty"`
+	CMaxReuseTimes   string              `proxy:"c-max-reuse-times,omitempty"`
+	HMaxRequestTimes string              `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs string              `proxy:"h-max-reusable-secs,omitempty"`
+	Download         *XMuxDownloadConfig `proxy:"download,omitempty"`
+}
+
+type XMuxDownloadConfig struct {
+	MaxConnections   string `proxy:"max-connections,omitempty"`
+	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
+	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
+	HMaxRequestTimes string `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs string `proxy:"h-max-reusable-secs,omitempty"`
 }
 
 func (c *Config) NormalizedMode() string {
@@ -145,6 +155,158 @@ func parseRange(s string) (int, int, error) {
 		return 0, 0, err
 	}
 	return minVal, maxVal, nil
+}
+
+func resolveRangeValue(s string, fallback int) (int, error) {
+	if strings.TrimSpace(s) == "" {
+		return fallback, nil
+	}
+
+	minVal, maxVal, err := parseRange(s)
+	if err != nil {
+		return 0, err
+	}
+	if minVal < 0 || maxVal < minVal {
+		return 0, fmt.Errorf("invalid range: %s", s)
+	}
+
+	if minVal == maxVal {
+		return minVal, nil
+	}
+
+	return minVal + rand.Intn(maxVal-minVal+1), nil
+}
+
+func (c *XMuxConfig) ResolveManagerConfig() (int, int, error) {
+	if c == nil {
+		return 0, 0, nil
+	}
+
+	maxConnections, err := resolveRangeValue(c.MaxConnections, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux max-connections: %w", err)
+	}
+
+	maxConcurrency, err := resolveRangeValue(c.MaxConcurrency, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux max-concurrency: %w", err)
+	}
+
+	return maxConnections, maxConcurrency, nil
+}
+
+func (c *XMuxConfig) ResolveConnReuseConfig() (int, error) {
+	if c == nil {
+		return 0, nil
+	}
+
+	cMaxReuseTimes, err := resolveRangeValue(c.CMaxReuseTimes, 0)
+	if err != nil {
+		return 0, fmt.Errorf("invalid xmux c-max-reuse-times: %w", err)
+	}
+
+	return cMaxReuseTimes, nil
+}
+
+func (c *XMuxConfig) ResolveEntryConfig() (int, int, error) {
+	if c == nil {
+		return 0, 0, nil
+	}
+
+	hMaxRequestTimes, err := resolveRangeValue(c.HMaxRequestTimes, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux h-max-request-times: %w", err)
+	}
+
+	hMaxReusableSecs, err := resolveRangeValue(c.HMaxReusableSecs, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux h-max-reusable-secs: %w", err)
+	}
+
+	return hMaxRequestTimes, hMaxReusableSecs, nil
+}
+
+func (c *XMuxConfig) ResolveDownloadConnReuseConfig() (int, error) {
+	if c == nil {
+		return 0, nil
+	}
+	if c.Download == nil {
+		return c.ResolveConnReuseConfig()
+	}
+
+	cMaxReuseTimes := c.Download.CMaxReuseTimes
+	if strings.TrimSpace(cMaxReuseTimes) == "" {
+		cMaxReuseTimes = c.CMaxReuseTimes
+	}
+
+	resolvedCMaxReuseTimes, err := resolveRangeValue(cMaxReuseTimes, 0)
+	if err != nil {
+		return 0, fmt.Errorf("invalid xmux download c-max-reuse-times: %w", err)
+	}
+
+	return resolvedCMaxReuseTimes, nil
+}
+
+func (c *XMuxConfig) ResolveDownloadManagerConfig() (int, int, error) {
+	if c == nil {
+		return 0, 0, nil
+	}
+	if c.Download == nil {
+		return c.ResolveManagerConfig()
+	}
+
+	maxConnections := c.Download.MaxConnections
+	if strings.TrimSpace(maxConnections) == "" {
+		maxConnections = c.MaxConnections
+	}
+
+	maxConcurrency := c.Download.MaxConcurrency
+	if strings.TrimSpace(maxConcurrency) == "" {
+		maxConcurrency = c.MaxConcurrency
+	}
+
+	resolvedMaxConnections, err := resolveRangeValue(maxConnections, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux download max-connections: %w", err)
+	}
+
+	resolvedMaxConcurrency, err := resolveRangeValue(maxConcurrency, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux download max-concurrency: %w", err)
+	}
+
+	return resolvedMaxConnections, resolvedMaxConcurrency, nil
+}
+
+func (c *XMuxConfig) ResolveDownloadEntryConfig() (int, int, error) {
+	if c == nil {
+		return 0, 0, nil
+	}
+	if c.Download == nil {
+		return c.ResolveEntryConfig()
+	}
+
+	hMaxRequestTimes := c.Download.HMaxRequestTimes
+	if strings.TrimSpace(hMaxRequestTimes) == "" {
+		hMaxRequestTimes = c.HMaxRequestTimes
+	}
+
+	hMaxReusableSecs := c.Download.HMaxReusableSecs
+	if strings.TrimSpace(hMaxReusableSecs) == "" {
+		hMaxReusableSecs = c.HMaxReusableSecs
+	}
+
+	resolvedHMaxRequestTimes, err := resolveRangeValue(hMaxRequestTimes, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux download h-max-request-times: %w", err)
+	}
+
+	resolvedHMaxReusableSecs, err := resolveRangeValue(hMaxReusableSecs, 0)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid xmux download h-max-reusable-secs: %w", err)
+	}
+
+	return resolvedHMaxRequestTimes, resolvedHMaxReusableSecs, nil
 }
 
 func (c *Config) FillStreamRequest(req *http.Request, sessionID string) error {

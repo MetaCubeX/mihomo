@@ -336,6 +336,14 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 		return nil, err
 	}
 
+	entry, err = c.xmux.getOrCreate(c.makeTransport, c.makeDownloadTransport)
+	if err != nil {
+		return nil, err
+	}
+	if entry == nil {
+		return nil, fmt.Errorf("xhttp xmux: no entry available")
+	}
+
 	conn, err := c.dialStreamUpOnce(entry.uploadTransport, entry.downloadTransport, func() {
 		c.xmux.release(entry)
 	})
@@ -436,6 +444,14 @@ func (c *Client) DialPacketUp() (net.Conn, error) {
 	entry, err := c.xmux.getOrCreate(c.makeTransport, c.makeDownloadTransport)
 	if err != nil {
 		return nil, err
+	}
+
+	entry, err = c.xmux.getOrCreate(c.makeTransport, c.makeDownloadTransport)
+	if err != nil {
+		return nil, err
+	}
+	if entry == nil {
+		return nil, fmt.Errorf("xhttp xmux: no entry available")
 	}
 
 	conn, err := c.dialPacketUpOnce(entry.uploadTransport, entry.downloadTransport, func() {

@@ -109,10 +109,20 @@ type XHTTPDownloadSettings struct {
 }
 
 type XHTTPXMuxOptions struct {
-	MaxConnections   int `proxy:"max-connections,omitempty"`
-	MaxConcurrency   int `proxy:"max-concurrency,omitempty"`
-	HMaxRequestTimes int `proxy:"h-max-request-times,omitempty"`
-	HMaxReusableSecs int `proxy:"h-max-reusable-secs,omitempty"`
+	MaxConnections   string                    `proxy:"max-connections,omitempty"`
+	MaxConcurrency   string                    `proxy:"max-concurrency,omitempty"`
+	CMaxReuseTimes   string                    `proxy:"c-max-reuse-times,omitempty"`
+	HMaxRequestTimes string                    `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs string                    `proxy:"h-max-reusable-secs,omitempty"`
+	Download         *XHTTPXMuxDownloadOptions `proxy:"download,omitempty"`
+}
+
+type XHTTPXMuxDownloadOptions struct {
+	MaxConnections   string `proxy:"max-connections,omitempty"`
+	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
+	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
+	HMaxRequestTimes string `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs string `proxy:"h-max-reusable-secs,omitempty"`
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
@@ -519,8 +529,18 @@ func NewVless(option VlessOption) (*Vless, error) {
 			xmuxCfg = &xhttp.XMuxConfig{
 				MaxConnections:   option.XHTTPOpts.XMux.MaxConnections,
 				MaxConcurrency:   option.XHTTPOpts.XMux.MaxConcurrency,
+				CMaxReuseTimes:   option.XHTTPOpts.XMux.CMaxReuseTimes,
 				HMaxRequestTimes: option.XHTTPOpts.XMux.HMaxRequestTimes,
 				HMaxReusableSecs: option.XHTTPOpts.XMux.HMaxReusableSecs,
+			}
+			if option.XHTTPOpts.XMux.Download != nil {
+				xmuxCfg.Download = &xhttp.XMuxDownloadConfig{
+					MaxConnections:   option.XHTTPOpts.XMux.Download.MaxConnections,
+					MaxConcurrency:   option.XHTTPOpts.XMux.Download.MaxConcurrency,
+					CMaxReuseTimes:   option.XHTTPOpts.XMux.Download.CMaxReuseTimes,
+					HMaxRequestTimes: option.XHTTPOpts.XMux.Download.HMaxRequestTimes,
+					HMaxReusableSecs: option.XHTTPOpts.XMux.Download.HMaxReusableSecs,
+				}
 			}
 		}
 

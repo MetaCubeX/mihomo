@@ -31,9 +31,9 @@ func TestXMuxReuseSameEntry(t *testing.T) {
 	var created atomic.Int64
 
 	manager := newXMuxManager(&XMuxConfig{
-		MaxConnections:   1,
-		MaxConcurrency:   1,
-		HMaxRequestTimes: 10,
+		MaxConnections:   "1",
+		MaxConcurrency:   "1",
+		HMaxRequestTimes: "10",
 	})
 
 	entry1, err := manager.getOrCreate(
@@ -68,9 +68,9 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 	var created atomic.Int64
 
 	manager := newXMuxManager(&XMuxConfig{
-		MaxConnections:   2,
-		MaxConcurrency:   1,
-		HMaxRequestTimes: 100,
+		MaxConnections:   "2",
+		MaxConcurrency:   "1",
+		HMaxRequestTimes: "100",
 	})
 
 	entry1, err := manager.getOrCreate(
@@ -80,6 +80,9 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if entry1 == nil {
+		t.Fatal("expected first entry")
+	}
 
 	entry2, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
@@ -88,30 +91,27 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if entry2 == nil {
+		t.Fatal("expected second entry")
+	}
 
 	if entry1 == entry2 {
 		t.Fatal("expected different entries for first two allocations")
 	}
 
-	id1 := transportID(entry1.uploadTransport)
-	id2 := transportID(entry2.uploadTransport)
-
 	entry3, err := manager.getOrCreate(
 		makeTestTransportFactory(&created),
 		nil,
 	)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("expected error when max-connections reached and all entries are at max-concurrency")
 	}
-	id3 := transportID(entry3.uploadTransport)
-
-	if id3 != id1 && id3 != id2 {
-		t.Fatalf("expected reuse of existing entry, got new transport id %d", id3)
+	if entry3 != nil {
+		t.Fatal("expected nil entry on allocation failure")
 	}
 
 	manager.release(entry1)
 	manager.release(entry2)
-	manager.release(entry3)
 	manager.Close()
 }
 
@@ -119,9 +119,9 @@ func TestXMuxRotateOnRequestLimit(t *testing.T) {
 	var created atomic.Int64
 
 	manager := newXMuxManager(&XMuxConfig{
-		MaxConnections:   1,
-		MaxConcurrency:   1,
-		HMaxRequestTimes: 1,
+		MaxConnections:   "1",
+		MaxConcurrency:   "1",
+		HMaxRequestTimes: "1",
 	})
 
 	entry1, err := manager.getOrCreate(
@@ -156,10 +156,10 @@ func TestXMuxRotateOnReusableSecs(t *testing.T) {
 	var created atomic.Int64
 
 	manager := newXMuxManager(&XMuxConfig{
-		MaxConnections:   1,
-		MaxConcurrency:   1,
-		HMaxRequestTimes: 100,
-		HMaxReusableSecs: 1,
+		MaxConnections:   "1",
+		MaxConcurrency:   "1",
+		HMaxRequestTimes: "100",
+		HMaxReusableSecs: "1",
 	})
 
 	entry1, err := manager.getOrCreate(
@@ -188,5 +188,58 @@ func TestXMuxRotateOnReusableSecs(t *testing.T) {
 	}
 
 	manager.release(entry2)
+	manager.Close()
+}
+
+func TestXMuxRotateOnConnReuseLimit(t *testing.T) {
+	var created atomic.Int64
+
+	manager := newXMuxManager(&XMuxConfig{
+		MaxConnections:   "1",
+		MaxConcurrency:   "1",
+		CMaxReuseTimes:   "1",
+		HMaxRequestTimes: "100",
+	})
+
+	entry1, err := manager.getOrCreate(
+		makeTestTransportFactory(&created),
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id1 := transportID(entry1.uploadTransport)
+
+	manager.release(entry1)
+
+	entry2, err := manager.getOrCreate(
+		makeTestTransportFactory(&created),
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id2 := transportID(entry2.uploadTransport)
+
+	if id1 != id2 {
+		t.Fatalf("expected first reuse to use same transport, got %d and %d", id1, id2)
+	}
+
+	manager.release(entry2)
+
+	entry3, err := manager.getOrCreate(
+		makeTestTransportFactory(&created),
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id3 := transportID(entry3.uploadTransport)
+
+	if id3 == id2 {
+		t.Fatalf("expected new transport after c-max-reuse-times limit, got same id %d", id3)
+	}
+
+	manager.release(entry3)
 	manager.Close()
 }
