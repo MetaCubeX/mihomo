@@ -110,7 +110,7 @@ func (m *xmuxManager) resolvedMaxConcurrency() int {
 	if m.cfg == nil {
 		return 0
 	}
-	v, err := resolveRangeValue(m.cfg.MaxConcurrency, 0)
+	_, v, err := m.cfg.ResolveDownloadManagerConfig()
 	if err != nil {
 		return 0
 	}
@@ -121,7 +121,7 @@ func (m *xmuxManager) resolvedMaxConnections() int {
 	if m.cfg == nil {
 		return 0
 	}
-	v, err := resolveRangeValue(m.cfg.MaxConnections, 0)
+	v, _, err := m.cfg.ResolveDownloadManagerConfig()
 	if err != nil {
 		return 0
 	}
@@ -177,7 +177,7 @@ func (m *xmuxManager) newEntryLocked(
 	}
 
 	if m.cfg != nil {
-		hMaxRequestTimes, hMaxReusableSecs, err := m.cfg.ResolveEntryConfig()
+		hMaxRequestTimes, hMaxReusableSecs, err := m.cfg.ResolveDownloadEntryConfig()
 		if err == nil {
 			if hMaxRequestTimes > 0 {
 				entry.leftRequests.Store(int32(hMaxRequestTimes))
@@ -191,7 +191,7 @@ func (m *xmuxManager) newEntryLocked(
 			entry.leftRequests.Store(1<<30 - 1)
 		}
 
-		cMaxReuseTimes, err := m.cfg.ResolveConnReuseConfig()
+		cMaxReuseTimes, err := m.cfg.ResolveDownloadConnReuseConfig()
 		if err == nil && cMaxReuseTimes > 0 {
 			entry.maxReuseTimes = int32(cMaxReuseTimes)
 		}
