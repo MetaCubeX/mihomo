@@ -82,8 +82,8 @@ type XHTTPOptions struct {
 	Headers          map[string]string      `proxy:"headers,omitempty"`
 	NoGRPCHeader     bool                   `proxy:"no-grpc-header,omitempty"`
 	XPaddingBytes    string                 `proxy:"x-padding-bytes,omitempty"`
-	DownloadSettings *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
 	XMux             *XHTTPXMuxOptions      `proxy:"xmux,omitempty"`
+	DownloadSettings *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
 }
 
 type XHTTPDownloadSettings struct {
@@ -93,6 +93,7 @@ type XHTTPDownloadSettings struct {
 	Headers       *map[string]string `proxy:"headers,omitempty"`
 	NoGRPCHeader  *bool              `proxy:"no-grpc-header,omitempty"`
 	XPaddingBytes *string            `proxy:"x-padding-bytes,omitempty"`
+	XMux          *XHTTPXMuxOptions  `proxy:"xmux,omitempty"`
 	// proxy part
 	Server            *string         `proxy:"server,omitempty"`
 	Port              *int            `proxy:"port,omitempty"`
@@ -109,15 +110,6 @@ type XHTTPDownloadSettings struct {
 }
 
 type XHTTPXMuxOptions struct {
-	MaxConnections   string                    `proxy:"max-connections,omitempty"`
-	MaxConcurrency   string                    `proxy:"max-concurrency,omitempty"`
-	CMaxReuseTimes   string                    `proxy:"c-max-reuse-times,omitempty"`
-	HMaxRequestTimes string                    `proxy:"h-max-request-times,omitempty"`
-	HMaxReusableSecs string                    `proxy:"h-max-reusable-secs,omitempty"`
-	Download         *XHTTPXMuxDownloadOptions `proxy:"download,omitempty"`
-}
-
-type XHTTPXMuxDownloadOptions struct {
 	MaxConnections   string `proxy:"max-connections,omitempty"`
 	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
 	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
@@ -533,15 +525,6 @@ func NewVless(option VlessOption) (*Vless, error) {
 				HMaxRequestTimes: option.XHTTPOpts.XMux.HMaxRequestTimes,
 				HMaxReusableSecs: option.XHTTPOpts.XMux.HMaxReusableSecs,
 			}
-			if option.XHTTPOpts.XMux.Download != nil {
-				xmuxCfg.Download = &xhttp.XMuxDownloadConfig{
-					MaxConnections:   option.XHTTPOpts.XMux.Download.MaxConnections,
-					MaxConcurrency:   option.XHTTPOpts.XMux.Download.MaxConcurrency,
-					CMaxReuseTimes:   option.XHTTPOpts.XMux.Download.CMaxReuseTimes,
-					HMaxRequestTimes: option.XHTTPOpts.XMux.Download.HMaxRequestTimes,
-					HMaxReusableSecs: option.XHTTPOpts.XMux.Download.HMaxReusableSecs,
-				}
-			}
 		}
 
 		cfg := &xhttp.Config{
@@ -613,6 +596,15 @@ func NewVless(option VlessOption) (*Vless, error) {
 				Headers:       lo.FromPtrOr(ds.Headers, v.option.XHTTPOpts.Headers),
 				NoGRPCHeader:  lo.FromPtrOr(ds.NoGRPCHeader, v.option.XHTTPOpts.NoGRPCHeader),
 				XPaddingBytes: lo.FromPtrOr(ds.XPaddingBytes, v.option.XHTTPOpts.XPaddingBytes),
+			}
+			if ds.XMux != nil && xmuxCfg != nil {
+				xmuxCfg.Download = &xhttp.XMuxDownloadConfig{
+					MaxConnections:   ds.XMux.MaxConnections,
+					MaxConcurrency:   ds.XMux.MaxConcurrency,
+					CMaxReuseTimes:   ds.XMux.CMaxReuseTimes,
+					HMaxRequestTimes: ds.XMux.HMaxRequestTimes,
+					HMaxReusableSecs: ds.XMux.HMaxReusableSecs,
+				}
 			}
 
 			makeDownloadTransport = func() http.RoundTripper {
