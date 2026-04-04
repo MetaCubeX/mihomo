@@ -167,12 +167,42 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 
 // parseXHTTPExtra maps xray-core extra JSON fields to mihomo xhttp-opts fields.
 func parseXHTTPExtra(extra map[string]any, opts map[string]any) {
+	// xmuxToReuse converts an xmux map to mihomo reuse-settings.
+	xmuxToReuse := func(xmux map[string]any) map[string]any {
+		reuse := make(map[string]any)
+		set := func(src, dst string) {
+			if v, ok := xmux[src]; ok {
+				switch val := v.(type) {
+				case string:
+					if val != "" {
+						reuse[dst] = val
+					}
+				case float64:
+					reuse[dst] = strconv.FormatInt(int64(val), 10)
+				}
+			}
+		}
+		set("maxConnections", "max-connections")
+		set("maxConcurrency", "max-concurrency")
+		set("cMaxReuseTimes", "c-max-reuse-times")
+		set("hMaxRequestTimes", "h-max-request-times")
+		set("hMaxReusableSecs", "h-max-reusable-secs")
+		return reuse
+	}
+
 	if v, ok := extra["noGRPCHeader"].(bool); ok && v {
 		opts["no-grpc-header"] = true
 	}
 
 	if v, ok := extra["xPaddingBytes"].(string); ok && v != "" {
 		opts["x-padding-bytes"] = v
+	}
+
+	// xmux in root extra → reuse-settings
+	if xmuxAny, ok := extra["xmux"].(map[string]any); ok && len(xmuxAny) > 0 {
+		if reuse := xmuxToReuse(xmuxAny); len(reuse) > 0 {
+			opts["reuse-settings"] = reuse
+		}
 	}
 
 	if dsAny, ok := extra["downloadSettings"].(map[string]any); ok {
@@ -222,6 +252,15 @@ func parseXHTTPExtra(extra map[string]any, opts map[string]any) {
 			}
 			if v, ok := xhttpAny["xPaddingBytes"].(string); ok && v != "" {
 				ds["x-padding-bytes"] = v
+			}
+
+			// xmux inside downloadSettings.xhttpSettings.extra → download-settings.reuse-settings
+			if dsExtraAny, ok := xhttpAny["extra"].(map[string]any); ok {
+				if xmuxAny, ok := dsExtraAny["xmux"].(map[string]any); ok && len(xmuxAny) > 0 {
+					if reuse := xmuxToReuse(xmuxAny); len(reuse) > 0 {
+						ds["reuse-settings"] = reuse
+					}
+				}
 			}
 		}
 
