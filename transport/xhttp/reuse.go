@@ -6,8 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/http"
 	"github.com/metacubex/mihomo/common/httputils"
+
+	"github.com/metacubex/http"
 )
 
 type reuseEntry struct {
