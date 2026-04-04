@@ -10,7 +10,7 @@ import (
 	"github.com/metacubex/mihomo/common/httputils"
 )
 
-type xmuxEntry struct {
+type reuseEntry struct {
 	transport http.RoundTripper
 
 	openUsage     atomic.Int32
@@ -22,36 +22,35 @@ type xmuxEntry struct {
 	closed atomic.Bool
 }
 
-func (e *xmuxEntry) IsClosed() bool {
+func (e *reuseEntry) IsClosed() bool {
 	return e.closed.Load()
 }
 
-func (e *xmuxEntry) Close() {
+func (e *reuseEntry) Close() {
 	if !e.closed.CompareAndSwap(false, true) {
 		return
 	}
 	httputils.CloseTransport(e.transport)
-
 }
 
-type xmuxManager struct {
-	cfg *XMuxConfig
+type reuseManager struct {
+	cfg *ReuseConfig
 
 	mu      sync.Mutex
-	entries []*xmuxEntry
+	entries []*reuseEntry
 }
 
-func newXMuxManager(cfg *XMuxConfig) *xmuxManager {
+func newReuseManager(cfg *ReuseConfig) *reuseManager {
 	if cfg == nil {
 		return nil
 	}
-	return &xmuxManager{
+	return &reuseManager{
 		cfg:     cfg,
-		entries: make([]*xmuxEntry, 0),
+		entries: make([]*reuseEntry, 0),
 	}
 }
 
-func (m *xmuxManager) Close() {
+func (m *reuseManager) Close() {
 	if m == nil {
 		return
 	}
@@ -64,7 +63,7 @@ func (m *xmuxManager) Close() {
 	m.entries = nil
 }
 
-func (m *xmuxManager) cleanupLocked(now time.Time) {
+func (m *reuseManager) cleanupLocked(now time.Time) {
 	kept := m.entries[:0]
 	for _, entry := range m.entries {
 		if entry.IsClosed() {
@@ -83,7 +82,7 @@ func (m *xmuxManager) cleanupLocked(now time.Time) {
 	m.entries = kept
 }
 
-func (m *xmuxManager) release(entry *xmuxEntry) {
+func (m *reuseManager) release(entry *reuseEntry) {
 	if entry == nil {
 		return
 	}
@@ -103,7 +102,7 @@ func (m *xmuxManager) release(entry *xmuxEntry) {
 	}
 }
 
-func (m *xmuxManager) resolvedMaxConcurrency() int {
+func (m *reuseManager) resolvedMaxConcurrency() int {
 	if m.cfg == nil {
 		return 0
 	}
@@ -114,7 +113,7 @@ func (m *xmuxManager) resolvedMaxConcurrency() int {
 	return v
 }
 
-func (m *xmuxManager) resolvedMaxConnections() int {
+func (m *reuseManager) resolvedMaxConnections() int {
 	if m.cfg == nil {
 		return 0
 	}
@@ -125,10 +124,10 @@ func (m *xmuxManager) resolvedMaxConnections() int {
 	return v
 }
 
-func (m *xmuxManager) pickLocked() *xmuxEntry {
+func (m *reuseManager) pickLocked() *reuseEntry {
 	maxConcurrency := m.resolvedMaxConcurrency()
 
-	var best *xmuxEntry
+	var best *reuseEntry
 	for _, entry := range m.entries {
 		if entry.IsClosed() {
 			continue
@@ -149,7 +148,7 @@ func (m *xmuxManager) pickLocked() *xmuxEntry {
 	return best
 }
 
-func (m *xmuxManager) canCreateLocked() bool {
+func (m *reuseManager) canCreateLocked() bool {
 	maxConnections := m.resolvedMaxConnections()
 	if maxConnections <= 0 {
 		return true
@@ -157,12 +156,12 @@ func (m *xmuxManager) canCreateLocked() bool {
 	return len(m.entries) < maxConnections
 }
 
-func (m *xmuxManager) newEntryLocked(
+func (m *reuseManager) newEntryLocked(
 	makeTransport TransportMaker,
 	now time.Time,
-) *xmuxEntry {
+) *reuseEntry {
 	transport := makeTransport()
-	entry := &xmuxEntry{transport: transport}
+	entry := &reuseEntry{transport: transport}
 
 	if m.cfg != nil {
 		hMaxRequestTimes, hMaxReusableSecs, err := m.cfg.ResolveEntryConfig()
@@ -191,9 +190,9 @@ func (m *xmuxManager) newEntryLocked(
 	return entry
 }
 
-func (m *xmuxManager) getOrCreate(
+func (m *reuseManager) getOrCreate(
 	makeTransport TransportMaker,
-) (*xmuxEntry, error) {
+) (*reuseEntry, error) {
 	now := time.Now()
 
 	m.mu.Lock()
@@ -206,7 +205,7 @@ func (m *xmuxManager) getOrCreate(
 
 	if entry == nil {
 		if !m.canCreateLocked() {
-			return nil, fmt.Errorf("xmux: no available connection")
+			return nil, fmt.Errorf("manager: no available connection")
 		}
 		entry = m.newEntryLocked(makeTransport, now)
 	}

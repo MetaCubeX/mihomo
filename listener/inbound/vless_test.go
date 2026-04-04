@@ -398,9 +398,9 @@ func TestInboundVless_Reality_XHTTP(t *testing.T) {
 		testInboundVless(t, inboundOptions, outboundOptions)
 	})
 
-	t.Run("xmux", func(t *testing.T) {
+	t.Run("reuse", func(t *testing.T) {
 		inboundOptions, outboundOptions := getConfig()
-		testInboundVless(t, inboundOptions, withXMux(outboundOptions))
+		testInboundVless(t, inboundOptions, withXHTTPReuse(outboundOptions))
 	})
 }
 
@@ -439,9 +439,9 @@ func TestInboundVless_XHTTP_DownloadSettings(t *testing.T) {
 				testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
 			})
 
-			t.Run("xmux", func(t *testing.T) {
+			t.Run("reuse", func(t *testing.T) {
 				inboundOptions, outboundOptions := getConfig()
-				testInboundVlessTLS(t, inboundOptions, withXMuxDownload(outboundOptions), false)
+				testInboundVlessTLS(t, inboundOptions, withXHTTPReuse(outboundOptions), false)
 			})
 		})
 	}
@@ -476,34 +476,26 @@ func TestInboundVless_XHTTP_StreamUp(t *testing.T) {
 		testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
 	})
 
-	t.Run("xmux", func(t *testing.T) {
+	t.Run("reuse", func(t *testing.T) {
 		inboundOptions, outboundOptions := getConfig()
-		testInboundVlessTLS(t, inboundOptions, withXMux(outboundOptions), false)
+		testInboundVlessTLS(t, inboundOptions, withXHTTPReuse(outboundOptions), false)
 	})
 }
 
-func withXMux(out outbound.VlessOption) outbound.VlessOption {
-	out.XHTTPOpts.XMux = &outbound.XHTTPXMuxOptions{
+func withXHTTPReuse(out outbound.VlessOption) outbound.VlessOption {
+	out.XHTTPOpts.ReuseSettings = &outbound.XHTTPReuseSettings{
 		MaxConnections:   "8-16",
 		MaxConcurrency:   "32-64",
 		HMaxRequestTimes: "128-256",
 		HMaxReusableSecs: "30-60",
 	}
-	return out
-}
-
-func withXMuxDownload(out outbound.VlessOption) outbound.VlessOption {
-	out.XHTTPOpts.XMux = &outbound.XHTTPXMuxOptions{
-		MaxConnections:   "8-16",
-		MaxConcurrency:   "32-64",
-		HMaxRequestTimes: "128-256",
-		HMaxReusableSecs: "30-60",
-	}
-	out.XHTTPOpts.DownloadSettings.XMux = &outbound.XHTTPXMuxOptions{
-		MaxConnections:   "8-16",
-		MaxConcurrency:   "32-64",
-		HMaxRequestTimes: "128-256",
-		HMaxReusableSecs: "30-60",
+	if out.XHTTPOpts.DownloadSettings != nil {
+		out.XHTTPOpts.DownloadSettings.ReuseSettings = &outbound.XHTTPReuseSettings{
+			MaxConnections:   "8-16",
+			MaxConcurrency:   "32-64",
+			HMaxRequestTimes: "128-256",
+			HMaxReusableSecs: "30-60",
+		}
 	}
 	return out
 }

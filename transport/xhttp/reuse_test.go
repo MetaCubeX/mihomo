@@ -13,7 +13,7 @@ type testRoundTripper struct {
 }
 
 func (t *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	panic("not used in xmux manager unit tests")
+	panic("not used in reuse manager unit tests")
 }
 
 func makeTestTransportFactory(counter *atomic.Int64) TransportMaker {
@@ -27,10 +27,10 @@ func transportID(rt http.RoundTripper) int64 {
 	return rt.(*testRoundTripper).id
 }
 
-func TestXMuxReuseSameEntry(t *testing.T) {
+func TestManagerReuseSameEntry(t *testing.T) {
 	var created atomic.Int64
 
-	manager := newXMuxManager(&XMuxConfig{
+	manager := newReuseManager(&ReuseConfig{
 		MaxConnections:   "1",
 		MaxConcurrency:   "1",
 		HMaxRequestTimes: "10",
@@ -62,10 +62,10 @@ func TestXMuxReuseSameEntry(t *testing.T) {
 	manager.Close()
 }
 
-func TestXMuxRespectMaxConnections(t *testing.T) {
+func TestManagerRespectMaxConnections(t *testing.T) {
 	var created atomic.Int64
 
-	manager := newXMuxManager(&XMuxConfig{
+	manager := newReuseManager(&ReuseConfig{
 		MaxConnections:   "2",
 		MaxConcurrency:   "1",
 		HMaxRequestTimes: "100",
@@ -110,10 +110,10 @@ func TestXMuxRespectMaxConnections(t *testing.T) {
 	manager.Close()
 }
 
-func TestXMuxRotateOnRequestLimit(t *testing.T) {
+func TestManagerRotateOnRequestLimit(t *testing.T) {
 	var created atomic.Int64
 
-	manager := newXMuxManager(&XMuxConfig{
+	manager := newReuseManager(&ReuseConfig{
 		MaxConnections:   "1",
 		MaxConcurrency:   "1",
 		HMaxRequestTimes: "1",
@@ -145,10 +145,10 @@ func TestXMuxRotateOnRequestLimit(t *testing.T) {
 	manager.Close()
 }
 
-func TestXMuxRotateOnReusableSecs(t *testing.T) {
+func TestManagerRotateOnReusableSecs(t *testing.T) {
 	var created atomic.Int64
 
-	manager := newXMuxManager(&XMuxConfig{
+	manager := newReuseManager(&ReuseConfig{
 		MaxConnections:   "1",
 		MaxConcurrency:   "1",
 		HMaxRequestTimes: "100",
@@ -182,10 +182,10 @@ func TestXMuxRotateOnReusableSecs(t *testing.T) {
 	manager.Close()
 }
 
-func TestXMuxRotateOnConnReuseLimit(t *testing.T) {
+func TestManagerRotateOnConnReuseLimit(t *testing.T) {
 	var created atomic.Int64
 
-	manager := newXMuxManager(&XMuxConfig{
+	manager := newReuseManager(&ReuseConfig{
 		MaxConnections:   "1",
 		MaxConcurrency:   "1",
 		CMaxReuseTimes:   "1",

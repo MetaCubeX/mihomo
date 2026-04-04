@@ -18,20 +18,11 @@ type Config struct {
 	Headers        map[string]string
 	NoGRPCHeader   bool
 	XPaddingBytes  string
+	ReuseConfig    *ReuseConfig
 	DownloadConfig *Config
-	XMux           *XMuxConfig
 }
 
-type DownloadConfig struct {
-	Host              string
-	Path              string
-	Mode              string
-	ServerName        string
-	ClientFingerprint string
-	SkipCertVerify    bool
-}
-
-type XMuxConfig struct {
+type ReuseConfig struct {
 	MaxConnections   string `proxy:"max-connections,omitempty"`
 	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
 	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
@@ -168,50 +159,50 @@ func resolveRangeValue(s string, fallback int) (int, error) {
 	return minVal + rand.Intn(maxVal-minVal+1), nil
 }
 
-func (c *XMuxConfig) ResolveManagerConfig() (int, int, error) {
+func (c *ReuseConfig) ResolveManagerConfig() (int, int, error) {
 	if c == nil {
 		return 0, 0, nil
 	}
 
 	maxConnections, err := resolveRangeValue(c.MaxConnections, 0)
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid xmux max-connections: %w", err)
+		return 0, 0, fmt.Errorf("invalid max-connections: %w", err)
 	}
 
 	maxConcurrency, err := resolveRangeValue(c.MaxConcurrency, 0)
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid xmux max-concurrency: %w", err)
+		return 0, 0, fmt.Errorf("invalid max-concurrency: %w", err)
 	}
 
 	return maxConnections, maxConcurrency, nil
 }
 
-func (c *XMuxConfig) ResolveConnReuseConfig() (int, error) {
+func (c *ReuseConfig) ResolveConnReuseConfig() (int, error) {
 	if c == nil {
 		return 0, nil
 	}
 
 	cMaxReuseTimes, err := resolveRangeValue(c.CMaxReuseTimes, 0)
 	if err != nil {
-		return 0, fmt.Errorf("invalid xmux c-max-reuse-times: %w", err)
+		return 0, fmt.Errorf("invalid c-max-reuse-times: %w", err)
 	}
 
 	return cMaxReuseTimes, nil
 }
 
-func (c *XMuxConfig) ResolveEntryConfig() (int, int, error) {
+func (c *ReuseConfig) ResolveEntryConfig() (int, int, error) {
 	if c == nil {
 		return 0, 0, nil
 	}
 
 	hMaxRequestTimes, err := resolveRangeValue(c.HMaxRequestTimes, 0)
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid xmux h-max-request-times: %w", err)
+		return 0, 0, fmt.Errorf("invalid h-max-request-times: %w", err)
 	}
 
 	hMaxReusableSecs, err := resolveRangeValue(c.HMaxReusableSecs, 0)
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid xmux h-max-reusable-secs: %w", err)
+		return 0, 0, fmt.Errorf("invalid h-max-reusable-secs: %w", err)
 	}
 
 	return hMaxRequestTimes, hMaxReusableSecs, nil
