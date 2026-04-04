@@ -24,14 +24,12 @@ type TransportMaker func() http.RoundTripper
 
 type PacketUpWriter struct {
 	ctx       context.Context
+	cancel    context.CancelFunc
 	cfg       *Config
 	sessionID string
 	transport http.RoundTripper
 	writeMu   sync.Mutex
 	seq       uint64
-
-	onClose func()
-	once    sync.Once
 }
 
 func (c *PacketUpWriter) Write(b []byte) (int, error) {
@@ -72,11 +70,7 @@ func (c *PacketUpWriter) Write(b []byte) (int, error) {
 }
 
 func (c *PacketUpWriter) Close() error {
-	c.once.Do(func() {
-		if c.onClose != nil {
-			c.onClose()
-		}
-	})
+	c.cancel()
 	return nil
 }
 
@@ -246,16 +240,13 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 		downloadTransport = downloadEntry.transport
 	}
 
-	release := func() {
+	conn, err := c.dialStreamUpOnce(uploadTransport, downloadTransport, func() {
 		c.uploadManager.release(uploadEntry)
 		if downloadEntry != nil {
 			c.downloadManager.release(downloadEntry)
 		}
-	}
-
-	conn, err := c.dialStreamUpOnce(uploadTransport, downloadTransport, release)
+	})
 	if err != nil {
-		release()
 		return nil, err
 	}
 
@@ -402,16 +393,13 @@ func (c *Client) DialPacketUp() (net.Conn, error) {
 		downloadTransport = downloadEntry.transport
 	}
 
-	release := func() {
+	conn, err := c.dialPacketUpOnce(uploadTransport, downloadTransport, func() {
 		c.uploadManager.release(uploadEntry)
 		if downloadEntry != nil {
 			c.downloadManager.release(downloadEntry)
 		}
-	}
-
-	conn, err := c.dialPacketUpOnce(uploadTransport, downloadTransport, release)
+	})
 	if err != nil {
-		release()
 		return nil, err
 	}
 
@@ -435,13 +423,14 @@ func (c *Client) dialPacketUpOnce(
 		Path:   downloadCfg.NormalizedPath(),
 	}
 
+	writerCtx, writerCancel := context.WithCancel(c.ctx)
 	writer := &PacketUpWriter{
-		ctx:       c.ctx,
+		ctx:       writerCtx,
+		cancel:    writerCancel,
 		cfg:       c.cfg,
 		sessionID: sessionID,
 		transport: uploadTransport,
 		seq:       0,
-		onClose:   onClose,
 	}
 	conn := &Conn{writer: writer}
 
@@ -473,8 +462,7 @@ func (c *Client) dialPacketUpOnce(
 	}
 
 	conn.reader = resp.Body
-	conn.onClose = func() {
-	}
+	conn.onClose = onClose
 
 	return conn, nil
 }

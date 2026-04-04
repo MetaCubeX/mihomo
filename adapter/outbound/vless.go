@@ -86,6 +86,14 @@ type XHTTPOptions struct {
 	DownloadSettings *XHTTPDownloadSettings `proxy:"download-settings,omitempty"`
 }
 
+type XHTTPReuseSettings struct {
+	MaxConnections   string `proxy:"max-connections,omitempty"`
+	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
+	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
+	HMaxRequestTimes string `proxy:"h-max-request-times,omitempty"`
+	HMaxReusableSecs string `proxy:"h-max-reusable-secs,omitempty"`
+}
+
 type XHTTPDownloadSettings struct {
 	// xhttp part
 	Path          *string             `proxy:"path,omitempty"`
@@ -107,14 +115,6 @@ type XHTTPDownloadSettings struct {
 	PrivateKey        *string         `proxy:"private-key,omitempty"`
 	ServerName        *string         `proxy:"servername,omitempty"`
 	ClientFingerprint *string         `proxy:"client-fingerprint,omitempty"`
-}
-
-type XHTTPReuseSettings struct {
-	MaxConnections   string `proxy:"max-connections,omitempty"`
-	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
-	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
-	HMaxRequestTimes string `proxy:"h-max-request-times,omitempty"`
-	HMaxReusableSecs string `proxy:"h-max-reusable-secs,omitempty"`
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
