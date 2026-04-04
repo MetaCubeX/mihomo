@@ -296,32 +296,24 @@ func (c *Client) dialStreamUpOnce(
 		nil,
 	)
 	if err != nil {
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 
 	if err := downloadCfg.FillDownloadRequest(downloadReq, sessionID); err != nil {
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 	downloadReq.Host = downloadCfg.Host
 
 	downloadResp, err := downloadTransport.RoundTrip(downloadReq)
 	if err != nil {
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 	if downloadResp.StatusCode != http.StatusOK {
 		_ = downloadResp.Body.Close()
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, fmt.Errorf("xhttp stream-up download bad status: %s", downloadResp.Status)
 	}
 
@@ -335,9 +327,7 @@ func (c *Client) dialStreamUpOnce(
 		_ = downloadResp.Body.Close()
 		_ = pr.Close()
 		_ = pw.Close()
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 
@@ -345,9 +335,7 @@ func (c *Client) dialStreamUpOnce(
 		_ = downloadResp.Body.Close()
 		_ = pr.Close()
 		_ = pw.Close()
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 	uploadReq.Host = c.cfg.Host
@@ -369,9 +357,7 @@ func (c *Client) dialStreamUpOnce(
 	conn.reader = downloadResp.Body
 	conn.onClose = func() {
 		_ = pr.Close()
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 	}
 
 	return conn, nil
@@ -466,37 +452,28 @@ func (c *Client) dialPacketUpOnce(
 		nil,
 	)
 	if err != nil {
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 	if err := downloadCfg.FillDownloadRequest(downloadReq, sessionID); err != nil {
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 	downloadReq.Host = downloadCfg.Host
 
 	resp, err := downloadTransport.RoundTrip(downloadReq)
 	if err != nil {
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
-		if onClose != nil {
-			onClose()
-		}
+		onClose()
 		return nil, fmt.Errorf("xhttp packet-up download bad status: %s", resp.Status)
 	}
 
 	conn.reader = resp.Body
 	conn.onClose = func() {
-		_ = writer.Close()
 	}
 
 	return conn, nil
