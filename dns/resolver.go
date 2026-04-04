@@ -50,6 +50,15 @@ type Resolver struct {
 }
 
 func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
+	ips, err = r.lookupIP(ctx, host, D.TypeA)
+	if err == nil {
+		return ips, nil
+	}
+
+	if !r.ipv6 {
+		return nil, err
+	}
+
 	ch := make(chan []netip.Addr, 1)
 	go func() {
 		defer close(ch)
@@ -59,11 +68,6 @@ func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []
 		}
 		ch <- ip
 	}()
-
-	ips, err = r.lookupIP(ctx, host, D.TypeA)
-	if err == nil {
-		return
-	}
 
 	ip, open := <-ch
 	if !open {
@@ -74,33 +78,40 @@ func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []
 }
 
 func (r *Resolver) LookupIP(ctx context.Context, host string) (ips []netip.Addr, err error) {
-	ch := make(chan []netip.Addr, 1)
-	go func() {
-		defer close(ch)
-		ip, err := r.lookupIP(ctx, host, D.TypeAAAA)
-		if err != nil {
-			return
+	if r.ipv6 {
+		ch := make(chan []netip.Addr, 1)
+		go func() {
+			defer close(ch)
+			ip, err := r.lookupIP(ctx, host, D.TypeAAAA)
+			if err != nil {
+				return
+			}
+
+			ch <- ip
+		}()
+
+		ips, err = r.lookupIP(ctx, host, D.TypeA)
+		var waitIPv6 *time.Timer
+		if r != nil && r.ipv6Timeout > 0 {
+			waitIPv6 = time.NewTimer(r.ipv6Timeout)
+		} else {
+			waitIPv6 = time.NewTimer(100 * time.Millisecond)
 		}
-
-		ch <- ip
-	}()
-
-	ips, err = r.lookupIP(ctx, host, D.TypeA)
-	var waitIPv6 *time.Timer
-	if r != nil && r.ipv6Timeout > 0 {
-		waitIPv6 = time.NewTimer(r.ipv6Timeout)
+		defer waitIPv6.Stop()
+		select {
+		case ipv6s, open := <-ch:
+			if !open && err != nil {
+				return nil, resolver.ErrIPNotFound
+			}
+			ips = append(ips, ipv6s...)
+		case <-waitIPv6.C:
+			// wait ipv6 result
+		}
 	} else {
-		waitIPv6 = time.NewTimer(100 * time.Millisecond)
-	}
-	defer waitIPv6.Stop()
-	select {
-	case ipv6s, open := <-ch:
-		if !open && err != nil {
-			return nil, resolver.ErrIPNotFound
+		ips, err = r.lookupIP(ctx, host, D.TypeA)
+		if err != nil {
+			return nil, err
 		}
-		ips = append(ips, ipv6s...)
-	case <-waitIPv6.C:
-		// wait ipv6 result
 	}
 
 	return ips, nil

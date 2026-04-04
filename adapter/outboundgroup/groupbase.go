@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
@@ -210,6 +212,28 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 			for _, excludeType := range gb.excludeTypeArray {
 				if strings.EqualFold(mType, excludeType) {
 					continue LOOP2
+				}
+			}
+			newProxies = append(newProxies, p)
+		}
+		proxies = newProxies
+	}
+
+	if resolver.DisableIPv6 {
+		var newProxies []C.Proxy
+		for _, p := range proxies {
+			addr := p.Addr()
+			if addr != "" {
+				if addrPort, err := netip.ParseAddrPort(addr); err == nil {
+					if addrPort.Addr().Is6() {
+						continue
+					}
+				} else {
+					if ip, err := netip.ParseAddr(addr); err == nil {
+						if ip.Is6() {
+							continue
+						}
+					}
 				}
 			}
 			newProxies = append(newProxies, p)
