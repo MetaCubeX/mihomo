@@ -261,7 +261,7 @@ func (r *rawConfig) getProxyNames() []string {
 	return names
 }
 
-func ParseProxyProviderForAutoImportRules(providersConfig map[string]map[string]any) (map[string][]string, error) {
+func ParseProxyProviderForAutoImportRules(providersConfig map[string]map[string]any, ipv6 bool) (map[string][]string, error) {
 	autoRulesMap := make(map[string][]string)
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 
@@ -329,6 +329,14 @@ func ParseProxyProviderForAutoImportRules(providersConfig map[string]map[string]
 				filterReg := regexp2.MustCompile(schema.AutoRuleFilter, regexp2.None)
 				if mat, _ := filterReg.MatchString(rule); !mat {
 					log.Debugln("[AutoImportRules] provider [%s] rule [%s] did not match filter, skipping", name, rule)
+					shouldAdd = false
+				}
+			}
+
+			if shouldAdd && !ipv6 {
+				ruleUpper := strings.ToUpper(rule)
+				if strings.HasPrefix(ruleUpper, "IP-CIDR6,") || strings.HasPrefix(ruleUpper, "SRC-IP-CIDR6,") {
+					log.Debugln("[AutoImportRules] provider [%s] rule [%s] is IPv6 rule, skipping (ipv6 disabled)", name, rule)
 					shouldAdd = false
 				}
 			}

@@ -680,7 +680,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.SubRules = subRules
 
-	autoRulesMap, err := provider.ParseProxyProviderForAutoImportRules(rawCfg.ProxyProvider)
+	autoRulesMap, err := provider.ParseProxyProviderForAutoImportRules(rawCfg.ProxyProvider, rawCfg.IPv6)
 	if err != nil {
 		return nil, fmt.Errorf("auto-import-rules error: %w", err)
 	}
