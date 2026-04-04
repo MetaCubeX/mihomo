@@ -207,6 +207,61 @@ func (c *Client) DialStreamOne() (net.Conn, error) {
 	return conn, nil
 }
 
+func (c *Client) DialStreamUp() (net.Conn, error) {
+	if c.uploadManager == nil {
+		uploadTransport := c.makeTransport()
+		downloadTransport := uploadTransport
+		if c.makeDownloadTransport != nil {
+			downloadTransport = c.makeDownloadTransport()
+		}
+
+		return c.dialStreamUpOnce(uploadTransport, downloadTransport, func() {
+			httputils.CloseTransport(uploadTransport)
+			if downloadTransport != uploadTransport {
+				httputils.CloseTransport(downloadTransport)
+			}
+		})
+	}
+
+	uploadEntry, err := c.uploadManager.getOrCreate(c.makeTransport)
+	if err != nil {
+		return nil, err
+	}
+	uploadTransport := uploadEntry.transport
+
+	var downloadEntry *reuseEntry
+	downloadTransport := uploadTransport
+
+	if c.downloadManager != nil {
+		if c.makeDownloadTransport == nil {
+			c.uploadManager.release(uploadEntry)
+			return nil, fmt.Errorf("xhttp: download manager requires download transport maker")
+		}
+
+		downloadEntry, err = c.downloadManager.getOrCreate(c.makeDownloadTransport)
+		if err != nil {
+			c.uploadManager.release(uploadEntry)
+			return nil, err
+		}
+		downloadTransport = downloadEntry.transport
+	}
+
+	release := func() {
+		c.uploadManager.release(uploadEntry)
+		if downloadEntry != nil {
+			c.downloadManager.release(downloadEntry)
+		}
+	}
+
+	conn, err := c.dialStreamUpOnce(uploadTransport, downloadTransport, release)
+	if err != nil {
+		release()
+		return nil, err
+	}
+
+	return conn, nil
+}
+
 func (c *Client) dialStreamUpOnce(
 	uploadTransport http.RoundTripper,
 	downloadTransport http.RoundTripper,
@@ -322,7 +377,7 @@ func (c *Client) dialStreamUpOnce(
 	return conn, nil
 }
 
-func (c *Client) DialStreamUp() (net.Conn, error) {
+func (c *Client) DialPacketUp() (net.Conn, error) {
 	if c.uploadManager == nil {
 		uploadTransport := c.makeTransport()
 		downloadTransport := uploadTransport
@@ -330,7 +385,7 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 			downloadTransport = c.makeDownloadTransport()
 		}
 
-		return c.dialStreamUpOnce(uploadTransport, downloadTransport, func() {
+		return c.dialPacketUpOnce(uploadTransport, downloadTransport, func() {
 			httputils.CloseTransport(uploadTransport)
 			if downloadTransport != uploadTransport {
 				httputils.CloseTransport(downloadTransport)
@@ -342,9 +397,10 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	uploadTransport := uploadEntry.transport
 
 	var downloadEntry *reuseEntry
-	downloadTransport := uploadEntry.transport
+	downloadTransport := uploadTransport
 
 	if c.downloadManager != nil {
 		if c.makeDownloadTransport == nil {
@@ -367,7 +423,7 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 		}
 	}
 
-	conn, err := c.dialStreamUpOnce(uploadEntry.transport, downloadTransport, release)
+	conn, err := c.dialPacketUpOnce(uploadTransport, downloadTransport, release)
 	if err != nil {
 		release()
 		return nil, err
@@ -441,60 +497,6 @@ func (c *Client) dialPacketUpOnce(
 	conn.reader = resp.Body
 	conn.onClose = func() {
 		_ = writer.Close()
-	}
-
-	return conn, nil
-}
-
-func (c *Client) DialPacketUp() (net.Conn, error) {
-	if c.uploadManager == nil {
-		uploadTransport := c.makeTransport()
-		downloadTransport := uploadTransport
-		if c.makeDownloadTransport != nil {
-			downloadTransport = c.makeDownloadTransport()
-		}
-
-		return c.dialPacketUpOnce(uploadTransport, downloadTransport, func() {
-			httputils.CloseTransport(uploadTransport)
-			if downloadTransport != uploadTransport {
-				httputils.CloseTransport(downloadTransport)
-			}
-		})
-	}
-
-	uploadEntry, err := c.uploadManager.getOrCreate(c.makeTransport)
-	if err != nil {
-		return nil, err
-	}
-
-	var downloadEntry *reuseEntry
-	downloadTransport := uploadEntry.transport
-
-	if c.downloadManager != nil {
-		if c.makeDownloadTransport == nil {
-			c.uploadManager.release(uploadEntry)
-			return nil, fmt.Errorf("xhttp: download manager requires download transport maker")
-		}
-
-		downloadEntry, err = c.downloadManager.getOrCreate(c.makeDownloadTransport)
-		if err != nil {
-			c.uploadManager.release(uploadEntry)
-			return nil, err
-		}
-		downloadTransport = downloadEntry.transport
-	}
-
-	release := func() {
-		c.uploadManager.release(uploadEntry)
-		if downloadEntry != nil {
-			c.downloadManager.release(downloadEntry)
-		}
-	}
-
-	conn, err := c.dialPacketUpOnce(uploadEntry.transport, downloadTransport, release)
-	if err != nil {
-		release()
-		return nil, err
 	}
 
 	return conn, nil
