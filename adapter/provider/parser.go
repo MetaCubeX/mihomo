@@ -115,7 +115,7 @@ func ParseProxyProvider(name string, mapping map[string]any) (P.ProxyProvider, e
 	return NewProxySetProvider(name, interval, schema.Payload, parser, vehicle, hc)
 }
 
-func ParseProxyProviderForAutoGroupWithFilter(providersConfig map[string]map[string]any, autoGroups *[]map[string]any) error {
+func ParseProxyProviderForAutoGroupWithFilter(providersConfig map[string]map[string]any, autoGroups *[]map[string]any, ipv6 bool) error {
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 
 	for name, mapping := range providersConfig {
@@ -224,6 +224,9 @@ func ParseProxyProviderForAutoGroupWithFilter(providersConfig map[string]map[str
 				autoGroupConfig["exclude-type"] = excludeType
 			} else if schema.AutoGroupExcludeType != "" {
 				autoGroupConfig["exclude-type"] = schema.AutoGroupExcludeType
+			} else if !ipv6 {
+				autoGroupConfig["exclude-type"] = "IPv6"
+				log.Debugln("[AutoCreateGroup] provider [%s] group [%s] auto-exclude IPv6 (ipv6 disabled)", name, groupName)
 			}
 
 			for key, value := range group {
