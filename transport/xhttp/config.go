@@ -23,11 +23,11 @@ type Config struct {
 }
 
 type ReuseConfig struct {
-	MaxConnections   string `proxy:"max-connections,omitempty"`
-	MaxConcurrency   string `proxy:"max-concurrency,omitempty"`
-	CMaxReuseTimes   string `proxy:"c-max-reuse-times,omitempty"`
-	HMaxRequestTimes string `proxy:"h-max-request-times,omitempty"`
-	HMaxReusableSecs string `proxy:"h-max-reusable-secs,omitempty"`
+	MaxConnections   string
+	MaxConcurrency   string
+	CMaxReuseTimes   string
+	HMaxRequestTimes string
+	HMaxReusableSecs string
 }
 
 func (c *Config) NormalizedMode() string {
