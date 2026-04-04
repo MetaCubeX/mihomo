@@ -1305,6 +1305,32 @@ proxy-providers:
       #   - pattern: "IPLC-(.*?)倍"
       #     target: "iplc x $1"
 
+  # auto-create-group: 自动为当前 provider 创建原始配置中的 proxy-groups，并添加 use 引用。创建的组名会自动添加 provider 前缀（如 `providerName-原始组名`）以避免冲突
+  # auto-group-filter: 当 group 没有 filter 时的默认过滤正则
+  # auto-group-exclude-filter: 当 group 没有 exclude-filter 时的默认排除正则
+  # auto-group-exclude-type: 当 group 没有 exclude-type 时的默认排除类型
+  # auto-group-sync: 启用后 group 不设置 filter，动态获取 provider 的所有代理，支持 provider 更新时自动同步
+  # auto-import-rules: 自动导入原始配置中的 rules，创建为同名的 inline rule-provider
+  # auto-rule-filter: 只导入匹配此正则的 rules
+  # auto-rule-exclude-filter: 跳过匹配此正则的 rules
+  # 注意：
+  #   1. auto-create-group 会读取原始配置中的 proxy-groups，组名添加 provider 前缀（如 `ClashYaml-节点选择`），并添加 use: [providerName]
+  #   2. 如果原始 group 有 filter，使用原始 filter；有 auto-group-filter，使用 auto-group-filter
+  #   3. 如果原始 group 有 proxies 且没有 filter，生成 auto:前缀的 filter（如 auto:HK-1|HK-2），支持 provider 更新时同步
+  #   4. 启用 auto-group-sync 后不生成 filter，动态获取 provider 所有代理
+  #   5. auto-group-filter/exclude-filter/exclude-type 会覆盖原始 group 的对应设置
+  #   6. auto-import-rules 会创建为同名的 inline rule-provider，需要在 rules 中通过 `RULE-SET,providerName,policy` 引用
+  # ClashYaml:
+  #   type: http
+  #   url: "https://example.com/clash.yaml"
+  #   auto-create-group: true
+  #   auto-group-filter: "HK|TW"
+  #   auto-group-exclude-filter: "中国|China|CN"
+  #   auto-group-exclude-type: "Drop"
+  #   auto-import-rules: true
+  #   auto-rule-filter: "DOMAIN"
+  #   auto-rule-exclude-filter: "google"
+
   provider2:
     type: inline
     dialer-proxy: proxy

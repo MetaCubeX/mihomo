@@ -22,18 +22,19 @@ import (
 
 type GroupBase struct {
 	*outbound.Base
-	hidden            bool
-	icon              string
-	filterRegs        []*regexp2.Regexp
-	excludeFilterRegs []*regexp2.Regexp
-	excludeTypeArray  []string
-	providers         []P.ProxyProvider
-	failedTestMux     sync.Mutex
-	failedTimes       int
-	failedTime        time.Time
-	failedTesting     atomic.Bool
-	testTimeout       int
-	maxFailedTimes    int
+	hidden                  bool
+	icon                    string
+	filterRegs              []*regexp2.Regexp
+	excludeFilterRegs       []*regexp2.Regexp
+	excludeTypeArray        []string
+	providers               []P.ProxyProvider
+	autoFilterOriginalNames []string
+	failedTestMux           sync.Mutex
+	failedTimes             int
+	failedTime              time.Time
+	failedTesting           atomic.Bool
+	testTimeout             int
+	maxFailedTimes          int
 
 	// for GetProxies
 	getProxiesMutex  sync.Mutex
@@ -69,24 +70,34 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 	}
 
 	var filterRegs []*regexp2.Regexp
+	var autoFilterOriginalNames []string
+	log.Debugln("[GroupBase] [%s] opt.Filter is empty=%v, value=[%s]", opt.Name, opt.Filter == "", opt.Filter)
 	if opt.Filter != "" {
 		for _, filter := range strings.Split(opt.Filter, "`") {
-			filterReg := regexp2.MustCompile(filter, regexp2.None)
-			filterRegs = append(filterRegs, filterReg)
+			log.Debugln("[GroupBase] parsing filter: raw=[%s]", filter)
+			if strings.HasPrefix(filter, "auto:") {
+				autoPart := strings.TrimPrefix(filter, "auto:")
+				autoFilterOriginalNames = strings.Split(autoPart, "|")
+				log.Debugln("[GroupBase] auto-filter: auto: prefix detected, after trim=[%s], names count: %d", autoPart, len(autoFilterOriginalNames))
+			} else {
+				filterReg := regexp2.MustCompile(filter, regexp2.None)
+				filterRegs = append(filterRegs, filterReg)
+			}
 		}
 	}
 
 	gb := &GroupBase{
-		Base:              outbound.NewBase(outbound.BaseOption{Name: opt.Name, Type: opt.Type}),
-		hidden:            opt.Hidden,
-		icon:              opt.Icon,
-		filterRegs:        filterRegs,
-		excludeFilterRegs: excludeFilterRegs,
-		excludeTypeArray:  excludeTypeArray,
-		providers:         opt.Providers,
-		failedTesting:     atomic.NewBool(false),
-		testTimeout:       opt.TestTimeout,
-		maxFailedTimes:    opt.MaxFailedTimes,
+		Base:                    outbound.NewBase(outbound.BaseOption{Name: opt.Name, Type: opt.Type}),
+		hidden:                  opt.Hidden,
+		icon:                    opt.Icon,
+		filterRegs:              filterRegs,
+		excludeFilterRegs:       excludeFilterRegs,
+		excludeTypeArray:        excludeTypeArray,
+		providers:               opt.Providers,
+		autoFilterOriginalNames: autoFilterOriginalNames,
+		failedTesting:           atomic.NewBool(false),
+		testTimeout:             opt.TestTimeout,
+		maxFailedTimes:          opt.MaxFailedTimes,
 	}
 
 	if gb.testTimeout == 0 {
@@ -131,15 +142,26 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 		return gb.providerProxies
 	}
 
+	hasAutoFilter := len(gb.autoFilterOriginalNames) > 0
+	autoFilterSet := make(map[string]bool)
+	if hasAutoFilter {
+		for _, name := range gb.autoFilterOriginalNames {
+			autoFilterSet[name] = true
+		}
+		log.Debugln("[GroupBase] [%s] autoFilterSet size: %d", gb.Name(), len(autoFilterSet))
+	}
+
 	var proxies []C.Proxy
-	if len(gb.filterRegs) == 0 {
+	if len(gb.filterRegs) == 0 && !hasAutoFilter {
 		for _, pd := range gb.providers {
 			proxies = append(proxies, pd.Proxies()...)
 		}
 	} else {
 		for _, pd := range gb.providers {
+			allProxies := pd.Proxies()
+			log.Debugln("[GroupBase] [%s] provider [%s] total proxies: %d", gb.Name(), pd.Name(), len(allProxies))
 			if pd.VehicleType() == P.Compatible { // compatible provider unneeded filter
-				proxies = append(proxies, pd.Proxies()...)
+				proxies = append(proxies, allProxies...)
 				continue
 			}
 
@@ -155,6 +177,21 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 						}
 					}
 				}
+			}
+			// handle auto filter: only include proxies whose names are in autoFilterOriginalNames
+			if hasAutoFilter {
+				for _, p := range pd.Proxies() {
+					name := p.Name()
+					if autoFilterSet[name] {
+						if _, ok := proxiesSet[name]; !ok {
+							proxiesSet[name] = struct{}{}
+							newProxies = append(newProxies, p)
+						}
+					} else {
+						log.Debugln("[GroupBase] [%s] proxy [%s] NOT in autoFilterSet, skipped", gb.Name(), name)
+					}
+				}
+				log.Debugln("[GroupBase] [%s] auto-filter matched proxies count: %d", gb.Name(), len(newProxies))
 			}
 			proxies = append(proxies, newProxies...)
 		}
