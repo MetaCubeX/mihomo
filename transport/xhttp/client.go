@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -143,13 +144,20 @@ func (c *Client) Dial() (net.Conn, error) {
 
 func (c *Client) Close() error {
 	c.cancel()
+	var errs []error
 	if c.uploadManager != nil {
-		c.uploadManager.Close()
+		err := c.uploadManager.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if c.downloadManager != nil {
-		c.downloadManager.Close()
+		err := c.downloadManager.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (c *Client) DialStreamOne() (net.Conn, error) {

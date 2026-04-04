@@ -50,9 +50,9 @@ func newReuseManager(cfg *ReuseConfig) *reuseManager {
 	}
 }
 
-func (m *reuseManager) Close() {
+func (m *reuseManager) Close() error {
 	if m == nil {
-		return
+		return nil
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -61,6 +61,7 @@ func (m *reuseManager) Close() {
 		entry.Close()
 	}
 	m.entries = nil
+	return nil
 }
 
 func (m *reuseManager) cleanupLocked(now time.Time) {
