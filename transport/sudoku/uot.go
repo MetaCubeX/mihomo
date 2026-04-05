@@ -36,9 +36,7 @@ func WriteDatagram(w io.Writer, addr string, payload []byte) error {
 	binary.BigEndian.PutUint16(header[:2], uint16(len(addrBuf)))
 	binary.BigEndian.PutUint16(header[2:], uint16(len(payload)))
 
-	buffers := net.Buffers{header[:], addrBuf, payload}
-	_, err = buffers.WriteTo(w)
-	return err
+	return writeAllChunks(w, header[:], addrBuf, payload)
 }
 
 // ReadDatagram parses a single UDP datagram frame from the reliable stream.

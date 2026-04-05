@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"time"
 
@@ -67,9 +66,7 @@ func WriteKIPMessage(w io.Writer, typ byte, payload []byte) error {
 	hdr[3] = typ
 	binary.BigEndian.PutUint16(hdr[4:], uint16(len(payload)))
 
-	buffers := net.Buffers{hdr[:], payload}
-	_, err := buffers.WriteTo(w)
-	return err
+	return writeAllChunks(w, hdr[:], payload)
 }
 
 func ReadKIPMessage(r io.Reader) (*KIPMessage, error) {

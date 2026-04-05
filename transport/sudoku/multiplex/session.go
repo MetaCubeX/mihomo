@@ -173,8 +173,7 @@ func (s *Session) sendFrame(frameType byte, streamID uint32, payload []byte) err
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	buffers := net.Buffers{header[:], payload}
-	if _, err := buffers.WriteTo(s.conn); err != nil {
+	if err := writeAllChunks(s.conn, header[:], payload); err != nil {
 		s.closeWithError(err)
 		return err
 	}
