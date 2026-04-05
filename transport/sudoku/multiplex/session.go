@@ -173,15 +173,10 @@ func (s *Session) sendFrame(frameType byte, streamID uint32, payload []byte) err
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	if err := writeFull(s.conn, header[:]); err != nil {
+	buffers := net.Buffers{header[:], payload}
+	if _, err := buffers.WriteTo(s.conn); err != nil {
 		s.closeWithError(err)
 		return err
-	}
-	if len(payload) > 0 {
-		if err := writeFull(s.conn, payload); err != nil {
-			s.closeWithError(err)
-			return err
-		}
 	}
 	return nil
 }
@@ -313,17 +308,6 @@ func (s *Session) readLoop() {
 			return
 		}
 	}
-}
-
-func writeFull(w io.Writer, b []byte) error {
-	for len(b) > 0 {
-		n, err := w.Write(b)
-		if err != nil {
-			return err
-		}
-		b = b[n:]
-	}
-	return nil
 }
 
 func trimASCII(b []byte) string {

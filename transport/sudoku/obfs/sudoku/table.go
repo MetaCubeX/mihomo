@@ -146,7 +146,7 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 			if matchCount == 1 {
 				// 唯一确定，生成最终编码字节
 				for i, p := range rawParts {
-					currentHints[i] = t.layout.encodeHint(p.val-1, p.pos)
+					currentHints[i] = t.layout.hintByte(p.val-1, p.pos)
 				}
 
 				t.EncodeTable[byteVal] = append(t.EncodeTable[byteVal], currentHints)
