@@ -1,7 +1,6 @@
 package xhttp
 
 import (
-	"errors"
 	"io"
 	"time"
 
@@ -13,9 +12,6 @@ type Conn struct {
 	reader  io.ReadCloser
 	onClose func()
 	httputils.NetAddr
-
-	// deadlines
-	deadline *time.Timer
 }
 
 func (c *Conn) Write(b []byte) (int, error) {
@@ -32,27 +28,12 @@ func (c *Conn) Close() error {
 	if c.onClose != nil {
 		c.onClose()
 	}
-	return errors.Join(err, err2)
+	if err != nil {
+		return err
+	}
+	return err2
 }
 
-func (c *Conn) SetReadDeadline(t time.Time) error  { return c.SetDeadline(t) }
-func (c *Conn) SetWriteDeadline(t time.Time) error { return c.SetDeadline(t) }
-
-func (c *Conn) SetDeadline(t time.Time) error {
-	if t.IsZero() {
-		if c.deadline != nil {
-			c.deadline.Stop()
-			c.deadline = nil
-		}
-		return nil
-	}
-	d := time.Until(t)
-	if c.deadline != nil {
-		c.deadline.Reset(d)
-		return nil
-	}
-	c.deadline = time.AfterFunc(d, func() {
-		c.Close()
-	})
-	return nil
-}
+func (c *Conn) SetReadDeadline(_ time.Time) error  { return nil }
+func (c *Conn) SetWriteDeadline(_ time.Time) error { return nil }
+func (c *Conn) SetDeadline(_ time.Time) error      { return nil }
