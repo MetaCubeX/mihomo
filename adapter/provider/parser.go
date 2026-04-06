@@ -342,6 +342,15 @@ func ParseProxyProviderForAutoImportRules(providersConfig map[string]map[string]
 			}
 
 			if shouldAdd {
+				ruleType := strings.ToUpper(strings.SplitN(rule, ",", 2)[0])
+				switch ruleType {
+				case "MATCH", "RULE-SET", "SUB-RULE":
+					log.Debugln("[AutoImportRules] provider [%s] rule [%s] is unsupported type in classical rule-set, skipping", name, rule)
+					shouldAdd = false
+				}
+			}
+
+			if shouldAdd {
 				autoRulesMap[name] = append(autoRulesMap[name], rule)
 				log.Infoln("[AutoImportRules] provider [%s] imported rule: %s", name, rule)
 			}
