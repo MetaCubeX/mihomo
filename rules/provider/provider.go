@@ -50,6 +50,7 @@ type ruleStrategy interface {
 	Reset()
 	Insert(rule string)
 	FinishInsert()
+	RawRules() []string
 }
 
 type mrsRuleStrategy interface {
@@ -82,6 +83,13 @@ func (bp *baseProvider) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bo
 
 func (bp *baseProvider) Strategy() any {
 	return bp.strategy
+}
+
+func (bp *baseProvider) RawRules() []string {
+	if bp.strategy == nil {
+		return nil
+	}
+	return bp.strategy.RawRules()
 }
 
 type ruleSetProvider struct {
@@ -304,6 +312,10 @@ func (i *inlineProvider) Update() error {
 
 func (i *inlineProvider) VehicleType() P.VehicleType {
 	return P.Inline
+}
+
+func (i *inlineProvider) UpdatedAt() time.Time {
+	return i.updateAt
 }
 
 func (i *inlineProvider) MarshalJSON() ([]byte, error) {

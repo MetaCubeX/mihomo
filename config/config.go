@@ -109,6 +109,7 @@ type Controller struct {
 	ExternalDohServer      string
 	Secret                 string
 	Cors                   Cors
+	ExternalIncludeRules   bool
 }
 
 type Cors struct {
@@ -412,6 +413,7 @@ type RawConfig struct {
 	ExternalControllerUnix  string                  `yaml:"external-controller-unix" json:"external-controller-unix"`
 	ExternalControllerTLS   string                  `yaml:"external-controller-tls" json:"external-controller-tls"`
 	ExternalControllerCors  RawCors                 `yaml:"external-controller-cors" json:"external-controller-cors"`
+	ExternalIncludeRules    bool                    `yaml:"external-include-rules" json:"external-include-rules"`
 	ExternalUI              string                  `yaml:"external-ui" json:"external-ui"`
 	ExternalUIURL           string                  `yaml:"external-ui-url" json:"external-ui-url"`
 	ExternalUIName          string                  `yaml:"external-ui-name" json:"external-ui-name"`
@@ -799,6 +801,7 @@ func parseController(cfg *RawConfig) (*Controller, error) {
 		ExternalControllerUnix: cfg.ExternalControllerUnix,
 		ExternalControllerTLS:  cfg.ExternalControllerTLS,
 		ExternalDohServer:      cfg.ExternalDohServer,
+		ExternalIncludeRules:   cfg.ExternalIncludeRules,
 		Cors: Cors{
 			AllowOrigins:        cfg.ExternalControllerCors.AllowOrigins,
 			AllowPrivateNetwork: cfg.ExternalControllerCors.AllowPrivateNetwork,

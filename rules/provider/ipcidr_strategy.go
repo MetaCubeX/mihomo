@@ -84,6 +84,18 @@ func (i *ipcidrStrategy) ToIpCidr() *netipx.IPSet {
 	return i.cidrSet.ToIPSet()
 }
 
+func (i *ipcidrStrategy) RawRules() []string {
+	if i.cidrSet == nil {
+		return nil
+	}
+	var raw []string
+	i.DumpMrs(func(key string) bool {
+		raw = append(raw, key)
+		return true
+	})
+	return raw
+}
+
 func NewIPCidrStrategy() *ipcidrStrategy {
 	return &ipcidrStrategy{}
 }

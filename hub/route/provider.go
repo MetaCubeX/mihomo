@@ -115,6 +115,7 @@ func ruleProviderRouter() http.Handler {
 	r.Get("/", getRuleProviders)
 	r.Route("/{name}", func(r chi.Router) {
 		r.Use(parseRuleProviderName, findRuleProviderByName)
+		r.Get("/", getRuleProvider)
 		r.Put("/", updateRuleProvider)
 	})
 	return r
@@ -122,9 +123,46 @@ func ruleProviderRouter() http.Handler {
 
 func getRuleProviders(w http.ResponseWriter, r *http.Request) {
 	ruleProviders := tunnel.RuleProviders()
+	includeRules := r.URL.Query().Get("includeRules")
+	if includeRules == "true" || (includeRules == "" && externalIncludeRules) {
+		providers := make(map[string]any)
+		for name, provider := range ruleProviders {
+			providers[name] = render.M{
+				"behavior":    provider.Behavior().String(),
+				"name":        name,
+				"ruleCount":   provider.Count(),
+				"type":        provider.Type().String(),
+				"vehicleType": provider.VehicleType().String(),
+				"updatedAt":   provider.UpdatedAt(),
+				"payload":     provider.RawRules(),
+			}
+		}
+		render.JSON(w, r, render.M{
+			"providers": providers,
+		})
+		return
+	}
 	render.JSON(w, r, render.M{
 		"providers": ruleProviders,
 	})
+}
+
+func getRuleProvider(w http.ResponseWriter, r *http.Request) {
+	provider := r.Context().Value(CtxKeyProvider).(P.RuleProvider)
+	includeRules := r.URL.Query().Get("includeRules")
+	if includeRules == "true" || (includeRules == "" && externalIncludeRules) {
+		render.JSON(w, r, render.M{
+			"behavior":    provider.Behavior().String(),
+			"name":        provider.Name(),
+			"ruleCount":   provider.Count(),
+			"type":        provider.Type().String(),
+			"vehicleType": provider.VehicleType().String(),
+			"updatedAt":   provider.UpdatedAt(),
+			"payload":     provider.RawRules(),
+		})
+		return
+	}
+	render.JSON(w, r, provider)
 }
 
 func updateRuleProvider(w http.ResponseWriter, r *http.Request) {

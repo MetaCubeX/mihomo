@@ -10,9 +10,10 @@ import (
 )
 
 type classicalStrategy struct {
-	rules []C.Rule
-	count int
-	parse common.ParseRuleFunc
+	rules    []C.Rule
+	rawRules []string
+	count    int
+	parse    common.ParseRuleFunc
 }
 
 func (c *classicalStrategy) Behavior() P.RuleBehavior {
@@ -35,6 +36,7 @@ func (c *classicalStrategy) Count() int {
 
 func (c *classicalStrategy) Reset() {
 	c.rules = nil
+	c.rawRules = nil
 	c.count = 0
 }
 
@@ -44,6 +46,7 @@ func (c *classicalStrategy) Insert(rule string) {
 		log.Warnln("parse classical rule [%s] error: %s", rule, err.Error())
 	} else {
 		c.rules = append(c.rules, r)
+		c.rawRules = append(c.rawRules, rule)
 		c.count++
 	}
 }
@@ -59,6 +62,10 @@ func (c *classicalStrategy) payloadToRule(rule string) (C.Rule, error) {
 
 func (c *classicalStrategy) FinishInsert() {}
 
+func (c *classicalStrategy) RawRules() []string {
+	return c.rawRules
+}
+
 func NewClassicalStrategy(parse common.ParseRuleFunc) *classicalStrategy {
-	return &classicalStrategy{rules: []C.Rule{}, parse: parse}
+	return &classicalStrategy{rules: []C.Rule{}, rawRules: []string{}, parse: parse}
 }

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/constant"
@@ -93,6 +94,8 @@ type RuleProvider interface {
 	Count() int
 	Match(metadata *constant.Metadata, helper constant.RuleMatchHelper) bool
 	Strategy() any
+	RawRules() []string
+	UpdatedAt() time.Time
 }
 
 // Rule Behavior

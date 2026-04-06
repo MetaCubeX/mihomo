@@ -55,6 +55,18 @@ func (d *domainStrategy) FinishInsert() {
 	d.domainTrie = nil
 }
 
+func (d *domainStrategy) RawRules() []string {
+	if d.domainSet == nil {
+		return nil
+	}
+	var raw []string
+	d.DumpMrs(func(key string) bool {
+		raw = append(raw, key)
+		return true
+	})
+	return raw
+}
+
 func (d *domainStrategy) FromMrs(r io.Reader, count int) error {
 	domainSet, err := trie.ReadDomainSetBin(r)
 	if err != nil {

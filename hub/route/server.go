@@ -37,7 +37,8 @@ var (
 	unixServer *http.Server
 	pipeServer *http.Server
 
-	embedMode = false
+	embedMode            = false
+	externalIncludeRules = false
 )
 
 func SetEmbedMode(embed bool) {
@@ -70,6 +71,7 @@ type Config struct {
 	DohServer      string
 	IsDebug        bool
 	Cors           Cors
+	IncludeRules   bool
 }
 
 type Cors struct {
@@ -88,6 +90,7 @@ func (c Cors) Apply(r chi.Router) {
 }
 
 func ReCreateServer(cfg *Config) {
+	externalIncludeRules = cfg.IncludeRules
 	go start(cfg)
 	go startTLS(cfg)
 	go startUnix(cfg)
