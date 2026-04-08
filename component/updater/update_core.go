@@ -147,6 +147,11 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 
 	defer u.clean(updateDir)
 
+	err = u.prepareUpdateDir(updateDir)
+	if err != nil {
+		return fmt.Errorf("preparing update dir: %w", err)
+	}
+
 	err = u.download(updateDir, packagePath, packageURL)
 	if err != nil {
 		return fmt.Errorf("downloading: %w", err)
@@ -162,7 +167,11 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 		return fmt.Errorf("backuping: %w", err)
 	}
 
-	err = u.copyFile(updateExePath, currentExePath)
+	if runtime.GOOS == "windows" {
+		err = u.copyFile(updateExePath, currentExePath)
+	} else {
+		err = u.replaceFileAtomically(updateExePath, currentExePath)
+	}
 	if err != nil {
 		return fmt.Errorf("replacing: %w", err)
 	}
@@ -192,6 +201,18 @@ func (u *CoreUpdater) getLatestVersion(versionURL string) (version string, err e
 	return content, nil
 }
 
+func (u *CoreUpdater) prepareUpdateDir(updateDir string) error {
+	if err := os.RemoveAll(updateDir); err != nil {
+		return fmt.Errorf("os.RemoveAll(%s): %w", updateDir, err)
+	}
+
+	if err := os.MkdirAll(updateDir, 0o755); err != nil {
+		return fmt.Errorf("os.MkdirAll(%s): %w", updateDir, err)
+	}
+
+	return nil
+}
+
 // download package file and save it to disk
 func (u *CoreUpdater) download(updateDir, packagePath, packageURL string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
@@ -207,12 +228,6 @@ func (u *CoreUpdater) download(updateDir, packagePath, packageURL string) (err e
 			err = closeErr
 		}
 	}()
-
-	log.Debugln("updateDir %s", updateDir)
-	err = os.Mkdir(updateDir, 0o755)
-	if err != nil {
-		return fmt.Errorf("mkdir error: %w", err)
-	}
 
 	log.Debugln("updater: saving package to file %s", packagePath)
 	// Create the output file
@@ -462,13 +477,78 @@ func (u *CoreUpdater) copyFile(src, dst string) (err error) {
 		return fmt.Errorf("io.Copy(): %w", err)
 	}
 
-	if runtime.GOOS == "darwin" {
-		err = exec.Command("/usr/bin/codesign", "--sign", "-", dst).Run()
+	log.Infoln("updater: copy: %s to %s", src, dst)
+	return nil
+}
+
+func (u *CoreUpdater) replaceFileAtomically(src, dst string) (err error) {
+	rc, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("os.Open(%s): %w", src, err)
+	}
+
+	defer func() {
+		closeErr := rc.Close()
+		if closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	info, err := rc.Stat()
+	if err != nil {
+		return fmt.Errorf("rc.Stat(): %w", err)
+	}
+
+	dir := filepath.Dir(dst)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dst)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("os.CreateTemp(%s): %w", dir, err)
+	}
+
+	tmpPath := tmp.Name()
+	defer func() {
 		if err != nil {
-			log.Warnln("codesign failed: %v", err)
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	defer func() {
+		if tmp != nil {
+			closeErr := tmp.Close()
+			if closeErr != nil && err == nil {
+				err = closeErr
+			}
+		}
+	}()
+
+	if err = tmp.Chmod(info.Mode()); err != nil {
+		return fmt.Errorf("tmp.Chmod(%s): %w", tmpPath, err)
+	}
+
+	if _, err = io.Copy(tmp, rc); err != nil {
+		return fmt.Errorf("io.Copy(): %w", err)
+	}
+
+	if err = tmp.Sync(); err != nil {
+		return fmt.Errorf("tmp.Sync(): %w", err)
+	}
+
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("tmp.Close(): %w", err)
+	}
+	tmp = nil
+
+	if runtime.GOOS == "darwin" {
+		signErr := exec.Command("/usr/bin/codesign", "--sign", "-", tmpPath).Run()
+		if signErr != nil {
+			log.Warnln("codesign failed: %v", signErr)
 		}
 	}
 
-	log.Infoln("updater: copy: %s to %s", src, dst)
+	if err = os.Rename(tmpPath, dst); err != nil {
+		return fmt.Errorf("os.Rename(%s, %s): %w", tmpPath, dst, err)
+	}
+
+	log.Infoln("updater: replace: %s to %s via %s", src, dst, tmpPath)
 	return nil
 }
