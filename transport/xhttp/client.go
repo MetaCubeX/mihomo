@@ -15,11 +15,15 @@ import (
 	"github.com/metacubex/mihomo/common/httputils"
 
 	"github.com/metacubex/http"
+	"github.com/metacubex/quic-go"
+	"github.com/metacubex/quic-go/http3"
 	"github.com/metacubex/tls"
 )
 
 type DialRawFunc func(ctx context.Context) (net.Conn, error)
 type WrapTLSFunc func(ctx context.Context, conn net.Conn, isH2 bool) (net.Conn, error)
+type DialQUICFunc func(ctx context.Context, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error)
+type MakeTLSConfigFunc func() (*tls.Config, error)
 
 type TransportMaker func() http.RoundTripper
 
@@ -96,7 +100,52 @@ func (c *PacketUpWriter) Close() error {
 	return nil
 }
 
-func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, alpn []string) http.RoundTripper {
+func hasALPN(alpn []string, token string) bool {
+	for _, p := range alpn {
+		if p == token {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldUseHTTP3(alpn []string, tryQUIC bool) bool {
+	if !tryQUIC {
+		return false
+	}
+	return hasALPN(alpn, "h3")
+}
+
+type errRoundTripper struct {
+	err error
+}
+
+func (e errRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, e.err
+}
+
+func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, dialQUIC DialQUICFunc, makeTLSConfig MakeTLSConfigFunc, alpn []string, tryQUIC bool) http.RoundTripper {
+	if shouldUseHTTP3(alpn, tryQUIC) && dialQUIC != nil && makeTLSConfig != nil {
+		tlsConfig, err := makeTLSConfig()
+		if err != nil {
+			return errRoundTripper{err: err}
+		}
+		return &http3.Transport{
+			TLSClientConfig: tlsConfig,
+			QUICConfig:      &quic.Config{Versions: []quic.Version{quic.Version1}},
+			Dial: func(ctx context.Context, _ string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+				if tlsCfg == nil {
+					tlsCfg = tlsConfig.Clone()
+				} else {
+					tlsCfg = tlsCfg.Clone()
+				}
+				if cfg == nil {
+					cfg = &quic.Config{Versions: []quic.Version{quic.Version1}}
+				}
+				return dialQUIC(ctx, tlsCfg, cfg)
+			},
+		}
+	}
 	return &http.Http2Transport{
 		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
 			raw, err := dialRaw(ctx)
