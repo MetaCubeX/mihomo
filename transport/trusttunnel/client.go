@@ -173,10 +173,10 @@ func (c *Client) newConnectRequest(host, userAgent string) *http.Request {
 		Method: http.MethodConnect,
 		URL: &url.URL{
 			Scheme: "https",
-			Host:   c.server,
+			Host:   c.server, // Use the proxy server authority so the pool keys reuse against the actual proxy endpoint.
 		},
 		Header: make(http.Header),
-		Host:   host,
+		Host:   host, // Send the actual CONNECT target as the Host header (:authority).
 	}
 	request.Header.Add("User-Agent", userAgent)
 	request.Header.Add("Proxy-Authorization", c.auth)
