@@ -168,52 +168,37 @@ func (c *Client) roundTrip(request *http.Request, conn *httpConn) {
 	}()
 }
 
-func (c *Client) Dial(ctx context.Context, host string) (net.Conn, error) {
+func (c *Client) newConnectRequest(host, userAgent string) *http.Request {
 	request := &http.Request{
 		Method: http.MethodConnect,
 		URL: &url.URL{
 			Scheme: "https",
-			Host:   host,
+			Host:   c.server,
 		},
 		Header: make(http.Header),
 		Host:   host,
 	}
-	request.Header.Add("User-Agent", TCPUserAgent)
+	request.Header.Add("User-Agent", userAgent)
 	request.Header.Add("Proxy-Authorization", c.auth)
+	return request
+}
+
+func (c *Client) Dial(ctx context.Context, host string) (net.Conn, error) {
+	request := c.newConnectRequest(host, TCPUserAgent)
 	conn := &tcpConn{}
 	c.roundTrip(request, &conn.httpConn)
 	return conn, nil
 }
 
 func (c *Client) ListenPacket(ctx context.Context) (net.PacketConn, error) {
-	request := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   UDPMagicAddress,
-		},
-		Header: make(http.Header),
-		Host:   UDPMagicAddress,
-	}
-	request.Header.Add("User-Agent", UDPUserAgent)
-	request.Header.Add("Proxy-Authorization", c.auth)
+	request := c.newConnectRequest(UDPMagicAddress, UDPUserAgent)
 	conn := &clientPacketConn{}
 	c.roundTrip(request, &conn.httpConn)
 	return conn, nil
 }
 
 func (c *Client) ListenICMP(ctx context.Context) (*IcmpConn, error) {
-	request := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   ICMPMagicAddress,
-		},
-		Header: make(http.Header),
-		Host:   ICMPMagicAddress,
-	}
-	request.Header.Add("User-Agent", ICMPUserAgent)
-	request.Header.Add("Proxy-Authorization", c.auth)
+	request := c.newConnectRequest(ICMPMagicAddress, ICMPUserAgent)
 	conn := &IcmpConn{}
 	c.roundTrip(request, &conn.httpConn)
 	return conn, nil
@@ -234,17 +219,7 @@ func (c *Client) ResetConnections() {
 
 func (c *Client) HealthCheck(ctx context.Context) error {
 	defer c.resetHealthCheckTimer()
-	request := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   HealthCheckMagicAddress,
-		},
-		Header: make(http.Header),
-		Host:   HealthCheckMagicAddress,
-	}
-	request.Header.Add("User-Agent", HealthCheckUserAgent)
-	request.Header.Add("Proxy-Authorization", c.auth)
+	request := c.newConnectRequest(HealthCheckMagicAddress, HealthCheckUserAgent)
 	response, err := c.roundTripper.RoundTrip(request.WithContext(ctx))
 	if err != nil {
 		return err
