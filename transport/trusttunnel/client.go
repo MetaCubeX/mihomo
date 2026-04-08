@@ -246,7 +246,8 @@ func NewPoolClient(ctx context.Context, options ClientOptions) (*PoolClient, err
 	minStreams := options.MinStreams
 	maxStreams := options.MaxStreams
 	if maxConnections == 0 && minStreams == 0 && maxStreams == 0 {
-		maxConnections = 1
+		maxConnections = 8
+		minStreams = 5
 	}
 	client, err := NewClient(ctx, options) // reserve one client and verify the configuration
 	if err != nil {

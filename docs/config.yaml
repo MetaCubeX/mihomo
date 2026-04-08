@@ -1218,8 +1218,8 @@ proxies: # socks5
     # quic: true # 默认为false
     # congestion-controller: bbr
     ### reuse options
-    # max-connections: 1 # Maximum connections. Conflict with max-streams.
-    # min-streams: 0 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
+    # max-connections: 8 # Maximum connections. Conflict with max-streams.
+    # min-streams: 5 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
     # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
 
 # dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
