@@ -807,8 +807,7 @@ proxies: # socks5
     udp: true
     tls: true
     network: xhttp
-    alpn:
-      - h2
+    alpn: [h2] # 默认为h2，如果开启h3模式需要设置alpn: [h3]
     # ech-opts: ...
     # reality-opts: ...
     # skip-cert-verify: false
