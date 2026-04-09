@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/metacubex/mihomo/common/httputils"
 
@@ -22,8 +23,7 @@ import (
 
 type DialRawFunc func(ctx context.Context) (net.Conn, error)
 type WrapTLSFunc func(ctx context.Context, conn net.Conn, isH2 bool) (net.Conn, error)
-type DialQUICFunc func(ctx context.Context, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error)
-type MakeTLSConfigFunc func() (*tls.Config, error)
+type DialQUICFunc func(ctx context.Context, cfg *quic.Config) (*quic.Conn, error)
 
 type TransportMaker func() http.RoundTripper
 
@@ -100,49 +100,15 @@ func (c *PacketUpWriter) Close() error {
 	return nil
 }
 
-func hasALPN(alpn []string, token string) bool {
-	for _, p := range alpn {
-		if p == token {
-			return true
-		}
-	}
-	return false
-}
-
-func shouldUseHTTP3(alpn []string, tryQUIC bool) bool {
-	if !tryQUIC {
-		return false
-	}
-	return hasALPN(alpn, "h3")
-}
-
-type errRoundTripper struct {
-	err error
-}
-
-func (e errRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
-	return nil, e.err
-}
-
-func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, dialQUIC DialQUICFunc, makeTLSConfig MakeTLSConfigFunc, alpn []string, tryQUIC bool) http.RoundTripper {
-	if shouldUseHTTP3(alpn, tryQUIC) && dialQUIC != nil && makeTLSConfig != nil {
-		tlsConfig, err := makeTLSConfig()
-		if err != nil {
-			return errRoundTripper{err: err}
-		}
+func NewTransport(dialRaw DialRawFunc, wrapTLS WrapTLSFunc, dialQUIC DialQUICFunc, alpn []string) http.RoundTripper {
+	if len(alpn) == 1 && alpn[0] == "h3" { // `alpn: [h3]` means using h3 mode
 		return &http3.Transport{
-			TLSClientConfig: tlsConfig,
-			QUICConfig:      &quic.Config{Versions: []quic.Version{quic.Version1}},
-			Dial: func(ctx context.Context, _ string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
-				if tlsCfg == nil {
-					tlsCfg = tlsConfig.Clone()
-				} else {
-					tlsCfg = tlsCfg.Clone()
-				}
-				if cfg == nil {
-					cfg = &quic.Config{Versions: []quic.Version{quic.Version1}}
-				}
-				return dialQUIC(ctx, tlsCfg, cfg)
+			QUICConfig: &quic.Config{
+				MaxIncomingStreams: -1, // don't allow the server to create bidirectional streams
+				KeepAlivePeriod:    10 * time.Second,
+			},
+			Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+				return dialQUIC(ctx, cfg)
 			},
 		}
 	}

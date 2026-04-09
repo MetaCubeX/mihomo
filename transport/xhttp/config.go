@@ -16,7 +16,6 @@ type Config struct {
 	Path                 string
 	Mode                 string
 	Headers              map[string]string
-	TryQUIC              bool
 	NoGRPCHeader         bool
 	XPaddingBytes        string
 	NoSSEHeader          bool   // server only
