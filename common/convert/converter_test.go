@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,4 +178,70 @@ func TestConvertsV2RayVlessHTTPTransportUsesH2Opts(t *testing.T) {
 		"headers": map[string]any{},
 	}, proxies[0]["h2-opts"])
 	assert.NotContains(t, proxies[0], "http-opts")
+}
+
+func TestConvertsV2RayEmptyFragmentFallsBackToServerPort(t *testing.T) {
+	testCases := []struct {
+		name         string
+		link         string
+		expectedName string
+	}{
+		{
+			name:         "vless",
+			link:         "vless://9d1f8e7d-2a36-4c76-8a2c-e6dc87a4b5c6@sys.example.com:33475?encryption=none&security=reality&type=grpc&serviceName=&sni=cdn.example.invalid&fp=chrome&pbk=ZgT8kLmNpQrStUvWxYz1aB3cD5eF7hJ9mK2nP4q&sid=a359f7e8d9c1b2a3",
+			expectedName: "sys.example.com:33475",
+		},
+		{
+			name:         "vmess-aead",
+			link:         "vmess://uuid@vmess.example.com:8443?security=tls&type=grpc&serviceName=test-service",
+			expectedName: "vmess.example.com:8443",
+		},
+		{
+			name:         "hysteria2",
+			link:         "hysteria2://letmein@hy.example.com:8443/?sni=real.example.com&insecure=1",
+			expectedName: "hy.example.com:8443",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			proxies, err := ConvertsV2Ray([]byte(testCase.link))
+
+			assert.Nil(t, err)
+			assert.Len(t, proxies, 1)
+			assert.Equal(t, testCase.expectedName, proxies[0]["name"])
+		})
+	}
+}
+
+func TestConvertsV2RayEmptyFragmentFallbackStillDeduplicates(t *testing.T) {
+	vlessTest := strings.Join([]string{
+		"vless://uuid@example.com:443?security=tls&type=tcp",
+		"vless://uuid@example.com:443?security=tls&type=tcp",
+	}, "\n")
+
+	proxies, err := ConvertsV2Ray([]byte(vlessTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 2)
+	assert.Equal(t, "example.com:443", proxies[0]["name"])
+	assert.Equal(t, "example.com:443-01", proxies[1]["name"])
+}
+
+func TestShareLinkNameFallbackRequiresCompleteEndpoint(t *testing.T) {
+	assert.Equal(t, "", shareLinkName(map[string]int{}, "", "example.com", ""))
+	assert.Equal(t, "", shareLinkName(map[string]int{}, "", "", "443"))
+	assert.Equal(t, "example.com:443", shareLinkName(map[string]int{}, "", "example.com", "443"))
+}
+
+func TestConvertsV2RaySSEncodedHostKeepsExplicitFragment(t *testing.T) {
+	ssTest := "ss://YWVzLTI1Ni1nY206cGFzc0BleGFtcGxlLmNvbTo4Mzg4#custom-name"
+
+	proxies, err := ConvertsV2Ray([]byte(ssTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "custom-name", proxies[0]["name"])
+	assert.Equal(t, "example.com", proxies[0]["server"])
+	assert.Equal(t, "8388", proxies[0]["port"])
 }
