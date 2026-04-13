@@ -40,6 +40,7 @@ jobs:
     env:
       CGO_ENABLED: 0
       GOTOOLCHAIN: local
+      SKIP_CONCURRENT_TEST: "1"
       # Fix mingw trying to be smart and converting paths https://github.com/moby/moby/issues/24029#issuecomment-250412919
       MSYS_NO_PATHCONV: true
     steps:
