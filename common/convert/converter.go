@@ -41,13 +41,15 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			query := urlHysteria.Query()
-			name := uniqueName(names, urlHysteria.Fragment)
+			server := urlHysteria.Hostname()
+			port := urlHysteria.Port()
+			name := shareLinkName(names, urlHysteria.Fragment, server, port)
 			hysteria := make(map[string]any, 20)
 
 			hysteria["name"] = name
 			hysteria["type"] = scheme
-			hysteria["server"] = urlHysteria.Hostname()
-			hysteria["port"] = urlHysteria.Port()
+			hysteria["server"] = server
+			hysteria["port"] = port
 			hysteria["sni"] = query.Get("peer")
 			hysteria["obfs"] = query.Get("obfs")
 			if alpn := query.Get("alpn"); alpn != "" {
@@ -76,17 +78,18 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			query := urlHysteria2.Query()
-			name := uniqueName(names, urlHysteria2.Fragment)
+			server := urlHysteria2.Hostname()
+			port := urlHysteria2.Port()
+			if port == "" {
+				port = "443"
+			}
+			name := shareLinkName(names, urlHysteria2.Fragment, server, port)
 			hysteria2 := make(map[string]any, 20)
 
 			hysteria2["name"] = name
 			hysteria2["type"] = "hysteria2"
-			hysteria2["server"] = urlHysteria2.Hostname()
-			if port := urlHysteria2.Port(); port != "" {
-				hysteria2["port"] = port
-			} else {
-				hysteria2["port"] = "443"
-			}
+			hysteria2["server"] = server
+			hysteria2["port"] = port
 			hysteria2["obfs"] = query.Get("obfs")
 			hysteria2["obfs-password"] = query.Get("obfs-password")
 			hysteria2["sni"] = query.Get("sni")
@@ -114,12 +117,14 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 			query := urlTUIC.Query()
+			server := urlTUIC.Hostname()
+			port := urlTUIC.Port()
 
 			tuic := make(map[string]any, 20)
-			tuic["name"] = uniqueName(names, urlTUIC.Fragment)
+			tuic["name"] = shareLinkName(names, urlTUIC.Fragment, server, port)
 			tuic["type"] = scheme
-			tuic["server"] = urlTUIC.Hostname()
-			tuic["port"] = urlTUIC.Port()
+			tuic["server"] = server
+			tuic["port"] = port
 			tuic["udp"] = true
 			password, v5 := urlTUIC.User.Password()
 			if v5 {
@@ -153,14 +158,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 
 			query := urlTrojan.Query()
+			server := urlTrojan.Hostname()
+			port := urlTrojan.Port()
 
-			name := uniqueName(names, urlTrojan.Fragment)
+			name := shareLinkName(names, urlTrojan.Fragment, server, port)
 			trojan := make(map[string]any, 20)
 
 			trojan["name"] = name
 			trojan["type"] = scheme
-			trojan["server"] = urlTrojan.Hostname()
-			trojan["port"] = urlTrojan.Port()
+			trojan["server"] = server
+			trojan["port"] = port
 			trojan["password"] = urlTrojan.User.Username()
 			trojan["udp"] = true
 			trojan["skip-cert-verify"], _ = strconv.ParseBool(query.Get("allowInsecure"))
@@ -392,7 +399,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				continue
 			}
 
-			name := uniqueName(names, urlSS.Fragment)
+			remarks := urlSS.Fragment
 			port := urlSS.Port()
 
 			if port == "" {
@@ -406,6 +413,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 					continue
 				}
 			}
+
+			server := urlSS.Hostname()
+			port = urlSS.Port()
+			name := shareLinkName(names, remarks, server, port)
 
 			var (
 				cipherRaw = urlSS.User.Username()
@@ -433,8 +444,8 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			ss["name"] = name
 			ss["type"] = scheme
-			ss["server"] = urlSS.Hostname()
-			ss["port"] = urlSS.Port()
+			ss["server"] = server
+			ss["port"] = port
 			ss["cipher"] = cipher
 			ss["password"] = password
 			query := urlSS.Query()
@@ -537,11 +548,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if portStr == "" {
 				continue
 			}
-			remarks := link.Fragment
-			if remarks == "" {
-				remarks = fmt.Sprintf("%s:%s", server, portStr)
-			}
-			name := uniqueName(names, remarks)
+			name := shareLinkName(names, link.Fragment, server, portStr)
 			encodeStr := link.User.String()
 			var username, password string
 			if encodeStr != "" {
@@ -600,11 +607,7 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			insecureBool := insecure == "1"
 			fingerprint := query.Get("hpkp")
 
-			remarks := link.Fragment
-			if remarks == "" {
-				remarks = fmt.Sprintf("%s:%s", server, portStr)
-			}
-			name := uniqueName(names, remarks)
+			name := shareLinkName(names, link.Fragment, server, portStr)
 			anytls := make(map[string]any, 10)
 			anytls["name"] = name
 			anytls["type"] = "anytls"
@@ -707,4 +710,11 @@ func uniqueName(names map[string]int, name string) string {
 		names[name] = index
 	}
 	return name
+}
+
+func shareLinkName(names map[string]int, remarks string, server string, port string) string {
+	if remarks == "" && server != "" && port != "" {
+		remarks = fmt.Sprintf("%s:%s", server, port)
+	}
+	return uniqueName(names, remarks)
 }
