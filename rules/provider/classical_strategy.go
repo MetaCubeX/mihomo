@@ -49,7 +49,7 @@ func (c *classicalStrategy) Insert(rule string) {
 }
 
 func (c *classicalStrategy) payloadToRule(rule string) (C.Rule, error) {
-	tp, payload, target, params := common.ParseRulePayload(rule, false)
+	tp, payload, target, params := common.ParseRulePayload(rule, true)
 	switch tp {
 	case "MATCH", "RULE-SET", "SUB-RULE":
 		return nil, fmt.Errorf("unsupported rule type on classical rule-set: %s", tp)
