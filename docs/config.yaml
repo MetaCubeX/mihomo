@@ -1063,6 +1063,19 @@ proxies: # socks5
     #   j3: <t><b 0xf6ab><c><r 10>                        # AmneziaWG v1.5 only (removed in v2)
     #   itime: 60                                         # AmneziaWG v1.5 only (removed in v2)
 
+  # tailscale
+  - name: "tailscale"
+    type: tailscale
+    hostname: "my-exit-node" # 必填：Tailscale 网络中的目标主机名
+    # authkey: "tskey-auth-xxxxx" # 可选：认证密钥，首次连接时需要
+    # control-url: "https://controlplane.tailscale.com" # 可选：控制服务器 URL（用于 Headscale 等自建服务）
+    # ephemeral: false # 可选：是否使用临时节点模式
+    # state-dir: "/path/to/state" # 可选：状态目录，默认 ~/.config/mihomo/tailscale/{name}
+    # udp: true # 支持 UDP
+    # ip-version: dual # 可选：ipv4/ipv6/dual
+    # accept-routes: true # 可选：是否接受所有路由
+    # exit-node: "my-exit-node" # 可选：指定出口节点
+
   # masque
   - name: "masque"
     type: masque
