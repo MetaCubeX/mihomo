@@ -45,7 +45,7 @@ type providerForApi struct {
 
 type ruleStrategy interface {
 	Behavior() P.RuleBehavior
-	Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool
+	Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string)
 	Count() int
 	Reset()
 	Insert(rule string)
@@ -76,8 +76,11 @@ func (bp *baseProvider) Count() int {
 	return bp.strategy.Count()
 }
 
-func (bp *baseProvider) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool {
-	return bp.strategy != nil && bp.strategy.Match(metadata, helper)
+func (bp *baseProvider) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
+	if bp.strategy == nil {
+		return false, ""
+	}
+	return bp.strategy.Match(metadata, helper)
 }
 
 func (bp *baseProvider) Strategy() any {

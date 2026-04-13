@@ -1397,6 +1397,8 @@ rule-providers:
 
 rules:
   - RULE-SET,rule1,REJECT
+  # prefer-provider: 优先使用 rule-provider 中定义的 adapter（覆盖规则中的 target），需要 rule-provider 的 behavior 支持返回 adapter
+  - RULE-SET,rule2,Proxy,prefer-provider
   - IP-ASN,1,PROXY
   - DOMAIN-REGEX,^abc,DIRECT
   - DOMAIN-SUFFIX,baidu.com,DIRECT

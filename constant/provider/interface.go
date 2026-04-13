@@ -91,7 +91,7 @@ type RuleProvider interface {
 	Provider
 	Behavior() RuleBehavior
 	Count() int
-	Match(metadata *constant.Metadata, helper constant.RuleMatchHelper) bool
+	Match(metadata *constant.Metadata, helper constant.RuleMatchHelper) (bool, string)
 	Strategy() any
 }
 

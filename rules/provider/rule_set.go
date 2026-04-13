@@ -14,6 +14,7 @@ type RuleSet struct {
 	adapter          string
 	isSrc            bool
 	noResolveIP      bool
+	useAdapter       bool
 }
 
 func (rs *RuleSet) RuleType() C.RuleType {
@@ -30,7 +31,14 @@ func (rs *RuleSet) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, 
 		} else if rs.noResolveIP {
 			helper.ResolveIP = nil
 		}
-		return provider.Match(metadata, helper), rs.adapter
+		matched, adapter := provider.Match(metadata, helper)
+		if !matched {
+			return false, ""
+		}
+		if rs.useAdapter && adapter != "" {
+			return true, adapter
+		}
+		return true, rs.adapter
 	}
 	return false, ""
 }
@@ -64,13 +72,14 @@ func (rs *RuleSet) getProvider() (P.RuleProvider, bool) {
 	return pp, ok
 }
 
-func NewRuleSet(ruleProviderName string, adapter string, isSrc bool, noResolveIP bool) (*RuleSet, error) {
+func NewRuleSet(ruleProviderName string, adapter string, isSrc bool, noResolveIP bool, useAdapter bool) (*RuleSet, error) {
 	rs := &RuleSet{
 		Base:             common.Base{},
 		ruleProviderName: ruleProviderName,
 		adapter:          adapter,
 		isSrc:            isSrc,
 		noResolveIP:      noResolveIP,
+		useAdapter:       useAdapter,
 	}
 	return rs, nil
 }

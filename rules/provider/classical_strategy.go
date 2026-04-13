@@ -19,14 +19,14 @@ func (c *classicalStrategy) Behavior() P.RuleBehavior {
 	return P.Classical
 }
 
-func (c *classicalStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool {
+func (c *classicalStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
 	for _, rule := range c.rules {
-		if m, _ := rule.Match(metadata, helper); m {
-			return true
+		if m, adapter := rule.Match(metadata, helper); m {
+			return true, adapter
 		}
 	}
 
-	return false
+	return false, ""
 }
 
 func (c *classicalStrategy) Count() int {

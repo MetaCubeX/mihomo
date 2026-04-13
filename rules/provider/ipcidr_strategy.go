@@ -23,12 +23,11 @@ func (i *ipcidrStrategy) Behavior() P.RuleBehavior {
 	return P.IPCIDR
 }
 
-func (i *ipcidrStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool {
+func (i *ipcidrStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
 	if helper.ResolveIP != nil {
 		helper.ResolveIP()
 	}
-	// return i.trie != nil && i.trie.IsContain(metadata.DstIP.AsSlice())
-	return i.cidrSet != nil && i.cidrSet.IsContain(metadata.DstIP)
+	return i.cidrSet != nil && i.cidrSet.IsContain(metadata.DstIP), ""
 }
 
 func (i *ipcidrStrategy) Count() int {

@@ -15,8 +15,9 @@ var (
 
 // params
 var (
-	NoResolve = "no-resolve"
-	Src       = "src"
+	NoResolve      = "no-resolve"
+	Src            = "src"
+	PreferProvider = "prefer-provider"
 )
 
 type Base struct {
@@ -31,6 +32,17 @@ func ParseParams(params []string) (isSrc bool, noResolve bool) {
 	} else {
 		noResolve = slices.Contains(params, NoResolve)
 	}
+	return
+}
+
+func ParseRuleSetParams(params []string) (isSrc bool, noResolve bool, useAdapter bool) {
+	isSrc = slices.Contains(params, Src)
+	if isSrc {
+		noResolve = true
+	} else {
+		noResolve = slices.Contains(params, NoResolve)
+	}
+	useAdapter = slices.Contains(params, PreferProvider)
 	return
 }
 

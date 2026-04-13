@@ -23,8 +23,8 @@ func (d *domainStrategy) Behavior() P.RuleBehavior {
 	return P.Domain
 }
 
-func (d *domainStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) bool {
-	return d.domainSet != nil && d.domainSet.Has(metadata.RuleHost())
+func (d *domainStrategy) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, string) {
+	return d.domainSet != nil && d.domainSet.Has(metadata.RuleHost()), ""
 }
 
 func (d *domainStrategy) Count() int {
