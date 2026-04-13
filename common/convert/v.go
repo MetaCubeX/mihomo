@@ -13,13 +13,13 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	// Xray VMessAEAD / VLESS share link standard
 	// https://github.com/XTLS/Xray-core/discussions/716
 	query := url.Query()
-	proxy["name"] = uniqueName(names, url.Fragment)
 	if url.Hostname() == "" {
 		return errors.New("url.Hostname() is empty")
 	}
 	if url.Port() == "" {
 		return errors.New("url.Port() is empty")
 	}
+	proxy["name"] = shareLinkName(names, url.Fragment, url.Hostname(), url.Port())
 	proxy["type"] = scheme
 	proxy["server"] = url.Hostname()
 	proxy["port"] = url.Port()
