@@ -241,22 +241,27 @@ func NewHttpTestTunnel() *TestTunnel {
 				t.Skip("skip concurrent test")
 			}
 			wg := sync.WaitGroup{}
+			maxInFlight := 8
+			sem := make(chan struct{}, maxInFlight)
+			run := func(proto string, size int) {
+				wg.Add(1)
+				sem <- struct{}{}
+				go func() {
+					defer wg.Done()
+					defer func() {
+						<-sem
+					}()
+					testFn(t, proxy, proto, size)
+				}()
+			}
 			num := len(httpData) / 1024
 			for i := 1; i <= num; i++ {
 				i := i
-				wg.Add(1)
-				go func() {
-					testFn(t, proxy, "https", i*1024)
-					defer wg.Done()
-				}()
+				run("https", i*1024)
 			}
 			for i := 1; i <= num; i++ {
 				i := i
-				wg.Add(1)
-				go func() {
-					testFn(t, proxy, "http", i*1024)
-					defer wg.Done()
-				}()
+				run("http", i*1024)
 			}
 			wg.Wait()
 		})

@@ -51,7 +51,6 @@ func testInboundShadowSocks(t *testing.T, inboundOptions inbound.ShadowSocksOpti
 }
 
 func testInboundShadowSocks0(t *testing.T, inboundOptions inbound.ShadowSocksOption, outboundOptions outbound.ShadowSocksOption, enableSingMux bool) {
-	t.Parallel()
 	password := shadowsocksPassword32
 	if strings.Contains(inboundOptions.Cipher, "-128-") {
 		password = shadowsocksPassword16

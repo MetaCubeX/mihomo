@@ -28,7 +28,6 @@ func testSingMux(t *testing.T, tunnel *TestTunnel, out outbound.ProxyAdapter) {
 		for _, protocol := range singMuxProtocolList {
 			protocol := protocol
 			t.Run(protocol, func(t *testing.T) {
-				t.Parallel()
 				singMuxOption := outbound.SingMuxOption{
 					Enabled:  true,
 					Protocol: protocol,
