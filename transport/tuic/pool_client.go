@@ -119,6 +119,27 @@ func (t *PoolClient) getClient(udp bool) Client {
 	}
 }
 
+// Close releases all resources held by the PoolClient by closing every
+// cached clientImpl in both the tcp and udp lists. Each clientImpl owns its
+// own SingleUse *quic.Transport that is auto-closed when the underlying
+// quicConn closes, so no additional cleanup is needed at the pool level.
+// Close is safe to call multiple times.
+func (t *PoolClient) Close() error {
+	closeClients := func(clients *list.List[Client], mu *sync.Mutex) {
+		mu.Lock()
+		defer mu.Unlock()
+		for it := clients.Front(); it != nil; it = it.Next() {
+			if c := it.Value; c != nil {
+				c.Close()
+			}
+		}
+		clients.Init()
+	}
+	closeClients(&t.tcpClients, &t.tcpClientsMutex)
+	closeClients(&t.udpClients, &t.udpClientsMutex)
+	return nil
+}
+
 func NewPoolClientV4(clientOption *ClientOptionV4, dialFn DialFunc) *PoolClient {
 	p := &PoolClient{
 		dialFn: dialFn,

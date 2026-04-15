@@ -125,6 +125,14 @@ func (t *Tuic) ProxyInfo() C.ProxyInfo {
 	return info
 }
 
+// Close implements C.ProxyAdapter
+func (t *Tuic) Close() error {
+	if t.client != nil {
+		return t.client.Close()
+	}
+	return nil
+}
+
 func NewTuic(option TuicOption) (*Tuic, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	serverName := option.Server
