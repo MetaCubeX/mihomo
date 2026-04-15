@@ -488,6 +488,42 @@ func TestInboundVless_XHTTP_Reality(t *testing.T) {
 	}
 }
 
+func TestInboundVless_XHTTP_PacketUp_H1(t *testing.T) {
+	getConfig := func() (inbound.VlessOption, outbound.VlessOption) {
+		inboundOptions := inbound.VlessOption{
+			Certificate: tlsCertificate,
+			PrivateKey:  tlsPrivateKey,
+			XHTTPConfig: inbound.XHTTPConfig{
+				Path: "/vless-xhttp",
+				Host: "example.com",
+				Mode: "packet-up",
+			},
+		}
+		outboundOptions := outbound.VlessOption{
+			TLS:         true,
+			Fingerprint: tlsFingerprint,
+			Network:     "xhttp",
+			ALPN:        []string{"http/1.1"},
+			XHTTPOpts: outbound.XHTTPOptions{
+				Path: "/vless-xhttp",
+				Host: "example.com",
+				Mode: "packet-up",
+			},
+		}
+		return inboundOptions, outboundOptions
+	}
+
+	t.Run("default", func(t *testing.T) {
+		inboundOptions, outboundOptions := getConfig()
+		testInboundVlessTLS(t, inboundOptions, outboundOptions, false)
+	})
+
+	t.Run("reuse", func(t *testing.T) {
+		inboundOptions, outboundOptions := getConfig()
+		testInboundVlessTLS(t, inboundOptions, withXHTTPReuse(outboundOptions), false)
+	})
+}
+
 func withXHTTPReuse(out outbound.VlessOption) outbound.VlessOption {
 	out.XHTTPOpts.ReuseSettings = &outbound.XHTTPReuseSettings{
 		MaxConnections:   "0",

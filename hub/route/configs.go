@@ -122,6 +122,7 @@ type tuicServerSchema struct {
 	ALPN                  *[]string          `yaml:"alpn" json:"alpn,omitempty"`
 	MaxUdpRelayPacketSize *int               `yaml:"max-udp-relay-packet-size" json:"max-udp-relay-packet-size,omitempty"`
 	CWND                  *int               `yaml:"cwnd" json:"cwnd,omitempty"`
+	BBRProfile            *string            `yaml:"bbr-profile" json:"bbr-profile,omitempty"`
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
@@ -304,6 +305,9 @@ func pointerOrDefaultTuicServer(p *tuicServerSchema, def LC.TuicServer) LC.TuicS
 		}
 		if p.CWND != nil {
 			def.CWND = *p.CWND
+		}
+		if p.BBRProfile != nil {
+			def.BBRProfile = *p.BBRProfile
 		}
 	}
 	return def

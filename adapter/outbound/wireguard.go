@@ -166,16 +166,16 @@ func (option WireGuardOption) Prefixes() ([]netip.Prefix, error) {
 
 func NewWireGuard(option WireGuardOption) (*WireGuard, error) {
 	outbound := &WireGuard{
-		Base: &Base{
-			name:   option.Name,
-			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:     C.WireGuard,
-			pdName: option.ProviderName,
-			udp:    option.UDP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			Type:         C.WireGuard,
+			ProviderName: option.ProviderName,
+			UDP:          option.UDP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	singDialer := proxydialer.NewSingDialer(proxydialer.NewSlowDownDialer(outbound.dialer, slowdown.New()))

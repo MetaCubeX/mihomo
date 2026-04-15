@@ -223,18 +223,18 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 	}
 
 	outbound := &Sudoku{
-		Base: &Base{
-			name:   option.Name,
-			addr:   baseConf.ServerAddress,
-			tp:     C.Sudoku,
-			pdName: option.ProviderName,
-			udp:    true,
-			tfo:    option.TFO,
-			mpTcp:  option.MPTCP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         baseConf.ServerAddress,
+			Type:         C.Sudoku,
+			ProviderName: option.ProviderName,
+			UDP:          true,
+			TFO:          option.TFO,
+			MPTCP:        option.MPTCP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option:   &option,
 		baseConf: baseConf,
 	}

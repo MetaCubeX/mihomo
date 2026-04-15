@@ -24,6 +24,7 @@ type Hysteria2Server struct {
 	IgnoreClientBandwidth bool              `yaml:"ignore-client-bandwidth" json:"ignore-client-bandwidth,omitempty"`
 	Masquerade            string            `yaml:"masquerade" json:"masquerade,omitempty"`
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
+	BBRProfile            string            `yaml:"bbr-profile" json:"bbr-profile,omitempty"`
 	UdpMTU                int               `yaml:"udp-mtu" json:"udp-mtu,omitempty"`
 	MuxOption             sing.MuxOption    `yaml:"mux-option" json:"mux-option,omitempty"`
 

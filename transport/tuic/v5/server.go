@@ -13,7 +13,7 @@ import (
 	"github.com/metacubex/mihomo/common/xsync"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/socks5"
-	"github.com/metacubex/mihomo/transport/tuic/common"
+	"github.com/metacubex/mihomo/transport/tuic/types"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
@@ -27,7 +27,7 @@ type ServerOption struct {
 	MaxUdpRelayPacketSize int
 }
 
-func NewServerHandler(option *ServerOption, quicConn *quic.Conn, uuid uuid.UUID) common.ServerHandler {
+func NewServerHandler(option *ServerOption, quicConn *quic.Conn, uuid uuid.UUID) types.ServerHandler {
 	return &serverHandler{
 		ServerOption: option,
 		quicConn:     quicConn,
@@ -74,7 +74,7 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(&packet, common.NATIVE)
+		return s.parsePacket(&packet, types.NATIVE)
 	case HeartbeatType:
 		var heartbeat Heartbeat
 		heartbeat, err = ReadHeartbeatWithHead(commandHead, reader)
@@ -86,7 +86,7 @@ func (s *serverHandler) HandleMessage(message []byte) (err error) {
 	return
 }
 
-func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode common.UdpRelayMode) (err error) {
+func (s *serverHandler) parsePacket(packet *Packet, udpRelayMode types.UdpRelayMode) (err error) {
 	<-s.authCh
 	if !s.authOk.Load() {
 		return
@@ -179,7 +179,7 @@ func (s *serverHandler) HandleUniStream(reader *bufio.Reader) (err error) {
 		if err != nil {
 			return
 		}
-		return s.parsePacket(&packet, common.QUIC)
+		return s.parsePacket(&packet, types.QUIC)
 	case DissociateType:
 		var disassociate Dissociate
 		disassociate, err = ReadDissociateWithHead(commandHead, reader)

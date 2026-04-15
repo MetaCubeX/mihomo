@@ -3,7 +3,6 @@ package outbound
 import (
 	"context"
 	"net"
-	"net/netip"
 	"strconv"
 
 	N "github.com/metacubex/mihomo/common/net"
@@ -39,6 +38,7 @@ type TrustTunnelOption struct {
 	Quic                 bool   `proxy:"quic,omitempty"`
 	CongestionController string `proxy:"congestion-controller,omitempty"`
 	CWND                 int    `proxy:"cwnd,omitempty"`
+	BBRProfile           string `proxy:"bbr-profile,omitempty"`
 	// reuse options
 	MaxConnections int `proxy:"max-connections,omitempty"`
 	MinStreams     int `proxy:"min-streams,omitempty"`
@@ -86,37 +86,32 @@ func (t *TrustTunnel) Close() error {
 func NewTrustTunnel(option TrustTunnelOption) (*TrustTunnel, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	outbound := &TrustTunnel{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.TrustTunnel,
-			pdName: option.ProviderName,
-			udp:    option.UDP,
-			tfo:    option.TFO,
-			mpTcp:  option.MPTCP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.TrustTunnel,
+			ProviderName: option.ProviderName,
+			UDP:          option.UDP,
+			TFO:          option.TFO,
+			MPTCP:        option.MPTCP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option: &option,
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 
 	tOption := trusttunnel.ClientOptions{
-		Dialer: outbound.dialer,
-		ResolvUDP: func(ctx context.Context, server string) (netip.AddrPort, error) {
-			udpAddr, err := resolveUDPAddr(ctx, "udp", server, option.IPVersion)
-			if err != nil {
-				return netip.AddrPort{}, err
-			}
-			return udpAddr.AddrPort(), nil
-		},
+		Dialer:                outbound.dialer,
+		DialOptions:           outbound.DialOptions,
 		Server:                addr,
 		Username:              option.UserName,
 		Password:              option.Password,
 		QUIC:                  option.Quic,
 		QUICCongestionControl: option.CongestionController,
 		QUICCwnd:              option.CWND,
+		QUICBBRProfile:        option.BBRProfile,
 		HealthCheck:           option.HealthCheck,
 		MaxConnections:        option.MaxConnections,
 		MinStreams:            option.MinStreams,

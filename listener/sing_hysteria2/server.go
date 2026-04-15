@@ -20,6 +20,7 @@ import (
 	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/ntp"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/http/httputil"
@@ -171,8 +172,10 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 		UDPTimeout:            sing.UDPTimeout,
 		Handler:               h,
 		MasqueradeHandler:     masqueradeHandler,
-		CWND:                  config.CWND,
 		UdpMTU:                config.UdpMTU,
+		SetBBRCongestion: func(quicConn *quic.Conn) {
+			common.SetCongestionController(quicConn, "bbr", config.CWND, config.BBRProfile)
+		},
 	})
 	if err != nil {
 		return nil, err

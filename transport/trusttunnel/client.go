@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"net/url"
 	"sync"
 	"sync/atomic"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/metacubex/mihomo/common/httputils"
 	"github.com/metacubex/mihomo/common/once"
+	"github.com/metacubex/mihomo/component/dialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/vmess"
 
@@ -22,11 +22,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type ResolvUDPFunc func(ctx context.Context, server string) (netip.AddrPort, error)
+type DialOptionsFunc func() []dialer.Option
 
 type ClientOptions struct {
 	Dialer                C.Dialer
-	ResolvUDP             ResolvUDPFunc
+	DialOptions           DialOptionsFunc // for quic
 	Server                string
 	Username              string
 	Password              string
@@ -34,6 +34,7 @@ type ClientOptions struct {
 	QUIC                  bool
 	QUICCongestionControl string
 	QUICCwnd              int
+	QUICBBRProfile        string
 	HealthCheck           bool
 	MaxConnections        int
 	MinStreams            int
@@ -43,7 +44,7 @@ type ClientOptions struct {
 type Client struct {
 	ctx              context.Context
 	dialer           C.Dialer
-	resolv           ResolvUDPFunc
+	dialOptions      DialOptionsFunc
 	server           string
 	auth             string
 	roundTripper     http.RoundTripper
@@ -55,11 +56,11 @@ type Client struct {
 
 func NewClient(ctx context.Context, options ClientOptions) (client *Client, err error) {
 	client = &Client{
-		ctx:    ctx,
-		dialer: options.Dialer,
-		resolv: options.ResolvUDP,
-		server: options.Server,
-		auth:   buildAuth(options.Username, options.Password),
+		ctx:         ctx,
+		dialer:      options.Dialer,
+		dialOptions: options.DialOptions,
+		server:      options.Server,
+		auth:        buildAuth(options.Username, options.Password),
 	}
 	if options.QUIC {
 		if len(options.TLSConfig.NextProtos) == 0 {
@@ -67,7 +68,7 @@ func NewClient(ctx context.Context, options ClientOptions) (client *Client, err 
 		} else if !slices.Contains(options.TLSConfig.NextProtos, "h3") {
 			return nil, errors.New("require alpn h3")
 		}
-		err = client.quicRoundTripper(options.TLSConfig, options.QUICCongestionControl, options.QUICCwnd)
+		err = client.quicRoundTripper(options.TLSConfig, options.QUICCongestionControl, options.QUICCwnd, options.QUICBBRProfile)
 		if err != nil {
 			return nil, err
 		}
@@ -168,52 +169,37 @@ func (c *Client) roundTrip(request *http.Request, conn *httpConn) {
 	}()
 }
 
-func (c *Client) Dial(ctx context.Context, host string) (net.Conn, error) {
+func (c *Client) newConnectRequest(host, userAgent string) *http.Request {
 	request := &http.Request{
 		Method: http.MethodConnect,
 		URL: &url.URL{
 			Scheme: "https",
-			Host:   host,
+			Host:   c.server, // Use the proxy server authority so the pool keys reuse against the actual proxy endpoint.
 		},
 		Header: make(http.Header),
-		Host:   host,
+		Host:   host, // Send the actual CONNECT target as the Host header (:authority).
 	}
-	request.Header.Add("User-Agent", TCPUserAgent)
+	request.Header.Add("User-Agent", userAgent)
 	request.Header.Add("Proxy-Authorization", c.auth)
+	return request
+}
+
+func (c *Client) Dial(ctx context.Context, host string) (net.Conn, error) {
+	request := c.newConnectRequest(host, TCPUserAgent)
 	conn := &tcpConn{}
 	c.roundTrip(request, &conn.httpConn)
 	return conn, nil
 }
 
 func (c *Client) ListenPacket(ctx context.Context) (net.PacketConn, error) {
-	request := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   UDPMagicAddress,
-		},
-		Header: make(http.Header),
-		Host:   UDPMagicAddress,
-	}
-	request.Header.Add("User-Agent", UDPUserAgent)
-	request.Header.Add("Proxy-Authorization", c.auth)
+	request := c.newConnectRequest(UDPMagicAddress, UDPUserAgent)
 	conn := &clientPacketConn{}
 	c.roundTrip(request, &conn.httpConn)
 	return conn, nil
 }
 
 func (c *Client) ListenICMP(ctx context.Context) (*IcmpConn, error) {
-	request := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   ICMPMagicAddress,
-		},
-		Header: make(http.Header),
-		Host:   ICMPMagicAddress,
-	}
-	request.Header.Add("User-Agent", ICMPUserAgent)
-	request.Header.Add("Proxy-Authorization", c.auth)
+	request := c.newConnectRequest(ICMPMagicAddress, ICMPUserAgent)
 	conn := &IcmpConn{}
 	c.roundTrip(request, &conn.httpConn)
 	return conn, nil
@@ -234,17 +220,7 @@ func (c *Client) ResetConnections() {
 
 func (c *Client) HealthCheck(ctx context.Context) error {
 	defer c.resetHealthCheckTimer()
-	request := &http.Request{
-		Method: http.MethodConnect,
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   HealthCheckMagicAddress,
-		},
-		Header: make(http.Header),
-		Host:   HealthCheckMagicAddress,
-	}
-	request.Header.Add("User-Agent", HealthCheckUserAgent)
-	request.Header.Add("Proxy-Authorization", c.auth)
+	request := c.newConnectRequest(HealthCheckMagicAddress, HealthCheckUserAgent)
 	response, err := c.roundTripper.RoundTrip(request.WithContext(ctx))
 	if err != nil {
 		return err
@@ -271,7 +247,8 @@ func NewPoolClient(ctx context.Context, options ClientOptions) (*PoolClient, err
 	minStreams := options.MinStreams
 	maxStreams := options.MaxStreams
 	if maxConnections == 0 && minStreams == 0 && maxStreams == 0 {
-		maxConnections = 1
+		maxConnections = 8
+		minStreams = 5
 	}
 	client, err := NewClient(ctx, options) // reserve one client and verify the configuration
 	if err != nil {

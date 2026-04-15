@@ -12,6 +12,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/socks5"
 	"github.com/metacubex/mihomo/transport/tuic/common"
+	"github.com/metacubex/mihomo/transport/tuic/types"
 	v4 "github.com/metacubex/mihomo/transport/tuic/v4"
 	v5 "github.com/metacubex/mihomo/transport/tuic/v5"
 
@@ -32,6 +33,7 @@ type ServerOption struct {
 	AuthenticationTimeout time.Duration
 	MaxUdpRelayPacketSize int
 	CWND                  int
+	BBRProfile            string
 }
 
 type Server struct {
@@ -47,7 +49,7 @@ func (s *Server) Serve() error {
 		if err != nil {
 			return err
 		}
-		common.SetCongestionController(conn, s.CongestionController, s.CWND)
+		common.SetCongestionController(conn, s.CongestionController, s.CWND, s.BBRProfile)
 		h := &serverHandler{
 			Server:   s,
 			quicConn: conn,
@@ -72,8 +74,8 @@ type serverHandler struct {
 	quicConn *quic.Conn
 	uuid     uuid.UUID
 
-	v4Handler common.ServerHandler
-	v5Handler common.ServerHandler
+	v4Handler types.ServerHandler
+	v5Handler types.ServerHandler
 }
 
 func (s *serverHandler) handle() {
@@ -148,7 +150,7 @@ func (s *serverHandler) handleStream() (err error) {
 			return err
 		}
 		go func() (err error) {
-			stream := common.NewQuicStreamConn(
+			stream := types.NewQuicStreamConn(
 				quicStream,
 				s.quicConn.LocalAddr(),
 				s.quicConn.RemoteAddr(),

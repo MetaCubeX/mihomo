@@ -381,7 +381,7 @@ jobs:
         EOF
 
     - name: Upload Prerelease
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       if: ${{  success() }}
       with:
         tag_name: Prerelease-${{ github.ref_name }}
@@ -443,7 +443,7 @@ jobs:
         working-directory: bin
   
       - name: Upload Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: ${{ success() }}
         with:
           tag_name: ${{ github.event.inputs.version }}

@@ -135,6 +135,7 @@ func New(config LC.TrustTunnelServer, tunnel C.Tunnel, additions ...inbound.Addi
 			ICMPHandler:           nil,
 			QUICCongestionControl: config.CongestionController,
 			QUICCwnd:              config.CWND,
+			QUICBBRProfile:        config.BBRProfile,
 		})
 		service.UpdateUsers(config.Users)
 		err = service.Start(tcpListener, udpConn, tlsConfig)

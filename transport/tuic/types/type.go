@@ -1,4 +1,4 @@
-package common
+package types
 
 import (
 	"bufio"
@@ -18,7 +18,7 @@ var (
 	TooManyOpenStreams = errors.New("tuic: too many open streams")
 )
 
-type DialFunc func(ctx context.Context) (transport *quic.Transport, addr net.Addr, err error)
+type DialFunc func(ctx context.Context) (quicConn *quic.Conn, err error)
 
 type Client interface {
 	DialContext(ctx context.Context, metadata *C.Metadata) (net.Conn, error)

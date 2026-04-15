@@ -253,18 +253,18 @@ func NewTrojan(option TrojanOption) (*Trojan, error) {
 	}
 
 	t := &Trojan{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.Trojan,
-			pdName: option.ProviderName,
-			udp:    option.UDP,
-			tfo:    option.TFO,
-			mpTcp:  option.MPTCP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.Trojan,
+			ProviderName: option.ProviderName,
+			UDP:          option.UDP,
+			TFO:          option.TFO,
+			MPTCP:        option.MPTCP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option:      &option,
 		hexPassword: trojan.Key(option.Password),
 	}

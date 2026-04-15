@@ -11,20 +11,16 @@ import (
 	N "github.com/metacubex/mihomo/common/net"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
-	tuicCommon "github.com/metacubex/mihomo/transport/tuic/common"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/metacubex/quic-go"
+	qtls "github.com/metacubex/sing-quic"
 	"github.com/metacubex/sing-quic/hysteria2"
 	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/tls"
 )
-
-func init() {
-	hysteria2.SetCongestionController = tuicCommon.SetCongestionController
-}
 
 const minHopInterval = 5
 const defaultHopInterval = 30
@@ -42,7 +38,7 @@ type Hysteria2Option struct {
 	Server         string     `proxy:"server"`
 	Port           int        `proxy:"port,omitempty"`
 	Ports          string     `proxy:"ports,omitempty"`
-	HopInterval    int        `proxy:"hop-interval,omitempty"`
+	HopInterval    string     `proxy:"hop-interval,omitempty"`
 	Up             string     `proxy:"up,omitempty"`
 	Down           string     `proxy:"down,omitempty"`
 	Password       string     `proxy:"password,omitempty"`
@@ -56,6 +52,7 @@ type Hysteria2Option struct {
 	PrivateKey     string     `proxy:"private-key,omitempty"`
 	ALPN           []string   `proxy:"alpn,omitempty"`
 	CWND           int        `proxy:"cwnd,omitempty"`
+	BBRProfile     string     `proxy:"bbr-profile,omitempty"`
 	UdpMTU         int        `proxy:"udp-mtu,omitempty"`
 
 	// quic-go special config
@@ -105,20 +102,19 @@ func (h *Hysteria2) ProxyInfo() C.ProxyInfo {
 func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	addr := net.JoinHostPort(option.Server, strconv.Itoa(option.Port))
 	outbound := &Hysteria2{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.Hysteria2,
-			pdName: option.ProviderName,
-			udp:    true,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.Hysteria2,
+			ProviderName: option.ProviderName,
+			UDP:          true,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option: &option,
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
-	singDialer := proxydialer.NewSingDialer(outbound.dialer)
 
 	var salamanderPassword string
 	if len(option.Obfs) > 0 {
@@ -177,7 +173,6 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 
 	clientOptions := hysteria2.ClientOptions{
 		Context:            context.TODO(),
-		Dialer:             singDialer,
 		Logger:             log.SingLogger,
 		SendBPS:            StringToBps(option.Up),
 		ReceiveBPS:         StringToBps(option.Down),
@@ -186,25 +181,24 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		TLSConfig:          tlsClientConfig,
 		QUICConfig:         quicConfig,
 		UDPDisabled:        false,
-		CWND:               option.CWND,
 		UdpMTU:             option.UdpMTU,
-		ServerAddress: func(ctx context.Context) (*net.UDPAddr, error) {
-			udpAddr, err := resolveUDPAddr(ctx, "udp", addr, option.IPVersion)
+		ServerAddress:      M.ParseSocksaddr(addr),
+		PacketListener:     outbound.dialer,
+		QuicDialer: qtls.QuicDialerFunc(func(ctx context.Context, addr string, dialer qtls.PacketDialer, tlsCfg *tls.Config, cfg *quic.Config, early bool) (net.PacketConn, *quic.Conn, error) {
+			err := echConfig.ClientHandle(ctx, tlsCfg)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			err = echConfig.ClientHandle(ctx, tlsClientConfig)
-			if err != nil {
-				return nil, err
-			}
-			return udpAddr, nil
+			return common.DialQuic(ctx, addr, outbound.DialOptions(), dialer, tlsCfg, cfg, early)
+		}),
+		SetBBRCongestion: func(quicConn *quic.Conn) {
+			common.SetCongestionController(quicConn, "bbr", option.CWND, option.BBRProfile)
 		},
 	}
 
-	var ranges utils.IntRanges[uint16]
 	var serverPorts []uint16
 	if option.Ports != "" {
-		ranges, err = utils.NewUnsignedRanges[uint16](option.Ports)
+		ranges, err := utils.NewUnsignedRanges[uint16](option.Ports)
 		if err != nil {
 			return nil, err
 		}
@@ -213,12 +207,21 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 			return true
 		})
 		if len(serverPorts) > 0 {
-			if option.HopInterval == 0 {
-				option.HopInterval = defaultHopInterval
-			} else if option.HopInterval < minHopInterval {
-				option.HopInterval = minHopInterval
+			hopRange, err := utils.NewUnsignedRange[uint64](option.HopInterval)
+			if err != nil {
+				return nil, err
 			}
-			clientOptions.HopInterval = time.Duration(option.HopInterval) * time.Second
+			start, end := hopRange.Start(), hopRange.End()
+			if start == 0 {
+				start = defaultHopInterval
+			} else if start < minHopInterval {
+				start = minHopInterval
+			}
+			if end < start {
+				end = start
+			}
+			clientOptions.HopInterval = time.Duration(start) * time.Second
+			clientOptions.HopIntervalMax = time.Duration(end) * time.Second
 			clientOptions.ServerPorts = serverPorts
 		}
 	}

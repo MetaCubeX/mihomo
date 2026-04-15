@@ -239,17 +239,17 @@ func NewHysteria(option HysteriaOption) (*Hysteria, error) {
 		return nil, fmt.Errorf("hysteria %s create error: %w", addr, err)
 	}
 	outbound := &Hysteria{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.Hysteria,
-			pdName: option.ProviderName,
-			udp:    true,
-			tfo:    option.FastOpen,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.Hysteria,
+			ProviderName: option.ProviderName,
+			UDP:          true,
+			TFO:          option.FastOpen,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option:    &option,
 		client:    client,
 		tlsConfig: tlsClientConfig,

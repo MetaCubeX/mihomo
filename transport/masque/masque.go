@@ -27,9 +27,15 @@ const (
 	ConnectURI = "https://cloudflareaccess.com"
 )
 
+type IpConn interface {
+	ReadPacket() (b []byte, err error)
+	WritePacket(b []byte) (icmp []byte, err error)
+	Close() error
+}
+
 // PrepareTlsConfig creates a TLS configuration using the provided certificate and SNI (Server Name Indication).
 // It also verifies the peer's public key against the provided public key.
-func PrepareTlsConfig(privKey *ecdsa.PrivateKey, peerPubKey *ecdsa.PublicKey, sni string) (*tls.Config, error) {
+func PrepareTlsConfig(privKey *ecdsa.PrivateKey, peerPubKey *ecdsa.PublicKey, sni string, insecure bool) (*tls.Config, error) {
 	verfiyCert := func(cert *x509.Certificate) error {
 		if _, ok := cert.PublicKey.(*ecdsa.PublicKey); !ok {
 			// we only support ECDSA
@@ -76,6 +82,9 @@ func PrepareTlsConfig(privKey *ecdsa.PrivateKey, peerPubKey *ecdsa.PublicKey, sn
 			}
 			return err
 		},
+	}
+	if insecure {
+		tlsConfig.VerifyConnection = nil
 	}
 
 	return tlsConfig, nil

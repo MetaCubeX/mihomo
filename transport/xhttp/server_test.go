@@ -78,7 +78,7 @@ func TestServerHandlerModeRestrictions(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			handler := NewServerHandler(ServerOption{
+			handler, err := NewServerHandler(ServerOption{
 				Config: Config{
 					Path: "/xhttp",
 					Mode: testCase.mode,
@@ -87,6 +87,9 @@ func TestServerHandlerModeRestrictions(t *testing.T) {
 					_ = conn.Close()
 				},
 			})
+			if err != nil {
+				panic(err)
+			}
 
 			req := httptest.NewRequest(testCase.method, testCase.target, io.NopCloser(http.NoBody))
 			recorder := httptest.NewRecorder()

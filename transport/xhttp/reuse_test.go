@@ -23,35 +23,29 @@ func makeTestTransportFactory(counter *atomic.Int64) TransportMaker {
 	}
 }
 
-func transportID(rt http.RoundTripper) int64 {
-	return rt.(*testRoundTripper).id
+func transportID(rt *ReuseTransport) int64 {
+	return rt.entry.transport.(*testRoundTripper).id
 }
 
 func TestManagerReuseSameEntry(t *testing.T) {
 	var created atomic.Int64
 
 	manager, err := NewReuseManager(&ReuseConfig{
-		MaxConnections:   "1",
 		MaxConcurrency:   "1",
+		MaxConnections:   "1",
 		HMaxRequestTimes: "10",
 	}, makeTestTransportFactory(&created))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	transport1, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id1 := transportID(transport1.entry.transport)
+	transport1 := manager.GetTransport().(*ReuseTransport)
+	id1 := transportID(transport1)
 
 	transport1.Close()
 
-	transport2, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id2 := transportID(transport2.entry.transport)
+	transport2 := manager.GetTransport().(*ReuseTransport)
+	id2 := transportID(transport2)
 
 	if id1 != id2 {
 		t.Fatalf("expected same transport to be reused, got %d and %d", id1, id2)
@@ -65,44 +59,46 @@ func TestManagerRespectMaxConnections(t *testing.T) {
 	var created atomic.Int64
 
 	manager, err := NewReuseManager(&ReuseConfig{
+		MaxConcurrency:   "2",
 		MaxConnections:   "2",
-		MaxConcurrency:   "1",
 		HMaxRequestTimes: "100",
 	}, makeTestTransportFactory(&created))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	transport1, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if transport1 == nil {
-		t.Fatal("expected first entry")
+	transport1 := manager.GetTransport().(*ReuseTransport)
+	id1 := transportID(transport1)
+	transport2 := manager.GetTransport().(*ReuseTransport)
+	id2 := transportID(transport2)
+	transport3 := manager.GetTransport().(*ReuseTransport)
+	id3 := transportID(transport3)
+	transport4 := manager.GetTransport().(*ReuseTransport)
+	id4 := transportID(transport4)
+	transport5 := manager.GetTransport().(*ReuseTransport)
+	id5 := transportID(transport5)
+
+	if id1 == id2 {
+		t.Fatal("expected the second transport to be new")
 	}
 
-	transport2, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if transport2 == nil {
-		t.Fatal("expected second entry")
+	if id3 != id1 && id3 != id2 {
+		t.Fatal("expected the third transport to be reused")
 	}
 
-	if transport1.entry == transport2.entry {
-		t.Fatal("expected different entries for first two allocations")
+	if id4 != id1 && id4 != id2 {
+		t.Fatal("expected the fourth transport to be reused")
 	}
 
-	transport3, err := manager.GetTransport()
-	if err == nil {
-		t.Fatal("expected error when max-connections reached and all entries are at max-concurrency")
-	}
-	if transport3 != nil {
-		t.Fatal("expected nil entry on allocation failure")
+	if id5 == id1 || id5 == id2 {
+		t.Fatal("expected the fifth transport to be new")
 	}
 
 	transport1.Close()
 	transport2.Close()
+	transport3.Close()
+	transport4.Close()
+	transport5.Close()
 	manager.Close()
 }
 
@@ -110,27 +106,21 @@ func TestManagerRotateOnRequestLimit(t *testing.T) {
 	var created atomic.Int64
 
 	manager, err := NewReuseManager(&ReuseConfig{
-		MaxConnections:   "1",
 		MaxConcurrency:   "1",
+		MaxConnections:   "1",
 		HMaxRequestTimes: "1",
 	}, makeTestTransportFactory(&created))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	transport1, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id1 := transportID(transport1.entry.transport)
+	transport1 := manager.GetTransport().(*ReuseTransport)
+	id1 := transportID(transport1)
 
 	transport1.Close()
 
-	transport2, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id2 := transportID(transport2.entry.transport)
+	transport2 := manager.GetTransport().(*ReuseTransport)
+	id2 := transportID(transport2)
 
 	if id1 == id2 {
 		t.Fatalf("expected new transport after request limit, got same id %d", id1)
@@ -144,8 +134,8 @@ func TestManagerRotateOnReusableSecs(t *testing.T) {
 	var created atomic.Int64
 
 	manager, err := NewReuseManager(&ReuseConfig{
-		MaxConnections:   "1",
 		MaxConcurrency:   "1",
+		MaxConnections:   "1",
 		HMaxRequestTimes: "100",
 		HMaxReusableSecs: "1",
 	}, makeTestTransportFactory(&created))
@@ -153,20 +143,14 @@ func TestManagerRotateOnReusableSecs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	transport1, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id1 := transportID(transport1.entry.transport)
+	transport1 := manager.GetTransport().(*ReuseTransport)
+	id1 := transportID(transport1)
 
 	time.Sleep(1100 * time.Millisecond)
 	transport1.Close()
 
-	transport2, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id2 := transportID(transport2.entry.transport)
+	transport2 := manager.GetTransport().(*ReuseTransport)
+	id2 := transportID(transport2)
 
 	if id1 == id2 {
 		t.Fatalf("expected new transport after reusable timeout, got same id %d", id1)
@@ -180,8 +164,8 @@ func TestManagerRotateOnConnReuseLimit(t *testing.T) {
 	var created atomic.Int64
 
 	manager, err := NewReuseManager(&ReuseConfig{
-		MaxConnections:   "1",
 		MaxConcurrency:   "1",
+		MaxConnections:   "1",
 		CMaxReuseTimes:   "1",
 		HMaxRequestTimes: "100",
 	}, makeTestTransportFactory(&created))
@@ -189,19 +173,13 @@ func TestManagerRotateOnConnReuseLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	transport1, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id1 := transportID(transport1.entry.transport)
+	transport1 := manager.GetTransport().(*ReuseTransport)
+	id1 := transportID(transport1)
 
 	transport1.Close()
 
-	transport2, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id2 := transportID(transport2.entry.transport)
+	transport2 := manager.GetTransport().(*ReuseTransport)
+	id2 := transportID(transport2)
 
 	if id1 != id2 {
 		t.Fatalf("expected first reuse to use same transport, got %d and %d", id1, id2)
@@ -209,11 +187,8 @@ func TestManagerRotateOnConnReuseLimit(t *testing.T) {
 
 	transport2.Close()
 
-	transport3, err := manager.GetTransport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	id3 := transportID(transport3.entry.transport)
+	transport3 := manager.GetTransport().(*ReuseTransport)
+	id3 := transportID(transport3)
 
 	if id3 == id2 {
 		t.Fatalf("expected new transport after c-max-reuse-times limit, got same id %d", id3)

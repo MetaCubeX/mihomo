@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -25,7 +26,7 @@ import (
 	"github.com/metacubex/mihomo/transport/masque"
 	"github.com/metacubex/mihomo/transport/tuic/common"
 
-	connectip "github.com/metacubex/connect-ip-go"
+	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go"
 	wireguard "github.com/metacubex/sing-wireguard"
 	M "github.com/metacubex/sing/common/metadata"
@@ -34,11 +35,12 @@ import (
 
 type Masque struct {
 	*Base
-	tlsConfig  *tls.Config
-	quicConfig *quic.Config
-	tunDevice  wireguard.Device
-	resolver   resolver.Resolver
-	uri        string
+	tlsConfig   *tls.Config
+	quicConfig  *quic.Config
+	tunDevice   wireguard.Device
+	resolver    resolver.Resolver
+	uri         string
+	h2Transport *http.Http2Transport
 
 	runCtx    context.Context
 	runCancel context.CancelFunc
@@ -51,20 +53,23 @@ type Masque struct {
 
 type MasqueOption struct {
 	BasicOption
-	Name       string `proxy:"name"`
-	Server     string `proxy:"server"`
-	Port       int    `proxy:"port"`
-	PrivateKey string `proxy:"private-key"`
-	PublicKey  string `proxy:"public-key"`
-	Ip         string `proxy:"ip,omitempty"`
-	Ipv6       string `proxy:"ipv6,omitempty"`
-	URI        string `proxy:"uri,omitempty"`
-	SNI        string `proxy:"sni,omitempty"`
-	MTU        int    `proxy:"mtu,omitempty"`
-	UDP        bool   `proxy:"udp,omitempty"`
+	Name           string `proxy:"name"`
+	Server         string `proxy:"server"`
+	Port           int    `proxy:"port"`
+	PrivateKey     string `proxy:"private-key"`
+	PublicKey      string `proxy:"public-key"`
+	Ip             string `proxy:"ip,omitempty"`
+	Ipv6           string `proxy:"ipv6,omitempty"`
+	URI            string `proxy:"uri,omitempty"`
+	SNI            string `proxy:"sni,omitempty"`
+	MTU            int    `proxy:"mtu,omitempty"`
+	UDP            bool   `proxy:"udp,omitempty"`
+	SkipCertVerify bool   `proxy:"skip-cert-verify,omitempty"`
+	Network        string `proxy:"network,omitempty"`
 
 	CongestionController string `proxy:"congestion-controller,omitempty"`
 	CWND                 int    `proxy:"cwnd,omitempty"`
+	BBRProfile           string `proxy:"bbr-profile,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -100,16 +105,16 @@ func (option MasqueOption) Prefixes() ([]netip.Prefix, error) {
 
 func NewMasque(option MasqueOption) (*Masque, error) {
 	outbound := &Masque{
-		Base: &Base{
-			name:   option.Name,
-			addr:   net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
-			tp:     C.Masque,
-			pdName: option.ProviderName,
-			udp:    option.UDP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         net.JoinHostPort(option.Server, strconv.Itoa(option.Port)),
+			Type:         C.Masque,
+			ProviderName: option.ProviderName,
+			UDP:          option.UDP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 
@@ -150,11 +155,25 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 		sni = masque.ConnectSNI
 	}
 
-	tlsConfig, err := masque.PrepareTlsConfig(privKey, ecPubKey, sni)
+	tlsConfig, err := masque.PrepareTlsConfig(privKey, ecPubKey, sni, option.SkipCertVerify)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare TLS config: %v\n", err)
 	}
 	outbound.tlsConfig = tlsConfig
+
+	if option.Network == "h2" {
+		tlsConfig.NextProtos = []string{"h2"}
+		outbound.h2Transport = &http.Http2Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+				c, err := outbound.dialer.DialContext(ctx, "tcp", outbound.addr)
+				if err != nil {
+					return nil, err
+				}
+				return tls.Client(c, tlsConfig), nil
+			},
+			ReadIdleTimeout: 30 * time.Second,
+		}
+	}
 
 	outbound.quicConfig = &quic.Config{
 		EnableDatagrams:   true,
@@ -229,27 +248,28 @@ func (w *Masque) run(ctx context.Context) error {
 		w.runDevice.Store(true)
 	}
 
-	udpAddr, err := resolveUDPAddr(ctx, "udp", w.addr, w.prefer)
-	if err != nil {
-		return err
-	}
+	var pc net.PacketConn
+	var closer io.Closer
+	var ipConn masque.IpConn
+	var err error
+	if w.h2Transport != nil {
+		closer, ipConn, err = masque.ConnectTunnelH2(ctx, w.h2Transport, w.uri)
+		if err != nil {
+			return err
+		}
+	} else {
+		var quicConn *quic.Conn
+		pc, quicConn, err = common.DialQuic(ctx, w.addr, w.DialOptions(), w.dialer, w.tlsConfig, w.quicConfig, false)
+		if err != nil {
+			return err
+		}
+		common.SetCongestionController(quicConn, w.option.CongestionController, w.option.CWND, w.option.BBRProfile)
 
-	pc, err := w.dialer.ListenPacket(ctx, "udp", "", udpAddr.AddrPort())
-	if err != nil {
-		return err
-	}
-
-	quicConn, err := quic.Dial(ctx, pc, udpAddr, w.tlsConfig, w.quicConfig)
-	if err != nil {
-		return err
-	}
-
-	common.SetCongestionController(quicConn, w.option.CongestionController, w.option.CWND)
-
-	tr, ipConn, err := masque.ConnectTunnel(ctx, quicConn, w.uri)
-	if err != nil {
-		_ = pc.Close()
-		return err
+		closer, ipConn, err = masque.ConnectTunnel(ctx, quicConn, w.uri)
+		if err != nil {
+			_ = pc.Close()
+			return err
+		}
 	}
 
 	w.running.Store(true)
@@ -258,8 +278,10 @@ func (w *Masque) run(ctx context.Context) error {
 	contextutils.AfterFunc(runCtx, func() {
 		w.running.Store(false)
 		_ = ipConn.Close()
-		_ = tr.Close()
-		_ = pc.Close()
+		_ = closer.Close()
+		if pc != nil {
+			_ = pc.Close()
+		}
 	})
 
 	go func() {
@@ -276,7 +298,7 @@ func (w *Masque) run(ctx context.Context) error {
 			}
 			icmp, err := ipConn.WritePacket(buf[:sizes[0]])
 			if err != nil {
-				if errors.As(err, new(*connectip.CloseError)) {
+				if errors.Is(err, net.ErrClosed) {
 					log.Errorln("[Masque](%s) connection closed while writing to IP connection: %v", w.name, err)
 					return
 				}
@@ -294,19 +316,17 @@ func (w *Masque) run(ctx context.Context) error {
 
 	go func() {
 		defer runCancel()
-		buf := pool.Get(pool.UDPBufferSize)
-		defer pool.Put(buf)
 		for runCtx.Err() == nil {
-			n, err := ipConn.ReadPacket(buf)
+			buf, err := ipConn.ReadPacket()
 			if err != nil {
-				if errors.As(err, new(*connectip.CloseError)) {
+				if errors.Is(err, net.ErrClosed) {
 					log.Errorln("[Masque](%s) connection closed while writing to IP connection: %v", w.name, err)
 					return
 				}
 				log.Warnln("[Masque](%s) error reading from IP connection: %v, continuing...", w.name, err)
 				continue
 			}
-			if _, err := w.tunDevice.Write([][]byte{buf[:n]}, 0); err != nil {
+			if _, err := w.tunDevice.Write([][]byte{buf}, 0); err != nil {
 				log.Errorln("[Masque](%s) error writing to TUN device: %v", w.name, err)
 				return
 			}

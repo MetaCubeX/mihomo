@@ -166,17 +166,18 @@ func NewMieru(option MieruOption) (*Mieru, error) {
 		addr = net.JoinHostPort(option.Server, strconv.Itoa(beginPort))
 	}
 	outbound := &Mieru{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.Mieru,
-			pdName: option.ProviderName,
-			udp:    option.UDP,
-			xudp:   false,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.Mieru,
+			ProviderName: option.ProviderName,
+			UDP:          option.UDP,
+			TFO:          option.TFO,
+			MPTCP:        option.MPTCP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option: &option,
 		client: c,
 	}

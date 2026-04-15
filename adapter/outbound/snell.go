@@ -161,18 +161,18 @@ func NewSnell(option SnellOption) (*Snell, error) {
 	}
 
 	s := &Snell{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.Snell,
-			pdName: option.ProviderName,
-			udp:    option.UDP,
-			tfo:    option.TFO,
-			mpTcp:  option.MPTCP,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.Snell,
+			ProviderName: option.ProviderName,
+			UDP:          option.UDP,
+			TFO:          option.TFO,
+			MPTCP:        option.MPTCP,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
 		option:     &option,
 		psk:        psk,
 		obfsOption: obfsOption,

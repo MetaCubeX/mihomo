@@ -12,6 +12,7 @@ import (
 	"github.com/metacubex/mihomo/component/ech"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/transport/tuic"
+	"github.com/metacubex/mihomo/transport/tuic/common"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"
@@ -25,8 +26,9 @@ type Tuic struct {
 	option *TuicOption
 	client *tuic.PoolClient
 
-	tlsConfig *tls.Config
-	echConfig *ech.Config
+	quicConfig *quic.Config
+	tlsConfig  *tls.Config
+	echConfig  *ech.Config
 }
 
 type TuicOption struct {
@@ -50,6 +52,7 @@ type TuicOption struct {
 	FastOpen             bool       `proxy:"fast-open,omitempty"`
 	MaxOpenStreams       int        `proxy:"max-open-streams,omitempty"`
 	CWND                 int        `proxy:"cwnd,omitempty"`
+	BBRProfile           string     `proxy:"bbr-profile,omitempty"`
 	SkipCertVerify       bool       `proxy:"skip-cert-verify,omitempty"`
 	Fingerprint          string     `proxy:"fingerprint,omitempty"`
 	Certificate          string     `proxy:"certificate,omitempty"`
@@ -106,25 +109,13 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_
 	return newPacketConn(pc, t), nil
 }
 
-func (t *Tuic) dial(ctx context.Context) (transport *quic.Transport, addr net.Addr, err error) {
-	udpAddr, err := resolveUDPAddr(ctx, "udp", t.addr, t.prefer)
+func (t *Tuic) dial(ctx context.Context) (quicConn *quic.Conn, err error) {
+	_, quicConn, err = common.DialQuic(ctx, t.addr, t.DialOptions(), t.dialer, t.tlsConfig, t.quicConfig, t.option.ReduceRtt)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	err = t.echConfig.ClientHandle(ctx, t.tlsConfig)
-	if err != nil {
-		return nil, nil, err
-	}
-	addr = udpAddr
-	var pc net.PacketConn
-	pc, err = t.dialer.ListenPacket(ctx, "udp", "", udpAddr.AddrPort())
-	if err != nil {
-		return nil, nil, err
-	}
-	transport = &quic.Transport{Conn: pc}
-	transport.SetCreatedConn(true) // auto close conn
-	transport.SetSingleUse(true)   // auto close transport
-	return
+	common.SetCongestionController(quicConn, t.option.CongestionController, t.option.CWND, t.option.BBRProfile)
+	return quicConn, nil
 }
 
 // ProxyInfo implements C.ProxyAdapter
@@ -232,7 +223,6 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 		tlsConfig.InsecureSkipVerify = true // tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config
 	}
 
-	tlsClientConfig := tlsConfig
 	echConfig, err := option.ECHOpts.Parse()
 	if err != nil {
 		return nil, err
@@ -247,20 +237,21 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	}
 
 	t := &Tuic{
-		Base: &Base{
-			name:   option.Name,
-			addr:   addr,
-			tp:     C.Tuic,
-			pdName: option.ProviderName,
-			udp:    true,
-			tfo:    option.FastOpen,
-			iface:  option.Interface,
-			rmark:  option.RoutingMark,
-			prefer: option.IPVersion,
-		},
-		option:    &option,
-		tlsConfig: tlsClientConfig,
-		echConfig: echConfig,
+		Base: NewBase(BaseOption{
+			Name:         option.Name,
+			Addr:         addr,
+			Type:         C.Tuic,
+			ProviderName: option.ProviderName,
+			UDP:          true,
+			TFO:          option.FastOpen,
+			Interface:    option.Interface,
+			RoutingMark:  option.RoutingMark,
+			Prefer:       option.IPVersion,
+		}),
+		option:     &option,
+		quicConfig: quicConfig,
+		tlsConfig:  tlsConfig,
+		echConfig:  echConfig,
 	}
 	t.dialer = option.NewDialer(t.DialOptions())
 
@@ -278,17 +269,12 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 	if len(option.Token) > 0 {
 		tkn := tuic.GenTKN(option.Token)
 		clientOption := &tuic.ClientOptionV4{
-			TlsConfig:             tlsClientConfig,
-			QuicConfig:            quicConfig,
 			Token:                 tkn,
 			UdpRelayMode:          udpRelayMode,
-			CongestionController:  option.CongestionController,
-			ReduceRtt:             option.ReduceRtt,
 			RequestTimeout:        time.Duration(option.RequestTimeout) * time.Millisecond,
 			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
 			FastOpen:              option.FastOpen,
 			MaxOpenStreams:        clientMaxOpenStreams,
-			CWND:                  option.CWND,
 		}
 
 		t.client = tuic.NewPoolClientV4(clientOption, t.dial)
@@ -298,16 +284,11 @@ func NewTuic(option TuicOption) (*Tuic, error) {
 			maxUdpRelayPacketSize = tuic.MaxFragSizeV5
 		}
 		clientOption := &tuic.ClientOptionV5{
-			TlsConfig:             tlsClientConfig,
-			QuicConfig:            quicConfig,
 			Uuid:                  uuid.FromStringOrNil(option.UUID),
 			Password:              option.Password,
 			UdpRelayMode:          udpRelayMode,
-			CongestionController:  option.CongestionController,
-			ReduceRtt:             option.ReduceRtt,
 			MaxUdpRelayPacketSize: maxUdpRelayPacketSize,
 			MaxOpenStreams:        clientMaxOpenStreams,
-			CWND:                  option.CWND,
 		}
 
 		t.client = tuic.NewPoolClientV5(clientOption, t.dial)

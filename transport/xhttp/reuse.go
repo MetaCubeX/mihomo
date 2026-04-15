@@ -1,7 +1,6 @@
 package xhttp
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,20 +22,19 @@ type reuseEntry struct {
 	closed atomic.Bool
 }
 
-func (e *reuseEntry) isClosed() bool {
-	return e.closed.Load()
+func (entry *reuseEntry) isClosed() bool {
+	return entry.closed.Load()
 }
 
-func (e *reuseEntry) close() {
-	if !e.closed.CompareAndSwap(false, true) {
+func (entry *reuseEntry) close() {
+	if !entry.closed.CompareAndSwap(false, true) {
 		return
 	}
-	httputils.CloseTransport(e.transport)
+	httputils.CloseTransport(entry.transport)
 }
 
 type ReuseTransport struct {
 	entry   *reuseEntry
-	manager *ReuseManager
 	removed atomic.Bool
 }
 
@@ -48,39 +46,43 @@ func (rt *ReuseTransport) Close() error {
 	if !rt.removed.CompareAndSwap(false, true) {
 		return nil
 	}
-	rt.manager.release(rt.entry)
+	rt.entry.release()
 	return nil
 }
 
 var _ http.RoundTripper = (*ReuseTransport)(nil)
 
 type ReuseManager struct {
-	cfg            *ReuseConfig
-	maxConnections int
-	maxConcurrency int
-	maker          TransportMaker
-	mu             sync.Mutex
-	entries        []*reuseEntry
+	maxConcurrency   int
+	maxConnections   int
+	cMaxReuseTimes   Range
+	hMaxRequestTimes Range
+	hMaxReusableSecs Range
+	maker            TransportMaker
+	mu               sync.Mutex
+	entries          []*reuseEntry
 }
 
 func NewReuseManager(cfg *ReuseConfig, makeTransport TransportMaker) (*ReuseManager, error) {
 	if cfg == nil {
 		return nil, nil
 	}
-	connections, concurrency, err := cfg.ResolveManagerConfig()
+	concurrency, connections, err := cfg.ResolveManagerConfig()
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, err = cfg.ResolveEntryConfig() // check if config is valid
+	cMaxReuseTimes, hMaxRequestTimes, hMaxReusableSecs, err := cfg.ResolveEntryConfig()
 	if err != nil {
 		return nil, err
 	}
 	return &ReuseManager{
-		cfg:            cfg,
-		maxConnections: connections,
-		maxConcurrency: concurrency,
-		maker:          makeTransport,
-		entries:        make([]*reuseEntry, 0),
+		maxConcurrency:   concurrency.Rand(),
+		maxConnections:   connections.Rand(),
+		cMaxReuseTimes:   cMaxReuseTimes,
+		hMaxRequestTimes: hMaxRequestTimes,
+		hMaxReusableSecs: hMaxReusableSecs,
+		maker:            makeTransport,
+		entries:          make([]*reuseEntry, 0),
 	}, nil
 }
 
@@ -117,7 +119,7 @@ func (m *ReuseManager) cleanupLocked(now time.Time) {
 	m.entries = kept
 }
 
-func (m *ReuseManager) release(entry *reuseEntry) {
+func (entry *reuseEntry) release() {
 	if entry == nil {
 		return
 	}
@@ -159,34 +161,36 @@ func (m *ReuseManager) pickLocked() *reuseEntry {
 	return best
 }
 
-func (m *ReuseManager) canCreateLocked() bool {
-	if m.maxConnections <= 0 {
+func (m *ReuseManager) shouldCreateLocked() bool {
+	if len(m.entries) == 0 {
 		return true
 	}
-	return len(m.entries) < m.maxConnections
+	if m.maxConnections > 0 {
+		return len(m.entries) < m.maxConnections
+	}
+	return false
 }
 
 func (m *ReuseManager) newEntryLocked(transport http.RoundTripper, now time.Time) *reuseEntry {
 	entry := &reuseEntry{transport: transport}
 
-	hMaxRequestTimes, hMaxReusableSecs, cMaxReuseTimes, _ := m.cfg.ResolveEntryConfig() // error already checked in [NewReuseManager]
-	if hMaxRequestTimes > 0 {
-		entry.leftRequests.Store(int32(hMaxRequestTimes))
+	if m.hMaxRequestTimes.Max > 0 {
+		entry.leftRequests.Store(int32(m.hMaxRequestTimes.Rand()))
 	} else {
 		entry.leftRequests.Store(1<<30 - 1)
 	}
-	if hMaxReusableSecs > 0 {
-		entry.unreusableAt = now.Add(time.Duration(hMaxReusableSecs) * time.Second)
+	if m.hMaxReusableSecs.Max > 0 {
+		entry.unreusableAt = now.Add(time.Duration(m.hMaxReusableSecs.Rand()) * time.Second)
 	}
-	if cMaxReuseTimes > 0 {
-		entry.maxReuseTimes = int32(cMaxReuseTimes)
+	if m.cMaxReuseTimes.Max > 0 {
+		entry.maxReuseTimes = int32(m.cMaxReuseTimes.Rand())
 	}
 
 	m.entries = append(m.entries, entry)
 	return entry
 }
 
-func (m *ReuseManager) GetTransport() (*ReuseTransport, error) {
+func (m *ReuseManager) GetTransport() http.RoundTripper {
 	now := time.Now()
 
 	m.mu.Lock()
@@ -194,13 +198,13 @@ func (m *ReuseManager) GetTransport() (*ReuseTransport, error) {
 
 	m.cleanupLocked(now)
 
-	entry := m.pickLocked()
+	var entry *reuseEntry
+	if !m.shouldCreateLocked() {
+		entry = m.pickLocked()
+	}
 	reused := entry != nil
 
 	if entry == nil {
-		if !m.canCreateLocked() {
-			return nil, fmt.Errorf("manager: no available connection")
-		}
 		transport := m.maker()
 		entry = m.newEntryLocked(transport, now)
 	}
@@ -214,5 +218,5 @@ func (m *ReuseManager) GetTransport() (*ReuseTransport, error) {
 		entry.leftRequests.Add(-1)
 	}
 
-	return &ReuseTransport{entry: entry, manager: m}, nil
+	return &ReuseTransport{entry: entry}
 }

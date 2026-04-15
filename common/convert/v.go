@@ -63,7 +63,7 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		network = "tcp"
 	}
 	fakeType := strings.ToLower(query.Get("headerType"))
-	if fakeType == "http" {
+	if network == "tcp" && fakeType == "http" {
 		network = "http"
 	} else if network == "http" {
 		network = "h2"
@@ -71,27 +71,26 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 	proxy["network"] = network
 	switch network {
 	case "tcp":
-		if fakeType != "none" {
-			headers := make(map[string]any)
-			httpOpts := make(map[string]any)
-			httpOpts["path"] = []string{"/"}
+	case "http":
+		headers := make(map[string]any)
+		httpOpts := make(map[string]any)
+		httpOpts["path"] = []string{"/"}
 
-			if host := query.Get("host"); host != "" {
-				headers["Host"] = []string{host}
-			}
-
-			if method := query.Get("method"); method != "" {
-				httpOpts["method"] = method
-			}
-
-			if path := query.Get("path"); path != "" {
-				httpOpts["path"] = []string{path}
-			}
-			httpOpts["headers"] = headers
-			proxy["http-opts"] = httpOpts
+		if host := query.Get("host"); host != "" {
+			headers["Host"] = []string{host}
 		}
 
-	case "http":
+		if method := query.Get("method"); method != "" {
+			httpOpts["method"] = method
+		}
+
+		if path := query.Get("path"); path != "" {
+			httpOpts["path"] = []string{path}
+		}
+		httpOpts["headers"] = headers
+		proxy["http-opts"] = httpOpts
+
+	case "h2":
 		headers := make(map[string]any)
 		h2Opts := make(map[string]any)
 		h2Opts["path"] = []string{"/"}

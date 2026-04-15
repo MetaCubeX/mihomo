@@ -13,7 +13,7 @@ const (
 	DefaultConnectionReceiveWindow = 67108864 // 64 MB/s
 )
 
-func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int) {
+func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int, profile string) {
 	if cwnd == 0 {
 		cwnd = 32
 	}
@@ -47,6 +47,7 @@ func SetCongestionController(quicConn *quic.Conn, cc string, cwnd int) {
 			congestionv2.NewBbrSender(
 				congestionv2.GetInitialPacketSize(quicConn),
 				c.ByteCount(cwnd),
+				congestionv2.Profile(profile),
 			),
 		)
 	}

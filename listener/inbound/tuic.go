@@ -24,6 +24,7 @@ type TuicOption struct {
 	ALPN                  []string          `inbound:"alpn,omitempty"`
 	MaxUdpRelayPacketSize int               `inbound:"max-udp-relay-packet-size,omitempty"`
 	CWND                  int               `inbound:"cwnd,omitempty"`
+	BBRProfile            string            `inbound:"bbr-profile,omitempty"`
 	MuxOption             MuxOption         `inbound:"mux-option,omitempty"`
 }
 
@@ -62,6 +63,7 @@ func NewTuic(options *TuicOption) (*Tuic, error) {
 			ALPN:                  options.ALPN,
 			MaxUdpRelayPacketSize: options.MaxUdpRelayPacketSize,
 			CWND:                  options.CWND,
+			BBRProfile:            options.BBRProfile,
 			MuxOption:             options.MuxOption.Build(),
 		},
 	}, nil

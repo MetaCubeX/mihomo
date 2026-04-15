@@ -3,11 +3,10 @@ package vmess
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"io"
 	"net"
 	"net/textproto"
-
-	"github.com/metacubex/mihomo/common/utils"
+	"net/url"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/randv2"
@@ -64,10 +63,12 @@ func (hc *httpConn) Write(b []byte) (int, error) {
 		host = header[randv2.IntN(len(header))]
 	}
 
-	u := fmt.Sprintf("http://%s%s", net.JoinHostPort(host, "80"), path)
-	req, err := http.NewRequest(utils.EmptyOr(hc.cfg.Method, http.MethodGet), u, bytes.NewBuffer(b))
-	if err != nil {
-		return 0, err
+	req := http.Request{
+		Method: hc.cfg.Method, // default is GET
+		Host:   host,
+		URL:    &url.URL{Scheme: "http", Host: host, Path: path},
+		Header: make(http.Header),
+		Body:   io.NopCloser(bytes.NewReader(b)),
 	}
 	for key, list := range hc.cfg.Headers {
 		req.Header.Set(key, list[randv2.IntN(len(list))])

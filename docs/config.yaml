@@ -807,8 +807,7 @@ proxies: # socks5
     udp: true
     tls: true
     network: xhttp
-    alpn:
-      - h2
+    alpn: [h2] # 默认仅支持h2，如果开启h3模式需要设置alpn: [h3]，如果开启http1.1模式需要设置alpn: [http/1.1]
     # ech-opts: ...
     # reality-opts: ...
     # skip-cert-verify: false
@@ -827,12 +826,14 @@ proxies: # socks5
       # no-grpc-header: false
       # x-padding-bytes: "100-1000"
       # sc-max-each-post-bytes: 1000000
+      # sc-min-posts-interval-ms: 30
       # reuse-settings: # aka XMUX
-      #   max-connections: "16-32"
-      #   max-concurrency: "0"
+      #   max-concurrency: "16-32"
+      #   max-connections: "0"
       #   c-max-reuse-times: "0"
       #   h-max-request-times: "600-900"
       #   h-max-reusable-secs: "1800-3000"
+      #   h-keep-alive-period: 0
       # download-settings:
       #   ## xhttp part
       #   path: "/"
@@ -842,18 +843,19 @@ proxies: # socks5
       #   no-grpc-header: false
       #   x-padding-bytes: "100-1000"
       #   sc-max-each-post-bytes: 1000000
+      #   sc-min-posts-interval-ms: 30
       #   reuse-settings: # aka XMUX
-      #     max-connections: "16-32"
-      #     max-concurrency: "0"
+      #     max-concurrency: "16-32"
+      #     max-connections: "0"
       #     c-max-reuse-times: "0"
       #     h-max-request-times: "600-900"
       #     h-max-reusable-secs: "1800-3000"
+      #     h-keep-alive-period: 0
       #   ## proxy part
       #   server: server
       #   port: 443
       #   tls: true
-      #   alpn:
-      #     - h2
+      #   alpn: ...
       #   ech-opts: ...
       #   reality-opts: ...
       #   skip-cert-verify: false
@@ -982,10 +984,11 @@ proxies: # socks5
     server: server.com
     port: 443
     # ports: 1000,2000-3000,5000 # port 不可省略
-    # hop-interval: 15
+    # hop-interval: 15 # 支持填写"15-30"会每次随机选取其中一个值作为切换间隔，仅支持写一个范围（即不允许出现逗号）
     #  up 和 down 均不写或为 0 则使用 BBR 流控
     # up: "30 Mbps" # 若不写单位，默认为 Mbps
     # down: "200 Mbps" # 若不写单位，默认为 Mbps
+    # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     password: yourpassword
     # obfs: salamander # 默认为空，如果填写则开启 obfs，目前仅支持 salamander
     # obfs-password: yourpassword
@@ -1080,6 +1083,23 @@ proxies: # socks5
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
     # congestion-controller: bbr # 默认不开启
 
+  # masque-h2
+  - name: "masque-h2"
+    type: masque
+    server: 162.159.198.2
+    port: 443
+    private-key: MHcCAQEEILI1eOtnbEIh89Fj4yNDuFR6UjayCKI3NdLl3DhetimWoAoGCCqGSM49AwEHoUQDQgAEgyXrE8v+hHsHy3ewSb3WcRjYgCrM9T9hiE0Uv6k2DZ1+4kefrDT9v1Q/8wdRigTf6t6gGNUV8W+IUMdrfUt+9g==
+    public-key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==
+    ip: 172.16.0.2
+    ipv6: 2606:4700:110:84c0:163a:4914:a0ad:3342
+    mtu: 1280
+    udp: true
+    network: h2
+    # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
+    # dialer-proxy: "ss1"
+    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
+    # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
+
   # tuic
   - name: tuic
     server: www.example.com
@@ -1099,6 +1119,7 @@ proxies: # socks5
     udp-relay-mode: native # Available: "native", "quic". Default: "native"
     # congestion-controller: bbr # Available: "cubic", "new_reno", "bbr". Default: "cubic"
     # cwnd: 10 # default: 32
+    # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     # max-udp-relay-packet-size: 1500
     # fast-open: true
     # skip-cert-verify: true
@@ -1217,9 +1238,10 @@ proxies: # socks5
     ### quic options
     # quic: true # 默认为false
     # congestion-controller: bbr
+    # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     ### reuse options
-    # max-connections: 1 # Maximum connections. Conflict with max-streams.
-    # min-streams: 0 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
+    # max-connections: 8 # Maximum connections. Conflict with max-streams.
+    # min-streams: 5 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
     # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
 
 # dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
@@ -1632,6 +1654,7 @@ listeners:
     #    dC5jb20AAA==
     #    -----END ECH KEYS-----
     #  congestion-controller: bbr
+    #  bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     #  max-idle-time: 15000
     #  authentication-timeout: 1000
     #  alpn:
@@ -1664,6 +1687,7 @@ listeners:
     #   host: ""
     #   mode: auto # Available: "stream-one", "stream-up" or "packet-up"
     #   no-sse-header: false
+    #   sc-max-buffered-posts: 30
     #   sc-stream-up-server-secs: "20-80"
     #   sc-max-each-post-bytes: 1000000
     # -------------------------
@@ -1864,6 +1888,7 @@ listeners:
     private-key: ./server.key # 证书对应的私钥 PEM 格式，或者私钥路径
     network: ["tcp", "udp"] # http2+http3
     congestion-controller: bbr
+    # bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
     # 下面两项为mTLS配置项，如果client-auth-type设置为 "verify-if-given" 或 "require-and-verify" 则client-auth-cert必须不为空
     # client-auth-type: "" # 可选值：""、"request"、"require-any"、"verify-if-given"、"require-and-verify"
     # client-auth-cert: string # 证书 PEM 格式，或者 证书的路径
@@ -1939,6 +1964,7 @@ listeners:
 #  certificate: ./server.crt
 #  private-key: ./server.key
 #  congestion-controller: bbr
+#  bbr-profile: "" # Available: "standard", "conservative", "aggressive". Default: "standard"
 #  max-idle-time: 15000
 #  authentication-timeout: 1000
 #  alpn:

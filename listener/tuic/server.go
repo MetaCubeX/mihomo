@@ -155,6 +155,7 @@ func New(config LC.TuicServer, tunnel C.Tunnel, additions ...inbound.Addition) (
 		AuthenticationTimeout: time.Duration(config.AuthenticationTimeout) * time.Millisecond,
 		MaxUdpRelayPacketSize: config.MaxUdpRelayPacketSize,
 		CWND:                  config.CWND,
+		BBRProfile:            config.BBRProfile,
 	}
 	if len(config.Token) > 0 {
 		tokens := make([][32]byte, len(config.Token))

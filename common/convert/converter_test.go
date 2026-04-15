@@ -129,3 +129,52 @@ func TestConvertsV2RayMieruFragment(t *testing.T) {
 	assert.Len(t, proxies, 1)
 	assert.Equal(t, "myproxy:443/TCP", proxies[0]["name"])
 }
+
+func TestConvertsV2RayVlessRealityVisionTCPWithoutHeaderType(t *testing.T) {
+	vlessTest := "vless://a1b2c3d4-eacc-4433-981b-7e5f9a8b@142.98.76.54:34888?encryption=none&security=reality&type=tcp&sni=github.io&fp=chrome&pbk=TifX9kL2mPqRsTuVwXyZ_JdUWw&sid=6ba85179f3a2b4c5&flow=xtls-rprx-vision#My-VLESS-Reality-Vision"
+
+	proxies, err := ConvertsV2Ray([]byte(vlessTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "tcp", proxies[0]["network"])
+	assert.Equal(t, "xtls-rprx-vision", proxies[0]["flow"])
+	assert.Equal(t, "none", proxies[0]["encryption"])
+	assert.Equal(t, "github.io", proxies[0]["servername"])
+	assert.NotContains(t, proxies[0], "http-opts")
+	assert.NotContains(t, proxies[0], "h2-opts")
+}
+
+func TestConvertsV2RayVlessTCPHTTPHeaderType(t *testing.T) {
+	vlessTest := "vless://uuid@example.com:443?security=tls&type=tcp&headerType=http&host=cdn.example.com&path=%2Fedge&method=POST#vless-http"
+
+	proxies, err := ConvertsV2Ray([]byte(vlessTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "http", proxies[0]["network"])
+	assert.Equal(t, map[string]any{
+		"method": "POST",
+		"path":   []string{"/edge"},
+		"headers": map[string]any{
+			"Host": []string{"cdn.example.com"},
+		},
+	}, proxies[0]["http-opts"])
+	assert.NotContains(t, proxies[0], "h2-opts")
+}
+
+func TestConvertsV2RayVlessHTTPTransportUsesH2Opts(t *testing.T) {
+	vlessTest := "vless://uuid@example.com:443?security=tls&type=http&host=cdn.example.com&path=%2Fgrpc#vless-h2"
+
+	proxies, err := ConvertsV2Ray([]byte(vlessTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "h2", proxies[0]["network"])
+	assert.Equal(t, map[string]any{
+		"host":    []string{"cdn.example.com"},
+		"path":    []string{"/grpc"},
+		"headers": map[string]any{},
+	}, proxies[0]["h2-opts"])
+	assert.NotContains(t, proxies[0], "http-opts")
+}

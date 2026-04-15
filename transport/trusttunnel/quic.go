@@ -15,7 +15,7 @@ import (
 	"github.com/metacubex/tls"
 )
 
-func (c *Client) quicRoundTripper(tlsConfig *vmess.TLSConfig, congestionControlName string, cwnd int) error {
+func (c *Client) quicRoundTripper(tlsConfig *vmess.TLSConfig, congestionControlName string, cwnd int, bbrProfile string) error {
 	stdConfig, err := tlsConfig.ToStdConfig()
 	if err != nil {
 		return err
@@ -30,24 +30,15 @@ func (c *Client) quicRoundTripper(tlsConfig *vmess.TLSConfig, congestionControlN
 			Allow0RTT:                  false,
 		},
 		Dial: func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
-			addrPort, err := c.resolv(ctx, c.server)
+			err := tlsConfig.ECH.ClientHandle(ctx, tlsCfg)
 			if err != nil {
 				return nil, err
 			}
-			err = tlsConfig.ECH.ClientHandle(ctx, tlsCfg)
+			_, quicConn, err := common.DialQuic(ctx, addr, c.dialOptions(), c.dialer, tlsCfg, cfg, true)
 			if err != nil {
 				return nil, err
 			}
-			packetConn, err := c.dialer.ListenPacket(ctx, "udp", "", addrPort)
-			if err != nil {
-				return nil, err
-			}
-			quicConn, err := quic.DialEarly(ctx, packetConn, net.UDPAddrFromAddrPort(addrPort), tlsCfg, cfg)
-			if err != nil {
-				_ = packetConn.Close()
-				return nil, err
-			}
-			common.SetCongestionController(quicConn, congestionControlName, cwnd)
+			common.SetCongestionController(quicConn, congestionControlName, cwnd, bbrProfile)
 			return quicConn, nil
 		},
 	}
@@ -69,7 +60,7 @@ func (s *Service) configHTTP3Server(tlsConfig *tls.Config, udpConn net.PacketCon
 		Handler:     s,
 		IdleTimeout: DefaultSessionTimeout,
 		ConnContext: func(ctx context.Context, conn *quic.Conn) context.Context {
-			common.SetCongestionController(conn, s.quicCongestionControl, s.quicCwnd)
+			common.SetCongestionController(conn, s.quicCongestionControl, s.quicCwnd, s.quicBBRProfile)
 			return ctx
 		},
 	}

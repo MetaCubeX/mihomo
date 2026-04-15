@@ -46,33 +46,33 @@ func (r *Reject) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
 
 func NewRejectWithOption(option RejectOption) *Reject {
 	return &Reject{
-		Base: &Base{
-			name: option.Name,
-			tp:   C.Reject,
-			udp:  true,
-		},
+		Base: NewBase(BaseOption{
+			Name: option.Name,
+			Type: C.Reject,
+			UDP:  true,
+		}),
 	}
 }
 
 func NewReject() *Reject {
 	return &Reject{
-		Base: &Base{
-			name:   "REJECT",
-			tp:     C.Reject,
-			udp:    true,
-			prefer: C.DualStack,
-		},
+		Base: NewBase(BaseOption{
+			Name:   "REJECT",
+			Type:   C.Reject,
+			UDP:    true,
+			Prefer: C.DualStack,
+		}),
 	}
 }
 
 func NewRejectDrop() *Reject {
 	return &Reject{
-		Base: &Base{
-			name:   "REJECT-DROP",
-			tp:     C.RejectDrop,
-			udp:    true,
-			prefer: C.DualStack,
-		},
+		Base: NewBase(BaseOption{
+			Name:   "REJECT-DROP",
+			Type:   C.RejectDrop,
+			UDP:    true,
+			Prefer: C.DualStack,
+		}),
 		drop: true,
 	}
 }
