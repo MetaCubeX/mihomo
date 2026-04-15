@@ -233,19 +233,20 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 	var lock sync.Mutex
 	mp := map[string]uint16{}
 	proxies := gb.GetProxies(false)
-	for _, proxy := range proxies {
-		proxy := proxy
+	for _, p := range proxies {
+		if p == nil {
+			continue
+		}
 		wg.Add(1)
-		go func() {
-			delay, err := proxy.URLTest(ctx, url, expectedStatus)
+		go func(p C.Proxy) {
+			defer wg.Done()
+			delay, err := p.URLTest(ctx, url, expectedStatus)
 			if err == nil {
 				lock.Lock()
-				mp[proxy.Name()] = delay
+				mp[p.Name()] = delay
 				lock.Unlock()
 			}
-
-			wg.Done()
-		}()
+		}(p)
 	}
 	wg.Wait()
 

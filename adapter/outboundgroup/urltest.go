@@ -98,6 +98,11 @@ func (u *URLTest) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return u.fast(touch)
 }
 
+// EffectiveSpeed implements C.Proxy - delegates to current leaf
+func (u *URLTest) EffectiveSpeed() uint64 {
+	return u.fast(false).EffectiveSpeed()
+}
+
 func (u *URLTest) healthCheck() {
 	u.fastSingle.Reset()
 	u.GroupBase.healthCheck()

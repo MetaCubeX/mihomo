@@ -67,6 +67,12 @@ var (
 	ruleUpdateCallback = utils.NewCallback[P.RuleProvider]()
 )
 
+func init() {
+	statistic.RegisterProxyResolver(func(name string) C.Proxy {
+		return GetProxy(name)
+	})
+}
+
 type tunnel struct{}
 
 var Tunnel = tunnel{}
@@ -206,6 +212,12 @@ func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[strin
 // Proxies return all proxies
 func Proxies() map[string]C.Proxy {
 	return proxies
+}
+
+func GetProxy(name string) C.Proxy {
+	configMux.RLock()
+	defer configMux.RUnlock()
+	return proxies[name]
 }
 
 // Providers return all compatible providers

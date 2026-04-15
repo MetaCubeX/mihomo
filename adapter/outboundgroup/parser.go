@@ -3,6 +3,7 @@ package outboundgroup
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/dlclark/regexp2"
@@ -184,6 +185,12 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	case "load-balance":
 		strategy := parseStrategy(config)
 		return NewLoadBalance(groupOption, providers, strategy)
+	case "smart":
+		opts, err := parseSmartOption(config)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", groupName, err)
+		}
+		return NewSmart(groupOption, providers, opts...)
 	case "relay":
 		return nil, fmt.Errorf("%w: The group [%s] with relay type was removed, please using dialer-proxy instead", errType, groupName)
 	default:
@@ -228,5 +235,96 @@ func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStat
 
 	for _, pd := range providers {
 		pd.RegisterHealthCheckTask(url, expectedStatus, filter, interval)
+	}
+}
+
+func parseSmartOption(config map[string]any) ([]smartOption, error) {
+	opts := []smartOption{}
+
+	weightDelay := defaultWeightDelay
+	weightLoss := defaultWeightLoss
+	weightSpeed := defaultWeightSpeed
+	tolerance := defaultTolerance
+
+	if v, ok := config["weight-delay"]; ok {
+		if f, ok := parseNumeric(v); ok {
+			if f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil, fmt.Errorf("weight-delay must be >= 0")
+			}
+			weightDelay = f
+		}
+	}
+	if v, ok := config["weight-loss"]; ok {
+		if f, ok := parseNumeric(v); ok {
+			if f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil, fmt.Errorf("weight-loss must be >= 0")
+			}
+			weightLoss = f
+		}
+	}
+	if v, ok := config["weight-speed"]; ok {
+		if f, ok := parseNumeric(v); ok {
+			if f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil, fmt.Errorf("weight-speed must be >= 0")
+			}
+			weightSpeed = f
+		}
+	}
+
+	sum := weightDelay + weightLoss + weightSpeed
+	if sum == 0 {
+		return nil, fmt.Errorf("at least one weight must be > 0")
+	}
+	weightDelay /= sum
+	weightLoss /= sum
+	weightSpeed /= sum
+
+	if v, ok := config["tolerance"]; ok {
+		if f, ok := parseNumeric(v); ok {
+			if f < 0 {
+				return nil, fmt.Errorf("tolerance must be >= 0")
+			}
+			tolerance = f
+		}
+	}
+
+	opts = append(opts, func(s *Smart) {
+		s.weightDelay = weightDelay
+		s.weightLoss = weightLoss
+		s.weightSpeed = weightSpeed
+		s.tolerance = tolerance
+	})
+
+	return opts, nil
+}
+
+func parseNumeric(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int8:
+		return float64(x), true
+	case int16:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case uint:
+		return float64(x), true
+	case uint8:
+		return float64(x), true
+	case uint16:
+		return float64(x), true
+	case uint32:
+		return float64(x), true
+	case uint64:
+		return float64(x), true
+	default:
+		return 0, false
 	}
 }

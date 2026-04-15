@@ -95,6 +95,10 @@ func (s *Selector) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return s.selectedProxy(touch)
 }
 
+func (s *Selector) EffectiveSpeed() uint64 {
+	return s.selectedProxy(false).EffectiveSpeed()
+}
+
 func (s *Selector) selectedProxy(touch bool) C.Proxy {
 	proxies := s.GetProxies(touch)
 	for _, proxy := range proxies {
