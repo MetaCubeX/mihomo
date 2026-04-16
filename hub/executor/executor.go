@@ -86,6 +86,11 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	mux.Lock()
 	defer mux.Unlock()
 	log.SetLevel(cfg.General.LogLevel)
+	log.SetFormatter(log.LogConfig{
+		Level:           cfg.General.LogLevel,
+		Formatter:       cfg.General.LogFormatter,
+		TimestampFormat: cfg.General.LogTimestampFormat,
+	})
 
 	tunnel.OnSuspend()
 

@@ -42,6 +42,8 @@ geo-update-interval: 24 # 更新间隔，单位：小时
 # geosite-matcher: succinct
 
 log-level: debug # 日志等级 silent/error/warning/info/debug
+log-formatter: custom-text # 日志格式 custom-text/text/json, custom-text格式换 行和引号不会被转义
+log-timestamp-format: "2006-01-02T15:04:05.000000000Z07:00" # 日期时间格式
 
 ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
 
