@@ -145,8 +145,23 @@ func (h *requestHandler) getOrCreateSession(sessionID string) *httpSession {
 
 	s = newHTTPSession(h.scMaxBufferedPosts.Max)
 	h.sessions[sessionID] = s
+
+	// Reap orphan sessions that never become fully connected (e.g. from probing).
+	// Matches Xray-core's 30-second reaper in upsertSession.
+	go func() {
+		timer := time.NewTimer(30 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			h.deleteSession(sessionID)
+		case <-s.connected:
+		}
+	}()
+
 	return s
 }
+
+
 
 func (h *requestHandler) deleteSession(sessionID string) {
 	h.mu.Lock()
