@@ -299,11 +299,7 @@ func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// stream-up upload: POST /path/{session}
 	if r.Method == http.MethodPost && len(parts) == 1 && h.allowStreamUpUpload() {
 		sessionID := parts[0]
-		session := h.getSession(sessionID)
-		if session == nil {
-			http.Error(w, "unknown xhttp session", http.StatusBadRequest)
-			return
-		}
+		session := h.getOrCreateSession(sessionID)
 
 		httpSC := newHTTPServerConn(w, r.Body)
 		err := session.uploadQueue.Push(Packet{
@@ -360,11 +356,7 @@ func (h *requestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		session := h.getSession(sessionID)
-		if session == nil {
-			http.Error(w, "unknown xhttp session", http.StatusBadRequest)
-			return
-		}
+		session := h.getOrCreateSession(sessionID)
 
 		if r.ContentLength > int64(h.scMaxEachPostBytes.Max) {
 			http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
