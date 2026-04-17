@@ -515,6 +515,21 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 		wrc.Set(resp.Body)
 	}()
 
+	<-gotConn
+
+	if !tcpConnected.Load() {
+		_ = pr.Close()
+		_ = pw.Close()
+		httputils.CloseTransport(uploadTransport)
+		httputils.CloseTransport(downloadTransport)
+		var buf [0]byte
+		_, err = wrc.Read(buf[:])
+		return nil, err
+	}
+
+	// Start upload after download TCP is connected, so the server has likely
+	// already processed the GET and created the session. This preserves the
+	// original ordering (download before upload) while still being async.
 	go func() {
 		resp, err := uploadTransport.RoundTrip(uploadReq)
 		if err != nil {
@@ -528,18 +543,6 @@ func (c *Client) DialStreamUp() (net.Conn, error) {
 			_ = pw.CloseWithError(fmt.Errorf("xhttp stream-up upload bad status: %s", resp.Status))
 		}
 	}()
-
-	<-gotConn
-
-	if !tcpConnected.Load() {
-		_ = pr.Close()
-		_ = pw.Close()
-		httputils.CloseTransport(uploadTransport)
-		httputils.CloseTransport(downloadTransport)
-		var buf [0]byte
-		_, err = wrc.Read(buf[:])
-		return nil, err
-	}
 
 	conn.reader = wrc
 	conn.onClose = func() {
