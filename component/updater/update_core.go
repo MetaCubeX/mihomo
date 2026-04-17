@@ -49,6 +49,11 @@ type CoreUpdater struct {
 
 var DefaultCoreUpdater = CoreUpdater{}
 
+// preservePosixAttrs is set via init() on linux/darwin to copy owner, mode,
+// xattrs and (on darwin) file flags from the existing binary onto the staged
+// replacement. Nil on other platforms.
+var preservePosixAttrs func(src, dst string)
+
 func (u *CoreUpdater) CoreBaseName() string {
 	switch runtime.GOARCH {
 	case "arm":
@@ -482,6 +487,13 @@ func (u *CoreUpdater) copyFile(src, dst string) (err error) {
 }
 
 func (u *CoreUpdater) replaceFileAtomically(src, dst string) (err error) {
+	// Resolve symlinks so deployments that expose a stable path (e.g.
+	// /usr/local/bin/mihomo -> /opt/mihomo/<ver>/mihomo) replace the real
+	// file rather than turning the symlink into a regular file.
+	if resolved, linkErr := filepath.EvalSymlinks(dst); linkErr == nil {
+		dst = resolved
+	}
+
 	rc, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("os.Open(%s): %w", src, err)
@@ -494,9 +506,19 @@ func (u *CoreUpdater) replaceFileAtomically(src, dst string) (err error) {
 		}
 	}()
 
-	info, err := rc.Stat()
+	srcInfo, err := rc.Stat()
 	if err != nil {
 		return fmt.Errorf("rc.Stat(): %w", err)
+	}
+
+	// Prefer the existing dst's mode so local chmod survives updates. Fall
+	// back to src's mode on first install.
+	mode := srcInfo.Mode()
+	dstExists := true
+	if dstInfo, statErr := os.Stat(dst); statErr == nil {
+		mode = dstInfo.Mode()
+	} else if os.IsNotExist(statErr) {
+		dstExists = false
 	}
 
 	dir := filepath.Dir(dst)
@@ -521,7 +543,7 @@ func (u *CoreUpdater) replaceFileAtomically(src, dst string) (err error) {
 		}
 	}()
 
-	if err = tmp.Chmod(info.Mode()); err != nil {
+	if err = tmp.Chmod(mode); err != nil {
 		return fmt.Errorf("tmp.Chmod(%s): %w", tmpPath, err)
 	}
 
@@ -537,6 +559,12 @@ func (u *CoreUpdater) replaceFileAtomically(src, dst string) (err error) {
 		return fmt.Errorf("tmp.Close(): %w", err)
 	}
 	tmp = nil
+
+	// Carry over ownership, xattrs (notably Linux security.capability for
+	// cap_net_admin / cap_net_bind_service), setuid/sgid and darwin flags.
+	if dstExists && preservePosixAttrs != nil {
+		preservePosixAttrs(dst, tmpPath)
+	}
 
 	if runtime.GOOS == "darwin" {
 		signErr := exec.Command("/usr/bin/codesign", "--sign", "-", tmpPath).Run()
