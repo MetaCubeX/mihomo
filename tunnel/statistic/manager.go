@@ -92,6 +92,7 @@ func (m *Manager) Snapshot() *Snapshot {
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
 		Memory:        m.memory,
+		Time:          time.Now().Format("15:04:05.000"),
 	}
 }
 
@@ -126,4 +127,5 @@ type Snapshot struct {
 	UploadTotal   int64          `json:"uploadTotal"`
 	Connections   []*TrackerInfo `json:"connections"`
 	Memory        uint64         `json:"memory"`
+	Time          string         `json:"time"`
 }

@@ -42,6 +42,7 @@ geo-update-interval: 24 # 更新间隔，单位：小时
 # geosite-matcher: succinct
 
 log-level: debug # 日志等级 silent/error/warning/info/debug
+log-restful-timestamp-format: "15:04:05.000" # RESTful API 日志时间格式，用于 /logs、/connections、/traffic、/memory 等接口，默认毫秒精度
 
 ipv6: true # 开启 IPv6 总开关，关闭阻断所有 IPv6 链接和屏蔽 DNS 请求 AAAA 记录
 

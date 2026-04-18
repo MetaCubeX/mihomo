@@ -45,27 +45,28 @@ import (
 // General config
 type General struct {
 	Inbound
-	Mode                    T.TunnelMode            `json:"mode"`
-	UnifiedDelay            bool                    `json:"unified-delay"`
-	LogLevel                log.LogLevel            `json:"log-level"`
-	IPv6                    bool                    `json:"ipv6"`
-	Interface               string                  `json:"interface-name"`
-	RoutingMark             int                     `json:"routing-mark"`
-	GeoXUrl                 GeoXUrl                 `json:"geox-url"`
-	GeoAutoUpdate           bool                    `json:"geo-auto-update"`
-	GeoUpdateInterval       int                     `json:"geo-update-interval"`
-	GeodataMode             bool                    `json:"geodata-mode"`
-	GeodataLoader           string                  `json:"geodata-loader"`
-	GeositeMatcher          string                  `json:"geosite-matcher"`
-	TCPConcurrent           bool                    `json:"tcp-concurrent"`
-	FindProcessMode         process.FindProcessMode `json:"find-process-mode"`
-	Sniffing                bool                    `json:"sniffing"`
-	GlobalClientFingerprint string                  `json:"global-client-fingerprint"`
-	GlobalUA                string                  `json:"global-ua"`
-	ETagSupport             bool                    `json:"etag-support"`
-	KeepAliveIdle           int                     `json:"keep-alive-idle"`
-	KeepAliveInterval       int                     `json:"keep-alive-interval"`
-	DisableKeepAlive        bool                    `json:"disable-keep-alive"`
+	Mode                      T.TunnelMode            `json:"mode"`
+	UnifiedDelay              bool                    `json:"unified-delay"`
+	LogLevel                  log.LogLevel            `json:"log-level"`
+	LogRestfulTimestampFormat string                  `json:"log-restful-timestamp-format"`
+	IPv6                      bool                    `json:"ipv6"`
+	Interface                 string                  `json:"interface-name"`
+	RoutingMark               int                     `json:"routing-mark"`
+	GeoXUrl                   GeoXUrl                 `json:"geox-url"`
+	GeoAutoUpdate             bool                    `json:"geo-auto-update"`
+	GeoUpdateInterval         int                     `json:"geo-update-interval"`
+	GeodataMode               bool                    `json:"geodata-mode"`
+	GeodataLoader             string                  `json:"geodata-loader"`
+	GeositeMatcher            string                  `json:"geosite-matcher"`
+	TCPConcurrent             bool                    `json:"tcp-concurrent"`
+	FindProcessMode           process.FindProcessMode `json:"find-process-mode"`
+	Sniffing                  bool                    `json:"sniffing"`
+	GlobalClientFingerprint   string                  `json:"global-client-fingerprint"`
+	GlobalUA                  string                  `json:"global-ua"`
+	ETagSupport               bool                    `json:"etag-support"`
+	KeepAliveIdle             int                     `json:"keep-alive-idle"`
+	KeepAliveInterval         int                     `json:"keep-alive-interval"`
+	DisableKeepAlive          bool                    `json:"disable-keep-alive"`
 }
 
 // Inbound config
@@ -390,51 +391,52 @@ type RawTLS struct {
 }
 
 type RawConfig struct {
-	Port                    int                     `yaml:"port" json:"port"`
-	SocksPort               int                     `yaml:"socks-port" json:"socks-port"`
-	RedirPort               int                     `yaml:"redir-port" json:"redir-port"`
-	TProxyPort              int                     `yaml:"tproxy-port" json:"tproxy-port"`
-	MixedPort               int                     `yaml:"mixed-port" json:"mixed-port"`
-	ShadowSocksConfig       string                  `yaml:"ss-config" json:"ss-config"`
-	VmessConfig             string                  `yaml:"vmess-config" json:"vmess-config"`
-	InboundTfo              bool                    `yaml:"inbound-tfo" json:"inbound-tfo"`
-	InboundMPTCP            bool                    `yaml:"inbound-mptcp" json:"inbound-mptcp"`
-	Authentication          []string                `yaml:"authentication" json:"authentication"`
-	SkipAuthPrefixes        []netip.Prefix          `yaml:"skip-auth-prefixes" json:"skip-auth-prefixes"`
-	LanAllowedIPs           []netip.Prefix          `yaml:"lan-allowed-ips" json:"lan-allowed-ips"`
-	LanDisAllowedIPs        []netip.Prefix          `yaml:"lan-disallowed-ips" json:"lan-disallowed-ips"`
-	AllowLan                bool                    `yaml:"allow-lan" json:"allow-lan"`
-	BindAddress             string                  `yaml:"bind-address" json:"bind-address"`
-	Mode                    T.TunnelMode            `yaml:"mode" json:"mode"`
-	UnifiedDelay            bool                    `yaml:"unified-delay" json:"unified-delay"`
-	LogLevel                log.LogLevel            `yaml:"log-level" json:"log-level"`
-	IPv6                    bool                    `yaml:"ipv6" json:"ipv6"`
-	ExternalController      string                  `yaml:"external-controller" json:"external-controller"`
-	ExternalControllerPipe  string                  `yaml:"external-controller-pipe" json:"external-controller-pipe"`
-	ExternalControllerUnix  string                  `yaml:"external-controller-unix" json:"external-controller-unix"`
-	ExternalControllerTLS   string                  `yaml:"external-controller-tls" json:"external-controller-tls"`
-	ExternalControllerCors  RawCors                 `yaml:"external-controller-cors" json:"external-controller-cors"`
-	ExternalUI              string                  `yaml:"external-ui" json:"external-ui"`
-	ExternalUIURL           string                  `yaml:"external-ui-url" json:"external-ui-url"`
-	ExternalUIName          string                  `yaml:"external-ui-name" json:"external-ui-name"`
-	ExternalDohServer       string                  `yaml:"external-doh-server" json:"external-doh-server"`
-	Secret                  string                  `yaml:"secret" json:"secret"`
-	Interface               string                  `yaml:"interface-name" json:"interface-name"`
-	RoutingMark             int                     `yaml:"routing-mark" json:"routing-mark"`
-	Tunnels                 []LC.Tunnel             `yaml:"tunnels" json:"tunnels"`
-	GeoAutoUpdate           bool                    `yaml:"geo-auto-update" json:"geo-auto-update"`
-	GeoUpdateInterval       int                     `yaml:"geo-update-interval" json:"geo-update-interval"`
-	GeodataMode             bool                    `yaml:"geodata-mode" json:"geodata-mode"`
-	GeodataLoader           string                  `yaml:"geodata-loader" json:"geodata-loader"`
-	GeositeMatcher          string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
-	TCPConcurrent           bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	FindProcessMode         process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
-	GlobalClientFingerprint string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
-	GlobalUA                string                  `yaml:"global-ua" json:"global-ua"`
-	ETagSupport             bool                    `yaml:"etag-support" json:"etag-support"`
-	KeepAliveIdle           int                     `yaml:"keep-alive-idle" json:"keep-alive-idle"`
-	KeepAliveInterval       int                     `yaml:"keep-alive-interval" json:"keep-alive-interval"`
-	DisableKeepAlive        bool                    `yaml:"disable-keep-alive" json:"disable-keep-alive"`
+	Port                      int                     `yaml:"port" json:"port"`
+	SocksPort                 int                     `yaml:"socks-port" json:"socks-port"`
+	RedirPort                 int                     `yaml:"redir-port" json:"redir-port"`
+	TProxyPort                int                     `yaml:"tproxy-port" json:"tproxy-port"`
+	MixedPort                 int                     `yaml:"mixed-port" json:"mixed-port"`
+	ShadowSocksConfig         string                  `yaml:"ss-config" json:"ss-config"`
+	VmessConfig               string                  `yaml:"vmess-config" json:"vmess-config"`
+	InboundTfo                bool                    `yaml:"inbound-tfo" json:"inbound-tfo"`
+	InboundMPTCP              bool                    `yaml:"inbound-mptcp" json:"inbound-mptcp"`
+	Authentication            []string                `yaml:"authentication" json:"authentication"`
+	SkipAuthPrefixes          []netip.Prefix          `yaml:"skip-auth-prefixes" json:"skip-auth-prefixes"`
+	LanAllowedIPs             []netip.Prefix          `yaml:"lan-allowed-ips" json:"lan-allowed-ips"`
+	LanDisAllowedIPs          []netip.Prefix          `yaml:"lan-disallowed-ips" json:"lan-disallowed-ips"`
+	AllowLan                  bool                    `yaml:"allow-lan" json:"allow-lan"`
+	BindAddress               string                  `yaml:"bind-address" json:"bind-address"`
+	Mode                      T.TunnelMode            `yaml:"mode" json:"mode"`
+	UnifiedDelay              bool                    `yaml:"unified-delay" json:"unified-delay"`
+	LogLevel                  log.LogLevel            `yaml:"log-level" json:"log-level"`
+	LogRestfulTimestampFormat string                  `yaml:"log-restful-timestamp-format" json:"log-restful-timestamp-format"`
+	IPv6                      bool                    `yaml:"ipv6" json:"ipv6"`
+	ExternalController        string                  `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerPipe    string                  `yaml:"external-controller-pipe" json:"external-controller-pipe"`
+	ExternalControllerUnix    string                  `yaml:"external-controller-unix" json:"external-controller-unix"`
+	ExternalControllerTLS     string                  `yaml:"external-controller-tls" json:"external-controller-tls"`
+	ExternalControllerCors    RawCors                 `yaml:"external-controller-cors" json:"external-controller-cors"`
+	ExternalUI                string                  `yaml:"external-ui" json:"external-ui"`
+	ExternalUIURL             string                  `yaml:"external-ui-url" json:"external-ui-url"`
+	ExternalUIName            string                  `yaml:"external-ui-name" json:"external-ui-name"`
+	ExternalDohServer         string                  `yaml:"external-doh-server" json:"external-doh-server"`
+	Secret                    string                  `yaml:"secret" json:"secret"`
+	Interface                 string                  `yaml:"interface-name" json:"interface-name"`
+	RoutingMark               int                     `yaml:"routing-mark" json:"routing-mark"`
+	Tunnels                   []LC.Tunnel             `yaml:"tunnels" json:"tunnels"`
+	GeoAutoUpdate             bool                    `yaml:"geo-auto-update" json:"geo-auto-update"`
+	GeoUpdateInterval         int                     `yaml:"geo-update-interval" json:"geo-update-interval"`
+	GeodataMode               bool                    `yaml:"geodata-mode" json:"geodata-mode"`
+	GeodataLoader             string                  `yaml:"geodata-loader" json:"geodata-loader"`
+	GeositeMatcher            string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
+	TCPConcurrent             bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	FindProcessMode           process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	GlobalClientFingerprint   string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
+	GlobalUA                  string                  `yaml:"global-ua" json:"global-ua"`
+	ETagSupport               bool                    `yaml:"etag-support" json:"etag-support"`
+	KeepAliveIdle             int                     `yaml:"keep-alive-idle" json:"keep-alive-idle"`
+	KeepAliveInterval         int                     `yaml:"keep-alive-interval" json:"keep-alive-interval"`
+	DisableKeepAlive          bool                    `yaml:"disable-keep-alive" json:"disable-keep-alive"`
 
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
@@ -470,26 +472,27 @@ func Parse(buf []byte) (*Config, error) {
 
 func DefaultRawConfig() *RawConfig {
 	return &RawConfig{
-		AllowLan:          false,
-		BindAddress:       "*",
-		LanAllowedIPs:     []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")},
-		IPv6:              true,
-		Mode:              T.Rule,
-		GeoAutoUpdate:     false,
-		GeoUpdateInterval: 24,
-		GeodataMode:       geodata.GeodataMode(),
-		GeodataLoader:     "memconservative",
-		UnifiedDelay:      false,
-		Authentication:    []string{},
-		LogLevel:          log.INFO,
-		Hosts:             map[string]any{},
-		Rule:              []string{},
-		Proxy:             []map[string]any{},
-		ProxyGroup:        []map[string]any{},
-		TCPConcurrent:     false,
-		FindProcessMode:   process.FindProcessStrict,
-		GlobalUA:          "clash.meta/" + C.Version,
-		ETagSupport:       true,
+		AllowLan:                  false,
+		BindAddress:               "*",
+		LanAllowedIPs:             []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")},
+		IPv6:                      true,
+		Mode:                      T.Rule,
+		GeoAutoUpdate:             false,
+		GeoUpdateInterval:         24,
+		GeodataMode:               geodata.GeodataMode(),
+		GeodataLoader:             "memconservative",
+		UnifiedDelay:              false,
+		Authentication:            []string{},
+		LogLevel:                  log.INFO,
+		LogRestfulTimestampFormat: "15:04:05.000",
+		Hosts:                     map[string]any{},
+		Rule:                      []string{},
+		Proxy:                     []map[string]any{},
+		ProxyGroup:                []map[string]any{},
+		TCPConcurrent:             false,
+		FindProcessMode:           process.FindProcessStrict,
+		GlobalUA:                  "clash.meta/" + C.Version,
+		ETagSupport:               true,
 		DNS: RawDNS{
 			Enable:         false,
 			IPv6:           false,
@@ -756,12 +759,13 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			InboundTfo:        cfg.InboundTfo,
 			InboundMPTCP:      cfg.InboundMPTCP,
 		},
-		UnifiedDelay: cfg.UnifiedDelay,
-		Mode:         cfg.Mode,
-		LogLevel:     cfg.LogLevel,
-		IPv6:         cfg.IPv6,
-		Interface:    cfg.Interface,
-		RoutingMark:  cfg.RoutingMark,
+		UnifiedDelay:              cfg.UnifiedDelay,
+		Mode:                      cfg.Mode,
+		LogLevel:                  cfg.LogLevel,
+		LogRestfulTimestampFormat: cfg.LogRestfulTimestampFormat,
+		IPv6:                      cfg.IPv6,
+		Interface:                 cfg.Interface,
+		RoutingMark:               cfg.RoutingMark,
 		GeoXUrl: GeoXUrl{
 			GeoIp:   cfg.GeoXUrl.GeoIp,
 			Mmdb:    cfg.GeoXUrl.Mmdb,
