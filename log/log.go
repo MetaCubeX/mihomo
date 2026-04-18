@@ -102,3 +102,15 @@ func newLog(logLevel LogLevel, format string, v ...any) Event {
 		Payload:  fmt.Sprintf(format, v...),
 	}
 }
+
+func SetOutputFile(path string) error {
+	if path == "" {
+		return nil
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	log.SetOutput(file)
+	return nil
+}

@@ -41,6 +41,7 @@ var (
 	externalControllerUnix string
 	externalControllerPipe string
 	secret                 string
+	logFile                string
 )
 
 func init() {
@@ -52,6 +53,7 @@ func init() {
 	flag.StringVar(&externalControllerUnix, "ext-ctl-unix", os.Getenv("CLASH_OVERRIDE_EXTERNAL_CONTROLLER_UNIX"), "override external controller unix address")
 	flag.StringVar(&externalControllerPipe, "ext-ctl-pipe", os.Getenv("CLASH_OVERRIDE_EXTERNAL_CONTROLLER_PIPE"), "override external controller pipe address")
 	flag.StringVar(&secret, "secret", os.Getenv("CLASH_OVERRIDE_SECRET"), "override secret for RESTful API")
+	flag.StringVar(&logFile, "log-file", os.Getenv("CLASH_LOG_FILE"), "specify log file path")
 	flag.BoolVar(&geodataMode, "m", false, "set geodata mode")
 	flag.BoolVar(&version, "v", false, "show current version of mihomo")
 	flag.BoolVar(&testConfig, "t", false, "test configuration and exit")
@@ -59,6 +61,12 @@ func init() {
 }
 
 func main() {
+	if logFile != "" {
+		if err := log.SetOutputFile(logFile); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to set log file: %s\n", err.Error())
+		}
+	}
+
 	// Defensive programming: panic when code mistakenly calls net.DefaultResolver
 	net.DefaultResolver.PreferGo = true
 	net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
