@@ -27,9 +27,10 @@ type Mieru struct {
 
 type MieruOption struct {
 	BaseOption
-	Transport      string            `inbound:"transport"`
-	Users          map[string]string `inbound:"users"`
-	TrafficPattern string            `inbound:"traffic-pattern,omitempty"`
+	Transport           string            `inbound:"transport"`
+	Users               map[string]string `inbound:"users"`
+	TrafficPattern      string            `inbound:"traffic-pattern,omitempty"`
+	UserHintIsMandatory bool              `inbound:"user-hint-is-mandatory,omitempty"`
 }
 
 type mieruListenerFactory struct{}
@@ -158,11 +159,18 @@ func buildMieruServerConfig(option *MieruOption, ports utils.IntRanges[uint16]) 
 	}
 	var trafficPattern *mierupb.TrafficPattern
 	trafficPattern, _ = mierutp.Decode(option.TrafficPattern)
+	var advancedSettings *mierupb.ServerAdvancedSettings
+	if option.UserHintIsMandatory {
+		advancedSettings = &mierupb.ServerAdvancedSettings{
+			UserHintIsMandatory: proto.Bool(true),
+		}
+	}
 	return &mieruserver.ServerConfig{
 		Config: &mierupb.ServerConfig{
-			PortBindings:   portBindings,
-			Users:          users,
-			TrafficPattern: trafficPattern,
+			PortBindings:     portBindings,
+			Users:            users,
+			TrafficPattern:   trafficPattern,
+			AdvancedSettings: advancedSettings,
 		},
 		StreamListenerFactory: mieruListenerFactory{},
 		PacketListenerFactory: mieruListenerFactory{},

@@ -206,8 +206,9 @@ func testInboundMieruTCP(t *testing.T, handshakeMode string) {
 			Listen:  "127.0.0.1",
 			Port:    strconv.Itoa(port),
 		},
-		Transport: "TCP",
-		Users:     map[string]string{"test": "password"},
+		Transport:           "TCP",
+		Users:               map[string]string{"test": "password"},
+		UserHintIsMandatory: true,
 	}
 	in, err := inbound.NewMieru(&inboundOptions)
 	if !assert.NoError(t, err) {
@@ -260,8 +261,9 @@ func testInboundMieruUDP(t *testing.T, handshakeMode string) {
 			Listen:  "127.0.0.1",
 			Port:    strconv.Itoa(port),
 		},
-		Transport: "UDP",
-		Users:     map[string]string{"test": "password"},
+		Transport:           "UDP",
+		Users:               map[string]string{"test": "password"},
+		UserHintIsMandatory: true,
 	}
 	in, err := inbound.NewMieru(&inboundOptions)
 	if !assert.NoError(t, err) {
