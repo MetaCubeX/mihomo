@@ -108,7 +108,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			// Modified from https://github.com/daeuniverse/dae/discussions/182
 			// Changes:
 			//   1. Support TUICv4, just replace uuid:password with token
-			//   2. Remove `allow_insecure` field
 			urlTUIC, err := url.Parse(line)
 			if err != nil {
 				continue
@@ -142,6 +141,12 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			}
 			if udpRelayMode := query.Get("udp_relay_mode"); udpRelayMode != "" {
 				tuic["udp-relay-mode"] = udpRelayMode
+			}
+			for _, k := range [...]string{"allow_insecure", "allowInsecure", "insecure"} {
+				if query.Get(k) == "1" {
+					tuic["skip-cert-verify"] = true
+					break
+				}
 			}
 
 			proxies = append(proxies, tuic)
