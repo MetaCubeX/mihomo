@@ -636,6 +636,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 						return nil, err
 					}
 					_, quicConn, err := common.DialQuic(ctx, v.addr, v.DialOptions(), v.dialer, tlsConfig, cfg, true)
+					if err != nil {
+						return nil, err
+					}
 					return quicConn, nil
 				},
 				v.option.ALPN,
@@ -790,6 +793,9 @@ func NewVless(option VlessOption) (*Vless, error) {
 							return nil, err
 						}
 						_, quicConn, err := common.DialQuic(ctx, downloadAddr, v.DialOptions(), v.dialer, tlsConfig, cfg, true)
+						if err != nil {
+							return nil, err
+						}
 						return quicConn, nil
 					},
 					downloadALPN,
