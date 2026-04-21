@@ -118,7 +118,7 @@ func TestNormalize_SubnetsDedupAfterMasked(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	ttl0, ttlNeg, ttlBig, ttlOK := 0, -1, MaxTTLSeconds+1, 60
+	ttl0, ttlNeg, ttlBig, ttlOK := 0, -1, maxTTLSeconds+1, 60
 
 	validIface := InterfaceContext{Name: "wlan0"}
 
@@ -448,9 +448,9 @@ func TestJSONDecoding_RejectsScalarDNSSuffix(t *testing.T) {
 
 func TestIsValidIfaceType(t *testing.T) {
 	for _, s := range []string{"", "wifi", "ethernet", "cellular", "wwan", "vpn", "loopback", "other"} {
-		assert.True(t, IsValidIfaceType(s), "want valid for %q", s)
+		assert.True(t, isValidIfaceType(s), "want valid for %q", s)
 	}
 	for _, s := range []string{"tun", "wire", "WIFI", "cell"} {
-		assert.False(t, IsValidIfaceType(s), "want invalid for %q", s)
+		assert.False(t, isValidIfaceType(s), "want invalid for %q", s)
 	}
 }

@@ -491,7 +491,7 @@ func collectNetworkPolicySelectors(groupOrder []string, proxies map[string]C.Pro
 		if !ok {
 			continue
 		}
-		sel, ok := p.Adapter().(*outboundgroup.Selector)
+		sel, ok := p.Adapter().(networkpolicy.SelectorWithPolicy)
 		if !ok {
 			continue
 		}

@@ -11,10 +11,10 @@ import (
 	"github.com/metacubex/mihomo/log"
 )
 
-// DefaultBarrierTimeout is the per-group provider-ready barrier timeout
+// defaultBarrierTimeout is the per-group provider-ready barrier timeout
 // (architecture §5.6.2 "first-load 超时"). Internal constant for now;
 // promoted to a YAML field if user feedback warrants.
-const DefaultBarrierTimeout = 15 * time.Second
+const defaultBarrierTimeout = 15 * time.Second
 
 // ApplyResult is one row of applied[] in the PUT /network/context response
 // (architecture §5.4.2).
@@ -31,7 +31,7 @@ type ApplyResult struct {
 // §5.4.2 JSON body; REST layer handles wire encoding (nil / MatchedNone →
 // JSON null for matched_network etc.).
 type PutResult struct {
-	// MatchedNetworkPresent + MatchedNetwork mirror the PersistedState
+	// MatchedNetworkPresent + MatchedNetwork mirror the persistedState
 	// last_matched_network tri-state encoding:
 	//   - MatchedNetworkPresent=false → nil (never evaluated; should only
 	//     appear in intermediate diagnostics, never in a PutResult after
@@ -164,7 +164,7 @@ type Manager struct {
 	// evaluation" from "a new dirty event arrived during the evaluation":
 	// PutContext snapshots the counter before entering evaluation and
 	// uses CompareAndSwap(snapshot, 0) at the end; if a concurrent
-	// OnCandidateSetDirty bumped the counter during the evaluation, the
+	// onCandidateSetDirty bumped the counter during the evaluation, the
 	// CAS fails and the signal is preserved for the next cycle.
 	atomicHasCtx                   atomic.Bool
 	atomicCtxFingerprint           atomic.Pointer[string]
@@ -199,7 +199,7 @@ func NewManager(groups []SelectorWithPolicy, networks []Network, cache *cachefil
 		groupsOrder: make([]string, 0, len(groups)),
 		networks:    networks,
 		cache:       cache,
-		barrierTTL:  DefaultBarrierTimeout,
+		barrierTTL:  defaultBarrierTimeout,
 		states:      make(map[string]*groupState, len(groups)),
 	}
 	for _, g := range groups {
@@ -270,14 +270,14 @@ func (m *Manager) initStatesFromCache() {
 }
 
 // decodePersisted unwraps the JSON + Validate chain for load-side
-// record recovery. Uses the M3a PersistedState schema.
-func decodePersisted(raw []byte) (PersistedState, error) {
-	var ps PersistedState
+// record recovery. Uses the M3a persistedState schema.
+func decodePersisted(raw []byte) (persistedState, error) {
+	var ps persistedState
 	if err := ps.UnmarshalJSON(raw); err != nil {
-		return PersistedState{}, err
+		return persistedState{}, err
 	}
 	if err := ps.Validate(); err != nil {
-		return PersistedState{}, err
+		return persistedState{}, err
 	}
 	return ps, nil
 }
@@ -359,7 +359,7 @@ func (m *Manager) PutContext(raw *NetworkContext) (*PutResult, error) {
 
 	// candidate_set_dirty (§5.6.3) consumed: only clear if the counter is
 	// still at the value we observed pre-evaluation. A bump during the
-	// evaluation (concurrent OnCandidateSetDirty) fails the CAS and keeps
+	// evaluation (concurrent onCandidateSetDirty) fails the CAS and keeps
 	// the signal alive for the next PUT — otherwise the race between a
 	// provider refresh and the serial queue would swallow the dirty event.
 	m.atomicCandidateSetDirtyCounter.CompareAndSwap(dirtySnapshot, 0)
@@ -695,13 +695,13 @@ func (m *Manager) persistStateLocked(name string, st *groupState) {
 	if m.cache == nil {
 		return
 	}
-	ps := PersistedState{
-		SchemaVersion:      PersistVersion,
+	ps := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             st.source,
 		LastMatched:        st.lastMatched,
 		LastMatchedPresent: st.lastMatchedPresent,
 	}
-	if err := WriteNetworkPolicyState(m.cache, name, ps); err != nil {
+	if err := writeNetworkPolicyState(m.cache, name, ps); err != nil {
 		// Write-side Validate failure is a programmer bug: log and
 		// skip. Don't propagate — the runtime already applied the
 		// transition; cachefile is best-effort persistence.
@@ -822,7 +822,7 @@ func (m *Manager) ReleaseBarrier(groupName string) {
 	m.recomputePendingMissingTargetLocked()
 }
 
-// OnCandidateSetDirty marks the candidate-set-dirty flag so subsequent
+// onCandidateSetDirty marks the candidate-set-dirty flag so subsequent
 // PUT requests go through the full evaluation path (§5.6.3 condition e).
 // Called by the executor on provider subscription refresh / external
 // provider reload / hot-reload group-membership changes.
@@ -833,7 +833,7 @@ func (m *Manager) ReleaseBarrier(groupName string) {
 // before evaluating and only clears via CompareAndSwap if the counter
 // hasn't moved. A bump during evaluation keeps the signal live for the
 // next PUT.
-func (m *Manager) OnCandidateSetDirty() {
+func (m *Manager) onCandidateSetDirty() {
 	m.atomicCandidateSetDirtyCounter.Add(1)
 }
 
@@ -896,7 +896,7 @@ func (m *Manager) ForceReEvaluate() *PutResult {
 	}
 	// ForceReEvaluate is a full evaluation (§5.8.3) — it also consumes
 	// the candidate_set_dirty signal. Snapshot the counter BEFORE the
-	// evaluation so a concurrent OnCandidateSetDirty during eval fails
+	// evaluation so a concurrent onCandidateSetDirty during eval fails
 	// the end-of-cycle CAS and keeps the signal live for the next PUT.
 	dirtySnapshot := m.atomicCandidateSetDirtyCounter.Load()
 

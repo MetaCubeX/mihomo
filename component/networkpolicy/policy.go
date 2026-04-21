@@ -1,14 +1,14 @@
 package networkpolicy
 
 const (
-	// PersistVersion is the current schema version persisted alongside the
+	// persistVersion is the current schema version persisted alongside the
 	// per-group last-matched network state in the runtime cache.
-	PersistVersion = 1
+	persistVersion = 1
 
-	// MaxTTLSeconds is the upper bound on PUT /network/context TTL (10 years).
+	// maxTTLSeconds is the upper bound on PUT /network/context TTL (10 years).
 	// Keeps time.Duration well clear of its int64 nanosecond overflow (~292 years)
 	// and prevents AfterFunc from scheduling absurdly far in the future.
-	MaxTTLSeconds = 10 * 365 * 86400
+	maxTTLSeconds = 10 * 365 * 86400
 
 	// DefaultKey is the reserved network-policy key meaning "fallback".
 	DefaultKey = "default"

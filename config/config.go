@@ -786,11 +786,7 @@ func warnOrphanNetworks(networks []networkpolicy.Network, proxies map[string]C.P
 	}
 	referenced := make(map[string]struct{})
 	for _, p := range proxies {
-		adapter, ok := p.(interface{ Adapter() C.ProxyAdapter })
-		if !ok {
-			continue
-		}
-		sel, ok := adapter.Adapter().(*outboundgroup.Selector)
+		sel, ok := p.Adapter().(networkpolicy.SelectorWithPolicy)
 		if !ok {
 			continue
 		}

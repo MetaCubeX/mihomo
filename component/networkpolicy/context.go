@@ -89,9 +89,9 @@ type InterfaceContext struct {
 // user-installed VPNs as iface_type=vpn.
 var ifaceTypes = []string{"cellular", "ethernet", "loopback", "other", "vpn", "wifi", "wwan"}
 
-// IsValidIfaceType reports whether s is a valid iface_type enum value.
+// isValidIfaceType reports whether s is a valid iface_type enum value.
 // Empty string returns true — a host that can't classify may omit the field.
-func IsValidIfaceType(s string) bool {
+func isValidIfaceType(s string) bool {
 	if s == "" {
 		return true
 	}
@@ -195,8 +195,8 @@ func (c *NetworkContext) validate() error {
 		switch {
 		case *c.TTL <= 0:
 			return fmt.Errorf("%w: %d (must be > 0 or omitted)", ErrInvalidTTL, *c.TTL)
-		case *c.TTL > MaxTTLSeconds:
-			return fmt.Errorf("%w: %d (max %d seconds = 10 years)", ErrInvalidTTL, *c.TTL, MaxTTLSeconds)
+		case *c.TTL > maxTTLSeconds:
+			return fmt.Errorf("%w: %d (max %d seconds = 10 years)", ErrInvalidTTL, *c.TTL, maxTTLSeconds)
 		}
 	}
 	if len(c.Interfaces) > MaxInterfaces {
@@ -384,7 +384,7 @@ func (iface *InterfaceContext) validate() error {
 	if len(iface.SSID) > 32 {
 		return invalidField("ssid", fmt.Sprintf("%d bytes (max 32)", len(iface.SSID)))
 	}
-	if iface.IfaceType != "" && !IsValidIfaceType(iface.IfaceType) {
+	if iface.IfaceType != "" && !isValidIfaceType(iface.IfaceType) {
 		return invalidField("iface_type", fmt.Sprintf("%q not in %s", iface.IfaceType, strings.Join(ifaceTypes, "/")))
 	}
 	// gateway_mac is only meaningful when gateway_ip is also filled; they

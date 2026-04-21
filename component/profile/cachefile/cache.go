@@ -81,7 +81,8 @@ func (c *CacheFile) SelectedMap() map[string]string {
 // so previously-persisted entries are effectively ignored (bbolt data
 // itself is untouched until the next successful write or explicit delete).
 //
-// value is the caller-encoded JSON payload (see networkpolicy.PersistedState).
+// value is the caller-encoded JSON payload (see the networkpolicy package's
+// internal persistence layer).
 // Storing raw bytes here keeps the cachefile layer untangled from the
 // networkpolicy package's schema.
 func (c *CacheFile) SetNetworkPolicyState(group string, value []byte) {

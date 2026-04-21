@@ -378,7 +378,7 @@ func buildIfaceFieldMatcher(key string, val any) (ifaceFieldMatcher, error) {
 		}
 		for i := range list {
 			list[i] = strings.ToLower(list[i])
-			if !IsValidIfaceType(list[i]) {
+			if !isValidIfaceType(list[i]) {
 				return nil, fmt.Errorf("iface-type[%d]: invalid value %q", i, list[i])
 			}
 		}

@@ -7,8 +7,8 @@ import (
 )
 
 func TestPersistedState_Roundtrip_ConcreteName(t *testing.T) {
-	orig := PersistedState{
-		SchemaVersion:      PersistVersion,
+	orig := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceManual,
 		LastMatched:        "office",
 		LastMatchedPresent: true,
@@ -21,7 +21,7 @@ func TestPersistedState_Roundtrip_ConcreteName(t *testing.T) {
 		t.Errorf("want string-encoded last_matched_network, got %s", buf)
 	}
 
-	var decoded PersistedState
+	var decoded persistedState
 	if err := json.Unmarshal(buf, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -35,8 +35,8 @@ func TestPersistedState_Roundtrip_ConcreteName(t *testing.T) {
 // Otherwise a restarted kernel would lose the "already evaluated, no
 // network matched" history and re-enter the wrong §5.6.2 branch.
 func TestPersistedState_Roundtrip_MatchedNone(t *testing.T) {
-	orig := PersistedState{
-		SchemaVersion:      PersistVersion,
+	orig := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        MatchedNone,
 		LastMatchedPresent: true,
@@ -66,7 +66,7 @@ func TestPersistedState_Roundtrip_MatchedNone(t *testing.T) {
 		t.Errorf(`want Unicode-escape form \u003cnone\u003e on disk, got %s`, s)
 	}
 
-	var decoded PersistedState
+	var decoded persistedState
 	if err := json.Unmarshal(buf, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -88,8 +88,8 @@ func TestPersistedState_Roundtrip_MatchedNone(t *testing.T) {
 // must treat a loaded record with these values as corrupt and fall into
 // branch B. The separate Validate tests enforce that.
 func TestPersistedState_Roundtrip_NilSentinel(t *testing.T) {
-	orig := PersistedState{
-		SchemaVersion:      PersistVersion,
+	orig := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceUnknown,
 		LastMatched:        "",
 		LastMatchedPresent: false,
@@ -102,7 +102,7 @@ func TestPersistedState_Roundtrip_NilSentinel(t *testing.T) {
 		t.Errorf("want null-encoded last_matched_network, got %s", buf)
 	}
 
-	var decoded PersistedState
+	var decoded persistedState
 	if err := json.Unmarshal(buf, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -122,14 +122,14 @@ func TestPersistedState_Validate_Happy(t *testing.T) {
 	// source=auto requires LastMatchedPresent=true (§5.6.2 advances it
 	// on every transition that sets source=auto); source=manual + nil
 	// is legitimate (first manual set before any ctx PUT).
-	cases := []PersistedState{
-		{SchemaVersion: PersistVersion, Source: SourceAuto, LastMatched: "office", LastMatchedPresent: true},
-		{SchemaVersion: PersistVersion, Source: SourceAuto, LastMatched: MatchedNone, LastMatchedPresent: true},
-		{SchemaVersion: PersistVersion, Source: SourceManual, LastMatched: "office", LastMatchedPresent: true},
+	cases := []persistedState{
+		{SchemaVersion: persistVersion, Source: SourceAuto, LastMatched: "office", LastMatchedPresent: true},
+		{SchemaVersion: persistVersion, Source: SourceAuto, LastMatched: MatchedNone, LastMatchedPresent: true},
+		{SchemaVersion: persistVersion, Source: SourceManual, LastMatched: "office", LastMatchedPresent: true},
 		// manual + MatchedNone: reachable via §5.6.2 "default / no_change_no_default
 		// advanced last_matched to <none>, user then manually switched".
-		{SchemaVersion: PersistVersion, Source: SourceManual, LastMatched: MatchedNone, LastMatchedPresent: true},
-		{SchemaVersion: PersistVersion, Source: SourceManual, LastMatched: "", LastMatchedPresent: false},
+		{SchemaVersion: persistVersion, Source: SourceManual, LastMatched: MatchedNone, LastMatchedPresent: true},
+		{SchemaVersion: persistVersion, Source: SourceManual, LastMatched: "", LastMatchedPresent: false},
 	}
 	for _, p := range cases {
 		if err := p.Validate(); err != nil {
@@ -144,8 +144,8 @@ func TestPersistedState_Validate_Happy(t *testing.T) {
 // legitimate `nil` is on source=manual (first manual set before ctx) or
 // source=unknown (initial in-memory state, never persisted).
 func TestPersistedState_Validate_RejectsAutoWithNil(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        "",
 		LastMatchedPresent: false,
@@ -157,7 +157,7 @@ func TestPersistedState_Validate_RejectsAutoWithNil(t *testing.T) {
 }
 
 func TestPersistedState_Validate_RejectsUnknownSchema(t *testing.T) {
-	p := PersistedState{SchemaVersion: 2, Source: SourceAuto}
+	p := persistedState{SchemaVersion: 2, Source: SourceAuto}
 	err := p.Validate()
 	if err == nil || !strings.Contains(err.Error(), "schema_version 2") {
 		t.Errorf("want schema_version error, got %v", err)
@@ -165,7 +165,7 @@ func TestPersistedState_Validate_RejectsUnknownSchema(t *testing.T) {
 }
 
 func TestPersistedState_Validate_RejectsInvalidSource(t *testing.T) {
-	p := PersistedState{SchemaVersion: PersistVersion, Source: "bogus"}
+	p := persistedState{SchemaVersion: persistVersion, Source: "bogus"}
 	err := p.Validate()
 	if err == nil || !strings.Contains(err.Error(), "invalid source") {
 		t.Errorf("want invalid-source error, got %v", err)
@@ -178,7 +178,7 @@ func TestPersistedState_Validate_RejectsInvalidSource(t *testing.T) {
 // corrupted record falls through to branch B rather than propagating a
 // broken state into the manager.
 func TestPersistedState_Validate_RejectsPersistedUnknown(t *testing.T) {
-	p := PersistedState{SchemaVersion: PersistVersion, Source: SourceUnknown}
+	p := persistedState{SchemaVersion: persistVersion, Source: SourceUnknown}
 	err := p.Validate()
 	if err == nil || !strings.Contains(err.Error(), "must not be persisted") {
 		t.Errorf("want persisted-unknown error, got %v", err)
@@ -190,8 +190,8 @@ func TestPersistedState_Validate_RejectsPersistedUnknown(t *testing.T) {
 // for "evaluated, no match". A present-but-empty value means the record
 // was tampered with externally.
 func TestPersistedState_Validate_RejectsEmptyLastMatched(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        "",
 		LastMatchedPresent: true,
@@ -207,8 +207,8 @@ func TestPersistedState_Validate_RejectsEmptyLastMatched(t *testing.T) {
 // it at config parse time). Reject defensively to catch external
 // tampering.
 func TestPersistedState_Validate_RejectsDefaultAsLastMatched(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        DefaultKey,
 		LastMatchedPresent: true,
@@ -224,8 +224,8 @@ func TestPersistedState_Validate_RejectsDefaultAsLastMatched(t *testing.T) {
 // JSON null, losing information silently. Validate must catch this on
 // the programmer-construction path.
 func TestPersistedState_Validate_RejectsInconsistentAbsenceWithValue(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceManual,
 		LastMatched:        "office",
 		LastMatchedPresent: false,
@@ -239,8 +239,8 @@ func TestPersistedState_Validate_RejectsInconsistentAbsenceWithValue(t *testing.
 // MatchedNone as LastMatched is explicitly valid: "evaluated, no network
 // matched" is a legitimate persisted state.
 func TestPersistedState_Validate_AcceptsMatchedNone(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        MatchedNone,
 		LastMatchedPresent: true,
@@ -256,7 +256,7 @@ func TestPersistedState_Validate_AcceptsMatchedNone(t *testing.T) {
 // through to branch B — the point of this test is that decoding itself is
 // robust, not that the result is usable.
 func TestPersistedState_Unmarshal_MissingFields(t *testing.T) {
-	var p PersistedState
+	var p persistedState
 	if err := json.Unmarshal([]byte(`{}`), &p); err != nil {
 		t.Fatalf("unmarshal empty: %v", err)
 	}
@@ -269,46 +269,46 @@ func TestPersistedState_Unmarshal_MissingFields(t *testing.T) {
 }
 
 func TestPersistedState_Unmarshal_Malformed(t *testing.T) {
-	var p PersistedState
+	var p persistedState
 	err := json.Unmarshal([]byte(`not json`), &p)
 	if err == nil {
 		t.Errorf("want error on malformed input; got nil")
 	}
 }
 
-// MarshalValidated returns the Validate error on invariant violations so
+// marshalValidated returns the Validate error on invariant violations so
 // writers cannot leak impossible states onto disk via raw json.Marshal.
 func TestPersistedState_MarshalValidated_RejectsInvalid(t *testing.T) {
-	invalid := PersistedState{
-		SchemaVersion:      PersistVersion,
+	invalid := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        "",
 		LastMatchedPresent: false,
 	}
-	_, err := invalid.MarshalValidated()
+	_, err := invalid.marshalValidated()
 	if err == nil {
 		t.Errorf("want Validate error on auto+nil, got nil")
 	}
 	// Raw json.Marshal succeeds on the same invalid struct — this is the
-	// loophole MarshalValidated is designed to close. The assertion
+	// loophole marshalValidated is designed to close. The assertion
 	// documents the contract rather than testing json semantics.
 	if _, rawErr := json.Marshal(invalid); rawErr != nil {
-		t.Errorf("raw json.Marshal should succeed on invalid struct (MarshalValidated is the guard); got %v", rawErr)
+		t.Errorf("raw json.Marshal should succeed on invalid struct (marshalValidated is the guard); got %v", rawErr)
 	}
 }
 
 func TestPersistedState_MarshalValidated_PassesThrough(t *testing.T) {
-	valid := PersistedState{
-		SchemaVersion:      PersistVersion,
+	valid := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        "office",
 		LastMatchedPresent: true,
 	}
-	buf, err := valid.MarshalValidated()
+	buf, err := valid.marshalValidated()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	var decoded PersistedState
+	var decoded persistedState
 	if err := json.Unmarshal(buf, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -322,8 +322,8 @@ func TestPersistedState_MarshalValidated_PassesThrough(t *testing.T) {
 // "auto requires present". Structural checks run first so the reported
 // error points at the real bug.
 func TestPersistedState_Validate_InconsistencyTakesPrecedenceOverSource(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceAuto,
 		LastMatched:        "office",
 		LastMatchedPresent: false,
@@ -343,8 +343,8 @@ func TestPersistedState_Validate_InconsistencyTakesPrecedenceOverSource(t *testi
 // otherwise legitimate, so source-specific check alone wouldn't catch
 // the bug).
 func TestPersistedState_Validate_InconsistencyOnManual(t *testing.T) {
-	p := PersistedState{
-		SchemaVersion:      PersistVersion,
+	p := persistedState{
+		SchemaVersion:      persistVersion,
 		Source:             SourceManual,
 		LastMatched:        "office",
 		LastMatchedPresent: false,

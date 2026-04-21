@@ -426,12 +426,12 @@ func TestTTLLightPath_CandidateSetDirtyDisables(t *testing.T) {
 	_ = first
 
 	// Simulate provider refresh: candidate_set_dirty set.
-	mgr.OnCandidateSetDirty()
+	mgr.onCandidateSetDirty()
 
 	sel.setHistory = nil
 	second, _ := mgr.PutContext(makeCtxWithTTL("office-5g", 3600))
 	// Must have gone through full evaluation — verifiable indirectly by
-	// checking that OnCandidateSetDirty's flag was cleared after the
+	// checking that onCandidateSetDirty's flag was cleared after the
 	// evaluation.
 	if mgr.atomicCandidateSetDirtyCounter.Load() != 0 {
 		t.Errorf("candidate_set_dirty counter must clear after a full evaluation (no concurrent bump)")
@@ -665,9 +665,9 @@ func TestForceReEvaluate_ClearsCandidateSetDirty(t *testing.T) {
 	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 	mgr.PutContext(makeCtx("office-5g"))
 
-	mgr.OnCandidateSetDirty()
+	mgr.onCandidateSetDirty()
 	if mgr.atomicCandidateSetDirtyCounter.Load() == 0 {
-		t.Fatal("precondition: OnCandidateSetDirty must set counter")
+		t.Fatal("precondition: onCandidateSetDirty must set counter")
 	}
 	mgr.ForceReEvaluate()
 	if mgr.atomicCandidateSetDirtyCounter.Load() != 0 {

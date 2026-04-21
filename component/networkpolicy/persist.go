@@ -7,7 +7,7 @@ import (
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 )
 
-// PersistedState is the per-group record written to the cachefile's
+// persistedState is the per-group record written to the cachefile's
 // bucketNetworkPolicy. One entry per proxy-group that carries a
 // network-policy (groups without a policy contribute nothing).
 //
@@ -49,7 +49,7 @@ import (
 // JSON null on the wire, with host code using selection_source to
 // disambiguate. Persistence keeps them distinct so the state machine
 // can restart with fidelity.
-type PersistedState struct {
+type persistedState struct {
 	// SchemaVersion is the persisted-schema version tag; currently 1.
 	SchemaVersion int `json:"schema_version"`
 
@@ -73,7 +73,7 @@ type PersistedState struct {
 // as a string. Custom to route the LastMatchedPresent tri-state through
 // a single JSON key (not two separate keys — simpler for future bucket
 // consumers that only read this field for diagnostics).
-func (p PersistedState) MarshalJSON() ([]byte, error) {
+func (p persistedState) MarshalJSON() ([]byte, error) {
 	type wire struct {
 		SchemaVersion int     `json:"schema_version"`
 		Source        string  `json:"source"`
@@ -89,7 +89,7 @@ func (p PersistedState) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the JSON form, populating LastMatchedPresent
 // based on whether last_matched_network is a string (true) or null (false).
-func (p *PersistedState) UnmarshalJSON(data []byte) error {
+func (p *persistedState) UnmarshalJSON(data []byte) error {
 	type wire struct {
 		SchemaVersion int     `json:"schema_version"`
 		Source        string  `json:"source"`
@@ -119,9 +119,9 @@ func (p *PersistedState) UnmarshalJSON(data []byte) error {
 // drop the state into branch B for that group, rather than feeding the
 // corrupt value into the state machine.
 //
-// Write-side: raw json.Marshal on PersistedState bypasses Validate,
+// Write-side: raw json.Marshal on persistedState bypasses Validate,
 // and cachefile.SetNetworkPolicyState accepts any byte slice. The
-// idiomatic (and only safe) write path is WriteNetworkPolicyState
+// idiomatic (and only safe) write path is writeNetworkPolicyState
 // below, which chains Validate → json.Marshal → bucket Set. Writers
 // that hand-roll the chain must call Validate explicitly; raw marshal
 // + raw Set is a landmine this package deliberately does not booby-trap
@@ -147,9 +147,9 @@ func (p *PersistedState) UnmarshalJSON(data []byte) error {
 //     meaning in this encoding
 //   - LastMatchedPresent=true with DefaultKey ("default"): default is
 //     the policy-layer fallback key, never a network name
-func (p PersistedState) Validate() error {
-	if p.SchemaVersion != PersistVersion {
-		return fmt.Errorf("schema_version %d not supported (current %d)", p.SchemaVersion, PersistVersion)
+func (p persistedState) Validate() error {
+	if p.SchemaVersion != persistVersion {
+		return fmt.Errorf("schema_version %d not supported (current %d)", p.SchemaVersion, persistVersion)
 	}
 
 	// Structural consistency first: the LastMatchedPresent flag and
@@ -185,32 +185,32 @@ func (p PersistedState) Validate() error {
 	return nil
 }
 
-// MarshalValidated runs Validate, then json.Marshal. Returns the Validate
+// marshalValidated runs Validate, then json.Marshal. Returns the Validate
 // error on any invariant failure so writers cannot accidentally persist an
 // architecturally impossible state. Prefer this over json.Marshal(p) at
 // write sites — the latter bypasses the invariant guard and will happily
 // serialize source=unknown, auto+nil, present-false+nonempty, etc.
 //
-// For writing to the actual cachefile, WriteNetworkPolicyState combines
+// For writing to the actual cachefile, writeNetworkPolicyState combines
 // this helper with the bucket Set call, closing the last hole where a
 // caller could invoke json.Marshal + SetNetworkPolicyState directly and
 // bypass validation.
-func (p PersistedState) MarshalValidated() ([]byte, error) {
+func (p persistedState) marshalValidated() ([]byte, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
 	return json.Marshal(p)
 }
 
-// WriteNetworkPolicyState is the typed write-path entry point: validates
+// writeNetworkPolicyState is the typed write-path entry point: validates
 // the record, serializes it, and persists it through the cachefile bucket
 // in one call. Returns Validate errors so callers can treat write failures
 // uniformly. This is the only write path M3b's manager should use — going
 // directly through cachefile.SetNetworkPolicyState with hand-marshaled
 // bytes bypasses the state-machine invariants and lets corrupt records
 // reach the bucket.
-func WriteNetworkPolicyState(cache *cachefile.CacheFile, group string, state PersistedState) error {
-	buf, err := state.MarshalValidated()
+func writeNetworkPolicyState(cache *cachefile.CacheFile, group string, state persistedState) error {
+	buf, err := state.marshalValidated()
 	if err != nil {
 		return err
 	}
