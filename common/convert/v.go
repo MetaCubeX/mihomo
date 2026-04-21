@@ -91,16 +91,14 @@ func handleVShareLink(names map[string]int, url *url.URL, scheme string, proxy m
 		proxy["http-opts"] = httpOpts
 
 	case "h2":
-		headers := make(map[string]any)
 		h2Opts := make(map[string]any)
-		h2Opts["path"] = []string{"/"}
+		h2Opts["path"] = "/"
 		if path := query.Get("path"); path != "" {
-			h2Opts["path"] = []string{path}
+			h2Opts["path"] = path
 		}
 		if host := query.Get("host"); host != "" {
 			h2Opts["host"] = []string{host}
 		}
-		h2Opts["headers"] = headers
 		proxy["h2-opts"] = h2Opts
 
 	case "ws", "httpupgrade":

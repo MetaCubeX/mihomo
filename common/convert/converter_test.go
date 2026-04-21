@@ -172,9 +172,8 @@ func TestConvertsV2RayVlessHTTPTransportUsesH2Opts(t *testing.T) {
 	assert.Len(t, proxies, 1)
 	assert.Equal(t, "h2", proxies[0]["network"])
 	assert.Equal(t, map[string]any{
-		"host":    []string{"cdn.example.com"},
-		"path":    []string{"/grpc"},
-		"headers": map[string]any{},
+		"host": []string{"cdn.example.com"},
+		"path": "/grpc",
 	}, proxies[0]["h2-opts"])
 	assert.NotContains(t, proxies[0], "http-opts")
 }
