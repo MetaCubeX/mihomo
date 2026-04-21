@@ -27,7 +27,12 @@ func TestNormalize_Interfaces(t *testing.T) {
 		},
 		DNSSuffix: []string{"CORP.Example.COM", "", "home.example.com", "CORP.Example.COM"},
 	}
-	c.normalize()
+	// Use NormalizeAndValidate so the canonical sort runs (sort moved
+	// from normalize() into validate() in the M4 round-2 fix that gave
+	// per-iface error paths input-order indices).
+	if err := c.NormalizeAndValidate(); err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
 
 	assert.Equal(t, 1, c.Version, "version passes through unchanged")
 	// Sorted by name: en0 < wlan0
@@ -124,27 +129,34 @@ func TestValidate(t *testing.T) {
 	}{
 		{"valid empty interfaces", NetworkContext{Version: 1}, ""},
 		{"valid single iface", NetworkContext{Version: 1, Interfaces: []InterfaceContext{validIface}}, ""},
-		{"version 0 rejected (no silent promotion)", NetworkContext{Version: 0}, "invalid version"},
-		{"version unsupported", NetworkContext{Version: 2}, "invalid version"},
+		{"version 0 rejected (no silent promotion)", NetworkContext{Version: 0}, "invalid_version"},
+		{"version unsupported", NetworkContext{Version: 2}, "invalid_version"},
 		{"ttl nil sticky", NetworkContext{Version: 1}, ""},
 		{"ttl positive", NetworkContext{Version: 1, TTL: &ttlOK}, ""},
-		{"ttl zero", NetworkContext{Version: 1, TTL: &ttl0}, "invalid ttl"},
-		{"ttl negative", NetworkContext{Version: 1, TTL: &ttlNeg}, "invalid ttl"},
-		{"ttl too large", NetworkContext{Version: 1, TTL: &ttlBig}, "invalid ttl"},
-		{"iface name required", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{}}}, "name: empty"},
-		{"iface name too long", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: strings.Repeat("x", 256)}}}, "name: 256 bytes"},
-		{"ssid too long", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", SSID: strings.Repeat("a", 33)}}}, "ssid: 33 bytes"},
+		{"ttl zero", NetworkContext{Version: 1, TTL: &ttl0}, "invalid_ttl"},
+		{"ttl negative", NetworkContext{Version: 1, TTL: &ttlNeg}, "invalid_ttl"},
+		{"ttl too large", NetworkContext{Version: 1, TTL: &ttlBig}, "invalid_ttl"},
+		{"iface name required", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{}}}, "field: interfaces[0].name, reason: empty"},
+		{"iface name too long", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: strings.Repeat("x", 256)}}}, "field: interfaces[0].name, reason: 256 bytes"},
+		{"ssid too long", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", SSID: strings.Repeat("a", 33)}}}, "field: interfaces[0].ssid, reason: 33 bytes"},
 		{"ssid at limit", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", SSID: strings.Repeat("a", 32)}}}, ""},
-		{"bssid invalid", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", BSSID: "xx:yy:zz:11:22:33"}}}, "bssid"},
-		{"gateway_ip invalid", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", GatewayIP: "999.9.9.9"}}}, "gateway_ip"},
-		{"iface_type invalid", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", IfaceType: "wire"}}}, "iface_type"},
-		{"gateway_mac without gateway_ip", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", GatewayMAC: "aa:bb:cc:dd:ee:ff"}}}, "gateway_mac: filled but gateway_ip is empty"},
+		{"bssid invalid", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", BSSID: "xx:yy:zz:11:22:33"}}}, "field: interfaces[0].bssid"},
+		{"gateway_ip invalid", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", GatewayIP: "999.9.9.9"}}}, "field: interfaces[0].gateway_ip"},
+		{"iface_type invalid", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", IfaceType: "wire"}}}, "field: interfaces[0].iface_type"},
+		{"gateway_mac without gateway_ip", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", GatewayMAC: "aa:bb:cc:dd:ee:ff"}}}, "invalid_gateway_combo"},
 		{"gateway_mac+gateway_ip ok", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", GatewayIP: "10.0.0.1", GatewayMAC: "aa:bb:cc:dd:ee:ff"}}}, ""},
-		{"subnets invalid entry", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", Subnets: []string{"10.0.0.0/8", "not-a-cidr"}}}}, "subnets[1]"},
-		{"duplicate iface name", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0"}, {Name: "wlan0"}}}, "duplicate name"},
-		{"dns_suffix with space", NetworkContext{Version: 1, DNSSuffix: []string{"corp example"}}, "dns_suffix"},
-		{"dns_suffix with comma rejected", NetworkContext{Version: 1, DNSSuffix: []string{"a,b"}}, "dns_suffix"},
-		{"too many interfaces", NetworkContext{Version: 1, Interfaces: makeIfaces(MaxInterfaces + 1)}, "invalid interfaces: 33 entries"},
+		{"subnets invalid entry", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0", Subnets: []string{"10.0.0.0/8", "not-a-cidr"}}}}, "field: interfaces[0].subnets[1]"},
+		{"duplicate iface name", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "wlan0"}, {Name: "wlan0"}}}, "duplicate_iface_name"},
+		{"dns_suffix with space", NetworkContext{Version: 1, DNSSuffix: []string{"corp example"}}, "field: dns_suffix"},
+		{"dns_suffix with comma rejected", NetworkContext{Version: 1, DNSSuffix: []string{"a,b"}}, "field: dns_suffix"},
+		{"too many interfaces", NetworkContext{Version: 1, Interfaces: makeIfaces(MaxInterfaces + 1)}, "too_many_interfaces"},
+		// Regression: per-iface error indices reflect HOST input order
+		// (pre-sort), not post-sort canonical order. With "z0" first and
+		// "a0" second in the input, an error on the second iface should
+		// say interfaces[1] (input position) rather than interfaces[0]
+		// (sorted position).
+		{"input-order index normalize", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "z0"}, {Name: "a0", BSSID: "xx:yy:zz:11:22:33"}}}, "interfaces[1].bssid"},
+		{"input-order index validate", NetworkContext{Version: 1, Interfaces: []InterfaceContext{{Name: "z0"}, {Name: "a0", IfaceType: "satellite"}}}, "interfaces[1].iface_type"},
 		{"at max interfaces", NetworkContext{Version: 1, Interfaces: makeIfaces(MaxInterfaces)}, ""},
 	}
 	for _, tc := range cases {
