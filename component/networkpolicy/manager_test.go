@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// mockSelector is a lightweight selectorWithPolicy implementation for
+// mockSelector is a lightweight SelectorWithPolicy implementation for
 // driving Manager's state machine directly without a real
 // outboundgroup.Selector (which would require wiring up providers, a
 // real proxy map, etc.).
@@ -89,7 +89,7 @@ func TestNewManager_BranchB_NoCache(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 	st, ok := mgr.states["auto"]
 	if !ok {
 		t.Fatal("group state not initialized")
@@ -111,7 +111,7 @@ func TestPutContext_Matched_SwitchesTarget(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	res, err := mgr.PutContext(makeCtx("office-5g"))
 	if err != nil {
@@ -139,7 +139,7 @@ func TestPutContext_AlreadySelected_NoChange(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	res, _ := mgr.PutContext(makeCtx("office-5g"))
 	ap := res.Applied[0]
@@ -160,7 +160,7 @@ func TestPutContext_Default_NoMappingForNetwork(t *testing.T) {
 		HasDefault:   true,
 		DefaultProxy: "DIRECT",
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// Ctx with a different SSID: matched=<none>, default proxy applies.
 	res, _ := mgr.PutContext(makeCtx("home-wifi"))
@@ -177,7 +177,7 @@ func TestPutContext_NoChangeNoDefault(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "hk"}, // no default
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// matched=<none>, no default → no_change_no_default; keep current.
 	res, _ := mgr.PutContext(makeCtx("home-wifi"))
@@ -200,7 +200,7 @@ func TestPutContext_MissingTarget_NoStateAdvance(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "subscription-node"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	res, _ := mgr.PutContext(makeCtx("office-5g"))
 	ap := res.Applied[0]
@@ -222,7 +222,7 @@ func TestHandleManualSet_PreservesLastMatched(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// First evaluate to set source=auto + lastMatched=office.
 	mgr.PutContext(makeCtx("office-5g"))
@@ -243,7 +243,7 @@ func TestPutContext_ManualLocked_SameMatched(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g"))
 	sel.Set("hk")
@@ -268,7 +268,7 @@ func TestPutContext_ManualTakenOverOnNetworkChange(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us", "DIRECT"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us", "home": "DIRECT"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{
 		makeNetwork("office", "office-5g"),
 		makeNetwork("home", "home-wifi"),
 	}, nil)
@@ -298,7 +298,7 @@ func TestPutContext_UnchangedNetwork_SameMatchedAutoSource(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g")) // source→auto, lastMatched=office
 	sel.setHistory = nil
@@ -318,7 +318,7 @@ func TestDeleteContext_PreservesState(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g"))
 	sel.Set("hk")
@@ -347,7 +347,7 @@ func TestTTLLightPath_SameFingerprintBothTTL_ShortCircuits(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// First PUT with TTL: full evaluation, caches expires_at, switches hk→us.
 	first, _ := mgr.PutContext(makeCtxWithTTL("office-5g", 3600))
@@ -377,7 +377,7 @@ func TestTTLLightPath_StickyToSticky_FallsThrough(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g"))
 	res, _ := mgr.PutContext(makeCtx("office-5g"))
@@ -398,7 +398,7 @@ func TestTTLLightPath_MissingTargetPendingDisables(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "sub-node"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	first, _ := mgr.PutContext(makeCtxWithTTL("office-5g", 3600))
 	if first.Applied[0].Reason != ReasonMissingTarget {
@@ -420,7 +420,7 @@ func TestTTLLightPath_CandidateSetDirtyDisables(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	first, _ := mgr.PutContext(makeCtxWithTTL("office-5g", 3600))
 	_ = first
@@ -452,7 +452,7 @@ func TestReleaseBarrier_NoCtx_EvaluatesAsMatchedNone(t *testing.T) {
 		HasDefault:   true,
 		DefaultProxy: "DIRECT",
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.ReleaseBarrier("auto")
 
@@ -478,7 +478,7 @@ func TestReleaseBarrier_WithCtx_UsesCachedCtx(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "sub-node"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// PUT during barrier — missing_target.
 	first, _ := mgr.PutContext(makeCtx("office-5g"))
@@ -509,7 +509,7 @@ func TestReleaseBarrier_Idempotent(t *testing.T) {
 		HasDefault:   true,
 		DefaultProxy: "DIRECT",
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.ReleaseBarrier("auto")
 	sel.setHistory = nil
@@ -525,7 +525,7 @@ func TestForceReEvaluate_NoCtx_NoOp(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	res := mgr.ForceReEvaluate()
 	if res != nil {
@@ -540,7 +540,7 @@ func TestForceReEvaluate_WithCtx_BypassesStability(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 	mgr.PutContext(makeCtx("office-5g"))
 
 	// Swap the policy so office → hk instead of us.
@@ -563,7 +563,7 @@ func TestPutContext_DeepCopy_CallerMutationIsolated(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	ctx := makeCtx("office-5g")
 	ctx.Interfaces[0].Subnets = []string{"10.0.0.0/24"}
@@ -597,7 +597,7 @@ func TestGetStatus_BeforeAnyPut_NoContext(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "hk"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	st := mgr.GetStatus()
 	if st.HasContext {
@@ -619,7 +619,7 @@ func TestHandleManualSet_PreservesStartupEvalPending(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// Branch B → startupEvalPending starts true.
 	if !mgr.states["auto"].startupEvalPending {
@@ -638,7 +638,7 @@ func TestReleaseBarrier_ClearsGlobalPendingOnResolve(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "sub-node"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// PUT during barrier — missing_target.
 	mgr.PutContext(makeCtx("office-5g"))
@@ -662,7 +662,7 @@ func TestForceReEvaluate_ClearsCandidateSetDirty(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 	mgr.PutContext(makeCtx("office-5g"))
 
 	mgr.OnCandidateSetDirty()
@@ -683,7 +683,7 @@ func TestGetStatus_MatchedFromCtx_NotFromGroupState(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk"}, GroupPolicy{
 		Mapping: map[string]string{"office": "sub-node"}, // target unreachable
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g")) // → missing_target, last_matched stays nil
 	if mgr.states["auto"].lastMatchedPresent {
@@ -709,7 +709,7 @@ func TestEvaluate_ReturnToOriginalMatched_ClearsPending(t *testing.T) {
 			"home":   "unreachable", // deliberately not in candidates
 		},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{
 		makeNetwork("office", "office-5g"),
 		makeNetwork("home", "home-wifi"),
 	}, nil)
@@ -741,7 +741,7 @@ func TestTTLLightPath_RefreshesReceivedAtForAge(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtxWithTTL("office-5g", 3600))
 	firstStamp := mgr.ctxReceivedAt
@@ -786,7 +786,7 @@ func TestGetStatus_AgeSecondsPopulated(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g"))
 	time.Sleep(10 * time.Millisecond)
@@ -808,7 +808,7 @@ func TestPutContext_StaleTTLCallbackDoesNotWipeNewCtx(t *testing.T) {
 	sel := newMockSelector("auto", "us", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	// First PUT with 1-second TTL.
 	mgr.PutContext(makeCtxWithTTL("office-5g", 1))
@@ -828,7 +828,7 @@ func TestGetStatus_AfterPut_ReflectsState(t *testing.T) {
 	sel := newMockSelector("auto", "hk", []string{"hk", "us"}, GroupPolicy{
 		Mapping: map[string]string{"office": "us"},
 	})
-	mgr := NewManager([]selectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
+	mgr := NewManager([]SelectorWithPolicy{sel}, []Network{makeNetwork("office", "office-5g")}, nil)
 
 	mgr.PutContext(makeCtx("office-5g"))
 	st := mgr.GetStatus()

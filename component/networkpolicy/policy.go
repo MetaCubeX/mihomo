@@ -102,18 +102,22 @@ type GroupSource struct {
 
 // selectable is the narrowest interface the network-policy runtime needs to
 // manually switch a proxy-group. Selector, Fallback, and URLTest all satisfy
-// it; the simple ManualSet path uses this when a group has no network-policy
-// attached.
+// it; kept unexported because no caller outside this package needs to
+// reference the name — SelectorWithPolicy embeds it and callers interact
+// with the composed interface.
 type selectable interface {
 	Name() string
 	Set(name string) error
 }
 
-// selectorWithPolicy is the full interface for a select-type group that
+// SelectorWithPolicy is the full interface for a select-type group that
 // carries network-policy metadata. Only *outboundgroup.Selector satisfies it.
 // The runtime state machine and first-init logic depend on Now / HasProxy /
-// NetworkPolicy / GroupSource in addition to the selectable base.
-type selectorWithPolicy interface {
+// NetworkPolicy / GroupSource in addition to the selectable base methods.
+//
+// Exported so the executor can build []SelectorWithPolicy from the parsed
+// proxy map and hand it to NewManager / Install.
+type SelectorWithPolicy interface {
 	selectable
 	Now() string
 	HasProxy(name string) bool

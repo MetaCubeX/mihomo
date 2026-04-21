@@ -108,7 +108,7 @@ type groupState struct {
 	barrierReleased bool
 }
 
-// selectorWithPolicy interface is defined in policy.go (unexported to the
+// SelectorWithPolicy interface is defined in policy.go (unexported to the
 // package — outboundgroup.Selector satisfies it via duck-typing, and
 // intra-package tests can supply mocks without needing the interface to
 // be exported).
@@ -134,7 +134,7 @@ type Manager struct {
 	// Hot reload constructs a fresh Manager in M3c's executor wiring and
 	// migrates in-memory state; this type intentionally does not expose
 	// an in-place Replace to keep the serial-queue invariants simple.
-	groups       map[string]selectorWithPolicy
+	groups       map[string]SelectorWithPolicy
 	groupsOrder  []string
 	networks     []Network
 	cache        *cachefile.CacheFile
@@ -193,9 +193,9 @@ type Manager struct {
 // ReleaseBarrier(groupName) is the public entry point executors call
 // when a group's referenced providers are populated or the 15s timeout
 // elapses.
-func NewManager(groups []selectorWithPolicy, networks []Network, cache *cachefile.CacheFile) *Manager {
+func NewManager(groups []SelectorWithPolicy, networks []Network, cache *cachefile.CacheFile) *Manager {
 	m := &Manager{
-		groups:      make(map[string]selectorWithPolicy, len(groups)),
+		groups:      make(map[string]SelectorWithPolicy, len(groups)),
 		groupsOrder: make([]string, 0, len(groups)),
 		networks:    networks,
 		cache:       cache,

@@ -209,6 +209,13 @@ type Config struct {
 	Sniffer       *sniffer.Config
 	TLS           *TLS
 	Networks      []networkpolicy.Network
+
+	// ProxyGroupOrder is the YAML declaration order of proxy-group
+	// names. Consumed by the executor's network-policy wiring (and
+	// future REST layers) so applied[] / groups[] output can follow
+	// the architecture §5.4.2 "按 proxy-group 在 YAML 中的声明顺序"
+	// contract without re-parsing the raw ProxyGroup slice.
+	ProxyGroupOrder []string
 }
 
 type RawCors struct {
@@ -675,6 +682,15 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Proxies = proxies
 	config.Providers = providers
+
+	// Record group declaration order for downstream consumers (executor
+	// network-policy wiring, future REST layers).
+	config.ProxyGroupOrder = make([]string, 0, len(rawCfg.ProxyGroup))
+	for _, mapping := range rawCfg.ProxyGroup {
+		if name, ok := mapping["name"].(string); ok && name != "" {
+			config.ProxyGroupOrder = append(config.ProxyGroupOrder, name)
+		}
+	}
 
 	// Orphan-network diagnostic (architecture §5.8.1): a network defined
 	// under top-level networks: but referenced by no group's

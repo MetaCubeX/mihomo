@@ -21,6 +21,7 @@ import (
 	mihomoHttp "github.com/metacubex/mihomo/component/http"
 	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/keepalive"
+	"github.com/metacubex/mihomo/component/networkpolicy"
 	"github.com/metacubex/mihomo/component/profile"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/component/resolver"
@@ -115,6 +116,13 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	initInnerTcp()
 	loadProvider(cfg.Providers)
 	updateProfile(cfg)
+	// network-policy depends only on proxy providers (for candidate-set
+	// visibility) and on patchSelectGroup having restored each
+	// Selector's `selected` value. Rule providers are irrelevant to
+	// its barrier — per architecture §5.6.2 "按组独立屏障 / 不采用全局
+	// 屏障", the barrier release must not wait on the slowest rule
+	// provider. So it runs BEFORE loadProvider(cfg.RuleProviders).
+	updateNetworkPolicy(cfg)
 	loadProvider(cfg.RuleProviders)
 	runtime.GC()
 	tunnel.OnRunning()
@@ -447,6 +455,51 @@ func updateProfile(cfg *config.Config) {
 	if profileCfg.StoreSelected {
 		patchSelectGroup(cfg.Proxies)
 	}
+}
+
+// updateNetworkPolicy installs or migrates the network-policy Manager.
+//
+// Ordering within ApplyConfig matters and is enforced by the call site:
+//   - updateProxies builds the proxy map (so Selectors exist).
+//   - loadProvider(cfg.Providers) blocks until all providers finish
+//     Initial() — by the time this function runs, provider-backed
+//     candidate sets are populated (or gave up), so the Manager's
+//     per-group barrier can be released immediately.
+//   - updateProfile / patchSelectGroup restores each Selector's
+//     `selected` from bucketSelected BEFORE the Manager inspects Now().
+//
+// After Install, ForceReEvaluate runs unconditionally: on a first-time
+// cold start it's a no-op (no cached ctx), and on hot reload it
+// re-runs evaluation against the inherited ctx so YAML policy edits
+// take effect (§5.8.3).
+func updateNetworkPolicy(cfg *config.Config) {
+	selectors := collectNetworkPolicySelectors(cfg.ProxyGroupOrder, cfg.Proxies)
+	mgr := networkpolicy.Install(cfg.Networks, selectors, cachefile.Cache())
+	mgr.ForceReEvaluate()
+}
+
+// collectNetworkPolicySelectors walks proxy groups in YAML declaration
+// order and returns the Selectors that carry a non-empty network-policy.
+// Architecture §5.4.2 requires applied[] / groups[] in REST responses to
+// reflect the user-authored ordering, so the iteration order here
+// propagates straight into Manager.groupsOrder.
+func collectNetworkPolicySelectors(groupOrder []string, proxies map[string]C.Proxy) []networkpolicy.SelectorWithPolicy {
+	out := make([]networkpolicy.SelectorWithPolicy, 0, len(groupOrder))
+	for _, name := range groupOrder {
+		p, ok := proxies[name]
+		if !ok {
+			continue
+		}
+		sel, ok := p.Adapter().(*outboundgroup.Selector)
+		if !ok {
+			continue
+		}
+		if sel.NetworkPolicy().IsEmpty() {
+			continue
+		}
+		out = append(out, sel)
+	}
+	return out
 }
 
 func patchSelectGroup(proxies map[string]C.Proxy) {
