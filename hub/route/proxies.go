@@ -8,6 +8,7 @@ import (
 
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/networkpolicy"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel"
@@ -96,6 +97,19 @@ func updateProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cachefile.Cache().SetSelected(proxy.Name(), req.Name)
+
+	// network-policy hook (architecture §5.6.2 row 1): if the group
+	// carries a network-policy, record the user's manual choice so the
+	// state machine flips source=manual and the manual-wins invariant
+	// kicks in at the next PUT /network/context. Called AFTER Set()
+	// has returned (no Selector lock held by this handler) to honor
+	// the networkpolicy/install.go lock order (globalMu → sel.mu).
+	if np, ok := proxy.Adapter().(networkpolicy.SelectorWithPolicy); ok && !np.NetworkPolicy().IsEmpty() {
+		if mgr := networkpolicy.Global(); mgr != nil {
+			mgr.HandleManualSet(np.Name())
+		}
+	}
+
 	if SwitchProxiesCallback != nil {
 		// refresh tray menu
 		go SwitchProxiesCallback(proxy.Name(), req.Name)
