@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/metacubex/mihomo/component/networkpolicy"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 )
 
 type Selector struct {
 	*GroupBase
-	disableUDP bool
-	selected   string
-	testUrl    string
+	disableUDP  bool
+	selected    string
+	testUrl     string
+	policy      networkpolicy.GroupPolicy
+	groupSource networkpolicy.GroupSource
 }
 
 // DialContext implements C.ProxyAdapter
@@ -108,6 +111,45 @@ func (s *Selector) selectedProxy(touch bool) C.Proxy {
 
 func (s *Selector) Providers() []P.ProxyProvider {
 	return s.providers
+}
+
+// HasProxy reports whether name is currently a visible candidate of this
+// group (either a static member listed under proxies: or a provider-emitted
+// proxy present in the current provider snapshot).
+//
+// The runtime network-policy manager uses this to validate that a resolved
+// target proxy is actually reachable before calling Set; a false return maps
+// to the missing_target reason (architecture §5.8.2).
+func (s *Selector) HasProxy(name string) bool {
+	for _, p := range s.GetProxies(false) {
+		if p.Name() == name {
+			return true
+		}
+	}
+	return false
+}
+
+// NetworkPolicy returns the parsed network-policy: subtree of this select
+// group. Returns a zero-value GroupPolicy (IsEmpty == true) when the group
+// has no network-policy configured.
+func (s *Selector) NetworkPolicy() networkpolicy.GroupPolicy {
+	return s.policy
+}
+
+// GroupSource returns the parse-time candidate-set metadata recorded for
+// this group. Populated even when the group has no network-policy, so the
+// runtime manager can diagnose provider availability uniformly.
+func (s *Selector) GroupSource() networkpolicy.GroupSource {
+	return s.groupSource
+}
+
+// SetNetworkPolicy records the parsed policy and candidate-set metadata.
+// Called once by ParseProxyGroup after the select group has been constructed.
+// Exposed separately from NewSelector to avoid changing the common-case
+// constructor signature (the GLOBAL group and tests never set a policy).
+func (s *Selector) SetNetworkPolicy(policy networkpolicy.GroupPolicy, source networkpolicy.GroupSource) {
+	s.policy = policy
+	s.groupSource = source
 }
 
 func (s *Selector) Proxies() []C.Proxy {

@@ -22,6 +22,7 @@ import (
 	"github.com/metacubex/mihomo/component/cidr"
 	"github.com/metacubex/mihomo/component/fakeip"
 	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/networkpolicy"
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/sniffer"
@@ -207,6 +208,7 @@ type Config struct {
 	Tunnels       []LC.Tunnel
 	Sniffer       *sniffer.Config
 	TLS           *TLS
+	Networks      []networkpolicy.Network
 }
 
 type RawCors struct {
@@ -440,6 +442,7 @@ type RawConfig struct {
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
 	Proxy         []map[string]any          `yaml:"proxies" json:"proxies"`
 	ProxyGroup    []map[string]any          `yaml:"proxy-groups" json:"proxy-groups"`
+	Networks      []map[string]any          `yaml:"networks" json:"networks"`
 	Rule          []string                  `yaml:"rules" json:"rule"`
 	SubRules      map[string][]string       `yaml:"sub-rules" json:"sub-rules"`
 	Listeners     []map[string]any          `yaml:"listeners" json:"listeners"`
@@ -655,12 +658,30 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.TLS = tlsCfg
 
-	proxies, providers, err := parseProxies(rawCfg)
+	networks, err := networkpolicy.ParseNetworks(rawCfg.Networks)
+	if err != nil {
+		return nil, fmt.Errorf("parse networks: %w", err)
+	}
+	config.Networks = networks
+
+	networkNames := make([]string, 0, len(networks))
+	for i := range networks {
+		networkNames = append(networkNames, networks[i].Name)
+	}
+
+	proxies, providers, err := parseProxies(rawCfg, networkNames)
 	if err != nil {
 		return nil, err
 	}
 	config.Proxies = proxies
 	config.Providers = providers
+
+	// Orphan-network diagnostic (architecture §5.8.1): a network defined
+	// under top-level networks: but referenced by no group's
+	// network-policy mapping is a stale config — warn, don't block. The
+	// default key does not participate since it is the fallback, not a
+	// network reference.
+	warnOrphanNetworks(networks, proxies)
 
 	listeners, err := parseListeners(rawCfg)
 	if err != nil {
@@ -737,6 +758,36 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 
 //go:linkname temporaryUpdateGeneral
 func temporaryUpdateGeneral(general *General) func()
+
+// warnOrphanNetworks emits a warning for each top-level network whose name
+// is not referenced by any select group's network-policy mapping
+// (architecture §5.8.1: orphan networks are non-blocking but worth flagging
+// as stale config). The default key in a network-policy map is a fallback,
+// not a network reference, so it does not participate.
+func warnOrphanNetworks(networks []networkpolicy.Network, proxies map[string]C.Proxy) {
+	if len(networks) == 0 {
+		return
+	}
+	referenced := make(map[string]struct{})
+	for _, p := range proxies {
+		adapter, ok := p.(interface{ Adapter() C.ProxyAdapter })
+		if !ok {
+			continue
+		}
+		sel, ok := adapter.Adapter().(*outboundgroup.Selector)
+		if !ok {
+			continue
+		}
+		for name := range sel.NetworkPolicy().Mapping {
+			referenced[name] = struct{}{}
+		}
+	}
+	for _, n := range networks {
+		if _, ok := referenced[n.Name]; !ok {
+			log.Warnln("network-policy: networks[%q] is defined but referenced by no group; remove it or add a mapping", n.Name)
+		}
+	}
+}
 
 func parseGeneral(cfg *RawConfig) (*General, error) {
 	return &General{
@@ -854,7 +905,7 @@ func parseTLS(cfg *RawConfig) (*TLS, error) {
 	}, nil
 }
 
-func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]P.ProxyProvider, err error) {
+func parseProxies(cfg *RawConfig, allNetworks []string) (proxies map[string]C.Proxy, providersMap map[string]P.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]P.ProxyProvider)
 	proxiesConfig := cfg.Proxy
@@ -925,9 +976,24 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	slices.Sort(AllProxies)
 	slices.Sort(AllProviders)
 
+	// Build the stable global proxy-name set for network-policy validation.
+	// Must be computed BEFORE group parsing so every group sees the same
+	// complete set regardless of iteration order; otherwise ParseGroupPolicy's
+	// "globally known vs. truly absent" distinction (architecture §5.8.1)
+	// becomes iteration-order dependent. Includes: DIRECT/REJECT (already in
+	// proxyList), top-level proxies (already in proxyList), every declared
+	// proxy group name (already in proxyList), the remaining built-in
+	// outbounds, and GLOBAL (auto-injected at the end of parseProxies).
+	allProxyNames := make([]string, 0, len(proxyList)+4)
+	allProxyNames = append(allProxyNames, proxyList...)
+	allProxyNames = append(allProxyNames, "REJECT-DROP", "COMPATIBLE", "PASS")
+	if !hasGlobal {
+		allProxyNames = append(allProxyNames, "GLOBAL")
+	}
+
 	// parse proxy group
 	for idx, mapping := range groupsConfig {
-		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap, AllProxies, AllProviders)
+		group, err := outboundgroup.ParseProxyGroup(mapping, proxies, providersMap, AllProxies, AllProviders, allNetworks, allProxyNames)
 		if err != nil {
 			return nil, nil, fmt.Errorf("proxy group[%d]: %w", idx, err)
 		}
