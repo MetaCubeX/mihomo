@@ -476,6 +476,7 @@ func updateNetworkPolicy(cfg *config.Config) {
 	selectors := collectNetworkPolicySelectors(cfg.ProxyGroupOrder, cfg.Proxies)
 	mgr := networkpolicy.Install(cfg.Networks, selectors, cachefile.Cache())
 	mgr.ForceReEvaluate()
+	warnNetworkPolicyExternalController(cfg)
 }
 
 // collectNetworkPolicySelectors walks proxy groups in YAML declaration
