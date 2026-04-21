@@ -178,3 +178,48 @@ func TestConvertsV2RayVlessHTTPTransportUsesH2Opts(t *testing.T) {
 	}, proxies[0]["h2-opts"])
 	assert.NotContains(t, proxies[0], "http-opts")
 }
+
+// Regression test for MetaCubeX/mihomo#2738: the legacy v2rayN-style
+// base64-JSON VMess parser must place `host` under h2-opts.host instead
+// of stranding it inside a non-existent h2-opts.headers.Host key.
+func TestConvertsV2RayVmessBase64H2Transport(t *testing.T) {
+	// base64 payload decodes to:
+	// {"v":"2","ps":"demo","add":"server.example.com","port":"443",
+	//  "id":"b831381d-6324-4d53-ad4f-8cda48b30811","aid":"0","scy":"auto",
+	//  "net":"h2","type":"none","host":"cdn.example.com","path":"/grpc","tls":"tls"}
+	vmessTest := "vmess://eyJ2IjoiMiIsInBzIjoiZGVtbyIsImFkZCI6InNlcnZlci5leGFtcGxlLmNvbSIsInBvcnQiOiI0NDMiLCJpZCI6ImI4MzEzODFkLTYzMjQtNGQ1My1hZDRmLThjZGE0OGIzMDgxMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0IjoiaDIiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJjZG4uZXhhbXBsZS5jb20iLCJwYXRoIjoiL2dycGMiLCJ0bHMiOiJ0bHMifQ=="
+
+	proxies, err := ConvertsV2Ray([]byte(vmessTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "h2", proxies[0]["network"])
+	assert.Equal(t, map[string]any{
+		"host": []string{"cdn.example.com"},
+		"path": "/grpc",
+	}, proxies[0]["h2-opts"])
+	assert.NotContains(t, proxies[0], "http-opts")
+}
+
+// `net: http` with `type != "http"` is remapped to h2 transport
+// at converter.go's network-resolution step, so it must produce the
+// same h2-opts shape as `net: h2`. Guards against regression if the
+// remap rule is changed later.
+func TestConvertsV2RayVmessBase64HTTPRemappedToH2Transport(t *testing.T) {
+	// base64 payload decodes to:
+	// {"v":"2","ps":"demo-http-remapped","add":"server.example.com","port":"443",
+	//  "id":"b831381d-6324-4d53-ad4f-8cda48b30811","aid":"0","scy":"auto",
+	//  "net":"http","type":"none","host":"cdn.example.com","path":"/grpc","tls":"tls"}
+	vmessTest := "vmess://eyJ2IjoiMiIsInBzIjoiZGVtby1odHRwLXJlbWFwcGVkIiwiYWRkIjoic2VydmVyLmV4YW1wbGUuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiYjgzMTM4MWQtNjMyNC00ZDUzLWFkNGYtOGNkYTQ4YjMwODExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJodHRwIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiY2RuLmV4YW1wbGUuY29tIiwicGF0aCI6Ii9ncnBjIiwidGxzIjoidGxzIn0="
+
+	proxies, err := ConvertsV2Ray([]byte(vmessTest))
+
+	assert.Nil(t, err)
+	assert.Len(t, proxies, 1)
+	assert.Equal(t, "h2", proxies[0]["network"])
+	assert.Equal(t, map[string]any{
+		"host": []string{"cdn.example.com"},
+		"path": "/grpc",
+	}, proxies[0]["h2-opts"])
+	assert.NotContains(t, proxies[0], "http-opts")
+}

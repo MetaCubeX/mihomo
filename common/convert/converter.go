@@ -331,15 +331,14 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				vmess["http-opts"] = httpOpts
 
 			case "h2":
-				headers := make(map[string]any)
 				h2Opts := make(map[string]any)
-				if host, ok := values["host"].(string); ok && host != "" {
-					headers["Host"] = []string{host}
+				h2Opts["path"] = "/"
+				if path, ok := values["path"].(string); ok && path != "" {
+					h2Opts["path"] = path
 				}
-
-				h2Opts["path"] = values["path"]
-				h2Opts["headers"] = headers
-
+				if host, ok := values["host"].(string); ok && host != "" {
+					h2Opts["host"] = []string{host}
+				}
 				vmess["h2-opts"] = h2Opts
 
 			case "ws", "httpupgrade":
