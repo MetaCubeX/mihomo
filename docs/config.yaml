@@ -2169,7 +2169,8 @@ listeners:
 # 让 `select` 代理组按当前网络环境自动切换。宿主（如 clash-verge-rev）
 # 通过 `PUT /network/context` 推送活跃接口集合，内核按 `networks:` 规则
 # 顺序 first-match 定名；之后每个带 `network-policy:` 的 select 组按命中
-# 的 network name 查表切到对应代理。详见 docs/network-policy.md。
+# 的 network name 查表切到对应代理。完整字段 / 组合子语义 / REST 契约详见
+# docs/api.md §11。
 
 # networks:
 #   # 规则按列表顺序 first-match；顶层多个 per-iface 字段要求同一张
