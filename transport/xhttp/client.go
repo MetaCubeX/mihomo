@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -630,9 +629,17 @@ func (c *Client) DialPacketUp() (net.Conn, error) {
 }
 
 func newSessionID() string {
+	// Xray-compatible session-id: UUID v4 string (36 chars with dashes).
+	// Many xhttp server-side nginx/openresty location configs match on the
+	// standard UUID regex `[0-9a-f]{8}-[0-9a-f]{4}-...`; emitting a bare
+	// 32-char hex string falls through to a 404 before reaching the xhttp
+	// handler. Aligning with xray-core's `uuid.New().String()` avoids this.
 	var b [16]byte
 	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // RFC 4122 variant
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // WaitReadCloser is an io.ReadCloser that blocks on Read() until the underlying
