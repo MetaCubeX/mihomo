@@ -17,6 +17,7 @@ const (
 	Version1            = 1
 	Version2            = 2
 	Version3            = 3
+	// Version5 is defined in v5.go
 	DefaultSnellVersion = Version1
 
 	// max packet length

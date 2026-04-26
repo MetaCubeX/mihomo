@@ -53,9 +53,37 @@ func snellStreamConn(c net.Conn, option streamOption) *snell.Snell {
 
 // StreamConnContext implements C.ProxyAdapter
 func (s *Snell) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	if s.version == snell.Version5 {
+		return s.streamV5(ctx, c, metadata)
+	}
 	c = snellStreamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
 	err := s.writeHeaderContext(ctx, c, metadata)
 	return c, err
+}
+
+func (s *Snell) streamV5(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	v5c, err := snell.StreamV5Conn(c, s.psk)
+	if err != nil {
+		return nil, err
+	}
+
+	var writeErr error
+	if ctx.Done() != nil {
+		done := N.SetupContextForConn(ctx, c)
+		writeErr = snell.WriteV5Header(v5c, metadata.String(), uint(metadata.DstPort))
+		done(&writeErr)
+	} else {
+		writeErr = snell.WriteV5Header(v5c, metadata.String(), uint(metadata.DstPort))
+	}
+	if writeErr != nil {
+		return nil, writeErr
+	}
+
+	// Don't read response here — server only replies after receiving
+	// the first relay data. Response is read lazily on first Read().
+	v5c.EnableLazyResponse()
+
+	return v5c, nil
 }
 
 func (s *Snell) writeHeaderContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (err error) {
@@ -74,6 +102,18 @@ func (s *Snell) writeHeaderContext(ctx context.Context, c net.Conn, metadata *C.
 
 // DialContext implements C.ProxyAdapter
 func (s *Snell) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	if s.version == snell.Version5 {
+		c, err := s.dialer.DialContext(ctx, "tcp", s.addr)
+		if err != nil {
+			return nil, fmt.Errorf("%s connect error: %w", s.addr, err)
+		}
+		defer func(c net.Conn) {
+			safeConnClose(c, err)
+		}(c)
+		c, err = s.StreamConnContext(ctx, c, metadata)
+		return NewConn(c, s), err
+	}
+
 	if s.version == snell.Version2 {
 		c, err := s.pool.Get()
 		if err != nil {
@@ -159,6 +199,9 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			return nil, fmt.Errorf("snell version %d not support UDP", option.Version)
 		}
 	case snell.Version3:
+	case snell.Version5:
+		// v5 does not support obfs or connection pooling
+		obfsOption.Mode = ""
 	default:
 		return nil, fmt.Errorf("snell version error: %d", option.Version)
 	}
