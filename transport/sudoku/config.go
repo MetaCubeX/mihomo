@@ -33,7 +33,7 @@ type ProtocolConfig struct {
 	PaddingMax int
 
 	// EnablePureDownlink enables the pure Sudoku downlink mode.
-	// When false, the connection uses the bandwidth-optimized packed downlink (requires AEAD).
+	// When false, the connection uses the bandwidth-optimized packed downlink.
 	EnablePureDownlink bool
 
 	// Client-only: final target "host:port".
@@ -99,10 +99,6 @@ func (c *ProtocolConfig) Validate() error {
 	}
 	if c.PaddingMax < c.PaddingMin {
 		return fmt.Errorf("padding-max (%d) must be >= padding-min (%d)", c.PaddingMax, c.PaddingMin)
-	}
-
-	if !c.EnablePureDownlink && c.AEADMethod == "none" {
-		return fmt.Errorf("bandwidth optimized downlink requires AEAD")
 	}
 
 	if c.HandshakeTimeoutSeconds < 0 {
