@@ -33,6 +33,7 @@ const (
 	ProcessPathWildcard
 	RuleSet
 	Network
+	SniffProtocol
 	Uid
 	SubRules
 	MATCH
@@ -103,6 +104,8 @@ func (rt RuleType) String() string {
 		return "RuleSet"
 	case Network:
 		return "Network"
+	case SniffProtocol:
+		return "SniffProtocol"
 	case DSCP:
 		return "DSCP"
 	case Uid:
