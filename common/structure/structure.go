@@ -366,7 +366,7 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 	val.Set(valMap)
 
 	if len(errors) > 0 {
-		return fmt.Errorf(strings.Join(errors, ","))
+		return fmt.Errorf("%s", strings.Join(errors, ","))
 	}
 
 	return nil
@@ -592,7 +592,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 	}
 
 	if len(errors) > 0 {
-		return fmt.Errorf(strings.Join(errors, ","))
+		return fmt.Errorf("%s", strings.Join(errors, ","))
 	}
 
 	return nil

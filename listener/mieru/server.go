@@ -105,6 +105,10 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 	return c.pc.WriteTo(packet, c.addr)
 }
 
+func (c *packet) SupportDomainWriteBack() bool {
+	return true
+}
+
 func (c *packet) Drop() {
 	if c.put != nil {
 		c.put()

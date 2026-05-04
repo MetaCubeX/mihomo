@@ -19,6 +19,11 @@ func (w *writeBackProxy) UpdateWriteBack(wb C.WriteBack) {
 	w.wb.Store(wb)
 }
 
+func (w *writeBackProxy) SupportDomainWriteBack() bool {
+	wb, ok := w.wb.Load().(interface{ SupportDomainWriteBack() bool })
+	return ok && wb.SupportDomainWriteBack()
+}
+
 func NewWriteBackProxy(wb C.WriteBack) C.WriteBackProxy {
 	w := &writeBackProxy{}
 	w.UpdateWriteBack(wb)

@@ -182,6 +182,17 @@ func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSen
 
 		fromUDPAddr, isUDPAddr := from.(*net.UDPAddr)
 		if !isUDPAddr {
+			if canWriteBackDomainAddr(writeBack, from) {
+				log.Debugln("[UDP] server returned domain addr %s, write back without destination NAT", from)
+				_, err = writeBack.WriteBack(data, from)
+				if put != nil {
+					put()
+				}
+				if err != nil {
+					return
+				}
+				continue
+			}
 			fromUDPAddr = net.UDPAddrFromAddrPort(oAddrPort) // oAddrPort was Unmapped
 			log.Warnln("server return a [%T](%s) which isn't a *net.UDPAddr, force replace to (%s), this may be caused by a wrongly implemented server", from, from, oAddrPort)
 		} else if fromUDPAddr == nil {
@@ -205,6 +216,26 @@ func handleUDPToLocal(writeBack C.WriteBack, pc C.PacketConn, sender C.PacketSen
 			return
 		}
 	}
+}
+
+type domainAddrWriteBack interface {
+	SupportDomainWriteBack() bool
+}
+
+func canWriteBackDomainAddr(writeBack C.WriteBack, addr net.Addr) bool {
+	support, ok := writeBack.(domainAddrWriteBack)
+	return ok && support.SupportDomainWriteBack() && shouldWriteBackDomainAddr(addr)
+}
+
+func shouldWriteBackDomainAddr(addr net.Addr) bool {
+	if addr == nil || addr.Network() != "udp" {
+		return false
+	}
+	host, _, err := net.SplitHostPort(addr.String())
+	if err != nil || host == "" {
+		return false
+	}
+	return net.ParseIP(host) == nil
 }
 
 func closeAllLocalCoon(lAddr string) {

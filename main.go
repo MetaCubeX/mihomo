@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -17,6 +15,7 @@ import (
 	"github.com/metacubex/mihomo/common/cmd"
 	"github.com/metacubex/mihomo/component/generator"
 	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/resolver/defaultguard"
 	"github.com/metacubex/mihomo/component/updater"
 	"github.com/metacubex/mihomo/config"
 	C "github.com/metacubex/mihomo/constant"
@@ -65,22 +64,7 @@ func init() {
 
 func main() {
 	// Defensive programming: panic when code mistakenly calls net.DefaultResolver
-	net.DefaultResolver.PreferGo = true
-	net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
-		//panic("should never be called")
-		buf := make([]byte, 1024)
-		for {
-			n := runtime.Stack(buf, true)
-			if n < len(buf) {
-				buf = buf[:n]
-				break
-			}
-			buf = make([]byte, 2*len(buf))
-		}
-		fmt.Fprintf(os.Stderr, "panic: should never be called\n\n%s", buf) // always print all goroutine stack
-		os.Exit(2)
-		return nil, nil
-	}
+	defaultguard.Install()
 
 	_, _ = maxprocs.Set(maxprocs.Logger(func(string, ...any) {}))
 
@@ -149,13 +133,13 @@ func main() {
 	if testConfig {
 		if len(configBytes) != 0 {
 			if _, err := executor.ParseWithBytes(configBytes); err != nil {
-				log.Errorln(err.Error())
+				log.Errorln("%s", err.Error())
 				fmt.Println("configuration test failed")
 				os.Exit(1)
 			}
 		} else {
 			if _, err := executor.Parse(); err != nil {
-				log.Errorln(err.Error())
+				log.Errorln("%s", err.Error())
 				fmt.Printf("configuration file %s test failed\n", C.Path.Config())
 				os.Exit(1)
 			}

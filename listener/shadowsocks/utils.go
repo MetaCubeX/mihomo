@@ -31,6 +31,10 @@ func (c *packet) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 	return c.pc.WriteTo(packet, c.rAddr)
 }
 
+func (c *packet) SupportDomainWriteBack() bool {
+	return true
+}
+
 // LocalAddr returns the source IP/Port of UDP Packet
 func (c *packet) LocalAddr() net.Addr {
 	return c.rAddr
