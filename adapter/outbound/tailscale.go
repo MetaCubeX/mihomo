@@ -23,6 +23,7 @@ import (
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	ipnstore "tailscale.com/ipn/store"
+	"tailscale.com/logtail"
 	"tailscale.com/net/netmon"
 	"tailscale.com/tailcfg"
 	"tailscale.com/tsnet"
@@ -50,6 +51,7 @@ var (
 	tailscaleAndroidNetwork             androidTailscaleNetworkInfo
 	tailscaleAndroidNetmonMu            sync.Mutex
 	tailscaleAndroidNetmonNodes         = map[*Tailscale]struct{}{}
+	tailscaleLogtailDisableOnce         sync.Once
 )
 
 var errTailscaleLegacyAndroidProfileDisabled = fmt.Errorf("legacy Android profile migration disabled")
@@ -81,6 +83,7 @@ type TailscaleOption struct {
 
 func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	installTailscaleAndroidInterfaceGetter()
+	disableTailscaleLogtailUploads(option.Name)
 
 	hostname := normalizeTailscaleHostname(option.Hostname)
 	if hostname == "" {
@@ -145,6 +148,13 @@ func newTailscaleStateStore(stateDir string, name string) (ipn.StateStore, error
 		return &tailscaleAndroidStateStore{StateStore: store, name: name}, nil
 	}
 	return store, nil
+}
+
+func disableTailscaleLogtailUploads(name string) {
+	tailscaleLogtailDisableOnce.Do(func() {
+		logtail.Disable()
+		log.Infoln("[Tailscale](%s) disabled Tailscale logtail uploads to avoid background OS DNS lookups", name)
+	})
 }
 
 func tailscaleStoreLogf(name string) func(string, ...any) {
