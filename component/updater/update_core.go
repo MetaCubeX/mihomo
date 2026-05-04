@@ -4,12 +4,14 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -24,11 +26,11 @@ import (
 )
 
 const (
-	baseReleaseURL    = "https://github.com/MetaCubeX/mihomo/releases/latest/download/"
-	versionReleaseURL = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt"
+	baseReleaseURL    = "https://github.com/cyenxchen/mihomo/releases/latest/download/"
+	versionReleaseURL = "https://api.github.com/repos/cyenxchen/mihomo/releases/latest"
 
-	baseAlphaURL    = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/"
-	versionAlphaURL = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"
+	baseAlphaURL    = "https://github.com/cyenxchen/mihomo/releases/latest/download/"
+	versionAlphaURL = "https://api.github.com/repos/cyenxchen/mihomo/releases/latest"
 
 	// MaxPackageFileSize is a maximum package file length in bytes. The largest
 	// package whose size is limited by this constant currently has the size of
@@ -107,7 +109,8 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 	}
 	log.Infoln("current version %s, latest version %s", C.Version, latestVersion)
 
-	if latestVersion == C.Version && !force {
+	if sameCoreVersion(latestVersion, C.Version) && !force {
+		log.Infoln("updater: current version %s matches latest release %s", C.Version, latestVersion)
 		// don't change this output, some downstream dependencies on the upgrader's output fields
 		return fmt.Errorf("update error: already using latest version %s", C.Version)
 	}
@@ -122,20 +125,9 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 
 	// ---- prepare ----
 	mihomoBaseName := u.CoreBaseName()
-	packageName := mihomoBaseName + "-" + latestVersion
-	if runtime.GOOS == "windows" {
-		packageName = packageName + ".zip"
-	} else {
-		packageName = packageName + ".gz"
-	}
-	packageURL := baseURL + packageName
-	log.Infoln("updater: updating using url: %s", packageURL)
-
 	workDir := filepath.Dir(currentExePath)
 	backupDir := filepath.Join(workDir, "meta-backup")
 	updateDir := filepath.Join(workDir, "meta-update")
-	packagePath := filepath.Join(updateDir, packageName)
-	//log.Infoln(packagePath)
 
 	updateExeName := mihomoBaseName
 	if runtime.GOOS == "windows" {
@@ -147,10 +139,11 @@ func (u *CoreUpdater) Update(currentExePath string, channel string, force bool) 
 
 	defer u.clean(updateDir)
 
-	err = u.download(updateDir, packagePath, packageURL)
+	packageName, packagePath, err := u.downloadPackage(updateDir, baseURL, mihomoBaseName, latestVersion)
 	if err != nil {
-		return fmt.Errorf("downloading: %w", err)
+		return err
 	}
+	log.Infoln("updater: selected package %s", packageName)
 
 	err = u.unpack(updateDir, packagePath, info.Mode())
 	if err != nil {
@@ -188,8 +181,85 @@ func (u *CoreUpdater) getLatestVersion(versionURL string) (version string, err e
 	if err != nil {
 		return "", err
 	}
-	content := strings.TrimRight(string(body), "\n")
-	return content, nil
+	content := strings.TrimSpace(string(body))
+	if strings.HasPrefix(content, "{") {
+		var release struct {
+			TagName string `json:"tag_name"`
+		}
+		if err = json.Unmarshal(body, &release); err != nil {
+			return "", fmt.Errorf("parse github release version: %w", err)
+		}
+		version = normalizeGithubReleaseVersion(release.TagName)
+		if version == "" {
+			return "", fmt.Errorf("github release tag_name is empty")
+		}
+		log.Infoln("updater: resolved latest version %s from %s", version, versionURL)
+		return version, nil
+	}
+
+	return normalizeGithubReleaseVersion(content), nil
+}
+
+func normalizeGithubReleaseVersion(version string) string {
+	version = strings.TrimSpace(version)
+	version = strings.TrimPrefix(version, "v")
+	version = strings.TrimPrefix(version, "V")
+	return version
+}
+
+func sameCoreVersion(latestVersion string, currentVersion string) bool {
+	latestVersion = normalizeCoreVersionForCompare(latestVersion)
+	currentVersion = normalizeCoreVersionForCompare(currentVersion)
+	return latestVersion != "" && latestVersion == currentVersion
+}
+
+func normalizeCoreVersionForCompare(version string) string {
+	version = normalizeGithubReleaseVersion(version)
+	return strings.TrimSuffix(version, "-custom")
+}
+
+func updaterPackageNames(mihomoBaseName string, latestVersion string) []string {
+	ext := updaterPackageExtension()
+	names := []string{mihomoBaseName + ext}
+	normalized := normalizeGithubReleaseVersion(latestVersion)
+	if normalized == "" {
+		return names
+	}
+
+	versionedNames := []string{
+		mihomoBaseName + "-" + normalized + ext,
+	}
+	if !strings.HasPrefix(normalized, "v") && !strings.HasPrefix(normalized, "V") {
+		versionedNames = append(versionedNames, mihomoBaseName+"-v"+normalized+ext)
+	}
+	for _, name := range versionedNames {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func updaterPackageExtension() string {
+	if runtime.GOOS == "windows" {
+		return ".zip"
+	}
+	return ".gz"
+}
+
+func (u *CoreUpdater) downloadPackage(updateDir string, baseURL string, mihomoBaseName string, latestVersion string) (packageName string, packagePath string, err error) {
+	var lastErr error
+	for _, candidate := range updaterPackageNames(mihomoBaseName, latestVersion) {
+		candidateURL := baseURL + candidate
+		candidatePath := filepath.Join(updateDir, candidate)
+		log.Infoln("updater: downloading package candidate url=%s", candidateURL)
+		if err = u.download(updateDir, candidatePath, candidateURL); err == nil {
+			return candidate, candidatePath, nil
+		}
+		lastErr = err
+		log.Warnln("updater: package candidate failed url=%s error=%v", candidateURL, err)
+	}
+	return "", "", fmt.Errorf("downloading: %w", lastErr)
 }
 
 // download package file and save it to disk
@@ -208,8 +278,12 @@ func (u *CoreUpdater) download(updateDir, packagePath, packageURL string) (err e
 		}
 	}()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected http status %s", resp.Status)
+	}
+
 	log.Debugln("updateDir %s", updateDir)
-	err = os.Mkdir(updateDir, 0o755)
+	err = os.MkdirAll(updateDir, 0o755)
 	if err != nil {
 		return fmt.Errorf("mkdir error: %w", err)
 	}

@@ -12,11 +12,24 @@ import (
 
 	C "github.com/metacubex/mihomo/constant"
 
+	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 	"tailscale.com/types/views"
 )
+
+func resetAndroidTailscaleNetworkInfoForTest(t *testing.T) {
+	t.Helper()
+	tailscaleAndroidNetworkMu.Lock()
+	tailscaleAndroidNetwork = androidTailscaleNetworkInfo{}
+	tailscaleAndroidNetworkMu.Unlock()
+	t.Cleanup(func() {
+		tailscaleAndroidNetworkMu.Lock()
+		tailscaleAndroidNetwork = androidTailscaleNetworkInfo{}
+		tailscaleAndroidNetworkMu.Unlock()
+	})
+}
 
 func TestNormalizeTailscaleHostname(t *testing.T) {
 	got := normalizeTailscaleHostname("TS_Main.Example")
@@ -35,6 +48,124 @@ func TestTailscaleAcceptRoutesDefault(t *testing.T) {
 	proxy.option.AcceptRoutes = &disabled
 	if proxy.acceptRoutes() {
 		t.Fatal("tailscale proxy should honor accept-routes=false")
+	}
+}
+
+func TestTailscaleAndroidInterfacesAvoidsSystemNetlink(t *testing.T) {
+	resetAndroidTailscaleNetworkInfoForTest(t)
+
+	ifaces, err := tailscaleAndroidInterfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ifaces) != 2 {
+		t.Fatalf("interfaces length = %d, want 2", len(ifaces))
+	}
+
+	var haveUsableV4 bool
+	var haveLoopback bool
+	for _, iface := range ifaces {
+		if iface.Interface == nil {
+			t.Fatalf("nil interface in %#v", ifaces)
+		}
+		if !iface.IsUp() {
+			t.Fatalf("interface %s should be up", iface.Name)
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			if iface.IsLoopback() && ipNet.IP.IsLoopback() {
+				haveLoopback = true
+			}
+			if !iface.IsLoopback() && ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
+				haveUsableV4 = true
+			}
+		}
+	}
+	if !haveLoopback {
+		t.Fatal("expected loopback address")
+	}
+	if !haveUsableV4 {
+		t.Fatal("expected a non-loopback IPv4 address so Tailscale treats Android network as up")
+	}
+}
+
+func TestTailscaleAndroidInterfacesUsePlatformNetworkInfo(t *testing.T) {
+	resetAndroidTailscaleNetworkInfoForTest(t)
+
+	err := SetAndroidTailscaleNetworkInfo(`{
+		"defaultInterface": "rmnet_data4",
+		"interfaces": [
+			{
+				"name": "rmnet_data4",
+				"index": 31,
+				"mtu": 1410,
+				"addresses": [
+					"10.153.83.183/28",
+					"2409:8924:2000:28cc:7c06:30ff:fe59:4839/64"
+				]
+			}
+		]
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ifaces, err := tailscaleAndroidInterfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ifaces) != 2 {
+		t.Fatalf("interfaces length = %d, want platform interface plus loopback", len(ifaces))
+	}
+	if ifaces[0].Name != "rmnet_data4" || ifaces[0].Index != 31 || ifaces[0].MTU != 1410 {
+		t.Fatalf("unexpected platform interface: %#v", ifaces[0].Interface)
+	}
+	addrs, err := ifaces[0].Addrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var haveV4 bool
+	var haveV6 bool
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			t.Fatalf("unexpected addr type %T", addr)
+		}
+		if ipNet.IP.Equal(net.ParseIP("10.153.83.183")) && len(ipNet.Mask) == net.IPv4len {
+			haveV4 = true
+		}
+		if ipNet.IP.Equal(net.ParseIP("2409:8924:2000:28cc:7c06:30ff:fe59:4839")) && len(ipNet.Mask) == net.IPv6len {
+			haveV6 = true
+		}
+	}
+	if !haveV4 || !haveV6 {
+		t.Fatalf("expected IPv4 and IPv6 platform addrs, addrs=%v", addrs)
+	}
+}
+
+func TestTailscaleAndroidStateStoreSkipsLegacyAndroidProfile(t *testing.T) {
+	inner := fakeStateStore{values: map[ipn.StateKey][]byte{
+		"ipn-android": []byte(`{"WantRunning":true}`),
+		"other":       []byte("ok"),
+	}}
+	store := &tailscaleAndroidStateStore{StateStore: inner, name: "ts-main"}
+
+	if _, err := store.ReadState("ipn-android"); err != errTailscaleLegacyAndroidProfileDisabled {
+		t.Fatalf("legacy Android profile err = %v, want disabled migration error", err)
+	}
+	got, err := store.ReadState("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "ok" {
+		t.Fatalf("unexpected delegated state: %q", got)
 	}
 }
 
@@ -354,6 +485,23 @@ func TestResolveTailscaleExitNodeRejectsOfflineFallback(t *testing.T) {
 func viewsOfPrefixes(routes ...netip.Prefix) *views.Slice[netip.Prefix] {
 	view := views.SliceOf(routes)
 	return &view
+}
+
+type fakeStateStore struct {
+	values map[ipn.StateKey][]byte
+}
+
+func (s fakeStateStore) ReadState(id ipn.StateKey) ([]byte, error) {
+	value, ok := s.values[id]
+	if !ok {
+		return nil, ipn.ErrStateNotExist
+	}
+	return value, nil
+}
+
+func (s fakeStateStore) WriteState(id ipn.StateKey, value []byte) error {
+	s.values[id] = value
+	return nil
 }
 
 type fakeTailscaleDialer struct {

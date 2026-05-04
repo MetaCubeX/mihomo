@@ -2,11 +2,14 @@ package outbound
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,6 +22,8 @@ import (
 
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
+	ipnstore "tailscale.com/ipn/store"
+	"tailscale.com/net/netmon"
 	"tailscale.com/tailcfg"
 	"tailscale.com/tsnet"
 )
@@ -39,6 +44,28 @@ type Tailscale struct {
 
 const tailscaleStartTimeout = 45 * time.Second
 
+var (
+	tailscaleAndroidInterfaceGetterOnce sync.Once
+	tailscaleAndroidNetworkMu           sync.RWMutex
+	tailscaleAndroidNetwork             androidTailscaleNetworkInfo
+	tailscaleAndroidNetmonMu            sync.Mutex
+	tailscaleAndroidNetmonNodes         = map[*Tailscale]struct{}{}
+)
+
+var errTailscaleLegacyAndroidProfileDisabled = fmt.Errorf("legacy Android profile migration disabled")
+
+type androidTailscaleNetworkInfo struct {
+	DefaultInterface string                          `json:"defaultInterface"`
+	Interfaces       []androidTailscaleInterfaceInfo `json:"interfaces"`
+}
+
+type androidTailscaleInterfaceInfo struct {
+	Name      string   `json:"name"`
+	Index     int      `json:"index"`
+	MTU       int      `json:"mtu"`
+	Addresses []string `json:"addresses"`
+}
+
 type TailscaleOption struct {
 	BasicOption
 	Name       string `proxy:"name"`
@@ -53,6 +80,8 @@ type TailscaleOption struct {
 }
 
 func NewTailscale(option TailscaleOption) (*Tailscale, error) {
+	installTailscaleAndroidInterfaceGetter()
+
 	hostname := normalizeTailscaleHostname(option.Hostname)
 	if hostname == "" {
 		hostname = normalizeTailscaleHostname(option.Name)
@@ -60,6 +89,12 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	if hostname == "" {
 		hostname = "mihomo-tailscale"
 	}
+	stateDir := C.Path.GetPathByHash("tailscale", option.Name)
+	stateStore, err := newTailscaleStateStore(stateDir, option.Name)
+	if err != nil {
+		return nil, err
+	}
+	log.Infoln("[Tailscale](%s) creating node hostname=%s auth-key-present=%t control-url=%s", option.Name, hostname, option.AuthKey != "", option.ControlURL)
 
 	outbound := &Tailscale{
 		Base: NewBase(BaseOption{
@@ -72,7 +107,8 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		option: option,
 	}
 	outbound.server = &tsnet.Server{
-		Dir:        C.Path.GetPathByHash("tailscale", option.Name),
+		Dir:        stateDir,
+		Store:      stateStore,
 		Hostname:   hostname,
 		AuthKey:    option.AuthKey,
 		ControlURL: option.ControlURL,
@@ -83,6 +119,263 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		},
 	}
 	return outbound, nil
+}
+
+type tailscaleAndroidStateStore struct {
+	ipn.StateStore
+	name string
+}
+
+func newTailscaleStateStore(stateDir string, name string) (ipn.StateStore, error) {
+	if runtime.GOOS == "android" {
+		if err := os.MkdirAll(stateDir, 0o700); err != nil {
+			return nil, fmt.Errorf("create tailscale state dir: %w", err)
+		}
+		if err := os.Setenv("TS_LOGS_DIR", stateDir); err != nil {
+			return nil, fmt.Errorf("set tailscale logs dir: %w", err)
+		}
+	}
+	stateFile := filepath.Join(stateDir, "tailscaled.state")
+	store, err := ipnstore.New(tailscaleStoreLogf(name), stateFile)
+	if err != nil {
+		return nil, fmt.Errorf("create tailscale state store: %w", err)
+	}
+	if runtime.GOOS == "android" {
+		log.Infoln("[Tailscale](%s) using Android isolated state store %s", name, stateFile)
+		return &tailscaleAndroidStateStore{StateStore: store, name: name}, nil
+	}
+	return store, nil
+}
+
+func tailscaleStoreLogf(name string) func(string, ...any) {
+	return func(format string, args ...any) {
+		log.Debugln("[Tailscale](%s) store: %s", name, fmt.Sprintf(format, args...))
+	}
+}
+
+func (s *tailscaleAndroidStateStore) ReadState(id ipn.StateKey) ([]byte, error) {
+	if id == "ipn-android" {
+		log.Infoln("[Tailscale](%s) skipping legacy Android profile migration", s.name)
+		return nil, errTailscaleLegacyAndroidProfileDisabled
+	}
+	return s.StateStore.ReadState(id)
+}
+
+func installTailscaleAndroidInterfaceGetter() {
+	if runtime.GOOS != "android" {
+		return
+	}
+	tailscaleAndroidInterfaceGetterOnce.Do(func() {
+		netmon.RegisterInterfaceGetter(tailscaleAndroidInterfaces)
+		log.Infoln("[Tailscale] registered Android-safe interface getter")
+	})
+}
+
+func SetAndroidTailscaleNetworkInfo(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fmt.Errorf("empty Android Tailscale network info")
+	}
+	var info androidTailscaleNetworkInfo
+	if err := json.Unmarshal([]byte(raw), &info); err != nil {
+		return fmt.Errorf("parse Android Tailscale network info: %w", err)
+	}
+	info = normalizeAndroidTailscaleNetworkInfo(info)
+
+	tailscaleAndroidNetworkMu.Lock()
+	tailscaleAndroidNetwork = info
+	tailscaleAndroidNetworkMu.Unlock()
+
+	updateTailscaleAndroidDefaultRoute(info.DefaultInterface)
+	injectTailscaleAndroidNetmonEvents()
+	log.Infoln("[Tailscale] Android network info updated default=%s interfaces=%d", info.DefaultInterface, len(info.Interfaces))
+	return nil
+}
+
+func registerTailscaleAndroidNetmon(t *Tailscale) {
+	tailscaleAndroidNetmonMu.Lock()
+	tailscaleAndroidNetmonNodes[t] = struct{}{}
+	count := len(tailscaleAndroidNetmonNodes)
+	tailscaleAndroidNetmonMu.Unlock()
+	log.Debugln("[Tailscale](%s) registered Android netmon wake target count=%d", t.Name(), count)
+}
+
+func unregisterTailscaleAndroidNetmon(t *Tailscale) {
+	tailscaleAndroidNetmonMu.Lock()
+	delete(tailscaleAndroidNetmonNodes, t)
+	count := len(tailscaleAndroidNetmonNodes)
+	tailscaleAndroidNetmonMu.Unlock()
+	log.Debugln("[Tailscale](%s) unregistered Android netmon wake target count=%d", t.Name(), count)
+}
+
+func injectTailscaleAndroidNetmonEvents() {
+	tailscaleAndroidNetmonMu.Lock()
+	nodes := make([]*Tailscale, 0, len(tailscaleAndroidNetmonNodes))
+	for node := range tailscaleAndroidNetmonNodes {
+		nodes = append(nodes, node)
+	}
+	tailscaleAndroidNetmonMu.Unlock()
+
+	injected := 0
+	for _, node := range nodes {
+		if node == nil || node.server == nil || node.server.Sys() == nil {
+			continue
+		}
+		netMon, ok := node.server.Sys().NetMon.GetOK()
+		if !ok || netMon == nil {
+			continue
+		}
+		netMon.InjectEvent()
+		injected++
+	}
+	log.Infoln("[Tailscale] Android network change injected netmon events count=%d targets=%d", injected, len(nodes))
+}
+
+func tailscaleAndroidInterfaces() ([]netmon.Interface, error) {
+	if ifaces := currentAndroidTailscaleInterfaces(); len(ifaces) > 0 {
+		log.Debugln("[Tailscale] providing Android platform network interfaces count=%d", len(ifaces))
+		return ifaces, nil
+	}
+	log.Debugln("[Tailscale] providing Android-safe synthetic network interfaces")
+	return syntheticTailscaleAndroidInterfaces(), nil
+}
+
+func currentAndroidTailscaleInterfaces() []netmon.Interface {
+	tailscaleAndroidNetworkMu.RLock()
+	info := tailscaleAndroidNetwork
+	tailscaleAndroidNetworkMu.RUnlock()
+
+	if len(info.Interfaces) == 0 {
+		return nil
+	}
+	ifaces := make([]netmon.Interface, 0, len(info.Interfaces)+1)
+	for i, iface := range info.Interfaces {
+		addrs := androidTailscaleNetAddrs(iface.Addresses)
+		if len(addrs) == 0 {
+			continue
+		}
+		index := iface.Index
+		if index <= 0 {
+			index = 2 + i
+		}
+		mtu := iface.MTU
+		if mtu <= 0 {
+			mtu = 1500
+		}
+		ifaces = append(ifaces, netmon.Interface{
+			Interface: &net.Interface{
+				Index: index,
+				MTU:   mtu,
+				Name:  iface.Name,
+				Flags: net.FlagUp | net.FlagBroadcast | net.FlagMulticast,
+			},
+			AltAddrs: addrs,
+		})
+	}
+	if len(ifaces) == 0 {
+		return nil
+	}
+	ifaces = append(ifaces, syntheticTailscaleAndroidLoopbackInterface())
+	return ifaces
+}
+
+func syntheticTailscaleAndroidInterfaces() []netmon.Interface {
+	return []netmon.Interface{
+		{
+			Interface: &net.Interface{
+				Index: 2,
+				MTU:   1500,
+				Name:  "android0",
+				Flags: net.FlagUp | net.FlagBroadcast | net.FlagMulticast,
+			},
+			AltAddrs: []net.Addr{
+				&net.IPNet{IP: net.IPv4(10, 0, 0, 2), Mask: net.CIDRMask(24, 32)},
+			},
+		},
+		syntheticTailscaleAndroidLoopbackInterface(),
+	}
+}
+
+func syntheticTailscaleAndroidLoopbackInterface() netmon.Interface {
+	return netmon.Interface{
+		Interface: &net.Interface{
+			Index: 1,
+			MTU:   65536,
+			Name:  "lo",
+			Flags: net.FlagUp | net.FlagLoopback,
+		},
+		AltAddrs: []net.Addr{
+			&net.IPNet{IP: net.IPv4(127, 0, 0, 1), Mask: net.CIDRMask(8, 32)},
+			&net.IPNet{IP: net.ParseIP("::1"), Mask: net.CIDRMask(128, 128)},
+		},
+	}
+}
+
+func normalizeAndroidTailscaleNetworkInfo(info androidTailscaleNetworkInfo) androidTailscaleNetworkInfo {
+	info.DefaultInterface = strings.TrimSpace(info.DefaultInterface)
+	out := androidTailscaleNetworkInfo{DefaultInterface: info.DefaultInterface}
+	for _, iface := range info.Interfaces {
+		iface.Name = strings.TrimSpace(iface.Name)
+		if iface.Name == "" {
+			continue
+		}
+		addrs := make([]string, 0, len(iface.Addresses))
+		for _, addr := range iface.Addresses {
+			addr = strings.TrimSpace(addr)
+			if addr == "" {
+				continue
+			}
+			if _, err := netip.ParsePrefix(addr); err != nil {
+				log.Warnln("[Tailscale] skipping invalid Android interface address iface=%s address=%s error=%v", iface.Name, addr, err)
+				continue
+			}
+			addrs = append(addrs, addr)
+		}
+		if len(addrs) == 0 {
+			continue
+		}
+		iface.Addresses = addrs
+		out.Interfaces = append(out.Interfaces, iface)
+	}
+	return out
+}
+
+func androidTailscaleNetAddrs(addresses []string) []net.Addr {
+	addrs := make([]net.Addr, 0, len(addresses))
+	for _, addr := range addresses {
+		prefix, err := netip.ParsePrefix(addr)
+		if err != nil {
+			log.Warnln("[Tailscale] skipping invalid Android interface address address=%s error=%v", addr, err)
+			continue
+		}
+		ipNet := androidTailscaleIPNet(prefix)
+		if ipNet != nil {
+			addrs = append(addrs, ipNet)
+		}
+	}
+	return addrs
+}
+
+func androidTailscaleIPNet(prefix netip.Prefix) *net.IPNet {
+	addr := prefix.Addr().Unmap()
+	if addr.Zone() != "" {
+		addr = addr.WithZone("")
+	}
+	if addr.Is4() {
+		bytes := addr.As4()
+		return &net.IPNet{
+			IP:   net.IPv4(bytes[0], bytes[1], bytes[2], bytes[3]),
+			Mask: net.CIDRMask(prefix.Bits(), 32),
+		}
+	}
+	if addr.Is6() {
+		bytes := addr.As16()
+		return &net.IPNet{
+			IP:   net.IP(append([]byte(nil), bytes[:]...)),
+			Mask: net.CIDRMask(prefix.Bits(), 128),
+		}
+	}
+	return nil
 }
 
 func (t *Tailscale) start() error {
@@ -105,15 +398,19 @@ func (t *Tailscale) start() error {
 			return t.startErr
 		}
 		t.serverStarted = true
+		registerTailscaleAndroidNetmon(t)
+		log.Infoln("[Tailscale](%s) tsnet start returned", t.Name())
 	}
 
 	startCtx, cancel := context.WithTimeout(context.Background(), tailscaleStartTimeout)
 	defer cancel()
+	log.Infoln("[Tailscale](%s) configuring route prefs", t.Name())
 	if err := withDefaultResolverAllowed(func() error { return t.ensureRoutePrefs(startCtx) }); err != nil {
 		t.startErr = fmt.Errorf("configure tailscale route prefs: %w", err)
 		log.Warnln("[Tailscale](%s) configure route prefs failed: %s", t.Name(), err)
 		return t.startErr
 	}
+	log.Infoln("[Tailscale](%s) waiting for node readiness", t.Name())
 	status, err := t.up(startCtx)
 	if err != nil {
 		t.startErr = fmt.Errorf("wait tailscale node ready: %w", err)
@@ -240,6 +537,7 @@ func (t *Tailscale) Close() error {
 	if !t.serverStarted {
 		return nil
 	}
+	unregisterTailscaleAndroidNetmon(t)
 	if err := t.server.Close(); err != nil {
 		return fmt.Errorf("close tailscale node: %w", err)
 	}
