@@ -195,6 +195,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewTailscale(*tailscaleOption)
+	case "loopback":
+		loopbackOption := &outbound.LoopbackOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, loopbackOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewLoopback(*loopbackOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
@@ -217,7 +224,9 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 		}
 	}
 
-	proxy = outbound.NewAutoCloseProxyAdapter(proxy)
+	if proxy.Type() != C.Loopback {
+		proxy = outbound.NewAutoCloseProxyAdapter(proxy)
+	}
 	return NewProxy(proxy), nil
 }
 

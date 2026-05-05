@@ -207,8 +207,9 @@ type Metadata struct {
 	RemoteDst    string     `json:"remoteDestination"`
 	DSCP         uint8      `json:"dscp"`
 
-	RawSrcAddr net.Addr `json:"-"`
-	RawDstAddr net.Addr `json:"-"`
+	RawSrcAddr    net.Addr `json:"-"`
+	RawDstAddr    net.Addr `json:"-"`
+	LoopbackChain []string `json:"-"`
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
 }
