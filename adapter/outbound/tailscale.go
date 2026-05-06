@@ -75,6 +75,7 @@ type TailscaleOption struct {
 	Hostname   string `proxy:"hostname,omitempty"`
 	ControlURL string `proxy:"control-url,omitempty"`
 	Ephemeral  bool   `proxy:"ephemeral,omitempty"`
+	StateDir   string `proxy:"state-dir,omitempty"`
 	// AcceptRoutes controls whether subnet routes advertised by other Tailscale
 	// nodes are usable by this tsnet node. It defaults to true.
 	AcceptRoutes *bool  `proxy:"accept-routes,omitempty"`
@@ -92,12 +93,12 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	if hostname == "" {
 		hostname = "mihomo-tailscale"
 	}
-	stateDir := C.Path.GetPathByHash("tailscale", option.Name)
+	stateDir := tailscaleStateDir(option)
 	stateStore, err := newTailscaleStateStore(stateDir, option.Name)
 	if err != nil {
 		return nil, err
 	}
-	log.Infoln("[Tailscale](%s) creating node hostname=%s auth-key-present=%t control-url=%s", option.Name, hostname, option.AuthKey != "", option.ControlURL)
+	log.Infoln("[Tailscale](%s) creating node hostname=%s state=%s auth-key-present=%t control-url=%s", option.Name, hostname, stateDir, option.AuthKey != "", option.ControlURL)
 
 	outbound := &Tailscale{
 		Base: NewBase(BaseOption{
@@ -122,6 +123,14 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		},
 	}
 	return outbound, nil
+}
+
+func tailscaleStateDir(option TailscaleOption) string {
+	stateDir := strings.TrimSpace(option.StateDir)
+	if stateDir == "" {
+		return C.Path.GetPathByHash("tailscale", option.Name)
+	}
+	return C.Path.Resolve(stateDir)
 }
 
 type tailscaleAndroidStateStore struct {

@@ -14,6 +14,7 @@ func TestParseTailscaleProxy(t *testing.T) {
 		"hostname":    "ts-main",
 		"control-url": "https://controlplane.tailscale.com",
 		"ephemeral":   false,
+		"state-dir":   "tailstate/ts-main",
 		"exit-node":   "exit-gateway.example.ts.net",
 	})
 	if err != nil {

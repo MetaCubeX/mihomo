@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -48,6 +49,54 @@ func TestTailscaleAcceptRoutesDefault(t *testing.T) {
 	proxy.option.AcceptRoutes = &disabled
 	if proxy.acceptRoutes() {
 		t.Fatal("tailscale proxy should honor accept-routes=false")
+	}
+}
+
+func TestTailscaleStateDirDefaultsToConfigPath(t *testing.T) {
+	homeDir := t.TempDir()
+	oldHomeDir := C.Path.HomeDir()
+	C.SetHomeDir(homeDir)
+	t.Cleanup(func() { C.SetHomeDir(oldHomeDir) })
+
+	got := tailscaleStateDir(TailscaleOption{Name: "ts-main"})
+	want := C.Path.GetPathByHash("tailscale", "ts-main")
+	if got != want {
+		t.Fatalf("state dir = %s, want %s", got, want)
+	}
+	if filepath.Dir(filepath.Dir(got)) != homeDir {
+		t.Fatalf("default state dir should be under mihomo home, got %s home %s", got, homeDir)
+	}
+}
+
+func TestTailscaleStateDirEmptyUsesDefault(t *testing.T) {
+	homeDir := t.TempDir()
+	oldHomeDir := C.Path.HomeDir()
+	C.SetHomeDir(homeDir)
+	t.Cleanup(func() { C.SetHomeDir(oldHomeDir) })
+
+	got := tailscaleStateDir(TailscaleOption{Name: "ts-main", StateDir: " \t "})
+	want := C.Path.GetPathByHash("tailscale", "ts-main")
+	if got != want {
+		t.Fatalf("state dir = %s, want %s", got, want)
+	}
+}
+
+func TestTailscaleStateDirResolvesConfiguredPath(t *testing.T) {
+	homeDir := t.TempDir()
+	oldHomeDir := C.Path.HomeDir()
+	C.SetHomeDir(homeDir)
+	t.Cleanup(func() { C.SetHomeDir(oldHomeDir) })
+
+	got := tailscaleStateDir(TailscaleOption{Name: "ts-main", StateDir: "tailstate/main"})
+	want := filepath.Join(homeDir, "tailstate/main")
+	if got != want {
+		t.Fatalf("relative state dir = %s, want %s", got, want)
+	}
+
+	absolute := filepath.Join(t.TempDir(), "ts-main")
+	got = tailscaleStateDir(TailscaleOption{Name: "ts-main", StateDir: absolute})
+	if got != absolute {
+		t.Fatalf("absolute state dir = %s, want %s", got, absolute)
 	}
 }
 
