@@ -40,7 +40,16 @@ type RuleExtra struct {
 }
 
 func getRules(w http.ResponseWriter, r *http.Request) {
-	rawRules := tunnel.Rules()
+	rules := formatRules(tunnel.Rules())
+	essentialRules := formatRules(tunnel.EssentialRules())
+
+	render.JSON(w, r, render.M{
+		"rules":           rules,
+		"essential-rules": essentialRules,
+	})
+}
+
+func formatRules(rawRules []constant.Rule) []Rule {
 	rules := make([]Rule, 0, len(rawRules))
 	for index, rule := range rawRules {
 		r := Rule{
@@ -67,9 +76,7 @@ func getRules(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	render.JSON(w, r, render.M{
-		"rules": rules,
-	})
+	return rules
 }
 
 // disableRules disable or enable rules by their indexes.

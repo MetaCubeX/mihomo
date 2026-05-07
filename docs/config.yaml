@@ -1426,6 +1426,10 @@ rule-providers:
       - '*.*.microsoft.com'
       - 'books.itunes.apple.com'
 
+# 必要规则会先于 mode 匹配；命中后不再受 direct / global / rule 模式影响。
+# essential-rules:
+#   - DOMAIN-SUFFIX,example.com,REJECT
+
 rules:
   - RULE-SET,rule1,REJECT
   - IP-ASN,1,PROXY

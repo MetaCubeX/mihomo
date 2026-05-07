@@ -189,24 +189,25 @@ type TLS struct {
 
 // Config is mihomo config manager
 type Config struct {
-	General       *General
-	Controller    *Controller
-	Experimental  *Experimental
-	IPTables      *IPTables
-	NTP           *NTP
-	DNS           *DNS
-	Hosts         *trie.DomainTrie[resolver.HostValue]
-	Profile       *Profile
-	Rules         []C.Rule
-	SubRules      map[string][]C.Rule
-	Users         []auth.AuthUser
-	Proxies       map[string]C.Proxy
-	Listeners     map[string]C.InboundListener
-	Providers     map[string]P.ProxyProvider
-	RuleProviders map[string]P.RuleProvider
-	Tunnels       []LC.Tunnel
-	Sniffer       *sniffer.Config
-	TLS           *TLS
+	General        *General
+	Controller     *Controller
+	Experimental   *Experimental
+	IPTables       *IPTables
+	NTP            *NTP
+	DNS            *DNS
+	Hosts          *trie.DomainTrie[resolver.HostValue]
+	Profile        *Profile
+	EssentialRules []C.Rule
+	Rules          []C.Rule
+	SubRules       map[string][]C.Rule
+	Users          []auth.AuthUser
+	Proxies        map[string]C.Proxy
+	Listeners      map[string]C.InboundListener
+	Providers      map[string]P.ProxyProvider
+	RuleProviders  map[string]P.RuleProvider
+	Tunnels        []LC.Tunnel
+	Sniffer        *sniffer.Config
+	TLS            *TLS
 }
 
 type RawCors struct {
@@ -436,24 +437,25 @@ type RawConfig struct {
 	KeepAliveInterval       int                     `yaml:"keep-alive-interval" json:"keep-alive-interval"`
 	DisableKeepAlive        bool                    `yaml:"disable-keep-alive" json:"disable-keep-alive"`
 
-	ProxyProvider map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
-	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
-	Proxy         []map[string]any          `yaml:"proxies" json:"proxies"`
-	ProxyGroup    []map[string]any          `yaml:"proxy-groups" json:"proxy-groups"`
-	Rule          []string                  `yaml:"rules" json:"rule"`
-	SubRules      map[string][]string       `yaml:"sub-rules" json:"sub-rules"`
-	Listeners     []map[string]any          `yaml:"listeners" json:"listeners"`
-	Hosts         map[string]any            `yaml:"hosts" json:"hosts"`
-	DNS           RawDNS                    `yaml:"dns" json:"dns"`
-	NTP           RawNTP                    `yaml:"ntp" json:"ntp"`
-	Tun           RawTun                    `yaml:"tun" json:"tun"`
-	TuicServer    RawTuicServer             `yaml:"tuic-server" json:"tuic-server"`
-	IPTables      RawIPTables               `yaml:"iptables" json:"iptables"`
-	Experimental  RawExperimental           `yaml:"experimental" json:"experimental"`
-	Profile       RawProfile                `yaml:"profile" json:"profile"`
-	GeoXUrl       RawGeoXUrl                `yaml:"geox-url" json:"geox-url"`
-	Sniffer       RawSniffer                `yaml:"sniffer" json:"sniffer"`
-	TLS           RawTLS                    `yaml:"tls" json:"tls"`
+	ProxyProvider  map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
+	RuleProvider   map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
+	Proxy          []map[string]any          `yaml:"proxies" json:"proxies"`
+	ProxyGroup     []map[string]any          `yaml:"proxy-groups" json:"proxy-groups"`
+	EssentialRules []string                  `yaml:"essential-rules" json:"essential-rules"`
+	Rule           []string                  `yaml:"rules" json:"rule"`
+	SubRules       map[string][]string       `yaml:"sub-rules" json:"sub-rules"`
+	Listeners      []map[string]any          `yaml:"listeners" json:"listeners"`
+	Hosts          map[string]any            `yaml:"hosts" json:"hosts"`
+	DNS            RawDNS                    `yaml:"dns" json:"dns"`
+	NTP            RawNTP                    `yaml:"ntp" json:"ntp"`
+	Tun            RawTun                    `yaml:"tun" json:"tun"`
+	TuicServer     RawTuicServer             `yaml:"tuic-server" json:"tuic-server"`
+	IPTables       RawIPTables               `yaml:"iptables" json:"iptables"`
+	Experimental   RawExperimental           `yaml:"experimental" json:"experimental"`
+	Profile        RawProfile                `yaml:"profile" json:"profile"`
+	GeoXUrl        RawGeoXUrl                `yaml:"geox-url" json:"geox-url"`
+	Sniffer        RawSniffer                `yaml:"sniffer" json:"sniffer"`
+	TLS            RawTLS                    `yaml:"tls" json:"tls"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
 }
@@ -483,6 +485,7 @@ func DefaultRawConfig() *RawConfig {
 		Authentication:    []string{},
 		LogLevel:          log.INFO,
 		Hosts:             map[string]any{},
+		EssentialRules:    []string{},
 		Rule:              []string{},
 		Proxy:             []map[string]any{},
 		ProxyGroup:        []map[string]any{},
@@ -681,6 +684,12 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.SubRules = subRules
+
+	essentialRules, err := parseRules(rawCfg.EssentialRules, proxies, ruleProviders, subRules, "essential-rules")
+	if err != nil {
+		return nil, err
+	}
+	config.EssentialRules = essentialRules
 
 	rules, err := parseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
 	if err != nil {
@@ -1095,7 +1104,7 @@ func parseRules(rulesConfig []string, proxies map[string]C.Proxy, ruleProviders 
 			}
 		}
 
-		if format == "rules" { // only wrap top level rules
+		if format == "rules" || format == "essential-rules" { // only wrap top level rules
 			parsed = RW.NewRuleWrapper(parsed)
 		}
 

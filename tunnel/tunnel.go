@@ -54,7 +54,8 @@ var (
 	udpInOnce sync.Once
 
 	// Outbound Rule
-	mode = Rule
+	mode           = Rule
+	essentialRules []C.Rule
 
 	// default timeout for UDP session
 	udpTimeout = 60 * time.Second
@@ -190,13 +191,19 @@ func Rules() []C.Rule {
 	return rules
 }
 
+// EssentialRules returns rules matched before tunnel mode routing.
+func EssentialRules() []C.Rule {
+	return essentialRules
+}
+
 func Listeners() map[string]C.InboundListener {
 	return listeners
 }
 
 // UpdateRules handle update rules
-func UpdateRules(newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]P.RuleProvider) {
+func UpdateRules(newEssentialRules []C.Rule, newRules []C.Rule, newSubRule map[string][]C.Rule, rp map[string]P.RuleProvider) {
 	configMux.Lock()
+	essentialRules = newEssentialRules
 	rules = newRules
 	ruleProviders = rp
 	subRules = newSubRule
@@ -376,6 +383,10 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		helper.FindProcess = nil
 	case process.FindProcessOff:
 		helper.FindProcess = nil
+	}
+
+	if proxy, rule, matched := matchEssentialRules(metadata, helper); matched {
+		return proxy, rule, nil
 	}
 
 	switch mode {
@@ -630,11 +641,30 @@ func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
 	}
 }
 
+func matchEssentialRules(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, bool) {
+	configMux.RLock()
+	defer configMux.RUnlock()
+
+	if len(essentialRules) == 0 {
+		return nil, nil, false
+	}
+	log.Debugln("[Rule] use essential rules")
+	return matchRules(metadata, helper, essentialRules)
+}
+
 func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, error) {
 	configMux.RLock()
 	defer configMux.RUnlock()
 
-	for _, rule := range getRules(metadata) {
+	if adapter, rule, matched := matchRules(metadata, helper, getRules(metadata)); matched {
+		return adapter, rule, nil
+	}
+
+	return proxies["DIRECT"], nil, nil
+}
+
+func matchRules(metadata *C.Metadata, helper C.RuleMatchHelper, rules []C.Rule) (C.Proxy, C.Rule, bool) {
+	for _, rule := range rules {
 		if matched, ada := rule.Match(metadata, helper); matched {
 			adapter, ok := proxies[ada]
 			if !ok {
@@ -659,11 +689,11 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 				continue
 			}
 
-			return adapter, rule, nil
+			return adapter, rule, true
 		}
 	}
 
-	return proxies["DIRECT"], nil, nil
+	return nil, nil, false
 }
 
 func getRules(metadata *C.Metadata) []C.Rule {

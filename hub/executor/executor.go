@@ -99,7 +99,7 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateExperimental(cfg.Experimental)
 	updateUsers(cfg.Users)
 	updateProxies(cfg.Proxies, cfg.Providers)
-	updateRules(cfg.Rules, cfg.SubRules, cfg.RuleProviders)
+	updateRules(cfg.EssentialRules, cfg.Rules, cfg.SubRules, cfg.RuleProviders)
 	updateSniffer(cfg.Sniffer)
 	updateHosts(cfg.Hosts)
 	updateGeneral(cfg.General, true)
@@ -309,8 +309,8 @@ func updateProxies(proxies map[string]C.Proxy, providers map[string]P.ProxyProvi
 	tunnel.UpdateProxies(proxies, providers)
 }
 
-func updateRules(rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map[string]P.RuleProvider) {
-	tunnel.UpdateRules(rules, subRules, ruleProviders)
+func updateRules(essentialRules []C.Rule, rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map[string]P.RuleProvider) {
+	tunnel.UpdateRules(essentialRules, rules, subRules, ruleProviders)
 }
 
 func loadProvider[T P.Provider](providers map[string]T) {
