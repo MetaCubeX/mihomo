@@ -22,23 +22,23 @@ type HealthCheckOption struct {
 }
 
 type extraOption struct {
-	expectedStatus utils.IntRanges[uint16]
-	filters        map[string]struct{}
+	option  C.HealthCheckOption
+	filters map[string]struct{}
 }
 
 type HealthCheck struct {
-	ctx            context.Context
-	ctxCancel      context.CancelFunc
-	url            string
-	extra          map[string]*extraOption
-	mu             sync.Mutex
-	proxies        []C.Proxy
-	interval       time.Duration
-	lazy           bool
-	expectedStatus utils.IntRanges[uint16]
-	lastTouch      atomic.TypedValue[time.Time]
-	singleDo       *singledo.Single[struct{}]
-	timeout        time.Duration
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	url       string
+	extra     map[string]*extraOption
+	mu        sync.Mutex
+	proxies   []C.Proxy
+	interval  time.Duration
+	lazy      bool
+	option    C.HealthCheckOption
+	lastTouch atomic.TypedValue[time.Time]
+	singleDo  *singledo.Single[struct{}]
+	timeout   time.Duration
 }
 
 func (hc *HealthCheck) process() {
@@ -65,7 +65,7 @@ func (hc *HealthCheck) setProxies(proxies []C.Proxy) {
 	hc.proxies = proxies
 }
 
-func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {
+func (hc *HealthCheck) registerHealthCheckTask(url string, option C.HealthCheckOption, filter string, interval uint) {
 	url = strings.TrimSpace(url)
 	if len(url) == 0 || url == hc.url {
 		log.Debugln("ignore invalid health check url: %s", url)
@@ -95,9 +95,9 @@ func (hc *HealthCheck) registerHealthCheckTask(url string, expectedStatus utils.
 		return
 	}
 
-	option := &extraOption{filters: map[string]struct{}{}, expectedStatus: expectedStatus}
-	splitAndAddFiltersToExtra(filter, option)
-	hc.extra[url] = option
+	extra := &extraOption{filters: map[string]struct{}{}, option: option.WithDefault()}
+	splitAndAddFiltersToExtra(filter, extra)
+	hc.extra[url] = extra
 }
 
 func splitAndAddFiltersToExtra(filter string, option *extraOption) {
@@ -132,7 +132,7 @@ func (hc *HealthCheck) check() {
 		b.SetLimit(10)
 
 		// execute default health check
-		option := &extraOption{filters: nil, expectedStatus: hc.expectedStatus}
+		option := &extraOption{filters: nil, option: hc.option}
 		hc.execute(b, hc.url, id, option)
 
 		// execute extra health check
@@ -155,9 +155,9 @@ func (hc *HealthCheck) execute(b *errgroup.Group, url, uid string, option *extra
 	}
 
 	var filterReg *regexp2.Regexp
-	var expectedStatus utils.IntRanges[uint16]
+	healthCheckOption := C.HealthCheckOption{}.WithDefault()
 	if option != nil {
-		expectedStatus = option.expectedStatus
+		healthCheckOption = option.option.WithDefault()
 		if len(option.filters) != 0 {
 			filters := make([]string, 0, len(option.filters))
 			for filter := range option.filters {
@@ -181,7 +181,7 @@ func (hc *HealthCheck) execute(b *errgroup.Group, url, uid string, option *extra
 			ctx, cancel := context.WithTimeout(hc.ctx, hc.timeout)
 			defer cancel()
 			log.Debugln("Health Checking, proxy: %s, url: %s, id: {%s}", p.Name(), url, uid)
-			_, _ = p.URLTest(ctx, url, expectedStatus)
+			_, _ = p.URLTest(ctx, url, healthCheckOption.ExpectedStatus, healthCheckOption)
 			log.Debugln("Health Checked, proxy: %s, url: %s, alive: %t, delay: %d ms uid: {%s}", p.Name(), url, p.AliveForTestUrl(url), p.LastDelayForTestUrl(url), uid)
 			return nil
 		})
@@ -193,25 +193,30 @@ func (hc *HealthCheck) close() {
 }
 
 func NewHealthCheck(proxies []C.Proxy, url string, timeout uint, interval uint, lazy bool, expectedStatus utils.IntRanges[uint16]) *HealthCheck {
+	return NewHealthCheckWithOption(proxies, url, timeout, interval, lazy, C.HealthCheckOption{ExpectedStatus: expectedStatus})
+}
+
+func NewHealthCheckWithOption(proxies []C.Proxy, url string, timeout uint, interval uint, lazy bool, option C.HealthCheckOption) *HealthCheck {
 	if url == "" {
-		expectedStatus = nil
+		option.ExpectedStatus = nil
 		interval = 0
 	}
 	if timeout == 0 {
 		timeout = 5000
 	}
+	option = option.WithDefault()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &HealthCheck{
-		ctx:            ctx,
-		ctxCancel:      cancel,
-		proxies:        proxies,
-		url:            url,
-		timeout:        time.Duration(timeout) * time.Millisecond,
-		extra:          map[string]*extraOption{},
-		interval:       time.Duration(interval) * time.Second,
-		lazy:           lazy,
-		expectedStatus: expectedStatus,
-		singleDo:       singledo.NewSingle[struct{}](time.Second),
+		ctx:       ctx,
+		ctxCancel: cancel,
+		proxies:   proxies,
+		url:       url,
+		timeout:   time.Duration(timeout) * time.Millisecond,
+		extra:     map[string]*extraOption{},
+		interval:  time.Duration(interval) * time.Second,
+		lazy:      lazy,
+		option:    option,
+		singleDo:  singledo.NewSingle[struct{}](time.Second),
 	}
 }

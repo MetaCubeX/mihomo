@@ -1722,6 +1722,13 @@ proxy-groups:
       - vmess1
     # tolerance: 150
     # lazy: true
+    # check-method: http_head # 健康检查请求方法，可选 http_head / http_get，默认 http_head
+    # http-headers: # 健康检查请求头，可用于 http_head / http_get
+    #   - name: User-Agent
+    #     value: mihomo
+    #   - name: Accept
+    #     value: text/plain
+    # expected-body-match: "(?i)success" # 仅 check-method 为 http_get 时生效，使用正则表达式匹配响应体，匹配成功才认为节点可用；http_get 默认支持 gzip/br 解压缩
     # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
     url: "https://cp.cloudflare.com/generate_204"
     interval: 300
@@ -1807,6 +1814,13 @@ proxy-providers:
       enable: true
       interval: 600
       # lazy: true
+      # check-method: http_head # 健康检查请求方法，可选 http_head / http_get，默认 http_head
+      # http-headers: # 健康检查请求头，可用于 http_head / http_get
+      #   - name: User-Agent
+      #     value: mihomo
+      #   - name: Accept
+      #     value: text/plain
+      # expected-body-match: "(?i)success" # 仅 check-method 为 http_get 时生效，使用正则表达式匹配响应体，匹配成功才认为节点可用；http_get 默认支持 gzip/br 解压缩
       url: https://cp.cloudflare.com/generate_204
       # expected-status: 204 # 当健康检查返回状态码与期望值不符时，认为节点不可用
     override: # 覆写节点加载时的一些配置项
