@@ -70,6 +70,7 @@ type MasqueOption struct {
 	CongestionController string `proxy:"congestion-controller,omitempty"`
 	CWND                 int    `proxy:"cwnd,omitempty"`
 	BBRProfile           string `proxy:"bbr-profile,omitempty"`
+	DisableMTUDiscovery  bool   `proxy:"disable-mtu-discovery,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -191,6 +192,7 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 		EnableDatagrams:   true,
 		InitialPacketSize: 1242,
 		KeepAlivePeriod:   30 * time.Second,
+		DisablePathMTUDiscovery: option.DisableMTUDiscovery,
 	}
 
 	prefixes, err := option.Prefixes()
