@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -41,163 +40,10 @@ func (c ClientConfig) RemoteAddress() string {
 	return net.JoinHostPort(c.RemoteHost, strconv.Itoa(int(c.RemotePort)))
 }
 
-func ParseClientConfigFile(path string) (*ClientConfig, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return ParseClientConfig(content)
-}
-
-func ParseClientConfig(content []byte) (*ClientConfig, error) {
-	parser := &configParser{
-		scalars: make(map[string][]string),
-		blocks:  make(map[string][]byte),
-	}
-	if err := parser.parse(content); err != nil {
-		return nil, err
-	}
-	return parser.build()
-}
-
-type configParser struct {
-	scalars map[string][]string
-	blocks  map[string][]byte
-}
-
-func (p *configParser) parse(content []byte) error {
-	lines := strings.Split(string(bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))), "\n")
-	var blockName string
-	var block strings.Builder
-
-	for idx, raw := range lines {
-		lineNo := idx + 1
-		line := strings.TrimSpace(raw)
-		if blockName != "" {
-			if strings.EqualFold(line, "</"+blockName+">") {
-				p.blocks[blockName] = []byte(strings.TrimSpace(block.String()) + "\n")
-				blockName = ""
-				block.Reset()
-				continue
-			}
-			block.WriteString(raw)
-			block.WriteByte('\n')
-			continue
-		}
-
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-		if strings.HasPrefix(line, "<") && strings.HasSuffix(line, ">") {
-			name := strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(line, "<"), ">"))
-			switch name {
-			case "ca", "cert", "key", "tls-crypt":
-				if _, exists := p.blocks[name]; exists {
-					return fmt.Errorf("duplicate inline block <%s> at line %d", name, lineNo)
-				}
-				blockName = name
-				continue
-			default:
-				return fmt.Errorf("unsupported inline block <%s> at line %d", name, lineNo)
-			}
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		name := strings.ToLower(fields[0])
-		p.scalars[name] = append(p.scalars[name], strings.Join(fields[1:], " "))
-	}
-
-	if blockName != "" {
-		return fmt.Errorf("unterminated inline block <%s>", blockName)
-	}
-	return nil
-}
-
-func (p *configParser) build() (*ClientConfig, error) {
-	if err := p.rejectUnsupported(); err != nil {
-		return nil, err
-	}
-	if !p.has("client") {
-		return nil, errors.New("openvpn config requires `client`")
-	}
-	if strings.ToLower(p.scalar("remote-cert-tls")) != "server" {
-		return nil, errors.New("openvpn config requires `remote-cert-tls server`")
-	}
-
-	cfg := &ClientConfig{
-		Dev:      p.scalar("dev"),
-		Proto:    normalizeProto(p.scalar("proto")),
-		Cipher:   strings.ToUpper(p.scalar("cipher")),
-		Auth:     strings.ToUpper(p.scalar("auth")),
-		CA:       p.blocks["ca"],
-		Cert:     p.blocks["cert"],
-		Key:      p.blocks["key"],
-		TLSCrypt: p.blocks["tls-crypt"],
-	}
-
-	remoteFields := strings.Fields(p.scalar("remote"))
-	if len(remoteFields) < 2 {
-		return nil, errors.New("openvpn config requires `remote <host> <port>`")
-	}
-	port, err := strconv.ParseUint(remoteFields[1], 10, 16)
-	if err != nil || port == 0 {
-		return nil, fmt.Errorf("invalid openvpn remote port: %s", remoteFields[1])
-	}
-	cfg.RemoteHost = remoteFields[0]
-	cfg.RemotePort = uint16(port)
-
-	if err := cfg.ValidateInstallScriptSubset(); err != nil {
-		return nil, err
-	}
-	cfg.TLSCryptKey, err = DecodeStaticKey(cfg.TLSCrypt)
-	if err != nil {
-		return nil, fmt.Errorf("parse tls-crypt key: %w", err)
-	}
-	return cfg, nil
-}
-
-func (p *configParser) scalar(name string) string {
-	values := p.scalars[name]
-	if len(values) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(values[0])
-}
-
-func (p *configParser) has(name string) bool {
-	_, ok := p.scalars[name]
-	return ok
-}
-
-func (p *configParser) rejectUnsupported() error {
-	allowed := map[string]struct{}{
-		"client":                {},
-		"dev":                   {},
-		"proto":                 {},
-		"remote":                {},
-		"resolv-retry":          {},
-		"nobind":                {},
-		"persist-key":           {},
-		"persist-tun":           {},
-		"remote-cert-tls":       {},
-		"auth":                  {},
-		"cipher":                {},
-		"ignore-unknown-option": {},
-		"verb":                  {},
-	}
-	for name := range p.scalars {
-		if _, ok := allowed[name]; !ok {
-			return fmt.Errorf("unsupported openvpn directive %q; only hwdsl2/openvpn-install client configs are supported", name)
-		}
-	}
-	return nil
-}
-
 func normalizeProto(proto string) string {
 	switch strings.ToLower(strings.TrimSpace(proto)) {
+	case "":
+		return ProtoUDP
 	case "udp", "udp4":
 		return ProtoUDP
 	case "tcp", "tcp-client", "tcp4", "tcp4-client":
@@ -205,6 +51,35 @@ func normalizeProto(proto string) string {
 	default:
 		return strings.ToLower(strings.TrimSpace(proto))
 	}
+}
+
+func (c *ClientConfig) Prepare() error {
+	if c == nil {
+		return errors.New("nil openvpn client config")
+	}
+	c.RemoteHost = strings.TrimSpace(c.RemoteHost)
+	c.Proto = normalizeProto(c.Proto)
+	if c.Dev == "" {
+		c.Dev = "tun"
+	}
+	c.Dev = strings.ToLower(strings.TrimSpace(c.Dev))
+	if c.Cipher == "" {
+		c.Cipher = CipherAES128GCM
+	}
+	c.Cipher = strings.ToUpper(strings.TrimSpace(c.Cipher))
+	if c.Auth == "" {
+		c.Auth = AuthSHA256
+	}
+	c.Auth = strings.ToUpper(strings.TrimSpace(c.Auth))
+	if err := c.ValidateInstallScriptSubset(); err != nil {
+		return err
+	}
+	key, err := DecodeStaticKey(c.TLSCrypt)
+	if err != nil {
+		return fmt.Errorf("parse tls-crypt key: %w", err)
+	}
+	c.TLSCryptKey = key
+	return nil
 }
 
 func (c *ClientConfig) ValidateInstallScriptSubset() error {

@@ -35,11 +35,19 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name          string `proxy:"name"`
-	Config        string `proxy:"config,omitempty"`
-	ConfigContent string `proxy:"config-content,omitempty"`
-	MTU           int    `proxy:"mtu,omitempty"`
-	UDP           bool   `proxy:"udp,omitempty"`
+	Name     string `proxy:"name"`
+	Server   string `proxy:"server"`
+	Port     int    `proxy:"port"`
+	Proto    string `proxy:"proto,omitempty"`
+	Dev      string `proxy:"dev,omitempty"`
+	Cipher   string `proxy:"cipher,omitempty"`
+	Auth     string `proxy:"auth,omitempty"`
+	CA       string `proxy:"ca"`
+	Cert     string `proxy:"cert"`
+	Key      string `proxy:"key"`
+	TLSCrypt string `proxy:"tls-crypt"`
+	MTU      int    `proxy:"mtu,omitempty"`
+	UDP      bool   `proxy:"udp,omitempty"`
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
@@ -70,17 +78,28 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 }
 
 func loadOpenVPNClientConfig(option OpenVPNOption) (*ovpn.ClientConfig, error) {
-	if option.ConfigContent != "" {
-		return ovpn.ParseClientConfig([]byte(option.ConfigContent))
+	if option.Server == "" {
+		return nil, fmt.Errorf("openvpn server is required")
 	}
-	if option.Config == "" {
-		return nil, fmt.Errorf("openvpn config is required")
+	if option.Port <= 0 || option.Port > 65535 {
+		return nil, fmt.Errorf("invalid openvpn port: %d", option.Port)
 	}
-	path := C.Path.Resolve(option.Config)
-	if !C.Path.IsSafePath(path) {
-		return nil, C.Path.ErrNotSafePath(path)
+	cfg := &ovpn.ClientConfig{
+		RemoteHost: option.Server,
+		RemotePort: uint16(option.Port),
+		Proto:      option.Proto,
+		Dev:        option.Dev,
+		Cipher:     option.Cipher,
+		Auth:       option.Auth,
+		CA:         []byte(option.CA),
+		Cert:       []byte(option.Cert),
+		Key:        []byte(option.Key),
+		TLSCrypt:   []byte(option.TLSCrypt),
 	}
-	return ovpn.ParseClientConfigFile(path)
+	if err := cfg.Prepare(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 func (o *OpenVPN) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {

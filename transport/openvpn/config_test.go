@@ -22,40 +22,30 @@ AwEHoUQDQgAEhT8O8v9COiL0e7Gmab6r8jYxgB5xIvEtL10eF6QpJm+5ROK8f8yO
 8JHj2L2F6i1vg7CNgMCoX9YnZ9wqOg==
 -----END EC PRIVATE KEY-----`
 
-func installScriptConfig() string {
-	return `client
-dev tun
-proto udp
-remote vpn.example.com 1194
-resolv-retry infinite
-nobind
-persist-key
-persist-tun
-remote-cert-tls server
-auth SHA256
-cipher AES-128-GCM
-ignore-unknown-option block-outside-dns block-ipv6
-verb 3
-<ca>
-` + testCert + `
-</ca>
-<cert>
-` + testCert + `
-</cert>
-<key>
-` + testKey + `
-</key>
-<tls-crypt>
------BEGIN OpenVPN Static key V1-----
+func testTLSCryptBlock() string {
+	return `-----BEGIN OpenVPN Static key V1-----
 ` + strings.Repeat("00", 256) + `
------END OpenVPN Static key V1-----
-</tls-crypt>
-`
+-----END OpenVPN Static key V1-----`
 }
 
-func TestParseClientConfigInstallScriptSubset(t *testing.T) {
-	cfg, err := ParseClientConfig([]byte(installScriptConfig()))
-	if err != nil {
+func yamlStyleConfig() *ClientConfig {
+	return &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 1194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "AES-128-GCM",
+		Auth:       "SHA256",
+		CA:         []byte(testCert),
+		Cert:       []byte(testCert),
+		Key:        []byte(testKey),
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+}
+
+func TestClientConfigYAMLStyleInstallScriptSubset(t *testing.T) {
+	cfg := yamlStyleConfig()
+	if err := cfg.Prepare(); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.RemoteAddress() != "vpn.example.com:1194" {
@@ -72,19 +62,37 @@ func TestParseClientConfigInstallScriptSubset(t *testing.T) {
 	}
 }
 
-func TestParseClientConfigRejectsUnsupportedDirective(t *testing.T) {
-	_, err := ParseClientConfig([]byte(installScriptConfig() + "\ntls-auth ta.key 1\n"))
-	if err == nil {
-		t.Fatal("expected unsupported directive error")
+func TestClientConfigDefaults(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.Proto = ""
+	cfg.Dev = ""
+	cfg.Cipher = ""
+	cfg.Auth = ""
+
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "unsupported openvpn directive") {
+	if cfg.Proto != ProtoUDP || cfg.Dev != "tun" || cfg.Cipher != CipherAES128GCM || cfg.Auth != AuthSHA256 {
+		t.Fatalf("unexpected defaults: proto=%s dev=%s cipher=%s auth=%s", cfg.Proto, cfg.Dev, cfg.Cipher, cfg.Auth)
+	}
+}
+
+func TestClientConfigRejectsUnsupportedProto(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.Proto = "tcp-server"
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected unsupported proto error")
+	}
+	if !strings.Contains(err.Error(), "unsupported openvpn proto") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestParseClientConfigRequiresTLSCrypt(t *testing.T) {
-	raw := strings.ReplaceAll(installScriptConfig(), "<tls-crypt>\n-----BEGIN OpenVPN Static key V1-----\n"+strings.Repeat("00", 256)+"\n-----END OpenVPN Static key V1-----\n</tls-crypt>\n", "")
-	_, err := ParseClientConfig([]byte(raw))
+func TestClientConfigRequiresTLSCrypt(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSCrypt = nil
+	err := cfg.Prepare()
 	if err == nil {
 		t.Fatal("expected missing tls-crypt error")
 	}
