@@ -449,6 +449,14 @@ type Config struct {
 	CacheMaxSize         int
 }
 
+func NewResolverWithClient(client dnsClient) *Resolver {
+	return &Resolver{
+		ipv6:  true,
+		main:  []dnsClient{client},
+		cache: Config{}.newCache(),
+	}
+}
+
 func (config Config) newCache() dnsCache {
 	if config.CacheMaxSize == 0 {
 		config.CacheMaxSize = 4096

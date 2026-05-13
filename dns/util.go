@@ -126,6 +126,8 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 			c = newDHCPClient(s.Addr)
 		case "system":
 			c = newSystemClient()
+		case "tailscale":
+			c = newTailscaleClient(s.Addr)
 		case "rcode":
 			c = newRCodeClient(s.Addr)
 		case "quic":
