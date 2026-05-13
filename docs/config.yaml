@@ -1087,6 +1087,41 @@ proxies: # socks5
     #   j3: <t><b 0xf6ab><c><r 10>                        # AmneziaWG v1.5 only (removed in v2)
     #   itime: 60                                         # AmneziaWG v1.5 only (removed in v2)
 
+  # openvpn
+  - name: "openvpn"
+    type: openvpn
+    server: vpn.example.com
+    port: 1194
+    proto: udp # udp/tcp，默认 udp
+    # dev: tun # 目前仅支持 tun，默认 tun
+    # cipher: AES-128-GCM # 目前仅支持 AES-128-GCM，默认 AES-128-GCM
+    # auth: SHA256 # 目前仅支持 SHA256，默认 SHA256
+    # 从 .ovpn 中复制 <ca></ca> 内的内容，不需要保留 <ca> 标签
+    ca: |
+      -----BEGIN CERTIFICATE-----
+      MIIB...example
+      -----END CERTIFICATE-----
+    # 从 .ovpn 中复制 <cert></cert> 内的内容，不需要保留 <cert> 标签
+    cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIB...example
+      -----END CERTIFICATE-----
+    # 从 .ovpn 中复制 <key></key> 内的内容，不需要保留 <key> 标签
+    key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIE...example
+      -----END PRIVATE KEY-----
+    # 从 .ovpn 中复制 <tls-crypt></tls-crypt> 内的内容，不需要保留 <tls-crypt> 标签
+    tls-crypt: |
+      -----BEGIN OpenVPN Static key V1-----
+      00000000000000000000000000000000
+      ...
+      -----END OpenVPN Static key V1-----
+    # mtu: 1500
+    udp: true
+    # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
+    # dialer-proxy: "ss1"
+
   # masque
   - name: "masque"
     type: masque
