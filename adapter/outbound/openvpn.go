@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 	ovpn "github.com/metacubex/mihomo/transport/openvpn"
 
@@ -26,6 +28,8 @@ type OpenVPN struct {
 
 	tunDevice wireguard.Device
 	client    *ovpn.Client
+	resolver  resolver.Resolver
+	dns       []dns.NameServer
 
 	runCtx    context.Context
 	runCancel context.CancelFunc
@@ -48,6 +52,9 @@ type OpenVPNOption struct {
 	TLSCrypt string `proxy:"tls-crypt"`
 	MTU      int    `proxy:"mtu,omitempty"`
 	UDP      bool   `proxy:"udp,omitempty"`
+
+	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
+	Dns              []string `proxy:"dns,omitempty"`
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
@@ -71,6 +78,13 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		}),
 		option: &option,
 		config: cfg,
+	}
+	if option.RemoteDnsResolve && len(option.Dns) > 0 {
+		nss, err := dns.ParseNameServer(option.Dns)
+		if err != nil {
+			return nil, err
+		}
+		outbound.dns = nss
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	outbound.runCtx, outbound.runCancel = context.WithCancel(context.Background())
@@ -111,9 +125,13 @@ func (o *OpenVPN) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn
 		conn net.Conn
 		err  error
 	)
-	if !metadata.Resolved() {
+	if !metadata.Resolved() || o.resolver != nil {
+		r := resolver.DefaultResolver
+		if o.resolver != nil {
+			r = o.resolver
+		}
 		options := o.DialOptions()
-		options = append(options, dialer.WithResolver(resolver.DefaultResolver))
+		options = append(options, dialer.WithResolver(r))
 		options = append(options, dialer.WithNetDialer(wgNetDialer{tunDevice: o.tunDevice}))
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
@@ -156,8 +174,12 @@ func (o *OpenVPN) IsL3Protocol(metadata *C.Metadata) bool {
 }
 
 func (o *OpenVPN) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
-	if !metadata.Resolved() && metadata.Host != "" {
-		ip, err := resolver.ResolveIP(ctx, metadata.Host)
+	if (!metadata.Resolved() || o.resolver != nil) && metadata.Host != "" {
+		r := resolver.DefaultResolver
+		if o.resolver != nil {
+			r = o.resolver
+		}
+		ip, err := resolver.ResolveIPWithResolver(ctx, metadata.Host, r)
 		if err != nil {
 			return fmt.Errorf("can't resolve ip: %w", err)
 		}
@@ -227,12 +249,30 @@ func (o *OpenVPN) run(ctx context.Context) error {
 		_ = tunDevice.Close()
 		return err
 	}
-
 	o.client = client
 	o.tunDevice = tunDevice
 	o.running = true
+	if o.option.RemoteDnsResolve && len(o.dns) > 0 && o.resolver == nil {
+		nss := append([]dns.NameServer(nil), o.dns...)
+		for i := range nss {
+			nss[i].ProxyAdapter = o
+		}
+		o.resolver = dns.NewResolver(dns.Config{
+			Main: nss,
+			IPv6: openVPNPrefixesHas6(push.Prefixes),
+		})
+	}
 	o.startPacketLoops()
 	return nil
+}
+
+func openVPNPrefixesHas6(prefixes []netip.Prefix) bool {
+	for _, prefix := range prefixes {
+		if !prefix.Addr().Unmap().Is4() {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *OpenVPN) openPacketIO(ctx context.Context) (ovpn.PacketIO, error) {
