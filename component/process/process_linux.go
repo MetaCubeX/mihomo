@@ -133,17 +133,79 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uint32,
 		return 0, 0, err
 	}
 
+	var fallbackUID, fallbackInode uint32
+	fallbackFound := false
 	for _, msg := range messages {
 		if len(msg.Data) < inetDiagResponseSize {
 			continue
 		}
 
 		response := (*inetDiagResponse)(unsafe.Pointer(&msg.Data[0]))
+		if response.INode == 0 {
+			continue
+		}
 
-		return response.UID, response.INode, nil
+		switch responseSourceMatch(response, request.Protocol, ip, srcPort) {
+		case sourceExactMatch:
+			return response.UID, response.INode, nil
+		case sourceWildcardMatch:
+			if !fallbackFound {
+				fallbackUID = response.UID
+				fallbackInode = response.INode
+				fallbackFound = true
+			}
+		}
+	}
+
+	if fallbackFound {
+		return fallbackUID, fallbackInode, nil
 	}
 
 	return 0, 0, ErrNotFound
+}
+
+type sourceMatch int
+
+const (
+	sourceNoMatch sourceMatch = iota
+	sourceWildcardMatch
+	sourceExactMatch
+)
+
+func responseSourceMatch(response *inetDiagResponse, protocol byte, ip netip.Addr, srcPort int) sourceMatch {
+	if binary.BigEndian.Uint16(response.SrcPort[:]) != uint16(srcPort) {
+		return sourceNoMatch
+	}
+
+	responseIP, ok := responseSourceAddr(response)
+	if !ok {
+		return sourceNoMatch
+	}
+
+	if responseIP == ip.Unmap() {
+		return sourceExactMatch
+	}
+
+	if protocol == unix.IPPROTO_UDP && responseIP.IsUnspecified() {
+		return sourceWildcardMatch
+	}
+
+	return sourceNoMatch
+}
+
+func responseSourceAddr(response *inetDiagResponse) (netip.Addr, bool) {
+	switch response.Family {
+	case unix.AF_INET:
+		var ip [4]byte
+		copy(ip[:], response.Src[:4])
+		return netip.AddrFrom4(ip), true
+	case unix.AF_INET6:
+		var ip [16]byte
+		copy(ip[:], response.Src[:])
+		return netip.AddrFrom16(ip).Unmap(), true
+	default:
+		return netip.Addr{}, false
+	}
 }
 
 func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
