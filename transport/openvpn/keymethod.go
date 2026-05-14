@@ -50,7 +50,7 @@ type KeyMethod2Record struct {
 	PeerInfo string
 }
 
-func NewClientKeyMethod2Record(options, peerInfo string) (*KeyMethod2Record, error) {
+func NewClientKeyMethod2Record(options, peerInfo, username, password string) (*KeyMethod2Record, error) {
 	var record KeyMethod2Record
 	if _, err := rand.Read(record.Sources.Client.PreMaster[:]); err != nil {
 		return nil, err
@@ -63,6 +63,8 @@ func NewClientKeyMethod2Record(options, peerInfo string) (*KeyMethod2Record, err
 	}
 	record.Options = options
 	record.PeerInfo = peerInfo
+	record.Username = username
+	record.Password = password
 	return &record, nil
 }
 
@@ -111,7 +113,10 @@ func ParseServerKeyMethod2Record(packet []byte) (*KeyMethod2Record, error) {
 	return record, nil
 }
 
-func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID) (*KeyMaterial, error) {
+func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession SessionID, cipherKeyLen int) (*KeyMaterial, error) {
+	if cipherKeyLen != 16 && cipherKeyLen != 32 {
+		return nil, fmt.Errorf("unsupported data cipher key length %d", cipherKeyLen)
+	}
 	var master [48]byte
 	if err := openvpnPRF(
 		sources.Client.PreMaster[:],
@@ -141,23 +146,27 @@ func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession Se
 	clientToServer := keyBlock[:maxCipherKeyLength+maxHMACKeyLength]
 	serverToClient := keyBlock[maxCipherKeyLength+maxHMACKeyLength:]
 	return &KeyMaterial{
-		SendCipherKey: cloneBytes(clientToServer[:16]),
+		SendCipherKey: cloneBytes(clientToServer[:cipherKeyLen]),
 		SendHMACKey:   cloneBytes(clientToServer[maxCipherKeyLength : maxCipherKeyLength+maxHMACKeyLength]),
-		RecvCipherKey: cloneBytes(serverToClient[:16]),
+		RecvCipherKey: cloneBytes(serverToClient[:cipherKeyLen]),
 		RecvHMACKey:   cloneBytes(serverToClient[maxCipherKeyLength : maxCipherKeyLength+maxHMACKeyLength]),
 	}, nil
 }
 
-func InstallScriptOptionsString(proto string) string {
+func InstallScriptOptionsString(proto, cipher, auth string) string {
 	protoName := "UDPv4"
 	if proto == ProtoTCP {
 		protoName = "TCPv4_CLIENT"
 	}
-	return fmt.Sprintf("V4,dev-type tun,link-mtu 1550,tun-mtu 1500,proto %s,cipher %s,auth %s,keysize 128,key-method 2,tls-client", protoName, CipherAES128GCM, AuthSHA256)
+	keysize := "128"
+	if cipher == CipherAES256GCM {
+		keysize = "256"
+	}
+	return fmt.Sprintf("V4,dev-type tun,link-mtu 1550,tun-mtu 1500,proto %s,cipher %s,auth %s,keysize %s,key-method 2,tls-client", protoName, cipher, auth, keysize)
 }
 
-func InstallScriptPeerInfo() string {
-	return "IV_VER=mihomo-openvpn\nIV_PROTO=6\nIV_CIPHERS=AES-128-GCM\n"
+func InstallScriptPeerInfo(cipher string) string {
+	return fmt.Sprintf("IV_VER=mihomo-openvpn\nIV_PROTO=6\nIV_CIPHERS=%s\n", cipher)
 }
 
 func appendOpenVPNString(out []byte, s string) []byte {

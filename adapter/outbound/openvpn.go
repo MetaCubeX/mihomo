@@ -47,9 +47,11 @@ type OpenVPNOption struct {
 	Cipher   string `proxy:"cipher,omitempty"`
 	Auth     string `proxy:"auth,omitempty"`
 	CA       string `proxy:"ca"`
-	Cert     string `proxy:"cert"`
-	Key      string `proxy:"key"`
+	Cert     string `proxy:"cert,omitempty"`
+	Key      string `proxy:"key,omitempty"`
 	TLSCrypt string `proxy:"tls-crypt"`
+	Username string `proxy:"username,omitempty"`
+	Password string `proxy:"password,omitempty"`
 	MTU      int    `proxy:"mtu,omitempty"`
 	UDP      bool   `proxy:"udp,omitempty"`
 
@@ -69,6 +71,8 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		Cert:       []byte(option.Cert),
 		Key:        []byte(option.Key),
 		TLSCrypt:   []byte(option.TLSCrypt),
+		Username:   option.Username,
+		Password:   option.Password,
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err

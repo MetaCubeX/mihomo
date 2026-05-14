@@ -83,7 +83,12 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, fmt.Errorf("openvpn tls handshake: %w", err)
 	}
 
-	clientRecord, err := NewClientKeyMethod2Record(InstallScriptOptionsString(c.config.Proto), InstallScriptPeerInfo())
+	clientRecord, err := NewClientKeyMethod2Record(
+		InstallScriptOptionsString(c.config.Proto, c.config.Cipher, c.config.Auth),
+		InstallScriptPeerInfo(c.config.Cipher),
+		strings.TrimSpace(c.config.Username),
+		c.config.Password,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +106,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 
 	sources := clientRecord.Sources
 	sources.Server = serverRecord.Sources.Server
-	keys, err := DeriveClientKeyMaterial(sources, c.control.LocalSessionID(), c.control.RemoteSessionID())
+	keys, err := DeriveClientKeyMaterial(sources, c.control.LocalSessionID(), c.control.RemoteSessionID(), c.config.DataCipherKeyLength())
 	if err != nil {
 		return nil, fmt.Errorf("derive data channel keys: %w", err)
 	}
@@ -228,33 +233,39 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 }
 
 func (c *Client) tlsConfig() (*tls.Config, error) {
-	cert, err := tls.X509KeyPair(c.config.Cert, c.config.Key)
-	if err != nil {
-		return nil, fmt.Errorf("parse client certificate/key: %w", err)
-	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(c.config.CA) {
 		return nil, errors.New("parse openvpn ca certificate")
 	}
-	return &tls.Config{
-		Certificates:       []tls.Certificate{cert},
+	verify := func(cs tls.ConnectionState) error {
+		if len(cs.PeerCertificates) == 0 {
+			return errors.New("openvpn server did not provide certificate")
+		}
+		intermediates := x509.NewCertPool()
+		for _, cert := range cs.PeerCertificates[1:] {
+			intermediates.AddCert(cert)
+		}
+		_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{
+			Roots:         roots,
+			Intermediates: intermediates,
+			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		})
+		return err
+	}
+	cfg := &tls.Config{
 		InsecureSkipVerify: true,
-		VerifyConnection: func(cs tls.ConnectionState) error {
-			if len(cs.PeerCertificates) == 0 {
-				return errors.New("openvpn server did not provide certificate")
-			}
-			intermediates := x509.NewCertPool()
-			for _, cert := range cs.PeerCertificates[1:] {
-				intermediates.AddCert(cert)
-			}
-			_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{
-				Roots:         roots,
-				Intermediates: intermediates,
-				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-			})
-			return err
-		},
-	}, nil
+		VerifyConnection:   verify,
+	}
+	certPEM := bytes.TrimSpace(c.config.Cert)
+	keyPEM := bytes.TrimSpace(c.config.Key)
+	if len(certPEM) > 0 && len(keyPEM) > 0 {
+		cert, err := tls.X509KeyPair(c.config.Cert, c.config.Key)
+		if err != nil {
+			return nil, fmt.Errorf("parse client certificate/key: %w", err)
+		}
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+	return cfg, nil
 }
 
 var _ net.Conn = (*ControlConn)(nil)

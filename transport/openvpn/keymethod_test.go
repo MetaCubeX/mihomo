@@ -8,8 +8,8 @@ import (
 
 func TestKeyMethod2ClientMarshalAndDerive(t *testing.T) {
 	record := &KeyMethod2Record{
-		Options:  InstallScriptOptionsString(ProtoUDP),
-		PeerInfo: InstallScriptPeerInfo(),
+		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES128GCM, AuthSHA256),
+		PeerInfo: InstallScriptPeerInfo(CipherAES128GCM),
 	}
 	for i := range record.Sources.Client.PreMaster {
 		record.Sources.Client.PreMaster[i] = byte(i + 1)
@@ -35,11 +35,43 @@ func TestKeyMethod2ClientMarshalAndDerive(t *testing.T) {
 	var clientID, serverID SessionID
 	copy(clientID[:], []byte("client01"))
 	copy(serverID[:], []byte("server01"))
-	keys, err := DeriveClientKeyMaterial(record.Sources, clientID, serverID)
+	keys, err := DeriveClientKeyMaterial(record.Sources, clientID, serverID, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(keys.SendCipherKey) != 16 || len(keys.RecvCipherKey) != 16 {
+		t.Fatalf("unexpected cipher key lengths: %d/%d", len(keys.SendCipherKey), len(keys.RecvCipherKey))
+	}
+	if len(keys.SendHMACKey) != maxHMACKeyLength || len(keys.RecvHMACKey) != maxHMACKeyLength {
+		t.Fatalf("unexpected hmac key lengths: %d/%d", len(keys.SendHMACKey), len(keys.RecvHMACKey))
+	}
+	if bytes.Equal(keys.SendCipherKey, keys.RecvCipherKey) {
+		t.Fatalf("send and recv keys should differ")
+	}
+}
+
+func TestKeyMethod2DeriveAES256(t *testing.T) {
+	record := &KeyMethod2Record{
+		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES256GCM, AuthSHA256),
+		PeerInfo: InstallScriptPeerInfo(CipherAES256GCM),
+	}
+	for i := range record.Sources.Client.PreMaster {
+		record.Sources.Client.PreMaster[i] = byte(i + 1)
+	}
+	for i := range record.Sources.Client.Random1 {
+		record.Sources.Client.Random1[i] = byte(i + 2)
+		record.Sources.Client.Random2[i] = byte(i + 3)
+		record.Sources.Server.Random1[i] = byte(i + 4)
+		record.Sources.Server.Random2[i] = byte(i + 5)
+	}
+	var clientID, serverID SessionID
+	copy(clientID[:], []byte("client01"))
+	copy(serverID[:], []byte("server01"))
+	keys, err := DeriveClientKeyMaterial(record.Sources, clientID, serverID, 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys.SendCipherKey) != 32 || len(keys.RecvCipherKey) != 32 {
 		t.Fatalf("unexpected cipher key lengths: %d/%d", len(keys.SendCipherKey), len(keys.RecvCipherKey))
 	}
 	if len(keys.SendHMACKey) != maxHMACKeyLength || len(keys.RecvHMACKey) != maxHMACKeyLength {

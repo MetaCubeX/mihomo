@@ -1115,19 +1115,22 @@ proxies: # socks5
     port: 1194
     proto: udp # udp/tcp，默认 udp
     # dev: tun # 目前仅支持 tun，默认 tun
-    # cipher: AES-128-GCM # 目前仅支持 AES-128-GCM，默认 AES-128-GCM
+    # cipher: AES-128-GCM # 支持 AES-128-GCM / AES-256-GCM，默认 AES-128-GCM
     # auth: SHA256 # 目前仅支持 SHA256，默认 SHA256
+    # username / password: auth-user-pass 模式（与下方 cert+key 二选一，不能都不填）
+    # username: "user"
+    # password: "pass"
     # 从 .ovpn 中复制 <ca></ca> 内的内容，不需要保留 <ca> 标签
     ca: |
       -----BEGIN CERTIFICATE-----
       MIIB...example
       -----END CERTIFICATE-----
-    # 从 .ovpn 中复制 <cert></cert> 内的内容，不需要保留 <cert> 标签
+    # 从 .ovpn 中复制 <cert></cert> 内的内容（auth-user-pass 时可省略 cert / key）
     cert: |
       -----BEGIN CERTIFICATE-----
       MIIB...example
       -----END CERTIFICATE-----
-    # 从 .ovpn 中复制 <key></key> 内的内容，不需要保留 <key> 标签
+    # 从 .ovpn 中复制 <key></key> 内的内容
     key: |
       -----BEGIN PRIVATE KEY-----
       MIIE...example

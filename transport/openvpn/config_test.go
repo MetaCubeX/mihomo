@@ -100,3 +100,41 @@ func TestClientConfigRequiresTLSCrypt(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestClientConfigAuthUserPassAES256(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 31194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "AES-256-GCM",
+		Auth:       "SHA256",
+		CA:         []byte(testCert),
+		Username:   "user",
+		Password:   "secret",
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cipher != CipherAES256GCM {
+		t.Fatalf("unexpected cipher: %s", cfg.Cipher)
+	}
+	if cfg.DataCipherKeyLength() != 32 {
+		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
+	}
+}
+
+func TestClientConfigRequiresAuth(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.Cert = nil
+	cfg.Key = nil
+	cfg.Username = ""
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected missing auth error")
+	}
+	if !strings.Contains(err.Error(), "cert+key or username") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

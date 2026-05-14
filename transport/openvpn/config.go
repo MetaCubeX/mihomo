@@ -16,6 +16,7 @@ const (
 	ProtoTCP = "tcp"
 
 	CipherAES128GCM = "AES-128-GCM"
+	CipherAES256GCM = "AES-256-GCM"
 	AuthSHA256      = "SHA256"
 )
 
@@ -33,7 +34,20 @@ type ClientConfig struct {
 	Key      []byte
 	TLSCrypt []byte
 
+	Username string
+	Password string
+
 	TLSCryptKey []byte
+}
+
+// DataCipherKeyLength returns the AES key size for the negotiated data cipher.
+func (c ClientConfig) DataCipherKeyLength() int {
+	switch c.Cipher {
+	case CipherAES256GCM:
+		return 32
+	default:
+		return 16
+	}
 }
 
 func (c ClientConfig) RemoteAddress() string {
@@ -95,16 +109,14 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	if c.Proto != ProtoUDP && c.Proto != ProtoTCP {
 		return fmt.Errorf("unsupported openvpn proto %q: only udp and tcp are supported", c.Proto)
 	}
-	if c.Cipher != CipherAES128GCM {
-		return fmt.Errorf("unsupported openvpn cipher %q: only %s is supported", c.Cipher, CipherAES128GCM)
+	if c.Cipher != CipherAES128GCM && c.Cipher != CipherAES256GCM {
+		return fmt.Errorf("unsupported openvpn cipher %q: only %s and %s are supported", c.Cipher, CipherAES128GCM, CipherAES256GCM)
 	}
 	if c.Auth != AuthSHA256 {
 		return fmt.Errorf("unsupported openvpn auth %q: only %s is supported", c.Auth, AuthSHA256)
 	}
 	for name, value := range map[string][]byte{
 		"ca":        c.CA,
-		"cert":      c.Cert,
-		"key":       c.Key,
 		"tls-crypt": c.TLSCrypt,
 	} {
 		if len(bytes.TrimSpace(value)) == 0 {
@@ -114,11 +126,19 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	if block, _ := pem.Decode(c.CA); block == nil {
 		return errors.New("inline <ca> block is not PEM")
 	}
-	if block, _ := pem.Decode(c.Cert); block == nil {
-		return errors.New("inline <cert> block is not PEM")
-	}
-	if block, _ := pem.Decode(c.Key); block == nil {
-		return errors.New("inline <key> block is not PEM")
+	hasCert := len(bytes.TrimSpace(c.Cert)) > 0 || len(bytes.TrimSpace(c.Key)) > 0
+	if hasCert {
+		if len(bytes.TrimSpace(c.Cert)) == 0 || len(bytes.TrimSpace(c.Key)) == 0 {
+			return errors.New("openvpn cert and key must both be set when using client certificate auth")
+		}
+		if block, _ := pem.Decode(c.Cert); block == nil {
+			return errors.New("inline <cert> block is not PEM")
+		}
+		if block, _ := pem.Decode(c.Key); block == nil {
+			return errors.New("inline <key> block is not PEM")
+		}
+	} else if strings.TrimSpace(c.Username) == "" {
+		return errors.New("openvpn requires either cert+key or username (auth-user-pass)")
 	}
 	return nil
 }
