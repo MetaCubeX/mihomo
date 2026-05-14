@@ -16,21 +16,20 @@ import (
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
-	mdns "github.com/metacubex/mihomo/dns"
+	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
-	"github.com/metacubex/tailscale/ipn"
-
-	D "github.com/miekg/dns"
 
 	"github.com/metacubex/tailscale/envknob"
+	"github.com/metacubex/tailscale/ipn"
 	"github.com/metacubex/tailscale/tsnet"
+	D "github.com/miekg/dns"
 )
 
 type Tailscale struct {
 	*Base
 	server      *tsnet.Server
-	dnsResolver *mdns.Resolver
+	dnsResolver *dns.Resolver
 	option      TailscaleOption
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -113,8 +112,8 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		},
 	}
 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
-	outbound.dnsResolver = mdns.NewResolverWithClient(dnsTransport)
-	outbound.unregisterDNSResolver = mdns.RegisterTailscaleClient(option.Name, dnsTransport)
+	outbound.dnsResolver = dns.NewResolverWithClient(dnsTransport)
+	outbound.unregisterDNSResolver = dns.RegisterTailscaleClient(option.Name, dnsTransport)
 	outbound.startHook = tunnel.RegisterOnRunning(outbound.startOnRunning)
 	return outbound, nil
 }
