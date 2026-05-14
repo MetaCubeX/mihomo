@@ -68,6 +68,10 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	if option.StateDir == "" {
 		option.StateDir = "tailscale"
 	}
+	option.StateDir = C.Path.Resolve(option.StateDir)
+	if !C.Path.IsSafePath(option.StateDir) {
+		return nil, C.Path.ErrNotSafePath(option.StateDir)
+	}
 
 	addr := option.ControlURL
 	if addr == "" {
