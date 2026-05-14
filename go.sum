@@ -165,8 +165,8 @@ github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141 h1:DK2l6m2Fc85H2Bhi
 github.com/metacubex/smux v0.0.0-20260105030934-d0c8756d3141/go.mod h1:/yI4OiGOSn0SURhZdJF3CbtPg3nwK700bG8TZLMBvAg=
 github.com/metacubex/ssh v0.1.0 h1:iGfr99qk/eMHzUnQ/0bTxXT8+8SWqLSHBWDHoAhngzw=
 github.com/metacubex/ssh v0.1.0/go.mod h1:NUtl0d+/f2cG9ECEpMM8iCVOpmggQlC13oLeDUONDlU=
-github.com/metacubex/tailscale v0.0.0-20260513235320-cab384c3f942 h1:C6ohrAWXOf9IhX/P+NufBnaTP+SWss1WKqHsOv6KLeQ=
-github.com/metacubex/tailscale v0.0.0-20260513235320-cab384c3f942/go.mod h1:2G1V82OGXgxT7m7046GA80I9SlcvczljCK0C7NQ3c10=
+github.com/metacubex/tailscale v0.0.0-20260514010142-10fd27a2338f h1:nJvp3tZr4Leqh92u8mgj/aT9wUXPrGXhUQ2iXd8KxPI=
+github.com/metacubex/tailscale v0.0.0-20260514010142-10fd27a2338f/go.mod h1:2G1V82OGXgxT7m7046GA80I9SlcvczljCK0C7NQ3c10=
 github.com/metacubex/tailscale-wireguard-go v0.0.0-20260513233728-8bc7ee255d04 h1:zk+mDDSBl5lv80WWtaFUbpj8XLb7AhjCUbn2pB37N0U=
 github.com/metacubex/tailscale-wireguard-go v0.0.0-20260513233728-8bc7ee255d04/go.mod h1:pKUKBy7IcQ5r0i66gWENHgxKvBn8tlgAGx0DZMq8h5M=
 github.com/metacubex/tfo-go v0.0.0-20251130171125-413e892ac443 h1:H6TnfM12tOoTizYE/qBHH3nEuibIelmHI+BVSxVJr8o=
