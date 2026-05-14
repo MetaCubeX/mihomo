@@ -26,7 +26,7 @@ var (
 
 var _ dnsClient = (*tailscaleDNSClient)(nil)
 
-func RegisterTailscaleClient(name string, client dnsClient) func() {
+func RegisterTailscaleDnsClient(name string, client dnsClient) func() {
 	id := tailscaleResolverID.Add(1)
 	tailscaleResolverMu.Lock()
 	tailscaleResolvers[name] = tailscaleResolverEntry{

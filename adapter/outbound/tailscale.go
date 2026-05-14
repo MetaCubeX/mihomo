@@ -112,8 +112,8 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		},
 	}
 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
-	outbound.dnsResolver = dns.NewResolverWithClient(dnsTransport)
-	outbound.unregisterDNSResolver = dns.RegisterTailscaleClient(option.Name, dnsTransport)
+	outbound.dnsResolver = dns.NewResolverFromClient(dnsTransport)
+	outbound.unregisterDNSResolver = dns.RegisterTailscaleDnsClient(option.Name, dnsTransport)
 	outbound.startHook = tunnel.RegisterOnRunning(outbound.startOnRunning)
 	return outbound, nil
 }
