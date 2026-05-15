@@ -285,7 +285,7 @@ func (wsedc *websocketWithEarlyDataConn) SetReadDeadline(t time.Time) error {
 func (wsedc *websocketWithEarlyDataConn) SetWriteDeadline(t time.Time) error {
 	select {
 	case <-wsedc.dialed:
-		return wsedc.conn.SetReadDeadline(t)
+		return wsedc.conn.SetWriteDeadline(t)
 	default:
 		return nil
 	}
