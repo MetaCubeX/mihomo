@@ -16,7 +16,6 @@ import (
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
-	gost "github.com/metacubex/mihomo/transport/gost"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -192,13 +191,12 @@ func (b *Base) Close() error {
 }
 
 type BasicOption struct {
-	TFO         bool              `proxy:"tfo,omitempty"`
-	MPTCP       bool              `proxy:"mptcp,omitempty"`
-	Interface   string            `proxy:"interface-name,omitempty"`
-	RoutingMark int               `proxy:"routing-mark,omitempty"`
-	IPVersion   C.DNSPrefer       `proxy:"ip-version,omitempty"`
-	DialerProxy string            `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
-	GostRelay   *gost.RelayOption `proxy:"gost-relay-opts,omitempty"`
+	TFO         bool        `proxy:"tfo,omitempty"`
+	MPTCP       bool        `proxy:"mptcp,omitempty"`
+	Interface   string      `proxy:"interface-name,omitempty"`
+	RoutingMark int         `proxy:"routing-mark,omitempty"`
+	IPVersion   C.DNSPrefer `proxy:"ip-version,omitempty"`
+	DialerProxy string      `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
 
 	//
 	// The following parameters are used internally, assign value by the structure decoder are disallowed
@@ -215,9 +213,6 @@ func (b *BasicOption) NewDialer(opts []dialer.Option) C.Dialer {
 		} else {
 			cDialer = dialer.NewDialer(opts...)
 		}
-	}
-	if b.GostRelay != nil {
-		cDialer = gost.NewRelayDialer(cDialer, b.GostRelay)
 	}
 	return cDialer
 }
