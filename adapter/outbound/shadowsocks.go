@@ -10,7 +10,7 @@ import (
 	"github.com/metacubex/mihomo/common/structure"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/ntp"
-	gost "github.com/metacubex/mihomo/transport/gost-plugin"
+	gost "github.com/metacubex/mihomo/transport/gost"
 	"github.com/metacubex/mihomo/transport/kcptun"
 	"github.com/metacubex/mihomo/transport/restls"
 	obfs "github.com/metacubex/mihomo/transport/simple-obfs"

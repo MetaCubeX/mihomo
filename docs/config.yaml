@@ -511,6 +511,47 @@ proxies: # socks5
       # headers:
       #   custom: value
 
+  - name: "ss6-gost-relay"
+    type: ss
+    # default mode: top-level server/port is the target address dialed by the remote gost relay.
+    # If the remote SS listens on 127.0.0.1:12345 on the relay server, write it here.
+    server: 127.0.0.1
+    port: 12345
+    cipher: chacha20-ietf-poly1305
+    password: "password"
+    udp: true
+    # udp-over-tcp: true # use this instead if your SS server expects UoT over TCP
+    gost-relay-opts:
+      server: relay.example.com
+      port: 443
+      tls: true
+      # mux: true # relay+mtls when tls is also true
+      # sni: relay.example.com
+      # username: user
+      # password: pass
+      # client-fingerprint: chrome
+      # fingerprint: xxxx
+      # certificate: ./client.crt
+      # private-key: ./client.key
+      # skip-cert-verify: true
+
+  # - name: "ss6-gost-relay-forward"
+  #   type: ss
+  #   # forward mode: top-level server/port is the relay endpoint itself.
+  #   # The relay server chooses its configured forwarding target.
+  #   server: relay.example.com
+  #   port: 443
+  #   cipher: chacha20-ietf-poly1305
+  #   password: "password"
+  #   udp: true
+  #   gost-relay-opts:
+  #     forward: true
+  #     tls: true
+  #     # mux: true
+  #     # sni: relay.example.com
+  #     # username: user
+  #     # password: pass
+
   - name: "ss-restls-tls13"
     type: ss
     server: [YOUR_SERVER_IP]
