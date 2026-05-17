@@ -19,11 +19,11 @@ func TestDataChannelAESGCMV2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, 7)
+	client, err := NewDataChannel(clientKeys, CipherAES128GCM, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, 7)
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,5 +73,45 @@ func TestParsePushReply(t *testing.T) {
 	}
 	if len(reply.DNS) != 1 || reply.DNS[0].String() != "8.8.8.8" {
 		t.Fatalf("unexpected DNS: %#v", reply.DNS)
+	}
+}
+
+func TestDataChannelChaCha20Poly1305V2RoundTrip(t *testing.T) {
+	clientKeys := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 32),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 32),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	serverKeys := &KeyMaterial{
+		SendCipherKey: clientKeys.RecvCipherKey,
+		SendHMACKey:   clientKeys.RecvHMACKey,
+		RecvCipherKey: clientKeys.SendCipherKey,
+		RecvHMACKey:   clientKeys.SendHMACKey,
+	}
+	client, err := NewDataChannel(clientKeys, CipherChaCha20Poly1305, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewDataChannel(serverKeys, CipherChaCha20Poly1305, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ipPacket := []byte{0x45, 0, 0, 20, 1, 2, 3, 4, 64, 17, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1}
+	encrypted, err := client.Encrypt(ipPacket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := server.Decrypt(encrypted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(plain, ipPacket) {
+		t.Fatalf("unexpected decrypted packet: %x", plain)
+	}
+	encrypted[len(encrypted)-1] ^= 0xff
+	if _, err := server.Decrypt(encrypted); err == nil {
+		t.Fatal("expected authentication failure")
 	}
 }

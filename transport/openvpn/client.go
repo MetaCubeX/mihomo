@@ -119,7 +119,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 	c.push = push
-	c.data, err = NewDataChannel(keys, push.PeerID)
+	c.data, err = NewDataChannel(keys, c.config.Cipher, push.PeerID)
 	if err != nil {
 		return nil, err
 	}

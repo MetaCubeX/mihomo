@@ -159,7 +159,7 @@ func InstallScriptOptionsString(proto, cipher, auth string) string {
 		protoName = "TCPv4_CLIENT"
 	}
 	keysize := "128"
-	if cipher == CipherAES256GCM {
+	if cipher == CipherAES256GCM || cipher == CipherChaCha20Poly1305 {
 		keysize = "256"
 	}
 	return fmt.Sprintf("V4,dev-type tun,link-mtu 1550,tun-mtu 1500,proto %s,cipher %s,auth %s,keysize %s,key-method 2,tls-client", protoName, cipher, auth, keysize)

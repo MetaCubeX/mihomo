@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
-	AESGCMTagSize = 16
-	AESGCMIVSize  = 12
+	DataChannelTagSize = 16
+	DataChannelIVSize  = 12
 
 	PeerIDUnset uint32 = 0xffffff
 )
@@ -20,8 +22,8 @@ type DataChannel struct {
 	send cipher.AEAD
 	recv cipher.AEAD
 
-	sendImplicitIV [AESGCMIVSize]byte
-	recvImplicitIV [AESGCMIVSize]byte
+	sendImplicitIV [DataChannelIVSize]byte
+	recvImplicitIV [DataChannelIVSize]byte
 
 	keyID  uint8
 	peerID uint32
@@ -32,27 +34,19 @@ type DataChannel struct {
 	recvSeen     bool
 }
 
-func NewDataChannel(keys *KeyMaterial, peerID uint32) (*DataChannel, error) {
+func NewDataChannel(keys *KeyMaterial, cipherName string, peerID uint32) (*DataChannel, error) {
 	if keys == nil {
 		return nil, errors.New("nil openvpn key material")
 	}
-	sendBlock, err := aes.NewCipher(keys.SendCipherKey)
+	send, err := newDataChannelAEAD(cipherName, keys.SendCipherKey)
 	if err != nil {
 		return nil, fmt.Errorf("create send cipher: %w", err)
 	}
-	recvBlock, err := aes.NewCipher(keys.RecvCipherKey)
+	recv, err := newDataChannelAEAD(cipherName, keys.RecvCipherKey)
 	if err != nil {
 		return nil, fmt.Errorf("create recv cipher: %w", err)
 	}
-	send, err := cipher.NewGCMWithTagSize(sendBlock, AESGCMTagSize)
-	if err != nil {
-		return nil, fmt.Errorf("create send gcm: %w", err)
-	}
-	recv, err := cipher.NewGCMWithTagSize(recvBlock, AESGCMTagSize)
-	if err != nil {
-		return nil, fmt.Errorf("create recv gcm: %w", err)
-	}
-	if len(keys.SendHMACKey) < AESGCMIVSize-4 || len(keys.RecvHMACKey) < AESGCMIVSize-4 {
+	if len(keys.SendHMACKey) < DataChannelIVSize-4 || len(keys.RecvHMACKey) < DataChannelIVSize-4 {
 		return nil, errors.New("openvpn implicit IV keys are too short")
 	}
 	d := &DataChannel{
@@ -60,9 +54,24 @@ func NewDataChannel(keys *KeyMaterial, peerID uint32) (*DataChannel, error) {
 		recv:   recv,
 		peerID: peerID,
 	}
-	copy(d.sendImplicitIV[4:], keys.SendHMACKey[:AESGCMIVSize-4])
-	copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:AESGCMIVSize-4])
+	copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
+	copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
 	return d, nil
+}
+
+func newDataChannelAEAD(cipherName string, key []byte) (cipher.AEAD, error) {
+	switch cipherName {
+	case CipherAES128GCM, CipherAES256GCM:
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, err
+		}
+		return cipher.NewGCMWithTagSize(block, DataChannelTagSize)
+	case CipherChaCha20Poly1305:
+		return chacha20poly1305.New(key)
+	default:
+		return nil, fmt.Errorf("unsupported openvpn cipher %q", cipherName)
+	}
 }
 
 func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
@@ -84,11 +93,11 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	ad = append(ad, packetIDBytes[:]...)
 	sealed := d.send.Seal(nil, nonce[:], packet, ad)
 
-	out := make([]byte, 0, len(header)+4+AESGCMTagSize+len(packet))
+	out := make([]byte, 0, len(header)+4+DataChannelTagSize+len(packet))
 	out = append(out, header...)
 	out = append(out, packetIDBytes[:]...)
-	out = append(out, sealed[len(sealed)-AESGCMTagSize:]...)
-	out = append(out, sealed[:len(sealed)-AESGCMTagSize]...)
+	out = append(out, sealed[len(sealed)-DataChannelTagSize:]...)
+	out = append(out, sealed[:len(sealed)-DataChannelTagSize]...)
 	return out, nil
 }
 
@@ -107,15 +116,15 @@ func (d *DataChannel) Decrypt(packet []byte) ([]byte, error) {
 	if opcode != PDataV1 && opcode != PDataV2 {
 		return nil, fmt.Errorf("not an openvpn data packet: %s", opcode)
 	}
-	if len(packet) < headerSize+4+AESGCMTagSize+1 {
+	if len(packet) < headerSize+4+DataChannelTagSize+1 {
 		return nil, errors.New("openvpn data packet too short")
 	}
 	header := packet[:headerSize]
 	packetIDBytes := packet[headerSize : headerSize+4]
 	packetID := binary.BigEndian.Uint32(packetIDBytes)
-	tag := packet[headerSize+4 : headerSize+4+AESGCMTagSize]
-	ciphertext := packet[headerSize+4+AESGCMTagSize:]
-	combined := make([]byte, 0, len(ciphertext)+AESGCMTagSize)
+	tag := packet[headerSize+4 : headerSize+4+DataChannelTagSize]
+	ciphertext := packet[headerSize+4+DataChannelTagSize:]
+	combined := make([]byte, 0, len(ciphertext)+DataChannelTagSize)
 	combined = append(combined, ciphertext...)
 	combined = append(combined, tag...)
 	ad := make([]byte, 0, len(header)+len(packetIDBytes))
@@ -151,7 +160,7 @@ func (d *DataChannel) dataHeader() []byte {
 	return []byte{opcodeKeyID(PDataV1, d.keyID)}
 }
 
-func (d *DataChannel) nonce(packetID uint32, implicit [AESGCMIVSize]byte) [AESGCMIVSize]byte {
+func (d *DataChannel) nonce(packetID uint32, implicit [DataChannelIVSize]byte) [DataChannelIVSize]byte {
 	nonce := implicit
 	binary.BigEndian.PutUint32(nonce[:4], binary.BigEndian.Uint32(nonce[:4])^packetID)
 	return nonce

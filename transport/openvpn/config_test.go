@@ -138,3 +138,27 @@ func TestClientConfigRequiresAuth(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestClientConfigAuthUserPassChaCha20Poly1305(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 31194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "chacha20-poly1305",
+		Auth:       "SHA256",
+		CA:         []byte(testCert),
+		Username:   "user",
+		Password:   "secret",
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cipher != CipherChaCha20Poly1305 {
+		t.Fatalf("unexpected cipher: %s", cfg.Cipher)
+	}
+	if cfg.DataCipherKeyLength() != 32 {
+		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
+	}
+}
