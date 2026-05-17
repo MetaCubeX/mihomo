@@ -1169,7 +1169,7 @@ proxies: # socks5
     port: 1194
     proto: udp # udp/tcp，默认 udp
     # dev: tun # 目前仅支持 tun，默认 tun
-    # cipher: AES-128-GCM # 支持 AES-128-GCM / AES-256-GCM，默认 AES-128-GCM
+    # cipher: AES-128-GCM # 支持 AES-128-GCM / AES-256-GCM / CHACHA20-POLY1305，默认 AES-128-GCM
     # auth: SHA256 # 目前仅支持 SHA256，默认 SHA256
     # username / password: auth-user-pass 模式（与下方 cert+key 二选一，不能都不填）
     # username: "user"
