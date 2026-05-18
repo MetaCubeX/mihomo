@@ -21,8 +21,10 @@ import (
 	"github.com/metacubex/mihomo/log"
 
 	"github.com/metacubex/tailscale/envknob"
+	"github.com/metacubex/tailscale/hostinfo"
 	"github.com/metacubex/tailscale/ipn"
 	"github.com/metacubex/tailscale/net/netmon"
+	"github.com/metacubex/tailscale/tailcfg"
 	"github.com/metacubex/tailscale/tsnet"
 	D "github.com/miekg/dns"
 )
@@ -62,6 +64,9 @@ type TailscaleOption struct {
 }
 
 func init() {
+	hostinfo.RegisterHostinfoNewHook(func(hi *tailcfg.Hostinfo) {
+		hi.IPNVersion = C.MihomoName + " " + C.Version
+	})
 	envknob.SetNoLogsNoSupport()
 	if runtime.GOOS == "android" { // Android SDK 30 no longer permits Go's net.Interfaces to work (Issue 2293)
 		netmon.RegisterInterfaceGetter(func() (nif []netmon.Interface, err error) {
