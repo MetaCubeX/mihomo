@@ -3,6 +3,8 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/metacubex/mihomo/common/structure"
@@ -30,6 +32,8 @@ type proxyProviderSchema struct {
 	Path          string           `provider:"path,omitempty"`
 	URL           string           `provider:"url,omitempty"`
 	Proxy         string           `provider:"proxy,omitempty"`
+	Command       []string         `provider:"command,omitempty"`
+	Timeout       int              `provider:"timeout,omitempty"`
 	Interval      int              `provider:"interval,omitempty"`
 	Filter        string           `provider:"filter,omitempty"`
 	ExcludeFilter string           `provider:"exclude-filter,omitempty"`
@@ -45,6 +49,12 @@ type proxyProviderSchema struct {
 
 func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P.ProxyProvider, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
+
+	if schemaType, ok := mapping["type"].(string); ok && schemaType == "exec" {
+		if err := validateExecCommandRaw(mapping); err != nil {
+			return nil, err
+		}
+	}
 
 	schema := &proxyProviderSchema{
 		HealthCheck: healthCheckSchema{
@@ -91,6 +101,22 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 			}
 		}
 		vehicle = resource.NewHTTPVehicle(schema.URL, path, schema.Proxy, schema.Header, resource.DefaultHttpTimeout, schema.SizeLimit)
+	case "exec":
+		if err := validateExecCommand(schema.Command); err != nil {
+			return nil, err
+		}
+		path := C.Path.GetPathByHash("proxies", "exec:"+strings.Join(schema.Command, "\x00"))
+		if schema.Path != "" {
+			path = C.Path.Resolve(schema.Path)
+			if !C.Path.IsSafePath(path) {
+				return nil, C.Path.ErrNotSafePath(path)
+			}
+		}
+		timeout := resource.DefaultHttpTimeout
+		if schema.Timeout > 0 {
+			timeout = time.Duration(uint(schema.Timeout)) * time.Second
+		}
+		vehicle = resource.NewExecVehicle(schema.Command, path, timeout, schema.SizeLimit)
 	case "inline":
 		return NewInlineProvider(name, schema.Payload, parser, hc)
 	default:
@@ -100,4 +126,33 @@ func ParseProxyProvider(name string, mapping map[string]any, tunnel C.Tunnel) (P
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 
 	return NewProxySetProvider(name, interval, schema.Payload, parser, vehicle, hc)
+}
+
+func validateExecCommandRaw(mapping map[string]any) error {
+	rawCommand, ok := mapping["command"]
+	if !ok {
+		return errors.New("exec provider command is required")
+	}
+	switch value := rawCommand.(type) {
+	case []string:
+	case []any:
+		for _, item := range value {
+			if _, ok := item.(string); !ok {
+				return errors.New("exec provider command must be an array of strings")
+			}
+		}
+	default:
+		return errors.New("exec provider command must be an array of strings")
+	}
+	return nil
+}
+
+func validateExecCommand(command []string) error {
+	if len(command) == 0 {
+		return errors.New("exec provider command is required")
+	}
+	if !filepath.IsAbs(command[0]) {
+		return errors.New("exec provider command executable must be an absolute path")
+	}
+	return nil
 }
