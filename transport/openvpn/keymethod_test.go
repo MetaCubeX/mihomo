@@ -82,6 +82,15 @@ func TestKeyMethod2DeriveAES256(t *testing.T) {
 	}
 }
 
+func TestInstallScriptOptionsCBCSHA1(t *testing.T) {
+	options := InstallScriptOptionsString(ProtoTCP, CipherAES256CBC, AuthSHA1)
+	for _, want := range []string{"proto TCPv4_CLIENT", "cipher AES-256-CBC", "auth SHA1", "keysize 256"} {
+		if !bytes.Contains([]byte(options), []byte(want)) {
+			t.Fatalf("options missing %q: %s", want, options)
+		}
+	}
+}
+
 func TestParseServerKeyMethod2Record(t *testing.T) {
 	var packet []byte
 	packet = binary.BigEndian.AppendUint32(packet, 0)

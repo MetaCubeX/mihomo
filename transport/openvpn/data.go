@@ -3,24 +3,37 @@ package openvpn
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash"
 	"sync"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
 const (
-	DataChannelTagSize = 16
-	DataChannelIVSize  = 12
+	DataChannelTagSize   = 16
+	DataChannelIVSize    = 12
+	DataChannelCBCIVSize = aes.BlockSize
 
 	PeerIDUnset uint32 = 0xffffff
 )
 
 type DataChannel struct {
-	send cipher.AEAD
-	recv cipher.AEAD
+	sendAEAD cipher.AEAD
+	recvAEAD cipher.AEAD
+
+	sendBlock   cipher.Block
+	recvBlock   cipher.Block
+	sendHMACKey []byte
+	recvHMACKey []byte
+	authHash    func() hash.Hash
+	authSize    int
 
 	sendImplicitIV [DataChannelIVSize]byte
 	recvImplicitIV [DataChannelIVSize]byte
@@ -34,29 +47,65 @@ type DataChannel struct {
 	recvSeen     bool
 }
 
-func NewDataChannel(keys *KeyMaterial, cipherName string, peerID uint32) (*DataChannel, error) {
+func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32) (*DataChannel, error) {
 	if keys == nil {
 		return nil, errors.New("nil openvpn key material")
 	}
-	send, err := newDataChannelAEAD(cipherName, keys.SendCipherKey)
+	if isDataChannelAEAD(cipherName) {
+		send, err := newDataChannelAEAD(cipherName, keys.SendCipherKey)
+		if err != nil {
+			return nil, fmt.Errorf("create send cipher: %w", err)
+		}
+		recv, err := newDataChannelAEAD(cipherName, keys.RecvCipherKey)
+		if err != nil {
+			return nil, fmt.Errorf("create recv cipher: %w", err)
+		}
+		if len(keys.SendHMACKey) < DataChannelIVSize-4 || len(keys.RecvHMACKey) < DataChannelIVSize-4 {
+			return nil, errors.New("openvpn implicit IV keys are too short")
+		}
+		d := &DataChannel{
+			sendAEAD: send,
+			recvAEAD: recv,
+			peerID:   peerID,
+		}
+		copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
+		copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
+		return d, nil
+	}
+
+	send, err := newDataChannelCBC(cipherName, keys.SendCipherKey)
 	if err != nil {
 		return nil, fmt.Errorf("create send cipher: %w", err)
 	}
-	recv, err := newDataChannelAEAD(cipherName, keys.RecvCipherKey)
+	recv, err := newDataChannelCBC(cipherName, keys.RecvCipherKey)
 	if err != nil {
 		return nil, fmt.Errorf("create recv cipher: %w", err)
 	}
-	if len(keys.SendHMACKey) < DataChannelIVSize-4 || len(keys.RecvHMACKey) < DataChannelIVSize-4 {
-		return nil, errors.New("openvpn implicit IV keys are too short")
+	authHash, authSize, err := newDataChannelAuth(authName)
+	if err != nil {
+		return nil, err
 	}
-	d := &DataChannel{
-		send:   send,
-		recv:   recv,
-		peerID: peerID,
+	if len(keys.SendHMACKey) < authSize || len(keys.RecvHMACKey) < authSize {
+		return nil, errors.New("openvpn HMAC keys are too short")
 	}
-	copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
-	copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
-	return d, nil
+	return &DataChannel{
+		sendBlock:   send,
+		recvBlock:   recv,
+		sendHMACKey: append([]byte(nil), keys.SendHMACKey[:authSize]...),
+		recvHMACKey: append([]byte(nil), keys.RecvHMACKey[:authSize]...),
+		authHash:    authHash,
+		authSize:    authSize,
+		peerID:      peerID,
+	}, nil
+}
+
+func isDataChannelAEAD(cipherName string) bool {
+	switch cipherName {
+	case CipherAES128GCM, CipherAES256GCM, CipherChaCha20Poly1305:
+		return true
+	default:
+		return false
+	}
 }
 
 func newDataChannelAEAD(cipherName string, key []byte) (cipher.AEAD, error) {
@@ -74,16 +123,39 @@ func newDataChannelAEAD(cipherName string, key []byte) (cipher.AEAD, error) {
 	}
 }
 
+func newDataChannelCBC(cipherName string, key []byte) (cipher.Block, error) {
+	switch cipherName {
+	case CipherAESCBC, CipherAES128CBC, CipherAES256CBC:
+		return aes.NewCipher(key)
+	default:
+		return nil, fmt.Errorf("unsupported openvpn cipher %q", cipherName)
+	}
+}
+
+func newDataChannelAuth(authName string) (func() hash.Hash, int, error) {
+	switch authName {
+	case AuthSHA1:
+		return sha1.New, sha1.Size, nil
+	case AuthSHA256:
+		return sha256.New, sha256.Size, nil
+	default:
+		return nil, 0, fmt.Errorf("unsupported openvpn auth %q", authName)
+	}
+}
+
 func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	if d == nil {
 		return nil, errors.New("nil openvpn data channel")
 	}
 
-	d.mu.Lock()
-	d.sendPacketID++
-	packetID := d.sendPacketID
-	d.mu.Unlock()
+	packetID := d.nextPacketID()
+	if d.sendAEAD != nil {
+		return d.encryptAEAD(packet, packetID)
+	}
+	return d.encryptCBC(packet, packetID)
+}
 
+func (d *DataChannel) encryptAEAD(packet []byte, packetID uint32) ([]byte, error) {
 	header := d.dataHeader()
 	var packetIDBytes [4]byte
 	binary.BigEndian.PutUint32(packetIDBytes[:], packetID)
@@ -91,7 +163,7 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	ad := make([]byte, 0, len(header)+len(packetIDBytes))
 	ad = append(ad, header...)
 	ad = append(ad, packetIDBytes[:]...)
-	sealed := d.send.Seal(nil, nonce[:], packet, ad)
+	sealed := d.sendAEAD.Seal(nil, nonce[:], packet, ad)
 
 	out := make([]byte, 0, len(header)+4+DataChannelTagSize+len(packet))
 	out = append(out, header...)
@@ -101,20 +173,49 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	return out, nil
 }
 
+func (d *DataChannel) encryptCBC(packet []byte, packetID uint32) ([]byte, error) {
+	header := d.dataHeader()
+	iv := make([]byte, DataChannelCBCIVSize)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, err
+	}
+
+	plain := make([]byte, 4+len(packet))
+	binary.BigEndian.PutUint32(plain[:4], packetID)
+	copy(plain[4:], packet)
+	padded := pkcs7Pad(plain, d.sendBlock.BlockSize())
+	ciphertext := make([]byte, len(padded))
+	cipher.NewCBCEncrypter(d.sendBlock, iv).CryptBlocks(ciphertext, padded)
+
+	authenticated := make([]byte, 0, len(iv)+len(ciphertext))
+	authenticated = append(authenticated, iv...)
+	authenticated = append(authenticated, ciphertext...)
+	tag := dataChannelHMAC(d.authHash, d.sendHMACKey, authenticated)
+
+	out := make([]byte, 0, len(header)+len(tag)+len(authenticated))
+	out = append(out, header...)
+	out = append(out, tag...)
+	out = append(out, authenticated...)
+	return out, nil
+}
+
 func (d *DataChannel) Decrypt(packet []byte) ([]byte, error) {
 	if d == nil {
 		return nil, errors.New("nil openvpn data channel")
 	}
+	headerSize, err := dataPacketHeaderSize(packet)
+	if err != nil {
+		return nil, err
+	}
+	if d.recvAEAD != nil {
+		return d.decryptAEAD(packet, headerSize)
+	}
+	return d.decryptCBC(packet, headerSize)
+}
+
+func (d *DataChannel) decryptAEAD(packet []byte, headerSize int) ([]byte, error) {
 	if len(packet) < 1 {
 		return nil, errors.New("empty openvpn data packet")
-	}
-	opcode, _ := parseOpcodeKeyID(packet[0])
-	headerSize := 1
-	if opcode == PDataV2 {
-		headerSize = 4
-	}
-	if opcode != PDataV1 && opcode != PDataV2 {
-		return nil, fmt.Errorf("not an openvpn data packet: %s", opcode)
 	}
 	if len(packet) < headerSize+4+DataChannelTagSize+1 {
 		return nil, errors.New("openvpn data packet too short")
@@ -132,20 +233,88 @@ func (d *DataChannel) Decrypt(packet []byte) ([]byte, error) {
 	ad = append(ad, packetIDBytes...)
 
 	nonce := d.nonce(packetID, d.recvImplicitIV)
-	plain, err := d.recv.Open(nil, nonce[:], combined, ad)
+	plain, err := d.recvAEAD.Open(nil, nonce[:], combined, ad)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := d.acceptPacketID(packetID); err != nil {
+		return nil, err
+	}
+	return plain, nil
+}
+
+func (d *DataChannel) decryptCBC(packet []byte, headerSize int) ([]byte, error) {
+	blockSize := d.recvBlock.BlockSize()
+	minPacketLen := headerSize + d.authSize + blockSize + blockSize
+	if len(packet) < minPacketLen {
+		return nil, errors.New("openvpn CBC data packet too short")
+	}
+
+	body := packet[headerSize:]
+	tag := body[:d.authSize]
+	authenticated := body[d.authSize:]
+	expected := dataChannelHMAC(d.authHash, d.recvHMACKey, authenticated)
+	if !hmac.Equal(tag, expected) {
+		return nil, errors.New("openvpn CBC data packet HMAC authentication failed")
+	}
+
+	iv := authenticated[:blockSize]
+	ciphertext := authenticated[blockSize:]
+	if len(ciphertext) == 0 || len(ciphertext)%blockSize != 0 {
+		return nil, errors.New("invalid openvpn CBC ciphertext length")
+	}
+	padded := make([]byte, len(ciphertext))
+	cipher.NewCBCDecrypter(d.recvBlock, iv).CryptBlocks(padded, ciphertext)
+	plain, err := pkcs7Unpad(padded, blockSize)
+	if err != nil {
+		return nil, err
+	}
+	if len(plain) < 4 {
+		return nil, errors.New("openvpn CBC plaintext missing packet id")
+	}
+
+	packetID := binary.BigEndian.Uint32(plain[:4])
+	if err := d.acceptPacketID(packetID); err != nil {
+		return nil, err
+	}
+	return plain[4:], nil
+}
+
+func dataPacketHeaderSize(packet []byte) (int, error) {
+	if len(packet) < 1 {
+		return 0, errors.New("empty openvpn data packet")
+	}
+	opcode, _ := parseOpcodeKeyID(packet[0])
+	switch opcode {
+	case PDataV1:
+		return 1, nil
+	case PDataV2:
+		if len(packet) < 4 {
+			return 0, errors.New("openvpn P_DATA_V2 packet missing peer id")
+		}
+		return 4, nil
+	default:
+		return 0, fmt.Errorf("not an openvpn data packet: %s", opcode)
+	}
+}
+
+func (d *DataChannel) nextPacketID() uint32 {
 	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.sendPacketID++
+	return d.sendPacketID
+}
+
+func (d *DataChannel) acceptPacketID(packetID uint32) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.recvSeen && packetID <= d.recvHighest {
-		d.mu.Unlock()
-		return nil, fmt.Errorf("openvpn replayed data packet id %d", packetID)
+		return fmt.Errorf("openvpn replayed data packet id %d", packetID)
 	}
 	d.recvHighest = packetID
 	d.recvSeen = true
-	d.mu.Unlock()
-	return plain, nil
+	return nil
 }
 
 func (d *DataChannel) dataHeader() []byte {
@@ -164,6 +333,41 @@ func (d *DataChannel) nonce(packetID uint32, implicit [DataChannelIVSize]byte) [
 	nonce := implicit
 	binary.BigEndian.PutUint32(nonce[:4], binary.BigEndian.Uint32(nonce[:4])^packetID)
 	return nonce
+}
+
+func dataChannelHMAC(newHash func() hash.Hash, key, data []byte) []byte {
+	mac := hmac.New(newHash, key)
+	_, _ = mac.Write(data)
+	return mac.Sum(nil)
+}
+
+func pkcs7Pad(plain []byte, blockSize int) []byte {
+	padding := blockSize - len(plain)%blockSize
+	if padding == 0 {
+		padding = blockSize
+	}
+	out := make([]byte, len(plain)+padding)
+	copy(out, plain)
+	for i := len(plain); i < len(out); i++ {
+		out[i] = byte(padding)
+	}
+	return out
+}
+
+func pkcs7Unpad(padded []byte, blockSize int) ([]byte, error) {
+	if len(padded) == 0 || len(padded)%blockSize != 0 {
+		return nil, errors.New("invalid openvpn CBC padding length")
+	}
+	padding := int(padded[len(padded)-1])
+	if padding == 0 || padding > blockSize || padding > len(padded) {
+		return nil, errors.New("invalid openvpn CBC padding")
+	}
+	for _, b := range padded[len(padded)-padding:] {
+		if int(b) != padding {
+			return nil, errors.New("invalid openvpn CBC padding")
+		}
+	}
+	return padded[:len(padded)-padding], nil
 }
 
 func ParsePeerID(options string) uint32 {

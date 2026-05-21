@@ -49,7 +49,7 @@ type OpenVPNOption struct {
 	CA       string `proxy:"ca"`
 	Cert     string `proxy:"cert,omitempty"`
 	Key      string `proxy:"key,omitempty"`
-	TLSCrypt string `proxy:"tls-crypt"`
+	TLSCrypt string `proxy:"tls-crypt,omitempty"`
 	Username string `proxy:"username,omitempty"`
 	Password string `proxy:"password,omitempty"`
 	MTU      int    `proxy:"mtu,omitempty"`

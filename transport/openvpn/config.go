@@ -17,7 +17,11 @@ const (
 
 	CipherAES128GCM        = "AES-128-GCM"
 	CipherAES256GCM        = "AES-256-GCM"
+	CipherAESCBC           = "AES-CBC"
+	CipherAES128CBC        = "AES-128-CBC"
+	CipherAES256CBC        = "AES-256-CBC"
 	CipherChaCha20Poly1305 = "CHACHA20-POLY1305"
+	AuthSHA1               = "SHA1"
 	AuthSHA256             = "SHA256"
 )
 
@@ -44,7 +48,7 @@ type ClientConfig struct {
 // DataCipherKeyLength returns the key size for the negotiated data cipher.
 func (c ClientConfig) DataCipherKeyLength() int {
 	switch c.Cipher {
-	case CipherAES256GCM, CipherChaCha20Poly1305:
+	case CipherAES256GCM, CipherAES256CBC, CipherChaCha20Poly1305:
 		return 32
 	default:
 		return 16
@@ -68,6 +72,28 @@ func normalizeProto(proto string) string {
 	}
 }
 
+func normalizeCipher(cipher string) string {
+	switch strings.ToUpper(strings.TrimSpace(cipher)) {
+	case "":
+		return CipherAES128GCM
+	case CipherAESCBC:
+		return CipherAES128CBC
+	default:
+		return strings.ToUpper(strings.TrimSpace(cipher))
+	}
+}
+
+func normalizeAuth(auth string) string {
+	switch strings.ToUpper(strings.TrimSpace(auth)) {
+	case "":
+		return AuthSHA256
+	case "SHA-1":
+		return AuthSHA1
+	default:
+		return strings.ToUpper(strings.TrimSpace(auth))
+	}
+}
+
 func (c *ClientConfig) Prepare() error {
 	if c == nil {
 		return errors.New("nil openvpn client config")
@@ -78,22 +104,18 @@ func (c *ClientConfig) Prepare() error {
 		c.Dev = "tun"
 	}
 	c.Dev = strings.ToLower(strings.TrimSpace(c.Dev))
-	if c.Cipher == "" {
-		c.Cipher = CipherAES128GCM
-	}
-	c.Cipher = strings.ToUpper(strings.TrimSpace(c.Cipher))
-	if c.Auth == "" {
-		c.Auth = AuthSHA256
-	}
-	c.Auth = strings.ToUpper(strings.TrimSpace(c.Auth))
+	c.Cipher = normalizeCipher(c.Cipher)
+	c.Auth = normalizeAuth(c.Auth)
 	if err := c.ValidateInstallScriptSubset(); err != nil {
 		return err
 	}
-	key, err := DecodeStaticKey(c.TLSCrypt)
-	if err != nil {
-		return fmt.Errorf("parse tls-crypt key: %w", err)
+	if len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
+		key, err := DecodeStaticKey(c.TLSCrypt)
+		if err != nil {
+			return fmt.Errorf("parse tls-crypt key: %w", err)
+		}
+		c.TLSCryptKey = key
 	}
-	c.TLSCryptKey = key
 	return nil
 }
 
@@ -110,15 +132,14 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	if c.Proto != ProtoUDP && c.Proto != ProtoTCP {
 		return fmt.Errorf("unsupported openvpn proto %q: only udp and tcp are supported", c.Proto)
 	}
-	if c.Cipher != CipherAES128GCM && c.Cipher != CipherAES256GCM && c.Cipher != CipherChaCha20Poly1305 {
-		return fmt.Errorf("unsupported openvpn cipher %q: only %s, %s and %s are supported", c.Cipher, CipherAES128GCM, CipherAES256GCM, CipherChaCha20Poly1305)
+	if c.Cipher != CipherAES128GCM && c.Cipher != CipherAES256GCM && c.Cipher != CipherAES128CBC && c.Cipher != CipherAES256CBC && c.Cipher != CipherChaCha20Poly1305 {
+		return fmt.Errorf("unsupported openvpn cipher %q: only %s, %s, %s, %s and %s are supported", c.Cipher, CipherAES128GCM, CipherAES256GCM, CipherAES128CBC, CipherAES256CBC, CipherChaCha20Poly1305)
 	}
-	if c.Auth != AuthSHA256 {
-		return fmt.Errorf("unsupported openvpn auth %q: only %s is supported", c.Auth, AuthSHA256)
+	if c.Auth != AuthSHA1 && c.Auth != AuthSHA256 {
+		return fmt.Errorf("unsupported openvpn auth %q: only %s and %s are supported", c.Auth, AuthSHA1, AuthSHA256)
 	}
 	for name, value := range map[string][]byte{
-		"ca":        c.CA,
-		"tls-crypt": c.TLSCrypt,
+		"ca": c.CA,
 	} {
 		if len(bytes.TrimSpace(value)) == 0 {
 			return fmt.Errorf("openvpn config requires inline <%s> block", name)

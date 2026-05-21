@@ -89,15 +89,14 @@ func TestClientConfigRejectsUnsupportedProto(t *testing.T) {
 	}
 }
 
-func TestClientConfigRequiresTLSCrypt(t *testing.T) {
+func TestClientConfigAllowsMissingTLSCrypt(t *testing.T) {
 	cfg := yamlStyleConfig()
 	cfg.TLSCrypt = nil
-	err := cfg.Prepare()
-	if err == nil {
-		t.Fatal("expected missing tls-crypt error")
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "tls-crypt") {
-		t.Fatalf("unexpected error: %v", err)
+	if len(cfg.TLSCryptKey) != 0 {
+		t.Fatalf("unexpected tls-crypt key length: %d", len(cfg.TLSCryptKey))
 	}
 }
 
@@ -121,6 +120,30 @@ func TestClientConfigAuthUserPassAES256(t *testing.T) {
 		t.Fatalf("unexpected cipher: %s", cfg.Cipher)
 	}
 	if cfg.DataCipherKeyLength() != 32 {
+		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
+	}
+}
+
+func TestClientConfigAESCBCSHA1(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 1194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "AES-CBC",
+		Auth:       "sha-1",
+		CA:         []byte(testCert),
+		Username:   "user",
+		Password:   "secret",
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cipher != CipherAES128CBC || cfg.Auth != AuthSHA1 {
+		t.Fatalf("unexpected crypto: %s/%s", cfg.Cipher, cfg.Auth)
+	}
+	if cfg.DataCipherKeyLength() != 16 {
 		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
 	}
 }

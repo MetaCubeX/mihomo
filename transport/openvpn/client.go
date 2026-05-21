@@ -35,9 +35,13 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	if io == nil {
 		return nil, errors.New("nil openvpn packet io")
 	}
-	crypt, err := NewTLSCrypt(config.TLSCryptKey, true)
-	if err != nil {
-		return nil, err
+	var crypt *TLSCrypt
+	if len(config.TLSCryptKey) > 0 {
+		var err error
+		crypt, err = NewTLSCrypt(config.TLSCryptKey, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 	local, err := NewSessionID()
 	if err != nil {
@@ -119,7 +123,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 	c.push = push
-	c.data, err = NewDataChannel(keys, c.config.Cipher, push.PeerID)
+	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
 	if err != nil {
 		return nil, err
 	}

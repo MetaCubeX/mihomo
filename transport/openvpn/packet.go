@@ -168,9 +168,6 @@ func DecodeControlPlain(opcode Opcode, plain []byte) (ackIDs []uint32, ackRemote
 }
 
 func (p ControlPacket) Encode(crypt *TLSCrypt, packetID uint32, unixTime uint32) ([]byte, error) {
-	if crypt == nil {
-		return nil, errors.New("tls-crypt is required")
-	}
 	plain, err := p.EncodePlain()
 	if err != nil {
 		return nil, err
@@ -179,12 +176,40 @@ func (p ControlPacket) Encode(crypt *TLSCrypt, packetID uint32, unixTime uint32)
 	header := make([]byte, TLSCryptHeaderSize)
 	header[0] = opcodeKeyID(p.Opcode, p.KeyID)
 	copy(header[1:], p.LocalSession[:])
+	if crypt == nil {
+		out := make([]byte, 0, len(header)+len(plain))
+		out = append(out, header...)
+		out = append(out, plain...)
+		return out, nil
+	}
 	return crypt.Wrap(header, packetID, unixTime, plain)
 }
 
 func DecodeControlPacket(crypt *TLSCrypt, packet []byte) (*ControlPacket, uint32, uint32, error) {
 	if crypt == nil {
-		return nil, 0, 0, errors.New("tls-crypt is required")
+		if len(packet) < TLSCryptHeaderSize+1 {
+			return nil, 0, 0, errors.New("control packet too short")
+		}
+		header := packet[:TLSCryptHeaderSize]
+		opcode, keyID := parseOpcodeKeyID(header[0])
+		if !opcode.IsControl() {
+			return nil, 0, 0, fmt.Errorf("opcode %s is not a control opcode", opcode)
+		}
+		var local SessionID
+		copy(local[:], header[1:])
+		ackIDs, ackRemote, messageID, payload, err := DecodeControlPlain(opcode, packet[TLSCryptHeaderSize:])
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		return &ControlPacket{
+			Opcode:           opcode,
+			KeyID:            keyID,
+			LocalSession:     local,
+			AckIDs:           ackIDs,
+			AckRemoteSession: ackRemote,
+			MessageID:        messageID,
+			Payload:          payload,
+		}, 0, 0, nil
 	}
 	header, packetID, unixTime, plain, err := crypt.Unwrap(packet)
 	if err != nil {
