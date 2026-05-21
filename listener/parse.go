@@ -79,6 +79,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewShadowSocks(shadowsocksOption)
+	case "snell":
+		snellOption := &IN.SnellOption{UDP: true}
+		err = decoder.Decode(mapping, snellOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewSnell(snellOption)
 	case "vmess":
 		vmessOption := &IN.VmessOption{}
 		err = decoder.Decode(mapping, vmessOption)
