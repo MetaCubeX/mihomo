@@ -157,6 +157,116 @@ func TestControlConnCarriesTLSBytes(t *testing.T) {
 	}
 }
 
+func TestControlChannelReordersReliableMessages(t *testing.T) {
+	packets := make(chan []byte, 4)
+	acks := make(chan []byte, 4)
+	io := &memoryPacketIO{in: packets, out: acks, closed: make(chan struct{})}
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	server := NewControlChannel(io, nil, serverID)
+
+	second, err := (ControlPacket{
+		Opcode:       PControlV1,
+		LocalSession: clientID,
+		MessageID:    1,
+		Payload:      []byte("second"),
+	}).Encode(nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := (ControlPacket{
+		Opcode:       PControlV1,
+		LocalSession: clientID,
+		MessageID:    0,
+		Payload:      []byte("first"),
+	}).Encode(nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	packets <- second
+	packets <- first
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	packet, err := server.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packet.MessageID != 0 || string(packet.Payload) != "first" {
+		t.Fatalf("unexpected first delivered packet: id=%d payload=%q", packet.MessageID, packet.Payload)
+	}
+	packet, err = server.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packet.MessageID != 1 || string(packet.Payload) != "second" {
+		t.Fatalf("unexpected second delivered packet: id=%d payload=%q", packet.MessageID, packet.Payload)
+	}
+}
+
+func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+
+	clientControl := NewControlChannel(clientIO, nil, clientID)
+	serverControl := NewControlChannel(serverIO, nil, serverID)
+	client := &Client{
+		config:  &ClientConfig{Proto: ProtoUDP},
+		control: clientControl,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := clientControl.SendReset(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		packet, err := serverControl.Read(ctx)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if packet.Opcode != PControlHardResetClientV2 {
+			errCh <- errors.New("unexpected reset opcode")
+			return
+		}
+		raw, err := serverIO.ReadPacket(ctx)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		packet, _, _, err = DecodeControlPacket(nil, raw)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if packet.Opcode != PControlHardResetClientV2 || packet.MessageID != 0 {
+			errCh <- errors.New("unexpected retransmitted reset packet")
+			return
+		}
+		_, err = serverControl.Send(ctx, PControlHardResetServerV2, nil)
+		errCh <- err
+	}()
+
+	if err := client.waitServerReset(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if clientControl.PendingMessages() != 0 {
+		t.Fatalf("expected client reset to be acked, pending=%d", clientControl.PendingMessages())
+	}
+}
+
 func TestTCPPacketIOFraming(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()

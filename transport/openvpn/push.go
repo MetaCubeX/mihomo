@@ -91,27 +91,44 @@ func splitPushOptions(message string) []string {
 	return out
 }
 
-func parseIPv4Ifconfig(address, mask string) (netip.Prefix, error) {
+func parseIPv4Ifconfig(address, maskOrPeer string) (netip.Prefix, error) {
 	addr, err := netip.ParseAddr(address)
 	if err != nil {
 		return netip.Prefix{}, fmt.Errorf("parse pushed ipv4 address %q: %w", address, err)
 	}
-	maskAddr, err := netip.ParseAddr(mask)
+	maskAddr, err := netip.ParseAddr(maskOrPeer)
 	if err != nil {
-		return netip.Prefix{}, fmt.Errorf("parse pushed ipv4 mask %q: %w", mask, err)
+		return netip.Prefix{}, fmt.Errorf("parse pushed ipv4 mask %q: %w", maskOrPeer, err)
 	}
 	if !addr.Is4() || !maskAddr.Is4() {
 		return netip.Prefix{}, fmt.Errorf("openvpn ifconfig requires ipv4 address and mask")
 	}
-	maskBytes := maskAddr.As4()
+
+	if ones, ok := ipv4MaskSize(maskAddr); ok {
+		return netip.PrefixFrom(addr, ones), nil
+	}
+
+	// Some servers, including SoftEther/VPNGate in net30/p2p mode, push
+	// "ifconfig <local> <remote>" rather than "ifconfig <local> <netmask>".
+	// Use a host prefix for that local tunnel address.
+	return netip.PrefixFrom(addr, 32), nil
+}
+
+func ipv4MaskSize(mask netip.Addr) (int, bool) {
+	maskBytes := mask.As4()
 	ones := 0
+	seenZero := false
 	for _, b := range maskBytes {
 		for i := 7; i >= 0; i-- {
 			if b&(1<<i) == 0 {
-				return netip.PrefixFrom(addr, ones), nil
+				seenZero = true
+				continue
+			}
+			if seenZero {
+				return 0, false
 			}
 			ones++
 		}
 	}
-	return netip.PrefixFrom(addr, ones), nil
+	return ones, true
 }

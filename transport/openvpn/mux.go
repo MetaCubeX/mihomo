@@ -18,8 +18,8 @@ type PacketMux struct {
 func NewPacketMux(io PacketIO) *PacketMux {
 	return &PacketMux{
 		io:      io,
-		control: make(chan []byte, 64),
-		data:    make(chan []byte, 256),
+		control: make(chan []byte, 256),
+		data:    make(chan []byte, 1024),
 		done:    make(chan struct{}),
 	}
 }

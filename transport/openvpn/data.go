@@ -17,9 +17,11 @@ import (
 )
 
 const (
-	DataChannelTagSize   = 16
-	DataChannelIVSize    = 12
-	DataChannelCBCIVSize = aes.BlockSize
+	DataChannelTagSize      = 16
+	DataChannelIVSize       = 12
+	DataChannelCBCIVSize    = aes.BlockSize
+	dataChannelIVRandBuf    = 32 * 1024
+	dataChannelReplayWindow = 64
 
 	PeerIDUnset uint32 = 0xffffff
 )
@@ -34,17 +36,25 @@ type DataChannel struct {
 	recvHMACKey []byte
 	authHash    func() hash.Hash
 	authSize    int
+	sendMACPool sync.Pool
+	recvMACPool sync.Pool
 
 	sendImplicitIV [DataChannelIVSize]byte
 	recvImplicitIV [DataChannelIVSize]byte
 
 	keyID  uint8
 	peerID uint32
+	header []byte
 
 	mu           sync.Mutex
 	sendPacketID uint32
 	recvHighest  uint32
+	recvWindow   uint64
 	recvSeen     bool
+
+	randMu     sync.Mutex
+	randBuf    []byte
+	randOffset int
 }
 
 func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32) (*DataChannel, error) {
@@ -67,6 +77,7 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 			sendAEAD: send,
 			recvAEAD: recv,
 			peerID:   peerID,
+			header:   dataHeader(peerID, 0),
 		}
 		copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
 		copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
@@ -88,7 +99,7 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 	if len(keys.SendHMACKey) < authSize || len(keys.RecvHMACKey) < authSize {
 		return nil, errors.New("openvpn HMAC keys are too short")
 	}
-	return &DataChannel{
+	d := &DataChannel{
 		sendBlock:   send,
 		recvBlock:   recv,
 		sendHMACKey: append([]byte(nil), keys.SendHMACKey[:authSize]...),
@@ -96,7 +107,15 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 		authHash:    authHash,
 		authSize:    authSize,
 		peerID:      peerID,
-	}, nil
+		header:      dataHeader(peerID, 0),
+	}
+	d.sendMACPool.New = func() any {
+		return hmac.New(d.authHash, d.sendHMACKey)
+	}
+	d.recvMACPool.New = func() any {
+		return hmac.New(d.authHash, d.recvHMACKey)
+	}
+	return d, nil
 }
 
 func isDataChannelAEAD(cipherName string) bool {
@@ -156,7 +175,7 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 }
 
 func (d *DataChannel) encryptAEAD(packet []byte, packetID uint32) ([]byte, error) {
-	header := d.dataHeader()
+	header := d.header
 	var packetIDBytes [4]byte
 	binary.BigEndian.PutUint32(packetIDBytes[:], packetID)
 	nonce := d.nonce(packetID, d.sendImplicitIV)
@@ -174,28 +193,28 @@ func (d *DataChannel) encryptAEAD(packet []byte, packetID uint32) ([]byte, error
 }
 
 func (d *DataChannel) encryptCBC(packet []byte, packetID uint32) ([]byte, error) {
-	header := d.dataHeader()
-	iv := make([]byte, DataChannelCBCIVSize)
-	if _, err := rand.Read(iv); err != nil {
+	header := d.header
+	blockSize := d.sendBlock.BlockSize()
+	plainLen := 4 + len(packet)
+	padding := blockSize - plainLen%blockSize
+	if padding == 0 {
+		padding = blockSize
+	}
+	out := make([]byte, len(header)+d.authSize+DataChannelCBCIVSize+plainLen+padding)
+	copy(out, header)
+	authenticated := out[len(header)+d.authSize:]
+	iv := authenticated[:DataChannelCBCIVSize]
+	if err := d.fillCBCIV(iv); err != nil {
 		return nil, err
 	}
-
-	plain := make([]byte, 4+len(packet))
-	binary.BigEndian.PutUint32(plain[:4], packetID)
-	copy(plain[4:], packet)
-	padded := pkcs7Pad(plain, d.sendBlock.BlockSize())
-	ciphertext := make([]byte, len(padded))
-	cipher.NewCBCEncrypter(d.sendBlock, iv).CryptBlocks(ciphertext, padded)
-
-	authenticated := make([]byte, 0, len(iv)+len(ciphertext))
-	authenticated = append(authenticated, iv...)
-	authenticated = append(authenticated, ciphertext...)
-	tag := dataChannelHMAC(d.authHash, d.sendHMACKey, authenticated)
-
-	out := make([]byte, 0, len(header)+len(tag)+len(authenticated))
-	out = append(out, header...)
-	out = append(out, tag...)
-	out = append(out, authenticated...)
+	ciphertext := authenticated[DataChannelCBCIVSize:]
+	binary.BigEndian.PutUint32(ciphertext[:4], packetID)
+	copy(ciphertext[4:], packet)
+	for i := plainLen; i < len(ciphertext); i++ {
+		ciphertext[i] = byte(padding)
+	}
+	cipher.NewCBCEncrypter(d.sendBlock, iv).CryptBlocks(ciphertext, ciphertext)
+	_ = d.hmacAppend(&d.sendMACPool, authenticated, out[len(header):len(header)])
 	return out, nil
 }
 
@@ -254,7 +273,8 @@ func (d *DataChannel) decryptCBC(packet []byte, headerSize int) ([]byte, error) 
 	body := packet[headerSize:]
 	tag := body[:d.authSize]
 	authenticated := body[d.authSize:]
-	expected := dataChannelHMAC(d.authHash, d.recvHMACKey, authenticated)
+	var expectedBuf [sha256.Size]byte
+	expected := d.hmacAppend(&d.recvMACPool, authenticated, expectedBuf[:0])
 	if !hmac.Equal(tag, expected) {
 		return nil, errors.New("openvpn CBC data packet HMAC authentication failed")
 	}
@@ -264,9 +284,8 @@ func (d *DataChannel) decryptCBC(packet []byte, headerSize int) ([]byte, error) 
 	if len(ciphertext) == 0 || len(ciphertext)%blockSize != 0 {
 		return nil, errors.New("invalid openvpn CBC ciphertext length")
 	}
-	padded := make([]byte, len(ciphertext))
-	cipher.NewCBCDecrypter(d.recvBlock, iv).CryptBlocks(padded, ciphertext)
-	plain, err := pkcs7Unpad(padded, blockSize)
+	cipher.NewCBCDecrypter(d.recvBlock, iv).CryptBlocks(ciphertext, ciphertext)
+	plain, err := pkcs7Unpad(ciphertext, blockSize)
 	if err != nil {
 		return nil, err
 	}
@@ -309,24 +328,47 @@ func (d *DataChannel) nextPacketID() uint32 {
 func (d *DataChannel) acceptPacketID(packetID uint32) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.recvSeen && packetID <= d.recvHighest {
+
+	if !d.recvSeen {
+		d.recvHighest = packetID
+		d.recvWindow = 1
+		d.recvSeen = true
+		return nil
+	}
+
+	if packetID > d.recvHighest {
+		shift := packetID - d.recvHighest
+		if shift >= dataChannelReplayWindow {
+			d.recvWindow = 1
+		} else {
+			d.recvWindow = d.recvWindow<<shift | 1
+		}
+		d.recvHighest = packetID
+		return nil
+	}
+
+	diff := d.recvHighest - packetID
+	if diff >= dataChannelReplayWindow {
 		return fmt.Errorf("openvpn replayed data packet id %d", packetID)
 	}
-	d.recvHighest = packetID
-	d.recvSeen = true
+	mask := uint64(1) << diff
+	if d.recvWindow&mask != 0 {
+		return fmt.Errorf("openvpn replayed data packet id %d", packetID)
+	}
+	d.recvWindow |= mask
 	return nil
 }
 
-func (d *DataChannel) dataHeader() []byte {
-	if d.peerID != PeerIDUnset {
+func dataHeader(peerID uint32, keyID uint8) []byte {
+	if peerID != PeerIDUnset {
 		return []byte{
-			opcodeKeyID(PDataV2, d.keyID),
-			byte(d.peerID >> 16),
-			byte(d.peerID >> 8),
-			byte(d.peerID),
+			opcodeKeyID(PDataV2, keyID),
+			byte(peerID >> 16),
+			byte(peerID >> 8),
+			byte(peerID),
 		}
 	}
-	return []byte{opcodeKeyID(PDataV1, d.keyID)}
+	return []byte{opcodeKeyID(PDataV1, keyID)}
 }
 
 func (d *DataChannel) nonce(packetID uint32, implicit [DataChannelIVSize]byte) [DataChannelIVSize]byte {
@@ -335,10 +377,43 @@ func (d *DataChannel) nonce(packetID uint32, implicit [DataChannelIVSize]byte) [
 	return nonce
 }
 
+func (d *DataChannel) fillCBCIV(iv []byte) error {
+	d.randMu.Lock()
+	defer d.randMu.Unlock()
+
+	for len(iv) > 0 {
+		if d.randOffset == len(d.randBuf) {
+			if d.randBuf == nil {
+				d.randBuf = make([]byte, dataChannelIVRandBuf)
+			}
+			if _, err := rand.Read(d.randBuf); err != nil {
+				return err
+			}
+			d.randOffset = 0
+		}
+		n := copy(iv, d.randBuf[d.randOffset:])
+		d.randOffset += n
+		iv = iv[n:]
+	}
+	return nil
+}
+
 func dataChannelHMAC(newHash func() hash.Hash, key, data []byte) []byte {
+	return dataChannelHMACAppend(newHash, key, data, nil)
+}
+
+func dataChannelHMACAppend(newHash func() hash.Hash, key, data, dst []byte) []byte {
 	mac := hmac.New(newHash, key)
 	_, _ = mac.Write(data)
-	return mac.Sum(nil)
+	return mac.Sum(dst)
+}
+
+func (d *DataChannel) hmacAppend(pool *sync.Pool, data, dst []byte) []byte {
+	mac := pool.Get().(hash.Hash)
+	defer pool.Put(mac)
+	mac.Reset()
+	_, _ = mac.Write(data)
+	return mac.Sum(dst)
 }
 
 func pkcs7Pad(plain []byte, blockSize int) []byte {

@@ -18,6 +18,13 @@ type PacketIO interface {
 	RemoteAddr() net.Addr
 }
 
+var streamPacketFramePool = sync.Pool{
+	New: func() any {
+		frame := make([]byte, 0, 64*1024+2)
+		return &frame
+	},
+}
+
 type ControlChannel struct {
 	io     PacketIO
 	crypt  *TLSCrypt
@@ -29,19 +36,22 @@ type ControlChannel struct {
 	mu            sync.Mutex
 	sendPacketID  uint32
 	sendMessage   uint32
+	recvMessage   uint32
 	ackPending    []uint32
 	pending       map[uint32]*ControlPacket
+	recvPending   map[uint32]*ControlPacket
 	readDeadline  time.Time
 	writeDeadline time.Time
 }
 
 func NewControlChannel(io PacketIO, crypt *TLSCrypt, local SessionID) *ControlChannel {
 	return &ControlChannel{
-		io:      io,
-		crypt:   crypt,
-		clock:   time.Now,
-		local:   local,
-		pending: make(map[uint32]*ControlPacket),
+		io:          io,
+		crypt:       crypt,
+		clock:       time.Now,
+		local:       local,
+		pending:     make(map[uint32]*ControlPacket),
+		recvPending: make(map[uint32]*ControlPacket),
 	}
 }
 
@@ -113,10 +123,22 @@ func (c *ControlChannel) SendAck(ctx context.Context) error {
 
 func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 	for {
+		c.mu.Lock()
+		if packet, ok := c.recvPending[c.recvMessage]; ok {
+			delete(c.recvPending, c.recvMessage)
+			c.recvMessage++
+			c.mu.Unlock()
+			return packet, nil
+		}
+		c.mu.Unlock()
+
 		packet, err := c.readControlPacket(ctx)
 		if err != nil {
 			return nil, err
 		}
+
+		var deliver *ControlPacket
+		sendAck := false
 
 		c.mu.Lock()
 		if c.remote == (SessionID{}) && packet.LocalSession != c.local {
@@ -128,12 +150,33 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 		if packet.Opcode.HasMessageID() {
 			c.ackPending = appendAck(c.ackPending, packet.MessageID)
 		}
+
+		switch {
+		case packet.Opcode == PAckV1:
+		case !packet.Opcode.HasMessageID():
+			deliver = packet
+		case packet.MessageID < c.recvMessage:
+			sendAck = true
+		case packet.MessageID == c.recvMessage:
+			deliver = packet
+			c.recvMessage++
+		default:
+			if _, exists := c.recvPending[packet.MessageID]; !exists {
+				c.recvPending[packet.MessageID] = packet
+			}
+			sendAck = true
+		}
+
 		c.mu.Unlock()
 
-		if packet.Opcode == PAckV1 {
-			continue
+		if deliver != nil {
+			return deliver, nil
 		}
-		return packet, nil
+		if sendAck {
+			if err := c.SendAck(ctx); err != nil {
+				return nil, err
+			}
+		}
 	}
 }
 
@@ -332,11 +375,18 @@ func (c *ControlConn) SetWriteDeadline(t time.Time) error {
 }
 
 type streamPacketIO struct {
-	conn net.Conn
+	conn          net.Conn
+	deadlineMu    sync.Mutex
+	writeMu       sync.Mutex
+	readDeadline  time.Time
+	writeDeadline time.Time
 }
 
 type datagramPacketIO struct {
-	conn net.Conn
+	conn          net.Conn
+	deadlineMu    sync.Mutex
+	readDeadline  time.Time
+	writeDeadline time.Time
 }
 
 func NewDatagramPacketIO(conn net.Conn) PacketIO {
@@ -344,40 +394,23 @@ func NewDatagramPacketIO(conn net.Conn) PacketIO {
 }
 
 func (d *datagramPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
-	done := make(chan struct{})
-	var (
-		packet []byte
-		err    error
-	)
-	go func() {
-		defer close(done)
-		buf := make([]byte, 64*1024)
-		var n int
-		n, err = d.conn.Read(buf)
-		if err == nil {
-			packet = cloneBytes(buf[:n])
-		}
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-done:
-		return packet, err
+	if err := setReadDeadlineFromContext(d.conn, ctx, &d.deadlineMu, &d.readDeadline); err != nil {
+		return nil, err
 	}
+	buf := make([]byte, 64*1024)
+	n, err := d.conn.Read(buf)
+	if err != nil {
+		return nil, contextIOError(ctx, err)
+	}
+	return buf[:n], nil
 }
 
 func (d *datagramPacketIO) WritePacket(ctx context.Context, packet []byte) error {
-	done := make(chan error, 1)
-	go func() {
-		_, err := d.conn.Write(packet)
-		done <- err
-	}()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-done:
+	if err := setWriteDeadlineFromContext(d.conn, ctx, &d.deadlineMu, &d.writeDeadline); err != nil {
 		return err
 	}
+	_, err := d.conn.Write(packet)
+	return contextIOError(ctx, err)
 }
 
 func (d *datagramPacketIO) Close() error {
@@ -397,52 +430,51 @@ func NewTCPPacketIO(conn net.Conn) PacketIO {
 }
 
 func (s *streamPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
-	done := make(chan struct{})
-	var (
-		packet []byte
-		err    error
-	)
-	go func() {
-		defer close(done)
-		var lenBuf [2]byte
-		if _, err = io.ReadFull(s.conn, lenBuf[:]); err != nil {
-			return
-		}
-		size := int(lenBuf[0])<<8 | int(lenBuf[1])
-		if size == 0 {
-			err = errors.New("empty openvpn tcp packet")
-			return
-		}
-		packet = make([]byte, size)
-		_, err = io.ReadFull(s.conn, packet)
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-done:
-		return packet, err
+	if err := setReadDeadlineFromContext(s.conn, ctx, &s.deadlineMu, &s.readDeadline); err != nil {
+		return nil, err
 	}
+	var lenBuf [2]byte
+	if _, err := io.ReadFull(s.conn, lenBuf[:]); err != nil {
+		return nil, contextIOError(ctx, err)
+	}
+	size := int(lenBuf[0])<<8 | int(lenBuf[1])
+	if size == 0 {
+		return nil, errors.New("empty openvpn tcp packet")
+	}
+	packet := make([]byte, size)
+	if _, err := io.ReadFull(s.conn, packet); err != nil {
+		return nil, contextIOError(ctx, err)
+	}
+	return packet, nil
 }
 
 func (s *streamPacketIO) WritePacket(ctx context.Context, packet []byte) error {
 	if len(packet) > 0xffff {
 		return fmt.Errorf("openvpn tcp packet too large: %d", len(packet))
 	}
-	done := make(chan error, 1)
-	go func() {
-		frame := make([]byte, 2+len(packet))
-		frame[0] = byte(len(packet) >> 8)
-		frame[1] = byte(len(packet))
-		copy(frame[2:], packet)
-		_, err := s.conn.Write(frame)
-		done <- err
+	framePtr := streamPacketFramePool.Get().(*[]byte)
+	frame := *framePtr
+	frameLen := 2 + len(packet)
+	if cap(frame) < frameLen {
+		frame = make([]byte, frameLen)
+	} else {
+		frame = frame[:frameLen]
+	}
+	defer func() {
+		*framePtr = frame[:0]
+		streamPacketFramePool.Put(framePtr)
 	}()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-done:
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if err := setWriteDeadlineFromContext(s.conn, ctx, &s.deadlineMu, &s.writeDeadline); err != nil {
 		return err
 	}
+	frame[0] = byte(len(packet) >> 8)
+	frame[1] = byte(len(packet))
+	copy(frame[2:], packet)
+	_, err := s.conn.Write(frame)
+	return contextIOError(ctx, err)
 }
 
 func (s *streamPacketIO) Close() error {
@@ -455,4 +487,51 @@ func (s *streamPacketIO) LocalAddr() net.Addr {
 
 func (s *streamPacketIO) RemoteAddr() net.Addr {
 	return s.conn.RemoteAddr()
+}
+
+func setReadDeadlineFromContext(conn net.Conn, ctx context.Context, mu *sync.Mutex, current *time.Time) error {
+	deadline, hasDeadline := ctx.Deadline()
+	mu.Lock()
+	defer mu.Unlock()
+	if current.Equal(deadline) {
+		return nil
+	}
+	if hasDeadline {
+		if err := conn.SetReadDeadline(deadline); err != nil {
+			return err
+		}
+	} else if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		return err
+	}
+	*current = deadline
+	return nil
+}
+
+func setWriteDeadlineFromContext(conn net.Conn, ctx context.Context, mu *sync.Mutex, current *time.Time) error {
+	deadline, hasDeadline := ctx.Deadline()
+	mu.Lock()
+	defer mu.Unlock()
+	if current.Equal(deadline) {
+		return nil
+	}
+	if hasDeadline {
+		if err := conn.SetWriteDeadline(deadline); err != nil {
+			return err
+		}
+	} else if err := conn.SetWriteDeadline(time.Time{}); err != nil {
+		return err
+	}
+	*current = deadline
+	return nil
+}
+
+func contextIOError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
 }
