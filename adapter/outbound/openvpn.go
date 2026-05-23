@@ -224,7 +224,10 @@ func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver,
 	}
 	defer o.runLock.Release(1)
 	if o.running {
-		return o.deviceSnapshot()
+		if o.tunDevice == nil {
+			return nil, nil, net.ErrClosed
+		}
+		return o.tunDevice, o.resolver, nil
 	}
 	if o.runCtx.Err() != nil {
 		return nil, nil, o.runCtx.Err()
@@ -283,7 +286,7 @@ func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver,
 		})
 	}
 	o.startPacketLoops()
-	return o.deviceSnapshot()
+	return o.tunDevice, o.resolver, nil
 }
 
 func (o *OpenVPN) lockRun(ctx context.Context) error {
@@ -303,18 +306,11 @@ func (o *OpenVPN) lockRun(ctx context.Context) error {
 }
 
 func (o *OpenVPN) handshakeContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	baseCtx, baseCancel := context.WithCancel(o.runCtx)
-	go func() {
-		select {
-		case <-ctx.Done():
-			baseCancel()
-		case <-baseCtx.Done():
-		}
-	}()
-	handshakeCtx, handshakeCancel := context.WithTimeout(baseCtx, openVPNHandshakeTimeout)
+	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, openVPNHandshakeTimeout)
+	stop := contextutils.AfterFunc(o.runCtx, handshakeCancel)
 	return handshakeCtx, func() {
+		stop()
 		handshakeCancel()
-		baseCancel()
 	}
 }
 
@@ -323,13 +319,6 @@ func (o *OpenVPN) contextErr(ctx context.Context) error {
 		return err
 	}
 	return o.runCtx.Err()
-}
-
-func (o *OpenVPN) deviceSnapshot() (wireguard.Device, resolver.Resolver, error) {
-	if o.tunDevice == nil {
-		return nil, nil, net.ErrClosed
-	}
-	return o.tunDevice, o.resolver, nil
 }
 
 func openVPNPrefixesHas6(prefixes []netip.Prefix) bool {
