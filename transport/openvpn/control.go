@@ -8,6 +8,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/metacubex/mihomo/common/pool"
 )
 
 type PacketIO interface {
@@ -16,13 +18,6 @@ type PacketIO interface {
 	Close() error
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
-}
-
-var streamPacketFramePool = sync.Pool{
-	New: func() any {
-		frame := make([]byte, 0, 64*1024+2)
-		return &frame
-	},
 }
 
 type ControlChannel struct {
@@ -377,7 +372,6 @@ func (c *ControlConn) SetWriteDeadline(t time.Time) error {
 type streamPacketIO struct {
 	conn          net.Conn
 	deadlineMu    sync.Mutex
-	writeMu       sync.Mutex
 	readDeadline  time.Time
 	writeDeadline time.Time
 }
@@ -452,24 +446,11 @@ func (s *streamPacketIO) WritePacket(ctx context.Context, packet []byte) error {
 	if len(packet) > 0xffff {
 		return fmt.Errorf("openvpn tcp packet too large: %d", len(packet))
 	}
-	framePtr := streamPacketFramePool.Get().(*[]byte)
-	frame := *framePtr
-	frameLen := 2 + len(packet)
-	if cap(frame) < frameLen {
-		frame = make([]byte, frameLen)
-	} else {
-		frame = frame[:frameLen]
-	}
-	defer func() {
-		*framePtr = frame[:0]
-		streamPacketFramePool.Put(framePtr)
-	}()
-
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	if err := setWriteDeadlineFromContext(s.conn, ctx, &s.deadlineMu, &s.writeDeadline); err != nil {
 		return err
 	}
+	frame := pool.Get(2 + len(packet))
+	defer pool.Put(frame)
 	frame[0] = byte(len(packet) >> 8)
 	frame[1] = byte(len(packet))
 	copy(frame[2:], packet)

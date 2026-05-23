@@ -31,7 +31,6 @@ type OpenVPN struct {
 	client    *ovpn.Client
 	resolver  resolver.Resolver
 	dns       []dns.NameServer
-	hasIPv6   bool
 
 	runCtx    context.Context
 	runCancel context.CancelFunc
@@ -39,10 +38,7 @@ type OpenVPN struct {
 	running   bool
 }
 
-const (
-	openVPNHandshakeTimeout = 30 * time.Second
-	openVPNSocketBufferSize = 4 * 1024 * 1024
-)
+const openVPNHandshakeTimeout = 30 * time.Second
 
 type OpenVPNOption struct {
 	BasicOption
@@ -118,20 +114,16 @@ func (o *OpenVPN) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 		return nil, err
 	}
 	var conn net.Conn
-	shouldResolve := !metadata.Resolved() || o.resolver != nil || (!o.hasIPv6 && metadata.Host != "" && openVPNAddrIsIPv6(metadata.DstIP))
-	if shouldResolve {
+	if !metadata.Resolved() || o.resolver != nil {
 		r := resolver.DefaultResolver
 		if o.resolver != nil {
 			r = o.resolver
 		}
-		options := o.tunnelDialOptions()
+		options := o.DialOptions()
 		options = append(options, dialer.WithResolver(r))
 		options = append(options, dialer.WithNetDialer(wgNetDialer{tunDevice: o.tunDevice}))
 		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
 	} else {
-		if !o.hasIPv6 && openVPNAddrIsIPv6(metadata.DstIP) {
-			return nil, E.New("openvpn outbound has no IPv6 address")
-		}
 		conn, err = o.tunDevice.DialContext(ctx, "tcp", M.SocksaddrFrom(metadata.DstIP, metadata.DstPort).Unwrap())
 	}
 	if err != nil {
@@ -167,14 +159,11 @@ func (o *OpenVPN) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
 		if o.resolver != nil {
 			r = o.resolver
 		}
-		ip, err := resolveIPWithResolver(ctx, metadata.Host, o.tunnelDNSPrefer(), r)
+		ip, err := resolveIPWithResolver(ctx, metadata.Host, o.prefer, r)
 		if err != nil {
 			return fmt.Errorf("can't resolve ip: %w", err)
 		}
 		metadata.DstIP = ip
-	}
-	if !o.hasIPv6 && openVPNAddrIsIPv6(metadata.DstIP) {
-		return fmt.Errorf("openvpn outbound has no IPv6 address")
 	}
 	return nil
 }
@@ -198,7 +187,6 @@ func (o *OpenVPN) Close() error {
 	tunDevice := o.tunDevice
 	o.client = nil
 	o.tunDevice = nil
-	o.hasIPv6 = false
 	o.running = false
 	o.runMutex.Unlock()
 
@@ -238,7 +226,6 @@ func (o *OpenVPN) run(_ context.Context) error {
 		_ = client.Close()
 		return E.Cause(err, "OpenVPN handshake")
 	}
-	hasIPv6 := openVPNPrefixesHas6(push.Prefixes)
 	log.Debugln("[OpenVPN](%s) handshake complete: prefixes=%v peer-id=%d dns=%v redirect=%t block-ipv6=%t", o.name, push.Prefixes, push.PeerID, push.DNS, push.Redirect, push.BlockIPv6)
 
 	mtu := o.option.MTU
@@ -257,7 +244,6 @@ func (o *OpenVPN) run(_ context.Context) error {
 	}
 	o.client = client
 	o.tunDevice = tunDevice
-	o.hasIPv6 = hasIPv6
 	o.running = true
 	if o.option.RemoteDnsResolve && len(o.dns) > 0 && o.resolver == nil {
 		nss := append([]dns.NameServer(nil), o.dns...)
@@ -266,7 +252,7 @@ func (o *OpenVPN) run(_ context.Context) error {
 		}
 		o.resolver = dns.NewResolver(dns.Config{
 			Main: nss,
-			IPv6: hasIPv6,
+			IPv6: openVPNPrefixesHas6(push.Prefixes),
 		})
 	}
 	o.startPacketLoops()
@@ -282,25 +268,6 @@ func openVPNPrefixesHas6(prefixes []netip.Prefix) bool {
 	return false
 }
 
-func openVPNAddrIsIPv6(addr netip.Addr) bool {
-	return addr.IsValid() && !addr.Unmap().Is4()
-}
-
-func (o *OpenVPN) tunnelDNSPrefer() C.DNSPrefer {
-	if !o.hasIPv6 {
-		return C.IPv4Only
-	}
-	return o.prefer
-}
-
-func (o *OpenVPN) tunnelDialOptions() []dialer.Option {
-	options := o.DialOptions()
-	if !o.hasIPv6 {
-		options = append(options, dialer.WithOnlySingleStack(true))
-	}
-	return options
-}
-
 func (o *OpenVPN) openPacketIO(ctx context.Context) (ovpn.PacketIO, error) {
 	switch o.config.Proto {
 	case ovpn.ProtoUDP:
@@ -308,33 +275,15 @@ func (o *OpenVPN) openPacketIO(ctx context.Context) (ovpn.PacketIO, error) {
 		if err != nil {
 			return nil, err
 		}
-		setOpenVPNSocketBuffers(o.name, conn)
 		return ovpn.NewDatagramPacketIO(conn), nil
 	case ovpn.ProtoTCP:
 		conn, err := o.dialer.DialContext(ctx, "tcp", o.addr)
 		if err != nil {
 			return nil, err
 		}
-		setOpenVPNSocketBuffers(o.name, conn)
 		return ovpn.NewTCPPacketIO(conn), nil
 	default:
 		return nil, fmt.Errorf("unsupported openvpn proto %q", o.config.Proto)
-	}
-}
-
-func setOpenVPNSocketBuffers(name string, conn net.Conn) {
-	bufferConn, ok := conn.(interface {
-		SetReadBuffer(bytes int) error
-		SetWriteBuffer(bytes int) error
-	})
-	if !ok {
-		return
-	}
-	if err := bufferConn.SetReadBuffer(openVPNSocketBufferSize); err != nil {
-		log.Debugln("[OpenVPN](%s) failed to set read buffer: %v", name, err)
-	}
-	if err := bufferConn.SetWriteBuffer(openVPNSocketBufferSize); err != nil {
-		log.Debugln("[OpenVPN](%s) failed to set write buffer: %v", name, err)
 	}
 }
 
@@ -352,7 +301,6 @@ func (o *OpenVPN) startPacketLoops() {
 			if o.client == client {
 				o.client = nil
 				o.tunDevice = nil
-				o.hasIPv6 = false
 				o.running = false
 			}
 			o.runMutex.Unlock()
