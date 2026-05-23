@@ -40,10 +40,6 @@ type OpenVPN struct {
 	running   bool
 }
 
-const (
-	openVPNHandshakeTimeout = 30 * time.Second
-)
-
 type OpenVPNOption struct {
 	BasicOption
 	Name     string `proxy:"name"`
@@ -306,7 +302,7 @@ func (o *OpenVPN) lockRun(ctx context.Context) error {
 }
 
 func (o *OpenVPN) handshakeContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, openVPNHandshakeTimeout)
+	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, ovpn.DefaultHandshakeTimeout)
 	stop := contextutils.AfterFunc(o.runCtx, handshakeCancel)
 	return handshakeCtx, func() {
 		stop()
