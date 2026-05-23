@@ -208,12 +208,6 @@ func (o *OpenVPN) Close() error {
 }
 
 func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
 	if err := o.lockRun(ctx); err != nil {
 		return nil, nil, err
 	}
