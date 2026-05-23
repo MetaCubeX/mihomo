@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/metacubex/mihomo/common/contextutils"
 	"github.com/metacubex/mihomo/component/dialer"
