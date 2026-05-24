@@ -25,7 +25,10 @@ func (p *pendingBuffer) reset() {
 }
 
 func (p *pendingBuffer) ensureAppendCapacity(extra int) {
-	if p == nil || extra <= 0 || p.off == 0 {
+	if p == nil || extra <= 0 {
+		return
+	}
+	if p.off == 0 {
 		return
 	}
 	if cap(p.data)-len(p.data) >= extra {
@@ -41,6 +44,15 @@ func (p *pendingBuffer) ensureAppendCapacity(extra int) {
 func (p *pendingBuffer) appendByte(b byte) {
 	p.ensureAppendCapacity(1)
 	p.data = append(p.data, b)
+}
+
+func appendDecodedByte(dst []byte, n int, pending *pendingBuffer, b byte) int {
+	if n < len(dst) {
+		dst[n] = b
+		return n + 1
+	}
+	pending.appendByte(b)
+	return n
 }
 
 func drainPending(dst []byte, pending *pendingBuffer) (int, bool) {

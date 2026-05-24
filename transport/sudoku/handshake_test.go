@@ -122,39 +122,40 @@ func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 	target := fmt.Sprintf("1.1.1.%d:80", (id%200)+1)
 	payload := []byte{0x42, byte(id)}
 
-	// Server side
+	serverErr := make(chan error, 1)
 	go func() {
 		c, meta, err := ServerHandshake(serverConn, cfg)
 		if err != nil {
-			errCh <- fmt.Errorf("server handshake tcp: %w", err)
+			serverErr <- fmt.Errorf("server handshake tcp: %w", err)
 			return
 		}
 		defer c.Close()
 
 		session, err := ReadServerSession(c, meta)
 		if err != nil {
-			errCh <- fmt.Errorf("server read session tcp: %w", err)
+			serverErr <- fmt.Errorf("server read session tcp: %w", err)
 			return
 		}
 		if session.Type != SessionTypeTCP {
-			errCh <- fmt.Errorf("unexpected session type: %v", session.Type)
+			serverErr <- fmt.Errorf("unexpected session type: %v", session.Type)
 			return
 		}
 		if session.Target != target {
-			errCh <- fmt.Errorf("target mismatch want %s got %s", target, session.Target)
+			serverErr <- fmt.Errorf("target mismatch want %s got %s", target, session.Target)
 			return
 		}
 		if _, err := session.Conn.Write(payload); err != nil {
-			errCh <- fmt.Errorf("server write: %w", err)
+			serverErr <- fmt.Errorf("server write: %w", err)
 			return
 		}
+		serverErr <- nil
 	}()
 
-	// Client side
 	clientCfg := *cfg
 	cConn, err := ClientHandshake(clientConn, &clientCfg)
 	if err != nil {
 		errCh <- fmt.Errorf("client handshake tcp: %w", err)
+		_ = clientConn.Close()
 		return
 	}
 	defer cConn.Close()
@@ -178,6 +179,7 @@ func runPackedTCPSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 		errCh <- fmt.Errorf("payload mismatch want %x got %x", payload, buf)
 		return
 	}
+	reportPackedServerErr(serverErr, errCh)
 }
 
 func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
@@ -185,35 +187,36 @@ func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 	target := "8.8.8.8:53"
 	payload := []byte{0xaa, byte(id)}
 
-	// Server side
+	serverErr := make(chan error, 1)
 	go func() {
 		c, meta, err := ServerHandshake(serverConn, cfg)
 		if err != nil {
-			errCh <- fmt.Errorf("server handshake uot: %w", err)
+			serverErr <- fmt.Errorf("server handshake uot: %w", err)
 			return
 		}
 		defer c.Close()
 
 		session, err := ReadServerSession(c, meta)
 		if err != nil {
-			errCh <- fmt.Errorf("server read session uot: %w", err)
+			serverErr <- fmt.Errorf("server read session uot: %w", err)
 			return
 		}
 		if session.Type != SessionTypeUoT {
-			errCh <- fmt.Errorf("unexpected session type: %v", session.Type)
+			serverErr <- fmt.Errorf("unexpected session type: %v", session.Type)
 			return
 		}
 		if err := WriteDatagram(session.Conn, target, payload); err != nil {
-			errCh <- fmt.Errorf("server write datagram: %w", err)
+			serverErr <- fmt.Errorf("server write datagram: %w", err)
 			return
 		}
+		serverErr <- nil
 	}()
 
-	// Client side
 	clientCfg := *cfg
 	cConn, err := ClientHandshake(clientConn, &clientCfg)
 	if err != nil {
 		errCh <- fmt.Errorf("client handshake uot: %w", err)
+		_ = clientConn.Close()
 		return
 	}
 	defer cConn.Close()
@@ -235,6 +238,17 @@ func runPackedUoTSession(id int, cfg *ProtocolConfig, errCh chan<- error) {
 	if !bytes.Equal(data, payload) {
 		errCh <- fmt.Errorf("uot payload mismatch want %x got %x", payload, data)
 		return
+	}
+	reportPackedServerErr(serverErr, errCh)
+}
+
+func reportPackedServerErr(serverErr <-chan error, errCh chan<- error) {
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			errCh <- err
+		}
+	default:
 	}
 }
 

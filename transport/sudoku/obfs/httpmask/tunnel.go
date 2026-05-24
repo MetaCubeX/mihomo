@@ -244,7 +244,7 @@ type httpClientTarget struct {
 
 func buildHTTPTransport(serverAddress string, tlsEnabled bool, hostOverride string, dialContext func(ctx context.Context, network, addr string) (net.Conn, error), maxIdleConns int) (*http.Transport, httpClientTarget, error) {
 	if dialContext == nil {
-		panic("httpmask: DialContext is nil")
+		return nil, httpClientTarget{}, errors.New("httpmask: DialContext is nil")
 	}
 
 	scheme, urlHost, dialAddr, serverName, err := normalizeHTTPDialTarget(serverAddress, tlsEnabled, hostOverride)

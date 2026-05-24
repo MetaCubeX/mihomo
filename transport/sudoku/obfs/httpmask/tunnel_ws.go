@@ -3,6 +3,7 @@ package httpmask
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	mrand "math/rand"
@@ -96,7 +97,7 @@ func applyWSHeaders(h stdhttp.Header, host string) {
 
 func dialWS(ctx context.Context, serverAddress string, opts TunnelDialOptions) (net.Conn, error) {
 	if opts.DialContext == nil {
-		panic("httpmask: DialContext is nil")
+		return nil, errors.New("httpmask: DialContext is nil")
 	}
 
 	scheme, urlHost, dialAddr, serverName, err := normalizeWSDialTarget(serverAddress, opts.TLSEnabled, opts.HostOverride)

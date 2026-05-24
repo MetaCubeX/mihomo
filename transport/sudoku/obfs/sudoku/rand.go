@@ -6,14 +6,10 @@ import (
 	"time"
 )
 
-type randomSource interface {
-	Uint32() uint32
-	Uint64() uint64
-	Intn(n int) int
-}
-
 type sudokuRand struct {
-	state uint64
+	state      uint64
+	cached     uint32
+	haveCached bool
 }
 
 func newSeededRand() *sudokuRand {
@@ -37,20 +33,36 @@ func (r *sudokuRand) Uint64() uint64 {
 	if r == nil {
 		return 0
 	}
-	r.state += 0x9e3779b97f4a7c15
-	z := r.state
-	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
-	z = (z ^ (z >> 27)) * 0x94d049bb133111eb
-	return z ^ (z >> 31)
+	r.haveCached = false
+	x := r.state
+	x ^= x >> 12
+	x ^= x << 25
+	x ^= x >> 27
+	r.state = x
+	return x * 0x2545f4914f6cdd1d
 }
 
 func (r *sudokuRand) Uint32() uint32 {
-	return uint32(r.Uint64() >> 32)
+	if r == nil {
+		return 0
+	}
+	if r.haveCached {
+		r.haveCached = false
+		return r.cached
+	}
+	v := r.Uint64()
+	r.cached = uint32(v)
+	r.haveCached = true
+	return uint32(v >> 32)
 }
 
 func (r *sudokuRand) Intn(n int) int {
 	if n <= 1 {
 		return 0
 	}
-	return int((uint64(r.Uint32()) * uint64(n)) >> 32)
+	return fastIntnFromUint32(r.Uint32(), n)
+}
+
+func fastIntnFromUint32(u uint32, n int) int {
+	return int((uint64(u) * uint64(n)) >> 32)
 }
