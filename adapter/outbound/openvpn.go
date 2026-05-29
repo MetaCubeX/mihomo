@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/metacubex/mihomo/common/contextutils"
@@ -48,6 +49,7 @@ type OpenVPNOption struct {
 	Dev      string `proxy:"dev,omitempty"`
 	Cipher   string `proxy:"cipher,omitempty"`
 	Auth     string `proxy:"auth,omitempty"`
+	CompLZO  string `proxy:"comp-lzo,omitempty"` // comp-lzo: "yes", "no", "adaptive"
 	CA       string `proxy:"ca"`
 	Cert     string `proxy:"cert,omitempty"`
 	Key      string `proxy:"key,omitempty"`
@@ -62,6 +64,12 @@ type OpenVPNOption struct {
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
+	compLZO := false
+	switch strings.ToLower(strings.TrimSpace(option.CompLZO)) {
+	case "yes", "adaptive":
+		compLZO = true
+	}
+
 	cfg := &ovpn.ClientConfig{
 		RemoteHost: option.Server,
 		RemotePort: uint16(option.Port),
@@ -69,6 +77,7 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		Dev:        option.Dev,
 		Cipher:     option.Cipher,
 		Auth:       option.Auth,
+		CompLZO:    compLZO,
 		CA:         []byte(option.CA),
 		Cert:       []byte(option.Cert),
 		Key:        []byte(option.Key),
@@ -245,12 +254,14 @@ func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver,
 		}
 		return nil, nil, E.Cause(err, "OpenVPN handshake")
 	}
-	log.Debugln("[OpenVPN](%s) handshake complete: prefixes=%v peer-id=%d dns=%v redirect=%t block-ipv6=%t", o.name, push.Prefixes, push.PeerID, push.DNS, push.Redirect, push.BlockIPv6)
+	log.Debugln("[OpenVPN](%s) handshake complete: prefixes=%v routes=%v peer-id=%d dns=%v redirect=%t block-ipv6=%t", o.name, push.Prefixes, push.Routes, push.PeerID, push.DNS, push.Redirect, push.BlockIPv6)
 
 	mtu := o.option.MTU
 	if mtu == 0 {
 		mtu = 1500
 	}
+	// Only pass VPN-assigned prefixes (ifconfig) to the stack device.
+	// Routes from push reply are handled by the catch-all route in the stack.
 	tunDevice, err := wireguard.NewStackDevice(push.Prefixes, uint32(mtu))
 	if err != nil {
 		_ = client.Close()

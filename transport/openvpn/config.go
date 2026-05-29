@@ -38,6 +38,7 @@ type ClientConfig struct {
 	Dev        string
 	Cipher     string
 	Auth       string
+	CompLZO    bool // comp-lzo compression enabled
 
 	CA       []byte
 	Cert     []byte

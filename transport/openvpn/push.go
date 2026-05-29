@@ -12,6 +12,7 @@ const PushRequest = "PUSH_REQUEST"
 type PushReply struct {
 	Raw       string
 	Prefixes  []netip.Prefix
+	Routes    []netip.Prefix // server-pushed routes (for logging only)
 	DNS       []netip.Addr
 	PeerID    uint32
 	Redirect  bool
@@ -48,6 +49,21 @@ func ParsePushReply(message string) (*PushReply, error) {
 					return nil, fmt.Errorf("parse pushed ipv6 address %q: %w", fields[1], err)
 				}
 				reply.Prefixes = append(reply.Prefixes, prefix)
+			}
+		case "route":
+			if len(fields) >= 3 {
+				prefix, err := parseRoute(fields[1], fields[2])
+				if err != nil {
+					continue
+				}
+				reply.Routes = append(reply.Routes, prefix)
+			}
+		case "route-ipv6":
+			if len(fields) >= 2 {
+				prefix, err := netip.ParsePrefix(fields[1])
+				if err == nil {
+					reply.Routes = append(reply.Routes, prefix)
+				}
 			}
 		case "dhcp-option":
 			if len(fields) >= 3 && fields[1] == "DNS" {
@@ -112,6 +128,25 @@ func parseIPv4Ifconfig(address, maskOrPeer string) (netip.Prefix, error) {
 	// "ifconfig <local> <remote>" rather than "ifconfig <local> <netmask>".
 	// Use a host prefix for that local tunnel address.
 	return netip.PrefixFrom(addr, 32), nil
+}
+
+func parseRoute(network, mask string) (netip.Prefix, error) {
+	addr, err := netip.ParseAddr(network)
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf("parse route network %q: %w", network, err)
+	}
+	maskAddr, err := netip.ParseAddr(mask)
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf("parse route mask %q: %w", mask, err)
+	}
+	if !addr.Is4() || !maskAddr.Is4() {
+		return netip.Prefix{}, fmt.Errorf("openvpn route requires ipv4 address and mask")
+	}
+	ones, ok := ipv4MaskSize(maskAddr)
+	if !ok {
+		return netip.Prefix{}, fmt.Errorf("invalid route mask %q", mask)
+	}
+	return netip.PrefixFrom(addr, ones), nil
 }
 
 func ipv4MaskSize(mask netip.Addr) (int, bool) {

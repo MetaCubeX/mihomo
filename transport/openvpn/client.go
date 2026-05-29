@@ -91,8 +91,8 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	}
 
 	clientRecord, err := NewClientKeyMethod2Record(
-		InstallScriptOptionsString(c.config.Proto, c.config.Cipher, c.config.Auth),
-		InstallScriptPeerInfo(c.config.Cipher),
+		InstallScriptOptionsString(c.config.Proto, c.config.Cipher, c.config.Auth, c.config.CompLZO),
+		InstallScriptPeerInfo(c.config.Cipher, c.config.CompLZO),
 		strings.TrimSpace(c.config.Username),
 		c.config.Password,
 	)
@@ -126,7 +126,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 	c.push = push
-	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
+	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID, c.config.CompLZO)
 	if err != nil {
 		return nil, err
 	}
