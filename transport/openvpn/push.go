@@ -12,7 +12,7 @@ const PushRequest = "PUSH_REQUEST"
 type PushReply struct {
 	Raw       string
 	Prefixes  []netip.Prefix
-	Routes    []netip.Prefix // server-pushed routes (for logging only)
+	Routes    []netip.Prefix
 	DNS       []netip.Addr
 	PeerID    uint32
 	Redirect  bool
