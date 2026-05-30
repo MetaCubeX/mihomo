@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/metacubex/mihomo/common/contextutils"
@@ -49,7 +48,7 @@ type OpenVPNOption struct {
 	Dev      string `proxy:"dev,omitempty"`
 	Cipher   string `proxy:"cipher,omitempty"`
 	Auth     string `proxy:"auth,omitempty"`
-	CompLZO  string `proxy:"comp-lzo,omitempty"` // comp-lzo: "yes", "no", "adaptive"
+	CompLZO  string `proxy:"comp-lzo,omitempty"`
 	CA       string `proxy:"ca"`
 	Cert     string `proxy:"cert,omitempty"`
 	Key      string `proxy:"key,omitempty"`
@@ -64,12 +63,6 @@ type OpenVPNOption struct {
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
-	compLZO := false
-	switch strings.ToLower(strings.TrimSpace(option.CompLZO)) {
-	case "yes", "adaptive":
-		compLZO = true
-	}
-
 	cfg := &ovpn.ClientConfig{
 		RemoteHost: option.Server,
 		RemotePort: uint16(option.Port),
@@ -77,7 +70,7 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		Dev:        option.Dev,
 		Cipher:     option.Cipher,
 		Auth:       option.Auth,
-		CompLZO:    compLZO,
+		CompLZO:    option.CompLZO,
 		CA:         []byte(option.CA),
 		Cert:       []byte(option.Cert),
 		Key:        []byte(option.Key),

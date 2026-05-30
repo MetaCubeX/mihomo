@@ -47,7 +47,7 @@ type DataChannel struct {
 	keyID   uint8
 	peerID  uint32
 	header  []byte
-	compLZO bool // comp-lzo compression enabled
+	compLZO string
 
 	mu           sync.Mutex
 	sendPacketID uint32
@@ -60,7 +60,7 @@ type DataChannel struct {
 	randOffset int
 }
 
-func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32, compLZO bool) (*DataChannel, error) {
+func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32, compLZO string) (*DataChannel, error) {
 	if keys == nil {
 		return nil, errors.New("nil openvpn key material")
 	}
@@ -179,7 +179,7 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 	}
 
 	// Prepend comp-lzo header (0xfa = not compressed) to satisfy servers expecting the framing.
-	if d.compLZO {
+	if d.compLZO == CompLzoYes {
 		lzoPacket := make([]byte, 1+len(packet))
 		lzoPacket[0] = lzoCompressNone
 		copy(lzoPacket[1:], packet)
@@ -254,7 +254,7 @@ func (d *DataChannel) Decrypt(packet []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if d.compLZO && len(plain) > 0 {
+	if d.compLZO == CompLzoYes && len(plain) > 0 {
 		decompressed, err := lzo1xDecompressSafe(plain)
 		if err != nil {
 			return nil, err

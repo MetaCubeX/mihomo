@@ -8,8 +8,8 @@ import (
 
 func TestKeyMethod2ClientMarshalAndDerive(t *testing.T) {
 	record := &KeyMethod2Record{
-		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES128GCM, AuthSHA256, false),
-		PeerInfo: InstallScriptPeerInfo(CipherAES128GCM, false),
+		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES128GCM, AuthSHA256, ""),
+		PeerInfo: InstallScriptPeerInfo(CipherAES128GCM, ""),
 	}
 	for i := range record.Sources.Client.PreMaster {
 		record.Sources.Client.PreMaster[i] = byte(i + 1)
@@ -52,8 +52,8 @@ func TestKeyMethod2ClientMarshalAndDerive(t *testing.T) {
 
 func TestKeyMethod2DeriveAES256(t *testing.T) {
 	record := &KeyMethod2Record{
-		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES256GCM, AuthSHA256, false),
-		PeerInfo: InstallScriptPeerInfo(CipherAES256GCM, false),
+		Options:  InstallScriptOptionsString(ProtoUDP, CipherAES256GCM, AuthSHA256, ""),
+		PeerInfo: InstallScriptPeerInfo(CipherAES256GCM, ""),
 	}
 	for i := range record.Sources.Client.PreMaster {
 		record.Sources.Client.PreMaster[i] = byte(i + 1)
@@ -83,7 +83,7 @@ func TestKeyMethod2DeriveAES256(t *testing.T) {
 }
 
 func TestInstallScriptOptionsCBCSHA1(t *testing.T) {
-	options := InstallScriptOptionsString(ProtoTCP, CipherAES256CBC, AuthSHA1, false)
+	options := InstallScriptOptionsString(ProtoTCP, CipherAES256CBC, AuthSHA1, "")
 	for _, want := range []string{"proto TCPv4_CLIENT", "cipher AES-256-CBC", "auth SHA1", "keysize 256"} {
 		if !bytes.Contains([]byte(options), []byte(want)) {
 			t.Fatalf("options missing %q: %s", want, options)

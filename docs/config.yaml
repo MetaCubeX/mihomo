@@ -1174,6 +1174,7 @@ proxies: # socks5
     # dev: tun # 目前仅支持 tun，默认 tun
     # cipher: AES-128-GCM # 支持 AES-128-GCM / AES-192-GCM / AES-256-GCM / AES-128-CBC / AES-192-CBC / AES-256-CBC / CHACHA20-POLY1305，默认 AES-128-GCM；AES-CBC 会按 AES-128-CBC 处理
     # auth: SHA256 # 支持 MD5 / SHA1 / SHA256 / SHA384 / SHA512，默认 SHA256；AEAD cipher 会忽略 auth
+    # comp-lzo: "no" # 可选值："yes", "no", "adaptive"
     # username / password: auth-user-pass 模式（与下方 cert+key 二选一，不能都不填）
     # username: "user"
     # password: "pass"

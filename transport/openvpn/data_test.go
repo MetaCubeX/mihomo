@@ -21,11 +21,11 @@ func TestDataChannelAESGCMV2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, false)
+	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, false)
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +75,11 @@ func TestDataChannelAcceptsOutOfOrderPacketsWithinReplayWindow(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, false)
+	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, false)
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,11 +154,11 @@ func TestDataChannelChaCha20Poly1305V2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherChaCha20Poly1305, AuthSHA256, 7, false)
+	client, err := NewDataChannel(clientKeys, CipherChaCha20Poly1305, AuthSHA256, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherChaCha20Poly1305, AuthSHA256, 7, false)
+	server, err := NewDataChannel(serverKeys, CipherChaCha20Poly1305, AuthSHA256, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,11 +194,11 @@ func TestDataChannelAESCBCSHA1V2RoundTrip(t *testing.T) {
 		RecvCipherKey: clientKeys.SendCipherKey,
 		RecvHMACKey:   clientKeys.SendHMACKey,
 	}
-	client, err := NewDataChannel(clientKeys, CipherAES128CBC, AuthSHA1, 7, false)
+	client, err := NewDataChannel(clientKeys, CipherAES128CBC, AuthSHA1, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys, CipherAES128CBC, AuthSHA1, 7, false)
+	server, err := NewDataChannel(serverKeys, CipherAES128CBC, AuthSHA1, 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
