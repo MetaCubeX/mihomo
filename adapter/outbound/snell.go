@@ -10,17 +10,19 @@ import (
 	"github.com/metacubex/mihomo/common/structure"
 	C "github.com/metacubex/mihomo/constant"
 	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
+	shadowtls "github.com/metacubex/mihomo/transport/sing-shadowtls"
 	"github.com/metacubex/mihomo/transport/snell"
 )
 
 type Snell struct {
 	*Base
-	option     *SnellOption
-	psk        []byte
-	pool       *snell.Pool
-	obfsOption *simpleObfsOption
-	version    int
-	reuse      bool
+	option          *SnellOption
+	psk             []byte
+	pool            *snell.Pool
+	obfsOption      *simpleObfsOption
+	shadowTLSOption *shadowtls.ShadowTLSOption
+	version         int
+	reuse           bool
 }
 
 type SnellOption struct {
@@ -33,6 +35,16 @@ type SnellOption struct {
 	Version  int            `proxy:"version,omitempty"`
 	Reuse    bool           `proxy:"reuse,omitempty"`
 	ObfsOpts map[string]any `proxy:"obfs-opts,omitempty"`
+
+	ClientFingerprint       string   `proxy:"client-fingerprint,omitempty"`
+	ShadowTLSPassword       string   `proxy:"shadow-tls-password,omitempty"`
+	ShadowTLSSNI            string   `proxy:"shadow-tls-sni,omitempty"`
+	ShadowTLSVersion        int      `proxy:"shadow-tls-version,omitempty"`
+	ShadowTLSALPN           []string `proxy:"shadow-tls-alpn,omitempty"`
+	ShadowTLSFingerprint    string   `proxy:"shadow-tls-fingerprint,omitempty"`
+	ShadowTLSCertificate    string   `proxy:"shadow-tls-certificate,omitempty"`
+	ShadowTLSPrivateKey     string   `proxy:"shadow-tls-private-key,omitempty"`
+	ShadowTLSSkipCertVerify bool     `proxy:"shadow-tls-skip-cert-verify,omitempty"`
 }
 
 type streamOption struct {
@@ -53,10 +65,49 @@ func snellStreamConn(c net.Conn, option streamOption) *snell.Snell {
 	return snell.StreamConn(c, option.psk, option.version)
 }
 
+// newShadowTLSOption builds the shadow-tls option from the snell option, or nil
+// when shadow-tls is not configured. Mirrors how shadowsocks.go wires shadow-tls.
+func newShadowTLSOption(option SnellOption) *shadowtls.ShadowTLSOption {
+	if option.ShadowTLSPassword == "" {
+		return nil
+	}
+	opt := &shadowtls.ShadowTLSOption{
+		Password:          option.ShadowTLSPassword,
+		Host:              option.ShadowTLSSNI,
+		Fingerprint:       option.ShadowTLSFingerprint,
+		Certificate:       option.ShadowTLSCertificate,
+		PrivateKey:        option.ShadowTLSPrivateKey,
+		ClientFingerprint: option.ClientFingerprint,
+		SkipCertVerify:    option.ShadowTLSSkipCertVerify,
+		Version:           option.ShadowTLSVersion,
+	}
+	if opt.Version == 0 {
+		opt.Version = 2
+	}
+	if option.ShadowTLSALPN != nil {
+		opt.ALPN = option.ShadowTLSALPN
+	} else {
+		opt.ALPN = shadowtls.DefaultALPN
+	}
+	return opt
+}
+
+// wrapShadowTLS wraps c with a shadow-tls client layer when configured.
+func wrapShadowTLS(ctx context.Context, c net.Conn, option *shadowtls.ShadowTLSOption) (net.Conn, error) {
+	if option == nil {
+		return c, nil
+	}
+	return shadowtls.NewShadowTLS(ctx, c, option)
+}
+
 // StreamConnContext implements C.ProxyAdapter
 func (s *Snell) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (net.Conn, error) {
+	c, err := wrapShadowTLS(ctx, c, s.shadowTLSOption)
+	if err != nil {
+		return nil, err
+	}
 	c = snellStreamConn(c, streamOption{s.psk, s.version, s.addr, s.obfsOption})
-	err := s.writeHeaderContext(ctx, c, metadata)
+	err = s.writeHeaderContext(ctx, c, metadata)
 	return c, err
 }
 
@@ -178,6 +229,8 @@ func NewSnell(option SnellOption) (*Snell, error) {
 		return nil, fmt.Errorf("snell version error: %d", option.Version)
 	}
 
+	shadowTLSOption := newShadowTLSOption(option)
+
 	s := &Snell{
 		Base: NewBase(BaseOption{
 			Name:         option.Name,
@@ -191,18 +244,25 @@ func NewSnell(option SnellOption) (*Snell, error) {
 			RoutingMark:  option.RoutingMark,
 			Prefer:       option.IPVersion,
 		}),
-		option:     &option,
-		psk:        psk,
-		obfsOption: obfsOption,
-		version:    option.Version,
-		reuse:      reuse,
+		option:          &option,
+		psk:             psk,
+		obfsOption:      obfsOption,
+		shadowTLSOption: shadowTLSOption,
+		version:         option.Version,
+		reuse:           reuse,
 	}
 	s.dialer = option.NewDialer(s.DialOptions())
 
 	if s.reuse {
 		s.pool = snell.NewPool(func(ctx context.Context) (*snell.Snell, error) {
-			c, err := s.dialer.DialContext(ctx, "tcp", addr)
+			rawConn, err := s.dialer.DialContext(ctx, "tcp", addr)
 			if err != nil {
+				return nil, err
+			}
+
+			c, err := wrapShadowTLS(ctx, rawConn, shadowTLSOption)
+			if err != nil {
+				_ = rawConn.Close()
 				return nil, err
 			}
 
