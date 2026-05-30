@@ -253,8 +253,6 @@ func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver,
 	if mtu == 0 {
 		mtu = 1500
 	}
-	// Only pass VPN-assigned prefixes (ifconfig) to the stack device.
-	// Routes from push reply are handled by the catch-all route in the stack.
 	tunDevice, err := wireguard.NewStackDevice(push.Prefixes, uint32(mtu))
 	if err != nil {
 		_ = client.Close()
