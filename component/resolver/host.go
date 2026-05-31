@@ -32,16 +32,33 @@ func NewHosts(hosts *trie.DomainTrie[HostValue]) Hosts {
 func (h *Hosts) Search(domain string, isDomain bool) (*HostValue, bool) {
 	if value := h.DomainTrie.Search(domain); value != nil {
 		hostValue := value.Data()
+		// Follow domain redirects while guarding against cycles. Config-time
+		// cycle detection does not catch wildcard rules whose redirect target is
+		// matched by the same wildcard (e.g. `+.example.com: foo.example.com`),
+		// which would otherwise loop forever here. `seen` is allocated lazily on
+		// the first redirect hop (seeded with the original query) so the common
+		// non-redirect lookup stays allocation-free.
+		var seen map[string]struct{}
 		for {
 			if isDomain && hostValue.IsDomain {
 				return &hostValue, true
-			} else {
-				if node := h.DomainTrie.Search(hostValue.Domain); node != nil {
-					hostValue = node.Data()
-				} else {
-					break
-				}
 			}
+			if !hostValue.IsDomain {
+				break
+			}
+			if seen == nil {
+				seen = map[string]struct{}{strings.ToLower(strings.Trim(domain, ".")): {}}
+			}
+			next := strings.ToLower(strings.Trim(hostValue.Domain, "."))
+			if _, ok := seen[next]; ok {
+				return &hostValue, false
+			}
+			seen[next] = struct{}{}
+			node := h.DomainTrie.Search(hostValue.Domain)
+			if node == nil {
+				break
+			}
+			hostValue = node.Data()
 		}
 		if isDomain == hostValue.IsDomain {
 			return &hostValue, true

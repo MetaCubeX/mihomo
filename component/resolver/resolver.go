@@ -63,6 +63,9 @@ func LookupIPv4WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		}); len(addrs) > 0 {
 			return addrs, nil
 		}
+	} else if node != nil && node.IsDomain {
+		// hosts domain redirect (e.g. `a.com: b.com`): resolve the target domain
+		host = node.Domain
 	}
 
 	ip, err := netip.ParseAddr(host)
@@ -114,6 +117,9 @@ func LookupIPv6WithResolver(ctx context.Context, host string, r Resolver) ([]net
 		}); len(addrs) > 0 {
 			return addrs, nil
 		}
+	} else if node != nil && node.IsDomain {
+		// hosts domain redirect (e.g. `a.com: b.com`): resolve the target domain
+		host = node.Domain
 	}
 
 	if ip, err := netip.ParseAddr(host); err == nil {
@@ -155,6 +161,9 @@ func ResolveIPv6(ctx context.Context, host string) (netip.Addr, error) {
 func LookupIPWithResolver(ctx context.Context, host string, r Resolver) ([]netip.Addr, error) {
 	if node, ok := DefaultHosts.Search(host, false); ok {
 		return node.IPs, nil
+	} else if node != nil && node.IsDomain {
+		// hosts domain redirect (e.g. `a.com: b.com`): resolve the target domain
+		host = node.Domain
 	}
 
 	if r != nil && r.Invalid() {
