@@ -14,6 +14,7 @@ import (
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/inbound"
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/component/auth"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
@@ -44,6 +45,10 @@ import (
 )
 
 var mux sync.Mutex
+
+// currentManagedConfig holds the managed-config directive of the most recently
+// applied configuration so it can be surfaced through GetGeneral (GET /configs).
+var currentManagedConfig atomic.TypedValue[*config.ManagedConfig]
 
 func readConfig(path string) ([]byte, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -180,6 +185,7 @@ func GetGeneral() *config.General {
 		KeepAliveInterval:       int(keepalive.KeepAliveInterval() / time.Second),
 		KeepAliveIdle:           int(keepalive.KeepAliveIdle() / time.Second),
 		DisableKeepAlive:        keepalive.DisableKeepAlive(),
+		ManagedConfig:           currentManagedConfig.Load(),
 	}
 
 	return general
@@ -425,6 +431,7 @@ func updateGeneral(general *config.General, logging bool) {
 	geodata.SetASNUrl(general.GeoXUrl.ASN)
 	mihomoHttp.SetUA(general.GlobalUA)
 	resource.SetETag(general.ETagSupport)
+	currentManagedConfig.Store(general.ManagedConfig)
 
 	if general.GlobalClientFingerprint != "" {
 		log.Warnln("The `global-client-fingerprint` configuration is deprecated, please set `client-fingerprint` directly on the proxy instead")

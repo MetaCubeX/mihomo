@@ -66,6 +66,7 @@ type General struct {
 	KeepAliveIdle           int                     `json:"keep-alive-idle"`
 	KeepAliveInterval       int                     `json:"keep-alive-interval"`
 	DisableKeepAlive        bool                    `json:"disable-keep-alive"`
+	ManagedConfig           *ManagedConfig          `json:"managed-config,omitempty"`
 }
 
 // Inbound config
@@ -456,6 +457,9 @@ type RawConfig struct {
 	TLS           RawTLS                    `yaml:"tls" json:"tls"`
 
 	ClashForAndroid RawClashForAndroid `yaml:"clash-for-android" json:"clash-for-android"`
+
+	// ManagedConfig is parsed from a leading comment directive, not from YAML.
+	ManagedConfig ManagedConfig `yaml:"-" json:"-"`
 }
 
 // Parse config
@@ -599,6 +603,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		return nil, err
 	}
 
+	// yaml.Unmarshal discards the leading comment that carries the managed-config
+	// directive, so it is parsed from the raw bytes here.
+	rawCfg.ManagedConfig = parseManagedConfig(buf)
+
 	return rawCfg, nil
 }
 
@@ -612,6 +620,9 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
+	// Attach the managed-config directive before temporaryUpdateGeneral so it is
+	// exposed consistently with the other General fields during reload parsing.
+	config.General.ManagedConfig = rawCfg.ManagedConfig.pointerOrNil()
 
 	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
 	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
