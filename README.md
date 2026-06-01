@@ -72,6 +72,9 @@ asyncio.run(v1())
 asyncio.run(v2())
 ```
 
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and [ARCHITECTURE.md](ARCHITECTURE.md) for an overview of the codebase.
+
 ### Tools
 `from mihomo import tools`
 #### Remove Duplicate Character
