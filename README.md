@@ -1,6 +1,9 @@
 # mihomo
 A simple python pydantic model (type hint and autocompletion support) for Honkai: Star Rail parsed data from the Mihomo API.
 
+> [!NOTE]
+> This is the Python API wrapper for the Honkai: Star Rail mihomo API (https://api.mihomo.me). It is **NOT** the mihomo/Clash.Meta proxy core (https://github.com/MetaCubeX/mihomo). For proxy, OpenVPN, networking, or Clash configuration issues, please use the [proxy-core repository's issue tracker](https://github.com/MetaCubeX/mihomo/issues).
+
 API url: https://api.mihomo.me/sr_info_parsed/{UID}?lang={LANG}
 
 ## Installation
