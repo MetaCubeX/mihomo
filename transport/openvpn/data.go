@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -27,6 +28,18 @@ const (
 
 	PeerIDUnset uint32 = 0xffffff
 )
+
+// OpenVPN data-channel ping payload, matching PING_STRING in upstream OpenVPN.
+var openVPNPingPacket = []byte{
+	0x2a, 0x18, 0x7b, 0xf3,
+	0x64, 0x1e, 0xb4, 0xcb,
+	0x07, 0xed, 0x2d, 0x0a,
+	0x98, 0x1f, 0xc7, 0x48,
+}
+
+func IsPingPacket(packet []byte) bool {
+	return bytes.Equal(packet, openVPNPingPacket)
+}
 
 type DataChannel struct {
 	sendAEAD cipher.AEAD
@@ -174,12 +187,20 @@ func newDataChannelAuth(authName string) (func() hash.Hash, int, error) {
 }
 
 func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
+	return d.encrypt(packet, true)
+}
+
+func (d *DataChannel) EncryptRaw(packet []byte) ([]byte, error) {
+	return d.encrypt(packet, false)
+}
+
+func (d *DataChannel) encrypt(packet []byte, compress bool) ([]byte, error) {
 	if d == nil {
 		return nil, errors.New("nil openvpn data channel")
 	}
 
 	// Prepend comp-lzo header (0xfa = not compressed) to satisfy servers expecting the framing.
-	if d.compLZO == CompLzoYes {
+	if compress && d.compLZO == CompLzoYes {
 		lzoPacket := make([]byte, 1+len(packet))
 		lzoPacket[0] = lzoCompressNone
 		copy(lzoPacket[1:], packet)
@@ -253,6 +274,9 @@ func (d *DataChannel) Decrypt(packet []byte) ([]byte, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if IsPingPacket(plain) {
+		return plain, nil
 	}
 	if d.compLZO == CompLzoYes && len(plain) > 0 {
 		decompressed, err := lzo1xDecompressSafe(plain)

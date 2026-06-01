@@ -62,6 +62,41 @@ func TestDataChannelAESGCMV2RoundTrip(t *testing.T) {
 	}
 }
 
+func TestDataChannelPingRoundTripWithCompLZO(t *testing.T) {
+	clientKeys := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	serverKeys := &KeyMaterial{
+		SendCipherKey: clientKeys.RecvCipherKey,
+		SendHMACKey:   clientKeys.RecvHMACKey,
+		RecvCipherKey: clientKeys.SendCipherKey,
+		RecvHMACKey:   clientKeys.SendHMACKey,
+	}
+	client, err := NewDataChannel(clientKeys, CipherAES128GCM, AuthSHA256, 7, CompLzoYes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7, CompLzoYes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encrypted, err := client.EncryptRaw(openVPNPingPacket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := server.Decrypt(encrypted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !IsPingPacket(plain) {
+		t.Fatalf("unexpected ping plaintext: %x", plain)
+	}
+}
+
 func TestDataChannelAcceptsOutOfOrderPacketsWithinReplayWindow(t *testing.T) {
 	clientKeys := &KeyMaterial{
 		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/tls"
@@ -29,6 +30,9 @@ type Client struct {
 	push    *PushReply
 
 	cancel context.CancelFunc
+
+	lastSendNano    atomic.Int64
+	lastReceiveNano atomic.Int64
 }
 
 func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
@@ -53,12 +57,15 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	runCtx, cancel := context.WithCancel(context.Background())
 	mux := NewPacketMux(io)
 	go mux.Run(runCtx)
-	return &Client{
+	client := &Client{
 		config:  config,
 		mux:     mux,
 		control: NewControlChannel(mux, crypt, local),
 		cancel:  cancel,
-	}, nil
+	}
+	client.markSend()
+	client.markReceive()
+	return client, nil
 }
 
 func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
@@ -130,18 +137,38 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.markSend()
+	c.markReceive()
 	return push, nil
 }
 
 func (c *Client) WriteIPPacket(ctx context.Context, packet []byte) error {
+	return c.writeDataPacket(ctx, packet, true)
+}
+
+func (c *Client) WritePing(ctx context.Context) error {
+	return c.writeDataPacket(ctx, openVPNPingPacket, false)
+}
+
+func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bool) error {
 	if c.data == nil {
 		return errors.New("openvpn data channel is not ready")
 	}
-	encrypted, err := c.data.Encrypt(packet)
+	var encrypted []byte
+	var err error
+	if compress {
+		encrypted, err = c.data.Encrypt(packet)
+	} else {
+		encrypted, err = c.data.EncryptRaw(packet)
+	}
 	if err != nil {
 		return err
 	}
-	return c.mux.WritePacket(ctx, encrypted)
+	if err := c.mux.WritePacket(ctx, encrypted); err != nil {
+		return err
+	}
+	c.markSend()
+	return nil
 }
 
 func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
@@ -157,8 +184,28 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 		if err != nil {
 			continue
 		}
+		c.markReceive()
+		if IsPingPacket(plain) {
+			continue
+		}
 		return plain, nil
 	}
+}
+
+func (c *Client) LastSend() time.Time {
+	return time.Unix(0, c.lastSendNano.Load())
+}
+
+func (c *Client) LastReceive() time.Time {
+	return time.Unix(0, c.lastReceiveNano.Load())
+}
+
+func (c *Client) markSend() {
+	c.lastSendNano.Store(time.Now().UnixNano())
+}
+
+func (c *Client) markReceive() {
+	c.lastReceiveNano.Store(time.Now().UnixNano())
 }
 
 func (c *Client) Close() error {

@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/metacubex/mihomo/common/contextutils"
 	"github.com/metacubex/mihomo/component/dialer"
@@ -41,22 +42,24 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name     string `proxy:"name"`
-	Server   string `proxy:"server"`
-	Port     int    `proxy:"port"`
-	Proto    string `proxy:"proto,omitempty"`
-	Dev      string `proxy:"dev,omitempty"`
-	Cipher   string `proxy:"cipher,omitempty"`
-	Auth     string `proxy:"auth,omitempty"`
-	CompLZO  string `proxy:"comp-lzo,omitempty"`
-	CA       string `proxy:"ca"`
-	Cert     string `proxy:"cert,omitempty"`
-	Key      string `proxy:"key,omitempty"`
-	TLSCrypt string `proxy:"tls-crypt,omitempty"`
-	Username string `proxy:"username,omitempty"`
-	Password string `proxy:"password,omitempty"`
-	MTU      int    `proxy:"mtu,omitempty"`
-	UDP      bool   `proxy:"udp,omitempty"`
+	Name        string `proxy:"name"`
+	Server      string `proxy:"server"`
+	Port        int    `proxy:"port"`
+	Proto       string `proxy:"proto,omitempty"`
+	Dev         string `proxy:"dev,omitempty"`
+	Cipher      string `proxy:"cipher,omitempty"`
+	Auth        string `proxy:"auth,omitempty"`
+	CompLZO     string `proxy:"comp-lzo,omitempty"`
+	CA          string `proxy:"ca"`
+	Cert        string `proxy:"cert,omitempty"`
+	Key         string `proxy:"key,omitempty"`
+	TLSCrypt    string `proxy:"tls-crypt,omitempty"`
+	Username    string `proxy:"username,omitempty"`
+	Password    string `proxy:"password,omitempty"`
+	MTU         int    `proxy:"mtu,omitempty"`
+	UDP         bool   `proxy:"udp,omitempty"`
+	Ping        int    `proxy:"ping,omitempty"`
+	PingRestart int    `proxy:"ping-restart,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -64,19 +67,21 @@ type OpenVPNOption struct {
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 	cfg := &ovpn.ClientConfig{
-		RemoteHost: option.Server,
-		RemotePort: uint16(option.Port),
-		Proto:      option.Proto,
-		Dev:        option.Dev,
-		Cipher:     option.Cipher,
-		Auth:       option.Auth,
-		CompLZO:    option.CompLZO,
-		CA:         []byte(option.CA),
-		Cert:       []byte(option.Cert),
-		Key:        []byte(option.Key),
-		TLSCrypt:   []byte(option.TLSCrypt),
-		Username:   option.Username,
-		Password:   option.Password,
+		RemoteHost:   option.Server,
+		RemotePort:   uint16(option.Port),
+		Proto:        option.Proto,
+		Dev:          option.Dev,
+		Cipher:       option.Cipher,
+		Auth:         option.Auth,
+		CompLZO:      option.CompLZO,
+		CA:           []byte(option.CA),
+		Cert:         []byte(option.Cert),
+		Key:          []byte(option.Key),
+		TLSCrypt:     []byte(option.TLSCrypt),
+		Username:     option.Username,
+		Password:     option.Password,
+		PingInterval: openVPNDurationSeconds(option.Ping),
+		PingRestart:  openVPNDurationSeconds(option.PingRestart),
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
@@ -401,4 +406,62 @@ func (o *OpenVPN) startPacketLoops() {
 			}
 		}
 	}()
+
+	if o.config.PingInterval > 0 || o.config.PingRestart > 0 {
+		go func() {
+			defer stop()
+			ticker := time.NewTicker(openVPNKeepAliveTickInterval(o.config.PingInterval, o.config.PingRestart))
+			defer ticker.Stop()
+			for runCtx.Err() == nil {
+				select {
+				case <-ticker.C:
+					now := time.Now()
+					if o.config.PingRestart > 0 && now.Sub(client.LastReceive()) >= o.config.PingRestart {
+						log.Warnln(
+							"[OpenVPN](%s) ping-restart timeout: no packet received for %s",
+							o.name,
+							now.Sub(client.LastReceive()).Round(time.Second),
+						)
+						return
+					}
+					sendIdle := now.Sub(client.LastSend())
+					if o.config.PingInterval > 0 && sendIdle >= o.config.PingInterval {
+						if err := client.WritePing(runCtx); err != nil {
+							if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
+								log.Warnln("[OpenVPN](%s) error writing ping packet: %v", o.name, err)
+							}
+							return
+						}
+						log.Debugln("[OpenVPN](%s) sent ping packet after %s idle", o.name, sendIdle.Round(time.Second))
+					}
+				case <-runCtx.Done():
+					return
+				}
+			}
+		}()
+	}
+}
+
+func openVPNDurationSeconds(seconds int) time.Duration {
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func openVPNKeepAliveTickInterval(pingInterval, pingRestart time.Duration) time.Duration {
+	tick := 10 * time.Second
+	for _, value := range []time.Duration{pingInterval, pingRestart} {
+		if value <= 0 {
+			continue
+		}
+		candidate := value / 2
+		if candidate < time.Second {
+			candidate = time.Second
+		}
+		if candidate < tick {
+			tick = candidate
+		}
+	}
+	return tick
 }

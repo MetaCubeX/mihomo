@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -49,6 +50,9 @@ type ClientConfig struct {
 
 	Username string
 	Password string
+
+	PingInterval time.Duration
+	PingRestart  time.Duration
 
 	TLSCryptKey []byte
 }
