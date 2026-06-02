@@ -133,7 +133,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 	c.push = push
-	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID, c.config.CompLZO)
+	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,17 +154,19 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	if c.data == nil {
 		return errors.New("openvpn data channel is not ready")
 	}
-	var encrypted []byte
-	var err error
-	if compress {
-		encrypted, err = c.data.Encrypt(packet)
-	} else {
-		encrypted, err = c.data.EncryptRaw(packet)
+	if compress && c.config.CompLZO == CompLzoYes {
+		compressed, err := lzo1xCompressSafe(packet)
+		if err != nil {
+			return err
+		}
+		packet = compressed
 	}
+	encrypted, err := c.data.Encrypt(packet)
 	if err != nil {
 		return err
 	}
-	if err := c.mux.WritePacket(ctx, encrypted); err != nil {
+	err = c.mux.WritePacket(ctx, encrypted)
+	if err != nil {
 		return err
 	}
 	c.markSend()
@@ -188,25 +190,33 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 		if IsPingPacket(plain) {
 			continue
 		}
+		if c.config.CompLZO == CompLzoYes && len(plain) > 0 {
+			return lzo1xDecompressSafe(plain)
+		}
 		return plain, nil
 	}
 }
 
-func (c *Client) LastSend() time.Time {
-	return time.Unix(0, c.lastSendNano.Load())
+func (c *Client) SinceSend() time.Duration {
+	return time.Duration(int64(time.Since(start)) - c.lastSendNano.Load())
 }
 
-func (c *Client) LastReceive() time.Time {
-	return time.Unix(0, c.lastReceiveNano.Load())
+func (c *Client) SinceReceive() time.Duration {
+	return time.Duration(int64(time.Since(start)) - c.lastReceiveNano.Load())
 }
 
 func (c *Client) markSend() {
-	c.lastSendNano.Store(time.Now().UnixNano())
+	c.lastSendNano.Store(int64(time.Since(start)))
 }
 
 func (c *Client) markReceive() {
-	c.lastReceiveNano.Store(time.Now().UnixNano())
+	c.lastReceiveNano.Store(int64(time.Since(start)))
 }
+
+// The absolute value doesn't matter, but it should be in the past,
+// so that every timestamp obtained with Now() is non-zero,
+// even on systems with low timer resolutions (e.g. Windows).
+var start = time.Now().Add(-time.Hour)
 
 func (c *Client) Close() error {
 	if c.cancel != nil {

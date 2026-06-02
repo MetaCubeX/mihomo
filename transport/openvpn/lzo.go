@@ -41,3 +41,12 @@ func lzo1xDecompressSafe(src []byte) ([]byte, error) {
 		return nil, ErrLZODecompress
 	}
 }
+
+// lzo1xCompressSafe handles OpenVPN comp-lzo data packets.
+// Prepend comp-lzo header (0xfa = not compressed) to satisfy servers expecting the framing.
+func lzo1xCompressSafe(src []byte) ([]byte, error) {
+	lzoPacket := make([]byte, 1+len(src))
+	lzoPacket[0] = lzoCompressNone
+	copy(lzoPacket[1:], src)
+	return lzoPacket, nil
+}

@@ -189,6 +189,23 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	return nil
 }
 
+func (c *ClientConfig) KeepAliveTickInterval() time.Duration {
+	tick := 10 * time.Second
+	for _, value := range []time.Duration{c.PingInterval, c.PingRestart} {
+		if value <= 0 {
+			continue
+		}
+		candidate := value / 2
+		if candidate < time.Second {
+			candidate = time.Second
+		}
+		if candidate < tick {
+			tick = candidate
+		}
+	}
+	return tick
+}
+
 func DecodeStaticKey(block []byte) ([]byte, error) {
 	var hexLines []string
 	for _, raw := range strings.Split(string(block), "\n") {

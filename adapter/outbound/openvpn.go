@@ -80,8 +80,8 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		TLSCrypt:     []byte(option.TLSCrypt),
 		Username:     option.Username,
 		Password:     option.Password,
-		PingInterval: openVPNDurationSeconds(option.Ping),
-		PingRestart:  openVPNDurationSeconds(option.PingRestart),
+		PingInterval: time.Duration(option.Ping) * time.Second,
+		PingRestart:  time.Duration(option.PingRestart) * time.Second,
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
@@ -410,29 +410,29 @@ func (o *OpenVPN) startPacketLoops() {
 	if o.config.PingInterval > 0 || o.config.PingRestart > 0 {
 		go func() {
 			defer stop()
-			ticker := time.NewTicker(openVPNKeepAliveTickInterval(o.config.PingInterval, o.config.PingRestart))
+			ticker := time.NewTicker(o.config.KeepAliveTickInterval())
 			defer ticker.Stop()
 			for runCtx.Err() == nil {
 				select {
 				case <-ticker.C:
-					now := time.Now()
-					if o.config.PingRestart > 0 && now.Sub(client.LastReceive()) >= o.config.PingRestart {
+					sinceReceive := client.SinceReceive()
+					if o.config.PingRestart > 0 && sinceReceive >= o.config.PingRestart {
 						log.Warnln(
 							"[OpenVPN](%s) ping-restart timeout: no packet received for %s",
 							o.name,
-							now.Sub(client.LastReceive()).Round(time.Second),
+							sinceReceive.Round(time.Second),
 						)
 						return
 					}
-					sendIdle := now.Sub(client.LastSend())
-					if o.config.PingInterval > 0 && sendIdle >= o.config.PingInterval {
+					sinceSend := client.SinceSend()
+					if o.config.PingInterval > 0 && sinceSend >= o.config.PingInterval {
 						if err := client.WritePing(runCtx); err != nil {
 							if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
 								log.Warnln("[OpenVPN](%s) error writing ping packet: %v", o.name, err)
 							}
 							return
 						}
-						log.Debugln("[OpenVPN](%s) sent ping packet after %s idle", o.name, sendIdle.Round(time.Second))
+						log.Debugln("[OpenVPN](%s) sent ping packet after %s idle", o.name, sinceSend.Round(time.Second))
 					}
 				case <-runCtx.Done():
 					return
@@ -440,28 +440,4 @@ func (o *OpenVPN) startPacketLoops() {
 			}
 		}()
 	}
-}
-
-func openVPNDurationSeconds(seconds int) time.Duration {
-	if seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
-}
-
-func openVPNKeepAliveTickInterval(pingInterval, pingRestart time.Duration) time.Duration {
-	tick := 10 * time.Second
-	for _, value := range []time.Duration{pingInterval, pingRestart} {
-		if value <= 0 {
-			continue
-		}
-		candidate := value / 2
-		if candidate < time.Second {
-			candidate = time.Second
-		}
-		if candidate < tick {
-			tick = candidate
-		}
-	}
-	return tick
 }
