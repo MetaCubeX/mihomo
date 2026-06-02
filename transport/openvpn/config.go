@@ -192,9 +192,6 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	if c.PingRestart < 0 {
 		return errors.New("openvpn ping restart must be positive")
 	}
-	if c.PingRestart < c.PingInterval {
-		return errors.New("openvpn ping restart must be greater than ping interval")
-	}
 	return nil
 }
 
