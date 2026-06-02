@@ -1199,6 +1199,8 @@ proxies: # socks5
     #   00000000000000000000000000000000
     #   ...
     #   -----END OpenVPN Static key V1-----
+    # ping: 10 # 默认值为 0
+    # ping-restart: 60 # 默认值为 0
     # mtu: 1500
     udp: true
     # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接

@@ -56,10 +56,10 @@ type OpenVPNOption struct {
 	TLSCrypt    string `proxy:"tls-crypt,omitempty"`
 	Username    string `proxy:"username,omitempty"`
 	Password    string `proxy:"password,omitempty"`
-	MTU         int    `proxy:"mtu,omitempty"`
-	UDP         bool   `proxy:"udp,omitempty"`
 	Ping        int    `proxy:"ping,omitempty"`
 	PingRestart int    `proxy:"ping-restart,omitempty"`
+	MTU         int    `proxy:"mtu,omitempty"`
+	UDP         bool   `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`

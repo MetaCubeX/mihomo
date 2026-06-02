@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/metacubex/tls"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -30,6 +31,8 @@ type Client struct {
 	push    *PushReply
 
 	cancel context.CancelFunc
+
+	writeSem semaphore.Weighted
 
 	lastSendNano    atomic.Int64
 	lastReceiveNano atomic.Int64
@@ -154,6 +157,10 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 	if c.data == nil {
 		return errors.New("openvpn data channel is not ready")
 	}
+	if err := c.writeSem.Acquire(ctx, 1); err != nil {
+		return err
+	}
+	defer c.writeSem.Release(1)
 	if compress && c.config.CompLZO == CompLzoYes {
 		compressed, err := lzo1xCompressSafe(packet)
 		if err != nil {
