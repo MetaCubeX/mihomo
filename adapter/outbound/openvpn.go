@@ -407,25 +407,15 @@ func (o *OpenVPN) startPacketLoops() {
 		}
 	}()
 
-	if o.config.PingInterval > 0 || o.config.PingRestart > 0 {
+	if o.config.PingInterval > 0 {
 		go func() {
 			defer stop()
-			ticker := time.NewTicker(o.config.KeepAliveTickInterval())
+			ticker := time.NewTicker(o.config.PingInterval)
 			defer ticker.Stop()
 			for runCtx.Err() == nil {
 				select {
 				case <-ticker.C:
-					sinceReceive := client.SinceReceive()
-					if o.config.PingRestart > 0 && sinceReceive >= o.config.PingRestart {
-						log.Warnln(
-							"[OpenVPN](%s) ping-restart timeout: no packet received for %s",
-							o.name,
-							sinceReceive.Round(time.Second),
-						)
-						return
-					}
-					sinceSend := client.SinceSend()
-					if o.config.PingInterval > 0 && sinceSend >= o.config.PingInterval {
+					if sinceSend := client.SinceSend(); sinceSend >= o.config.PingInterval {
 						if err := client.WritePing(runCtx); err != nil {
 							if !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) {
 								log.Warnln("[OpenVPN](%s) error writing ping packet: %v", o.name, err)
@@ -433,6 +423,29 @@ func (o *OpenVPN) startPacketLoops() {
 							return
 						}
 						log.Debugln("[OpenVPN](%s) sent ping packet after %s idle", o.name, sinceSend.Round(time.Second))
+					}
+				case <-runCtx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	if o.config.PingRestart > 0 {
+		go func() {
+			defer stop()
+			ticker := time.NewTicker(o.config.PingRestart)
+			defer ticker.Stop()
+			for runCtx.Err() == nil {
+				select {
+				case <-ticker.C:
+					if sinceReceive := client.SinceReceive(); sinceReceive >= o.config.PingRestart {
+						log.Warnln(
+							"[OpenVPN](%s) ping-restart timeout: no packet received for %s",
+							o.name,
+							sinceReceive.Round(time.Second),
+						)
+						return
 					}
 				case <-runCtx.Done():
 					return

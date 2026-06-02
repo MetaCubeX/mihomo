@@ -186,24 +186,16 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	} else if strings.TrimSpace(c.Username) == "" {
 		return errors.New("openvpn requires either cert+key or username (auth-user-pass)")
 	}
-	return nil
-}
-
-func (c *ClientConfig) KeepAliveTickInterval() time.Duration {
-	tick := 10 * time.Second
-	for _, value := range []time.Duration{c.PingInterval, c.PingRestart} {
-		if value <= 0 {
-			continue
-		}
-		candidate := value / 2
-		if candidate < time.Second {
-			candidate = time.Second
-		}
-		if candidate < tick {
-			tick = candidate
-		}
+	if c.PingInterval < 0 {
+		return errors.New("openvpn ping interval must be positive")
 	}
-	return tick
+	if c.PingRestart < 0 {
+		return errors.New("openvpn ping restart must be positive")
+	}
+	if c.PingRestart < c.PingInterval {
+		return errors.New("openvpn ping restart must be greater than ping interval")
+	}
+	return nil
 }
 
 func DecodeStaticKey(block []byte) ([]byte, error) {
