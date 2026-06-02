@@ -10,6 +10,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/common/structure"
 	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/networkpolicy"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
@@ -44,7 +45,7 @@ type GroupCommonOption struct {
 	Icon                string   `group:"icon,omitempty"`
 }
 
-func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string) (C.ProxyAdapter, error) {
+func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string, AllNetworks []string, AllProxyNames []string) (C.ProxyAdapter, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 
 	groupOption := &GroupCommonOption{
@@ -56,6 +57,17 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 
 	if groupOption.Type == "" || groupOption.Name == "" {
 		return nil, errFormat
+	}
+
+	// network-policy is a select-only subfield (architecture §5.8.1).
+	// Presence on any other group type is a parse-time configuration error.
+	// Presence detection is key-based, so `network-policy:` (null value) is
+	// treated the same as a populated field — ParseGroupPolicy will reject
+	// it with "expected map" and users who want "no policy" must omit the
+	// field entirely.
+	_, hasNetworkPolicy := config["network-policy"]
+	if hasNetworkPolicy && groupOption.Type != "select" {
+		return nil, fmt.Errorf("%s: network-policy is only supported on select groups (got %q)", groupOption.Name, groupOption.Type)
 	}
 
 	if _, ok := config["routing-mark"]; ok {
@@ -178,7 +190,46 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		opts := parseURLTestOption(config)
 		group = NewURLTest(groupOption, providers, opts...)
 	case "select":
-		group = NewSelector(groupOption, providers)
+		selector := NewSelector(groupOption, providers)
+		// Build GroupSource from the post-expansion static proxy set and the
+		// external-provider presence (architecture §5.8.1). StaticProxies
+		// must reflect the runtime-visible candidate set after filtering —
+		// GroupBase.GetProxies applies ExcludeFilter / ExcludeType on top of
+		// the compatible-provider output at runtime, so the parse-time check
+		// must apply the same filters to preserve the "parse-time visible ⇒
+		// runtime reachable" invariant promised by GroupSource's docs.
+		// (Filter itself is already applied in the include-all-proxies
+		// expansion path above, so only the Exclude* side is handled here.)
+		//
+		// The inner CompatibleProvider wrapping Proxies: is not an "external"
+		// provider for validation purposes — tolerant-branch validation
+		// applies only to real providers referenced via `use:` /
+		// include-all-providers.
+		gs := networkpolicy.GroupSource{
+			StaticProxies: filterStaticProxies(groupOption.Proxies, groupOption.ExcludeFilter, groupOption.ExcludeType, proxyMap),
+			HasProvider:   len(groupOption.Use) > 0,
+			Filter:        groupOption.Filter,
+			ExcludeFilter: groupOption.ExcludeFilter,
+			ExcludeType:   groupOption.ExcludeType,
+		}
+		if hasNetworkPolicy {
+			// AllProxyNames is the stable pre-computed global proxy-name set
+			// (all built-ins, top-level `proxies:`, and every declared proxy
+			// group name). It is NOT derived from proxyMap at this moment,
+			// because proxyMap only contains groups parsed so far — using it
+			// would make the §5.8.1 "globally known vs. truly absent"
+			// distinction order-dependent (proxyGroupsDagSort topologically
+			// sorts groups but groups without mutual dependencies can appear
+			// in any order, destabilizing validation across runs).
+			policy, err := networkpolicy.ParseGroupPolicy(config["network-policy"], AllNetworks, AllProxyNames, gs)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", groupName, err)
+			}
+			selector.SetNetworkPolicy(policy, gs)
+		} else {
+			selector.SetNetworkPolicy(networkpolicy.GroupPolicy{}, gs)
+		}
+		group = selector
 	case "fallback":
 		group = NewFallback(groupOption, providers)
 	case "load-balance":
@@ -219,6 +270,72 @@ func getProviders(mapping map[string]P.ProxyProvider, list []string) ([]P.ProxyP
 		ps = append(ps, p)
 	}
 	return ps, nil
+}
+
+// filterStaticProxies applies a group's ExcludeFilter / ExcludeType rules to
+// the (already Filter-applied) static proxy name list, producing the
+// parse-time candidate set that the network-policy validator can trust.
+//
+// GroupBase.GetProxies applies ExcludeFilter / ExcludeType unconditionally to
+// both the compatible-provider-wrapped static proxies and external provider
+// output (adapter/outboundgroup/groupbase.go). For the network-policy
+// parse-time check to correctly preserve the "visible at parse time ⇒
+// reachable at runtime" invariant (architecture §5.8.1), the static list
+// must go through the same Exclude* filtering before being recorded as
+// GroupSource.StaticProxies.
+//
+// Note: the regex split + compile logic here intentionally duplicates
+// NewGroupBase in groupbase.go. The two are called independently (NewGroupBase
+// for runtime, this for parse-time validation); keep them aligned by hand
+// when editing either side.
+//
+// ExcludeType matching needs proxy type strings, which are only available
+// via proxyMap. A name missing from proxyMap is kept in the result because
+// a separately-failing lookup downstream (getProxies) will surface the bug
+// on its own channel — the network-policy validator's job is narrow.
+func filterStaticProxies(names []string, excludeFilter, excludeType string, proxyMap map[string]C.Proxy) []string {
+	if len(names) == 0 {
+		return nil
+	}
+
+	var excludeFilterRegs []*regexp2.Regexp
+	if excludeFilter != "" {
+		for _, f := range strings.Split(excludeFilter, "`") {
+			excludeFilterRegs = append(excludeFilterRegs, regexp2.MustCompile(f, regexp2.None))
+		}
+	}
+	var excludeTypeArr []string
+	if excludeType != "" {
+		excludeTypeArr = strings.Split(excludeType, "|")
+	}
+
+	if len(excludeFilterRegs) == 0 && len(excludeTypeArr) == 0 {
+		// Common case: no exclude filters at all. Return a defensive copy so
+		// downstream callers can't mutate the caller's slice.
+		return append([]string(nil), names...)
+	}
+
+	out := make([]string, 0, len(names))
+outer:
+	for _, name := range names {
+		for _, reg := range excludeFilterRegs {
+			if mat, _ := reg.MatchString(name); mat {
+				continue outer
+			}
+		}
+		if len(excludeTypeArr) > 0 {
+			if p, ok := proxyMap[name]; ok {
+				t := p.Type().String()
+				for _, et := range excludeTypeArr {
+					if strings.EqualFold(t, et) {
+						continue outer
+					}
+				}
+			}
+		}
+		out = append(out, name)
+	}
+	return out
 }
 
 func addTestUrlToProviders(providers []P.ProxyProvider, url string, expectedStatus utils.IntRanges[uint16], filter string, interval uint) {

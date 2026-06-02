@@ -68,7 +68,7 @@ func TestValidateDialerProxies(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
 			config := RawConfig{Proxy: testCase.proxy}
-			_, _, err := parseProxies(&config)
+			_, _, err := parseProxies(&config, nil)
 			if testCase.errContains == "" {
 				assert.NoError(t, err, testCase.testName)
 			} else {

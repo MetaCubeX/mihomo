@@ -2189,3 +2189,64 @@ listeners:
 #  alpn:
 #    - h3
 #  max-udp-relay-packet-size: 1500
+
+# 网络策略（network-policy）
+# 让 `select` 代理组按当前网络环境自动切换。宿主（如 clash-verge-rev）
+# 通过 `PUT /network/context` 推送活跃接口集合，内核按 `networks:` 规则
+# 顺序 first-match 定名；之后每个带 `network-policy:` 的 select 组按命中
+# 的 network name 查表切到对应代理。完整字段 / 组合子语义 / REST 契约详见
+# docs/api.md §11。
+
+# networks:
+#   # 规则按列表顺序 first-match；顶层多个 per-iface 字段要求同一张
+#   # iface 同时满足（原子 AND），跨 iface 的 AND 用 `all:` 显式拆开。
+#   - name: home
+#     match:
+#       ssid: home-network
+#       iface-type: wifi
+#   - name: office
+#     match:
+#       any:                         # OR：任一子表达式命中即可
+#         - ssid: [office-5g, office-2.4g]
+#         - gateway-mac: "aa:bb:cc:dd:ee:00"
+#   - name: corp-vpn
+#     match:
+#       all:                         # AND 跨 iface：Wi-Fi + VPN 共存
+#         - iface-type: wifi
+#         - iface-type: vpn
+#           dns-suffix: corp.example.com
+#   - name: mobile
+#     match:
+#       any:
+#         - iface-type: cellular     # 内置 modem / 手机热点
+#         - iface-type: wwan         # USB / PCIe 蜂窝模块
+#
+# network-policy 写在 `select` 类型的代理组里。Mapping 的 key 是
+# `networks[].name`（或特殊键 `default`），value 必须是该组当前可见的候
+# 选代理名：
+#   - `proxies:` 里显式列出的代理（含 DIRECT / REJECT 等内置 outbound）：
+#     parse-time fail-fast
+#   - `use:` / `include-all-providers` / `include-all` 展开的 provider 节
+#     点：parse-time 宽容，首次 PUT 时再判 missing_target
+#
+# proxy-groups:
+#   - name: "auto-region"
+#     type: select
+#     proxies: [hk, us, jp, DIRECT]
+#     network-policy:
+#       home: hk                     # 在家走香港
+#       office: us                   # 公司走美国
+#       corp-vpn: DIRECT             # 进 VPN 直连（公司内网）
+#       mobile: jp                   # 4G 场景走日本
+#       default: hk                  # 未命中任何 network（或命中但本组无对应 mapping）时的兜底
+#
+# 关键语义（摘要）：
+# - 用户手动 PUT /proxies/:name 切换后该组进入 manual 状态，同一 network
+#   下后续 PUT 不覆盖；切换到新 network 时自动恢复为 auto（但若新 network
+#   求得的目标代理当前不在候选中，本轮按 missing_target 保留原状态，等
+#   下次 PUT 重试）
+# - `default` 是 Mapping 的一个保留 key，语义是"未命中任何 network（含
+#   matched=<none>）**或命中但本组 Mapping 无对应 target** 时的兜底目标"；
+#   若省略则保持当前选择不变
+# - YAML matcher 对未知 key 严格 fail-fast（例如误写 `metered:` 会报配
+#   置错误）——wire 层对未知字段宽容忽略，两边策略有意非对称
