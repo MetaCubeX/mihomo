@@ -1479,8 +1479,8 @@ proxy-providers:
     # #   您可以通过 "mihomo age keygen" 生成符合要求的 x25519 key
     # #   您可以通过 "mihomo age keygen-pq" 生成符合要求的 mlkem768-x25519 key
     # #   您可以通过 "mihomo age convert <secret_key>" 从 age-secret-key 导出 age-public-key
-    # #   您可以通过 "mihome age decrypt <secret_key> <source_file> <target_file>" 将已加密文件解密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
-    # #   您可以通过 "mihome age encrypt <public_key> <source_file> <target_file>" 将未加密文件加密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
+    # #   您可以通过 "mihomo age decrypt <secret_key> <source_file> <target_file>" 将已加密文件解密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
+    # #   您可以通过 "mihomo age encrypt <public_key> <source_file> <target_file>" 将未加密文件加密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
     # # 参考实现：
     # #   https://github.com/FiloSottile/awesome-age#implementations
     # #
