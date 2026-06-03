@@ -17,6 +17,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
+	"github.com/metacubex/mihomo/transport/mkcp"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 
 	"github.com/metacubex/http"
@@ -35,6 +36,9 @@ type Vmess struct {
 
 	// for gun mux
 	gunClient *gun.Client
+
+	// for mkcp transport
+	mkcpConfig *mkcp.Config
 
 	realityConfig *tlsC.RealityConfig
 	echConfig     *ech.Config
@@ -63,6 +67,7 @@ type VmessOption struct {
 	HTTP2Opts           HTTP2Options   `proxy:"h2-opts,omitempty"`
 	GrpcOpts            GrpcOptions    `proxy:"grpc-opts,omitempty"`
 	WSOpts              WSOptions      `proxy:"ws-opts,omitempty"`
+	KCPOpts             KCPOptions     `proxy:"kcp-opts,omitempty"`
 	PacketAddr          bool           `proxy:"packet-addr,omitempty"`
 	XUDP                bool           `proxy:"xudp,omitempty"`
 	PacketEncoding      string         `proxy:"packet-encoding,omitempty"`
@@ -89,6 +94,40 @@ type GrpcOptions struct {
 	MaxConnections  int    `proxy:"max-connections,omitempty"`
 	MinStreams      int    `proxy:"min-streams,omitempty"`
 	MaxStreams      int    `proxy:"max-streams,omitempty"`
+}
+
+// KCPOptions configures the mKCP transport (Xray-compatible). Field names and
+// semantics mirror Xray's kcpSettings. Buffer sizes are in MB like Xray's JSON.
+type KCPOptions struct {
+	MTU              int    `proxy:"mtu,omitempty"`
+	TTI              int    `proxy:"tti,omitempty"`
+	UplinkCapacity   int    `proxy:"uplink-capacity,omitempty"`
+	DownlinkCapacity int    `proxy:"downlink-capacity,omitempty"`
+	Congestion       bool   `proxy:"congestion,omitempty"`
+	ReadBufferSize   int    `proxy:"read-buffer-size,omitempty"`
+	WriteBufferSize  int    `proxy:"write-buffer-size,omitempty"`
+	Header           string `proxy:"header,omitempty"`
+	Seed             string `proxy:"seed,omitempty"`
+}
+
+func (o KCPOptions) Build() *mkcp.Config {
+	cfg := &mkcp.Config{
+		Mtu:              uint32(o.MTU),
+		Tti:              uint32(o.TTI),
+		UplinkCapacity:   uint32(o.UplinkCapacity),
+		DownlinkCapacity: uint32(o.DownlinkCapacity),
+		Congestion:       o.Congestion,
+		Header:           o.Header,
+		Seed:             o.Seed,
+	}
+	// Xray expresses these buffers in MB; convert to bytes (0 keeps the default).
+	if o.ReadBufferSize > 0 {
+		cfg.ReadBufferSize = uint32(o.ReadBufferSize) * 1024 * 1024
+	}
+	if o.WriteBufferSize > 0 {
+		cfg.WriteBufferSize = uint32(o.WriteBufferSize) * 1024 * 1024
+	}
+	return cfg
 }
 
 type WSOptions struct {
@@ -278,9 +317,33 @@ func (v *Vmess) dialContext(ctx context.Context) (c net.Conn, err error) {
 	switch v.option.Network {
 	case "grpc": // gun transport
 		return v.gunClient.Dial()
+	case "kcp": // mkcp transport over udp
+		pc, addr, err := v.listenPacketContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		c, err := mkcp.Dial(pc, addr, v.mkcpConfig)
+		if err != nil {
+			_ = pc.Close()
+			return nil, err
+		}
+		return c, nil
 	default:
 	}
 	return v.dialer.DialContext(ctx, "tcp", v.addr)
+}
+
+func (v *Vmess) listenPacketContext(ctx context.Context) (net.PacketConn, net.Addr, error) {
+	addr, err := resolveUDPAddr(ctx, "udp", v.addr, v.prefer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pc, err := v.dialer.ListenPacket(ctx, "udp", "", addr.AddrPort())
+	if err != nil {
+		return nil, nil, err
+	}
+	return pc, addr, nil
 }
 
 // DialContext implements C.ProxyAdapter
@@ -407,6 +470,8 @@ func NewVmess(option VmessOption) (*Vmess, error) {
 		if len(option.HTTP2Opts.Host) == 0 {
 			option.HTTP2Opts.Host = append(option.HTTP2Opts.Host, "www.example.com")
 		}
+	case "kcp":
+		v.mkcpConfig = option.KCPOpts.Build()
 	case "grpc":
 		dialFn := func(ctx context.Context, network, addr string) (net.Conn, error) {
 			c, err := v.dialer.DialContext(ctx, "tcp", v.addr)
