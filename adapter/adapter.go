@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
@@ -23,7 +25,11 @@ import (
 var UnifiedDelay = atomic.NewBool(false)
 
 const (
-	defaultHistoriesNum = 10
+	defaultHistoriesNum      = 10
+	defaultSpeedHistoriesNum = 120
+	defaultTestResultsNum    = 20
+	speedStaleThreshold      = 30 * time.Second
+	speedDecayLambda         = 0.001
 )
 
 type internalProxyState struct {
@@ -36,6 +42,22 @@ type Proxy struct {
 	alive   atomic.Bool
 	history *queue.Queue[C.DelayHistory]
 	extra   xsync.Map[string, *internalProxyState]
+
+	peakSpeed    atomic.Uint64
+	peakAt       atomic.Int64
+	currentSpeed atomic.Uint64
+	currentAt    atomic.Int64
+
+	speedHistoryMu sync.Mutex
+	speedHistory   []C.SpeedHistory
+
+	testResultsMu sync.Mutex
+	testResults   []TestResult
+}
+
+type TestResult struct {
+	At      time.Time
+	Success bool
 }
 
 // Adapter implements C.Proxy
@@ -284,6 +306,85 @@ func NewProxy(adapter C.ProxyAdapter) *Proxy {
 		history:      queue.New[C.DelayHistory](defaultHistoriesNum),
 		alive:        atomic.NewBool(true),
 	}
+}
+
+// PushSpeed implements C.Proxy - updates current speed and peak if exceeds decayed peak
+func (p *Proxy) PushSpeed(speed uint64) {
+	if speed == 0 {
+		return
+	}
+	now := time.Now()
+	p.currentSpeed.Store(speed)
+	p.currentAt.Store(now.UnixNano())
+
+	peak := p.peakSpeed.Load()
+	peakAt := time.Unix(0, p.peakAt.Load())
+	decayedPeak := uint64(float64(peak) * math.Exp(-speedDecayLambda*now.Sub(peakAt).Seconds()))
+	if speed >= decayedPeak {
+		p.peakSpeed.Store(speed)
+		p.peakAt.Store(now.UnixNano())
+	}
+
+	p.speedHistoryMu.Lock()
+	p.speedHistory = append(p.speedHistory, C.SpeedHistory{Time: now, Speed: speed})
+	if len(p.speedHistory) > defaultSpeedHistoriesNum {
+		p.speedHistory = p.speedHistory[1:]
+	}
+	p.speedHistoryMu.Unlock()
+}
+
+// LastSpeed implements C.Proxy - returns fresh speed or 0 if stale
+func (p *Proxy) LastSpeed() uint64 {
+	at := time.Unix(0, p.currentAt.Load())
+	if at.IsZero() || time.Since(at) > speedStaleThreshold {
+		return 0
+	}
+	return p.currentSpeed.Load()
+}
+
+// EffectiveSpeed implements C.Proxy - max(decayed peak, fresh current)
+func (p *Proxy) EffectiveSpeed() uint64 {
+	current := p.LastSpeed()
+	peak := uint64(float64(p.peakSpeed.Load()) * math.Exp(-speedDecayLambda*time.Since(time.Unix(0, p.peakAt.Load())).Seconds()))
+	if peak > current {
+		return peak
+	}
+	return current
+}
+
+// SpeedHistory implements C.Proxy
+func (p *Proxy) SpeedHistory() []C.SpeedHistory {
+	p.speedHistoryMu.Lock()
+	out := make([]C.SpeedHistory, len(p.speedHistory))
+	copy(out, p.speedHistory)
+	p.speedHistoryMu.Unlock()
+	return out
+}
+
+// PushTestResult implements C.Proxy - record test result for packet loss calculation
+func (p *Proxy) PushTestResult(url string, success bool) {
+	p.testResultsMu.Lock()
+	p.testResults = append(p.testResults, TestResult{At: time.Now(), Success: success})
+	if len(p.testResults) > defaultTestResultsNum {
+		p.testResults = p.testResults[1:]
+	}
+	p.testResultsMu.Unlock()
+}
+
+// PacketLossRate implements C.Proxy - calculate loss rate from recent test results
+func (p *Proxy) PacketLossRate(url string) float64 {
+	p.testResultsMu.Lock()
+	defer p.testResultsMu.Unlock()
+	if len(p.testResults) == 0 {
+		return 0
+	}
+	fails := 0
+	for _, r := range p.testResults {
+		if !r.Success {
+			fails++
+		}
+	}
+	return float64(fails) / float64(len(p.testResults))
 }
 
 func urlToMetadata(rawURL string) (addr C.Metadata, err error) {

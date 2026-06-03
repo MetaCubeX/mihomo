@@ -99,6 +99,10 @@ func (f *Fallback) Unwrap(metadata *C.Metadata, touch bool) C.Proxy {
 	return proxy
 }
 
+func (f *Fallback) EffectiveSpeed() uint64 {
+	return f.findAliveProxy(false).EffectiveSpeed()
+}
+
 func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	proxies := f.GetProxies(touch)
 	for _, proxy := range proxies {

@@ -28,6 +28,7 @@ const (
 	Fallback
 	URLTest
 	LoadBalance
+	Smart
 
 	Shadowsocks
 	ShadowsocksR
@@ -151,6 +152,11 @@ type DelayHistory struct {
 	Delay uint16    `json:"delay"`
 }
 
+type SpeedHistory struct {
+	Time  time.Time `json:"time"`
+	Speed uint64    `json:"speed"` // bytes/sec
+}
+
 type ProxyState struct {
 	Alive   bool           `json:"alive"`
 	History []DelayHistory `json:"history"`
@@ -166,6 +172,14 @@ type Proxy interface {
 	ExtraDelayHistories() map[string]ProxyState
 	LastDelayForTestUrl(url string) uint16
 	URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (uint16, error)
+
+	SpeedHistory() []SpeedHistory
+	PushSpeed(speed uint64)
+	LastSpeed() uint64
+	EffectiveSpeed() uint64
+
+	PacketLossRate(url string) float64
+	PushTestResult(url string, success bool)
 }
 
 // AdapterType is enum of adapter type
@@ -237,6 +251,8 @@ func (at AdapterType) String() string {
 		return "URLTest"
 	case LoadBalance:
 		return "LoadBalance"
+	case Smart:
+		return "Smart"
 	default:
 		return "Unknown"
 	}

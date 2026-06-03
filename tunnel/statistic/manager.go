@@ -2,14 +2,22 @@ package statistic
 
 import (
 	"os"
+	syncatomic "sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/common/atomic"
 	"github.com/metacubex/mihomo/common/xsync"
 	"github.com/metacubex/mihomo/component/memory"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 var DefaultManager *Manager
+
+var proxyResolver syncatomic.Value // func(string) C.Proxy
+
+func RegisterProxyResolver(fn func(string) C.Proxy) {
+	proxyResolver.Store(fn)
+}
 
 func init() {
 	DefaultManager = &Manager{
@@ -20,6 +28,7 @@ func init() {
 		uploadTotal:   atomic.NewInt64(0),
 		downloadTotal: atomic.NewInt64(0),
 		pid:           int32(os.Getpid()),
+		speedObserver: NewSpeedObserver(),
 	}
 
 	go DefaultManager.handle()
@@ -35,13 +44,16 @@ type Manager struct {
 	downloadTotal atomic.Int64
 	pid           int32
 	memory        uint64
+	speedObserver *SpeedObserver
 }
 
 func (m *Manager) Join(c Tracker) {
 	m.connections.Store(c.ID(), c)
+	m.speedObserver.Join(c)
 }
 
 func (m *Manager) Leave(c Tracker) {
+	m.speedObserver.Leave(c)
 	m.connections.Delete(c.ID())
 }
 
@@ -118,6 +130,10 @@ func (m *Manager) handle() {
 	for range ticker.C {
 		m.uploadBlip.Store(m.uploadTemp.Swap(0))
 		m.downloadBlip.Store(m.downloadTemp.Swap(0))
+
+		if resolve, ok := proxyResolver.Load().(func(string) C.Proxy); ok {
+			m.speedObserver.Tick(time.Now(), resolve)
+		}
 	}
 }
 
