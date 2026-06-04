@@ -182,8 +182,8 @@ func matchSubRules(metadata *C.Metadata, name string, subRules map[string][]C.Ru
 			if rule.RuleType() == C.SubRules {
 				m, a = matchSubRules(metadata, rule.Adapter(), subRules, helper)
 			}
-			if m && a == "PASS-RULE" {
-				continue
+			if m && (a == "PASS-RULE" || (C.CheckPassRule != nil && C.CheckPassRule(a, metadata))) {
+				continue 
 			}
 			return m, a
 		}
