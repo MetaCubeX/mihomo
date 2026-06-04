@@ -62,6 +62,7 @@ const (
 )
 
 var ErrNotSupport = errors.New("no support")
+var CheckPassRule func(name string, metadata *Metadata) bool
 
 type Connection interface {
 	Chains() Chain
