@@ -374,6 +374,18 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 				}
 			}
 		},
+		CheckPassRule: func(adapterName string) bool {
+			adapter, ok := proxies[adapterName]
+			if !ok {
+				return false
+			}
+			for a := adapter; a != nil; a = a.Unwrap(metadata, false) {
+				if a.Type() == C.PassRule {
+					return true
+				}
+			}
+			return false
+		},
 	}
 
 	switch FindProcessMode() {
