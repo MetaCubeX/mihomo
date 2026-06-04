@@ -651,7 +651,7 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 			// parse multi-layer nesting
 			passed := false
 			for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
-				if adapter.Type() == C.Pass {
+				if adapter.Type() == C.Pass || adapter.Type() == C.PassRule {
 					passed = true
 					break
 				}
