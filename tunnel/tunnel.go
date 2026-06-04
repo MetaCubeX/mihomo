@@ -721,3 +721,20 @@ func retry[T any](ctx context.Context, ft func(context.Context) (T, error), fe f
 	}
 	return
 }
+
+func init() {
+	C.CheckPassRule = func(name string, metadata *C.Metadata) bool {
+		configMux.RLock()
+		defer configMux.RUnlock()
+		adapter, ok := proxies[name]
+		if !ok {
+			return false
+		}
+		for a := adapter; a != nil; a = a.Unwrap(metadata, false) {
+			if a.Type() == C.PassRule {
+				return true
+			}
+		}
+		return false
+	}
+}
