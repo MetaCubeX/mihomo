@@ -66,7 +66,7 @@ func (s *Sudoku) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 	}
 
 	muxMode := normalizeHTTPMaskMultiplex(cfg.HTTPMaskMultiplex)
-	if muxMode == "on" && !cfg.DisableHTTPMask && httpTunnelModeEnabled(cfg.HTTPMaskMode) {
+	if muxMode == "on" {
 		stream, muxErr := s.dialMultiplex(ctx, cfg.TargetAddress)
 		if muxErr == nil {
 			return NewConn(stream, s), nil

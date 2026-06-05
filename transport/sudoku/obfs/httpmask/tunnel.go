@@ -514,6 +514,8 @@ type queuedConn struct {
 	remoteAddr net.Addr
 }
 
+const queuedConnPayloadQueueDepth = 64
+
 func (c *queuedConn) CloseWrite() error {
 	if c == nil || c.writeClosed == nil {
 		return nil
@@ -646,9 +648,9 @@ func newStreamSplitConnFromInfo(info *sessionDialInfo) *streamSplitConn {
 		headerHost: info.headerHost,
 		auth:       info.auth,
 		queuedConn: queuedConn{
-			rxc:         make(chan []byte, 256),
+			rxc:         make(chan []byte, queuedConnPayloadQueueDepth),
 			closed:      make(chan struct{}),
-			writeCh:     make(chan []byte, 256),
+			writeCh:     make(chan []byte, queuedConnPayloadQueueDepth),
 			writeClosed: make(chan struct{}),
 			localAddr:   &net.TCPAddr{},
 			remoteAddr:  &net.TCPAddr{},
@@ -1083,9 +1085,9 @@ func newPollConnFromInfo(info *sessionDialInfo) *pollConn {
 		headerHost: info.headerHost,
 		auth:       info.auth,
 		queuedConn: queuedConn{
-			rxc:         make(chan []byte, 128),
+			rxc:         make(chan []byte, queuedConnPayloadQueueDepth),
 			closed:      make(chan struct{}),
-			writeCh:     make(chan []byte, 256),
+			writeCh:     make(chan []byte, queuedConnPayloadQueueDepth),
 			writeClosed: make(chan struct{}),
 			localAddr:   &net.TCPAddr{},
 			remoteAddr:  &net.TCPAddr{},

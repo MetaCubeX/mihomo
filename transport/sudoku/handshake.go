@@ -258,14 +258,7 @@ func newClientDownlinkReader(raw net.Conn, table *sudoku.Table, paddingMin, padd
 
 func newServerDownlinkWriter(raw net.Conn, table *sudoku.Table, paddingMin, paddingMax int, pureDownlink bool) (io.Writer, []func() error) {
 	downlinkTable := oppositeDirectionTable(table)
-	if pureDownlink {
-		if downlinkTable == table {
-			return nil, nil
-		}
-		return sudoku.NewConn(raw, downlinkTable, paddingMin, paddingMax, false), nil
-	}
-	packed := sudoku.NewPackedConn(raw, downlinkTable, paddingMin, paddingMax)
-	return packed, []func() error{packed.Flush}
+	return sudoku.NewServerDownlinkWriter(raw, downlinkTable, paddingMin, paddingMax, pureDownlink)
 }
 
 func buildClientObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table) net.Conn {
@@ -280,9 +273,6 @@ func buildClientObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table)
 func buildServerObfsConn(raw net.Conn, cfg *ProtocolConfig, table *sudoku.Table, record bool) (*sudoku.Conn, net.Conn) {
 	uplinkSudoku := sudoku.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, record)
 	downlinkWriter, closers := newServerDownlinkWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
-	if downlinkWriter == nil {
-		return uplinkSudoku, uplinkSudoku
-	}
 	return uplinkSudoku, newDirectionalConn(raw, uplinkSudoku, downlinkWriter, closers...)
 }
 
@@ -439,7 +429,7 @@ func ServerHandshake(rawConn net.Conn, cfg *ProtocolConfig) (net.Conn, *Handshak
 		return nil, nil, &SuspiciousError{Err: fmt.Errorf("resolve table hint failed: %w", err), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
 	}
 	if resolvedTable != selectedTable {
-		downlinkWriter, closers := newServerDownlinkWriter(baseConn, resolvedTable, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
+		downlinkWriter, closers := sudoku.NewServerDownlinkWriter(baseConn, resolvedTable.OppositeDirection(), cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
 		switchable, ok := obfsConn.(*directionalConn)
 		if !ok {
 			return nil, nil, &SuspiciousError{Err: fmt.Errorf("switch downlink writer failed"), Conn: &prefixedRecorderConn{Conn: sConn, prefix: httpHeaderData}}
