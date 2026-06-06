@@ -3,6 +3,8 @@ module github.com/metacubex/mihomo
 go 1.20
 
 require (
+	github.com/ameshkov/dnscrypt/v2 v2.2.7
+	github.com/ameshkov/dnsstamps v1.0.3
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.12.0
@@ -76,8 +78,11 @@ require (
 )
 
 require (
+	github.com/AdguardTeam/golibs v0.10.9 // indirect
 	github.com/RyuaNerin/go-krypto v1.3.0 // indirect
 	github.com/Yawning/aez v0.0.0-20211027044916-e49e68abd344 // indirect
+	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
+	github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa // indirect
