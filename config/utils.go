@@ -22,6 +22,7 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 		topo int
 		// the original data in `groupsConfig`
 		data map[string]any
+		deps []string
 		// `outdegree` and `from` are used in loop locating
 		outdegree int
 		option    *outboundgroup.GroupCommonOption
@@ -30,6 +31,17 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 
 	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 	graph := make(map[string]*graphNode)
+	dependencies := func(option *outboundgroup.GroupCommonOption) []string {
+		// Minimize unnecessary slice creation
+		if option.EmptyFallback == "" {
+			return option.Proxies
+		}
+
+		deps := make([]string, 0, len(option.Proxies)+1)
+		deps = append(deps, option.Proxies...)
+		deps = append(deps, option.EmptyFallback)
+		return deps
+	}
 
 	// Step 1.1 build dependency graph
 	for _, mapping := range groupsConfig {
@@ -39,21 +51,33 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 		}
 
 		groupName := option.Name
+		deps := dependencies(option)
 		if node, ok := graph[groupName]; ok {
 			if node.data != nil {
 				return fmt.Errorf("ProxyGroup %s: duplicate group name", groupName)
 			}
 			node.data = mapping
+			node.deps = deps
 			node.option = option
 		} else {
-			graph[groupName] = &graphNode{0, -1, mapping, 0, option, nil}
+			graph[groupName] = &graphNode{
+				indegree:  0,
+				topo:      -1,
+				data:      mapping,
+				deps:      deps,
+				outdegree: 0,
+				option:    option,
+			}
 		}
 
-		for _, proxy := range option.Proxies {
+		for _, proxy := range deps {
 			if node, ex := graph[proxy]; ex {
 				node.indegree++
 			} else {
-				graph[proxy] = &graphNode{1, -1, nil, 0, nil, nil}
+				graph[proxy] = &graphNode{
+					indegree: 1,
+					topo:     -1,
+				}
 			}
 		}
 	}
@@ -74,12 +98,7 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 		if node.option != nil {
 			index++
 			groupsConfig[len(groupsConfig)-index] = node.data
-			if len(node.option.Proxies) == 0 {
-				delete(graph, name)
-				continue
-			}
-
-			for _, proxy := range node.option.Proxies {
+			for _, proxy := range node.deps {
 				child := graph[proxy]
 				child.indegree--
 				if child.indegree == 0 {
@@ -102,11 +121,11 @@ func proxyGroupsDagSort(groupsConfig []map[string]any) error {
 			continue
 		}
 
-		if len(node.option.Proxies) == 0 {
+		if len(node.deps) == 0 {
 			continue
 		}
 
-		for _, proxy := range node.option.Proxies {
+		for _, proxy := range node.deps {
 			node.outdegree++
 			child := graph[proxy]
 			if child.from == nil {
