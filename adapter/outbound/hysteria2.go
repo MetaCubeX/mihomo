@@ -68,6 +68,7 @@ type Hysteria2Option struct {
 	MaxStreamReceiveWindow         uint64 `proxy:"max-stream-receive-window,omitempty"`
 	InitialConnectionReceiveWindow uint64 `proxy:"initial-connection-receive-window,omitempty"`
 	MaxConnectionReceiveWindow     uint64 `proxy:"max-connection-receive-window,omitempty"`
+	DisableMTUDiscovery            bool   `proxy:"disable-mtu-discovery,omitempty"`
 }
 
 type Hysteria2RealmOption struct {
@@ -199,6 +200,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		MaxStreamReceiveWindow:         option.MaxStreamReceiveWindow,
 		InitialConnectionReceiveWindow: option.InitialConnectionReceiveWindow,
 		MaxConnectionReceiveWindow:     option.MaxConnectionReceiveWindow,
+		DisablePathMTUDiscovery:        option.DisableMTUDiscovery,
 	}
 
 	clientOptions := hysteria2.ClientOptions{
