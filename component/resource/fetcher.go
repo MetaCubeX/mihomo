@@ -2,6 +2,8 @@ package resource
 
 import (
 	"context"
+	"io"
+	"io/fs"
 	"os"
 	"sync"
 	"time"
@@ -16,6 +18,7 @@ import (
 )
 
 type Parser[V any] func([]byte) (V, error)
+type BundleFile func() (fs.File, error)
 
 type Fetcher[V any] struct {
 	ctx          context.Context
@@ -23,6 +26,7 @@ type Fetcher[V any] struct {
 	resourceType string
 	name         string
 	vehicle      P.Vehicle
+	bundleFile   BundleFile
 	updatedAt    time.Time
 	hash         utils.HashType
 	parser       Parser[V]
@@ -63,6 +67,33 @@ func (f *Fetcher[V]) Initial() (V, error) {
 				return lo.Empty[V](), err
 			}
 			return contents, nil
+		}
+	}
+
+	// parse local file error, fallback to bundle file
+	if f.bundleFile != nil {
+		// bundle file exists, use it first
+		if file, fErr := f.bundleFile(); fErr == nil {
+			defer file.Close()
+			buf, err := io.ReadAll(file)
+			var modTime time.Time
+			if stat, sErr := file.Stat(); sErr == nil {
+				modTime = stat.ModTime()
+			}
+			contents, _, err := f.loadBuf(buf, utils.MakeHash(buf), true)
+			f.updatedAt = modTime // reset updatedAt to file's modTime
+
+			if err == nil {
+				log.Infoln("[Provider] %s extract successful from bundle file", f.Name())
+				err = f.startPullLoop(time.Since(modTime) > f.interval)
+				if err != nil {
+					return lo.Empty[V](), err
+				}
+				return contents, nil
+			}
+			log.Warnln("[Provider] %s read bundle file error: %s", f.Name(), err.Error())
+		} else {
+			log.Warnln("[Provider] %s read bundle file error: %s", f.Name(), fErr.Error())
 		}
 	}
 
@@ -218,20 +249,21 @@ func (f *Fetcher[V]) updateWithLog() {
 	return
 }
 
-func NewFetcher[V any](name string, interval time.Duration, vehicle P.Vehicle, parser Parser[V], onUpdate func(V)) *Fetcher[V] {
+func NewFetcher[V any](name string, interval time.Duration, vehicle P.Vehicle, bundleFile BundleFile, parser Parser[V], onUpdate func(V)) *Fetcher[V] {
 	ctx, cancel := context.WithCancel(context.Background())
 	minBackoff := 10 * time.Second
 	if interval < minBackoff {
 		minBackoff = interval
 	}
 	return &Fetcher[V]{
-		ctx:       ctx,
-		ctxCancel: cancel,
-		name:      name,
-		vehicle:   vehicle,
-		parser:    parser,
-		onUpdate:  onUpdate,
-		interval:  interval,
+		ctx:        ctx,
+		ctxCancel:  cancel,
+		name:       name,
+		bundleFile: bundleFile,
+		vehicle:    vehicle,
+		parser:     parser,
+		onUpdate:   onUpdate,
+		interval:   interval,
 		backoff: slowdown.Backoff{
 			Factor: 2,
 			Jitter: false,

@@ -192,23 +192,27 @@ func tableHintFingerprint(key string, mode string, uplinkPattern string, downlin
 }
 
 func packHintsToKey(hints [4]byte) uint32 {
+	return packHintBytes(hints[0], hints[1], hints[2], hints[3])
+}
+
+func packHintBytes(h0, h1, h2, h3 byte) uint32 {
 	// Sorting network for 4 elements (Bubble sort unrolled)
 	// Swap if a > b
-	if hints[0] > hints[1] {
-		hints[0], hints[1] = hints[1], hints[0]
+	if h0 > h1 {
+		h0, h1 = h1, h0
 	}
-	if hints[2] > hints[3] {
-		hints[2], hints[3] = hints[3], hints[2]
+	if h2 > h3 {
+		h2, h3 = h3, h2
 	}
-	if hints[0] > hints[2] {
-		hints[0], hints[2] = hints[2], hints[0]
+	if h0 > h2 {
+		h0, h2 = h2, h0
 	}
-	if hints[1] > hints[3] {
-		hints[1], hints[3] = hints[3], hints[1]
+	if h1 > h3 {
+		h1, h3 = h3, h1
 	}
-	if hints[1] > hints[2] {
-		hints[1], hints[2] = hints[2], hints[1]
+	if h1 > h2 {
+		h1, h2 = h2, h1
 	}
 
-	return uint32(hints[0])<<24 | uint32(hints[1])<<16 | uint32(hints[2])<<8 | uint32(hints[3])
+	return uint32(h0)<<24 | uint32(h1)<<16 | uint32(h2)<<8 | uint32(h3)
 }

@@ -234,6 +234,7 @@ func (lb *LoadBalance) MarshalJSON() ([]byte, error) {
 		"expectedStatus": lb.expectedStatus,
 		"hidden":         lb.Hidden(),
 		"icon":           lb.Icon(),
+		"emptyFallback":  lb.EmptyFallback().Name(),
 	})
 }
 
@@ -249,7 +250,7 @@ func (lb *LoadBalance) Now() string {
 	return ""
 }
 
-func NewLoadBalance(option *GroupCommonOption, providers []P.ProxyProvider, strategy string) (lb *LoadBalance, err error) {
+func NewLoadBalance(option *GroupCommonOption, emptyFallback C.Proxy, providers []P.ProxyProvider, strategy string) (lb *LoadBalance, err error) {
 	var strategyFn strategyFn
 	switch strategy {
 	case "consistent-hashing":
@@ -272,6 +273,7 @@ func NewLoadBalance(option *GroupCommonOption, providers []P.ProxyProvider, stra
 			ExcludeType:    option.ExcludeType,
 			TestTimeout:    option.TestTimeout,
 			MaxFailedTimes: option.MaxFailedTimes,
+			EmptyFallback:  emptyFallback,
 			Providers:      providers,
 		}),
 		strategyFn:     strategyFn,

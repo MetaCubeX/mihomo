@@ -12,19 +12,20 @@ import (
 )
 
 type ruleProviderSchema struct {
-	Type      string              `provider:"type"`
-	Behavior  string              `provider:"behavior"`
-	Path      string              `provider:"path,omitempty"`
-	URL       string              `provider:"url,omitempty"`
-	Proxy     string              `provider:"proxy,omitempty"`
-	Format    string              `provider:"format,omitempty"`
-	Interval  int                 `provider:"interval,omitempty"`
-	SizeLimit int64               `provider:"size-limit,omitempty"`
-	Payload   []string            `provider:"payload,omitempty"`
-	Header    map[string][]string `provider:"header,omitempty"`
+	Type         string              `provider:"type"`
+	Behavior     string              `provider:"behavior"`
+	Path         string              `provider:"path,omitempty"`
+	URL          string              `provider:"url,omitempty"`
+	Proxy        string              `provider:"proxy,omitempty"`
+	Format       string              `provider:"format,omitempty"`
+	Interval     int                 `provider:"interval,omitempty"`
+	SizeLimit    int64               `provider:"size-limit,omitempty"`
+	Payload      []string            `provider:"payload,omitempty"`
+	Header       map[string][]string `provider:"header,omitempty"`
+	PathInBundle string              `provider:"path-in-bundle,omitempty"`
 }
 
-func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc) (P.RuleProvider, error) {
+func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRuleFunc, makeBundleFile func(pathInBundle string) resource.BundleFile) (P.RuleProvider, error) {
 	schema := &ruleProviderSchema{}
 	decoder := structure.NewDecoder(structure.Option{TagName: "provider", WeaklyTypedInput: true})
 	if err := decoder.Decode(mapping, schema); err != nil {
@@ -64,5 +65,5 @@ func ParseRuleProvider(name string, mapping map[string]any, parse common.ParseRu
 
 	interval := time.Duration(uint(schema.Interval)) * time.Second
 
-	return NewRuleSetProvider(name, behavior, format, interval, vehicle, schema.Payload, parse), nil
+	return NewRuleSetProvider(name, behavior, format, interval, vehicle, schema.Payload, makeBundleFile(schema.PathInBundle), parse), nil
 }

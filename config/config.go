@@ -35,6 +35,7 @@ import (
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/log"
 	R "github.com/metacubex/mihomo/rules"
+	RB "github.com/metacubex/mihomo/rules/bundle"
 	RC "github.com/metacubex/mihomo/rules/common"
 	RP "github.com/metacubex/mihomo/rules/provider"
 	RW "github.com/metacubex/mihomo/rules/wrapper"
@@ -880,6 +881,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 	proxies["REJECT-DROP"] = adapter.NewProxy(outbound.NewRejectDrop())
 	proxies["COMPATIBLE"] = adapter.NewProxy(outbound.NewCompatible())
 	proxies["PASS"] = adapter.NewProxy(outbound.NewPass())
+	proxies["PASS-RULE"] = adapter.NewProxy(outbound.NewPassRule())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
 
 	// parse proxy
@@ -950,7 +952,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	var ps []C.Proxy
 	for _, v := range proxyList {
-		if proxies[v].Type() == C.Pass {
+		if proxies[v].Type() == C.Pass || proxies[v].Type() == C.PassRule {
 			continue
 		}
 		ps = append(ps, proxies[v])
@@ -964,6 +966,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			&outboundgroup.GroupCommonOption{
 				Name: "GLOBAL",
 			},
+			proxies["COMPATIBLE"],
 			[]P.ProxyProvider{pd},
 		)
 		proxies["GLOBAL"] = adapter.NewProxy(global)
@@ -1001,7 +1004,7 @@ func parseRuleProviders(cfg *RawConfig) (ruleProviders map[string]P.RuleProvider
 	ruleProviders = map[string]P.RuleProvider{}
 	// parse rule provider
 	for name, mapping := range cfg.RuleProvider {
-		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule)
+		rp, err := RP.ParseRuleProvider(name, mapping, R.ParseRule, RB.MakeBundleFile)
 		if err != nil {
 			return nil, err
 		}

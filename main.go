@@ -125,11 +125,10 @@ func main() {
 	}
 
 	if ageSecretKey != "" {
-		identities, err := age.ParseIdentities(ageSecretKey)
-		if err != nil {
+		if err := age.VeritySecretKeys(ageSecretKey); err != nil {
 			log.Errorln("Parse age-secret-key error: %s", err.Error())
 		}
-		age.SetGlobalIdentities(identities)
+		age.SetGlobalSecretKeys(ageSecretKey)
 	}
 
 	if configString != "" {

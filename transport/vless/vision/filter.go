@@ -43,7 +43,10 @@ func (vc *Conn) FilterTLS(buffer []byte) (index int) {
 					vc.isTLS12orAbove = true
 					if lenP-index >= 79 && vc.remainingServerHello >= 79 {
 						sessionIDLen := int(buffer[index+43])
-						vc.cipher = binary.BigEndian.Uint16(buffer[index+43+sessionIDLen+1:])
+						cipherOffset := index + 43 + sessionIDLen + 1
+						if cipherOffset+2 <= lenP {
+							vc.cipher = binary.BigEndian.Uint16(buffer[cipherOffset:])
+						}
 					}
 				}
 			}

@@ -14,7 +14,6 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/tunnel"
 
 	"github.com/dlclark/regexp2"
 	"golang.org/x/exp/slices"
@@ -34,6 +33,7 @@ type GroupBase struct {
 	failedTesting     atomic.Bool
 	testTimeout       int
 	maxFailedTimes    int
+	emptyFallback     C.Proxy
 
 	// for GetProxies
 	getProxiesMutex  sync.Mutex
@@ -51,6 +51,7 @@ type GroupBaseOption struct {
 	ExcludeType    string
 	TestTimeout    int
 	MaxFailedTimes int
+	EmptyFallback  C.Proxy
 	Providers      []P.ProxyProvider
 }
 
@@ -87,6 +88,7 @@ func NewGroupBase(opt GroupBaseOption) *GroupBase {
 		failedTesting:     atomic.NewBool(false),
 		testTimeout:       opt.TestTimeout,
 		maxFailedTimes:    opt.MaxFailedTimes,
+		emptyFallback:     opt.EmptyFallback,
 	}
 
 	if gb.testTimeout == 0 {
@@ -105,6 +107,10 @@ func (gb *GroupBase) Hidden() bool {
 
 func (gb *GroupBase) Icon() string {
 	return gb.icon
+}
+
+func (gb *GroupBase) EmptyFallback() C.Proxy {
+	return gb.emptyFallback
 }
 
 func (gb *GroupBase) Touch() {
@@ -218,7 +224,7 @@ func (gb *GroupBase) GetProxies(touch bool) []C.Proxy {
 	}
 
 	if len(proxies) == 0 {
-		return []C.Proxy{tunnel.Proxies()["COMPATIBLE"]}
+		return []C.Proxy{gb.EmptyFallback()}
 	}
 
 	// only cache when proxies not empty

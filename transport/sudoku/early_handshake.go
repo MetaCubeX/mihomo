@@ -96,9 +96,6 @@ func buildEarlyClientObfsConn(raw net.Conn, cfg EarlyCodecConfig, table *sudokuo
 func buildEarlyServerObfsConn(raw net.Conn, cfg EarlyCodecConfig, table *sudokuobfs.Table) net.Conn {
 	uplink := sudokuobfs.NewConn(raw, table, cfg.PaddingMin, cfg.PaddingMax, false)
 	downlinkWriter, closers := newServerDownlinkWriter(raw, table, cfg.PaddingMin, cfg.PaddingMax, cfg.EnablePureDownlink)
-	if downlinkWriter == nil {
-		return uplink
-	}
 	return newDirectionalConn(raw, uplink, downlinkWriter, closers...)
 }
 

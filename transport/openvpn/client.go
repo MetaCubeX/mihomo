@@ -32,7 +32,7 @@ type Client struct {
 
 	cancel context.CancelFunc
 
-	writeSem semaphore.Weighted
+	writeSem *semaphore.Weighted
 
 	lastSendNano    atomic.Int64
 	lastReceiveNano atomic.Int64
@@ -61,10 +61,11 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	mux := NewPacketMux(io)
 	go mux.Run(runCtx)
 	client := &Client{
-		config:  config,
-		mux:     mux,
-		control: NewControlChannel(mux, crypt, local),
-		cancel:  cancel,
+		config:   config,
+		mux:      mux,
+		control:  NewControlChannel(mux, crypt, local),
+		cancel:   cancel,
+		writeSem: semaphore.NewWeighted(1),
 	}
 	client.markSend()
 	client.markReceive()

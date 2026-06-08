@@ -1459,6 +1459,7 @@ proxy-groups:
     proxies:
       - Proxy
       - DIRECT
+    # empty-fallback: COMPATIBLE # 设置当组为空时的回退proxy
 
 # Mihomo 格式的节点或支持 *ray 的分享格式
 proxy-providers:
@@ -1478,8 +1479,9 @@ proxy-providers:
     # # 实用工具：
     # #   您可以通过 "mihomo age keygen" 生成符合要求的 x25519 key
     # #   您可以通过 "mihomo age keygen-pq" 生成符合要求的 mlkem768-x25519 key
-    # #   您可以通过 "mihome age decrypt <secret_key> <source_file> <target_file>" 将已加密文件解密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
-    # #   您可以通过 "mihome age encrypt <public_key> <source_file> <target_file>" 将未加密文件加密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
+    # #   您可以通过 "mihomo age convert <secret_key>" 从 age-secret-key 导出 age-public-key
+    # #   您可以通过 "mihomo age decrypt <secret_key> <source_file> <target_file>" 将已加密文件解密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
+    # #   您可以通过 "mihomo age encrypt <public_key> <source_file> <target_file>" 将未加密文件加密，<source_file> 为 - 时会从标准输入读取，<target_file> 为 - 时会往标准输出写入
     # # 参考实现：
     # #   https://github.com/FiloSottile/awesome-age#implementations
     # #
@@ -1568,6 +1570,7 @@ rule-providers:
     format: mrs
     behavior: domain
     path: /path/to/save/file.mrs
+    # path-in-bundle: "geo/geosite/cn.mrs" # 当设置该选项时，如果本地文件不存在，会优先从 Home Dir的 BundleMRS.7z 中解压该文件，此项的值用于指定在 BundleMRS.7z 中的路径
   rule4:
     type: inline
     behavior: domain # classical / ipcidr

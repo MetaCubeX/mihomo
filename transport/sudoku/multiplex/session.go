@@ -18,9 +18,12 @@ const (
 )
 
 const (
-	headerSize     = 1 + 4 + 4
-	maxFrameSize   = 256 * 1024
-	maxDataPayload = 32 * 1024
+	headerSize = 1 + 4 + 4
+	// maxQueuedBytesPerStream bounds unread payload retained by a single logical stream.
+	// Backpressure is applied to the demux loop instead of dropping data.
+	maxQueuedBytesPerStream = 4 * 1024 * 1024
+	maxFrameSize            = 256 * 1024
+	maxDataPayload          = 128 * 1024
 )
 
 type acceptEvent struct {
@@ -344,6 +347,8 @@ type stream struct {
 	closeErr error
 	readBuf  []byte
 	queue    [][]byte
+	// queuedBytes includes unread bytes in readBuf and queue.
+	queuedBytes int
 
 	localAddr  net.Addr
 	remoteAddr net.Addr
@@ -362,16 +367,20 @@ func newStream(session *Session, id uint32) *stream {
 
 func (c *stream) enqueue(payload []byte) {
 	c.mu.Lock()
+	for !c.closed && c.queuedBytes+len(payload) > maxQueuedBytesPerStream {
+		c.cond.Wait()
+	}
 	if c.closed {
 		c.mu.Unlock()
 		return
 	}
+	c.queuedBytes += len(payload)
 	if len(c.readBuf) == 0 && len(c.queue) == 0 {
 		c.readBuf = payload
 	} else {
 		c.queue = append(c.queue, payload)
 	}
-	c.cond.Signal()
+	c.cond.Broadcast()
 	c.mu.Unlock()
 }
 
@@ -413,7 +422,11 @@ func (c *stream) Read(p []byte) (int, error) {
 	}
 	if len(c.readBuf) == 0 && len(c.queue) > 0 {
 		c.readBuf = c.queue[0]
+		c.queue[0] = nil
 		c.queue = c.queue[1:]
+		if len(c.queue) == 0 {
+			c.queue = nil
+		}
 	}
 	if len(c.readBuf) == 0 && c.closed {
 		if c.closeErr == nil {
@@ -424,6 +437,14 @@ func (c *stream) Read(p []byte) (int, error) {
 
 	n := copy(p, c.readBuf)
 	c.readBuf = c.readBuf[n:]
+	if len(c.readBuf) == 0 {
+		c.readBuf = nil
+	}
+	c.queuedBytes -= n
+	if c.queuedBytes < 0 {
+		c.queuedBytes = 0
+	}
+	c.cond.Broadcast()
 	return n, nil
 }
 

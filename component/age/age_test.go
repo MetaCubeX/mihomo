@@ -22,21 +22,23 @@ func TestAge(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Log(secretKey, publicKey)
-			identities, err := age.ParseIdentities(secretKey)
+			publicKeys, err := age.ToPublicKeys(secretKey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			recipients, err := age.ParseRecipients(publicKey)
-			if err != nil {
-				t.Fatal(err)
+			if len(publicKeys) != 1 {
+				t.Fatal("public keys length is not equal to 1")
+			}
+			if publicKeys[0] != publicKey {
+				t.Fatal("public key is not equal")
 			}
 			rawData := []byte("hello world")
-			encryptData, err := age.EncryptBytes(rawData, recipients...)
+			encryptData, err := age.EncryptBytes(rawData, publicKey)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Log(string(encryptData))
-			decryptData, err := age.DecryptBytes(encryptData, identities...)
+			decryptData, err := age.DecryptBytes(encryptData, secretKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -45,5 +47,4 @@ func TestAge(t *testing.T) {
 			}
 		})
 	}
-
 }
