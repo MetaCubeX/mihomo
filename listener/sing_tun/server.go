@@ -80,6 +80,10 @@ var emptyAddressSet = []*netipx.IPSet{{}}
 func CalculateInterfaceName(name string) (tunName string) {
 	if runtime.GOOS == "darwin" {
 		tunName = "utun"
+	} else if runtime.GOOS == "freebsd" {
+		// FreeBSD tun(4) interfaces must be named "tunN"; ignore any custom
+		// name and scan for a free index below.
+		tunName = "tun"
 	} else if name != "" {
 		tunName = name
 		return
@@ -127,6 +131,18 @@ func checkTunName(tunName string) (ok bool) {
 			return false
 		}
 		if _, parseErr := strconv.ParseInt(tunName[4:], 10, 16); parseErr != nil {
+			return false
+		}
+	} else if runtime.GOOS == "freebsd" {
+		// FreeBSD tun(4) devices must be named "tunN" (N numeric); the kernel
+		// derives the device node /dev/tunN from the name.
+		if len(tunName) <= 3 {
+			return false
+		}
+		if tunName[:3] != "tun" {
+			return false
+		}
+		if _, parseErr := strconv.ParseInt(tunName[3:], 10, 16); parseErr != nil {
 			return false
 		}
 	}

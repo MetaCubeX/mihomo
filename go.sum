@@ -157,8 +157,6 @@ github.com/metacubex/sing-shadowsocks2 v0.2.7 h1:hSuuc0YpsfiqYqt1o+fP4m34BQz4e6w
 github.com/metacubex/sing-shadowsocks2 v0.2.7/go.mod h1:vOEbfKC60txi0ca+yUlqEwOGc3Obl6cnSgx9Gf45KjE=
 github.com/metacubex/sing-shadowtls v0.0.0-20260517015314-c11c36474edc h1:8wLoFfYQ88iGPL+krQ5tJsI8IAmkFjKpQL2q+y3pvss=
 github.com/metacubex/sing-shadowtls v0.0.0-20260517015314-c11c36474edc/go.mod h1:mbfboaXauKJNIHJYxQRa+NJs4JU9NZfkA+I33dS2+9E=
-github.com/metacubex/sing-tun v0.4.20 h1:xdupzizRoZKyDzP0l68WAx5Sk4ooiuT1GiWsiJyOGPw=
-github.com/metacubex/sing-tun v0.4.20/go.mod h1:g4I/JNplDBhXLF+aQWgFbhNeJPSXQOWS9HvLeNvkgeA=
 github.com/metacubex/sing-vmess v0.2.5 h1:m9Zt5I27lB9fmLMZfism9sH2LcnAfShZfwSkf6/KJoE=
 github.com/metacubex/sing-vmess v0.2.5/go.mod h1:AwtlzUgf8COe9tRYAKqWZ+leDH7p5U98a0ZUpYehl8Q=
 github.com/metacubex/sing-wireguard v0.0.0-20260520151737-7e7c7c1b854c h1:tH9FuQW357zp2xAGzkoZTGpNGMVmEFZov0iV5M2S5ew=
