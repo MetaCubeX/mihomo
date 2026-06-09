@@ -205,6 +205,25 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 				trojan["fingerprint"] = pcs
 			}
 
+			// map REALITY params from v2ray/trojan share links
+			sec := ""
+			if s := query.Get("security"); s != "" {
+				sec = strings.ToLower(s)
+			}
+
+			if sec == "reality" {
+				realityOpts := make(map[string]any)
+				if pbk := query.Get("pbk"); pbk != "" {
+					realityOpts["public-key"] = pbk
+				}
+				if sid := query.Get("sid"); sid != "" {
+					realityOpts["short-id"] = sid
+				}
+				if len(realityOpts) > 0 {
+					trojan["reality-opts"] = realityOpts
+				}
+			}
+
 			proxies = append(proxies, trojan)
 
 		case "vless":
