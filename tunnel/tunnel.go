@@ -474,7 +474,6 @@ func handleUDPConn(packet C.PacketAdapter) {
 			if err != nil {
 				return nil, nil, err
 			}
-			appendLoopbackChains(rawPc, metadata)
 			logMetadata(metadata, rule, rawPc)
 
 			pc := statistic.NewUDPTracker(rawPc, statistic.DefaultManager, metadata, rule, 0, 0, true)
@@ -611,7 +610,6 @@ func handleTCPConn(connCtx C.ConnContext) {
 	if err != nil {
 		return
 	}
-	appendLoopbackChains(remoteConn, metadata)
 	logMetadata(metadata, rule, remoteConn)
 
 	remoteConn = statistic.NewTCPTracker(remoteConn, statistic.DefaultManager, metadata, rule, int64(peekLen), 0, true)
@@ -657,6 +655,7 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 	configMux.RLock()
 	defer configMux.RUnlock()
 
+	var loopbackChain []string
 	for {
 		var loopbackProxy C.Proxy
 		var loopbackRule C.Rule
@@ -691,11 +690,11 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 			}
 		}
 		if loopbackProxy != nil {
-			if slices.Contains(metadata.LoopbackChain, loopbackProxy.Name()) {
+			if slices.Contains(loopbackChain, loopbackProxy.Name()) {
 				log.Warnln("[Rule] loopback cycle detected on %s", loopbackProxy.Name())
 				return loopbackProxy, loopbackRule, nil
 			}
-			metadata.LoopbackChain = append(metadata.LoopbackChain, loopbackProxy.Name())
+			loopbackChain = append(loopbackChain, loopbackProxy.Name())
 			conn, err := loopbackProxy.DialContext(context.Background(), metadata) // not a real connection, just for metadata update
 			if conn != nil {
 				_ = conn.Close()
@@ -709,15 +708,6 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 		}
 		return proxies["DIRECT"], nil, nil
 	}
-}
-
-func appendLoopbackChains(conn C.Connection, metadata *C.Metadata) {
-	for i := len(metadata.LoopbackChain) - 1; i >= 0; i-- {
-		if proxy, ok := proxies[metadata.LoopbackChain[i]]; ok {
-			conn.AppendToChains(proxy)
-		}
-	}
-	metadata.LoopbackChain = nil
 }
 
 func getRules(metadata *C.Metadata) []C.Rule {
