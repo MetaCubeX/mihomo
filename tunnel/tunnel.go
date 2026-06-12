@@ -28,6 +28,8 @@ import (
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
+
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -655,72 +657,58 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 	configMux.RLock()
 	defer configMux.RUnlock()
 
-	visitedLoopbacks := map[string]struct{}{}
 	for {
-		proxy, rule, loopbackProxy := matchRules(metadata, helper)
-		if loopbackProxy == nil {
-			return proxy, rule, nil
-		}
+		var loopbackProxy C.Proxy
+		var loopbackRule C.Rule
+	GetRules:
+		for _, rule := range getRules(metadata) {
+			if matched, ada := rule.Match(metadata, helper); matched {
+				adapter, ok := proxies[ada]
+				if !ok {
+					continue
+				}
 
-		if _, exists := visitedLoopbacks[loopbackProxy.Name()]; exists {
-			log.Warnln("[Rule] loopback cycle detected on %s, drop connection", loopbackProxy.Name())
-			return proxies["REJECT-DROP"], rule, nil
-		}
-		visitedLoopbacks[loopbackProxy.Name()] = struct{}{}
-		metadata.LoopbackChain = append(metadata.LoopbackChain, loopbackProxy.Name())
-		if err := applyLoopbackProxy(loopbackProxy, metadata); err != nil {
-			log.Warnln("[Rule] loopback proxy %s failed to update metadata: %s", loopbackProxy.Name(), err)
-			return proxies["REJECT-DROP"], rule, nil
-		}
-		log.Debugln("[Rule] loopback jump by %s to in-name=%q sub-rule=%q", loopbackProxy.Name(), metadata.InName, metadata.SpecialRules)
-	}
-}
+				// parse multi-layer nesting
+				for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
+					if adapter.Type() == C.Pass {
+						log.Debugln("%s match Pass rule", adapter.Name())
+						continue GetRules
+					}
+					if adapter.Type() == C.Loopback {
+						log.Debugln("%s match Loopback rule", adapter.Name())
+						loopbackProxy = adapter
+						loopbackRule = rule
+						break GetRules
+					}
+				}
 
-func matchRules(metadata *C.Metadata, helper C.RuleMatchHelper) (proxy C.Proxy, rule C.Rule, loopbackProxy C.Proxy) {
-	for _, rule = range getRules(metadata) {
-		matched, ada := rule.Match(metadata, helper)
-		if !matched {
-			continue
-		}
+				if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
+					log.Debugln("%s UDP is not supported", adapter.Name())
+					continue
+				}
 
-		adapter, ok := proxies[ada]
-		if !ok {
-			continue
+				return adapter, rule, nil
+			}
 		}
-
-		loopbackProxy, passed := inspectProxyChain(adapter, metadata)
 		if loopbackProxy != nil {
-			return nil, rule, loopbackProxy
-		}
-		if passed {
-			log.Debugln("%s match Pass rule", adapter.Name())
+			if slices.Contains(metadata.LoopbackChain, loopbackProxy.Name()) {
+				log.Warnln("[Rule] loopback cycle detected on %s", loopbackProxy.Name())
+				return loopbackProxy, loopbackRule, nil
+			}
+			metadata.LoopbackChain = append(metadata.LoopbackChain, loopbackProxy.Name())
+			conn, err := loopbackProxy.DialContext(context.Background(), metadata) // not a real connection, just for metadata update
+			if conn != nil {
+				_ = conn.Close()
+			}
+			if err != nil {
+				log.Warnln("[Rule] loopback proxy %s failed to update metadata: %s", loopbackProxy.Name(), err)
+				return loopbackProxy, loopbackRule, nil
+			}
+			log.Debugln("[Rule] loopback jump by %s to in-name=%q sub-rule=%q", loopbackProxy.Name(), metadata.InName, metadata.SpecialRules)
 			continue
 		}
-
-		if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
-			log.Debugln("%s UDP is not supported", adapter.Name())
-			continue
-		}
-
-		return adapter, rule, nil
+		return proxies["DIRECT"], nil, nil
 	}
-	return proxies["DIRECT"], nil, nil
-}
-
-func applyLoopbackProxy(proxy C.Proxy, metadata *C.Metadata) error {
-	if metadata.NetWork == C.UDP {
-		pc, err := proxy.ListenPacketContext(context.Background(), metadata)
-		if pc != nil {
-			_ = pc.Close()
-		}
-		return err
-	}
-
-	conn, err := proxy.DialContext(context.Background(), metadata)
-	if conn != nil {
-		_ = conn.Close()
-	}
-	return err
 }
 
 func appendLoopbackChains(conn C.Connection, metadata *C.Metadata) {
@@ -729,18 +717,7 @@ func appendLoopbackChains(conn C.Connection, metadata *C.Metadata) {
 			conn.AppendToChains(proxy)
 		}
 	}
-}
-
-func inspectProxyChain(proxy C.Proxy, metadata *C.Metadata) (loopbackProxy C.Proxy, passed bool) {
-	for adapter := proxy; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
-		switch adapter.Type() {
-		case C.Loopback:
-			return adapter, false
-		case C.Pass:
-			return nil, true
-		}
-	}
-	return nil, false
+	metadata.LoopbackChain = nil
 }
 
 func getRules(metadata *C.Metadata) []C.Rule {
