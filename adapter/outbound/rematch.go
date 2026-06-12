@@ -9,15 +9,15 @@ import (
 
 type Rematch struct {
 	*Base
-	subRule string
-	inName  string
+	targetRematchName *string
+	targetSubRule     *string
 }
 
 type RematchOption struct {
 	BasicOption
-	Name    string `proxy:"name"`
-	SubRule string `proxy:"sub-rule,omitempty"`
-	InName  string `proxy:"in-name,omitempty"`
+	Name              string  `proxy:"name"`
+	TargetRematchName *string `proxy:"target-rematch-name,omitempty"`
+	TargetSubRule     *string `proxy:"target-sub-rule,omitempty"`
 }
 
 func (l *Rematch) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
@@ -31,19 +31,17 @@ func (l *Rematch) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 }
 
 func (l *Rematch) applyMetadata(metadata *C.Metadata) {
-	if l.inName != "" {
-		metadata.InName = l.inName
+	if l.targetRematchName != nil {
+		metadata.RematchName = *l.targetRematchName
 	}
-	if l.subRule != "" {
-		metadata.SpecialRules = l.subRule
-	} else {
-		metadata.SpecialRules = ""
+	if l.targetSubRule != nil {
+		metadata.SpecialRules = *l.targetSubRule
 	}
 }
 
 func NewRematch(option RematchOption) (*Rematch, error) {
-	if option.SubRule == "" && option.InName == "" {
-		return nil, fmt.Errorf("rematch %s requires at least one of in-name or sub-rule", option.Name)
+	if option.TargetRematchName == nil && option.TargetSubRule == nil {
+		return nil, fmt.Errorf("rematch %s requires at least one of target-rematch-name or target-sub-rule", option.Name)
 	}
 	return &Rematch{
 		Base: NewBase(BaseOption{
@@ -52,7 +50,7 @@ func NewRematch(option RematchOption) (*Rematch, error) {
 			ProviderName: option.ProviderName,
 			UDP:          true,
 		}),
-		subRule: option.SubRule,
-		inName:  option.InName,
+		targetRematchName: option.TargetRematchName,
+		targetSubRule:     option.TargetSubRule,
 	}, nil
 }

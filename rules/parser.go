@@ -77,6 +77,8 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = RC.NewInUser(payload, target)
 	case "IN-NAME":
 		parsed, parseErr = RC.NewInName(payload, target)
+	case "REMATCH-NAME":
+		parsed, parseErr = RC.NewRematchName(payload, target)
 	case "SUB-RULE":
 		parsed, parseErr = logic.NewSubRule(payload, target, subRules, ParseRule)
 	case "AND":

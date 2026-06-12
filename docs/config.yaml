@@ -1393,6 +1393,11 @@ proxies: # socks5
   - name: "dns-out"
     type: dns
 
+  - name: "rematch"
+    type: rematch
+    target-rematch-name: "rematch1" # 如果填写则覆盖原始 metadata 中的 rematch-name（可用REMATCH-NAME规则匹配）
+    target-sub-rule: "sub-rule1" # 如果填写则接下来会直接用指定的 sub-rule 匹配，如果名字不存在或为空会回退到主rules
+
   # 配置指定 interface-name 和 fwmark 的 DIRECT
   - name: en1-direct
     type: direct
