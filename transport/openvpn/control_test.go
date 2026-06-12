@@ -121,6 +121,38 @@ func TestControlChannelResetAndAck(t *testing.T) {
 	}
 }
 
+func TestControlChannelSoftResetAdvancesKeyIDAndCounters(t *testing.T) {
+	client, server := newTestChannels(t)
+
+	if err := client.SendReset(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	packet, err := server.Read(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packet.Opcode != PControlHardResetClientV2 || packet.KeyID != 0 || packet.MessageID != 0 {
+		t.Fatalf("unexpected hard reset packet: %s key=%d message=%d", packet.Opcode, packet.KeyID, packet.MessageID)
+	}
+	if err := server.SendAck(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	_, _ = client.Read(ctx)
+	cancel()
+
+	if err := client.SendSoftReset(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	packet, err = server.Read(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if packet.Opcode != PControlSoftResetV1 || packet.KeyID != 1 || packet.MessageID != 0 {
+		t.Fatalf("unexpected soft reset packet: %s key=%d message=%d", packet.Opcode, packet.KeyID, packet.MessageID)
+	}
+}
+
 func TestControlConnCarriesTLSBytes(t *testing.T) {
 	client, server := newTestChannels(t)
 	client.SetRemoteSessionID(server.LocalSessionID())
@@ -204,6 +236,48 @@ func TestControlChannelReordersReliableMessages(t *testing.T) {
 	}
 	if packet.MessageID != 1 || string(packet.Payload) != "second" {
 		t.Fatalf("unexpected second delivered packet: id=%d payload=%q", packet.MessageID, packet.Payload)
+	}
+}
+
+func TestSoftResetControlConnContinuesAfterSoftResetPacket(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+	clientConn := NewSoftResetControlConn(client)
+
+	if _, err := server.Send(context.Background(), PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.Send(context.Background(), PControlV1, []byte("new tls record")); err != nil {
+		t.Fatal(err)
+	}
+
+	buf := make([]byte, 64)
+	n, err := clientConn.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(buf[:n]); got != "new tls record" {
+		t.Fatalf("unexpected payload after soft reset: %q", got)
+	}
+}
+
+func TestControlConnReportsSoftResetOutsideRekeyHandshake(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+	clientConn := NewControlConn(client)
+
+	if _, err := server.Send(context.Background(), PControlSoftResetV1, nil); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 64)
+	_, err := clientConn.Read(buf)
+	if !errors.Is(err, ErrControlRestart) {
+		t.Fatalf("expected soft reset restart signal, got %v", err)
+	}
+	if !errors.Is(err, ErrControlSoftReset) {
+		t.Fatalf("expected soft reset sentinel, got %v", err)
 	}
 }
 

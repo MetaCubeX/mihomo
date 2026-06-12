@@ -21,10 +21,12 @@ const (
 	DefaultHandshakeTimeout = 30 * time.Second
 	ControlRetransmitDelay  = time.Second
 	DefaultControlPollDelay = time.Second
+	dataChannelRekeyOverlap = ControlRetransmitDelay
 )
 
 var (
-	ErrControlRestart = errors.New("openvpn control channel requested restart")
+	ErrControlRestart   = errors.New("openvpn control channel requested restart")
+	ErrControlSoftReset = errors.New("openvpn control channel requested soft reset")
 )
 
 type controlStream interface {
@@ -32,6 +34,10 @@ type controlStream interface {
 	Write([]byte) (int, error)
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
+}
+
+type controlLoopHooks struct {
+	rekey func(context.Context, string) (*PushReply, controlStream, error)
 }
 
 type Client struct {
@@ -143,11 +149,34 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	}
 	log.Debugln("[OpenVPN] hard reset response received from %s", c.config.RemoteAddress())
 
+	return c.negotiateDataSession(ctx, false)
+}
+
+func (c *Client) Renegotiate(ctx context.Context, reason string) (*PushReply, error) {
+	if c == nil {
+		return nil, errors.New("nil openvpn client")
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultHandshakeTimeout)
+		defer cancel()
+	}
+	log.Debugln("[OpenVPN] starting soft reset for %s: %s", c.config.RemoteAddress(), reason)
+	if err := c.control.SendSoftReset(ctx); err != nil {
+		return nil, fmt.Errorf("send soft reset: %w", err)
+	}
+	return c.negotiateDataSession(ctx, true)
+}
+
+func (c *Client) negotiateDataSession(ctx context.Context, rekey bool) (*PushReply, error) {
 	tlsConfig, err := c.tlsConfig()
 	if err != nil {
 		return nil, err
 	}
 	controlConn := NewControlConn(c.control)
+	if rekey {
+		controlConn = NewSoftResetControlConn(c.control)
+	}
 	c.tlsConn = tls.Client(controlConn, tlsConfig)
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = c.tlsConn.SetDeadline(deadline)
@@ -197,16 +226,49 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 		return nil, err
 	}
 	log.Debugln("[OpenVPN] push reply received from %s", c.config.RemoteAddress())
-	c.push = push
-	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
-	if err != nil {
+	if err := c.installDataChannel(keys, push, rekey); err != nil {
 		return nil, err
 	}
-	c.markSend()
-	c.markReceive()
-	c.activity.Mark()
 	_ = c.tlsConn.SetDeadline(time.Time{})
 	return push, nil
+}
+
+func (c *Client) installDataChannel(keys *KeyMaterial, push *PushReply, rekey bool) error {
+	if c == nil {
+		return errors.New("nil openvpn client")
+	}
+	if push == nil {
+		return errors.New("nil openvpn push reply")
+	}
+	if rekey && c.data != nil {
+		if err := c.data.Rekey(keys, c.config.Cipher, c.config.Auth, push.PeerID, c.config.CompLZO); err != nil {
+			return err
+		}
+		c.schedulePreviousKeyRetirement()
+	} else {
+		data, err := NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID, c.config.CompLZO)
+		if err != nil {
+			return err
+		}
+		c.data = data
+	}
+	c.push = push
+	c.activity.Mark()
+	return nil
+}
+
+func (c *Client) schedulePreviousKeyRetirement() {
+	if c == nil || c.data == nil {
+		return
+	}
+	data := c.data
+	generation, ok := data.activeGeneration()
+	if !ok {
+		return
+	}
+	time.AfterFunc(dataChannelRekeyOverlap, func() {
+		data.RetirePreviousKeysForGeneration(generation)
+	})
 }
 
 func (c *Client) RunControlLoop(ctx context.Context) error {
@@ -216,7 +278,15 @@ func (c *Client) RunControlLoop(ctx context.Context) error {
 	if c.tlsConn == nil || c.push == nil {
 		return errors.New("openvpn control channel is not ready")
 	}
-	return runControlLoop(ctx, c.tlsConn, c.push, c.config.RemoteAddress(), c.activity)
+	return runControlLoopWithHooks(ctx, c.tlsConn, c.push, c.config.RemoteAddress(), c.activity, controlLoopHooks{
+		rekey: func(ctx context.Context, reason string) (*PushReply, controlStream, error) {
+			push, err := c.Renegotiate(ctx, reason)
+			if err != nil {
+				return nil, nil, err
+			}
+			return push, c.tlsConn, nil
+		},
+	})
 }
 
 func (c *Client) WriteIPPacket(ctx context.Context, packet []byte) error {
@@ -423,6 +493,10 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 }
 
 func runControlLoop(ctx context.Context, stream controlStream, push *PushReply, remote string, activity *remoteActivity) error {
+	return runControlLoopWithHooks(ctx, stream, push, remote, activity, controlLoopHooks{})
+}
+
+func runControlLoopWithHooks(ctx context.Context, stream controlStream, push *PushReply, remote string, activity *remoteActivity, hooks controlLoopHooks) error {
 	if push == nil {
 		return errors.New("nil openvpn push reply")
 	}
@@ -448,7 +522,26 @@ func runControlLoop(ctx context.Context, stream controlStream, push *PushReply, 
 		now := time.Now()
 		lastReceived = activity.Last()
 		if !renegotiateAt.IsZero() && !now.Before(renegotiateAt) {
-			return fmt.Errorf("%w: reneg-sec elapsed", ErrControlRestart)
+			nextPush, nextStream, err := runControlLoopRekey(ctx, hooks, "reneg-sec elapsed")
+			if err != nil {
+				return err
+			}
+			if nextStream != nil {
+				stream = nextStream
+			}
+			push = nextPush
+			pingInterval = push.PingInterval
+			if pingInterval <= 0 && push.PingRestart > 0 {
+				pingInterval = push.PingRestart / 2
+			}
+			pingRestart = push.PingRestart
+			renegotiateAt = time.Time{}
+			if push.RenegotiateAfter > 0 {
+				renegotiateAt = time.Now().Add(push.RenegotiateAfter)
+			}
+			lastReceived = activity.Last()
+			lastPingSent = time.Now()
+			continue
 		}
 		if pingRestart > 0 && !lastReceived.Add(pingRestart).After(now) {
 			return fmt.Errorf("%w: ping-restart elapsed without control traffic from %s", ErrControlRestart, remote)
@@ -466,6 +559,29 @@ func runControlLoop(ctx context.Context, stream controlStream, push *PushReply, 
 		}
 		n, err := stream.Read(tmp)
 		if err != nil {
+			if errors.Is(err, ErrControlSoftReset) {
+				nextPush, nextStream, err := runControlLoopRekey(ctx, hooks, "received P_CONTROL_SOFT_RESET_V1")
+				if err != nil {
+					return err
+				}
+				if nextStream != nil {
+					stream = nextStream
+				}
+				push = nextPush
+				pingInterval = push.PingInterval
+				if pingInterval <= 0 && push.PingRestart > 0 {
+					pingInterval = push.PingRestart / 2
+				}
+				pingRestart = push.PingRestart
+				renegotiateAt = time.Time{}
+				if push.RenegotiateAfter > 0 {
+					renegotiateAt = time.Now().Add(push.RenegotiateAfter)
+				}
+				lastReceived = activity.Last()
+				lastPingSent = time.Now()
+				buf = nil
+				continue
+			}
 			if errors.Is(err, ErrControlRestart) {
 				return err
 			}
@@ -496,11 +612,49 @@ func runControlLoop(ctx context.Context, stream controlStream, push *PushReply, 
 			}
 			msg := strings.TrimSpace(string(buf[:idx]))
 			buf = buf[idx+1:]
-			if err := handleControlMessage(msg, remote); err != nil {
+			rekeyReason, err := handleControlMessage(msg, remote)
+			if err != nil {
 				return err
+			}
+			if rekeyReason != "" {
+				nextPush, nextStream, err := runControlLoopRekey(ctx, hooks, rekeyReason)
+				if err != nil {
+					return err
+				}
+				if nextStream != nil {
+					stream = nextStream
+				}
+				push = nextPush
+				pingInterval = push.PingInterval
+				if pingInterval <= 0 && push.PingRestart > 0 {
+					pingInterval = push.PingRestart / 2
+				}
+				pingRestart = push.PingRestart
+				renegotiateAt = time.Time{}
+				if push.RenegotiateAfter > 0 {
+					renegotiateAt = time.Now().Add(push.RenegotiateAfter)
+				}
+				lastReceived = activity.Last()
+				lastPingSent = time.Now()
+				buf = nil
+				break
 			}
 		}
 	}
+}
+
+func runControlLoopRekey(ctx context.Context, hooks controlLoopHooks, reason string) (*PushReply, controlStream, error) {
+	if hooks.rekey == nil {
+		return nil, nil, fmt.Errorf("%w: %s", ErrControlRestart, reason)
+	}
+	nextPush, nextStream, err := hooks.rekey(ctx, reason)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: rekey failed after %s: %v", ErrControlRestart, reason, err)
+	}
+	if nextPush == nil {
+		return nil, nil, fmt.Errorf("%w: rekey returned nil push reply after %s", ErrControlRestart, reason)
+	}
+	return nextPush, nextStream, nil
 }
 
 func nextControlDeadline(now, lastReceived, lastPingSent time.Time, pingInterval, pingRestart time.Duration, renegotiateAt time.Time) time.Time {
@@ -533,17 +687,20 @@ func writeControlMessage(ctx context.Context, stream controlStream, message stri
 	return err
 }
 
-func handleControlMessage(message, remote string) error {
+func handleControlMessage(message, remote string) (string, error) {
 	if message == "" || message == "PING" || strings.HasPrefix(message, "INFO") || strings.HasPrefix(message, "WARNING") || strings.HasPrefix(message, "PUSH_REPLY") {
-		return nil
+		return "", nil
 	}
 	if strings.HasPrefix(message, "AUTH_FAILED") {
-		return fmt.Errorf("openvpn authentication failed after handshake from %s: %s", remote, message)
+		return "", fmt.Errorf("openvpn authentication failed after handshake from %s: %s", remote, message)
+	}
+	if strings.HasPrefix(message, "RESTART,soft") {
+		return message, nil
 	}
 	if strings.HasPrefix(message, "RESTART") || strings.HasPrefix(message, "HALT") {
-		return fmt.Errorf("%w: %s", ErrControlRestart, message)
+		return "", fmt.Errorf("%w: %s", ErrControlRestart, message)
 	}
-	return nil
+	return "", nil
 }
 
 func (c *Client) tlsConfig() (*tls.Config, error) {

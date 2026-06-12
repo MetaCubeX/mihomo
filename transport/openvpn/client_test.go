@@ -1,8 +1,10 @@
 package openvpn
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -91,6 +93,147 @@ func (timeoutError) Error() string   { return "timeout" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
 
+type oneShotReadErrorStream struct {
+	*fakeControlStream
+
+	mu  sync.Mutex
+	err error
+}
+
+func newOneShotReadErrorStream(err error) *oneShotReadErrorStream {
+	return &oneShotReadErrorStream{
+		fakeControlStream: newFakeControlStream(),
+		err:               err,
+	}
+}
+
+func (s *oneShotReadErrorStream) Read(b []byte) (int, error) {
+	s.mu.Lock()
+	err := s.err
+	s.err = nil
+	s.mu.Unlock()
+	if err != nil {
+		return 0, err
+	}
+	return s.fakeControlStream.Read(b)
+}
+
+func TestClientInstallDataChannelRekeysWithoutReplacingDataChannel(t *testing.T) {
+	client := &Client{
+		config: &ClientConfig{
+			Cipher: CipherAES128GCM,
+			Auth:   AuthSHA256,
+		},
+		activity: newRemoteActivity(),
+	}
+	keys1 := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	keys2 := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x55}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x66}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x77}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x88}, maxHMACKeyLength),
+	}
+	if err := client.installDataChannel(keys1, &PushReply{PeerID: 7}, false); err != nil {
+		t.Fatal(err)
+	}
+	initial := client.data
+	if initial == nil {
+		t.Fatal("expected initial data channel")
+	}
+	if err := client.installDataChannel(keys2, &PushReply{PeerID: 7}, true); err != nil {
+		t.Fatal(err)
+	}
+	if client.data != initial {
+		t.Fatal("expected in-place rekey to keep the data channel object")
+	}
+	encrypted, err := client.data.Encrypt([]byte{0x45, 0, 0, 20, 1, 2, 3, 4, 64, 6, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, keyID := parseOpcodeKeyID(encrypted[0]); keyID != 1 {
+		t.Fatalf("expected encrypted packets to use rekeyed key id 1, got %d", keyID)
+	}
+}
+
+func TestClientInstallDataChannelRetiresPreviousReceiveKeyAfterOverlap(t *testing.T) {
+	clientKeys1 := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	serverKeys1 := &KeyMaterial{
+		SendCipherKey: clientKeys1.RecvCipherKey,
+		SendHMACKey:   clientKeys1.RecvHMACKey,
+		RecvCipherKey: clientKeys1.SendCipherKey,
+		RecvHMACKey:   clientKeys1.SendHMACKey,
+	}
+	clientKeys2 := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x55}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x66}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x77}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x88}, maxHMACKeyLength),
+	}
+	serverKeys2 := &KeyMaterial{
+		SendCipherKey: clientKeys2.RecvCipherKey,
+		SendHMACKey:   clientKeys2.RecvHMACKey,
+		RecvCipherKey: clientKeys2.SendCipherKey,
+		RecvHMACKey:   clientKeys2.SendHMACKey,
+	}
+	client := &Client{
+		config: &ClientConfig{
+			Cipher: CipherAES128GCM,
+			Auth:   AuthSHA256,
+		},
+		activity: newRemoteActivity(),
+	}
+	if err := client.installDataChannel(clientKeys1, &PushReply{PeerID: 7}, false); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewDataChannel(serverKeys1, CipherAES128GCM, AuthSHA256, 7, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPacketDuringOverlap := []byte{0x45, 0, 0, 20, 1, 2, 3, 4, 64, 6, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1}
+	oldEncryptedDuringOverlap, err := server.Encrypt(oldPacketDuringOverlap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPacketAfterOverlap := []byte{0x45, 0, 0, 20, 1, 2, 3, 6, 64, 6, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1}
+	oldEncryptedAfterOverlap, err := server.Encrypt(oldPacketAfterOverlap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.installDataChannel(clientKeys2, &PushReply{PeerID: 7}, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.data.Decrypt(oldEncryptedDuringOverlap); err != nil {
+		t.Fatalf("expected old receive key to remain during overlap: %v", err)
+	}
+	if err := server.Rekey(serverKeys2, CipherAES128GCM, AuthSHA256, 7, ""); err != nil {
+		t.Fatal(err)
+	}
+	newPacket := []byte{0x45, 0, 0, 20, 1, 2, 3, 5, 64, 6, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1}
+	newEncrypted, err := server.Encrypt(newPacket)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(dataChannelRekeyOverlap + 100*time.Millisecond)
+
+	if _, err := client.data.Decrypt(oldEncryptedAfterOverlap); err == nil {
+		t.Fatal("expected old receive key to be retired after overlap")
+	}
+	if _, err := client.data.Decrypt(newEncrypted); err != nil {
+		t.Fatalf("expected active receive key to remain after overlap: %v", err)
+	}
+}
+
 func TestRunControlLoopSendsPing(t *testing.T) {
 	stream := newFakeControlStream()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -133,13 +276,92 @@ func TestRunControlLoopRestartsOnPingTimeout(t *testing.T) {
 	}
 }
 
-func TestRunControlLoopRestartsOnServerRestartMessage(t *testing.T) {
+func TestRunControlLoopRekeysOnRenegSec(t *testing.T) {
+	stream := newFakeControlStream()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	rekeys := 0
+	err := runControlLoopWithHooks(ctx, stream, &PushReply{RenegotiateAfter: time.Millisecond}, "test", newRemoteActivity(), controlLoopHooks{
+		rekey: func(context.Context, string) (*PushReply, controlStream, error) {
+			rekeys++
+			cancel()
+			return &PushReply{RenegotiateAfter: time.Hour}, stream, nil
+		},
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation after successful rekey, got %v", err)
+	}
+	if rekeys != 1 {
+		t.Fatalf("expected one in-place rekey, got %d", rekeys)
+	}
+}
+
+func TestRunControlLoopFallsBackWhenRekeyFails(t *testing.T) {
+	stream := newFakeControlStream()
+	err := runControlLoopWithHooks(context.Background(), stream, &PushReply{RenegotiateAfter: time.Millisecond}, "test", newRemoteActivity(), controlLoopHooks{
+		rekey: func(context.Context, string) (*PushReply, controlStream, error) {
+			return nil, nil, errors.New("boom")
+		},
+	})
+	if !errors.Is(err, ErrControlRestart) {
+		t.Fatalf("expected reconnect fallback, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "rekey failed") {
+		t.Fatalf("expected rekey failure reason, got %v", err)
+	}
+}
+
+func TestRunControlLoopRekeysOnServerSoftRestartMessage(t *testing.T) {
 	stream := newFakeControlStream()
 	stream.readCh <- []byte("RESTART,soft\x00")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	rekeys := 0
+	err := runControlLoopWithHooks(ctx, stream, &PushReply{}, "test", newRemoteActivity(), controlLoopHooks{
+		rekey: func(context.Context, string) (*PushReply, controlStream, error) {
+			rekeys++
+			cancel()
+			return &PushReply{RenegotiateAfter: time.Hour}, stream, nil
+		},
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation after successful soft restart rekey, got %v", err)
+	}
+	if rekeys != 1 {
+		t.Fatalf("expected one in-place rekey, got %d", rekeys)
+	}
+}
+
+func TestRunControlLoopRekeysOnServerSoftResetPacket(t *testing.T) {
+	stream := newOneShotReadErrorStream(fmt.Errorf("%w: %w: received P_CONTROL_SOFT_RESET_V1", ErrControlRestart, ErrControlSoftReset))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	rekeys := 0
+	err := runControlLoopWithHooks(ctx, stream, &PushReply{}, "test", newRemoteActivity(), controlLoopHooks{
+		rekey: func(context.Context, string) (*PushReply, controlStream, error) {
+			rekeys++
+			cancel()
+			return &PushReply{RenegotiateAfter: time.Hour}, stream, nil
+		},
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation after successful soft reset rekey, got %v", err)
+	}
+	if rekeys != 1 {
+		t.Fatalf("expected one in-place rekey, got %d", rekeys)
+	}
+}
+
+func TestRunControlLoopRestartsOnServerHardRestartMessage(t *testing.T) {
+	stream := newFakeControlStream()
+	stream.readCh <- []byte("HALT,server-exit\x00")
 
 	err := runControlLoop(context.Background(), stream, &PushReply{}, "test", newRemoteActivity())
 	if !errors.Is(err, ErrControlRestart) {
-		t.Fatalf("expected restart on server RESTART, got %v", err)
+		t.Fatalf("expected restart on server HALT, got %v", err)
 	}
 }
 

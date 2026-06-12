@@ -71,6 +71,19 @@ func (c *ControlChannel) SendReset(ctx context.Context) error {
 	return err
 }
 
+func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
+	c.mu.Lock()
+	c.keyID = (c.keyID + 1) & KeyIDMask
+	c.sendMessage = 0
+	c.recvMessage = 0
+	c.ackPending = nil
+	c.pending = make(map[uint32]*ControlPacket)
+	c.recvPending = make(map[uint32]*ControlPacket)
+	c.mu.Unlock()
+	_, err := c.Send(ctx, PControlSoftResetV1, nil)
+	return err
+}
+
 func (c *ControlChannel) Send(ctx context.Context, opcode Opcode, payload []byte) (uint32, error) {
 	if !opcode.HasMessageID() {
 		return 0, fmt.Errorf("opcode %s cannot carry a reliable message", opcode)
@@ -138,6 +151,11 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 		c.mu.Lock()
 		if c.remote == (SessionID{}) && packet.LocalSession != c.local {
 			c.remote = packet.LocalSession
+		}
+		if packet.Opcode == PControlSoftResetV1 {
+			c.recvMessage = 0
+			c.recvPending = make(map[uint32]*ControlPacket)
+			c.ackPending = nil
 		}
 		for _, ackID := range packet.AckIDs {
 			delete(c.pending, ackID)
@@ -282,14 +300,19 @@ func appendAck(acks []uint32, ack uint32) []uint32 {
 }
 
 type ControlConn struct {
-	channel *ControlChannel
-	readBuf []byte
-	closed  bool
-	mu      sync.Mutex
+	channel         *ControlChannel
+	acceptSoftReset bool
+	readBuf         []byte
+	closed          bool
+	mu              sync.Mutex
 }
 
 func NewControlConn(channel *ControlChannel) *ControlConn {
 	return &ControlConn{channel: channel}
+}
+
+func NewSoftResetControlConn(channel *ControlChannel) *ControlConn {
+	return &ControlConn{channel: channel, acceptSoftReset: true}
 }
 
 func (c *ControlConn) Read(b []byte) (int, error) {
@@ -333,7 +356,15 @@ func (c *ControlConn) Read(b []byte) (int, error) {
 			return 0, err
 		}
 		switch packet.Opcode {
-		case PControlSoftResetV1, PControlHardResetServerV1, PControlHardResetServerV2:
+		case PControlSoftResetV1:
+			if err := c.channel.SendAck(context.Background()); err != nil {
+				return 0, err
+			}
+			if c.acceptSoftReset {
+				continue
+			}
+			return 0, fmt.Errorf("%w: %w: received %s", ErrControlRestart, ErrControlSoftReset, packet.Opcode)
+		case PControlHardResetServerV1, PControlHardResetServerV2:
 			if err := c.channel.SendAck(context.Background()); err != nil {
 				return 0, err
 			}
