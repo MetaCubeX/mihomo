@@ -281,6 +281,104 @@ func TestControlConnReportsSoftResetOutsideRekeyHandshake(t *testing.T) {
 	}
 }
 
+func TestControlChannelRejectsReplayedProtectedPacket(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	clientCrypt, err := NewTLSCrypt(testStaticKey(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverCrypt, err := NewTLSCrypt(testStaticKey(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewControlChannel(clientIO, clientCrypt, clientID)
+	client.SetRemoteSessionID(serverID)
+	now := uint32(time.Now().Unix())
+	packet := &ControlPacket{
+		Opcode:       PControlV1,
+		KeyID:        0,
+		LocalSession: serverID,
+		MessageID:    0,
+		Payload:      []byte("hello"),
+	}
+	raw, err := packet.Encode(serverCrypt, 7, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := serverIO.WritePacket(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Read(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := serverIO.WritePacket(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Read(context.Background()); err == nil {
+		t.Fatal("expected replayed control packet to be rejected")
+	}
+}
+
+func TestControlChannelRejectsMismatchedRemoteSession(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	var otherID SessionID
+	copy(otherID[:], []byte("other001"))
+	client := NewControlChannel(clientIO, nil, clientID)
+	client.SetRemoteSessionID(serverID)
+	packet := &ControlPacket{
+		Opcode:       PControlV1,
+		KeyID:        0,
+		LocalSession: otherID,
+		MessageID:    0,
+		Payload:      []byte("hello"),
+	}
+	raw, err := packet.Encode(nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := serverIO.WritePacket(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Read(context.Background()); err == nil {
+		t.Fatal("expected mismatched remote session to be rejected")
+	}
+}
+
+func TestControlChannelRejectsFutureMessageIDOutsideWindow(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	var clientID SessionID
+	copy(clientID[:], []byte("client01"))
+	var serverID SessionID
+	copy(serverID[:], []byte("server01"))
+	client := NewControlChannel(clientIO, nil, clientID)
+	client.SetRemoteSessionID(serverID)
+	packet := &ControlPacket{
+		Opcode:       PControlV1,
+		KeyID:        0,
+		LocalSession: serverID,
+		MessageID:    controlReceiveWindowSize + 1,
+		Payload:      []byte("future"),
+	}
+	raw, err := packet.Encode(nil, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := serverIO.WritePacket(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Read(context.Background()); err == nil {
+		t.Fatal("expected future message outside receive window to be rejected")
+	}
+}
+
 func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
 	clientIO, serverIO := newMemoryPacketPair()
 	var clientID SessionID

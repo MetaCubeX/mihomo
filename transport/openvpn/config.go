@@ -57,7 +57,7 @@ type ClientConfig struct {
 
 	TLSCryptKey      []byte
 	TLSAuthKey       []byte
-	TLSAuthDirection int
+	TLSAuthDirection *int
 }
 
 // DataCipherKeyLength returns the key size for the negotiated data cipher.
@@ -175,8 +175,15 @@ func (c *ClientConfig) ValidateInstallScriptSubset() error {
 	if len(bytes.TrimSpace(c.TLSCrypt)) > 0 && len(bytes.TrimSpace(c.TLSAuth)) > 0 {
 		return errors.New("openvpn tls-crypt and tls-auth are mutually exclusive")
 	}
-	if c.TLSAuthDirection != 0 && c.TLSAuthDirection != 1 {
-		return fmt.Errorf("unsupported openvpn key-direction %d: only 0 and 1 are supported", c.TLSAuthDirection)
+	hasTLSAuth := len(bytes.TrimSpace(c.TLSAuth)) > 0
+	if c.TLSAuthDirection != nil && *c.TLSAuthDirection != 0 && *c.TLSAuthDirection != 1 {
+		return fmt.Errorf("unsupported openvpn key-direction %d: only 0 and 1 are supported", *c.TLSAuthDirection)
+	}
+	if hasTLSAuth && c.TLSAuthDirection == nil {
+		return errors.New("openvpn tls-auth requires explicit key-direction 0 or 1")
+	}
+	if !hasTLSAuth && c.TLSAuthDirection != nil {
+		return errors.New("openvpn key-direction requires tls-auth")
 	}
 	for name, value := range map[string][]byte{
 		"ca": c.CA,

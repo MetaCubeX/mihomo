@@ -22,6 +22,9 @@ const (
 	ControlRetransmitDelay  = time.Second
 	DefaultControlPollDelay = time.Second
 	dataChannelRekeyOverlap = ControlRetransmitDelay
+	maxPushReplyBuffer      = 64 * 1024
+	maxPushReplyFragments   = 16
+	maxPushReplyOptions     = 256
 )
 
 var (
@@ -103,11 +106,11 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		log.Debugln("[OpenVPN] control protection=tls-crypt remote=%s", config.RemoteAddress())
 	} else if len(config.TLSAuthKey) > 0 {
 		var err error
-		crypt, err = NewTLSAuth(config.TLSAuthKey, config.Auth, config.TLSAuthDirection, true)
+		crypt, err = NewTLSAuth(config.TLSAuthKey, config.Auth, *config.TLSAuthDirection, true)
 		if err != nil {
 			return nil, err
 		}
-		log.Debugln("[OpenVPN] control protection=tls-auth auth=%s key-direction=%d remote=%s", config.Auth, config.TLSAuthDirection, config.RemoteAddress())
+		log.Debugln("[OpenVPN] control protection=tls-auth auth=%s key-direction=%d remote=%s", config.Auth, *config.TLSAuthDirection, config.RemoteAddress())
 	} else {
 		log.Debugln("[OpenVPN] control protection=none remote=%s", config.RemoteAddress())
 	}
@@ -124,6 +127,7 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 		control:  NewControlChannel(mux, crypt, local),
 		activity: newRemoteActivity(),
 		cancel:   cancel,
+		writeSem: *semaphore.NewWeighted(1),
 	}
 	client.markSend()
 	client.markReceive()
@@ -241,12 +245,12 @@ func (c *Client) installDataChannel(keys *KeyMaterial, push *PushReply, rekey bo
 		return errors.New("nil openvpn push reply")
 	}
 	if rekey && c.data != nil {
-		if err := c.data.Rekey(keys, c.config.Cipher, c.config.Auth, push.PeerID, c.config.CompLZO); err != nil {
+		if err := c.data.Rekey(keys, c.config.Cipher, c.config.Auth, push.PeerID); err != nil {
 			return err
 		}
 		c.schedulePreviousKeyRetirement()
 	} else {
-		data, err := NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID, c.config.CompLZO)
+		data, err := NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
 		if err != nil {
 			return err
 		}
@@ -437,6 +441,7 @@ func (c *Client) readServerKeyMethod(ctx context.Context) (*KeyMethod2Record, er
 func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 	var buf []byte
 	var pushOptions []string
+	pushFragments := 0
 	tmp := make([]byte, 4096)
 	retransmits := 0
 	for {
@@ -462,34 +467,68 @@ func (c *Client) readPushReply(ctx context.Context) (*PushReply, error) {
 			return nil, fmt.Errorf("read push reply after %d retransmits: %w", retransmits, err)
 		}
 		buf = append(buf, tmp[:n]...)
-		if bytes.Contains(buf, []byte("\x00")) || strings.Contains(string(buf), "PUSH_REPLY") {
-			msg := string(buf)
-			if idx := strings.IndexByte(msg, 0); idx >= 0 {
-				msg = msg[:idx]
-			}
-			if strings.HasPrefix(msg, "PUSH_REPLY") {
-				options, continuation := splitPushReplyOptions(msg)
-				pushOptions = append(pushOptions, options...)
-				buf = nil
-				if continuation == 2 {
-					continue
-				}
-				return ParsePushReply(joinPushReplyOptions(pushOptions))
-			}
-			if strings.HasPrefix(msg, "AUTH_FAILED") {
-				return nil, fmt.Errorf("openvpn authentication failed: %s", msg)
-			}
-			if strings.HasPrefix(msg, "AUTH_PENDING") {
-				log.Debugln("[OpenVPN] auth pending from %s: %s", c.config.RemoteAddress(), msg)
-				buf = nil
-				continue
-			}
-			if strings.TrimSpace(msg) != "" {
-				return nil, fmt.Errorf("unexpected openvpn control message while waiting for push reply: %s", msg)
-			}
+		if len(buf) > maxPushReplyBuffer {
+			return nil, fmt.Errorf("openvpn push reply buffer exceeded %d bytes", maxPushReplyBuffer)
+		}
+		reply, done, err := c.consumePushReplyFrames(&buf, &pushOptions, &pushFragments)
+		if err != nil {
+			return nil, err
+		}
+		if done {
+			return reply, nil
 		}
 	}
 	return nil, ctx.Err()
+}
+
+func (c *Client) consumePushReplyFrames(buf *[]byte, pushOptions *[]string, pushFragments *int) (*PushReply, bool, error) {
+	for {
+		idx := bytes.IndexByte(*buf, 0)
+		if idx < 0 {
+			return nil, false, nil
+		}
+		frame := string((*buf)[:idx])
+		*buf = (*buf)[idx+1:]
+		reply, done, err := c.handlePushReplyFrame(frame, pushOptions, pushFragments)
+		if err != nil || done {
+			return reply, done, err
+		}
+	}
+}
+
+func (c *Client) handlePushReplyFrame(frame string, pushOptions *[]string, pushFragments *int) (*PushReply, bool, error) {
+	msg := strings.TrimSpace(frame)
+	if msg == "" {
+		return nil, false, nil
+	}
+	if strings.HasPrefix(msg, "PUSH_REPLY") {
+		options, continuation := splitPushReplyOptions(msg)
+		(*pushFragments)++
+		if *pushFragments > maxPushReplyFragments {
+			return nil, false, fmt.Errorf("openvpn push reply exceeded %d fragments", maxPushReplyFragments)
+		}
+		*pushOptions = append(*pushOptions, options...)
+		if len(*pushOptions) > maxPushReplyOptions {
+			return nil, false, fmt.Errorf("openvpn push reply exceeded %d options", maxPushReplyOptions)
+		}
+		joined := joinPushReplyOptions(*pushOptions)
+		if len(joined) > maxPushReplyBuffer {
+			return nil, false, fmt.Errorf("openvpn push reply exceeded %d bytes", maxPushReplyBuffer)
+		}
+		if continuation == 2 {
+			return nil, false, nil
+		}
+		reply, err := ParsePushReply(joined)
+		return reply, err == nil, err
+	}
+	if strings.HasPrefix(msg, "AUTH_FAILED") {
+		return nil, false, fmt.Errorf("openvpn authentication failed: %s", msg)
+	}
+	if strings.HasPrefix(msg, "AUTH_PENDING") {
+		log.Debugln("[OpenVPN] auth pending from %s: %s", c.config.RemoteAddress(), msg)
+		return nil, false, nil
+	}
+	return nil, false, fmt.Errorf("unexpected openvpn control message while waiting for push reply: %s", msg)
 }
 
 func runControlLoop(ctx context.Context, stream controlStream, push *PushReply, remote string, activity *remoteActivity) error {

@@ -12,6 +12,14 @@ import (
 	"github.com/metacubex/mihomo/common/pool"
 )
 
+const (
+	controlReplayWindowSize     = 64
+	controlReceiveWindowSize    = 64
+	controlMaxBufferedBytes     = 64 * 1024
+	controlMaxPacketTimeSkew    = 2 * time.Minute
+	controlPacketBufferOverhead = 32
+)
+
 type PacketIO interface {
 	ReadPacket(ctx context.Context) ([]byte, error)
 	WritePacket(ctx context.Context, packet []byte) error
@@ -35,8 +43,45 @@ type ControlChannel struct {
 	ackPending    []uint32
 	pending       map[uint32]*ControlPacket
 	recvPending   map[uint32]*ControlPacket
+	recvBuffered  int
+	replayWindow  packetReplayWindow
 	readDeadline  time.Time
 	writeDeadline time.Time
+}
+
+type packetReplayWindow struct {
+	highest uint32
+	seen    uint64
+	ready   bool
+}
+
+func (w *packetReplayWindow) Accept(packetID uint32) bool {
+	if !w.ready {
+		w.highest = packetID
+		w.seen = 1
+		w.ready = true
+		return true
+	}
+	if packetID > w.highest {
+		shift := packetID - w.highest
+		if shift >= controlReplayWindowSize {
+			w.seen = 1
+		} else {
+			w.seen = (w.seen << shift) | 1
+		}
+		w.highest = packetID
+		return true
+	}
+	delta := w.highest - packetID
+	if delta >= controlReplayWindowSize {
+		return false
+	}
+	mask := uint64(1) << delta
+	if w.seen&mask != 0 {
+		return false
+	}
+	w.seen |= mask
+	return true
 }
 
 func NewControlChannel(io PacketIO, crypt ControlProtection, local SessionID) *ControlChannel {
@@ -79,6 +124,7 @@ func (c *ControlChannel) SendSoftReset(ctx context.Context) error {
 	c.ackPending = nil
 	c.pending = make(map[uint32]*ControlPacket)
 	c.recvPending = make(map[uint32]*ControlPacket)
+	c.recvBuffered = 0
 	c.mu.Unlock()
 	_, err := c.Send(ctx, PControlSoftResetV1, nil)
 	return err
@@ -134,13 +180,17 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 		c.mu.Lock()
 		if packet, ok := c.recvPending[c.recvMessage]; ok {
 			delete(c.recvPending, c.recvMessage)
+			c.recvBuffered -= controlPacketBufferedSize(packet)
+			if c.recvBuffered < 0 {
+				c.recvBuffered = 0
+			}
 			c.recvMessage++
 			c.mu.Unlock()
 			return packet, nil
 		}
 		c.mu.Unlock()
 
-		packet, err := c.readControlPacket(ctx)
+		packet, packetID, unixTime, err := c.readControlPacket(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -149,12 +199,17 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 		sendAck := false
 
 		c.mu.Lock()
+		if err := c.validateReceivedControlPacketLocked(packet, packetID, unixTime); err != nil {
+			c.mu.Unlock()
+			return nil, err
+		}
 		if c.remote == (SessionID{}) && packet.LocalSession != c.local {
 			c.remote = packet.LocalSession
 		}
 		if packet.Opcode == PControlSoftResetV1 {
 			c.recvMessage = 0
 			c.recvPending = make(map[uint32]*ControlPacket)
+			c.recvBuffered = 0
 			c.ackPending = nil
 		}
 		for _, ackID := range packet.AckIDs {
@@ -174,8 +229,18 @@ func (c *ControlChannel) Read(ctx context.Context) (*ControlPacket, error) {
 			deliver = packet
 			c.recvMessage++
 		default:
+			if packet.MessageID-c.recvMessage > controlReceiveWindowSize {
+				c.mu.Unlock()
+				return nil, fmt.Errorf("openvpn control message id %d exceeds receive window at %d", packet.MessageID, c.recvMessage)
+			}
 			if _, exists := c.recvPending[packet.MessageID]; !exists {
+				bufferedSize := controlPacketBufferedSize(packet)
+				if c.recvBuffered+bufferedSize > controlMaxBufferedBytes {
+					c.mu.Unlock()
+					return nil, fmt.Errorf("openvpn control receive buffer exceeded %d bytes", controlMaxBufferedBytes)
+				}
 				c.recvPending[packet.MessageID] = packet
+				c.recvBuffered += bufferedSize
 			}
 			sendAck = true
 		}
@@ -240,7 +305,33 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 	return c.io.WritePacket(ctx, encoded)
 }
 
-func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket, error) {
+func (c *ControlChannel) validateReceivedControlPacketLocked(packet *ControlPacket, packetID uint32, unixTime uint32) error {
+	if c.remote != (SessionID{}) && packet.LocalSession != c.remote {
+		return fmt.Errorf("openvpn control packet session mismatch")
+	}
+	if len(packet.AckIDs) > 0 && packet.AckRemoteSession != c.local {
+		return fmt.Errorf("openvpn control ack remote session mismatch")
+	}
+	if c.crypt != nil {
+		packetTime := time.Unix(int64(unixTime), 0)
+		if skew := c.clock().Sub(packetTime); skew > controlMaxPacketTimeSkew || skew < -controlMaxPacketTimeSkew {
+			return fmt.Errorf("openvpn control packet time outside replay window: %s", packetTime)
+		}
+		if !c.replayWindow.Accept(packetID) {
+			return fmt.Errorf("openvpn control replay detected for packet id %d", packetID)
+		}
+	}
+	return nil
+}
+
+func controlPacketBufferedSize(packet *ControlPacket) int {
+	if packet == nil {
+		return 0
+	}
+	return controlPacketBufferOverhead + len(packet.Payload) + len(packet.AckIDs)*4
+}
+
+func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket, uint32, uint32, error) {
 	c.mu.Lock()
 	deadline := c.readDeadline
 	c.mu.Unlock()
@@ -256,10 +347,10 @@ func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket,
 
 	raw, err := c.io.ReadPacket(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, 0, err
 	}
-	packet, _, _, err := DecodeControlPacket(c.crypt, raw)
-	return packet, err
+	packet, packetID, unixTime, err := DecodeControlPacket(c.crypt, raw)
+	return packet, packetID, unixTime, err
 }
 
 func (c *ControlChannel) SetDeadline(t time.Time) error {

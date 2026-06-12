@@ -64,10 +64,9 @@ type dataChannelKey struct {
 	sendImplicitIV [DataChannelIVSize]byte
 	recvImplicitIV [DataChannelIVSize]byte
 
-	keyID   uint8
-	peerID  uint32
-	header  []byte
-	compLZO string
+	keyID  uint8
+	peerID uint32
+	header []byte
 
 	mu           sync.Mutex
 	sendPacketID uint32
@@ -80,8 +79,8 @@ type dataChannelKey struct {
 	randOffset int
 }
 
-func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32, compLZO string) (*DataChannel, error) {
-	key, err := newDataChannelKey(keys, cipherName, authName, peerID, compLZO, 0)
+func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint32) (*DataChannel, error) {
+	key, err := newDataChannelKey(keys, cipherName, authName, peerID, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +92,7 @@ func NewDataChannel(keys *KeyMaterial, cipherName, authName string, peerID uint3
 	}, nil
 }
 
-func newDataChannelKey(keys *KeyMaterial, cipherName, authName string, peerID uint32, compLZO string, keyID uint8) (*dataChannelKey, error) {
+func newDataChannelKey(keys *KeyMaterial, cipherName, authName string, peerID uint32, keyID uint8) (*dataChannelKey, error) {
 	if keys == nil {
 		return nil, errors.New("nil openvpn key material")
 	}
@@ -115,7 +114,6 @@ func newDataChannelKey(keys *KeyMaterial, cipherName, authName string, peerID ui
 			keyID:    keyID,
 			peerID:   peerID,
 			header:   dataHeader(peerID, keyID),
-			compLZO:  compLZO,
 		}
 		copy(d.sendImplicitIV[4:], keys.SendHMACKey[:DataChannelIVSize-4])
 		copy(d.recvImplicitIV[4:], keys.RecvHMACKey[:DataChannelIVSize-4])
@@ -147,7 +145,6 @@ func newDataChannelKey(keys *KeyMaterial, cipherName, authName string, peerID ui
 		keyID:       keyID,
 		peerID:      peerID,
 		header:      dataHeader(peerID, keyID),
-		compLZO:     compLZO,
 	}
 	d.sendMACPool.New = func() any {
 		return hmac.New(d.authHash, d.sendHMACKey)
@@ -217,14 +214,6 @@ func (d *DataChannel) Encrypt(packet []byte) ([]byte, error) {
 		return nil, errors.New("openvpn data channel has no active key")
 	}
 
-	// Prepend comp-lzo header (0xfa = not compressed) to satisfy servers expecting the framing.
-	if key.compLZO == CompLzoYes {
-		lzoPacket := make([]byte, 1+len(packet))
-		lzoPacket[0] = lzoCompressNone
-		copy(lzoPacket[1:], packet)
-		packet = lzoPacket
-	}
-
 	return key.Encrypt(packet)
 }
 
@@ -244,19 +233,10 @@ func (d *DataChannel) Decrypt(packet []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if key.compLZO == CompLzoYes && len(plain) > 0 {
-		decompressed, err := lzo1xDecompressSafe(plain)
-		if err != nil {
-			return nil, err
-		}
-		if len(decompressed) > 0 {
-			return decompressed, nil
-		}
-	}
 	return plain, nil
 }
 
-func (d *DataChannel) Rekey(keys *KeyMaterial, cipherName, authName string, peerID uint32, compLZO string) error {
+func (d *DataChannel) Rekey(keys *KeyMaterial, cipherName, authName string, peerID uint32) error {
 	if d == nil {
 		return errors.New("nil openvpn data channel")
 	}
@@ -265,7 +245,7 @@ func (d *DataChannel) Rekey(keys *KeyMaterial, cipherName, authName string, peer
 	if active != nil {
 		nextKeyID = (active.keyID + 1) & KeyIDMask
 	}
-	next, err := newDataChannelKey(keys, cipherName, authName, peerID, compLZO, nextKeyID)
+	next, err := newDataChannelKey(keys, cipherName, authName, peerID, nextKeyID)
 	if err != nil {
 		return err
 	}

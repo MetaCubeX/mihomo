@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 )
 
 type fakeControlStream struct {
@@ -195,7 +197,7 @@ func TestClientInstallDataChannelRetiresPreviousReceiveKeyAfterOverlap(t *testin
 	if err := client.installDataChannel(clientKeys1, &PushReply{PeerID: 7}, false); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewDataChannel(serverKeys1, CipherAES128GCM, AuthSHA256, 7, "")
+	server, err := NewDataChannel(serverKeys1, CipherAES128GCM, AuthSHA256, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +217,7 @@ func TestClientInstallDataChannelRetiresPreviousReceiveKeyAfterOverlap(t *testin
 	if _, err := client.data.Decrypt(oldEncryptedDuringOverlap); err != nil {
 		t.Fatalf("expected old receive key to remain during overlap: %v", err)
 	}
-	if err := server.Rekey(serverKeys2, CipherAES128GCM, AuthSHA256, 7, ""); err != nil {
+	if err := server.Rekey(serverKeys2, CipherAES128GCM, AuthSHA256, 7); err != nil {
 		t.Fatal(err)
 	}
 	newPacket := []byte{0x45, 0, 0, 20, 1, 2, 3, 5, 64, 6, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1}
@@ -231,6 +233,125 @@ func TestClientInstallDataChannelRetiresPreviousReceiveKeyAfterOverlap(t *testin
 	}
 	if _, err := client.data.Decrypt(newEncrypted); err != nil {
 		t.Fatalf("expected active receive key to remain after overlap: %v", err)
+	}
+}
+
+func TestClientConsumePushReplyFramesWaitsForNULTerminator(t *testing.T) {
+	client := &Client{config: &ClientConfig{RemoteHost: "test", RemotePort: 1194}}
+	var options []string
+	fragments := 0
+	buf := []byte("PUSH_REPLY,ifconfig 198.51.100.2")
+
+	if reply, done, err := client.consumePushReplyFrames(&buf, &options, &fragments); err != nil || done || reply != nil {
+		t.Fatalf("expected incomplete frame to be ignored, reply=%v done=%v err=%v", reply, done, err)
+	}
+	if got := string(buf); got != "PUSH_REPLY,ifconfig 198.51.100.2" {
+		t.Fatalf("expected incomplete bytes to remain buffered, got %q", got)
+	}
+
+	buf = append(buf, []byte(" 255.255.255.0,peer-id 7\x00")...)
+	reply, done, err := client.consumePushReplyFrames(&buf, &options, &fragments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done || reply == nil {
+		t.Fatalf("expected complete push reply, done=%v reply=%v", done, reply)
+	}
+	if reply.PeerID != 7 {
+		t.Fatalf("unexpected peer-id: %d", reply.PeerID)
+	}
+	if len(buf) != 0 {
+		t.Fatalf("expected buffer to be consumed, got %q", string(buf))
+	}
+}
+
+func TestClientConsumePushReplyFramesHandlesMultipleFramesInOneRead(t *testing.T) {
+	client := &Client{config: &ClientConfig{RemoteHost: "test", RemotePort: 1194}}
+	var options []string
+	fragments := 0
+	buf := []byte("AUTH_PENDING,timeout 1\x00PUSH_REPLY,ifconfig 198.51.100.2 255.255.255.0,peer-id 7\x00")
+
+	reply, done, err := client.consumePushReplyFrames(&buf, &options, &fragments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done || reply == nil {
+		t.Fatalf("expected complete push reply after auth-pending frame, done=%v reply=%v", done, reply)
+	}
+	if reply.PeerID != 7 {
+		t.Fatalf("unexpected peer-id: %d", reply.PeerID)
+	}
+}
+
+func TestClientConsumePushReplyFramesLimitsContinuationFragments(t *testing.T) {
+	client := &Client{config: &ClientConfig{RemoteHost: "test", RemotePort: 1194}}
+	var options []string
+	fragments := 0
+	var buf []byte
+	for i := 0; i < maxPushReplyFragments+1; i++ {
+		buf = append(buf, []byte("PUSH_REPLY,route 198.51.100.0 255.255.255.0,push-continuation 2\x00")...)
+	}
+
+	_, _, err := client.consumePushReplyFrames(&buf, &options, &fragments)
+	if err == nil {
+		t.Fatal("expected continuation fragment limit error")
+	}
+}
+
+func TestClientCompLZOFramingIsAppliedOnce(t *testing.T) {
+	clientIO, serverIO := newMemoryPacketPair()
+	clientMux := NewPacketMux(clientIO)
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go clientMux.Run(runCtx)
+
+	clientKeys := &KeyMaterial{
+		SendCipherKey: bytes.Repeat([]byte{0x11}, 16),
+		SendHMACKey:   bytes.Repeat([]byte{0x22}, maxHMACKeyLength),
+		RecvCipherKey: bytes.Repeat([]byte{0x33}, 16),
+		RecvHMACKey:   bytes.Repeat([]byte{0x44}, maxHMACKeyLength),
+	}
+	serverKeys := &KeyMaterial{
+		SendCipherKey: clientKeys.RecvCipherKey,
+		SendHMACKey:   clientKeys.RecvHMACKey,
+		RecvCipherKey: clientKeys.SendCipherKey,
+		RecvHMACKey:   clientKeys.SendHMACKey,
+	}
+	client := &Client{
+		config: &ClientConfig{
+			Cipher:  CipherAES128GCM,
+			Auth:    AuthSHA256,
+			CompLZO: CompLzoYes,
+		},
+		mux:      clientMux,
+		writeSem: *semaphore.NewWeighted(1),
+	}
+	if err := client.installDataChannel(clientKeys, &PushReply{PeerID: 7}, false); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewDataChannel(serverKeys, CipherAES128GCM, AuthSHA256, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	packet := []byte{0x45, 0, 0, 20, 1, 2, 3, 4, 64, 6, 0, 0, 10, 8, 0, 2, 1, 1, 1, 1}
+	if err := client.WriteIPPacket(context.Background(), packet); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := serverIO.ReadPacket(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := server.Decrypt(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := lzo1xDecompressSafe(plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, packet) {
+		t.Fatalf("expected one comp-lzo frame, got %x want %x", got, packet)
 	}
 }
 

@@ -55,7 +55,7 @@ type OpenVPNOption struct {
 	Key          string `proxy:"key,omitempty"`
 	TLSCrypt     string `proxy:"tls-crypt,omitempty"`
 	TLSAuth      string `proxy:"tls-auth,omitempty"`
-	KeyDirection int    `proxy:"key-direction,omitempty"`
+	KeyDirection *int   `proxy:"key-direction,omitempty"`
 	Username     string `proxy:"username,omitempty"`
 	Password     string `proxy:"password,omitempty"`
 	Ping         int    `proxy:"ping,omitempty"`
@@ -309,8 +309,8 @@ func (o *OpenVPN) lockRun(ctx context.Context) error {
 	return nil
 }
 
-func (o *OpenVPN) handshakeContext(_ context.Context) (context.Context, context.CancelFunc) {
-	handshakeCtx, handshakeCancel := context.WithTimeout(context.Background(), ovpn.DefaultHandshakeTimeout)
+func (o *OpenVPN) handshakeContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, ovpn.DefaultHandshakeTimeout)
 	stop := contextutils.AfterFunc(o.runCtx, handshakeCancel)
 	return handshakeCtx, func() {
 		stop()

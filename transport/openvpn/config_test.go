@@ -104,12 +104,40 @@ func TestClientConfigTLSAuth(t *testing.T) {
 	cfg := yamlStyleConfig()
 	cfg.TLSCrypt = nil
 	cfg.TLSAuth = []byte(testTLSCryptBlock())
-	cfg.TLSAuthDirection = 1
+	keyDirection := 1
+	cfg.TLSAuthDirection = &keyDirection
 	if err := cfg.Prepare(); err != nil {
 		t.Fatal(err)
 	}
 	if len(cfg.TLSAuthKey) != 256 {
 		t.Fatalf("unexpected tls-auth key length: %d", len(cfg.TLSAuthKey))
+	}
+}
+
+func TestClientConfigRejectsTLSAuthWithoutKeyDirection(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSCrypt = nil
+	cfg.TLSAuth = []byte(testTLSCryptBlock())
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected missing key-direction error")
+	}
+	if !strings.Contains(err.Error(), "requires explicit key-direction") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClientConfigRejectsKeyDirectionWithoutTLSAuth(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSCrypt = nil
+	keyDirection := 1
+	cfg.TLSAuthDirection = &keyDirection
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected key-direction without tls-auth error")
+	}
+	if !strings.Contains(err.Error(), "requires tls-auth") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

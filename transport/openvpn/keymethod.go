@@ -153,7 +153,7 @@ func DeriveClientKeyMaterial(sources KeySource2, clientSession, serverSession Se
 	}, nil
 }
 
-func InstallScriptOptionsString(proto, cipher, auth string, compLZO string, tlsAuth bool, keyDirection int) string {
+func InstallScriptOptionsString(proto, cipher, auth string, compLZO string, tlsAuth bool, keyDirection *int) string {
 	protoName := "UDPv4"
 	if proto == ProtoTCP {
 		protoName = "TCPv4_CLIENT"
@@ -170,7 +170,11 @@ func InstallScriptOptionsString(proto, cipher, auth string, compLZO string, tlsA
 	}
 	tlsAuthOptions := ""
 	if tlsAuth {
-		tlsAuthOptions = fmt.Sprintf("keydir %d,tls-auth,", keyDirection)
+		if keyDirection != nil {
+			tlsAuthOptions = fmt.Sprintf("keydir %d,tls-auth,", *keyDirection)
+		} else {
+			tlsAuthOptions = "tls-auth,"
+		}
 	}
 	return fmt.Sprintf("V4,dev-type tun,link-mtu %s,tun-mtu 1500,proto %s,%s%scipher %s,auth %s,keysize %s,key-method 2,tls-client", mtu, protoName, comp, tlsAuthOptions, cipher, auth, keysize)
 }
