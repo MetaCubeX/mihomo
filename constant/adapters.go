@@ -22,6 +22,7 @@ const (
 	Compatible
 	Pass
 	PassRule
+	Rematch
 	Dns
 
 	Relay
@@ -51,7 +52,6 @@ const (
 	OpenVPN
 	Tailscale
 	GostRelay
-	Loopback
 )
 
 const (
@@ -187,6 +187,8 @@ func (at AdapterType) String() string {
 		return "Pass"
 	case PassRule:
 		return "PassRule"
+	case Rematch:
+		return "Rematch"
 	case Dns:
 		return "Dns"
 	case Shadowsocks:
@@ -231,8 +233,6 @@ func (at AdapterType) String() string {
 		return "Tailscale"
 	case GostRelay:
 		return "GostRelay"
-	case Loopback:
-		return "Loopback"
 	case Relay:
 		return "Relay"
 	case Selector:

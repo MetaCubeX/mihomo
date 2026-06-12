@@ -7,30 +7,30 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 )
 
-type Loopback struct {
+type Rematch struct {
 	*Base
 	subRule string
 	inName  string
 }
 
-type LoopbackOption struct {
+type RematchOption struct {
 	BasicOption
 	Name    string `proxy:"name"`
 	SubRule string `proxy:"sub-rule,omitempty"`
 	InName  string `proxy:"in-name,omitempty"`
 }
 
-func (l *Loopback) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
+func (l *Rematch) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn, error) {
 	l.applyMetadata(metadata)
 	return NewConn(nopConn{}, l), nil
 }
 
-func (l *Loopback) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
+func (l *Rematch) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.PacketConn, error) {
 	l.applyMetadata(metadata)
 	return NewPacketConn(&nopPacketConn{}, l), nil
 }
 
-func (l *Loopback) applyMetadata(metadata *C.Metadata) {
+func (l *Rematch) applyMetadata(metadata *C.Metadata) {
 	if l.inName != "" {
 		metadata.InName = l.inName
 	}
@@ -41,14 +41,14 @@ func (l *Loopback) applyMetadata(metadata *C.Metadata) {
 	}
 }
 
-func NewLoopback(option LoopbackOption) (*Loopback, error) {
+func NewRematch(option RematchOption) (*Rematch, error) {
 	if option.SubRule == "" && option.InName == "" {
-		return nil, fmt.Errorf("loopback %s requires at least one of in-name or sub-rule", option.Name)
+		return nil, fmt.Errorf("rematch %s requires at least one of in-name or sub-rule", option.Name)
 	}
-	return &Loopback{
+	return &Rematch{
 		Base: NewBase(BaseOption{
 			Name:         option.Name,
-			Type:         C.Loopback,
+			Type:         C.Rematch,
 			ProviderName: option.ProviderName,
 			UDP:          true,
 		}),

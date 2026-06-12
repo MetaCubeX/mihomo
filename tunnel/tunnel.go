@@ -655,10 +655,10 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 	configMux.RLock()
 	defer configMux.RUnlock()
 
-	var loopbackChain []string
+	var rematchChain []string
 	for {
-		var loopbackProxy C.Proxy
-		var loopbackRule C.Rule
+		var rematchProxy C.Proxy
+		var rematchRule C.Rule
 	GetRules:
 		for _, rule := range getRules(metadata) {
 			if matched, ada := rule.Match(metadata, helper); matched {
@@ -673,10 +673,10 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 						log.Debugln("%s match Pass rule", adapter.Name())
 						continue GetRules
 					}
-					if adapter.Type() == C.Loopback {
-						log.Debugln("%s match Loopback rule", adapter.Name())
-						loopbackProxy = adapter
-						loopbackRule = rule
+					if adapter.Type() == C.Rematch {
+						log.Debugln("%s match Rematch rule", adapter.Name())
+						rematchProxy = adapter
+						rematchRule = rule
 						break GetRules
 					}
 				}
@@ -689,21 +689,21 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 				return adapter, rule, nil
 			}
 		}
-		if loopbackProxy != nil {
-			if slices.Contains(loopbackChain, loopbackProxy.Name()) {
-				log.Warnln("[Rule] loopback cycle detected on %s", loopbackProxy.Name())
-				return loopbackProxy, loopbackRule, nil
+		if rematchProxy != nil {
+			if slices.Contains(rematchChain, rematchProxy.Name()) {
+				log.Warnln("[Rule] rematch cycle detected on %s", rematchProxy.Name())
+				return rematchProxy, rematchRule, nil
 			}
-			loopbackChain = append(loopbackChain, loopbackProxy.Name())
-			conn, err := loopbackProxy.DialContext(context.Background(), metadata) // not a real connection, just for metadata update
+			rematchChain = append(rematchChain, rematchProxy.Name())
+			conn, err := rematchProxy.DialContext(context.Background(), metadata) // not a real connection, just for metadata update
 			if conn != nil {
 				_ = conn.Close()
 			}
 			if err != nil {
-				log.Warnln("[Rule] loopback proxy %s failed to update metadata: %s", loopbackProxy.Name(), err)
-				return loopbackProxy, loopbackRule, nil
+				log.Warnln("[Rule] rematch proxy %s failed to update metadata: %s", rematchProxy.Name(), err)
+				return rematchProxy, rematchRule, nil
 			}
-			log.Debugln("[Rule] loopback jump by %s to in-name=%q sub-rule=%q", loopbackProxy.Name(), metadata.InName, metadata.SpecialRules)
+			log.Debugln("[Rule] rematch proxy %s update metadata to in-name=%q sub-rule=%q", rematchProxy.Name(), metadata.InName, metadata.SpecialRules)
 			continue
 		}
 		return proxies["DIRECT"], nil, nil

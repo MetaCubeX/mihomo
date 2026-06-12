@@ -139,6 +139,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy = outbound.NewRejectWithOption(*rejectOption)
+	case "rematch":
+		rematchOption := &outbound.RematchOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, rematchOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewRematch(*rematchOption)
 	case "ssh":
 		sshOption := &outbound.SshOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, sshOption)
@@ -195,13 +202,6 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewTailscale(*tailscaleOption)
-	case "loopback":
-		loopbackOption := &outbound.LoopbackOption{BasicOption: basicOption}
-		err = decoder.Decode(mapping, loopbackOption)
-		if err != nil {
-			break
-		}
-		proxy, err = outbound.NewLoopback(*loopbackOption)
 	default:
 		return nil, fmt.Errorf("unsupport proxy type: %s", proxyType)
 	}
