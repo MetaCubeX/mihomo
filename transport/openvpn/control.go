@@ -22,7 +22,7 @@ type PacketIO interface {
 
 type ControlChannel struct {
 	io     PacketIO
-	crypt  *TLSCrypt
+	crypt  ControlProtection
 	clock  func() time.Time
 	keyID  uint8
 	local  SessionID
@@ -39,7 +39,7 @@ type ControlChannel struct {
 	writeDeadline time.Time
 }
 
-func NewControlChannel(io PacketIO, crypt *TLSCrypt, local SessionID) *ControlChannel {
+func NewControlChannel(io PacketIO, crypt ControlProtection, local SessionID) *ControlChannel {
 	return &ControlChannel{
 		io:          io,
 		crypt:       crypt,
@@ -227,6 +227,9 @@ func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket,
 	deadline := c.readDeadline
 	c.mu.Unlock()
 
+	if ctxDeadline, ok := ctx.Deadline(); ok && (deadline.IsZero() || ctxDeadline.Before(deadline)) {
+		deadline = ctxDeadline
+	}
 	if !deadline.IsZero() {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, deadline)
@@ -254,6 +257,12 @@ func (c *ControlChannel) SetReadDeadline(t time.Time) error {
 	c.readDeadline = t
 	c.mu.Unlock()
 	return nil
+}
+
+func (c *ControlChannel) ReadDeadline() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.readDeadline
 }
 
 func (c *ControlChannel) SetWriteDeadline(t time.Time) error {
@@ -298,9 +307,37 @@ func (c *ControlConn) Read(b []byte) (int, error) {
 	c.mu.Unlock()
 
 	for {
-		packet, err := c.channel.Read(context.Background())
+		readCtx := context.Background()
+		cancel := func() {}
+		readDeadline := c.channel.ReadDeadline()
+		if !readDeadline.IsZero() {
+			now := time.Now()
+			if !readDeadline.After(now) {
+				return 0, context.DeadlineExceeded
+			}
+			nextDeadline := now.Add(ControlRetransmitDelay)
+			if readDeadline.Before(nextDeadline) {
+				nextDeadline = readDeadline
+			}
+			readCtx, cancel = context.WithDeadline(context.Background(), nextDeadline)
+		}
+		packet, err := c.channel.Read(readCtx)
+		cancel()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && !readDeadline.IsZero() && readDeadline.After(time.Now()) {
+				if retransmitErr := c.channel.RetransmitPending(context.Background()); retransmitErr != nil {
+					return 0, retransmitErr
+				}
+				continue
+			}
 			return 0, err
+		}
+		switch packet.Opcode {
+		case PControlSoftResetV1, PControlHardResetServerV1, PControlHardResetServerV2:
+			if err := c.channel.SendAck(context.Background()); err != nil {
+				return 0, err
+			}
+			return 0, fmt.Errorf("%w: received %s", ErrControlRestart, packet.Opcode)
 		}
 		if packet.Opcode != PControlV1 {
 			if err := c.channel.SendAck(context.Background()); err != nil {

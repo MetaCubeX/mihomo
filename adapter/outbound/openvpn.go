@@ -42,24 +42,26 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name        string `proxy:"name"`
-	Server      string `proxy:"server"`
-	Port        int    `proxy:"port"`
-	Proto       string `proxy:"proto,omitempty"`
-	Dev         string `proxy:"dev,omitempty"`
-	Cipher      string `proxy:"cipher,omitempty"`
-	Auth        string `proxy:"auth,omitempty"`
-	CompLZO     string `proxy:"comp-lzo,omitempty"`
-	CA          string `proxy:"ca"`
-	Cert        string `proxy:"cert,omitempty"`
-	Key         string `proxy:"key,omitempty"`
-	TLSCrypt    string `proxy:"tls-crypt,omitempty"`
-	Username    string `proxy:"username,omitempty"`
-	Password    string `proxy:"password,omitempty"`
-	Ping        int    `proxy:"ping,omitempty"`
-	PingRestart int    `proxy:"ping-restart,omitempty"`
-	MTU         int    `proxy:"mtu,omitempty"`
-	UDP         bool   `proxy:"udp,omitempty"`
+	Name         string `proxy:"name"`
+	Server       string `proxy:"server"`
+	Port         int    `proxy:"port"`
+	Proto        string `proxy:"proto,omitempty"`
+	Dev          string `proxy:"dev,omitempty"`
+	Cipher       string `proxy:"cipher,omitempty"`
+	Auth         string `proxy:"auth,omitempty"`
+	CompLZO      string `proxy:"comp-lzo,omitempty"`
+	CA           string `proxy:"ca"`
+	Cert         string `proxy:"cert,omitempty"`
+	Key          string `proxy:"key,omitempty"`
+	TLSCrypt     string `proxy:"tls-crypt,omitempty"`
+	TLSAuth      string `proxy:"tls-auth,omitempty"`
+	KeyDirection int    `proxy:"key-direction,omitempty"`
+	Username     string `proxy:"username,omitempty"`
+	Password     string `proxy:"password,omitempty"`
+	Ping         int    `proxy:"ping,omitempty"`
+	PingRestart  int    `proxy:"ping-restart,omitempty"`
+	MTU          int    `proxy:"mtu,omitempty"`
+	UDP          bool   `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -67,21 +69,23 @@ type OpenVPNOption struct {
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 	cfg := &ovpn.ClientConfig{
-		RemoteHost:   option.Server,
-		RemotePort:   uint16(option.Port),
-		Proto:        option.Proto,
-		Dev:          option.Dev,
-		Cipher:       option.Cipher,
-		Auth:         option.Auth,
-		CompLZO:      option.CompLZO,
-		CA:           []byte(option.CA),
-		Cert:         []byte(option.Cert),
-		Key:          []byte(option.Key),
-		TLSCrypt:     []byte(option.TLSCrypt),
-		Username:     option.Username,
-		Password:     option.Password,
-		PingInterval: time.Duration(option.Ping) * time.Second,
-		PingRestart:  time.Duration(option.PingRestart) * time.Second,
+		RemoteHost:       option.Server,
+		RemotePort:       uint16(option.Port),
+		Proto:            option.Proto,
+		Dev:              option.Dev,
+		Cipher:           option.Cipher,
+		Auth:             option.Auth,
+		CompLZO:          option.CompLZO,
+		CA:               []byte(option.CA),
+		Cert:             []byte(option.Cert),
+		Key:              []byte(option.Key),
+		TLSCrypt:         []byte(option.TLSCrypt),
+		TLSAuth:          []byte(option.TLSAuth),
+		TLSAuthDirection: option.KeyDirection,
+		Username:         option.Username,
+		Password:         option.Password,
+		PingInterval:     time.Duration(option.Ping) * time.Second,
+		PingRestart:      time.Duration(option.PingRestart) * time.Second,
 	}
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
@@ -198,19 +202,9 @@ func (o *OpenVPN) Close() error {
 		o.runCancel()
 	}
 	_ = o.runLock.Acquire(context.Background(), 1)
-	client := o.client
-	tunDevice := o.tunDevice
-	o.client = nil
-	o.tunDevice = nil
-	o.running = false
+	o.closeRunningLocked()
 	o.runLock.Release(1)
 
-	if client != nil {
-		_ = client.Close()
-	}
-	if tunDevice != nil {
-		return tunDevice.Close()
-	}
 	return nil
 }
 
@@ -285,6 +279,20 @@ func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver,
 	return o.tunDevice, o.resolver, nil
 }
 
+func (o *OpenVPN) closeRunningLocked() {
+	client := o.client
+	tunDevice := o.tunDevice
+	o.client = nil
+	o.tunDevice = nil
+	o.running = false
+	if client != nil {
+		_ = client.Close()
+	}
+	if tunDevice != nil {
+		_ = tunDevice.Close()
+	}
+}
+
 func (o *OpenVPN) lockRun(ctx context.Context) error {
 	lockCtx, cancel := context.WithCancel(ctx)
 	stop := contextutils.AfterFunc(o.runCtx, cancel)
@@ -301,8 +309,8 @@ func (o *OpenVPN) lockRun(ctx context.Context) error {
 	return nil
 }
 
-func (o *OpenVPN) handshakeContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, ovpn.DefaultHandshakeTimeout)
+func (o *OpenVPN) handshakeContext(_ context.Context) (context.Context, context.CancelFunc) {
+	handshakeCtx, handshakeCancel := context.WithTimeout(context.Background(), ovpn.DefaultHandshakeTimeout)
 	stop := contextutils.AfterFunc(o.runCtx, handshakeCancel)
 	return handshakeCtx, func() {
 		stop()
@@ -453,4 +461,13 @@ func (o *OpenVPN) startPacketLoops() {
 			}
 		}()
 	}
+
+	go func() {
+		defer stop()
+		if err := client.RunControlLoop(runCtx); errors.Is(err, ovpn.ErrControlRestart) {
+			log.Infoln("[OpenVPN](%s) control loop requested reconnect: %v", o.name, err)
+		} else if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, os.ErrClosed) {
+			log.Warnln("[OpenVPN](%s) control loop stopped: %v", o.name, err)
+		}
+	}()
 }

@@ -100,6 +100,31 @@ func TestClientConfigAllowsMissingTLSCrypt(t *testing.T) {
 	}
 }
 
+func TestClientConfigTLSAuth(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSCrypt = nil
+	cfg.TLSAuth = []byte(testTLSCryptBlock())
+	cfg.TLSAuthDirection = 1
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.TLSAuthKey) != 256 {
+		t.Fatalf("unexpected tls-auth key length: %d", len(cfg.TLSAuthKey))
+	}
+}
+
+func TestClientConfigRejectsTLSCryptWithTLSAuth(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSAuth = []byte(testTLSCryptBlock())
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected mutually exclusive tls-crypt/tls-auth error")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestClientConfigAuthUserPassAES256(t *testing.T) {
 	cfg := &ClientConfig{
 		RemoteHost: "vpn.example.com",

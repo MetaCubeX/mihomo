@@ -28,6 +28,11 @@ type TLSCrypt struct {
 	decryptHMACKey   []byte
 }
 
+type ControlProtection interface {
+	Wrap(header []byte, packetID uint32, unixTime uint32, plaintext []byte) ([]byte, error)
+	Unwrap(packet []byte) (header []byte, packetID uint32, unixTime uint32, plaintext []byte, err error)
+}
+
 func NewTLSCrypt(staticKey []byte, client bool) (*TLSCrypt, error) {
 	if len(staticKey) != staticKeySize {
 		return nil, fmt.Errorf("invalid tls-crypt static key length %d, expected %d", len(staticKey), staticKeySize)

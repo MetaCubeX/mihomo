@@ -167,7 +167,7 @@ func DecodeControlPlain(opcode Opcode, plain []byte) (ackIDs []uint32, ackRemote
 	return ackIDs, ackRemote, messageID, payload, nil
 }
 
-func (p ControlPacket) Encode(crypt *TLSCrypt, packetID uint32, unixTime uint32) ([]byte, error) {
+func (p ControlPacket) Encode(crypt ControlProtection, packetID uint32, unixTime uint32) ([]byte, error) {
 	plain, err := p.EncodePlain()
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func (p ControlPacket) Encode(crypt *TLSCrypt, packetID uint32, unixTime uint32)
 	return crypt.Wrap(header, packetID, unixTime, plain)
 }
 
-func DecodeControlPacket(crypt *TLSCrypt, packet []byte) (*ControlPacket, uint32, uint32, error) {
+func DecodeControlPacket(crypt ControlProtection, packet []byte) (*ControlPacket, uint32, uint32, error) {
 	if crypt == nil {
 		if len(packet) < TLSCryptHeaderSize+1 {
 			return nil, 0, 0, errors.New("control packet too short")

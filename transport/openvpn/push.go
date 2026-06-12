@@ -5,18 +5,24 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const PushRequest = "PUSH_REQUEST"
 
 type PushReply struct {
-	Raw       string
-	Prefixes  []netip.Prefix
-	Routes    []netip.Prefix
-	DNS       []netip.Addr
-	PeerID    uint32
-	Redirect  bool
-	BlockIPv6 bool
+	Raw                string
+	Prefixes           []netip.Prefix
+	Routes             []netip.Prefix
+	DNS                []netip.Addr
+	PeerID             uint32
+	Redirect           bool
+	BlockIPv6          bool
+	PingInterval       time.Duration
+	PingRestart        time.Duration
+	RenegotiateAfter   time.Duration
+	InactiveAfter      time.Duration
+	ExplicitExitNotify bool
 }
 
 func ParsePushReply(message string) (*PushReply, error) {
@@ -84,12 +90,46 @@ func ParsePushReply(message string) (*PushReply, error) {
 			reply.Redirect = true
 		case "block-ipv6":
 			reply.BlockIPv6 = true
+		case "ping":
+			if len(fields) >= 2 {
+				if d, ok := parsePushDurationSeconds(fields[1]); ok {
+					reply.PingInterval = d
+				}
+			}
+		case "ping-restart":
+			if len(fields) >= 2 {
+				if d, ok := parsePushDurationSeconds(fields[1]); ok {
+					reply.PingRestart = d
+				}
+			}
+		case "reneg-sec":
+			if len(fields) >= 2 {
+				if d, ok := parsePushDurationSeconds(fields[1]); ok {
+					reply.RenegotiateAfter = d
+				}
+			}
+		case "inactive":
+			if len(fields) >= 2 {
+				if d, ok := parsePushDurationSeconds(fields[1]); ok {
+					reply.InactiveAfter = d
+				}
+			}
+		case "explicit-exit-notify":
+			reply.ExplicitExitNotify = true
 		}
 	}
 	if len(reply.Prefixes) == 0 {
 		return nil, fmt.Errorf("openvpn push reply missing ifconfig address")
 	}
 	return reply, nil
+}
+
+func parsePushDurationSeconds(value string) (time.Duration, bool) {
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds <= 0 {
+		return 0, false
+	}
+	return time.Duration(seconds) * time.Second, true
 }
 
 func splitPushOptions(message string) []string {
@@ -106,6 +146,30 @@ func splitPushOptions(message string) []string {
 		}
 	}
 	return out
+}
+
+func splitPushReplyOptions(message string) ([]string, int) {
+	options := splitPushOptions(message)
+	out := options[:0]
+	continuation := 0
+	for _, option := range options {
+		fields := strings.Fields(option)
+		if len(fields) == 2 && fields[0] == "push-continuation" {
+			if value, err := strconv.Atoi(fields[1]); err == nil {
+				continuation = value
+			}
+			continue
+		}
+		out = append(out, option)
+	}
+	return out, continuation
+}
+
+func joinPushReplyOptions(options []string) string {
+	if len(options) == 0 {
+		return "PUSH_REPLY"
+	}
+	return "PUSH_REPLY," + strings.Join(options, ",")
 }
 
 func parseIPv4Ifconfig(address, maskOrPeer string) (netip.Prefix, error) {
