@@ -1,6 +1,8 @@
 package fakeip
 
 import (
+	"net/netip"
+
 	C "github.com/metacubex/mihomo/constant"
 )
 
@@ -16,9 +18,9 @@ type Skipper struct {
 }
 
 // ShouldSkipped return if domain should be skipped
-func (p *Skipper) ShouldSkipped(domain string) bool {
+func (p *Skipper) ShouldSkipped(domain string, sourceIP netip.Addr) bool {
 	if len(p.Rules) > 0 {
-		metadata := &C.Metadata{Host: domain}
+		metadata := &C.Metadata{Host: domain, SrcIP: sourceIP}
 		for _, rule := range p.Rules {
 			if matched, action := rule.Match(metadata, C.RuleMatchHelper{}); matched {
 				return action == UseRealIP

@@ -152,7 +152,7 @@ func withFakeIP(skipper *fakeip.Skipper, fakePool *fakeip.Pool, fakePool6 *fakei
 			q := r.Question[0]
 
 			host := strings.TrimRight(q.Name, ".")
-			if skipper.ShouldSkipped(host) {
+			if skipper.ShouldSkipped(host, ctx.SourceIP()) {
 				return next(ctx, r)
 			}
 

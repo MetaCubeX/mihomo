@@ -1613,7 +1613,7 @@ func parseFakeIPRules(rawRules []string, ruleProviders map[string]P.RuleProvider
 				case P.IPCIDR:
 					return nil, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: rule-set behavior is %s, must be domain or classical", idx, line, rp.Behavior())
 				case P.Classical:
-					log.Warnln("%s provider is %s, only matching domain rules in fake-ip-filter", rp.Name(), rp.Behavior())
+					log.Warnln("%s provider is %s, only matching domain and source IP rules in fake-ip-filter", rp.Name(), rp.Behavior())
 				default:
 				}
 			}
@@ -1624,8 +1624,8 @@ func parseFakeIPRules(rawRules []string, ruleProviders map[string]P.RuleProvider
 			return nil, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: %w", idx, line, err)
 		}
 
-		if !isDomainRule(parsed.RuleType()) && parsed.RuleType() != C.MATCH {
-			return nil, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: rule type '%s' not supported, only domain-based rules allowed", idx, line, tp)
+		if !isFakeIPFilterRule(parsed.RuleType()) {
+			return nil, fmt.Errorf("dns.fake-ip-filter[%d] [%s] error: rule type '%s' not supported, only domain-based rules, SRC-IP-CIDR and MATCH allowed", idx, line, tp)
 		}
 
 		rules = append(rules, parsed)
@@ -1634,9 +1634,9 @@ func parseFakeIPRules(rawRules []string, ruleProviders map[string]P.RuleProvider
 	return rules, nil
 }
 
-func isDomainRule(rt C.RuleType) bool {
+func isFakeIPFilterRule(rt C.RuleType) bool {
 	switch rt {
-	case C.Domain, C.DomainSuffix, C.DomainKeyword, C.DomainRegex, C.DomainWildcard, C.GEOSITE, C.RuleSet:
+	case C.Domain, C.DomainSuffix, C.DomainKeyword, C.DomainRegex, C.DomainWildcard, C.GEOSITE, C.RuleSet, C.SrcIPCIDR, C.MATCH:
 		return true
 	default:
 		return false

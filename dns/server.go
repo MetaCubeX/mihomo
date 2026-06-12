@@ -3,10 +3,12 @@ package dns
 import (
 	"context"
 	"net"
+	"net/netip"
 
 	"github.com/metacubex/mihomo/common/sockopt"
 	"github.com/metacubex/mihomo/component/resolver"
 	C "github.com/metacubex/mihomo/constant"
+	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 
 	D "github.com/miekg/dns"
@@ -27,7 +29,11 @@ type Server struct {
 
 // ServeDNS implement D.Handler ServeDNS
 func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
-	msg, err := s.service.ServeMsg(context.Background(), r)
+	ctx := context.Background()
+	if sourceIP := dnsSourceIPFromAddr(w.RemoteAddr()); sourceIP.IsValid() {
+		ctx = icontext.WithSourceIP(ctx, sourceIP)
+	}
+	msg, err := s.service.ServeMsg(ctx, r)
 	if err != nil {
 		m := new(D.Msg)
 		m.SetRcode(r, D.RcodeServerFailure)
@@ -37,6 +43,21 @@ func (s *Server) ServeDNS(w D.ResponseWriter, r *D.Msg) {
 	}
 	msg.Compress = true
 	w.WriteMsg(msg)
+}
+
+func dnsSourceIPFromAddr(addr net.Addr) netip.Addr {
+	if addr == nil {
+		return netip.Addr{}
+	}
+	host, _, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return netip.Addr{}
+	}
+	sourceIP, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}
+	}
+	return sourceIP.Unmap()
 }
 
 func (s *Server) SetService(service resolver.Service) {
