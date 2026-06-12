@@ -61,10 +61,11 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	mux := NewPacketMux(io)
 	go mux.Run(runCtx)
 	client := &Client{
-		config:  config,
-		mux:     mux,
-		control: NewControlChannel(mux, crypt, local),
-		cancel:  cancel,
+		config:   config,
+		mux:      mux,
+		control:  NewControlChannel(mux, crypt, local),
+		cancel:   cancel,
+		writeSem: *semaphore.NewWeighted(1),
 	}
 	client.markSend()
 	client.markReceive()
