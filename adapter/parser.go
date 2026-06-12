@@ -224,9 +224,7 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 		}
 	}
 
-	if proxy.Type() != C.Loopback {
-		proxy = outbound.NewAutoCloseProxyAdapter(proxy)
-	}
+	proxy = outbound.NewAutoCloseProxyAdapter(proxy)
 	return NewProxy(proxy), nil
 }
 

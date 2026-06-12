@@ -30,10 +30,6 @@ func (l *Loopback) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	return NewPacketConn(&nopPacketConn{}, l), nil
 }
 
-func (l *Loopback) LoopbackConfig() (subRule, inName string) {
-	return l.subRule, l.inName
-}
-
 func (l *Loopback) applyMetadata(metadata *C.Metadata) {
 	if l.inName != "" {
 		metadata.InName = l.inName

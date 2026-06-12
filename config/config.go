@@ -691,9 +691,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = validateLoopbackProxies(proxies, subRules); err != nil {
-		return nil, err
-	}
 	config.SubRules = subRules
 
 	rules, err := parseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
@@ -1052,30 +1049,6 @@ func verifySubRule(subRules map[string][]C.Rule) error {
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-type loopbackProxyConfig interface {
-	LoopbackConfig() (subRule, inName string)
-}
-
-func validateLoopbackProxies(proxies map[string]C.Proxy, subRules map[string][]C.Rule) error {
-	for name, proxy := range proxies {
-		proxyAdapter := proxy.Adapter()
-		loopback, ok := proxyAdapter.(loopbackProxyConfig)
-		if !ok {
-			continue
-		}
-
-		subRule, _ := loopback.LoopbackConfig()
-		if subRule == "" {
-			continue
-		}
-		if _, exists := subRules[subRule]; exists {
-			continue
-		}
-		return fmt.Errorf("loopback proxy %s sub-rule [%s] not found", name, subRule)
 	}
 	return nil
 }
