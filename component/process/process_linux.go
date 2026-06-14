@@ -25,6 +25,7 @@ const (
 	SOCK_DIAG_BY_FAMILY  = 20
 	inetDiagRequestSize  = int(unsafe.Sizeof(inetDiagRequest{}))
 	inetDiagResponseSize = int(unsafe.Sizeof(inetDiagResponse{}))
+	ProcessNameMaxLen    = 15
 )
 
 type inetDiagRequest struct {
