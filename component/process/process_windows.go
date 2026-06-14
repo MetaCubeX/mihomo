@@ -3,6 +3,7 @@ package process
 import (
 	"fmt"
 	"net/netip"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -61,7 +62,7 @@ func initWin32API() error {
 	return nil
 }
 
-func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (*ProcessInfo, error) {
 	once.Do(func() {
 		err := initWin32API()
 		if err != nil {
@@ -85,22 +86,26 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 		fn = getExUDPTable
 		class = udpTablePid
 	default:
-		return 0, "", ErrInvalidNetwork
+		return nil, ErrInvalidNetwork
 	}
 
 	buf, err := getTransportTable(fn, family, class)
 	if err != nil {
-		return 0, "", err
+		return nil, err
 	}
 
 	s := newSearcher(family == windows.AF_INET, network == TCP)
 
 	pid, err := s.Search(buf, ip, uint16(srcPort))
 	if err != nil {
-		return 0, "", err
+		return nil, err
 	}
 	pp, err := getExecPathFromPID(pid)
-	return 0, pp, err
+	return &ProcessInfo{
+		PID:            pid,
+		ProcessName:    filepath.Base(pp),
+		ExecutablePath: pp,
+	}, err
 }
 
 type searcher struct {

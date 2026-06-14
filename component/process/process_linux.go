@@ -62,7 +62,7 @@ type inetDiagResponse struct {
 	INode   uint32
 }
 
-func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (*ProcessInfo, error) {
 	uid, inode, err := resolveSocketByNetlink(network, ip, srcPort)
 	if runtime.GOOS == "android" {
 		// on Android (especially recent releases), netlink INET_DIAG can fail or return UID 0 / empty process info for some apps
@@ -77,17 +77,21 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (uint32, string
 		}
 	}
 	if err != nil {
-		return 0, "", err
+		return nil, err
 	}
-	pp, err := resolveProcessNameByProcSearch(inode, uid)
+	pid, err := resolveProcessIdByProcSearch(inode, uid)
 	if runtime.GOOS == "android" {
 		// if inode-based /proc/<pid>/fd resolution fails but UID is known,
 		// fall back to resolving the process/package name by UID (typical on Android where all app processes share one UID).
 		if err != nil && uid != 0 {
-			pp, err = resolveProcessNameByUID(uid)
+			pp, err := resolveProcessNameByUID(uid)
+			return &ProcessInfo{
+				UID:         uid,
+				ProcessName: pp,
+			}, err
 		}
 	}
-	return uid, pp, err
+	return newProcessInfo(pid, uid), err
 }
 
 func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uid uint32, inode uint32, err error) {
@@ -174,14 +178,17 @@ func resolveSocketByNetlink(network string, ip netip.Addr, srcPort int) (uid uin
 	return
 }
 
-func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
+func resolveProcessIdByProcSearch(inode, uid uint32) (uint32, error) {
 	files, err := os.ReadDir("/proc")
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	buffer := make([]byte, unix.PathMax)
 	socket := fmt.Appendf(nil, "socket:[%d]", inode)
+
+	lastPid := uint32(0)
+	lastProcessStartTime := uint64(0)
 
 	for _, f := range files {
 		if !f.IsDir() || !isPid(f.Name()) {
@@ -210,24 +217,49 @@ func resolveProcessNameByProcSearch(inode, uid uint32) (string, error) {
 				continue
 			}
 
-			if runtime.GOOS == "android" {
-				if bytes.Equal(buffer[:n], socket) {
-					cmdline, err := os.ReadFile(path.Join(processPath, "cmdline"))
-					if err != nil {
-						return "", err
-					}
-
-					return splitCmdline(cmdline), nil
+			if bytes.Equal(buffer[:n], socket) {
+				pid, _ := strconv.ParseUint(f.Name(), 10, 32)
+				startTime, err := getProcessStartTime(uint32(pid))
+				if err != nil {
+					continue
 				}
-			} else {
-				if bytes.Equal(buffer[:n], socket) {
-					return os.Readlink(filepath.Join(processPath, "exe"))
+				if startTime > lastProcessStartTime {
+					lastProcessStartTime = startTime
+					lastPid = uint32(pid)
 				}
 			}
 		}
 	}
+	if lastPid != 0 {
+		return lastPid, nil
+	}
+	return 0, fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
+}
 
-	return "", fmt.Errorf("process of uid(%d),inode(%d) not found", uid, inode)
+func getProcessStartTime(pid uint32) (uint64, error) {
+	statPath := fmt.Sprintf("/proc/%d/stat", pid)
+	content, err := os.ReadFile(statPath)
+	if err != nil {
+		return 0, err
+	}
+
+	// strip pid and comm as comm may contain spaces
+	par := bytes.LastIndexByte(content, ')')
+	if par == -1 {
+		return 0, fmt.Errorf("unexpected stat format for pid %d", pid)
+	}
+	fields := strings.Split(string(content[par+2:]), " ")
+	if len(fields) < 20 {
+		return 0, fmt.Errorf("unexpected stat format for pid %d", pid)
+	}
+
+	// starttime is the 22nd field in /proc/[pid]/stat,
+	// note that we stripped first two fields
+	startTimeTicks, err := strconv.ParseUint(fields[19], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid start time ticks for pid %d: %v", pid, err)
+	}
+	return startTimeTicks, nil
 }
 
 // resolveProcessNameByUID returns a process name for any process with uid.
@@ -482,3 +514,36 @@ var littleEndian = func() bool {
 	x := uint32(0x01020304)
 	return *(*byte)(unsafe.Pointer(&x)) == 0x04
 }()
+
+func newProcessInfo(pid, uid uint32) *ProcessInfo {
+	exePath := fmt.Sprintf("/proc/%d/exe", pid)
+
+	exe, err := os.Readlink(exePath)
+	if err != nil {
+		exe = ""
+	}
+
+	name := ""
+	if runtime.GOOS == "android" {
+		cmdlinePath := fmt.Sprintf("/proc/%d/cmdline", pid)
+		cmdlineBytes, err := os.ReadFile(cmdlinePath)
+		if err != nil {
+			name = splitCmdline(cmdlineBytes)
+		}
+	} else {
+		namePath := fmt.Sprintf("/proc/%d/comm", pid)
+		commBytes, err := os.ReadFile(namePath)
+		if err == nil {
+			name = string(commBytes[:len(commBytes)-1]) // remove trailing newline
+		}
+	}
+
+	info := &ProcessInfo{
+		PID:            pid,
+		UID:            uid,
+		ProcessName:    name,
+		ExecutablePath: exe,
+	}
+
+	return info
+}
