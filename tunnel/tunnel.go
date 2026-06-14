@@ -298,10 +298,10 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	if needLookupIP(metadata) {
 		host, exist := resolver.FindHostByIP(metadata.DstIP)
 		if exist {
-			metadata.Host = host
-			metadata.DNSMode = C.DNSMapping
+			metadata.DNSMode = C.DNSNormal
 			if resolver.IsFakeIP(metadata.DstIP) {
 				// only clear dstIP if it is confirmed to be a fake IP
+				metadata.Host = host
 				metadata.DstIP = netip.Addr{}
 				metadata.DNSMode = C.DNSFakeIP
 			} else if node, ok := resolver.DefaultHosts.Search(host, false); ok {
