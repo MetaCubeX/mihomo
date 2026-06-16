@@ -240,9 +240,9 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		}
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if ss.option.UDPOverTCPVersion == uot.LegacyVersion {
-			return newPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
+			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewConn(c, uot.Request{Destination: destination})), ss), nil
 		} else {
-			return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
+			return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), ss), nil
 		}
 	}
 	if err := ss.ResolveUDP(ctx, metadata); err != nil {
@@ -254,7 +254,7 @@ func (ss *ShadowSocks) ListenPacketContext(ctx context.Context, metadata *C.Meta
 		return nil, err
 	}
 	pc = ss.method.DialPacketConn(bufio.NewBindPacketConn(pc, addr))
-	return newPacketConn(pc, ss), nil
+	return NewPacketConn(pc, ss), nil
 }
 
 // ProxyInfo implements C.ProxyAdapter

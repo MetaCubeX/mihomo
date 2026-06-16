@@ -58,7 +58,7 @@ func (g *GostRelay) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 		return nil, fmt.Errorf("%s udp connect error: %w", g.addr, err)
 	}
 
-	return newPacketConn(pc, g), nil
+	return NewPacketConn(pc, g), nil
 }
 
 func (g *GostRelay) ProxyInfo() C.ProxyInfo {

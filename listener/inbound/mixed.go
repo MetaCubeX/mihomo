@@ -64,28 +64,26 @@ func (m *Mixed) Address() string {
 
 // Listen implements constant.InboundListener
 func (m *Mixed) Listen(tunnel C.Tunnel) error {
+	lc := m.ListenConfig()
 	for _, addr := range strings.Split(m.RawAddress(), ",") {
-		l, err := mixed.NewWithConfig(
-			LC.AuthServer{
-				Enable:         true,
-				Listen:         addr,
-				AuthStore:      m.config.Users.GetAuthStore(),
-				Certificate:    m.config.Certificate,
-				PrivateKey:     m.config.PrivateKey,
-				ClientAuthType: m.config.ClientAuthType,
-				ClientAuthCert: m.config.ClientAuthCert,
-				EchKey:         m.config.EchKey,
-				RealityConfig:  m.config.RealityConfig.Build(),
-			},
-			tunnel,
-			m.Additions()...,
-		)
+		config := LC.AuthServer{
+			Enable:         true,
+			Listen:         addr,
+			AuthStore:      m.config.Users.GetAuthStore(),
+			Certificate:    m.config.Certificate,
+			PrivateKey:     m.config.PrivateKey,
+			ClientAuthType: m.config.ClientAuthType,
+			ClientAuthCert: m.config.ClientAuthCert,
+			EchKey:         m.config.EchKey,
+			RealityConfig:  m.config.RealityConfig.Build(),
+		}
+		l, err := mixed.NewWithConfig(config, lc, tunnel, m.Additions()...)
 		if err != nil {
 			return err
 		}
 		m.l = append(m.l, l)
 		if m.udp {
-			lUDP, err := socks.NewUDP(addr, tunnel, m.Additions()...)
+			lUDP, err := socks.NewUDPWithConfig(config, lc, tunnel, m.Additions()...)
 			if err != nil {
 				return err
 			}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/metacubex/mihomo/adapter/inbound"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/http"
@@ -283,7 +284,7 @@ func ReCreateShadowSocks(shadowSocksConfig string, tunnel C.Tunnel) {
 		return
 	}
 
-	listener, err := sing_shadowsocks.New(ssConfig, tunnel)
+	listener, err := sing_shadowsocks.New(ssConfig, inbound.NewListenConfig(), tunnel)
 	if err != nil {
 		return
 	}
@@ -335,7 +336,7 @@ func ReCreateVmess(vmessConfig string, tunnel C.Tunnel) {
 		return
 	}
 
-	listener, err := sing_vmess.New(vsConfig, tunnel)
+	listener, err := sing_vmess.New(vsConfig, inbound.NewListenConfig(), tunnel)
 	if err != nil {
 		return
 	}
@@ -380,7 +381,7 @@ func ReCreateTuic(config LC.TuicServer, tunnel C.Tunnel) {
 		return
 	}
 
-	listener, err := tuic.New(config, tunnel)
+	listener, err := tuic.New(config, inbound.NewListenConfig(), tunnel)
 	if err != nil {
 		return
 	}
@@ -600,10 +601,11 @@ func PatchTunnel(tunnels []LC.Tunnel, tunnel C.Tunnel) {
 		}
 	}
 
+	lc := inbound.NewListenConfig()
 	for _, elm := range needCreate {
 		key := fmt.Sprintf("%s/%s/%s", elm.addr, elm.target, elm.proxy)
 		if elm.network == "tcp" {
-			l, err := LT.New(elm.addr, elm.target, elm.proxy, tunnel)
+			l, err := LT.New(elm.addr, elm.target, elm.proxy, lc, tunnel)
 			if err != nil {
 				log.Errorln("Start tunnel %s error: %s", elm.target, err.Error())
 				continue
@@ -611,7 +613,7 @@ func PatchTunnel(tunnels []LC.Tunnel, tunnel C.Tunnel) {
 			tunnelTCPListeners[key] = l
 			log.Infoln("Tunnel(tcp/%s) proxy %s listening at: %s", elm.target, elm.proxy, tunnelTCPListeners[key].Address())
 		} else {
-			l, err := LT.NewUDP(elm.addr, elm.target, elm.proxy, tunnel)
+			l, err := LT.NewUDP(elm.addr, elm.target, elm.proxy, lc, tunnel)
 			if err != nil {
 				log.Errorln("Start tunnel %s error: %s", elm.target, err.Error())
 				continue

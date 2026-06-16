@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/netip"
 	"syscall"
+
+	"github.com/metacubex/mihomo/common/sockopt"
 )
 
 func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ netip.Addr) {
@@ -19,19 +21,11 @@ func bindMarkToListenConfig(mark int, lc *net.ListenConfig, _, _ string) {
 
 func bindMarkToControl(mark int) controlFn {
 	return func(ctx context.Context, network, address string, c syscall.RawConn) (err error) {
-
 		addrPort, err := netip.ParseAddrPort(address)
 		if err == nil && !addrPort.Addr().IsGlobalUnicast() {
 			return
 		}
 
-		var innerErr error
-		err = c.Control(func(fd uintptr) {
-			innerErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark)
-		})
-		if innerErr != nil {
-			err = innerErr
-		}
-		return
+		return sockopt.RawConnMark(c, mark)
 	}
 }

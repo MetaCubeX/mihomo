@@ -591,7 +591,7 @@ func (w *WireGuard) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return newPacketConn(pc, w), nil
+	return NewPacketConn(pc, w), nil
 }
 
 func (w *WireGuard) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

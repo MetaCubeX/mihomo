@@ -60,7 +60,7 @@ func (s *SingMux) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 	if pc == nil {
 		return nil, E.New("packetConn is nil")
 	}
-	return newPacketConn(N.NewThreadSafePacketConn(pc), s), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(pc), s), nil
 }
 
 func (s *SingMux) SupportUDP() bool {

@@ -67,7 +67,7 @@ func (h *Hysteria) ListenPacketContext(ctx context.Context, metadata *C.Metadata
 	if err != nil {
 		return nil, err
 	}
-	return newPacketConn(&hyPacketConn{udpConn}, h), nil
+	return NewPacketConn(&hyPacketConn{udpConn}, h), nil
 }
 
 func (h *Hysteria) genHdc(ctx context.Context) hyUtils.PacketDialer {

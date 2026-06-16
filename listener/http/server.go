@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"net"
 
@@ -39,7 +40,7 @@ func (l *Listener) Close() error {
 }
 
 func New(addr string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	return NewWithConfig(LC.AuthServer{Enable: true, Listen: addr, AuthStore: authStore.Default}, tunnel, additions...)
+	return NewWithConfig(LC.AuthServer{Enable: true, Listen: addr, AuthStore: authStore.Default}, inbound.NewListenConfig(), tunnel, additions...)
 }
 
 // NewWithAuthenticate
@@ -49,10 +50,10 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 	if !authenticate {
 		store = authStore.Nil
 	}
-	return NewWithConfig(LC.AuthServer{Enable: true, Listen: addr, AuthStore: store}, tunnel, additions...)
+	return NewWithConfig(LC.AuthServer{Enable: true, Listen: addr, AuthStore: store}, inbound.NewListenConfig(), tunnel, additions...)
 }
 
-func NewWithConfig(config LC.AuthServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+func NewWithConfig(config LC.AuthServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	isDefault := false
 	if len(additions) == 0 {
 		isDefault = true
@@ -62,7 +63,7 @@ func NewWithConfig(config LC.AuthServer, tunnel C.Tunnel, additions ...inbound.A
 		}
 	}
 
-	l, err := inbound.Listen("tcp", config.Listen)
+	l, err := lc.Listen(context.Background(), "tcp", config.Listen)
 	if err != nil {
 		return nil, err
 	}

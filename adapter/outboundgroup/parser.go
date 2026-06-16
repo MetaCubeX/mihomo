@@ -45,7 +45,7 @@ type GroupCommonOption struct {
 	Icon                string   `group:"icon,omitempty"`
 }
 
-func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string) (C.ProxyAdapter, error) {
+func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, providersMap map[string]P.ProxyProvider, AllProxies []string, AllProviders []string) (ProxyGroup, error) {
 	decoder := structure.NewDecoder(structure.Option{TagName: "group", WeaklyTypedInput: true})
 
 	groupOption := &GroupCommonOption{
@@ -76,6 +76,9 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 	}
 	emptyFallback, ok := proxyMap[groupOption.EmptyFallback]
 	if !ok {
+		return nil, fmt.Errorf("%s: empty fallback proxy '%s' not found", groupName, groupOption.EmptyFallback)
+	}
+	if _, ok := emptyFallback.Adapter().(ProxyGroup); ok { // strictly forbidden to fill in a proxy group for empty-fallback
 		return nil, fmt.Errorf("%s: empty fallback proxy '%s' not found", groupName, groupOption.EmptyFallback)
 	}
 
@@ -181,7 +184,7 @@ func ParseProxyGroup(config map[string]any, proxyMap map[string]C.Proxy, provide
 		providersMap[groupName] = pd
 	}
 
-	var group C.ProxyAdapter
+	var group ProxyGroup
 	switch groupOption.Type {
 	case "url-test":
 		opts := parseURLTestOption(config)

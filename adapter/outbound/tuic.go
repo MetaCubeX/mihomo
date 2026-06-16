@@ -97,16 +97,16 @@ func (t *Tuic) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_
 
 		destination := M.SocksaddrFromNet(metadata.UDPAddr())
 		if t.option.UDPOverStreamVersion == uot.LegacyVersion {
-			return newPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), t), nil
+			return NewPacketConn(uot.NewConn(c, uot.Request{Destination: destination}), t), nil
 		} else {
-			return newPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), t), nil
+			return NewPacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination}), t), nil
 		}
 	}
 	pc, err := t.client.ListenPacket(ctx, metadata)
 	if err != nil {
 		return nil, err
 	}
-	return newPacketConn(pc, t), nil
+	return NewPacketConn(pc, t), nil
 }
 
 func (t *Tuic) dial(ctx context.Context) (quicConn *quic.Conn, err error) {

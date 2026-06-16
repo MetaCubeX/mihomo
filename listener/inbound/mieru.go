@@ -1,9 +1,7 @@
 package inbound
 
 import (
-	"context"
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -31,16 +29,6 @@ type MieruOption struct {
 	Users               map[string]string `inbound:"users"`
 	TrafficPattern      string            `inbound:"traffic-pattern,omitempty"`
 	UserHintIsMandatory bool              `inbound:"user-hint-is-mandatory,omitempty"`
-}
-
-type mieruListenerFactory struct{}
-
-func (mieruListenerFactory) Listen(ctx context.Context, network, address string) (net.Listener, error) {
-	return inbound.ListenContext(ctx, network, address)
-}
-
-func (mieruListenerFactory) ListenPacket(ctx context.Context, network, address string) (net.PacketConn, error) {
-	return inbound.ListenPacketContext(ctx, network, address)
 }
 
 func NewMieru(option *MieruOption) (*Mieru, error) {
@@ -165,6 +153,7 @@ func buildMieruServerConfig(option *MieruOption, ports utils.IntRanges[uint16]) 
 			UserHintIsMandatory: proto.Bool(true),
 		}
 	}
+	lc := option.ListenConfig()
 	return &mieruserver.ServerConfig{
 		Config: &mierupb.ServerConfig{
 			PortBindings:     portBindings,
@@ -172,8 +161,8 @@ func buildMieruServerConfig(option *MieruOption, ports utils.IntRanges[uint16]) 
 			TrafficPattern:   trafficPattern,
 			AdvancedSettings: advancedSettings,
 		},
-		StreamListenerFactory: mieruListenerFactory{},
-		PacketListenerFactory: mieruListenerFactory{},
+		StreamListenerFactory: lc,
+		PacketListenerFactory: lc,
 	}, nil
 }
 

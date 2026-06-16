@@ -105,7 +105,7 @@ func (v *Trojan) Address() string {
 // Listen implements constant.InboundListener
 func (v *Trojan) Listen(tunnel C.Tunnel) error {
 	var err error
-	v.l, err = trojan.New(v.vs, tunnel, v.Additions()...)
+	v.l, err = trojan.New(v.vs, v.ListenConfig(), tunnel, v.Additions()...)
 	if err != nil {
 		return err
 	}

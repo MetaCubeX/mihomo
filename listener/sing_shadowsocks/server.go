@@ -53,7 +53,7 @@ func (s *shadowTLSService) NewConnection(ctx context.Context, conn net.Conn, met
 	return s.Service.NewConnection(ctx, conn, metadata)
 }
 
-func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
+func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
 	var sl *Listener
 	var err error
 	if len(additions) == 0 {
@@ -90,7 +90,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 		sl.service, err = shadowaead_2022.NewServiceWithPassword(config.Cipher, config.Password, udpTimeout, h, ntp.Now)
 	default:
 		err = fmt.Errorf("shadowsocks: unsupported method: %s", config.Cipher)
-		return embedSS.New(config, tunnel, additions...)
+		return embedSS.New(config, lc, tunnel, additions...)
 	}
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 
 		if config.Udp {
 			//UDP
-			ul, err := inbound.ListenPacket("udp", addr)
+			ul, err := lc.ListenPacket(context.Background(), "udp", addr)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +223,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 		}
 
 		//TCP
-		l, err := inbound.Listen("tcp", addr)
+		l, err := lc.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			return nil, err
 		}

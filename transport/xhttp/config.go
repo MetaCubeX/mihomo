@@ -2,14 +2,20 @@ package xhttp
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
 	"strconv"
 	"strings"
 
+	"github.com/metacubex/mihomo/common/utils"
+
 	"github.com/metacubex/http"
+	"github.com/metacubex/randv2"
 )
 
 const (
@@ -37,6 +43,8 @@ type Config struct {
 	UplinkHTTPMethod     string
 	SessionPlacement     string
 	SessionKey           string
+	SessionTable         string // client only
+	SessionLength        string // client only
 	SeqPlacement         string
 	SeqKey               string
 	UplinkDataPlacement  string
@@ -310,7 +318,7 @@ func (r Range) Rand() int {
 	if r.Min == r.Max {
 		return r.Min
 	}
-	return r.Min + rand.Intn(r.Max-r.Min+1)
+	return r.Min + randv2.IntN(r.Max-r.Min+1)
 }
 
 func ParseRange(s string, fallback string) (Range, error) {
@@ -576,4 +584,72 @@ func (c *Config) FillPacketRequest(request *http.Request, sessionId string, seqS
 	c.ApplyMetaToRequest(request, sessionId, seqStr)
 
 	return nil
+}
+
+func roomSize(tableSize int, min, max int) *big.Int {
+	base := big.NewInt(int64(tableSize))
+	sum := new(big.Int)
+	term := new(big.Int)
+	for k := min; k <= max; k++ {
+		term.Exp(base, big.NewInt(int64(k)), nil)
+		sum.Add(sum, term)
+	}
+	return sum
+}
+
+var predefinedTable = map[string]string{
+	"ALPHABET": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+	"Alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+	"BASE36":   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+	"Base62":   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+	"HEX":      "0123456789ABCDEF",
+	"alphabet": "abcdefghijklmnopqrstuvwxyz",
+	"base36":   "0123456789abcdefghijklmnopqrstuvwxyz",
+	"hex":      "0123456789abcdef",
+	"number":   "0123456789",
+}
+
+func (c *Config) GetGenerateSessionID() (func() string, error) {
+	sessionTable := c.SessionTable
+	switch sessionTable {
+	case "": // maintain compatibility with older versions
+		return func() string {
+			var b [16]byte
+			_, _ = rand.Read(b[:])
+			return hex.EncodeToString(b[:])
+		}, nil
+	case "uuid": // some people rely on the UUID format string, WTF???
+		return func() string {
+			return utils.NewUUIDV4().String()
+		}, nil
+	default: // https://github.com/XTLS/Xray-core/pull/6258
+		if predefined, ok := predefinedTable[sessionTable]; ok {
+			sessionTable = predefined
+		}
+		sessionLength, err := ParseRange(c.SessionLength, "16-32")
+		if err != nil {
+			return nil, fmt.Errorf("invalid session-length: %w", err)
+		}
+		room := roomSize(len(c.SessionTable), sessionLength.Min, sessionLength.Max)
+		// 2.1B possiblities should be enough
+		if room.Cmp(big.NewInt(2<<30)) < 0 {
+			return nil, errors.New("session-table or session-length is too small")
+		}
+		if sessionLength.Min <= 0 {
+			return nil, errors.New("session-length must be greater than 0")
+		}
+		for i := 0; i < len(sessionTable); i++ {
+			if sessionTable[i] >= 0x80 {
+				return nil, errors.New("session-table must contain only ASCII characters")
+			}
+		}
+		return func() string {
+			length := sessionLength.Rand()
+			id := make([]byte, length)
+			for i := range id {
+				id[i] = sessionTable[randv2.N(len(sessionTable))]
+			}
+			return string(id)
+		}, nil
+	}
 }

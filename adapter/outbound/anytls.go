@@ -63,7 +63,7 @@ func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 
 	// create uot on tcp
 	destination := M.SocksaddrFromNet(metadata.UDPAddr())
-	return newPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), t), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(uot.NewLazyConn(c, uot.Request{Destination: destination})), t), nil
 }
 
 // SupportUOT implements C.ProxyAdapter

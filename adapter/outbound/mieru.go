@@ -96,7 +96,7 @@ func (m *Mieru) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	if err != nil {
 		return nil, fmt.Errorf("dial to %s failed: %w", metadata.UDPAddr(), err)
 	}
-	return newPacketConn(N.NewThreadSafePacketConn(mierucommon.NewUDPAssociateWrapper(mierucommon.NewPacketOverStreamTunnel(c))), m), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(mierucommon.NewUDPAssociateWrapper(mierucommon.NewPacketOverStreamTunnel(c))), m), nil
 }
 
 // SupportUOT implements C.ProxyAdapter

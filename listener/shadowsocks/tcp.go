@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -27,7 +28,7 @@ type Listener struct {
 
 var _listener *Listener
 
-func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	pickCipher, err := core.PickCipher(config.Cipher, nil, config.Password)
 	if err != nil {
 		return nil, err
@@ -62,7 +63,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 
 		if config.Udp {
 			//UDP
-			ul, err := NewUDP(addr, pickCipher, tunnel, additions...)
+			ul, err := NewUDP(addr, lc, pickCipher, tunnel, additions...)
 			if err != nil {
 				return nil, err
 			}
@@ -70,7 +71,7 @@ func New(config LC.ShadowsocksServer, tunnel C.Tunnel, additions ...inbound.Addi
 		}
 
 		//TCP
-		l, err := inbound.Listen("tcp", addr)
+		l, err := lc.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			return nil, err
 		}

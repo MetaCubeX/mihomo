@@ -402,7 +402,7 @@ func (w *Masque) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if pc == nil {
 		return nil, errors.New("packetConn is nil")
 	}
-	return newPacketConn(pc, w), nil
+	return NewPacketConn(pc, w), nil
 }
 
 func (w *Masque) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

@@ -29,7 +29,7 @@ type Listener struct {
 	services     []*trusttunnel.Service
 }
 
-func New(config LC.TrustTunnelServer, tunnel C.Tunnel, additions ...inbound.Addition) (sl *Listener, err error) {
+func New(config LC.TrustTunnelServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (sl *Listener, err error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-TRUSTTUNNEL"),
@@ -108,7 +108,7 @@ func New(config LC.TrustTunnelServer, tunnel C.Tunnel, additions ...inbound.Addi
 			udpConn     net.PacketConn
 		)
 		if listenTCP {
-			tcpListener, err = inbound.Listen("tcp", addr)
+			tcpListener, err = lc.Listen(context.Background(), "tcp", addr)
 			if err != nil {
 				_ = sl.Close()
 				return nil, err
@@ -116,7 +116,7 @@ func New(config LC.TrustTunnelServer, tunnel C.Tunnel, additions ...inbound.Addi
 			sl.listeners = append(sl.listeners, tcpListener)
 		}
 		if listenUDP {
-			udpConn, err = inbound.ListenPacket("udp", addr)
+			udpConn, err = lc.ListenPacket(context.Background(), "udp", addr)
 			if err != nil {
 				_ = sl.Close()
 				return nil, err

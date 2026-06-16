@@ -36,7 +36,7 @@ const (
 
 func DefaultALPN() []string { return []string{"h2", "http/1.1"} }
 
-func New(config LC.Hysteria2RealmServer, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+func New(config LC.Hysteria2RealmServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-HYSTERIA2-REALM"),
@@ -93,7 +93,7 @@ func New(config LC.Hysteria2RealmServer, tunnel C.Tunnel, additions ...inbound.A
 		addr := addr
 
 		//TCP
-		l, err := inbound.Listen("tcp", addr)
+		l, err := lc.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			return nil, err
 		}

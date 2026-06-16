@@ -38,7 +38,7 @@ func (d *Dns) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (C.
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return newPacketConn(&dnsPacketConn{
+	return NewPacketConn(&dnsPacketConn{
 		response: make(chan dnsPacket, 1),
 		ctx:      ctx,
 		cancel:   cancel,

@@ -84,28 +84,26 @@ func (s *Socks) Address() string {
 
 // Listen implements constant.InboundListener
 func (s *Socks) Listen(tunnel C.Tunnel) error {
+	lc := s.ListenConfig()
 	for _, addr := range strings.Split(s.RawAddress(), ",") {
-		stl, err := socks.NewWithConfig(
-			LC.AuthServer{
-				Enable:         true,
-				Listen:         addr,
-				AuthStore:      s.config.Users.GetAuthStore(),
-				Certificate:    s.config.Certificate,
-				PrivateKey:     s.config.PrivateKey,
-				ClientAuthType: s.config.ClientAuthType,
-				ClientAuthCert: s.config.ClientAuthCert,
-				EchKey:         s.config.EchKey,
-				RealityConfig:  s.config.RealityConfig.Build(),
-			},
-			tunnel,
-			s.Additions()...,
-		)
+		config := LC.AuthServer{
+			Enable:         true,
+			Listen:         addr,
+			AuthStore:      s.config.Users.GetAuthStore(),
+			Certificate:    s.config.Certificate,
+			PrivateKey:     s.config.PrivateKey,
+			ClientAuthType: s.config.ClientAuthType,
+			ClientAuthCert: s.config.ClientAuthCert,
+			EchKey:         s.config.EchKey,
+			RealityConfig:  s.config.RealityConfig.Build(),
+		}
+		stl, err := socks.NewWithConfig(config, lc, tunnel, s.Additions()...)
 		if err != nil {
 			return err
 		}
 		s.stl = append(s.stl, stl)
 		if s.udp {
-			sul, err := socks.NewUDP(addr, tunnel, s.Additions()...)
+			sul, err := socks.NewUDPWithConfig(config, lc, tunnel, s.Additions()...)
 			if err != nil {
 				return err
 			}

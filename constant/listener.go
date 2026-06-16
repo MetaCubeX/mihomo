@@ -1,6 +1,9 @@
 package constant
 
-import "net"
+import (
+	"context"
+	"net"
+)
 
 type Listener interface {
 	RawAddress() string
@@ -26,4 +29,9 @@ type InboundListener interface {
 type InboundConfig interface {
 	Name() string
 	Equal(config InboundConfig) bool
+}
+
+type InboundListenConfig interface {
+	Listen(ctx context.Context, network, address string) (net.Listener, error)
+	ListenPacket(ctx context.Context, network, address string) (net.PacketConn, error)
 }

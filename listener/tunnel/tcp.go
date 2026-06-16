@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -37,8 +38,8 @@ func (l *Listener) handleTCP(conn net.Conn, tunnel C.Tunnel, additions ...inboun
 	tunnel.HandleTCPConn(inbound.NewSocket(l.target, conn, C.TUNNEL, additions...))
 }
 
-func New(addr, target, proxy string, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
-	l, err := inbound.Listen("tcp", addr)
+func New(addr, target, proxy string, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
+	l, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return nil, err
 	}

@@ -339,7 +339,7 @@ func (c *packetConn) AddRef(ref any) {
 	c.EnhancePacketConn = N.NewRefPacketConn(c.EnhancePacketConn, ref) // add ref for autoCloseProxyAdapter
 }
 
-func newPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
+func NewPacketConn(pc net.PacketConn, a ProxyAdapter) C.PacketConn {
 	epc := N.NewEnhancePacketConn(pc)
 	if _, ok := pc.(syscall.Conn); !ok { // exclusion system conn like *net.UDPConn
 		epc = N.NewDeadlineEnhancePacketConn(epc) // most conn from outbound can't handle readDeadline correctly

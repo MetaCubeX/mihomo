@@ -96,7 +96,7 @@ func (ssr *ShadowSocksR) ListenPacketContext(ctx context.Context, metadata *C.Me
 
 	epc := ssr.cipher.PacketConn(N.NewEnhancePacketConn(pc))
 	epc = ssr.protocol.PacketConn(epc)
-	return newPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr), nil
+	return NewPacketConn(&ssrPacketConn{EnhancePacketConn: epc, rAddr: addr}, ssr), nil
 }
 
 // ProxyInfo implements C.ProxyAdapter

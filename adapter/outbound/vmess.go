@@ -320,9 +320,9 @@ func (v *Vmess) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 	}
 
 	if pc, ok := c.(net.PacketConn); ok {
-		return newPacketConn(N.NewThreadSafePacketConn(pc), v), nil
+		return NewPacketConn(N.NewThreadSafePacketConn(pc), v), nil
 	}
-	return newPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
+	return NewPacketConn(&vmessPacketConn{Conn: c, rAddr: metadata.UDPAddr()}, v), nil
 }
 
 // ProxyInfo implements C.ProxyAdapter

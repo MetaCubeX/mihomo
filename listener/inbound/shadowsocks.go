@@ -84,7 +84,7 @@ func (s *ShadowSocks) Address() string {
 // Listen implements constant.InboundListener
 func (s *ShadowSocks) Listen(tunnel C.Tunnel) error {
 	var err error
-	s.l, err = sing_shadowsocks.New(s.ss, tunnel, s.Additions()...)
+	s.l, err = sing_shadowsocks.New(s.ss, s.ListenConfig(), tunnel, s.Additions()...)
 	if err != nil {
 		return err
 	}

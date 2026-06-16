@@ -222,12 +222,26 @@ func parseXHTTPExtra(extra map[string]any, opts map[string]any) {
 		opts["uplink-http-method"] = v
 	}
 
-	if v, ok := extra["sessionPlacement"].(string); ok && v != "" {
+	if v, ok := extra["sessionIDPlacement"].(string); ok && v != "" {
+		opts["session-placement"] = v
+	} else if v, ok := extra["sessionPlacement"].(string); ok && v != "" {
 		opts["session-placement"] = v
 	}
 
-	if v, ok := extra["sessionKey"].(string); ok && v != "" {
+	if v, ok := extra["sessionIDKey"].(string); ok && v != "" {
 		opts["session-key"] = v
+	} else if v, ok := extra["sessionKey"].(string); ok && v != "" {
+		opts["session-key"] = v
+	}
+
+	if v, ok := extra["sessionIDTable"].(string); ok && v != "" {
+		opts["session-table"] = v
+	}
+
+	if v, ok := extra["sessionIDLength"].(string); ok && v != "" {
+		opts["session-length"] = v
+	} else if v, ok := extra["sessionIDLength"].(float64); ok {
+		opts["session-length"] = strconv.FormatInt(int64(v), 10)
 	}
 
 	if v, ok := extra["seqPlacement"].(string); ok && v != "" {

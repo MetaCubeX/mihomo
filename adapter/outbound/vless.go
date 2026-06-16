@@ -93,6 +93,8 @@ type XHTTPOptions struct {
 	UplinkHTTPMethod     string                 `proxy:"uplink-http-method,omitempty"`
 	SessionPlacement     string                 `proxy:"session-placement,omitempty"`
 	SessionKey           string                 `proxy:"session-key,omitempty"`
+	SessionTable         string                 `proxy:"session-table,omitempty"`
+	SessionLength        string                 `proxy:"session-length,omitempty"`
 	SeqPlacement         string                 `proxy:"seq-placement,omitempty"`
 	SeqKey               string                 `proxy:"seq-key,omitempty"`
 	UplinkDataPlacement  string                 `proxy:"uplink-data-placement,omitempty"`
@@ -346,18 +348,18 @@ func (v *Vless) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (
 		if metadata.SourceValid() {
 			globalID = utils.GlobalID(metadata.SourceAddress())
 		}
-		return newPacketConn(N.NewThreadSafePacketConn(
+		return NewPacketConn(N.NewThreadSafePacketConn(
 			vmessSing.NewXUDPConn(c,
 				globalID,
 				M.SocksaddrFromNet(metadata.UDPAddr())),
 		), v), nil
 	} else if v.option.PacketAddr {
-		return newPacketConn(N.NewThreadSafePacketConn(
+		return NewPacketConn(N.NewThreadSafePacketConn(
 			packetaddr.NewConn(v.client.PacketConn(c, metadata.UDPAddr()),
 				M.SocksaddrFromNet(metadata.UDPAddr())),
 		), v), nil
 	}
-	return newPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(v.client.PacketConn(c, metadata.UDPAddr())), v), nil
 }
 
 // SupportUOT implements C.ProxyAdapter
@@ -569,6 +571,8 @@ func NewVless(option VlessOption) (*Vless, error) {
 			UplinkHTTPMethod:     v.option.XHTTPOpts.UplinkHTTPMethod,
 			SessionPlacement:     v.option.XHTTPOpts.SessionPlacement,
 			SessionKey:           v.option.XHTTPOpts.SessionKey,
+			SessionTable:         v.option.XHTTPOpts.SessionTable,
+			SessionLength:        v.option.XHTTPOpts.SessionLength,
 			SeqPlacement:         v.option.XHTTPOpts.SeqPlacement,
 			SeqKey:               v.option.XHTTPOpts.SeqKey,
 			UplinkDataPlacement:  v.option.XHTTPOpts.UplinkDataPlacement,

@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"context"
 	"net"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
@@ -17,8 +18,8 @@ type UDPListener struct {
 	closed     bool
 }
 
-func NewUDP(addr string, pickCipher core.Cipher, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPListener, error) {
-	l, err := inbound.ListenPacket("udp", addr)
+func NewUDP(addr string, lc C.InboundListenConfig, pickCipher core.Cipher, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPListener, error) {
+	l, err := lc.ListenPacket(context.Background(), "udp", addr)
 	if err != nil {
 		return nil, err
 	}

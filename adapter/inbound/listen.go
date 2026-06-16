@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"sync"
+	"syscall"
 
+	"github.com/metacubex/mihomo/common/atomic"
+	"github.com/metacubex/mihomo/common/sockopt"
 	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/mptcp"
 
@@ -14,34 +16,68 @@ import (
 )
 
 var (
-	lc = tfo.ListenConfig{
-		DisableTFO: true,
-	}
-	mutex sync.RWMutex
+	globalTFO   = atomic.NewBool(false)
+	globalMPTCP = atomic.NewBool(false)
 )
 
 func SetTfo(open bool) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	lc.DisableTFO = !open
+	globalTFO.Store(open)
 }
 
 func Tfo() bool {
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return !lc.DisableTFO
+	return globalTFO.Load()
 }
 
 func SetMPTCP(open bool) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	mptcp.SetNetListenConfig(&lc.ListenConfig, open)
+	globalMPTCP.Store(open)
 }
 
 func MPTCP() bool {
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return mptcp.GetNetListenConfig(&lc.ListenConfig)
+	return globalMPTCP.Load()
+}
+
+type ListenConfig struct {
+	routeMark int
+}
+
+func NewListenConfig() *ListenConfig {
+	return &ListenConfig{}
+}
+
+func (l *ListenConfig) SetRouteMark(mark int) {
+	l.routeMark = mark
+}
+
+func (l ListenConfig) newListenConfig() *tfo.ListenConfig {
+	lc := tfo.ListenConfig{DisableTFO: !Tfo()}
+	keepalive.SetNetListenConfig(&lc.ListenConfig)
+	mptcp.SetNetListenConfig(&lc.ListenConfig, MPTCP())
+	lc.Control = func(network, address string, c syscall.RawConn) error {
+		if l.routeMark != 0 {
+			err := sockopt.RawConnMark(c, l.routeMark)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return &lc
+}
+
+func (l ListenConfig) Listen(ctx context.Context, network, address string) (net.Listener, error) {
+	address, err := preResolve(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return l.newListenConfig().Listen(ctx, network, address)
+}
+
+func (l ListenConfig) ListenPacket(ctx context.Context, network, address string) (net.PacketConn, error) {
+	address, err := preResolve(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return l.newListenConfig().ListenPacket(ctx, network, address)
 }
 
 func preResolve(network, address string) (string, error) {
@@ -66,42 +102,4 @@ func preResolve(network, address string) (string, error) {
 		}
 	}
 	return address, nil
-}
-
-func ListenContext(ctx context.Context, network, address string) (net.Listener, error) {
-	address, err := preResolve(network, address)
-	if err != nil {
-		return nil, err
-	}
-
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return lc.Listen(ctx, network, address)
-}
-
-func Listen(network, address string) (net.Listener, error) {
-	return ListenContext(context.Background(), network, address)
-}
-
-func ListenPacketContext(ctx context.Context, network, address string) (net.PacketConn, error) {
-	address, err := preResolve(network, address)
-	if err != nil {
-		return nil, err
-	}
-
-	mutex.RLock()
-	defer mutex.RUnlock()
-	return lc.ListenPacket(ctx, network, address)
-}
-
-func ListenPacket(network, address string) (net.PacketConn, error) {
-	return ListenPacketContext(context.Background(), network, address)
-}
-
-func init() {
-	keepalive.SetDisableKeepAliveCallback.Register(func(b bool) {
-		mutex.Lock()
-		defer mutex.Unlock()
-		keepalive.SetNetListenConfig(&lc.ListenConfig)
-	})
 }

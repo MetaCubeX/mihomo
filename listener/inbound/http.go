@@ -59,6 +59,7 @@ func (h *HTTP) Address() string {
 
 // Listen implements constant.InboundListener
 func (h *HTTP) Listen(tunnel C.Tunnel) error {
+	lc := h.ListenConfig()
 	for _, addr := range strings.Split(h.RawAddress(), ",") {
 		l, err := http.NewWithConfig(
 			LC.AuthServer{
@@ -72,6 +73,7 @@ func (h *HTTP) Listen(tunnel C.Tunnel) error {
 				EchKey:         h.config.EchKey,
 				RealityConfig:  h.config.RealityConfig.Build(),
 			},
+			lc,
 			tunnel,
 			h.Additions()...,
 		)

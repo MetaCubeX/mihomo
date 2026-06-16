@@ -63,7 +63,7 @@ func (t *TrustTunnel) ListenPacketContext(ctx context.Context, metadata *C.Metad
 		return nil, err
 	}
 
-	return newPacketConn(N.NewThreadSafePacketConn(pc), t), nil
+	return NewPacketConn(N.NewThreadSafePacketConn(pc), t), nil
 }
 
 // SupportUOT implements C.ProxyAdapter

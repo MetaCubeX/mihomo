@@ -34,7 +34,7 @@ func (r *Reject) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := r.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	return newPacketConn(&nopPacketConn{}, r), nil
+	return NewPacketConn(&nopPacketConn{}, r), nil
 }
 
 func (r *Reject) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

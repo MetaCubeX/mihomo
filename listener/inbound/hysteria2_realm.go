@@ -89,7 +89,7 @@ func (t *Hysteria2RealmServer) Address() string {
 // Listen implements constant.InboundListener
 func (t *Hysteria2RealmServer) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = hysteria2_realm.New(t.ts, tunnel, t.Additions()...)
+	t.l, err = hysteria2_realm.New(t.ts, t.ListenConfig(), tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

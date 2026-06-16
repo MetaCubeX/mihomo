@@ -92,7 +92,7 @@ func (v *Vmess) Address() string {
 // Listen implements constant.InboundListener
 func (v *Vmess) Listen(tunnel C.Tunnel) error {
 	var err error
-	v.l, err = sing_vmess.New(v.vs, tunnel, v.Additions()...)
+	v.l, err = sing_vmess.New(v.vs, v.ListenConfig(), tunnel, v.Additions()...)
 	if err != nil {
 		return err
 	}

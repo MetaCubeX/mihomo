@@ -46,7 +46,7 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err != nil {
 		return nil, err
 	}
-	return d.loopBack.NewPacketConn(newPacketConn(pc, d)), nil
+	return d.loopBack.NewPacketConn(NewPacketConn(pc, d)), nil
 }
 
 func (d *Direct) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {

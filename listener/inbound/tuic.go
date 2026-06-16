@@ -88,7 +88,7 @@ func (t *Tuic) Address() string {
 // Listen implements constant.InboundListener
 func (t *Tuic) Listen(tunnel C.Tunnel) error {
 	var err error
-	t.l, err = tuic.New(t.ts, tunnel, t.Additions()...)
+	t.l, err = tuic.New(t.ts, t.ListenConfig(), tunnel, t.Additions()...)
 	if err != nil {
 		return err
 	}

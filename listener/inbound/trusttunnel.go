@@ -82,7 +82,7 @@ func (v *TrustTunnel) Address() string {
 // Listen implements constant.InboundListener
 func (v *TrustTunnel) Listen(tunnel C.Tunnel) error {
 	var err error
-	v.l, err = trusttunnel.New(v.vs, tunnel, v.Additions()...)
+	v.l, err = trusttunnel.New(v.vs, v.ListenConfig(), tunnel, v.Additions()...)
 	if err != nil {
 		return err
 	}

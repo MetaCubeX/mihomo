@@ -83,6 +83,9 @@ external-controller-unix: mihomo.sock
 # ！！！注意： 从Windows namedpipe访问api接口不会验证secret， 如果开启请自行保证安全问题 ！！！
 external-controller-pipe: \\.\pipe\mihomo
 
+# 为 external-controller 和 external-controller-tls 的监听socket设置routing-mark（仅支持linux）
+external-controller-routing-mark: 0
+
 # tcp-concurrent: true # TCP 并发连接所有 IP, 将使用最快握手的 TCP
 
 # 配置 WEB UI 目录，使用 http://{{external-controller}}/ui 访问
@@ -1390,6 +1393,11 @@ proxies: # socks5
   - name: "dns-out"
     type: dns
 
+  - name: "rematch"
+    type: rematch
+    target-rematch-name: "rematch1" # 如果填写则覆盖原始 metadata 中的 rematch-name（可用REMATCH-NAME规则匹配）
+    target-sub-rule: "sub-rule1" # 如果填写则接下来会直接用指定的 sub-rule 匹配，如果名字不存在或为空会回退到主rules
+
   # 配置指定 interface-name 和 fwmark 的 DIRECT
   - name: en1-direct
     type: direct
@@ -1459,7 +1467,7 @@ proxy-groups:
     proxies:
       - Proxy
       - DIRECT
-    # empty-fallback: COMPATIBLE # 设置当组为空时的回退proxy
+    # empty-fallback: COMPATIBLE # 设置当组为空时的回退proxy（这里不支持填写代理组，只支持填写proxy名称）
 
 # Mihomo 格式的节点或支持 *ray 的分享格式
 proxy-providers:
@@ -1622,6 +1630,7 @@ listeners:
     type: socks
     port: 10808 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     #listen: 0.0.0.0 # 默认监听 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理
     # udp: false # 默认 true
@@ -1646,6 +1655,7 @@ listeners:
     type: http
     port: 10809 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # users: # 如果不填写users项，则遵从全局authentication设置，如果填写会忽略全局设置, 如想跳过该入站的验证可填写 users: []
@@ -1669,6 +1679,7 @@ listeners:
     type: mixed #  HTTP(S) 和 SOCKS 代理混合
     port: 10810 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # udp: false # 默认 true
@@ -1708,6 +1719,7 @@ listeners:
     type: shadowsocks
     port: 10813 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     password: vlmpIPSyHH6f4S8WVPdRIHIlzmB+GIRfoH3aNJ/t9Gg=
@@ -1755,6 +1767,7 @@ listeners:
     type: snell
     port: 10815 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     psk: your-password
     version: 4 # 仅支持 4/5
     udp: true # UDP over TCP tunnel，默认 true
@@ -1768,6 +1781,7 @@ listeners:
     type: vmess
     port: 10814 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
@@ -1812,6 +1826,7 @@ listeners:
     type: tuic
     port: 10815 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     # token:    # tuicV4 填写（可以同时填写 users）
@@ -1843,6 +1858,7 @@ listeners:
     type: tunnel
     port: 10816 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     network: [tcp, udp]
@@ -1852,6 +1868,7 @@ listeners:
     type: vless
     port: 10817 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
@@ -1874,6 +1891,8 @@ listeners:
     #   uplink-http-method: POST # Available: POST, PUT, PATCH, DELETE
     #   session-placement: path # Available: path, query, cookie, header
     #   session-key: ""
+    #   session-table: "" # Available: "", "uuid", "ALPHABET", "Alphabet", "BASE36", "Base62", "HEX", "alphabet", "base36", "hex", "number"
+    #   session-length: "16-32" # 起始值不可为 0，总的 id 空间必须大于 21 亿，仅当session-table不为空或uuid时生效
     #   seq-placement: path # Available: path, query, cookie, header
     #   seq-key: ""
     #   uplink-data-placement: body # Available: body, cookie, header
@@ -1933,6 +1952,7 @@ listeners:
     type: anytls
     port: 10818 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     users:
       username1: password1
       username2: password2
@@ -1957,6 +1977,7 @@ listeners:
     type: mieru
     port: 10818 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     transport: TCP # 支持 TCP 或者 UDP
     users:
       username1: password1
@@ -1970,6 +1991,7 @@ listeners:
     type: sudoku
     port: 8443 # 仅支持单端口
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     key: "<server_key>" # 如果你使用sudoku生成的ED25519密钥对，此处是密钥对中的公钥，当然，你也可以仅仅使用任意uuid充当key
     aead-method: chacha20-poly1305 # 可选：chacha20-poly1305、aes-128-gcm、none（不建议；none 不提供 AEAD 保护）
     padding-min: 1 # 最小填充率（0-100）
@@ -1993,6 +2015,7 @@ listeners:
     type: trojan
     port: 10819 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
@@ -2042,6 +2065,7 @@ listeners:
     type: hysteria2
     port: 10820 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:
@@ -2094,6 +2118,7 @@ listeners:
     type: hysteria2-realm
     port: 10820 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     token: public # hysteria2入站和出站通过 `Authorization: Bearer <token>` 出示的 Bearer 令牌。
     max-realms: 65536 # maximum total realms (0 = unlimited)
     max-realms-per-ip: 4 # maximum realms per client IP (0 = unlimited)
@@ -2118,6 +2143,7 @@ listeners:
     type: trusttunnel
     port: 10821 # 支持使用ports格式，例如200,302 or 200,204,401-429,501-503
     listen: 0.0.0.0
+    # routing-mark: 0 # 为监听socket设置routing-mark（仅支持linux）
     # rule: sub-rule-name1 # 默认使用 rules，如果未找到 sub-rule 则直接使用 rules
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     users:

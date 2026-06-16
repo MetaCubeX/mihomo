@@ -100,16 +100,17 @@ type GeoXUrl struct {
 
 // Controller config
 type Controller struct {
-	ExternalController     string
-	ExternalControllerTLS  string
-	ExternalControllerUnix string
-	ExternalControllerPipe string
-	ExternalUI             string
-	ExternalUIURL          string
-	ExternalUIName         string
-	ExternalDohServer      string
-	Secret                 string
-	Cors                   Cors
+	ExternalController            string
+	ExternalControllerTLS         string
+	ExternalControllerUnix        string
+	ExternalControllerPipe        string
+	ExternalControllerRoutingMark int
+	ExternalUI                    string
+	ExternalUIURL                 string
+	ExternalUIName                string
+	ExternalDohServer             string
+	Secret                        string
+	Cors                          Cors
 }
 
 type Cors struct {
@@ -155,6 +156,7 @@ type DNS struct {
 	FallbackIPFilter      []C.IpMatcher
 	FallbackDomainFilter  []C.DomainMatcher
 	Listen                string
+	ListenRoutingMark     int
 	EnhancedMode          C.DNSMode
 	DefaultNameserver     []dns.NameServer
 	CacheAlgorithm        string
@@ -227,6 +229,7 @@ type RawDNS struct {
 	Fallback                     []string                            `yaml:"fallback" json:"fallback"`
 	FallbackFilter               RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
 	Listen                       string                              `yaml:"listen" json:"listen"`
+	ListenRoutingMark            int                                 `yaml:"listen-routing-mark" json:"listen-routing-mark"`
 	EnhancedMode                 C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
 	FakeIPRange                  string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
 	FakeIPRange6                 string                              `yaml:"fake-ip-range6" json:"fake-ip-range6"`
@@ -391,51 +394,52 @@ type RawTLS struct {
 }
 
 type RawConfig struct {
-	Port                    int                     `yaml:"port" json:"port"`
-	SocksPort               int                     `yaml:"socks-port" json:"socks-port"`
-	RedirPort               int                     `yaml:"redir-port" json:"redir-port"`
-	TProxyPort              int                     `yaml:"tproxy-port" json:"tproxy-port"`
-	MixedPort               int                     `yaml:"mixed-port" json:"mixed-port"`
-	ShadowSocksConfig       string                  `yaml:"ss-config" json:"ss-config"`
-	VmessConfig             string                  `yaml:"vmess-config" json:"vmess-config"`
-	InboundTfo              bool                    `yaml:"inbound-tfo" json:"inbound-tfo"`
-	InboundMPTCP            bool                    `yaml:"inbound-mptcp" json:"inbound-mptcp"`
-	Authentication          []string                `yaml:"authentication" json:"authentication"`
-	SkipAuthPrefixes        []netip.Prefix          `yaml:"skip-auth-prefixes" json:"skip-auth-prefixes"`
-	LanAllowedIPs           []netip.Prefix          `yaml:"lan-allowed-ips" json:"lan-allowed-ips"`
-	LanDisAllowedIPs        []netip.Prefix          `yaml:"lan-disallowed-ips" json:"lan-disallowed-ips"`
-	AllowLan                bool                    `yaml:"allow-lan" json:"allow-lan"`
-	BindAddress             string                  `yaml:"bind-address" json:"bind-address"`
-	Mode                    T.TunnelMode            `yaml:"mode" json:"mode"`
-	UnifiedDelay            bool                    `yaml:"unified-delay" json:"unified-delay"`
-	LogLevel                log.LogLevel            `yaml:"log-level" json:"log-level"`
-	IPv6                    bool                    `yaml:"ipv6" json:"ipv6"`
-	ExternalController      string                  `yaml:"external-controller" json:"external-controller"`
-	ExternalControllerPipe  string                  `yaml:"external-controller-pipe" json:"external-controller-pipe"`
-	ExternalControllerUnix  string                  `yaml:"external-controller-unix" json:"external-controller-unix"`
-	ExternalControllerTLS   string                  `yaml:"external-controller-tls" json:"external-controller-tls"`
-	ExternalControllerCors  RawCors                 `yaml:"external-controller-cors" json:"external-controller-cors"`
-	ExternalUI              string                  `yaml:"external-ui" json:"external-ui"`
-	ExternalUIURL           string                  `yaml:"external-ui-url" json:"external-ui-url"`
-	ExternalUIName          string                  `yaml:"external-ui-name" json:"external-ui-name"`
-	ExternalDohServer       string                  `yaml:"external-doh-server" json:"external-doh-server"`
-	Secret                  string                  `yaml:"secret" json:"secret"`
-	Interface               string                  `yaml:"interface-name" json:"interface-name"`
-	RoutingMark             int                     `yaml:"routing-mark" json:"routing-mark"`
-	Tunnels                 []LC.Tunnel             `yaml:"tunnels" json:"tunnels"`
-	GeoAutoUpdate           bool                    `yaml:"geo-auto-update" json:"geo-auto-update"`
-	GeoUpdateInterval       int                     `yaml:"geo-update-interval" json:"geo-update-interval"`
-	GeodataMode             bool                    `yaml:"geodata-mode" json:"geodata-mode"`
-	GeodataLoader           string                  `yaml:"geodata-loader" json:"geodata-loader"`
-	GeositeMatcher          string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
-	TCPConcurrent           bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
-	FindProcessMode         process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
-	GlobalClientFingerprint string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
-	GlobalUA                string                  `yaml:"global-ua" json:"global-ua"`
-	ETagSupport             bool                    `yaml:"etag-support" json:"etag-support"`
-	KeepAliveIdle           int                     `yaml:"keep-alive-idle" json:"keep-alive-idle"`
-	KeepAliveInterval       int                     `yaml:"keep-alive-interval" json:"keep-alive-interval"`
-	DisableKeepAlive        bool                    `yaml:"disable-keep-alive" json:"disable-keep-alive"`
+	Port                          int                     `yaml:"port" json:"port"`
+	SocksPort                     int                     `yaml:"socks-port" json:"socks-port"`
+	RedirPort                     int                     `yaml:"redir-port" json:"redir-port"`
+	TProxyPort                    int                     `yaml:"tproxy-port" json:"tproxy-port"`
+	MixedPort                     int                     `yaml:"mixed-port" json:"mixed-port"`
+	ShadowSocksConfig             string                  `yaml:"ss-config" json:"ss-config"`
+	VmessConfig                   string                  `yaml:"vmess-config" json:"vmess-config"`
+	InboundTfo                    bool                    `yaml:"inbound-tfo" json:"inbound-tfo"`
+	InboundMPTCP                  bool                    `yaml:"inbound-mptcp" json:"inbound-mptcp"`
+	Authentication                []string                `yaml:"authentication" json:"authentication"`
+	SkipAuthPrefixes              []netip.Prefix          `yaml:"skip-auth-prefixes" json:"skip-auth-prefixes"`
+	LanAllowedIPs                 []netip.Prefix          `yaml:"lan-allowed-ips" json:"lan-allowed-ips"`
+	LanDisAllowedIPs              []netip.Prefix          `yaml:"lan-disallowed-ips" json:"lan-disallowed-ips"`
+	AllowLan                      bool                    `yaml:"allow-lan" json:"allow-lan"`
+	BindAddress                   string                  `yaml:"bind-address" json:"bind-address"`
+	Mode                          T.TunnelMode            `yaml:"mode" json:"mode"`
+	UnifiedDelay                  bool                    `yaml:"unified-delay" json:"unified-delay"`
+	LogLevel                      log.LogLevel            `yaml:"log-level" json:"log-level"`
+	IPv6                          bool                    `yaml:"ipv6" json:"ipv6"`
+	ExternalController            string                  `yaml:"external-controller" json:"external-controller"`
+	ExternalControllerRoutingMark int                     `yaml:"external-controller-routing-mark" json:"external-controller-routing-mark"`
+	ExternalControllerPipe        string                  `yaml:"external-controller-pipe" json:"external-controller-pipe"`
+	ExternalControllerUnix        string                  `yaml:"external-controller-unix" json:"external-controller-unix"`
+	ExternalControllerTLS         string                  `yaml:"external-controller-tls" json:"external-controller-tls"`
+	ExternalControllerCors        RawCors                 `yaml:"external-controller-cors" json:"external-controller-cors"`
+	ExternalUI                    string                  `yaml:"external-ui" json:"external-ui"`
+	ExternalUIURL                 string                  `yaml:"external-ui-url" json:"external-ui-url"`
+	ExternalUIName                string                  `yaml:"external-ui-name" json:"external-ui-name"`
+	ExternalDohServer             string                  `yaml:"external-doh-server" json:"external-doh-server"`
+	Secret                        string                  `yaml:"secret" json:"secret"`
+	Interface                     string                  `yaml:"interface-name" json:"interface-name"`
+	RoutingMark                   int                     `yaml:"routing-mark" json:"routing-mark"`
+	Tunnels                       []LC.Tunnel             `yaml:"tunnels" json:"tunnels"`
+	GeoAutoUpdate                 bool                    `yaml:"geo-auto-update" json:"geo-auto-update"`
+	GeoUpdateInterval             int                     `yaml:"geo-update-interval" json:"geo-update-interval"`
+	GeodataMode                   bool                    `yaml:"geodata-mode" json:"geodata-mode"`
+	GeodataLoader                 string                  `yaml:"geodata-loader" json:"geodata-loader"`
+	GeositeMatcher                string                  `yaml:"geosite-matcher" json:"geosite-matcher"`
+	TCPConcurrent                 bool                    `yaml:"tcp-concurrent" json:"tcp-concurrent"`
+	FindProcessMode               process.FindProcessMode `yaml:"find-process-mode" json:"find-process-mode"`
+	GlobalClientFingerprint       string                  `yaml:"global-client-fingerprint" json:"global-client-fingerprint"`
+	GlobalUA                      string                  `yaml:"global-ua" json:"global-ua"`
+	ETagSupport                   bool                    `yaml:"etag-support" json:"etag-support"`
+	KeepAliveIdle                 int                     `yaml:"keep-alive-idle" json:"keep-alive-idle"`
+	KeepAliveInterval             int                     `yaml:"keep-alive-interval" json:"keep-alive-interval"`
+	DisableKeepAlive              bool                    `yaml:"disable-keep-alive" json:"disable-keep-alive"`
 
 	ProxyProvider map[string]map[string]any `yaml:"proxy-providers" json:"proxy-providers"`
 	RuleProvider  map[string]map[string]any `yaml:"rule-providers" json:"rule-providers"`
@@ -801,15 +805,16 @@ func parseController(cfg *RawConfig) (*Controller, error) {
 		return nil, fmt.Errorf("external UI name is not local: %s", uiName)
 	}
 	return &Controller{
-		ExternalController:     cfg.ExternalController,
-		ExternalUI:             cfg.ExternalUI,
-		ExternalUIURL:          cfg.ExternalUIURL,
-		ExternalUIName:         cfg.ExternalUIName,
-		Secret:                 cfg.Secret,
-		ExternalControllerPipe: cfg.ExternalControllerPipe,
-		ExternalControllerUnix: cfg.ExternalControllerUnix,
-		ExternalControllerTLS:  cfg.ExternalControllerTLS,
-		ExternalDohServer:      cfg.ExternalDohServer,
+		ExternalController:            cfg.ExternalController,
+		ExternalUI:                    cfg.ExternalUI,
+		ExternalUIURL:                 cfg.ExternalUIURL,
+		ExternalUIName:                cfg.ExternalUIName,
+		Secret:                        cfg.Secret,
+		ExternalControllerRoutingMark: cfg.ExternalControllerRoutingMark,
+		ExternalControllerPipe:        cfg.ExternalControllerPipe,
+		ExternalControllerUnix:        cfg.ExternalControllerUnix,
+		ExternalControllerTLS:         cfg.ExternalControllerTLS,
+		ExternalDohServer:             cfg.ExternalDohServer,
 		Cors: Cors{
 			AllowOrigins:        cfg.ExternalControllerCors.AllowOrigins,
 			AllowPrivateNetwork: cfg.ExternalControllerCors.AllowPrivateNetwork,
@@ -1397,16 +1402,17 @@ func parseDNS(rawCfg *RawConfig, ruleProviders map[string]P.RuleProvider) (*DNS,
 	}
 
 	dnsCfg := &DNS{
-		Enable:         cfg.Enable,
-		Listen:         cfg.Listen,
-		PreferH3:       cfg.PreferH3,
-		IPv6Timeout:    cfg.IPv6Timeout,
-		IPv6:           cfg.IPv6,
-		UseHosts:       cfg.UseHosts,
-		UseSystemHosts: cfg.UseSystemHosts,
-		EnhancedMode:   cfg.EnhancedMode,
-		CacheAlgorithm: cfg.CacheAlgorithm,
-		CacheMaxSize:   cfg.CacheMaxSize,
+		Enable:            cfg.Enable,
+		Listen:            cfg.Listen,
+		ListenRoutingMark: cfg.ListenRoutingMark,
+		PreferH3:          cfg.PreferH3,
+		IPv6Timeout:       cfg.IPv6Timeout,
+		IPv6:              cfg.IPv6,
+		UseHosts:          cfg.UseHosts,
+		UseSystemHosts:    cfg.UseSystemHosts,
+		EnhancedMode:      cfg.EnhancedMode,
+		CacheAlgorithm:    cfg.CacheAlgorithm,
+		CacheMaxSize:      cfg.CacheMaxSize,
 	}
 	var err error
 	if dnsCfg.NameServer, err = parseNameServer(cfg.NameServer, cfg.RespectRules, cfg.PreferH3); err != nil {

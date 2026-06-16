@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	C "github.com/metacubex/mihomo/constant"
+	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/snell"
 	"github.com/metacubex/mihomo/log"
 )
@@ -30,7 +31,7 @@ type Snell struct {
 	*Base
 	config *SnellOption
 	l      C.MultiAddrListener
-	snell  snell.Config
+	snell  LC.SnellServer
 }
 
 func NewSnell(options *SnellOption) (*Snell, error) {
@@ -48,7 +49,7 @@ func NewSnell(options *SnellOption) (*Snell, error) {
 	return &Snell{
 		Base:   base,
 		config: options,
-		snell: snell.Config{
+		snell: LC.SnellServer{
 			Listen:   base.RawAddress(),
 			Psk:      options.Psk,
 			Version:  options.Version,
@@ -75,7 +76,7 @@ func (s *Snell) Address() string {
 
 func (s *Snell) Listen(tunnel C.Tunnel) error {
 	var err error
-	s.l, err = snell.New(s.snell, tunnel, s.Additions()...)
+	s.l, err = snell.New(s.snell, s.ListenConfig(), tunnel, s.Additions()...)
 	if err != nil {
 		return err
 	}

@@ -28,6 +28,8 @@ import (
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel/statistic"
+
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -653,36 +655,59 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 	configMux.RLock()
 	defer configMux.RUnlock()
 
-	for _, rule := range getRules(metadata) {
-		if matched, ada := rule.Match(metadata, helper); matched {
-			adapter, ok := proxies[ada]
-			if !ok {
-				continue
-			}
-
-			// parse multi-layer nesting
-			passed := false
-			for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
-				if adapter.Type() == C.Pass {
-					passed = true
-					break
+	var rematchChain []string
+	for {
+		var rematchProxy C.Proxy
+		var rematchRule C.Rule
+	GetRules:
+		for _, rule := range getRules(metadata) {
+			if matched, ada := rule.Match(metadata, helper); matched {
+				adapter, ok := proxies[ada]
+				if !ok {
+					continue
 				}
-			}
-			if passed {
-				log.Debugln("%s match Pass rule", adapter.Name())
-				continue
-			}
 
-			if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
-				log.Debugln("%s UDP is not supported", adapter.Name())
-				continue
-			}
+				// parse multi-layer nesting
+				for adapter := adapter; adapter != nil; adapter = adapter.Unwrap(metadata, false) {
+					if adapter.Type() == C.Pass {
+						log.Debugln("%s match Pass rule", adapter.Name())
+						continue GetRules
+					}
+					if adapter.Type() == C.Rematch {
+						log.Debugln("%s match Rematch rule", adapter.Name())
+						rematchProxy = adapter
+						rematchRule = rule
+						break GetRules
+					}
+				}
 
-			return adapter, rule, nil
+				if metadata.NetWork == C.UDP && !adapter.SupportUDP() {
+					log.Debugln("%s UDP is not supported", adapter.Name())
+					continue
+				}
+
+				return adapter, rule, nil
+			}
 		}
+		if rematchProxy != nil {
+			if slices.Contains(rematchChain, rematchProxy.Name()) {
+				log.Warnln("[Rule] rematch cycle detected on %s", rematchProxy.Name())
+				return rematchProxy, rematchRule, nil
+			}
+			rematchChain = append(rematchChain, rematchProxy.Name())
+			conn, err := rematchProxy.DialContext(context.Background(), metadata) // not a real connection, just for metadata update
+			if conn != nil {
+				_ = conn.Close()
+			}
+			if err != nil {
+				log.Warnln("[Rule] rematch proxy %s failed to update metadata: %s", rematchProxy.Name(), err)
+				return rematchProxy, rematchRule, nil
+			}
+			log.Debugln("[Rule] rematch proxy %s update metadata to rematch-name=%q sub-rule=%q", rematchProxy.Name(), metadata.InName, metadata.SpecialRules)
+			continue
+		}
+		return proxies["DIRECT"], nil, nil
 	}
-
-	return proxies["DIRECT"], nil, nil
 }
 
 func getRules(metadata *C.Metadata) []C.Rule {

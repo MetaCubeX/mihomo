@@ -78,17 +78,18 @@ func (t *Tunnel) Address() string {
 
 // Listen implements constant.InboundListener
 func (t *Tunnel) Listen(tunnel C.Tunnel) error {
+	lc := t.ListenConfig()
 	for _, addr := range strings.Split(t.RawAddress(), ",") {
 		for _, network := range t.config.Network {
 			switch network {
 			case "tcp":
-				ttl, err := LT.New(addr, t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...)
+				ttl, err := LT.New(addr, t.config.Target, t.config.SpecialProxy, lc, tunnel, t.Additions()...)
 				if err != nil {
 					return err
 				}
 				t.ttl = append(t.ttl, ttl)
 			case "udp":
-				tul, err := LT.NewUDP(addr, t.config.Target, t.config.SpecialProxy, tunnel, t.Additions()...)
+				tul, err := LT.NewUDP(addr, t.config.Target, t.config.SpecialProxy, lc, tunnel, t.Additions()...)
 				if err != nil {
 					return err
 				}
