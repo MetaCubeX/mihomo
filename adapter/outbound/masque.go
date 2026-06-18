@@ -41,6 +41,7 @@ type Masque struct {
 	resolver    resolver.Resolver
 	uri         string
 	h2Transport *http.Transport
+	l4Client    *masque.L4Client
 
 	runCtx    context.Context
 	runCancel context.CancelFunc
@@ -144,6 +145,8 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 		return nil, fmt.Errorf("failed to assert public key as ECDSA")
 	}
 
+	l4proxy := option.Network == "h3-l4proxy"
+
 	uri := option.URI
 	if uri == "" {
 		uri = masque.ConnectURI
@@ -153,6 +156,9 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 	sni := option.SNI
 	if sni == "" {
 		sni = masque.ConnectSNI
+		if l4proxy {
+			sni = masque.L4ConnectSNI
+		}
 	}
 
 	tlsConfig, err := masque.PrepareTlsConfig(privKey, ecPubKey, sni, option.SkipCertVerify)
@@ -197,30 +203,39 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 		KeepAlivePeriod:   30 * time.Second,
 	}
 
-	prefixes, err := option.Prefixes()
-	if err != nil {
-		return nil, err
-	}
-
 	outbound.option = option
 
 	mtu := option.MTU
 	if mtu == 0 {
 		mtu = 1280
 	}
-	if len(prefixes) == 0 {
-		return nil, errors.New("missing local address")
-	}
-	outbound.tunDevice, err = wireguard.NewStackDevice(prefixes, uint32(mtu))
-	if err != nil {
-		return nil, fmt.Errorf("create device: %w", err)
-	}
 
 	var has6 bool
-	for _, address := range prefixes {
-		if !address.Addr().Unmap().Is4() {
-			has6 = true
-			break
+	if l4proxy {
+		outbound.l4Client = masque.NewL4Client(outbound.runCtx, outbound.dialQuic)
+		if outbound.udp {
+			log.Warnln("[Masque](%s) L4 proxy mode is not supported for UDP", outbound.name)
+			outbound.udp = false
+		}
+		has6 = true // l4 proxy mode always has ipv6
+	} else {
+		prefixes, err := option.Prefixes()
+		if err != nil {
+			return nil, err
+		}
+		if len(prefixes) == 0 {
+			return nil, errors.New("missing local address")
+		}
+		outbound.tunDevice, err = wireguard.NewStackDevice(prefixes, uint32(mtu))
+		if err != nil {
+			return nil, fmt.Errorf("create device: %w", err)
+		}
+
+		for _, address := range prefixes {
+			if !address.Addr().Unmap().Is4() {
+				has6 = true
+				break
+			}
 		}
 	}
 
@@ -239,6 +254,15 @@ func NewMasque(option MasqueOption) (*Masque, error) {
 	}
 
 	return outbound, nil
+}
+
+func (w *Masque) dialQuic(ctx context.Context) (net.PacketConn, *quic.Conn, error) {
+	pc, quicConn, err := common.DialQuic(ctx, w.addr, w.DialOptions(), w.dialer, w.tlsConfig, w.quicConfig, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	common.SetCongestionController(quicConn, w.option.CongestionController, w.option.CWND, w.option.BBRProfile)
+	return pc, quicConn, nil
 }
 
 func (w *Masque) run(ctx context.Context) error {
@@ -275,11 +299,7 @@ func (w *Masque) run(ctx context.Context) error {
 		}
 	} else {
 		var quicConn *quic.Conn
-		pc, quicConn, err = common.DialQuic(ctx, w.addr, w.DialOptions(), w.dialer, w.tlsConfig, w.quicConfig, false)
-		if err != nil {
-			return err
-		}
-		common.SetCongestionController(quicConn, w.option.CongestionController, w.option.CWND, w.option.BBRProfile)
+		pc, quicConn, err = w.dialQuic(ctx)
 
 		closer, ipConn, err = masque.ConnectTunnel(ctx, quicConn, w.uri)
 		if err != nil {
@@ -358,10 +378,39 @@ func (w *Masque) Close() error {
 	if w.tunDevice != nil {
 		w.tunDevice.Close()
 	}
+	if w.l4Client != nil {
+		w.l4Client.Close()
+	}
 	return nil
 }
 
+func (w *Masque) dialContextL4(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	var conn net.Conn
+	if !metadata.Resolved() || w.resolver != nil {
+		r := resolver.DefaultResolver
+		if w.resolver != nil {
+			r = w.resolver
+		}
+		options := w.DialOptions()
+		options = append(options, dialer.WithResolver(r))
+		options = append(options, dialer.WithNetDialer(w.l4Client))
+		conn, err = dialer.NewDialer(options...).DialContext(ctx, "tcp", metadata.RemoteAddress())
+	} else {
+		conn, err = w.l4Client.DialContext(ctx, "tcp", metadata.AddrPort().String())
+	}
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil {
+		return nil, errors.New("conn is nil")
+	}
+	return NewConn(conn, w), nil
+}
+
 func (w *Masque) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
+	if w.l4Client != nil {
+		return w.dialContextL4(ctx, metadata)
+	}
 	var conn net.Conn
 	if err = w.run(ctx); err != nil {
 		return nil, err
@@ -388,6 +437,9 @@ func (w *Masque) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Con
 }
 
 func (w *Masque) ListenPacketContext(ctx context.Context, metadata *C.Metadata) (_ C.PacketConn, err error) {
+	if w.l4Client != nil {
+		return nil, errors.New("masque L4 proxy mode is not supported for UDP")
+	}
 	var pc net.PacketConn
 	if err = w.run(ctx); err != nil {
 		return nil, err

@@ -1228,6 +1228,21 @@ proxies: # socks5
     # dns: [ 1.1.1.1, 8.8.8.8 ] # 仅在 remote-dns-resolve 为 true 时生效
     # congestion-controller: bbr # 默认不开启
 
+  # masque-h3-l4proxy
+  - name: "masque-h3-l4proxy"
+    type: masque
+    server: 162.159.198.1
+    port: 443
+    private-key: MHcCAQEEILI1eOtnbEIh89Fj4yNDuFR6UjayCKI3NdLl3DhetimWoAoGCCqGSM49AwEHoUQDQgAEgyXrE8v+hHsHy3ewSb3WcRjYgCrM9T9hiE0Uv6k2DZ1+4kefrDT9v1Q/8wdRigTf6t6gGNUV8W+IUMdrfUt+9g==
+    public-key: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r+/h4mcG7SxI8tsW8OR1A5tv/zCzVbCRRh2t87/kxnP6lAy0lkr7qYwu+ox+k3dr6w==
+    udp: false # 目前 l4proxy 模式不支持 udp
+    network: h3-l4proxy
+    # 一个出站代理的标识。当值不为空时，将使用指定的 proxy 发出连接
+    # dialer-proxy: "ss1"
+    # remote-dns-resolve: true # 强制 dns 远程解析，默认值为 false
+    # dns: [ tls://1.1.1.1, tls://1.0.0.1 ] # 仅在 remote-dns-resolve 为 true 时生效
+    # congestion-controller: bbr # 默认不开启
+
   # masque-h2
   - name: "masque-h2"
     type: masque
