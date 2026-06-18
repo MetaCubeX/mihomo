@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -83,6 +84,14 @@ func CalculateInterfaceName(name string) (tunName string) {
 	} else if runtime.GOOS == "freebsd" {
 		// FreeBSD tun(4) interfaces must be named "tunN"; ignore any custom
 		// name and scan for a free index below.
+		//
+		// FreeBSD tun(4) devices are cloning interfaces that persist after the
+		// process that opened them dies. When mihomo is killed without a clean
+		// shutdown (e.g. logout/reboot while TUN mode is on), the tun it created
+		// is left behind as an orphan, so the next start would skip it and
+		// advance to a higher index (tun0 -> tun1 -> ...), leaking a device each
+		// cycle. Destroy those orphans first so we can reuse the low index.
+		destroyOrphanTunInterfaces()
 		tunName = "tun"
 	} else if name != "" {
 		tunName = name
@@ -115,6 +124,71 @@ func CalculateInterfaceName(name string) (tunName string) {
 	}
 	tunName = F.ToString(tunName, tunIndex)
 	return
+}
+
+// freebsdTunDescription is the marker mihomo asks sing-tun to write into the
+// ifconfig description of every tun(4) interface it creates on FreeBSD. mihomo
+// owns this string (sing-tun stays generic); it is the sole criterion used to
+// identify our own orphan tun devices for cleanup, so it must be specific
+// enough to never collide with descriptions other software might use.
+const freebsdTunDescription = "clash-verge-rev-tun"
+
+// destroyOrphanTunInterfaces removes leftover FreeBSD tun(4) interfaces that a
+// previous, abnormally terminated mihomo created but never tore down.
+//
+// Safety: we ONLY destroy interfaces whose ifconfig description equals
+// freebsdTunDescription (the marker mihomo asked sing-tun to stamp on the tun
+// devices it created). FreeBSD preserves that description after the owning
+// process dies, so it reliably identifies our own orphans. Interfaces created
+// by any other software (VPN clients, manually created tun, etc.) never carry
+// this marker and are therefore never touched — even if they look unused.
+func destroyOrphanTunInterfaces() {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+	for _, netInterface := range interfaces {
+		if !strings.HasPrefix(netInterface.Name, "tun") {
+			continue
+		}
+		// Numeric suffix only ("tunN"), to match real tun(4) devices.
+		if _, parseErr := strconv.ParseInt(netInterface.Name[len("tun"):], 10, 16); parseErr != nil {
+			continue
+		}
+		// An interface that is currently UP is in active use; never touch it.
+		if netInterface.Flags&net.FlagUp != 0 {
+			continue
+		}
+		// Only destroy interfaces that carry our own description marker.
+		if !tunHasClashDescription(netInterface.Name) {
+			continue
+		}
+		if destroyErr := exec.Command("ifconfig", netInterface.Name, "destroy").Run(); destroyErr != nil {
+			log.Warnln("[TUN] failed to destroy orphan tun interface %s: %v", netInterface.Name, destroyErr)
+		} else {
+			log.Infoln("[TUN] destroyed orphan tun interface %s left by a previous run", netInterface.Name)
+		}
+	}
+}
+
+// tunHasClashDescription reports whether the given tun interface's ifconfig
+// description equals the marker sing-tun stamps on tun devices it creates.
+func tunHasClashDescription(name string) bool {
+	// `ifconfig <name>` prints the full interface info including a
+	// "description: <text>" line; `ifconfig <name> description` (no value)
+	// would instead be a set request and error out, so always read the full
+	// output and parse it.
+	output, err := exec.Command("ifconfig", name).Output()
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if desc, ok := strings.CutPrefix(line, "description: "); ok {
+			return strings.TrimSpace(desc) == freebsdTunDescription
+		}
+	}
+	return false
 }
 
 func checkTunName(tunName string) (ok bool) {
@@ -426,6 +500,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		ExcludeMACAddress:                     excludeMACAddress,
 		FileDescriptor:                        options.FileDescriptor,
 		InterfaceMonitor:                      defaultInterfaceMonitor,
+		FreeBSDInterfaceDescription:           freebsdTunDescription,
 		EXP_RecvMsgX:                          options.RecvMsgX,
 		EXP_SendMsgX:                          options.SendMsgX,
 	}
