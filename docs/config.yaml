@@ -917,7 +917,7 @@ proxies: # socks5
       # max-connections: 1 # Maximum connections. Conflict with max-streams.
       # min-streams: 0 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
       # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
-      
+
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
@@ -1440,7 +1440,7 @@ proxies: # socks5
   - name: sudoku
     type: sudoku
     server: server_ip/domain # 1.2.3.4 or domain
-    port: 443 
+    port: 443
     key: "<client_key>" # 如果你使用sudoku生成的ED25519密钥对，请填写密钥对中的私钥，否则填入和服务端相同的uuid
     aead-method: chacha20-poly1305 # 可选：chacha20-poly1305、aes-128-gcm、none（不建议；none 不提供 AEAD 保护）
     padding-min: 2 # 最小填充率（0-100）
@@ -1955,6 +1955,7 @@ listeners:
     #     - 0123456789abcdef
     #   server-names:
     #     - test.com
+    #   proxy-protocol: 0 # 可选，默认 0 为关闭；1/2 会在连接 Reality dest 后立即发送 Proxy Protocol v1/v2，向后端传递原始来源/目标地址，后端必须启用 Proxy Protocol
     #   #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
     #   #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
     #   limit-fallback-upload:
@@ -2093,6 +2094,7 @@ listeners:
         - 0123456789abcdef
       server-names:
         - test.com
+      proxy-protocol: 0 # 可选，默认 0 为关闭；1/2 会在连接 Reality dest 后立即发送 Proxy Protocol v1/v2，向后端传递原始来源/目标地址，后端必须启用 Proxy Protocol
       #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
       #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
       limit-fallback-upload:
@@ -2202,6 +2204,7 @@ listeners:
     #     - 0123456789abcdef
     #   server-names:
     #     - test.com
+    #   proxy-protocol: 0 # 可选，默认 0 为关闭；1/2 会在连接 Reality dest 后立即发送 Proxy Protocol v1/v2，向后端传递原始来源/目标地址，后端必须启用 Proxy Protocol
     #   #下列两个 limit 为选填，可对未通过验证的回落连接限速，bytesPerSec 默认为 0 即不启用
     #   #回落限速是一种特征，不建议启用，如果您是面板/一键脚本开发者，务必让这些参数随机化
     #   limit-fallback-upload:

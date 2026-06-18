@@ -9,6 +9,7 @@ type RealityConfig struct {
 	ServerNames       []string `inbound:"server-names"`
 	MaxTimeDifference int      `inbound:"max-time-difference,omitempty"`
 	Proxy             string   `inbound:"proxy,omitempty"`
+	ProxyProtocol     int      `inbound:"proxy-protocol,omitempty"`
 
 	LimitFallbackUpload   RealityLimitFallback `inbound:"limit-fallback-upload,omitempty"`
 	LimitFallbackDownload RealityLimitFallback `inbound:"limit-fallback-download,omitempty"`
@@ -28,6 +29,7 @@ func (c RealityConfig) Build() reality.Config {
 		ServerNames:       c.ServerNames,
 		MaxTimeDifference: c.MaxTimeDifference,
 		Proxy:             c.Proxy,
+		ProxyProtocol:     c.ProxyProtocol,
 
 		LimitFallbackUpload: reality.LimitFallback{
 			AfterBytes:       c.LimitFallbackUpload.AfterBytes,

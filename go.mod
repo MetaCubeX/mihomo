@@ -48,6 +48,7 @@ require (
 	github.com/metacubex/wireguard-go v0.0.0-20250820062549-a6cecdd7f57f
 	github.com/mroth/weightedrand/v2 v2.1.0
 	github.com/openacid/low v0.1.21
+	github.com/pires/go-proxyproto v0.8.0
 	github.com/rasky/go-lzo v0.0.0-20200203143853-96a758eda86e
 	github.com/samber/lo v1.53.0
 	github.com/sirupsen/logrus v1.9.4
@@ -122,7 +123,6 @@ require (
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
-	github.com/pires/go-proxyproto v0.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/sagernet/netlink v0.0.0-20240612041022-b9a21c07ac6a // indirect
