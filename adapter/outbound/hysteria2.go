@@ -76,6 +76,7 @@ type Hysteria2RealmOption struct {
 	Token       string   `proxy:"token,omitempty"`
 	RealmID     string   `proxy:"realm-id,omitempty"`
 	STUNServers []string `proxy:"stun-servers,omitempty"`
+	LocalPort   int      `proxy:"local-port,omitempty"`
 
 	// for ServerURL
 	SNI            string   `proxy:"sni,omitempty"`
@@ -84,6 +85,16 @@ type Hysteria2RealmOption struct {
 	Certificate    string   `proxy:"certificate,omitempty"`
 	PrivateKey     string   `proxy:"private-key,omitempty"`
 	ALPN           []string `proxy:"alpn,omitempty"`
+}
+
+type RealmDialer struct {
+	outboundDialer qtls.PacketDialer
+	localPort      int
+}
+
+func (rd *RealmDialer) ListenPacket(ctx context.Context, network, address string, rAddrPort netip.AddrPort) (net.PacketConn, error) {
+	localAddr := net.JoinHostPort("", strconv.Itoa(rd.localPort))
+	return rd.outboundDialer.ListenPacket(ctx, network, localAddr, rAddrPort)
 }
 
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
@@ -201,6 +212,19 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		MaxConnectionReceiveWindow:     option.MaxConnectionReceiveWindow,
 	}
 
+	var packetListener qtls.PacketDialer = outbound.dialer
+	if option.RealmOpts.Enable {
+		if option.RealmOpts.LocalPort != int(uint16(option.RealmOpts.LocalPort)) {
+			return nil, errors.New("invalid local-port")
+		}
+		if option.RealmOpts.LocalPort != 0 {
+			packetListener = &RealmDialer{
+				outboundDialer: outbound.dialer,
+				localPort:      option.RealmOpts.LocalPort,
+			}
+		}
+	}
+
 	clientOptions := hysteria2.ClientOptions{
 		Context:            context.TODO(),
 		Logger:             log.SingLogger,
@@ -216,7 +240,7 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		UDPDisabled:        false,
 		UdpMTU:             option.UdpMTU,
 		ServerAddress:      M.ParseSocksaddr(addr),
-		PacketListener:     outbound.dialer,
+		PacketListener:     packetListener,
 		QuicDialer: qtls.QuicDialerFunc(func(ctx context.Context, addr string, dialer qtls.PacketDialer, tlsCfg *tls.Config, cfg *quic.Config, early bool) (net.PacketConn, *quic.Conn, error) {
 			err := echConfig.ClientHandle(ctx, tlsCfg)
 			if err != nil {
