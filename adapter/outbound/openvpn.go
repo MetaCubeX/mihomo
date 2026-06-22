@@ -42,30 +42,44 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name        string `proxy:"name"`
-	Server      string `proxy:"server"`
-	Port        int    `proxy:"port"`
-	Proto       string `proxy:"proto,omitempty"`
-	Dev         string `proxy:"dev,omitempty"`
-	Cipher      string `proxy:"cipher,omitempty"`
-	Auth        string `proxy:"auth,omitempty"`
-	CompLZO     string `proxy:"comp-lzo,omitempty"`
-	CA          string `proxy:"ca"`
-	Cert        string `proxy:"cert,omitempty"`
-	Key         string `proxy:"key,omitempty"`
-	TLSCrypt    string `proxy:"tls-crypt,omitempty"`
-	Username    string `proxy:"username,omitempty"`
-	Password    string `proxy:"password,omitempty"`
-	Ping        int    `proxy:"ping,omitempty"`
-	PingRestart int    `proxy:"ping-restart,omitempty"`
-	MTU         int    `proxy:"mtu,omitempty"`
-	UDP         bool   `proxy:"udp,omitempty"`
+	Name         string `proxy:"name"`
+	Server       string `proxy:"server"`
+	Port         int    `proxy:"port"`
+	Proto        string `proxy:"proto,omitempty"`
+	Dev          string `proxy:"dev,omitempty"`
+	Cipher       string `proxy:"cipher,omitempty"`
+	Auth         string `proxy:"auth,omitempty"`
+	CompLZO      string `proxy:"comp-lzo,omitempty"`
+	CA           string `proxy:"ca"`
+	Cert         string `proxy:"cert,omitempty"`
+	Key          string `proxy:"key,omitempty"`
+	TLSCrypt     string `proxy:"tls-crypt,omitempty"`
+	TLSAuth      string `proxy:"tls-auth,omitempty"`
+	KeyDirection *int   `proxy:"key-direction,omitempty"`
+	Scramble     string `proxy:"scramble,omitempty"`
+	Username     string `proxy:"username,omitempty"`
+	Password     string `proxy:"password,omitempty"`
+	Ping         int    `proxy:"ping,omitempty"`
+	PingRestart  int    `proxy:"ping-restart,omitempty"`
+	MTU          int    `proxy:"mtu,omitempty"`
+	UDP          bool   `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
 }
 
 func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
+	keyDirection := ovpn.KeyDirectionBidirectional
+	if option.KeyDirection != nil {
+		switch *option.KeyDirection {
+		case 0:
+			keyDirection = ovpn.KeyDirectionNormal
+		case 1:
+			keyDirection = ovpn.KeyDirectionInverse
+		default:
+			return nil, fmt.Errorf("unsupported openvpn key-direction %d", *option.KeyDirection)
+		}
+	}
 	cfg := &ovpn.ClientConfig{
 		RemoteHost:   option.Server,
 		RemotePort:   uint16(option.Port),
@@ -78,6 +92,9 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		Cert:         []byte(option.Cert),
 		Key:          []byte(option.Key),
 		TLSCrypt:     []byte(option.TLSCrypt),
+		TLSAuth:      []byte(option.TLSAuth),
+		KeyDirection: keyDirection,
+		ScrambleRaw:  option.Scramble,
 		Username:     option.Username,
 		Password:     option.Password,
 		PingInterval: time.Duration(option.Ping) * time.Second,
@@ -86,7 +103,6 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
 	}
-
 	outbound := &OpenVPN{
 		Base: NewBase(BaseOption{
 			Name:         option.Name,
@@ -239,6 +255,7 @@ func (o *OpenVPN) run(ctx context.Context) (wireguard.Device, resolver.Resolver,
 		}
 		return nil, nil, E.Cause(err, "connect OpenVPN server")
 	}
+	log.Debugln("[OpenVPN](%s) connected %s over %s", o.name, o.addr, o.config.Proto)
 	client, err := ovpn.NewClient(o.config, packetIO)
 	if err != nil {
 		_ = packetIO.Close()
@@ -333,13 +350,13 @@ func (o *OpenVPN) openPacketIO(ctx context.Context) (ovpn.PacketIO, error) {
 		if err != nil {
 			return nil, err
 		}
-		return ovpn.NewDatagramPacketIO(conn), nil
+		return ovpn.NewScramblePacketIO(ovpn.NewDatagramPacketIO(conn), o.config.Scramble), nil
 	case ovpn.ProtoTCP:
 		conn, err := o.dialer.DialContext(ctx, "tcp", o.addr)
 		if err != nil {
 			return nil, err
 		}
-		return ovpn.NewTCPPacketIO(conn), nil
+		return ovpn.NewScramblePacketIO(ovpn.NewTCPPacketIO(conn), o.config.Scramble), nil
 	default:
 		return nil, fmt.Errorf("unsupported openvpn proto %q", o.config.Proto)
 	}
@@ -422,7 +439,6 @@ func (o *OpenVPN) startPacketLoops() {
 							}
 							return
 						}
-						log.Debugln("[OpenVPN](%s) sent ping packet after %s idle", o.name, sinceSend.Round(time.Second))
 					}
 				case <-runCtx.Done():
 					return

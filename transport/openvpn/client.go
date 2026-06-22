@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/tls"
 	"golang.org/x/sync/semaphore"
 )
@@ -45,13 +46,21 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	if io == nil {
 		return nil, errors.New("nil openvpn packet io")
 	}
-	var crypt *TLSCrypt
+	var wrap ControlPacketWrapper
 	if len(config.TLSCryptKey) > 0 {
 		var err error
-		crypt, err = NewTLSCrypt(config.TLSCryptKey, true)
+		wrap, err = NewTLSCrypt(config.TLSCryptKey, true)
 		if err != nil {
 			return nil, err
 		}
+		log.Debugln("[OpenVPN] enabled tls-crypt control channel wrapping")
+	} else if len(config.TLSAuthKey) > 0 {
+		var err error
+		wrap, err = NewTLSAuth(config.TLSAuthKey, config.KeyDirection, config.Auth)
+		if err != nil {
+			return nil, err
+		}
+		log.Debugln("[OpenVPN] enabled tls-auth control channel authentication: auth=%s key-direction=%s", config.Auth, KeyDirectionString(config.KeyDirection))
 	}
 	local, err := NewSessionID()
 	if err != nil {
@@ -63,7 +72,7 @@ func NewClient(config *ClientConfig, io PacketIO) (*Client, error) {
 	client := &Client{
 		config:   config,
 		mux:      mux,
-		control:  NewControlChannel(mux, crypt, local),
+		control:  NewControlChannel(mux, wrap, local),
 		cancel:   cancel,
 		writeSem: semaphore.NewWeighted(1),
 	}
@@ -84,9 +93,11 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err := c.control.SendReset(ctx); err != nil {
 		return nil, fmt.Errorf("send hard reset: %w", err)
 	}
+	log.Debugln("[OpenVPN] sent hard reset to start handshake")
 	if err := c.waitServerReset(ctx); err != nil {
 		return nil, err
 	}
+	log.Debugln("[OpenVPN] received server hard reset")
 
 	tlsConfig, err := c.tlsConfig()
 	if err != nil {
@@ -100,6 +111,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err := c.tlsConn.HandshakeContext(ctx); err != nil {
 		return nil, fmt.Errorf("openvpn tls handshake: %w", err)
 	}
+	log.Debugln("[OpenVPN] TLS handshake complete")
 
 	clientRecord, err := NewClientKeyMethod2Record(
 		InstallScriptOptionsString(c.config.Proto, c.config.Cipher, c.config.Auth, c.config.CompLZO),
@@ -121,6 +133,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debugln("[OpenVPN] received key method 2 server record: options=%q peer-info=%q", serverRecord.Options, serverRecord.PeerInfo)
 
 	sources := clientRecord.Sources
 	sources.Server = serverRecord.Sources.Server
@@ -136,6 +149,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debugln("[OpenVPN] received PUSH_REPLY: peer-id=%d routes=%v prefixes=%v raw=%q", push.PeerID, push.Routes, push.Prefixes, push.Raw)
 	c.push = push
 	c.data, err = NewDataChannel(keys, c.config.Cipher, c.config.Auth, push.PeerID)
 	if err != nil {
@@ -162,7 +176,7 @@ func (c *Client) writeDataPacket(ctx context.Context, packet []byte, compress bo
 		return err
 	}
 	defer c.writeSem.Release(1)
-	if compress && c.config.CompLZO == CompLzoYes {
+	if compress && c.config.CompLZO != "" {
 		compressed, err := lzo1xCompressSafe(packet)
 		if err != nil {
 			return err
@@ -192,13 +206,14 @@ func (c *Client) ReadIPPacket(ctx context.Context) ([]byte, error) {
 		}
 		plain, err := c.data.Decrypt(packet)
 		if err != nil {
+			log.Debugln("[OpenVPN] discard data packet: len=%d err=%v", len(packet), err)
 			continue
 		}
 		c.markReceive()
 		if IsPingPacket(plain) {
 			continue
 		}
-		if c.config.CompLZO == CompLzoYes && len(plain) > 0 {
+		if c.config.CompLZO != "" && len(plain) > 0 {
 			return lzo1xDecompressSafe(plain)
 		}
 		return plain, nil

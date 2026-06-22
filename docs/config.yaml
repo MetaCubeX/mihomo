@@ -107,13 +107,13 @@ external-doh-server: /dns-query
 
 # routing-mark:6666 # 配置 fwmark 仅用于 Linux
 experimental:
-  # Disable quic-go GSO support. This may result in reduced performance on Linux.
-  # This is not recommended for most users.
-  # Only users encountering issues with quic-go's internal implementation should enable this,
-  # and they should disable it as soon as the issue is resolved.
-  # This field will be removed when quic-go fixes all their issues in GSO.
-  # This equivalent to the environment variable QUIC_GO_DISABLE_GSO=1.
-  #quic-go-disable-gso: true
+# Disable quic-go GSO support. This may result in reduced performance on Linux.
+# This is not recommended for most users.
+# Only users encountering issues with quic-go's internal implementation should enable this,
+# and they should disable it as soon as the issue is resolved.
+# This field will be removed when quic-go fixes all their issues in GSO.
+# This equivalent to the environment variable QUIC_GO_DISABLE_GSO=1.
+#quic-go-disable-gso: true
 
 # 类似于 /etc/hosts, 仅支持配置单个 IP
 hosts:
@@ -579,12 +579,12 @@ proxies: # socks5
     password: [YOUR_SS_PASSWORD]
     client-fingerprint:
       chrome # One of: chrome, ios, firefox or safari
-      # 可以是 chrome, ios, firefox, safari 中的一个
+    # 可以是 chrome, ios, firefox, safari 中的一个
     plugin: restls
     plugin-opts:
       host:
         "www.microsoft.com" # Must be a TLS 1.3 server
-        # 应当是一个 TLS 1.3 服务器
+      # 应当是一个 TLS 1.3 服务器
       password: [YOUR_RESTLS_PASSWORD]
       version-hint: "tls13"
       # Control your post-handshake traffic through restls-script
@@ -602,12 +602,12 @@ proxies: # socks5
     password: [YOUR_SS_PASSWORD]
     client-fingerprint:
       chrome # One of: chrome, ios, firefox or safari
-      # 可以是 chrome, ios, firefox, safari 中的一个
+    # 可以是 chrome, ios, firefox, safari 中的一个
     plugin: restls
     plugin-opts:
       host:
         "vscode.dev" # Must be a TLS 1.2 server
-        # 应当是一个 TLS 1.2 服务器
+      # 应当是一个 TLS 1.2 服务器
       password: [YOUR_RESTLS_PASSWORD]
       version-hint: "tls12"
       restls-script: "1000?100<1,500~100,350~100,600~100,400~200"
@@ -654,29 +654,29 @@ proxies: # socks5
     uuid: uuid
     alterId: 32
     cipher: auto
-    # udp: true
-    # tls: true
-    # fingerprint: xxxx # 配置指纹将实现 SSL Pining 效果, 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
-    # 下面两项如果填写则开启 mTLS（需要同时填写）
-    # certificate: ./client.crt # 证书 PEM 格式，或者 证书的路径
-    # private-key: ./client.key # 证书对应的私钥 PEM 格式，或者私钥路径
-    # client-fingerprint: chrome    # Available: "chrome","firefox","safari","ios","random", currently only support TLS transport in TCP/GRPC/WS/HTTP for VLESS/Vmess and trojan.
-    # skip-cert-verify: true
-    # servername: example.com # priority over wss host
-    # network: ws
-    # ech-opts:
-    #   enable: true # 必须手动开启
-    #   # 如果config为空则通过dns解析，不为空则通过该值指定，格式为经过base64编码的ech参数（dig +short TYPE65 tls-ech.dev）
-    #   config: AEn+DQBFKwAgACABWIHUGj4u+PIggYXcR5JF0gYk3dCRioBW8uJq9H4mKAAIAAEAAQABAANAEnB1YmxpYy50bHMtZWNoLmRldgAA
-    #   # query-server-name: xxx.com # 可选项，不为空时用于指定通过dns解析时的域名
-    # ws-opts:
+      # udp: true
+      # tls: true
+      # fingerprint: xxxx # 配置指纹将实现 SSL Pining 效果, 可使用 openssl x509 -noout -fingerprint -sha256 -inform pem -in yourcert.pem 获取
+      # 下面两项如果填写则开启 mTLS（需要同时填写）
+      # certificate: ./client.crt # 证书 PEM 格式，或者 证书的路径
+      # private-key: ./client.key # 证书对应的私钥 PEM 格式，或者私钥路径
+      # client-fingerprint: chrome    # Available: "chrome","firefox","safari","ios","random", currently only support TLS transport in TCP/GRPC/WS/HTTP for VLESS/Vmess and trojan.
+      # skip-cert-verify: true
+      # servername: example.com # priority over wss host
+      # network: ws
+      # ech-opts:
+      #   enable: true # 必须手动开启
+      #   # 如果config为空则通过dns解析，不为空则通过该值指定，格式为经过base64编码的ech参数（dig +short TYPE65 tls-ech.dev）
+      #   config: AEn+DQBFKwAgACABWIHUGj4u+PIggYXcR5JF0gYk3dCRioBW8uJq9H4mKAAIAAEAAQABAANAEnB1YmxpYy50bHMtZWNoLmRldgAA
+      #   # query-server-name: xxx.com # 可选项，不为空时用于指定通过dns解析时的域名
+      # ws-opts:
       # path: /path
       # headers:
       #   Host: v2ray.com
       # max-early-data: 2048
       # early-data-header-name: Sec-WebSocket-Protocol
-      # v2ray-http-upgrade: false
-      # v2ray-http-upgrade-fast-open: false
+    # v2ray-http-upgrade: false
+    # v2ray-http-upgrade-fast-open: false
 
   - name: "vmess-h2"
     type: vmess
@@ -832,7 +832,7 @@ proxies: # socks5
       # max-connections: 1 # Maximum connections. Conflict with max-streams.
       # min-streams: 0 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
       # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
-      
+
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
@@ -1204,6 +1204,13 @@ proxies: # socks5
     #   00000000000000000000000000000000
     #   ...
     #   -----END OpenVPN Static key V1-----
+    # tls-auth: | # 从 .ovpn 中复制 <tls-auth></tls-auth> 内的内容；与 tls-crypt 二选一
+    #   -----BEGIN OpenVPN Static key V1-----
+    #   00000000000000000000000000000000
+    #   ...
+    #   -----END OpenVPN Static key V1-----
+    # key-direction: 1 # 对应 .ovpn 的 key-direction，可选值 0/1；省略表示双向 key
+    # scramble: obfuscate password # 支持 xormask <mask> / xorptrpos / reverse / obfuscate <mask>；scramble <mask> 等同 xormask
     # ping: 10 # 默认值为 0
     # ping-restart: 60 # 默认值为 0
     # mtu: 1500
@@ -1348,7 +1355,7 @@ proxies: # socks5
   - name: sudoku
     type: sudoku
     server: server_ip/domain # 1.2.3.4 or domain
-    port: 443 
+    port: 443
     key: "<client_key>" # 如果你使用sudoku生成的ED25519密钥对，请填写密钥对中的私钥，否则填入和服务端相同的uuid
     aead-method: chacha20-poly1305 # 可选：chacha20-poly1305、aes-128-gcm、none（不建议；none 不提供 AEAD 保护）
     padding-min: 2 # 最小填充率（0-100）
@@ -1406,7 +1413,7 @@ proxies: # socks5
     # min-streams: 5 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
     # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
 
-# dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
+  # dns 出站会将请求劫持到内部 dns 模块，所有请求均在内部处理
   - name: "dns-out"
     type: dns
 
@@ -1503,8 +1510,8 @@ proxy-providers:
     # age-secret-key: AGE-SECRET-KEY-1ZTQLLN0A4U3ZTT3DCZKYN0CGZEZQLWX2DFTXUWMT4ZHR0N2UG6LSW9NT0N
     header:
       User-Agent:
-      - "Clash/v1.18.0"
-      - "mihomo/1.18.3"
+        - "Clash/v1.18.0"
+        - "mihomo/1.18.3"
       # Accept:
       # - 'application/vnd.github.v3.raw'
       # Authorization:
@@ -2179,14 +2186,14 @@ listeners:
     # proxy: proxy # 如果不为空则直接将该入站流量交由指定 proxy 处理 (当 proxy 不为空时，这里的 proxy 名称必须合法，否则会出错)
     stack: system # gvisor / mixed
     dns-hijack:
-    - 0.0.0.0:53 # 需要劫持的 DNS
+      - 0.0.0.0:53 # 需要劫持的 DNS
     # auto-detect-interface: false # 自动识别出口网卡
     # auto-route: false # 配置路由表
     # mtu: 9000 # 最大传输单元
     inet4-address: # 必须手动设置 ipv4 地址段
-    - 198.19.0.1/30
+      - 198.19.0.1/30
     inet6-address: # 必须手动设置 ipv6 地址段
-    - "fdfe:dcba:9877::1/126"
+      - "fdfe:dcba:9877::1/126"
     # strict-route: true # 将所有连接路由到 tun 来防止泄漏，但你的设备将无法其他设备被访问
     # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由
     # - 0.0.0.0/1

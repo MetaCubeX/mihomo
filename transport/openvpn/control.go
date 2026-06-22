@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/common/pool"
+	"github.com/metacubex/mihomo/log"
 )
 
 type PacketIO interface {
@@ -22,7 +23,7 @@ type PacketIO interface {
 
 type ControlChannel struct {
 	io     PacketIO
-	crypt  *TLSCrypt
+	wrap   ControlPacketWrapper
 	clock  func() time.Time
 	keyID  uint8
 	local  SessionID
@@ -39,10 +40,10 @@ type ControlChannel struct {
 	writeDeadline time.Time
 }
 
-func NewControlChannel(io PacketIO, crypt *TLSCrypt, local SessionID) *ControlChannel {
+func NewControlChannel(io PacketIO, wrap ControlPacketWrapper, local SessionID) *ControlChannel {
 	return &ControlChannel{
 		io:          io,
-		crypt:       crypt,
+		wrap:        wrap,
 		clock:       time.Now,
 		local:       local,
 		pending:     make(map[uint32]*ControlPacket),
@@ -215,10 +216,12 @@ func (c *ControlChannel) writeControlPacket(ctx context.Context, packet *Control
 		defer cancel()
 	}
 
-	encoded, err := packet.Encode(c.crypt, packetID, unixTime)
+	encoded, err := packet.Encode(c.wrap, packetID, unixTime)
 	if err != nil {
 		return err
 	}
+	log.Debugln("[OpenVPN] write control packet: opcode=%s message-id=%d ack-count=%d payload=%d wrapped-packet-id=%d",
+		packet.Opcode, packet.MessageID, len(packet.AckIDs), len(packet.Payload), packetID)
 	return c.io.WritePacket(ctx, encoded)
 }
 
@@ -237,7 +240,13 @@ func (c *ControlChannel) readControlPacket(ctx context.Context) (*ControlPacket,
 	if err != nil {
 		return nil, err
 	}
-	packet, _, _, err := DecodeControlPacket(c.crypt, raw)
+	packet, _, _, err := DecodeControlPacket(c.wrap, raw)
+	if err != nil {
+		log.Debugln("[OpenVPN] read control packet failed: raw=%d err=%v", len(raw), err)
+		return nil, err
+	}
+	log.Debugln("[OpenVPN] read control packet: opcode=%s message-id=%d ack-count=%d payload=%d",
+		packet.Opcode, packet.MessageID, len(packet.AckIDs), len(packet.Payload))
 	return packet, err
 }
 
@@ -278,6 +287,8 @@ type ControlConn struct {
 	closed  bool
 	mu      sync.Mutex
 }
+
+const maxControlPayloadSize = 1000
 
 func NewControlConn(channel *ControlChannel) *ControlConn {
 	return &ControlConn{channel: channel}
@@ -332,10 +343,19 @@ func (c *ControlConn) Write(b []byte) (int, error) {
 	}
 	c.mu.Unlock()
 
-	if _, err := c.channel.Send(context.Background(), PControlV1, b); err != nil {
-		return 0, err
+	written := 0
+	for len(b) > 0 {
+		n := len(b)
+		if n > maxControlPayloadSize {
+			n = maxControlPayloadSize
+		}
+		if _, err := c.channel.Send(context.Background(), PControlV1, b[:n]); err != nil {
+			return written, err
+		}
+		written += n
+		b = b[n:]
 	}
-	return len(b), nil
+	return written, nil
 }
 
 func (c *ControlConn) Close() error {

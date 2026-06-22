@@ -164,7 +164,7 @@ func InstallScriptOptionsString(proto, cipher, auth string, compLZO string) stri
 	}
 	mtu := "1550"
 	comp := ""
-	if compLZO == CompLzoYes {
+	if compLZO != "" {
 		mtu = "1544"
 		comp = "comp-lzo,"
 	}
@@ -173,7 +173,7 @@ func InstallScriptOptionsString(proto, cipher, auth string, compLZO string) stri
 
 func InstallScriptPeerInfo(cipher string, compLZO string) string {
 	lzo := ""
-	if compLZO == CompLzoYes {
+	if compLZO != "" {
 		lzo = "IV_LZO=1\n"
 	}
 	return fmt.Sprintf("IV_VER=mihomo-openvpn\nIV_PROTO=6\n%sIV_CIPHERS=%s\n", lzo, cipher)

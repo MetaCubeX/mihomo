@@ -47,6 +47,7 @@ type ClientConfig struct {
 	Cert     []byte
 	Key      []byte
 	TLSCrypt []byte
+	TLSAuth  []byte
 
 	Username string
 	Password string
@@ -54,7 +55,30 @@ type ClientConfig struct {
 	PingInterval time.Duration
 	PingRestart  time.Duration
 
-	TLSCryptKey []byte
+	TLSCryptKey  []byte
+	TLSAuthKey   []byte
+	KeyDirection int
+	ScrambleRaw  string
+	Scramble     ScrambleConfig
+}
+
+const (
+	KeyDirectionBidirectional = 0
+	KeyDirectionNormal        = 1
+	KeyDirectionInverse       = 2
+)
+
+func KeyDirectionString(keyDirection int) string {
+	switch keyDirection {
+	case KeyDirectionBidirectional:
+		return "bidirectional"
+	case KeyDirectionNormal:
+		return "0"
+	case KeyDirectionInverse:
+		return "1"
+	default:
+		return fmt.Sprintf("unknown(%d)", keyDirection)
+	}
 }
 
 // DataCipherKeyLength returns the key size for the negotiated data cipher.
@@ -130,15 +154,35 @@ func (c *ClientConfig) Prepare() error {
 	c.Cipher = normalizeCipher(c.Cipher)
 	c.Auth = normalizeAuth(c.Auth)
 	c.CompLZO = normalizeCompLZO(c.CompLZO)
+	if c.KeyDirection < KeyDirectionBidirectional || c.KeyDirection > KeyDirectionInverse {
+		return fmt.Errorf("unsupported openvpn key-direction %d", c.KeyDirection)
+	}
+	scramble, err := ParseScramble(c.ScrambleRaw)
+	if err != nil {
+		return err
+	}
+	c.Scramble = scramble
 	if err := c.ValidateInstallScriptSubset(); err != nil {
 		return err
 	}
-	if len(bytes.TrimSpace(c.TLSCrypt)) > 0 {
+	hasTLSCrypt := len(bytes.TrimSpace(c.TLSCrypt)) > 0
+	hasTLSAuth := len(bytes.TrimSpace(c.TLSAuth)) > 0
+	if hasTLSCrypt && hasTLSAuth {
+		return errors.New("openvpn tls-auth and tls-crypt are mutually exclusive")
+	}
+	if hasTLSCrypt {
 		key, err := DecodeStaticKey(c.TLSCrypt)
 		if err != nil {
 			return fmt.Errorf("parse tls-crypt key: %w", err)
 		}
 		c.TLSCryptKey = key
+	}
+	if hasTLSAuth {
+		key, err := DecodeStaticKey(c.TLSAuth)
+		if err != nil {
+			return fmt.Errorf("parse tls-auth key: %w", err)
+		}
+		c.TLSAuthKey = key
 	}
 	return nil
 }

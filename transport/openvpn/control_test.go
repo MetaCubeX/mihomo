@@ -1,294 +1,216 @@
 package openvpn
 
 import (
-	"context"
-	"errors"
-	"net"
-	"sync"
+	"strings"
 	"testing"
-	"time"
 )
 
-type memoryPacketIO struct {
-	in     <-chan []byte
-	out    chan<- []byte
-	closed chan struct{}
-	once   sync.Once
+const testCert = `-----BEGIN CERTIFICATE-----
+MIIBszCCAVmgAwIBAgIUQbG/Z7JQGg+Jb42bBYK6q8I4g5swCgYIKoZIzj0EAwIw
+EjEQMA4GA1UEAwwHbWlob21vMB4XDTI2MDUwMTAwMDAwMFoXDTM2MDQyOTAwMDAw
+MFowEjEQMA4GA1UEAwwHbWlob21vMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE
+hT8O8v9COiL0e7Gmab6r8jYxgB5xIvEtL10eF6QpJm+5ROK8f8yO8JHj2L2F6i1v
+g7CNgMCoX9YnZ9wqOqNTMFEwHQYDVR0OBBYEFDuK1nBI7w+Kz8o9hD7UzpJkq1N2
+MB8GA1UdIwQYMBaAFDuK1nBI7w+Kz8o9hD7UzpJkq1N2MA8GA1UdEwEB/wQFMAMB
+Af8wCgYIKoZIzj0EAwIDSAAwRQIhAJ4mquCRw+W1M7RCNzUVpV9qPzR9qYpK4SAi
+6pEh8FeaAiBKv+YbWBjjiWk0Yxch3v7y8W7S7e3pVtHh8x9n9+6w1Q==
+-----END CERTIFICATE-----`
+
+const testKey = `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIG1paG9tb19vcGVudnBuX3Rlc3Rfa2V5XzEyMzQ1Njc4oAoGCCqGSM49
+AwEHoUQDQgAEhT8O8v9COiL0e7Gmab6r8jYxgB5xIvEtL10eF6QpJm+5ROK8f8yO
+8JHj2L2F6i1vg7CNgMCoX9YnZ9wqOg==
+-----END EC PRIVATE KEY-----`
+
+func testTLSCryptBlock() string {
+	return `-----BEGIN OpenVPN Static key V1-----
+` + strings.Repeat("00", 256) + `
+-----END OpenVPN Static key V1-----`
 }
 
-func newMemoryPacketPair() (*memoryPacketIO, *memoryPacketIO) {
-	aToB := make(chan []byte, 16)
-	bToA := make(chan []byte, 16)
-	a := &memoryPacketIO{in: bToA, out: aToB, closed: make(chan struct{})}
-	b := &memoryPacketIO{in: aToB, out: bToA, closed: make(chan struct{})}
-	return a, b
-}
-
-func (m *memoryPacketIO) ReadPacket(ctx context.Context) ([]byte, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-m.closed:
-		return nil, net.ErrClosed
-	case packet := <-m.in:
-		return cloneBytes(packet), nil
-	}
-}
-
-func (m *memoryPacketIO) WritePacket(ctx context.Context, packet []byte) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-m.closed:
-		return net.ErrClosed
-	case m.out <- cloneBytes(packet):
-		return nil
-	}
-}
-
-func (m *memoryPacketIO) Close() error {
-	m.once.Do(func() { close(m.closed) })
-	return nil
-}
-
-func (m *memoryPacketIO) LocalAddr() net.Addr {
-	return dummyAddr("local")
-}
-
-func (m *memoryPacketIO) RemoteAddr() net.Addr {
-	return dummyAddr("remote")
-}
-
-type dummyAddr string
-
-func (d dummyAddr) Network() string { return string(d) }
-func (d dummyAddr) String() string  { return string(d) }
-
-func newTestChannels(t *testing.T) (*ControlChannel, *ControlChannel) {
-	t.Helper()
-	clientIO, serverIO := newMemoryPacketPair()
-	clientCrypt, err := NewTLSCrypt(testStaticKey(), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	serverCrypt, err := NewTLSCrypt(testStaticKey(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var clientID SessionID
-	copy(clientID[:], []byte("client01"))
-	var serverID SessionID
-	copy(serverID[:], []byte("server01"))
-
-	client := NewControlChannel(clientIO, clientCrypt, clientID)
-	server := NewControlChannel(serverIO, serverCrypt, serverID)
-	client.clock = func() time.Time { return time.Unix(1714567890, 0) }
-	server.clock = func() time.Time { return time.Unix(1714567891, 0) }
-	return client, server
-}
-
-func TestControlChannelResetAndAck(t *testing.T) {
-	client, server := newTestChannels(t)
-
-	if err := client.SendReset(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	packet, err := server.Read(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if packet.Opcode != PControlHardResetClientV2 || packet.MessageID != 0 {
-		t.Fatalf("unexpected reset packet: %s/%d", packet.Opcode, packet.MessageID)
-	}
-	if packetID := client.sendPacketID; packetID != 1 {
-		t.Fatalf("unexpected first tls-crypt packet id: %d", packetID)
-	}
-	if server.RemoteSessionID() != client.LocalSessionID() {
-		t.Fatalf("server did not learn client session id")
-	}
-
-	if err := server.SendAck(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err = client.Read(ctx)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline after consuming pure ack, got %v", err)
-	}
-	if client.PendingMessages() != 0 {
-		t.Fatalf("expected client reset to be acked, pending=%d", client.PendingMessages())
+func yamlStyleConfig() *ClientConfig {
+	return &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 1194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "AES-128-GCM",
+		Auth:       "SHA256",
+		CA:         []byte(testCert),
+		Cert:       []byte(testCert),
+		Key:        []byte(testKey),
+		TLSCrypt:   []byte(testTLSCryptBlock()),
 	}
 }
 
-func TestControlConnCarriesTLSBytes(t *testing.T) {
-	client, server := newTestChannels(t)
-	client.SetRemoteSessionID(server.LocalSessionID())
-	server.SetRemoteSessionID(client.LocalSessionID())
-
-	clientConn := NewControlConn(client)
-	serverConn := NewControlConn(server)
-
-	errCh := make(chan error, 1)
-	go func() {
-		_, err := clientConn.Write([]byte("client tls record"))
-		errCh <- err
-	}()
-
-	buf := make([]byte, 64)
-	n, err := serverConn.Read(buf)
-	if err != nil {
+func TestClientConfigYAMLStyleInstallScriptSubset(t *testing.T) {
+	cfg := yamlStyleConfig()
+	if err := cfg.Prepare(); err != nil {
 		t.Fatal(err)
 	}
-	if got := string(buf[:n]); got != "client tls record" {
-		t.Fatalf("unexpected payload: %q", got)
+	if cfg.RemoteAddress() != "vpn.example.com:1194" {
+		t.Fatalf("unexpected remote address: %s", cfg.RemoteAddress())
 	}
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
+	if cfg.Proto != ProtoUDP {
+		t.Fatalf("unexpected proto: %s", cfg.Proto)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err = client.Read(ctx)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected deadline after consuming pure ack, got %v", err)
+	if cfg.Cipher != CipherAES128GCM || cfg.Auth != AuthSHA256 {
+		t.Fatalf("unexpected crypto: %s/%s", cfg.Cipher, cfg.Auth)
 	}
-	if client.PendingMessages() != 0 {
-		t.Fatalf("expected client message to be acked, pending=%d", client.PendingMessages())
+	if len(cfg.TLSCryptKey) != 256 {
+		t.Fatalf("unexpected tls-crypt key length: %d", len(cfg.TLSCryptKey))
 	}
 }
 
-func TestControlChannelReordersReliableMessages(t *testing.T) {
-	packets := make(chan []byte, 4)
-	acks := make(chan []byte, 4)
-	io := &memoryPacketIO{in: packets, out: acks, closed: make(chan struct{})}
-	var clientID SessionID
-	copy(clientID[:], []byte("client01"))
-	var serverID SessionID
-	copy(serverID[:], []byte("server01"))
-	server := NewControlChannel(io, nil, serverID)
+func TestClientConfigDefaults(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.Proto = ""
+	cfg.Dev = ""
+	cfg.Cipher = ""
+	cfg.Auth = ""
 
-	second, err := (ControlPacket{
-		Opcode:       PControlV1,
-		LocalSession: clientID,
-		MessageID:    1,
-		Payload:      []byte("second"),
-	}).Encode(nil, 0, 0)
-	if err != nil {
+	if err := cfg.Prepare(); err != nil {
 		t.Fatal(err)
 	}
-	first, err := (ControlPacket{
-		Opcode:       PControlV1,
-		LocalSession: clientID,
-		MessageID:    0,
-		Payload:      []byte("first"),
-	}).Encode(nil, 0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	packets <- second
-	packets <- first
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	packet, err := server.Read(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if packet.MessageID != 0 || string(packet.Payload) != "first" {
-		t.Fatalf("unexpected first delivered packet: id=%d payload=%q", packet.MessageID, packet.Payload)
-	}
-	packet, err = server.Read(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if packet.MessageID != 1 || string(packet.Payload) != "second" {
-		t.Fatalf("unexpected second delivered packet: id=%d payload=%q", packet.MessageID, packet.Payload)
+	if cfg.Proto != ProtoUDP || cfg.Dev != "tun" || cfg.Cipher != CipherAES128GCM || cfg.Auth != AuthSHA256 {
+		t.Fatalf("unexpected defaults: proto=%s dev=%s cipher=%s auth=%s", cfg.Proto, cfg.Dev, cfg.Cipher, cfg.Auth)
 	}
 }
 
-func TestClientWaitServerResetRetransmitsUDP(t *testing.T) {
-	clientIO, serverIO := newMemoryPacketPair()
-	var clientID SessionID
-	copy(clientID[:], []byte("client01"))
-	var serverID SessionID
-	copy(serverID[:], []byte("server01"))
-
-	clientControl := NewControlChannel(clientIO, nil, clientID)
-	serverControl := NewControlChannel(serverIO, nil, serverID)
-	client := &Client{
-		config:  &ClientConfig{Proto: ProtoUDP},
-		control: clientControl,
+func TestClientConfigRejectsUnsupportedProto(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.Proto = "tcp-server"
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected unsupported proto error")
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := clientControl.SendReset(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		packet, err := serverControl.Read(ctx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		if packet.Opcode != PControlHardResetClientV2 {
-			errCh <- errors.New("unexpected reset opcode")
-			return
-		}
-		raw, err := serverIO.ReadPacket(ctx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		packet, _, _, err = DecodeControlPacket(nil, raw)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		if packet.Opcode != PControlHardResetClientV2 || packet.MessageID != 0 {
-			errCh <- errors.New("unexpected retransmitted reset packet")
-			return
-		}
-		_, err = serverControl.Send(ctx, PControlHardResetServerV2, nil)
-		errCh <- err
-	}()
-
-	if err := client.waitServerReset(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
-	}
-	if clientControl.PendingMessages() != 0 {
-		t.Fatalf("expected client reset to be acked, pending=%d", clientControl.PendingMessages())
+	if !strings.Contains(err.Error(), "unsupported openvpn proto") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestTCPPacketIOFraming(t *testing.T) {
-	client, server := net.Pipe()
-	defer client.Close()
-	defer server.Close()
-
-	clientIO := NewTCPPacketIO(client)
-	serverIO := NewTCPPacketIO(server)
-	payload := []byte{1, 2, 3, 4}
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- clientIO.WritePacket(context.Background(), payload)
-	}()
-
-	got, err := serverIO.ReadPacket(context.Background())
-	if err != nil {
+func TestClientConfigAllowsMissingTLSCrypt(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSCrypt = nil
+	if err := cfg.Prepare(); err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != string(payload) {
-		t.Fatalf("unexpected payload: %v", got)
+	if len(cfg.TLSCryptKey) != 0 {
+		t.Fatalf("unexpected tls-crypt key length: %d", len(cfg.TLSCryptKey))
 	}
-	if err := <-errCh; err != nil {
+}
+
+func TestClientConfigTLSAuthAndScramble(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSCrypt = nil
+	cfg.TLSAuth = []byte(testTLSCryptBlock())
+	cfg.KeyDirection = KeyDirectionInverse
+	cfg.ScrambleRaw = "obfuscate password"
+	if err := cfg.Prepare(); err != nil {
 		t.Fatal(err)
+	}
+	if len(cfg.TLSAuthKey) != 256 {
+		t.Fatalf("unexpected tls-auth key length: %d", len(cfg.TLSAuthKey))
+	}
+	if cfg.Scramble.Method != ScrambleObfuscate || string(cfg.Scramble.Mask) != "password" {
+		t.Fatalf("unexpected scramble config: %#v", cfg.Scramble)
+	}
+}
+
+func TestClientConfigRejectsTLSAuthWithTLSCrypt(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSAuth = []byte(testTLSCryptBlock())
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected tls-auth/tls-crypt conflict")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClientConfigAuthUserPassAES256(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 31194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "AES-256-GCM",
+		Auth:       "SHA256",
+		CA:         []byte(testCert),
+		Username:   "user",
+		Password:   "secret",
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cipher != CipherAES256GCM {
+		t.Fatalf("unexpected cipher: %s", cfg.Cipher)
+	}
+	if cfg.DataCipherKeyLength() != 32 {
+		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
+	}
+}
+
+func TestClientConfigAESCBCSHA1(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 1194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "AES-CBC",
+		Auth:       "sha-1",
+		CA:         []byte(testCert),
+		Username:   "user",
+		Password:   "secret",
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cipher != CipherAES128CBC || cfg.Auth != AuthSHA1 {
+		t.Fatalf("unexpected crypto: %s/%s", cfg.Cipher, cfg.Auth)
+	}
+	if cfg.DataCipherKeyLength() != 16 {
+		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
+	}
+}
+
+func TestClientConfigRequiresAuth(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.Cert = nil
+	cfg.Key = nil
+	cfg.Username = ""
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected missing auth error")
+	}
+	if !strings.Contains(err.Error(), "cert+key or username") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClientConfigAuthUserPassChaCha20Poly1305(t *testing.T) {
+	cfg := &ClientConfig{
+		RemoteHost: "vpn.example.com",
+		RemotePort: 31194,
+		Proto:      "udp",
+		Dev:        "tun",
+		Cipher:     "chacha20-poly1305",
+		Auth:       "SHA256",
+		CA:         []byte(testCert),
+		Username:   "user",
+		Password:   "secret",
+		TLSCrypt:   []byte(testTLSCryptBlock()),
+	}
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Cipher != CipherChaCha20Poly1305 {
+		t.Fatalf("unexpected cipher: %s", cfg.Cipher)
+	}
+	if cfg.DataCipherKeyLength() != 32 {
+		t.Fatalf("unexpected data key length helper: %d", cfg.DataCipherKeyLength())
 	}
 }

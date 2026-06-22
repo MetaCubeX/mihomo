@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	TLSCryptHeaderSize = 1 + 8
-	TLSCryptPIDSize    = 4 + 4
+	TLSCryptHeaderSize = controlHeaderSize
+	TLSCryptPIDSize    = ControlPacketIDSize
 	TLSCryptTagSize    = sha256.Size
 
 	staticKeySize = 256
