@@ -79,12 +79,13 @@ type Hysteria2RealmOption struct {
 	LocalPort   int      `proxy:"local-port,omitempty"`
 
 	// for ServerURL
-	SNI            string   `proxy:"sni,omitempty"`
-	SkipCertVerify bool     `proxy:"skip-cert-verify,omitempty"`
-	Fingerprint    string   `proxy:"fingerprint,omitempty"`
-	Certificate    string   `proxy:"certificate,omitempty"`
-	PrivateKey     string   `proxy:"private-key,omitempty"`
-	ALPN           []string `proxy:"alpn,omitempty"`
+	SNI            string     `proxy:"sni,omitempty"`
+	SkipCertVerify bool       `proxy:"skip-cert-verify,omitempty"`
+	Fingerprint    string     `proxy:"fingerprint,omitempty"`
+	Certificate    string     `proxy:"certificate,omitempty"`
+	PrivateKey     string     `proxy:"private-key,omitempty"`
+	ALPN           []string   `proxy:"alpn,omitempty"`
+	ECHOpts        ECHOptions `proxy:"ech-opts,omitempty"`
 }
 
 type RealmDialer struct {
@@ -299,6 +300,16 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 		})
 		if err != nil {
 			return nil, err
+		}
+		httpECHConfig, err := option.RealmOpts.ECHOpts.Parse()
+		if err != nil {
+			return nil, err
+		}
+		if httpECHConfig != nil {
+			err = httpECHConfig.ClientHandle(context.Background(), httpTLSClientConfig)
+			if err != nil {
+				return nil, err
+			}
 		}
 		clientOptions.RealmOptions = &realm.Options{
 			ServerURL:   option.RealmOpts.ServerURL,
