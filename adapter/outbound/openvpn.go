@@ -42,26 +42,27 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name         string `proxy:"name"`
-	Server       string `proxy:"server"`
-	Port         int    `proxy:"port"`
-	Proto        string `proxy:"proto,omitempty"`
-	Dev          string `proxy:"dev,omitempty"`
-	Cipher       string `proxy:"cipher,omitempty"`
-	Auth         string `proxy:"auth,omitempty"`
-	CompLZO      string `proxy:"comp-lzo,omitempty"`
-	CA           string `proxy:"ca"`
-	Cert         string `proxy:"cert,omitempty"`
-	Key          string `proxy:"key,omitempty"`
-	TLSCrypt     string `proxy:"tls-crypt,omitempty"`
-	TLSAuth      string `proxy:"tls-auth,omitempty"`
-	KeyDirection *int   `proxy:"key-direction,omitempty"`
-	Username     string `proxy:"username,omitempty"`
-	Password     string `proxy:"password,omitempty"`
-	Ping         int    `proxy:"ping,omitempty"`
-	PingRestart  int    `proxy:"ping-restart,omitempty"`
-	MTU          int    `proxy:"mtu,omitempty"`
-	UDP          bool   `proxy:"udp,omitempty"`
+	Name          string `proxy:"name"`
+	Server        string `proxy:"server"`
+	Port          int    `proxy:"port"`
+	Proto         string `proxy:"proto,omitempty"`
+	Dev           string `proxy:"dev,omitempty"`
+	Cipher        string `proxy:"cipher,omitempty"`
+	Auth          string `proxy:"auth,omitempty"`
+	TLSMinVersion string `proxy:"tls-version-min,omitempty"`
+	CompLZO       string `proxy:"comp-lzo,omitempty"`
+	CA            string `proxy:"ca"`
+	Cert          string `proxy:"cert,omitempty"`
+	Key           string `proxy:"key,omitempty"`
+	TLSCrypt      string `proxy:"tls-crypt,omitempty"`
+	TLSAuth       string `proxy:"tls-auth,omitempty"`
+	KeyDirection  *int   `proxy:"key-direction,omitempty"`
+	Username      string `proxy:"username,omitempty"`
+	Password      string `proxy:"password,omitempty"`
+	Ping          int    `proxy:"ping,omitempty"`
+	PingRestart   int    `proxy:"ping-restart,omitempty"`
+	MTU           int    `proxy:"mtu,omitempty"`
+	UDP           bool   `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -75,6 +76,7 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		Dev:              option.Dev,
 		Cipher:           option.Cipher,
 		Auth:             option.Auth,
+		TLSMinVersion:    option.TLSMinVersion,
 		CompLZO:          option.CompLZO,
 		CA:               []byte(option.CA),
 		Cert:             []byte(option.Cert),

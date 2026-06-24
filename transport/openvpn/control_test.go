@@ -1,6 +1,7 @@
 package openvpn
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -186,6 +187,46 @@ func TestControlConnCarriesTLSBytes(t *testing.T) {
 	}
 	if client.PendingMessages() != 0 {
 		t.Fatalf("expected client message to be acked, pending=%d", client.PendingMessages())
+	}
+}
+
+func TestControlConnSplitsLargeTLSWrites(t *testing.T) {
+	client, server := newTestChannels(t)
+	client.SetRemoteSessionID(server.LocalSessionID())
+	server.SetRemoteSessionID(client.LocalSessionID())
+
+	clientConn := NewControlConn(client)
+	serverConn := NewControlConn(server)
+	payload := bytes.Repeat([]byte{0x42}, maxControlPayloadSize+17)
+
+	errCh := make(chan error, 1)
+	go func() {
+		n, err := clientConn.Write(payload)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if n != len(payload) {
+			errCh <- errors.New("short write")
+			return
+		}
+		errCh <- nil
+	}()
+
+	got := make([]byte, 0, len(payload))
+	buf := make([]byte, maxControlPayloadSize)
+	for len(got) < len(payload) {
+		n, err := serverConn.Read(buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, buf[:n]...)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("reassembled payload mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
 

@@ -398,6 +398,8 @@ type ControlConn struct {
 	mu              sync.Mutex
 }
 
+const maxControlPayloadSize = 1200
+
 func NewControlConn(channel *ControlChannel) *ControlConn {
 	return &ControlConn{channel: channel}
 }
@@ -491,8 +493,19 @@ func (c *ControlConn) Write(b []byte) (int, error) {
 	}
 	c.mu.Unlock()
 
-	if _, err := c.channel.Send(context.Background(), PControlV1, b); err != nil {
-		return 0, err
+	if len(b) == 0 {
+		return 0, nil
+	}
+	written := 0
+	for written < len(b) {
+		end := written + maxControlPayloadSize
+		if end > len(b) {
+			end = len(b)
+		}
+		if _, err := c.channel.Send(context.Background(), PControlV1, b[written:end]); err != nil {
+			return written, err
+		}
+		written = end
 	}
 	return len(b), nil
 }

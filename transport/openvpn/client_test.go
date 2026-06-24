@@ -3,6 +3,7 @@ package openvpn
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -159,6 +160,24 @@ func TestClientInstallDataChannelRekeysWithoutReplacingDataChannel(t *testing.T)
 	}
 	if _, keyID := parseOpcodeKeyID(encrypted[0]); keyID != 1 {
 		t.Fatalf("expected encrypted packets to use rekeyed key id 1, got %d", keyID)
+	}
+}
+
+func TestTLSVersionUsesConfiguredMinVersion(t *testing.T) {
+	minVersion, err := tlsVersion(TLSVersion10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if minVersion != tls.VersionTLS10 {
+		t.Fatalf("unexpected min TLS version: %x", minVersion)
+	}
+
+	maxVersion, err := tlsVersion(TLSVersion13)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if maxVersion != tls.VersionTLS13 {
+		t.Fatalf("unexpected max TLS version: %x", maxVersion)
 	}
 }
 

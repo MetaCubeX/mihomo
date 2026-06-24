@@ -747,6 +747,10 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	if !roots.AppendCertsFromPEM(c.config.CA) {
 		return nil, errors.New("parse openvpn ca certificate")
 	}
+	minVersion, err := tlsVersion(c.config.TLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
 	verify := func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) == 0 {
 			return errors.New("openvpn server did not provide certificate")
@@ -765,8 +769,8 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	cfg := &tls.Config{
 		InsecureSkipVerify: true,
 		VerifyConnection:   verify,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS12,
+		MinVersion:         minVersion,
+		MaxVersion:         tls.VersionTLS13,
 	}
 	certPEM := bytes.TrimSpace(c.config.Cert)
 	keyPEM := bytes.TrimSpace(c.config.Key)
@@ -778,6 +782,21 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		cfg.Certificates = []tls.Certificate{cert}
 	}
 	return cfg, nil
+}
+
+func tlsVersion(version string) (uint16, error) {
+	switch version {
+	case TLSVersion10:
+		return tls.VersionTLS10, nil
+	case TLSVersion11:
+		return tls.VersionTLS11, nil
+	case TLSVersion12:
+		return tls.VersionTLS12, nil
+	case TLSVersion13:
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("unsupported openvpn tls-version-min %q", version)
+	}
 }
 
 var _ net.Conn = (*ControlConn)(nil)

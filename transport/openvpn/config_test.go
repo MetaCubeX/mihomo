@@ -75,6 +75,46 @@ func TestClientConfigDefaults(t *testing.T) {
 	if cfg.Proto != ProtoUDP || cfg.Dev != "tun" || cfg.Cipher != CipherAES128GCM || cfg.Auth != AuthSHA256 {
 		t.Fatalf("unexpected defaults: proto=%s dev=%s cipher=%s auth=%s", cfg.Proto, cfg.Dev, cfg.Cipher, cfg.Auth)
 	}
+	if cfg.TLSMinVersion != TLSVersion12 {
+		t.Fatalf("unexpected tls-version-min default: %s", cfg.TLSMinVersion)
+	}
+}
+
+func TestClientConfigTLSMinVersion(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSMinVersion = "tlsv1.0"
+
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TLSMinVersion != TLSVersion10 {
+		t.Fatalf("unexpected tls-version-min: %s", cfg.TLSMinVersion)
+	}
+}
+
+func TestClientConfigTLSMinVersionAcceptsYAMLNumberString(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSMinVersion = "1E+00"
+
+	if err := cfg.Prepare(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TLSMinVersion != TLSVersion10 {
+		t.Fatalf("unexpected tls-version-min: %s", cfg.TLSMinVersion)
+	}
+}
+
+func TestClientConfigRejectsUnsupportedTLSMinVersion(t *testing.T) {
+	cfg := yamlStyleConfig()
+	cfg.TLSMinVersion = "1.4"
+
+	err := cfg.Prepare()
+	if err == nil {
+		t.Fatal("expected unsupported tls-version-min error")
+	}
+	if !strings.Contains(err.Error(), "unsupported openvpn tls-version-min") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestClientConfigRejectsUnsupportedProto(t *testing.T) {
