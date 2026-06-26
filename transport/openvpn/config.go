@@ -51,6 +51,8 @@ type ClientConfig struct {
 	Username string
 	Password string
 
+	PeerInfo map[string]string
+
 	PingInterval time.Duration
 	PingRestart  time.Duration
 

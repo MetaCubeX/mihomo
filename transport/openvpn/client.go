@@ -103,7 +103,7 @@ func (c *Client) Handshake(ctx context.Context) (*PushReply, error) {
 
 	clientRecord, err := NewClientKeyMethod2Record(
 		InstallScriptOptionsString(c.config.Proto, c.config.Cipher, c.config.Auth, c.config.CompLZO),
-		InstallScriptPeerInfo(c.config.Cipher, c.config.CompLZO),
+		InstallScriptPeerInfo(c.config.Cipher, c.config.CompLZO, c.config.PeerInfo),
 		strings.TrimSpace(c.config.Username),
 		c.config.Password,
 	)

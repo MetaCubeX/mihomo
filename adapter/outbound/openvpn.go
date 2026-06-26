@@ -42,24 +42,25 @@ type OpenVPN struct {
 
 type OpenVPNOption struct {
 	BasicOption
-	Name        string `proxy:"name"`
-	Server      string `proxy:"server"`
-	Port        int    `proxy:"port"`
-	Proto       string `proxy:"proto,omitempty"`
-	Dev         string `proxy:"dev,omitempty"`
-	Cipher      string `proxy:"cipher,omitempty"`
-	Auth        string `proxy:"auth,omitempty"`
-	CompLZO     string `proxy:"comp-lzo,omitempty"`
-	CA          string `proxy:"ca"`
-	Cert        string `proxy:"cert,omitempty"`
-	Key         string `proxy:"key,omitempty"`
-	TLSCrypt    string `proxy:"tls-crypt,omitempty"`
-	Username    string `proxy:"username,omitempty"`
-	Password    string `proxy:"password,omitempty"`
-	Ping        int    `proxy:"ping,omitempty"`
-	PingRestart int    `proxy:"ping-restart,omitempty"`
-	MTU         int    `proxy:"mtu,omitempty"`
-	UDP         bool   `proxy:"udp,omitempty"`
+	Name        string            `proxy:"name"`
+	Server      string            `proxy:"server"`
+	Port        int               `proxy:"port"`
+	Proto       string            `proxy:"proto,omitempty"`
+	Dev         string            `proxy:"dev,omitempty"`
+	Cipher      string            `proxy:"cipher,omitempty"`
+	Auth        string            `proxy:"auth,omitempty"`
+	CompLZO     string            `proxy:"comp-lzo,omitempty"`
+	CA          string            `proxy:"ca"`
+	Cert        string            `proxy:"cert,omitempty"`
+	Key         string            `proxy:"key,omitempty"`
+	TLSCrypt    string            `proxy:"tls-crypt,omitempty"`
+	Username    string            `proxy:"username,omitempty"`
+	Password    string            `proxy:"password,omitempty"`
+	PeerInfo    map[string]string `proxy:"peer-info,omitempty"`
+	Ping        int               `proxy:"ping,omitempty"`
+	PingRestart int               `proxy:"ping-restart,omitempty"`
+	MTU         int               `proxy:"mtu,omitempty"`
+	UDP         bool              `proxy:"udp,omitempty"`
 
 	RemoteDnsResolve bool     `proxy:"remote-dns-resolve,omitempty"`
 	Dns              []string `proxy:"dns,omitempty"`
@@ -80,6 +81,7 @@ func NewOpenVPN(option OpenVPNOption) (*OpenVPN, error) {
 		TLSCrypt:     []byte(option.TLSCrypt),
 		Username:     option.Username,
 		Password:     option.Password,
+		PeerInfo:     option.PeerInfo,
 		PingInterval: time.Duration(option.Ping) * time.Second,
 		PingRestart:  time.Duration(option.PingRestart) * time.Second,
 	}
