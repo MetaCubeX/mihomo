@@ -1377,6 +1377,7 @@ proxies: # socks5
     # idle-session-check-interval: 30 # seconds
     # idle-session-timeout: 30 # seconds
     # min-idle-session: 0
+    # disable-session-reuse: true
     # sni: "example.com"
     # alpn:
     #   - h2

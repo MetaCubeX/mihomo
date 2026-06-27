@@ -31,17 +31,19 @@ type Client struct {
 
 	padding *atomic.Pointer[padding.PaddingFactory]
 
-	idleSessionTimeout time.Duration
-	minIdleSession     int
+	idleSessionTimeout  time.Duration
+	minIdleSession      int
+	disableSessionReuse bool
 }
 
-func NewClient(ctx context.Context, dialOut util.DialOutFunc, _padding *atomic.Pointer[padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int) *Client {
+func NewClient(ctx context.Context, dialOut util.DialOutFunc, _padding *atomic.Pointer[padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int, disableSessionReuse bool) *Client {
 	c := &Client{
-		sessions:           make(map[uint64]*Session),
-		dialOut:            dialOut,
-		padding:            _padding,
-		idleSessionTimeout: idleSessionTimeout,
-		minIdleSession:     minIdleSession,
+		sessions:            make(map[uint64]*Session),
+		dialOut:             dialOut,
+		padding:             _padding,
+		idleSessionTimeout:  idleSessionTimeout,
+		minIdleSession:      minIdleSession,
+		disableSessionReuse: disableSessionReuse,
 	}
 	if idleSessionCheckInterval <= time.Second*5 {
 		idleSessionCheckInterval = time.Second * 30
@@ -87,6 +89,10 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 				// Now client has been closed
 				go session.Close()
 			default:
+				if c.disableSessionReuse {
+					go session.Close()
+					return
+				}
 				c.idleSessionLock.Lock()
 				session.idleSince = time.Now()
 				c.idleSession.Insert(math.MaxUint64-session.seq, session)
