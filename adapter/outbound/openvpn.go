@@ -121,6 +121,8 @@ func (o *OpenVPN) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Co
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := o.afterRunContext(ctx)
+	defer cancel()
 	var conn net.Conn
 	if !metadata.Resolved() || r != nil {
 		if r == nil {
@@ -148,6 +150,8 @@ func (o *OpenVPN) ListenPacketContext(ctx context.Context, metadata *C.Metadata)
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := o.afterRunContext(ctx)
+	defer cancel()
 	if err = o.resolveUDP(ctx, metadata, r); err != nil {
 		return nil, err
 	}
@@ -166,6 +170,8 @@ func (o *OpenVPN) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
 	if err != nil {
 		return err
 	}
+	ctx, cancel := o.afterRunContext(ctx)
+	defer cancel()
 	return o.resolveUDP(ctx, metadata, r)
 }
 
@@ -302,12 +308,25 @@ func (o *OpenVPN) lockRun(ctx context.Context) error {
 }
 
 func (o *OpenVPN) handshakeContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	handshakeCtx, handshakeCancel := context.WithTimeout(ctx, ovpn.DefaultHandshakeTimeout)
-	stop := contextutils.AfterFunc(o.runCtx, handshakeCancel)
-	return handshakeCtx, func() {
-		stop()
-		handshakeCancel()
+	// The OpenVPN tunnel is a shared, long-lived resource established once and
+	// reused by every connection. Its handshake must not be bound by the short
+	// per-dial timeout of whichever connection happens to trigger it (which is
+	// far shorter than the handshake of a server that performs push-peer-info /
+	// PAM checks), so use the outbound's run context with the full handshake
+	// timeout instead.
+	return context.WithTimeout(o.runCtx, ovpn.DefaultHandshakeTimeout)
+}
+
+// afterRunContext refreshes the dial deadline once the tunnel is established.
+// The first request that triggers the one-time handshake would otherwise have
+// spent most of its (short) dial budget building the tunnel, leaving too little
+// for the actual dial and failing the triggering request. Since the tunnel is
+// shared infrastructure, give the subsequent dial a fresh budget instead.
+func (o *OpenVPN) afterRunContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < C.DefaultTCPTimeout {
+		return context.WithTimeout(context.WithoutCancel(ctx), C.DefaultTCPTimeout)
 	}
+	return ctx, func() {}
 }
 
 func (o *OpenVPN) contextErr(ctx context.Context) error {
