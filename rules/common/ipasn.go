@@ -1,6 +1,8 @@
 package common
 
 import (
+	"strings"
+
 	"github.com/metacubex/mihomo/component/geodata"
 	"github.com/metacubex/mihomo/component/mmdb"
 	C "github.com/metacubex/mihomo/constant"
@@ -9,7 +11,8 @@ import (
 
 type ASN struct {
 	Base
-	asn         string
+	asns        []string
+	payload     string
 	adapter     string
 	noResolveIP bool
 	isSourceIP  bool
@@ -35,7 +38,13 @@ func (a *ASN) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, strin
 		metadata.DstIPASN = asn + " " + aso
 	}
 
-	return a.asn == asn, a.adapter
+	for _, ruleASN := range a.asns {
+		if ruleASN == asn {
+			return true, a.adapter
+		}
+	}
+
+	return false, a.adapter
 }
 
 func (a *ASN) RuleType() C.RuleType {
@@ -50,14 +59,26 @@ func (a *ASN) Adapter() string {
 }
 
 func (a *ASN) Payload() string {
-	return a.asn
+	return a.payload
 }
 
 func (a *ASN) GetASN() string {
-	return a.asn
+	if len(a.asns) == 0 {
+		return ""
+	}
+	return a.asns[0]
+}
+
+func (a *ASN) GetASNs() []string {
+	return append([]string(nil), a.asns...)
 }
 
 func NewIPASN(asn string, adapter string, isSrc, noResolveIP bool) (*ASN, error) {
+	asns, err := parseSlashSeparatedPayload(asn, "asn", nil)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := geodata.InitASN(); err != nil {
 		log.Errorln("can't initial ASN: %s", err)
 		return nil, err
@@ -65,7 +86,8 @@ func NewIPASN(asn string, adapter string, isSrc, noResolveIP bool) (*ASN, error)
 
 	return &ASN{
 		Base:        Base{},
-		asn:         asn,
+		asns:        asns,
+		payload:     strings.Join(asns, "/"),
 		adapter:     adapter,
 		noResolveIP: noResolveIP,
 		isSourceIP:  isSrc,

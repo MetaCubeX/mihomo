@@ -274,6 +274,7 @@ dns:
     - rule-set:fakeip-filter
     # fakeip-filter 为 geosite 中名为 fakeip-filter 的分类（需要自行保证该分类存在）
     - geosite:fakeip-filter
+    # geosite:fakeip-filter/private # geosite: 前缀也支持正斜杠(/)分割
 
     # 当 fake-ip-filter-mode: rule 时开启规则模式
     # fake-ip 与路由 rules 匹配逻辑一致(自上而下)，语法也一致，支持GEOSITE、RuleSet、DOMAIN*、MATCH
@@ -360,6 +361,7 @@ dns:
     "geosite:cn,private,apple":
       - https://doh.pub/dns-query
       - https://dns.alidns.com/dns-query
+    # "geosite:google/youtube": https://dns.google/dns-query # geosite: 前缀也支持正斜杠(/)分割
     "geosite:category-ads-all": rcode://success
     "www.baidu.com,+.google.cn": [223.5.5.5, https://dns.alidns.com/dns-query]
     ## global，dns 为 rule-providers 中的名为 global 和 dns 规则订阅，
@@ -917,7 +919,6 @@ proxies: # socks5
       # max-connections: 1 # Maximum connections. Conflict with max-streams.
       # min-streams: 0 # Minimum multiplexed streams in a connection before opening a new connection. Conflict with max-streams.
       # max-streams: 0 # Maximum multiplexed streams in a connection before opening a new connection. Conflict with max-connections and min-streams.
-      
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
@@ -1440,7 +1441,7 @@ proxies: # socks5
   - name: sudoku
     type: sudoku
     server: server_ip/domain # 1.2.3.4 or domain
-    port: 443 
+    port: 443
     key: "<client_key>" # 如果你使用sudoku生成的ED25519密钥对，请填写密钥对中的私钥，否则填入和服务端相同的uuid
     aead-method: chacha20-poly1305 # 可选：chacha20-poly1305、aes-128-gcm、none（不建议；none 不提供 AEAD 保护）
     padding-min: 2 # 最小填充率（0-100）
@@ -1688,11 +1689,17 @@ rule-providers:
 
 rules:
   - RULE-SET,rule1,REJECT
-  - IP-ASN,1,PROXY
+  - IP-ASN,13335,PROXY # 匹配 cloudflare ASN13335 IP 段
+  - IP-ASN,13335/396982,PROXY # 支持正斜杠(/)分割, 效果等同于 OR
   - DOMAIN-REGEX,^abc,DIRECT
   - DOMAIN-SUFFIX,baidu.com,DIRECT
   - DOMAIN-KEYWORD,google,ss1
   - DOMAIN-WILDCARD,test.*.mihomo.com,ss1
+  - GEOSITE,baidu,DIRECT # 匹配所有百度网站域名
+  - GEOSITE,google/youtube,PROXY # 支持正斜杠(/)分割, 效果等同于 OR
+  - GEOIP,cn,DIRECT # 匹配所有 CN IP 段
+  - GEOIP,cn/us,PROXY # 支持正斜杠(/)分割, 效果等同于 OR
+  - SRC-GEOIP,cn/us,DIRECT # SRC-GEOIP 和 SRC-IP-ASN 同样支持正斜杠(/)分割
   - IP-CIDR,1.1.1.1/32,ss1
   - IP-CIDR6,2409::/64,DIRECT
   # 当满足条件是 TCP 或 UDP 流量时，使用名为 sub-rule-name1 的规则集

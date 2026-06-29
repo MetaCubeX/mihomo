@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/metacubex/mihomo/component/geodata"
 	_ "github.com/metacubex/mihomo/component/geodata/memconservative"
@@ -13,9 +14,29 @@ import (
 
 type GEOSITE struct {
 	Base
-	country    string
+	countries  []string
+	payload    string
 	adapter    string
 	recodeSize int
+}
+
+type multiGeoSiteMatcher []router.DomainMatcher
+
+func (m multiGeoSiteMatcher) ApplyDomain(domain string) bool {
+	for _, matcher := range m {
+		if matcher.ApplyDomain(domain) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m multiGeoSiteMatcher) Count() int {
+	count := 0
+	for _, matcher := range m {
+		count += matcher.Count()
+	}
+	return count
 }
 
 func (gs *GEOSITE) RuleType() C.RuleType {
@@ -43,15 +64,31 @@ func (gs *GEOSITE) Adapter() string {
 }
 
 func (gs *GEOSITE) Payload() string {
-	return gs.country
+	return gs.payload
 }
 
 func (gs *GEOSITE) GetDomainMatcher() (router.DomainMatcher, error) {
-	matcher, err := geodata.LoadGeoSiteMatcher(gs.country)
-	if err != nil {
-		return nil, fmt.Errorf("load GeoSite data error, %w", err)
+	return gs.loadDomainMatcher()
+}
+
+func (gs *GEOSITE) loadDomainMatcher() (router.DomainMatcher, error) {
+	matchers := make(multiGeoSiteMatcher, 0, len(gs.countries))
+	for _, country := range gs.countries {
+		matcher, err := geodata.LoadGeoSiteMatcher(country)
+		if err != nil {
+			return nil, fmt.Errorf("load GeoSite data error, %w", err)
+		}
+		matchers = append(matchers, matcher)
 	}
-	return matcher, nil
+
+	switch len(matchers) {
+	case 0:
+		return nil, fmt.Errorf("load GeoSite data error, empty matcher list")
+	case 1:
+		return matchers[0], nil
+	default:
+		return matchers, nil
+	}
 }
 
 func (gs *GEOSITE) GetRecodeSize() int {
@@ -62,23 +99,29 @@ func (gs *GEOSITE) GetRecodeSize() int {
 }
 
 func NewGEOSITE(country string, adapter string) (*GEOSITE, error) {
+	countries, err := parseSlashSeparatedPayload(country, "geosite country", strings.ToLower)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := geodata.InitGeoSite(); err != nil {
 		log.Errorln("can't initial GeoSite: %s", err)
 		return nil, err
 	}
 
 	geoSite := &GEOSITE{
-		Base:    Base{},
-		country: country,
-		adapter: adapter,
+		Base:      Base{},
+		countries: countries,
+		payload:   strings.Join(countries, "/"),
+		adapter:   adapter,
 	}
 
-	matcher, err := geoSite.GetDomainMatcher() // test load
+	matcher, err := geoSite.loadDomainMatcher() // test load
 	if err != nil {
 		return nil, err
 	}
 
-	log.Infoln("Finished initial GeoSite rule %s => %s, records: %d", country, adapter, matcher.Count())
+	log.Infoln("Finished initial GeoSite rule %s => %s, records: %d", geoSite.payload, adapter, matcher.Count())
 
 	return geoSite, nil
 }
