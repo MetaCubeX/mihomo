@@ -1204,7 +1204,7 @@ proxies: # socks5
     #   00000000000000000000000000000000
     #   ...
     #   -----END OpenVPN Static key V1-----
-    # peer-info: # 透传给服务端的 peer-info 键值对，追加在内置 IV_VER/IV_PROTO/IV_CIPHERS 之后；用于服务端通过 --client-connect / PAM 基于 peer-info 做准入决策
+    # peer-info: # 透传给服务端的 peer-info 键值对，追加在内置 IV_VER/IV_PROTO/IV_CIPHERS 之后；用于服务端基于 peer-info 做准入决策
     #   IV_HWADDR: "52:54:00:ff:72:87"
     #   UV_DEVICE_ID: "laptop-001"
     # ping: 10 # 默认值为 0
