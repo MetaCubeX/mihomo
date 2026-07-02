@@ -191,7 +191,7 @@ func New(config LC.Hysteria2Server, tunnel C.Tunnel, additions ...inbound.Additi
 				if ipv4 && !ipv6 {
 					return resolver.LookupIPv4WithResolver(ctx, host, resolver.ProxyServerHostResolver)
 				} else if ipv6 && !ipv4 {
-					return resolver.LookupIPv4WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+					return resolver.LookupIPv6WithResolver(ctx, host, resolver.ProxyServerHostResolver)
 				}
 				return resolver.LookupIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
 			},
