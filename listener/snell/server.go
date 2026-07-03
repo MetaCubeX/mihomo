@@ -90,7 +90,7 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			WildcardSNI:            wildcardSNI,
 			Handler: sing.FnHandler{
 				NewConnectionFn: func(ctx context.Context, conn net.Conn, metadata M.Metadata) error {
-					l.handleConn(conn, tunnel, additions...)
+					l.handleConn(conn, tunnel, sing.AdditionsFromContext(ctx)...)
 					return nil
 				}},
 			Logger: log.SingLogger,
