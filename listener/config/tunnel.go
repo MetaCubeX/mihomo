@@ -9,10 +9,10 @@ import (
 )
 
 type tunnel struct {
-	Network []string `yaml:"network"`
-	Address string   `yaml:"address"`
-	Target  string   `yaml:"target"`
-	Proxy   string   `yaml:"proxy"`
+	Network []string `yaml:"network" json:"network"`
+	Address string   `yaml:"address" json:"address"`
+	Target  string   `yaml:"target" json:"target"`
+	Proxy   string   `yaml:"proxy" json:"proxy"`
 }
 
 type Tunnel tunnel
