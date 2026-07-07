@@ -237,7 +237,7 @@ func NewServer(option *ServerOption, pc net.PacketConn) (*Server, error) {
 			HandleTcpFn:           option.HandleTcpFn,
 			HandleUdpFn:           option.HandleUdpFn,
 			Users:                 option.Users,
-			MaxUdpRelayPacketSize: option.MaxUdpRelayPacketSize,
+			MaxUdpRelayPacketSize: maxUdpRelayPacketSize,
 		}
 	}
 	return server, nil
