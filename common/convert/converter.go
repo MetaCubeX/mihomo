@@ -69,8 +69,10 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 			proxies = append(proxies, hysteria)
 
-		case "hysteria2", "hy2":
-			urlHysteria2, err := url.Parse(line)
+		case "hysteria2", "hy2", "hysteria2+realm", "hy2+realm":
+			realmMode := strings.HasSuffix(scheme, "+realm")
+			hopLine, ports := splitHysteria2Ports(line)
+			urlHysteria2, err := url.Parse(hopLine)
 			if err != nil {
 				continue
 			}
@@ -87,6 +89,9 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			} else {
 				hysteria2["port"] = "443"
 			}
+			if ports != "" {
+				hysteria2["ports"] = ports
+			}
 			hysteria2["obfs"] = query.Get("obfs")
 			hysteria2["obfs-password"] = query.Get("obfs-password")
 			hysteria2["sni"] = query.Get("sni")
@@ -94,12 +99,22 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			if alpn := query.Get("alpn"); alpn != "" {
 				hysteria2["alpn"] = strings.Split(alpn, ",")
 			}
-			if auth := urlHysteria2.User.String(); auth != "" {
-				hysteria2["password"] = auth
-			}
 			hysteria2["fingerprint"] = query.Get("pinSHA256")
 			hysteria2["down"] = query.Get("down")
 			hysteria2["up"] = query.Get("up")
+			if realmMode {
+				token, _ := url.PathUnescape(urlHysteria2.User.String())
+				realmID, _ := url.PathUnescape(strings.TrimPrefix(urlHysteria2.EscapedPath(), "/"))
+				hysteria2["realm-opts"] = buildRealmOpts("https://"+urlHysteria2.Host, token, realmID, query["stun"])
+				if auth := query.Get("auth"); auth != "" {
+					hysteria2["password"] = auth
+				}
+			} else if auth := urlHysteria2.User.String(); auth != "" {
+				hysteria2["password"] = auth
+			}
+			if fm := query.Get("fm"); fm != "" {
+				parseFinalMask(fm, hysteria2)
+			}
 
 			proxies = append(proxies, hysteria2)
 
