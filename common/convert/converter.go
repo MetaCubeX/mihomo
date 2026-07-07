@@ -112,9 +112,6 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 			} else if auth := urlHysteria2.User.String(); auth != "" {
 				hysteria2["password"] = auth
 			}
-			if fm := query.Get("fm"); fm != "" {
-				parseFinalMask(fm, hysteria2)
-			}
 
 			proxies = append(proxies, hysteria2)
 

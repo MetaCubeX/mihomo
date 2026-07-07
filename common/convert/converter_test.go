@@ -1,7 +1,6 @@
 package convert_test
 
 import (
-	"net/url"
 	"testing"
 
 	"github.com/metacubex/mihomo/adapter"
@@ -39,96 +38,6 @@ func TestConvertsV2Ray_normal(t *testing.T) {
 
 	_, err = adapter.ParseProxy(proxies[0])
 	assert.NoError(t, err)
-}
-
-func TestConvertsV2Ray_hysteria2FinalMask(t *testing.T) {
-	fm := `{"udp":[{"type":"salamander","settings":{"password":"gawrgura","packetSize":"100-2000"}}],` +
-		`"quicParams":{"brutalUp":"100","brutalDown":"200","bbrProfile":"aggressive",` +
-		`"initStreamReceiveWindow":8388608,"maxStreamReceiveWindow":8388608,` +
-		`"initConnectionReceiveWindow":20971520,"maxConnectionReceiveWindow":20971520,` +
-		`"udpHop":{"ports":"20000-30000","interval":"30"}}}`
-	hy2test := "hysteria2://letmein@example.com:8443/?insecure=1&obfs=salamander&obfs-password=gawrgura&sni=real.example.com&fm=" + url.QueryEscape(fm) + "#hy2fm"
-
-	expected := []map[string]interface{}{
-		{
-			"name":                              "hy2fm",
-			"type":                              "hysteria2",
-			"server":                            "example.com",
-			"port":                              "8443",
-			"sni":                               "real.example.com",
-			"obfs":                              "gecko",
-			"obfs-password":                     "gawrgura",
-			"obfs-min-packet-size":              "100",
-			"obfs-max-packet-size":              "2000",
-			"password":                          "letmein",
-			"skip-cert-verify":                  true,
-			"fingerprint":                       "",
-			"up":                                "100",
-			"down":                              "200",
-			"bbr-profile":                       "aggressive",
-			"ports":                             "20000-30000",
-			"hop-interval":                      "30",
-			"initial-stream-receive-window":     "8388608",
-			"max-stream-receive-window":         "8388608",
-			"initial-connection-receive-window": "20971520",
-			"max-connection-receive-window":     "20971520",
-		},
-	}
-
-	proxies, err := ConvertsV2Ray([]byte(hy2test))
-
-	assert.Nil(t, err)
-	assert.Equal(t, expected, proxies)
-
-	_, err = adapter.ParseProxy(proxies[0])
-	assert.NoError(t, err)
-}
-
-func TestConvertsV2Ray_hysteria2FinalMaskSinglePacketSize(t *testing.T) {
-	fm := `{"udp":[{"type":"salamander","settings":{"password":"gawrgura","packetSize":1500}}]}`
-	hy2test := "hysteria2://letmein@example.com:8443/?fm=" + url.QueryEscape(fm) + "#hy2fm"
-
-	proxies, err := ConvertsV2Ray([]byte(hy2test))
-
-	assert.Nil(t, err)
-	assert.Equal(t, "1500", proxies[0]["obfs-min-packet-size"])
-	assert.Equal(t, "1500", proxies[0]["obfs-max-packet-size"])
-
-	_, err = adapter.ParseProxy(proxies[0])
-	assert.NoError(t, err)
-}
-
-func TestConvertsV2Ray_hysteria2FinalMaskRealm(t *testing.T) {
-	fm := `{"udp":[{"type":"realm","settings":{"url":"realm://tok3n@realm.example.com:8443/rid42",` +
-		`"stunServers":["stun.l.google.com:19302"],"tlsConfig":{"serverName":"realm.example.com","allowInsecure":true}}}]}`
-	hy2test := "hysteria2://letmein@example.com:8443/?sni=example.com&fm=" + url.QueryEscape(fm) + "#hy2realm"
-
-	proxies, err := ConvertsV2Ray([]byte(hy2test))
-	assert.Nil(t, err)
-
-	expected := map[string]any{
-		"enable":           true,
-		"server-url":       "https://realm.example.com:8443",
-		"token":            "tok3n",
-		"realm-id":         "rid42",
-		"stun-servers":     []string{"stun.l.google.com:19302"},
-		"sni":              "realm.example.com",
-		"skip-cert-verify": true,
-	}
-	assert.Equal(t, expected, proxies[0]["realm-opts"])
-
-	_, err = adapter.ParseProxy(proxies[0])
-	assert.NoError(t, err)
-}
-
-func TestConvertsV2Ray_hysteria2FinalMaskFlatWins(t *testing.T) {
-	fm := `{"quicParams":{"brutalUp":"100"}}`
-	hy2test := "hysteria2://letmein@example.com:8443/?up=999&fm=" + url.QueryEscape(fm) + "#hy2flat"
-
-	proxies, err := ConvertsV2Ray([]byte(hy2test))
-
-	assert.Nil(t, err)
-	assert.Equal(t, "999", proxies[0]["up"])
 }
 
 func TestConvertsV2Ray_hysteria2PortHopping(t *testing.T) {
