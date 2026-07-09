@@ -191,12 +191,13 @@ func (b *Base) Close() error {
 }
 
 type BasicOption struct {
-	TFO         bool        `proxy:"tfo,omitempty"`
-	MPTCP       bool        `proxy:"mptcp,omitempty"`
-	Interface   string      `proxy:"interface-name,omitempty"`
-	RoutingMark int         `proxy:"routing-mark,omitempty"`
-	IPVersion   C.DNSPrefer `proxy:"ip-version,omitempty"`
-	DialerProxy string      `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
+	TFO         bool            `proxy:"tfo,omitempty"`
+	MPTCP       bool            `proxy:"mptcp,omitempty"`
+	Interface   string          `proxy:"interface-name,omitempty"`
+	RoutingMark int             `proxy:"routing-mark,omitempty"`
+	IPVersion   C.DNSPrefer     `proxy:"ip-version,omitempty"`
+	DialerProxy string          `proxy:"dialer-proxy,omitempty"` // don't apply this option into groups, but can set a group name in a proxy
+	FinalMask   FinalMaskOption `proxy:"finalmask,omitempty"`
 
 	//
 	// The following parameters are used internally, assign value by the structure decoder are disallowed
@@ -215,6 +216,11 @@ func (b *BasicOption) NewDialer(opts []dialer.Option) C.Dialer {
 			cDialer = dialer.NewDialer(opts...)
 		}
 	}
+
+	if fmCfg := b.FinalMask.Parse(); fmCfg != nil {
+		cDialer = newFinalMaskDialer(cDialer, fmCfg)
+	}
+
 	return cDialer
 }
 
