@@ -24,6 +24,7 @@ type TailscaleOption struct {
 	StateDir    string                     `proxy:"state-dir,omitempty"`
 	Ephemeral   bool                       `proxy:"ephemeral,omitempty"`
 	UDP         bool                       `proxy:"udp,omitempty"`
+	MagicDNS    bool                       `proxy:"magic-dns,omitempty"`
 	HostForward TailscaleHostForwardOption `proxy:"host-forward,omitempty"`
 
 	AcceptRoutes           *bool  `proxy:"accept-routes,omitempty"`

@@ -136,6 +136,8 @@ tun:
   stack: system # gvisor/mixed
   dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
+  # dns-search-domains: # 追加到系统 TUN DNS 链路的搜索域；Linux/systemd-resolved 上可用于 MagicDNS 单标签解析，如 ssh newvbox
+  #   - tailnet.ts.net
   # auto-detect-interface: true # 自动识别出口网卡
   # auto-route: true # 配置路由表
   # mtu: 9000 # 最大传输单元
@@ -155,6 +157,8 @@ tun:
     - 128.0.0.0/1
     - "::/1"
     - "8000::/1"
+    # - 100.64.0.0/10 # Tailnet IPv4；配合 type: tailscale / magic-dns 可透明访问 Tailnet
+    # - "fd7a:115c:a1e0::/48" # Tailnet IPv6
   # inet4-route-address: # 启用 auto-route 时使用自定义路由而不是默认路由（旧写法）
   #   - 0.0.0.0/1
   #   - 128.0.0.0/1
@@ -1244,6 +1248,7 @@ proxies: # socks5
     # state-dir: ./tailscale # tsnet 状态目录，默认 tailscale
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
+    # magic-dns: true # 启用 MagicDNS 集成；会启动 tsnet、自动发布 Tailnet 搜索域，并将匹配域名交给此出站的 Tailscale DNS
     # host-forward: # 可选；将发往此节点 Tailscale IP 任意端口的流量转发到同端口的本机回环服务
     #   enabled: true
     #   target: 127.0.0.1 # 仅允许回环地址，默认 127.0.0.1
@@ -2336,6 +2341,8 @@ listeners:
     stack: system # gvisor / mixed
     dns-hijack:
     - 0.0.0.0:53 # 需要劫持的 DNS
+    # dns-search-domains: # 追加到系统 TUN DNS 链路的搜索域；Linux/systemd-resolved 上可用于 MagicDNS 单标签解析
+    # - tailnet.ts.net
     # auto-detect-interface: false # 自动识别出口网卡
     # auto-route: false # 配置路由表
     # mtu: 9000 # 最大传输单元

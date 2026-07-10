@@ -15,6 +15,7 @@ type TunOption struct {
 	Device              string     `inbound:"device,omitempty"`
 	Stack               C.TUNStack `inbound:"stack,omitempty"`
 	DNSHijack           []string   `inbound:"dns-hijack,omitempty"`
+	DNSSearchDomains    []string   `inbound:"dns-search-domains,omitempty"`
 	AutoRoute           bool       `inbound:"auto-route,omitempty"`
 	AutoDetectInterface bool       `inbound:"auto-detect-interface,omitempty"`
 
@@ -94,6 +95,7 @@ func NewTun(options *TunOption) (*Tun, error) {
 			Device:                                options.Device,
 			Stack:                                 options.Stack,
 			DNSHijack:                             options.DNSHijack,
+			DNSSearchDomains:                      options.DNSSearchDomains,
 			AutoRoute:                             options.AutoRoute,
 			AutoDetectInterface:                   options.AutoDetectInterface,
 			MTU:                                   options.MTU,

@@ -14,6 +14,7 @@ type Tun struct {
 	Device              string     `yaml:"device" json:"device"`
 	Stack               C.TUNStack `yaml:"stack" json:"stack"`
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
+	DNSSearchDomains    []string   `yaml:"dns-search-domains" json:"dns-search-domains"`
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 
@@ -67,6 +68,7 @@ type Tun struct {
 
 func (t *Tun) Sort() {
 	slices.Sort(t.DNSHijack)
+	slices.Sort(t.DNSSearchDomains)
 
 	slices.SortFunc(t.Inet4Address, netipx.ComparePrefix)
 	slices.SortFunc(t.Inet6Address, netipx.ComparePrefix)
@@ -103,6 +105,9 @@ func (t *Tun) Equal(other Tun) bool {
 		return false
 	}
 	if !slices.Equal(t.DNSHijack, other.DNSHijack) {
+		return false
+	}
+	if !slices.Equal(t.DNSSearchDomains, other.DNSSearchDomains) {
 		return false
 	}
 	if t.AutoRoute != other.AutoRoute {

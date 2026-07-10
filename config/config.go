@@ -275,6 +275,7 @@ type RawTun struct {
 	Device              string     `yaml:"device" json:"device"`
 	Stack               C.TUNStack `yaml:"stack" json:"stack"`
 	DNSHijack           []string   `yaml:"dns-hijack" json:"dns-hijack"`
+	DNSSearchDomains    []string   `yaml:"dns-search-domains" json:"dns-search-domains"`
 	AutoRoute           bool       `yaml:"auto-route" json:"auto-route"`
 	AutoDetectInterface bool       `yaml:"auto-detect-interface" json:"auto-detect-interface"`
 
@@ -1680,6 +1681,7 @@ func parseTun(rawTun RawTun, dns *DNS, general *General) error {
 		Device:              rawTun.Device,
 		Stack:               rawTun.Stack,
 		DNSHijack:           rawTun.DNSHijack,
+		DNSSearchDomains:    rawTun.DNSSearchDomains,
 		AutoRoute:           rawTun.AutoRoute,
 		AutoDetectInterface: rawTun.AutoDetectInterface,
 

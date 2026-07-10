@@ -18,6 +18,7 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/iface/anet"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/tailnet"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/dns"
 	"github.com/metacubex/mihomo/log"
@@ -28,6 +29,7 @@ import (
 	"github.com/metacubex/tailscale/net/netmon"
 	"github.com/metacubex/tailscale/tailcfg"
 	"github.com/metacubex/tailscale/tsnet"
+	"github.com/metacubex/tailscale/types/netmap"
 	"github.com/metacubex/tailscale/types/nettype"
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
@@ -63,6 +65,7 @@ type TailscaleOption struct {
 	StateDir    string                     `proxy:"state-dir,omitempty"`
 	Ephemeral   bool                       `proxy:"ephemeral,omitempty"`
 	UDP         bool                       `proxy:"udp,omitempty"`
+	MagicDNS    bool                       `proxy:"magic-dns,omitempty"`
 	HostForward TailscaleHostForwardOption `proxy:"host-forward,omitempty"`
 
 	AcceptRoutes           *bool  `proxy:"accept-routes,omitempty"`
@@ -359,18 +362,25 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
 	outbound.dnsResolver = dns.NewResolverFromClient(dnsTransport)
 	outbound.unregisterDNSResolver = dns.RegisterTailscaleDnsClient(option.Name, dnsTransport)
-	if hostForward != nil {
-		if hostForward.tcp {
-			outbound.unregisterHostForward = append(outbound.unregisterHostForward, outbound.server.RegisterFallbackTCPHandler(hostForward.handleTCP))
-		}
-		if hostForward.udp {
-			outbound.unregisterHostForward = append(outbound.unregisterHostForward, outbound.server.RegisterFallbackUDPHandler(hostForward.handleUDP))
+	if hostForward != nil || option.MagicDNS {
+		if hostForward != nil {
+			if hostForward.tcp {
+				outbound.unregisterHostForward = append(outbound.unregisterHostForward, outbound.server.RegisterFallbackTCPHandler(hostForward.handleTCP))
+			}
+			if hostForward.udp {
+				outbound.unregisterHostForward = append(outbound.unregisterHostForward, outbound.server.RegisterFallbackUDPHandler(hostForward.handleUDP))
+			}
 		}
 		if err := outbound.start(); err != nil {
 			_ = outbound.Close()
-			return nil, fmt.Errorf("start tailscale host-forward: %w", err)
+			return nil, fmt.Errorf("start tailscale proxy: %w", err)
 		}
+	}
+	if hostForward != nil {
 		log.Infoln("[Tailscale](%s) host-forward enabled: tcp=%v udp=%v target=%s", option.Name, hostForward.tcp, hostForward.udp, hostForward.target)
+	}
+	if option.MagicDNS {
+		log.Infoln("[Tailscale](%s) MagicDNS integration enabled", option.Name)
 	}
 	return outbound, nil
 }
@@ -408,7 +418,11 @@ func (t *Tailscale) watchBackendState() {
 		t.setBackendInitialized(err)
 		return
 	}
-	watcher, err := lc.WatchIPNBus(t.ctx, ipn.NotifyInitialState)
+	watchMask := ipn.NotifyInitialState
+	if t.option.MagicDNS {
+		watchMask |= ipn.NotifyInitialNetMap
+	}
+	watcher, err := lc.WatchIPNBus(t.ctx, watchMask)
 	if err != nil {
 		t.setBackendInitialized(err)
 		return
@@ -424,13 +438,19 @@ func (t *Tailscale) watchBackendState() {
 			return
 		}
 		if n.State == nil {
+			if t.option.MagicDNS && n.NetMap != nil {
+				t.publishMagicDNSSearchDomains(n.NetMap)
+			}
 			continue
+		}
+		if t.option.MagicDNS && n.NetMap != nil {
+			t.publishMagicDNSSearchDomains(n.NetMap)
 		}
 
 		if *n.State != ipn.NoState && !backendInitialized {
 			t.setBackendInitialized(nil)
 			backendInitialized = true
-			if !exitNodeNeedsStatus {
+			if !exitNodeNeedsStatus && !t.option.MagicDNS {
 				return
 			}
 		}
@@ -438,9 +458,32 @@ func (t *Tailscale) watchBackendState() {
 			if err := t.applyExitNodePrefs(t.ctx); err != nil {
 				log.Warnln("[Tailscale](%s) set exit node failed: %v", t.Name(), err)
 			}
-			return
+			if !t.option.MagicDNS {
+				return
+			}
+			exitNodeNeedsStatus = false
 		}
 	}
+}
+
+func (t *Tailscale) publishMagicDNSSearchDomains(nm *netmap.NetworkMap) {
+	domains := tailscaleMagicDNSSearchDomains(nm)
+	if len(domains) == 0 {
+		return
+	}
+	tailnet.SetSearchDomains(t.Name(), domains)
+	log.Debugln("[Tailscale](%s) MagicDNS search domains: %v", t.Name(), domains)
+}
+
+func tailscaleMagicDNSSearchDomains(nm *netmap.NetworkMap) []string {
+	if nm == nil {
+		return nil
+	}
+	domains := append([]string{}, nm.DNS.Domains...)
+	if nm.DNS.Proxied {
+		domains = append(domains, nm.MagicDNSSuffix())
+	}
+	return tailnet.NormalizeSearchDomains(domains)
 }
 
 func (t *Tailscale) setBackendInitialized(err error) {
@@ -658,6 +701,9 @@ func (t *Tailscale) IsL3Protocol(metadata *C.Metadata) bool {
 
 func (t *Tailscale) Close() error {
 	t.cancel()
+	if t.option.MagicDNS {
+		tailnet.RemoveSearchDomains(t.Name())
+	}
 	for _, unregister := range t.unregisterHostForward {
 		unregister()
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/iface"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/tailnet"
 	C "github.com/metacubex/mihomo/constant"
 	P "github.com/metacubex/mihomo/constant/provider"
 	LC "github.com/metacubex/mihomo/listener/config"
@@ -65,6 +66,9 @@ type Listener struct {
 	routeExcludeAddressSet   []*netipx.IPSet
 
 	dnsServerIp []string
+
+	systemDNSCancel          context.CancelFunc
+	tailnetSearchDomainClose io.Closer
 }
 
 type ListenerHandler struct {
@@ -510,6 +514,11 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		return
 	}
 	l.tunStack = tunStack
+	systemDNSCtx, systemDNSCancel := context.WithCancel(ctx)
+	l.systemDNSCancel = systemDNSCancel
+	l.tailnetSearchDomainClose = tailnet.RegisterSearchDomainCallback(func(domains []string) {
+		l.updateSystemDNSSearchDomains(systemDNSCtx, domains)
+	})
 
 	if l.autoRedirect != nil {
 		if len(l.options.RouteAddressSet) > 0 && len(l.routeAddressSet) == 0 {
@@ -544,6 +553,16 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 	l.addrStr = fmt.Sprintf("%s(%s,%s), mtu: %d, auto route: %v, auto redir: %v, ip stack: %s",
 		tunName, tunOptions.Inet4Address, tunOptions.Inet6Address, tunMTU, options.AutoRoute, options.AutoRedirect, options.Stack)
 	return
+}
+
+func (l *Listener) updateSystemDNSSearchDomains(ctx context.Context, tailnetDomains []string) {
+	domains := make([]string, 0, len(l.options.DNSSearchDomains)+len(tailnetDomains))
+	domains = append(domains, l.options.DNSSearchDomains...)
+	domains = append(domains, tailnetDomains...)
+	if len(tailnet.NormalizeSearchDomains(domains)) == 0 {
+		return
+	}
+	configureSystemDNSSearchDomains(ctx, l.tunName, domains)
 }
 
 func (l *Listener) ruleUpdateCallback(ruleProvider P.RuleProvider) {
@@ -667,6 +686,9 @@ func parseRange[T constraints.Integer](uidRanges []ranges.Range[T], rangeList []
 
 func (l *Listener) Close() error {
 	l.closed = true
+	if l.systemDNSCancel != nil {
+		l.systemDNSCancel()
+	}
 	resolver.RemoveSystemDnsBlacklist(l.dnsServerIp...)
 	if l.autoRedirectOutputMark != 0 {
 		dialer.DefaultRoutingMark.CompareAndSwap(l.autoRedirectOutputMark, 0)
@@ -675,6 +697,7 @@ func (l *Listener) Close() error {
 		dialer.DefaultInterfaceFinder.CompareAndSwap(l.cDialerInterfaceFinder, nil)
 	}
 	return common.Close(
+		l.tailnetSearchDomainClose,
 		l.ruleUpdateCallbackCloser,
 		l.tunStack,
 		l.tunIf,

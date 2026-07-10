@@ -23,7 +23,8 @@ func TestTailscaleHostForwardOptionDecode(t *testing.T) {
 		WeaklyTypedInput: true,
 		KeyReplacer:      structure.DefaultKeyReplacer,
 	}).Decode(map[string]any{
-		"name": "test",
+		"name":      "test",
+		"magic-dns": true,
 		"host-forward": map[string]any{
 			"enabled": true,
 			"target":  "127.0.0.2",
@@ -33,6 +34,9 @@ func TestTailscaleHostForwardOptionDecode(t *testing.T) {
 	}, &option)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !option.MagicDNS {
+		t.Fatal("magic-dns was not decoded")
 	}
 	if !option.HostForward.Enabled || option.HostForward.Target != "127.0.0.2" {
 		t.Fatalf("decoded host-forward: %+v", option.HostForward)

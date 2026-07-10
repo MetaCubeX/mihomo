@@ -10,6 +10,7 @@ import (
 	"github.com/metacubex/mihomo/common/lru"
 	"github.com/metacubex/mihomo/common/singleflight"
 	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/tailnet"
 	"github.com/metacubex/mihomo/component/trie"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -259,19 +260,20 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 }
 
 func (r *Resolver) matchPolicy(m *D.Msg) []dnsClient {
-	if r.policy == nil {
-		return nil
-	}
-
 	domain := msgToDomain(m)
 	if domain == "" {
 		return nil
 	}
 
-	for _, policy := range r.policy {
-		if dnsClients := policy.Match(domain); len(dnsClients) > 0 {
-			return dnsClients
+	if r.policy != nil {
+		for _, policy := range r.policy {
+			if dnsClients := policy.Match(domain); len(dnsClients) > 0 {
+				return dnsClients
+			}
 		}
+	}
+	if proxyName, ok := tailnet.ProxyNameForDomain(domain); ok {
+		return []dnsClient{newTailscaleClient(proxyName)}
 	}
 	return nil
 }
