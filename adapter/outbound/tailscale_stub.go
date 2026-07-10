@@ -10,9 +10,12 @@ type Tailscale struct {
 
 type TailscaleHostForwardOption struct {
 	Enabled bool   `proxy:"enabled,omitempty"`
+	Mode    string `proxy:"mode,omitempty"`
 	Target  string `proxy:"target,omitempty"`
 	TCP     *bool  `proxy:"tcp,omitempty"`
 	UDP     *bool  `proxy:"udp,omitempty"`
+	Device  string `proxy:"device,omitempty"`
+	MTU     uint32 `proxy:"mtu,omitempty"`
 }
 
 type TailscaleOption struct {

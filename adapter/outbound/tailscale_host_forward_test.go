@@ -34,9 +34,12 @@ func TestTailscaleHostForwardOptionDecode(t *testing.T) {
 		"magic-dns": true,
 		"host-forward": map[string]any{
 			"enabled": true,
+			"mode":    "kernel",
 			"target":  "127.0.0.2",
 			"tcp":     false,
 			"udp":     true,
+			"device":  "mts-test",
+			"mtu":     1280,
 		},
 	}, &option)
 	if err != nil {
@@ -48,11 +51,41 @@ func TestTailscaleHostForwardOptionDecode(t *testing.T) {
 	if !option.HostForward.Enabled || option.HostForward.Target != "127.0.0.2" {
 		t.Fatalf("decoded host-forward: %+v", option.HostForward)
 	}
+	if option.HostForward.Mode != "kernel" || option.HostForward.Device != "mts-test" || option.HostForward.MTU != 1280 {
+		t.Fatalf("decoded kernel host-forward fields: %+v", option.HostForward)
+	}
 	if option.HostForward.TCP == nil || *option.HostForward.TCP {
 		t.Fatalf("decoded tcp: %v", option.HostForward.TCP)
 	}
 	if option.HostForward.UDP == nil || !*option.HostForward.UDP {
 		t.Fatalf("decoded udp: %v", option.HostForward.UDP)
+	}
+}
+
+func TestTailscaleHostForwardMode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode string
+		want string
+	}{
+		{name: "default", want: tailscaleHostForwardModeUserspace},
+		{name: "userspace", mode: "userspace", want: tailscaleHostForwardModeUserspace},
+		{name: "kernel", mode: "kernel", want: tailscaleHostForwardModeKernel},
+		{name: "case and space", mode: " Kernel ", want: tailscaleHostForwardModeKernel},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tailscaleHostForwardMode(TailscaleHostForwardOption{Mode: tc.mode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("mode = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	if _, err := tailscaleHostForwardMode(TailscaleHostForwardOption{Mode: "netstack"}); err == nil {
+		t.Fatal("expected invalid mode to fail")
 	}
 }
 
