@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/dialer"
 	"github.com/metacubex/mihomo/component/iface/anet"
+	"github.com/metacubex/mihomo/component/keepalive"
 	"github.com/metacubex/mihomo/component/resolver"
 	"github.com/metacubex/mihomo/component/tailnet"
 	C "github.com/metacubex/mihomo/constant"
@@ -82,7 +84,13 @@ type TailscaleHostForwardOption struct {
 	UDP     *bool  `proxy:"udp,omitempty"`
 }
 
-const tailscaleHostForwardUDPIdleTimeout = 2 * time.Minute
+const (
+	tailscaleHostForwardUDPIdleTimeout               = 2 * time.Minute
+	tailscaleHostForwardNetstackKeepaliveIdleEnv     = "TS_NETSTACK_KEEPALIVE_IDLE"
+	tailscaleHostForwardNetstackKeepaliveIdle        = "60s"
+	tailscaleHostForwardNetstackKeepaliveIntervalEnv = "TS_NETSTACK_KEEPALIVE_INTERVAL"
+	tailscaleHostForwardNetstackKeepaliveInterval    = "15s"
+)
 
 var tailscaleHostForwardDefaultTarget = netip.MustParseAddr("127.0.0.1")
 
@@ -126,6 +134,7 @@ func newTailscaleHostForwarder(
 	}
 
 	dialer := &net.Dialer{}
+	keepalive.SetNetDialer(dialer)
 	return &tailscaleHostForwarder{
 		ctx:         ctx,
 		name:        name,
@@ -153,15 +162,29 @@ func (f *tailscaleHostForwarder) handleTCP(src, dst netip.AddrPort) (func(net.Co
 	}
 	target := f.targetAddress(dst)
 	return func(client net.Conn) {
+		keepalive.TCPKeepAlive(client)
 		backend, err := f.dialContext(f.ctx, "tcp", target)
 		if err != nil {
 			log.Debugln("[Tailscale](%s) host-forward TCP %s -> %s failed: %v", f.name, src, target, err)
 			_ = client.Close()
 			return
 		}
+		keepalive.TCPKeepAlive(backend)
 		log.Debugln("[Tailscale](%s) host-forward TCP %s -> %s", f.name, src, target)
 		N.Relay(client, backend)
 	}, true
+}
+
+func configureTailscaleHostForwardNetstackKeepalive() {
+	setTailscaleEnvDefault(tailscaleHostForwardNetstackKeepaliveIdleEnv, tailscaleHostForwardNetstackKeepaliveIdle)
+	setTailscaleEnvDefault(tailscaleHostForwardNetstackKeepaliveIntervalEnv, tailscaleHostForwardNetstackKeepaliveInterval)
+}
+
+func setTailscaleEnvDefault(name, value string) {
+	if os.Getenv(name) != "" {
+		return
+	}
+	envknob.Setenv(name, value)
 }
 
 func (f *tailscaleHostForwarder) handleUDP(src, dst netip.AddrPort) (func(nettype.ConnPacketConn), bool) {
@@ -361,6 +384,9 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 		return nil, err
 	}
 	outbound.hostForward = hostForward
+	if hostForward != nil {
+		configureTailscaleHostForwardNetstackKeepalive()
+	}
 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
 	outbound.dnsResolver = dns.NewResolverFromClient(dnsTransport)
 	outbound.unregisterDNSResolver = dns.RegisterTailscaleDnsClient(option.Name, dnsTransport)
@@ -380,6 +406,7 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
 	}
 	if hostForward != nil {
 		log.Infoln("[Tailscale](%s) host-forward enabled: tcp=%v udp=%v target=%s", option.Name, hostForward.tcp, hostForward.udp, hostForward.target)
+		log.Infoln("[Tailscale](%s) host-forward netstack TCP keepalive: idle=%s interval=%s", option.Name, os.Getenv(tailscaleHostForwardNetstackKeepaliveIdleEnv), os.Getenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv))
 	}
 	if option.MagicDNS {
 		log.Infoln("[Tailscale](%s) MagicDNS integration enabled", option.Name)

@@ -24,6 +24,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outbound"
 	C "github.com/metacubex/mihomo/constant"
 	mlog "github.com/metacubex/mihomo/log"
+	"github.com/metacubex/tailscale/envknob"
 	"github.com/metacubex/tailscale/net/netns"
 	"github.com/metacubex/tailscale/net/stun/stuntest"
 	"github.com/metacubex/tailscale/tailcfg"
@@ -36,6 +37,7 @@ func TestTailscaleHostForwardE2E(t *testing.T) {
 	oldHome := C.Path.HomeDir()
 	C.SetHomeDir(t.TempDir())
 	t.Cleanup(func() { C.SetHomeDir(oldHome) })
+	setShortNetstackKeepalive(t)
 
 	controlURL := startControl(t)
 	serverHost := "hf-server.tail-scale.ts.net"
@@ -106,6 +108,14 @@ func TestTailscaleHostForwardE2E(t *testing.T) {
 	})
 	t.Log("SSH handshake over host-forward reached authentication")
 
+	idleDuration := hostForwardE2EIdleDuration(t, 6*time.Second)
+	idleEchoPort := startEchoService(t)
+	idleEchoForward := startTCPForwarder(t, client, serverHost, idleEchoPort, 0)
+	if err := checkIdleTCPFlow(idleEchoForward, idleDuration); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("idle TCP flow over host-forward survived quiet period")
+
 	iperfTCPPort := startIperfServer(t)
 	iperfTCPForward := startTCPForwarder(t, client, serverHost, iperfTCPPort, 0)
 	out, err := runCommand(25*time.Second, "iperf3", "-c", "127.0.0.1", "-p", portString(iperfTCPForward), "-t", "1", "-J")
@@ -134,6 +144,39 @@ func TestTailscaleHostForwardE2E(t *testing.T) {
 		t.Fatalf("closed-port check emitted %d host-forward warnings", got-beforeWarnings)
 	}
 	t.Log("closed TCP port failed cleanly without host-forward warnings")
+}
+
+func setShortNetstackKeepalive(t *testing.T) {
+	t.Helper()
+	const (
+		idleEnv     = "TS_NETSTACK_KEEPALIVE_IDLE"
+		intervalEnv = "TS_NETSTACK_KEEPALIVE_INTERVAL"
+	)
+	oldIdle := os.Getenv(idleEnv)
+	oldInterval := os.Getenv(intervalEnv)
+	if oldIdle == "" {
+		envknob.Setenv(idleEnv, "2s")
+	}
+	if oldInterval == "" {
+		envknob.Setenv(intervalEnv, "1s")
+	}
+	t.Cleanup(func() {
+		envknob.Setenv(idleEnv, oldIdle)
+		envknob.Setenv(intervalEnv, oldInterval)
+	})
+}
+
+func hostForwardE2EIdleDuration(t *testing.T, fallback time.Duration) time.Duration {
+	t.Helper()
+	raw := os.Getenv("MIHOMO_TAILSCALE_HOST_FORWARD_E2E_IDLE")
+	if raw == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		t.Fatalf("invalid MIHOMO_TAILSCALE_HOST_FORWARD_E2E_IDLE %q: %v", raw, err)
+	}
+	return d
 }
 
 func startControl(t *testing.T) string {
@@ -208,6 +251,35 @@ func startHTTPService(t *testing.T) int {
 		defer cancel()
 		_ = srv.Shutdown(ctx)
 	})
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+func startEchoService(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		_ = ln.Close()
+	})
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				if ctx.Err() == nil {
+					t.Logf("echo service accept failed: %v", err)
+				}
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				_, _ = io.Copy(conn, conn)
+			}(conn)
+		}
+	}()
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
@@ -428,6 +500,37 @@ func checkSSHHandshake(addr string) error {
 	}
 	if !strings.Contains(err.Error(), "unable to authenticate") {
 		return err
+	}
+	return nil
+}
+
+func checkIdleTCPFlow(addr string, idle time.Duration) error {
+	conn, err := net.DialTimeout("tcp4", addr, 15*time.Second)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if err := writeAndReadEcho(conn, "before-idle"); err != nil {
+		return err
+	}
+	time.Sleep(idle)
+	return writeAndReadEcho(conn, "after-idle")
+}
+
+func writeAndReadEcho(conn net.Conn, payload string) error {
+	if err := conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(conn, payload); err != nil {
+		return err
+	}
+	got := make([]byte, len(payload))
+	if _, err := io.ReadFull(conn, got); err != nil {
+		return err
+	}
+	if string(got) != payload {
+		return fmt.Errorf("echo response = %q, want %q", got, payload)
 	}
 	return nil
 }

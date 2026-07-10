@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/metacubex/mihomo/common/structure"
 	C "github.com/metacubex/mihomo/constant"
 
+	"github.com/metacubex/tailscale/envknob"
 	"github.com/metacubex/tailscale/ipn"
 	"github.com/metacubex/tailscale/ipn/ipnstate"
 	"github.com/metacubex/tailscale/types/key"
@@ -141,6 +143,35 @@ func TestTailscaleHostForwardOptions(t *testing.T) {
 		UDP:     &disabled,
 	}, localIPs); err == nil {
 		t.Fatal("expected disabled TCP and UDP to fail")
+	}
+}
+
+func TestTailscaleHostForwardConfiguresNetstackKeepalive(t *testing.T) {
+	oldIdle := os.Getenv(tailscaleHostForwardNetstackKeepaliveIdleEnv)
+	oldInterval := os.Getenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv)
+	t.Cleanup(func() {
+		envknob.Setenv(tailscaleHostForwardNetstackKeepaliveIdleEnv, oldIdle)
+		envknob.Setenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv, oldInterval)
+	})
+
+	envknob.Setenv(tailscaleHostForwardNetstackKeepaliveIdleEnv, "")
+	envknob.Setenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv, "")
+	configureTailscaleHostForwardNetstackKeepalive()
+	if got := os.Getenv(tailscaleHostForwardNetstackKeepaliveIdleEnv); got != tailscaleHostForwardNetstackKeepaliveIdle {
+		t.Fatalf("%s = %q, want %q", tailscaleHostForwardNetstackKeepaliveIdleEnv, got, tailscaleHostForwardNetstackKeepaliveIdle)
+	}
+	if got := os.Getenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv); got != tailscaleHostForwardNetstackKeepaliveInterval {
+		t.Fatalf("%s = %q, want %q", tailscaleHostForwardNetstackKeepaliveIntervalEnv, got, tailscaleHostForwardNetstackKeepaliveInterval)
+	}
+
+	envknob.Setenv(tailscaleHostForwardNetstackKeepaliveIdleEnv, "2m")
+	envknob.Setenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv, "30s")
+	configureTailscaleHostForwardNetstackKeepalive()
+	if got := os.Getenv(tailscaleHostForwardNetstackKeepaliveIdleEnv); got != "2m" {
+		t.Fatalf("%s override = %q, want 2m", tailscaleHostForwardNetstackKeepaliveIdleEnv, got)
+	}
+	if got := os.Getenv(tailscaleHostForwardNetstackKeepaliveIntervalEnv); got != "30s" {
+		t.Fatalf("%s override = %q, want 30s", tailscaleHostForwardNetstackKeepaliveIntervalEnv, got)
 	}
 }
 

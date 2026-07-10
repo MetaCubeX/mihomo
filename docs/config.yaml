@@ -1255,6 +1255,7 @@ proxies: # socks5
     #   target: 127.0.0.1 # 仅允许回环地址，默认 127.0.0.1
     #   tcp: true # enabled 时默认 true
     #   udp: true # enabled 时默认 true；与上层出站 udp 开关无关
+    # 启用 host-forward 时会将 Tailscale userspace netstack TCP keepalive 默认设为 60s/15s，避免 SSH 等空闲长连接在 WireGuard session 过期后断开；可用 TS_NETSTACK_KEEPALIVE_IDLE/INTERVAL 覆盖
     # accept-routes: true # 是否接受 Tailnet 中发布的 subnet routes
     # exit-node: 100.64.0.1 # 使用指定 exit node，可填写节点 IP；也支持 auto:any
     # exit-node-allow-lan-access: true # 使用 exit node 时是否允许访问本地 LAN
