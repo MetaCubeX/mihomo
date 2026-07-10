@@ -73,6 +73,10 @@ func TestTailscaleStatusFromIPN(t *testing.T) {
 				OS:           "linux",
 				TailscaleIPs: []netip.Addr{netip.MustParseAddr("100.90.103.91")},
 				Online:       true,
+				Active:       true,
+				Addrs:        []string{"10.10.10.1:41641"},
+				CurAddr:      "10.10.10.1:41641",
+				Relay:        "cnhome",
 				LastSeen:     lastSeen,
 				TxBytes:      42,
 				RxBytes:      24,
@@ -94,8 +98,17 @@ func TestTailscaleStatusFromIPN(t *testing.T) {
 	if peer.Name != "newvbox" || len(peer.TailscaleIPs) != 1 || peer.TailscaleIPs[0] != "100.90.103.91" {
 		t.Fatalf("peer status: %+v", peer)
 	}
-	if text := got.Text(); !strings.Contains(text, "newvbox") || !strings.Contains(text, "100.90.103.91") {
-		t.Fatalf("status text missing peer: %s", text)
+	if !peer.Active || peer.CurAddr != "10.10.10.1:41641" || peer.Relay != "cnhome" {
+		t.Fatalf("peer connection fields: %+v", peer)
+	}
+	text := got.Text()
+	for _, want := range []string{"newvbox", "100.90.103.91", "direct 10.10.10.1:41641"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("status text missing %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, `relay "cnhome"`) {
+		t.Fatalf("status text used DERP relay despite CurAddr: %s", text)
 	}
 }
 

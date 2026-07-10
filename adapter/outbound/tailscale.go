@@ -541,16 +541,21 @@ func tailscaleStatusFromIPN(proxyName string, status *ipnstate.Status) tailnet.S
 
 func tailscalePeerStatusToNode(peer *ipnstate.PeerStatus, magicDNSSuffix string, self bool) tailnet.NodeStatus {
 	node := tailnet.NodeStatus{
-		HostName:     peer.HostName,
-		DNSName:      peer.DNSName,
-		OS:           peer.OS,
-		TailscaleIPs: tailscaleAddrsToStrings(peer.TailscaleIPs),
-		Online:       peer.Online,
-		Relay:        peer.Relay,
-		PeerRelay:    peer.PeerRelay,
-		TxBytes:      peer.TxBytes,
-		RxBytes:      peer.RxBytes,
-		Self:         self,
+		HostName:       peer.HostName,
+		DNSName:        peer.DNSName,
+		OS:             peer.OS,
+		TailscaleIPs:   tailscaleAddrsToStrings(peer.TailscaleIPs),
+		Online:         peer.Online,
+		Active:         peer.Active,
+		Relay:          peer.Relay,
+		Addrs:          append([]string{}, peer.Addrs...),
+		CurAddr:        peer.CurAddr,
+		PeerRelay:      peer.PeerRelay,
+		ExitNode:       peer.ExitNode,
+		ExitNodeOption: peer.ExitNodeOption,
+		TxBytes:        peer.TxBytes,
+		RxBytes:        peer.RxBytes,
+		Self:           self,
 	}
 	if !peer.LastSeen.IsZero() {
 		lastSeen := peer.LastSeen
