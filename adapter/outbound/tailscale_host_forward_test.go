@@ -8,12 +8,17 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/metacubex/mihomo/common/structure"
 	C "github.com/metacubex/mihomo/constant"
+
+	"github.com/metacubex/tailscale/ipn"
+	"github.com/metacubex/tailscale/ipn/ipnstate"
+	"github.com/metacubex/tailscale/types/key"
 )
 
 func TestTailscaleHostForwardOptionDecode(t *testing.T) {
@@ -46,6 +51,51 @@ func TestTailscaleHostForwardOptionDecode(t *testing.T) {
 	}
 	if option.HostForward.UDP == nil || !*option.HostForward.UDP {
 		t.Fatalf("decoded udp: %v", option.HostForward.UDP)
+	}
+}
+
+func TestTailscaleStatusFromIPN(t *testing.T) {
+	lastSeen := time.Date(2026, 7, 10, 4, 0, 0, 0, time.UTC)
+	status := &ipnstate.Status{
+		BackendState:   ipn.Running.String(),
+		MagicDNSSuffix: "tailnet.test",
+		TailscaleIPs:   []netip.Addr{netip.MustParseAddr("100.64.0.1")},
+		Self: &ipnstate.PeerStatus{
+			HostName:     "mihomo-tailnet-staging",
+			DNSName:      "mihomo-tailnet-staging.tailnet.test.",
+			OS:           "linux",
+			TailscaleIPs: []netip.Addr{netip.MustParseAddr("100.64.0.1")},
+		},
+		Peer: map[key.NodePublic]*ipnstate.PeerStatus{
+			{}: {
+				HostName:     "newvbox",
+				DNSName:      "newvbox.tailnet.test.",
+				OS:           "linux",
+				TailscaleIPs: []netip.Addr{netip.MustParseAddr("100.90.103.91")},
+				Online:       true,
+				LastSeen:     lastSeen,
+				TxBytes:      42,
+				RxBytes:      24,
+			},
+		},
+	}
+
+	got := tailscaleStatusFromIPN("ts", status)
+	if got.Proxy != "ts" || got.BackendState != ipn.Running.String() {
+		t.Fatalf("status metadata: %+v", got)
+	}
+	if got.Self == nil || got.Self.Name != "mihomo-tailnet-staging" || !got.Self.Online {
+		t.Fatalf("self status: %+v", got.Self)
+	}
+	if len(got.Peers) != 1 {
+		t.Fatalf("peers length: %d", len(got.Peers))
+	}
+	peer := got.Peers[0]
+	if peer.Name != "newvbox" || len(peer.TailscaleIPs) != 1 || peer.TailscaleIPs[0] != "100.90.103.91" {
+		t.Fatalf("peer status: %+v", peer)
+	}
+	if text := got.Text(); !strings.Contains(text, "newvbox") || !strings.Contains(text, "100.90.103.91") {
+		t.Fatalf("status text missing peer: %s", text)
 	}
 }
 

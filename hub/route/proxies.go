@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/profile/cachefile"
+	"github.com/metacubex/mihomo/component/tailnet"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/tunnel"
 
@@ -29,6 +31,7 @@ func proxyRouter() http.Handler {
 		r.Use(parseProxyName, findProxyByName)
 		r.Get("/", getProxy)
 		r.Get("/delay", getProxyDelay)
+		r.Get("/tailscale/status", getProxyTailnetStatus)
 		r.Put("/", updateProxy)
 		r.Delete("/", unfixedProxy)
 	})
@@ -145,6 +148,43 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, render.M{
 		"delay": delay,
 	})
+}
+
+func getProxyTailnetStatus(w http.ResponseWriter, r *http.Request) {
+	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
+	statusProvider, ok := proxy.Adapter().(tailnet.StatusProvider)
+	if !ok {
+		render.Status(r, http.StatusBadRequest)
+		render.JSON(w, r, newError("proxy does not provide Tailnet status"))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	status, err := statusProvider.TailnetStatus(ctx)
+	if ctx.Err() != nil {
+		render.Status(r, http.StatusGatewayTimeout)
+		render.JSON(w, r, ErrRequestTimeout)
+		return
+	}
+	if err != nil {
+		if errors.Is(err, tailnet.ErrStatusUnavailable) {
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, newError(err.Error()))
+			return
+		}
+		render.Status(r, http.StatusServiceUnavailable)
+		render.JSON(w, r, newError(err.Error()))
+		return
+	}
+
+	if r.URL.Query().Get("format") == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(status.Text()))
+		return
+	}
+	render.JSON(w, r, status)
 }
 
 func unfixedProxy(w http.ResponseWriter, r *http.Request) {

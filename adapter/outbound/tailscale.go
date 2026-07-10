@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/metacubex/tailscale/envknob"
 	"github.com/metacubex/tailscale/hostinfo"
 	"github.com/metacubex/tailscale/ipn"
+	"github.com/metacubex/tailscale/ipn/ipnstate"
 	"github.com/metacubex/tailscale/net/netmon"
 	"github.com/metacubex/tailscale/tailcfg"
 	"github.com/metacubex/tailscale/tsnet"
@@ -484,6 +486,111 @@ func tailscaleMagicDNSSearchDomains(nm *netmap.NetworkMap) []string {
 		domains = append(domains, nm.MagicDNSSuffix())
 	}
 	return tailnet.NormalizeSearchDomains(domains)
+}
+
+func (t *Tailscale) TailnetStatus(ctx context.Context) (tailnet.Status, error) {
+	if err := t.ensureStarted(ctx); err != nil {
+		return tailnet.Status{Proxy: t.Name()}, err
+	}
+	lc, err := t.server.LocalClient()
+	if err != nil {
+		return tailnet.Status{Proxy: t.Name()}, err
+	}
+	status, err := lc.Status(ctx)
+	if err != nil {
+		return tailnet.Status{Proxy: t.Name()}, err
+	}
+	return tailscaleStatusFromIPN(t.Name(), status), nil
+}
+
+func tailscaleStatusFromIPN(proxyName string, status *ipnstate.Status) tailnet.Status {
+	result := tailnet.Status{
+		Proxy: proxyName,
+		Peers: []tailnet.NodeStatus{},
+	}
+	if status == nil {
+		return result
+	}
+
+	result.BackendState = status.BackendState
+	result.TailscaleIPs = tailscaleAddrsToStrings(status.TailscaleIPs)
+	if status.CurrentTailnet != nil {
+		result.MagicDNSSuffix = status.CurrentTailnet.MagicDNSSuffix
+		result.MagicDNSEnabled = status.CurrentTailnet.MagicDNSEnabled
+	} else {
+		result.MagicDNSSuffix = status.MagicDNSSuffix
+	}
+
+	if status.Self != nil {
+		self := tailscalePeerStatusToNode(status.Self, result.MagicDNSSuffix, true)
+		if !self.Online && status.BackendState == ipn.Running.String() {
+			self.Online = true
+		}
+		result.Self = &self
+	}
+
+	for _, key := range status.Peers() {
+		peer := status.Peer[key]
+		if peer == nil {
+			continue
+		}
+		result.Peers = append(result.Peers, tailscalePeerStatusToNode(peer, result.MagicDNSSuffix, false))
+	}
+	return result
+}
+
+func tailscalePeerStatusToNode(peer *ipnstate.PeerStatus, magicDNSSuffix string, self bool) tailnet.NodeStatus {
+	node := tailnet.NodeStatus{
+		HostName:     peer.HostName,
+		DNSName:      peer.DNSName,
+		OS:           peer.OS,
+		TailscaleIPs: tailscaleAddrsToStrings(peer.TailscaleIPs),
+		Online:       peer.Online,
+		Relay:        peer.Relay,
+		PeerRelay:    peer.PeerRelay,
+		TxBytes:      peer.TxBytes,
+		RxBytes:      peer.RxBytes,
+		Self:         self,
+	}
+	if !peer.LastSeen.IsZero() {
+		lastSeen := peer.LastSeen
+		node.LastSeen = &lastSeen
+	}
+	node.Name = tailscalePeerDisplayName(node, magicDNSSuffix)
+	return node
+}
+
+func tailscalePeerDisplayName(node tailnet.NodeStatus, magicDNSSuffix string) string {
+	dnsName := strings.TrimRight(node.DNSName, ".")
+	suffix := strings.TrimRight(magicDNSSuffix, ".")
+	if dnsName != "" && suffix != "" {
+		if dnsName == suffix {
+			return dnsName
+		}
+		if name, ok := strings.CutSuffix(dnsName, "."+suffix); ok && name != "" {
+			return name
+		}
+	}
+	if node.HostName != "" {
+		return node.HostName
+	}
+	if dnsName != "" {
+		return dnsName
+	}
+	if len(node.TailscaleIPs) > 0 {
+		return node.TailscaleIPs[0]
+	}
+	return ""
+}
+
+func tailscaleAddrsToStrings(addrs []netip.Addr) []string {
+	result := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr.IsValid() {
+			result = append(result, addr.String())
+		}
+	}
+	return result
 }
 
 func (t *Tailscale) setBackendInitialized(err error) {

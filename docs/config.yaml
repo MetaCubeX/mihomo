@@ -1249,6 +1249,7 @@ proxies: # socks5
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
     # magic-dns: true # 启用 MagicDNS 集成；会启动 tsnet、自动发布 Tailnet 搜索域，并将匹配域名交给此出站的 Tailscale DNS
+    # 可通过 RESTful API `GET /proxies/{name}/tailscale/status?format=text` 查看 Tailnet 节点 IP、名称和在线状态
     # host-forward: # 可选；将发往此节点 Tailscale IP 任意端口的流量转发到同端口的本机回环服务
     #   enabled: true
     #   target: 127.0.0.1 # 仅允许回环地址，默认 127.0.0.1
