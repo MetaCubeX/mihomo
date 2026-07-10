@@ -482,7 +482,7 @@ func (w *WireGuard) genIpcConf(ctx context.Context, updateOnly bool) (string, er
 			ipcConf += "endpoint=" + destination.String() + "\n"
 			if len(peer.Reserved) > 0 {
 				var reserved [3]uint8
-				copy(reserved[:], w.option.Reserved)
+				copy(reserved[:], peer.Reserved)
 				w.bind.SetReservedForEndpoint(destination, reserved)
 			}
 			if updateOnly {
