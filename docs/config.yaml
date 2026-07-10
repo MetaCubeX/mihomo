@@ -1244,6 +1244,11 @@ proxies: # socks5
     # state-dir: ./tailscale # tsnet 状态目录，默认 tailscale
     # ephemeral: false # 是否作为 ephemeral node 登录，默认 false
     udp: true # 是否启用 UDP，默认 false
+    # host-forward: # 可选；将发往此节点 Tailscale IP 任意端口的流量转发到同端口的本机回环服务
+    #   enabled: true
+    #   target: 127.0.0.1 # 仅允许回环地址，默认 127.0.0.1
+    #   tcp: true # enabled 时默认 true
+    #   udp: true # enabled 时默认 true；与上层出站 udp 开关无关
     # accept-routes: true # 是否接受 Tailnet 中发布的 subnet routes
     # exit-node: 100.64.0.1 # 使用指定 exit node，可填写节点 IP；也支持 auto:any
     # exit-node-allow-lan-access: true # 使用 exit node 时是否允许访问本地 LAN

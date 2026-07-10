@@ -8,15 +8,23 @@ type Tailscale struct {
 	*Base
 }
 
+type TailscaleHostForwardOption struct {
+	Enabled bool   `proxy:"enabled,omitempty"`
+	Target  string `proxy:"target,omitempty"`
+	TCP     *bool  `proxy:"tcp,omitempty"`
+	UDP     *bool  `proxy:"udp,omitempty"`
+}
+
 type TailscaleOption struct {
 	BasicOption
-	Name       string `proxy:"name"`
-	Hostname   string `proxy:"hostname,omitempty"`
-	AuthKey    string `proxy:"auth-key,omitempty"`
-	ControlURL string `proxy:"control-url,omitempty"`
-	StateDir   string `proxy:"state-dir,omitempty"`
-	Ephemeral  bool   `proxy:"ephemeral,omitempty"`
-	UDP        bool   `proxy:"udp,omitempty"`
+	Name        string                     `proxy:"name"`
+	Hostname    string                     `proxy:"hostname,omitempty"`
+	AuthKey     string                     `proxy:"auth-key,omitempty"`
+	ControlURL  string                     `proxy:"control-url,omitempty"`
+	StateDir    string                     `proxy:"state-dir,omitempty"`
+	Ephemeral   bool                       `proxy:"ephemeral,omitempty"`
+	UDP         bool                       `proxy:"udp,omitempty"`
+	HostForward TailscaleHostForwardOption `proxy:"host-forward,omitempty"`
 
 	AcceptRoutes           *bool  `proxy:"accept-routes,omitempty"`
 	ExitNode               string `proxy:"exit-node,omitempty"`
