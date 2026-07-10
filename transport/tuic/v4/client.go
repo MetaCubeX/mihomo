@@ -275,10 +275,12 @@ func (t *clientImpl) DialContext(ctx context.Context, metadata *C.Metadata) (net
 		defer pool.PutBuffer(buf)
 		err = NewConnect(NewAddress(metadata)).WriteTo(buf)
 		if err != nil {
+			t.openStreams.Add(-1)
 			return nil, err
 		}
 		quicStream, err := quicConn.OpenStream()
 		if err != nil {
+			t.openStreams.Add(-1)
 			return nil, err
 		}
 		stream = types.NewQuicStreamConn(
