@@ -112,6 +112,7 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		closeConns()
 		return
 	}
+	cConn = wrapSessionConn(cConn)
 
 	session, err := sudoku.ReadServerSession(cConn, meta)
 	if err != nil {
@@ -156,6 +157,12 @@ func (l *Listener) handleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 		l.handler.HandleSocket(targetAddr, session.Conn, additions...)
 		//tunnel.HandleTCPConn(inbound.NewSocket(targetAddr, session.Conn, C.SUDOKU, additions...))
 	}
+}
+
+func wrapSessionConn(conn net.Conn) net.Conn {
+	// Sudoku uses framed reads. Keep mihomo's asynchronous peek deadlines from
+	// interrupting a partially consumed frame and desynchronizing the session.
+	return N.NewDeadlineConn(conn)
 }
 
 func (l *Listener) handleUoTSession(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
