@@ -553,9 +553,13 @@ type queuedConn struct {
 	writeCh chan []byte
 	// writeClosed is closed by CloseWrite to stop accepting new payloads.
 	// When closed, Write returns io.ErrClosedPipe, but Read is unaffected.
-	writeClosed chan struct{}
-	readEOF     chan struct{}
-	readEOFOnce sync.Once
+	writeClosed   chan struct{}
+	writeGate     sync.RWMutex
+	writeDone     chan struct{}
+	writeDoneOnce sync.Once
+	writeErr      error
+	readEOF       chan struct{}
+	readEOFOnce   sync.Once
 
 	mu         sync.Mutex
 	readBuf    []byte
@@ -566,16 +570,62 @@ type queuedConn struct {
 
 const queuedConnPayloadQueueDepth = 64
 
+func newQueuedConn() queuedConn {
+	return queuedConn{
+		rxc:         make(chan []byte, queuedConnPayloadQueueDepth),
+		closed:      make(chan struct{}),
+		writeCh:     make(chan []byte, queuedConnPayloadQueueDepth),
+		writeClosed: make(chan struct{}),
+		writeDone:   make(chan struct{}),
+		readEOF:     make(chan struct{}),
+		localAddr:   &net.TCPAddr{},
+		remoteAddr:  &net.TCPAddr{},
+	}
+}
+
 func (c *queuedConn) CloseWrite() error {
 	if c == nil || c.writeClosed == nil {
 		return nil
 	}
-	c.mu.Lock()
+	c.writeGate.Lock()
 	if !isClosedPipeChan(c.writeClosed) {
 		close(c.writeClosed)
 	}
+	c.writeGate.Unlock()
+
+	if c.writeDone == nil {
+		return nil
+	}
+	select {
+	case <-c.writeDone:
+		return c.completedWriteErr()
+	default:
+	}
+	select {
+	case <-c.writeDone:
+		return c.completedWriteErr()
+	case <-c.closed:
+		return c.closedErr()
+	}
+}
+
+func (c *queuedConn) completedWriteErr() error {
+	c.mu.Lock()
+	err := c.writeErr
 	c.mu.Unlock()
-	return nil
+	return err
+}
+
+func (c *queuedConn) completeWrite(err error) {
+	if c == nil || c.writeDone == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.writeErr == nil {
+		c.writeErr = err
+	}
+	c.mu.Unlock()
+	c.writeDoneOnce.Do(func() { close(c.writeDone) })
 }
 
 func (c *queuedConn) markReadEOF() {
@@ -650,27 +700,35 @@ func (c *queuedConn) Write(b []byte) (n int, err error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
-	c.mu.Lock()
-	select {
-	case <-c.closed:
-		c.mu.Unlock()
-		return 0, c.closedErr()
-	case <-c.writeClosed:
-		c.mu.Unlock()
-		return 0, io.ErrClosedPipe
-	default:
-	}
-	c.mu.Unlock()
 
 	payload := make([]byte, len(b))
 	copy(payload, b)
+	if c.writeClosed == nil {
+		select {
+		case c.writeCh <- payload:
+			return len(b), nil
+		case <-c.closed:
+			return 0, c.closedErr()
+		}
+	}
+
+	c.writeGate.RLock()
+	defer c.writeGate.RUnlock()
+	select {
+	case <-c.closed:
+		return 0, c.closedErr()
+	default:
+	}
+	select {
+	case <-c.writeClosed:
+		return 0, io.ErrClosedPipe
+	default:
+	}
 	select {
 	case c.writeCh <- payload:
 		return len(b), nil
 	case <-c.closed:
 		return 0, c.closedErr()
-	case <-c.writeClosed:
-		return 0, io.ErrClosedPipe
 	}
 }
 
@@ -726,15 +784,7 @@ func newStreamSplitConnFromInfo(info *sessionDialInfo) *streamSplitConn {
 		closeURL:   info.closeURL,
 		headerHost: info.headerHost,
 		auth:       info.auth,
-		queuedConn: queuedConn{
-			rxc:         make(chan []byte, queuedConnPayloadQueueDepth),
-			closed:      make(chan struct{}),
-			writeCh:     make(chan []byte, queuedConnPayloadQueueDepth),
-			writeClosed: make(chan struct{}),
-			readEOF:     make(chan struct{}),
-			localAddr:   &net.TCPAddr{},
-			remoteAddr:  &net.TCPAddr{},
-		},
+		queuedConn: newQueuedConn(),
 	}
 
 	if info.dialer != nil && strings.EqualFold(strings.TrimSpace(info.multiplex), "on") {
@@ -963,10 +1013,17 @@ func (c *streamSplitConn) pushLoop() {
 	)
 
 	var (
-		buf   bytes.Buffer
-		timer = time.NewTimer(flushInterval)
+		buf      bytes.Buffer
+		timer    = time.NewTimer(flushInterval)
+		writeErr error
 	)
 	defer timer.Stop()
+	defer func() { c.completeWrite(writeErr) }()
+
+	fail := func(err error) {
+		writeErr = err
+		_ = c.closeWithError(err)
+	}
 
 	flush := func() error {
 		if buf.Len() == 0 {
@@ -1059,17 +1116,13 @@ func (c *streamSplitConn) pushLoop() {
 
 	for {
 		select {
-		case b, ok := <-c.writeCh:
-			if !ok {
-				_ = flushWithRetry()
-				return
-			}
+		case b := <-c.writeCh:
 			if len(b) == 0 {
 				continue
 			}
 			if buf.Len()+len(b) > maxBatchBytes {
 				if err := flushWithRetry(); err != nil {
-					_ = c.closeWithError(fmt.Errorf("stream push flush failed: %w", err))
+					fail(fmt.Errorf("stream push flush failed: %w", err))
 					return
 				}
 				resetTimer()
@@ -1077,14 +1130,14 @@ func (c *streamSplitConn) pushLoop() {
 			_, _ = buf.Write(b)
 			if buf.Len() >= maxBatchBytes {
 				if err := flushWithRetry(); err != nil {
-					_ = c.closeWithError(fmt.Errorf("stream push flush failed: %w", err))
+					fail(fmt.Errorf("stream push flush failed: %w", err))
 					return
 				}
 				resetTimer()
 			}
 		case <-timer.C:
 			if err := flushWithRetry(); err != nil {
-				_ = c.closeWithError(fmt.Errorf("stream push flush failed: %w", err))
+				fail(fmt.Errorf("stream push flush failed: %w", err))
 				return
 			}
 			resetTimer()
@@ -1098,25 +1151,25 @@ func (c *streamSplitConn) pushLoop() {
 					}
 					if buf.Len()+len(b) > maxBatchBytes {
 						if err := flushWithRetry(); err != nil {
-							_ = c.closeWithError(fmt.Errorf("stream push flush failed: %w", err))
+							fail(fmt.Errorf("stream push flush failed: %w", err))
 							return
 						}
 					}
 					_, _ = buf.Write(b)
 				default:
 					if err := flushWithRetry(); err != nil {
-						_ = c.closeWithError(fmt.Errorf("stream push flush failed: %w", err))
+						fail(fmt.Errorf("stream push flush failed: %w", err))
 						return
 					}
 					if err := sendSessionControl(c.client, c.finURL, c.headerHost, TunnelModeStream, c.auth); err != nil {
-						_ = c.closeWithError(fmt.Errorf("stream FIN failed: %w", err))
+						fail(fmt.Errorf("stream FIN failed: %w", err))
 						return
 					}
 					return
 				}
 			}
 		case <-c.closed:
-			_ = flushWithRetry()
+			writeErr = c.closedErr()
 			return
 		}
 	}
@@ -1220,15 +1273,7 @@ func newPollConnFromInfo(info *sessionDialInfo) *pollConn {
 		closeURL:   info.closeURL,
 		headerHost: info.headerHost,
 		auth:       info.auth,
-		queuedConn: queuedConn{
-			rxc:         make(chan []byte, queuedConnPayloadQueueDepth),
-			closed:      make(chan struct{}),
-			writeCh:     make(chan []byte, queuedConnPayloadQueueDepth),
-			writeClosed: make(chan struct{}),
-			readEOF:     make(chan struct{}),
-			localAddr:   &net.TCPAddr{},
-			remoteAddr:  &net.TCPAddr{},
-		},
+		queuedConn: newQueuedConn(),
 	}
 
 	if info.dialer != nil && strings.EqualFold(strings.TrimSpace(info.multiplex), "on") {
@@ -1446,8 +1491,15 @@ func (c *pollConn) pushLoop() {
 		encodedLine = make([]byte, base64.StdEncoding.EncodedLen(maxLineRawBytes)+1)
 		pendingRaw  int
 		timer       = time.NewTimer(flushInterval)
+		writeErr    error
 	)
 	defer timer.Stop()
+	defer func() { c.completeWrite(writeErr) }()
+
+	fail := func(err error) {
+		writeErr = err
+		_ = c.closeWithError(err)
+	}
 
 	flush := func() error {
 		if buf.Len() == 0 {
@@ -1563,30 +1615,26 @@ func (c *pollConn) pushLoop() {
 
 	for {
 		select {
-		case b, ok := <-c.writeCh:
-			if !ok {
-				_ = flushWithRetry()
-				return
-			}
+		case b := <-c.writeCh:
 			if len(b) == 0 {
 				continue
 			}
 
 			if err := enqueue(b); err != nil {
-				_ = c.closeWithError(fmt.Errorf("poll push flush failed: %w", err))
+				fail(fmt.Errorf("poll push flush failed: %w", err))
 				return
 			}
 
 			if pendingRaw >= maxBatchBytes {
 				if err := flushWithRetry(); err != nil {
-					_ = c.closeWithError(fmt.Errorf("poll push flush failed: %w", err))
+					fail(fmt.Errorf("poll push flush failed: %w", err))
 					return
 				}
 				resetTimer()
 			}
 		case <-timer.C:
 			if err := flushWithRetry(); err != nil {
-				_ = c.closeWithError(fmt.Errorf("poll push flush failed: %w", err))
+				fail(fmt.Errorf("poll push flush failed: %w", err))
 				return
 			}
 			resetTimer()
@@ -1599,23 +1647,23 @@ func (c *pollConn) pushLoop() {
 						continue
 					}
 					if err := enqueue(b); err != nil {
-						_ = c.closeWithError(fmt.Errorf("poll push flush failed: %w", err))
+						fail(fmt.Errorf("poll push flush failed: %w", err))
 						return
 					}
 				default:
 					if err := flushWithRetry(); err != nil {
-						_ = c.closeWithError(fmt.Errorf("poll push flush failed: %w", err))
+						fail(fmt.Errorf("poll push flush failed: %w", err))
 						return
 					}
 					if err := sendSessionControl(c.client, c.finURL, c.headerHost, TunnelModePoll, c.auth); err != nil {
-						_ = c.closeWithError(fmt.Errorf("poll FIN failed: %w", err))
+						fail(fmt.Errorf("poll FIN failed: %w", err))
 						return
 					}
 					return
 				}
 			}
 		case <-c.closed:
-			_ = flushWithRetry()
+			writeErr = c.closedErr()
 			return
 		}
 	}
@@ -1711,15 +1759,21 @@ type TunnelServer struct {
 }
 
 type tunnelSession struct {
-	conn       net.Conn
-	lastActive time.Time
+	conn           net.Conn
+	lastActive     time.Time
+	uplinkClosed   bool
+	downlinkClosed bool
 }
+
+type sessionDirection uint8
+
+const (
+	sessionUplink sessionDirection = iota
+	sessionDownlink
+)
 
 func NewTunnelServer(opts TunnelServerOptions) *TunnelServer {
 	mode := normalizeTunnelMode(opts.Mode)
-	if mode == TunnelModeLegacy {
-		// Server-side "legacy" means: don't accept stream/poll tunnels; only passthrough.
-	}
 	pathRoot := normalizePathRoot(opts.PathRoot)
 	auth := newTunnelAuth(opts.AuthKey, opts.AuthSkew)
 	timeout := opts.PullReadTimeout
@@ -2498,23 +2552,45 @@ func (s *TunnelServer) sessionClose(token string) {
 }
 
 func (s *TunnelServer) sessionCloseWrite(token string) {
-	sess, ok := s.sessionGet(token)
-	if !ok || sess == nil || sess.conn == nil {
-		return
-	}
-	if cw, ok := sess.conn.(interface{ CloseWrite() error }); ok {
-		_ = cw.CloseWrite()
-		return
-	}
-	_ = sess.conn.Close()
+	s.sessionHalfClose(token, sessionUplink)
 }
 
-func sessionPeerClosed(sess *tunnelSession) bool {
-	if sess == nil || sess.conn == nil {
-		return true
+func (s *TunnelServer) sessionHalfClose(token string, direction sessionDirection) {
+	var (
+		conn       net.Conn
+		closeWrite bool
+	)
+
+	s.mu.Lock()
+	sess, ok := s.sessions[token]
+	if !ok {
+		s.mu.Unlock()
+		return
 	}
-	state, ok := sess.conn.(interface{ peerClosed() bool })
-	return ok && state.peerClosed()
+	sess.lastActive = time.Now()
+	switch direction {
+	case sessionUplink:
+		if !sess.uplinkClosed {
+			sess.uplinkClosed = true
+			closeWrite = true
+		}
+	case sessionDownlink:
+		sess.downlinkClosed = true
+	}
+	if sess.uplinkClosed && sess.downlinkClosed {
+		delete(s.sessions, token)
+	}
+	conn = sess.conn
+	s.mu.Unlock()
+
+	if !closeWrite {
+		return
+	}
+	if cw, ok := conn.(interface{ CloseWrite() error }); ok {
+		_ = cw.CloseWrite()
+	} else {
+		_ = conn.Close()
+	}
 }
 
 func (s *TunnelServer) pollPush(rawConn net.Conn, token string, body io.Reader) (HandleResult, net.Conn, error) {
@@ -2678,11 +2754,9 @@ func (s *TunnelServer) sessionPull(
 			}
 			return HandleDone, nil, nil
 		}
-		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, net.ErrClosed) {
+		if errors.Is(err, io.EOF) {
 			streamEOF = true
-			if sessionPeerClosed(sess) {
-				s.sessionClose(token)
-			}
+			s.sessionHalfClose(token, sessionDownlink)
 			return HandleDone, nil, nil
 		}
 		s.sessionClose(token)

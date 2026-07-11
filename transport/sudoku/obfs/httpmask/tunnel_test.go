@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,27 @@ type roundTripFunc func(*mhttp.Request) (*mhttp.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *mhttp.Request) (*mhttp.Response, error) {
 	return f(req)
+}
+
+func TestEarlyHandshakeConnPreservesHalfClose(t *testing.T) {
+	client, peer := newHalfPipe()
+	defer client.Close()
+	defer peer.Close()
+
+	wrapped := wrapEarlyHandshakeConn(client, "user")
+	if err := wrapped.(interface{ CloseWrite() error }).CloseWrite(); err != nil {
+		t.Fatalf("close write: %v", err)
+	}
+	var one [1]byte
+	if n, err := peer.Read(one[:]); n != 0 || !errors.Is(err, io.EOF) {
+		t.Fatalf("peer read = (%d, %v), want EOF", n, err)
+	}
+
+	response := make([]byte, len("response"))
+	go func() { _, _ = peer.Write([]byte("response")) }()
+	if _, err := io.ReadFull(wrapped, response); err != nil {
+		t.Fatalf("read after close write: %v", err)
+	}
 }
 
 func TestTunnelHalfClosePreservesResponse(t *testing.T) {
@@ -237,28 +259,30 @@ func startTestTunnelServer(t testing.TB, server *TunnelServer) (string, func(), 
 	return listener.Addr().String(), stop, tunnels
 }
 
-func TestPollPullReapsOnlyFullyClosedSession(t *testing.T) {
+func TestTunnelServerDownlinkHalfCloseKeepsUplink(t *testing.T) {
 	tests := []struct {
-		name      string
-		closePeer func(net.Conn) error
-		wantAlive bool
+		name     string
+		pull     func(*TunnelServer, net.Conn, string) (HandleResult, net.Conn, error)
+		push     func(*TunnelServer, net.Conn, string, io.Reader) (HandleResult, net.Conn, error)
+		pushBody string
 	}{
 		{
-			name: "close-write",
-			closePeer: func(conn net.Conn) error {
-				return conn.(interface{ CloseWrite() error }).CloseWrite()
-			},
-			wantAlive: true,
+			name:     "stream",
+			pull:     (*TunnelServer).streamPull,
+			push:     (*TunnelServer).streamPush,
+			pushBody: "tail",
 		},
 		{
-			name:      "close",
-			closePeer: net.Conn.Close,
+			name:     "poll",
+			pull:     (*TunnelServer).pollPull,
+			push:     (*TunnelServer).pollPush,
+			pushBody: base64.StdEncoding.EncodeToString([]byte("tail")) + "\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			const token = "closed-session"
+			const token = "half-closed-session"
 
 			appConn, sessionConn := newHalfPipe()
 			server := NewTunnelServer(TunnelServerOptions{PullReadTimeout: 20 * time.Millisecond})
@@ -268,14 +292,27 @@ func TestPollPullReapsOnlyFullyClosedSession(t *testing.T) {
 				server.sessionClose(token)
 			})
 
-			if err := tt.closePeer(appConn); err != nil {
-				t.Fatalf("close peer: %v", err)
-			}
+			appDone := make(chan error, 1)
+			go func() {
+				if _, err := appConn.Write([]byte("response")); err != nil {
+					appDone <- err
+					return
+				}
+				if err := appConn.(interface{ CloseWrite() error }).CloseWrite(); err != nil {
+					appDone <- err
+					return
+				}
+				tail, err := io.ReadAll(appConn)
+				if err == nil && string(tail) != "tail" {
+					err = fmt.Errorf("tail = %q", tail)
+				}
+				appDone <- err
+			}()
 
 			clientConn, serverConn := net.Pipe()
 			done := make(chan error, 1)
 			go func() {
-				_, _, err := server.pollPull(serverConn, token)
+				_, _, err := tt.pull(server, serverConn, token)
 				done <- err
 			}()
 
@@ -295,8 +332,35 @@ func TestPollPullReapsOnlyFullyClosedSession(t *testing.T) {
 			if got := resp.Trailer.Get(tunnelStreamEOFHeader); got != "1" {
 				t.Fatalf("EOF trailer = %q, want 1", got)
 			}
-			if alive := server.sessionHas(token); alive != tt.wantAlive {
-				t.Fatalf("session alive: got %v want %v", alive, tt.wantAlive)
+			if !server.sessionHas(token) {
+				t.Fatal("session removed after downlink EOF")
+			}
+
+			clientConn, serverConn = net.Pipe()
+			done = make(chan error, 1)
+			go func() {
+				_, _, err := tt.push(server, serverConn, token, strings.NewReader(tt.pushBody))
+				done <- err
+			}()
+			resp, err = http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})
+			if err != nil {
+				t.Fatalf("read push response: %v", err)
+			}
+			_ = resp.Body.Close()
+			_ = clientConn.Close()
+			if err := <-done; err != nil {
+				t.Fatalf("push: %v", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("push status: got %d want %d", resp.StatusCode, http.StatusOK)
+			}
+
+			server.sessionCloseWrite(token)
+			if err := <-appDone; err != nil {
+				t.Fatalf("application: %v", err)
+			}
+			if server.sessionHas(token) {
+				t.Fatal("session retained after both directions closed")
 			}
 		})
 	}

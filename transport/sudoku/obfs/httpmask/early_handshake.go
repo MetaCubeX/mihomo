@@ -40,6 +40,26 @@ type earlyHandshakeConn struct {
 	userHash string
 }
 
+func (c *earlyHandshakeConn) CloseWrite() error {
+	if c == nil || c.Conn == nil {
+		return nil
+	}
+	if closeWriter, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return closeWriter.CloseWrite()
+	}
+	return nil
+}
+
+func (c *earlyHandshakeConn) CloseRead() error {
+	if c == nil || c.Conn == nil {
+		return nil
+	}
+	if closeReader, ok := c.Conn.(interface{ CloseRead() error }); ok {
+		return closeReader.CloseRead()
+	}
+	return nil
+}
+
 func (c *earlyHandshakeConn) HTTPMaskEarlyHandshakeUserHash() string {
 	if c == nil {
 		return ""
