@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,11 +21,14 @@ const (
 const (
 	headerSize = 1 + 4 + 4
 	// maxQueuedBytesPerStream bounds unread payload retained by a single logical stream.
-	// Backpressure is applied to the demux loop instead of dropping data.
+	// A stream that exceeds the limit is reset so it cannot block the shared demux loop.
 	maxQueuedBytesPerStream = 4 * 1024 * 1024
 	maxFrameSize            = 256 * 1024
 	maxDataPayload          = 128 * 1024
+	keepaliveInterval       = 15 * time.Second
 )
+
+var errMuxReceiveQueueFull = errors.New("mux receive queue full")
 
 type acceptEvent struct {
 	stream  *stream
@@ -45,6 +49,9 @@ type Session struct {
 	closed    chan struct{}
 	closeOnce sync.Once
 	closeErr  error
+
+	lastWrite     atomic.Int64
+	keepaliveOnce sync.Once
 }
 
 func NewClientSession(conn net.Conn) (*Session, error) {
@@ -56,7 +63,9 @@ func NewClientSession(conn net.Conn) (*Session, error) {
 		streams: make(map[uint32]*stream),
 		closed:  make(chan struct{}),
 	}
+	s.lastWrite.Store(time.Now().UnixNano())
 	go s.readLoop()
+	s.startKeepalive(keepaliveInterval)
 	return s, nil
 }
 
@@ -70,7 +79,9 @@ func NewServerSession(conn net.Conn) (*Session, error) {
 		acceptCh: make(chan acceptEvent, 256),
 		closed:   make(chan struct{}),
 	}
+	s.lastWrite.Store(time.Now().UnixNano())
 	go s.readLoop()
+	s.startKeepalive(keepaliveInterval)
 	return s, nil
 }
 
@@ -84,6 +95,15 @@ func (s *Session) IsClosed() bool {
 	default:
 		return false
 	}
+}
+
+func (s *Session) Done() <-chan struct{} {
+	if s == nil {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	return s.closed
 }
 
 func (s *Session) closedErr() error {
@@ -180,7 +200,36 @@ func (s *Session) sendFrame(frameType byte, streamID uint32, payload []byte) err
 		s.closeWithError(err)
 		return err
 	}
+	s.lastWrite.Store(time.Now().UnixNano())
 	return nil
+}
+
+func (s *Session) startKeepalive(interval time.Duration) {
+	if s == nil || interval <= 0 {
+		return
+	}
+	s.keepaliveOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					lastWrite := time.Unix(0, s.lastWrite.Load())
+					if time.Since(lastWrite) < interval {
+						continue
+					}
+					// Stream zero is never allocated. v0.4.7 peers ignore DATA
+					// frames for unknown streams, so this remains compatible.
+					if err := s.sendFrame(frameData, 0, nil); err != nil {
+						return
+					}
+				case <-s.closed:
+					return
+				}
+			}
+		}()
+	})
 }
 
 func (s *Session) sendReset(streamID uint32, msg string) {
@@ -249,7 +298,6 @@ func (s *Session) readLoop() {
 				return
 			}
 		}
-
 		switch frameType {
 		case frameOpen:
 			if s.acceptCh == nil {
@@ -283,15 +331,20 @@ func (s *Session) readLoop() {
 			if len(payload) == 0 {
 				continue
 			}
-			st.enqueue(payload)
+			if err := st.enqueue(payload); err != nil {
+				st.closeNoSend(err)
+				s.removeStream(streamID)
+				go s.sendReset(streamID, err.Error())
+			}
 
 		case frameClose:
 			st := s.getStream(streamID)
 			if st == nil {
 				continue
 			}
-			st.closeNoSend(io.EOF)
-			s.removeStream(streamID)
+			if st.closeRemoteWrite() {
+				s.removeStream(streamID)
+			}
 
 		case frameReset:
 			st := s.getStream(streamID)
@@ -341,12 +394,17 @@ type stream struct {
 	session *Session
 	id      uint32
 
-	mu       sync.Mutex
-	cond     *sync.Cond
-	closed   bool
-	closeErr error
-	readBuf  []byte
-	queue    [][]byte
+	writeMu sync.Mutex
+
+	mu                sync.Mutex
+	cond              *sync.Cond
+	closed            bool
+	localReadClosed   bool
+	localWriteClosed  bool
+	remoteWriteClosed bool
+	closeErr          error
+	readBuf           []byte
+	queue             [][]byte
 	// queuedBytes includes unread bytes in readBuf and queue.
 	queuedBytes int
 
@@ -363,25 +421,6 @@ func newStream(session *Session, id uint32) *stream {
 	}
 	st.cond = sync.NewCond(&st.mu)
 	return st
-}
-
-func (c *stream) enqueue(payload []byte) {
-	c.mu.Lock()
-	for !c.closed && c.queuedBytes+len(payload) > maxQueuedBytesPerStream {
-		c.cond.Wait()
-	}
-	if c.closed {
-		c.mu.Unlock()
-		return
-	}
-	c.queuedBytes += len(payload)
-	if len(c.readBuf) == 0 && len(c.queue) == 0 {
-		c.readBuf = payload
-	} else {
-		c.queue = append(c.queue, payload)
-	}
-	c.cond.Broadcast()
-	c.mu.Unlock()
 }
 
 func (c *stream) closeNoSend(err error) {
@@ -401,9 +440,27 @@ func (c *stream) closeNoSend(err error) {
 	c.mu.Unlock()
 }
 
+func (c *stream) closeRemoteWrite() bool {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return false
+	}
+	c.remoteWriteClosed = true
+	remove := c.localWriteClosed
+	c.cond.Broadcast()
+	c.mu.Unlock()
+	return remove
+}
+
 func (c *stream) closedErr() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	err := c.closedErrLocked()
+	c.mu.Unlock()
+	return err
+}
+
+func (c *stream) closedErrLocked() error {
 	if c.closeErr == nil {
 		return io.ErrClosedPipe
 	}
@@ -417,7 +474,7 @@ func (c *stream) Read(p []byte) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for len(c.readBuf) == 0 && len(c.queue) == 0 && !c.closed {
+	for len(c.readBuf) == 0 && len(c.queue) == 0 && !c.closed && !c.localReadClosed && !c.remoteWriteClosed {
 		c.cond.Wait()
 	}
 	if len(c.readBuf) == 0 && len(c.queue) > 0 {
@@ -428,11 +485,15 @@ func (c *stream) Read(p []byte) (int, error) {
 			c.queue = nil
 		}
 	}
-	if len(c.readBuf) == 0 && c.closed {
-		if c.closeErr == nil {
+	if len(c.readBuf) == 0 {
+		switch {
+		case c.closed:
+			return 0, c.closedErrLocked()
+		case c.localReadClosed:
 			return 0, io.ErrClosedPipe
+		case c.remoteWriteClosed:
+			return 0, io.EOF
 		}
-		return 0, c.closeErr
 	}
 
 	n := copy(p, c.readBuf)
@@ -452,18 +513,25 @@ func (c *stream) Write(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if c.session == nil || c.session.IsClosed() {
-		if c.session != nil {
-			return 0, c.session.closedErr()
-		}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	if c.session == nil {
 		return 0, io.ErrClosedPipe
+	}
+	if c.session.IsClosed() {
+		return 0, c.session.closedErr()
 	}
 
 	c.mu.Lock()
 	closed := c.closed
+	writeClosed := c.localWriteClosed
 	c.mu.Unlock()
 	if closed {
 		return 0, c.closedErr()
+	}
+	if writeClosed {
+		return 0, io.ErrClosedPipe
 	}
 
 	written := 0
@@ -482,25 +550,78 @@ func (c *stream) Write(p []byte) (int, error) {
 }
 
 func (c *stream) Close() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
 		return nil
 	}
+	sendClose := !c.localWriteClosed
 	c.closed = true
+	c.localReadClosed = true
+	c.localWriteClosed = true
 	if c.closeErr == nil {
 		c.closeErr = io.ErrClosedPipe
 	}
+	c.readBuf = nil
+	c.queue = nil
+	c.queuedBytes = 0
 	c.cond.Broadcast()
 	c.mu.Unlock()
 
-	_ = c.session.sendFrame(frameClose, c.id, nil)
-	c.session.removeStream(c.id)
+	if c.session != nil {
+		if sendClose {
+			_ = c.session.sendFrame(frameClose, c.id, nil)
+		}
+		c.session.removeStream(c.id)
+	}
 	return nil
 }
 
-func (c *stream) CloseWrite() error { return c.Close() }
-func (c *stream) CloseRead() error  { return c.Close() }
+func (c *stream) CloseWrite() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	c.mu.Lock()
+	if c.closed || c.localWriteClosed {
+		c.mu.Unlock()
+		return nil
+	}
+	c.localWriteClosed = true
+	remove := c.remoteWriteClosed || c.localReadClosed
+	c.mu.Unlock()
+
+	if c.session == nil {
+		return nil
+	}
+	err := c.session.sendFrame(frameClose, c.id, nil)
+	if remove {
+		c.session.removeStream(c.id)
+	}
+	return err
+}
+
+func (c *stream) CloseRead() error {
+	c.mu.Lock()
+	if c.closed || c.localReadClosed {
+		c.mu.Unlock()
+		return nil
+	}
+	c.localReadClosed = true
+	c.readBuf = nil
+	c.queue = nil
+	c.queuedBytes = 0
+	remove := c.localWriteClosed
+	c.cond.Broadcast()
+	c.mu.Unlock()
+
+	if remove && c.session != nil {
+		c.session.removeStream(c.id)
+	}
+	return nil
+}
 
 func (c *stream) LocalAddr() net.Addr  { return c.localAddr }
 func (c *stream) RemoteAddr() net.Addr { return c.remoteAddr }
@@ -512,3 +633,23 @@ func (c *stream) SetDeadline(t time.Time) error {
 }
 func (c *stream) SetReadDeadline(time.Time) error  { return nil }
 func (c *stream) SetWriteDeadline(time.Time) error { return nil }
+
+func (c *stream) enqueue(payload []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed || c.localReadClosed || c.remoteWriteClosed {
+		return nil
+	}
+	if c.queuedBytes+len(payload) > maxQueuedBytesPerStream {
+		return errMuxReceiveQueueFull
+	}
+	c.queuedBytes += len(payload)
+	if len(c.readBuf) == 0 && len(c.queue) == 0 {
+		c.readBuf = payload
+	} else {
+		c.queue = append(c.queue, payload)
+	}
+	c.cond.Broadcast()
+	return nil
+}
