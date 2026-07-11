@@ -216,24 +216,6 @@ func (c *halfPipeConn) peerClosed() bool {
 	return isClosedPipeChan(c.remoteReadDone) && isClosedPipeChan(c.remoteWriteDone)
 }
 
-func (c *halfPipeConn) waitPeerClosed(timeout time.Duration) bool {
-	if c.peerClosed() {
-		return true
-	}
-	if timeout <= 0 {
-		return false
-	}
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case <-c.remoteReadDone:
-		return c.peerClosed()
-	case <-timer.C:
-		return c.peerClosed()
-	}
-}
-
 func (c *halfPipeConn) SetDeadline(t time.Time) error {
 	c.readDeadline.set(t)
 	c.writeDeadline.set(t)

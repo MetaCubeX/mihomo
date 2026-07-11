@@ -4,12 +4,24 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	mhttp "github.com/metacubex/http"
 )
+
+type roundTripFunc func(*mhttp.Request) (*mhttp.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *mhttp.Request) (*mhttp.Response, error) {
+	return f(req)
+}
 
 func TestTunnelHalfClosePreservesResponse(t *testing.T) {
 	tests := []struct {
@@ -18,6 +30,7 @@ func TestTunnelHalfClosePreservesResponse(t *testing.T) {
 	}{
 		{name: "stream", dial: dialStream},
 		{name: "poll", dial: dialPoll},
+		{name: "auto", dial: DialTunnel},
 	}
 
 	for _, tt := range tests {
@@ -33,7 +46,9 @@ func TestTunnelHalfClosePreservesResponse(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			conn, err := tt.dial(ctx, addr, TunnelDialOptions{
+				Mode:        tt.name,
 				DialContext: (&net.Dialer{}).DialContext,
+				Multiplex:   "auto",
 			})
 			if err != nil {
 				t.Fatalf("dial: %v", err)
@@ -80,6 +95,112 @@ func TestTunnelHalfClosePreservesResponse(t *testing.T) {
 	}
 }
 
+func TestQueuedConnReadEOFDrainsBufferedPayload(t *testing.T) {
+	conn := &queuedConn{
+		rxc:     make(chan []byte, 1),
+		closed:  make(chan struct{}),
+		readEOF: make(chan struct{}),
+	}
+	conn.rxc <- []byte("final payload")
+	conn.markReadEOF()
+
+	got := make([]byte, len("final payload"))
+	if _, err := io.ReadFull(conn, got); err != nil {
+		t.Fatalf("read final payload: %v", err)
+	}
+	if string(got) != "final payload" {
+		t.Fatalf("final payload = %q", got)
+	}
+	var one [1]byte
+	if n, err := conn.Read(one[:]); n != 0 || !errors.Is(err, io.EOF) {
+		t.Fatalf("read after final payload = (%d, %v), want EOF", n, err)
+	}
+}
+
+func TestSendSessionControlRetriesTransportEOF(t *testing.T) {
+	var calls atomic.Int32
+	client := &mhttp.Client{Transport: roundTripFunc(func(req *mhttp.Request) (*mhttp.Response, error) {
+		if req.Method != mhttp.MethodPost || req.URL.Query().Get("fin") != "1" {
+			t.Fatalf("unexpected control request: %s %s", req.Method, req.URL)
+		}
+		if calls.Add(1) == 1 {
+			return nil, io.EOF
+		}
+		return &mhttp.Response{
+			StatusCode: mhttp.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader("OK")),
+			Header:     make(mhttp.Header),
+		}, nil
+	})}
+
+	if err := sendSessionControl(
+		client,
+		"http://example/api/v1/upload?token=session&fin=1",
+		"example",
+		TunnelModeStream,
+		newTunnelAuth("", 0),
+	); err != nil {
+		t.Fatalf("send session control: %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("control calls = %d, want 2", calls.Load())
+	}
+}
+
+func TestTunnelServerSessionControlIsIdempotent(t *testing.T) {
+	for _, mode := range []TunnelMode{TunnelModeStream, TunnelModePoll} {
+		for _, control := range []string{"fin", "close"} {
+			t.Run(string(mode)+"/"+control, func(t *testing.T) {
+				server := NewTunnelServer(TunnelServerOptions{
+					Mode:                "auto",
+					PassThroughOnReject: true,
+				})
+				clientConn, serverConn := net.Pipe()
+				defer clientConn.Close()
+
+				done := make(chan struct {
+					result HandleResult
+					err    error
+				}, 1)
+				go func() {
+					result, _, err := server.HandleConn(serverConn)
+					done <- struct {
+						result HandleResult
+						err    error
+					}{result: result, err: err}
+				}()
+
+				request := fmt.Sprintf(
+					"POST /api/v1/upload?token=already-closed&%s=1 HTTP/1.1\r\n"+
+						"Host: example.com\r\n"+
+						"X-Sudoku-Tunnel: %s\r\n"+
+						"Content-Length: 0\r\n\r\n",
+					control, mode,
+				)
+				if _, err := io.WriteString(clientConn, request); err != nil {
+					t.Fatalf("write control request: %v", err)
+				}
+				response, err := http.ReadResponse(bufio.NewReader(clientConn), &http.Request{Method: http.MethodPost})
+				if err != nil {
+					t.Fatalf("read control response: %v", err)
+				}
+				_ = response.Body.Close()
+				result := <-done
+				if result.err != nil {
+					t.Fatalf("handle control request: %v", result.err)
+				}
+				if result.result != HandleDone {
+					t.Fatalf("control result = %v, want HandleDone", result.result)
+				}
+				if response.StatusCode != http.StatusOK {
+					t.Fatalf("control status = %d, want 200", response.StatusCode)
+				}
+			})
+		}
+	}
+}
+
 func startTestTunnelServer(t testing.TB, server *TunnelServer) (string, func(), <-chan net.Conn) {
 	t.Helper()
 
@@ -118,25 +239,20 @@ func startTestTunnelServer(t testing.TB, server *TunnelServer) (string, func(), 
 
 func TestPollPullReapsOnlyFullyClosedSession(t *testing.T) {
 	tests := []struct {
-		name        string
-		closePeer   func(net.Conn) error
-		wantStatus  int
-		wantAlive   bool
-		minDuration time.Duration
+		name      string
+		closePeer func(net.Conn) error
+		wantAlive bool
 	}{
 		{
 			name: "close-write",
 			closePeer: func(conn net.Conn) error {
 				return conn.(interface{ CloseWrite() error }).CloseWrite()
 			},
-			wantStatus:  http.StatusOK,
-			wantAlive:   true,
-			minDuration: 10 * time.Millisecond,
+			wantAlive: true,
 		},
 		{
-			name:       "close",
-			closePeer:  net.Conn.Close,
-			wantStatus: http.StatusGone,
+			name:      "close",
+			closePeer: net.Conn.Close,
 		},
 	}
 
@@ -158,7 +274,6 @@ func TestPollPullReapsOnlyFullyClosedSession(t *testing.T) {
 
 			clientConn, serverConn := net.Pipe()
 			done := make(chan error, 1)
-			started := time.Now()
 			go func() {
 				_, _, err := server.pollPull(serverConn, token)
 				done <- err
@@ -174,12 +289,11 @@ func TestPollPullReapsOnlyFullyClosedSession(t *testing.T) {
 			if err := <-done; err != nil {
 				t.Fatalf("poll pull: %v", err)
 			}
-			if elapsed := time.Since(started); elapsed < tt.minDuration {
-				t.Fatalf("poll pull returned after %v, want at least %v", elapsed, tt.minDuration)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusOK)
 			}
-
-			if resp.StatusCode != tt.wantStatus {
-				t.Fatalf("status: got %d want %d", resp.StatusCode, tt.wantStatus)
+			if got := resp.Trailer.Get(tunnelStreamEOFHeader); got != "1" {
+				t.Fatalf("EOF trailer = %q, want 1", got)
 			}
 			if alive := server.sessionHas(token); alive != tt.wantAlive {
 				t.Fatalf("session alive: got %v want %v", alive, tt.wantAlive)
