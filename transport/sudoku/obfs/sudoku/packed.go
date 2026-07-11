@@ -9,8 +9,8 @@ import (
 
 const (
 	packedProtectedPrefixBytes = 14
-	packedIOBufferSize         = 64 * 1024
-	packedDecodeBufferSize     = 96 * 1024
+	packedIOBufferSize         = 32 * 1024
+	packedDecodeBufferSize     = 32 * 1024
 )
 
 // PackedConn encodes traffic with the packed Sudoku layout while preserving
