@@ -14,17 +14,20 @@ import (
 
 type MultiplexBaseDialer func(context.Context) (net.Conn, error)
 
-// MultiplexDialer keeps one warmed Sudoku mux session and recreates it after
-// transport failures. Concurrent callers share the same creation attempt.
+// MultiplexDialer starts maintaining a warmed Sudoku mux session after the
+// first successful Dial and recreates it after transport failures.
+// Concurrent callers share the same creation attempt.
 type MultiplexDialer struct {
 	dialBase MultiplexBaseDialer
 
-	mu         sync.Mutex
-	creating   bool
-	createDone chan struct{}
-	createStop context.CancelFunc
-	client     *MultiplexClient
-	closed     bool
+	mu           sync.Mutex
+	creating     bool
+	createDone   chan struct{}
+	createStop   context.CancelFunc
+	client       *MultiplexClient
+	maintainStop context.CancelFunc
+	maintainDone chan struct{}
+	closed       bool
 }
 
 func NewMultiplexDialer(dialBase MultiplexBaseDialer) (*MultiplexDialer, error) {
@@ -47,6 +50,7 @@ func (d *MultiplexDialer) Dial(ctx context.Context, targetAddress string) (net.C
 		}
 		stream, err := client.Dial(ctx, targetAddress)
 		if err == nil {
+			d.startMaintaining()
 			return stream, nil
 		}
 		if !client.IsClosed() {
@@ -109,15 +113,41 @@ func (d *MultiplexDialer) Close() error {
 	stop := d.createStop
 	client := d.client
 	d.client = nil
+	stopMaintaining := d.maintainStop
+	maintainDone := d.maintainDone
 	d.mu.Unlock()
 
+	if stopMaintaining != nil {
+		stopMaintaining()
+	}
 	if stop != nil {
 		stop()
 	}
+	var err error
 	if client != nil {
-		return client.Close()
+		err = client.Close()
 	}
-	return nil
+	if maintainDone != nil {
+		<-maintainDone
+	}
+	return err
+}
+
+func (d *MultiplexDialer) startMaintaining() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed || d.maintainDone != nil {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	d.maintainStop = cancel
+	d.maintainDone = done
+	go func() {
+		defer close(done)
+		d.Maintain(ctx)
+	}()
 }
 
 func (d *MultiplexDialer) getOrCreateClient(ctx context.Context) (*MultiplexClient, error) {

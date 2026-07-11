@@ -20,8 +20,6 @@ type Sudoku struct {
 	baseConf sudoku.ProtocolConfig
 
 	muxDialer *sudoku.MultiplexDialer
-	muxCancel context.CancelFunc
-	muxDone   chan struct{}
 
 	httpMaskMu     sync.Mutex
 	httpMaskClient *httpmask.TunnelClient
@@ -245,34 +243,20 @@ func NewSudoku(option SudokuOption) (*Sudoku, error) {
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 	if baseConf.SessionMuxEnabled() {
-		muxDialer, err := sudoku.NewMultiplexDialer(func(ctx context.Context) (net.Conn, error) {
+		outbound.muxDialer, err = sudoku.NewMultiplexDialer(func(ctx context.Context) (net.Conn, error) {
 			cfg := outbound.baseConf
 			return outbound.dialAndHandshake(ctx, &cfg)
 		})
 		if err != nil {
 			return nil, err
 		}
-		muxCtx, muxCancel := context.WithCancel(context.Background())
-		outbound.muxDialer = muxDialer
-		outbound.muxCancel = muxCancel
-		outbound.muxDone = make(chan struct{})
-		go func() {
-			defer close(outbound.muxDone)
-			muxDialer.Maintain(muxCtx)
-		}()
 	}
 	return outbound, nil
 }
 
 func (s *Sudoku) Close() error {
-	if s.muxCancel != nil {
-		s.muxCancel()
-	}
 	if s.muxDialer != nil {
 		_ = s.muxDialer.Close()
-	}
-	if s.muxDone != nil {
-		<-s.muxDone
 	}
 	s.resetHTTPMaskClient()
 	return s.Base.Close()
