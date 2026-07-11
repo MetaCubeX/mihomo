@@ -191,7 +191,7 @@ func (s *server) reaper(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			return
 		case <-t.C:
 			s.mu.Lock()
 			now := time.Now()
