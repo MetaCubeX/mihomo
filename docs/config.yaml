@@ -1448,6 +1448,7 @@ proxies: # socks5
     table-type: prefer_ascii    # 可选值：prefer_ascii、prefer_entropy、up_ascii_down_entropy、up_entropy_down_ascii
     # custom-table: xpxvvpvv    # 可选，自定义字节布局，必须包含2个x、2个p、4个v，可随意组合；只对 entropy 方向生效
     # custom-tables: ["xpxvvpvv", "vxpvxvvp"] # 可选，自定义字节布局列表（x/v/p），非空时覆盖 custom-table
+    # multiplex: "off" # 可选：off（默认）、auto（仅复用 HTTPMask 底层连接）、on（在原始 TCP 或 HTTPMask 上启用 Sudoku 单会话多目标 mux）
     # 推荐：使用 httpmask 对象统一管理 HTTPMask 相关字段：
     httpmask:
       disable: false # true 禁用所有 HTTP 伪装/隧道
@@ -1455,7 +1456,7 @@ proxies: # socks5
       # tls: true # 可选：按需开启 HTTPS/WSS
       # host: "" # 可选：覆盖 Host/SNI（支持 example.com 或 example.com:443）；仅在 mode 为 stream/poll/auto/ws 时生效
       # path-root: "" # 可选：HTTP 隧道端点一级路径前缀（双方需一致），例如 "aabbcc" 或 "/aabbcc/" => /aabbcc/session、/aabbcc/stream、/aabbcc/api/v1/upload、/aabbcc/ws
-      # multiplex: "off" # 可选字符串：off（默认）、auto（复用底层 HTTP 连接，减少建链 RTT）、on（Sudoku mux 单隧道多目标；仅在 mode=stream/poll/auto 生效；ws 强制 off）
+      # multiplex: "off" # 兼容旧配置；设置时优先于顶层 multiplex
     enable-pure-downlink: false # 可选：false=带宽优化下行；true=纯 Sudoku 下行
 
   # anytls
