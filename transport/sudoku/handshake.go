@@ -212,18 +212,54 @@ func (c *directionalConn) CloseWrite() error {
 	if c == nil {
 		return nil
 	}
-	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
-		return cw.CloseWrite()
+
+	firstErr := c.runClosers()
+	if err := closeWrite(c.writer); err != nil && firstErr == nil {
+		firstErr = err
 	}
-	return nil
+	if err := closeWrite(c.Conn); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }
 
 func (c *directionalConn) CloseRead() error {
 	if c == nil {
 		return nil
 	}
-	if cr, ok := c.Conn.(interface{ CloseRead() error }); ok {
-		return cr.CloseRead()
+
+	if err := closeRead(c.reader); err != nil {
+		return err
+	}
+	return closeRead(c.Conn)
+}
+
+func (c *directionalConn) runClosers() error {
+	var firstErr error
+	for _, fn := range c.closers {
+		if fn == nil {
+			continue
+		}
+		if err := fn(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func closeRead(target any) error {
+	if closer, ok := target.(interface{ CloseRead() error }); ok {
+		return closer.CloseRead()
+	}
+	return nil
+}
+
+func closeWrite(target any) error {
+	if closer, ok := target.(interface{ CloseWrite() error }); ok {
+		return closer.CloseWrite()
+	}
+	if closer, ok := target.(io.Closer); ok {
+		return closer.Close()
 	}
 	return nil
 }
