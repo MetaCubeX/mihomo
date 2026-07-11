@@ -82,7 +82,7 @@ func withHosts(mapping *lru.LruCache[netip.Addr, string]) middleware {
 			case D.TypeAAAA:
 				handleIPs()
 			case D.TypeCNAME:
-				handleCName(r, record.Domain)
+				handleCName(msg, record.Domain)
 			default:
 				return next(ctx, r)
 			}
